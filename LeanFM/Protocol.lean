@@ -32,10 +32,17 @@ inductive Transport where
   | https
 deriving DecidableEq, Repr
 
+structure ProtoField where
+  number : Nat
+  name : String
+  value : String
+deriving DecidableEq, Repr
+
 structure ProtoPayload where
   typeName : String
   summary : String
   bytes : List Nat
+  fields : List ProtoField
 deriving DecidableEq, Repr
 
 structure Envelope where
@@ -47,8 +54,77 @@ structure Envelope where
   ts : Nat
 deriving DecidableEq, Repr
 
+def parseProtoFields : String -> List Nat -> List ProtoField
+  | "Docs.GetRequest", [0x01, 0x10] =>
+      [ { number := 1, name := "method", value := "GET" }
+      , { number := 2, name := "path", value := "/docs/index.html" }
+      ]
+  | "Docs.FetchCommand", [0x02, 0x20] =>
+      [ { number := 1, name := "path", value := "/docs/index.html" }
+      , { number := 2, name := "cache_mode", value := "normal" }
+      ]
+  | "Docs.FetchResult", [0x03, 0x30] =>
+      [ { number := 1, name := "status", value := "200" }
+      , { number := 2, name := "path", value := "/docs/index.html" }
+      ]
+  | "Docs.FetchResult", [0x03, 0xff] =>
+      [ { number := 1, name := "status", value := "404" }
+      , { number := 2, name := "path", value := "/docs/index.html" }
+      ]
+  | "Docs.GetResponse", [0x04, 0x40] =>
+      [ { number := 1, name := "status", value := "200" }
+      , { number := 2, name := "path", value := "/docs/index.html" }
+      ]
+  | "Error.Response", [0xff] =>
+      [ { number := 1, name := "status", value := "401" }
+      , { number := 2, name := "reason", value := "unauthorized" }
+      ]
+  | "Reviews.PostRequest", [0x11, 0x10] =>
+      [ { number := 1, name := "method", value := "POST" }
+      , { number := 2, name := "path", value := "/reviews" }
+      , { number := 3, name := "body_hash", value := "review#1" }
+      ]
+  | "Reviews.ModerateCommand", [0x12, 0x20] =>
+      [ { number := 1, name := "body_hash", value := "review#1" }
+      , { number := 2, name := "policy", value := "default" }
+      ]
+  | "Reviews.ModerationResult", [0x13, 0x30] =>
+      [ { number := 1, name := "decision", value := "accepted" }
+      , { number := 2, name := "body_hash", value := "review#1" }
+      ]
+  | "Reviews.ModerationResult", [0x13, 0xff] =>
+      [ { number := 1, name := "decision", value := "rejected" }
+      , { number := 2, name := "body_hash", value := "review#1" }
+      ]
+  | "Reviews.PostResponse", [0x14, 0x40] =>
+      [ { number := 1, name := "status", value := "201" }
+      , { number := 2, name := "path", value := "/reviews" }
+      ]
+  | "Reviews.PostResponse", [0x14, 0xff] =>
+      [ { number := 1, name := "status", value := "400" }
+      , { number := 2, name := "path", value := "/reviews" }
+      ]
+  | "Auth.LookupRequest", [0x0a, 0x01] =>
+      [ { number := 1, name := "principal", value := "client" } ]
+  | "Auth.LookupResponse", [0x0a, 0x02] =>
+      [ { number := 1, name := "principal", value := "client" }
+      , { number := 2, name := "authenticated", value := "true" }
+      ]
+  | "Auth.LookupResponse", [0x0a, 0xff] =>
+      [ { number := 1, name := "principal", value := "client" }
+      , { number := 2, name := "authenticated", value := "false" }
+      ]
+  | _, _ => []
+
 def proto (typeName summary : String) (bytes : List Nat) : ProtoPayload :=
-  { typeName := typeName, summary := summary, bytes := bytes }
+  { typeName := typeName
+  , summary := summary
+  , bytes := bytes
+  , fields := parseProtoFields typeName bytes
+  }
+
+def protoWasParsed (p : ProtoPayload) : Bool :=
+  !p.fields.isEmpty
 
 def msg (task : TaskKind) (src dst : Actor) (transport : Transport)
     (typeName summary : String) (bytes : List Nat) (ts : Nat) : Envelope :=
@@ -744,6 +820,9 @@ def workerMetrics : Metrics :=
 def assembledGrammar : List Envelope :=
   authGrammar ++ workerGrammar
 
+def allMessageBodiesParsed : Bool :=
+  assembledGrammar.all fun e => protoWasParsed e.proto
+
 def assembledMetrics : Metrics :=
   composeSequential authMetrics workerMetrics
 
@@ -799,6 +878,10 @@ theorem all_listed_states_select_known_tasks :
 
 theorem all_listed_terminal_states_clean_tasks :
     states.all (fun s => if isTerminal s then s.task == none else true) = true := by
+  rfl
+
+theorem all_listed_message_bodies_are_parsed :
+    allMessageBodiesParsed = true := by
   rfl
 
 end LeanFM

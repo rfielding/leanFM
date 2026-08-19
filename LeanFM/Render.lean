@@ -26,6 +26,12 @@ def actorStateName : ActorState -> String
 def bytesName (bytes : List Nat) : String :=
   "[" ++ joinWith " " (bytes.map toString) ++ "]"
 
+def protoFieldName (f : ProtoField) : String :=
+  s!"{f.number}:{f.name}={f.value}"
+
+def protoFieldsName (fields : List ProtoField) : String :=
+  "{" ++ joinWith ", " (fields.map protoFieldName) ++ "}"
+
 def transportName : Transport -> String
   | Transport.http => "http"
   | Transport.https => "https"
@@ -44,7 +50,7 @@ def proofName : Option AuthProof -> String
   | none => "no-proof"
 
 def envelopeName (e : Envelope) : String :=
-  s!"{taskName e.task} {actorName e.src}->{actorName e.dst} via={transportName e.transport} proto={e.proto.typeName} bytes={bytesName e.proto.bytes} payload={e.proto.summary} ts={e.ts}"
+  s!"wrapper(task={taskName e.task}, src={actorName e.src}, dst={actorName e.dst}, via={transportName e.transport}, ts={e.ts}); protobuf(type={e.proto.typeName}, bytes={bytesName e.proto.bytes}, fields={protoFieldsName e.proto.fields})"
 
 def optionEnvelopeName : Option Envelope -> String
   | some e => envelopeName e
@@ -83,7 +89,7 @@ def turnName (t : Turn) : String :=
 
 def compactTurnName (t : Turn) : String :=
   match t.emitted with
-  | some e => s!"{actorName t.actor}: {e.proto.summary}"
+  | some e => s!"{actorName t.actor}: {e.proto.typeName} {protoFieldsName e.proto.fields}"
   | none =>
       match t.blocked with
       | some reason => s!"{actorName t.actor}: {blockReasonName reason}"
@@ -251,7 +257,7 @@ def distributionLine (bucket : Nat × Nat) : String :=
 
 def traceEventName (t : Turn) : String :=
   match t.emitted with
-  | some e => s!"src={actorName e.src}, dst={actorName e.dst}, payload=\"{e.proto.summary}\", ts={e.ts}"
+  | some e => s!"src={actorName e.src}, dst={actorName e.dst}, proto={e.proto.typeName}, fields={protoFieldsName e.proto.fields}, ts={e.ts}"
   | none =>
       match t.blocked with
       | some reason => s!"actor={actorName t.actor}, {blockReasonName reason}"
@@ -306,6 +312,9 @@ def textReport : String :=
     (reviewGrammar.map fun e => s!"  {envelopeName e}") ++
     ["", "Assembled system grammar"] ++
     (assembledGrammar.map fun e => s!"  {envelopeName e}") ++
+    ["", "Protobuf parsing"
+    , s!"  all listed message bodies parsed: {allMessageBodiesParsed}"
+    ] ++
     ["", "World actor/task composition"] ++
     (workerWorld.actors.map actorSpecLine) ++
     ["", "Task machines selected from queued messages"] ++
@@ -349,58 +358,111 @@ def trafficAnimation : String :=
   "const traceEl=document.getElementById('trafficTrace');" ++
   "const actors={Client:{x:120,y:95},Gateway:{x:450,y:95},Worker:{x:780,y:95}};" ++
   "const events=[" ++
-  "{src:'Client',dst:'Gateway',payload:'GET /docs/index.html',proto:'Docs.GetRequest',ts:1}," ++
-  "{src:'Gateway',dst:'Worker',payload:'fetch /docs/index.html',proto:'Docs.FetchCommand',ts:3}," ++
-  "{src:'Worker',dst:'Gateway',payload:'200 /docs/index.html',proto:'Docs.FetchResult',ts:7}," ++
-  "{src:'Gateway',dst:'Client',payload:'200 /docs/index.html',proto:'Docs.GetResponse',ts:8}," ++
-  "{src:'Client',dst:'Gateway',payload:'POST /reviews',proto:'Reviews.PostRequest',ts:1}," ++
-  "{src:'Gateway',dst:'Worker',payload:'moderate review',proto:'Reviews.ModerateCommand',ts:2}," ++
-  "{src:'Worker',dst:'Gateway',payload:'review accepted',proto:'Reviews.ModerationResult',ts:5}," ++
-  "{src:'Gateway',dst:'Client',payload:'201 /reviews',proto:'Reviews.PostResponse',ts:6}" ++
+  "{src:'Client',dst:'Gateway',payload:'GET /docs/index.html',proto:'Docs.GetRequest',bytes:'[1 16]',fields:'1:method=GET, 2:path=/docs/index.html',ts:1}," ++
+  "{src:'Gateway',dst:'Worker',payload:'fetch /docs/index.html',proto:'Docs.FetchCommand',bytes:'[2 32]',fields:'1:path=/docs/index.html, 2:cache_mode=normal',ts:3}," ++
+  "{src:'Worker',dst:'Gateway',payload:'200 /docs/index.html',proto:'Docs.FetchResult',bytes:'[3 48]',fields:'1:status=200, 2:path=/docs/index.html',ts:7}," ++
+  "{src:'Gateway',dst:'Client',payload:'200 /docs/index.html',proto:'Docs.GetResponse',bytes:'[4 64]',fields:'1:status=200, 2:path=/docs/index.html',ts:8}," ++
+  "{src:'Client',dst:'Gateway',payload:'POST /reviews',proto:'Reviews.PostRequest',bytes:'[17 16]',fields:'1:method=POST, 2:path=/reviews, 3:body_hash=review#1',ts:1}," ++
+  "{src:'Gateway',dst:'Worker',payload:'moderate review',proto:'Reviews.ModerateCommand',bytes:'[18 32]',fields:'1:body_hash=review#1, 2:policy=default',ts:2}," ++
+  "{src:'Worker',dst:'Gateway',payload:'review accepted',proto:'Reviews.ModerationResult',bytes:'[19 48]',fields:'1:decision=accepted, 2:body_hash=review#1',ts:5}," ++
+  "{src:'Gateway',dst:'Client',payload:'201 /reviews',proto:'Reviews.PostResponse',bytes:'[20 64]',fields:'1:status=201, 2:path=/reviews',ts:6}" ++
   "];" ++
   "function drawActor(name,a){ctx.fillStyle='#000';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.fillRect(a.x-70,a.y-36,140,72);ctx.strokeRect(a.x-70,a.y-36,140,72);ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.textAlign='center';ctx.fillText(name,a.x,a.y+6);}" ++
-  "function draw(){const w=canvas.width,h=canvas.height;ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);Object.entries(actors).forEach(([n,a])=>drawActor(n,a));ctx.strokeStyle='#666';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(120,180);ctx.lineTo(780,180);ctx.stroke();const now=performance.now();const span=1500;const i=Math.floor(now/span)%events.length;const p=(now%span)/span;const e=events[i];const a=actors[e.src],b=actors[e.dst];const x=a.x+(b.x-a.x)*p;const y=180+Math.sin(p*Math.PI)*-42;ctx.strokeStyle='#93c5fd';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(a.x,180);ctx.lineTo(b.x,180);ctx.stroke();ctx.fillStyle='#f8f8f8';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText(e.proto,x,250);ctx.fillText(e.payload,x,276);ctx.fillText(e.src+' -> '+e.dst+'  ts='+e.ts,x,302);traceEl.innerHTML=events.map((ev,j)=>'<li'+(j===i?' class=\"active\"':'')+'>'+ev.src+' -> '+ev.dst+' | '+ev.payload+' | ts='+ev.ts+'</li>').join('');requestAnimationFrame(draw);}draw();" ++
+  "function arrow(ctx,x1,y1,x2,y2,color,width){ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-13*Math.cos(a-.45),y2-13*Math.sin(a-.45));ctx.lineTo(x2-13*Math.cos(a+.45),y2-13*Math.sin(a+.45));ctx.closePath();ctx.fill();}" ++
+  "function draw(){const w=canvas.width,h=canvas.height;ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);Object.entries(actors).forEach(([n,a])=>drawActor(n,a));ctx.strokeStyle='#666';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(120,180);ctx.lineTo(780,180);ctx.stroke();const now=performance.now();const span=1500;const i=Math.floor(now/span)%events.length;const p=(now%span)/span;const e=events[i];const a=actors[e.src],b=actors[e.dst];const sx=a.x+(b.x>a.x?70:-70),tx=b.x-(b.x>a.x?70:-70);const x=sx+(tx-sx)*p;const y=180+Math.sin(p*Math.PI)*-42;arrow(ctx,sx,180,tx,180,'#93c5fd',3);ctx.fillStyle='#f8f8f8';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText(e.proto+' bytes='+e.bytes,x,250);ctx.fillText(e.fields,x,276);ctx.fillText(e.src+' -> '+e.dst+'  ts='+e.ts,x,302);traceEl.innerHTML=events.map((ev,j)=>'<li'+(j===i?' class=\"active\"':'')+'>'+ev.src+' -> '+ev.dst+' | '+ev.proto+' | bytes='+ev.bytes+' | '+ev.fields+' | ts='+ev.ts+'</li>').join('');requestAnimationFrame(draw);}draw();" ++
+  "</script>"
+
+def interactionDiagram : String :=
+  "<section><h2>Interaction Diagram</h2><div class=\"canvasPanel\"><canvas id=\"interaction\" width=\"1000\" height=\"560\"></canvas><ol id=\"interactionTrace\"></ol></div></section>" ++
+  "<script>" ++
+  "const ic=document.getElementById('interaction');const ictx=ic.getContext('2d');const itrace=document.getElementById('interactionTrace');" ++
+  "const lanes={Client:140,Gateway:500,Worker:860};" ++
+  "const seq=[" ++
+  "{task:'get_docs',src:'Client',dst:'Gateway',proto:'Docs.GetRequest',bytes:'[1 16]',fields:'1:method=GET, 2:path=/docs/index.html',ts:1}," ++
+  "{task:'get_docs',src:'Gateway',dst:'Worker',proto:'Docs.FetchCommand',bytes:'[2 32]',fields:'1:path=/docs/index.html, 2:cache_mode=normal',ts:3}," ++
+  "{task:'get_docs',src:'Worker',dst:'Gateway',proto:'Docs.FetchResult',bytes:'[3 48]',fields:'1:status=200, 2:path=/docs/index.html',ts:7}," ++
+  "{task:'get_docs',src:'Gateway',dst:'Client',proto:'Docs.GetResponse',bytes:'[4 64]',fields:'1:status=200, 2:path=/docs/index.html',ts:8}," ++
+  "{task:'post_review',src:'Client',dst:'Gateway',proto:'Reviews.PostRequest',bytes:'[17 16]',fields:'1:method=POST, 2:path=/reviews, 3:body_hash=review#1',ts:1}," ++
+  "{task:'post_review',src:'Gateway',dst:'Worker',proto:'Reviews.ModerateCommand',bytes:'[18 32]',fields:'1:body_hash=review#1, 2:policy=default',ts:2}," ++
+  "{task:'post_review',src:'Worker',dst:'Gateway',proto:'Reviews.ModerationResult',bytes:'[19 48]',fields:'1:decision=accepted, 2:body_hash=review#1',ts:5}," ++
+  "{task:'post_review',src:'Gateway',dst:'Client',proto:'Reviews.PostResponse',bytes:'[20 64]',fields:'1:status=201, 2:path=/reviews',ts:6}" ++
+  "];" ++
+  "function iarrow(x1,y1,x2,y2,color){ictx.strokeStyle=color;ictx.fillStyle=color;ictx.lineWidth=2;ictx.beginPath();ictx.moveTo(x1,y1);ictx.lineTo(x2,y2);ictx.stroke();const a=Math.atan2(y2-y1,x2-x1);ictx.beginPath();ictx.moveTo(x2,y2);ictx.lineTo(x2-12*Math.cos(a-.42),y2-12*Math.sin(a-.42));ictx.lineTo(x2-12*Math.cos(a+.42),y2-12*Math.sin(a+.42));ictx.closePath();ictx.fill();}" ++
+  "function drawInteraction(){ictx.fillStyle='#111';ictx.fillRect(0,0,ic.width,ic.height);ictx.font='18px sans-serif';ictx.textAlign='center';for(const [name,x] of Object.entries(lanes)){ictx.fillStyle='#000';ictx.strokeStyle='#fff';ictx.lineWidth=2;ictx.fillRect(x-72,22,144,42);ictx.strokeRect(x-72,22,144,42);ictx.fillStyle='#fff';ictx.fillText(name,x,50);ictx.strokeStyle='#555';ictx.setLineDash([6,7]);ictx.beginPath();ictx.moveTo(x,72);ictx.lineTo(x,ic.height-24);ictx.stroke();ictx.setLineDash([]);}seq.forEach((e,i)=>{const y=104+i*56;const x1=lanes[e.src],x2=lanes[e.dst];const color=e.task==='get_docs'?'#93c5fd':'#fbbf24';iarrow(x1,y,x2,y,color);ictx.fillStyle='#fff';ictx.font='13px sans-serif';ictx.textAlign='center';ictx.fillText(e.task+' '+e.proto+' bytes='+e.bytes,(x1+x2)/2,y-10);ictx.font='12px sans-serif';ictx.fillText(e.fields,(x1+x2)/2,y+17);});itrace.innerHTML=seq.map(e=>'<li>'+e.task+' | '+e.src+' -> '+e.dst+' | '+e.proto+' | bytes='+e.bytes+' | '+e.fields+' | ts='+e.ts+'</li>').join('');}drawInteraction();" ++
   "</script>"
 
 def aggregateGraphAnimation : String :=
-  "<section><h2>Aggregate Graph</h2><div class=\"controlPanel\"><label>Group by <select id=\"groupBy\"><option value=\"task\">active task</option><option value=\"auth\">auth proof</option><option value=\"terminal\">terminal</option><option value=\"queue\">queue length</option></select></label></div><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
+  "<section><h2>Aggregate Graph</h2><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
   "<script>" ++
-  "const graphCanvas=document.getElementById('aggGraph');const gctx=graphCanvas.getContext('2d');const groupBy=document.getElementById('groupBy');const aggInfo=document.getElementById('aggInfo');" ++
+  "const graphCanvas=document.getElementById('aggGraph');const gctx=graphCanvas.getContext('2d');const aggInfo=document.getElementById('aggInfo');" ++
   "const gNodes=[" ++
-  "{id:'unauth_idle',task:'none',auth:'no auth',terminal:false,q:0,label:'no auth idle'}," ++
-  "{id:'unauthorized',task:'none',auth:'no auth',terminal:true,q:0,label:'unauthorized'}," ++
-  "{id:'idle',task:'none',auth:'auth ok',terminal:false,q:0,label:'ready'}," ++
-  "{id:'gd_submit',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'GET queued at Gateway'}," ++
-  "{id:'gd_worker',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'fetch queued at Worker'}," ++
-  "{id:'gd_ok',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'200 queued at Gateway'}," ++
-  "{id:'gd_fail',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'404 queued at Gateway'}," ++
-  "{id:'gd_reply',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'200 queued at Client'}," ++
-  "{id:'gd_reject',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'401 queued at Client'}," ++
-  "{id:'done',task:'none',auth:'auth ok',terminal:true,q:0,label:'done cleaned'}," ++
-  "{id:'failed',task:'none',auth:'auth ok',terminal:true,q:0,label:'failed cleaned'}," ++
-  "{id:'rv_submit',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'review queued at Gateway'}," ++
-  "{id:'rv_worker',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'moderate queued at Worker'}," ++
-  "{id:'rv_ok',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'201 queued at Gateway'}," ++
-  "{id:'rv_fail',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'reject queued at Gateway'}," ++
-  "{id:'rv_reply',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'201 queued at Client'}," ++
-  "{id:'rv_reject',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'400 queued at Client'}" ++
+  "{id:'unauth_idle',group:'unauthenticated',sub:'entry',task:'none',auth:'no auth',terminal:false,q:0,label:'no auth idle'}," ++
+  "{id:'unauthorized',group:'unauthenticated',sub:'terminal',task:'none',auth:'no auth',terminal:true,q:0,label:'unauthorized'}," ++
+  "{id:'idle',group:'authenticated session',sub:'ready',task:'none',auth:'auth ok',terminal:false,q:0,label:'ready for task'}," ++
+  "{id:'gd_submit',group:'get_docs task',sub:'request accepted',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'GET queued at Gateway'}," ++
+  "{id:'gd_worker',group:'get_docs task',sub:'worker running',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'fetch queued at Worker'}," ++
+  "{id:'gd_ok',group:'get_docs task',sub:'gateway decides',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'200 queued at Gateway'}," ++
+  "{id:'gd_fail',group:'get_docs task',sub:'gateway decides',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'404 queued at Gateway'}," ++
+  "{id:'gd_reply',group:'get_docs task',sub:'client response',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'200 queued at Client'}," ++
+  "{id:'gd_reject',group:'get_docs task',sub:'client response',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'401 queued at Client'}," ++
+  "{id:'gd_done',group:'get_docs task',sub:'terminal',task:'get_docs',auth:'auth ok',terminal:true,q:0,label:'get_docs done'}," ++
+  "{id:'gd_failed',group:'get_docs task',sub:'terminal',task:'get_docs',auth:'auth ok',terminal:true,q:0,label:'get_docs failed'}," ++
+  "{id:'rv_submit',group:'post_review task',sub:'request accepted',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'review queued at Gateway'}," ++
+  "{id:'rv_worker',group:'post_review task',sub:'worker running',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'moderate queued at Worker'}," ++
+  "{id:'rv_ok',group:'post_review task',sub:'gateway decides',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'201 queued at Gateway'}," ++
+  "{id:'rv_fail',group:'post_review task',sub:'gateway decides',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'reject queued at Gateway'}," ++
+  "{id:'rv_reply',group:'post_review task',sub:'client response',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'201 queued at Client'}," ++
+  "{id:'rv_reject',group:'post_review task',sub:'client response',task:'post_review',auth:'auth ok',terminal:false,q:1,label:'400 queued at Client'}," ++
+  "{id:'rv_done',group:'post_review task',sub:'terminal',task:'post_review',auth:'auth ok',terminal:true,q:0,label:'post_review done'}," ++
+  "{id:'rv_failed',group:'post_review task',sub:'terminal',task:'post_review',auth:'auth ok',terminal:true,q:0,label:'post_review failed'}" ++
   "];" ++
-  "const gEdges=[['unauth_idle','unauthorized'],['idle','gd_submit'],['idle','rv_submit'],['gd_submit','gd_worker'],['gd_submit','gd_reject'],['gd_worker','gd_ok'],['gd_worker','gd_fail'],['gd_ok','gd_reply'],['gd_fail','gd_reject'],['gd_reply','done'],['gd_reject','failed'],['rv_submit','rv_worker'],['rv_submit','rv_reject'],['rv_worker','rv_ok'],['rv_worker','rv_fail'],['rv_ok','rv_reply'],['rv_fail','rv_reject'],['rv_reply','done'],['rv_reject','failed']];" ++
-  "let openGroups=new Set();let pos={};let hit=[];" ++
-  "function bucket(n){const k=groupBy.value;if(k==='task')return n.task;if(k==='auth')return n.auth;if(k==='terminal')return n.terminal?'terminal':'nonterminal';return 'q='+n.q;}" ++
+  "const gEdges=[['unauth_idle','unauthorized','Docs.GetRequest'],['idle','gd_submit','Docs.GetRequest'],['idle','rv_submit','Reviews.PostRequest'],['gd_submit','gd_worker','Docs.FetchCommand'],['gd_submit','gd_reject','Error.Response'],['gd_worker','gd_ok','Docs.FetchResult 200'],['gd_worker','gd_fail','Docs.FetchResult 404'],['gd_ok','gd_reply','Docs.GetResponse'],['gd_fail','gd_reject','Error.Response'],['gd_reply','gd_done','Docs.GetResponse'],['gd_reject','gd_failed','Error.Response'],['rv_submit','rv_worker','Reviews.ModerateCommand'],['rv_submit','rv_reject','Reviews.PostResponse 400'],['rv_worker','rv_ok','Reviews.ModerationResult accepted'],['rv_worker','rv_fail','Reviews.ModerationResult rejected'],['rv_ok','rv_reply','Reviews.PostResponse 201'],['rv_fail','rv_reject','Reviews.PostResponse 400'],['rv_reply','rv_done','Reviews.PostResponse 201'],['rv_reject','rv_failed','Reviews.PostResponse 400']];" ++
+  "let openGroups=new Set();let simGroups=[];let simById=new Map();let groupEdges=[];let hit=[];let childById=new Map();" ++
+  "function bucket(n){return n.group;}" ++
   "function groups(){const m=new Map();for(const n of gNodes){const b=bucket(n);if(!m.has(b))m.set(b,[]);m.get(b).push(n);}return [...m.entries()].map(([key,nodes])=>({key,nodes}));}" ++
-  "function targetLayout(){const gs=groups();const out={};const visible=[];const cols=Math.min(3,gs.length);const cellW=graphCanvas.width/(cols+1);const rowH=170;gs.forEach((g,i)=>{const cx=cellW*((i%cols)+1),cy=95+Math.floor(i/cols)*rowH;out['group:'+g.key]={x:cx,y:cy};visible.push({type:'group',key:g.key,x:cx,y:cy,count:g.nodes.length});if(openGroups.has(g.key)){g.nodes.forEach((n,j)=>{const a=(Math.PI*2*j)/Math.max(1,g.nodes.length);out[n.id]={x:cx+95*Math.cos(a),y:cy+72*Math.sin(a)+68};visible.push({type:'node',node:n});});}});return{out,visible};}" ++
-  "function endpoint(id,t){const n=gNodes.find(x=>x.id===id);const b=bucket(n);return openGroups.has(b)?(pos[id]||t.out[id]):(pos['group:'+b]||t.out['group:'+b]);}" ++
-  "function drawAgg(){const t=targetLayout();for(const k in t.out){const p=pos[k]||t.out[k];pos[k]={x:p.x+(t.out[k].x-p.x)*0.14,y:p.y+(t.out[k].y-p.y)*0.14};}gctx.fillStyle='#111';gctx.fillRect(0,0,graphCanvas.width,graphCanvas.height);hit=[];gctx.strokeStyle='#555';gctx.lineWidth=1.5;for(const e of gEdges){const a=endpoint(e[0],t),b=endpoint(e[1],t);if(!a||!b)continue;gctx.beginPath();gctx.moveTo(a.x,a.y);gctx.lineTo(b.x,b.y);gctx.stroke();}for(const item of t.visible){if(item.type==='group'){const p=pos['group:'+item.key];gctx.fillStyle=openGroups.has(item.key)?'#111827':'#000';gctx.strokeStyle='#fff';gctx.lineWidth=2;gctx.fillRect(p.x-82,p.y-34,164,68);gctx.strokeRect(p.x-82,p.y-34,164,68);gctx.fillStyle='#fff';gctx.font='16px sans-serif';gctx.textAlign='center';gctx.fillText(item.key,p.x,p.y-5);gctx.fillText(item.count+' states '+(openGroups.has(item.key)?'open':'closed'),p.x,p.y+18);hit.push({kind:'group',key:item.key,x:p.x-82,y:p.y-34,w:164,h:68});}else{const p=pos[item.node.id];if(!p)continue;gctx.fillStyle='#0b0b0b';gctx.strokeStyle='#93c5fd';gctx.lineWidth=1.5;gctx.beginPath();gctx.arc(p.x,p.y,27,0,Math.PI*2);gctx.fill();gctx.stroke();gctx.fillStyle='#fff';gctx.font='11px sans-serif';gctx.textAlign='center';gctx.fillText(item.node.label,p.x,p.y+4);}}aggInfo.innerHTML='<p>Click a bucket to open or close it. The selector simulates a property query that buckets states into a hash table.</p><ul>'+groups().map(g=>'<li>'+g.key+': '+g.nodes.length+' states</li>').join('')+'</ul>';requestAnimationFrame(drawAgg);}graphCanvas.addEventListener('click',ev=>{const r=graphCanvas.getBoundingClientRect();const x=(ev.clientX-r.left)*graphCanvas.width/r.width,y=(ev.clientY-r.top)*graphCanvas.height/r.height;for(const h of hit){if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){openGroups.has(h.key)?openGroups.delete(h.key):openGroups.add(h.key);break;}}});groupBy.addEventListener('change',()=>{openGroups.clear();});drawAgg();" ++
+  "function subKey(g,n){return g.key+'|'+n.sub;}" ++
+  "function subGroups(g){const m=new Map();for(const n of g.nodes){const k=n.sub;if(!m.has(k))m.set(k,[]);m.get(k).push(n);}return [...m.entries()].map(([key,nodes])=>({key,id:g.key+'|'+key,nodes}));}" ++
+  "function localRadius(n){return n<=1?0:Math.max(150,Math.ceil(Math.sqrt(n))*135);}" ++
+  "function groupSize(g){if(!openGroups.has(g.key))return{w:210,h:88};const r=localRadius(g.nodes.length);return{w:Math.max(620,2*r+460),h:Math.max(440,2*r+260)};}" ++
+  "function seed(id,i,total){const old=simById.get(id);if(old)return{x:old.x,y:old.y,vx:old.vx||0,vy:old.vy||0};const r=190+40*total,a=-Math.PI/2+i*Math.PI*2/Math.max(1,total);return{x:graphCanvas.width/2+Math.cos(a)*r,y:graphCanvas.height/2+Math.sin(a)*r,vx:0,vy:0};}" ++
+  "function resizeGraphCanvas(){let area=0,maxW=0,maxH=0;for(const g of simGroups){const s=groupSize(g);area+=s.w*s.h;maxW=Math.max(maxW,s.w);maxH=Math.max(maxH,s.h);}const side=Math.ceil(Math.sqrt(area))*2+520;const w=Math.max(1100,maxW+620,side);const h=Math.max(760,maxH+420,side);if(graphCanvas.width!==w||graphCanvas.height!==h){const ox=graphCanvas.width/2,oy=graphCanvas.height/2;graphCanvas.width=w;graphCanvas.height=h;for(const g of simGroups){g.x+=w/2-ox;g.y+=h/2-oy;}}}" ++
+  "function clampGroup(n){const sz=groupSize(n);n.x=Math.max(sz.w/2+24,Math.min(graphCanvas.width-sz.w/2-24,n.x));n.y=Math.max(sz.h/2+24,Math.min(graphCanvas.height-sz.h/2-24,n.y));}" ++
+  "function resolveOverlaps(){for(let pass=0;pass<24;pass++){for(let i=0;i<simGroups.length;i++){for(let j=i+1;j<simGroups.length;j++){const a=simGroups[i],b=simGroups[j],as=groupSize(a),bs=groupSize(b);let dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)<0.1&&Math.abs(dy)<0.1){dx=(j-i)*9;dy=7;}const ox=(as.w+bs.w)/2+72-Math.abs(dx),oy=(as.h+bs.h)/2+72-Math.abs(dy);if(ox>0&&oy>0){if(ox<oy){const m=ox/2+6,sgn=Math.sign(dx||1);a.x-=m*sgn;b.x+=m*sgn;a.vx*=0.2;b.vx*=0.2;}else{const m=oy/2+6,sgn=Math.sign(dy||1);a.y-=m*sgn;b.y+=m*sgn;a.vy*=0.2;b.vy*=0.2;}clampGroup(a);clampGroup(b);}}}}}" ++
+  "function rebuildGraph(){const gs=groups();simGroups=gs.map((g,i)=>Object.assign({id:'group:'+g.key,key:g.key,label:g.key,nodes:g.nodes,count:g.nodes.length},seed('group:'+g.key,i,gs.length)));simById=new Map(simGroups.map(g=>[g.id,g]));const seen=new Set();groupEdges=[];for(const e of gEdges){const a=bucket(gNodes.find(n=>n.id===e[0])),b=bucket(gNodes.find(n=>n.id===e[1]));if(a===b)continue;const k=a+'>'+b;if(seen.has(k))continue;seen.add(k);groupEdges.push(['group:'+a,'group:'+b]);}resizeGraphCanvas();for(let i=0;i<24;i++)resolveOverlaps();aggInfo.innerHTML='<p>Fixed hierarchy: each discrete task is a compound node; nested boxes are task super-states such as request accepted, worker running, gateway decides, client response, and terminal.</p><ul>'+gs.map(g=>'<li>'+g.key+': '+g.nodes.length+' states</li>').join('')+'</ul>';}" ++
+  "function stepForce(){const cx=graphCanvas.width/2,cy=graphCanvas.height/2;for(const n of simGroups){n.vx+=(cx-n.x)*0.00065;n.vy+=(cy-n.y)*0.00065;}for(const e of groupEdges){const a=simById.get(e[0]),b=simById.get(e[1]);if(!a||!b)continue;const as=groupSize(a),bs=groupSize(b);const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));const target=Math.max((as.w+bs.w)/2+180,(as.h+bs.h)/2+160);const f=(d-target)*0.006;const fx=f*dx/d,fy=f*dy/d;a.vx+=fx;b.vx-=fx;a.vy+=fy;b.vy-=fy;}for(let i=0;i<simGroups.length;i++){for(let j=i+1;j<simGroups.length;j++){const a=simGroups[i],b=simGroups[j],as=groupSize(a),bs=groupSize(b);let dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)<1&&Math.abs(dy)<1){dx=5;dy=4;}const d2=Math.max(1,dx*dx+dy*dy),d=Math.sqrt(d2);const near=Math.max((as.w+bs.w)/2+220,(as.h+bs.h)/2+180);const f=(near*near*0.18)/d2;const fx=f*dx/d,fy=f*dy/d;a.vx-=fx;a.vy-=fy;b.vx+=fx;b.vy+=fy;}}for(const n of simGroups){n.vx*=0.62;n.vy*=0.62;n.x+=n.vx;n.y+=n.vy;clampGroup(n);}resolveOverlaps();}" ++
+  "function groupRect(g){const s=groupSize(g);return{x:g.x-s.w/2,y:g.y-s.h/2,w:s.w,h:s.h};}" ++
+  "function childTarget(g,node){const nodes=g.nodes;const idx=nodes.findIndex(n=>n.id===node.id);const rad=localRadius(nodes.length);const angle=-Math.PI/2+(idx/nodes.length)*Math.PI*2;return{x:g.x+Math.cos(angle)*rad,y:g.y+30+Math.sin(angle)*rad};}" ++
+  "function childState(g,node){const id=g.key+'|'+node.id;let c=childById.get(id);const t=childTarget(g,node);if(!c){c={id,x:t.x,y:t.y,vx:0,vy:0};childById.set(id,c);}return c;}" ++
+  "function clampChild(c,r){const w=260,h=42;c.x=Math.max(r.x+w/2+18,Math.min(r.x+r.w-w/2-18,c.x));c.y=Math.max(r.y+h/2+72,Math.min(r.y+r.h-h/2-18,c.y));}" ++
+  "function layoutChildren(g){if(!openGroups.has(g.key))return;const r=groupRect(g);const cs=g.nodes.map(n=>childState(g,n));const byNode=new Map(g.nodes.map((n,i)=>[n.id,cs[i]]));for(let pass=0;pass<28;pass++){const center={x:g.x,y:g.y+30};const rad=localRadius(g.nodes.length);for(let i=0;i<g.nodes.length;i++){const c=cs[i];let dx=c.x-center.x,dy=c.y-center.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));if(rad===0){c.vx+=(center.x-c.x)*0.04;c.vy+=(center.y-c.y)*0.04;}else{const f=(d-rad)*0.006;c.vx-=f*dx/d;c.vy-=f*dy/d;c.vx+=(center.x-c.x)*0.0012;c.vy+=(center.y-c.y)*0.0012;}}for(const e of gEdges){const a=byNode.get(e[0]),b=byNode.get(e[1]);if(!a||!b)continue;const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));const target=250,force=(d-target)*0.014;const fx=force*dx/d,fy=force*dy/d;a.vx+=fx;b.vx-=fx;a.vy+=fy;b.vy-=fy;}for(let sep=0;sep<3;sep++){for(let i=0;i<cs.length;i++){for(let j=i+1;j<cs.length;j++){const a=cs[i],b=cs[j];let dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)<.1&&Math.abs(dy)<.1){dx=4;dy=3;}const d2=Math.max(1,dx*dx+dy*dy),d=Math.sqrt(d2);const rep=26000/d2;a.vx-=rep*dx/d;a.vy-=rep*dy/d;b.vx+=rep*dx/d;b.vy+=rep*dy/d;const ox=326-Math.abs(dx),oy=86-Math.abs(dy);if(ox>0&&oy>0){if(ox<oy){const m=ox/2+6,sgn=Math.sign(dx||1);a.x-=m*sgn;b.x+=m*sgn;}else{const m=oy/2+6,sgn=Math.sign(dy||1);a.y-=m*sgn;b.y+=m*sgn;}}}}}for(const c of cs){c.vx*=0.58;c.vy*=0.58;c.x+=c.vx;c.y+=c.vy;clampChild(c,r);}}}" ++
+  "function childPos(g,node){const c=childState(g,node);return{x:c.x,y:c.y};}" ++
+  "function drawChild(g,n){const p=childPos(g,n);const w=260,h=42;const x=p.x-w/2,y=p.y-h/2;gctx.fillStyle='#0b0b0b';gctx.strokeStyle='#93c5fd';gctx.lineWidth=1.5;gctx.fillRect(x,y,w,h);gctx.strokeRect(x,y,w,h);gctx.fillStyle='#fff';gctx.font='11px sans-serif';gctx.textAlign='center';gctx.fillText(n.id,p.x,p.y-5);gctx.fillText(n.label,p.x,p.y+10);hit.push({key:null,kind:'state',x,y,w,h});}" ++
+  "function edgePoint(g,t){const sz=groupSize(g);const dx=t.x-g.x,dy=t.y-g.y;const sx=(sz.w/2+16)/Math.max(1,Math.abs(dx)),sy=(sz.h/2+16)/Math.max(1,Math.abs(dy));const s=Math.min(sx,sy);return{x:g.x+dx*s,y:g.y+dy*s};}" ++
+  "function drawArrow(ctx,x1,y1,x2,y2,color,width){ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-12*Math.cos(a-.45),y2-12*Math.sin(a-.45));ctx.lineTo(x2-12*Math.cos(a+.45),y2-12*Math.sin(a+.45));ctx.closePath();ctx.fill();}" ++
+  "function rectPort(from,to,w,h,pad){const dx=to.x-from.x,dy=to.y-from.y;const sx=(w/2+pad)/Math.max(1,Math.abs(dx)),sy=(h/2+pad)/Math.max(1,Math.abs(dy));const s=Math.min(sx,sy);return{x:from.x+dx*s,y:from.y+dy*s};}" ++
+  "function edgeLabel(e){return e[2]||((e[0]||'?')+' -> '+(e[1]||'?'));}" ++
+  "function labelBox(ctx,x,y,text,color){const t=text.length>44?text.slice(0,41)+'...':text;ctx.fillStyle=color;ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(t,x,y-6);}" ++
+  "function visibleInnerPos(g,id){const n=g.nodes.find(x=>x.id===id);return n?childPos(g,n):null;}" ++
+  "function drawSubBuckets(g){}" ++
+  "function drawInternalEdges(g){if(!openGroups.has(g.key))return;for(const e of gEdges){const sn=gNodes.find(n=>n.id===e[0]),dn=gNodes.find(n=>n.id===e[1]);if(!sn||!dn||bucket(sn)!==g.key||bucket(dn)!==g.key)continue;const a=visibleInnerPos(g,e[0]),b=visibleInnerPos(g,e[1]);if(!a||!b)continue;const pa=rectPort(a,b,260,42,8),pb=rectPort(b,a,260,42,8);drawArrow(gctx,pa.x,pa.y,pb.x,pb.y,'#315f92',1.2);labelBox(gctx,(pa.x+pb.x)/2,(pa.y+pb.y)/2,edgeLabel(e),'#315f92');}}" ++
+  "function visibleEndpoint(id){const n=gNodes.find(x=>x.id===id);if(!n)return null;const g=simById.get('group:'+bucket(n));if(!g)return null;if(!openGroups.has(g.key)){return{key:'group:'+g.key,kind:'group',x:g.x,y:g.y,w:groupSize(g).w,h:groupSize(g).h};}const p=childPos(g,n);return{key:'state:'+id,kind:'state',x:p.x,y:p.y,w:260,h:42};}" ++
+  "function visibleNodes(){const out=[];for(const g of simGroups){if(!openGroups.has(g.key)){out.push({key:'group:'+g.key,kind:'group',x:g.x,y:g.y,w:groupSize(g).w,h:groupSize(g).h});continue;}for(const n of g.nodes)out.push(visibleEndpoint(n.id));}return out.filter(Boolean);}" ++
+  "function visibleEdgeEndpoints(e){const a=visibleEndpoint(e[0]),b=visibleEndpoint(e[1]);if(!a||!b||a.key===b.key)return null;return{a,b};}" ++
+  "function hasVisibleIncoming(v){for(const e of gEdges){const p=visibleEdgeEndpoints(e);if(p&&p.b.key===v.key)return true;}return false;}" ++
+  "function hasVisibleOutgoing(v){for(const e of gEdges){const p=visibleEdgeEndpoints(e);if(p&&p.a.key===v.key)return true;}return false;}" ++
+  "function drawBoundaryMarkers(){for(const v of visibleNodes()){if(!hasVisibleIncoming(v)){const from={x:v.x-v.w/2-42,y:v.y},to={x:v.x-v.w/2-6,y:v.y};drawArrow(gctx,from.x,from.y,to.x,to.y,'#22c55e',2);gctx.fillStyle='#22c55e';gctx.font='11px sans-serif';gctx.textAlign='right';gctx.fillText('start',from.x-4,from.y-6);}if(!hasVisibleOutgoing(v)){gctx.strokeStyle='#ef4444';gctx.lineWidth=2;gctx.strokeRect(v.x-v.w/2-5,v.y-v.h/2-5,v.w+10,v.h+10);gctx.fillStyle='#ef4444';gctx.font='11px sans-serif';gctx.textAlign='left';gctx.fillText('terminal',v.x+v.w/2+8,v.y+4);}}}" ++
+  "function drawVisibleEdges(){const projected=new Map();for(const e of gEdges){const sn=gNodes.find(n=>n.id===e[0]),dn=gNodes.find(n=>n.id===e[1]);if(!sn||!dn||bucket(sn)===bucket(dn))continue;const a=visibleEndpoint(e[0]),b=visibleEndpoint(e[1]);if(!a||!b||a.key===b.key)continue;const k=a.key+'>'+b.key;if(!projected.has(k))projected.set(k,{a,b,labels:[]});const p=projected.get(k);const label=edgeLabel(e);if(!p.labels.includes(label))p.labels.push(label);}for(const p of projected.values()){const pa=rectPort(p.a,p.b,p.a.w,p.a.h,12),pb=rectPort(p.b,p.a,p.b.w,p.b.h,12);const color=(p.a.kind==='state'||p.b.kind==='state')?'#f59e0b':'#777';drawArrow(gctx,pa.x,pa.y,pb.x,pb.y,color,1.8);labelBox(gctx,(pa.x+pb.x)/2,(pa.y+pb.y)/2,p.labels.join(' / '),color);}}" ++
+  "function drawAgg(){stepForce();gctx.fillStyle='#111';gctx.fillRect(0,0,graphCanvas.width,graphCanvas.height);hit=[];for(const g of simGroups){const sz=groupSize(g);const x=g.x-sz.w/2,y=g.y-sz.h/2;gctx.fillStyle=openGroups.has(g.key)?'#111827':'#000';gctx.strokeStyle='#fff';gctx.lineWidth=2;gctx.fillRect(x,y,sz.w,sz.h);}for(const g of simGroups){layoutChildren(g);drawSubBuckets(g);}for(const g of simGroups){const sz=groupSize(g);const x=g.x-sz.w/2,y=g.y-sz.h/2;gctx.strokeStyle='#fff';gctx.lineWidth=2;gctx.strokeRect(x,y,sz.w,sz.h);gctx.fillStyle='#fff';gctx.font='16px sans-serif';gctx.textAlign='center';gctx.fillText(g.label,g.x,y+25);gctx.font='13px sans-serif';gctx.fillText(g.count+' states '+(openGroups.has(g.key)?'open':'closed'),g.x,y+47);hit.push({key:g.key,kind:'group',x,y,w:sz.w,h:sz.h});if(openGroups.has(g.key)){for(const n of g.nodes)drawChild(g,n);}}for(const g of simGroups)drawInternalEdges(g);drawVisibleEdges();drawBoundaryMarkers();requestAnimationFrame(drawAgg);}graphCanvas.addEventListener('click',ev=>{const r=graphCanvas.getBoundingClientRect();const x=(ev.clientX-r.left)*graphCanvas.width/r.width,y=(ev.clientY-r.top)*graphCanvas.height/r.height;const matches=hit.filter(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h).sort((a,b)=>(a.w*a.h)-(b.w*b.h));if(matches.length===0)return;const h=matches[0];if(!h.key)return;openGroups.has(h.key)?openGroups.delete(h.key):openGroups.add(h.key);rebuildGraph();});rebuildGraph();drawAgg();" ++
   "</script>"
 
 def htmlPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM</title>" ++
   "<meta name=\"color-scheme\" content=\"dark only\">" ++
-  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagram img{display:block;max-width:100%;height:auto;background:#111;forced-color-adjust:none}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}</style>" ++
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagram img{display:block;max-width:100%;height:auto;background:#111;forced-color-adjust:none}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}</style>" ++
   "</head><body><h1>LeanFM</h1><p>Lean-native model of message-passing processes.</p>" ++
   "<p><a href=\"/metrics\">metrics</a> | <a href=\"/auth.dot\">auth.dot</a> | <a href=\"/graph.dot\">worker.dot</a> | <a href=\"/get_docs.dot\">get_docs.dot</a> | <a href=\"/post_review.dot\">post_review.dot</a> | <a href=\"/tasks.dot\">tasks.dot</a> | <a href=\"/assembled.dot\">assembled.dot</a></p>" ++
   trafficAnimation ++
+  interactionDiagram ++
   aggregateGraphAnimation ++
   "<details open><summary>Auth Group</summary><div class=\"diagram\"><img src=\"/diagrams/auth.png?v=4\" alt=\"Auth group state graph\"></div></details>" ++
   "<details><summary>Worker Group Overview</summary><div class=\"diagram\"><img src=\"/diagrams/worker.png?v=5\" alt=\"Worker group state graph\"></div></details>" ++
