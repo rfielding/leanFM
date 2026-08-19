@@ -8,3 +8,11 @@ name = "LeanFM"
 [[lean_exe]]
 name = "leanfm"
 root = "Main"
+
+[[lean_exe]]
+name = "leanfm-server"
+root = "Server"
+
+[[lean_exe]]
+name = "leanfm-diagrams"
+root = "Diagrams"

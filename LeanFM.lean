@@ -4,3 +4,4 @@ import LeanFM.Basic
 import LeanFM.CTL
 import LeanFM.MDP
 import LeanFM.Protocol
+import LeanFM.Render

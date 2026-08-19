@@ -16,6 +16,7 @@ inductive ActorState where
   | waiting
   | queued
   | busy
+  | sleeping
   | done
   | failed
 deriving DecidableEq, Repr
@@ -26,11 +27,25 @@ structure Envelope where
   bytes : List Nat
 deriving DecidableEq, Repr
 
-structure Observation where
-  client : ActorState
-  gateway : ActorState
-  worker : ActorState
+inductive BlockReason where
+  | readEmpty
+  | writeFull
 deriving DecidableEq, Repr
+
+structure Turn where
+  actor : Actor
+  emitted : Option Envelope
+  blocked : Option BlockReason
+deriving DecidableEq, Repr
+
+def emitTurn (actor : Actor) (msg : Envelope) : Turn :=
+  { actor := actor, emitted := some msg, blocked := none }
+
+def sleepRead (actor : Actor) : Turn :=
+  { actor := actor, emitted := none, blocked := some BlockReason.readEmpty }
+
+def sleepWrite (actor : Actor) : Turn :=
+  { actor := actor, emitted := none, blocked := some BlockReason.writeFull }
 
 def submit : Envelope :=
   { src := Actor.client, dst := Actor.gateway, bytes := [0x01, 0x10] }
@@ -38,8 +53,11 @@ def submit : Envelope :=
 def dispatch : Envelope :=
   { src := Actor.gateway, dst := Actor.worker, bytes := [0x02, 0x20] }
 
-def result : Envelope :=
+def resultOk : Envelope :=
   { src := Actor.worker, dst := Actor.gateway, bytes := [0x03, 0x30] }
+
+def resultFail : Envelope :=
+  { src := Actor.worker, dst := Actor.gateway, bytes := [0x03, 0xff] }
 
 def replyToClient : Envelope :=
   { src := Actor.gateway, dst := Actor.client, bytes := [0x04, 0x40] }
@@ -58,72 +76,97 @@ def authFail : Envelope :=
 
 structure AuthObservation where
   auth : ActorState
+  authQ : Nat
   db : ActorState
+  dbQ : Nat
 deriving DecidableEq, Repr
 
-def authInitial : AuthObservation :=
-  { auth := ActorState.idle, db := ActorState.idle }
+def authCap (a : Actor) : Nat :=
+  match a with
+  | Actor.auth => 1
+  | Actor.db => 1
+  | _ => 0
 
-def authWaiting : AuthObservation :=
-  { auth := ActorState.waiting, db := ActorState.busy }
+def authWithinCapacity (s : AuthObservation) : Bool :=
+  s.authQ <= authCap Actor.auth && s.dbQ <= authCap Actor.db
+
+def authInitial : AuthObservation :=
+  { auth := ActorState.idle, authQ := 0, db := ActorState.idle, dbQ := 0 }
+
+def authAfterQuery : AuthObservation :=
+  { auth := ActorState.waiting, authQ := 0, db := ActorState.queued, dbQ := 1 }
+
+def authAfterOk : AuthObservation :=
+  { auth := ActorState.queued, authQ := 1, db := ActorState.done, dbQ := 0 }
+
+def authAfterFail : AuthObservation :=
+  { auth := ActorState.queued, authQ := 1, db := ActorState.failed, dbQ := 0 }
 
 def authSucceeded : AuthObservation :=
-  { auth := ActorState.done, db := ActorState.done }
+  { auth := ActorState.done, authQ := 0, db := ActorState.done, dbQ := 0 }
 
 def authFailed : AuthObservation :=
-  { auth := ActorState.failed, db := ActorState.failed }
+  { auth := ActorState.failed, authQ := 0, db := ActorState.failed, dbQ := 0 }
 
 def authGrammar : List Envelope :=
   [authQuery, authOk, authFail]
 
-def authChoices : AuthObservation -> List (Choice AuthObservation Envelope)
+def turnGrammar (messages : List Envelope) : List Turn :=
+  messages.map fun e => emitTurn e.src e
+
+def authChoices : AuthObservation -> List (Choice AuthObservation Turn)
   | s =>
       if s = authInitial then
-        [Choice.action authQuery 1 authWaiting]
-      else if s = authWaiting then
-        [Choice.chance authOk
-          [ { weight := 98, dwell := 2, value := authSucceeded }
-          , { weight := 2, dwell := 2, value := authFailed }
+        [Choice.action (emitTurn Actor.auth authQuery) 1 authAfterQuery]
+      else if s = authAfterQuery then
+        [Choice.chance (emitTurn Actor.db authOk)
+          [ { weight := 98, dwell := 2, value := authAfterOk }
+          , { weight := 2, dwell := 2, value := authAfterFail }
           ]]
+      else if s = authAfterOk then
+        [Choice.action (emitTurn Actor.auth authOk) 1 authSucceeded]
+      else if s = authAfterFail then
+        [Choice.action (emitTurn Actor.auth authFail) 1 authFailed]
       else
         []
 
 def authStates : List AuthObservation :=
-  [authInitial, authWaiting, authSucceeded, authFailed]
+  [authInitial, authAfterQuery, authAfterOk, authAfterFail, authSucceeded, authFailed]
 
-def authComponent : Component AuthObservation Envelope :=
+def authComponent : Component AuthObservation Turn :=
   { initial := authInitial
   , states := authStates
-  , grammar := authGrammar
+  , grammar := turnGrammar authGrammar
   , choices := authChoices
   }
 
-def authSuccessPolicy : AuthObservation -> Option (Choice AuthObservation Envelope)
+def authSuccessPolicy : AuthObservation -> Option (Choice AuthObservation Turn)
   | s =>
       if s = authInitial then
-        some (Choice.action authQuery 1 authWaiting)
-      else if s = authWaiting then
-        some (Choice.chance authOk
-          [ { weight := 98, dwell := 2, value := authSucceeded }
-          , { weight := 2, dwell := 2, value := authFailed }
+        some (Choice.action (emitTurn Actor.auth authQuery) 1 authAfterQuery)
+      else if s = authAfterQuery then
+        some (Choice.chance (emitTurn Actor.db authOk)
+          [ { weight := 98, dwell := 2, value := authAfterOk }
+          , { weight := 2, dwell := 2, value := authAfterFail }
           ])
+      else if s = authAfterOk then
+        some (Choice.action (emitTurn Actor.auth authOk) 1 authSucceeded)
+      else if s = authAfterFail then
+        some (Choice.action (emitTurn Actor.auth authFail) 1 authFailed)
       else
         none
 
-def authInitialStats : PathStats AuthObservation Envelope :=
-  { mass := 1
-  , scale := 1
-  , lastDwell := 0
-  , elapsed := 0
-  , state := authInitial
-  , trace := []
-  }
+def authInitialStats : PathStats AuthObservation Turn :=
+  { mass := 1, scale := 1, lastDwell := 0, elapsed := 0, state := authInitial, trace := [] }
 
-def authStatsAfterQuery : List (PathStats AuthObservation Envelope) :=
+def authStats1 : List (PathStats AuthObservation Turn) :=
   advancePolicy authSuccessPolicy authInitialStats
 
-def authTerminalStats : List (PathStats AuthObservation Envelope) :=
-  authStatsAfterQuery.flatMap (advancePolicy authSuccessPolicy)
+def authStats2 : List (PathStats AuthObservation Turn) :=
+  authStats1.flatMap (advancePolicy authSuccessPolicy)
+
+def authTerminalStats : List (PathStats AuthObservation Turn) :=
+  authStats2.flatMap (advancePolicy authSuccessPolicy)
 
 def authIsSucceeded (s : AuthObservation) : Bool :=
   s.auth = ActorState.done && s.db = ActorState.done
@@ -132,9 +175,7 @@ def authTerminalMass : Nat :=
   authTerminalStats.foldl (fun n path => n + path.mass) 0
 
 def authSuccessMass : Nat :=
-  authTerminalStats.foldl
-    (fun n path => if authIsSucceeded path.state then n + path.mass else n)
-    0
+  authTerminalStats.foldl (fun n path => if authIsSucceeded path.state then n + path.mass else n) 0
 
 def authLatencyNumerator : Nat :=
   authTerminalStats.foldl (fun n path => n + path.mass * path.elapsed) 0
@@ -146,105 +187,131 @@ def authMetrics : Metrics :=
   , latencyDen := authTerminalMass
   }
 
+structure Observation where
+  client : ActorState
+  clientQ : Nat
+  gateway : ActorState
+  gatewayQ : Nat
+  worker : ActorState
+  workerQ : Nat
+deriving DecidableEq, Repr
+
+def cap (a : Actor) : Nat :=
+  match a with
+  | Actor.client => 1
+  | Actor.gateway => 2
+  | Actor.worker => 1
+  | _ => 0
+
+def withinCapacity (s : Observation) : Bool :=
+  s.clientQ <= cap Actor.client &&
+    s.gatewayQ <= cap Actor.gateway &&
+    s.workerQ <= cap Actor.worker
+
 def initial : Observation :=
-  { client := ActorState.idle
-  , gateway := ActorState.idle
-  , worker := ActorState.idle
+  { client := ActorState.idle, clientQ := 0
+  , gateway := ActorState.idle, gatewayQ := 0
+  , worker := ActorState.idle, workerQ := 0
   }
 
 def afterSubmit : Observation :=
-  { client := ActorState.waiting
-  , gateway := ActorState.queued
-  , worker := ActorState.idle
+  { client := ActorState.waiting, clientQ := 0
+  , gateway := ActorState.queued, gatewayQ := 1
+  , worker := ActorState.idle, workerQ := 0
   }
 
 def afterDispatch : Observation :=
-  { client := ActorState.waiting
-  , gateway := ActorState.waiting
-  , worker := ActorState.busy
+  { client := ActorState.waiting, clientQ := 0
+  , gateway := ActorState.waiting, gatewayQ := 0
+  , worker := ActorState.queued, workerQ := 1
   }
 
-def afterResult : Observation :=
-  { client := ActorState.waiting
-  , gateway := ActorState.done
-  , worker := ActorState.done
+def afterWorkerOk : Observation :=
+  { client := ActorState.waiting, clientQ := 0
+  , gateway := ActorState.queued, gatewayQ := 1
+  , worker := ActorState.done, workerQ := 0
+  }
+
+def afterWorkerFail : Observation :=
+  { client := ActorState.waiting, clientQ := 0
+  , gateway := ActorState.queued, gatewayQ := 1
+  , worker := ActorState.failed, workerQ := 0
+  }
+
+def afterReply : Observation :=
+  { client := ActorState.queued, clientQ := 1
+  , gateway := ActorState.done, gatewayQ := 0
+  , worker := ActorState.done, workerQ := 0
+  }
+
+def afterReject : Observation :=
+  { client := ActorState.queued, clientQ := 1
+  , gateway := ActorState.failed, gatewayQ := 0
+  , worker := ActorState.failed, workerQ := 0
   }
 
 def succeeded : Observation :=
-  { client := ActorState.done
-  , gateway := ActorState.done
-  , worker := ActorState.done
+  { client := ActorState.done, clientQ := 0
+  , gateway := ActorState.done, gatewayQ := 0
+  , worker := ActorState.done, workerQ := 0
   }
 
 def failed : Observation :=
-  { client := ActorState.failed
-  , gateway := ActorState.failed
-  , worker := ActorState.failed
+  { client := ActorState.failed, clientQ := 0
+  , gateway := ActorState.failed, gatewayQ := 0
+  , worker := ActorState.failed, workerQ := 0
   }
-
-def clientStep (self : Actor) (st : ActorState) (e : Envelope) : ActorState :=
-  if st = ActorState.idle && e.src = self && e = submit then ActorState.waiting
-  else if st = ActorState.waiting && e.dst = self && e = replyToClient then ActorState.done
-  else if st = ActorState.waiting && e.dst = self && e = rejectClient then ActorState.failed
-  else st
-
-def gatewayStep (self : Actor) (st : ActorState) (e : Envelope) : ActorState :=
-  if st = ActorState.idle && e.dst = self && e = submit then ActorState.queued
-  else if st = ActorState.queued && e.src = self && e = dispatch then ActorState.waiting
-  else if st = ActorState.waiting && e.dst = self && e = result then ActorState.done
-  else if st = ActorState.queued && e.src = self && e = rejectClient then ActorState.failed
-  else st
-
-def workerStep (self : Actor) (st : ActorState) (e : Envelope) : ActorState :=
-  if st = ActorState.idle && e.dst = self && e = dispatch then ActorState.busy
-  else if st = ActorState.busy && e.src = self && e = result then ActorState.done
-  else st
-
-def applyMessage (s : Observation) (e : Envelope) : Observation :=
-  { client := clientStep Actor.client s.client e
-  , gateway := gatewayStep Actor.gateway s.gateway e
-  , worker := workerStep Actor.worker s.worker e
-  }
-
-def observe (s : Observation) (e : Envelope) : Option Observation :=
-  let s' := applyMessage s e
-  if s' = s then none else some s'
 
 def grammar : List Envelope :=
-  [submit, dispatch, result, replyToClient, rejectClient]
+  [submit, dispatch, resultOk, resultFail, replyToClient, rejectClient]
 
-def choices : Observation -> List (Choice Observation Envelope)
+def choices : Observation -> List (Choice Observation Turn)
   | s =>
       if s = initial then
-        [Choice.action submit 1 afterSubmit]
+        [ Choice.action (emitTurn Actor.client submit) 1 afterSubmit
+        , Choice.action (sleepRead Actor.gateway) 1 initial
+        , Choice.action (sleepRead Actor.worker) 1 initial
+        ]
       else if s = afterSubmit then
-        [ Choice.action dispatch 2 afterDispatch
-        , Choice.action rejectClient 1 failed
+        [ Choice.action (emitTurn Actor.gateway dispatch) 2 afterDispatch
+        , Choice.action (emitTurn Actor.gateway rejectClient) 1 afterReject
+        , Choice.action (sleepRead Actor.worker) 1 afterSubmit
         ]
       else if s = afterDispatch then
-        [Choice.chance result
-          [ { weight := 95, dwell := 4, value := afterResult }
-          , { weight := 5, dwell := 4, value := failed }
-          ]]
-      else if s = afterResult then
-        [Choice.action replyToClient 1 succeeded]
+        [Choice.chance (emitTurn Actor.worker resultOk)
+          [ { weight := 95, dwell := 4, value := afterWorkerOk }
+          , { weight := 5, dwell := 4, value := afterWorkerFail }
+          ]
+        , Choice.action (sleepRead Actor.gateway) 1 afterDispatch
+        , Choice.action (sleepWrite Actor.gateway) 1 afterDispatch
+        ]
+      else if s = afterWorkerOk then
+        [Choice.action (emitTurn Actor.gateway replyToClient) 1 afterReply]
+      else if s = afterWorkerFail then
+        [Choice.action (emitTurn Actor.gateway rejectClient) 1 afterReject]
+      else if s = afterReply then
+        [Choice.action (emitTurn Actor.client replyToClient) 1 succeeded]
+      else if s = afterReject then
+        [Choice.action (emitTurn Actor.client rejectClient) 1 failed]
       else
         []
 
-def protocolMDP : MDP Observation Envelope :=
+def protocolMDP : MDP Observation Turn :=
   { choices := choices }
 
 def states : List Observation :=
-  [initial, afterSubmit, afterDispatch, afterResult, succeeded, failed]
+  [ initial, afterSubmit, afterDispatch, afterWorkerOk, afterWorkerFail
+  , afterReply, afterReject, succeeded, failed
+  ]
 
-def workerComponent : Component Observation Envelope :=
+def workerComponent : Component Observation Turn :=
   { initial := initial
   , states := states
-  , grammar := grammar
+  , grammar := turnGrammar grammar
   , choices := choices
   }
 
-def transitions : List (Observation × Envelope × Observation) :=
+def transitions : List (Observation × Turn × Observation) :=
   (states.map fun s =>
     (choices s).flatMap fun c =>
       (Choice.support c).map fun s' => (s, Choice.label c, s')).flatten
@@ -253,9 +320,7 @@ def successors (s : Observation) : List Observation :=
   protocolMDP.successors s
 
 def queueLength (s : Observation) : Nat :=
-  let gatewayQueue := if s.gateway = ActorState.queued then 1 else 0
-  let workerQueue := if s.worker = ActorState.busy then 1 else 0
-  gatewayQueue + workerQueue
+  s.clientQ + s.gatewayQ + s.workerQ
 
 def isSucceeded (s : Observation) : Bool :=
   s.client = ActorState.done && s.gateway = ActorState.done && s.worker = ActorState.done
@@ -263,42 +328,45 @@ def isSucceeded (s : Observation) : Bool :=
 def isFailed (s : Observation) : Bool :=
   s.client = ActorState.failed || s.gateway = ActorState.failed || s.worker = ActorState.failed
 
-def successPolicy : Observation -> Option (Choice Observation Envelope)
+def successPolicy : Observation -> Option (Choice Observation Turn)
   | s =>
       if s = initial then
-        some (Choice.action submit 1 afterSubmit)
+        some (Choice.action (emitTurn Actor.client submit) 1 afterSubmit)
       else if s = afterSubmit then
-        some (Choice.action dispatch 2 afterDispatch)
+        some (Choice.action (emitTurn Actor.gateway dispatch) 2 afterDispatch)
       else if s = afterDispatch then
-        some (Choice.chance result
-          [ { weight := 95, dwell := 4, value := afterResult }
-          , { weight := 5, dwell := 4, value := failed }
+        some (Choice.chance (emitTurn Actor.worker resultOk)
+          [ { weight := 95, dwell := 4, value := afterWorkerOk }
+          , { weight := 5, dwell := 4, value := afterWorkerFail }
           ])
-      else if s = afterResult then
-        some (Choice.action replyToClient 1 succeeded)
+      else if s = afterWorkerOk then
+        some (Choice.action (emitTurn Actor.gateway replyToClient) 1 afterReply)
+      else if s = afterWorkerFail then
+        some (Choice.action (emitTurn Actor.gateway rejectClient) 1 afterReject)
+      else if s = afterReply then
+        some (Choice.action (emitTurn Actor.client replyToClient) 1 succeeded)
+      else if s = afterReject then
+        some (Choice.action (emitTurn Actor.client rejectClient) 1 failed)
       else
         none
 
-def initialStats : PathStats Observation Envelope :=
-  { mass := 1
-  , scale := 1
-  , lastDwell := 0
-  , elapsed := 0
-  , state := initial
-  , trace := []
-  }
+def initialStats : PathStats Observation Turn :=
+  { mass := 1, scale := 1, lastDwell := 0, elapsed := 0, state := initial, trace := [] }
 
-def statsAfterSubmit : List (PathStats Observation Envelope) :=
+def stats1 : List (PathStats Observation Turn) :=
   advancePolicy successPolicy initialStats
 
-def statsAfterDispatch : List (PathStats Observation Envelope) :=
-  statsAfterSubmit.flatMap (advancePolicy successPolicy)
+def stats2 : List (PathStats Observation Turn) :=
+  stats1.flatMap (advancePolicy successPolicy)
 
-def statsAfterResult : List (PathStats Observation Envelope) :=
-  statsAfterDispatch.flatMap (advancePolicy successPolicy)
+def stats3 : List (PathStats Observation Turn) :=
+  stats2.flatMap (advancePolicy successPolicy)
 
-def terminalStats : List (PathStats Observation Envelope) :=
-  statsAfterResult.flatMap (advancePolicy successPolicy)
+def stats4 : List (PathStats Observation Turn) :=
+  stats3.flatMap (advancePolicy successPolicy)
+
+def terminalStats : List (PathStats Observation Turn) :=
+  stats4.flatMap (advancePolicy successPolicy)
 
 def terminalMass : Nat :=
   terminalStats.foldl (fun n path => n + path.mass) 0
@@ -310,9 +378,7 @@ def expectedLatencyDenominator : Nat :=
   terminalMass
 
 def successMass : Nat :=
-  terminalStats.foldl
-    (fun n path => if isSucceeded path.state then n + path.mass else n)
-    0
+  terminalStats.foldl (fun n path => if isSucceeded path.state then n + path.mass else n) 0
 
 def throughputNumerator : Nat :=
   successMass
@@ -333,9 +399,8 @@ def assembledGrammar : List Envelope :=
 def assembledMetrics : Metrics :=
   composeSequential authMetrics workerMetrics
 
-def queueLengthSamples : List (PathStats Observation Envelope) :=
-  statsAfterSubmit ++ statsAfterDispatch ++ statsAfterResult ++
-    terminalStats.filter (fun path => isSucceeded path.state)
+def queueLengthSamples : List (PathStats Observation Turn) :=
+  stats1 ++ stats2 ++ stats3 ++ stats4 ++ terminalStats
 
 def queueLengthTimeDistribution : List (Nat × Nat) :=
   bucketScaledMass terminalMass queueLength queueLengthSamples
@@ -349,13 +414,15 @@ def neverFails : CTL Observation :=
 def mayFail : CTL Observation :=
   CTL.ef (CTL.atom isFailed)
 
-theorem initial_observes_submit :
-    observe initial submit = some afterSubmit := by
-  simp [observe, applyMessage, clientStep, gatewayStep, workerStep,
-    initial, submit, afterSubmit]
+def queuesStayWithinCapacity : CTL Observation :=
+  CTL.ag (CTL.atom withinCapacity)
 
-theorem succeeded_is_terminal_for_grammar :
-    (grammar.filterMap (observe succeeded)) = [] := by
+theorem initial_within_capacity :
+    withinCapacity initial = true := by
+  rfl
+
+theorem all_listed_states_within_capacity :
+    states.all withinCapacity = true := by
   rfl
 
 end LeanFM
