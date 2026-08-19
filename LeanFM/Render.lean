@@ -414,13 +414,44 @@ def interactionDiagram : String :=
   "function drawInteraction(){ictx.fillStyle='#111';ictx.fillRect(0,0,ic.width,ic.height);drawTask('get_docs',taskSeqs.get_docs,34,'#93c5fd');drawTask('post_review',taskSeqs.post_review,342,'#fbbf24');itrace.innerHTML=Object.entries(taskSeqs).flatMap(([task,seq])=>seq.map(e=>'<li>'+task+' | '+e.src+' -> '+e.dst+' | '+e.proto+' | bytes='+e.bytes+' | '+e.fields+' | ts='+e.ts+'</li>')).join('');}drawInteraction();" ++
   "</script>"
 
+def queueChartData : String :=
+  joinWith "," <| queueLengthTimeDistribution.map fun bucket =>
+    "{q:" ++ toString bucket.1 ++ ",p:" ++ fixed4Text bucket.2 expectedLatencyNumerator ++ "}"
+
+def chartsSection : String :=
+  "<section><h2>Charts</h2><div class=\"chartGrid\"><canvas id=\"latencyChart\" width=\"720\" height=\"300\"></canvas><canvas id=\"queueChart\" width=\"720\" height=\"300\"></canvas><canvas id=\"successPie\" width=\"360\" height=\"300\"></canvas><canvas id=\"taskPie\" width=\"360\" height=\"300\"></canvas></div></section>" ++
+  "<script>" ++
+  "const latencyData=[" ++
+  "{label:'auth',latency:" ++ fixed4Text authMetrics.latencyNum authMetrics.latencyDen ++ ",throughput:" ++ fixed4Text authMetrics.throughputNum authMetrics.throughputDen ++ "}," ++
+  "{label:'get_docs',latency:" ++ fixed4Text purchaseMetrics.latencyNum purchaseMetrics.latencyDen ++ ",throughput:" ++ fixed4Text purchaseMetrics.throughputNum purchaseMetrics.throughputDen ++ "}," ++
+  "{label:'post_review',latency:" ++ fixed4Text reviewMetrics.latencyNum reviewMetrics.latencyDen ++ ",throughput:" ++ fixed4Text reviewMetrics.throughputNum reviewMetrics.throughputDen ++ "}," ++
+  "{label:'worker',latency:" ++ fixed4Text workerMetrics.latencyNum workerMetrics.latencyDen ++ ",throughput:" ++ fixed4Text workerMetrics.throughputNum workerMetrics.throughputDen ++ "}," ++
+  "{label:'assembled',latency:" ++ fixed4Text assembledMetrics.latencyNum assembledMetrics.latencyDen ++ ",throughput:" ++ fixed4Text assembledMetrics.throughputNum assembledMetrics.throughputDen ++ "}" ++
+  "];" ++
+  "const queueData=[" ++ queueChartData ++ "];" ++
+  "const successData=[" ++
+  "{label:'success',value:" ++ fixed4Text workerMetrics.successNum workerMetrics.successDen ++ ",color:'#22c55e'}," ++
+  "{label:'failure',value:" ++ fixed4Text (workerMetrics.successDen - workerMetrics.successNum) workerMetrics.successDen ++ ",color:'#ef4444'}" ++
+  "];" ++
+  "const taskSuccessData=[" ++
+  "{label:'get_docs',value:" ++ fixed4Text purchaseMetrics.successNum purchaseMetrics.successDen ++ ",color:'#93c5fd'}," ++
+  "{label:'post_review',value:" ++ fixed4Text reviewMetrics.successNum reviewMetrics.successDen ++ ",color:'#fbbf24'}" ++
+  "];" ++
+  "function chartFrame(ctx,w,h,title){ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(0,0,w,h);ctx.fillStyle='#fff';ctx.font='16px sans-serif';ctx.textAlign='left';ctx.fillText(title,18,28);ctx.strokeStyle='#444';ctx.beginPath();ctx.moveTo(58,48);ctx.lineTo(58,h-46);ctx.lineTo(w-24,h-46);ctx.stroke();}" ++
+  "function lineChart(id,title,series){const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;chartFrame(ctx,w,h,title);const max=Math.max(...series.flatMap(s=>s.values.map(p=>p.v)),1);for(let gi=0;gi<5;gi++){const y=48+(h-94)*gi/4;ctx.strokeStyle='#252525';ctx.beginPath();ctx.moveTo(58,y);ctx.lineTo(w-24,y);ctx.stroke();ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText((max*(1-gi/4)).toFixed(2),52,y+4);}series.forEach(s=>{ctx.strokeStyle=s.color;ctx.fillStyle=s.color;ctx.lineWidth=2;ctx.beginPath();s.values.forEach((p,i)=>{const x=72+(w-116)*i/Math.max(1,s.values.length-1);const y=h-46-(h-104)*(p.v/max);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();s.values.forEach((p,i)=>{const x=72+(w-116)*i/Math.max(1,s.values.length-1);const y=h-46-(h-104)*(p.v/max);ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ddd';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(p.label,x,h-26);ctx.fillStyle=s.color;});});let lx=w-190,ly=26;series.forEach(s=>{ctx.fillStyle=s.color;ctx.fillRect(lx,ly,12,8);ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(s.name,lx+18,ly+8);ly+=18;});}" ++
+  "function pieChart(id,title,data){const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;chartFrame(ctx,w,h,title);const total=data.reduce((n,d)=>n+d.value,0);let a=-Math.PI/2;const cx=w/2,cy=150,r=78;data.forEach(d=>{const b=a+Math.PI*2*(d.value/total);ctx.fillStyle=d.color;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,a,b);ctx.closePath();ctx.fill();a=b;});let y=242;data.forEach(d=>{ctx.fillStyle=d.color;ctx.fillRect(48,y-10,14,10);ctx.fillStyle='#fff';ctx.font='13px sans-serif';ctx.textAlign='left';ctx.fillText(d.label+' '+d.value.toFixed(4),70,y);y+=20;});}" ++
+  "lineChart('latencyChart','Expected latency and throughput',[{name:'latency',color:'#93c5fd',values:latencyData.map(d=>({label:d.label,v:d.latency}))},{name:'throughput',color:'#fbbf24',values:latencyData.map(d=>({label:d.label,v:d.throughput}))}]);" ++
+  "lineChart('queueChart','Time-weighted queue length distribution',[{name:'queue probability',color:'#22c55e',values:queueData.map(d=>({label:'q='+d.q,v:d.p}))}]);" ++
+  "pieChart('successPie','Worker success/failure',successData);" ++
+  "pieChart('taskPie','Task success rates',taskSuccessData);" ++
+  "</script>"
+
 def aggregateGraphAnimation : String :=
   "<section><h2>Aggregate Graph</h2><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
   "<script>" ++
   "const graphCanvas=document.getElementById('aggGraph');const gctx=graphCanvas.getContext('2d');const aggInfo=document.getElementById('aggInfo');" ++
   "const gNodes=[" ++
-  "{id:'unauth_idle',group:'unauthenticated',sub:'entry',task:'none',auth:'no auth',terminal:false,q:0,label:'no auth idle'}," ++
-  "{id:'unauthorized',group:'unauthenticated',sub:'terminal',task:'none',auth:'no auth',terminal:true,q:0,label:'unauthorized'}," ++
+  "{id:'unauthorized',group:'unauthenticated',sub:'entry',task:'none',auth:'no auth',terminal:false,q:0,label:'unauthorized'}," ++
   "{id:'idle',group:'authenticated session',sub:'ready',task:'none',auth:'auth ok',terminal:false,q:0,label:'ready for task'}," ++
   "{id:'gd_submit',group:'get_docs task',sub:'request accepted',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'GET queued at Gateway'}," ++
   "{id:'gd_worker',group:'get_docs task',sub:'worker running',task:'get_docs',auth:'auth ok',terminal:false,q:1,label:'fetch queued at Worker'}," ++
@@ -439,7 +470,7 @@ def aggregateGraphAnimation : String :=
   "{id:'rv_done',group:'post_review task',sub:'terminal',task:'post_review',auth:'auth ok',terminal:true,q:0,label:'post_review done'}," ++
   "{id:'rv_failed',group:'post_review task',sub:'terminal',task:'post_review',auth:'auth ok',terminal:true,q:0,label:'post_review failed'}" ++
   "];" ++
-  "const gEdges=[['unauth_idle','unauthorized','Docs.GetRequest'],['idle','gd_submit','Docs.GetRequest'],['idle','rv_submit','Reviews.PostRequest'],['gd_submit','gd_worker','Docs.FetchCommand'],['gd_submit','gd_reject','Error.Response'],['gd_worker','gd_ok','Docs.FetchResult 200'],['gd_worker','gd_fail','Docs.FetchResult 404'],['gd_ok','gd_reply','Docs.GetResponse'],['gd_fail','gd_reject','Error.Response'],['gd_reply','gd_done','Docs.GetResponse'],['gd_reject','gd_failed','Error.Response'],['rv_submit','rv_worker','Reviews.ModerateCommand'],['rv_submit','rv_reject','Reviews.PostResponse 400'],['rv_worker','rv_ok','Reviews.ModerationResult accepted'],['rv_worker','rv_fail','Reviews.ModerationResult rejected'],['rv_ok','rv_reply','Reviews.PostResponse 201'],['rv_fail','rv_reject','Reviews.PostResponse 400'],['rv_reply','rv_done','Reviews.PostResponse 201'],['rv_reject','rv_failed','Reviews.PostResponse 400']];" ++
+  "const gEdges=[['unauthorized','idle','Auth.LookupResponse ok'],['idle','gd_submit','Docs.GetRequest'],['idle','rv_submit','Reviews.PostRequest'],['gd_submit','gd_worker','Docs.FetchCommand'],['gd_submit','gd_reject','Error.Response'],['gd_worker','gd_ok','Docs.FetchResult 200'],['gd_worker','gd_fail','Docs.FetchResult 404'],['gd_ok','gd_reply','Docs.GetResponse'],['gd_fail','gd_reject','Error.Response'],['gd_reply','gd_done','Docs.GetResponse'],['gd_reject','gd_failed','Error.Response'],['rv_submit','rv_worker','Reviews.ModerateCommand'],['rv_submit','rv_reject','Reviews.PostResponse 400'],['rv_worker','rv_ok','Reviews.ModerationResult accepted'],['rv_worker','rv_fail','Reviews.ModerationResult rejected'],['rv_ok','rv_reply','Reviews.PostResponse 201'],['rv_fail','rv_reject','Reviews.PostResponse 400'],['rv_reply','rv_done','Reviews.PostResponse 201'],['rv_reject','rv_failed','Reviews.PostResponse 400']];" ++
   "let openGroups=new Set();let simGroups=[];let simById=new Map();let groupEdges=[];let hit=[];let childById=new Map();let drag=null;let dragMoved=false;" ++
   "function bucket(n){return n.group;}" ++
   "function groups(){const m=new Map();for(const n of gNodes){const b=bucket(n);if(!m.has(b))m.set(b,[]);m.get(b).push(n);}return [...m.entries()].map(([key,nodes])=>({key,nodes}));}" ++
@@ -484,11 +515,12 @@ def aggregateGraphAnimation : String :=
 def htmlPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM</title>" ++
   "<meta name=\"color-scheme\" content=\"dark only\">" ++
-  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagram img{display:block;max-width:100%;height:auto;background:#111;forced-color-adjust:none}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555;cursor:grab}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}</style>" ++
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagram img{display:block;max-width:100%;height:auto;background:#111;forced-color-adjust:none}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555;cursor:grab}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}.chartGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem}.chartGrid canvas{width:100%;height:auto;background:#111;border:1px solid #555}</style>" ++
   "</head><body><h1>LeanFM</h1><p>Lean-native model of message-passing processes.</p>" ++
   "<p><a href=\"/metrics\">metrics</a> | <a href=\"/auth.dot\">auth.dot</a> | <a href=\"/graph.dot\">worker.dot</a> | <a href=\"/get_docs.dot\">get_docs.dot</a> | <a href=\"/post_review.dot\">post_review.dot</a> | <a href=\"/tasks.dot\">tasks.dot</a> | <a href=\"/assembled.dot\">assembled.dot</a></p>" ++
   trafficAnimation ++
   interactionDiagram ++
+  chartsSection ++
   aggregateGraphAnimation ++
   "<details open><summary>Auth Group</summary><div class=\"diagram\"><img src=\"/diagrams/auth.png?v=4\" alt=\"Auth group state graph\"></div></details>" ++
   "<details><summary>Worker Group Overview</summary><div class=\"diagram\"><img src=\"/diagrams/worker.png?v=5\" alt=\"Worker group state graph\"></div></details>" ++
