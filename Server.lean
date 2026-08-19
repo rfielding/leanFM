@@ -31,14 +31,23 @@ def responseBody (path : String) : IO (Nat × String × ByteArray) := do
   | "/" => pure (200, "text/html; charset=utf-8", LeanFM.htmlPage.toUTF8)
   | "/diagrams/" => pure (200, "text/html; charset=utf-8", LeanFM.htmlPage.toUTF8)
   | "/metrics" => pure (200, "text/plain; charset=utf-8", LeanFM.textReport.toUTF8)
-  | "/graph.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.graphDot.toUTF8)
+  | "/graph.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.groupedGraphDot.toUTF8)
   | "/auth.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.authGraphDot.toUTF8)
+  | "/get_docs.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.getDocsGraphDot.toUTF8)
+  | "/post_review.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.postReviewGraphDot.toUTF8)
+  | "/tasks.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.taskGraphDot.toUTF8)
   | "/assembled.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.assembledGraphDot.toUTF8)
   | "/diagrams/auth.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/auth.svg").toUTF8)
   | "/diagrams/worker.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/worker.svg").toUTF8)
+  | "/diagrams/get_docs.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/get_docs.svg").toUTF8)
+  | "/diagrams/post_review.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/post_review.svg").toUTF8)
+  | "/diagrams/tasks.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/tasks.svg").toUTF8)
   | "/diagrams/assembled.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/assembled.svg").toUTF8)
   | "/diagrams/auth.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/auth.png")
   | "/diagrams/worker.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/worker.png")
+  | "/diagrams/get_docs.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/get_docs.png")
+  | "/diagrams/post_review.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/post_review.png")
+  | "/diagrams/tasks.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/tasks.png")
   | "/diagrams/assembled.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/assembled.png")
   | "/health" => pure (200, "text/plain; charset=utf-8", "ok\n".toUTF8)
   | _ => pure (404, "text/plain; charset=utf-8", "not found\n".toUTF8)
@@ -75,7 +84,10 @@ def writeDiagram (name dot : String) : IO Unit := do
 
 def writeDiagrams : IO Unit := do
   writeDiagram "auth" LeanFM.authGraphDot
-  writeDiagram "worker" LeanFM.graphDot
+  writeDiagram "worker" LeanFM.groupedGraphDot
+  writeDiagram "get_docs" LeanFM.getDocsGraphDot
+  writeDiagram "post_review" LeanFM.postReviewGraphDot
+  writeDiagram "tasks" LeanFM.taskGraphDot
   writeDiagram "assembled" LeanFM.assembledGraphDot
 
 def handleClient (client : TcpClient) : IO Unit := do

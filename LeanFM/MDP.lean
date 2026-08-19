@@ -9,29 +9,44 @@ deriving DecidableEq, Repr
 inductive Choice (S A : Type) where
   | action : A -> Nat -> S -> Choice S A
   | chance : A -> List (Weighted S) -> Choice S A
+  | chanceEvents : List (Weighted (A × S)) -> Choice S A
 deriving Repr
 
 namespace Choice
 
-def label {S A : Type} : Choice S A -> A
-  | action a _ _ => a
-  | chance a _ => a
-
 def support {S A : Type} : Choice S A -> List S
   | action _ _ s => [s]
   | chance _ outcomes => outcomes.map Weighted.value
+  | chanceEvents outcomes => outcomes.map fun outcome => outcome.value.2
+
+def labeledSupport {S A : Type} : Choice S A -> List (A × S)
+  | action a _ s => [(a, s)]
+  | chance a outcomes => outcomes.map fun outcome => (a, outcome.value)
+  | chanceEvents outcomes => outcomes.map Weighted.value
 
 def isChance {S A : Type} : Choice S A -> Bool
   | action _ _ _ => false
   | chance _ _ => true
+  | chanceEvents _ => true
 
 def totalWeight {S A : Type} : Choice S A -> Nat
   | action _ _ _ => 1
   | chance _ outcomes => outcomes.foldl (fun n outcome => n + outcome.weight) 0
+  | chanceEvents outcomes => outcomes.foldl (fun n outcome => n + outcome.weight) 0
 
 def timedSupport {S A : Type} : Choice S A -> List (Weighted S)
   | action _ dwell s => [{ weight := 1, dwell := dwell, value := s }]
   | chance _ outcomes => outcomes
+  | chanceEvents outcomes =>
+      outcomes.map fun outcome =>
+        { weight := outcome.weight, dwell := outcome.dwell, value := outcome.value.2 }
+
+def timedLabeledSupport {S A : Type} : Choice S A -> List (Weighted (A × S))
+  | action a dwell s => [{ weight := 1, dwell := dwell, value := (a, s) }]
+  | chance a outcomes =>
+      outcomes.map fun outcome =>
+        { weight := outcome.weight, dwell := outcome.dwell, value := (a, outcome.value) }
+  | chanceEvents outcomes => outcomes
 
 end Choice
 
@@ -96,13 +111,13 @@ def bucketScaledMass (commonScale : Nat) (measure : S -> Nat)
 
 def nextStats {S A : Type} (path : PathStats S A) (choice : Choice S A) : List (PathStats S A) :=
   let total := Choice.totalWeight choice
-  (Choice.timedSupport choice).map fun outcome =>
+  (Choice.timedLabeledSupport choice).map fun outcome =>
     { mass := path.mass * outcome.weight
     , scale := path.scale * total
     , lastDwell := outcome.dwell
     , elapsed := path.elapsed + outcome.dwell
-    , state := outcome.value
-    , trace := path.trace ++ [Choice.label choice]
+    , state := outcome.value.2
+    , trace := path.trace ++ [outcome.value.1]
     }
 
 def advancePolicy {S A : Type} (policy : S -> Option (Choice S A))
@@ -111,17 +126,39 @@ def advancePolicy {S A : Type} (policy : S -> Option (Choice S A))
   | some choice => nextStats path choice
   | none => [path]
 
+def runPolicy {S A : Type} (fuel : Nat) (policy : S -> Option (Choice S A))
+    (paths : List (PathStats S A)) : List (PathStats S A) :=
+  match fuel with
+  | 0 => paths
+  | n + 1 => runPolicy n policy (paths.flatMap (advancePolicy policy))
+
 def ratioText (num den : Nat) : String :=
   s!"{num}/{den}"
 
-def decimalText (num den : Nat) : String :=
+def pow10 : Nat -> Nat
+  | 0 => 1
+  | n + 1 => 10 * pow10 n
+
+def leftPadZeros : Nat -> String -> String
+  | 0, s => s
+  | n + 1, s => leftPadZeros n ("0" ++ s)
+
+def fixedText (digits num den : Nat) : String :=
   if den = 0 then
     "undefined"
   else
+    let scale := pow10 digits
     let whole := num / den
-    let frac := ((num % den) * 100) / den
-    let padded := if frac < 10 then s!"0{frac}" else toString frac
+    let frac := ((num % den) * scale) / den
+    let fracText := toString frac
+    let padded := leftPadZeros (digits - fracText.length) fracText
     s!"{whole}.{padded}"
+
+def fixed4Text (num den : Nat) : String :=
+  fixedText 4 num den
+
+def decimalText (num den : Nat) : String :=
+  fixed4Text num den
 
 structure Metrics where
   successNum : Nat

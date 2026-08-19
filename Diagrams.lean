@@ -22,5 +22,8 @@ def writeDiagram (name dot : String) : IO Unit := do
 
 def main : IO Unit := do
   writeDiagram "auth" LeanFM.authGraphDot
-  writeDiagram "worker" LeanFM.graphDot
+  writeDiagram "worker" LeanFM.groupedGraphDot
+  writeDiagram "get_docs" LeanFM.getDocsGraphDot
+  writeDiagram "post_review" LeanFM.postReviewGraphDot
+  writeDiagram "tasks" LeanFM.taskGraphDot
   writeDiagram "assembled" LeanFM.assembledGraphDot
