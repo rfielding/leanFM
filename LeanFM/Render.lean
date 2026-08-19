@@ -158,10 +158,15 @@ def groupedGraphDot : String :=
   joinWith "\n" <|
     [ "digraph protocol {" ] ++
     graphStyle ++
+    [ s!"  label=\"worker group overview\\nP(success)={fixed4Text workerMetrics.successNum workerMetrics.successDen}\\nget_docs={fixed4Text purchaseMetrics.successNum purchaseMetrics.successDen}, post_review={fixed4Text reviewMetrics.successNum reviewMetrics.successDen}\";"
+    , "  labelloc=\"t\";"
+    , "  fontcolor=\"white\";"
+    , "  fontsize=\"20\";"
+    ] ++
     clusterDot "unauthenticated" "no auth proof" unauthenticatedStates ++
     clusterDot "idle_terminal" "no active task" noActiveTaskStates ++
-    clusterDot "get_docs" "active task: get_docs" getDocsActiveStates ++
-    clusterDot "post_review" "active task: post_review" postReviewActiveStates ++
+    clusterDot "get_docs" s!"active task: get_docs, P(success)={fixed4Text purchaseMetrics.successNum purchaseMetrics.successDen}" getDocsActiveStates ++
+    clusterDot "post_review" s!"active task: post_review, P(success)={fixed4Text reviewMetrics.successNum reviewMetrics.successDen}" postReviewActiveStates ++
     (transitions.map compactDotLine) ++
     ["}"]
 
@@ -301,6 +306,15 @@ def messageListName (messages : List Envelope) : String :=
 def taskMachineLine (machine : TaskMachine) : String :=
   s!"  {actorName machine.owner}.{taskName machine.task}: accepts=[{messageListName machine.accepts}], emits=[{messageListName machine.emits}]"
 
+def taskCtlLines (name : String) (fsm : TaskFSM) : List String :=
+  [ s!"  {name}: states={fsm.states.length}, transitions={fsm.transitions.length}"
+  , s!"    AF terminal: {fsm.holds taskTerminates}"
+  , s!"    EF success: {fsm.holds taskCanSucceed}"
+  , s!"    EF failure: {fsm.holds taskCanFail}"
+  , s!"    AG capacity: {fsm.holds taskCapacitySafe}"
+  , s!"    AG terminal states clean up active task: {fsm.holds taskTerminalStatesCleaned}"
+  ]
+
 def textReport : String :=
   joinWith "\n" <|
     ["Two-actor auth group grammar"] ++
@@ -319,6 +333,9 @@ def textReport : String :=
     (workerWorld.actors.map actorSpecLine) ++
     ["", "Task machines selected from queued messages"] ++
     (workerWorld.tasks.map taskMachineLine) ++
+    ["", "Per-task FSM CTL checks"] ++
+    taskCtlLines "get_docs" purchaseTaskFSM ++
+    taskCtlLines "post_review" reviewTaskFSM ++
     ["", "Observable actor-state transitions"] ++
     (transitions.map fun t => s!"  {transitionLine t}") ++
     ["", "MDP choices"] ++
@@ -431,10 +448,12 @@ def aggregateGraphAnimation : String :=
   "function rebuildGraph(){const gs=groups();simGroups=gs.map((g,i)=>Object.assign({id:'group:'+g.key,key:g.key,label:g.key,nodes:g.nodes,count:g.nodes.length},seed('group:'+g.key,i,gs.length)));simById=new Map(simGroups.map(g=>[g.id,g]));const seen=new Set();groupEdges=[];for(const e of gEdges){const a=bucket(gNodes.find(n=>n.id===e[0])),b=bucket(gNodes.find(n=>n.id===e[1]));if(a===b)continue;const k=a+'>'+b;if(seen.has(k))continue;seen.add(k);groupEdges.push(['group:'+a,'group:'+b]);}resizeGraphCanvas();for(let i=0;i<24;i++)resolveOverlaps();aggInfo.innerHTML='<p>Fixed hierarchy: each discrete task is a compound node; nested boxes are task super-states such as request accepted, worker running, gateway decides, client response, and terminal.</p><ul>'+gs.map(g=>'<li>'+g.key+': '+g.nodes.length+' states</li>').join('')+'</ul>';}" ++
   "function stepForce(){const cx=graphCanvas.width/2,cy=graphCanvas.height/2;for(const n of simGroups){n.vx+=(cx-n.x)*0.00065;n.vy+=(cy-n.y)*0.00065;}for(const e of groupEdges){const a=simById.get(e[0]),b=simById.get(e[1]);if(!a||!b)continue;const as=groupSize(a),bs=groupSize(b);const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));const target=Math.max((as.w+bs.w)/2+180,(as.h+bs.h)/2+160);const f=(d-target)*0.006;const fx=f*dx/d,fy=f*dy/d;a.vx+=fx;b.vx-=fx;a.vy+=fy;b.vy-=fy;}for(let i=0;i<simGroups.length;i++){for(let j=i+1;j<simGroups.length;j++){const a=simGroups[i],b=simGroups[j],as=groupSize(a),bs=groupSize(b);let dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)<1&&Math.abs(dy)<1){dx=5;dy=4;}const d2=Math.max(1,dx*dx+dy*dy),d=Math.sqrt(d2);const near=Math.max((as.w+bs.w)/2+220,(as.h+bs.h)/2+180);const f=(near*near*0.18)/d2;const fx=f*dx/d,fy=f*dy/d;a.vx-=fx;a.vy-=fy;b.vx+=fx;b.vy+=fy;}}for(const n of simGroups){n.vx*=0.62;n.vy*=0.62;n.x+=n.vx;n.y+=n.vy;clampGroup(n);}resolveOverlaps();}" ++
   "function groupRect(g){const s=groupSize(g);return{x:g.x-s.w/2,y:g.y-s.h/2,w:s.w,h:s.h};}" ++
+  "function innerPortToward(g,other){const r=groupRect(g);let dx=other.x-g.x,dy=other.y-g.y;if(Math.abs(dx)<1&&Math.abs(dy)<1){dx=1;dy=0;}const sx=(r.w/2-150)/Math.max(1,Math.abs(dx)),sy=(r.h/2-92)/Math.max(1,Math.abs(dy));const s=Math.min(sx,sy);return{x:g.x+dx*s,y:g.y+dy*s};}" ++
+  "function boundaryPeer(id){const n=gNodes.find(x=>x.id===id);if(!n)return null;const g=simById.get('group:'+bucket(n));return g?{x:g.x,y:g.y}:null;}" ++
   "function childTarget(g,node){const nodes=g.nodes;const idx=nodes.findIndex(n=>n.id===node.id);const rad=localRadius(nodes.length);const angle=-Math.PI/2+(idx/nodes.length)*Math.PI*2;return{x:g.x+Math.cos(angle)*rad,y:g.y+30+Math.sin(angle)*rad};}" ++
   "function childState(g,node){const id=g.key+'|'+node.id;let c=childById.get(id);const t=childTarget(g,node);if(!c){c={id,x:t.x,y:t.y,vx:0,vy:0};childById.set(id,c);}return c;}" ++
   "function clampChild(c,r){const w=260,h=42;c.x=Math.max(r.x+w/2+18,Math.min(r.x+r.w-w/2-18,c.x));c.y=Math.max(r.y+h/2+72,Math.min(r.y+r.h-h/2-18,c.y));}" ++
-  "function layoutChildren(g){if(!openGroups.has(g.key))return;const r=groupRect(g);const cs=g.nodes.map(n=>childState(g,n));const byNode=new Map(g.nodes.map((n,i)=>[n.id,cs[i]]));for(let pass=0;pass<28;pass++){const center={x:g.x,y:g.y+30};const rad=localRadius(g.nodes.length);for(let i=0;i<g.nodes.length;i++){const c=cs[i];let dx=c.x-center.x,dy=c.y-center.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));if(rad===0){c.vx+=(center.x-c.x)*0.04;c.vy+=(center.y-c.y)*0.04;}else{const f=(d-rad)*0.006;c.vx-=f*dx/d;c.vy-=f*dy/d;c.vx+=(center.x-c.x)*0.0012;c.vy+=(center.y-c.y)*0.0012;}}for(const e of gEdges){const a=byNode.get(e[0]),b=byNode.get(e[1]);if(!a||!b)continue;const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));const target=250,force=(d-target)*0.014;const fx=force*dx/d,fy=force*dy/d;a.vx+=fx;b.vx-=fx;a.vy+=fy;b.vy-=fy;}for(let sep=0;sep<3;sep++){for(let i=0;i<cs.length;i++){for(let j=i+1;j<cs.length;j++){const a=cs[i],b=cs[j];let dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)<.1&&Math.abs(dy)<.1){dx=4;dy=3;}const d2=Math.max(1,dx*dx+dy*dy),d=Math.sqrt(d2);const rep=26000/d2;a.vx-=rep*dx/d;a.vy-=rep*dy/d;b.vx+=rep*dx/d;b.vy+=rep*dy/d;const ox=326-Math.abs(dx),oy=86-Math.abs(dy);if(ox>0&&oy>0){if(ox<oy){const m=ox/2+6,sgn=Math.sign(dx||1);a.x-=m*sgn;b.x+=m*sgn;}else{const m=oy/2+6,sgn=Math.sign(dy||1);a.y-=m*sgn;b.y+=m*sgn;}}}}}for(const c of cs){c.vx*=0.58;c.vy*=0.58;c.x+=c.vx;c.y+=c.vy;clampChild(c,r);}}}" ++
+  "function layoutChildren(g){if(!openGroups.has(g.key))return;const r=groupRect(g);const cs=g.nodes.map(n=>childState(g,n));const byNode=new Map(g.nodes.map((n,i)=>[n.id,cs[i]]));for(let pass=0;pass<28;pass++){const center={x:g.x,y:g.y+30};const rad=localRadius(g.nodes.length);for(let i=0;i<g.nodes.length;i++){const c=cs[i];let dx=c.x-center.x,dy=c.y-center.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));if(rad===0){c.vx+=(center.x-c.x)*0.04;c.vy+=(center.y-c.y)*0.04;}else{const f=(d-rad)*0.006;c.vx-=f*dx/d;c.vy-=f*dy/d;c.vx+=(center.x-c.x)*0.0012;c.vy+=(center.y-c.y)*0.0012;}}for(const e of gEdges){const a=byNode.get(e[0]),b=byNode.get(e[1]);if(a&&b){const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));const target=250,force=(d-target)*0.014;const fx=force*dx/d,fy=force*dy/d;a.vx+=fx;b.vx-=fx;a.vy+=fy;b.vy-=fy;}else if(a){const dn=gNodes.find(n=>n.id===e[1]);if(dn&&bucket(dn)!==g.key){const peer=boundaryPeer(e[1]);if(peer){const p=innerPortToward(g,peer);a.vx+=(p.x-a.x)*0.018;a.vy+=(p.y-a.y)*0.018;}}}else if(b){const sn=gNodes.find(n=>n.id===e[0]);if(sn&&bucket(sn)!==g.key){const peer=boundaryPeer(e[0]);if(peer){const p=innerPortToward(g,peer);b.vx+=(p.x-b.x)*0.010;b.vy+=(p.y-b.y)*0.010;}}}}for(let sep=0;sep<3;sep++){for(let i=0;i<cs.length;i++){for(let j=i+1;j<cs.length;j++){const a=cs[i],b=cs[j];let dx=b.x-a.x,dy=b.y-a.y;if(Math.abs(dx)<.1&&Math.abs(dy)<.1){dx=4;dy=3;}const d2=Math.max(1,dx*dx+dy*dy),d=Math.sqrt(d2);const rep=26000/d2;a.vx-=rep*dx/d;a.vy-=rep*dy/d;b.vx+=rep*dx/d;b.vy+=rep*dy/d;const ox=326-Math.abs(dx),oy=86-Math.abs(dy);if(ox>0&&oy>0){if(ox<oy){const m=ox/2+6,sgn=Math.sign(dx||1);a.x-=m*sgn;b.x+=m*sgn;}else{const m=oy/2+6,sgn=Math.sign(dy||1);a.y-=m*sgn;b.y+=m*sgn;}}}}}for(const c of cs){c.vx*=0.58;c.vy*=0.58;c.x+=c.vx;c.y+=c.vy;clampChild(c,r);}}}" ++
   "function childPos(g,node){const c=childState(g,node);return{x:c.x,y:c.y};}" ++
   "function drawChild(g,n){const p=childPos(g,n);const w=260,h=42;const x=p.x-w/2,y=p.y-h/2;gctx.fillStyle='#0b0b0b';gctx.strokeStyle='#93c5fd';gctx.lineWidth=1.5;gctx.fillRect(x,y,w,h);gctx.strokeRect(x,y,w,h);gctx.fillStyle='#fff';gctx.font='11px sans-serif';gctx.textAlign='center';gctx.fillText(n.id,p.x,p.y-5);gctx.fillText(n.label,p.x,p.y+10);hit.push({key:null,kind:'state',x,y,w,h});}" ++
   "function edgePoint(g,t){const sz=groupSize(g);const dx=t.x-g.x,dy=t.y-g.y;const sx=(sz.w/2+16)/Math.max(1,Math.abs(dx)),sy=(sz.h/2+16)/Math.max(1,Math.abs(dy));const s=Math.min(sx,sy);return{x:g.x+dx*s,y:g.y+dy*s};}" ++

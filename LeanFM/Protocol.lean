@@ -760,6 +760,68 @@ def reviewPolicy : Observation -> Option (Choice Observation Turn)
       else
         none
 
+structure TaskFSM where
+  task : TaskKind
+  entry : Observation
+  states : List Observation
+  transitions : List (Observation × Turn × Observation)
+
+def policyTransitions (states : List Observation)
+    (policy : Observation -> Option (Choice Observation Turn)) :
+    List (Observation × Turn × Observation) :=
+  (states.map fun s =>
+    match policy s with
+    | none => []
+    | some c =>
+        (Choice.labeledSupport c).map fun step => (s, step.1, step.2)).flatten
+
+def TaskFSM.successors (fsm : TaskFSM) (s : Observation) : List Observation :=
+  (fsm.transitions.filterMap fun t =>
+    if t.1 = s then some t.2.2 else none)
+
+def TaskFSM.holds (fsm : TaskFSM) (formula : CTL Observation) : Bool :=
+  CTL.holds fsm.successors fsm.entry formula
+
+def taskTerminates : CTL Observation :=
+  CTL.af (CTL.atom isTerminal)
+
+def taskCanSucceed : CTL Observation :=
+  CTL.ef (CTL.atom isSucceeded)
+
+def taskCanFail : CTL Observation :=
+  CTL.ef (CTL.atom isFailed)
+
+def taskCapacitySafe : CTL Observation :=
+  CTL.ag (CTL.atom withinCapacity)
+
+def taskTerminalStatesCleaned : CTL Observation :=
+  CTL.ag (CTL.implies (CTL.atom isTerminal) (CTL.atom fun s => s.task == none))
+
+def purchaseTaskStates : List Observation :=
+  [ initial, afterSubmit, afterDispatch, afterWorkerOk, afterWorkerFail
+  , afterReply, afterReject, succeeded, failed
+  ]
+
+def reviewTaskStates : List Observation :=
+  [ initial, reviewAfterSubmit, reviewAfterDispatch, reviewAfterWorkerOk
+  , reviewAfterWorkerFail, reviewAfterReply, reviewAfterReject, reviewSucceeded
+  , reviewFailed
+  ]
+
+def purchaseTaskFSM : TaskFSM :=
+  { task := TaskKind.purchaseItem
+  , entry := initial
+  , states := purchaseTaskStates
+  , transitions := policyTransitions purchaseTaskStates successPolicy
+  }
+
+def reviewTaskFSM : TaskFSM :=
+  { task := TaskKind.postReview
+  , entry := initial
+  , states := reviewTaskStates
+  , transitions := policyTransitions reviewTaskStates reviewPolicy
+  }
+
 def initialStats : PathStats Observation Turn :=
   { mass := 1, scale := 1, lastDwell := 0, elapsed := 0, state := initial, trace := [] }
 
