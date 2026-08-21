@@ -534,6 +534,16 @@ Routes include:
 
 The server does not serve SVG or PNG assets. The UI renders diagrams with canvas from data built into the binary. Tool catalogs, Markdown docs, DOT sources, generated Lean source views, and metrics are served directly from Lean constants.
 
+Browser behavior is authored in readable JavaScript under `assets/`. To keep the single-binary property, run:
+
+```sh
+node scripts/format_assets.js
+node scripts/embed_assets.js
+lake build leanfm-server
+```
+
+`scripts/embed_assets.js` writes `LeanFM/GeneratedAssets.lean`, which embeds the JavaScript as Lean string constants. Normal UI changes should edit `assets/*.js`, not the generated Lean strings.
+
 All routes except `/login` and `/health` require the local session cookie set by the login form. The default password is `leanfm`; set `LEANFM_PASSWORD` before launch to override it.
 
 Run it with:
