@@ -91,15 +91,17 @@
       }
 
     }
-    ctx.fillStyle='#000';
-    ctx.strokeStyle=color||'#93c5fd';
-    ctx.lineWidth=1.5;
-    ctx.fillRect(bx-lw/2, by-h/2, lw, h);
-    ctx.strokeRect(bx-lw/2, by-h/2, lw, h);
-    ctx.fillStyle='#fff';
     ctx.font='11px sans-serif';
     ctx.textAlign='center';
-    ls.forEach((t, i)=>ctx.fillText(t, bx, by-(ls.length-1)*7+i*14+4));
+    ctx.lineWidth=4;
+    ctx.strokeStyle='#000';
+    ctx.fillStyle=color||'#fff';
+    ls.forEach((t, i)=>{
+      const ty=by-(ls.length-1)*7+i*14+4;
+      ctx.strokeText(t, bx, ty);
+      ctx.fillText(t, bx, ty);
+
+    });
 
   }
   function group(x, y, w, h, label){
