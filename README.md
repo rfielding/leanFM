@@ -4,7 +4,7 @@ Lean Formal Methods, based on communicating heirarchial processes.
 
 ## Checkable requirements in Lean
 
-This repository now includes `/home/runner/work/leanFM/leanFM/Requirements.lean`, a small Lean file for
+This repository now includes `Requirements.lean`, a small Lean file for
 capturing accepted requirements as proof-carrying artifacts.
 
 - `RequirementDraft` is the place to encode a requirement being refined with an LLM or stakeholder.
@@ -15,5 +15,5 @@ capturing accepted requirements as proof-carrying artifacts.
 To check the committed requirements locally:
 
 ```bash
-lean /home/runner/work/leanFM/leanFM/Requirements.lean
+lean Requirements.lean
 ```
