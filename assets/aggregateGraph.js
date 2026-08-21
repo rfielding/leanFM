@@ -132,6 +132,14 @@ function isPlainTop(g){
   return g.key==='unauthenticated'||g.key==='authenticated session';
 
 }
+function groupArtifacts(g){
+  return[
+    {kind:'md', label:g.key+' notes', body:g.nodes.map(n=>n.label).slice(0, 2).join(', ')||'informal requirement description'},
+    {kind:'img', label:'image', body:'visual explanation'},
+    {kind:'canvas', label:'canvas', body:'local chart or diagram'}
+  ];
+
+}
 function groupSize(g){
   if(isPlainTop(g))return{
     w:260, h:58
@@ -153,7 +161,7 @@ function groupSize(g){
 
   }
   return{
-    w:Math.max(600, 340+292*(maxRow-1)), h:Math.max(420, 182+80*maxRank)
+    w:Math.max(660, 420+292*(maxRow-1)), h:Math.max(540, 302+80*maxRank)
   };
 
 }
@@ -474,7 +482,7 @@ function childTarget(g, node){
   const idx=row.findIndex(n=>n.id===node.id);
   const rect=groupRect(g);
   const left=rect.x+170, right=rect.x+rect.w-170;
-  const top=rect.y+110, bottom=rect.y+rect.h-72;
+  const top=rect.y+220, bottom=rect.y+rect.h-72;
   const maxRank=Math.max(0, ...nodes.map(n=>rankByNode.get(n.id)||0));
   const x=row.length<=1?g.x:left+(idx/(row.length-1))*(right-left);
   const y=maxRank<=0?(top+bottom)/2:top+(r/maxRank)*(bottom-top);
@@ -500,7 +508,7 @@ function childState(g, node){
 function clampChild(c, r){
   const w=260, h=42;
   c.x=Math.max(r.x+w/2+18, Math.min(r.x+r.w-w/2-18, c.x));
-  c.y=Math.max(r.y+h/2+72, Math.min(r.y+r.h-h/2-18, c.y));
+  c.y=Math.max(r.y+h/2+178, Math.min(r.y+r.h-h/2-18, c.y));
 
 }
 function separateChildren(cs, r){
@@ -654,6 +662,57 @@ function drawChild(g, n){
   hit.push({
     key:'state:'+n.id, kind:'state', stateId:n.id, groupKey:g.key, x, y, w, h
   });
+
+}
+function drawArtifactTile(g, x, y, w, h, a){
+  gctx.fillStyle='#050505';
+  gctx.strokeStyle='#94a3b8';
+  gctx.lineWidth=1.3;
+  gctx.fillRect(x, y, w, h);
+  gctx.strokeRect(x, y, w, h);
+  gctx.fillStyle='#94a3b8';
+  gctx.font='10px sans-serif';
+  gctx.textAlign='left';
+  gctx.fillText(a.kind.toUpperCase(), x+8, y+14);
+  gctx.fillStyle='#fff';
+  gctx.font='11px sans-serif';
+  gctx.fillText(a.label, x+8, y+31);
+  if(a.kind==='img'){
+    gctx.strokeStyle='#64748b';
+    gctx.beginPath();
+    gctx.moveTo(x+8, y+h-10);
+    gctx.lineTo(x+w*.42, y+h-30);
+    gctx.lineTo(x+w*.62, y+h-18);
+    gctx.lineTo(x+w-8, y+h-38);
+    gctx.stroke();
+
+  }
+  else if(a.kind==='canvas'){
+    gctx.strokeStyle='#64748b';
+    for(let i=0;i<3;i++){
+      gctx.beginPath();
+      gctx.moveTo(x+12+i*24, y+h-14);
+      gctx.lineTo(x+28+i*24, y+h-36);
+      gctx.lineTo(x+52+i*24, y+h-22);
+      gctx.stroke();
+
+    }
+
+  }
+  else{
+    const words=String(a.body).split(/\s+/), line=words.slice(0, 5).join(' ');
+    gctx.fillText(line, x+8, y+50);
+
+  }
+
+}
+function drawArtifactShelf(g, x, y, w){
+  const items=groupArtifacts(g), gap=10, tileW=(w-28-gap*2)/3, top=y+62;
+  gctx.fillStyle='#cbd5e1';
+  gctx.font='11px sans-serif';
+  gctx.textAlign='left';
+  gctx.fillText('informal artifacts: markdown / images / canvas', x+14, top-10);
+  items.forEach((a, i)=>drawArtifactTile(g, x+14+i*(tileW+gap), top, tileW, 82, a));
 
 }
 function edgePoint(g, t){
@@ -935,6 +994,7 @@ function drawAgg(){
       key:g.key, kind:plain?'plain':'group', x, y, w:sz.w, h:sz.h
     });
     if(openGroups.has(g.key)&&!plain){
+      drawArtifactShelf(g, x, y, sz.w);
       for(const n of g.nodes)drawChild(g, n);
 
     }

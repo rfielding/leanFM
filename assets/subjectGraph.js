@@ -171,15 +171,25 @@
     return[];
 
   }
+  function groupArtifacts(n){
+    const md=mdLines();
+    const base=n.id==='exchange'?'Task FSM notes':n.id==='annotations'?'Property notes':n.id==='terminal'?'Postcondition notes':'Requirement notes';
+    return[
+      {kind:'md', label:base, body:md[0]||String(model.entry||model.label||model.task||'informal requirement description')},
+      {kind:'img', label:'image', body:n.id==='exchange'?'message trace sketch':'requirement visual'},
+      {kind:'canvas', label:'canvas', body:n.id==='annotations'?'reducers / charts':'local diagram'}
+    ];
+
+  }
   function groupSize(n){
     if(!openGroups.has(n.id))return{
       w:230, h:82
     };
-    const kids=groupChildren(n), baseW=n.id==='exchange'?560:360, baseH=Math.max(260, 118+kids.length*58);
+    const kids=groupChildren(n), baseW=n.id==='exchange'?620:420, baseH=Math.max(360, 214+kids.length*58);
     const cols=Math.max(1, Math.ceil(Math.sqrt(kids.length)));
     const rows=Math.max(1, Math.ceil(kids.length/cols));
     return{
-      w:Math.max(baseW, 340+292*(cols-1)), h:Math.max(baseH, 162+66*(rows-1))
+      w:Math.max(baseW, 420+292*(cols-1)), h:Math.max(baseH, 272+66*(rows-1))
     };
 
   }
@@ -435,7 +445,7 @@
   function clampSubjectChild(c, parent){
     const s=groupSize(parent);
     c.x=Math.max(parent.x-s.w/2+145, Math.min(parent.x+s.w/2-145, c.x));
-    c.y=Math.max(parent.y-s.h/2+76, Math.min(parent.y+s.h/2-46, c.y));
+    c.y=Math.max(parent.y-s.h/2+166, Math.min(parent.y+s.h/2-46, c.y));
 
   }
   function separateSubjectChildren(parent, kids){
@@ -462,7 +472,7 @@
     let c=childById.get(key);
     const s=groupSize(parent), cols=Math.max(1, Math.ceil(Math.sqrt(total))), rows=Math.max(1, Math.ceil(total/cols)), col=i%cols, row=Math.floor(i/cols);
     const left=parent.x-s.w/2+170, right=parent.x+s.w/2-170;
-    const top=parent.y-s.h/2+96, bottom=parent.y+s.h/2-66;
+    const top=parent.y-s.h/2+184, bottom=parent.y+s.h/2-66;
     const tx=cols<=1?parent.x:left+(col/(cols-1))*(right-left);
     const ty=rows<=1?(top+bottom)/2:top+(row/(rows-1))*(bottom-top);
     if(!c){
@@ -489,6 +499,56 @@
     return concreteEdges().some(e=>e[3]==='msg'&&(e[0]===key||e[1]===key));
 
   }
+  function drawArtifactTile(x, y, w, h, a, color){
+    ctx.fillStyle='#050505';
+    ctx.strokeStyle=color||'#94a3b8';
+    ctx.lineWidth=1.3;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle=color||'#94a3b8';
+    ctx.font='10px sans-serif';
+    ctx.textAlign='left';
+    ctx.fillText(a.kind.toUpperCase(), x+8, y+14);
+    ctx.fillStyle='#fff';
+    ctx.font='11px sans-serif';
+    ctx.fillText(a.label, x+8, y+31);
+    if(a.kind==='img'){
+      ctx.strokeStyle='#64748b';
+      ctx.beginPath();
+      ctx.moveTo(x+8, y+h-10);
+      ctx.lineTo(x+w*.42, y+h-30);
+      ctx.lineTo(x+w*.62, y+h-18);
+      ctx.lineTo(x+w-8, y+h-38);
+      ctx.stroke();
+
+    }
+    else if(a.kind==='canvas'){
+      ctx.strokeStyle='#64748b';
+      for(let i=0;i<3;i++){
+        ctx.beginPath();
+        ctx.moveTo(x+12+i*24, y+h-14);
+        ctx.lineTo(x+28+i*24, y+h-36);
+        ctx.lineTo(x+52+i*24, y+h-22);
+        ctx.stroke();
+
+      }
+
+    }
+    else{
+      lines(a.body, Math.max(10, Math.floor((w-16)/7))).slice(0, 2).forEach((t, i)=>ctx.fillText(t, x+8, y+49+i*14));
+
+    }
+
+  }
+  function drawArtifactShelf(n, x, y, w){
+    const items=groupArtifacts(n), gap=10, tileW=(w-28-gap*2)/3, top=y+62;
+    ctx.fillStyle='#cbd5e1';
+    ctx.font='11px sans-serif';
+    ctx.textAlign='left';
+    ctx.fillText('informal artifacts: markdown / images / canvas', x+14, top-10);
+    items.forEach((a, i)=>drawArtifactTile(x+14+i*(tileW+gap), top, tileW, 74, a, n.color));
+
+  }
   function drawNode(n){
     const s=groupSize(n), x=n.x-s.w/2, y=n.y-s.h/2;
     ctx.fillStyle=openGroups.has(n.id)?'#111827':'#000';
@@ -506,6 +566,7 @@
       kind:'group', id:n.id, x, y, w:s.w, h:s.h
     });
     if(openGroups.has(n.id)){
+      drawArtifactShelf(n, x, y, s.w);
       const labels=groupChildren(n), kids=labels.map((st, i)=>childState(n, st, i, labels.length));
       separateSubjectChildren(n, kids);
       kids.forEach((c, i)=>{
