@@ -697,12 +697,21 @@ function edgeLabel(e){
   return e[2]||((e[0]||'?')+' -> '+(e[1]||'?'));
 
 }
+function clampValue(v, lo, hi){
+  return Math.max(lo, Math.min(hi, v));
+
+}
 function labelBox(ctx, x, y, text, color){
   const t=text.length>44?text.slice(0, 41)+'...':text;
+  const w=Math.max(120, Math.min(330, t.length*7)), h=20, pad=44;
+  const bx=clampValue(x, w/2+pad, graphCanvas.width-w/2-pad), by=clampValue(y-6, h/2+pad, graphCanvas.height-h/2-pad);
   ctx.fillStyle=color;
   ctx.font='11px sans-serif';
   ctx.textAlign='center';
-  ctx.fillText(t, x, y-6);
+  ctx.lineWidth=4;
+  ctx.strokeStyle='#000';
+  ctx.strokeText(t, bx, by);
+  ctx.fillText(t, bx, by);
 
 }
 function visibleInnerPos(g, id){

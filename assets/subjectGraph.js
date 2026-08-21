@@ -75,17 +75,23 @@
     return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
 
   }
+  function clampValue(v, lo, hi){
+    return Math.max(lo, Math.min(hi, v));
+
+  }
   function labelBox(x, y, text, color, w, avoid){
     const lw=w||210, ls=lines(text, Math.floor(lw/8)).slice(0, 3), h=18+ls.length*15;
     const offsets=[[0, 0], [0, -54], [0, 54], [170, 0], [-170, 0], [170, -54], [-170, -54], [170, 54], [-170, 54], [0, -96], [0, 96]];
-    let bx=x, by=y;
+    const pad=44, minX=lw/2+pad, maxX=cv.width-lw/2-pad, minY=h/2+pad, maxY=cv.height-h/2-pad;
+    let bx=clampValue(x, minX, maxX), by=clampValue(y, minY, maxY);
     for(const [ox, oy] of offsets){
+      const cx=clampValue(x+ox, minX, maxX), cy=clampValue(y+oy, minY, maxY);
       const r={
-        x:x+ox-lw/2, y:y+oy-h/2, w:lw, h
+        x:cx-lw/2, y:cy-h/2, w:lw, h
       };
       if(!(avoid||[]).some(a=>overlapsRect(r, a))){
-        bx=x+ox;
-        by=y+oy;
+        bx=cx;
+        by=cy;
         break;
 
       }
