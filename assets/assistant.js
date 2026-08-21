@@ -128,6 +128,7 @@ let charts=JSON.parse(localStorage.getItem('leanfm.namedCharts')||'null')||[
   {id:'messages_by_actor', name:'messages by actor', kind:'pie', dataset:'messages_by_actor'},
   {id:'protocol_steps', name:'protocol steps', kind:'xy', dataset:'protocol_steps'}
 ];
+let selectedChartId=charts[0]?.id||'';
 function saveCharts(){
   localStorage.setItem('leanfm.namedCharts', JSON.stringify(charts));
 
@@ -218,15 +219,27 @@ function drawPie(canvas, title, data){
 function renderNamedCharts(){
   if(!namedCharts)return;
   namedCharts.innerHTML='';
+  if(!charts.length){
+    namedCharts.innerHTML='<div class="chartCard"><h3>No charts</h3><p>Ask for a pie or xy chart, or save one in the editor.</p></div>';
+    selectedChartId='';
+    return;
+
+  }
   charts.forEach(c=>{
     const ds=chartDatasets[c.dataset]||chartDatasets.messages_by_actor;
     const card=document.createElement('div');
     card.className='chartCard';
-    card.innerHTML='<h3>'+esc(c.name)+'</h3><canvas width="560" height="300"></canvas>';
+    card.innerHTML='<h3>'+esc(c.name)+'</h3><canvas width="560" height="300"></canvas><button type="button" class="chartCardDelete">delete</button>';
     card.addEventListener('click', ()=>{
+      selectedChartId=c.id;
       chartName.value=c.name;
       chartKind.value=c.kind;
       chartDataset.value=c.dataset;
+
+    });
+    card.querySelector('.chartCardDelete').addEventListener('click', ev=>{
+      ev.stopPropagation();
+      deleteChart(c.id);
 
     });
     namedCharts.appendChild(card);
@@ -236,12 +249,36 @@ function renderNamedCharts(){
   });
 
 }
+function deleteChart(id){
+  charts=charts.filter(c=>c.id!==id);
+  if(selectedChartId===id)selectedChartId=charts[0]?.id||'';
+  saveCharts();
+  if(selectedChartId){
+    const c=charts.find(x=>x.id===selectedChartId);
+    if(c){
+      chartName.value=c.name;
+      chartKind.value=c.kind;
+      chartDataset.value=c.dataset;
+
+    }
+
+  }
+  else{
+    chartName.value='';
+    chartKind.value='xy';
+    chartDataset.value='messages_by_actor';
+
+  }
+  renderNamedCharts();
+
+}
 function upsertChart(spec){
   const id=(spec.name||'chart').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')||'chart';
   const chart={
     id, name:spec.name||id, kind:spec.kind==='pie'?'pie':'xy', dataset:chartDatasets[spec.dataset]?spec.dataset:'messages_by_actor'
   };
   charts=charts.filter(c=>c.id!==id).concat([chart]);
+  selectedChartId=id;
   saveCharts();
   renderNamedCharts();
   return chart;
@@ -271,10 +308,8 @@ function initCharts(){
 
   });
   if(chartDelete)chartDelete.addEventListener('click', ()=>{
-    const id=(chartName.value||'').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-    charts=charts.filter(c=>c.id!==id);
-    saveCharts();
-    renderNamedCharts();
+    const id=selectedChartId||((chartName.value||'').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''));
+    if(id)deleteChart(id);
 
   });
   renderNamedCharts();
