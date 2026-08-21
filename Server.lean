@@ -64,6 +64,13 @@ def responseBody (path : String) : IO Response := do
   match path with
   | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
   | "/diagrams/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
+  | "/renders/" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "all")
+  | "/renders/auth" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "auth")
+  | "/renders/worker" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "worker")
+  | "/renders/get_docs" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "get_docs")
+  | "/renders/post_review" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "post_review")
+  | "/renders/tasks" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "tasks")
+  | "/renders/assembled" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "assembled")
   | "/metrics" => pure <| response 200 "text/plain; version=0.0.4; charset=utf-8" LeanFM.prometheusMetrics
   | "/report" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.textReport
   | "/tools/scenarios" => pure <| response 200 "application/json; charset=utf-8" LeanFM.scenarioCatalogJson

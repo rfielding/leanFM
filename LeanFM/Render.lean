@@ -641,13 +641,14 @@ def interactionDiagram : String :=
 
 def canvasDiagramGallery : String :=
   "<section><h2>Canvas Diagram Gallery</h2>" ++
+  "<p class=\"renderLinks\"><a href=\"/renders/auth\">auth render</a> | <a href=\"/renders/worker\">worker render</a> | <a href=\"/renders/get_docs\">get_docs render</a> | <a href=\"/renders/post_review\">post_review render</a> | <a href=\"/renders/tasks\">task conversations render</a> | <a href=\"/renders/assembled\">assembled render</a></p>" ++
   "<div class=\"diagramGrid\">" ++
-  "<details open><summary>Auth Group <a href=\"/docs/auth.md\">md</a></summary><canvas id=\"diagAuth\" width=\"900\" height=\"320\"></canvas></details>" ++
-  "<details><summary>Worker Group Overview <a href=\"/docs/worker.md\">md</a></summary><canvas id=\"diagWorker\" width=\"900\" height=\"420\"></canvas></details>" ++
-  "<details><summary>get_docs Task <a href=\"/docs/get_docs.md\">md</a></summary><canvas id=\"diagGetDocs\" width=\"900\" height=\"420\"></canvas></details>" ++
-  "<details><summary>post_review Task <a href=\"/docs/post_review.md\">md</a></summary><canvas id=\"diagPostReview\" width=\"900\" height=\"420\"></canvas></details>" ++
-  "<details open><summary>Task Conversations</summary><canvas id=\"diagTasks\" width=\"900\" height=\"360\"></canvas></details>" ++
-  "<details open><summary>Assembled System <a href=\"/docs/assembled.md\">md</a></summary><canvas id=\"diagAssembled\" width=\"900\" height=\"360\"></canvas></details>" ++
+  "<details id=\"render-auth\" open><summary>Auth Group <a href=\"/renders/auth\">render</a> <a href=\"/docs/auth.md\">md</a></summary><canvas id=\"diagAuth\" width=\"900\" height=\"320\"></canvas></details>" ++
+  "<details id=\"render-worker\"><summary>Worker Group Overview <a href=\"/renders/worker\">render</a> <a href=\"/docs/worker.md\">md</a></summary><canvas id=\"diagWorker\" width=\"900\" height=\"420\"></canvas></details>" ++
+  "<details id=\"render-get-docs\"><summary>get_docs Task <a href=\"/renders/get_docs\">render</a> <a href=\"/docs/get_docs.md\">md</a></summary><canvas id=\"diagGetDocs\" width=\"900\" height=\"420\"></canvas></details>" ++
+  "<details id=\"render-post-review\"><summary>post_review Task <a href=\"/renders/post_review\">render</a> <a href=\"/docs/post_review.md\">md</a></summary><canvas id=\"diagPostReview\" width=\"900\" height=\"420\"></canvas></details>" ++
+  "<details id=\"render-tasks\" open><summary>Task Conversations <a href=\"/renders/tasks\">render</a></summary><canvas id=\"diagTasks\" width=\"900\" height=\"360\"></canvas></details>" ++
+  "<details id=\"render-assembled\" open><summary>Assembled System <a href=\"/renders/assembled\">render</a> <a href=\"/docs/assembled.md\">md</a></summary><canvas id=\"diagAssembled\" width=\"900\" height=\"360\"></canvas></details>" ++
   "</div></section>" ++
   "<script>" ++
   "function cnode(ctx,n){const w=n.w||190,h=n.h||56,x=n.x-w/2,y=n.y-h/2;ctx.fillStyle='#000';ctx.strokeStyle=n.color||'#fff';ctx.lineWidth=2;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.fillStyle='#fff';ctx.font='15px sans-serif';ctx.textAlign='center';String(n.label).split('\\n').forEach((t,i,a)=>ctx.fillText(t,n.x,n.y-(a.length-1)*9+i*18));}" ++
@@ -660,6 +661,17 @@ def canvasDiagramGallery : String :=
   "drawCanvasDiagram('diagTasks','task conversations',[{id:'c',label:'Client',x:130,y:180},{id:'g',label:'Gateway',x:450,y:180},{id:'w',label:'Worker',x:770,y:180}],[['c','g','request'],['g','w','command'],['w','g','result'],['g','c','response']]);" ++
   "drawCanvasDiagram('diagAssembled','assembled system',[{id:'auth',label:'auth group\\nP=0.9800',x:220,y:110,w:230,h:80},{id:'worker',label:'worker group\\nP=0.9250',x:450,y:215,w:230,h:80},{id:'sys',label:'assembled\\nP=0.9065\\nthroughput=0.0765',x:680,y:110,w:250,h:96}],[['auth','worker','auth proof'],['worker','sys','aggregate metrics']]);" ++
   "</script>"
+
+def diagramRenderPage (selected : String) : String :=
+  "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM Render</title>" ++
+  "<meta name=\"color-scheme\" content=\"dark only\">" ++
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagramGrid canvas{display:block;width:100%;max-width:900px;height:auto;background:#111;border-top:1px solid #333}.renderLinks{margin:.5rem 0 1rem}</style>" ++
+  "</head><body><h1>LeanFM Diagram Render</h1><p><a href=\"/\">root UI</a> | <a href=\"/renders/\">all renders</a> | selected: " ++ selected ++ "</p>" ++
+  canvasDiagramGallery ++
+  "<script>" ++
+  "const sel='" ++ selected ++ "';const ids={auth:'render-auth',worker:'render-worker',get_docs:'render-get-docs',post_review:'render-post-review',tasks:'render-tasks',assembled:'render-assembled'};" ++
+  "for(const [k,id] of Object.entries(ids)){const el=document.getElementById(id);if(el)el.open=(sel==='all'||sel===k);}setTimeout(()=>{const el=document.getElementById(ids[sel]);if(el)el.scrollIntoView({block:'start'});},50);" ++
+  "</script></body></html>"
 
 def queueChartData : String :=
   joinWith "," <| queueLengthTimeDistribution.map fun bucket =>
