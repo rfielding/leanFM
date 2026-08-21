@@ -409,8 +409,14 @@ function childTarget(g, node){
   const r=rankByNode.get(node.id)||0;
   const row=nodes.filter(n=>(rankByNode.get(n.id)||0)===r);
   const idx=row.findIndex(n=>n.id===node.id);
+  const rect=groupRect(g);
+  const left=rect.x+170, right=rect.x+rect.w-170;
+  const top=rect.y+110, bottom=rect.y+rect.h-72;
+  const maxRank=Math.max(0, ...nodes.map(n=>rankByNode.get(n.id)||0));
+  const x=row.length<=1?g.x:left+(idx/(row.length-1))*(right-left);
+  const y=maxRank<=0?(top+bottom)/2:top+(r/maxRank)*(bottom-top);
   return{
-    x:g.x+(idx-(row.length-1)/2)*310, y:g.y-120+r*105
+    x, y
   };
 
 }
@@ -498,9 +504,9 @@ function layoutChildren(g){
       const c=cs[i];
       if(c.pinned)continue;
       const t=childTarget(g, g.nodes[i]);
-      c.vx+=(t.x-c.x)*0.008;
-      c.vy+=(t.y-c.y)*0.010;
-      c.vx+=(g.x-c.x)*0.0008;
+      c.vx+=(t.x-c.x)*0.012;
+      c.vy+=(t.y-c.y)*0.014;
+      c.vx+=(g.x-c.x)*0.0002;
 
     }
     for(const e of gEdges){
@@ -966,5 +972,4 @@ graphCanvas.addEventListener('click', ev=>{
 });
 rebuildGraph();
 drawAgg();
-
 

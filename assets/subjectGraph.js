@@ -421,7 +421,11 @@
   function childState(parent, id, i, total){
     const key=parent.id+'|'+id;
     let c=childById.get(key);
-    const s=groupSize(parent), cols=Math.max(1, Math.ceil(Math.sqrt(total))), col=i%cols, row=Math.floor(i/cols), tx=parent.x+(col-(cols-1)/2)*330, ty=parent.y-s.h/2+96+row*96;
+    const s=groupSize(parent), cols=Math.max(1, Math.ceil(Math.sqrt(total))), rows=Math.max(1, Math.ceil(total/cols)), col=i%cols, row=Math.floor(i/cols);
+    const left=parent.x-s.w/2+170, right=parent.x+s.w/2-170;
+    const top=parent.y-s.h/2+96, bottom=parent.y+s.h/2-66;
+    const tx=cols<=1?parent.x:left+(col/(cols-1))*(right-left);
+    const ty=rows<=1?(top+bottom)/2:top+(row/(rows-1))*(bottom-top);
     if(!c){
       c={
         id, key, x:tx, y:ty, vx:0, vy:0, pinned:false, parent:parent.id
@@ -430,8 +434,8 @@
 
     }
     if(!c.pinned){
-      c.vx+=(tx-c.x)*0.014;
-      c.vy+=(ty-c.y)*0.014;
+      c.vx+=(tx-c.x)*0.018;
+      c.vy+=(ty-c.y)*0.018;
       c.vx=Math.max(-8, Math.min(8, c.vx*0.38));
       c.vy=Math.max(-8, Math.min(8, c.vy*0.38));
       c.x+=c.vx;
@@ -701,5 +705,4 @@
   render();
 
 })();
-
 
