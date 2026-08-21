@@ -39,9 +39,11 @@ http://127.0.0.1:8080
 Endpoints:
 
 ```text
-GET /          HTML report
+GET /          clean assistant workbench
+GET /examples  sample dashboard with charts, graphs, and generated sources
+GET /renders/  built-in canvas diagram renders
 GET /metrics   Prometheus metrics
-GET /report    plain-text report
+GET /report    generated plain-text report
 GET /tools/conversations conversation-to-Lean-file catalog
 GET /lean/get_docs.lean generated Lean view for a conversation
 GET /graph.dot Graphviz DOT

@@ -63,7 +63,8 @@ def byteResponse (status : Nat) (contentType : String) (body : ByteArray) (heade
 def responseBody (path : String) : IO Response := do
   match path with
   | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
-  | "/diagrams/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
+  | "/examples" => pure <| response 200 "text/html; charset=utf-8" LeanFM.examplesPage
+  | "/diagrams/" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "all")
   | "/renders/" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "all")
   | "/renders/auth" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "auth")
   | "/renders/worker" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "worker")
