@@ -22,9 +22,6 @@ def accept (draft : RequirementDraft) (proof : draft.formalization) : AcceptedRe
   formalization := draft.formalization
   proof := proof
 
-def AcceptedRequirement.checked (requirement : AcceptedRequirement) : Prop :=
-  requirement.formalization
-
 def req001Draft : RequirementDraft where
   id := "REQ-001"
   title := "Requirements are stored as Lean"
@@ -40,7 +37,7 @@ def req002Draft : RequirementDraft where
   title := "Committed requirements are checkable"
   description :=
     "Every accepted requirement carries a Lean proof, so the repository only commits checked requirements."
-  formalization := ∀ requirement : AcceptedRequirement, requirement.checked
+  formalization := ∀ requirement : AcceptedRequirement, requirement.formalization
 
 def req002 : AcceptedRequirement :=
   accept req002Draft (by
@@ -63,14 +60,12 @@ def committedRequirements : List AcceptedRequirement :=
 def committedRequirementIds : List String :=
   committedRequirements.map AcceptedRequirement.id
 
-example : req001.checked := req001.proof
+example : req001.formalization := req001.proof
 
-example : req002.checked := req002.proof
+example : req002.formalization := req002.proof
 
-example : req003.checked := req003.proof
+example : req003.formalization := req003.proof
 
 example : committedRequirementIds = ["REQ-001", "REQ-002", "REQ-003"] := rfl
-
-#eval committedRequirementIds
 
 end LeanFM

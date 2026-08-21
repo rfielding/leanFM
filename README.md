@@ -1,6 +1,6 @@
 # leanFM
 
-Lean Formal Methods, based on communicating heirarchial processes.
+Lean Formal Methods, based on communicating hierarchical processes.
 
 ## Checkable requirements in Lean
 
