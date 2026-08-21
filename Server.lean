@@ -60,7 +60,82 @@ def response (status : Nat) (contentType body : String) (headers : List String :
 def byteResponse (status : Nat) (contentType : String) (body : ByteArray) (headers : List String := []) : Response :=
   { status, contentType, body, headers }
 
-def responseBody (path : String) : IO Response := do
+def jsonEscape (s : String) : String :=
+  String.join <| s.toList.map fun c =>
+    if c == '"' then "\\\""
+    else if c == '\\' then "\\\\"
+    else if c == '\n' then "\\n"
+    else if c == '\r' then "\\r"
+    else if c == '\t' then "\\t"
+    else c.toString
+
+partial def takeJsonStringLoop (cs : List Char) (acc : List Char) (escaped : Bool) : String :=
+  match cs with
+  | [] => String.ofList acc.reverse
+  | c :: rest =>
+      if escaped then
+        let decoded :=
+          if c == 'n' then '\n'
+          else if c == 'r' then '\r'
+          else if c == 't' then '\t'
+          else c
+        takeJsonStringLoop rest (decoded :: acc) false
+      else if c == '\\' then
+        takeJsonStringLoop rest acc true
+      else if c == '"' then
+        String.ofList acc.reverse
+      else
+        takeJsonStringLoop rest (c :: acc) false
+
+def takeJsonString (s : String) : String :=
+  takeJsonStringLoop s.toList [] false
+
+def responseOutputText (json : String) : Option String :=
+  match json.splitOn "\"output_text\":\"" with
+  | _ :: rest :: _ => some (takeJsonString rest)
+  | _ =>
+      match json.splitOn "\"text\":\"" with
+      | _ :: rest :: _ => some (takeJsonString rest)
+      | _ =>
+          match json.splitOn "\"content\":\"" with
+          | _ :: rest :: _ => some (takeJsonString rest)
+          | _ => none
+
+def llmSystemPrompt : String :=
+  "You are LeanFM's protocol-design assistant. Answer in terms of visible message-passing behavior, actors, per-task FSMs, observable message fields, CTL over visible fields, metrics reducers, and nested markdown artifacts. Prefer concrete protocol sketches and tool-call-shaped steps."
+
+def openAIRequestJson (model prompt : String) : String :=
+  "{\"model\":\"" ++ jsonEscape model ++
+  "\",\"input\":[{\"role\":\"system\",\"content\":\"" ++ jsonEscape llmSystemPrompt ++
+  "\"},{\"role\":\"user\",\"content\":\"" ++ jsonEscape prompt ++ "\"}]}"
+
+def callLLM (prompt : String) : IO Response := do
+  match (← IO.getEnv "OPENAI_API_KEY") with
+  | none =>
+      pure <| response 503 "text/plain; charset=utf-8" "OPENAI_API_KEY is not set; using deterministic LeanFM tools instead.\n"
+  | some key =>
+      let model ←
+        match (← IO.getEnv "LEANFM_LLM_MODEL") with
+        | some m => pure m
+        | none => pure "gpt-5-mini"
+      let payload := openAIRequestJson model prompt
+      let out ← IO.Process.output {
+        cmd := "curl"
+        args := #[
+          "-sS", "--max-time", "6", "https://api.openai.com/v1/responses",
+          "-H", "Content-Type: application/json",
+          "-H", "Authorization: Bearer " ++ key,
+          "-d", payload
+        ]
+      }
+      if out.exitCode == 0 then
+        match responseOutputText out.stdout with
+        | some text => pure <| response 200 "text/plain; charset=utf-8" text
+        | none => pure <| response 502 "text/plain; charset=utf-8" ("LLM response did not include output_text; raw response follows.\n" ++ out.stdout)
+      else
+        pure <| response 502 "text/plain; charset=utf-8" ("LLM request failed.\n" ++ out.stderr)
+
+def responseBody (path : String) (request : String) : IO Response := do
   match path with
   | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
   | "/examples" => pure <| response 200 "text/html; charset=utf-8" LeanFM.examplesPage
@@ -77,6 +152,7 @@ def responseBody (path : String) : IO Response := do
   | "/tools/scenarios" => pure <| response 200 "application/json; charset=utf-8" LeanFM.scenarioCatalogJson
   | "/tools/protocol-sketches" => pure <| response 200 "application/json; charset=utf-8" LeanFM.protocolSketchCatalogJson
   | "/tools/conversations" => pure <| response 200 "application/json; charset=utf-8" LeanFM.conversationCatalogJson
+  | "/api/llm" => callLLM (requestBody request)
   | "/lean/auth.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.authLeanFile
   | "/lean/get_docs.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.getDocsLeanFile
   | "/lean/post_review.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.postReviewLeanFile
@@ -110,7 +186,7 @@ def redirectResponse (location : String) (headers : List String := []) : Respons
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   if path == "/health" then
-    responseBody path
+    responseBody path request
   else if path == "/login" then
     if requestMethod request == "POST" then
       let password ← configuredPassword
@@ -121,7 +197,7 @@ def responseForRequest (request : String) : IO Response := do
     else
       pure <| response 200 "text/html; charset=utf-8" loginPage
   else if hasSession request then
-    responseBody path
+    responseBody path request
   else
     pure <| redirectResponse "/login"
 
@@ -130,6 +206,8 @@ def statusText : Nat -> String
   | 303 => "See Other"
   | 403 => "Forbidden"
   | 404 => "Not Found"
+  | 502 => "Bad Gateway"
+  | 503 => "Service Unavailable"
   | _ => "OK"
 
 def httpHeader (status : Nat) (contentType : String) (body : ByteArray) (extraHeaders : List String := []) : String :=
