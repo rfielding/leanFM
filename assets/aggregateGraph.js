@@ -132,12 +132,88 @@ function isPlainTop(g){
   return g.key==='unauthenticated'||g.key==='authenticated session';
 
 }
+function escHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+
+}
+function groupMarkdown(g){
+  if(g.key==='unauthenticated')return [
+    '# unauthenticated',
+    '',
+    'Initial visible state. The client has no login proof and may only ask for authentication.',
+    '',
+    '$$',
+    'login_proof = none',
+    '$$',
+    '',
+    '- allowed outbound: Auth.LookupRequest',
+    '- rejected requirement: no task message may succeed from this state'
+  ].join('\n');
+  if(g.key==='authenticated session')return [
+    '# authenticated session',
+    '',
+    'A successful authentication exchange produced a visible proof artifact that later tasks must carry.',
+    '',
+    '$$',
+    'login_proof \\in message.fields',
+    '$$',
+    '',
+    '- enabled tasks: get_docs, post_review',
+    '- CTL sketch: AG(task_success -> prior(login_proof))'
+  ].join('\n');
+  if(g.key==='get_docs task')return [
+    '# get_docs task',
+    '',
+    'Task instance for `GET /docs/index.html`. The task starts when an authenticated client request is queued and is cleaned up at a terminal state.',
+    '',
+    '$$',
+    'latency = ts_{client_response} - ts_{client_request}',
+    '$$',
+    '',
+    '- actors: Client, Gateway, Worker',
+    '- fields: path, request_id, login_proof, status, bytes',
+    '- terminal states: get_docs done, get_docs failed'
+  ].join('\n');
+  if(g.key==='post_review task')return [
+    '# post_review task',
+    '',
+    'Task instance for posting a review. Moderation is a visible message exchange; success and rejection are both terminal observations.',
+    '',
+    '$$',
+    'P(accepted) = accepted / (accepted + rejected)',
+    '$$',
+    '',
+    '- actors: Client, Gateway, Worker',
+    '- fields: review_id, item_id, login_proof, decision, status',
+    '- terminal states: post_review done, post_review failed'
+  ].join('\n');
+  const labels=g.nodes.map(n=>n.label).join(', ')||'no child states';
+  return [
+    '# '+g.key,
+    '',
+    'Aggregate requirement state.',
+    '',
+    '$$',
+    'states = '+g.nodes.length,
+    '$$',
+    '',
+    labels
+  ].join('\n');
+
+}
 function groupArtifacts(g){
   return[
-    {kind:'md', label:g.key+' notes', body:g.nodes.map(n=>n.label).slice(0, 2).join(', ')||'informal requirement description'},
+    {kind:'md', label:'Markdown/LaTeX', body:groupMarkdown(g)},
     {kind:'img', label:'image', body:'visual explanation'},
     {kind:'canvas', label:'canvas', body:'local chart or diagram'}
   ];
+
+}
+function renderGroupInfo(g){
+  const md=groupMarkdown(g);
+  aggInfo.innerHTML='<h3>'+escHtml(g.key)+'</h3><pre class="artifact-md">'+escHtml(md)+'</pre>';
 
 }
 function groupSize(g){
@@ -700,8 +776,20 @@ function drawArtifactTile(g, x, y, w, h, a){
 
   }
   else{
-    const words=String(a.body).split(/\s+/), line=words.slice(0, 5).join(' ');
-    gctx.fillText(line, x+8, y+50);
+    const lines=String(a.body).split(/\n/).map(s=>s.trim()).filter(Boolean);
+    const preview=[];
+    for(let i=0;i<lines.length&&preview.length<4;i++){
+      if(lines[i]==='$$')continue;
+      preview.push(lines[i].replace(/^#\s*/, '').replace(/^- /, ''));
+
+    }
+    gctx.font='10px sans-serif';
+    for(let i=0;i<preview.length;i++){
+      const line=preview[i].length>34?preview[i].slice(0, 31)+'...':preview[i];
+      gctx.fillStyle=line.indexOf('=')>=0||line.indexOf('\\')>=0?'#7dd3fc':'#e5e7eb';
+      gctx.fillText(line, x+8, y+49+i*12);
+
+    }
 
   }
 
@@ -990,6 +1078,12 @@ function drawAgg(){
       gctx.fillText(g.count+' states '+(openGroups.has(g.key)?'open':'closed'), g.x, y+47);
 
     }
+    else{
+      gctx.fillStyle='#7dd3fc';
+      gctx.font='10px sans-serif';
+      gctx.fillText('Markdown / LaTeX', g.x, y+sz.h-10);
+
+    }
     hit.push({
       key:g.key, kind:plain?'plain':'group', x, y, w:sz.w, h:sz.h
     });
@@ -1187,9 +1281,14 @@ graphCanvas.addEventListener('click', ev=>{
 
   }
   const p=canvasPoint(ev), h=hitAt(p.x, p.y);
-  if(!h||h.kind!=='group')return;
+  if(!h||(h.kind!=='group'&&h.kind!=='plain'))return;
+  const g=simById.get('group:'+h.key);
+  if(g)renderGroupInfo(g);
+  if(h.kind==='plain')return;
   openGroups.has(h.key)?openGroups.delete(h.key):openGroups.add(h.key);
   rebuildGraph();
+  const next=simById.get('group:'+h.key);
+  if(next)renderGroupInfo(next);
 
 });
 rebuildGraph();
