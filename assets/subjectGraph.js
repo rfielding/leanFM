@@ -115,7 +115,7 @@
     if(!openGroups.has(n.id))return{
       w:230, h:82
     };
-    const kids=groupChildren(n), baseW=n.id==='exchange'?560:360, baseH=Math.max(260, 120+kids.length*58);
+    const kids=groupChildren(n), baseW=n.id==='exchange'?560:360, baseH=Math.max(260, 118+kids.length*58);
     let minX=0, maxX=0, minY=0, maxY=0;
     for(const c of childById.values()){
       if(!c.key.startsWith(n.id+'|'))continue;
@@ -126,7 +126,7 @@
 
     }
     return{
-      w:Math.max(baseW, maxX-minX+360), h:Math.max(baseH, maxY-minY+180)
+      w:Math.max(baseW, maxX-minX+330), h:Math.max(baseH, maxY-minY+165)
     };
 
   }

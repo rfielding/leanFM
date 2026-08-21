@@ -102,9 +102,21 @@ function groupSize(g){
   if(!openGroups.has(g.key))return{
     w:210, h:88
   };
-  const r=localRadius(g.nodes.length);
+  const ranks=edgeRanks(g.nodes.map(n=>n.id), gEdges.filter(e=>{
+    const a=gNodes.find(n=>n.id===e[0]), b=gNodes.find(n=>n.id===e[1]);
+    return a&&b&&bucket(a)===g.key&&bucket(b)===g.key;
+
+  }));
+  const maxRank=Math.max(0, ...g.nodes.map(n=>ranks.get(n.id)||0));
+  let maxRow=1;
+  for(let r=0;
+  r<=maxRank;
+  r++){
+    maxRow=Math.max(maxRow, g.nodes.filter(n=>(ranks.get(n.id)||0)===r).length);
+
+  }
   return{
-    w:Math.max(620, 2*r+460), h:Math.max(440, 2*r+260)
+    w:Math.max(600, maxRow*330+260), h:Math.max(420, (maxRank+1)*96+230)
   };
 
 }
