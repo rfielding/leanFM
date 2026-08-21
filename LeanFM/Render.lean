@@ -294,6 +294,103 @@ def metricsLines (label : String) (m : Metrics) : List String :=
   , metricLine s!"{label} throughput" m.throughputNum m.throughputDen
   ]
 
+def promBool (b : Bool) : Nat :=
+  if b then 1 else 0
+
+def promMetricLine (name labels value : String) : String :=
+  "leanfm_" ++ name ++ "{" ++ labels ++ "} " ++ value
+
+def promComponentMetrics (component : String) (m : Metrics) : List String :=
+  [ promMetricLine "success_probability" s!"component=\"{component}\"" (fixed4Text m.successNum m.successDen)
+  , promMetricLine "expected_latency" s!"component=\"{component}\"" (fixed4Text m.latencyNum m.latencyDen)
+  , promMetricLine "throughput" s!"component=\"{component}\"" (fixed4Text m.throughputNum m.throughputDen)
+  ]
+
+def promTaskMetrics (task : String) (fsm : TaskFSM) (m : Metrics) : List String :=
+  promComponentMetrics task m ++
+  [ promMetricLine "task_states" s!"task=\"{task}\"" (toString fsm.states.length)
+  , promMetricLine "task_transitions" s!"task=\"{task}\"" (toString fsm.transitions.length)
+  , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"AF_terminal\"" (toString (promBool (fsm.holds taskTerminates)))
+  , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"EF_success\"" (toString (promBool (fsm.holds taskCanSucceed)))
+  , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"EF_failure\"" (toString (promBool (fsm.holds taskCanFail)))
+  , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"AG_capacity\"" (toString (promBool (fsm.holds taskCapacitySafe)))
+  , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"AG_terminal_cleanup\"" (toString (promBool (fsm.holds taskTerminalStatesCleaned)))
+  ]
+
+def promMessageCount (task proto : String) (count : Nat) : String :=
+  promMetricLine "messages_total" s!"task=\"{task}\",proto=\"{proto}\"" (toString count)
+
+def prometheusMetrics : String :=
+  joinWith "\n" <|
+    [ "# HELP leanfm_success_probability Weighted success probability by component or task."
+    , "# TYPE leanfm_success_probability gauge"
+    , "# HELP leanfm_expected_latency Expected dwell-time latency by component or task."
+    , "# TYPE leanfm_expected_latency gauge"
+    , "# HELP leanfm_throughput Success probability divided by expected latency."
+    , "# TYPE leanfm_throughput gauge"
+    , "# HELP leanfm_queue_time_weight Time-weighted queue length mass for stacked queue charts."
+    , "# TYPE leanfm_queue_time_weight gauge"
+    , "# HELP leanfm_ctl_holds CTL property result, encoded as 1 for true and 0 for false."
+    , "# TYPE leanfm_ctl_holds gauge"
+    , "# HELP leanfm_task_states Number of states in a task FSM."
+    , "# TYPE leanfm_task_states gauge"
+    , "# HELP leanfm_task_transitions Number of transitions in a task FSM."
+    , "# TYPE leanfm_task_transitions gauge"
+    , "# HELP leanfm_messages_total Static modeled message count by task and protobuf type."
+    , "# TYPE leanfm_messages_total gauge"
+    , "# HELP leanfm_grammar_messages_total Static modeled grammar message count by scope."
+    , "# TYPE leanfm_grammar_messages_total gauge"
+    , "# HELP leanfm_protobuf_parsed Model protobuf parsing check, 1 for true and 0 for false."
+    , "# TYPE leanfm_protobuf_parsed gauge"
+    , "# HELP leanfm_visible_protocol_messages Number of messages in a typed visible protocol sketch."
+    , "# TYPE leanfm_visible_protocol_messages gauge"
+    , "# HELP leanfm_visible_protocol_proof_fields Number of observable proof fields in a typed visible protocol sketch."
+    , "# TYPE leanfm_visible_protocol_proof_fields gauge"
+    , "# HELP leanfm_visible_protocol_assertions Number of assertions attached to a typed visible protocol sketch."
+    , "# TYPE leanfm_visible_protocol_assertions gauge"
+    ] ++
+    promComponentMetrics "auth_group" authMetrics ++
+    promTaskMetrics "get_docs" purchaseTaskFSM purchaseMetrics ++
+    promTaskMetrics "post_review" reviewTaskFSM reviewMetrics ++
+    promComponentMetrics "worker_group" workerMetrics ++
+    promComponentMetrics "assembled_system" assembledMetrics ++
+    (queueLengthTimeDistribution.map fun bucket =>
+      promMetricLine "queue_time_weight" s!"queue_length=\"{bucket.1}\"" (fixed4Text bucket.2 expectedLatencyNumerator)) ++
+    [ promMetricLine "ctl_holds" "scope=\"worker\",property=\"AF_success\"" (toString (promBool (CTL.holds successors initial mustEventuallySucceed)))
+    , promMetricLine "ctl_holds" "scope=\"worker\",property=\"AG_not_failed\"" (toString (promBool (CTL.holds successors initial neverFails)))
+    , promMetricLine "ctl_holds" "scope=\"worker\",property=\"EF_failure\"" (toString (promBool (CTL.holds successors initial mayFail)))
+    , promMetricLine "ctl_holds" "scope=\"worker\",property=\"AG_capacity\"" (toString (promBool (CTL.holds successors initial queuesStayWithinCapacity)))
+    , promMetricLine "ctl_holds" "scope=\"worker\",property=\"AG_no_success_without_auth\"" (toString (promBool (CTL.holds successors initial noSuccessWithoutAuth)))
+    , promMetricLine "ctl_holds" "scope=\"worker\",property=\"AG_queued_heads_select_known_tasks\"" (toString (promBool (CTL.holds successors initial actorQueuesSelectKnownTasks)))
+    , promMetricLine "ctl_holds" "scope=\"worker\",property=\"AG_terminal_cleanup\"" (toString (promBool (CTL.holds successors initial terminalTasksAreCleanedUp)))
+    , promMetricLine "protobuf_parsed" "scope=\"assembled\",property=\"all_message_bodies_parsed\"" (toString (promBool allMessageBodiesParsed))
+    , promMetricLine "grammar_messages_total" "scope=\"auth\"" (toString authGrammar.length)
+    , promMetricLine "grammar_messages_total" "scope=\"get_docs\"" (toString grammar.length)
+    , promMetricLine "grammar_messages_total" "scope=\"post_review\"" (toString reviewGrammar.length)
+    , promMetricLine "grammar_messages_total" "scope=\"assembled\"" (toString assembledGrammar.length)
+    , promMetricLine "visible_protocol_messages" "protocol=\"kerberos\"" (toString kerberosDhTokenSpec.messages.length)
+    , promMetricLine "visible_protocol_proof_fields" "protocol=\"kerberos\"" (toString kerberosDhTokenSpec.proofFields.length)
+    , promMetricLine "visible_protocol_assertions" "protocol=\"kerberos\"" (toString kerberosDhTokenSpec.assertions.length)
+    , promMessageCount "auth" "Auth.LookupRequest" 1
+    , promMessageCount "auth" "Auth.LookupResponse" 2
+    , promMessageCount "get_docs" "Docs.GetRequest" 1
+    , promMessageCount "get_docs" "Docs.FetchCommand" 1
+    , promMessageCount "get_docs" "Docs.FetchResult" 2
+    , promMessageCount "get_docs" "Docs.GetResponse" 1
+    , promMessageCount "get_docs" "Error.Response" 1
+    , promMessageCount "post_review" "Reviews.PostRequest" 1
+    , promMessageCount "post_review" "Reviews.ModerateCommand" 1
+    , promMessageCount "post_review" "Reviews.ModerationResult" 2
+    , promMessageCount "post_review" "Reviews.PostResponse" 2
+    , promMessageCount "kerberos" "Kerberos.AsReq" 1
+    , promMessageCount "kerberos" "Kerberos.AsRep" 1
+    , promMessageCount "kerberos" "Kerberos.TgsReq" 1
+    , promMessageCount "kerberos" "Kerberos.TgsRep" 1
+    , promMessageCount "kerberos" "Kerberos.ApReq" 1
+    , promMessageCount "kerberos" "Kerberos.ApRep" 1
+    , ""
+    ]
+
 def taskListName (tasks : List TaskKind) : String :=
   joinWith ", " (tasks.map taskName)
 
@@ -389,6 +486,134 @@ def trafficAnimation : String :=
   "function draw(){const w=canvas.width,h=canvas.height;ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);Object.entries(actors).forEach(([n,a])=>drawActor(n,a));ctx.strokeStyle='#666';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(120,180);ctx.lineTo(780,180);ctx.stroke();const now=performance.now();const span=1500;const i=Math.floor(now/span)%events.length;const p=(now%span)/span;const e=events[i];const a=actors[e.src],b=actors[e.dst];const sx=a.x+(b.x>a.x?70:-70),tx=b.x-(b.x>a.x?70:-70);const x=sx+(tx-sx)*p;const y=180+Math.sin(p*Math.PI)*-42;arrow(ctx,sx,180,tx,180,'#93c5fd',3);ctx.fillStyle='#f8f8f8';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText(e.proto+' bytes='+e.bytes,x,250);ctx.fillText(e.fields,x,276);ctx.fillText(e.src+' -> '+e.dst+'  ts='+e.ts,x,302);traceEl.innerHTML=events.map((ev,j)=>'<li'+(j===i?' class=\"active\"':'')+'>'+ev.src+' -> '+ev.dst+' | '+ev.proto+' | bytes='+ev.bytes+' | '+ev.fields+' | ts='+ev.ts+'</li>').join('');requestAnimationFrame(draw);}draw();" ++
   "</script>"
 
+def scenarioCatalogJson : String :=
+  "[" ++
+  "{\"id\":\"get_docs\",\"task\":\"get_docs\",\"actors\":[\"Client\",\"Gateway\",\"Worker\"],\"entry\":\"GET /docs/index.html\",\"messages\":[\"Client -> Gateway Docs.GetRequest fields={method,path}\",\"Gateway -> Worker Docs.FetchCommand fields={path,cache_mode}\",\"Worker -> Gateway Docs.FetchResult fields={status,path,bytes}\",\"Gateway -> Client Docs.GetResponse fields={status,path,bytes}\"],\"properties\":[\"AG no success without auth proof\",\"AF terminal\",\"AG terminal cleanup\"],\"reducers\":[\"latency by task\",\"bytes by ts\",\"queue length by ts\"]}," ++
+  "{\"id\":\"post_review\",\"task\":\"post_review\",\"actors\":[\"Client\",\"Gateway\",\"Worker\"],\"entry\":\"POST /reviews\",\"messages\":[\"Client -> Gateway Reviews.PostRequest fields={method,path,body_hash}\",\"Gateway -> Worker Reviews.ModerateCommand fields={body_hash,policy}\",\"Worker -> Gateway Reviews.ModerationResult fields={decision,body_hash}\",\"Gateway -> Client Reviews.PostResponse fields={status,path}\"],\"properties\":[\"AG no success without auth proof\",\"EF rejected\",\"AF terminal\"],\"reducers\":[\"accept/reject pie\",\"latency by task\",\"messages by actor\"]}," ++
+  "{\"id\":\"upload_file\",\"task\":\"upload_file\",\"actors\":[\"Client\",\"Gateway\",\"Storage\",\"Worker\"],\"entry\":\"PUT /files/{name}\",\"messages\":[\"Client -> Gateway Files.PutRequest fields={path,bytes,content_hash}\",\"Gateway -> Storage Files.StoreCommand fields={path,bytes,content_hash}\",\"Storage -> Gateway Files.StoreResult fields={status,path,stored_bytes}\",\"Gateway -> Client Files.PutResponse fields={status,path,stored_bytes}\"],\"properties\":[\"AG no success without auth proof\",\"AG stored_bytes <= bytes\",\"AF terminal\"],\"reducers\":[\"bytes by ts\",\"USL load vs throughput\",\"queue length by actor\"]}," ++
+  "{\"id\":\"download_file\",\"task\":\"download_file\",\"actors\":[\"Client\",\"Gateway\",\"Storage\"],\"entry\":\"GET /files/{name}\",\"messages\":[\"Client -> Gateway Files.GetRequest fields={path}\",\"Gateway -> Storage Files.ReadCommand fields={path}\",\"Storage -> Gateway Files.ReadResult fields={status,path,bytes}\",\"Gateway -> Client Files.GetResponse fields={status,path,bytes}\"],\"properties\":[\"AG no success without auth proof\",\"EF not_found\",\"AF terminal\"],\"reducers\":[\"bytes by ts\",\"latency by path\",\"success/failure pie\"]}" ++
+  "]"
+
+def protocolSketchCatalogJson : String :=
+  "[" ++
+  "{\"id\":\"kerberos\",\"label\":\"Kerberos/DH trusted-token sketch\",\"actors\":[\"Client\",\"AuthServer\",\"TicketGrantingServer\",\"Service\"],\"messages\":[\"Client -> AuthServer Kerberos.AsReq fields={client_principal,realm,client_dh_share,nonce}\",\"AuthServer -> Client Kerberos.AsRep fields={client_principal,tgt_proof,server_dh_share,dh_commutativity_proof,token_server_signature_proof,nonce}\",\"Client -> TicketGrantingServer Kerberos.TgsReq fields={service_principal,tgt_proof,authenticator_proof,client_dh_share,nonce}\",\"TicketGrantingServer -> Client Kerberos.TgsRep fields={service_ticket_proof,service_session_key_proof,server_dh_share,dh_commutativity_proof,nonce}\",\"Client -> Service Kerberos.ApReq fields={service_ticket_proof,authenticator_proof,operation}\",\"Service -> Client Kerberos.ApRep fields={service_accept_proof,operation,status}\"],\"terminal\":[\"authenticated_for_service\",\"rejected\"],\"properties\":[\"AG no service success without service_ticket_proof\",\"AG TgsRep requires prior tgt_proof\",\"AG ApRep success requires prior service_accept_proof\",\"AG dh_commutativity_proof appears only after both DH shares are visible\",\"AG token_server_signature_proof appears only on AuthServer/TGS-issued tokens\",\"AF terminal\"],\"notes\":[\"proof fields are placeholders for visible protocol evidence, not real cryptographic material\",\"dh_commutativity_proof stands for both parties deriving the same shared key from exchanged DH shares\",\"token_server_signature_proof stands for a trusted token server issuing the ticket\"]}" ++
+  "]"
+
+def conversationCatalogJson : String :=
+  "[" ++
+  "{\"id\":\"auth\",\"label\":\"auth conversation\",\"leanFile\":\"/lean/auth.lean\",\"dot\":\"/auth.dot\"}," ++
+  "{\"id\":\"get_docs\",\"label\":\"get_docs conversation\",\"leanFile\":\"/lean/get_docs.lean\",\"dot\":\"/get_docs.dot\"}," ++
+  "{\"id\":\"post_review\",\"label\":\"post_review conversation\",\"leanFile\":\"/lean/post_review.lean\",\"dot\":\"/post_review.dot\"}," ++
+  "{\"id\":\"kerberos\",\"label\":\"Kerberos/DH trusted-token sketch\",\"leanFile\":\"/lean/sketch/kerberos.lean\",\"dot\":\"/tasks.dot\"}," ++
+  "{\"id\":\"worker\",\"label\":\"worker group\",\"leanFile\":\"/lean/worker.lean\",\"dot\":\"/graph.dot\"}," ++
+  "{\"id\":\"assembled\",\"label\":\"assembled system\",\"leanFile\":\"/lean/assembled.lean\",\"dot\":\"/assembled.dot\"}" ++
+  "]"
+
+def leanFileText (title body : String) : String :=
+  joinWith "\n"
+    [ "import LeanFM"
+    , ""
+    , "namespace LeanFM.Generated"
+    , ""
+    , s!"-- Generated view for {title}. The source of truth is the typed LeanFM model."
+    , body
+    , ""
+    , "end LeanFM.Generated"
+    , ""
+    ]
+
+def authLeanFile : String :=
+  leanFileText "auth conversation" <| joinWith "\n"
+    [ "def conversationId : String := \"auth\""
+    , "def grammar := LeanFM.authGrammar"
+    , "def metrics := LeanFM.authMetrics"
+    ]
+
+def getDocsLeanFile : String :=
+  leanFileText "get_docs conversation" <| joinWith "\n"
+    [ "def conversationId : String := \"get_docs\""
+    , "def grammar := LeanFM.grammar"
+    , "def taskFsm := LeanFM.purchaseTaskFSM"
+    , "def metrics := LeanFM.purchaseMetrics"
+    , "def terminates : Bool := taskFsm.holds LeanFM.taskTerminates"
+    ]
+
+def postReviewLeanFile : String :=
+  leanFileText "post_review conversation" <| joinWith "\n"
+    [ "def conversationId : String := \"post_review\""
+    , "def grammar := LeanFM.reviewGrammar"
+    , "def taskFsm := LeanFM.reviewTaskFSM"
+    , "def metrics := LeanFM.reviewMetrics"
+    , "def terminates : Bool := taskFsm.holds LeanFM.taskTerminates"
+    ]
+
+def workerLeanFile : String :=
+  leanFileText "worker group" <| joinWith "\n"
+    [ "def conversationId : String := \"worker\""
+    , "def world := LeanFM.workerWorld"
+    , "def grammar := LeanFM.workerGrammar"
+    , "def metrics := LeanFM.workerMetrics"
+    , "def capacitySafe : Bool := LeanFM.CTL.holds LeanFM.successors LeanFM.initial LeanFM.queuesStayWithinCapacity"
+    ]
+
+def assembledLeanFile : String :=
+  leanFileText "assembled system" <| joinWith "\n"
+    [ "def conversationId : String := \"assembled\""
+    , "def grammar := LeanFM.assembledGrammar"
+    , "def metrics := LeanFM.assembledMetrics"
+    , "def allMessageBodiesParsed : Bool := LeanFM.allMessageBodiesParsed"
+    ]
+
+def kerberosLeanSketch : String :=
+  leanFileText "kerberos protocol sketch" <| joinWith "\n"
+    [ "def conversationId : String := \"kerberos\""
+    , "def spec : LeanFM.VisibleProtocolSpec := LeanFM.kerberosDhTokenSpec"
+    , "def actors : List String := spec.actors"
+    , "def visibleMessages : List LeanFM.VisibleMessageSpec := spec.messages"
+    , "def proofFields : List String := spec.proofFields"
+    , "def assertions : List String := spec.assertions"
+    , ""
+    , "-- This is a visible-behavior sketch. DH and token-server facts are represented"
+    , "-- by observable proof fields carried in messages, not by real cryptographic values."
+    ]
+
+def conversationPicker : String :=
+  "<section><h2>Conversation Source</h2><div class=\"controlPanel\"><label>Conversation <select id=\"conversationSelect\"></select></label> <a id=\"conversationLean\" href=\"/lean/get_docs.lean\">Lean file</a> <a id=\"conversationDot\" href=\"/get_docs.dot\">DOT</a></div><pre id=\"conversationPreview\"></pre></section>" ++
+  "<script>" ++
+  "const conversationSelect=document.getElementById('conversationSelect'),conversationLean=document.getElementById('conversationLean'),conversationDot=document.getElementById('conversationDot'),conversationPreview=document.getElementById('conversationPreview');" ++
+  "async function loadConversations(){const xs=await fetch('/tools/conversations').then(r=>r.json());conversationSelect.innerHTML=xs.map(x=>'<option value=\"'+x.id+'\">'+x.label+'</option>').join('');async function pick(){const c=xs.find(x=>x.id===conversationSelect.value)||xs[0];conversationLean.href=c.leanFile;conversationDot.href=c.dot;conversationLean.textContent=c.leanFile;conversationDot.textContent=c.dot;conversationPreview.textContent=await fetch(c.leanFile).then(r=>r.text());}conversationSelect.addEventListener('change',pick);conversationSelect.value='get_docs';pick();}loadConversations();" ++
+  "</script>"
+
+def chatWorkbench : String :=
+  "<section><h2>LeanFM Assistant</h2><div class=\"chatShell\"><div id=\"chatLog\" class=\"chatLog\"></div><div class=\"chatInput\"><textarea id=\"chatPrompt\" rows=\"3\" placeholder=\"Ask for metrics, graphs, charts, validation, or a new requirement sketch\"></textarea><button id=\"chatSend\">Send</button></div><div id=\"toolLog\" class=\"toolLog\"></div></div></section>" ++
+  "<script>" ++
+  "const chatLog=document.getElementById('chatLog'),toolLog=document.getElementById('toolLog'),chatPrompt=document.getElementById('chatPrompt'),chatSend=document.getElementById('chatSend');" ++
+  "let currentDraft=null;" ++
+  "const artifactLinks=[['prometheus metrics','/metrics'],['human report','/report'],['docs','/docs/'],['worker DOT','/graph.dot'],['auth DOT','/auth.dot'],['get_docs DOT','/get_docs.dot'],['post_review DOT','/post_review.dot'],['task conversations DOT','/tasks.dot'],['assembled DOT','/assembled.dot']];" ++
+  "function esc(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}" ++
+  "function bubble(role,text){const d=document.createElement('div');d.className='bubble '+role;d.innerHTML=esc(text).replace(/\\n/g,'<br>');chatLog.appendChild(d);chatLog.scrollTop=chatLog.scrollHeight;}" ++
+  "function tool(name,args){const d=document.createElement('div');d.className='toolCall';d.textContent='tool: '+name+' '+JSON.stringify(args);toolLog.prepend(d);}" ++
+  "async function callMetrics(){tool('get_report',{url:'/report'});const t=await fetch('/report').then(r=>r.text());return t.split('\\n').filter(x=>x.includes('success probability')||x.includes('expected latency')||x.includes('throughput')||x.includes('Per-task FSM')).slice(0,18).join('\\n');}" ++
+  "function callArtifacts(){tool('list_artifacts',{});return artifactLinks.map(a=>a[0]+': '+location.origin+a[1]).join('\\n');}" ++
+  "function callCharts(){tool('list_chart_datasets',{});return ['cumulative bytes over ordered messages','messages by task','messages sent by actor','task elapsed from ordered message timestamps','queue length distribution','worker success/failure','task success rates','expected latency and throughput'].join('\\n');}" ++
+  "async function callScenarioCatalog(){tool('scenario_catalog',{url:'/tools/scenarios'});return await fetch('/tools/scenarios').then(r=>r.json());}" ++
+  "async function callProtocolSketchCatalog(){tool('protocol_sketch_catalog',{url:'/tools/protocol-sketches'});return await fetch('/tools/protocol-sketches').then(r=>r.json());}" ++
+  "function validateSpec(text){tool('validate_requirement_sketch',{observableFieldsOnly:true});const needed=['actor','task','message'];const miss=needed.filter(k=>!text.toLowerCase().includes(k));const refsHidden=/database|memory|internal variable|private state/i.test(text);let out=[];if(miss.length)out.push('missing: '+miss.join(', '));if(refsHidden)out.push('reject: references hidden implementation state; use visible messages/queues/proofs instead');if(/token|proof|cert/i.test(text)&&!/message|field|payload/i.test(text))out.push('warning: capability should name the visible message field where it appears');if(!out.length)out.push('well-formed sketch: includes actor/task/message vocabulary and no obvious hidden-state references');return out.join('\\n');}" ++
+  "function requirementTemplate(){tool('spec_template',{format:'LeanFM requirement'});return 'Requirement template\\nactor: <server or monitor actor>\\ntask: <transaction/task kind>\\nentry message: src -> dst proto.type fields...\\nFSM states: unauthorized/authenticated/running/terminal...\\nmessages: ordered visible envelopes with src,dst,task,proto fields,ts,dwell\\nproperties: CTL over visible fields only\\nreducers: filter/group over ordered replay for line or pie charts';}" ++
+  "function wantsScenario(p){return /add|build|model|scenario|requirement|task|transaction|upload|download|delete|search|checkout|purchase|review|login/.test(p);}" ++
+  "function chooseScenario(prompt,catalog){const p=prompt.toLowerCase();let hit=catalog.find(s=>p.includes(s.id)||p.includes(s.task));if(!hit&&/upload|put /.test(p))hit=catalog.find(s=>s.id==='upload_file');if(!hit&&/download|get \\/files/.test(p))hit=catalog.find(s=>s.id==='download_file');if(!hit&&/review/.test(p))hit=catalog.find(s=>s.id==='post_review');if(!hit&&/doc|get /.test(p))hit=catalog.find(s=>s.id==='get_docs');if(hit)return JSON.parse(JSON.stringify(hit));const m=prompt.match(/(?:task|scenario|transaction)\\s+([a-zA-Z0-9_/-]+)/);const name=(m?m[1]:'new_task').replace(/[^a-zA-Z0-9_]/g,'_').toLowerCase();return {id:name,task:name,actors:['Client','Gateway','Worker'],entry:'Client request for '+name,messages:['Client -> Gateway '+name+'.Request fields={request_id,payload}','Gateway -> Worker '+name+'.Command fields={request_id,payload}','Worker -> Gateway '+name+'.Result fields={status,request_id}','Gateway -> Client '+name+'.Response fields={status,request_id}'],properties:['AG no success without auth proof','AF terminal','AG terminal cleanup'],reducers:['latency by task','messages by actor','success/failure pie']};}" ++
+  "function previewScenario(s){tool('scenario_preview_messages',{task:s.task,actors:s.actors});return 'Draft scenario: '+s.task+'\\nentry: '+s.entry+'\\nactors: '+s.actors.join(', ')+'\\nmessages:\\n  '+s.messages.join('\\n  ')+'\\nproperties:\\n  '+s.properties.join('\\n  ')+'\\ncharts/reducers:\\n  '+s.reducers.join('\\n  ');}" ++
+  "function wantsProtocolSketch(p){return /kerberos|oauth|openid|tls|protocol sketch|sketch.*protocol|ticket granting|single sign/.test(p);}" ++
+  "function chooseProtocolSketch(prompt,catalog){const p=prompt.toLowerCase();let hit=catalog.find(s=>p.includes(s.id)||p.includes(s.label.toLowerCase().split(' ')[0]));return hit||catalog[0];}" ++
+  "function previewProtocolSketch(s){tool('protocol_sketch_preview',{id:s.id,actors:s.actors});return 'Protocol sketch: '+s.label+'\\nactors: '+s.actors.join(', ')+'\\nmessages:\\n  '+s.messages.join('\\n  ')+'\\nterminal states:\\n  '+s.terminal.join('\\n  ')+'\\nproperties:\\n  '+s.properties.join('\\n  ')+'\\nnotes:\\n  '+s.notes.join('\\n  ')+'\\nLean sketch: '+location.origin+'/lean/sketch/'+s.id+'.lean';}" ++
+  "async function generateProtocolSketch(prompt){const catalog=await callProtocolSketchCatalog();tool('protocol_sketch_generate',{prompt:prompt,crypto:'placeholder visible proof fields'});const draft=chooseProtocolSketch(prompt,catalog);tool('protocol_sketch_validate',{observableOnly:true,id:draft.id});currentDraft={id:draft.id,task:draft.id,actors:draft.actors,messages:draft.messages,properties:draft.properties,reducers:['latency by phase','messages by actor','success/failure pie']};return previewProtocolSketch(draft)+'\\n\\nSay \"wire it in\" when the sketch has the right visible messages and proof fields.';}" ++
+  "function wireDraft(){if(!currentDraft)return 'No current draft. Describe a task or transaction first.';tool('scenario_stage_integration',{task:currentDraft.task,mode:'message_passing_requirement'});return 'Staged integration for '+currentDraft.task+'\\n1. Add/extend TaskKind and actor task membership.\\n2. Add protobuf envelope constructors with src,dst,task,transport,fields,bytes,ts,dwell.\\n3. Instantiate one per-task FSM over observable actor states, queues, messages, and auth proof fields.\\n4. Add CTL checks over visible message/proof/queue fields only.\\n5. Append reducers for chart data and Prometheus metrics.\\n6. Re-render nested FSM, interaction diagram, charts, docs, and /metrics.';}" ++
+  "async function generateScenario(prompt){const catalog=await callScenarioCatalog();tool('scenario_generate',{prompt:prompt});const draft=chooseScenario(prompt,catalog);tool('scenario_validate',{observableOnly:true,task:draft.task});currentDraft=draft;return previewScenario(draft)+'\\n\\nSay \"wire it in\" when this is the shape you want, or describe changes.';}" ++
+  "async function assistant(prompt){const p=prompt.toLowerCase();let parts=[];if(/wire|accept|agreed|looks good|ship it/.test(p))parts.push(wireDraft());if(wantsProtocolSketch(p)&&!parts.length)parts.push(await generateProtocolSketch(prompt));if(wantsScenario(p)&&!parts.length)parts.push(await generateScenario(prompt));if(p.includes('metric')||p.includes('latency')||p.includes('throughput')||p.includes('ctl'))parts.push(await callMetrics());if(p.includes('graph')||p.includes('diagram')||p.includes('artifact')||p.includes('image'))parts.push(callArtifacts());if(p.includes('chart')||p.includes('pie')||p.includes('line')||p.includes('usl'))parts.push(callCharts());if(p.includes('validate')||p.includes('spec'))parts.push(validateSpec(prompt));if(p.includes('template')||p.includes('how do i write'))parts.push(requirementTemplate());if(parts.length===0){tool('route_intent',{intent:'design_discussion'});parts.push('Ask for a protocol sketch, for example: sketch Kerberos with visible proof fields. I will generate message-passing steps, validate the observable fields, and stage it for integration when we agree.');}return parts.join('\\n\\n');}" ++
+  "chatSend.addEventListener('click',async()=>{const p=chatPrompt.value.trim();if(!p)return;bubble('user',p);chatPrompt.value='';const r=await assistant(p);bubble('assistant',r);});chatPrompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.ctrlKey)chatSend.click();});" ++
+  "bubble('assistant','LeanFM workbench ready. Ask for a sketched protocol, for example: Kerberos with proof fields. I will keep crypto as visible placeholder evidence unless you ask for concrete bytes.');" ++
+  "</script>"
+
 def interactionDiagram : String :=
   "<section><h2>Interaction Diagrams By Task</h2><div class=\"canvasPanel\"><canvas id=\"interaction\" width=\"1000\" height=\"640\"></canvas><ol id=\"interactionTrace\"></ol></div></section>" ++
   "<script>" ++
@@ -412,6 +637,28 @@ def interactionDiagram : String :=
   "function drawLanes(y0,y1){for(const [name,x] of Object.entries(lanes)){ictx.fillStyle='#000';ictx.strokeStyle='#fff';ictx.lineWidth=2;ictx.fillRect(x-72,y0,144,38);ictx.strokeRect(x-72,y0,144,38);ictx.fillStyle='#fff';ictx.font='16px sans-serif';ictx.textAlign='center';ictx.fillText(name,x,y0+25);ictx.strokeStyle='#555';ictx.setLineDash([6,7]);ictx.beginPath();ictx.moveTo(x,y0+44);ictx.lineTo(x,y1);ictx.stroke();ictx.setLineDash([]);}}" ++
   "function drawTask(task,seq,y0,color){ictx.strokeStyle='#444';ictx.lineWidth=1;ictx.strokeRect(28,y0-16,944,268);ictx.fillStyle='#fff';ictx.font='18px sans-serif';ictx.textAlign='left';ictx.fillText(task,42,y0+8);drawLanes(y0+22,y0+238);seq.forEach((e,i)=>{const y=y0+82+i*42;const x1=lanes[e.src],x2=lanes[e.dst];iarrow(x1,y,x2,y,color);ictx.fillStyle='#fff';ictx.font='12px sans-serif';ictx.textAlign='center';ictx.fillText(e.proto+' bytes='+e.bytes,(x1+x2)/2,y-9);ictx.font='11px sans-serif';ictx.fillText(e.fields,(x1+x2)/2,y+16);});}" ++
   "function drawInteraction(){ictx.fillStyle='#111';ictx.fillRect(0,0,ic.width,ic.height);drawTask('get_docs',taskSeqs.get_docs,34,'#93c5fd');drawTask('post_review',taskSeqs.post_review,342,'#fbbf24');itrace.innerHTML=Object.entries(taskSeqs).flatMap(([task,seq])=>seq.map(e=>'<li>'+task+' | '+e.src+' -> '+e.dst+' | '+e.proto+' | bytes='+e.bytes+' | '+e.fields+' | ts='+e.ts+'</li>')).join('');}drawInteraction();" ++
+  "</script>"
+
+def canvasDiagramGallery : String :=
+  "<section><h2>Canvas Diagram Gallery</h2>" ++
+  "<div class=\"diagramGrid\">" ++
+  "<details open><summary>Auth Group <a href=\"/docs/auth.md\">md</a></summary><canvas id=\"diagAuth\" width=\"900\" height=\"320\"></canvas></details>" ++
+  "<details><summary>Worker Group Overview <a href=\"/docs/worker.md\">md</a></summary><canvas id=\"diagWorker\" width=\"900\" height=\"420\"></canvas></details>" ++
+  "<details><summary>get_docs Task <a href=\"/docs/get_docs.md\">md</a></summary><canvas id=\"diagGetDocs\" width=\"900\" height=\"420\"></canvas></details>" ++
+  "<details><summary>post_review Task <a href=\"/docs/post_review.md\">md</a></summary><canvas id=\"diagPostReview\" width=\"900\" height=\"420\"></canvas></details>" ++
+  "<details open><summary>Task Conversations</summary><canvas id=\"diagTasks\" width=\"900\" height=\"360\"></canvas></details>" ++
+  "<details open><summary>Assembled System <a href=\"/docs/assembled.md\">md</a></summary><canvas id=\"diagAssembled\" width=\"900\" height=\"360\"></canvas></details>" ++
+  "</div></section>" ++
+  "<script>" ++
+  "function cnode(ctx,n){const w=n.w||190,h=n.h||56,x=n.x-w/2,y=n.y-h/2;ctx.fillStyle='#000';ctx.strokeStyle=n.color||'#fff';ctx.lineWidth=2;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.fillStyle='#fff';ctx.font='15px sans-serif';ctx.textAlign='center';String(n.label).split('\\n').forEach((t,i,a)=>ctx.fillText(t,n.x,n.y-(a.length-1)*9+i*18));}" ++
+  "function carrow(ctx,a,b,label,color){const dx=b.x-a.x,dy=b.y-a.y,d=Math.max(1,Math.sqrt(dx*dx+dy*dy));const x1=a.x+dx/d*((a.w||190)/2+8),y1=a.y+dy/d*((a.h||56)/2+8),x2=b.x-dx/d*((b.w||190)/2+8),y2=b.y-dy/d*((b.h||56)/2+8);ctx.strokeStyle=color||'#93c5fd';ctx.fillStyle=color||'#93c5fd';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const ang=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-13*Math.cos(ang-.45),y2-13*Math.sin(ang-.45));ctx.lineTo(x2-13*Math.cos(ang+.45),y2-13*Math.sin(ang+.45));ctx.closePath();ctx.fill();ctx.font='12px sans-serif';ctx.textAlign='center';ctx.fillText(label,(x1+x2)/2,(y1+y2)/2-7);}" ++
+  "function drawCanvasDiagram(id,title,nodes,edges){const cv=document.getElementById(id),ctx=cv.getContext('2d');ctx.fillStyle='#111';ctx.fillRect(0,0,cv.width,cv.height);ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.textAlign='left';ctx.fillText(title,24,30);const by=new Map(nodes.map(n=>[n.id,n]));edges.forEach(e=>carrow(ctx,by.get(e[0]),by.get(e[1]),e[2],e[3]));nodes.forEach(n=>cnode(ctx,n));}" ++
+  "drawCanvasDiagram('diagAuth','auth group',[{id:'idle',label:'Auth idle',x:160,y:150},{id:'db',label:'DB lookup',x:450,y:150},{id:'ok',label:'auth proof\\nissued',x:740,y:95,color:'#22c55e'},{id:'fail',label:'reject',x:740,y:215,color:'#ef4444'}],[['idle','db','LookupRequest'],['db','ok','LookupResponse ok'],['db','fail','LookupResponse fail','#ef4444']]);" ++
+  "drawCanvasDiagram('diagGetDocs','get_docs task',[{id:'u',label:'unauthorized',x:150,y:95,color:'#ef4444'},{id:'s',label:'start\\nDocs.GetRequest',x:150,y:230},{id:'g',label:'Gateway queued',x:380,y:230},{id:'w',label:'Worker fetch',x:610,y:230},{id:'d',label:'done\\n200 response',x:820,y:165,color:'#22c55e'},{id:'f',label:'failed\\n404/401',x:820,y:295,color:'#ef4444'}],[['u','f','reject'],['s','g','GetRequest'],['g','w','FetchCommand'],['w','d','FetchResult 200'],['w','f','FetchResult 404','#ef4444']]);" ++
+  "drawCanvasDiagram('diagPostReview','post_review task',[{id:'u',label:'unauthorized',x:150,y:95,color:'#ef4444'},{id:'s',label:'start\\nPostRequest',x:150,y:230},{id:'g',label:'Gateway queued',x:380,y:230},{id:'m',label:'Worker moderate',x:610,y:230},{id:'d',label:'posted\\n201',x:820,y:165,color:'#22c55e'},{id:'f',label:'rejected\\n400',x:820,y:295,color:'#ef4444'}],[['u','f','reject'],['s','g','PostRequest'],['g','m','ModerateCommand'],['m','d','accepted'],['m','f','rejected','#ef4444']]);" ++
+  "drawCanvasDiagram('diagWorker','worker overview',[{id:'auth',label:'authenticated\\nsession',x:150,y:210,color:'#22c55e'},{id:'docs',label:'get_docs\\nFSM',x:430,y:130,w:220,h:80},{id:'review',label:'post_review\\nFSM',x:430,y:290,w:220,h:80},{id:'metrics',label:'reducers\\ncharts + metrics',x:750,y:210,w:220,h:80}],[['auth','docs','GET /docs'],['auth','review','POST /reviews'],['docs','metrics','trace'],['review','metrics','trace']]);" ++
+  "drawCanvasDiagram('diagTasks','task conversations',[{id:'c',label:'Client',x:130,y:180},{id:'g',label:'Gateway',x:450,y:180},{id:'w',label:'Worker',x:770,y:180}],[['c','g','request'],['g','w','command'],['w','g','result'],['g','c','response']]);" ++
+  "drawCanvasDiagram('diagAssembled','assembled system',[{id:'auth',label:'auth group\\nP=0.9800',x:220,y:110,w:230,h:80},{id:'worker',label:'worker group\\nP=0.9250',x:450,y:215,w:230,h:80},{id:'sys',label:'assembled\\nP=0.9065\\nthroughput=0.0765',x:680,y:110,w:250,h:96}],[['auth','worker','auth proof'],['worker','sys','aggregate metrics']]);" ++
   "</script>"
 
 def queueChartData : String :=
@@ -473,6 +720,173 @@ def chartsSection : String :=
   "function renderCharts(){renderSlot('A');renderSlot('B');}" ++
   "fillChartSelect('chartDataA','cumulative_bytes');fillChartSelect('chartDataB','messages_by_task');['chartKindA','chartKindB','chartDataA','chartDataB'].forEach(id=>document.getElementById(id).addEventListener('change',renderCharts));renderCharts();" ++
   "</script>"
+
+def authDoc : String :=
+  joinWith "\n"
+    [ "# Auth Group"
+    , ""
+    , "This Markdown artifact documents the collapsed `Auth Group` node."
+    , ""
+    , "## Role"
+    , ""
+    , "The auth group models the requirement that a client obtains a visible proof artifact before using worker transactions."
+    , ""
+    , "## Actors"
+    , ""
+    , "- `Auth`"
+    , "- `DB`"
+    , ""
+    , "## Messages"
+    , ""
+    , "- `Auth.LookupRequest`"
+    , "- `Auth.LookupResponse authenticated=true`"
+    , "- `Auth.LookupResponse authenticated=false`"
+    , ""
+    , "## Metrics"
+    , ""
+    , s!"- Success probability: `{fixed4Text authMetrics.successNum authMetrics.successDen}`"
+    , s!"- Expected latency: `{fixed4Text authMetrics.latencyNum authMetrics.latencyDen}`"
+    , s!"- Throughput: `{fixed4Text authMetrics.throughputNum authMetrics.throughputDen}`"
+    , ""
+    , "## Visualizations"
+    , ""
+    , "- [DOT](/auth.dot)"
+    , "- Canvas rendering is available on the root page."
+    ]
+
+def workerDoc : String :=
+  joinWith "\n"
+    [ "# Worker Group"
+    , ""
+    , "This Markdown artifact documents the worker requirement group. It contains task FSMs that share the same actor set."
+    , ""
+    , "## Actors"
+    , ""
+    , "- `Client`"
+    , "- `Gateway`"
+    , "- `Worker`"
+    , ""
+    , "## Tasks"
+    , ""
+    , "- `get_docs`"
+    , "- `post_review`"
+    , ""
+    , "## Composition Rule"
+    , ""
+    , "Tasks interact with actors only through queued, visible message envelopes. The graph can be collapsed to the group node or expanded into per-task FSM detail."
+    , ""
+    , "## Metrics"
+    , ""
+    , s!"- Success probability: `{fixed4Text workerMetrics.successNum workerMetrics.successDen}`"
+    , s!"- Expected latency: `{fixed4Text workerMetrics.latencyNum workerMetrics.latencyDen}`"
+    , s!"- Throughput: `{fixed4Text workerMetrics.throughputNum workerMetrics.throughputDen}`"
+    , ""
+    , "## Visualizations"
+    , ""
+    , "- [DOT](/graph.dot)"
+    , "- Canvas rendering is available on the root page."
+    ]
+
+def getDocsDoc : String :=
+  joinWith "\n" <|
+    [ "# get_docs Task FSM"
+    , ""
+    , "This Markdown artifact documents the `get_docs` task FSM."
+    , ""
+    , "## Entry Message"
+    , ""
+    , "- `Client -> Gateway: Docs.GetRequest`"
+    , ""
+    , "## Message Flow"
+    , ""
+    , "- `Gateway -> Worker: Docs.FetchCommand`"
+    , "- `Worker -> Gateway: Docs.FetchResult`"
+    , "- `Gateway -> Client: Docs.GetResponse` or `Error.Response`"
+    , ""
+    , "## CTL Checks"
+    , ""
+    ] ++
+    taskCtlLines "get_docs" purchaseTaskFSM ++
+    [ ""
+    , "## Metrics"
+    , ""
+    , s!"- Success probability: `{fixed4Text purchaseMetrics.successNum purchaseMetrics.successDen}`"
+    , s!"- Expected latency: `{fixed4Text purchaseMetrics.latencyNum purchaseMetrics.latencyDen}`"
+    , s!"- Throughput: `{fixed4Text purchaseMetrics.throughputNum purchaseMetrics.throughputDen}`"
+    , ""
+    , "## Visualizations"
+    , ""
+    , "- [DOT](/get_docs.dot)"
+    , "- Canvas rendering is available on the root page."
+    ]
+
+def postReviewDoc : String :=
+  joinWith "\n" <|
+    [ "# post_review Task FSM"
+    , ""
+    , "This Markdown artifact documents the `post_review` task FSM."
+    , ""
+    , "## Entry Message"
+    , ""
+    , "- `Client -> Gateway: Reviews.PostRequest`"
+    , ""
+    , "## Message Flow"
+    , ""
+    , "- `Gateway -> Worker: Reviews.ModerateCommand`"
+    , "- `Worker -> Gateway: Reviews.ModerationResult`"
+    , "- `Gateway -> Client: Reviews.PostResponse`"
+    , ""
+    , "## CTL Checks"
+    , ""
+    ] ++
+    taskCtlLines "post_review" reviewTaskFSM ++
+    [ ""
+    , "## Metrics"
+    , ""
+    , s!"- Success probability: `{fixed4Text reviewMetrics.successNum reviewMetrics.successDen}`"
+    , s!"- Expected latency: `{fixed4Text reviewMetrics.latencyNum reviewMetrics.latencyDen}`"
+    , s!"- Throughput: `{fixed4Text reviewMetrics.throughputNum reviewMetrics.throughputDen}`"
+    , ""
+    , "## Visualizations"
+    , ""
+    , "- [DOT](/post_review.dot)"
+    , "- Canvas rendering is available on the root page."
+    ]
+
+def assembledDoc : String :=
+  joinWith "\n"
+    [ "# Assembled System"
+    , ""
+    , "This Markdown artifact documents the top-level assembled system."
+    , ""
+    , "## Composition"
+    , ""
+    , "The assembled model composes the auth group with the worker group. On auth success, worker transactions can run with a visible proof artifact."
+    , ""
+    , "## Metrics"
+    , ""
+    , s!"- Success probability: `{fixed4Text assembledMetrics.successNum assembledMetrics.successDen}`"
+    , s!"- Expected latency: `{fixed4Text assembledMetrics.latencyNum assembledMetrics.latencyDen}`"
+    , s!"- Throughput: `{fixed4Text assembledMetrics.throughputNum assembledMetrics.throughputDen}`"
+    , ""
+    , "## Visualizations"
+    , ""
+    , "- [DOT](/assembled.dot)"
+    , "- Canvas rendering is available on the root page."
+    ]
+
+def docsIndex : String :=
+  joinWith "\n"
+    [ "# LeanFM Generated Docs"
+    , ""
+    , "These Markdown files are deterministic artifacts generated from the LeanFM model. They correspond to collapsed or nested graph nodes."
+    , ""
+    , "- [Auth Group](/docs/auth.md)"
+    , "- [Worker Group](/docs/worker.md)"
+    , "- [get_docs Task FSM](/docs/get_docs.md)"
+    , "- [post_review Task FSM](/docs/post_review.md)"
+    , "- [Assembled System](/docs/assembled.md)"
+    ]
 
 def aggregateGraphAnimation : String :=
   "<section><h2>Aggregate Graph</h2><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
@@ -544,19 +958,16 @@ def aggregateGraphAnimation : String :=
 def htmlPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM</title>" ++
   "<meta name=\"color-scheme\" content=\"dark only\">" ++
-  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagram img{display:block;max-width:100%;height:auto;background:#111;forced-color-adjust:none}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555;cursor:grab}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}.chartControls{display:grid;grid-template-columns:auto minmax(220px,1fr) auto minmax(220px,1fr);gap:.5rem;align-items:center;margin:.5rem 0 1rem}.chartControls select{background:#000;color:#fff;border:1px solid #666;padding:.4rem}.chartGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem}.chartGrid canvas{width:100%;height:auto;background:#111;border:1px solid #555}</style>" ++
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagramGrid canvas{display:block;width:100%;max-width:900px;height:auto;background:#111;border-top:1px solid #333}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.chatShell{display:grid;grid-template-columns:minmax(320px,2fr) minmax(260px,1fr);gap:1rem;border:1px solid #444;background:#090909;padding:1rem;margin-bottom:1rem}.chatLog{height:340px;overflow:auto;background:#050505;border:1px solid #333;padding:1rem}.bubble{max-width:76%;padding:.7rem .85rem;margin:.55rem 0;border:1px solid #444;white-space:normal}.bubble.user{margin-left:auto;background:#10233f}.bubble.assistant{background:#111827}.chatInput{grid-column:1 / 2;display:grid;grid-template-columns:1fr auto;gap:.5rem}.chatInput textarea{background:#000;color:#fff;border:1px solid #666;padding:.65rem;font:14px ui-monospace,monospace;resize:vertical}.chatInput button{background:#1d4ed8;color:#fff;border:1px solid #93c5fd;padding:0 1rem;font-weight:700}.toolLog{grid-column:2;grid-row:1 / 3;height:420px;overflow:auto;background:#050505;border:1px solid #333;padding:.75rem;font:12px ui-monospace,monospace}.toolCall{border-bottom:1px solid #222;padding:.4rem 0;color:#93c5fd}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555;cursor:grab}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}.chartControls{display:grid;grid-template-columns:auto minmax(220px,1fr) auto minmax(220px,1fr);gap:.5rem;align-items:center;margin:.5rem 0 1rem}.chartControls select{background:#000;color:#fff;border:1px solid #666;padding:.4rem}.chartGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem}.chartGrid canvas{width:100%;height:auto;background:#111;border:1px solid #555}</style>" ++
   "</head><body><h1>LeanFM</h1><p>Lean-native model of message-passing processes.</p>" ++
-  "<p><a href=\"/metrics\">metrics</a> | <a href=\"/auth.dot\">auth.dot</a> | <a href=\"/graph.dot\">worker.dot</a> | <a href=\"/get_docs.dot\">get_docs.dot</a> | <a href=\"/post_review.dot\">post_review.dot</a> | <a href=\"/tasks.dot\">tasks.dot</a> | <a href=\"/assembled.dot\">assembled.dot</a></p>" ++
+  "<p><a href=\"/metrics\">prometheus metrics</a> | <a href=\"/report\">report</a> | <a href=\"/docs/\">docs</a> | <a href=\"/auth.dot\">auth.dot</a> | <a href=\"/graph.dot\">worker.dot</a> | <a href=\"/get_docs.dot\">get_docs.dot</a> | <a href=\"/post_review.dot\">post_review.dot</a> | <a href=\"/tasks.dot\">tasks.dot</a> | <a href=\"/assembled.dot\">assembled.dot</a></p>" ++
+  chatWorkbench ++
+  conversationPicker ++
   trafficAnimation ++
   interactionDiagram ++
   chartsSection ++
   aggregateGraphAnimation ++
-  "<details open><summary>Auth Group</summary><div class=\"diagram\"><img src=\"/diagrams/auth.png?v=4\" alt=\"Auth group state graph\"></div></details>" ++
-  "<details><summary>Worker Group Overview</summary><div class=\"diagram\"><img src=\"/diagrams/worker.png?v=5\" alt=\"Worker group state graph\"></div></details>" ++
-  "<details><summary>get_docs Task</summary><div class=\"diagram\"><img src=\"/diagrams/get_docs.png?v=5\" alt=\"get_docs task state graph\"></div></details>" ++
-  "<details><summary>post_review Task</summary><div class=\"diagram\"><img src=\"/diagrams/post_review.png?v=5\" alt=\"post_review task state graph\"></div></details>" ++
-  "<details open><summary>Task Conversations</summary><div class=\"diagram\"><img src=\"/diagrams/tasks.png?v=4\" alt=\"Task conversations graph\"></div></details>" ++
-  "<details open><summary>Assembled System</summary><div class=\"diagram\"><img src=\"/diagrams/assembled.png?v=4\" alt=\"Assembled system graph\"></div></details>" ++
+  canvasDiagramGallery ++
   "<pre>" ++ textReport ++ "</pre></body></html>"
 
 end LeanFM

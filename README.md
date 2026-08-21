@@ -40,17 +40,17 @@ Endpoints:
 
 ```text
 GET /          HTML report
-GET /metrics   plain-text report
+GET /metrics   Prometheus metrics
+GET /report    plain-text report
+GET /tools/conversations conversation-to-Lean-file catalog
+GET /lean/get_docs.lean generated Lean view for a conversation
 GET /graph.dot Graphviz DOT
 GET /auth.dot  auth group DOT
 GET /assembled.dot assembled-system DOT
-GET /diagrams/auth.svg rendered auth diagram
-GET /diagrams/worker.svg rendered worker diagram
-GET /diagrams/assembled.svg rendered assembled-system diagram
 GET /health    health check
 ```
 
-Generate the diagrams without starting the server:
+Export DOT sources without starting the server:
 
 ```sh
 lake exe leanfm-diagrams
@@ -60,12 +60,11 @@ Generated files:
 
 ```text
 diagrams/auth.dot
-diagrams/auth.svg
 diagrams/worker.dot
-diagrams/worker.svg
 diagrams/assembled.dot
-diagrams/assembled.svg
 ```
+
+The web UI renders diagrams with `<canvas>` from data built into the Lean binary. It does not serve SVG or PNG image files.
 
 The current example has three actors:
 

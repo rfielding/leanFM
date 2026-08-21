@@ -524,12 +524,17 @@ It binds to:
 Routes include:
 
 - `/`: HTML UI.
-- `/metrics`: plain text report.
+- `/login`: built-in login form.
+- `/metrics`: Prometheus metrics.
+- `/report`: plain text report.
+- `/tools/conversations`: conversation catalog mapping each conversation to a unique generated Lean file.
+- `/lean/*.lean`: generated Lean source views for conversations.
 - `/*.dot`: DOT sources.
-- `/diagrams/*.svg` and `/diagrams/*.png`: rendered Graphviz artifacts.
 - `/health`: health check.
 
-On startup the server calls `writeDiagrams`, which writes DOT files and uses the external `dot` command to generate SVG and PNG artifacts in `diagrams/`.
+The server does not serve SVG or PNG assets. The UI renders diagrams with canvas from data built into the binary. Tool catalogs, Markdown docs, DOT sources, generated Lean source views, and metrics are served directly from Lean constants.
+
+All routes except `/login` and `/health` require the local session cookie set by the login form. The default password is `leanfm`; set `LEANFM_PASSWORD` before launch to override it.
 
 Run it with:
 
@@ -592,4 +597,3 @@ Good next steps:
 - make task FSM generation depend on `TaskMachine` definitions;
 - move chart dataset construction into Lean;
 - add stronger Lean theorems about capacities, authentication, and terminal cleanup.
-

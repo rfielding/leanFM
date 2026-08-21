@@ -26,69 +26,112 @@ def requestPath (request : String) : String :=
       | _ => "/"
   | _ => "/"
 
-def responseBody (path : String) : IO (Nat × String × ByteArray) := do
+def requestMethod (request : String) : String :=
+  match request.splitOn "\r\n" with
+  | firstLine :: _ =>
+      match firstLine.splitOn " " with
+      | method :: _ => method
+      | _ => "GET"
+  | _ => "GET"
+
+def requestBody (request : String) : String :=
+  match request.splitOn "\r\n\r\n" with
+  | _headers :: body :: _ => body
+  | _ => ""
+
+def hasSession (request : String) : Bool :=
+  request.contains "leanfm_session=local"
+
+def loginPage : String :=
+  "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM Login</title>" ++
+  "<meta name=\"color-scheme\" content=\"dark only\">" ++
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only}body{font-family:system-ui,sans-serif;margin:2rem}form{max-width:360px;border:1px solid #444;background:#090909;padding:1rem}input,button{box-sizing:border-box;width:100%;margin:.4rem 0;padding:.65rem;background:#000;color:#fff;border:1px solid #666}button{background:#1d4ed8;border-color:#93c5fd;font-weight:700}</style>" ++
+  "</head><body><h1>LeanFM</h1><form method=\"post\" action=\"/login\"><label>Password <input name=\"password\" type=\"password\" autofocus></label><button type=\"submit\">Log in</button></form></body></html>"
+
+structure Response where
+  status : Nat
+  contentType : String
+  body : ByteArray
+  headers : List String := []
+
+def response (status : Nat) (contentType body : String) (headers : List String := []) : Response :=
+  { status, contentType, body := body.toUTF8, headers }
+
+def byteResponse (status : Nat) (contentType : String) (body : ByteArray) (headers : List String := []) : Response :=
+  { status, contentType, body, headers }
+
+def responseBody (path : String) : IO Response := do
   match path with
-  | "/" => pure (200, "text/html; charset=utf-8", LeanFM.htmlPage.toUTF8)
-  | "/diagrams/" => pure (200, "text/html; charset=utf-8", LeanFM.htmlPage.toUTF8)
-  | "/metrics" => pure (200, "text/plain; charset=utf-8", LeanFM.textReport.toUTF8)
-  | "/graph.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.groupedGraphDot.toUTF8)
-  | "/auth.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.authGraphDot.toUTF8)
-  | "/get_docs.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.getDocsGraphDot.toUTF8)
-  | "/post_review.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.postReviewGraphDot.toUTF8)
-  | "/tasks.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.taskGraphDot.toUTF8)
-  | "/assembled.dot" => pure (200, "text/vnd.graphviz; charset=utf-8", LeanFM.assembledGraphDot.toUTF8)
-  | "/diagrams/auth.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/auth.svg").toUTF8)
-  | "/diagrams/worker.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/worker.svg").toUTF8)
-  | "/diagrams/get_docs.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/get_docs.svg").toUTF8)
-  | "/diagrams/post_review.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/post_review.svg").toUTF8)
-  | "/diagrams/tasks.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/tasks.svg").toUTF8)
-  | "/diagrams/assembled.svg" => pure (200, "image/svg+xml; charset=utf-8", (← IO.FS.readFile "diagrams/assembled.svg").toUTF8)
-  | "/diagrams/auth.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/auth.png")
-  | "/diagrams/worker.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/worker.png")
-  | "/diagrams/get_docs.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/get_docs.png")
-  | "/diagrams/post_review.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/post_review.png")
-  | "/diagrams/tasks.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/tasks.png")
-  | "/diagrams/assembled.png" => pure (200, "image/png", ← IO.FS.readBinFile "diagrams/assembled.png")
-  | "/health" => pure (200, "text/plain; charset=utf-8", "ok\n".toUTF8)
-  | _ => pure (404, "text/plain; charset=utf-8", "not found\n".toUTF8)
+  | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
+  | "/diagrams/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
+  | "/metrics" => pure <| response 200 "text/plain; version=0.0.4; charset=utf-8" LeanFM.prometheusMetrics
+  | "/report" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.textReport
+  | "/tools/scenarios" => pure <| response 200 "application/json; charset=utf-8" LeanFM.scenarioCatalogJson
+  | "/tools/protocol-sketches" => pure <| response 200 "application/json; charset=utf-8" LeanFM.protocolSketchCatalogJson
+  | "/tools/conversations" => pure <| response 200 "application/json; charset=utf-8" LeanFM.conversationCatalogJson
+  | "/lean/auth.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.authLeanFile
+  | "/lean/get_docs.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.getDocsLeanFile
+  | "/lean/post_review.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.postReviewLeanFile
+  | "/lean/worker.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.workerLeanFile
+  | "/lean/assembled.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.assembledLeanFile
+  | "/lean/sketch/kerberos.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.kerberosLeanSketch
+  | "/docs/" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.docsIndex
+  | "/docs/index.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.docsIndex
+  | "/docs/auth.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.authDoc
+  | "/docs/worker.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.workerDoc
+  | "/docs/get_docs.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.getDocsDoc
+  | "/docs/post_review.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.postReviewDoc
+  | "/docs/assembled.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.assembledDoc
+  | "/graph.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.groupedGraphDot
+  | "/auth.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.authGraphDot
+  | "/get_docs.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.getDocsGraphDot
+  | "/post_review.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.postReviewGraphDot
+  | "/tasks.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.taskGraphDot
+  | "/assembled.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.assembledGraphDot
+  | "/health" => pure <| response 200 "text/plain; charset=utf-8" "ok\n"
+  | _ => pure <| response 404 "text/plain; charset=utf-8" "not found\n"
+
+def configuredPassword : IO String := do
+  match (← IO.getEnv "LEANFM_PASSWORD") with
+  | some password => pure password
+  | none => pure "leanfm"
+
+def redirectResponse (location : String) (headers : List String := []) : Response :=
+  response 303 "text/plain; charset=utf-8" "see other\n" (("Location: " ++ location) :: headers)
+
+def responseForRequest (request : String) : IO Response := do
+  let path := requestPath request
+  if path == "/health" then
+    responseBody path
+  else if path == "/login" then
+    if requestMethod request == "POST" then
+      let password ← configuredPassword
+      if (requestBody request).contains ("password=" ++ password) then
+        pure <| redirectResponse "/" ["Set-Cookie: leanfm_session=local; Path=/; HttpOnly; SameSite=Lax"]
+      else
+        pure <| response 403 "text/html; charset=utf-8" loginPage
+    else
+      pure <| response 200 "text/html; charset=utf-8" loginPage
+  else if hasSession request then
+    responseBody path
+  else
+    pure <| redirectResponse "/login"
 
 def statusText : Nat -> String
   | 200 => "OK"
+  | 303 => "See Other"
+  | 403 => "Forbidden"
   | 404 => "Not Found"
   | _ => "OK"
 
-def httpHeader (status : Nat) (contentType : String) (body : ByteArray) : String :=
+def httpHeader (status : Nat) (contentType : String) (body : ByteArray) (extraHeaders : List String := []) : String :=
   "HTTP/1.1 " ++ toString status ++ " " ++ statusText status ++ "\r\n" ++
   "Content-Type: " ++ contentType ++ "\r\n" ++
   "Content-Length: " ++ toString body.size ++ "\r\n" ++
   "Cache-Control: no-store\r\n" ++
   "X-Content-Type-Options: nosniff\r\n" ++
+  (String.join (extraHeaders.map fun h => h ++ "\r\n")) ++
   "Connection: close\r\n\r\n"
-
-def writeDiagram (name dot : String) : IO Unit := do
-  IO.FS.createDirAll "diagrams"
-  let dotPath := s!"diagrams/{name}.dot"
-  let svgPath := s!"diagrams/{name}.svg"
-  let pngPath := s!"diagrams/{name}.png"
-  IO.FS.writeFile dotPath dot
-  let svgChild ← IO.Process.output
-    { cmd := "dot"
-    , args := #["-Tsvg", dotPath, "-o", svgPath]
-    }
-  let pngChild ← IO.Process.output
-    { cmd := "dot"
-    , args := #["-Tpng", dotPath, "-o", pngPath]
-    }
-  if svgChild.exitCode != 0 || pngChild.exitCode != 0 then
-    throw <| IO.userError s!"dot failed for {dotPath}: {svgChild.stderr}{pngChild.stderr}"
-
-def writeDiagrams : IO Unit := do
-  writeDiagram "auth" LeanFM.authGraphDot
-  writeDiagram "worker" LeanFM.groupedGraphDot
-  writeDiagram "get_docs" LeanFM.getDocsGraphDot
-  writeDiagram "post_review" LeanFM.postReviewGraphDot
-  writeDiagram "tasks" LeanFM.taskGraphDot
-  writeDiagram "assembled" LeanFM.assembledGraphDot
 
 def handleClient (client : TcpClient) : IO Unit := do
   let requestBytes? ← (client.recv? 4096).block
@@ -96,8 +139,8 @@ def handleClient (client : TcpClient) : IO Unit := do
     match requestBytes? with
     | some bytes => String.fromUTF8! bytes
     | none => ""
-  let (status, contentType, body) ← responseBody (requestPath request)
-  (client.sendAll #[(httpHeader status contentType body).toUTF8, body]).block
+  let res ← responseForRequest request
+  (client.sendAll #[(httpHeader res.status res.contentType res.body res.headers).toUTF8, res.body]).block
 
 partial def serveLoop (server : TcpServer) : IO Unit := do
   let client ← (server.accept).block
@@ -108,7 +151,6 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
   serveLoop server
 
 def main : IO Unit := do
-  writeDiagrams
   let server ← Std.Internal.IO.Async.TCP.Socket.Server.mk
   server.bind bindAddr
   server.listen 128

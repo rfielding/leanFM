@@ -918,6 +918,100 @@ def actorQueuesSelectKnownTasks : CTL Observation :=
 def terminalTasksAreCleanedUp : CTL Observation :=
   CTL.ag (CTL.implies (CTL.atom isTerminal) (CTL.atom fun s => s.task == none))
 
+structure VisibleMessageSpec where
+  src : String
+  dst : String
+  proto : String
+  bytes : List Nat
+  fields : List String
+  ts : Nat
+deriving DecidableEq, Repr
+
+structure VisibleProtocolSpec where
+  id : String
+  actors : List String
+  initialState : String
+  terminalStates : List String
+  messages : List VisibleMessageSpec
+  proofFields : List String
+  assertions : List String
+deriving DecidableEq, Repr
+
+def kerberosDhTokenSpec : VisibleProtocolSpec :=
+  { id := "kerberos"
+  , actors := ["Client", "AuthServer", "TicketGrantingServer", "Service"]
+  , initialState := "unauthenticated"
+  , terminalStates := ["authenticated_for_service", "rejected"]
+  , messages :=
+      [ { src := "Client"
+        , dst := "AuthServer"
+        , proto := "Kerberos.AsReq"
+        , bytes := [0x6b, 0x01]
+        , fields := ["client_principal", "realm", "client_dh_share", "nonce"]
+        , ts := 1
+        }
+      , { src := "AuthServer"
+        , dst := "Client"
+        , proto := "Kerberos.AsRep"
+        , bytes := [0x6b, 0x02]
+        , fields := ["client_principal", "tgt_proof", "server_dh_share", "dh_commutativity_proof", "token_server_signature_proof", "nonce"]
+        , ts := 2
+        }
+      , { src := "Client"
+        , dst := "TicketGrantingServer"
+        , proto := "Kerberos.TgsReq"
+        , bytes := [0x6b, 0x03]
+        , fields := ["service_principal", "tgt_proof", "authenticator_proof", "client_dh_share", "nonce"]
+        , ts := 3
+        }
+      , { src := "TicketGrantingServer"
+        , dst := "Client"
+        , proto := "Kerberos.TgsRep"
+        , bytes := [0x6b, 0x04]
+        , fields := ["service_ticket_proof", "service_session_key_proof", "server_dh_share", "dh_commutativity_proof", "nonce"]
+        , ts := 4
+        }
+      , { src := "Client"
+        , dst := "Service"
+        , proto := "Kerberos.ApReq"
+        , bytes := [0x6b, 0x05]
+        , fields := ["service_ticket_proof", "authenticator_proof", "operation"]
+        , ts := 5
+        }
+      , { src := "Service"
+        , dst := "Client"
+        , proto := "Kerberos.ApRep"
+        , bytes := [0x6b, 0x06]
+        , fields := ["service_accept_proof", "operation", "status"]
+        , ts := 6
+        }
+      ]
+  , proofFields :=
+      [ "tgt_proof"
+      , "authenticator_proof"
+      , "service_ticket_proof"
+      , "service_accept_proof"
+      , "dh_commutativity_proof"
+      , "token_server_signature_proof"
+      ]
+  , assertions :=
+      [ "AG no service success without service_ticket_proof"
+      , "AG TgsRep requires prior tgt_proof"
+      , "AG ApRep success requires prior service_accept_proof"
+      , "AG dh_commutativity_proof appears only after both DH shares are visible"
+      , "AG token_server_signature_proof appears only on AuthServer/TGS-issued tokens"
+      , "AF terminal"
+      ]
+  }
+
+theorem kerberos_has_terminal_states :
+    kerberosDhTokenSpec.terminalStates.length = 2 := by
+  rfl
+
+theorem kerberos_has_visible_proof_fields :
+    kerberosDhTokenSpec.proofFields.length = 6 := by
+  rfl
+
 theorem initial_within_capacity :
     withinCapacity initial = true := by
   rfl
