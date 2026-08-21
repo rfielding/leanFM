@@ -1,5 +1,5 @@
 (()=>{
-  const cv=document.getElementById('subjectGraph'), ctx=cv.getContext('2d'), title=document.getElementById('subjectTitle'), summary=document.getElementById('subjectSummary'), artifacts=document.getElementById('subjectArtifacts'), cutBox=document.getElementById('subjectCutEdges');
+  const cv=document.getElementById('subjectGraph'), ctx=cv.getContext('2d'), title=document.getElementById('subjectTitle'), summary=document.getElementById('subjectSummary'), artifacts=document.getElementById('subjectArtifacts'), cutBox=document.getElementById('subjectCutEdges'), zoomIn=document.getElementById('subjectZoomIn'), zoomOut=document.getElementById('subjectZoomOut'), zoomReset=document.getElementById('subjectZoomReset'), zoomLabel=document.getElementById('subjectZoomLabel');
   cutBox.checked=localStorage.getItem('leanfm.subject.cutEdges')!=='false';
   cutBox.addEventListener('change', ()=>localStorage.setItem('leanfm.subject.cutEdges', cutBox.checked?'true':'false'));
   const empty={
@@ -127,6 +127,27 @@
     view.z=Math.max(.25, Math.min(3.5, view.z));
     view.x=Math.max(-cv.width*2, Math.min(cv.width*2, view.x));
     view.y=Math.max(-cv.height*2, Math.min(cv.height*2, view.y));
+
+  }
+  function updateZoomLabel(){
+    if(zoomLabel)zoomLabel.textContent=Math.round(view.z*100)+'%';
+
+  }
+  function zoomAt(factor, sx, sy){
+    const before={
+      x:(sx-view.x)/view.z, y:(sy-view.y)/view.z
+    };
+    view.z*=factor;
+    clampView();
+    view.x=sx-before.x*view.z;
+    view.y=sy-before.y*view.z;
+    clampView();
+    saveView();
+    updateZoomLabel();
+
+  }
+  function zoomCenter(factor){
+    zoomAt(factor, cv.width/2, cv.height/2);
 
   }
   function mdLines(){
@@ -670,14 +691,8 @@
     ev.preventDefault();
     const p=screenPoint(ev);
     if(ev.ctrlKey||ev.metaKey){
-      const before={
-        x:(p.x-view.x)/view.z, y:(p.y-view.y)/view.z
-      };
-      const factor=Math.exp(-ev.deltaY*0.002);
-      view.z*=factor;
-      clampView();
-      view.x=p.x-before.x*view.z;
-      view.y=p.y-before.y*view.z;
+      zoomAt(Math.exp(-ev.deltaY*0.002), p.x, p.y);
+      return;
 
     }
     else{
@@ -687,9 +702,20 @@
     }
     clampView();
     saveView();
+    updateZoomLabel();
 
   }, {
     passive:false
+  });
+  if(zoomIn)zoomIn.addEventListener('click', ()=>zoomCenter(1.25));
+  if(zoomOut)zoomOut.addEventListener('click', ()=>zoomCenter(0.8));
+  if(zoomReset)zoomReset.addEventListener('click', ()=>{
+    view={
+      x:0, y:0, z:1
+    };
+    saveView();
+    updateZoomLabel();
+
   });
   cv.addEventListener('pointerdown', ev=>{
     ev.preventDefault();
@@ -816,6 +842,7 @@
     setSubject:save, renderText:textCard, renderLinks:linkCard, renderMarkdown:renderMarkdownCard, getSubject:()=>model
   };
   build();
+  updateZoomLabel();
   render();
 
 })();

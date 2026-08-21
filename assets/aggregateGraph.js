@@ -2,6 +2,7 @@ const graphCanvas=document.getElementById('aggGraph');
 const gctx=graphCanvas.getContext('2d');
 const aggInfo=document.getElementById('aggInfo');
 const aggCutBox=document.getElementById('aggCutEdges');
+const aggZoomIn=document.getElementById('aggZoomIn'), aggZoomOut=document.getElementById('aggZoomOut'), aggZoomReset=document.getElementById('aggZoomReset'), aggZoomLabel=document.getElementById('aggZoomLabel');
 aggCutBox.checked=localStorage.getItem('leanfm.agg.cutEdges')!=='false';
 aggCutBox.addEventListener('change', ()=>localStorage.setItem('leanfm.agg.cutEdges', aggCutBox.checked?'true':'false'));
 const gNodes=[{
@@ -65,6 +66,27 @@ function clampView(){
   view.z=Math.max(.25, Math.min(3.5, view.z));
   view.x=Math.max(-graphCanvas.width*2, Math.min(graphCanvas.width*2, view.x));
   view.y=Math.max(-graphCanvas.height*2, Math.min(graphCanvas.height*2, view.y));
+
+}
+function updateZoomLabel(){
+  if(aggZoomLabel)aggZoomLabel.textContent=Math.round(view.z*100)+'%';
+
+}
+function zoomAt(factor, sx, sy){
+  const before={
+    x:(sx-view.x)/view.z, y:(sy-view.y)/view.z
+  };
+  view.z*=factor;
+  clampView();
+  view.x=sx-before.x*view.z;
+  view.y=sy-before.y*view.z;
+  clampView();
+  saveView();
+  updateZoomLabel();
+
+}
+function zoomCenter(factor){
+  zoomAt(factor, graphCanvas.width/2, graphCanvas.height/2);
 
 }
 function bucket(n){
@@ -1020,14 +1042,8 @@ graphCanvas.addEventListener('wheel', ev=>{
   ev.preventDefault();
   const p=canvasScreenPoint(ev);
   if(ev.ctrlKey||ev.metaKey){
-    const before={
-      x:(p.x-view.x)/view.z, y:(p.y-view.y)/view.z
-    };
-    const factor=Math.exp(-ev.deltaY*0.002);
-    view.z*=factor;
-    clampView();
-    view.x=p.x-before.x*view.z;
-    view.y=p.y-before.y*view.z;
+    zoomAt(Math.exp(-ev.deltaY*0.002), p.x, p.y);
+    return;
 
   }
   else{
@@ -1037,9 +1053,20 @@ graphCanvas.addEventListener('wheel', ev=>{
   }
   clampView();
   saveView();
+  updateZoomLabel();
 
 }, {
   passive:false
+});
+if(aggZoomIn)aggZoomIn.addEventListener('click', ()=>zoomCenter(1.25));
+if(aggZoomOut)aggZoomOut.addEventListener('click', ()=>zoomCenter(0.8));
+if(aggZoomReset)aggZoomReset.addEventListener('click', ()=>{
+  view={
+    x:0, y:0, z:1
+  };
+  saveView();
+  updateZoomLabel();
+
 });
 graphCanvas.addEventListener('click', ev=>{
   if(dragMoved){
@@ -1054,4 +1081,5 @@ graphCanvas.addEventListener('click', ev=>{
 
 });
 rebuildGraph();
+updateZoomLabel();
 drawAgg();
