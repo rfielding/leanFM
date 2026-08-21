@@ -71,17 +71,35 @@
     ctx.fill();
 
   }
-  function labelBox(x, y, text, color, w){
-    const ls=lines(text, Math.floor((w||210)/8)).slice(0, 3), h=18+ls.length*15;
+  function overlapsRect(a, b){
+    return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+
+  }
+  function labelBox(x, y, text, color, w, avoid){
+    const lw=w||210, ls=lines(text, Math.floor(lw/8)).slice(0, 3), h=18+ls.length*15;
+    const offsets=[[0, 0], [0, -54], [0, 54], [170, 0], [-170, 0], [170, -54], [-170, -54], [170, 54], [-170, 54], [0, -96], [0, 96]];
+    let bx=x, by=y;
+    for(const [ox, oy] of offsets){
+      const r={
+        x:x+ox-lw/2, y:y+oy-h/2, w:lw, h
+      };
+      if(!(avoid||[]).some(a=>overlapsRect(r, a))){
+        bx=x+ox;
+        by=y+oy;
+        break;
+
+      }
+
+    }
     ctx.fillStyle='#000';
     ctx.strokeStyle=color||'#93c5fd';
     ctx.lineWidth=1.5;
-    ctx.fillRect(x-(w||210)/2, y-h/2, w||210, h);
-    ctx.strokeRect(x-(w||210)/2, y-h/2, w||210, h);
+    ctx.fillRect(bx-lw/2, by-h/2, lw, h);
+    ctx.strokeRect(bx-lw/2, by-h/2, lw, h);
     ctx.fillStyle='#fff';
     ctx.font='11px sans-serif';
     ctx.textAlign='center';
-    ls.forEach((t, i)=>ctx.fillText(t, x, y-(ls.length-1)*7+i*14+4));
+    ls.forEach((t, i)=>ctx.fillText(t, bx, by-(ls.length-1)*7+i*14+4));
 
   }
   function group(x, y, w, h, label){
@@ -503,6 +521,9 @@
   }
   function drawConcreteEdges(){
     const seen=new Map();
+    const blockers=hit.filter(h=>h.kind==='child').map(h=>({
+      x:h.x-8, y:h.y-8, w:h.w+16, h:h.h+16
+    }));
     for(const e of concreteEdges()){
       const a=endpoint(e[0]), b=endpoint(e[1]);
       if(!a||!b)continue;
@@ -518,7 +539,7 @@
       }
       const p1=portFrom(a, b), p2=portFrom(b, a);
       arrow(p1.x, p1.y, p2.x, p2.y, st.c, st.d);
-      labelBox((p1.x+p2.x)/2, (p1.y+p2.y)/2-16, st.name+': '+e[2], st.c, 300);
+      labelBox((p1.x+p2.x)/2, (p1.y+p2.y)/2-16, st.name+': '+e[2], st.c, 300, blockers);
 
     }
     for(const item of seen.values()){
