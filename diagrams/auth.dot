@@ -1,0 +1,17 @@
+digraph auth {
+  rankdir=TB;
+  graph [bgcolor="#111111", pad="0.35", nodesep="0.55", ranksep="0.7"];
+  node [shape=box, style="rounded,filled", fillcolor="black", color="white", fontcolor="white", fontname="Arial", fontsize="18", margin="0.18,0.12"];
+  edge [fontname="Arial", fontsize="14", penwidth="2", color="white", fontcolor="white"];
+  "no-proof; Auth=idle q=0/1; DB=idle q=0/1";
+  "no-proof; Auth=waiting q=0/1; DB=queued q=1/1";
+  "no-proof; Auth=queued q=1/1; DB=done q=0/1";
+  "no-proof; Auth=queued q=1/1; DB=failed q=0/1";
+  "proof(Auth->Client:[160 1]); Auth=done q=0/1; DB=done q=0/1";
+  "no-proof; Auth=failed q=0/1; DB=failed q=0/1";
+  "no-proof; Auth=idle q=0/1; DB=idle q=0/1" -> "no-proof; Auth=waiting q=0/1; DB=queued q=1/1" [label="schedule Auth: wrapper(task=auth, src=Auth, dst=DB, via=http, ts=1); protobuf(type=Auth.LookupRequest, bytes=[10 1], fields={1:principal=client})"];
+  "no-proof; Auth=waiting q=0/1; DB=queued q=1/1" -> "no-proof; Auth=queued q=1/1; DB=done q=0/1" [label="schedule DB: wrapper(task=auth, src=DB, dst=Auth, via=http, ts=3); protobuf(type=Auth.LookupResponse, bytes=[10 2], fields={1:principal=client, 2:authenticated=true})"];
+  "no-proof; Auth=waiting q=0/1; DB=queued q=1/1" -> "no-proof; Auth=queued q=1/1; DB=failed q=0/1" [label="schedule DB: wrapper(task=auth, src=DB, dst=Auth, via=http, ts=3); protobuf(type=Auth.LookupResponse, bytes=[10 255], fields={1:principal=client, 2:authenticated=false})"];
+  "no-proof; Auth=queued q=1/1; DB=done q=0/1" -> "proof(Auth->Client:[160 1]); Auth=done q=0/1; DB=done q=0/1" [label="schedule Auth: wrapper(task=auth, src=DB, dst=Auth, via=http, ts=3); protobuf(type=Auth.LookupResponse, bytes=[10 2], fields={1:principal=client, 2:authenticated=true})"];
+  "no-proof; Auth=queued q=1/1; DB=failed q=0/1" -> "no-proof; Auth=failed q=0/1; DB=failed q=0/1" [label="schedule Auth: wrapper(task=auth, src=DB, dst=Auth, via=http, ts=3); protobuf(type=Auth.LookupResponse, bytes=[10 255], fields={1:principal=client, 2:authenticated=false})"];
+}

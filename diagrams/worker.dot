@@ -1,0 +1,81 @@
+digraph protocol {
+  rankdir=TB;
+  graph [bgcolor="#111111", pad="0.35", nodesep="0.55", ranksep="0.7"];
+  node [shape=box, style="rounded,filled", fillcolor="black", color="white", fontcolor="white", fontname="Arial", fontsize="18", margin="0.18,0.12"];
+  edge [fontname="Arial", fontsize="14", penwidth="2", color="white", fontcolor="white"];
+  label="worker group overview\nP(success)=0.9250\nget_docs=0.9500, post_review=0.9000";
+  labelloc="t";
+  fontcolor="white";
+  fontsize="20";
+  subgraph cluster_unauthenticated {
+    label="no auth proof";
+    color="white";
+    fontcolor="white";
+    style="rounded";
+    "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth";
+    "task=none\nC failed q=0/1 h=-\nG failed q=0/2 h=-\nW idle q=0/1 h=-\nno auth";
+  }
+  subgraph cluster_idle_terminal {
+    label="no active task";
+    color="white";
+    fontcolor="white";
+    style="rounded";
+    "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok";
+    "task=none\nC done q=0/1 h=-\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok";
+    "task=none\nC failed q=0/1 h=-\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok";
+  }
+  subgraph cluster_get_docs {
+    label="active task: get_docs, P(success)=0.9500";
+    color="white";
+    fontcolor="white";
+    style="rounded";
+    "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.GetRequest\nW idle q=0/1 h=-\nauth ok";
+    "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok";
+    "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.FetchResult\nW done q=0/1 h=-\nauth ok";
+    "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.FetchResult\nW failed q=0/1 h=-\nauth ok";
+    "task=get_docs\nC queued q=1/1 h=Docs.GetResponse\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok";
+    "task=get_docs\nC queued q=1/1 h=Error.Response\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok";
+  }
+  subgraph cluster_post_review {
+    label="active task: post_review, P(success)=0.9000";
+    color="white";
+    fontcolor="white";
+    style="rounded";
+    "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.PostRequest\nW idle q=0/1 h=-\nauth ok";
+    "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok";
+    "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.ModerationResult\nW done q=0/1 h=-\nauth ok";
+    "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.ModerationResult\nW failed q=0/1 h=-\nauth ok";
+    "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok";
+    "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok";
+  }
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth" -> "task=none\nC failed q=0/1 h=-\nG failed q=0/2 h=-\nW idle q=0/1 h=-\nno auth" [label="Client: Docs.GetRequest {1:method=GET, 2:path=/docs/index.html}"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth" -> "task=none\nC failed q=0/1 h=-\nG failed q=0/2 h=-\nW idle q=0/1 h=-\nno auth" [label="Client: Reviews.PostRequest {1:method=POST, 2:path=/reviews, 3:body_hash=review#1}"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth" -> "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth" [label="Gateway: sleep(read empty)"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth" -> "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nno auth" [label="Worker: sleep(read empty)"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.GetRequest\nW idle q=0/1 h=-\nauth ok" [label="Client: Docs.GetRequest {1:method=GET, 2:path=/docs/index.html}"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.PostRequest\nW idle q=0/1 h=-\nauth ok" [label="Client: Reviews.PostRequest {1:method=POST, 2:path=/reviews, 3:body_hash=review#1}"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok" -> "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok" [label="Gateway: sleep(read empty)"];
+  "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok" -> "task=none\nC idle q=0/1 h=-\nG idle q=0/2 h=-\nW idle q=0/1 h=-\nauth ok" [label="Worker: sleep(read empty)"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.GetRequest\nW idle q=0/1 h=-\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" [label="Gateway: Docs.FetchCommand {1:path=/docs/index.html, 2:cache_mode=normal}"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.GetRequest\nW idle q=0/1 h=-\nauth ok" -> "task=get_docs\nC queued q=1/1 h=Error.Response\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" [label="Gateway: Error.Response {1:status=401, 2:reason=unauthorized}"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.GetRequest\nW idle q=0/1 h=-\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.GetRequest\nW idle q=0/1 h=-\nauth ok" [label="Worker: sleep(read empty)"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.FetchResult\nW done q=0/1 h=-\nauth ok" [label="Worker: Docs.FetchResult {1:status=200, 2:path=/docs/index.html}"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.FetchResult\nW failed q=0/1 h=-\nauth ok" [label="Worker: Docs.FetchResult {1:status=404, 2:path=/docs/index.html}"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" [label="Gateway: sleep(read empty)"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" -> "task=get_docs\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Docs.FetchCommand\nauth ok" [label="Gateway: sleep(write full)"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.FetchResult\nW done q=0/1 h=-\nauth ok" -> "task=get_docs\nC queued q=1/1 h=Docs.GetResponse\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok" [label="Gateway: Docs.GetResponse {1:status=200, 2:path=/docs/index.html}"];
+  "task=get_docs\nC waiting q=0/1 h=-\nG queued q=1/2 h=Docs.FetchResult\nW failed q=0/1 h=-\nauth ok" -> "task=get_docs\nC queued q=1/1 h=Error.Response\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" [label="Gateway: Error.Response {1:status=401, 2:reason=unauthorized}"];
+  "task=get_docs\nC queued q=1/1 h=Docs.GetResponse\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok" -> "task=none\nC done q=0/1 h=-\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok" [label="Client: Docs.GetResponse {1:status=200, 2:path=/docs/index.html}"];
+  "task=get_docs\nC queued q=1/1 h=Error.Response\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" -> "task=none\nC failed q=0/1 h=-\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" [label="Client: Error.Response {1:status=401, 2:reason=unauthorized}"];
+  "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.PostRequest\nW idle q=0/1 h=-\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" [label="Gateway: Reviews.ModerateCommand {1:body_hash=review#1, 2:policy=default}"];
+  "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.PostRequest\nW idle q=0/1 h=-\nauth ok" -> "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" [label="Gateway: Reviews.PostResponse {1:status=400, 2:path=/reviews}"];
+  "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.PostRequest\nW idle q=0/1 h=-\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.PostRequest\nW idle q=0/1 h=-\nauth ok" [label="Worker: sleep(read empty)"];
+  "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.ModerationResult\nW done q=0/1 h=-\nauth ok" [label="Worker: Reviews.ModerationResult {1:decision=accepted, 2:body_hash=review#1}"];
+  "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.ModerationResult\nW failed q=0/1 h=-\nauth ok" [label="Worker: Reviews.ModerationResult {1:decision=rejected, 2:body_hash=review#1}"];
+  "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" [label="Gateway: sleep(read empty)"];
+  "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" -> "task=post_review\nC waiting q=0/1 h=-\nG waiting q=0/2 h=-\nW queued q=1/1 h=Reviews.ModerateCommand\nauth ok" [label="Gateway: sleep(write full)"];
+  "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.ModerationResult\nW done q=0/1 h=-\nauth ok" -> "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok" [label="Gateway: Reviews.PostResponse {1:status=201, 2:path=/reviews}"];
+  "task=post_review\nC waiting q=0/1 h=-\nG queued q=1/2 h=Reviews.ModerationResult\nW failed q=0/1 h=-\nauth ok" -> "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" [label="Gateway: Reviews.PostResponse {1:status=400, 2:path=/reviews}"];
+  "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok" -> "task=none\nC done q=0/1 h=-\nG done q=0/2 h=-\nW done q=0/1 h=-\nauth ok" [label="Client: Reviews.PostResponse {1:status=201, 2:path=/reviews}"];
+  "task=post_review\nC queued q=1/1 h=Reviews.PostResponse\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" -> "task=none\nC failed q=0/1 h=-\nG failed q=0/2 h=-\nW failed q=0/1 h=-\nauth ok" [label="Client: Reviews.PostResponse {1:status=400, 2:path=/reviews}"];
+}

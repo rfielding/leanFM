@@ -1,0 +1,11 @@
+digraph assembled {
+  rankdir=TB;
+  graph [bgcolor="#111111", pad="0.35", nodesep="0.55", ranksep="0.7"];
+  node [shape=box, style="rounded,filled", fillcolor="black", color="white", fontcolor="white", fontname="Arial", fontsize="18", margin="0.18,0.12"];
+  edge [fontname="Arial", fontsize="14", penwidth="2", color="white", fontcolor="white"];
+  AuthGroup [label="2 actor auth group\nP(success)=0.9800\nE(latency)=4.0000\nthroughput=0.2450"];
+  WorkerGroup [label="3 actor worker group\nget_docs + post_review\nP(success)=0.9250\nE(latency)=8.0000\nthroughput=0.1156"];
+  Assembled [label="assembled system\nP(success)=0.9065\nE(latency)=11.8400\nthroughput=0.0765"];
+  AuthGroup -> WorkerGroup [label="on auth success"];
+  WorkerGroup -> Assembled [label="aggregate metrics"];
+}
