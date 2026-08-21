@@ -1,0 +1,19 @@
+/.lake/
+/.lean/
+
+# Lean/Lake build artifacts
+*.olean
+*.ilean
+*.c
+*.c.o
+*.o
+*.so
+*.dll
+*.dylib
+*.a
+
+# Local noise
+*~
+*.swp
+*.swo
+.DS_Store

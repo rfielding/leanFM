@@ -1,0 +1,10 @@
+name = "LeanFM"
+version = "0.1.0"
+defaultTargets = ["leanfm"]
+
+[[lean_lib]]
+name = "LeanFM"
+
+[[lean_exe]]
+name = "leanfm"
+root = "Main"
