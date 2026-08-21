@@ -1,5 +1,13 @@
 /.lake/
 /.lean/
+/docs/
+/diagrams/
+
+# Local persistence/runtime state
+*.sqlite
+*.sqlite3
+*.db
+.env
 
 # Lean/Lake build artifacts
 *.olean
