@@ -115,7 +115,20 @@
 
   }
   let openGroups=new Set(JSON.parse(localStorage.getItem('leanfm.subject.open')||'[]'));
-  let nodes=[], edges=[], hit=[], childById=new Map(), drag=null, started=false;
+  let nodes=[], edges=[], hit=[], childById=new Map(), drag=null, pan=null, started=false;
+  let view=JSON.parse(localStorage.getItem('leanfm.subject.view')||'null')||{
+    x:0, y:0, z:1
+  };
+  function saveView(){
+    localStorage.setItem('leanfm.subject.view', JSON.stringify(view));
+
+  }
+  function clampView(){
+    view.z=Math.max(.25, Math.min(3.5, view.z));
+    view.x=Math.max(-cv.width*2, Math.min(cv.width*2, view.x));
+    view.y=Math.max(-cv.height*2, Math.min(cv.height*2, view.y));
+
+  }
   function mdLines(){
     return String(model.markdown||'').split(/\n+/).map(s=>s.replace(/^#+\s*/, '').trim()).filter(Boolean).slice(0, 8);
 
@@ -564,13 +577,16 @@
     if(!nodes.length)build();
     if(!drag)resizeCanvas();
     stepForce();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle='#111';
     ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(view.z, 0, 0, view.z, view.x, view.y);
     title.textContent=model.label||model.task||model.id||'Current draft';
     summary.textContent='Persistent browser model: '+(model.actors||[]).length+' actors, '+(model.messages||[]).length+' visible messages, '+(model.properties||[]).length+' properties. Click composite states to open or close them.';
     hit=[];
     for(const n of nodes)drawNode(n);
     drawConcreteEdges();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawLegend();
     requestAnimationFrame(render);
 
@@ -597,10 +613,50 @@
     artifacts.prepend(d);
 
   }
-  function point(ev){
+  function latexHtml(s){
+    return esc(s).replace(/\\cdot/g, '&middot;').replace(/\\alpha/g, 'alpha').replace(/\\beta/g, 'beta').replace(/\\lambda/g, 'lambda').replace(/([A-Za-z0-9)]+)\^\{([^}]+)\}/g, '$1<sup>$2</sup>').replace(/([A-Za-z0-9)]+)_\{([^}]+)\}/g, '$1<sub>$2</sub>');
+
+  }
+  function mdInline(s){
+    const parts=String(s).split(/(\$[^$]+\$)/g);
+    return parts.map(p=>p.startsWith('$')&&p.endsWith('$')?'<span style="font-family:ui-serif,serif;border:1px solid #333;background:#050505;padding:.05rem .25rem">'+latexHtml(p.slice(1, -1))+'</span>':esc(p)).join('');
+
+  }
+  function renderMarkdownCard(title, md){
+    const blocks=String(md).split(/(\$\$[\s\S]*?\$\$)/g);
+    const html=blocks.map(block=>{
+      if(block.startsWith('$$')&&block.endsWith('$$')){
+        return '<div style="font-family:ui-serif,serif;background:#050505;border:1px solid #333;padding:.75rem;margin:.6rem 0;text-align:center">'+latexHtml(block.slice(2, -2).trim())+'</div>';
+
+      }
+      return block.split(/\n/).map(line=>{
+        if(/^###\s+/.test(line))return '<h4>'+mdInline(line.replace(/^###\s+/, ''))+'</h4>';
+        if(/^##\s+/.test(line))return '<h3>'+mdInline(line.replace(/^##\s+/, ''))+'</h3>';
+        if(/^#\s+/.test(line))return '<h2>'+mdInline(line.replace(/^#\s+/, ''))+'</h2>';
+        if(/^-\s+/.test(line))return '<p style="margin:.35rem 0 0 1rem">- '+mdInline(line.replace(/^-\s+/, ''))+'</p>';
+        if(!line.trim())return '';
+        return '<p>'+mdInline(line)+'</p>';
+
+      }).join('');
+
+    }).join('');
+    const d=document.createElement('details');
+    d.open=true;
+    d.innerHTML='<summary>'+esc(title)+'</summary><div style="padding:1rem">'+html+'</div>';
+    artifacts.prepend(d);
+
+  }
+  function screenPoint(ev){
     const r=cv.getBoundingClientRect();
     return{
       x:(ev.clientX-r.left)*cv.width/r.width, y:(ev.clientY-r.top)*cv.height/r.height
+    };
+
+  }
+  function point(ev){
+    const p=screenPoint(ev);
+    return{
+      x:(p.x-view.x)/view.z, y:(p.y-view.y)/view.z
     };
 
   }
@@ -610,10 +666,44 @@
   }
   cv.style.touchAction='none';
   cv.style.cursor='grab';
+  cv.addEventListener('wheel', ev=>{
+    ev.preventDefault();
+    const p=screenPoint(ev);
+    if(ev.ctrlKey||ev.metaKey){
+      const before={
+        x:(p.x-view.x)/view.z, y:(p.y-view.y)/view.z
+      };
+      const factor=Math.exp(-ev.deltaY*0.002);
+      view.z*=factor;
+      clampView();
+      view.x=p.x-before.x*view.z;
+      view.y=p.y-before.y*view.z;
+
+    }
+    else{
+      view.x-=ev.deltaX;
+      view.y-=ev.deltaY;
+
+    }
+    clampView();
+    saveView();
+
+  }, {
+    passive:false
+  });
   cv.addEventListener('pointerdown', ev=>{
     ev.preventDefault();
     const p=point(ev), h=hitAt(p);
-    if(!h)return;
+    if(!h){
+      const s=screenPoint(ev);
+      pan={
+        x:s.x, y:s.y, viewX:view.x, viewY:view.y
+      };
+      cv.setPointerCapture(ev.pointerId);
+      cv.style.cursor='grabbing';
+      return;
+
+    }
     if(h.kind==='child'){
       const c=childById.get(h.id);
       if(!c)return;
@@ -642,6 +732,16 @@
   });
   cv.addEventListener('pointermove', ev=>{
     const p=point(ev);
+    if(pan){
+      ev.preventDefault();
+      const s=screenPoint(ev);
+      view.x=pan.viewX+s.x-pan.x;
+      view.y=pan.viewY+s.y-pan.y;
+      clampView();
+      saveView();
+      return;
+
+    }
     if(!drag){
       cv.style.cursor=hitAt(p)?'grab':'default';
       return;
@@ -657,6 +757,19 @@
 
   });
   cv.addEventListener('pointerup', ev=>{
+    if(pan){
+      ev.preventDefault();
+      try{
+        cv.releasePointerCapture(ev.pointerId);
+
+      }
+      catch(e){
+
+      }
+      pan=null;
+      cv.style.cursor='grab';
+
+    }
     if(drag){
       ev.preventDefault();
       try{
@@ -679,6 +792,7 @@
   });
   cv.addEventListener('pointercancel', ev=>{
     drag=null;
+    pan=null;
     cv.style.cursor='grab';
 
   });
@@ -699,7 +813,7 @@
 
   });
   window.LeanFMUI={
-    setSubject:save, renderText:textCard, renderLinks:linkCard, getSubject:()=>model
+    setSubject:save, renderText:textCard, renderLinks:linkCard, renderMarkdown:renderMarkdownCard, getSubject:()=>model
   };
   build();
   render();

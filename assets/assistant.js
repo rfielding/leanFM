@@ -94,6 +94,27 @@ function requirementTemplate(){
   return 'Requirement template\nmarkdown: each nested requirement/state may carry explanatory MD assertions\nactor: <server or monitor actor>\ntask instance: <transaction/task kind selected from a queued message>\nentry message: src -> dst proto.type fields...\nFSM states: unauthorized/authenticated/running/terminal...\nmessages: ordered visible envelopes with concrete src,dst,task,proto fields,ts,dwell\nproperties: optional CTL over visible fields only\nreducers: filter/group over ordered replay for line or pie charts';
 
 }
+function markdownLatexExample(){
+  tool('markdown_latex_artifact_generate', {
+    nestedObject:'requirement/markdown-render/latex'
+  });
+  const md='# Markdown render LaTeX\nA nested node can be an explanatory artifact rather than a temporal state.\n\n- parent: requirement Kerberos/DH trusted-token sketch\n- child object: markdown artifact with rendered equations\n- checkable references: visible message fields client_dh_share, server_dh_share, dh_commutativity_proof\n\nThe displayed proof obligation can say $client_dh_share = g^{a}$ and $server_dh_share = g^{b}$.\n\n$$\nshared_client = (g^{b})^{a} = g^{ab}\n$$\n\n$$\nshared_server = (g^{a})^{b} = g^{ba}\n$$\n\nSince multiplication in the exponent commutes for this sketch, the visible field dh_commutativity_proof can stand for $g^{ab} = g^{ba}$.';
+  const draft={
+    id:'markdown_latex_artifact',
+    label:'Markdown/LaTeX nested artifact',
+    task:'render_requirement_markdown',
+    actors:['Author', 'Renderer', 'Verifier'],
+    entry:'Author requests markdown render with LaTeX proof notes',
+    messages:['Author -> Renderer Markdown.RenderRequest fields={markdown,latex_fragments,requirement_id}', 'Renderer -> Verifier Markdown.RenderedArtifact fields={html,math_tokens,requirement_id}', 'Verifier -> Author Markdown.RenderAccepted fields={artifact_id,requirement_id,status}'],
+    properties:['AG rendered math references visible fields only', 'AF artifact accepted or rejected', 'AG accepted artifact has requirement_id'],
+    reducers:['render latency by artifact', 'math token count by requirement', 'accepted/rejected pie'],
+    markdown:md
+  };
+  setSubject(draft);
+  if(window.LeanFMUI)window.LeanFMUI.renderMarkdown('nested markdown artifact: LaTeX proof notes', md);
+  return 'Created a nested markdown artifact requirement. The graph shows the artifact as part of the requirement, and the side panel renders the markdown with LaTeX-style math blocks.\n\n'+md;
+
+}
 function wantsScenario(p){
   return /add|build|model|scenario|requirement|task|transaction|upload|download|delete|search|checkout|purchase|review|login/.test(p);
 
@@ -182,6 +203,7 @@ async function assistant(prompt){
   const p=prompt.toLowerCase();
   let parts=[];
   if(/wire|accept|agreed|looks good|ship it/.test(p))parts.push(wireDraft());
+  if(/markdown|latex|math artifact|render math/.test(p)&&!parts.length)parts.push(markdownLatexExample());
   if(wantsProtocolSketch(p)&&!parts.length)parts.push(await generateProtocolSketch(prompt));
   if(wantsScenario(p)&&!parts.length)parts.push(await generateScenario(prompt));
   if(p.includes('metric')||p.includes('latency')||p.includes('throughput')||p.includes('ctl'))parts.push(await callMetrics());
@@ -213,5 +235,4 @@ chatPrompt.addEventListener('keydown', e=>{
 
 });
 bubble('assistant', 'LeanFM workbench ready. Ask for a sketched protocol, for example: Kerberos with proof fields. I will keep crypto as visible placeholder evidence unless you ask for concrete bytes.');
-
 

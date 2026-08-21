@@ -52,7 +52,21 @@ let rankByNode=new Map();
 let hit=[];
 let childById=new Map();
 let drag=null;
+let pan=null;
 let dragMoved=false;
+let view=JSON.parse(localStorage.getItem('leanfm.agg.view')||'null')||{
+  x:0, y:0, z:1
+};
+function saveView(){
+  localStorage.setItem('leanfm.agg.view', JSON.stringify(view));
+
+}
+function clampView(){
+  view.z=Math.max(.25, Math.min(3.5, view.z));
+  view.x=Math.max(-graphCanvas.width*2, Math.min(graphCanvas.width*2, view.x));
+  view.y=Math.max(-graphCanvas.height*2, Math.min(graphCanvas.height*2, view.y));
+
+}
 function bucket(n){
   return n.group;
 
@@ -819,8 +833,10 @@ function drawAggLegend(){
 }
 function drawAgg(){
   stepForce();
+  gctx.setTransform(1, 0, 0, 1, 0, 0);
   gctx.fillStyle='#111';
   gctx.fillRect(0, 0, graphCanvas.width, graphCanvas.height);
+  gctx.setTransform(view.z, 0, 0, view.z, view.x, view.y);
   hit=[];
   for(const g of simGroups){
     const sz=groupSize(g);
@@ -864,14 +880,22 @@ function drawAgg(){
   for(const g of simGroups)drawInternalEdges(g);
   drawVisibleEdges();
   drawBoundaryMarkers();
+  gctx.setTransform(1, 0, 0, 1, 0, 0);
   drawAggLegend();
   requestAnimationFrame(drawAgg);
 
 }
-function canvasPoint(ev){
+function canvasScreenPoint(ev){
   const r=graphCanvas.getBoundingClientRect();
   return{
     x:(ev.clientX-r.left)*graphCanvas.width/r.width, y:(ev.clientY-r.top)*graphCanvas.height/r.height
+  };
+
+}
+function canvasPoint(ev){
+  const p=canvasScreenPoint(ev);
+  return{
+    x:(p.x-view.x)/view.z, y:(p.y-view.y)/view.z
   };
 
 }
@@ -880,8 +904,18 @@ function hitAt(x, y){
 
 }
 graphCanvas.addEventListener('pointerdown', ev=>{
+  ev.preventDefault();
   const p=canvasPoint(ev), h=hitAt(p.x, p.y);
-  if(!h)return;
+  if(!h){
+    const s=canvasScreenPoint(ev);
+    pan={
+      x:s.x, y:s.y, viewX:view.x, viewY:view.y
+    };
+    graphCanvas.setPointerCapture(ev.pointerId);
+    graphCanvas.style.cursor='grabbing';
+    return;
+
+  }
   if(h.kind==='state'){
     const c=childById.get(h.groupKey+'|'+h.stateId);
     if(!c)return;
@@ -911,7 +945,19 @@ graphCanvas.addEventListener('pointerdown', ev=>{
 
 });
 graphCanvas.addEventListener('pointermove', ev=>{
+  if(pan){
+    ev.preventDefault();
+    dragMoved=true;
+    const s=canvasScreenPoint(ev);
+    view.x=pan.viewX+s.x-pan.x;
+    view.y=pan.viewY+s.y-pan.y;
+    clampView();
+    saveView();
+    return;
+
+  }
   if(!drag)return;
+  ev.preventDefault();
   const p=canvasPoint(ev);
   dragMoved=true;
   if(drag.kind==='state'){
@@ -937,6 +983,18 @@ graphCanvas.addEventListener('pointermove', ev=>{
 
 });
 graphCanvas.addEventListener('pointerup', ev=>{
+  if(pan){
+    try{
+      graphCanvas.releasePointerCapture(ev.pointerId);
+
+    }
+    catch(e){
+
+    }
+    pan=null;
+    graphCanvas.style.cursor='grab';
+
+  }
   if(drag){
     try{
       graphCanvas.releasePointerCapture(ev.pointerId);
@@ -953,8 +1011,35 @@ graphCanvas.addEventListener('pointerup', ev=>{
 });
 graphCanvas.addEventListener('pointercancel', ev=>{
   drag=null;
+  pan=null;
   graphCanvas.style.cursor='grab';
 
+});
+graphCanvas.style.touchAction='none';
+graphCanvas.addEventListener('wheel', ev=>{
+  ev.preventDefault();
+  const p=canvasScreenPoint(ev);
+  if(ev.ctrlKey||ev.metaKey){
+    const before={
+      x:(p.x-view.x)/view.z, y:(p.y-view.y)/view.z
+    };
+    const factor=Math.exp(-ev.deltaY*0.002);
+    view.z*=factor;
+    clampView();
+    view.x=p.x-before.x*view.z;
+    view.y=p.y-before.y*view.z;
+
+  }
+  else{
+    view.x-=ev.deltaX;
+    view.y-=ev.deltaY;
+
+  }
+  clampView();
+  saveView();
+
+}, {
+  passive:false
 });
 graphCanvas.addEventListener('click', ev=>{
   if(dragMoved){
