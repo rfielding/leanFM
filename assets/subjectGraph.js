@@ -116,17 +116,10 @@
       w:230, h:82
     };
     const kids=groupChildren(n), baseW=n.id==='exchange'?560:360, baseH=Math.max(260, 118+kids.length*58);
-    let minX=0, maxX=0, minY=0, maxY=0;
-    for(const c of childById.values()){
-      if(!c.key.startsWith(n.id+'|'))continue;
-      minX=Math.min(minX, c.x-n.x);
-      maxX=Math.max(maxX, c.x-n.x);
-      minY=Math.min(minY, c.y-n.y);
-      maxY=Math.max(maxY, c.y-n.y);
-
-    }
+    const cols=Math.max(1, Math.ceil(Math.sqrt(kids.length)));
+    const rows=Math.max(1, Math.ceil(kids.length/cols));
     return{
-      w:Math.max(baseW, maxX-minX+330), h:Math.max(baseH, maxY-minY+165)
+      w:Math.max(baseW, 340+292*(cols-1)), h:Math.max(baseH, 162+66*(rows-1))
     };
 
   }
@@ -207,7 +200,7 @@
       dy=1;
 
     }
-    const ox=(aw+bw)/2+pad-Math.abs(dx), oy=(ah+bh)/2+pad-Math.abs(dy);
+    const ox=(aw+bw)/2-Math.abs(dx), oy=(ah+bh)/2-Math.abs(dy);
     if(ox<=0||oy<=0)return false;
     const am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
     if(am===0&&bm===0)return false;

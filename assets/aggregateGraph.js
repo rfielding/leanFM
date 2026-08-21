@@ -116,7 +116,7 @@ function groupSize(g){
 
   }
   return{
-    w:Math.max(600, maxRow*330+260), h:Math.max(420, (maxRank+1)*96+230)
+    w:Math.max(600, 340+292*(maxRow-1)), h:Math.max(420, 182+80*maxRank)
   };
 
 }
@@ -196,7 +196,7 @@ function overlapPush(a, b, aw, ah, bw, bh, cx, cy, pad, clampA, clampB){
     dy=1;
 
   }
-  const ox=(aw+bw)/2+pad-Math.abs(dx), oy=(ah+bh)/2+pad-Math.abs(dy);
+  const ox=(aw+bw)/2-Math.abs(dx), oy=(ah+bh)/2-Math.abs(dy);
   if(ox<=0||oy<=0)return false;
   const am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
   if(am===0&&bm===0)return false;
