@@ -82,7 +82,7 @@
   function labelBox(x, y, text, color, w, avoid){
     const lw=w||210, ls=lines(text, Math.floor(lw/8)).slice(0, 3), h=18+ls.length*15;
     const offsets=[[0, 0], [0, -54], [0, 54], [170, 0], [-170, 0], [170, -54], [-170, -54], [170, 54], [-170, 54], [0, -96], [0, 96]];
-    const pad=44, minX=lw/2+pad, maxX=cv.width-lw/2-pad, minY=h/2+pad, maxY=cv.height-h/2-pad;
+    const pad=120, minX=lw/2+pad, maxX=cv.width-lw/2-pad, minY=h/2+pad, maxY=cv.height-h/2-pad;
     let bx=clampValue(x, minX, maxX), by=clampValue(y, minY, maxY);
     for(const [ox, oy] of offsets){
       const cx=clampValue(x+ox, minX, maxX), cy=clampValue(y+oy, minY, maxY);
@@ -123,7 +123,7 @@
 
   }
   let openGroups=new Set(JSON.parse(localStorage.getItem('leanfm.subject.open')||'[]'));
-  let nodes=[], edges=[], hit=[], childById=new Map(), drag=null, pan=null, started=false;
+  let nodes=[], edges=[], hit=[], childById=new Map(), drag=null, pan=null, hover=null, started=false;
   let view=JSON.parse(localStorage.getItem('leanfm.subject.view')||'null')||{
     x:0, y:0, z:1
   };
@@ -233,7 +233,7 @@
       maxH=Math.max(maxH, s.h);
 
     }
-    const wantW=Math.max(1180, maxW+620, Math.ceil(Math.sqrt(area))*2+520), wantH=Math.max(720, maxH+420, 260+nodes.length*230, Math.ceil(Math.sqrt(area))*2+360);
+    const wantW=Math.max(1380, maxW+900, Math.ceil(Math.sqrt(area))*2+820), wantH=Math.max(900, maxH+660, 360+nodes.length*260, Math.ceil(Math.sqrt(area))*2+620);
     if(cv.width!==wantW||cv.height!==wantH){
       const ox=cv.width/2, oy=cv.height/2;
       cv.width=wantW;
@@ -248,7 +248,7 @@
 
   }
   function clamp(n){
-    const s=groupSize(n), m=84;
+    const s=groupSize(n), m=180;
     n.x=Math.max(s.w/2+m, Math.min(cv.width-s.w/2-m, n.x));
     n.y=Math.max(s.h/2+m, Math.min(cv.height-s.h/2-m, n.y));
 
@@ -593,6 +593,39 @@
     }
 
   }
+  function edgeTouchesHover(e){
+    if(!hover)return false;
+    if(hover.kind==='child')return e[0]===hover.id||e[1]===hover.id;
+    if(hover.kind==='group'){
+      const gid=hover.id+'|';
+      return e[0].startsWith(gid)||e[1].startsWith(gid);
+
+    }
+    return false;
+
+  }
+  function drawHighlightedEdges(){
+    if(!hover)return;
+    const blockers=hit.filter(h=>h.kind==='child').map(h=>({
+      x:h.x-8, y:h.y-8, w:h.w+16, h:h.h+16
+    }));
+    for(const e of concreteEdges()){
+      if(!edgeTouchesHover(e))continue;
+      const a=endpoint(e[0]), b=endpoint(e[1]);
+      if(!a||!b)continue;
+      const st=edgeStyle(e[3]);
+      if(a.kind==='group'&&b.kind==='group'&&a.id===b.id){
+        labelBox(a.x, a.y+54, st.name+': '+e[2], '#38bdf8', 320, blockers);
+        continue;
+
+      }
+      const p1=portFrom(a, b), p2=portFrom(b, a);
+      arrow(p1.x, p1.y, p2.x, p2.y, '#38bdf8', st.d);
+      labelBox((p1.x+p2.x)/2, (p1.y+p2.y)/2-24, st.name+': '+e[2], '#38bdf8', 320, blockers);
+
+    }
+
+  }
   function drawLegend(){
     ctx.textAlign='left';
     ctx.font='12px sans-serif';
@@ -615,6 +648,7 @@
     hit=[];
     for(const n of nodes)drawNode(n);
     drawConcreteEdges();
+    drawHighlightedEdges();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawLegend();
     requestAnimationFrame(render);
@@ -777,7 +811,8 @@
 
     }
     if(!drag){
-      cv.style.cursor=hitAt(p)?'grab':'default';
+      hover=hitAt(p)||null;
+      cv.style.cursor=hover?'grab':'default';
       return;
 
     }
@@ -828,6 +863,10 @@
     drag=null;
     pan=null;
     cv.style.cursor='grab';
+
+  });
+  cv.addEventListener('pointerleave', ev=>{
+    if(!drag&&!pan)hover=null;
 
   });
   cv.addEventListener('dblclick', ev=>{

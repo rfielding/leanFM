@@ -54,6 +54,7 @@ let hit=[];
 let childById=new Map();
 let drag=null;
 let pan=null;
+let hover=null;
 let dragMoved=false;
 let view=JSON.parse(localStorage.getItem('leanfm.agg.view')||'null')||{
   x:0, y:0, z:1
@@ -203,9 +204,9 @@ function resizeGraphCanvas(){
     maxH=Math.max(maxH, s.h);
 
   }
-  const side=Math.ceil(Math.sqrt(area))*2+520;
-  const w=Math.max(1100, maxW+620, side);
-  const h=Math.max(760, maxH+420, side);
+  const side=Math.ceil(Math.sqrt(area))*2+860;
+  const w=Math.max(1400, maxW+940, side);
+  const h=Math.max(940, maxH+700, side);
   if(graphCanvas.width!==w||graphCanvas.height!==h){
     const ox=graphCanvas.width/2, oy=graphCanvas.height/2;
     graphCanvas.width=w;
@@ -221,8 +222,8 @@ function resizeGraphCanvas(){
 }
 function clampGroup(n){
   const sz=groupSize(n);
-  n.x=Math.max(sz.w/2+24, Math.min(graphCanvas.width-sz.w/2-24, n.x));
-  n.y=Math.max(sz.h/2+24, Math.min(graphCanvas.height-sz.h/2-24, n.y));
+  n.x=Math.max(sz.w/2+180, Math.min(graphCanvas.width-sz.w/2-180, n.x));
+  n.y=Math.max(sz.h/2+180, Math.min(graphCanvas.height-sz.h/2-180, n.y));
 
 }
 function overlapPush(a, b, aw, ah, bw, bh, cx, cy, pad, clampA, clampB){
@@ -703,7 +704,7 @@ function clampValue(v, lo, hi){
 }
 function labelBox(ctx, x, y, text, color){
   const t=text.length>44?text.slice(0, 41)+'...':text;
-  const w=Math.max(120, Math.min(330, t.length*7)), h=20, pad=44;
+  const w=Math.max(120, Math.min(330, t.length*7)), h=20, pad=120;
   const bx=clampValue(x, w/2+pad, graphCanvas.width-w/2-pad), by=clampValue(y-6, h/2+pad, graphCanvas.height-h/2-pad);
   ctx.fillStyle=color;
   ctx.font='11px sans-serif';
@@ -849,6 +850,37 @@ function drawVisibleEdges(){
   }
 
 }
+function edgeTouchesHover(e){
+  if(!hover)return false;
+  if(hover.kind==='state')return e[0]===hover.stateId||e[1]===hover.stateId;
+  if(hover.kind==='group'||hover.kind==='plain'){
+    const g=simById.get('group:'+hover.key);
+    if(!g)return false;
+    const ids=new Set(g.nodes.map(n=>n.id));
+    return ids.has(e[0])||ids.has(e[1]);
+
+  }
+  return false;
+
+}
+function drawHighlightedEdges(){
+  if(!hover)return;
+  for(const e of gEdges){
+    if(!edgeTouchesHover(e))continue;
+    const a=visibleEndpoint(e[0]), b=visibleEndpoint(e[1]);
+    if(!a||!b)continue;
+    if(a.key===b.key){
+      labelBox(gctx, a.x, a.y+54, edgeLabel(e), '#38bdf8');
+      continue;
+
+    }
+    const pa=rectPort(a, b, a.w, a.h, 14), pb=rectPort(b, a, b.w, b.h, 14);
+    drawArrow(gctx, pa.x, pa.y, pb.x, pb.y, '#38bdf8', 3.2, false);
+    labelBox(gctx, (pa.x+pb.x)/2, (pa.y+pb.y)/2-10, edgeLabel(e), '#38bdf8');
+
+  }
+
+}
 function drawAggLegend(){
   gctx.textAlign='left';
   gctx.font='12px sans-serif';
@@ -910,6 +942,7 @@ function drawAgg(){
   }
   for(const g of simGroups)drawInternalEdges(g);
   drawVisibleEdges();
+  drawHighlightedEdges();
   drawBoundaryMarkers();
   gctx.setTransform(1, 0, 0, 1, 0, 0);
   drawAggLegend();
@@ -987,7 +1020,13 @@ graphCanvas.addEventListener('pointermove', ev=>{
     return;
 
   }
-  if(!drag)return;
+  if(!drag){
+    const p=canvasPoint(ev);
+    hover=hitAt(p.x, p.y);
+    graphCanvas.style.cursor=hover?'grab':'default';
+    return;
+
+  }
   ev.preventDefault();
   const p=canvasPoint(ev);
   dragMoved=true;
@@ -1044,6 +1083,10 @@ graphCanvas.addEventListener('pointercancel', ev=>{
   drag=null;
   pan=null;
   graphCanvas.style.cursor='grab';
+
+});
+graphCanvas.addEventListener('pointerleave', ev=>{
+  if(!drag&&!pan)hover=null;
 
 });
 graphCanvas.style.touchAction='none';
