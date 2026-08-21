@@ -210,10 +210,11 @@
     const ox=(aw+bw)/2+pad-Math.abs(dx), oy=(ah+bh)/2+pad-Math.abs(dy);
     if(ox<=0||oy<=0)return false;
     const am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
+    if(am===0&&bm===0)return false;
     const axisX=ox<oy, sgn=Math.sign(axisX?dx:dy)||1;
-    const exact=Math.min(ox, oy)+2;
+    const exact=Math.min(34, Math.min(ox, oy)+2);
     const depth=Math.max(ox, oy);
-    const boost=Math.min(120, (depth*depth)/42);
+    const boost=Math.min(28, (depth*depth)/260);
     const arx=a.x-cx, ary=a.y-cy, brx=b.x-cx, bry=b.y-cy;
     const al=Math.max(1, Math.sqrt(arx*arx+ary*ary)), bl=Math.max(1, Math.sqrt(brx*brx+bry*bry));
     const adx=Math.abs(arx)<1&&Math.abs(ary)<1?-0.707:arx/al, ady=Math.abs(arx)<1&&Math.abs(ary)<1?-0.707:ary/al;
@@ -243,7 +244,7 @@
   }
   function separateRects(){
     for(let pass=0;
-    pass<80;
+    pass<16;
     pass++){
       let moved=false;
       for(let i=0;
@@ -386,7 +387,7 @@
   }
   function separateSubjectChildren(parent, kids){
     for(let pass=0;
-    pass<80;
+    pass<16;
     pass++){
       let moved=false;
       for(let i=0;

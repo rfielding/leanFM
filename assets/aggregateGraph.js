@@ -187,10 +187,11 @@ function overlapPush(a, b, aw, ah, bw, bh, cx, cy, pad, clampA, clampB){
   const ox=(aw+bw)/2+pad-Math.abs(dx), oy=(ah+bh)/2+pad-Math.abs(dy);
   if(ox<=0||oy<=0)return false;
   const am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
+  if(am===0&&bm===0)return false;
   const axisX=ox<oy, sgn=Math.sign(axisX?dx:dy)||1;
-  const exact=Math.min(ox, oy)+2;
+  const exact=Math.min(34, Math.min(ox, oy)+2);
   const depth=Math.max(ox, oy);
-  const boost=Math.min(120, (depth*depth)/42);
+  const boost=Math.min(28, (depth*depth)/260);
   const arx=a.x-cx, ary=a.y-cy, brx=b.x-cx, bry=b.y-cy;
   const al=Math.max(1, Math.sqrt(arx*arx+ary*ary)), bl=Math.max(1, Math.sqrt(brx*brx+bry*bry));
   const adx=Math.abs(arx)<1&&Math.abs(ary)<1?-0.707:arx/al, ady=Math.abs(arx)<1&&Math.abs(ary)<1?-0.707:ary/al;
@@ -220,7 +221,7 @@ function overlapPush(a, b, aw, ah, bw, bh, cx, cy, pad, clampA, clampB){
 }
 function resolveOverlaps(){
   for(let pass=0;
-  pass<96;
+  pass<16;
   pass++){
     let moved=false;
     for(let i=0;
@@ -260,7 +261,7 @@ function rebuildGraph(){
   simById=new Map(simGroups.map(g=>[g.id, g]));
   resizeGraphCanvas();
   for(let i=0;
-  i<24;
+  i<4;
   i++)resolveOverlaps();
   aggInfo.innerHTML='<p>Fixed hierarchy: edges prefer top-to-bottom layout; each discrete task is a compound node with task super-states and terminal states.</p><ul>'+gs.map(g=>'<li>'+g.key+': '+g.nodes.length+' states</li>').join('')+'</ul>';
 
@@ -455,7 +456,7 @@ function clampChild(c, r){
 }
 function separateChildren(cs, r){
   for(let pass=0;
-  pass<96;
+  pass<16;
   pass++){
     let moved=false;
     for(let i=0;
