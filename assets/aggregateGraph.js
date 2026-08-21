@@ -177,9 +177,50 @@ function clampGroup(n){
   n.y=Math.max(sz.h/2+24, Math.min(graphCanvas.height-sz.h/2-24, n.y));
 
 }
+function overlapPush(a, b, aw, ah, bw, bh, cx, cy, pad, clampA, clampB){
+  let dx=b.x-a.x, dy=b.y-a.y;
+  if(Math.abs(dx)<1&&Math.abs(dy)<1){
+    dx=1;
+    dy=1;
+
+  }
+  const ox=(aw+bw)/2+pad-Math.abs(dx), oy=(ah+bh)/2+pad-Math.abs(dy);
+  if(ox<=0||oy<=0)return false;
+  const am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
+  const axisX=ox<oy, sgn=Math.sign(axisX?dx:dy)||1;
+  const exact=Math.min(ox, oy)+2;
+  const depth=Math.max(ox, oy);
+  const boost=Math.min(120, (depth*depth)/42);
+  const arx=a.x-cx, ary=a.y-cy, brx=b.x-cx, bry=b.y-cy;
+  const al=Math.max(1, Math.sqrt(arx*arx+ary*ary)), bl=Math.max(1, Math.sqrt(brx*brx+bry*bry));
+  const adx=Math.abs(arx)<1&&Math.abs(ary)<1?-0.707:arx/al, ady=Math.abs(arx)<1&&Math.abs(ary)<1?-0.707:ary/al;
+  const bdx=Math.abs(brx)<1&&Math.abs(bry)<1?0.707:brx/bl, bdy=Math.abs(brx)<1&&Math.abs(bry)<1?0.707:bry/bl;
+  if(!a.pinned){
+    if(axisX)a.x-=exact*am*sgn;
+    else a.y-=exact*am*sgn;
+    a.x+=adx*boost*am;
+    a.y+=ady*boost*am;
+    a.vx=0;
+    a.vy=0;
+
+  }
+  if(!b.pinned){
+    if(axisX)b.x+=exact*bm*sgn;
+    else b.y+=exact*bm*sgn;
+    b.x+=bdx*boost*bm;
+    b.y+=bdy*boost*bm;
+    b.vx=0;
+    b.vy=0;
+
+  }
+  clampA();
+  clampB();
+  return true;
+
+}
 function resolveOverlaps(){
   for(let pass=0;
-  pass<48;
+  pass<96;
   pass++){
     let moved=false;
     for(let i=0;
@@ -189,35 +230,7 @@ function resolveOverlaps(){
       j<simGroups.length;
       j++){
         const a=simGroups[i], b=simGroups[j], as=groupSize(a), bs=groupSize(b);
-        let dx=b.x-a.x, dy=b.y-a.y;
-        if(Math.abs(dx)<0.1&&Math.abs(dy)<0.1){
-          dx=(j-i)*9;
-          dy=7;
-
-        }
-        const ox=(as.w+bs.w)/2+86-Math.abs(dx), oy=(as.h+bs.h)/2+86-Math.abs(dy);
-        if(ox>0&&oy>0){
-          moved=true;
-          if(ox<oy){
-            const sgn=Math.sign(dx||1), am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
-            if(!a.pinned)a.x-=ox*am*sgn;
-            if(!b.pinned)b.x+=ox*bm*sgn;
-            a.vx=0;
-            b.vx=0;
-
-          }
-          else{
-            const sgn=Math.sign(dy||1), am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
-            if(!a.pinned)a.y-=oy*am*sgn;
-            if(!b.pinned)b.y+=oy*bm*sgn;
-            a.vy=0;
-            b.vy=0;
-
-          }
-          clampGroup(a);
-          clampGroup(b);
-
-        }
+        moved=overlapPush(a, b, as.w, as.h, bs.w, bs.h, graphCanvas.width/2, graphCanvas.height/2, 86, ()=>clampGroup(a), ()=>clampGroup(b))||moved;
 
       }
 
@@ -442,7 +455,7 @@ function clampChild(c, r){
 }
 function separateChildren(cs, r){
   for(let pass=0;
-  pass<48;
+  pass<96;
   pass++){
     let moved=false;
     for(let i=0;
@@ -452,35 +465,7 @@ function separateChildren(cs, r){
       j<cs.length;
       j++){
         const a=cs[i], b=cs[j];
-        let dx=b.x-a.x, dy=b.y-a.y;
-        if(Math.abs(dx)<.1&&Math.abs(dy)<.1){
-          dx=5;
-          dy=3;
-
-        }
-        const ox=292-Math.abs(dx), oy=66-Math.abs(dy);
-        if(ox>0&&oy>0){
-          moved=true;
-          if(ox<oy){
-            const sgn=Math.sign(dx||1), am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
-            if(!a.pinned)a.x-=ox*am*sgn;
-            if(!b.pinned)b.x+=ox*bm*sgn;
-            a.vx=0;
-            b.vx=0;
-
-          }
-          else{
-            const sgn=Math.sign(dy||1), am=a.pinned?0:(b.pinned?1:.5), bm=b.pinned?0:(a.pinned?1:.5);
-            if(!a.pinned)a.y-=oy*am*sgn;
-            if(!b.pinned)b.y+=oy*bm*sgn;
-            a.vy=0;
-            b.vy=0;
-
-          }
-          clampChild(a, r);
-          clampChild(b, r);
-
-        }
+        moved=overlapPush(a, b, 260, 42, 260, 42, r.x+r.w/2, r.y+r.h/2, 32, ()=>clampChild(a, r), ()=>clampChild(b, r))||moved;
 
       }
 
@@ -972,4 +957,3 @@ graphCanvas.addEventListener('click', ev=>{
 });
 rebuildGraph();
 drawAgg();
-
