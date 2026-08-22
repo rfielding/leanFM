@@ -542,7 +542,7 @@ node scripts/embed_assets.js
 lake build leanfm-server
 ```
 
-`scripts/embed_assets.js` writes `LeanFM/GeneratedAssets.lean`, which embeds the JavaScript as Lean string constants. Normal UI changes should edit `assets/*.js`, not the generated Lean strings.
+`scripts/embed_assets.js` writes `LeanFM/GeneratedAssets.lean`, a small typed manifest that uses `include_str` to include readable JavaScript from `assets/*.js` at compile time. Normal UI changes should edit `assets/*.js`, then regenerate the manifest and rebuild.
 
 All routes except `/login` and `/health` require the local session cookie set by the login form. The default password is `leanfm`; set `LEANFM_PASSWORD` before launch to override it.
 
