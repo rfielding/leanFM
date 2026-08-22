@@ -1,97 +1,69 @@
 import LeanFM.Artifacts
 
-namespace LeanFM.GeneratedArtifacts
+namespace LeanFM.GeneratedRequirements
+
+def generatedRequirementsProto : String :=
+  include_str "GeneratedRequirements.proto"
 
 inductive WorkerActor where
-  | client
-  | gateway
-  | worker
+  | Client
+  | Gateway
+  | Worker
 deriving DecidableEq, Repr
 
 instance : LeanFM.RequirementName WorkerActor where
-  name
-    | .client => "Client"
-    | .gateway => "Gateway"
-    | .worker => "Worker"
+  style := LeanFM.NameStyle.raw
 
 inductive WorkerMessage where
-  | docsGetRequest
-  | docsFetchCommand
-  | docsFetchResult200
-  | docsFetchResult404
-  | docsGetResponse
-  | errorResponse
-  | reviewsPostRequest
-  | reviewsModerateCommand
-  | reviewsModerationAccepted
-  | reviewsModerationRejected
-  | reviewsPostResponse201
-  | reviewsPostResponse400
+  | Docs_GetRequest
+  | Docs_FetchCommand
+  | Docs_FetchResult200
+  | Docs_FetchResult404
+  | Docs_GetResponse
+  | Error_Response
+  | Reviews_PostRequest
+  | Reviews_ModerateCommand
+  | Reviews_ModerationAccepted
+  | Reviews_ModerationRejected
+  | Reviews_PostResponse201
+  | Reviews_PostResponse400
 deriving DecidableEq, Repr
 
 instance : LeanFM.RequirementName WorkerMessage where
-  name
-    | .docsGetRequest => "Docs.GetRequest"
-    | .docsFetchCommand => "Docs.FetchCommand"
-    | .docsFetchResult200 => "Docs.FetchResult200"
-    | .docsFetchResult404 => "Docs.FetchResult404"
-    | .docsGetResponse => "Docs.GetResponse"
-    | .errorResponse => "Error.Response"
-    | .reviewsPostRequest => "Reviews.PostRequest"
-    | .reviewsModerateCommand => "Reviews.ModerateCommand"
-    | .reviewsModerationAccepted => "Reviews.ModerationAccepted"
-    | .reviewsModerationRejected => "Reviews.ModerationRejected"
-    | .reviewsPostResponse201 => "Reviews.PostResponse201"
-    | .reviewsPostResponse400 => "Reviews.PostResponse400"
+  style := LeanFM.NameStyle.dot
 
 inductive GetDocsState where
   | requested
-  | workerFetching
-  | gatewaySuccess
-  | gatewayFailure
-  | clientSuccess
-  | clientRejected
+  | worker_fetching
+  | gateway_success
+  | gateway_failure
+  | client_success
+  | client_rejected
   | done
   | failed
 deriving DecidableEq, Repr
 
 instance : LeanFM.RequirementName GetDocsState where
-  name
-    | .requested => "requested"
-    | .workerFetching => "worker_fetching"
-    | .gatewaySuccess => "gateway_success"
-    | .gatewayFailure => "gateway_failure"
-    | .clientSuccess => "client_success"
-    | .clientRejected => "client_rejected"
-    | .done => "done"
-    | .failed => "failed"
+  style := LeanFM.NameStyle.raw
 
 inductive PostReviewState where
   | submitted
   | moderating
   | accepted
   | rejected
-  | clientPosted
-  | clientRejected
+  | client_posted
+  | client_rejected
   | done
   | failed
 deriving DecidableEq, Repr
 
 instance : LeanFM.RequirementName PostReviewState where
-  name
-    | .submitted => "submitted"
-    | .moderating => "moderating"
-    | .accepted => "accepted"
-    | .rejected => "rejected"
-    | .clientPosted => "client_posted"
-    | .clientRejected => "client_rejected"
-    | .done => "done"
-    | .failed => "failed"
+  style := LeanFM.NameStyle.raw
 
 def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) :=
-  [ { name := WorkerMessage.docsGetRequest
-    , src := WorkerActor.client
-    , dst := WorkerActor.gateway
+  [ { name := WorkerMessage.Docs_GetRequest
+    , src := WorkerActor.Client
+    , dst := WorkerActor.Gateway
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x01, 0x10]
@@ -104,9 +76,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 4, name := "return_to", scalar := LeanFM.ProtoScalar.string }
         ]
     }
-  , { name := WorkerMessage.docsFetchCommand
-    , src := WorkerActor.gateway
-    , dst := WorkerActor.worker
+  , { name := WorkerMessage.Docs_FetchCommand
+    , src := WorkerActor.Gateway
+    , dst := WorkerActor.Worker
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x02, 0x20]
@@ -118,9 +90,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "return_to", scalar := LeanFM.ProtoScalar.string }
         ]
     }
-  , { name := WorkerMessage.docsFetchResult200
-    , src := WorkerActor.worker
-    , dst := WorkerActor.gateway
+  , { name := WorkerMessage.Docs_FetchResult200
+    , src := WorkerActor.Worker
+    , dst := WorkerActor.Gateway
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x03, 0x30]
@@ -133,9 +105,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 4, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
         ]
     }
-  , { name := WorkerMessage.docsFetchResult404
-    , src := WorkerActor.worker
-    , dst := WorkerActor.gateway
+  , { name := WorkerMessage.Docs_FetchResult404
+    , src := WorkerActor.Worker
+    , dst := WorkerActor.Gateway
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x03, 0xff]
@@ -147,9 +119,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
         ]
     }
-  , { name := WorkerMessage.docsGetResponse
-    , src := WorkerActor.gateway
-    , dst := WorkerActor.client
+  , { name := WorkerMessage.Docs_GetResponse
+    , src := WorkerActor.Gateway
+    , dst := WorkerActor.Client
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x04, 0x40]
@@ -161,9 +133,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "bytes_moved", scalar := LeanFM.ProtoScalar.uint64 }
         ]
     }
-  , { name := WorkerMessage.errorResponse
-    , src := WorkerActor.gateway
-    , dst := WorkerActor.client
+  , { name := WorkerMessage.Error_Response
+    , src := WorkerActor.Gateway
+    , dst := WorkerActor.Client
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0xff]
@@ -174,9 +146,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 2, name := "reason", scalar := LeanFM.ProtoScalar.string }
         ]
     }
-  , { name := WorkerMessage.reviewsPostRequest
-    , src := WorkerActor.client
-    , dst := WorkerActor.gateway
+  , { name := WorkerMessage.Reviews_PostRequest
+    , src := WorkerActor.Client
+    , dst := WorkerActor.Gateway
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x11, 0x10]
@@ -190,9 +162,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 5, name := "return_to", scalar := LeanFM.ProtoScalar.string }
         ]
     }
-  , { name := WorkerMessage.reviewsModerateCommand
-    , src := WorkerActor.gateway
-    , dst := WorkerActor.worker
+  , { name := WorkerMessage.Reviews_ModerateCommand
+    , src := WorkerActor.Gateway
+    , dst := WorkerActor.Worker
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x12, 0x20]
@@ -204,9 +176,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "return_to", scalar := LeanFM.ProtoScalar.string }
         ]
     }
-  , { name := WorkerMessage.reviewsModerationAccepted
-    , src := WorkerActor.worker
-    , dst := WorkerActor.gateway
+  , { name := WorkerMessage.Reviews_ModerationAccepted
+    , src := WorkerActor.Worker
+    , dst := WorkerActor.Gateway
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x13, 0x30]
@@ -218,9 +190,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
         ]
     }
-  , { name := WorkerMessage.reviewsModerationRejected
-    , src := WorkerActor.worker
-    , dst := WorkerActor.gateway
+  , { name := WorkerMessage.Reviews_ModerationRejected
+    , src := WorkerActor.Worker
+    , dst := WorkerActor.Gateway
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x13, 0xff]
@@ -232,9 +204,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
         ]
     }
-  , { name := WorkerMessage.reviewsPostResponse201
-    , src := WorkerActor.gateway
-    , dst := WorkerActor.client
+  , { name := WorkerMessage.Reviews_PostResponse201
+    , src := WorkerActor.Gateway
+    , dst := WorkerActor.Client
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x14, 0x40]
@@ -246,9 +218,9 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
         , { number := 3, name := "review_id", scalar := LeanFM.ProtoScalar.string }
         ]
     }
-  , { name := WorkerMessage.reviewsPostResponse400
-    , src := WorkerActor.gateway
-    , dst := WorkerActor.client
+  , { name := WorkerMessage.Reviews_PostResponse400
+    , src := WorkerActor.Gateway
+    , dst := WorkerActor.Client
     , bytePattern :=
         { origin := LeanFM.ByteOrigin.literalPrefix
         , bytes := [0x14, 0xff]
@@ -265,7 +237,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
 def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState WorkerMessage :=
   { id := "get_docs"
   , title := "get_docs task"
-  , actors := [WorkerActor.client, WorkerActor.gateway, WorkerActor.worker]
+  , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker]
   , initialState := GetDocsState.requested
   , states :=
       [ { id := GetDocsState.requested
@@ -274,31 +246,31 @@ def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState Work
         , markdown := "Client has sent an authenticated GET request to Gateway."
         , terminal := false
         }
-      , { id := GetDocsState.workerFetching
+      , { id := GetDocsState.worker_fetching
         , label := "Worker fetching document"
         , group := "worker running"
         , markdown := "Gateway has queued a fetch command for Worker."
         , terminal := false
         }
-      , { id := GetDocsState.gatewaySuccess
+      , { id := GetDocsState.gateway_success
         , label := "Gateway has 200 result"
         , group := "gateway decides"
         , markdown := "Worker returned a visible 200 result to Gateway."
         , terminal := false
         }
-      , { id := GetDocsState.gatewayFailure
+      , { id := GetDocsState.gateway_failure
         , label := "Gateway has 404 result"
         , group := "gateway decides"
         , markdown := "Worker returned a visible 404 result to Gateway."
         , terminal := false
         }
-      , { id := GetDocsState.clientSuccess
+      , { id := GetDocsState.client_success
         , label := "Client receives 200"
         , group := "client response"
         , markdown := "Gateway returns the successful response to Client."
         , terminal := false
         }
-      , { id := GetDocsState.clientRejected
+      , { id := GetDocsState.client_rejected
         , label := "Client receives error"
         , group := "client response"
         , markdown := "Gateway returns an observable error response to Client."
@@ -319,57 +291,57 @@ def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState Work
       ]
   , transitions :=
       [ { src := GetDocsState.requested
-        , dst := GetDocsState.workerFetching
-        , message := WorkerMessage.docsFetchCommand
+        , dst := GetDocsState.worker_fetching
+        , message := WorkerMessage.Docs_FetchCommand
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 2
         }
       , { src := GetDocsState.requested
-        , dst := GetDocsState.clientRejected
-        , message := WorkerMessage.errorResponse
+        , dst := GetDocsState.client_rejected
+        , message := WorkerMessage.Error_Response
         , probabilityNum := 1
         , probabilityDen := 100
         , dwellMs := 1
         }
-      , { src := GetDocsState.workerFetching
-        , dst := GetDocsState.gatewaySuccess
-        , message := WorkerMessage.docsFetchResult200
+      , { src := GetDocsState.worker_fetching
+        , dst := GetDocsState.gateway_success
+        , message := WorkerMessage.Docs_FetchResult200
         , probabilityNum := 95
         , probabilityDen := 100
         , dwellMs := 8
         }
-      , { src := GetDocsState.workerFetching
-        , dst := GetDocsState.gatewayFailure
-        , message := WorkerMessage.docsFetchResult404
+      , { src := GetDocsState.worker_fetching
+        , dst := GetDocsState.gateway_failure
+        , message := WorkerMessage.Docs_FetchResult404
         , probabilityNum := 5
         , probabilityDen := 100
         , dwellMs := 8
         }
-      , { src := GetDocsState.gatewaySuccess
-        , dst := GetDocsState.clientSuccess
-        , message := WorkerMessage.docsGetResponse
+      , { src := GetDocsState.gateway_success
+        , dst := GetDocsState.client_success
+        , message := WorkerMessage.Docs_GetResponse
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 2
         }
-      , { src := GetDocsState.gatewayFailure
-        , dst := GetDocsState.clientRejected
-        , message := WorkerMessage.errorResponse
+      , { src := GetDocsState.gateway_failure
+        , dst := GetDocsState.client_rejected
+        , message := WorkerMessage.Error_Response
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 2
         }
-      , { src := GetDocsState.clientSuccess
+      , { src := GetDocsState.client_success
         , dst := GetDocsState.done
-        , message := WorkerMessage.docsGetResponse
+        , message := WorkerMessage.Docs_GetResponse
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 1
         }
-      , { src := GetDocsState.clientRejected
+      , { src := GetDocsState.client_rejected
         , dst := GetDocsState.failed
-        , message := WorkerMessage.errorResponse
+        , message := WorkerMessage.Error_Response
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 1
@@ -383,7 +355,7 @@ def getDocsTask : LeanFM.TaskRequirement :=
 def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewState WorkerMessage :=
   { id := "post_review"
   , title := "post_review task"
-  , actors := [WorkerActor.client, WorkerActor.gateway, WorkerActor.worker]
+  , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker]
   , initialState := PostReviewState.submitted
   , states :=
       [ { id := PostReviewState.submitted
@@ -410,13 +382,13 @@ def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewStat
         , markdown := "Worker rejected the submitted review."
         , terminal := false
         }
-      , { id := PostReviewState.clientPosted
+      , { id := PostReviewState.client_posted
         , label := "Client receives 201"
         , group := "client response"
         , markdown := "Gateway returns a successful post response to Client."
         , terminal := false
         }
-      , { id := PostReviewState.clientRejected
+      , { id := PostReviewState.client_rejected
         , label := "Client receives 400"
         , group := "client response"
         , markdown := "Gateway returns a visible rejection to Client."
@@ -438,56 +410,56 @@ def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewStat
   , transitions :=
       [ { src := PostReviewState.submitted
         , dst := PostReviewState.moderating
-        , message := WorkerMessage.reviewsModerateCommand
+        , message := WorkerMessage.Reviews_ModerateCommand
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 3
         }
       , { src := PostReviewState.submitted
-        , dst := PostReviewState.clientRejected
-        , message := WorkerMessage.reviewsPostResponse400
+        , dst := PostReviewState.client_rejected
+        , message := WorkerMessage.Reviews_PostResponse400
         , probabilityNum := 1
         , probabilityDen := 100
         , dwellMs := 1
         }
       , { src := PostReviewState.moderating
         , dst := PostReviewState.accepted
-        , message := WorkerMessage.reviewsModerationAccepted
+        , message := WorkerMessage.Reviews_ModerationAccepted
         , probabilityNum := 90
         , probabilityDen := 100
         , dwellMs := 10
         }
       , { src := PostReviewState.moderating
         , dst := PostReviewState.rejected
-        , message := WorkerMessage.reviewsModerationRejected
+        , message := WorkerMessage.Reviews_ModerationRejected
         , probabilityNum := 10
         , probabilityDen := 100
         , dwellMs := 10
         }
       , { src := PostReviewState.accepted
-        , dst := PostReviewState.clientPosted
-        , message := WorkerMessage.reviewsPostResponse201
+        , dst := PostReviewState.client_posted
+        , message := WorkerMessage.Reviews_PostResponse201
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 2
         }
       , { src := PostReviewState.rejected
-        , dst := PostReviewState.clientRejected
-        , message := WorkerMessage.reviewsPostResponse400
+        , dst := PostReviewState.client_rejected
+        , message := WorkerMessage.Reviews_PostResponse400
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 2
         }
-      , { src := PostReviewState.clientPosted
+      , { src := PostReviewState.client_posted
         , dst := PostReviewState.done
-        , message := WorkerMessage.reviewsPostResponse201
+        , message := WorkerMessage.Reviews_PostResponse201
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 1
         }
-      , { src := PostReviewState.clientRejected
+      , { src := PostReviewState.client_rejected
         , dst := PostReviewState.failed
-        , message := WorkerMessage.reviewsPostResponse400
+        , message := WorkerMessage.Reviews_PostResponse400
         , probabilityNum := 1
         , probabilityDen := 1
         , dwellMs := 1
@@ -501,7 +473,7 @@ def postReviewTask : LeanFM.TaskRequirement :=
 def workerRequirement : LeanFM.RequirementSpec :=
   { id := "worker.visible_behavior"
   , title := "Worker visible-behavior requirements"
-  , actors := [WorkerActor.client, WorkerActor.gateway, WorkerActor.worker].map LeanFM.requirementName
+  , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker].map LeanFM.requirementName
   , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
   , properties :=
@@ -527,15 +499,20 @@ def aggregateGraphData : LeanFM.AggregateGraphData :=
   LeanFM.requirementAggregateGraphData workerRequirement
 
 def workerProtoFile : String :=
-  LeanFM.requirementProtoFile workerRequirement
+  generatedRequirementsProto
 
-def workerArtifact : LeanFM.GeneratedArtifact :=
-  LeanFM.GeneratedArtifact.requirement workerRequirement
+def workerGeneratedRequirement : LeanFM.GeneratedRequirement :=
+  LeanFM.GeneratedRequirement.requirement workerRequirement
 
-def all : List LeanFM.GeneratedArtifact :=
-  [workerArtifact]
+def all : List LeanFM.GeneratedRequirement :=
+  [workerGeneratedRequirement]
 
 def validationReport : String :=
-  LeanFM.generatedArtifactValidationReport all
+  let errors :=
+    LeanFM.validateGeneratedRequirements all ++
+    LeanFM.validateRequirementProtoFile workerRequirement generatedRequirementsProto
+  match errors with
+  | [] => "ok: all generated requirements are well-formed typed Lean values\n"
+  | errors => "invalid generated requirements\n" ++ LeanFM.joinWithNewline errors ++ "\n"
 
-end LeanFM.GeneratedArtifacts
+end LeanFM.GeneratedRequirements

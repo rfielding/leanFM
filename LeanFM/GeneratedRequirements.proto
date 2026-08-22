@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package leanfm.generated;
+
+// Atomic message payloads for LeanFM.GeneratedRequirements.
+// The Lean requirement file defines src/dst traffic, byte patterns, valid ordering,
+// probabilities, dwell time, CTL-style properties, charts, and markdown.
+
+message Docs_GetRequest {
+  string method = 1;
+  string path = 2;
+  bytes auth_proof = 3;
+  string return_to = 4;
+}
+
+message Docs_FetchCommand {
+  string path = 1;
+  string cache_mode = 2;
+  string return_to = 3;
+}
+
+message Docs_FetchResult200 {
+  uint32 status = 1;
+  string path = 2;
+  uint64 bytes_moved = 3;
+  uint64 cpu_ms = 4;
+}
+
+message Docs_FetchResult404 {
+  uint32 status = 1;
+  string path = 2;
+  uint64 cpu_ms = 3;
+}
+
+message Docs_GetResponse {
+  uint32 status = 1;
+  string path = 2;
+  uint64 bytes_moved = 3;
+}
+
+message Error_Response {
+  uint32 status = 1;
+  string reason = 2;
+}
+
+message Reviews_PostRequest {
+  string method = 1;
+  string path = 2;
+  bytes auth_proof = 3;
+  string body_hash = 4;
+  string return_to = 5;
+}
+
+message Reviews_ModerateCommand {
+  string body_hash = 1;
+  string policy = 2;
+  string return_to = 3;
+}
+
+message Reviews_ModerationAccepted {
+  string decision = 1;
+  string body_hash = 2;
+  uint64 cpu_ms = 3;
+}
+
+message Reviews_ModerationRejected {
+  string decision = 1;
+  string body_hash = 2;
+  uint64 cpu_ms = 3;
+}
+
+message Reviews_PostResponse201 {
+  uint32 status = 1;
+  string path = 2;
+  string review_id = 3;
+}
+
+message Reviews_PostResponse400 {
+  uint32 status = 1;
+  string path = 2;
+  string reason = 3;
+}

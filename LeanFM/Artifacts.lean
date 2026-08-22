@@ -2,11 +2,34 @@ import LeanFM.UiModel
 
 namespace LeanFM
 
-class RequirementName (α : Type) where
-  name : α -> String
+inductive NameStyle where
+  | raw
+  | dot
+deriving DecidableEq, Repr
 
-def requirementName [RequirementName α] (value : α) : String :=
-  RequirementName.name value
+class RequirementName (α : Type) where
+  style : NameStyle := NameStyle.raw
+
+def charsAfterLastDot : List Char -> List Char -> List Char
+  | [], current => current
+  | c :: rest, current =>
+      if c == '.' then
+        charsAfterLastDot rest []
+      else
+        charsAfterLastDot rest (current ++ [c])
+
+def constructorToken [Repr α] (value : α) : String :=
+  String.ofList <| charsAfterLastDot (reprStr value).toList []
+
+def replaceChar (needle replacement : Char) (s : String) : String :=
+  String.ofList <| s.toList.map fun c => if c == needle then replacement else c
+
+def applyNameStyle : NameStyle -> String -> String
+  | .raw, name => name
+  | .dot, name => replaceChar '_' '.' name
+
+def requirementName [Repr α] [RequirementName α] (value : α) : String :=
+  applyNameStyle (RequirementName.style (α := α)) (constructorToken value)
 
 inductive PropertyMode where
   | eventually
@@ -158,7 +181,7 @@ structure TypedTaskRequirement (Actor State Message : Type) where
   transitions : List (TypedRequirementTransition State Message)
 deriving Repr
 
-def typedMessageSchemaToSchema [RequirementName Actor] [RequirementName Message]
+def typedMessageSchemaToSchema [Repr Actor] [RequirementName Actor] [Repr Message] [RequirementName Message]
     (msg : TypedMessageSchema Actor Message) : MessageSchema :=
   { name := requirementName msg.name
   , src := requirementName msg.src
@@ -167,7 +190,7 @@ def typedMessageSchemaToSchema [RequirementName Actor] [RequirementName Message]
   , fields := msg.fields
   }
 
-def typedRequirementStateToState [RequirementName State]
+def typedRequirementStateToState [Repr State] [RequirementName State]
     (state : TypedRequirementState State) : RequirementState :=
   { id := requirementName state.id
   , label := state.label
@@ -176,7 +199,7 @@ def typedRequirementStateToState [RequirementName State]
   , terminal := state.terminal
   }
 
-def typedRequirementTransitionToTransition [RequirementName State] [RequirementName Message]
+def typedRequirementTransitionToTransition [Repr State] [RequirementName State] [Repr Message] [RequirementName Message]
     (tr : TypedRequirementTransition State Message) : RequirementTransition :=
   { src := requirementName tr.src
   , dst := requirementName tr.dst
@@ -186,7 +209,7 @@ def typedRequirementTransitionToTransition [RequirementName State] [RequirementN
   , dwellMs := tr.dwellMs
   }
 
-def typedTaskRequirementToTask [RequirementName Actor] [RequirementName State] [RequirementName Message]
+def typedTaskRequirementToTask [Repr Actor] [RequirementName Actor] [Repr State] [RequirementName State] [Repr Message] [RequirementName Message]
     (task : TypedTaskRequirement Actor State Message) : TaskRequirement :=
   { id := task.id
   , title := task.title
@@ -196,14 +219,14 @@ def typedTaskRequirementToTask [RequirementName Actor] [RequirementName State] [
   , transitions := task.transitions.map typedRequirementTransitionToTransition
   }
 
-inductive GeneratedArtifact where
-  | requirement : RequirementSpec -> GeneratedArtifact
+inductive GeneratedRequirement where
+  | requirement : RequirementSpec -> GeneratedRequirement
 deriving Repr
 
-def GeneratedArtifact.id : GeneratedArtifact -> String
+def GeneratedRequirement.id : GeneratedRequirement -> String
   | .requirement spec => spec.id
 
-def GeneratedArtifact.title : GeneratedArtifact -> String
+def GeneratedRequirement.title : GeneratedRequirement -> String
   | .requirement spec => spec.title
 
 def messageNames (spec : RequirementSpec) : List String :=
@@ -338,9 +361,6 @@ def requirementAggregateGraphData (spec : RequirementSpec) : AggregateGraphData 
   , edges := concatLists (spec.tasks.map (taskToAggregateEdges spec))
   }
 
-def replaceChar (needle replacement : Char) (s : String) : String :=
-  String.ofList <| s.toList.map fun c => if c == needle then replacement else c
-
 def protoMessageName (name : String) : String :=
   replaceChar '.' '_' name
 
@@ -379,17 +399,64 @@ def requirementProtoFile (spec : RequirementSpec) : String :=
       ] ++
       spec.messages.map protoMessageBlock) ++ "\n"
 
-def validateGeneratedArtifact : GeneratedArtifact -> List String
+def charsStartWith : List Char -> List Char -> Bool
+  | _, [] => true
+  | [], _ :: _ => false
+  | x :: xs, y :: ys => x == y && charsStartWith xs ys
+
+def charsContain : List Char -> List Char -> Bool
+  | [], needle => needle == []
+  | hay, needle =>
+      charsStartWith hay needle ||
+      match hay with
+      | [] => false
+      | _ :: rest => charsContain rest needle
+
+def stringContains (haystack needle : String) : Bool :=
+  charsContain haystack.toList needle.toList
+
+def protoMessageDeclaration (msg : MessageSchema) : String :=
+  "message " ++ protoMessageName msg.name ++ " {"
+
+def validateRequirementProtoFile (spec : RequirementSpec) (protoText : String) : List String :=
+  spec.messages.filterMap fun msg =>
+    let decl := protoMessageDeclaration msg
+    if stringContains protoText decl then
+      none
+    else
+      some ("proto file is missing declaration for message atom: " ++ decl)
+
+def validateGeneratedRequirement : GeneratedRequirement -> List String
   | .requirement spec =>
       validateRequirementSpec spec ++
       (validateAggregateGraph (requirementAggregateGraphData spec)).map (fun msg => "derived graph: " ++ msg)
 
-def validateGeneratedArtifacts (artifacts : List GeneratedArtifact) : List String :=
-  artifacts.foldr (fun artifact acc => validateGeneratedArtifact artifact ++ acc) []
+def validateGeneratedRequirements (requirements : List GeneratedRequirement) : List String :=
+  requirements.foldr (fun requirement acc => validateGeneratedRequirement requirement ++ acc) []
 
-def generatedArtifactValidationReport (artifacts : List GeneratedArtifact) : String :=
-  match validateGeneratedArtifacts artifacts with
-  | [] => "ok: all generated artifacts are well-formed typed Lean values\n"
-  | errors => "invalid generated artifacts\n" ++ joinWithNewline errors ++ "\n"
+def generatedRequirementValidationReport (requirements : List GeneratedRequirement) : String :=
+  match validateGeneratedRequirements requirements with
+  | [] => "ok: all generated requirements are well-formed typed Lean values\n"
+  | errors => "invalid generated requirements\n" ++ joinWithNewline errors ++ "\n"
+
+def generatedRequirementSystemPrompt : String :=
+  joinWithNewline
+    [ "You generate LeanFM visible-behavior requirements as Lean 4 code."
+    , "Output one Lean module that imports LeanFM.Artifacts and defines a namespace LeanFM.GeneratedRequirements."
+    , "Define requirement-local inductive types for actors, message atoms, and each task's states."
+    , "Each generated enum must derive DecidableEq and Repr."
+    , "Provide LeanFM.RequirementName instances by naming convention, not per-constructor string matches."
+    , "Use NameStyle.raw for actor and state constructors whose spellings are already the rendered names."
+    , "Use NameStyle.dot for message constructors like Docs_GetRequest, which render as Docs.GetRequest."
+    , "Define message atoms as List (TypedMessageSchema Actor Message)."
+    , "Every message atom must have src, dst, BytePattern, and numbered protobuf fields that correspond to a message in GeneratedRequirements.proto."
+    , "BytePattern must explain where bytes come from: literalPrefix, protobufEncoding, or transportWrapper."
+    , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
+    , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
+    , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
+    , "Define RequirementSpec with actors, messages, tasks, properties, charts, and markdown."
+    , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str, aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
+    , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
+    ]
 
 end LeanFM

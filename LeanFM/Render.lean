@@ -1,6 +1,6 @@
 import LeanFM.Protocol
 import LeanFM.UiModel
-import LeanFM.GeneratedArtifacts
+import LeanFM.GeneratedRequirements
 import LeanFM.StaticAssets
 
 namespace LeanFM
@@ -882,11 +882,11 @@ def docsIndex : String :=
     ]
 
 def aggregateGraphDataValidationReport : String :=
-  LeanFM.GeneratedArtifacts.validationReport
+  LeanFM.GeneratedRequirements.validationReport
 
 def aggregateGraphAnimation : String :=
   "<section><h2>Aggregate Graph</h2><div class=\"controlPanel\"><label><input id=\"aggCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"aggZoomOut\" type=\"button\">-</button><span id=\"aggZoomLabel\">100%</span><button id=\"aggZoomIn\" type=\"button\">+</button><button id=\"aggZoomReset\" type=\"button\">reset</button></span></div><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
-  "<script id=\"aggGraphModel\" type=\"application/json\">" ++ aggregateGraphJson LeanFM.GeneratedArtifacts.aggregateGraphData ++ "</script>" ++
+  "<script id=\"aggGraphModel\" type=\"application/json\">" ++ aggregateGraphJson LeanFM.GeneratedRequirements.aggregateGraphData ++ "</script>" ++
   "<script>" ++ LeanFM.StaticAssets.aggregateGraphJs ++ "</script>"
 
 def pageCss : String :=

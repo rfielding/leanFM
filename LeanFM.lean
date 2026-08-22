@@ -7,6 +7,6 @@ import LeanFM.MDP
 import LeanFM.Protocol
 import LeanFM.UiModel
 import LeanFM.Artifacts
-import LeanFM.GeneratedArtifacts
+import LeanFM.GeneratedRequirements
 import LeanFM.StaticAssets
 import LeanFM.Render
