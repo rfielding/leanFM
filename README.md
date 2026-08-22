@@ -72,7 +72,7 @@ diagrams/assembled.dot
 
 The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
 
-`LeanFM/GeneratedArtifacts.lean` is the file an LLM should produce for a generated requirement. It defines typed Lean values: requirement-local actor/message/state enums, protobuf-like message schemas with numbered fields, per-task state machines, CTL-style property declarations, chart specs, and Markdown blocks. Renderer inputs such as the aggregate graph and `/generated/worker.proto` are deterministic projections from that typed requirement, not generated JavaScript.
+`LeanFM/GeneratedArtifacts.lean` is the file an LLM should produce for a generated requirement. It defines typed Lean values: requirement-local actor/message/state enums, protobuf-like message schemas with numbered fields, per-task state machines, CTL-style property declarations, chart specs, and Markdown blocks. Message byte prefixes are explicit `BytePattern` values with an origin and explanation, so the generated file says where the traffic bytes come from. Renderer inputs such as the aggregate graph and `/generated/worker.proto` are deterministic projections from that typed requirement, not generated JavaScript.
 
 The current example has three actors:
 

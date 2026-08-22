@@ -2,6 +2,12 @@ import LeanFM.UiModel
 
 namespace LeanFM
 
+class RequirementName (α : Type) where
+  name : α -> String
+
+def requirementName [RequirementName α] (value : α) : String :=
+  RequirementName.name value
+
 inductive PropertyMode where
   | eventually
   | always
@@ -29,6 +35,23 @@ def ProtoScalar.protoName : ProtoScalar -> String
   | .uint64 => "uint64"
   | .bytes => "bytes"
 
+inductive ByteOrigin where
+  | literalPrefix
+  | protobufEncoding
+  | transportWrapper
+deriving DecidableEq, Repr
+
+def ByteOrigin.describe : ByteOrigin -> String
+  | .literalPrefix => "literal traffic discriminator"
+  | .protobufEncoding => "protobuf field encoding"
+  | .transportWrapper => "transport wrapper bytes"
+
+structure BytePattern where
+  origin : ByteOrigin
+  bytes : List Nat
+  note : String
+deriving Repr
+
 structure ProtoFieldSchema where
   number : Nat
   name : String
@@ -39,7 +62,7 @@ structure MessageSchema where
   name : String
   src : String
   dst : String
-  bytes : List Nat
+  bytePattern : BytePattern
   fields : List ProtoFieldSchema
 deriving Repr
 
@@ -105,7 +128,7 @@ structure TypedMessageSchema (Actor Message : Type) where
   name : Message
   src : Actor
   dst : Actor
-  bytes : List Nat
+  bytePattern : BytePattern
   fields : List ProtoFieldSchema
 deriving Repr
 
@@ -135,46 +158,42 @@ structure TypedTaskRequirement (Actor State Message : Type) where
   transitions : List (TypedRequirementTransition State Message)
 deriving Repr
 
-def typedMessageSchemaToSchema
-    (actorName : Actor -> String) (messageName : Message -> String)
+def typedMessageSchemaToSchema [RequirementName Actor] [RequirementName Message]
     (msg : TypedMessageSchema Actor Message) : MessageSchema :=
-  { name := messageName msg.name
-  , src := actorName msg.src
-  , dst := actorName msg.dst
-  , bytes := msg.bytes
+  { name := requirementName msg.name
+  , src := requirementName msg.src
+  , dst := requirementName msg.dst
+  , bytePattern := msg.bytePattern
   , fields := msg.fields
   }
 
-def typedRequirementStateToState
-    (stateName : State -> String)
+def typedRequirementStateToState [RequirementName State]
     (state : TypedRequirementState State) : RequirementState :=
-  { id := stateName state.id
+  { id := requirementName state.id
   , label := state.label
   , group := state.group
   , markdown := state.markdown
   , terminal := state.terminal
   }
 
-def typedRequirementTransitionToTransition
-    (stateName : State -> String) (messageName : Message -> String)
+def typedRequirementTransitionToTransition [RequirementName State] [RequirementName Message]
     (tr : TypedRequirementTransition State Message) : RequirementTransition :=
-  { src := stateName tr.src
-  , dst := stateName tr.dst
-  , message := messageName tr.message
+  { src := requirementName tr.src
+  , dst := requirementName tr.dst
+  , message := requirementName tr.message
   , probabilityNum := tr.probabilityNum
   , probabilityDen := tr.probabilityDen
   , dwellMs := tr.dwellMs
   }
 
-def typedTaskRequirementToTask
-    (actorName : Actor -> String) (stateName : State -> String) (messageName : Message -> String)
+def typedTaskRequirementToTask [RequirementName Actor] [RequirementName State] [RequirementName Message]
     (task : TypedTaskRequirement Actor State Message) : TaskRequirement :=
   { id := task.id
   , title := task.title
-  , actors := task.actors.map actorName
-  , initialState := stateName task.initialState
-  , states := task.states.map (typedRequirementStateToState stateName)
-  , transitions := task.transitions.map (typedRequirementTransitionToTransition stateName messageName)
+  , actors := task.actors.map requirementName
+  , initialState := requirementName task.initialState
+  , states := task.states.map typedRequirementStateToState
+  , transitions := task.transitions.map typedRequirementTransitionToTransition
   }
 
 inductive GeneratedArtifact where
@@ -203,6 +222,10 @@ def validateProtoFieldSchema (messageName : String) (field : ProtoFieldSchema) :
   (if field.number == 0 then ["message " ++ messageName ++ " has protobuf field " ++ field.name ++ " with tag 0"] else []) ++
   (if field.name == "" then ["message " ++ messageName ++ " has protobuf field with empty name"] else [])
 
+def validateBytePattern (messageName : String) (pattern : BytePattern) : List String :=
+  (if pattern.bytes.isEmpty then ["message " ++ messageName ++ " has no byte grammar"] else []) ++
+  (if pattern.note == "" then ["message " ++ messageName ++ " byte grammar does not explain where bytes come from"] else [])
+
 def validateMessageSchema (actors : List String) (msg : MessageSchema) : List String :=
   let duplicateFieldNumbers := (duplicateStrings (natStrings (msg.fields.map (fun f => f.number)))).map fun tag =>
     "message " ++ msg.name ++ " has duplicate protobuf field tag: " ++ tag
@@ -212,7 +235,7 @@ def validateMessageSchema (actors : List String) (msg : MessageSchema) : List St
   (if msg.name == "" then ["message has empty name"] else []) ++
   (if actors.contains msg.src then [] else ["message " ++ msg.name ++ " has unknown src actor: " ++ msg.src]) ++
   (if actors.contains msg.dst then [] else ["message " ++ msg.name ++ " has unknown dst actor: " ++ msg.dst]) ++
-  (if msg.bytes.isEmpty then ["message " ++ msg.name ++ " has no byte grammar"] else []) ++
+  validateBytePattern msg.name msg.bytePattern ++
   (if msg.fields.isEmpty then ["message " ++ msg.name ++ " has no visible fields"] else []) ++
   duplicateFieldNumbers ++ duplicateFieldNames ++ fieldErrors
 
@@ -336,7 +359,9 @@ def protoFieldLine (field : ProtoFieldSchema) : String :=
 def protoMessageBlock (msg : MessageSchema) : String :=
   joinWithNewline
     ( [ "// traffic: " ++ msg.src ++ " -> " ++ msg.dst
-      , "// bytes: [" ++ byteListComment msg.bytes ++ "]"
+      , "// byte origin: " ++ msg.bytePattern.origin.describe
+      , "// bytes: [" ++ byteListComment msg.bytePattern.bytes ++ "]"
+      , "// byte note: " ++ msg.bytePattern.note
       , "message " ++ protoMessageName msg.name ++ " {"
       ] ++
       msg.fields.map protoFieldLine ++

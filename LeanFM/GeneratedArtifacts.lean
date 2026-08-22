@@ -8,10 +8,11 @@ inductive WorkerActor where
   | worker
 deriving DecidableEq, Repr
 
-def WorkerActor.name : WorkerActor -> String
-  | .client => "Client"
-  | .gateway => "Gateway"
-  | .worker => "Worker"
+instance : LeanFM.RequirementName WorkerActor where
+  name
+    | .client => "Client"
+    | .gateway => "Gateway"
+    | .worker => "Worker"
 
 inductive WorkerMessage where
   | docsGetRequest
@@ -28,19 +29,20 @@ inductive WorkerMessage where
   | reviewsPostResponse400
 deriving DecidableEq, Repr
 
-def WorkerMessage.name : WorkerMessage -> String
-  | .docsGetRequest => "Docs.GetRequest"
-  | .docsFetchCommand => "Docs.FetchCommand"
-  | .docsFetchResult200 => "Docs.FetchResult200"
-  | .docsFetchResult404 => "Docs.FetchResult404"
-  | .docsGetResponse => "Docs.GetResponse"
-  | .errorResponse => "Error.Response"
-  | .reviewsPostRequest => "Reviews.PostRequest"
-  | .reviewsModerateCommand => "Reviews.ModerateCommand"
-  | .reviewsModerationAccepted => "Reviews.ModerationAccepted"
-  | .reviewsModerationRejected => "Reviews.ModerationRejected"
-  | .reviewsPostResponse201 => "Reviews.PostResponse201"
-  | .reviewsPostResponse400 => "Reviews.PostResponse400"
+instance : LeanFM.RequirementName WorkerMessage where
+  name
+    | .docsGetRequest => "Docs.GetRequest"
+    | .docsFetchCommand => "Docs.FetchCommand"
+    | .docsFetchResult200 => "Docs.FetchResult200"
+    | .docsFetchResult404 => "Docs.FetchResult404"
+    | .docsGetResponse => "Docs.GetResponse"
+    | .errorResponse => "Error.Response"
+    | .reviewsPostRequest => "Reviews.PostRequest"
+    | .reviewsModerateCommand => "Reviews.ModerateCommand"
+    | .reviewsModerationAccepted => "Reviews.ModerationAccepted"
+    | .reviewsModerationRejected => "Reviews.ModerationRejected"
+    | .reviewsPostResponse201 => "Reviews.PostResponse201"
+    | .reviewsPostResponse400 => "Reviews.PostResponse400"
 
 inductive GetDocsState where
   | requested
@@ -53,15 +55,16 @@ inductive GetDocsState where
   | failed
 deriving DecidableEq, Repr
 
-def GetDocsState.name : GetDocsState -> String
-  | .requested => "requested"
-  | .workerFetching => "worker_fetching"
-  | .gatewaySuccess => "gateway_success"
-  | .gatewayFailure => "gateway_failure"
-  | .clientSuccess => "client_success"
-  | .clientRejected => "client_rejected"
-  | .done => "done"
-  | .failed => "failed"
+instance : LeanFM.RequirementName GetDocsState where
+  name
+    | .requested => "requested"
+    | .workerFetching => "worker_fetching"
+    | .gatewaySuccess => "gateway_success"
+    | .gatewayFailure => "gateway_failure"
+    | .clientSuccess => "client_success"
+    | .clientRejected => "client_rejected"
+    | .done => "done"
+    | .failed => "failed"
 
 inductive PostReviewState where
   | submitted
@@ -74,21 +77,26 @@ inductive PostReviewState where
   | failed
 deriving DecidableEq, Repr
 
-def PostReviewState.name : PostReviewState -> String
-  | .submitted => "submitted"
-  | .moderating => "moderating"
-  | .accepted => "accepted"
-  | .rejected => "rejected"
-  | .clientPosted => "client_posted"
-  | .clientRejected => "client_rejected"
-  | .done => "done"
-  | .failed => "failed"
+instance : LeanFM.RequirementName PostReviewState where
+  name
+    | .submitted => "submitted"
+    | .moderating => "moderating"
+    | .accepted => "accepted"
+    | .rejected => "rejected"
+    | .clientPosted => "client_posted"
+    | .clientRejected => "client_rejected"
+    | .done => "done"
+    | .failed => "failed"
 
 def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) :=
   [ { name := WorkerMessage.docsGetRequest
     , src := WorkerActor.client
     , dst := WorkerActor.gateway
-    , bytes := [0x01, 0x10]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x01, 0x10]
+        , note := "LeanFM traffic discriminator for Docs.GetRequest; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "method", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -99,7 +107,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.docsFetchCommand
     , src := WorkerActor.gateway
     , dst := WorkerActor.worker
-    , bytes := [0x02, 0x20]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x02, 0x20]
+        , note := "LeanFM traffic discriminator for Docs.FetchCommand; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "path", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "cache_mode", scalar := LeanFM.ProtoScalar.string }
@@ -109,7 +121,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.docsFetchResult200
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
-    , bytes := [0x03, 0x30]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x03, 0x30]
+        , note := "LeanFM traffic discriminator for successful Docs.FetchResult; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -120,7 +136,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.docsFetchResult404
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
-    , bytes := [0x03, 0xff]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x03, 0xff]
+        , note := "LeanFM traffic discriminator for failed Docs.FetchResult; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -130,7 +150,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.docsGetResponse
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
-    , bytes := [0x04, 0x40]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x04, 0x40]
+        , note := "LeanFM traffic discriminator for Docs.GetResponse; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -140,7 +164,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.errorResponse
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
-    , bytes := [0xff]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0xff]
+        , note := "LeanFM traffic discriminator for generic observable error response; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "reason", scalar := LeanFM.ProtoScalar.string }
@@ -149,7 +177,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.reviewsPostRequest
     , src := WorkerActor.client
     , dst := WorkerActor.gateway
-    , bytes := [0x11, 0x10]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x11, 0x10]
+        , note := "LeanFM traffic discriminator for Reviews.PostRequest; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "method", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -161,7 +193,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.reviewsModerateCommand
     , src := WorkerActor.gateway
     , dst := WorkerActor.worker
-    , bytes := [0x12, 0x20]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x12, 0x20]
+        , note := "LeanFM traffic discriminator for Reviews.ModerateCommand; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "policy", scalar := LeanFM.ProtoScalar.string }
@@ -171,7 +207,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.reviewsModerationAccepted
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
-    , bytes := [0x13, 0x30]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x13, 0x30]
+        , note := "LeanFM traffic discriminator for accepted Reviews.ModerationResult; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "decision", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
@@ -181,7 +221,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.reviewsModerationRejected
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
-    , bytes := [0x13, 0xff]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x13, 0xff]
+        , note := "LeanFM traffic discriminator for rejected Reviews.ModerationResult; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "decision", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
@@ -191,7 +235,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.reviewsPostResponse201
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
-    , bytes := [0x14, 0x40]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x14, 0x40]
+        , note := "LeanFM traffic discriminator for successful Reviews.PostResponse; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -201,7 +249,11 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.reviewsPostResponse400
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
-    , bytes := [0x14, 0xff]
+    , bytePattern :=
+        { origin := LeanFM.ByteOrigin.literalPrefix
+        , bytes := [0x14, 0xff]
+        , note := "LeanFM traffic discriminator for failed Reviews.PostResponse; protobuf fields below define the payload body."
+        }
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -326,7 +378,7 @@ def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState Work
   }
 
 def getDocsTask : LeanFM.TaskRequirement :=
-  LeanFM.typedTaskRequirementToTask WorkerActor.name GetDocsState.name WorkerMessage.name getDocsTaskTyped
+  LeanFM.typedTaskRequirementToTask getDocsTaskTyped
 
 def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewState WorkerMessage :=
   { id := "post_review"
@@ -444,13 +496,13 @@ def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewStat
   }
 
 def postReviewTask : LeanFM.TaskRequirement :=
-  LeanFM.typedTaskRequirementToTask WorkerActor.name PostReviewState.name WorkerMessage.name postReviewTaskTyped
+  LeanFM.typedTaskRequirementToTask postReviewTaskTyped
 
 def workerRequirement : LeanFM.RequirementSpec :=
   { id := "worker.visible_behavior"
   , title := "Worker visible-behavior requirements"
-  , actors := [WorkerActor.client, WorkerActor.gateway, WorkerActor.worker].map WorkerActor.name
-  , messages := workerMessages.map (LeanFM.typedMessageSchemaToSchema WorkerActor.name WorkerMessage.name)
+  , actors := [WorkerActor.client, WorkerActor.gateway, WorkerActor.worker].map LeanFM.requirementName
+  , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
   , properties :=
       [ { name := "AF get_docs terminal", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "terminal" }

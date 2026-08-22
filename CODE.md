@@ -515,7 +515,18 @@ Each chart slot can be rendered as either a line chart or a pie chart. The chart
 
 ## Generated Requirements
 
-`LeanFM/GeneratedArtifacts.lean` is the intended output shape for an LLM that is asked to sketch or revise requirements. It should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced by deterministic `*.name` functions at the renderer/persistence boundary.
+`LeanFM/GeneratedArtifacts.lean` is the intended output shape for an LLM that is asked to sketch or revise requirements. It should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced through the common `RequirementName` typeclass at the renderer/persistence boundary.
+
+Network bytes are not bare lists. Each message has a `BytePattern`:
+
+```lean
+{ origin := LeanFM.ByteOrigin.literalPrefix
+, bytes := [0x01, 0x10]
+, note := "LeanFM traffic discriminator for Docs.GetRequest; protobuf fields below define the payload body."
+}
+```
+
+That means the requirement can distinguish bytes that come from a literal traffic discriminator, protobuf field encoding, or a transport wrapper. The current worker example uses literal traffic discriminators for message atoms and uses protobuf field schemas for the payload body.
 
 The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`. It contains:
 
@@ -528,7 +539,7 @@ The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`.
 
 Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedArtifacts` then checks semantic constraints that are still data-dependent: messages must have byte grammars, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
 
-`requirementProtoFile` emits a proto3 schema from those same message atoms. The `.proto` output is not the protocol by itself; it defines the structs that can read and write the bytes. The task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
+`requirementProtoFile` emits a proto3 schema from those same message atoms. The `.proto` output is not the protocol by itself; it defines the structs that can read and write the payload body. The `BytePattern` defines the traffic atom bytes, and the task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
 
 ## Web Server
 
