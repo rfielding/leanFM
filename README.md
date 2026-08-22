@@ -48,6 +48,7 @@ GET /tools/conversations conversation-to-Lean-file catalog
 GET /tools/static-assets/validate static JavaScript renderer validation
 GET /tools/generated-artifacts/validate generated typed Lean artifact validation
 GET /tools/aggregate-graph/validate typed aggregate graph data validation
+GET /generated/worker.proto protobuf schema generated from requirement messages
 GET /lean/get_docs.lean generated Lean view for a conversation
 GET /graph.dot Graphviz DOT
 GET /auth.dot  auth group DOT
@@ -71,7 +72,7 @@ diagrams/assembled.dot
 
 The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
 
-`LeanFM/GeneratedArtifacts.lean` is the file an LLM should produce for a generated requirement. It defines typed Lean values: requirement-local actor/message/state enums, protobuf-like message schemas, per-task state machines, CTL-style property declarations, chart specs, and Markdown blocks. Renderer inputs such as the aggregate graph are deterministic projections from that typed requirement, not generated JavaScript.
+`LeanFM/GeneratedArtifacts.lean` is the file an LLM should produce for a generated requirement. It defines typed Lean values: requirement-local actor/message/state enums, protobuf-like message schemas with numbered fields, per-task state machines, CTL-style property declarations, chart specs, and Markdown blocks. Renderer inputs such as the aggregate graph and `/generated/worker.proto` are deterministic projections from that typed requirement, not generated JavaScript.
 
 The current example has three actors:
 

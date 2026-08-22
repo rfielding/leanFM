@@ -520,13 +520,15 @@ Each chart slot can be rendered as either a line chart or a pie chart. The chart
 The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`. It contains:
 
 - `actors`: visible participants in the world.
-- `messages`: protobuf-like schemas with `src`, `dst`, byte grammar, and visible fields.
+- `messages`: protobuf-like schemas with `src`, `dst`, byte grammar, and numbered visible fields.
 - `tasks`: per-task state machines with named states and message-labeled transitions.
 - `properties`: CTL-style declarations such as eventually, always, never, and prepared-for.
 - `charts`: named chart requests over message-derived datasets.
 - `markdown`: informal descriptions attached to generated requirement blocks.
 
-Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedArtifacts` then checks semantic constraints that are still data-dependent: messages must have byte grammars and visible fields, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
+Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedArtifacts` then checks semantic constraints that are still data-dependent: messages must have byte grammars, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
+
+`requirementProtoFile` emits a proto3 schema from those same message atoms. The `.proto` output is not the protocol by itself; it defines the structs that can read and write the bytes. The task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
 
 ## Web Server
 
@@ -548,6 +550,7 @@ Routes include:
 - `/tools/static-assets/validate`: static JavaScript renderer asset validation.
 - `/tools/generated-artifacts/validate`: generated typed Lean artifact validation.
 - `/tools/aggregate-graph/validate`: typed aggregate graph data validation.
+- `/generated/worker.proto`: protobuf schema generated from requirement message atoms.
 - `/lean/*.lean`: generated Lean source views for conversations.
 - `/*.dot`: DOT sources.
 - `/health`: health check.

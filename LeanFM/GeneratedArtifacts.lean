@@ -89,73 +89,124 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
     , src := WorkerActor.client
     , dst := WorkerActor.gateway
     , bytes := [0x01, 0x10]
-    , fields := ["method", "path", "auth_proof", "return_to"]
+    , fields :=
+        [ { number := 1, name := "method", scalar := LeanFM.ProtoScalar.string }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "auth_proof", scalar := LeanFM.ProtoScalar.bytes }
+        , { number := 4, name := "return_to", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   , { name := WorkerMessage.docsFetchCommand
     , src := WorkerActor.gateway
     , dst := WorkerActor.worker
     , bytes := [0x02, 0x20]
-    , fields := ["path", "cache_mode", "return_to"]
+    , fields :=
+        [ { number := 1, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 2, name := "cache_mode", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "return_to", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   , { name := WorkerMessage.docsFetchResult200
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
     , bytes := [0x03, 0x30]
-    , fields := ["status", "path", "bytes_moved", "cpu_ms"]
+    , fields :=
+        [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "bytes_moved", scalar := LeanFM.ProtoScalar.uint64 }
+        , { number := 4, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
+        ]
     }
   , { name := WorkerMessage.docsFetchResult404
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
     , bytes := [0x03, 0xff]
-    , fields := ["status", "path", "cpu_ms"]
+    , fields :=
+        [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
+        ]
     }
   , { name := WorkerMessage.docsGetResponse
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
     , bytes := [0x04, 0x40]
-    , fields := ["status", "path", "bytes_moved"]
+    , fields :=
+        [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "bytes_moved", scalar := LeanFM.ProtoScalar.uint64 }
+        ]
     }
   , { name := WorkerMessage.errorResponse
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
     , bytes := [0xff]
-    , fields := ["status", "reason"]
+    , fields :=
+        [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
+        , { number := 2, name := "reason", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   , { name := WorkerMessage.reviewsPostRequest
     , src := WorkerActor.client
     , dst := WorkerActor.gateway
     , bytes := [0x11, 0x10]
-    , fields := ["method", "path", "auth_proof", "body_hash", "return_to"]
+    , fields :=
+        [ { number := 1, name := "method", scalar := LeanFM.ProtoScalar.string }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "auth_proof", scalar := LeanFM.ProtoScalar.bytes }
+        , { number := 4, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
+        , { number := 5, name := "return_to", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   , { name := WorkerMessage.reviewsModerateCommand
     , src := WorkerActor.gateway
     , dst := WorkerActor.worker
     , bytes := [0x12, 0x20]
-    , fields := ["body_hash", "policy", "return_to"]
+    , fields :=
+        [ { number := 1, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
+        , { number := 2, name := "policy", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "return_to", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   , { name := WorkerMessage.reviewsModerationAccepted
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
     , bytes := [0x13, 0x30]
-    , fields := ["decision", "body_hash", "cpu_ms"]
+    , fields :=
+        [ { number := 1, name := "decision", scalar := LeanFM.ProtoScalar.string }
+        , { number := 2, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
+        ]
     }
   , { name := WorkerMessage.reviewsModerationRejected
     , src := WorkerActor.worker
     , dst := WorkerActor.gateway
     , bytes := [0x13, 0xff]
-    , fields := ["decision", "body_hash", "cpu_ms"]
+    , fields :=
+        [ { number := 1, name := "decision", scalar := LeanFM.ProtoScalar.string }
+        , { number := 2, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "cpu_ms", scalar := LeanFM.ProtoScalar.uint64 }
+        ]
     }
   , { name := WorkerMessage.reviewsPostResponse201
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
     , bytes := [0x14, 0x40]
-    , fields := ["status", "path", "review_id"]
+    , fields :=
+        [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "review_id", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   , { name := WorkerMessage.reviewsPostResponse400
     , src := WorkerActor.gateway
     , dst := WorkerActor.client
     , bytes := [0x14, 0xff]
-    , fields := ["status", "path", "reason"]
+    , fields :=
+        [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
+        , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
+        , { number := 3, name := "reason", scalar := LeanFM.ProtoScalar.string }
+        ]
     }
   ]
 
@@ -422,6 +473,9 @@ def workerRequirement : LeanFM.RequirementSpec :=
 
 def aggregateGraphData : LeanFM.AggregateGraphData :=
   LeanFM.requirementAggregateGraphData workerRequirement
+
+def workerProtoFile : String :=
+  LeanFM.requirementProtoFile workerRequirement
 
 def workerArtifact : LeanFM.GeneratedArtifact :=
   LeanFM.GeneratedArtifact.requirement workerRequirement

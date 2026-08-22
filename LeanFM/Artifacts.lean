@@ -14,12 +14,33 @@ inductive ChartKind where
   | pie
 deriving DecidableEq, Repr
 
+inductive ProtoScalar where
+  | string
+  | bool
+  | uint32
+  | uint64
+  | bytes
+deriving DecidableEq, Repr
+
+def ProtoScalar.protoName : ProtoScalar -> String
+  | .string => "string"
+  | .bool => "bool"
+  | .uint32 => "uint32"
+  | .uint64 => "uint64"
+  | .bytes => "bytes"
+
+structure ProtoFieldSchema where
+  number : Nat
+  name : String
+  scalar : ProtoScalar
+deriving Repr
+
 structure MessageSchema where
   name : String
   src : String
   dst : String
   bytes : List Nat
-  fields : List String
+  fields : List ProtoFieldSchema
 deriving Repr
 
 structure RequirementState where
@@ -85,7 +106,7 @@ structure TypedMessageSchema (Actor Message : Type) where
   src : Actor
   dst : Actor
   bytes : List Nat
-  fields : List String
+  fields : List ProtoFieldSchema
 deriving Repr
 
 structure TypedRequirementState (State : Type) where
@@ -175,12 +196,25 @@ def taskIds (spec : RequirementSpec) : List String :=
 def stateIds (task : TaskRequirement) : List String :=
   task.states.map (fun s => s.id)
 
+def natStrings (xs : List Nat) : List String :=
+  xs.map (fun n => toString n)
+
+def validateProtoFieldSchema (messageName : String) (field : ProtoFieldSchema) : List String :=
+  (if field.number == 0 then ["message " ++ messageName ++ " has protobuf field " ++ field.name ++ " with tag 0"] else []) ++
+  (if field.name == "" then ["message " ++ messageName ++ " has protobuf field with empty name"] else [])
+
 def validateMessageSchema (actors : List String) (msg : MessageSchema) : List String :=
+  let duplicateFieldNumbers := (duplicateStrings (natStrings (msg.fields.map (fun f => f.number)))).map fun tag =>
+    "message " ++ msg.name ++ " has duplicate protobuf field tag: " ++ tag
+  let duplicateFieldNames := (duplicateStrings (msg.fields.map (fun f => f.name))).map fun name =>
+    "message " ++ msg.name ++ " has duplicate protobuf field name: " ++ name
+  let fieldErrors := msg.fields.foldr (fun field acc => validateProtoFieldSchema msg.name field ++ acc) []
   (if msg.name == "" then ["message has empty name"] else []) ++
   (if actors.contains msg.src then [] else ["message " ++ msg.name ++ " has unknown src actor: " ++ msg.src]) ++
   (if actors.contains msg.dst then [] else ["message " ++ msg.name ++ " has unknown dst actor: " ++ msg.dst]) ++
   (if msg.bytes.isEmpty then ["message " ++ msg.name ++ " has no byte grammar"] else []) ++
-  (if msg.fields.isEmpty then ["message " ++ msg.name ++ " has no visible fields"] else [])
+  (if msg.fields.isEmpty then ["message " ++ msg.name ++ " has no visible fields"] else []) ++
+  duplicateFieldNumbers ++ duplicateFieldNames ++ fieldErrors
 
 def validateTaskRequirement (spec : RequirementSpec) (task : TaskRequirement) : List String :=
   let ids := stateIds task
@@ -280,6 +314,45 @@ def requirementAggregateGraphData (spec : RequirementSpec) : AggregateGraphData 
   { nodes := concatLists (spec.tasks.map taskToAggregateNodes)
   , edges := concatLists (spec.tasks.map (taskToAggregateEdges spec))
   }
+
+def replaceChar (needle replacement : Char) (s : String) : String :=
+  String.ofList <| s.toList.map fun c => if c == needle then replacement else c
+
+def protoMessageName (name : String) : String :=
+  replaceChar '.' '_' name
+
+def byteHex (n : Nat) : String :=
+  if n < 16 then
+    "0x0" ++ String.ofList (Nat.toDigits 16 n)
+  else
+    "0x" ++ String.ofList (Nat.toDigits 16 n)
+
+def byteListComment (bytes : List Nat) : String :=
+  joinWithComma (bytes.map byteHex)
+
+def protoFieldLine (field : ProtoFieldSchema) : String :=
+  "  " ++ field.scalar.protoName ++ " " ++ field.name ++ " = " ++ toString field.number ++ ";"
+
+def protoMessageBlock (msg : MessageSchema) : String :=
+  joinWithNewline
+    ( [ "// traffic: " ++ msg.src ++ " -> " ++ msg.dst
+      , "// bytes: [" ++ byteListComment msg.bytes ++ "]"
+      , "message " ++ protoMessageName msg.name ++ " {"
+      ] ++
+      msg.fields.map protoFieldLine ++
+      [ "}" ] )
+
+def requirementProtoFile (spec : RequirementSpec) : String :=
+  joinWithNewline
+    ( [ "syntax = \"proto3\";"
+      , ""
+      , "package leanfm.generated;"
+      , ""
+      , "// Generated from LeanFM requirement: " ++ spec.id
+      , "// The comments preserve the src/dst wrapper and byte grammar for each message atom."
+      , ""
+      ] ++
+      spec.messages.map protoMessageBlock) ++ "\n"
 
 def validateGeneratedArtifact : GeneratedArtifact -> List String
   | .requirement spec =>

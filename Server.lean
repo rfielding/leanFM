@@ -155,6 +155,7 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/static-assets/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.StaticAssets.validationReport
   | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.GeneratedArtifacts.validationReport
   | "/tools/aggregate-graph/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.aggregateGraphDataValidationReport
+  | "/generated/worker.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.GeneratedArtifacts.workerProtoFile
   | "/api/llm" => callLLM (requestBody request)
   | "/lean/auth.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.authLeanFile
   | "/lean/get_docs.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.getDocsLeanFile
