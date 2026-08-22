@@ -513,6 +513,21 @@ There are also model-derived datasets:
 
 Each chart slot can be rendered as either a line chart or a pie chart. The chart choice is presentation; the dataset is the real model artifact.
 
+## Generated Requirements
+
+`LeanFM/GeneratedArtifacts.lean` is the intended output shape for an LLM that is asked to sketch or revise requirements. It should construct typed Lean values, not JavaScript and not raw renderer JSON.
+
+The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`. It contains:
+
+- `actors`: visible participants in the world.
+- `messages`: protobuf-like schemas with `src`, `dst`, byte grammar, and visible fields.
+- `tasks`: per-task state machines with named states and message-labeled transitions.
+- `properties`: CTL-style declarations such as eventually, always, never, and prepared-for.
+- `charts`: named chart requests over message-derived datasets.
+- `markdown`: informal descriptions attached to generated requirement blocks.
+
+`validateGeneratedArtifacts` checks cross references: messages must name real actors, task transitions must name real states and messages, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
+
 ## Web Server
 
 `Server.lean` is a small Lean-native HTTP server using `Std.Internal.Async.TCP`.
