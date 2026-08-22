@@ -45,6 +45,8 @@ GET /renders/  built-in canvas diagram renders
 GET /metrics   Prometheus metrics
 GET /report    generated plain-text report
 GET /tools/conversations conversation-to-Lean-file catalog
+GET /tools/assets/validate generated asset contract validation
+GET /tools/aggregate-graph/validate typed aggregate graph data validation
 GET /lean/get_docs.lean generated Lean view for a conversation
 GET /graph.dot Graphviz DOT
 GET /auth.dot  auth group DOT
@@ -66,7 +68,7 @@ diagrams/worker.dot
 diagrams/assembled.dot
 ```
 
-The web UI renders diagrams with `<canvas>` from data built into the Lean binary. It does not serve SVG or PNG image files.
+The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
 
 The current example has three actors:
 

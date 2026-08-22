@@ -5,4 +5,5 @@ import LeanFM.Assets
 import LeanFM.CTL
 import LeanFM.MDP
 import LeanFM.Protocol
+import LeanFM.UiModel
 import LeanFM.Render

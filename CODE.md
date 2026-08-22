@@ -7,6 +7,7 @@ The repo has four main layers:
 - `LeanFM/MDP.lean`: generic nondeterministic/probabilistic transition machinery.
 - `LeanFM/CTL.lean`: generic CTL formulas and finite graph evaluation.
 - `LeanFM/Protocol.lean`: the actual actor/message/task model.
+- `LeanFM/UiModel.lean`: explicit, checkable UI data structures for renderer inputs.
 - `LeanFM/Render.lean`, `Server.lean`, and `Main.lean`: reports, Graphviz, canvas visualizations, and the local web server.
 
 ## The Generic State Model
@@ -528,11 +529,13 @@ Routes include:
 - `/metrics`: Prometheus metrics.
 - `/report`: plain text report.
 - `/tools/conversations`: conversation catalog mapping each conversation to a unique generated Lean file.
+- `/tools/assets/validate`: generated asset contract validation.
+- `/tools/aggregate-graph/validate`: typed aggregate graph data validation.
 - `/lean/*.lean`: generated Lean source views for conversations.
 - `/*.dot`: DOT sources.
 - `/health`: health check.
 
-The server does not serve SVG or PNG assets. The UI renders diagrams with canvas from data built into the binary. Tool catalogs, Markdown docs, DOT sources, generated Lean source views, and metrics are served directly from Lean constants.
+The server does not serve SVG or PNG assets. The UI renders diagrams with canvas from explicit Lean data structures built into the binary. Constant JavaScript renderers consume JSON serialized from those Lean values. Tool catalogs, Markdown docs, DOT sources, generated Lean source views, and metrics are served directly from Lean constants.
 
 Browser behavior is authored in readable JavaScript under `assets/`. To keep the single-binary property, run:
 

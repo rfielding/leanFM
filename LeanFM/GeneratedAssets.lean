@@ -3,10 +3,13 @@ import LeanFM.Assets
 
 namespace LeanFM.GeneratedAssets
 
+-- subjectGraph.js sha256:2c976dc8d86f9027
 def subjectGraphJs : String := include_str "../assets/subjectGraph.js"
 
+-- assistant.js sha256:6fd60b0a8aa22ebf
 def assistantJs : String := include_str "../assets/assistant.js"
 
+-- aggregateGraph.js sha256:17b0ad6737e458a7
 def aggregateGraphJs : String := include_str "../assets/aggregateGraph.js"
 
 def subjectGraphJsAsset : LeanFM.GeneratedAsset :=

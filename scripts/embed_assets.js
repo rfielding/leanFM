@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const root = path.resolve(__dirname, "..");
 const assets = [
@@ -33,6 +34,9 @@ const lines = [
 
 for (const asset of assets) {
   const relFromLean = path.relative(path.join(root, "LeanFM"), path.join(root, asset.rel));
+  const text = fs.readFileSync(path.join(root, asset.rel), "utf8");
+  const hash = crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);
+  lines.push(`-- ${asset.assetName} sha256:${hash}`);
   lines.push(`def ${asset.defName} : String := include_str ${JSON.stringify(relFromLean)}`);
   lines.push("");
 }

@@ -5,45 +5,30 @@ const aggCutBox=document.getElementById('aggCutEdges');
 const aggZoomIn=document.getElementById('aggZoomIn'), aggZoomOut=document.getElementById('aggZoomOut'), aggZoomReset=document.getElementById('aggZoomReset'), aggZoomLabel=document.getElementById('aggZoomLabel');
 aggCutBox.checked=localStorage.getItem('leanfm.agg.cutEdges')!=='false';
 aggCutBox.addEventListener('change', ()=>localStorage.setItem('leanfm.agg.cutEdges', aggCutBox.checked?'true':'false'));
-const gNodes=[{
-  id:'unauthorized', group:'unauthenticated', sub:'entry', task:'none', auth:'no auth', terminal:false, q:0, label:'unauthorized'
-}, {
-  id:'idle', group:'authenticated session', sub:'ready', task:'none', auth:'auth ok', terminal:false, q:0, label:'ready for task'
-}, {
-  id:'gd_submit', group:'get_docs task', sub:'request accepted', task:'get_docs', auth:'auth ok', terminal:false, q:1, label:'GET queued at Gateway'
-}, {
-  id:'gd_worker', group:'get_docs task', sub:'worker running', task:'get_docs', auth:'auth ok', terminal:false, q:1, label:'fetch queued at Worker'
-}, {
-  id:'gd_ok', group:'get_docs task', sub:'gateway decides', task:'get_docs', auth:'auth ok', terminal:false, q:1, label:'200 queued at Gateway'
-}, {
-  id:'gd_fail', group:'get_docs task', sub:'gateway decides', task:'get_docs', auth:'auth ok', terminal:false, q:1, label:'404 queued at Gateway'
-}, {
-  id:'gd_reply', group:'get_docs task', sub:'client response', task:'get_docs', auth:'auth ok', terminal:false, q:1, label:'200 queued at Client'
-}, {
-  id:'gd_reject', group:'get_docs task', sub:'client response', task:'get_docs', auth:'auth ok', terminal:false, q:1, label:'401 queued at Client'
-}, {
-  id:'gd_done', group:'get_docs task', sub:'terminal', task:'get_docs', auth:'auth ok', terminal:true, q:0, label:'get_docs done'
-}, {
-  id:'gd_failed', group:'get_docs task', sub:'terminal', task:'get_docs', auth:'auth ok', terminal:true, q:0, label:'get_docs failed'
-}, {
-  id:'rv_submit', group:'post_review task', sub:'request accepted', task:'post_review', auth:'auth ok', terminal:false, q:1, label:'review queued at Gateway'
-}, {
-  id:'rv_worker', group:'post_review task', sub:'worker running', task:'post_review', auth:'auth ok', terminal:false, q:1, label:'moderate queued at Worker'
-}, {
-  id:'rv_ok', group:'post_review task', sub:'gateway decides', task:'post_review', auth:'auth ok', terminal:false, q:1, label:'201 queued at Gateway'
-}, {
-  id:'rv_fail', group:'post_review task', sub:'gateway decides', task:'post_review', auth:'auth ok', terminal:false, q:1, label:'reject queued at Gateway'
-}, {
-  id:'rv_reply', group:'post_review task', sub:'client response', task:'post_review', auth:'auth ok', terminal:false, q:1, label:'201 queued at Client'
-}, {
-  id:'rv_reject', group:'post_review task', sub:'client response', task:'post_review', auth:'auth ok', terminal:false, q:1, label:'400 queued at Client'
-}, {
-  id:'rv_done', group:'post_review task', sub:'terminal', task:'post_review', auth:'auth ok', terminal:true, q:0, label:'post_review done'
-}, {
-  id:'rv_failed', group:'post_review task', sub:'terminal', task:'post_review', auth:'auth ok', terminal:true, q:0, label:'post_review failed'
+function readAggregateModel(){
+  const el=document.getElementById('aggGraphModel');
+  if(!el)return{
+    nodes:[], edges:[]
+  };
+  try{
+    const model=JSON.parse(el.textContent||'{}');
+    return{
+      nodes:Array.isArray(model.nodes)?model.nodes:[],
+      edges:Array.isArray(model.edges)?model.edges:[]
+    };
+
+  }
+  catch(e){
+    return{
+      nodes:[], edges:[]
+    };
+
+  }
+
 }
-];
-const gEdges=[['unauthorized', 'idle', 'Auth.LookupResponse ok'], ['idle', 'gd_submit', 'Docs.GetRequest'], ['idle', 'rv_submit', 'Reviews.PostRequest'], ['gd_submit', 'gd_worker', 'Docs.FetchCommand'], ['gd_submit', 'gd_reject', 'Error.Response'], ['gd_worker', 'gd_ok', 'Docs.FetchResult 200'], ['gd_worker', 'gd_fail', 'Docs.FetchResult 404'], ['gd_ok', 'gd_reply', 'Docs.GetResponse'], ['gd_fail', 'gd_reject', 'Error.Response'], ['gd_reply', 'gd_done', 'Docs.GetResponse'], ['gd_reject', 'gd_failed', 'Error.Response'], ['rv_submit', 'rv_worker', 'Reviews.ModerateCommand'], ['rv_submit', 'rv_reject', 'Reviews.PostResponse 400'], ['rv_worker', 'rv_ok', 'Reviews.ModerationResult accepted'], ['rv_worker', 'rv_fail', 'Reviews.ModerationResult rejected'], ['rv_ok', 'rv_reply', 'Reviews.PostResponse 201'], ['rv_fail', 'rv_reject', 'Reviews.PostResponse 400'], ['rv_reply', 'rv_done', 'Reviews.PostResponse 201'], ['rv_reject', 'rv_failed', 'Reviews.PostResponse 400']];
+const aggregateModel=readAggregateModel();
+const gNodes=aggregateModel.nodes;
+const gEdges=aggregateModel.edges.map(e=>Array.isArray(e)?e:[e.src, e.dst, e.label]);
 let openGroups=new Set();
 let simGroups=[];
 let simById=new Map();
