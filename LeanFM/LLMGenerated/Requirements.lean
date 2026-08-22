@@ -60,15 +60,17 @@ deriving DecidableEq, Repr
 instance : LeanFM.RequirementName PostReviewState where
   style := LeanFM.NameStyle.raw
 
+def protobufAtomFraming : LeanFM.MessageFraming :=
+  { kind := LeanFM.FramingKind.protobufMessage
+  , dispatchField := none
+  , note := "The wire bytes are exactly the protobuf encoding of this atom as defined in Requirements.proto; the typed message constructor selects the concrete atom after decode."
+  }
+
 def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) :=
   [ { name := WorkerMessage.Docs_GetRequest
     , src := WorkerActor.Client
     , dst := WorkerActor.Gateway
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x01, 0x10]
-        , note := "LeanFM traffic discriminator for Docs.GetRequest; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "method", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -79,11 +81,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Docs_FetchCommand
     , src := WorkerActor.Gateway
     , dst := WorkerActor.Worker
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x02, 0x20]
-        , note := "LeanFM traffic discriminator for Docs.FetchCommand; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "path", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "cache_mode", scalar := LeanFM.ProtoScalar.string }
@@ -93,11 +91,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Docs_FetchResult200
     , src := WorkerActor.Worker
     , dst := WorkerActor.Gateway
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x03, 0x30]
-        , note := "LeanFM traffic discriminator for successful Docs.FetchResult; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -108,11 +102,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Docs_FetchResult404
     , src := WorkerActor.Worker
     , dst := WorkerActor.Gateway
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x03, 0xff]
-        , note := "LeanFM traffic discriminator for failed Docs.FetchResult; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -122,11 +112,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Docs_GetResponse
     , src := WorkerActor.Gateway
     , dst := WorkerActor.Client
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x04, 0x40]
-        , note := "LeanFM traffic discriminator for Docs.GetResponse; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -136,11 +122,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Error_Response
     , src := WorkerActor.Gateway
     , dst := WorkerActor.Client
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0xff]
-        , note := "LeanFM traffic discriminator for generic observable error response; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "reason", scalar := LeanFM.ProtoScalar.string }
@@ -149,11 +131,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Reviews_PostRequest
     , src := WorkerActor.Client
     , dst := WorkerActor.Gateway
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x11, 0x10]
-        , note := "LeanFM traffic discriminator for Reviews.PostRequest; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "method", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -165,11 +143,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Reviews_ModerateCommand
     , src := WorkerActor.Gateway
     , dst := WorkerActor.Worker
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x12, 0x20]
-        , note := "LeanFM traffic discriminator for Reviews.ModerateCommand; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "policy", scalar := LeanFM.ProtoScalar.string }
@@ -179,11 +153,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Reviews_ModerationAccepted
     , src := WorkerActor.Worker
     , dst := WorkerActor.Gateway
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x13, 0x30]
-        , note := "LeanFM traffic discriminator for accepted Reviews.ModerationResult; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "decision", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
@@ -193,11 +163,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Reviews_ModerationRejected
     , src := WorkerActor.Worker
     , dst := WorkerActor.Gateway
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x13, 0xff]
-        , note := "LeanFM traffic discriminator for rejected Reviews.ModerationResult; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "decision", scalar := LeanFM.ProtoScalar.string }
         , { number := 2, name := "body_hash", scalar := LeanFM.ProtoScalar.string }
@@ -207,11 +173,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Reviews_PostResponse201
     , src := WorkerActor.Gateway
     , dst := WorkerActor.Client
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x14, 0x40]
-        , note := "LeanFM traffic discriminator for successful Reviews.PostResponse; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }
@@ -221,11 +183,7 @@ def workerMessages : List (LeanFM.TypedMessageSchema WorkerActor WorkerMessage) 
   , { name := WorkerMessage.Reviews_PostResponse400
     , src := WorkerActor.Gateway
     , dst := WorkerActor.Client
-    , bytePattern :=
-        { origin := LeanFM.ByteOrigin.literalPrefix
-        , bytes := [0x14, 0xff]
-        , note := "LeanFM traffic discriminator for failed Reviews.PostResponse; protobuf fields below define the payload body."
-        }
+    , framing := protobufAtomFraming
     , fields :=
         [ { number := 1, name := "status", scalar := LeanFM.ProtoScalar.uint32 }
         , { number := 2, name := "path", scalar := LeanFM.ProtoScalar.string }

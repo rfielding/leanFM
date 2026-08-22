@@ -58,20 +58,20 @@ def ProtoScalar.protoName : ProtoScalar -> String
   | .uint64 => "uint64"
   | .bytes => "bytes"
 
-inductive ByteOrigin where
-  | literalPrefix
-  | protobufEncoding
-  | transportWrapper
+inductive FramingKind where
+  | protobufMessage
+  | protobufOneof
+  | transportEnvelope
 deriving DecidableEq, Repr
 
-def ByteOrigin.describe : ByteOrigin -> String
-  | .literalPrefix => "literal traffic discriminator"
-  | .protobufEncoding => "protobuf field encoding"
-  | .transportWrapper => "transport wrapper bytes"
+def FramingKind.describe : FramingKind -> String
+  | .protobufMessage => "protobuf message bytes"
+  | .protobufOneof => "protobuf oneof dispatch"
+  | .transportEnvelope => "transport envelope dispatch"
 
-structure BytePattern where
-  origin : ByteOrigin
-  bytes : List Nat
+structure MessageFraming where
+  kind : FramingKind
+  dispatchField : Option String
   note : String
 deriving Repr
 
@@ -85,7 +85,7 @@ structure MessageSchema where
   name : String
   src : String
   dst : String
-  bytePattern : BytePattern
+  framing : MessageFraming
   fields : List ProtoFieldSchema
 deriving Repr
 
@@ -151,7 +151,7 @@ structure TypedMessageSchema (Actor Message : Type) where
   name : Message
   src : Actor
   dst : Actor
-  bytePattern : BytePattern
+  framing : MessageFraming
   fields : List ProtoFieldSchema
 deriving Repr
 
@@ -186,7 +186,7 @@ def typedMessageSchemaToSchema [Repr Actor] [RequirementName Actor] [Repr Messag
   { name := requirementName msg.name
   , src := requirementName msg.src
   , dst := requirementName msg.dst
-  , bytePattern := msg.bytePattern
+  , framing := msg.framing
   , fields := msg.fields
   }
 
@@ -245,9 +245,14 @@ def validateProtoFieldSchema (messageName : String) (field : ProtoFieldSchema) :
   (if field.number == 0 then ["message " ++ messageName ++ " has protobuf field " ++ field.name ++ " with tag 0"] else []) ++
   (if field.name == "" then ["message " ++ messageName ++ " has protobuf field with empty name"] else [])
 
-def validateBytePattern (messageName : String) (pattern : BytePattern) : List String :=
-  (if pattern.bytes.isEmpty then ["message " ++ messageName ++ " has no byte grammar"] else []) ++
-  (if pattern.note == "" then ["message " ++ messageName ++ " byte grammar does not explain where bytes come from"] else [])
+def validateMessageFraming (messageName : String) (framing : MessageFraming) : List String :=
+  let dispatchErrors :=
+    match framing.kind, framing.dispatchField with
+    | FramingKind.protobufMessage, _ => []
+    | _, some _ => []
+    | _, none => ["message " ++ messageName ++ " framing requires a dispatchField"]
+  dispatchErrors ++
+  (if framing.note == "" then ["message " ++ messageName ++ " framing has empty note"] else [])
 
 def validateMessageSchema (actors : List String) (msg : MessageSchema) : List String :=
   let duplicateFieldNumbers := (duplicateStrings (natStrings (msg.fields.map (fun f => f.number)))).map fun tag =>
@@ -258,7 +263,7 @@ def validateMessageSchema (actors : List String) (msg : MessageSchema) : List St
   (if msg.name == "" then ["message has empty name"] else []) ++
   (if actors.contains msg.src then [] else ["message " ++ msg.name ++ " has unknown src actor: " ++ msg.src]) ++
   (if actors.contains msg.dst then [] else ["message " ++ msg.name ++ " has unknown dst actor: " ++ msg.dst]) ++
-  validateBytePattern msg.name msg.bytePattern ++
+  validateMessageFraming msg.name msg.framing ++
   (if msg.fields.isEmpty then ["message " ++ msg.name ++ " has no visible fields"] else []) ++
   duplicateFieldNumbers ++ duplicateFieldNames ++ fieldErrors
 
@@ -379,9 +384,9 @@ def protoFieldLine (field : ProtoFieldSchema) : String :=
 def protoMessageBlock (msg : MessageSchema) : String :=
   joinWithNewline
     ( [ "// traffic: " ++ msg.src ++ " -> " ++ msg.dst
-      , "// byte origin: " ++ msg.bytePattern.origin.describe
-      , "// bytes: [" ++ byteListComment msg.bytePattern.bytes ++ "]"
-      , "// byte note: " ++ msg.bytePattern.note
+      , "// framing: " ++ msg.framing.kind.describe
+      , "// dispatch field: " ++ match msg.framing.dispatchField with | some field => field | none => "none"
+      , "// framing note: " ++ msg.framing.note
       , "message " ++ protoMessageName msg.name ++ " {"
       ] ++
       msg.fields.map protoFieldLine ++
@@ -394,7 +399,7 @@ def requirementProtoFile (spec : RequirementSpec) : String :=
       , "package leanfm.generated;"
       , ""
       , "// Generated from LeanFM requirement: " ++ spec.id
-      , "// The comments preserve the src/dst wrapper and byte grammar for each message atom."
+      , "// The comments preserve the src/dst wrapper and framing for each message atom."
       , ""
       ] ++
       spec.messages.map protoMessageBlock) ++ "\n"
@@ -452,8 +457,9 @@ def generatedRequirementSystemPrompt : String :=
     , "Use NameStyle.raw for actor and state constructors whose spellings are already the rendered names."
     , "Use NameStyle.dot for message constructors like Docs_GetRequest, which render as Docs.GetRequest."
     , "Define message atoms as List (TypedMessageSchema Actor Message)."
-    , "Every message atom must have src, dst, BytePattern, and numbered protobuf fields that correspond to a message in LLMGenerated/Requirements.proto."
-    , "BytePattern must explain where bytes come from: literalPrefix, protobufEncoding, or transportWrapper."
+    , "Every message atom must have src, dst, MessageFraming, and numbered protobuf fields that correspond to a message in LLMGenerated/Requirements.proto."
+    , "MessageFraming must say how bytes are emitted and consumed: protobufMessage, protobufOneof, or transportEnvelope."
+    , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."

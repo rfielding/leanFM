@@ -526,29 +526,30 @@ Generated enums should follow naming conventions instead of writing per-construc
 - task states use `NameStyle.raw`, with constructors such as `GetDocsState.worker_fetching`;
 - message atoms use `NameStyle.dot`, with constructors such as `WorkerMessage.Docs_GetRequest`, which renders as `Docs.GetRequest`.
 
-Network bytes are not bare lists. Each message has a `BytePattern`:
+Network bytes are not duplicated as manual byte lists in Lean. Atomic payload bytes are defined by `LeanFM/LLMGenerated/Requirements.proto`; polymorphic dispatch is handled by its `RequirementEnvelope.oneof atom`.
 
 ```lean
-{ origin := LeanFM.ByteOrigin.literalPrefix
-, bytes := [0x01, 0x10]
-, note := "LeanFM traffic discriminator for Docs.GetRequest; protobuf fields below define the payload body."
-}
+def protobufAtomFraming : LeanFM.MessageFraming :=
+  { kind := LeanFM.FramingKind.protobufMessage
+  , dispatchField := none
+  , note := "The wire bytes are exactly the protobuf encoding of this atom as defined in Requirements.proto; the typed message constructor selects the concrete atom after decode."
+  }
 ```
 
-That means the requirement can distinguish bytes that come from a literal traffic discriminator, protobuf field encoding, or a transport wrapper. The current worker example uses literal traffic discriminators for message atoms and uses protobuf field schemas for the payload body.
+That means the generated Lean states how emitted and consumed bytes are framed without restating byte arrays. If a protocol uses an outer transport envelope or a custom discriminator, `MessageFraming` can name that dispatch field explicitly.
 
 The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`. It contains:
 
 - `actors`: visible participants in the world.
-- `messages`: protobuf-like schemas with `src`, `dst`, byte grammar, and numbered visible fields.
+- `messages`: protobuf-backed schemas with `src`, `dst`, framing, and numbered visible fields.
 - `tasks`: per-task state machines with named states and message-labeled transitions.
 - `properties`: CTL-style declarations such as eventually, always, never, and prepared-for.
 - `charts`: named chart requests over message-derived datasets.
 - `markdown`: informal descriptions attached to generated requirement blocks.
 
-Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedRequirements` then checks semantic constraints that are still data-dependent: messages must have byte grammars, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
+Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedRequirements` then checks semantic constraints that are still data-dependent: message framing must be explicit, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
 
-`LeanFM/LLMGenerated/Requirements.proto` defines the proto3 payload structs for atomic messages. `LeanFM/LLMGenerated/Requirements.lean` includes that sibling proto file, references those message atoms from typed Lean FSMs, and validates that each Lean message atom has a corresponding `message ... {` declaration. The `.proto` file is not the protocol by itself; it defines the structs that can read and write the payload body. The `BytePattern` defines the traffic atom bytes, and the task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
+`LeanFM/LLMGenerated/Requirements.proto` defines the proto3 payload structs for atomic messages and a `RequirementEnvelope.oneof atom` sum-type discriminator for consuming bytes as one of those atoms. `LeanFM/LLMGenerated/Requirements.lean` includes that sibling proto file, references those message atoms from typed Lean FSMs, and validates that each Lean message atom has a corresponding `message ... {` declaration. The `.proto` file defines the structs that read and write payload bytes; the task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
 
 ## Web Server
 

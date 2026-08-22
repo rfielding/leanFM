@@ -3,8 +3,26 @@ syntax = "proto3";
 package leanfm.generated;
 
 // LLM-generated atomic message payloads for LeanFM.LLMGenerated.Requirements.
-// The Lean requirement file defines src/dst traffic, byte patterns, valid ordering,
+// RequirementEnvelope.oneof atom is the byte-level sum-type discriminator.
+// The Lean requirement file defines src/dst traffic, framing, valid ordering,
 // probabilities, dwell time, CTL-style properties, charts, and markdown.
+
+message RequirementEnvelope {
+  oneof atom {
+    Docs_GetRequest docs_get_request = 1;
+    Docs_FetchCommand docs_fetch_command = 2;
+    Docs_FetchResult200 docs_fetch_result200 = 3;
+    Docs_FetchResult404 docs_fetch_result404 = 4;
+    Docs_GetResponse docs_get_response = 5;
+    Error_Response error_response = 6;
+    Reviews_PostRequest reviews_post_request = 7;
+    Reviews_ModerateCommand reviews_moderate_command = 8;
+    Reviews_ModerationAccepted reviews_moderation_accepted = 9;
+    Reviews_ModerationRejected reviews_moderation_rejected = 10;
+    Reviews_PostResponse201 reviews_post_response201 = 11;
+    Reviews_PostResponse400 reviews_post_response400 = 12;
+  }
+}
 
 message Docs_GetRequest {
   string method = 1;
