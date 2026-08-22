@@ -47,10 +47,13 @@ GET /report    generated plain-text report
 GET /tools/conversations conversation-to-Lean-file catalog
 GET /tools/static-assets/validate static JavaScript renderer validation
 GET /tools/generated-requirements/prompt LLM system prompt for generated requirements
+GET /tools/llm-generated/requirements/prompt canonical LLM system prompt route
 GET /tools/generated-requirements/validate generated typed Lean requirement validation
+GET /tools/llm-generated/requirements/validate canonical LLM-generated requirement validation route
 GET /tools/generated-artifacts/validate compatibility alias for generated requirement validation
 GET /tools/aggregate-graph/validate typed aggregate graph data validation
 GET /generated/worker.proto protobuf schema generated from requirement messages
+GET /llm-generated/requirements.proto canonical LLM-generated protobuf schema
 GET /lean/get_docs.lean generated Lean view for a conversation
 GET /graph.dot Graphviz DOT
 GET /auth.dot  auth group DOT
@@ -74,7 +77,7 @@ diagrams/assembled.dot
 
 The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
 
-`LeanFM/GeneratedRequirements.lean` is the file an LLM should produce for a generated requirement, paired with `LeanFM/GeneratedRequirements.proto` for atomic protobuf message payloads. The Lean file defines typed values: requirement-local actor/message/state enums, message references, per-task state machines, CTL-style property declarations, chart specs, and Markdown blocks. Message byte prefixes are explicit `BytePattern` values with an origin and explanation, so the generated file says where the traffic bytes come from. Renderer inputs such as the aggregate graph are deterministic projections from that typed requirement, not generated JavaScript.
+`LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto` are the files an LLM should produce for generated requirements. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code. The Lean file defines typed values: requirement-local actor/message/state enums, message references, per-task state machines, CTL-style property declarations, chart specs, and Markdown blocks. Message byte prefixes are explicit `BytePattern` values with an origin and explanation, so the generated file says where the traffic bytes come from. Renderer inputs such as the aggregate graph are deterministic projections from that typed requirement, not generated JavaScript.
 
 The current example has three actors:
 

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package leanfm.generated;
 
-// Atomic message payloads for LeanFM.GeneratedRequirements.
+// LLM-generated atomic message payloads for LeanFM.LLMGenerated.Requirements.
 // The Lean requirement file defines src/dst traffic, byte patterns, valid ordering,
 // probabilities, dwell time, CTL-style properties, charts, and markdown.
 

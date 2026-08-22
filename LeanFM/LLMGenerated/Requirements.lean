@@ -1,9 +1,9 @@
 import LeanFM.Artifacts
 
-namespace LeanFM.GeneratedRequirements
+namespace LeanFM.LLMGenerated.Requirements
 
 def generatedRequirementsProto : String :=
-  include_str "GeneratedRequirements.proto"
+  include_str "Requirements.proto"
 
 inductive WorkerActor where
   | Client
@@ -515,4 +515,4 @@ def validationReport : String :=
   | [] => "ok: all generated requirements are well-formed typed Lean values\n"
   | errors => "invalid generated requirements\n" ++ LeanFM.joinWithNewline errors ++ "\n"
 
-end LeanFM.GeneratedRequirements
+end LeanFM.LLMGenerated.Requirements

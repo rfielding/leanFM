@@ -8,7 +8,8 @@ The repo has four main layers:
 - `LeanFM/CTL.lean`: generic CTL formulas and finite graph evaluation.
 - `LeanFM/Protocol.lean`: the actual actor/message/task model.
 - `LeanFM/UiModel.lean`: explicit, checkable UI data structures for renderer inputs.
-- `LeanFM/Artifacts.lean` and `LeanFM/GeneratedRequirements.lean`: type-checkable requirement constructors and generated requirement instances.
+- `LeanFM/Artifacts.lean`: static, committed requirement DSL.
+- `LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto`: LLM-generated requirement instances and protobuf atoms.
 - `LeanFM/Render.lean`, `Server.lean`, and `Main.lean`: reports, Graphviz, canvas visualizations, and the local web server.
 
 ## The Generic State Model
@@ -515,7 +516,9 @@ Each chart slot can be rendered as either a line chart or a pie chart. The chart
 
 ## Generated Requirements
 
-`LeanFM/GeneratedRequirements.lean` is the intended output shape for an LLM that is asked to sketch or revise requirements. It should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced through the common `RequirementName` typeclass at the renderer/persistence boundary.
+`LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto` are the intended output files for an LLM that is asked to sketch or revise requirements. The `LLMGenerated` directory marks the ownership boundary: these files are produced by the LLM and committed into the repo; the DSL/runtime modules outside that directory are static committed code.
+
+The generated Lean should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced through the common `RequirementName` typeclass at the renderer/persistence boundary.
 
 Generated enums should follow naming conventions instead of writing per-constructor string functions:
 
@@ -545,7 +548,7 @@ The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`.
 
 Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedRequirements` then checks semantic constraints that are still data-dependent: messages must have byte grammars, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
 
-`LeanFM/GeneratedRequirements.proto` defines the proto3 payload structs for atomic messages. `LeanFM/GeneratedRequirements.lean` includes that sibling proto file, references those message atoms from typed Lean FSMs, and validates that each Lean message atom has a corresponding `message ... {` declaration. The `.proto` file is not the protocol by itself; it defines the structs that can read and write the payload body. The `BytePattern` defines the traffic atom bytes, and the task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
+`LeanFM/LLMGenerated/Requirements.proto` defines the proto3 payload structs for atomic messages. `LeanFM/LLMGenerated/Requirements.lean` includes that sibling proto file, references those message atoms from typed Lean FSMs, and validates that each Lean message atom has a corresponding `message ... {` declaration. The `.proto` file is not the protocol by itself; it defines the structs that can read and write the payload body. The `BytePattern` defines the traffic atom bytes, and the task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
 
 ## Web Server
 
@@ -566,10 +569,13 @@ Routes include:
 - `/tools/conversations`: conversation catalog mapping each conversation to a unique generated Lean file.
 - `/tools/static-assets/validate`: static JavaScript renderer asset validation.
 - `/tools/generated-requirements/prompt`: system prompt for LLM-generated requirement modules.
+- `/tools/llm-generated/requirements/prompt`: canonical system prompt route for LLM-generated requirement modules.
 - `/tools/generated-requirements/validate`: generated typed Lean requirement validation.
+- `/tools/llm-generated/requirements/validate`: canonical LLM-generated requirement validation route.
 - `/tools/generated-artifacts/validate`: compatibility alias for generated requirement validation.
 - `/tools/aggregate-graph/validate`: typed aggregate graph data validation.
 - `/generated/worker.proto`: protobuf schema generated from requirement message atoms.
+- `/llm-generated/requirements.proto`: canonical LLM-generated protobuf schema route.
 - `/lean/*.lean`: generated Lean source views for conversations.
 - `/*.dot`: DOT sources.
 - `/health`: health check.
@@ -584,7 +590,7 @@ node scripts/embed_static_assets.js
 lake build leanfm-server
 ```
 
-`scripts/embed_static_assets.js` writes `LeanFM/StaticAssets.lean`, a small manifest that uses `include_str` to include readable JavaScript renderers from `assets/*.js` at compile time. Generated requirements live in typed Lean values such as `LeanFM/GeneratedRequirements.lean`; static JavaScript is not treated as a generated requirement.
+`scripts/embed_static_assets.js` writes `LeanFM/StaticAssets.lean`, a small manifest that uses `include_str` to include readable JavaScript renderers from `assets/*.js` at compile time. LLM-generated requirements live under `LeanFM/LLMGenerated/`; static JavaScript is not treated as a generated requirement.
 
 All routes except `/login` and `/health` require the local session cookie set by the login form. The default password is `leanfm`; set `LEANFM_PASSWORD` before launch to override it.
 

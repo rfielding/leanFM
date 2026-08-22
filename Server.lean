@@ -154,10 +154,13 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/conversations" => pure <| response 200 "application/json; charset=utf-8" LeanFM.conversationCatalogJson
   | "/tools/static-assets/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.StaticAssets.validationReport
   | "/tools/generated-requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
-  | "/tools/generated-requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.GeneratedRequirements.validationReport
-  | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.GeneratedRequirements.validationReport
+  | "/tools/llm-generated/requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
+  | "/tools/generated-requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
+  | "/tools/llm-generated/requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
+  | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/aggregate-graph/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.aggregateGraphDataValidationReport
-  | "/generated/worker.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.GeneratedRequirements.workerProtoFile
+  | "/generated/worker.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.LLMGenerated.Requirements.workerProtoFile
+  | "/llm-generated/requirements.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.LLMGenerated.Requirements.workerProtoFile
   | "/api/llm" => callLLM (requestBody request)
   | "/lean/auth.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.authLeanFile
   | "/lean/get_docs.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.getDocsLeanFile

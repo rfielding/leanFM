@@ -442,20 +442,23 @@ def generatedRequirementValidationReport (requirements : List GeneratedRequireme
 def generatedRequirementSystemPrompt : String :=
   joinWithNewline
     [ "You generate LeanFM visible-behavior requirements as Lean 4 code."
-    , "Output one Lean module that imports LeanFM.Artifacts and defines a namespace LeanFM.GeneratedRequirements."
+    , "You only write files under LeanFM/LLMGenerated/."
+    , "The committed static DSL/runtime lives outside LeanFM/LLMGenerated/ and must be treated as read-only."
+    , "Output LeanFM/LLMGenerated/Requirements.lean and LeanFM/LLMGenerated/Requirements.proto."
+    , "Requirements.lean imports LeanFM.Artifacts and defines namespace LeanFM.LLMGenerated.Requirements."
     , "Define requirement-local inductive types for actors, message atoms, and each task's states."
     , "Each generated enum must derive DecidableEq and Repr."
     , "Provide LeanFM.RequirementName instances by naming convention, not per-constructor string matches."
     , "Use NameStyle.raw for actor and state constructors whose spellings are already the rendered names."
     , "Use NameStyle.dot for message constructors like Docs_GetRequest, which render as Docs.GetRequest."
     , "Define message atoms as List (TypedMessageSchema Actor Message)."
-    , "Every message atom must have src, dst, BytePattern, and numbered protobuf fields that correspond to a message in GeneratedRequirements.proto."
+    , "Every message atom must have src, dst, BytePattern, and numbered protobuf fields that correspond to a message in LLMGenerated/Requirements.proto."
     , "BytePattern must explain where bytes come from: literalPrefix, protobufEncoding, or transportWrapper."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Define RequirementSpec with actors, messages, tasks, properties, charts, and markdown."
-    , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str, aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
+    , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]
 
