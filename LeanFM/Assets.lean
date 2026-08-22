@@ -24,7 +24,7 @@ def AssetKind.label : AssetKind -> String
   | .json => "json"
   | .text => "text"
 
-structure GeneratedAsset where
+structure StaticAsset where
   name : String
   kind : AssetKind
   mediaType : String
@@ -43,13 +43,13 @@ structure AssetValidation where
   diagnostics : List AssetDiagnostic
 deriving Repr
 
-def validateAsset (asset : GeneratedAsset) : List AssetDiagnostic :=
+def validateStaticAsset (asset : StaticAsset) : List AssetDiagnostic :=
   let base :=
     (if asset.name == "" then
-      [{ asset := asset.name, message := "asset name is empty", fix := "provide a stable generated asset name" }]
+      [{ asset := asset.name, message := "static asset name is empty", fix := "provide a stable static asset name" }]
     else []) ++
     (if asset.body == "" then
-      [{ asset := asset.name, message := "asset body is empty", fix := "generate non-empty asset content" }]
+      [{ asset := asset.name, message := "static asset body is empty", fix := "include non-empty asset content" }]
     else []) ++
     (if asset.mediaType != asset.kind.mediaType then
       [{ asset := asset.name
@@ -63,7 +63,7 @@ def validateAsset (asset : GeneratedAsset) : List AssetDiagnostic :=
       else
         some { asset := asset.name
              , message := "missing required marker: " ++ marker
-             , fix := "include the required DOM hook, export, or model marker in the generated asset" }
+             , fix := "include the required DOM hook or renderer marker in the static asset" }
   let scriptDiagnostics :=
     if asset.kind == .javascript && asset.body.contains "</script>" then
       [{ asset := asset.name
@@ -72,17 +72,17 @@ def validateAsset (asset : GeneratedAsset) : List AssetDiagnostic :=
     else []
   base ++ requiredDiagnostics ++ scriptDiagnostics
 
-def validateAssets (assets : List GeneratedAsset) : AssetValidation :=
-  let diagnostics := assets.foldr (fun asset acc => validateAsset asset ++ acc) []
+def validateStaticAssets (assets : List StaticAsset) : AssetValidation :=
+  let diagnostics := assets.foldr (fun asset acc => validateStaticAsset asset ++ acc) []
   { ok := diagnostics.isEmpty, diagnostics }
 
 def diagnosticLine (d : AssetDiagnostic) : String :=
   "- " ++ d.asset ++ ": " ++ d.message ++ "\n  fix: " ++ d.fix
 
-def assetValidationReport (validation : AssetValidation) : String :=
+def staticAssetValidationReport (validation : AssetValidation) : String :=
   if validation.ok then
-    "ok: all generated assets fit their declared contracts\n"
+    "ok: all static assets fit their declared contracts\n"
   else
-    "invalid generated assets\n" ++ joinLines (validation.diagnostics.map diagnosticLine) ++ "\n"
+    "invalid static assets\n" ++ joinLines (validation.diagnostics.map diagnosticLine) ++ "\n"
 
 end LeanFM

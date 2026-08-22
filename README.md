@@ -45,7 +45,8 @@ GET /renders/  built-in canvas diagram renders
 GET /metrics   Prometheus metrics
 GET /report    generated plain-text report
 GET /tools/conversations conversation-to-Lean-file catalog
-GET /tools/assets/validate generated asset contract validation
+GET /tools/static-assets/validate static JavaScript renderer validation
+GET /tools/generated-artifacts/validate generated typed Lean artifact validation
 GET /tools/aggregate-graph/validate typed aggregate graph data validation
 GET /lean/get_docs.lean generated Lean view for a conversation
 GET /graph.dot Graphviz DOT

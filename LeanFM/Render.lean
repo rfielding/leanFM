@@ -1,6 +1,7 @@
 import LeanFM.Protocol
 import LeanFM.UiModel
-import LeanFM.GeneratedAssets
+import LeanFM.GeneratedArtifacts
+import LeanFM.StaticAssets
 
 namespace LeanFM
 
@@ -588,11 +589,11 @@ def conversationPicker : String :=
 
 def liveSubjectGraph : String :=
   "<section><h2>Current Requirement</h2><div class=\"controlPanel\"><label><input id=\"subjectCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"subjectZoomOut\" type=\"button\">-</button><span id=\"subjectZoomLabel\">100%</span><button id=\"subjectZoomIn\" type=\"button\">+</button><button id=\"subjectZoomReset\" type=\"button\">reset</button></span></div><div class=\"subjectPanel\"><canvas id=\"subjectGraph\" width=\"1180\" height=\"720\"></canvas><div><h3 id=\"subjectTitle\">No active draft</h3><p id=\"subjectSummary\">Ask the assistant to sketch a protocol or task.</p><div id=\"subjectArtifacts\" class=\"artifactPanel\"></div></div></div></section>" ++
-  "<script>" ++ LeanFM.GeneratedAssets.subjectGraphJs ++ "</script>"
+  "<script>" ++ LeanFM.StaticAssets.subjectGraphJs ++ "</script>"
 
 def chatWorkbench : String :=
   "<section><h2>LeanFM Assistant</h2><div class=\"chatShell\"><div id=\"chatLog\" class=\"chatLog\"></div><div class=\"chatInput\"><textarea id=\"chatPrompt\" rows=\"3\" placeholder=\"Ask for a protocol sketch, diagram render, generated text, metrics, charts, or validation\"></textarea><button id=\"chatSend\">Send</button></div><div id=\"toolLog\" class=\"toolLog\"></div></div></section><section><h2>LLM Chart Workbench</h2><div class=\"chartEditor\"><label>Name <input id=\"chartName\" value=\"messages by actor\"></label><label>Kind <select id=\"chartKind\"><option value=\"xy\">xy line</option><option value=\"pie\">pie</option></select></label><label>Dataset <select id=\"chartDataset\"></select></label><button id=\"chartSave\" type=\"button\">save</button><button id=\"chartDelete\" type=\"button\">delete</button></div><div id=\"namedCharts\" class=\"namedCharts\"></div></section>" ++
-  "<script>" ++ LeanFM.GeneratedAssets.assistantJs ++ "</script>"
+  "<script>" ++ LeanFM.StaticAssets.assistantJs ++ "</script>"
 
 def interactionDiagram : String :=
   "<section><h2>Interaction Diagrams By Task</h2><div class=\"canvasPanel\"><canvas id=\"interaction\" width=\"1000\" height=\"640\"></canvas><ol id=\"interactionTrace\"></ol></div></section>" ++
@@ -880,63 +881,13 @@ def docsIndex : String :=
     , "- [Assembled System](/docs/assembled.md)"
     ]
 
-def aggNode (id group sub task auth label : String) (terminal : Bool) (q : Nat) : AggregateNode :=
-  { id, group, sub, task, auth, terminal, q, label }
-
-def aggEdge (src dst label : String) : AggregateEdge :=
-  { src, dst, label }
-
-def aggregateGraphData : AggregateGraphData :=
-  { nodes :=
-    [ aggNode "unauthorized" "unauthenticated" "entry" "none" "no auth" "unauthorized" false 0
-    , aggNode "idle" "authenticated session" "ready" "none" "auth ok" "ready for task" false 0
-    , aggNode "gd_submit" "get_docs task" "request accepted" "get_docs" "auth ok" "GET queued at Gateway" false 1
-    , aggNode "gd_worker" "get_docs task" "worker running" "get_docs" "auth ok" "fetch queued at Worker" false 1
-    , aggNode "gd_ok" "get_docs task" "gateway decides" "get_docs" "auth ok" "200 queued at Gateway" false 1
-    , aggNode "gd_fail" "get_docs task" "gateway decides" "get_docs" "auth ok" "404 queued at Gateway" false 1
-    , aggNode "gd_reply" "get_docs task" "client response" "get_docs" "auth ok" "200 queued at Client" false 1
-    , aggNode "gd_reject" "get_docs task" "client response" "get_docs" "auth ok" "401 queued at Client" false 1
-    , aggNode "gd_done" "get_docs task" "terminal" "get_docs" "auth ok" "get_docs done" true 0
-    , aggNode "gd_failed" "get_docs task" "terminal" "get_docs" "auth ok" "get_docs failed" true 0
-    , aggNode "rv_submit" "post_review task" "request accepted" "post_review" "auth ok" "review queued at Gateway" false 1
-    , aggNode "rv_worker" "post_review task" "worker running" "post_review" "auth ok" "moderate queued at Worker" false 1
-    , aggNode "rv_ok" "post_review task" "gateway decides" "post_review" "auth ok" "201 queued at Gateway" false 1
-    , aggNode "rv_fail" "post_review task" "gateway decides" "post_review" "auth ok" "reject queued at Gateway" false 1
-    , aggNode "rv_reply" "post_review task" "client response" "post_review" "auth ok" "201 queued at Client" false 1
-    , aggNode "rv_reject" "post_review task" "client response" "post_review" "auth ok" "400 queued at Client" false 1
-    , aggNode "rv_done" "post_review task" "terminal" "post_review" "auth ok" "post_review done" true 0
-    , aggNode "rv_failed" "post_review task" "terminal" "post_review" "auth ok" "post_review failed" true 0
-    ]
-  , edges :=
-    [ aggEdge "unauthorized" "idle" "Auth.LookupResponse ok"
-    , aggEdge "idle" "gd_submit" "Docs.GetRequest"
-    , aggEdge "idle" "rv_submit" "Reviews.PostRequest"
-    , aggEdge "gd_submit" "gd_worker" "Docs.FetchCommand"
-    , aggEdge "gd_submit" "gd_reject" "Error.Response"
-    , aggEdge "gd_worker" "gd_ok" "Docs.FetchResult 200"
-    , aggEdge "gd_worker" "gd_fail" "Docs.FetchResult 404"
-    , aggEdge "gd_ok" "gd_reply" "Docs.GetResponse"
-    , aggEdge "gd_fail" "gd_reject" "Error.Response"
-    , aggEdge "gd_reply" "gd_done" "Docs.GetResponse"
-    , aggEdge "gd_reject" "gd_failed" "Error.Response"
-    , aggEdge "rv_submit" "rv_worker" "Reviews.ModerateCommand"
-    , aggEdge "rv_submit" "rv_reject" "Reviews.PostResponse 400"
-    , aggEdge "rv_worker" "rv_ok" "Reviews.ModerationResult accepted"
-    , aggEdge "rv_worker" "rv_fail" "Reviews.ModerationResult rejected"
-    , aggEdge "rv_ok" "rv_reply" "Reviews.PostResponse 201"
-    , aggEdge "rv_fail" "rv_reject" "Reviews.PostResponse 400"
-    , aggEdge "rv_reply" "rv_done" "Reviews.PostResponse 201"
-    , aggEdge "rv_reject" "rv_failed" "Reviews.PostResponse 400"
-    ]
-  }
-
 def aggregateGraphDataValidationReport : String :=
-  aggregateGraphValidationReport aggregateGraphData
+  LeanFM.GeneratedArtifacts.validationReport
 
 def aggregateGraphAnimation : String :=
   "<section><h2>Aggregate Graph</h2><div class=\"controlPanel\"><label><input id=\"aggCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"aggZoomOut\" type=\"button\">-</button><span id=\"aggZoomLabel\">100%</span><button id=\"aggZoomIn\" type=\"button\">+</button><button id=\"aggZoomReset\" type=\"button\">reset</button></span></div><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
-  "<script id=\"aggGraphModel\" type=\"application/json\">" ++ aggregateGraphJson aggregateGraphData ++ "</script>" ++
-  "<script>" ++ LeanFM.GeneratedAssets.aggregateGraphJs ++ "</script>"
+  "<script id=\"aggGraphModel\" type=\"application/json\">" ++ aggregateGraphJson LeanFM.GeneratedArtifacts.aggregateGraphData ++ "</script>" ++
+  "<script>" ++ LeanFM.StaticAssets.aggregateGraphJs ++ "</script>"
 
 def pageCss : String :=
   "<meta name=\"color-scheme\" content=\"dark only\">" ++

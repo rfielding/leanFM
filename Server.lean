@@ -152,7 +152,8 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/scenarios" => pure <| response 200 "application/json; charset=utf-8" LeanFM.scenarioCatalogJson
   | "/tools/protocol-sketches" => pure <| response 200 "application/json; charset=utf-8" LeanFM.protocolSketchCatalogJson
   | "/tools/conversations" => pure <| response 200 "application/json; charset=utf-8" LeanFM.conversationCatalogJson
-  | "/tools/assets/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.GeneratedAssets.validationReport
+  | "/tools/static-assets/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.StaticAssets.validationReport
+  | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.GeneratedArtifacts.validationReport
   | "/tools/aggregate-graph/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.aggregateGraphDataValidationReport
   | "/api/llm" => callLLM (requestBody request)
   | "/lean/auth.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.authLeanFile

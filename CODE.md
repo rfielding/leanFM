@@ -8,6 +8,7 @@ The repo has four main layers:
 - `LeanFM/CTL.lean`: generic CTL formulas and finite graph evaluation.
 - `LeanFM/Protocol.lean`: the actual actor/message/task model.
 - `LeanFM/UiModel.lean`: explicit, checkable UI data structures for renderer inputs.
+- `LeanFM/Artifacts.lean` and `LeanFM/GeneratedArtifacts.lean`: type-checkable generated artifact constructors and instances.
 - `LeanFM/Render.lean`, `Server.lean`, and `Main.lean`: reports, Graphviz, canvas visualizations, and the local web server.
 
 ## The Generic State Model
@@ -529,7 +530,8 @@ Routes include:
 - `/metrics`: Prometheus metrics.
 - `/report`: plain text report.
 - `/tools/conversations`: conversation catalog mapping each conversation to a unique generated Lean file.
-- `/tools/assets/validate`: generated asset contract validation.
+- `/tools/static-assets/validate`: static JavaScript renderer asset validation.
+- `/tools/generated-artifacts/validate`: generated typed Lean artifact validation.
 - `/tools/aggregate-graph/validate`: typed aggregate graph data validation.
 - `/lean/*.lean`: generated Lean source views for conversations.
 - `/*.dot`: DOT sources.
@@ -541,11 +543,11 @@ Browser behavior is authored in readable JavaScript under `assets/`. To keep the
 
 ```sh
 node scripts/format_assets.js
-node scripts/embed_assets.js
+node scripts/embed_static_assets.js
 lake build leanfm-server
 ```
 
-`scripts/embed_assets.js` writes `LeanFM/GeneratedAssets.lean`, a small typed manifest that uses `include_str` to include readable JavaScript from `assets/*.js` at compile time. Normal UI changes should edit `assets/*.js`, then regenerate the manifest and rebuild.
+`scripts/embed_static_assets.js` writes `LeanFM/StaticAssets.lean`, a small manifest that uses `include_str` to include readable JavaScript renderers from `assets/*.js` at compile time. Generated requirement artifacts live in typed Lean values such as `LeanFM/GeneratedArtifacts.lean`; static JavaScript is not treated as a generated artifact.
 
 All routes except `/login` and `/health` require the local session cookie set by the login form. The default password is `leanfm`; set `LEANFM_PASSWORD` before launch to override it.
 
