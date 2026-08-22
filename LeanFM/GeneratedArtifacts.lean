@@ -2,47 +2,118 @@ import LeanFM.Artifacts
 
 namespace LeanFM.GeneratedArtifacts
 
-def msg (name src dst : String) (bytes : List Nat) (fields : List String) : LeanFM.MessageSchema :=
-  { name, src, dst, bytes, fields }
-
-def state (id label group markdown : String) (terminal : Bool := false) : LeanFM.RequirementState :=
-  { id, label, group, markdown, terminal }
-
-def tr (src dst message : String) (probabilityNum probabilityDen dwellMs : Nat) : LeanFM.RequirementTransition :=
-  { src, dst, message, probabilityNum, probabilityDen, dwellMs }
-
 def getDocsTask : LeanFM.TaskRequirement :=
   { id := "get_docs"
   , title := "get_docs task"
   , actors := ["Client", "Gateway", "Worker"]
   , initialState := "requested"
   , states :=
-      [ state "requested" "GET /docs/index.html requested" "request accepted"
-          "Client has sent an authenticated GET request to Gateway."
-      , state "worker_fetching" "Worker fetching document" "worker running"
-          "Gateway has queued a fetch command for Worker."
-      , state "gateway_success" "Gateway has 200 result" "gateway decides"
-          "Worker returned a visible 200 result to Gateway."
-      , state "gateway_failure" "Gateway has 404 result" "gateway decides"
-          "Worker returned a visible 404 result to Gateway."
-      , state "client_success" "Client receives 200" "client response"
-          "Gateway returns the successful response to Client."
-      , state "client_rejected" "Client receives error" "client response"
-          "Gateway returns an observable error response to Client."
-      , state "done" "get_docs done" "terminal"
-          "Task is complete and the active task instance is cleaned up." true
-      , state "failed" "get_docs failed" "terminal"
-          "Task is terminal on an observable failure response." true
+      [ { id := "requested"
+        , label := "GET /docs/index.html requested"
+        , group := "request accepted"
+        , markdown := "Client has sent an authenticated GET request to Gateway."
+        , terminal := false
+        }
+      , { id := "worker_fetching"
+        , label := "Worker fetching document"
+        , group := "worker running"
+        , markdown := "Gateway has queued a fetch command for Worker."
+        , terminal := false
+        }
+      , { id := "gateway_success"
+        , label := "Gateway has 200 result"
+        , group := "gateway decides"
+        , markdown := "Worker returned a visible 200 result to Gateway."
+        , terminal := false
+        }
+      , { id := "gateway_failure"
+        , label := "Gateway has 404 result"
+        , group := "gateway decides"
+        , markdown := "Worker returned a visible 404 result to Gateway."
+        , terminal := false
+        }
+      , { id := "client_success"
+        , label := "Client receives 200"
+        , group := "client response"
+        , markdown := "Gateway returns the successful response to Client."
+        , terminal := false
+        }
+      , { id := "client_rejected"
+        , label := "Client receives error"
+        , group := "client response"
+        , markdown := "Gateway returns an observable error response to Client."
+        , terminal := false
+        }
+      , { id := "done"
+        , label := "get_docs done"
+        , group := "terminal"
+        , markdown := "Task is complete and the active task instance is cleaned up."
+        , terminal := true
+        }
+      , { id := "failed"
+        , label := "get_docs failed"
+        , group := "terminal"
+        , markdown := "Task is terminal on an observable failure response."
+        , terminal := true
+        }
       ]
   , transitions :=
-      [ tr "requested" "worker_fetching" "Docs.FetchCommand" 1 1 2
-      , tr "requested" "client_rejected" "Error.Response" 1 100 1
-      , tr "worker_fetching" "gateway_success" "Docs.FetchResult200" 95 100 8
-      , tr "worker_fetching" "gateway_failure" "Docs.FetchResult404" 5 100 8
-      , tr "gateway_success" "client_success" "Docs.GetResponse" 1 1 2
-      , tr "gateway_failure" "client_rejected" "Error.Response" 1 1 2
-      , tr "client_success" "done" "Docs.GetResponse" 1 1 1
-      , tr "client_rejected" "failed" "Error.Response" 1 1 1
+      [ { src := "requested"
+        , dst := "worker_fetching"
+        , message := "Docs.FetchCommand"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 2
+        }
+      , { src := "requested"
+        , dst := "client_rejected"
+        , message := "Error.Response"
+        , probabilityNum := 1
+        , probabilityDen := 100
+        , dwellMs := 1
+        }
+      , { src := "worker_fetching"
+        , dst := "gateway_success"
+        , message := "Docs.FetchResult200"
+        , probabilityNum := 95
+        , probabilityDen := 100
+        , dwellMs := 8
+        }
+      , { src := "worker_fetching"
+        , dst := "gateway_failure"
+        , message := "Docs.FetchResult404"
+        , probabilityNum := 5
+        , probabilityDen := 100
+        , dwellMs := 8
+        }
+      , { src := "gateway_success"
+        , dst := "client_success"
+        , message := "Docs.GetResponse"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 2
+        }
+      , { src := "gateway_failure"
+        , dst := "client_rejected"
+        , message := "Error.Response"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 2
+        }
+      , { src := "client_success"
+        , dst := "done"
+        , message := "Docs.GetResponse"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 1
+        }
+      , { src := "client_rejected"
+        , dst := "failed"
+        , message := "Error.Response"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 1
+        }
       ]
   }
 
@@ -52,32 +123,112 @@ def postReviewTask : LeanFM.TaskRequirement :=
   , actors := ["Client", "Gateway", "Worker"]
   , initialState := "submitted"
   , states :=
-      [ state "submitted" "POST /reviews submitted" "request accepted"
-          "Client has sent an authenticated review submission to Gateway."
-      , state "moderating" "Worker moderating review" "worker running"
-          "Gateway has queued moderation work for Worker."
-      , state "accepted" "Gateway has accepted review" "gateway decides"
-          "Worker accepted the submitted review."
-      , state "rejected" "Gateway has rejected review" "gateway decides"
-          "Worker rejected the submitted review."
-      , state "client_posted" "Client receives 201" "client response"
-          "Gateway returns a successful post response to Client."
-      , state "client_rejected" "Client receives 400" "client response"
-          "Gateway returns a visible rejection to Client."
-      , state "done" "post_review done" "terminal"
-          "Task is complete and the active task instance is cleaned up." true
-      , state "failed" "post_review failed" "terminal"
-          "Task is terminal on an observable rejection." true
+      [ { id := "submitted"
+        , label := "POST /reviews submitted"
+        , group := "request accepted"
+        , markdown := "Client has sent an authenticated review submission to Gateway."
+        , terminal := false
+        }
+      , { id := "moderating"
+        , label := "Worker moderating review"
+        , group := "worker running"
+        , markdown := "Gateway has queued moderation work for Worker."
+        , terminal := false
+        }
+      , { id := "accepted"
+        , label := "Gateway has accepted review"
+        , group := "gateway decides"
+        , markdown := "Worker accepted the submitted review."
+        , terminal := false
+        }
+      , { id := "rejected"
+        , label := "Gateway has rejected review"
+        , group := "gateway decides"
+        , markdown := "Worker rejected the submitted review."
+        , terminal := false
+        }
+      , { id := "client_posted"
+        , label := "Client receives 201"
+        , group := "client response"
+        , markdown := "Gateway returns a successful post response to Client."
+        , terminal := false
+        }
+      , { id := "client_rejected"
+        , label := "Client receives 400"
+        , group := "client response"
+        , markdown := "Gateway returns a visible rejection to Client."
+        , terminal := false
+        }
+      , { id := "done"
+        , label := "post_review done"
+        , group := "terminal"
+        , markdown := "Task is complete and the active task instance is cleaned up."
+        , terminal := true
+        }
+      , { id := "failed"
+        , label := "post_review failed"
+        , group := "terminal"
+        , markdown := "Task is terminal on an observable rejection."
+        , terminal := true
+        }
       ]
   , transitions :=
-      [ tr "submitted" "moderating" "Reviews.ModerateCommand" 1 1 3
-      , tr "submitted" "client_rejected" "Reviews.PostResponse400" 1 100 1
-      , tr "moderating" "accepted" "Reviews.ModerationAccepted" 90 100 10
-      , tr "moderating" "rejected" "Reviews.ModerationRejected" 10 100 10
-      , tr "accepted" "client_posted" "Reviews.PostResponse201" 1 1 2
-      , tr "rejected" "client_rejected" "Reviews.PostResponse400" 1 1 2
-      , tr "client_posted" "done" "Reviews.PostResponse201" 1 1 1
-      , tr "client_rejected" "failed" "Reviews.PostResponse400" 1 1 1
+      [ { src := "submitted"
+        , dst := "moderating"
+        , message := "Reviews.ModerateCommand"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 3
+        }
+      , { src := "submitted"
+        , dst := "client_rejected"
+        , message := "Reviews.PostResponse400"
+        , probabilityNum := 1
+        , probabilityDen := 100
+        , dwellMs := 1
+        }
+      , { src := "moderating"
+        , dst := "accepted"
+        , message := "Reviews.ModerationAccepted"
+        , probabilityNum := 90
+        , probabilityDen := 100
+        , dwellMs := 10
+        }
+      , { src := "moderating"
+        , dst := "rejected"
+        , message := "Reviews.ModerationRejected"
+        , probabilityNum := 10
+        , probabilityDen := 100
+        , dwellMs := 10
+        }
+      , { src := "accepted"
+        , dst := "client_posted"
+        , message := "Reviews.PostResponse201"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 2
+        }
+      , { src := "rejected"
+        , dst := "client_rejected"
+        , message := "Reviews.PostResponse400"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 2
+        }
+      , { src := "client_posted"
+        , dst := "done"
+        , message := "Reviews.PostResponse201"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 1
+        }
+      , { src := "client_rejected"
+        , dst := "failed"
+        , message := "Reviews.PostResponse400"
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 1
+        }
       ]
   }
 
@@ -86,30 +237,78 @@ def workerRequirement : LeanFM.RequirementSpec :=
   , title := "Worker visible-behavior requirements"
   , actors := ["Client", "Gateway", "Worker"]
   , messages :=
-      [ msg "Docs.GetRequest" "Client" "Gateway" [0x01, 0x10]
-          ["method", "path", "auth_proof", "return_to"]
-      , msg "Docs.FetchCommand" "Gateway" "Worker" [0x02, 0x20]
-          ["path", "cache_mode", "return_to"]
-      , msg "Docs.FetchResult200" "Worker" "Gateway" [0x03, 0x30]
-          ["status", "path", "bytes_moved", "cpu_ms"]
-      , msg "Docs.FetchResult404" "Worker" "Gateway" [0x03, 0xff]
-          ["status", "path", "cpu_ms"]
-      , msg "Docs.GetResponse" "Gateway" "Client" [0x04, 0x40]
-          ["status", "path", "bytes_moved"]
-      , msg "Error.Response" "Gateway" "Client" [0xff]
-          ["status", "reason"]
-      , msg "Reviews.PostRequest" "Client" "Gateway" [0x11, 0x10]
-          ["method", "path", "auth_proof", "body_hash", "return_to"]
-      , msg "Reviews.ModerateCommand" "Gateway" "Worker" [0x12, 0x20]
-          ["body_hash", "policy", "return_to"]
-      , msg "Reviews.ModerationAccepted" "Worker" "Gateway" [0x13, 0x30]
-          ["decision", "body_hash", "cpu_ms"]
-      , msg "Reviews.ModerationRejected" "Worker" "Gateway" [0x13, 0xff]
-          ["decision", "body_hash", "cpu_ms"]
-      , msg "Reviews.PostResponse201" "Gateway" "Client" [0x14, 0x40]
-          ["status", "path", "review_id"]
-      , msg "Reviews.PostResponse400" "Gateway" "Client" [0x14, 0xff]
-          ["status", "path", "reason"]
+      [ { name := "Docs.GetRequest"
+        , src := "Client"
+        , dst := "Gateway"
+        , bytes := [0x01, 0x10]
+        , fields := ["method", "path", "auth_proof", "return_to"]
+        }
+      , { name := "Docs.FetchCommand"
+        , src := "Gateway"
+        , dst := "Worker"
+        , bytes := [0x02, 0x20]
+        , fields := ["path", "cache_mode", "return_to"]
+        }
+      , { name := "Docs.FetchResult200"
+        , src := "Worker"
+        , dst := "Gateway"
+        , bytes := [0x03, 0x30]
+        , fields := ["status", "path", "bytes_moved", "cpu_ms"]
+        }
+      , { name := "Docs.FetchResult404"
+        , src := "Worker"
+        , dst := "Gateway"
+        , bytes := [0x03, 0xff]
+        , fields := ["status", "path", "cpu_ms"]
+        }
+      , { name := "Docs.GetResponse"
+        , src := "Gateway"
+        , dst := "Client"
+        , bytes := [0x04, 0x40]
+        , fields := ["status", "path", "bytes_moved"]
+        }
+      , { name := "Error.Response"
+        , src := "Gateway"
+        , dst := "Client"
+        , bytes := [0xff]
+        , fields := ["status", "reason"]
+        }
+      , { name := "Reviews.PostRequest"
+        , src := "Client"
+        , dst := "Gateway"
+        , bytes := [0x11, 0x10]
+        , fields := ["method", "path", "auth_proof", "body_hash", "return_to"]
+        }
+      , { name := "Reviews.ModerateCommand"
+        , src := "Gateway"
+        , dst := "Worker"
+        , bytes := [0x12, 0x20]
+        , fields := ["body_hash", "policy", "return_to"]
+        }
+      , { name := "Reviews.ModerationAccepted"
+        , src := "Worker"
+        , dst := "Gateway"
+        , bytes := [0x13, 0x30]
+        , fields := ["decision", "body_hash", "cpu_ms"]
+        }
+      , { name := "Reviews.ModerationRejected"
+        , src := "Worker"
+        , dst := "Gateway"
+        , bytes := [0x13, 0xff]
+        , fields := ["decision", "body_hash", "cpu_ms"]
+        }
+      , { name := "Reviews.PostResponse201"
+        , src := "Gateway"
+        , dst := "Client"
+        , bytes := [0x14, 0x40]
+        , fields := ["status", "path", "review_id"]
+        }
+      , { name := "Reviews.PostResponse400"
+        , src := "Gateway"
+        , dst := "Client"
+        , bytes := [0x14, 0xff]
+        , fields := ["status", "path", "reason"]
+        }
       ]
   , tasks := [getDocsTask, postReviewTask]
   , properties :=
