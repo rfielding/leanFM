@@ -515,7 +515,7 @@ Each chart slot can be rendered as either a line chart or a pie chart. The chart
 
 ## Generated Requirements
 
-`LeanFM/GeneratedArtifacts.lean` is the intended output shape for an LLM that is asked to sketch or revise requirements. It should construct typed Lean values, not JavaScript and not raw renderer JSON.
+`LeanFM/GeneratedArtifacts.lean` is the intended output shape for an LLM that is asked to sketch or revise requirements. It should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced by deterministic `*.name` functions at the renderer/persistence boundary.
 
 The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`. It contains:
 
@@ -526,7 +526,7 @@ The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`.
 - `charts`: named chart requests over message-derived datasets.
 - `markdown`: informal descriptions attached to generated requirement blocks.
 
-`validateGeneratedArtifacts` checks cross references: messages must name real actors, task transitions must name real states and messages, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
+Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedArtifacts` then checks semantic constraints that are still data-dependent: messages must have byte grammars and visible fields, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
 
 ## Web Server
 

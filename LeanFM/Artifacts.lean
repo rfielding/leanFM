@@ -80,6 +80,82 @@ structure RequirementSpec where
   markdown : List RequirementMarkdown
 deriving Repr
 
+structure TypedMessageSchema (Actor Message : Type) where
+  name : Message
+  src : Actor
+  dst : Actor
+  bytes : List Nat
+  fields : List String
+deriving Repr
+
+structure TypedRequirementState (State : Type) where
+  id : State
+  label : String
+  group : String
+  markdown : String
+  terminal : Bool
+deriving Repr
+
+structure TypedRequirementTransition (State Message : Type) where
+  src : State
+  dst : State
+  message : Message
+  probabilityNum : Nat
+  probabilityDen : Nat
+  dwellMs : Nat
+deriving Repr
+
+structure TypedTaskRequirement (Actor State Message : Type) where
+  id : String
+  title : String
+  actors : List Actor
+  initialState : State
+  states : List (TypedRequirementState State)
+  transitions : List (TypedRequirementTransition State Message)
+deriving Repr
+
+def typedMessageSchemaToSchema
+    (actorName : Actor -> String) (messageName : Message -> String)
+    (msg : TypedMessageSchema Actor Message) : MessageSchema :=
+  { name := messageName msg.name
+  , src := actorName msg.src
+  , dst := actorName msg.dst
+  , bytes := msg.bytes
+  , fields := msg.fields
+  }
+
+def typedRequirementStateToState
+    (stateName : State -> String)
+    (state : TypedRequirementState State) : RequirementState :=
+  { id := stateName state.id
+  , label := state.label
+  , group := state.group
+  , markdown := state.markdown
+  , terminal := state.terminal
+  }
+
+def typedRequirementTransitionToTransition
+    (stateName : State -> String) (messageName : Message -> String)
+    (tr : TypedRequirementTransition State Message) : RequirementTransition :=
+  { src := stateName tr.src
+  , dst := stateName tr.dst
+  , message := messageName tr.message
+  , probabilityNum := tr.probabilityNum
+  , probabilityDen := tr.probabilityDen
+  , dwellMs := tr.dwellMs
+  }
+
+def typedTaskRequirementToTask
+    (actorName : Actor -> String) (stateName : State -> String) (messageName : Message -> String)
+    (task : TypedTaskRequirement Actor State Message) : TaskRequirement :=
+  { id := task.id
+  , title := task.title
+  , actors := task.actors.map actorName
+  , initialState := stateName task.initialState
+  , states := task.states.map (typedRequirementStateToState stateName)
+  , transitions := task.transitions.map (typedRequirementTransitionToTransition stateName messageName)
+  }
+
 inductive GeneratedArtifact where
   | requirement : RequirementSpec -> GeneratedArtifact
 deriving Repr
