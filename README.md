@@ -30,6 +30,15 @@ Serve it with:
 lake exe leanfm-server
 ```
 
+Common development commands:
+
+```sh
+make check       # build, evaluate generated requirement validation, and emit diagrams
+make serve       # run the web server on 127.0.0.1:8080
+make http-check  # validate live server routes after make serve
+make stop        # stop the process listening on PORT, default 8080
+```
+
 The Lean HTTP server listens on:
 
 ```text
@@ -67,6 +76,12 @@ Export DOT sources without starting the server:
 lake exe leanfm-diagrams
 ```
 
+Run generated requirement validation without starting the server:
+
+```sh
+lake exe leanfm-validate
+```
+
 Generated files:
 
 ```text
@@ -77,7 +92,9 @@ diagrams/assembled.dot
 
 The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
 
-`LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto` are the files an LLM should produce for generated requirements. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code. The proto file defines atomic payloads and a `RequirementEnvelope.oneof` sum-type discriminator for consuming bytes. The Lean file defines typed values: requirement-local actor/message/state enums, message references, per-task state machines, framing, CTL-style property declarations, chart specs, and Markdown blocks. Renderer inputs such as the aggregate graph are deterministic projections from that typed requirement, not generated JavaScript.
+`LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto` are the files an LLM should produce for generated requirements. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code. The proto file defines atomic payloads and a `RequirementEnvelope.oneof` sum-type discriminator for consuming bytes. The Lean file defines typed values: requirement-local actor/message/state enums, message references, per-task state machines, communicating sequential processes, framing, CTL-style property declarations, chart specs, and Markdown blocks. Renderer inputs such as the aggregate graph are deterministic projections from that typed requirement, not generated JavaScript.
+
+Generated requirements are rejected as vacuous unless tasks involve multiple actors, message transitions, terminal states, temporal/property annotations, and per-actor process send/receive coverage for each transition.
 
 The current example has three actors:
 

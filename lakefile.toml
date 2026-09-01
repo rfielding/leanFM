@@ -16,3 +16,7 @@ root = "Server"
 [[lean_exe]]
 name = "leanfm-diagrams"
 root = "Diagrams"
+
+[[lean_exe]]
+name = "leanfm-validate"
+root = "Validate"

@@ -130,6 +130,14 @@ structure RequirementChart where
   value : String
 deriving Repr
 
+structure RequirementProcess where
+  actor : String
+  task : String
+  states : List String
+  sends : List String
+  receives : List String
+deriving Repr
+
 structure RequirementMarkdown where
   id : String
   title : String
@@ -142,6 +150,7 @@ structure RequirementSpec where
   actors : List String
   messages : List MessageSchema
   tasks : List TaskRequirement
+  processes : List RequirementProcess
   properties : List RequirementProperty
   charts : List RequirementChart
   markdown : List RequirementMarkdown
@@ -179,6 +188,14 @@ structure TypedTaskRequirement (Actor State Message : Type) where
   initialState : State
   states : List (TypedRequirementState State)
   transitions : List (TypedRequirementTransition State Message)
+deriving Repr
+
+structure TypedRequirementProcess (Actor State Message : Type) where
+  actor : Actor
+  task : String
+  states : List State
+  sends : List Message
+  receives : List Message
 deriving Repr
 
 def typedMessageSchemaToSchema [Repr Actor] [RequirementName Actor] [Repr Message] [RequirementName Message]
@@ -219,6 +236,15 @@ def typedTaskRequirementToTask [Repr Actor] [RequirementName Actor] [Repr State]
   , transitions := task.transitions.map typedRequirementTransitionToTransition
   }
 
+def typedRequirementProcessToProcess [Repr Actor] [RequirementName Actor] [Repr State] [RequirementName State] [Repr Message] [RequirementName Message]
+    (process : TypedRequirementProcess Actor State Message) : RequirementProcess :=
+  { actor := requirementName process.actor
+  , task := process.task
+  , states := process.states.map requirementName
+  , sends := process.sends.map requirementName
+  , receives := process.receives.map requirementName
+  }
+
 inductive GeneratedRequirement where
   | requirement : RequirementSpec -> GeneratedRequirement
 deriving Repr
@@ -232,11 +258,41 @@ def GeneratedRequirement.title : GeneratedRequirement -> String
 def messageNames (spec : RequirementSpec) : List String :=
   spec.messages.map (fun m => m.name)
 
+def findMessage? (spec : RequirementSpec) (name : String) : Option MessageSchema :=
+  spec.messages.find? (fun msg => msg.name == name)
+
 def taskIds (spec : RequirementSpec) : List String :=
   spec.tasks.map (fun t => t.id)
 
 def stateIds (task : TaskRequirement) : List String :=
   task.states.map (fun s => s.id)
+
+def taskProperties (spec : RequirementSpec) (task : String) : List RequirementProperty :=
+  spec.properties.filter (fun prop => prop.task == task)
+
+def taskProcesses (spec : RequirementSpec) (task : String) : List RequirementProcess :=
+  spec.processes.filter (fun process => process.task == task)
+
+def taskTransitionMessages (task : TaskRequirement) : List String :=
+  task.transitions.map (fun tr => tr.message)
+
+def listIntersects [DecidableEq α] (xs ys : List α) : Bool :=
+  xs.any (fun x => ys.contains x)
+
+def messageSentBy (spec : RequirementSpec) (actor message : String) : Bool :=
+  match findMessage? spec message with
+  | some msg => msg.src == actor
+  | none => false
+
+def messageReceivedBy (spec : RequirementSpec) (actor message : String) : Bool :=
+  match findMessage? spec message with
+  | some msg => msg.dst == actor
+  | none => false
+
+def transitionUsesInterActorMessage (spec : RequirementSpec) (tr : RequirementTransition) : Bool :=
+  match findMessage? spec tr.message with
+  | some msg => msg.src != msg.dst
+  | none => false
 
 def natStrings (xs : List Nat) : List String :=
   xs.map (fun n => toString n)
@@ -270,6 +326,7 @@ def validateMessageSchema (actors : List String) (msg : MessageSchema) : List St
 def validateTaskRequirement (spec : RequirementSpec) (task : TaskRequirement) : List String :=
   let ids := stateIds task
   let duplicates := (duplicateStrings ids).map fun id => "task " ++ task.id ++ " has duplicate state: " ++ id
+  let hasInterActorMessage := task.transitions.any (transitionUsesInterActorMessage spec)
   let stateErrors :=
     task.states.foldr
       (fun state acc =>
@@ -290,18 +347,82 @@ def validateTaskRequirement (spec : RequirementSpec) (task : TaskRequirement) : 
       []
   (if task.id == "" then ["task has empty id"] else []) ++
   (if task.title == "" then ["task " ++ task.id ++ " has empty title"] else []) ++
+  (if task.actors.length < 2 then ["task " ++ task.id ++ " is vacuous: it must involve at least two actors"] else []) ++
   (if task.states.isEmpty then ["task " ++ task.id ++ " has no states"] else []) ++
+  (if task.transitions.isEmpty then ["task " ++ task.id ++ " is vacuous: it has no message transitions"] else []) ++
+  (if task.states.any (fun s => s.terminal) then [] else ["task " ++ task.id ++ " has no terminal state"] ) ++
+  (if hasInterActorMessage then [] else ["task " ++ task.id ++ " is vacuous: it has no inter-actor message transition"] ) ++
+  (if (taskProperties spec task.id).isEmpty then ["task " ++ task.id ++ " has no temporal/property annotations"] else []) ++
   (if ids.contains task.initialState then [] else ["task " ++ task.id ++ " initial state is not listed: " ++ task.initialState]) ++
   (task.actors.filterMap fun actor =>
     if spec.actors.contains actor then none else some ("task " ++ task.id ++ " has unknown actor: " ++ actor)) ++
   duplicates ++ stateErrors ++ transitionErrors
+
+def validateRequirementProcess (spec : RequirementSpec) (process : RequirementProcess) : List String :=
+  let maybeTask := spec.tasks.find? (fun task => task.id == process.task)
+  let taskStateIds :=
+    match maybeTask with
+    | some task => stateIds task
+    | none => []
+  let taskMessageNames :=
+    match maybeTask with
+    | some task => taskTransitionMessages task
+    | none => []
+  (if spec.actors.contains process.actor then [] else ["process has unknown actor: " ++ process.actor]) ++
+  (if (taskIds spec).contains process.task then [] else ["process " ++ process.actor ++ " references unknown task: " ++ process.task]) ++
+  (if process.states.isEmpty then ["process " ++ process.actor ++ "/" ++ process.task ++ " is vacuous: it has no local states"] else []) ++
+  (process.states.filterMap fun state =>
+    if taskStateIds.contains state then none else some ("process " ++ process.actor ++ "/" ++ process.task ++ " references unknown task state: " ++ state)) ++
+  (process.sends.filterMap fun msg =>
+    if !taskMessageNames.contains msg then
+      some ("process " ++ process.actor ++ "/" ++ process.task ++ " sends message outside task transitions: " ++ msg)
+    else if messageSentBy spec process.actor msg then
+      none
+    else
+      some ("process " ++ process.actor ++ "/" ++ process.task ++ " sends message with different src actor: " ++ msg)) ++
+  (process.receives.filterMap fun msg =>
+    if !taskMessageNames.contains msg then
+      some ("process " ++ process.actor ++ "/" ++ process.task ++ " receives message outside task transitions: " ++ msg)
+    else if messageReceivedBy spec process.actor msg then
+      none
+    else
+      some ("process " ++ process.actor ++ "/" ++ process.task ++ " receives message with different dst actor: " ++ msg))
+
+def validateTaskProcesses (spec : RequirementSpec) (task : TaskRequirement) : List String :=
+  let processes := taskProcesses spec task.id
+  let processActors := processes.map (fun process => process.actor)
+  let processTraffic := processes.any (fun process => !process.sends.isEmpty || !process.receives.isEmpty)
+  let missingProcesses := task.actors.filterMap fun actor =>
+    if processActors.contains actor then none else some ("task " ++ task.id ++ " lacks communicating sequential process for actor: " ++ actor)
+  let idleProcesses := processes.filterMap fun process =>
+    if process.sends.isEmpty && process.receives.isEmpty then
+      some ("process " ++ process.actor ++ "/" ++ process.task ++ " is vacuous: it neither sends nor receives")
+    else
+      none
+  (if processes.isEmpty then ["task " ++ task.id ++ " has no communicating sequential processes"] else []) ++
+  (if processTraffic then [] else ["task " ++ task.id ++ " has no process send/receive traffic"] ) ++
+  missingProcesses ++ idleProcesses
+
+def validateTaskTransitionProcessCoverage (spec : RequirementSpec) (task : TaskRequirement) : List String :=
+  let processes := taskProcesses spec task.id
+  task.transitions.foldr
+    (fun tr acc =>
+      let senderCovered :=
+        processes.any (fun process => process.sends.contains tr.message)
+      let receiverCovered :=
+        processes.any (fun process => process.receives.contains tr.message)
+      (if senderCovered then [] else ["task " ++ task.id ++ " transition " ++ tr.message ++ " has no sending process"]) ++
+      (if receiverCovered then [] else ["task " ++ task.id ++ " transition " ++ tr.message ++ " has no receiving process"]) ++
+      acc)
+    []
 
 def validateRequirementSpec (spec : RequirementSpec) : List String :=
   let duplicateActors := (duplicateStrings spec.actors).map fun id => "duplicate actor: " ++ id
   let duplicateMessages := (duplicateStrings (messageNames spec)).map fun id => "duplicate message: " ++ id
   let duplicateTasks := (duplicateStrings (taskIds spec)).map fun id => "duplicate task: " ++ id
   let messageErrors := spec.messages.foldr (fun msg acc => validateMessageSchema spec.actors msg ++ acc) []
-  let taskErrors := spec.tasks.foldr (fun task acc => validateTaskRequirement spec task ++ acc) []
+  let taskErrors := spec.tasks.foldr (fun task acc => validateTaskRequirement spec task ++ validateTaskProcesses spec task ++ validateTaskTransitionProcessCoverage spec task ++ acc) []
+  let processErrors := spec.processes.foldr (fun process acc => validateRequirementProcess spec process ++ acc) []
   let propertyErrors :=
     spec.properties.foldr
       (fun prop acc =>
@@ -331,7 +452,9 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.actors.isEmpty then ["requirement " ++ spec.id ++ " has no actors"] else []) ++
   (if spec.messages.isEmpty then ["requirement " ++ spec.id ++ " has no message schemas"] else []) ++
   (if spec.tasks.isEmpty then ["requirement " ++ spec.id ++ " has no task FSMs"] else []) ++
-  duplicateActors ++ duplicateMessages ++ duplicateTasks ++ messageErrors ++ taskErrors ++ propertyErrors ++ chartErrors ++ markdownErrors
+  (if spec.processes.isEmpty then ["requirement " ++ spec.id ++ " has no communicating sequential processes"] else []) ++
+  (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
+  duplicateActors ++ duplicateMessages ++ duplicateTasks ++ messageErrors ++ taskErrors ++ processErrors ++ propertyErrors ++ chartErrors ++ markdownErrors
 
 def transitionMessageLabel (spec : RequirementSpec) (message : String) : String :=
   match spec.messages.find? (fun msg => msg.name == message) with
@@ -357,13 +480,38 @@ def taskToAggregateEdges (spec : RequirementSpec) (task : TaskRequirement) : Lis
     , label := transitionMessageLabel spec tr.message
     }
 
+def propertyModeName : PropertyMode -> String
+  | .eventually => "eventually"
+  | .always => "always"
+  | .never => "never"
+  | .preparedFor => "preparedFor"
+
+def taskPropertyNodes (spec : RequirementSpec) (task : TaskRequirement) : List AggregateNode :=
+  (taskProperties spec task.id).map fun prop =>
+    { id := task.id ++ ".property." ++ prop.name
+    , group := task.title
+    , sub := "temporal logic"
+    , task := task.id
+    , auth := ""
+    , terminal := false
+    , q := 0
+    , label := propertyModeName prop.mode ++ ": " ++ prop.expression
+    }
+
+def taskPropertyEdges (spec : RequirementSpec) (task : TaskRequirement) : List AggregateEdge :=
+  (taskProperties spec task.id).map fun prop =>
+    { src := task.id ++ "." ++ task.initialState
+    , dst := task.id ++ ".property." ++ prop.name
+    , label := "annotates CTL"
+    }
+
 def concatLists : List (List α) -> List α
   | [] => []
   | xs :: rest => xs ++ concatLists rest
 
 def requirementAggregateGraphData (spec : RequirementSpec) : AggregateGraphData :=
-  { nodes := concatLists (spec.tasks.map taskToAggregateNodes)
-  , edges := concatLists (spec.tasks.map (taskToAggregateEdges spec))
+  { nodes := concatLists (spec.tasks.map (fun task => taskToAggregateNodes task ++ taskPropertyNodes spec task))
+  , edges := concatLists (spec.tasks.map (fun task => taskToAggregateEdges spec task ++ taskPropertyEdges spec task))
   }
 
 def protoMessageName (name : String) : String :=
@@ -462,8 +610,10 @@ def generatedRequirementSystemPrompt : String :=
     , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
+    , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
+    , "Each task transition message must appear in one actor process sends list and one actor process receives list."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
-    , "Define RequirementSpec with actors, messages, tasks, properties, charts, and markdown."
+    , "Define RequirementSpec with actors, messages, tasks, processes, properties, charts, and markdown."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]

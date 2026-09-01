@@ -543,11 +543,12 @@ The central generated value is a `RequirementSpec` from `LeanFM/Artifacts.lean`.
 - `actors`: visible participants in the world.
 - `messages`: protobuf-backed schemas with `src`, `dst`, framing, and numbered visible fields.
 - `tasks`: per-task state machines with named states and message-labeled transitions.
+- `processes`: actor-local communicating sequential processes with states, sends, and receives.
 - `properties`: CTL-style declarations such as eventually, always, never, and prepared-for.
 - `charts`: named chart requests over message-derived datasets.
 - `markdown`: informal descriptions attached to generated requirement blocks.
 
-Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedRequirements` then checks semantic constraints that are still data-dependent: message framing must be explicit, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model.
+Lean catches misspelled actor, message, and state references while compiling generated Lean. `validateGeneratedRequirements` then checks semantic constraints that are still data-dependent: message framing must be explicit, visible protobuf fields must have nonzero unique tags, probabilities must have nonzero denominators, properties must name real tasks, charts must name a data source and value, and derived graph data must be renderable. It also rejects vacuous models: each task must involve at least two actors, at least one inter-actor message transition, at least one terminal state, temporal/property annotations, and communicating sequential process coverage for every transition message. The aggregate canvas graph is produced by `requirementAggregateGraphData`; it is a deterministic projection from the requirement model, including temporal annotation nodes.
 
 `LeanFM/LLMGenerated/Requirements.proto` defines the proto3 payload structs for atomic messages and a `RequirementEnvelope.oneof atom` sum-type discriminator for consuming bytes as one of those atoms. `LeanFM/LLMGenerated/Requirements.lean` includes that sibling proto file, references those message atoms from typed Lean FSMs, and validates that each Lean message atom has a corresponding `message ... {` declaration. The `.proto` file defines the structs that read and write payload bytes; the task FSMs and CTL properties define which ordered `src`/`dst` message sequences are valid.
 
@@ -600,6 +601,17 @@ Run it with:
 ```sh
 lake exe leanfm-server
 ```
+
+The Makefile wraps the common local workflow:
+
+```sh
+make check       # build, evaluate generated requirement validation, and emit diagrams
+make serve       # run the web server on 127.0.0.1:8080
+make http-check  # validate health, prompt, requirements, proto, and page scripts
+make stop        # stop the process listening on PORT, default 8080
+```
+
+`lake exe leanfm-validate` prints the generated requirement validation report without starting the web server.
 
 Run the text report with:
 

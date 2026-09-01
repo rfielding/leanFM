@@ -33,6 +33,7 @@ instance : LeanFM.RequirementName WorkerMessage where
   style := LeanFM.NameStyle.dot
 
 inductive GetDocsState where
+  | start
   | requested
   | worker_fetching
   | gateway_success
@@ -47,6 +48,7 @@ instance : LeanFM.RequirementName GetDocsState where
   style := LeanFM.NameStyle.raw
 
 inductive PostReviewState where
+  | start
   | submitted
   | moderating
   | accepted
@@ -196,9 +198,15 @@ def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState Work
   { id := "get_docs"
   , title := "get_docs task"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker]
-  , initialState := GetDocsState.requested
+  , initialState := GetDocsState.start
   , states :=
-      [ { id := GetDocsState.requested
+      [ { id := GetDocsState.start
+        , label := "Client ready to request document"
+        , group := "entry"
+        , markdown := "The task instance exists before the first visible client request is consumed."
+        , terminal := false
+        }
+      , { id := GetDocsState.requested
         , label := "GET /docs/index.html requested"
         , group := "request accepted"
         , markdown := "Client has sent an authenticated GET request to Gateway."
@@ -248,7 +256,14 @@ def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState Work
         }
       ]
   , transitions :=
-      [ { src := GetDocsState.requested
+      [ { src := GetDocsState.start
+        , dst := GetDocsState.requested
+        , message := WorkerMessage.Docs_GetRequest
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 1
+        }
+      , { src := GetDocsState.requested
         , dst := GetDocsState.worker_fetching
         , message := WorkerMessage.Docs_FetchCommand
         , probabilityNum := 1
@@ -310,13 +325,43 @@ def getDocsTaskTyped : LeanFM.TypedTaskRequirement WorkerActor GetDocsState Work
 def getDocsTask : LeanFM.TaskRequirement :=
   LeanFM.typedTaskRequirementToTask getDocsTaskTyped
 
+def getDocsProcesses : List (LeanFM.RequirementProcess) :=
+  [ LeanFM.typedRequirementProcessToProcess
+      { actor := WorkerActor.Client
+      , task := "get_docs"
+      , states := [GetDocsState.start, GetDocsState.requested, GetDocsState.client_success, GetDocsState.client_rejected, GetDocsState.done, GetDocsState.failed]
+      , sends := [WorkerMessage.Docs_GetRequest]
+      , receives := [WorkerMessage.Docs_GetResponse, WorkerMessage.Error_Response]
+      }
+  , LeanFM.typedRequirementProcessToProcess
+      { actor := WorkerActor.Gateway
+      , task := "get_docs"
+      , states := [GetDocsState.requested, GetDocsState.gateway_success, GetDocsState.gateway_failure, GetDocsState.client_success, GetDocsState.client_rejected]
+      , sends := [WorkerMessage.Docs_FetchCommand, WorkerMessage.Docs_GetResponse, WorkerMessage.Error_Response]
+      , receives := [WorkerMessage.Docs_GetRequest, WorkerMessage.Docs_FetchResult200, WorkerMessage.Docs_FetchResult404]
+      }
+  , LeanFM.typedRequirementProcessToProcess
+      { actor := WorkerActor.Worker
+      , task := "get_docs"
+      , states := [GetDocsState.worker_fetching, GetDocsState.gateway_success, GetDocsState.gateway_failure]
+      , sends := [WorkerMessage.Docs_FetchResult200, WorkerMessage.Docs_FetchResult404]
+      , receives := [WorkerMessage.Docs_FetchCommand]
+      }
+  ]
+
 def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewState WorkerMessage :=
   { id := "post_review"
   , title := "post_review task"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker]
-  , initialState := PostReviewState.submitted
+  , initialState := PostReviewState.start
   , states :=
-      [ { id := PostReviewState.submitted
+      [ { id := PostReviewState.start
+        , label := "Client ready to submit review"
+        , group := "entry"
+        , markdown := "The task instance exists before the first visible review submission is consumed."
+        , terminal := false
+        }
+      , { id := PostReviewState.submitted
         , label := "POST /reviews submitted"
         , group := "request accepted"
         , markdown := "Client has sent an authenticated review submission to Gateway."
@@ -366,7 +411,14 @@ def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewStat
         }
       ]
   , transitions :=
-      [ { src := PostReviewState.submitted
+      [ { src := PostReviewState.start
+        , dst := PostReviewState.submitted
+        , message := WorkerMessage.Reviews_PostRequest
+        , probabilityNum := 1
+        , probabilityDen := 1
+        , dwellMs := 1
+        }
+      , { src := PostReviewState.submitted
         , dst := PostReviewState.moderating
         , message := WorkerMessage.Reviews_ModerateCommand
         , probabilityNum := 1
@@ -428,12 +480,37 @@ def postReviewTaskTyped : LeanFM.TypedTaskRequirement WorkerActor PostReviewStat
 def postReviewTask : LeanFM.TaskRequirement :=
   LeanFM.typedTaskRequirementToTask postReviewTaskTyped
 
+def postReviewProcesses : List (LeanFM.RequirementProcess) :=
+  [ LeanFM.typedRequirementProcessToProcess
+      { actor := WorkerActor.Client
+      , task := "post_review"
+      , states := [PostReviewState.start, PostReviewState.submitted, PostReviewState.client_posted, PostReviewState.client_rejected, PostReviewState.done, PostReviewState.failed]
+      , sends := [WorkerMessage.Reviews_PostRequest]
+      , receives := [WorkerMessage.Reviews_PostResponse201, WorkerMessage.Reviews_PostResponse400]
+      }
+  , LeanFM.typedRequirementProcessToProcess
+      { actor := WorkerActor.Gateway
+      , task := "post_review"
+      , states := [PostReviewState.submitted, PostReviewState.accepted, PostReviewState.rejected, PostReviewState.client_posted, PostReviewState.client_rejected]
+      , sends := [WorkerMessage.Reviews_ModerateCommand, WorkerMessage.Reviews_PostResponse201, WorkerMessage.Reviews_PostResponse400]
+      , receives := [WorkerMessage.Reviews_PostRequest, WorkerMessage.Reviews_ModerationAccepted, WorkerMessage.Reviews_ModerationRejected]
+      }
+  , LeanFM.typedRequirementProcessToProcess
+      { actor := WorkerActor.Worker
+      , task := "post_review"
+      , states := [PostReviewState.moderating, PostReviewState.accepted, PostReviewState.rejected]
+      , sends := [WorkerMessage.Reviews_ModerationAccepted, WorkerMessage.Reviews_ModerationRejected]
+      , receives := [WorkerMessage.Reviews_ModerateCommand]
+      }
+  ]
+
 def workerRequirement : LeanFM.RequirementSpec :=
   { id := "worker.visible_behavior"
   , title := "Worker visible-behavior requirements"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker].map LeanFM.requirementName
   , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
+  , processes := getDocsProcesses ++ postReviewProcesses
   , properties :=
       [ { name := "AF get_docs terminal", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "terminal" }
       , { name := "AG no get_docs success without auth_proof", mode := LeanFM.PropertyMode.never, task := "get_docs", expression := "success && missing(auth_proof)" }
