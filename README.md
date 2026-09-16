@@ -102,6 +102,12 @@ The web UI renders diagrams with `<canvas>` from explicit Lean data serialized t
 
 Generated requirements are rejected as vacuous unless tasks involve multiple actors, message transitions, terminal states, temporal/property annotations, multiparty grammars, required proof obligations, and per-actor process send/receive coverage for each transition.
 
+Worked design examples:
+
+- `BROWSER_SERVER_OAUTH.md` shows a browser/server/OAuth actor set.
+- `MULTIPARTY_GRAMMAR_EXAMPLE.md` shows the CFG-like multiparty grammar style.
+- `LARGE_FILE_POLICY_SERVER.md` shows a JWT, OpenAPI, huge-file upload/download, and OPA/Rego policy server with manager handoff.
+
 The current example has three actors:
 
 ```text
