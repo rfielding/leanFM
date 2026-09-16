@@ -514,28 +514,26 @@ def atom (task : String) (src dst : WorkerActor) (message : WorkerMessage) : Lea
 def event (task : String) (src dst : WorkerActor) (message : WorkerMessage) : LeanFM.GrammarExpr :=
   LeanFM.GrammarExpr.event (atom task src dst message)
 
-def seqList : List LeanFM.GrammarExpr -> LeanFM.GrammarExpr
-  | [] => LeanFM.GrammarExpr.empty
-  | [x] => x
-  | x :: xs => LeanFM.GrammarExpr.seq x (seqList xs)
+def seq := LeanFM.GrammarExpr.seqList
+def alt := LeanFM.GrammarExpr.alt
 
 def getDocsGrammar : LeanFM.TaskGrammar :=
   { task := "get_docs"
   , entry := "start"
   , terminals := ["done", "failed"]
   , body :=
-      seqList
+      seq
         [ event "get_docs" WorkerActor.Client WorkerActor.Gateway WorkerMessage.Docs_GetRequest
-        , LeanFM.GrammarExpr.choice
+        , alt
             [ event "get_docs" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Error_Response
-            , seqList
+            , seq
                 [ event "get_docs" WorkerActor.Gateway WorkerActor.Worker WorkerMessage.Docs_FetchCommand
-                , LeanFM.GrammarExpr.choice
-                    [ seqList
+                , alt
+                    [ seq
                         [ event "get_docs" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Docs_FetchResult200
                         , event "get_docs" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Docs_GetResponse
                         ]
-                    , seqList
+                    , seq
                         [ event "get_docs" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Docs_FetchResult404
                         , event "get_docs" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Error_Response
                         ]
@@ -550,18 +548,18 @@ def postReviewGrammar : LeanFM.TaskGrammar :=
   , entry := "start"
   , terminals := ["done", "failed"]
   , body :=
-      seqList
+      seq
         [ event "post_review" WorkerActor.Client WorkerActor.Gateway WorkerMessage.Reviews_PostRequest
-        , LeanFM.GrammarExpr.choice
+        , alt
             [ event "post_review" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Reviews_PostResponse400
-            , seqList
+            , seq
                 [ event "post_review" WorkerActor.Gateway WorkerActor.Worker WorkerMessage.Reviews_ModerateCommand
-                , LeanFM.GrammarExpr.choice
-                    [ seqList
+                , alt
+                    [ seq
                         [ event "post_review" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Reviews_ModerationAccepted
                         , event "post_review" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Reviews_PostResponse201
                         ]
-                    , seqList
+                    , seq
                         [ event "post_review" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Reviews_ModerationRejected
                         , event "post_review" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Reviews_PostResponse400
                         ]

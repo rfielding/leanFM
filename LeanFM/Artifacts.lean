@@ -144,7 +144,44 @@ inductive GrammarExpr where
   | parallel : GrammarExpr -> GrammarExpr -> GrammarExpr
   | guard : String -> GrammarExpr -> GrammarExpr
   | ref : String -> GrammarExpr
+  | repeat : GrammarExpr -> GrammarExpr
 deriving Repr
+
+namespace GrammarExpr
+
+def eps : GrammarExpr :=
+  GrammarExpr.empty
+
+def seqList : List GrammarExpr -> GrammarExpr
+  | [] => GrammarExpr.empty
+  | [x] => x
+  | x :: xs => GrammarExpr.seq x (seqList xs)
+
+def alt : List GrammarExpr -> GrammarExpr :=
+  GrammarExpr.choice
+
+def par : GrammarExpr -> GrammarExpr -> GrammarExpr :=
+  GrammarExpr.parallel
+
+def when (predicate : String) (body : GrammarExpr) : GrammarExpr :=
+  GrammarExpr.guard predicate body
+
+def nonterminal (task : String) : GrammarExpr :=
+  GrammarExpr.ref task
+
+def optional (body : GrammarExpr) : GrammarExpr :=
+  GrammarExpr.choice [GrammarExpr.empty, body]
+
+def star (body : GrammarExpr) : GrammarExpr :=
+  GrammarExpr.repeat body
+
+def plus (body : GrammarExpr) : GrammarExpr :=
+  GrammarExpr.seq body (GrammarExpr.repeat body)
+
+infixr:55 " >>> " => GrammarExpr.seq
+infixr:50 " <||> " => fun left right => GrammarExpr.choice [left, right]
+
+end GrammarExpr
 
 structure TaskGrammar where
   task : String
@@ -327,6 +364,7 @@ partial def grammarAtoms : GrammarExpr -> List GrammarAtom
   | GrammarExpr.parallel left right => grammarAtoms left ++ grammarAtoms right
   | GrammarExpr.guard _ body => grammarAtoms body
   | GrammarExpr.ref _ => []
+  | GrammarExpr.repeat body => grammarAtoms body
 
 partial def grammarRefs : GrammarExpr -> List String
   | GrammarExpr.empty => []
@@ -336,6 +374,7 @@ partial def grammarRefs : GrammarExpr -> List String
   | GrammarExpr.parallel left right => grammarRefs left ++ grammarRefs right
   | GrammarExpr.guard _ body => grammarRefs body
   | GrammarExpr.ref task => [task]
+  | GrammarExpr.repeat body => grammarRefs body
 
 def listIntersects [DecidableEq α] (xs ys : List α) : Bool :=
   xs.any (fun x => ys.contains x)
@@ -706,7 +745,7 @@ def generatedRequirementSystemPrompt : String :=
     , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
     , "Define TaskGrammar values with GrammarExpr.event atoms labeled by task, src actor, dst actor, and message atom."
-    , "Use GrammarExpr.seq for causality, GrammarExpr.choice for alternatives, GrammarExpr.parallel for commuting independent work, GrammarExpr.guard for context-sensitive visible facts, and GrammarExpr.ref for task references."
+    , "Use GrammarExpr.seqList or the >>> notation for causality, GrammarExpr.alt or <||> for alternatives, GrammarExpr.parallel for commuting independent work, GrammarExpr.guard for context-sensitive visible facts, GrammarExpr.ref for task references, and GrammarExpr.repeat for regex-style repetition."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
     , "Each task transition message must appear in one actor process sends list and one actor process receives list."

@@ -138,6 +138,40 @@ par a b      means any interleaving that preserves order inside a and b
 guard p g    means g is legal only when p holds over the prior trace
 ```
 
+LeanFM's checked DSL uses ordinary Lean constructors with a regex-like documentation layer:
+
+```lean
+def seq := LeanFM.GrammarExpr.seqList
+def alt := LeanFM.GrammarExpr.alt
+
+infixr:55 " >>> " => LeanFM.GrammarExpr.seq
+infixr:50 " <||> " => fun left right => LeanFM.GrammarExpr.choice [left, right]
+```
+
+So a grammar can be written in valid Lean as either list-oriented EBNF:
+
+```lean
+seq
+  [ event loginTask browser server Msg.httpGetLogin
+  , alt
+      [ event loginTask server browser (Msg.loginFailed "invalid_request")
+      , seq
+          [ event loginTask server oauth (Msg.tokenRequest code1)
+          , event loginTask server browser (Msg.sessionIssued sess1)
+          ]
+      ]
+  ]
+```
+
+or as an infix expression:
+
+```lean
+event loginTask browser server Msg.httpGetLogin >>>
+  (event loginTask server browser (Msg.loginFailed "invalid_request") <||>
+   (event loginTask server oauth (Msg.tokenRequest code1) >>>
+    event loginTask server browser (Msg.sessionIssued sess1)))
+```
+
 ## Concrete Example Values
 
 ```lean
