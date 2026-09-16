@@ -42,6 +42,7 @@ http-check:
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/validate" | rg '^ok: all generated requirements'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/aggregate-graph/validate" | rg '^ok: all generated requirements'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/llm-generated/requirements.proto" | rg 'message RequirementEnvelope|oneof atom|message Docs_GetRequest'
+	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/openapi.yaml" | rg 'openapi: 3\.1\.0|x-leanfm-requirement|Docs\.GetRequest'
 	@curl -fsS -b "$(COOKIES)" -o "$(EXAMPLES_HTML)" "$(BASE_URL)/examples"
 	@ROOT_HTML="$(ROOT_HTML)" EXAMPLES_HTML="$(EXAMPLES_HTML)" node -e 'const fs=require("fs"),vm=require("vm"); for (const f of [process.env.ROOT_HTML,process.env.EXAMPLES_HTML]) { const html=fs.readFileSync(f,"utf8"); const re=/<script([^>]*)>([\s\S]*?)<\/script>/gi; let m,n=0; while ((m=re.exec(html))) { if (/type=["'\'']application\/json["'\'']/i.test(m[1])) continue; const code=m[2].trim(); if (code) new vm.Script(code,{filename:f+":inline"+(++n)}); } console.log(f+": ok ("+n+" inline scripts)"); }'
 

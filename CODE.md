@@ -576,6 +576,7 @@ Routes include:
 - `/`: HTML UI.
 - `/login`: built-in login form.
 - `/metrics`: Prometheus metrics.
+- `/openapi.yaml`: OpenAPI 3.1 description of LeanFM routes plus generated protobuf-backed message schemas.
 - `/report`: plain text report.
 - `/tools/conversations`: conversation catalog mapping each conversation to a unique generated Lean file.
 - `/tools/static-assets/validate`: static JavaScript renderer asset validation.

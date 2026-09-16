@@ -395,6 +395,128 @@ def prometheusMetrics : String :=
     , ""
     ]
 
+def openApiScalarType : ProtoScalar -> List String
+  | ProtoScalar.string => ["type: string"]
+  | ProtoScalar.bool => ["type: boolean"]
+  | ProtoScalar.uint32 => ["type: integer", "format: uint32", "minimum: 0"]
+  | ProtoScalar.uint64 => ["type: integer", "format: uint64", "minimum: 0"]
+  | ProtoScalar.bytes => ["type: string", "format: byte"]
+
+def indentLines (pad : String) (lines : List String) : List String :=
+  lines.map fun line => pad ++ line
+
+def openApiFieldSchema (field : ProtoFieldSchema) : List String :=
+  [ s!"{field.name}:" ] ++ indentLines "  " (openApiScalarType field.scalar)
+
+def openApiRequiredFields (fields : List ProtoFieldSchema) : String :=
+  "[" ++ joinWith ", " (fields.map fun field => jsonString field.name) ++ "]"
+
+def openApiMessageSchema (msg : MessageSchema) : List String :=
+  [ s!"{jsonString msg.name}:"
+  , "  type: object"
+  , s!"  description: {jsonString ("LeanFM message atom " ++ msg.name ++ " carried from " ++ msg.src ++ " to " ++ msg.dst)}"
+  , s!"  x-leanfm-src: {jsonString msg.src}"
+  , s!"  x-leanfm-dst: {jsonString msg.dst}"
+  , s!"  x-leanfm-framing: {jsonString msg.framing.kind.describe}"
+  , "  properties:"
+  ] ++
+  indentLines "    " (msg.fields.foldr (fun field acc => openApiFieldSchema field ++ acc) []) ++
+  [ s!"  required: {openApiRequiredFields msg.fields}" ]
+
+structure OpenApiRoute where
+  path : String
+  method : String
+  summary : String
+  contentType : String
+  schema : String
+  tags : List String
+  leanfmKind : String
+deriving Repr
+
+def openApiRoute (path summary contentType schema leanfmKind : String) (tags : List String := ["LeanFM"]) : OpenApiRoute :=
+  { path := path, method := "get", summary, contentType, schema, tags, leanfmKind }
+
+def openApiRoutes : List OpenApiRoute :=
+  [ openApiRoute "/" "LeanFM assistant workbench" "text/html" "string" "workbench" ["UI"]
+  , openApiRoute "/examples" "Example dashboard with charts, graphs, generated sources, and renders" "text/html" "string" "workbench" ["UI"]
+  , openApiRoute "/renders/" "Canvas diagram render gallery" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/renders/auth" "Auth group canvas render" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/renders/worker" "Worker group canvas render" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/renders/get_docs" "get_docs task canvas render" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/renders/post_review" "post_review task canvas render" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/renders/tasks" "Task interaction canvas render" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/renders/assembled" "Assembled system canvas render" "text/html" "string" "render" ["Renders"]
+  , openApiRoute "/metrics" "Prometheus metrics for modeled probabilities, latency, queue pressure, CTL checks, and protobuf coverage" "text/plain" "string" "metrics" ["Tools"]
+  , openApiRoute "/report" "Generated LeanFM text report" "text/plain" "string" "report" ["Tools"]
+  , openApiRoute "/tools/scenarios" "Scenario catalog" "application/json" "object" "catalog" ["Tools"]
+  , openApiRoute "/tools/protocol-sketches" "Protocol sketch catalog" "application/json" "object" "catalog" ["Tools"]
+  , openApiRoute "/tools/conversations" "Conversation-to-Lean-file catalog" "application/json" "object" "catalog" ["Tools"]
+  , openApiRoute "/tools/static-assets/validate" "Static JavaScript asset validation report" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/tools/generated-requirements/prompt" "Prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
+  , openApiRoute "/tools/llm-generated/requirements/prompt" "Canonical prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
+  , openApiRoute "/tools/generated-requirements/validate" "Generated typed Lean requirement validation report" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/tools/llm-generated/requirements/validate" "Canonical generated typed Lean requirement validation report" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/tools/generated-artifacts/validate" "Compatibility alias for generated requirement validation" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/tools/aggregate-graph/validate" "Aggregate graph validation report" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/generated/worker.proto" "Generated protobuf schema for worker requirements" "text/x-protobuf" "string" "protobuf" ["Generated"]
+  , openApiRoute "/llm-generated/requirements.proto" "Canonical generated protobuf schema for requirements" "text/x-protobuf" "string" "protobuf" ["Generated"]
+  , openApiRoute "/lean/auth.lean" "Generated Lean view for auth" "text/plain" "string" "lean-source" ["Generated"]
+  , openApiRoute "/lean/get_docs.lean" "Generated Lean view for get_docs" "text/plain" "string" "lean-source" ["Generated"]
+  , openApiRoute "/lean/post_review.lean" "Generated Lean view for post_review" "text/plain" "string" "lean-source" ["Generated"]
+  , openApiRoute "/lean/worker.lean" "Generated Lean view for worker" "text/plain" "string" "lean-source" ["Generated"]
+  , openApiRoute "/lean/assembled.lean" "Generated Lean view for assembled system" "text/plain" "string" "lean-source" ["Generated"]
+  , openApiRoute "/lean/sketch/kerberos.lean" "Generated Lean sketch for Kerberos/DH trusted-token protocol" "text/plain" "string" "lean-source" ["Generated"]
+  , openApiRoute "/docs/" "Generated Markdown documentation index" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/docs/index.md" "Generated Markdown documentation index" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/docs/auth.md" "Generated auth Markdown documentation" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/docs/worker.md" "Generated worker Markdown documentation" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/docs/get_docs.md" "Generated get_docs Markdown documentation" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/docs/post_review.md" "Generated post_review Markdown documentation" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/docs/assembled.md" "Generated assembled-system Markdown documentation" "text/markdown" "string" "docs" ["Docs"]
+  , openApiRoute "/graph.dot" "Worker Graphviz DOT" "text/vnd.graphviz" "string" "dot" ["Graphviz"]
+  , openApiRoute "/auth.dot" "Auth Graphviz DOT" "text/vnd.graphviz" "string" "dot" ["Graphviz"]
+  , openApiRoute "/get_docs.dot" "get_docs Graphviz DOT" "text/vnd.graphviz" "string" "dot" ["Graphviz"]
+  , openApiRoute "/post_review.dot" "post_review Graphviz DOT" "text/vnd.graphviz" "string" "dot" ["Graphviz"]
+  , openApiRoute "/tasks.dot" "Task conversation Graphviz DOT" "text/vnd.graphviz" "string" "dot" ["Graphviz"]
+  , openApiRoute "/assembled.dot" "Assembled system Graphviz DOT" "text/vnd.graphviz" "string" "dot" ["Graphviz"]
+  , openApiRoute "/health" "Health check" "text/plain" "string" "health" ["Health"]
+  ]
+
+def openApiRouteYaml (route : OpenApiRoute) : List String :=
+  [ s!"{jsonString route.path}:"
+  , s!"  {route.method}:"
+  , s!"    summary: {jsonString route.summary}"
+  , s!"    tags: [{joinWith ", " (route.tags.map jsonString)}]"
+  , s!"    x-leanfm-kind: {jsonString route.leanfmKind}"
+  , "    responses:"
+  , "      \"200\":"
+  , "        description: OK"
+  , "        content:"
+  , s!"          {route.contentType}:"
+  , "            schema:"
+  , s!"              type: {route.schema}"
+  ]
+
+def openApiYaml : String :=
+  joinWith "\n" <|
+    [ "openapi: 3.1.0"
+    , "info:"
+    , "  title: LeanFM Local Workbench API"
+    , "  version: 0.1.0"
+    , "  description: OpenAPI description generated by LeanFM from its server routes and protobuf-backed requirement messages."
+    , "servers:"
+    , "  - url: http://127.0.0.1:8080"
+    , "x-leanfm-requirement:"
+    , s!"  id: {jsonString LeanFM.LLMGenerated.Requirements.workerRequirement.id}"
+    , s!"  title: {jsonString LeanFM.LLMGenerated.Requirements.workerRequirement.title}"
+    , "paths:"
+    ] ++
+    indentLines "  " (openApiRoutes.foldr (fun route acc => openApiRouteYaml route ++ acc) []) ++
+    [ "components:"
+    , "  schemas:"
+    ] ++
+    indentLines "    " (LeanFM.LLMGenerated.Requirements.workerRequirement.messages.foldr (fun msg acc => openApiMessageSchema msg ++ acc) [])
+
 def taskListName (tasks : List TaskKind) : String :=
   joinWith ", " (tasks.map taskName)
 
