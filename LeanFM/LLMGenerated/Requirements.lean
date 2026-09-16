@@ -504,12 +504,123 @@ def postReviewProcesses : List (LeanFM.RequirementProcess) :=
       }
   ]
 
+def atom (task : String) (src dst : WorkerActor) (message : WorkerMessage) : LeanFM.GrammarAtom :=
+  { task := task
+  , src := LeanFM.requirementName src
+  , dst := LeanFM.requirementName dst
+  , message := LeanFM.requirementName message
+  }
+
+def event (task : String) (src dst : WorkerActor) (message : WorkerMessage) : LeanFM.GrammarExpr :=
+  LeanFM.GrammarExpr.event (atom task src dst message)
+
+def seqList : List LeanFM.GrammarExpr -> LeanFM.GrammarExpr
+  | [] => LeanFM.GrammarExpr.empty
+  | [x] => x
+  | x :: xs => LeanFM.GrammarExpr.seq x (seqList xs)
+
+def getDocsGrammar : LeanFM.TaskGrammar :=
+  { task := "get_docs"
+  , entry := "start"
+  , terminals := ["done", "failed"]
+  , body :=
+      seqList
+        [ event "get_docs" WorkerActor.Client WorkerActor.Gateway WorkerMessage.Docs_GetRequest
+        , LeanFM.GrammarExpr.choice
+            [ event "get_docs" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Error_Response
+            , seqList
+                [ event "get_docs" WorkerActor.Gateway WorkerActor.Worker WorkerMessage.Docs_FetchCommand
+                , LeanFM.GrammarExpr.choice
+                    [ seqList
+                        [ event "get_docs" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Docs_FetchResult200
+                        , event "get_docs" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Docs_GetResponse
+                        ]
+                    , seqList
+                        [ event "get_docs" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Docs_FetchResult404
+                        , event "get_docs" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Error_Response
+                        ]
+                    ]
+                ]
+            ]
+        ]
+  }
+
+def postReviewGrammar : LeanFM.TaskGrammar :=
+  { task := "post_review"
+  , entry := "start"
+  , terminals := ["done", "failed"]
+  , body :=
+      seqList
+        [ event "post_review" WorkerActor.Client WorkerActor.Gateway WorkerMessage.Reviews_PostRequest
+        , LeanFM.GrammarExpr.choice
+            [ event "post_review" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Reviews_PostResponse400
+            , seqList
+                [ event "post_review" WorkerActor.Gateway WorkerActor.Worker WorkerMessage.Reviews_ModerateCommand
+                , LeanFM.GrammarExpr.choice
+                    [ seqList
+                        [ event "post_review" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Reviews_ModerationAccepted
+                        , event "post_review" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Reviews_PostResponse201
+                        ]
+                    , seqList
+                        [ event "post_review" WorkerActor.Worker WorkerActor.Gateway WorkerMessage.Reviews_ModerationRejected
+                        , event "post_review" WorkerActor.Gateway WorkerActor.Client WorkerMessage.Reviews_PostResponse400
+                        ]
+                    ]
+                ]
+            ]
+        ]
+  }
+
+def requiredProofs : List LeanFM.RequiredProof :=
+  [ { name := "Never get_docs success without auth proof"
+    , mode := LeanFM.RequiredProofMode.never
+    , task := "get_docs"
+    , predicate := "success && missing(auth_proof)"
+    }
+  , { name := "Always get_docs messages use declared src/dst"
+    , mode := LeanFM.RequiredProofMode.always
+    , task := "get_docs"
+    , predicate := "grammar atom src/dst equals protobuf-backed message schema src/dst"
+    }
+  , { name := "Eventually get_docs terminal"
+    , mode := LeanFM.RequiredProofMode.eventually
+    , task := "get_docs"
+    , predicate := "terminal"
+    }
+  , { name := "Possibly get_docs fetch failure"
+    , mode := LeanFM.RequiredProofMode.possibly
+    , task := "get_docs"
+    , predicate := "Docs.FetchResult404"
+    }
+  , { name := "Never post_review success without auth proof"
+    , mode := LeanFM.RequiredProofMode.never
+    , task := "post_review"
+    , predicate := "success && missing(auth_proof)"
+    }
+  , { name := "Always post_review messages use declared src/dst"
+    , mode := LeanFM.RequiredProofMode.always
+    , task := "post_review"
+    , predicate := "grammar atom src/dst equals protobuf-backed message schema src/dst"
+    }
+  , { name := "Eventually post_review terminal"
+    , mode := LeanFM.RequiredProofMode.eventually
+    , task := "post_review"
+    , predicate := "terminal"
+    }
+  , { name := "Possibly post_review moderation rejection"
+    , mode := LeanFM.RequiredProofMode.possibly
+    , task := "post_review"
+    , predicate := "Reviews.ModerationRejected"
+    }
+  ]
+
 def workerRequirement : LeanFM.RequirementSpec :=
   { id := "worker.visible_behavior"
   , title := "Worker visible-behavior requirements"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker].map LeanFM.requirementName
   , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
+  , grammars := [getDocsGrammar, postReviewGrammar]
   , processes := getDocsProcesses ++ postReviewProcesses
   , properties :=
       [ { name := "AF get_docs terminal", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "terminal" }
@@ -519,6 +630,7 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { name := "AG no post_review success without auth_proof", mode := LeanFM.PropertyMode.never, task := "post_review", expression := "success && missing(auth_proof)" }
       , { name := "EF post_review moderation rejection", mode := LeanFM.PropertyMode.eventually, task := "post_review", expression := "decision=rejected" }
       ]
+  , requiredProofs := requiredProofs
   , charts :=
       [ { name := "latency by task", kind := LeanFM.ChartKind.xy, source := "messages", groupBy := some "task", value := "sum(dwellMs)" }
       , { name := "bytes by actor", kind := LeanFM.ChartKind.pie, source := "messages", groupBy := some "src", value := "sum(bytes_moved)" }

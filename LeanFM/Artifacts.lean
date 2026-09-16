@@ -38,6 +38,20 @@ inductive PropertyMode where
   | preparedFor
 deriving DecidableEq, Repr
 
+inductive RequiredProofMode where
+  | never
+  | always
+  | eventually
+  | possibly
+deriving DecidableEq, Repr
+
+structure RequiredProof where
+  name : String
+  mode : RequiredProofMode
+  task : String
+  predicate : String
+deriving Repr
+
 inductive ChartKind where
   | xy
   | pie
@@ -115,6 +129,30 @@ structure TaskRequirement where
   transitions : List RequirementTransition
 deriving Repr
 
+structure GrammarAtom where
+  task : String
+  src : String
+  dst : String
+  message : String
+deriving Repr
+
+inductive GrammarExpr where
+  | empty
+  | event : GrammarAtom -> GrammarExpr
+  | seq : GrammarExpr -> GrammarExpr -> GrammarExpr
+  | choice : List GrammarExpr -> GrammarExpr
+  | parallel : GrammarExpr -> GrammarExpr -> GrammarExpr
+  | guard : String -> GrammarExpr -> GrammarExpr
+  | ref : String -> GrammarExpr
+deriving Repr
+
+structure TaskGrammar where
+  task : String
+  entry : String
+  terminals : List String
+  body : GrammarExpr
+deriving Repr
+
 structure RequirementProperty where
   name : String
   mode : PropertyMode
@@ -150,8 +188,10 @@ structure RequirementSpec where
   actors : List String
   messages : List MessageSchema
   tasks : List TaskRequirement
+  grammars : List TaskGrammar
   processes : List RequirementProcess
   properties : List RequirementProperty
+  requiredProofs : List RequiredProof
   charts : List RequirementChart
   markdown : List RequirementMarkdown
 deriving Repr
@@ -275,6 +315,27 @@ def taskProcesses (spec : RequirementSpec) (task : String) : List RequirementPro
 
 def taskTransitionMessages (task : TaskRequirement) : List String :=
   task.transitions.map (fun tr => tr.message)
+
+def grammarIds (spec : RequirementSpec) : List String :=
+  spec.grammars.map (fun grammar => grammar.task)
+
+partial def grammarAtoms : GrammarExpr -> List GrammarAtom
+  | GrammarExpr.empty => []
+  | GrammarExpr.event atom => [atom]
+  | GrammarExpr.seq left right => grammarAtoms left ++ grammarAtoms right
+  | GrammarExpr.choice branches => branches.foldr (fun branch acc => grammarAtoms branch ++ acc) []
+  | GrammarExpr.parallel left right => grammarAtoms left ++ grammarAtoms right
+  | GrammarExpr.guard _ body => grammarAtoms body
+  | GrammarExpr.ref _ => []
+
+partial def grammarRefs : GrammarExpr -> List String
+  | GrammarExpr.empty => []
+  | GrammarExpr.event _ => []
+  | GrammarExpr.seq left right => grammarRefs left ++ grammarRefs right
+  | GrammarExpr.choice branches => branches.foldr (fun branch acc => grammarRefs branch ++ acc) []
+  | GrammarExpr.parallel left right => grammarRefs left ++ grammarRefs right
+  | GrammarExpr.guard _ body => grammarRefs body
+  | GrammarExpr.ref task => [task]
 
 def listIntersects [DecidableEq α] (xs ys : List α) : Bool :=
   xs.any (fun x => ys.contains x)
@@ -416,12 +477,44 @@ def validateTaskTransitionProcessCoverage (spec : RequirementSpec) (task : TaskR
       acc)
     []
 
+def validateGrammarAtom (spec : RequirementSpec) (grammar : TaskGrammar) (atom : GrammarAtom) : List String :=
+  match findMessage? spec atom.message with
+  | none => ["grammar " ++ grammar.task ++ " references unknown message: " ++ atom.message]
+  | some msg =>
+      (if atom.task == grammar.task then [] else ["grammar " ++ grammar.task ++ " contains atom for different task: " ++ atom.task]) ++
+      (if atom.src == msg.src then [] else ["grammar " ++ grammar.task ++ " atom " ++ atom.message ++ " has src " ++ atom.src ++ " but message src is " ++ msg.src]) ++
+      (if atom.dst == msg.dst then [] else ["grammar " ++ grammar.task ++ " atom " ++ atom.message ++ " has dst " ++ atom.dst ++ " but message dst is " ++ msg.dst])
+
+def validateTaskGrammar (spec : RequirementSpec) (grammar : TaskGrammar) : List String :=
+  let maybeTask := spec.tasks.find? (fun task => task.id == grammar.task)
+  let taskStateIds :=
+    match maybeTask with
+    | some task => stateIds task
+    | none => []
+  let atoms := grammarAtoms grammar.body
+  let refs := grammarRefs grammar.body
+  (if (taskIds spec).contains grammar.task then [] else ["grammar references unknown task: " ++ grammar.task]) ++
+  (if taskStateIds.contains grammar.entry then [] else ["grammar " ++ grammar.task ++ " entry is not a task state: " ++ grammar.entry]) ++
+  (grammar.terminals.filterMap fun terminal =>
+    if taskStateIds.contains terminal then none else some ("grammar " ++ grammar.task ++ " terminal is not a task state: " ++ terminal)) ++
+  (if atoms.isEmpty then ["grammar " ++ grammar.task ++ " has no event atoms"] else []) ++
+  refs.filterMap (fun task =>
+    if (taskIds spec).contains task then none else some ("grammar " ++ grammar.task ++ " references unknown grammar task: " ++ task)) ++
+  atoms.foldr (fun atom acc => validateGrammarAtom spec grammar atom ++ acc) []
+
+def validateRequiredProof (spec : RequirementSpec) (proof : RequiredProof) : List String :=
+  (if proof.name == "" then ["required proof has empty name"] else []) ++
+  (if (taskIds spec).contains proof.task then [] else ["required proof " ++ proof.name ++ " references unknown task: " ++ proof.task]) ++
+  (if proof.predicate == "" then ["required proof " ++ proof.name ++ " has empty predicate"] else [])
+
 def validateRequirementSpec (spec : RequirementSpec) : List String :=
   let duplicateActors := (duplicateStrings spec.actors).map fun id => "duplicate actor: " ++ id
   let duplicateMessages := (duplicateStrings (messageNames spec)).map fun id => "duplicate message: " ++ id
   let duplicateTasks := (duplicateStrings (taskIds spec)).map fun id => "duplicate task: " ++ id
+  let duplicateGrammars := (duplicateStrings (grammarIds spec)).map fun id => "duplicate grammar for task: " ++ id
   let messageErrors := spec.messages.foldr (fun msg acc => validateMessageSchema spec.actors msg ++ acc) []
   let taskErrors := spec.tasks.foldr (fun task acc => validateTaskRequirement spec task ++ validateTaskProcesses spec task ++ validateTaskTransitionProcessCoverage spec task ++ acc) []
+  let grammarErrors := spec.grammars.foldr (fun grammar acc => validateTaskGrammar spec grammar ++ acc) []
   let processErrors := spec.processes.foldr (fun process acc => validateRequirementProcess spec process ++ acc) []
   let propertyErrors :=
     spec.properties.foldr
@@ -431,6 +524,7 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
         (if prop.expression == "" then ["property " ++ prop.name ++ " has empty expression"] else []) ++
         acc)
       []
+  let proofErrors := spec.requiredProofs.foldr (fun proof acc => validateRequiredProof spec proof ++ acc) []
   let chartErrors :=
     spec.charts.foldr
       (fun chart acc =>
@@ -452,9 +546,11 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.actors.isEmpty then ["requirement " ++ spec.id ++ " has no actors"] else []) ++
   (if spec.messages.isEmpty then ["requirement " ++ spec.id ++ " has no message schemas"] else []) ++
   (if spec.tasks.isEmpty then ["requirement " ++ spec.id ++ " has no task FSMs"] else []) ++
+  (if spec.grammars.isEmpty then ["requirement " ++ spec.id ++ " has no multiparty grammars"] else []) ++
   (if spec.processes.isEmpty then ["requirement " ++ spec.id ++ " has no communicating sequential processes"] else []) ++
   (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
-  duplicateActors ++ duplicateMessages ++ duplicateTasks ++ messageErrors ++ taskErrors ++ processErrors ++ propertyErrors ++ chartErrors ++ markdownErrors
+  (if spec.requiredProofs.isEmpty then ["requirement " ++ spec.id ++ " has no required proof obligations"] else []) ++
+  duplicateActors ++ duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++ grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ chartErrors ++ markdownErrors
 
 def transitionMessageLabel (spec : RequirementSpec) (message : String) : String :=
   match spec.messages.find? (fun msg => msg.name == message) with
@@ -609,11 +705,14 @@ def generatedRequirementSystemPrompt : String :=
     , "MessageFraming must say how bytes are emitted and consumed: protobufMessage, protobufOneof, or transportEnvelope."
     , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
+    , "Define TaskGrammar values with GrammarExpr.event atoms labeled by task, src actor, dst actor, and message atom."
+    , "Use GrammarExpr.seq for causality, GrammarExpr.choice for alternatives, GrammarExpr.parallel for commuting independent work, GrammarExpr.guard for context-sensitive visible facts, and GrammarExpr.ref for task references."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
     , "Each task transition message must appear in one actor process sends list and one actor process receives list."
+    , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
-    , "Define RequirementSpec with actors, messages, tasks, processes, properties, charts, and markdown."
+    , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]
