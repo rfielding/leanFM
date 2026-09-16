@@ -5,7 +5,17 @@
   const empty={
     id:'empty', task:'No active draft', actors:[], messages:[], properties:[], reducers:[], markdown:''
   };
-  let model=JSON.parse(localStorage.getItem('leanfm.subject')||'null')||empty;
+  let bootModel=null;
+  try{
+    const boot=document.getElementById('subjectInitialModel');
+    if(boot)bootModel=JSON.parse(boot.textContent);
+
+  }
+  catch(_){
+    bootModel=null;
+
+  }
+  let model=JSON.parse(localStorage.getItem('leanfm.subject')||'null')||bootModel||empty;
   function esc(s){
     return String(s).replace(/[&<>]/g, c=>({
       '&':'&amp;', '<':'&lt;', '>':'&gt;'
@@ -122,7 +132,7 @@
     ctx.fillText(label, x+14, y+24);
 
   }
-  let openGroups=new Set(JSON.parse(localStorage.getItem('leanfm.subject.open')||'[]'));
+  let openGroups=new Set(JSON.parse(localStorage.getItem('leanfm.subject.open')||'null')||['pre', 'exchange', 'annotations']);
   let nodes=[], edges=[], hit=[], childById=new Map(), drag=null, pan=null, hover=null, started=false;
   let view=JSON.parse(localStorage.getItem('leanfm.subject.view')||'null')||{
     x:0, y:0, z:1

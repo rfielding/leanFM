@@ -711,8 +711,92 @@ def conversationPicker : String :=
   "async function loadConversations(){const xs=await fetch('/tools/conversations').then(r=>r.json());conversationSelect.innerHTML=xs.map(x=>'<option value=\"'+x.id+'\">'+x.label+'</option>').join('');async function pick(){const c=xs.find(x=>x.id===conversationSelect.value)||xs[0];conversationLean.href=c.leanFile;conversationDot.href=c.dot;conversationLean.textContent=c.leanFile;conversationDot.textContent=c.dot;conversationPreview.textContent=await fetch(c.leanFile).then(r=>r.text());}conversationSelect.addEventListener('change',pick);conversationSelect.value='get_docs';pick();}loadConversations();" ++
   "</script>"
 
+def frontPropertyModeName : PropertyMode -> String
+  | .eventually => "Eventually"
+  | .always => "Always"
+  | .never => "Never"
+  | .preparedFor => "Prepared for"
+
+def frontRequiredProofModeName : RequiredProofMode -> String
+  | .never => "Never"
+  | .always => "Always"
+  | .eventually => "Eventually"
+  | .possibly => "Possibly"
+
+def frontChartKindName : ChartKind -> String
+  | .xy => "xy"
+  | .pie => "pie"
+
+def frontProbabilityName : Option Probability -> String
+  | none => ""
+  | some p => s!" p={p.numerator}/{p.denominator}"
+
+def messageSummaryLine (msg : MessageSchema) : String :=
+  msg.src ++ " -> " ++ msg.dst ++ " " ++ msg.name ++ " fields={" ++ joinWith "," (msg.fields.map (fun f => f.name)) ++ "}"
+
+def propertySummaryLine (prop : RequirementProperty) : String :=
+  frontPropertyModeName prop.mode ++ " " ++ prop.task ++ ": " ++ prop.expression ++ frontProbabilityName prop.probability
+
+def requiredProofSummaryLine (proof : RequiredProof) : String :=
+  frontRequiredProofModeName proof.mode ++ " " ++ proof.task ++ ": " ++ proof.predicate ++ frontProbabilityName proof.probability
+
+def chartSummaryLine (chart : RequirementChart) : String :=
+  chart.name ++ " (" ++ frontChartKindName chart.kind ++ ", source=" ++ chart.source ++ ", value=" ++ chart.value ++ ")"
+
+def currentRequirementSubjectJson : String :=
+  let spec := LeanFM.LLMGenerated.Requirements.workerRequirement
+  let markdown :=
+    joinWith "\n" <|
+      [ spec.title
+      , "Actors: " ++ joinWith ", " spec.actors
+      , "Tasks: " ++ joinWith ", " (spec.tasks.map (fun task => task.id))
+      , "The graph is derived from declared message schemas, proof obligations, and reducers."
+      ] ++
+      spec.requiredProofs.map requiredProofSummaryLine
+  "{" ++
+  "\"id\":" ++ jsonString spec.id ++ "," ++
+  "\"label\":" ++ jsonString spec.title ++ "," ++
+  "\"task\":" ++ jsonString "worker.visible_behavior" ++ "," ++
+  "\"entry\":" ++ jsonString "message-selected task instance" ++ "," ++
+  "\"actors\":" ++ jsonList (spec.actors.map jsonString) ++ "," ++
+  "\"messages\":" ++ jsonList (spec.messages.map (fun msg => jsonString (messageSummaryLine msg))) ++ "," ++
+  "\"properties\":" ++ jsonList ((spec.properties.map propertySummaryLine ++ spec.requiredProofs.map requiredProofSummaryLine).map jsonString) ++ "," ++
+  "\"reducers\":" ++ jsonList (spec.charts.map (fun chart => jsonString (chartSummaryLine chart))) ++ "," ++
+  "\"markdown\":" ++ jsonString markdown ++
+  "}"
+
+def htmlEscape (s : String) : String :=
+  String.join <| s.toList.map fun c =>
+    if c == '&' then "&amp;"
+    else if c == '<' then "&lt;"
+    else if c == '>' then "&gt;"
+    else if c == '"' then "&quot;"
+    else c.toString
+
+def htmlList (items : List String) : String :=
+  "<ul>" ++ String.join (items.map fun item => "<li>" ++ htmlEscape item ++ "</li>") ++ "</ul>"
+
+def linkList (items : List (String × String)) : String :=
+  "<ul>" ++ String.join (items.map fun item => "<li><a href=\"" ++ item.2 ++ "\">" ++ htmlEscape item.1 ++ "</a></li>") ++ "</ul>"
+
+def frontPageOverview : String :=
+  let spec := LeanFM.LLMGenerated.Requirements.workerRequirement
+  "<section class=\"modelOverview\"><div><h2>Current Actor Model</h2>" ++
+  "<p>The front page is the current compiled LeanFM requirement: visible actors, protobuf-backed messages, proof obligations, and graph artifacts derived from those messages.</p>" ++
+  "<div class=\"overviewGrid\">" ++
+  "<div class=\"overviewCard\"><h3>Actors</h3>" ++ htmlList spec.actors ++ "</div>" ++
+  "<div class=\"overviewCard\"><h3>Tasks</h3>" ++ htmlList (spec.tasks.map (fun task => task.id ++ " (" ++ toString task.states.length ++ " states, " ++ toString task.transitions.length ++ " transitions)")) ++ "</div>" ++
+  "<div class=\"overviewCard\"><h3>Proofs</h3>" ++ htmlList (spec.requiredProofs.map requiredProofSummaryLine) ++ "</div>" ++
+  "<div class=\"overviewCard\"><h3>Graphs</h3>" ++
+    linkList [("aggregate graph", "/examples#aggregate"), ("worker DOT", "/graph.dot"), ("get_docs DOT", "/get_docs.dot"), ("post_review DOT", "/post_review.dot"), ("assembled DOT", "/assembled.dot"), ("canvas renders", "/renders/")] ++
+  "</div>" ++
+  "<div class=\"overviewCard wide\"><h3>Message Atoms</h3>" ++ htmlList (spec.messages.map messageSummaryLine) ++ "</div>" ++
+  "<div class=\"overviewCard wide\"><h3>Reducers</h3>" ++ htmlList (spec.charts.map chartSummaryLine) ++ "</div>" ++
+  "</div></div></section>"
+
 def liveSubjectGraph : String :=
-  "<section><h2>Current Requirement</h2><div class=\"controlPanel\"><label><input id=\"subjectCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"subjectZoomOut\" type=\"button\">-</button><span id=\"subjectZoomLabel\">100%</span><button id=\"subjectZoomIn\" type=\"button\">+</button><button id=\"subjectZoomReset\" type=\"button\">reset</button></span></div><div class=\"subjectPanel\"><canvas id=\"subjectGraph\" width=\"1180\" height=\"720\"></canvas><div><h3 id=\"subjectTitle\">No active draft</h3><p id=\"subjectSummary\">Ask the assistant to sketch a protocol or task.</p><div id=\"subjectArtifacts\" class=\"artifactPanel\"></div></div></div></section>" ++
+  "<section><h2>Current Requirement Graph</h2><div class=\"controlPanel\"><label><input id=\"subjectCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"subjectZoomOut\" type=\"button\">-</button><span id=\"subjectZoomLabel\">100%</span><button id=\"subjectZoomIn\" type=\"button\">+</button><button id=\"subjectZoomReset\" type=\"button\">reset</button></span></div><div class=\"subjectPanel\"><canvas id=\"subjectGraph\" width=\"1180\" height=\"720\"></canvas><div><h3 id=\"subjectTitle\">Current compiled requirement</h3><p id=\"subjectSummary\">Actors, messages, proof obligations, and reducers are loaded from the current Lean model.</p><div id=\"subjectArtifacts\" class=\"artifactPanel\"></div></div></div></section>" ++
+  "<script id=\"subjectInitialModel\" type=\"application/json\">" ++ currentRequirementSubjectJson ++ "</script>" ++
   "<script>" ++ LeanFM.StaticAssets.subjectGraphJs ++ "</script>"
 
 def chatWorkbench : String :=
@@ -819,7 +903,7 @@ def chartsSection : String :=
   "function cumulativeBytes(){let n=0;return orderedMessages.map((m,i)=>{n+=m.bytes;return{label:String(i+1),v:n};});}" ++
   "function messageIndex(){return orderedMessages.map((m,i)=>({label:m.task.replace('_',' ')+' '+String(i+1),v:i+1}));}" ++
   "function taskElapsed(){const by=new Map();orderedMessages.forEach(m=>{const r=by.get(m.task)||{min:m.ts,max:m.ts};r.min=Math.min(r.min,m.ts);r.max=Math.max(r.max,m.ts);by.set(m.task,r);});return [...by.entries()].map(([label,r])=>({label,v:r.max-r.min+1}));}" ++
-  "const chartDatasets={" ++
+  "const builtinChartDatasets={" ++
   "cumulative_bytes:{label:'cumulative bytes over ordered messages',line:()=>[{name:'bytes',color:'#93c5fd',values:cumulativeBytes()}],pie:()=>countBy(orderedMessages,'task').map((d,i)=>({label:d.label,value:d.value,color:['#93c5fd','#fbbf24','#22c55e'][i%3]}))}," ++
   "messages_by_task:{label:'messages by task',line:()=>[{name:'count',color:'#fbbf24',values:countBy(orderedMessages,'task').map(d=>({label:d.label,v:d.value}))}],pie:()=>countBy(orderedMessages,'task').map((d,i)=>({label:d.label,value:d.value,color:['#22c55e','#93c5fd','#fbbf24'][i%3]}))}," ++
   "messages_by_actor:{label:'messages sent by actor',line:()=>[{name:'sent',color:'#22c55e',values:countBy(orderedMessages,'src').map(d=>({label:d.label,v:d.value}))}],pie:()=>countBy(orderedMessages,'src').map((d,i)=>({label:d.label,value:d.value,color:['#93c5fd','#fbbf24','#22c55e','#ef4444','#a78bfa'][i%5]}))}," ++
@@ -832,8 +916,8 @@ def chartsSection : String :=
   "function chartFrame(ctx,w,h,title){ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.strokeRect(0,0,w,h);ctx.fillStyle='#fff';ctx.font='16px sans-serif';ctx.textAlign='left';ctx.fillText(title,18,28);ctx.strokeStyle='#444';ctx.beginPath();ctx.moveTo(58,48);ctx.lineTo(58,h-46);ctx.lineTo(w-24,h-46);ctx.stroke();}" ++
   "function lineChart(id,title,series){const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;chartFrame(ctx,w,h,title);const max=Math.max(...series.flatMap(s=>s.values.map(p=>p.v)),1);for(let gi=0;gi<5;gi++){const y=48+(h-94)*gi/4;ctx.strokeStyle='#252525';ctx.beginPath();ctx.moveTo(58,y);ctx.lineTo(w-24,y);ctx.stroke();ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.textAlign='right';ctx.fillText((max*(1-gi/4)).toFixed(2),52,y+4);}series.forEach(s=>{ctx.strokeStyle=s.color;ctx.fillStyle=s.color;ctx.lineWidth=2;ctx.beginPath();s.values.forEach((p,i)=>{const x=72+(w-116)*i/Math.max(1,s.values.length-1);const y=h-46-(h-104)*(p.v/max);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();s.values.forEach((p,i)=>{const x=72+(w-116)*i/Math.max(1,s.values.length-1);const y=h-46-(h-104)*(p.v/max);ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ddd';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(p.label,x,h-26);ctx.fillStyle=s.color;});});let lx=w-190,ly=26;series.forEach(s=>{ctx.fillStyle=s.color;ctx.fillRect(lx,ly,12,8);ctx.fillStyle='#fff';ctx.font='12px sans-serif';ctx.textAlign='left';ctx.fillText(s.name,lx+18,ly+8);ly+=18;});}" ++
   "function pieChart(id,title,data){const c=document.getElementById(id),ctx=c.getContext('2d'),w=c.width,h=c.height;chartFrame(ctx,w,h,title);const total=data.reduce((n,d)=>n+d.value,0);let a=-Math.PI/2;const cx=w/2,cy=150,r=78;data.forEach(d=>{const b=a+Math.PI*2*(d.value/total);ctx.fillStyle=d.color;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,a,b);ctx.closePath();ctx.fill();a=b;});let y=242;data.forEach(d=>{ctx.fillStyle=d.color;ctx.fillRect(48,y-10,14,10);ctx.fillStyle='#fff';ctx.font='13px sans-serif';ctx.textAlign='left';ctx.fillText(d.label+' '+d.value.toFixed(4),70,y);y+=20;});}" ++
-  "function fillChartSelect(id,selected){const s=document.getElementById(id);s.innerHTML=Object.entries(chartDatasets).map(([k,d])=>'<option value=\"'+k+'\"'+(k===selected?' selected':'')+'>'+d.label+'</option>').join('');}" ++
-  "function renderSlot(slot){const kind=document.getElementById('chartKind'+slot).value,key=document.getElementById('chartData'+slot).value,ds=chartDatasets[key],id='chart'+slot;if(kind==='pie')pieChart(id,ds.label,ds.pie());else lineChart(id,ds.label,ds.line());}" ++
+  "function fillChartSelect(id,selected){const s=document.getElementById(id);s.innerHTML=Object.entries(builtinChartDatasets).map(([k,d])=>'<option value=\"'+k+'\"'+(k===selected?' selected':'')+'>'+d.label+'</option>').join('');}" ++
+  "function renderSlot(slot){const kind=document.getElementById('chartKind'+slot).value,key=document.getElementById('chartData'+slot).value,ds=builtinChartDatasets[key],id='chart'+slot;if(kind==='pie')pieChart(id,ds.label,ds.pie());else lineChart(id,ds.label,ds.line());}" ++
   "function renderCharts(){renderSlot('A');renderSlot('B');}" ++
   "fillChartSelect('chartDataA','cumulative_bytes');fillChartSelect('chartDataB','messages_by_task');['chartKindA','chartKindB','chartDataA','chartDataB'].forEach(id=>document.getElementById(id).addEventListener('change',renderCharts));renderCharts();" ++
   "</script>"
@@ -1009,13 +1093,13 @@ def aggregateGraphDataValidationReport : String :=
   LeanFM.LLMGenerated.Requirements.validationReport
 
 def aggregateGraphAnimation : String :=
-  "<section><h2>Aggregate Graph</h2><div class=\"controlPanel\"><label><input id=\"aggCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"aggZoomOut\" type=\"button\">-</button><span id=\"aggZoomLabel\">100%</span><button id=\"aggZoomIn\" type=\"button\">+</button><button id=\"aggZoomReset\" type=\"button\">reset</button></span></div><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
+  "<section id=\"aggregate\"><h2>Aggregate Graph</h2><div class=\"controlPanel\"><label><input id=\"aggCutEdges\" type=\"checkbox\" checked> edge corridors push boxes out of arrow paths</label> <span class=\"zoomControls\"><button id=\"aggZoomOut\" type=\"button\">-</button><span id=\"aggZoomLabel\">100%</span><button id=\"aggZoomIn\" type=\"button\">+</button><button id=\"aggZoomReset\" type=\"button\">reset</button></span></div><div class=\"canvasPanel\"><canvas id=\"aggGraph\" width=\"1000\" height=\"520\"></canvas><div id=\"aggInfo\"></div></div></section>" ++
   "<script id=\"aggGraphModel\" type=\"application/json\">" ++ aggregateGraphJson LeanFM.LLMGenerated.Requirements.aggregateGraphData ++ "</script>" ++
   "<script>" ++ LeanFM.StaticAssets.aggregateGraphJs ++ "</script>"
 
 def pageCss : String :=
   "<meta name=\"color-scheme\" content=\"dark only\">" ++
-  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagramGrid canvas{display:block;width:100%;max-width:900px;height:auto;background:#111;border-top:1px solid #333}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.zoomControls{display:inline-flex;gap:.35rem;align-items:center;margin-left:.75rem}.zoomControls button{background:#000;color:#fff;border:1px solid #666;padding:.25rem .55rem;min-width:2rem}.zoomControls span{font:12px ui-monospace,monospace;color:#ddd;min-width:3.5rem;text-align:center}.subjectPanel{display:grid;grid-template-columns:minmax(420px,1fr) 340px;gap:1rem;align-items:start}.subjectPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555}.artifactPanel details{margin:.5rem 0}.artifactPanel pre{max-height:220px}.chatShell{display:grid;grid-template-columns:minmax(320px,2fr) minmax(260px,1fr);gap:1rem;border:1px solid #444;background:#090909;padding:1rem;margin-bottom:1rem}.chatLog{height:340px;overflow:auto;background:#050505;border:1px solid #333;padding:1rem}.bubble{max-width:76%;padding:.7rem .85rem;margin:.55rem 0;border:1px solid #444;white-space:normal}.bubble.user{margin-left:auto;background:#10233f}.bubble.assistant{background:#111827}.chatInput{grid-column:1 / 2;display:grid;grid-template-columns:1fr auto;gap:.5rem}.chatInput textarea{background:#000;color:#fff;border:1px solid #666;padding:.65rem;font:14px ui-monospace,monospace;resize:vertical}.chatInput button{background:#1d4ed8;color:#fff;border:1px solid #93c5fd;padding:0 1rem;font-weight:700}.toolLog{grid-column:2;grid-row:1 / 3;height:420px;overflow:auto;background:#050505;border:1px solid #333;padding:.75rem;font:12px ui-monospace,monospace}.toolCall{border-bottom:1px solid #222;padding:.4rem 0;color:#93c5fd}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555;cursor:grab}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}.chartControls,.chartEditor{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;align-items:end;margin:.5rem 0 1rem}.chartControls select,.chartEditor select,.chartEditor input{background:#000;color:#fff;border:1px solid #666;padding:.4rem;width:100%;box-sizing:border-box}.chartEditor button{background:#000;color:#fff;border:1px solid #666;padding:.45rem .7rem}.chartGrid,.namedCharts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem}.chartGrid canvas,.namedCharts canvas{width:100%;height:auto;background:#111;border:1px solid #555}.chartCard{background:#090909;border:1px solid #444;padding:.75rem}.chartCard h3{margin:.1rem 0 .5rem;font-size:1rem}.chartCardDelete{margin-top:.5rem;background:#000;color:#fff;border:1px solid #666;padding:.35rem .65rem}@media(max-width:900px){.subjectPanel,.chatShell,.canvasPanel{grid-template-columns:1fr}.toolLog{grid-column:auto;grid-row:auto}.chatInput{grid-column:auto}}</style>"
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}pre{background:#050505;color:#f8f8f8;border:1px solid #333;padding:1rem;overflow:auto}code{font-family:ui-monospace,monospace}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.modelOverview{border:1px solid #444;background:#090909;padding:1rem;margin:1rem 0}.overviewGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem}.overviewCard{border:1px solid #333;background:#050505;padding:.8rem}.overviewCard.wide{grid-column:span 2}.overviewCard h3{margin:.1rem 0 .5rem;font-size:1rem}.overviewCard ul{margin:.25rem 0 0;padding-left:1.25rem}.overviewCard li{margin:.25rem 0}.diagram{background:#111;border-top:1px solid #333;margin:0;padding:1rem;overflow:auto;min-height:220px;forced-color-adjust:none}.diagramGrid canvas{display:block;width:100%;max-width:900px;height:auto;background:#111;border-top:1px solid #333}.controlPanel{margin:.5rem 0 1rem}.controlPanel select{background:#000;color:#fff;border:1px solid #666;padding:.35rem}.zoomControls{display:inline-flex;gap:.35rem;align-items:center;margin-left:.75rem}.zoomControls button{background:#000;color:#fff;border:1px solid #666;padding:.25rem .55rem;min-width:2rem}.zoomControls span{font:12px ui-monospace,monospace;color:#ddd;min-width:3.5rem;text-align:center}.subjectPanel{display:grid;grid-template-columns:minmax(420px,1fr) 340px;gap:1rem;align-items:start}.subjectPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555}.artifactPanel details{margin:.5rem 0}.artifactPanel pre{max-height:220px}.chatShell{display:grid;grid-template-columns:minmax(320px,2fr) minmax(260px,1fr);gap:1rem;border:1px solid #444;background:#090909;padding:1rem;margin-bottom:1rem}.chatLog{height:340px;overflow:auto;background:#050505;border:1px solid #333;padding:1rem}.bubble{max-width:76%;padding:.7rem .85rem;margin:.55rem 0;border:1px solid #444;white-space:normal}.bubble.user{margin-left:auto;background:#10233f}.bubble.assistant{background:#111827}.chatInput{grid-column:1 / 2;display:grid;grid-template-columns:1fr auto;gap:.5rem}.chatInput textarea{background:#000;color:#fff;border:1px solid #666;padding:.65rem;font:14px ui-monospace,monospace;resize:vertical}.chatInput button{background:#1d4ed8;color:#fff;border:1px solid #93c5fd;padding:0 1rem;font-weight:700}.toolLog{grid-column:2;grid-row:1 / 3;height:420px;overflow:auto;background:#050505;border:1px solid #333;padding:.75rem;font:12px ui-monospace,monospace}.toolCall{border-bottom:1px solid #222;padding:.4rem 0;color:#93c5fd}.canvasPanel{display:grid;grid-template-columns:minmax(320px,900px) minmax(260px,1fr);gap:1rem;align-items:start;overflow:auto}.canvasPanel canvas{width:100%;height:auto;background:#111;border:1px solid #555;cursor:grab}.canvasPanel #aggGraph{width:auto;max-width:none}.canvasPanel ol,.canvasPanel ul{margin:0;padding-left:1.5rem;font-family:ui-monospace,monospace}.canvasPanel li{padding:.2rem .35rem}.canvasPanel li.active{background:#1d4ed8;color:#fff}.chartControls,.chartEditor{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;align-items:end;margin:.5rem 0 1rem}.chartControls select,.chartEditor select,.chartEditor input{background:#000;color:#fff;border:1px solid #666;padding:.4rem;width:100%;box-sizing:border-box}.chartEditor button{background:#000;color:#fff;border:1px solid #666;padding:.45rem .7rem}.chartGrid,.namedCharts{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem}.chartGrid canvas,.namedCharts canvas{width:100%;height:auto;background:#111;border:1px solid #555}.chartCard{background:#090909;border:1px solid #444;padding:.75rem}.chartCard h3{margin:.1rem 0 .5rem;font-size:1rem}.chartCardDelete{margin-top:.5rem;background:#000;color:#fff;border:1px solid #666;padding:.35rem .65rem}@media(max-width:900px){.overviewCard.wide{grid-column:auto}.subjectPanel,.chatShell,.canvasPanel{grid-template-columns:1fr}.toolLog{grid-column:auto;grid-row:auto}.chatInput{grid-column:auto}}</style>"
 
 def topNav : String :=
   "<p><a href=\"/\">ask</a> | <a href=\"/examples\">examples</a> | <a href=\"/renders/\">canvas renders</a> | <a href=\"/metrics\">prometheus metrics</a> | <a href=\"/report\">generated report</a> | <a href=\"/docs/\">generated docs</a></p>"
@@ -1024,9 +1108,13 @@ def htmlPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM Workbench</title>" ++
   pageCss ++
   "</head><body><h1>LeanFM Workbench</h1>" ++
-  "<p>Ask for a visible-behavior protocol or requirement. The request router decides whether to call deterministic tools, return generated text, or link canvas renders.</p>" ++
+  "<p>Current visible-behavior model, proof obligations, and derived graph artifacts.</p>" ++
   topNav ++
+  frontPageOverview ++
   liveSubjectGraph ++
+  chartsSection ++
+  aggregateGraphAnimation ++
+  canvasDiagramGallery ++
   chatWorkbench ++
   "</body></html>"
 
