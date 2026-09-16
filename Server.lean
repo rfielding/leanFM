@@ -39,8 +39,65 @@ def requestBody (request : String) : String :=
   | _headers :: body :: _ => body
   | _ => ""
 
+def sessionChars : List Char :=
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".toList
+
+def isSessionChar (c : Char) : Bool :=
+  sessionChars.contains c
+
+def sanitizeSessionId (s : String) : String :=
+  String.ofList ((s.toList.filter isSessionChar).take 48)
+
+partial def takeSessionPrefixLoop (cs acc : List Char) : String :=
+  match cs with
+  | [] => String.ofList acc.reverse
+  | c :: rest =>
+      if isSessionChar c then
+        takeSessionPrefixLoop rest (c :: acc)
+      else
+        String.ofList acc.reverse
+
+def takeSessionPrefix (s : String) : String :=
+  takeSessionPrefixLoop s.toList []
+
+def sessionId? (request : String) : Option String :=
+  match request.splitOn "leanfm_session=" with
+  | _ :: rest :: _ =>
+      let sid := sanitizeSessionId (takeSessionPrefix rest)
+      if sid.length == 0 then none else some sid
+  | _ => none
+
 def hasSession (request : String) : Bool :=
-  request.contains "leanfm_session=local"
+  (sessionId? request).isSome
+
+def sessionsRoot : String :=
+  "/tmp/leanfm-sessions"
+
+def sessionWorkspaceString (sessionId : String) : String :=
+  sessionsRoot ++ "/" ++ sessionId
+
+def sessionGeneratedLeanString (sessionId : String) : String :=
+  sessionWorkspaceString sessionId ++ "/Requirements.lean"
+
+def sessionGeneratedProtoString (sessionId : String) : String :=
+  sessionWorkspaceString sessionId ++ "/Requirements.proto"
+
+def sessionWorkspace (sessionId : String) : System.FilePath :=
+  System.FilePath.mk (sessionWorkspaceString sessionId)
+
+def sessionGeneratedLeanPath (sessionId : String) : System.FilePath :=
+  System.FilePath.mk (sessionGeneratedLeanString sessionId)
+
+def sessionGeneratedProtoPath (sessionId : String) : System.FilePath :=
+  System.FilePath.mk (sessionGeneratedProtoString sessionId)
+
+def ensureSessionWorkspace (sessionId : String) : IO Unit :=
+  IO.FS.createDirAll (sessionWorkspace sessionId)
+
+def newSessionId : IO String := do
+  let a ← IO.rand 100000000 999999999
+  let b ← IO.rand 100000000 999999999
+  pure ("s" ++ toString a ++ "-" ++ toString b)
 
 def loginPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM Login</title>" ++
@@ -135,6 +192,57 @@ def callLLM (prompt : String) : IO Response := do
       else
         pure <| response 502 "text/plain; charset=utf-8" ("LLM request failed.\n" ++ out.stderr)
 
+def readTextOrElse (path : System.FilePath) (fallback : IO String) : IO String := do
+  try
+    IO.FS.readFile path
+  catch _ =>
+    fallback
+
+def defaultGeneratedRequirementsLean : IO String :=
+  readTextOrElse (System.FilePath.mk "LeanFM/LLMGenerated/Requirements.lean") (pure LeanFM.workerLeanFile)
+
+def sessionRequiredResponse (request : String) : IO Response := do
+  match sessionId? request with
+  | some sessionId =>
+      ensureSessionWorkspace sessionId
+      pure <| response 200 "application/json; charset=utf-8"
+        ("{\"session\":\"" ++ jsonEscape sessionId ++
+          "\",\"workspace\":\"" ++ jsonEscape (sessionWorkspaceString sessionId) ++
+          "\",\"files\":{\"requirementsLean\":\"/api/session/generated/requirements.lean\",\"requirementsProto\":\"/api/session/generated/requirements.proto\"}}\n")
+  | none =>
+      pure <| response 401 "application/json; charset=utf-8" "{\"error\":\"missing session\"}\n"
+
+def saveSessionArtifactResponse (sessionId path contentType body : String) : IO Response := do
+  ensureSessionWorkspace sessionId
+  IO.FS.writeFile (System.FilePath.mk path) body
+  pure <| response 200 "application/json; charset=utf-8"
+    ("{\"session\":\"" ++ jsonEscape sessionId ++
+      "\",\"path\":\"" ++ jsonEscape path ++
+      "\",\"contentType\":\"" ++ jsonEscape contentType ++
+      "\",\"bytes\":" ++ toString body.toUTF8.size ++ "}\n")
+
+def sessionGeneratedLeanResponse (request : String) : IO Response := do
+  match sessionId? request with
+  | none => pure <| response 401 "text/plain; charset=utf-8" "missing session\n"
+  | some sessionId =>
+      if requestMethod request == "POST" then
+        saveSessionArtifactResponse sessionId (sessionGeneratedLeanString sessionId) "text/plain; charset=utf-8" (requestBody request)
+      else
+        ensureSessionWorkspace sessionId
+        let body ← readTextOrElse (sessionGeneratedLeanPath sessionId) defaultGeneratedRequirementsLean
+        pure <| response 200 "text/plain; charset=utf-8" body
+
+def sessionGeneratedProtoResponse (request : String) : IO Response := do
+  match sessionId? request with
+  | none => pure <| response 401 "text/plain; charset=utf-8" "missing session\n"
+  | some sessionId =>
+      if requestMethod request == "POST" then
+        saveSessionArtifactResponse sessionId (sessionGeneratedProtoString sessionId) "text/x-protobuf; charset=utf-8" (requestBody request)
+      else
+        ensureSessionWorkspace sessionId
+        let body ← readTextOrElse (sessionGeneratedProtoPath sessionId) (pure LeanFM.LLMGenerated.Requirements.workerProtoFile)
+        pure <| response 200 "text/x-protobuf; charset=utf-8" body
+
 def responseBody (path : String) (request : String) : IO Response := do
   match path with
   | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
@@ -160,6 +268,10 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/llm-generated/requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/aggregate-graph/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.aggregateGraphDataValidationReport
+  | "/api/session" => sessionRequiredResponse request
+  | "/api/session/files" => sessionRequiredResponse request
+  | "/api/session/generated/requirements.lean" => sessionGeneratedLeanResponse request
+  | "/api/session/generated/requirements.proto" => sessionGeneratedProtoResponse request
   | "/generated/worker.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.LLMGenerated.Requirements.workerProtoFile
   | "/llm-generated/requirements.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.LLMGenerated.Requirements.workerProtoFile
   | "/api/llm" => callLLM (requestBody request)
@@ -201,7 +313,9 @@ def responseForRequest (request : String) : IO Response := do
     if requestMethod request == "POST" then
       let password ← configuredPassword
       if (requestBody request).contains ("password=" ++ password) then
-        pure <| redirectResponse "/" ["Set-Cookie: leanfm_session=local; Path=/; HttpOnly; SameSite=Lax"]
+        let sessionId ← newSessionId
+        ensureSessionWorkspace sessionId
+        pure <| redirectResponse "/" ["Set-Cookie: leanfm_session=" ++ sessionId ++ "; Path=/; HttpOnly; SameSite=Lax"]
       else
         pure <| response 403 "text/html; charset=utf-8" loginPage
     else
@@ -215,6 +329,7 @@ def statusText : Nat -> String
   | 200 => "OK"
   | 303 => "See Other"
   | 403 => "Forbidden"
+  | 401 => "Unauthorized"
   | 404 => "Not Found"
   | 502 => "Bad Gateway"
   | 503 => "Service Unavailable"
@@ -230,7 +345,7 @@ def httpHeader (status : Nat) (contentType : String) (body : ByteArray) (extraHe
   "Connection: close\r\n\r\n"
 
 def handleClient (client : TcpClient) : IO Unit := do
-  let requestBytes? ← (client.recv? 4096).block
+  let requestBytes? ← (client.recv? 1048576).block
   let request :=
     match requestBytes? with
     | some bytes => String.fromUTF8! bytes

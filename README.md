@@ -62,6 +62,11 @@ GET /tools/generated-requirements/validate generated typed Lean requirement vali
 GET /tools/llm-generated/requirements/validate canonical LLM-generated requirement validation route
 GET /tools/generated-artifacts/validate compatibility alias for generated requirement validation
 GET /tools/aggregate-graph/validate typed aggregate graph data validation
+GET /api/session current authenticated workspace id and per-session artifact links
+GET /api/session/generated/requirements.lean current session's generated Lean file, falling back to the built-in example
+POST /api/session/generated/requirements.lean replace the current session's generated Lean file
+GET /api/session/generated/requirements.proto current session's generated protobuf file, falling back to the built-in example
+POST /api/session/generated/requirements.proto replace the current session's generated protobuf file
 GET /generated/worker.proto protobuf schema generated from requirement messages
 GET /llm-generated/requirements.proto canonical LLM-generated protobuf schema
 GET /lean/get_docs.lean generated Lean view for a conversation

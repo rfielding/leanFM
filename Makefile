@@ -41,6 +41,9 @@ http-check:
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/prompt" | rg 'LeanFM/LLMGenerated/Requirements\.lean|Requirements\.proto|MessageFraming'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/validate" | rg '^ok: all generated requirements'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/aggregate-graph/validate" | rg '^ok: all generated requirements'
+	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/api/session" | rg 'requirementsLean|requirementsProto'
+	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/api/session/generated/requirements.lean" | rg 'namespace LeanFM\.LLMGenerated\.Requirements'
+	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/api/session/generated/requirements.proto" | rg 'message RequirementEnvelope|oneof atom|message Docs_GetRequest'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/llm-generated/requirements.proto" | rg 'message RequirementEnvelope|oneof atom|message Docs_GetRequest'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/openapi.yaml" | rg 'openapi: 3\.1\.0|x-leanfm-requirement|Docs\.GetRequest'
 	@curl -fsS -b "$(COOKIES)" -o "$(EXAMPLES_HTML)" "$(BASE_URL)/examples"
