@@ -349,6 +349,25 @@ Eventually loginTerminal
 Possibly tokenError
 ```
 
+When a task is an abstraction over incomplete implementation detail, the proof obligation can also carry a probability mass. The temporal predicate says what shape is being measured, and the probability summarizes how much of the current MDP/policy reaches that shape.
+
+```lean
+{ name := "Possibly token error"
+, mode := LeanFM.RequiredProofMode.possibly
+, task := "login"
+, predicate := "TokenError"
+, probability := some { numerator := 2, denominator := 100 }
+}
+```
+
+At a low level, the probability may come from branch weights on concrete messages. At a higher nested abstraction, it can be rolled up into summary statements such as:
+
+```text
+Possibly tokenError with P=2/100
+Eventually loginTerminal with P=1/1
+Never sessionWithoutToken with P=0/1
+```
+
 ## Parallel Composition
 
 After login, independent tasks may run in parallel:

@@ -45,11 +45,20 @@ inductive RequiredProofMode where
   | possibly
 deriving DecidableEq, Repr
 
+structure Probability where
+  numerator : Nat
+  denominator : Nat
+deriving DecidableEq, Repr
+
+def Probability.isValid (p : Probability) : Bool :=
+  p.denominator != 0 && p.numerator <= p.denominator
+
 structure RequiredProof where
   name : String
   mode : RequiredProofMode
   task : String
   predicate : String
+  probability : Option Probability
 deriving Repr
 
 inductive ChartKind where
@@ -195,6 +204,7 @@ structure RequirementProperty where
   mode : PropertyMode
   task : String
   expression : String
+  probability : Option Probability
 deriving Repr
 
 structure RequirementChart where
@@ -544,7 +554,11 @@ def validateTaskGrammar (spec : RequirementSpec) (grammar : TaskGrammar) : List 
 def validateRequiredProof (spec : RequirementSpec) (proof : RequiredProof) : List String :=
   (if proof.name == "" then ["required proof has empty name"] else []) ++
   (if (taskIds spec).contains proof.task then [] else ["required proof " ++ proof.name ++ " references unknown task: " ++ proof.task]) ++
-  (if proof.predicate == "" then ["required proof " ++ proof.name ++ " has empty predicate"] else [])
+  (if proof.predicate == "" then ["required proof " ++ proof.name ++ " has empty predicate"] else []) ++
+  (match proof.probability with
+  | none => []
+  | some p =>
+      if p.isValid then [] else ["required proof " ++ proof.name ++ " has invalid probability"])
 
 def validateRequirementSpec (spec : RequirementSpec) : List String :=
   let duplicateActors := (duplicateStrings spec.actors).map fun id => "duplicate actor: " ++ id
@@ -561,6 +575,10 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
         (if prop.name == "" then ["property has empty name"] else []) ++
         (if (taskIds spec).contains prop.task then [] else ["property " ++ prop.name ++ " references unknown task: " ++ prop.task]) ++
         (if prop.expression == "" then ["property " ++ prop.name ++ " has empty expression"] else []) ++
+        (match prop.probability with
+        | none => []
+        | some p =>
+            if p.isValid then [] else ["property " ++ prop.name ++ " has invalid probability"]) ++
         acc)
       []
   let proofErrors := spec.requiredProofs.foldr (fun proof acc => validateRequiredProof spec proof ++ acc) []
@@ -749,7 +767,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
     , "Each task transition message must appear in one actor process sends list and one actor process receives list."
-    , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly."
+    , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly; include probability when the abstraction has a known exact or estimated probability mass for the predicate."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."

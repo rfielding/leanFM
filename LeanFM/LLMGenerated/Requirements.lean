@@ -574,41 +574,49 @@ def requiredProofs : List LeanFM.RequiredProof :=
     , mode := LeanFM.RequiredProofMode.never
     , task := "get_docs"
     , predicate := "success && missing(auth_proof)"
+    , probability := some { numerator := 0, denominator := 1 }
     }
   , { name := "Always get_docs messages use declared src/dst"
     , mode := LeanFM.RequiredProofMode.always
     , task := "get_docs"
     , predicate := "grammar atom src/dst equals protobuf-backed message schema src/dst"
+    , probability := some { numerator := 1, denominator := 1 }
     }
   , { name := "Eventually get_docs terminal"
     , mode := LeanFM.RequiredProofMode.eventually
     , task := "get_docs"
     , predicate := "terminal"
+    , probability := some { numerator := 1, denominator := 1 }
     }
   , { name := "Possibly get_docs fetch failure"
     , mode := LeanFM.RequiredProofMode.possibly
     , task := "get_docs"
     , predicate := "Docs.FetchResult404"
+    , probability := some { numerator := 5, denominator := 100 }
     }
   , { name := "Never post_review success without auth proof"
     , mode := LeanFM.RequiredProofMode.never
     , task := "post_review"
     , predicate := "success && missing(auth_proof)"
+    , probability := some { numerator := 0, denominator := 1 }
     }
   , { name := "Always post_review messages use declared src/dst"
     , mode := LeanFM.RequiredProofMode.always
     , task := "post_review"
     , predicate := "grammar atom src/dst equals protobuf-backed message schema src/dst"
+    , probability := some { numerator := 1, denominator := 1 }
     }
   , { name := "Eventually post_review terminal"
     , mode := LeanFM.RequiredProofMode.eventually
     , task := "post_review"
     , predicate := "terminal"
+    , probability := some { numerator := 1, denominator := 1 }
     }
   , { name := "Possibly post_review moderation rejection"
     , mode := LeanFM.RequiredProofMode.possibly
     , task := "post_review"
     , predicate := "Reviews.ModerationRejected"
+    , probability := some { numerator := 10, denominator := 100 }
     }
   ]
 
@@ -621,12 +629,12 @@ def workerRequirement : LeanFM.RequirementSpec :=
   , grammars := [getDocsGrammar, postReviewGrammar]
   , processes := getDocsProcesses ++ postReviewProcesses
   , properties :=
-      [ { name := "AF get_docs terminal", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "terminal" }
-      , { name := "AG no get_docs success without auth_proof", mode := LeanFM.PropertyMode.never, task := "get_docs", expression := "success && missing(auth_proof)" }
-      , { name := "EF get_docs failure", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "failed" }
-      , { name := "AF post_review terminal", mode := LeanFM.PropertyMode.eventually, task := "post_review", expression := "terminal" }
-      , { name := "AG no post_review success without auth_proof", mode := LeanFM.PropertyMode.never, task := "post_review", expression := "success && missing(auth_proof)" }
-      , { name := "EF post_review moderation rejection", mode := LeanFM.PropertyMode.eventually, task := "post_review", expression := "decision=rejected" }
+      [ { name := "AF get_docs terminal", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "terminal", probability := some { numerator := 1, denominator := 1 } }
+      , { name := "AG no get_docs success without auth_proof", mode := LeanFM.PropertyMode.never, task := "get_docs", expression := "success && missing(auth_proof)", probability := some { numerator := 0, denominator := 1 } }
+      , { name := "EF get_docs failure", mode := LeanFM.PropertyMode.eventually, task := "get_docs", expression := "failed", probability := some { numerator := 6, denominator := 100 } }
+      , { name := "AF post_review terminal", mode := LeanFM.PropertyMode.eventually, task := "post_review", expression := "terminal", probability := some { numerator := 1, denominator := 1 } }
+      , { name := "AG no post_review success without auth_proof", mode := LeanFM.PropertyMode.never, task := "post_review", expression := "success && missing(auth_proof)", probability := some { numerator := 0, denominator := 1 } }
+      , { name := "EF post_review moderation rejection", mode := LeanFM.PropertyMode.eventually, task := "post_review", expression := "decision=rejected", probability := some { numerator := 10, denominator := 100 } }
       ]
   , requiredProofs := requiredProofs
   , charts :=
