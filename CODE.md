@@ -86,6 +86,8 @@ inductive CTL (S : Type) where
   | af : CTL S -> CTL S
   | eg : CTL S -> CTL S
   | ag : CTL S -> CTL S
+  | eu : CTL S -> CTL S -> CTL S
+  | au : CTL S -> CTL S -> CTL S
 ```
 
 The evaluator is:
@@ -102,6 +104,8 @@ The most useful operators in this project are:
 - `EF p`: some reachable state eventually satisfies `p`.
 - `AF p`: all paths eventually satisfy `p`.
 - `AG p`: all reachable states satisfy `p`.
+- `EU p q`: some path keeps `p` true until `q` becomes true.
+- `AU p q`: all paths keep `p` true until `q` becomes true.
 
 Examples from `Protocol.lean`:
 
@@ -114,6 +118,9 @@ def taskCapacitySafe : CTL Observation :=
 
 def noSuccessWithoutAuth : CTL Observation :=
   CTL.ag (CTL.implies (CTL.neg (CTL.atom hasValidAuth)) (CTL.neg (CTL.atom isSucceeded)))
+
+def taskQueuesStayBoundedUntilTerminal : CTL Observation :=
+  CTL.au (CTL.atom withinCapacity) (CTL.atom isTerminal)
 ```
 
 These are evaluated either against the whole worker MDP or against per-task FSMs.

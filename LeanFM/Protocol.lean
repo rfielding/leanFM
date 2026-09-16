@@ -797,6 +797,9 @@ def taskCapacitySafe : CTL Observation :=
 def taskTerminalStatesCleaned : CTL Observation :=
   CTL.ag (CTL.implies (CTL.atom isTerminal) (CTL.atom fun s => s.task == none))
 
+def taskQueuesStayBoundedUntilTerminal : CTL Observation :=
+  CTL.au (CTL.atom withinCapacity) (CTL.atom isTerminal)
+
 def purchaseTaskStates : List Observation :=
   [ initial, afterSubmit, afterDispatch, afterWorkerOk, afterWorkerFail
   , afterReply, afterReject, succeeded, failed

@@ -318,6 +318,7 @@ def promTaskMetrics (task : String) (fsm : TaskFSM) (m : Metrics) : List String 
   , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"EF_failure\"" (toString (promBool (fsm.holds taskCanFail)))
   , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"AG_capacity\"" (toString (promBool (fsm.holds taskCapacitySafe)))
   , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"AG_terminal_cleanup\"" (toString (promBool (fsm.holds taskTerminalStatesCleaned)))
+  , promMetricLine "ctl_holds" s!"scope=\"task\",task=\"{task}\",property=\"AU_capacity_until_terminal\"" (toString (promBool (fsm.holds taskQueuesStayBoundedUntilTerminal)))
   ]
 
 def promMessageCount (task proto : String) (count : Nat) : String :=
@@ -413,6 +414,7 @@ def taskCtlLines (name : String) (fsm : TaskFSM) : List String :=
   , s!"    EF failure: {fsm.holds taskCanFail}"
   , s!"    AG capacity: {fsm.holds taskCapacitySafe}"
   , s!"    AG terminal states clean up active task: {fsm.holds taskTerminalStatesCleaned}"
+  , s!"    AU capacity until terminal: {fsm.holds taskQueuesStayBoundedUntilTerminal}"
   ]
 
 def textReport : String :=

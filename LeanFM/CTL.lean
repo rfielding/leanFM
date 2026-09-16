@@ -11,6 +11,8 @@ inductive CTL (S : Type) where
   | af : CTL S -> CTL S
   | eg : CTL S -> CTL S
   | ag : CTL S -> CTL S
+  | eu : CTL S -> CTL S -> CTL S
+  | au : CTL S -> CTL S -> CTL S
 
 namespace CTL
 
@@ -55,6 +57,30 @@ partial def existsPathAlways [DecidableEq S]
     | [] => true
     | next => next.any (existsPathAlways succ p (s :: seen))
 
+partial def existsUntil [DecidableEq S]
+    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
+  if q s then
+    true
+  else if seen.contains s then
+    false
+  else if !p s then
+    false
+  else
+    (succ s).any (existsUntil succ p q (s :: seen))
+
+partial def allUntil [DecidableEq S]
+    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
+  if q s then
+    true
+  else if seen.contains s then
+    false
+  else if !p s then
+    false
+  else
+    match succ s with
+    | [] => false
+    | next => next.all (allUntil succ p q (s :: seen))
+
 partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
   | atom p => p s
   | neg p => !(holds succ s p)
@@ -66,6 +92,8 @@ partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
   | af p => allPathsEventually succ (fun s' => holds succ s' p) [] s
   | eg p => existsPathAlways succ (fun s' => holds succ s' p) [] s
   | ag p => allReachable succ (fun s' => holds succ s' p) [] s
+  | eu p q => existsUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
+  | au p q => allUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
 
 end CTL
 end LeanFM
