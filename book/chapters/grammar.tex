@@ -1,0 +1,56 @@
+\chapter{A Multiparty Grammar of Behaviour}
+\label{ch:grammar}
+
+\index{grammar!multiparty}
+\index{grammar!context-free}
+A protocol is a language whose terminal symbols are visible events. A production
+describes a legal continuation. The context-free grammar is the visual and
+conceptual starting point, not a claim that every useful protocol language is
+context-free.
+
+\section{A small authoring algebra}
+
+\begin{lstlisting}
+inductive Grammar (Event : Type) where
+  | empty
+  | event  : Event -> Grammar Event
+  | seq    : Grammar Event -> Grammar Event -> Grammar Event
+  | choice : List (Grammar Event) -> Grammar Event
+  | par    : Grammar Event -> Grammar Event -> Grammar Event
+  | where_ : (List Event -> Bool) -> Grammar Event -> Grammar Event
+\end{lstlisting}
+
+\texttt{seq} preserves time order. \texttt{choice} exposes alternatives rather
+than burying them in control flow. \texttt{par} admits interleavings while
+preserving the internal order of each side. A \texttt{where\_} clause checks a
+fact accumulated from the prior trace and provides the escape from context-free
+structure when genuine context sensitivity is needed.
+
+Simple finite conversations can compile to regular languages. Nested request
+structure motivates context-free productions. Correlation, freshness, uniqueness,
+and authorization typically require parameter flow or guarded productions.
+
+\section{Parameters carry information}
+
+\index{parameter flow}
+A production should bind values at one event and reuse them later. Conceptually:
+
+\begin{lstlisting}
+def login (browser server provider : Actor) (state : OAuthState) : Grammar Event :=
+  event (redirect server browser provider state) >>>
+  event (authorize browser provider state) >>>
+  callback browser server state
+\end{lstlisting}
+
+The repeated \texttt{state} is not decorative. It states the information-flow
+relationship that distinguishes a matching callback from an unrelated one. Lean's
+types, constructors, and ordinary function parameters are the surface language;
+the fixed library supplies grammar composition and semantics.
+
+\section{Composition without omniscience}
+
+A participant's implementation need not know the global execution state. The
+global grammar states the contract, while projection derives each participant's
+view. Composition should preserve independently specified modules and make shared
+events explicit. Proving useful projection and composition theorems is a core
+research obligation, not an implementation footnote.

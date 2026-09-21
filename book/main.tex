@@ -1,0 +1,112 @@
+\documentclass[11pt,oneside]{book}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1.15in]{geometry}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{imakeidx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,automata,positioning,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\hypersetup{
+  pdftitle={Grammar-based Formal Methods Vibecoding},
+  pdfauthor={The LeanFM Project and ChatGPT}
+}
+
+\makeindex[intoc,title=Index]
+
+\definecolor{leanblue}{RGB}{40,74,120}
+\definecolor{leangreen}{RGB}{35,110,70}
+\definecolor{leangray}{RGB}{90,90,90}
+\lstdefinelanguage{Lean}{
+  morekeywords={abbrev,def,deriving,inductive,namespace,structure,theorem,where,
+    match,with,if,then,else,let,in,fun,forall,exists,Type,Nat,String,Bool,List},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[s]{/-}{-/},
+  morestring=[b]"
+}
+\lstset{
+  language=Lean,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{leanblue}\bfseries,
+  commentstyle=\color{leangreen},
+  stringstyle=\color{leangray},
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  breaklines=true,
+  showstringspaces=false
+}
+
+\begin{document}
+\pagenumbering{gobble}
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+  \node at (current page.center)
+    {\includegraphics[width=\paperwidth,height=\paperheight]{assets/grammar-events-cover.png}};
+  \fill[black,opacity=.34]
+    (current page.north west) rectangle ([yshift=-4.2cm]current page.north east);
+  \fill[black,opacity=.30]
+    ([yshift=2.25cm]current page.south west) rectangle (current page.south east);
+  \node[anchor=north west,text width=.82\paperwidth,align=left]
+    at ([xshift=1.35cm,yshift=-1.25cm]current page.north west)
+    {\color{white}\fontsize{31}{35}\selectfont\bfseries
+      Grammar-based\\Formal Methods\\Vibecoding};
+  \node[anchor=south west,text width=.78\paperwidth,align=left]
+    at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
+    {\color{white}\Large The LeanFM Project and ChatGPT\\[.35em]
+     \normalsize Working draft---\today};
+\end{tikzpicture}
+\end{titlepage}
+\frontmatter
+
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+Formal methods should be the easy way to build software. This book develops that
+claim into a practical method: describe externally meaningful behaviour as a
+parameterised, multiparty grammar; interpret its sentences as event traces; state
+temporal requirements in CTL; and render the whole specification as ordinary Lean.
+The specification says what participants may observe, not how an implementation
+stores every intermediate detail.
+
+This is a working book and an executable design notebook. Definitions will migrate
+into a stable Lean library; systems built with the library should consist mostly of
+domain types, grammar productions, and theorems about expected behaviour.
+The evolving implementation, examples, and book sources are maintained in the
+LeanFM repository \citep{leanfmrepo}.
+
+\tableofcontents
+
+\mainmatter
+\part{The Grammar-Based Method}
+\include{chapters/vision}
+\include{chapters/events}
+\include{chapters/grammar}
+\include{chapters/authoring-language}
+\include{chapters/oauth-example}
+\include{chapters/temporal-logic}
+\include{chapters/lean-rendering}
+\include{chapters/roadmap}
+
+\part{Security Protocol Exercises from the CSP Approach}
+\include{chapters/csp-exercises}
+
+\backmatter
+\bibliographystyle{plainnat}
+\bibliography{references}
+\addcontentsline{toc}{chapter}{Bibliography}
+\printindex
+\end{document}

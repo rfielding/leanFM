@@ -1,0 +1,42 @@
+\chapter{Research and Implementation Roadmap}
+\label{ch:roadmap}
+
+The project will proceed through small executable examples rather than attempting a
+complete logic and compiler at once.
+
+\section{Milestones}
+
+\begin{enumerate}
+  \item Stabilise the event envelope, including identity, causal links, actor
+        endpoints, kind, payload, and a disciplined account of time.
+  \item Give the grammar algebra a trace semantics and establish laws for sequence,
+        choice, guarded context, and interleaving.
+  \item Define parameter binding and participant projection, then test both on
+        authentication and ordinary web request protocols.
+  \item Preserve named scenario boundaries while reading their references into one
+        grammar; render interaction diagrams and residual state machines per scenario.
+  \item Treat independent requirements as trace-language intersections and report
+        minimal inconsistent requirement sets.
+  \item Generate finite transition systems and evaluate the CTL fragment already
+        represented by the LeanFM library.
+  \item Compare past-trace predicates with explicit past operators.
+  \item Render declarative pie and line charts as reductions over observable events.
+  \item Connect specifications to a Lean web service and generated protocol
+        schemas, preserving one source of typed domain truth.
+\end{enumerate}
+
+\section{Proof obligations}
+
+The initial metatheory should make the following questions precise:
+
+\begin{itemize}
+  \item Does a projected local behaviour faithfully implement its part of the
+        global grammar?
+  \item Under what finiteness restrictions is CTL checking decidable and executable?
+  \item Which guards can be compiled into finite monitor state?
+  \item When does modular composition preserve an established temporal property?
+  \item Which fairness and timing assumptions are required by a liveness theorem?
+\end{itemize}
+
+The intended outcome is not merely a verifier. It is a development loop in which
+writing the behaviour is the fastest way to obtain working, reviewable software.

@@ -1,0 +1,327 @@
+\chapter{From CSP Roles to Multiparty Grammars}
+\label{ch:csp-exercises}
+
+\index{CSP}
+\index{protocol role}
+This part revisits examples from \citet{ryan2001modelling} and its official Casper
+companion scripts. The goal is not to transliterate CSP operators. It is to use
+well-known security protocols as demanding exercises for the grammar-based method:
+multiple roles, fresh values, encrypted components, an active intruder, secrecy,
+agreement, and messages whose legality depends on the preceding trace.
+
+\section{Can actors really be specified separately?}
+
+Yes, provided composition is defined as synchronization over the same observable
+events rather than as concatenation of independent scripts. Each actor accepts a
+language over its own projection of the global event alphabet.
+
+\begin{lstlisting}
+structure RoleSpec where
+  actor    : Actor
+  accepts  : Grammar (ProjectedEvent actor)
+  initialKnowledge : Knowledge actor
+
+def composeRoles (roles : List RoleSpec) : GlobalGrammar :=
+  synchronize roles where
+    sendReceiveAgree := sameEventId && sameBytes && oppositeEndpoints
+\end{lstlisting}
+
+For a global trace $t$, let $t\!\upharpoonright_a$ retain events sent or received by
+actor $a$. The composition accepts exactly when every local role accepts its view:
+
+\[
+  L(\operatorname{composeRoles}(R_1,\ldots,R_n))
+  = \{t \mid \forall i,\; t\!\upharpoonright_{a_i} \in L(R_i)\}.
+\]
+
+One global message is therefore not duplicated into unrelated send and receive
+events. It has a single identity, byte string, sender, and recipient; both endpoint
+grammars constrain it. An unmatched send, an unexpected receive, or disagreement
+about bytes makes the intersection empty at that trace prefix.
+
+\subsection{Local state without global implementation state}
+
+A role may bind parameters from the events it observes. Those bindings are a
+parser environment for the trace, not a claim about implementation memory. A role
+can say ``the nonce in this reply equals the nonce I previously sent'' without
+specifying a table, variable layout, or retry mechanism.
+
+\section{A transport-neutral byte algebra}
+
+\index{bytes}
+Security claims need more than message names. They need an algebra that says which
+bytes expose which values. We still need not choose HTTP, protobuf, ASN.1, or a
+particular cipher suite.
+
+\begin{lstlisting}
+abbrev Bytes := ByteArray
+
+inductive WireTerm where
+  | atom    : Name -> Bytes -> WireTerm
+  | tuple   : List WireTerm -> WireTerm
+  | encrypt : KeyRef -> WireTerm -> WireTerm
+  | sign    : KeyRef -> WireTerm -> WireTerm
+
+structure WireEvent where
+  tstamp : Nat
+  id     : EventId
+  prevId : Option EventId
+  from   : Actor
+  to     : Actor
+  term   : WireTerm
+  bytes  : Bytes
+  encodedBy : bytes = encodeCanonical term
+\end{lstlisting}
+
+At this level, encryption is a symbolic constructor with an encoding into bytes.
+The intruder may concatenate, split visible tuples, encrypt with known keys, and
+decrypt only with a derivable inverse key. A concrete refinement must replace this
+idealized algebra with a transport and cryptographic implementation whose security
+assumptions justify the abstraction.
+
+\section{Yahalom as three separate actors}
+
+\index{Yahalom protocol}
+Yahalom is an excellent first exercise because an initiator, responder, and trusted
+server exchange fresh nonces and receive a session key. The companion model states
+secrecy for the session key and agreement claims involving the nonces and key.
+
+Let $K_A$ and $K_B$ be long-term keys shared by the server with Alice and Bob,
+$N_A$ and $N_B$ fresh nonces, and $K_{AB}$ the proposed session key. The following
+actor grammars use symbolic wire terms whose canonical encodings are byte strings.
+
+\subsection{Alice, the initiator}
+
+\begin{lstlisting}
+def aliceRole (alice bob server : Actor) (ka : SharedKey) : RoleSpec :=
+  role alice "Yahalom initiator" do
+    let na <- fresh Nonce "na"
+
+    from_ alice; to_ bob
+    send (atom "initiator nonce" na.bytes)
+
+    from_ server; to_ alice
+    receive (encrypt ka.ref
+      (tuple [actor bob, sessionKey "kab", nonce na, nonce "nb"]))
+      where_ field "na" == na
+    let kab <- take SessionKey "kab"
+    let nb  <- take Nonce "nb"
+    let ticketForBob <- take WireTerm "ticketForBob"
+
+    from_ alice; to_ bob
+    send ticketForBob
+    send (encrypt kab.ref (nonce nb))
+\end{lstlisting}
+
+Alice's \texttt{where\_} clause is the context-sensitive step: the received nonce
+must equal the value generated earlier. The surface structure is context-free, but
+legality depends on the binding environment accumulated from the prefix.
+
+\subsection{Bob, the responder}
+
+\begin{lstlisting}
+def bobRole (alice bob server : Actor) (kb : SharedKey) : RoleSpec :=
+  role bob "Yahalom responder" do
+    from_ alice; to_ bob
+    receive (atom "initiator nonce" ?naBytes)
+    let na <- take Nonce "na"
+    let nb <- fresh Nonce "nb"
+
+    from_ bob; to_ server
+    send (encrypt kb.ref
+      (tuple [actor alice, nonce na, nonce nb]))
+
+    from_ alice; to_ bob
+    receive (encrypt kb.ref (tuple [actor alice, sessionKey "kab"]))
+    let kab <- take SessionKey "kab"
+    receive (encrypt kab.ref (nonce nb)) where_ field "nb" == nb
+\end{lstlisting}
+
+Bob need not know Alice's local control state. He constrains only the events visible
+at his boundary and the values learned from them.
+
+\subsection{The trusted server}
+
+\begin{lstlisting}
+def serverRole (alice bob server : Actor)
+    (ka kb : SharedKey) : RoleSpec :=
+  role server "Yahalom key server" do
+    from_ bob; to_ server
+    receive (encrypt kb.ref
+      (tuple [actor alice, nonce "na", nonce "nb"]))
+    let na  <- take Nonce "na"
+    let nb  <- take Nonce "nb"
+    let kab <- fresh SessionKey "kab"
+
+    let bobTicket := encrypt kb.ref
+      (tuple [actor alice, sessionKey kab])
+    from_ server; to_ alice
+    sendMany
+      [ encrypt ka.ref
+          (tuple [actor bob, sessionKey kab, nonce na, nonce nb])
+      , bobTicket
+      ]
+\end{lstlisting}
+
+\subsection{Global assembly and context conditions}
+
+\begin{lstlisting}
+def yahalom : GlobalGrammar :=
+  composeRoles
+    [ aliceRole .alice .bob .server keyAlice
+    , bobRole .alice .bob .server keyBob
+    , serverRole .alice .bob .server keyAlice keyBob
+    , intruderRole .ivo
+    ]
+  |> where_ (distinct [.alice, .bob, .server, .ivo])
+  |> where_ (freshValuesNeverRepeat ["na", "nb", "kab"])
+  |> where_ (longTermKeysKnownOnlyToOwnersAndServer)
+\end{lstlisting}
+
+The three honest roles can be authored and checked separately. Composition exposes
+incompatibilities: for example, if Alice expects the server's first encrypted tuple
+to name Bob but the server grammar could name another responder, the shared global
+event cannot satisfy both projections.
+
+\section{The attacker is another grammar plus deduction}
+
+\index{intruder model}
+An active network attacker observes public wire events, blocks them, replays known
+bytes, and emits any term derivable from current knowledge. It does not learn the
+plaintext of an encryption merely because its encoded bytes are observable.
+
+\begin{lstlisting}
+inductive Derives : Knowledge -> WireTerm -> Prop where
+  | initial : term in knowledge -> Derives knowledge term
+  | tuple   : (forall x in xs, Derives knowledge x) ->
+              Derives knowledge (.tuple xs)
+  | project : Derives knowledge (.tuple xs) -> x in xs ->
+              Derives knowledge x
+  | encrypt : Derives knowledge key -> Derives knowledge body ->
+              Derives knowledge (.encrypt key body)
+  | decrypt : Derives knowledge (.encrypt key body) ->
+              Derives knowledge (inverse key) -> Derives knowledge body
+
+def intruderRole (ivo : Actor) : RoleSpec :=
+  adversary ivo do
+    observe publicWireEvents
+    mayBlock
+    mayReplay
+    maySend fun knowledge term => Derives knowledge term
+\end{lstlisting}
+
+This is the grammar analogue of the CSP/Dolev--Yao attacker: possible hostile
+messages are generated from observable history and constrained by a
+context-sensitive derivability relation.
+
+\section{Secrecy and agreement become theorems}
+
+\index{secrecy}
+\index{agreement}
+A secrecy theorem quantifies over every accepted trace, not merely the happy-path
+scenario. For Yahalom:
+
+\begin{lstlisting}
+theorem yahalom_session_key_secret
+    (trace : Trace WireEvent)
+    (accepted : yahalom.Accepts trace)
+    (honest : Uncompromised [.alice, .bob, .server]) :
+    not (Derives (knowledgeOf .ivo trace) (sessionKey accepted.kab)) := by
+  -- proof uses the fixed symbolic-crypto library
+  exact secrecyFromKeyOwnership accepted honest
+
+theorem yahalom_bob_agrees_with_alice
+    (trace : Trace WireEvent)
+    (accepted : yahalom.Accepts trace)
+    (bobDone : completed trace .bob) :
+    exists run, peer run == .alice &&
+      run.na == bobDone.na && run.nb == bobDone.nb := by
+  exact agreementFromNonceChallenge accepted bobDone
+\end{lstlisting}
+
+The exact proof scripts depend on the library still to be built. The important
+design constraint is already visible: theorem statements refer only to accepted
+event traces, knowledge derived from those traces, and explicit compromise
+assumptions.
+
+\section{Otway--Rees: guards are not optional decoration}
+
+\index{Otway--Rees protocol}
+The Otway--Rees companion model introduces a run marker $M$ and guards that the two
+participants differ. Each participant encrypts its nonce, marker, and actor names
+under its long-term server key. The server returns separate encrypted components.
+
+This example adds three useful \texttt{where\_} obligations:
+
+\begin{lstlisting}
+where_ alice != bob
+where_ response.field "marker" == request.field "marker"
+where_ encryptedPart.names == [alice, bob]
+\end{lstlisting}
+
+The grammar shape remains a small sequence of messages. The accepted language is
+not context-free once equality of an unbounded marker and actor parameters matters.
+Keeping these tests as named guards preserves the readable protocol skeleton while
+making the extra context explicit.
+
+The example also distinguishes ordinary secrecy from \emph{strong secrecy}: an
+attacker should not be able to distinguish executions merely by substituting one
+candidate session key for another. That is a relational property over pairs of
+trace distributions, beyond a single CTL state formula, and should be represented
+as a separate theorem family.
+
+\section{Needham--Schroeder: public-key lookup as behaviour}
+
+\index{Needham--Schroeder protocol}
+The seven-message public-key example makes key discovery observable. Alice requests
+Bob's public key from a server, receives a signed binding, sends an encrypted nonce
+and identity to Bob, and later answers Bob's nonce. Bob performs the symmetric key
+lookup for Alice.
+
+Actor separation is particularly valuable here:
+
+\begin{itemize}
+  \item the key server grammar promises signed actor--public-key bindings;
+  \item Alice's grammar accepts Bob's key only where the signature verifies and the
+        named actor is Bob;
+  \item Bob imposes the corresponding constraint for Alice;
+  \item the nonce-response messages reuse previously bound values;
+  \item the intruder grammar may substitute any derivable public key or replay any
+        signed binding, but cannot manufacture a server signature.
+\end{itemize}
+
+\begin{lstlisting}
+receive (sign serverSigningKey (tuple [actor bob, publicKey "pkb"]))
+  where_ verifiesWith serverPublicKey
+  where_ field "actor" == bob
+
+send (encrypt pkb (tuple [nonce na, actor alice]))
+
+receive (encrypt aliceSecretView (tuple [nonce na, nonce "nb"]))
+  where_ field "na" == na
+\end{lstlisting}
+
+This demonstrates why ``all behaviour is observable'' must not mean ``all
+plaintext is public.'' The globally recorded event exposes endpoints, timing,
+kind, and wire bytes. Which symbolic values an actor can recover from those bytes
+is governed by the deduction relation.
+
+\section{What these exercises demand from the library}
+
+The three case studies produce a concrete implementation checklist:
+
+\begin{enumerate}
+  \item actor-local grammar definitions and trace projection;
+  \item synchronization by common event identity and bytes;
+  \item typed symbolic variables, exports, imports, and prefix-dependent guards;
+  \item a transport-neutral term-to-byte relation;
+  \item explicit initial knowledge and compromise assumptions;
+  \item attacker closure under symbolic construction and decryption;
+  \item trace secrecy, agreement, and relational strong-secrecy theorem schemas;
+  \item counterexamples rendered simultaneously as a global interaction diagram
+        and as each actor's local projection.
+\end{enumerate}
+
+These are not security-specific embellishments. They are a rigorous test of whether
+multiparty context-sensitive grammars can remain modular while expressing the
+information flow on which real behavioural claims depend.

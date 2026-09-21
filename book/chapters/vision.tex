@@ -1,0 +1,59 @@
+\chapter{Formal Methods as the Default Path}
+\label{ch:vision}
+
+\index{formal methods}
+Formal methods are usually presented as an extra stage: first build a system, then
+translate a simplified version into a model, and finally ask a specialist tool a
+few questions. That workflow taxes correctness. The model drifts, the difficult
+translation is postponed, and proofs concern yesterday's architecture.
+
+Our aim is the reverse. The shortest path to a running service should pass through
+an executable behavioural specification. Writing the specification should remove
+work: it supplies message types, scenario tests, model-checking input,
+documentation, and the skeleton of the service itself. Going without it should be
+the inconvenient choice.
+
+\section{Behaviour before machinery}
+
+The primary object is a set of permitted, visible histories. An implementation may
+use threads, actors, queues, databases, caches, or continuations. Those decisions
+matter operationally, but they are not automatically part of the contract.
+Promoting all internal state into the model creates a product state space whose
+size grows exponentially with independently varying components. Worse, it makes
+the specification brittle under harmless refactoring.
+
+We therefore begin with \emph{behaviour}: who communicated with whom, what kind of
+event occurred, what information it carried, and what causal history it extends.
+Internal state enters only when it changes an observable promise.
+
+\section{Three ingredients}
+
+The method combines three traditions.
+
+\begin{enumerate}[label=\arabic*.]
+  \item Language theory gives compact generative descriptions of legal histories.
+        Regular and context-free grammars provide the approachable starting point
+        developed by \citet{richards2017logic}. For the underlying habits of
+        symbolization, validity, proof, quantification, and modal reasoning, we also
+        draw on the accessible progression of \citet{gensler2017introduction}.
+  \item Protocol analysis contributes explicit participants, adversarial choices,
+        trace semantics, and tool-supported checking. The CSP treatment of
+        \citet{ryan2001modelling} is an initial reference point.
+  \item Temporal logic turns expectations into queries over the generated
+        transition system. CTL is central because it distinguishes claims about
+        some possible future from claims about every possible future
+        \citep{clarke1986automatic}.
+\end{enumerate}
+
+\section{A test for every abstraction}
+
+Each abstraction in this book should answer a practical question:
+
+\begin{quote}
+Can a developer state a meaningful behaviour once, compose it with other
+behaviours, check its consequences, and keep it stable while implementation details
+change?
+\end{quote}
+
+If an abstraction does not improve that workflow, it does not belong in the core
+library.

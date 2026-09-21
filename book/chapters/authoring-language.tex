@@ -1,0 +1,312 @@
+\chapter{The Scenario Authoring Language}
+\label{ch:authoring-language}
+
+\index{scenario}
+\index{observable event}
+This chapter proposes the first concrete surface language. It is intentionally a
+small Lean DSL: ordinary \texttt{def}, function parameters, \texttt{let}, typed
+values, and \texttt{do} notation provide the host language; a fixed library adds
+scenario, endpoint, choice, probability, and rendering operations. The examples
+are a design target. Names may change as the Lean implementation makes their
+semantics precise.
+
+\section{The smallest useful scenario}
+
+A scenario is a named grammar fragment. Every emitted terminal is an observable
+message event. Endpoint commands establish the \texttt{from} and \texttt{to}
+context for the messages that follow.
+
+\begin{lstlisting}
+def requestQuote (customer shop : Actor) : Scenario :=
+  scenario "request a quote" do
+    let requestId <- declare RequestId "requestId"
+
+    from_ customer
+    to_ shop
+    emit "quote requested" [field "requestId" requestId]
+
+    let quoteId <- declare QuoteId "quoteId"
+    let amount  <- declare Money "amount"
+
+    from_ shop
+    to_ customer
+    emit "quote offered"
+      [ field "requestId" requestId
+      , field "quoteId" quoteId
+      , field "amount" amount
+      ]
+\end{lstlisting}
+
+The spelling \texttt{from\_} avoids collision with Lean syntax while remaining
+visually explicit. Endpoint commands affect authoring context only; elaboration
+copies both endpoints into every event. A scenario with an \texttt{emit} before
+both endpoints have been established is rejected.
+
+\subsection{Variables and assignment}
+
+There are two kinds of assignment.
+
+\begin{itemize}
+  \item Ordinary \texttt{let x := expression} evaluates a known Lean expression.
+  \item \texttt{let x <- declare T "x"} introduces a symbolic value of type
+        \texttt{T}. The grammar binds it when generating or matching a trace, and
+        later events may reuse it.
+\end{itemize}
+
+Variables are immutable. A later \texttt{let attempt := attempt + 1} creates a new
+binding rather than mutable hidden state. Information flow is consequently visible
+in the grammar's data dependencies. Equality of two occurrences of
+\texttt{requestId} means they carry the same value, not merely values with the same
+field name.
+
+A value received from the environment is bound by matching an observable event:
+
+\begin{lstlisting}
+from_ customer
+to_ shop
+receive "quote accepted" do
+  let quoteId <- take QuoteId "quoteId"
+  let payment <- take PaymentToken "paymentToken"
+
+from_ shop
+to_ bank
+emit "payment authorization requested"
+  [field "quoteId" quoteId, field "paymentToken" payment]
+\end{lstlisting}
+
+\texttt{receive} and \texttt{emit} both denote grammar terminals; they differ only
+in the viewpoint used when projecting a global scenario to executable participant
+code.
+
+\section{Vague messages first, typed alphabets later}
+
+\index{alphabet!vague}
+Early requirements should not require a finished protobuf schema. A vague message
+has a stable semantic name and a list of named, typed fields. It is already precise
+enough to express ordering, correlation, and temporal properties.
+
+\begin{lstlisting}
+emit "quote offered"
+  [field "requestId" requestId, field "amount" amount]
+\end{lstlisting}
+
+Later, a refinement maps that terminal to a concrete alphabet:
+
+\begin{lstlisting}
+refineMessage "quote offered" with Proto.Shop.QuoteOffered where
+  request_id := field "requestId"
+  quote_id   := field "quoteId"
+  cents      := encodeMoney (field "amount")
+\end{lstlisting}
+
+The refinement obligation is language inclusion: every concrete implementation
+trace, after erasing representation details, must be admitted by the abstract
+grammar. Refinement may decide serialization, retry mechanics, and internal state;
+it must not invent externally visible behaviour forbidden by the requirements.
+
+\section{One concern per scenario}
+
+Scenarios should be small enough to read as stories and independent enough to
+render separately. The quote protocol can be decomposed as follows.
+
+\begin{lstlisting}
+def quoteAccepted (customer shop : Actor) : Scenario :=
+  scenario "quote accepted" do
+    include (requestQuote customer shop)
+    -- bind quoteId from the included scenario's exports
+    use quoteId <- exported QuoteId "quoteId"
+    from_ customer; to_ shop
+    emit "quote accepted" [field "quoteId" quoteId]
+
+def quoteDeclined (customer shop : Actor) : Scenario :=
+  scenario "quote declined" do
+    include (requestQuote customer shop)
+    use quoteId <- exported QuoteId "quoteId"
+    from_ customer; to_ shop
+    emit "quote declined" [field "quoteId" quoteId]
+
+def quoteOutcome (customer shop : Actor) : Scenario :=
+  oneOf "customer decision"
+    [ quoteAccepted customer shop
+    , quoteDeclined customer shop
+    ]
+\end{lstlisting}
+
+\texttt{include} is textual only in the rendered book view; semantically it is a
+reference to a named nonterminal. The compiler reads all referenced scenarios,
+checks exported bindings, detects cycles, and builds one grammar. Tools retain the
+scenario boundary for navigation, diagrams, tests, and counterexamples.
+
+\section{Interaction diagram: accepted quote}
+
+The first rendering of any scenario is a sequence-style interaction diagram.
+It shows observable messages and parameter flow without suggesting an internal
+implementation architecture.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[>=Latex,actor/.style={draw,rounded corners,minimum width=2.6cm,
+  minimum height=.7cm,fill=black!4},message/.style={->,thick}]
+  \node[actor] (customer) at (0,0) {Customer};
+  \node[actor] (shop) at (7,0) {Shop};
+  \draw[dashed] (customer.south) -- ++(0,-5.2);
+  \draw[dashed] (shop.south) -- ++(0,-5.2);
+  \draw[message] (0,-1) -- node[above,sloped]{quote requested(requestId)} (7,-1);
+  \draw[message] (7,-2) -- node[above,sloped]{quote offered(requestId, quoteId, amount)} (0,-2);
+  \draw[message] (0,-3) -- node[above,sloped]{quote accepted(quoteId)} (7,-3);
+  \draw[message] (7,-4) -- node[above,sloped]{order confirmed(quoteId, orderId)} (0,-4);
+\end{tikzpicture}
+\caption{Interaction diagram derived from the accepted-quote scenario.}
+\label{fig:quote-interaction}
+\end{figure}
+
+\section{Choices and unresolved probability}
+
+\index{probability}
+Nondeterminism and probability are different. \texttt{oneOf} says that multiple
+behaviours are legal without claiming how often they occur. \texttt{weighted}
+attaches a distribution when the abstraction has one.
+
+\begin{lstlisting}
+def paymentOutcome : Scenario :=
+  oneOf "payment outcome" [paymentApproved, paymentRejected]
+
+def estimatedPaymentOutcome : Scenario :=
+  choose "estimated payment outcome"
+    [ weighted (95 / 100) paymentApproved
+    , weighted ( 5 / 100) paymentRejected
+    ]
+\end{lstlisting}
+
+Probabilities belong to choices, not to messages. An early requirement can use
+\texttt{oneOf}, a symbolic weight, or a range such as \texttt{between 0.90 0.99}.
+Implementation refinement resolves those claims to a well-defined stochastic
+model or to deterministic conditions. Refinement must preserve possibility even
+when a current implementation assigns probability zero to a legal abstract branch;
+otherwise changing operational policy would silently change the contract.
+
+\section{Composing requirements means intersecting constraints}
+
+\index{composition!requirement intersection}
+Scenario composition builds behaviour in familiar language-theoretic ways:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Operator & Language operation & Purpose \\
+\midrule
+\texttt{then a b} & concatenation & $a$ happens before $b$ \\
+\texttt{oneOf [a,b]} & union & either story is legal \\
+\texttt{together a b} & shuffle/interleaving & independent concurrent stories \\
+\texttt{repeat a} & closure & repeated conversation \\
+\texttt{where\_ p a} & trace filtering & context-sensitive legality \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Combining requirements is subtler. A requirement usually does not add another
+message sequence; it removes histories that violate a concern. Therefore
+\texttt{requireAll} denotes intersection of accepted trace sets.
+
+\begin{lstlisting}
+def quoteSystem : SystemSpec :=
+  generatedBy quoteOutcome
+  |> requireAll
+      [ correlate "offered quote matches request"
+          (sameField "requestId")
+      , forbid "confirmation without acceptance"
+          (event "order confirmed" && notPreviously "quote accepted")
+      , ctl "every accepted quote is answered"
+          (AG (accepted --> AF (confirmed || rejected)))
+      , timing "answer within service objective"
+          (accepted --> within 2.seconds (confirmed || rejected))
+      ]
+\end{lstlisting}
+
+This distinction prevents an important category error: union and concatenation
+assemble possible stories; intersection layers independent obligations over those
+stories. A system is consistent only if the intersection remains nonempty. When it
+is empty, tooling should return a minimal conflicting set of requirements and the
+shortest available counterexample prefix.
+
+\section{State-machine rendering}
+
+The same scenario grammar can be rendered as a state machine. States are grammar
+residuals---the legal continuations after a trace prefix---rather than snapshots of
+private implementation memory.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[->,>=Latex,node distance=2.7cm,on grid,auto,
+  every state/.style={draw,minimum size=1.05cm}]
+  \node[state,initial] (start) {start};
+  \node[state] (asked) [right=of start] {asked};
+  \node[state] (offered) [right=of asked] {offered};
+  \node[state,accepting] (accepted) [above right=1.4cm and 2.5cm of offered] {accepted};
+  \node[state,accepting] (declined) [below right=1.4cm and 2.5cm of offered] {declined};
+  \path
+    (start) edge node {quote requested} (asked)
+    (asked) edge node {quote offered} (offered)
+    (offered) edge node {quote accepted} (accepted)
+    (offered) edge node[below] {quote declined} (declined);
+\end{tikzpicture}
+\caption{A state machine derived from grammar residuals.}
+\label{fig:quote-state-machine}
+\end{figure}
+
+\section{Charts are declarative trace reductions}
+
+\index{chart specification}
+Charts are also specified in the Lean subset. A chart names an observable event
+source, a grouping or $x$ expression, and an aggregate or $y$ expression. It does
+not contain rendering code.
+
+\begin{lstlisting}
+def outcomeShare : ChartSpec :=
+  pie "quote outcomes" do
+    source events
+    where_ (kind == "quote accepted" || kind == "quote declined")
+    groupBy kind
+    value count
+
+def responseLatency : ChartSpec :=
+  line "quote response latency" do
+    source (correlate events by "quoteId")
+    x tstamp
+    y (elapsed "quote offered" "customer decision")
+    series "p50" median
+\end{lstlisting}
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{.43\textwidth}
+\centering
+\begin{tikzpicture}
+  \def\r{1.55}
+  \fill[leanblue!80] (0,0) -- (90:\r) arc (90:-234:\r) -- cycle;
+  \fill[orange!80] (0,0) -- (-234:\r) arc (-234:-270:\r) -- cycle;
+  \node at (0,-2.05) {accepted 90\%};
+  \node at (0,-2.45) {declined 10\%};
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}{.52\textwidth}
+\centering
+\resizebox{.97\linewidth}{!}{%
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5cm,
+  xlabel={event time},ylabel={latency (ms)},
+  xmin=1,xmax=5,ymin=0,ymax=500,
+  grid=major]
+  \addplot[color=leanblue,mark=*] coordinates {(1,310) (2,240) (3,180) (4,205) (5,145)};
+\end{axis}
+\end{tikzpicture}
+}
+\end{minipage}
+\caption{Example pie and line renderings from declarative chart specifications.}
+\label{fig:charts}
+\end{figure}
+
+Interaction diagrams, state machines, and charts are projections of the same typed
+scenario and event definitions. Keeping them derived prevents a diagram from
+becoming a second, drifting specification.

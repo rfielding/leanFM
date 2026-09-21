@@ -37,7 +37,11 @@ make check       # build, evaluate generated requirement validation, and emit di
 make serve       # run the web server on 127.0.0.1:8080
 make http-check  # validate live server routes after make serve
 make stop        # stop the process listening on PORT, default 8080
+make book        # build the LaTeX book, bibliography, contents, and index
 ```
+
+The book source is in `book/`; its rendered PDF is `book/main.pdf` after a
+successful build. Use `make book-clean` to remove generated LaTeX artifacts.
 
 The Lean HTTP server listens on:
 

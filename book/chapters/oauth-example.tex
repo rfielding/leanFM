@@ -1,0 +1,369 @@
+\chapter{Worked Example: OAuth Authorization Code Flow}
+\label{ch:oauth-example}
+
+\index{OAuth}
+This chapter is a behavioural sketch inspired by the OAuth authorization-code
+flow. It is not a replacement for the OAuth specification and deliberately begins
+above HTTP and protobuf. Its purpose is to exercise scenario decomposition,
+parameter flow, visible evidence, alternatives, requirements, and rendering.
+
+\section{Actors, values, and observable events}
+
+The example has four participants: a person using a browser, an application, an
+authorization service, and a resource service. The browser is modelled separately
+from the person because redirects are observable messages between software
+participants.
+
+\begin{lstlisting}
+inductive Actor where
+  | user | browser | app | authorizationServer | resourceServer
+
+opaque State       : Type
+opaque AuthCode    : Type
+opaque AccessToken : Type
+opaque Resource    : Type
+opaque Profile     : Type
+opaque Password    : Type
+opaque Bytes       : Type
+\end{lstlisting}
+
+Every terminal elaborates to the common event envelope. For example, the vague
+message ``authorization redirected'' becomes conceptually:
+
+\begin{lstlisting}
+{ tstamp := t2, id := e2, prevId := some e1
+, from := Actor.app, to := Actor.browser
+, kind := "authorization redirected"
+, fields := [field "state" state, field "redirectUri" callback]
+}
+\end{lstlisting}
+
+\section{Scenario 1: begin authorization}
+
+Before the redirect returns, the authorization service may authenticate the person.
+OAuth does not prescribe the authentication mechanism; we include a password branch
+to exercise secret input without pretending that the password is an OAuth protocol
+parameter.
+
+\begin{lstlisting}
+def authenticateAtAuthorizationServer (password : Password) : Scenario :=
+  scenario "authenticate resource owner" do
+    from_ .browser
+    to_ .authorizationServer
+    emitBytes "credentials submitted"
+      (protectFor .authorizationServer
+        (encode [secretField "password" password]))
+
+    from_ .authorizationServer
+    to_ .browser
+    oneOf "authentication result"
+      [ emitBytes "authentication accepted" (encode [tag 1])
+      , emitBytes "authentication rejected" (encode [tag 0])
+      ]
+\end{lstlisting}
+
+The wire bytes are specified even though the transport is not. The abstract
+\texttt{protectFor} constructor promises confidentiality to the named endpoint. A
+later refinement may realize that promise with TLS, message-level encryption, or a
+local trusted channel. Merely placing the password inside a field would not support
+a secrecy theorem: a network observer would then derive it from the bytes.
+
+\begin{lstlisting}
+def beginAuthorization (resource : Resource) : Scenario :=
+  scenario "begin authorization" do
+    let state <- declare State "state"
+    let callback := Uri.https "app.example" "/oauth/callback"
+
+    from_ .user
+    to_ .browser
+    emit "resource requested" [field "resource" resource]
+
+    from_ .browser
+    to_ .app
+    emit "application request" [field "resource" resource]
+
+    from_ .app
+    to_ .browser
+    emit "authorization redirected"
+      [field "state" state, field "redirectUri" callback]
+
+    from_ .browser
+    to_ .authorizationServer
+    emit "authorization requested"
+      [field "state" state, field "redirectUri" callback]
+
+    export "state" state
+    export "resource" resource
+\end{lstlisting}
+
+This scenario establishes the correlation value \texttt{state}. Nothing here says
+how the application stores it. The contract only requires later observable
+messages to carry the corresponding value.
+
+\section{Scenario 2: grant or deny}
+
+\begin{lstlisting}
+def authorizationGranted : Scenario :=
+  scenario "authorization granted" do
+    use state <- imported State "state"
+    let code <- declare AuthCode "code"
+
+    from_ .authorizationServer
+    to_ .browser
+    emit "authorization code returned"
+      [field "state" state, field "code" code]
+
+    from_ .browser
+    to_ .app
+    emit "authorization callback"
+      [field "state" state, field "code" code]
+    export "code" code
+
+def authorizationDenied : Scenario :=
+  scenario "authorization denied" do
+    use state <- imported State "state"
+    from_ .authorizationServer
+    to_ .browser
+    emit "authorization error returned"
+      [field "state" state, field "reason" "access_denied"]
+    from_ .browser
+    to_ .app
+    emit "authorization error callback"
+      [field "state" state, field "reason" "access_denied"]
+
+def authorizationDecision : Scenario :=
+  oneOf "authorization decision"
+    [authorizationGranted, authorizationDenied]
+\end{lstlisting}
+
+The abstract contract makes both decisions possible. A product model may later
+attach an estimated or measured probability distribution without changing the set
+of legal traces.
+
+\section{Scenario 3: exchange the code and use the token}
+
+\begin{lstlisting}
+def exchangeAndFetch : Scenario :=
+  scenario "exchange code and fetch resource" do
+    use code     <- imported AuthCode "code"
+    use resource <- imported Resource "resource"
+    let token    <- declare AccessToken "accessToken"
+    let profile  <- declare Profile "profile"
+
+    from_ .app
+    to_ .authorizationServer
+    emit "token requested" [field "code" code]
+
+    from_ .authorizationServer
+    to_ .app
+    emit "access token issued" [field "accessToken" token]
+
+    from_ .app
+    to_ .resourceServer
+    emit "protected resource requested"
+      [field "accessToken" token, field "resource" resource]
+
+    from_ .resourceServer
+    to_ .app
+    emit "protected resource returned"
+      [field "resource" resource, field "profile" profile]
+
+    from_ .app
+    to_ .browser
+    emit "application response" [field "profile" profile]
+\end{lstlisting}
+
+The token itself is visible only at the endpoints where the abstract protocol says
+it is transmitted. The grammar makes no claim about the authorization server's
+database schema or the application's session representation.
+
+\section{Reading the scenarios together}
+
+\begin{lstlisting}
+def oauthAuthorization (resource : Resource) (password : Password) : Scenario :=
+  scenario "OAuth authorization code flow" do
+    include (beginAuthorization resource)
+    include (authenticateAtAuthorizationServer password)
+    include authorizationDecision
+    after authorizationGranted include exchangeAndFetch
+
+def oauthSystem (resource : Resource) (password : Password) : SystemSpec :=
+  generatedBy (oauthAuthorization resource password)
+  |> requireAll oauthRequirements
+\end{lstlisting}
+
+The \texttt{after} line is a guarded nonterminal reference. The denial branch ends
+without exchanging a code. All scenario sources are read into one grammar, but
+their names and boundaries remain available to render and test independently.
+
+\section{Interaction diagrams by scenario}
+
+\begin{figure}[p]
+\centering
+\begin{tikzpicture}[>=Latex,actor/.style={draw,rounded corners,minimum width=2.15cm,
+  minimum height=.65cm,fill=black!4,font=\small},message/.style={->,thick}]
+  \node[actor] (browser) at (0,0) {Browser};
+  \node[actor] (app) at (3.5,0) {Application};
+  \node[actor] (auth) at (7,0) {Authorization};
+  \node[actor] (resource) at (10.5,0) {Resource};
+  \foreach \x in {browser,app,auth,resource}
+    \draw[dashed] (\x.south) -- ++(0,-10.8);
+
+  \node[anchor=west,font=\bfseries] at (-.8,-.85) {Begin authorization};
+  \draw[message] (browser.center |- 0,-1.45) -- node[above,font=\scriptsize]{application request(resource)} (app.center |- 0,-1.45);
+  \draw[message] (app.center |- 0,-2.05) -- node[above,font=\scriptsize]{redirect(state)} (browser.center |- 0,-2.05);
+  \draw[message] (browser.center |- 0,-2.65) -- node[above,font=\scriptsize]{authorize(state)} (auth.center |- 0,-2.65);
+
+  \node[anchor=west,font=\bfseries] at (-.8,-3.55) {Authorization granted};
+  \draw[message] (auth.center |- 0,-4.15) -- node[above,font=\scriptsize]{code(state, code)} (browser.center |- 0,-4.15);
+  \draw[message] (browser.center |- 0,-4.75) -- node[above,font=\scriptsize]{callback(state, code)} (app.center |- 0,-4.75);
+
+  \node[anchor=west,font=\bfseries] at (-.8,-5.65) {Exchange and fetch};
+  \draw[message] (app.center |- 0,-6.25) -- node[above,font=\scriptsize]{token request(code)} (auth.center |- 0,-6.25);
+  \draw[message] (auth.center |- 0,-6.85) -- node[above,font=\scriptsize]{token issued(token)} (app.center |- 0,-6.85);
+  \draw[message] (app.center |- 0,-7.45) -- node[above,font=\scriptsize]{resource request(token)} (resource.center |- 0,-7.45);
+  \draw[message] (resource.center |- 0,-8.05) -- node[above,font=\scriptsize]{resource returned(profile)} (app.center |- 0,-8.05);
+  \draw[message] (app.center |- 0,-8.65) -- node[above,font=\scriptsize]{application response(profile)} (browser.center |- 0,-8.65);
+
+  \node[anchor=west,font=\bfseries] at (-.8,-9.55) {Alternative: denied};
+  \draw[message] (auth.center |- 0,-10.15) -- node[above,font=\scriptsize]{error(state, access\_denied)} (browser.center |- 0,-10.15);
+  \draw[message] (browser.center |- 0,-10.75) -- node[above,font=\scriptsize]{error callback(state)} (app.center |- 0,-10.75);
+\end{tikzpicture}
+\caption{OAuth interaction view. Named scenario bands remain visible after the
+sources are assembled into one grammar.}
+\label{fig:oauth-interaction}
+\end{figure}
+
+\section{Requirements as observable constraints}
+
+\begin{lstlisting}
+def oauthRequirements : List Requirement :=
+  [ require "callback state matches request"
+      (on "authorization callback" (previouslySame "state"
+        "authorization requested"))
+
+  , forbid "code exchange after denial"
+      (previously "authorization denied" && event "token requested")
+
+  , require "issued token came from a code"
+      (on "access token issued" (previouslySame "code" "token requested"))
+
+  , ctl "every decision reaches the application"
+      (AG (decisionAtAuthorizationServer --> AF callbackAtApplication))
+
+  , ctl "a protected result is never returned without a token request"
+      (AG (resourceReturned --> previously tokenRequested))
+  ]
+\end{lstlisting}
+
+\subsection{Password secrecy}
+
+\index{password secrecy}
+Observable events are not the same as universally readable plaintext. Every actor
+may observe that credential bytes were sent; only actors within the trusted
+user-agent boundary and authorization service may derive the password value. The
+theorem must name both the observer and its assumptions.
+
+\begin{lstlisting}
+theorem oauth_password_secret
+    (trace : Trace WireEvent)
+    (accepted : (oauthSystem resource password).Accepts trace)
+    (initial : InitiallyKnown password [.browser, .authorizationServer])
+    (honest : Uncompromised [.browser, .authorizationServer])
+    (protection : PerfectProtection protectFor) :
+    not (Derives (knowledgeOf .networkAttacker trace) (secret password)) := by
+  exact protectedFieldNotDerivable accepted initial honest protection
+\end{lstlisting}
+
+This statement deliberately permits the trusted browser boundary and authorization
+service to know the password. A theorem claiming secrecy from the browser would be
+false for a password typed into that browser. If the desired boundary is narrower,
+the actor model must represent a trusted credential component separately.
+
+The theorem is also conditional. A compromised endpoint, logging side channel, or
+failed concrete protection refinement invalidates an assumption rather than being
+hidden by the grammar.
+
+\subsection{Byte-level refinement without choosing a transport}
+
+Every vague OAuth message can be assigned a canonical byte term before HTTP or
+protobuf is chosen:
+
+\begin{lstlisting}
+refineMessage "authorization requested" where
+  term := tuple
+    [ tagBytes 0x01
+    , namedBytes "state" (encode state)
+    , namedBytes "redirectUri" (encode callback)
+    ]
+  bytes := encodeCanonical term
+
+refineMessage "token requested" where
+  term := tuple [tagBytes 0x02, namedBytes "code" (encode code)]
+  bytes := encodeCanonical term
+\end{lstlisting}
+
+This fixes framing, tags, and value relationships at an abstract byte-algebra level.
+A subsequent HTTP mapping might put those bytes into form fields; a protobuf mapping
+might use numbered fields. Either concrete alphabet must prove that decoding and
+re-encoding preserve the abstract terminal and its parameter bindings.
+
+The use of \texttt{previously} is deliberately a trace predicate in this first
+version. It can later receive dedicated past-time syntax without changing the event
+model.
+
+\section{Probabilities and charts}
+
+An operational model may refine the decision and exchange outcomes:
+
+\begin{lstlisting}
+def measuredAuthorizationDecision : Scenario :=
+  choose "authorization decision"
+    [ weighted (87 / 100) authorizationGranted
+    , weighted (13 / 100) authorizationDenied ]
+
+def oauthCharts : List ChartSpec :=
+  [ pie "authorization outcomes" do
+      source events; groupBy terminalOutcome; value count
+  , line "end-to-end authorization latency" do
+      source (correlate events by "state")
+      x tstamp; y (elapsed "authorization requested" "application response")
+  ]
+\end{lstlisting}
+
+The percentages are model inputs or measurements, not truths inferred from the
+grammar. The grammar continues to define which behaviours are possible; the
+probabilistic refinement says how mass is distributed over them.
+
+\section{Residual state machine}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[->,>=Latex,node distance=2.35cm,on grid,auto,
+  every state/.style={draw,minimum size=.9cm,font=\small}]
+  \node[state,initial] (start) {start};
+  \node[state] (requested) [right=of start] {requested};
+  \node[state] (decision) [right=of requested] {decision};
+  \node[state] (callback) [above right=1.25cm and 2.5cm of decision] {callback};
+  \node[state,accepting] (denied) [below right=1.25cm and 2.5cm of decision] {denied};
+  \node[state] (token) [right=of callback] {token};
+  \node[state] (fetch) [right=of token] {fetch};
+  \node[state,accepting] (done) [right=of fetch] {done};
+  \path
+    (start) edge node {request} (requested)
+    (requested) edge node {authorize} (decision)
+    (decision) edge node {code} (callback)
+    (decision) edge node[below] {deny} (denied)
+    (callback) edge node {exchange} (token)
+    (token) edge node {issued} (fetch)
+    (fetch) edge node {resource} (done);
+\end{tikzpicture}}
+\caption{OAuth state machine derived from legal grammar continuations.}
+\label{fig:oauth-state-machine}
+\end{figure}
+
+This automaton is intentionally behavioural. It does not contain browser cookies,
+database rows, server threads, or cryptographic library state. Those details may be
+essential to an implementation proof, but they are refinements of this contract,
+not the contract itself.

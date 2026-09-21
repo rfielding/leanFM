@@ -8,7 +8,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check http-check validate proto diagrams scripts clean
+.PHONY: build run serve stop check http-check validate proto diagrams scripts book book-clean clean
 
 build:
 	lake build leanfm-server
@@ -58,6 +58,12 @@ diagrams:
 scripts:
 	node scripts/format_assets.js
 	node scripts/embed_static_assets.js
+
+book:
+	$(MAKE) -C book
+
+book-clean:
+	$(MAKE) -C book clean
 
 clean:
 	lake clean

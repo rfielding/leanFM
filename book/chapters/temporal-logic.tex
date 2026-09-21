@@ -1,0 +1,52 @@
+\chapter{CTL over Generated Futures}
+\label{ch:ctl}
+
+\index{CTL}
+\index{temporal logic}
+A grammar generates a branching transition system. CTL speaks directly about that
+branching: path quantifiers distinguish \emph{there exists a future} from
+\emph{every future}, while temporal operators distinguish the next state,
+eventuality, invariance, and until.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Formula & Reading & Typical use \\
+\midrule
+$EF\,p$ & some future can reach $p$ & possibility / witness \\
+$AF\,p$ & every future eventually reaches $p$ & termination / response \\
+$EG\,p$ & some path preserves $p$ forever & viable invariant path \\
+$AG\,p$ & every reachable state satisfies $p$ & safety invariant \\
+$A[p\ U\ q]$ & every path keeps $p$ until $q$ & constrained progress \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For a request event carrying identifier $r$, an expected response property might
+say that on every continuation a matching success or failure eventually occurs.
+Authentication might say that every successful use of a session has an earlier
+issuance event with the same session identifier.
+
+\section{Past claims}
+
+\index{past-time logic}
+CTL is future-facing at the current state, but security and protocol claims often
+refer to evidence in the past: ``this capability was previously issued'' or ``this
+response matches an earlier request.'' Since states are trace prefixes, past facts
+can initially be expressed as predicates over the accumulated trace. This gives a
+clear baseline without prematurely committing the surface language to a particular
+past-time temporal logic.
+
+There is still an open design question. Explicit past operators may make properties
+more readable and allow better checking algorithms. The project should compare
+trace predicates, CTL with past operators, and compilation of finite-history
+monitors into state. The criterion is maintainability of specifications as the
+event schema evolves.
+
+\section{Fairness and time bounds}
+
+$AF$ does not by itself distinguish a participant that is perpetually denied a
+turn from one that violates the protocol. Fairness assumptions must therefore be
+named, scoped, and visible in theorem statements. Similarly, ``eventually'' is not
+``within 200 milliseconds.'' Quantitative bounds belong in an explicit timed layer
+rather than being smuggled into timestamps and informal prose.

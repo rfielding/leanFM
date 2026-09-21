@@ -1,0 +1,39 @@
+\chapter{Lean as the Rendered Language}
+\label{ch:lean}
+
+\index{Lean}
+The user-facing notation should render to a conservative subset of Lean. There is
+no second opaque specification file: domain declarations are Lean definitions,
+expected behaviours are Lean values, and requirements are Lean propositions or
+checked queries.
+
+\begin{lstlisting}
+def checkout : Grammar CheckoutEvent :=
+  request >>> (accepted <||> rejected)
+
+def eventuallyAnswered : CTL Observation :=
+  CTL.ag (CTL.implies requestPending
+    (CTL.af (CTL.or requestAccepted requestRejected)))
+\end{lstlisting}
+
+Most semantic machinery should be imported from a fixed library. A system author
+normally supplies only:
+
+\begin{itemize}
+  \item typed actors, identifiers, event kinds, and payloads;
+  \item parameterised grammar definitions;
+  \item projections from trace prefixes to observable propositions;
+  \item named temporal requirements and proofs or decidable checks.
+\end{itemize}
+
+This boundary matters for automation. Generated Lean remains small enough to
+review, while library proofs and algorithms are reused rather than regenerated.
+
+\section{From specification to service}
+
+Lean can host executable code, including a small web server. That makes the formal
+artifact part of the running project rather than a document beside it. The same
+typed definitions can drive validation endpoints, test-trace generation, protocol
+schemas, visualisations, and runtime monitors. Extraction and integration choices
+must preserve the distinction between a verified behavioural boundary and an
+unverified infrastructure layer.

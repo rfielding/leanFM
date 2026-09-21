@@ -1,0 +1,58 @@
+\chapter{Histories Made of Events}
+\label{ch:events}
+
+\index{event}
+\index{trace}
+Every execution is represented by an event sequence. A deliberately small common
+envelope makes histories comparable across protocols:
+
+\begin{lstlisting}
+structure Event (Actor Kind Payload : Type) where
+  tstamp  : Nat
+  id      : String
+  prevId  : Option String
+  from    : Actor
+  to      : Actor
+  kind    : Kind
+  payload : Payload
+
+abbrev Trace (Actor Kind Payload : Type) :=
+  List (Event Actor Kind Payload)
+\end{lstlisting}
+
+The fields have different jobs. \texttt{id} identifies a visible fact;
+\texttt{prevId} records an immediate causal claim; \texttt{from} and \texttt{to}
+name the parties; and \texttt{kind} supplies a stable discriminator. The payload is
+protocol-specific and carries the parameters that flow from one production to the
+next. A timestamp is useful, but order and causality must not be silently reduced
+to wall-clock order.
+
+\section{Derived state}
+
+A current session, an authenticated principal, or an outstanding request can often
+be computed by folding the trace. Such a fact need not also exist as primitive
+model state. This discipline has two benefits: evidence for a fact remains visible,
+and the state representation does not multiply independently of the history that
+justifies it.
+
+Some implementations necessarily maintain private state. The model includes it
+only when two executions with the same visible trace may make different future
+behaviour legal. Even then, the first remedy is to expose the relevant distinction
+as an event or a grammar parameter rather than copying an implementation object
+graph into the specification.
+
+\section{Time is more than a timestamp}
+
+\index{time}
+The central modelling problem is maintainable time evolution. We separate three
+ideas that are often conflated:
+
+\begin{itemize}
+  \item sequence order: one visible event occurs before another;
+  \item causality: an event extends or responds to another event;
+  \item duration: an amount of physical or logical time elapses.
+\end{itemize}
+
+Grammar structure handles sequence, identifiers handle causal linkage, and typed
+constraints handle duration. This keeps a change in timeout policy from rewriting
+the protocol's entire behavioural shape.
