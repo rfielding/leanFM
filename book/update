@@ -1,0 +1,4 @@
+#!/bin/bash
+
+cp main.pdf ../../rfielding.github.com/leanFM.pdf ; ( cd ../../rfielding.github.com/; git add leanFM.pdf ; git commit -a -m "update book"; git push origin master)
+
