@@ -56,37 +56,77 @@
 \begin{tikzpicture}[>=Latex,actor/.style={draw,rounded corners,minimum width=2.15cm,
   minimum height=.65cm,fill=#3,text=#1,draw=#1,font=\small},
   message/.style={->,thick,draw=#1,text=#1},
+  production/.style={draw=#1,rounded corners,very thick},
   alternative/.style={draw=#1,rounded corners,thick}]
   \node[actor] (browser) at (0,0) {Browser};
   \node[actor] (app) at (3.5,0) {Application};
   \node[actor] (auth) at (7,0) {Authorization};
   \node[actor] (resource) at (10.5,0) {Resource};
   \foreach \x in {browser,app,auth,resource}
-    \draw[dashed,draw=#1] (\x.south) -- ++(0,-11.50);
+    \draw[dashed,draw=#1] (\x.south) -- ++(0,-14.10);
 
-  \node[anchor=west,text=#1,font=\small\bfseries] at (-.8,-.85) {Begin authorization};
-  \draw[message] (browser.center |- 0,-1.65) -- node[above,font=\scriptsize]{application request(resource)} (app.center |- 0,-1.65);
-  \draw[message] (app.center |- 0,-2.25) -- node[above,font=\scriptsize]{redirect(state)} (browser.center |- 0,-2.25);
-  \draw[message] (browser.center |- 0,-2.85) -- node[above,font=\scriptsize]{authorize(state)} (auth.center |- 0,-2.85);
-
-  \draw[alternative] (-.8,-3.45) rectangle (11.35,-9.25);
+  \draw[production] (-.8,-.75) rectangle (11.35,-3.45);
   \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.55,-3.45) {Alternative: authorization granted};
-  \draw[message] (auth.center |- 0,-4.70) -- node[above,font=\scriptsize]{code(state, code)} (browser.center |- 0,-4.70);
-  \draw[message] (browser.center |- 0,-5.30) -- node[above,font=\scriptsize]{callback(state, code)} (app.center |- 0,-5.30);
+    at (-.55,-.75) {Production: application request and redirect};
+  \draw[message] (browser.center |- 0,-2.00) -- node[above,font=\scriptsize]{application request(resource)} (app.center |- 0,-2.00);
+  \draw[message] (app.center |- 0,-2.85) -- node[above,font=\scriptsize]{redirect(state)} (browser.center |- 0,-2.85);
 
-  \node[anchor=west,text=#1,font=\small\bfseries] at (-.55,-5.85) {Exchange and fetch};
-  \draw[message] (app.center |- 0,-6.55) -- node[above,font=\scriptsize]{token request(code)} (auth.center |- 0,-6.55);
-  \draw[message] (auth.center |- 0,-7.15) -- node[above,font=\scriptsize]{token issued(token)} (app.center |- 0,-7.15);
-  \draw[message] (app.center |- 0,-7.75) -- node[above,font=\scriptsize]{resource request(token)} (resource.center |- 0,-7.75);
-  \draw[message] (resource.center |- 0,-8.35) -- node[above,font=\scriptsize]{resource returned(profile)} (app.center |- 0,-8.35);
-  \draw[message] (app.center |- 0,-8.95) -- node[above,font=\scriptsize]{application response(profile)} (browser.center |- 0,-8.95);
-
-  \draw[alternative] (-.8,-9.55) rectangle (11.35,-11.70);
+  \draw[production] (-.8,-3.70) rectangle (11.35,-10.45);
   \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.55,-9.55) {Alternative: authorization denied};
-  \draw[message] (auth.center |- 0,-10.80) -- node[above,font=\scriptsize]{error(state, access\_denied)} (browser.center |- 0,-10.80);
-  \draw[message] (browser.center |- 0,-11.40) -- node[above,font=\scriptsize]{error callback(state)} (app.center |- 0,-11.40);
+    at (-.55,-3.70) {Production: authorize and decide};
+  \draw[message] (browser.center |- 0,-4.95) -- node[above,font=\scriptsize]{authorize(state)} (auth.center |- 0,-4.95);
+  \node[draw=#1,rounded corners,fill=#2,text=#1,font=\scriptsize,
+    minimum width=5.6cm,minimum height=.55cm]
+    at (3.5,-5.65) {authenticate resource owner};
+
+  \draw[alternative] (-.55,-6.15) rectangle (11.10,-8.05);
+  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
+    at (-.30,-6.15) {Alternative: authorization granted};
+  \draw[message] (auth.center |- 0,-7.35) -- node[above,font=\scriptsize]{code(state, code)} (browser.center |- 0,-7.35);
+  \draw[message] (browser.center |- 0,-7.85) -- node[above,font=\scriptsize]{callback(state, code)} (app.center |- 0,-7.85);
+
+  \draw[alternative] (-.55,-8.25) rectangle (11.10,-10.20);
+  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
+    at (-.30,-8.25) {Alternative: authorization denied};
+  \draw[message] (auth.center |- 0,-9.45) -- node[above,font=\scriptsize]{error(state, access\_denied)} (browser.center |- 0,-9.45);
+  \draw[message] (browser.center |- 0,-10.00) -- node[above,font=\scriptsize]{error callback(state)} (app.center |- 0,-10.00);
+
+  \draw[production] (-.8,-10.70) rectangle (11.35,-14.35);
+  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
+    at (-.55,-10.70) {After granted: exchange and fetch};
+  \draw[message] (app.center |- 0,-12.00) -- node[above,font=\scriptsize]{token request(code)} (auth.center |- 0,-12.00);
+  \draw[message] (auth.center |- 0,-12.50) -- node[above,font=\scriptsize]{token issued(token)} (app.center |- 0,-12.50);
+  \draw[message] (app.center |- 0,-13.00) -- node[above,font=\scriptsize]{resource request(token)} (resource.center |- 0,-13.00);
+  \draw[message] (resource.center |- 0,-13.50) -- node[above,font=\scriptsize]{resource returned(profile)} (app.center |- 0,-13.50);
+  \draw[message] (app.center |- 0,-14.00) -- node[above,font=\scriptsize]{application response(profile)} (browser.center |- 0,-14.00);
+\end{tikzpicture}%
+}
+
+\newcommand{\OAuthOverviewDiagram}[3]{%
+\begin{tikzpicture}[>=Latex,actor/.style={draw=#1,rounded corners,minimum width=2.15cm,
+  minimum height=.65cm,fill=#3,text=#1,font=\small},
+  production/.style={draw=#1,rounded corners,very thick,fill=#2,text=#1}]
+  \node[actor] (browser) at (0,0) {Browser};
+  \node[actor] (app) at (3.5,0) {Application};
+  \node[actor] (auth) at (7,0) {Authorization};
+  \node[actor] (resource) at (10.5,0) {Resource};
+  \foreach \x in {browser,app,auth,resource}
+    \draw[dashed,draw=#1] (\x.south) -- ++(0,-6.15);
+
+  \draw[production] (-.65,-1.00) rectangle (4.15,-2.15);
+  \node[text=#1,font=\bfseries,align=center] at (1.75,-1.57)
+    {application request\\and redirect};
+
+  \draw[production] (-.65,-2.65) rectangle (7.80,-3.80);
+  \node[text=#1,font=\bfseries,align=center] at (3.58,-3.22)
+    {authorize and decide\\[.15em]\scriptsize granted $\mid$ denied};
+
+  \draw[production] (2.85,-4.30) rectangle (11.15,-5.55);
+  \node[text=#1,font=\bfseries,align=center] at (7.00,-4.92)
+    {after granted: exchange code\\and fetch resource};
+
+  \draw[->,very thick,draw=#1] (1.75,-2.15) -- (1.75,-2.65);
+  \draw[->,very thick,draw=#1] (3.58,-3.80) -- node[right,text=#1,font=\scriptsize]{granted} (3.58,-4.30);
 \end{tikzpicture}%
 }
 
@@ -98,7 +138,7 @@
     (current page.south west) rectangle (current page.north east);
   \node[fill=leanblue!75!black,inner sep=10pt]
     at ([yshift=-1.0cm]current page.center)
-    {\resizebox{.88\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{leanblue!75!black}{leanblue!75!black}}};
+    {\resizebox{.78\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{leanblue!75!black}{leanblue!75!black}}};
   \node[anchor=north west,text width=.82\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.75cm]current page.north west)
     {\color{leangold}\fontsize{27}{31}\selectfont\bfseries

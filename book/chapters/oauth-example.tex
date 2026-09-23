@@ -38,7 +38,7 @@ message ``authorization redirected'' becomes conceptually:
 }
 \end{lstlisting}
 
-\section{Scenario 1: begin authorization}
+\subsection*{Authentication detail used by Production 2}
 
 Before the redirect returns, the authorization service may authenticate the person.
 OAuth does not prescribe the authentication mechanism; we include a password branch
@@ -68,15 +68,13 @@ later refinement may realize that promise with TLS, message-level encryption, or
 local trusted channel. Merely placing the password inside a field would not support
 a secrecy theorem: a network observer would then derive it from the bytes.
 
+\section{Production 1: application request and redirect}
+
 \begin{lstlisting}
-def beginAuthorization (resource : Resource) : Scenario :=
-  scenario "begin authorization" do
+def applicationRequestAndRedirect (resource : Resource) : Scenario :=
+  scenario "application request and redirect" do
     let state <- declare State "state"
     let callback := Uri.https "app.example" "/oauth/callback"
-
-    from_ .user
-    to_ .browser
-    emit "resource requested" [field "resource" resource]
 
     from_ .browser
     to_ .app
@@ -87,20 +85,16 @@ def beginAuthorization (resource : Resource) : Scenario :=
     emit "authorization redirected"
       [field "state" state, field "redirectUri" callback]
 
-    from_ .browser
-    to_ .authorizationServer
-    emit "authorization requested"
-      [field "state" state, field "redirectUri" callback]
-
     export "state" state
+    export "redirectUri" callback
     export "resource" resource
 \end{lstlisting}
 
-This scenario establishes the correlation value \texttt{state}. Nothing here says
-how the application stores it. The contract only requires later observable
-messages to carry the corresponding value.
+This production treats the application request and its redirect as one named
+unit. It establishes the correlation value \texttt{state} and exports it to the
+next production. Nothing here says how the application stores it.
 
-\section{Scenario 2: grant or deny}
+\section{Production 2: authorize, then grant or deny}
 
 \begin{lstlisting}
 def authorizationGranted : Scenario :=
@@ -131,11 +125,26 @@ def authorizationDenied : Scenario :=
     emit "authorization error callback"
       [field "state" state, field "reason" "access_denied"]
 
-def authorizationDecision : Scenario :=
-  oneOf "authorization decision"
-    [authorizationGranted, authorizationDenied]
+def authorizeAndDecide (password : Password) : Scenario :=
+  scenario "authorize and decide" do
+    use state       <- imported State "state"
+    use redirectUri <- imported Uri "redirectUri"
+
+    from_ .browser
+    to_ .authorizationServer
+    emit "authorization requested"
+      [field "state" state, field "redirectUri" redirectUri]
+
+    include (authenticateAtAuthorizationServer password)
+    oneOf "authorization decision"
+      [ include authorizationGranted
+      , include authorizationDenied
+      ]
 \end{lstlisting}
 
+The authorization request and its two possible continuations form one production.
+At a more abstract rendering level, the entire production can be shown as one
+node; expanding it reveals authentication and the explicitly bracketed choice.
 The abstract contract makes both decisions possible. A product model may later
 attach an estimated or measured probability distribution without changing the set
 of legal traces.
@@ -182,9 +191,8 @@ database schema or the application's session representation.
 \begin{lstlisting}
 def oauthAuthorization (resource : Resource) (password : Password) : Scenario :=
   scenario "OAuth authorization code flow" do
-    include (beginAuthorization resource)
-    include (authenticateAtAuthorizationServer password)
-    include authorizationDecision
+    include (applicationRequestAndRedirect resource)
+    include (authorizeAndDecide password)
     after authorizationGranted include exchangeAndFetch
 
 def oauthSystem (resource : Resource) (password : Password) : SystemSpec :=
@@ -192,18 +200,19 @@ def oauthSystem (resource : Resource) (password : Password) : SystemSpec :=
   |> requireAll oauthRequirements
 \end{lstlisting}
 
-The \texttt{after} line is a guarded nonterminal reference. The denial branch ends
-without exchanging a code. All scenario sources are read into one grammar, but
-their names and boundaries remain available to render and test independently.
+The two named productions provide the first abstraction level. A renderer may
+collapse either production to a single node or expand it to its messages and
+nested alternatives. The \texttt{after} line is a guarded nonterminal reference;
+the denial branch ends without exchanging a code.
 
 \section{Interaction diagrams by scenario}
 
 \begin{figure}[p]
 \centering
 \resizebox{\textwidth}{!}{\OAuthInteractionDiagram{black}{white}{black!4}}
-\caption{OAuth interaction view. The frames bracket the two alternatives after
-the common authorization prefix; only the granted branch continues to token
-exchange and resource access.}
+\caption{OAuth interaction view. Production frames provide collapsible abstraction
+boundaries. The authorization production contains its request and both alternatives;
+the guarded exchange production is enabled only by the granted alternative.}
 \label{fig:oauth-interaction}
 \end{figure}
 
@@ -312,26 +321,25 @@ probabilistic refinement says how mass is distributed over them.
 
 \begin{figure}[htbp]
 \centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[->,>=Latex,node distance=2.35cm,on grid,auto,
+\begin{tikzpicture}[->,>=Latex,node distance=2.10cm,on grid,
   every state/.style={draw,minimum size=.9cm,font=\small}]
   \node[state,initial] (start) {start};
-  \node[state] (requested) [right=of start] {requested};
-  \node[state] (decision) [right=of requested] {decision};
-  \node[state] (callback) [above right=1.25cm and 2.5cm of decision] {callback};
-  \node[state,accepting] (denied) [below right=1.25cm and 2.5cm of decision] {denied};
-  \node[state] (token) [right=of callback] {token};
-  \node[state] (fetch) [right=of token] {fetch};
-  \node[state,accepting] (done) [right=of fetch] {done};
+  \node[state] (requested) [below=of start] {requested};
+  \node[state] (decision) [below=of requested] {decision};
+  \node[state] (callback) [below left=1.5cm and 2.0cm of decision] {callback};
+  \node[state,accepting] (denied) [below right=1.5cm and 2.0cm of decision] {denied};
+  \node[state] (token) [below=of callback] {token};
+  \node[state] (fetch) [below=of token] {fetch};
+  \node[state,accepting] (done) [below=of fetch] {done};
   \path
-    (start) edge node {request} (requested)
-    (requested) edge node {authorize} (decision)
-    (decision) edge node {code} (callback)
-    (decision) edge node[below] {deny} (denied)
-    (callback) edge node {exchange} (token)
-    (token) edge node {issued} (fetch)
-    (fetch) edge node {resource} (done);
-\end{tikzpicture}}
+    (start) edge node[right,fill=white,inner sep=1pt] {request} (requested)
+    (requested) edge node[right,fill=white,inner sep=1pt] {authorize} (decision)
+    (decision) edge node[left,fill=white,inner sep=1pt,align=right] {code} (callback)
+    (decision) edge node[right,fill=white,inner sep=1pt,align=left] {deny} (denied)
+    (callback) edge node[right,fill=white,inner sep=1pt] {exchange} (token)
+    (token) edge node[right,fill=white,inner sep=1pt] {issued} (fetch)
+    (fetch) edge node[right,fill=white,inner sep=1pt] {resource} (done);
+\end{tikzpicture}
 \caption{OAuth state machine derived from legal grammar continuations.}
 \label{fig:oauth-state-machine}
 \end{figure}

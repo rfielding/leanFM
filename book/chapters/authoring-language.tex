@@ -237,18 +237,18 @@ private implementation memory.
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[->,>=Latex,node distance=2.7cm,on grid,auto,
+\begin{tikzpicture}[->,>=Latex,node distance=1.8cm,on grid,
   every state/.style={draw,minimum size=1.05cm}]
   \node[state,initial] (start) {start};
-  \node[state] (asked) [right=of start] {asked};
-  \node[state] (offered) [right=of asked] {offered};
-  \node[state,accepting] (accepted) [above right=1.4cm and 2.5cm of offered] {accepted};
-  \node[state,accepting] (declined) [below right=1.4cm and 2.5cm of offered] {declined};
+  \node[state] (asked) [below=of start] {asked};
+  \node[state] (offered) [below=of asked] {offered};
+  \node[state,accepting] (accepted) [below left=1.8cm and 2.2cm of offered] {accepted};
+  \node[state,accepting] (declined) [below right=1.8cm and 2.2cm of offered] {declined};
   \path
-    (start) edge node {quote requested} (asked)
-    (asked) edge node {quote offered} (offered)
-    (offered) edge node {quote accepted} (accepted)
-    (offered) edge node[below] {quote declined} (declined);
+    (start) edge node[right,fill=white,inner sep=1pt] {quote requested} (asked)
+    (asked) edge node[right,fill=white,inner sep=1pt] {quote offered} (offered)
+    (offered) edge node[left,fill=white,inner sep=1pt,align=right] {quote accepted} (accepted)
+    (offered) edge node[right,fill=white,inner sep=1pt,align=left] {quote declined} (declined);
 \end{tikzpicture}
 \caption{A state machine derived from grammar residuals.}
 \label{fig:quote-state-machine}
