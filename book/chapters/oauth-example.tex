@@ -31,7 +31,7 @@ Every terminal elaborates to the common event envelope. For example, the vague
 message ``authorization redirected'' becomes conceptually:
 
 \begin{lstlisting}
-{ tstamp := t2, id := e2, prevId := some e1
+{ tstamp := t2, id := e2, priorIds := [e1]
 , from := Actor.app, to := Actor.browser
 , kind := "authorization redirected"
 , fields := [field "state" state, field "redirectUri" callback]
@@ -200,37 +200,10 @@ their names and boundaries remain available to render and test independently.
 
 \begin{figure}[p]
 \centering
-\begin{tikzpicture}[>=Latex,actor/.style={draw,rounded corners,minimum width=2.15cm,
-  minimum height=.65cm,fill=black!4,font=\small},message/.style={->,thick}]
-  \node[actor] (browser) at (0,0) {Browser};
-  \node[actor] (app) at (3.5,0) {Application};
-  \node[actor] (auth) at (7,0) {Authorization};
-  \node[actor] (resource) at (10.5,0) {Resource};
-  \foreach \x in {browser,app,auth,resource}
-    \draw[dashed] (\x.south) -- ++(0,-10.8);
-
-  \node[anchor=west,font=\bfseries] at (-.8,-.85) {Begin authorization};
-  \draw[message] (browser.center |- 0,-1.45) -- node[above,font=\scriptsize]{application request(resource)} (app.center |- 0,-1.45);
-  \draw[message] (app.center |- 0,-2.05) -- node[above,font=\scriptsize]{redirect(state)} (browser.center |- 0,-2.05);
-  \draw[message] (browser.center |- 0,-2.65) -- node[above,font=\scriptsize]{authorize(state)} (auth.center |- 0,-2.65);
-
-  \node[anchor=west,font=\bfseries] at (-.8,-3.55) {Authorization granted};
-  \draw[message] (auth.center |- 0,-4.15) -- node[above,font=\scriptsize]{code(state, code)} (browser.center |- 0,-4.15);
-  \draw[message] (browser.center |- 0,-4.75) -- node[above,font=\scriptsize]{callback(state, code)} (app.center |- 0,-4.75);
-
-  \node[anchor=west,font=\bfseries] at (-.8,-5.65) {Exchange and fetch};
-  \draw[message] (app.center |- 0,-6.25) -- node[above,font=\scriptsize]{token request(code)} (auth.center |- 0,-6.25);
-  \draw[message] (auth.center |- 0,-6.85) -- node[above,font=\scriptsize]{token issued(token)} (app.center |- 0,-6.85);
-  \draw[message] (app.center |- 0,-7.45) -- node[above,font=\scriptsize]{resource request(token)} (resource.center |- 0,-7.45);
-  \draw[message] (resource.center |- 0,-8.05) -- node[above,font=\scriptsize]{resource returned(profile)} (app.center |- 0,-8.05);
-  \draw[message] (app.center |- 0,-8.65) -- node[above,font=\scriptsize]{application response(profile)} (browser.center |- 0,-8.65);
-
-  \node[anchor=west,font=\bfseries] at (-.8,-9.55) {Alternative: denied};
-  \draw[message] (auth.center |- 0,-10.15) -- node[above,font=\scriptsize]{error(state, access\_denied)} (browser.center |- 0,-10.15);
-  \draw[message] (browser.center |- 0,-10.75) -- node[above,font=\scriptsize]{error callback(state)} (app.center |- 0,-10.75);
-\end{tikzpicture}
-\caption{OAuth interaction view. Named scenario bands remain visible after the
-sources are assembled into one grammar.}
+\resizebox{\textwidth}{!}{\OAuthInteractionDiagram{black}{white}{black!4}}
+\caption{OAuth interaction view. The frames bracket the two alternatives after
+the common authorization prefix; only the granted branch continues to token
+exchange and resource access.}
 \label{fig:oauth-interaction}
 \end{figure}
 

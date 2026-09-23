@@ -10,7 +10,7 @@ envelope makes histories comparable across protocols:
 structure Event (Actor Kind Payload : Type) where
   tstamp  : Nat
   id      : String
-  prevId  : Option String
+  priorIds : List String
   from    : Actor
   to      : Actor
   kind    : Kind
@@ -21,11 +21,16 @@ abbrev Trace (Actor Kind Payload : Type) :=
 \end{lstlisting}
 
 The fields have different jobs. \texttt{id} identifies a visible fact;
-\texttt{prevId} records an immediate causal claim; \texttt{from} and \texttt{to}
-name the parties; and \texttt{kind} supplies a stable discriminator. The payload is
-protocol-specific and carries the parameters that flow from one production to the
-next. A timestamp is useful, but order and causality must not be silently reduced
-to wall-clock order.
+\texttt{priorIds} records zero or more immediate causal claims; \texttt{from} and
+\texttt{to} name the parties; and \texttt{kind} supplies a stable discriminator.
+The payload is protocol-specific and carries the parameters that flow from one
+production to the next. A timestamp is useful, but order and causality must not be
+silently reduced to wall-clock order.
+
+The causal links form a directed acyclic graph rather than a singly linked list.
+An initial event has no prior identifiers. A fork is represented by several later
+events that each name the same prior event. A join is represented by one event
+whose \texttt{priorIds} names every branch on which it immediately depends.
 
 \section{Derived state}
 

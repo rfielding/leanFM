@@ -65,7 +65,7 @@ inductive WireTerm where
 structure WireEvent where
   tstamp : Nat
   id     : EventId
-  prevId : Option EventId
+  priorIds : List EventId
   from   : Actor
   to     : Actor
   term   : WireTerm
