@@ -206,6 +206,33 @@ collapse either production to a single node or expand it to its messages and
 nested alternatives. The \texttt{after} line is a guarded nonterminal reference;
 the denial branch ends without exchanging a code.
 
+\section{The parallel protobuf alphabet}
+
+The scenario and its wire alphabet are maintained side by side. The scenario says
+which messages may occur, in what causal structure, and with which parameter
+relationships. The protobuf file assigns field numbers and concrete wire types to
+those same message atoms:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize]{examples/oauth.proto}
+
+Each emitted scenario message maps to exactly one member of
+\texttt{EventEnvelope.payload}. The envelope carries the event identity, repeated
+\texttt{prior\_ids}, \texttt{(session\_id, task\_id)} correlation key, monotonic
+clock tick, and endpoints outside the payload. The payload carries only the fields
+specific to that message.
+
+Protobuf alone does not specify the protocol order, queue behavior, probability,
+or dwell time; those remain in the scenario. Conversely, the scenario does not
+invent byte tags. Validation checks that every scenario terminal has one protobuf
+variant, that its endpoints agree with the scenario, and that every referenced
+field has the expected protobuf type.
+
+The schema determines valid protobuf encodings, but protobuf does not generally
+promise one canonical byte sequence. When byte-for-byte comparison is required,
+the refinement also fixes deterministic serialization and length-delimited message
+framing. An instantiated envelope can then be serialized and displayed as the
+actual bytes sent between the named actors.
+
 \section{Interaction diagrams by scenario}
 
 \begin{figure}[p]

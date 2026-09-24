@@ -45,6 +45,13 @@ completion probability, success probability conditional on completion, mean
 completed-task latency, and the number still in flight. In-flight attempts are
 not counted as failures or assigned a completed-task latency.
 
+The worked OAuth scenario has a parallel protobuf alphabet in
+`book/examples/oauth.proto`. Its envelope carries event identity, causal
+predecessors, `(session, task)`, clock, and endpoints; its `oneof` selects the
+scenario message payload. The grammar owns behavior, while protobuf owns field
+numbers and wire types. Exact byte comparison additionally requires a deterministic
+serialization and framing policy.
+
 ```lean
 inductive Choice (S A : Type) where
   | action : A -> Nat -> S -> Choice S A

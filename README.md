@@ -20,6 +20,7 @@ The model treats a protocol as globally observable behavior:
 - specifications attach dwell durations to transitions or productions
 - dwell advances the event clock and supports latency, throughput, and queue metrics
 - correlated event streams estimate task completion probability and completed-task latency
+- scenarios may carry a parallel protobuf alphabet for concrete wire bytes
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph
 
