@@ -251,6 +251,11 @@ and XY plots. Specified probabilities and dwell times are therefore predictions;
 stream-derived estimates provide measurements against which those predictions can
 be checked.
 
+In the executable reducer, an entry event opens a \texttt{TaskAttempt}, progress
+events leave it open, and a success or failure event closes the open attempt with
+the same \texttt{(session, task)} key. The resulting attempts feed the estimates
+above.
+
 \section{Composing requirements means intersecting constraints}
 
 \index{composition!requirement intersection}
