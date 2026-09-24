@@ -30,6 +30,90 @@ Simple finite conversations can compile to regular languages. Nested request
 structure motivates context-free productions. Correlation, freshness, uniqueness,
 and authorization typically require parameter flow or guarded productions.
 
+\section{A BNF for composable interactions}
+
+The authoring notation can be presented independently of Lean as a small BNF.
+Named productions are interactions; referring to a production composes that
+interaction into a larger one.
+
+\begin{lstlisting}[language={}]
+<specification> ::= <production>
+                  | <production> <specification>
+
+<production>   ::= <name> "::=" <expression>
+
+<expression>   ::= "empty"
+                  | <event>
+                  | <name>
+                  | "(" <expression> ";" <expression> ")"
+                  | "(" <expression> "|" <expression> ")"
+                  | "(" <expression> "||" <expression> ")"
+                  | "repeat" "(" <expression> ")"
+                  | "when" "(" <predicate> "," <expression> ")"
+                  | "after" "(" <name> "," <expression> ")"
+
+<event>        ::= <actor> "->" <actor> ":"
+                   <message> "(" <fields> ")"
+
+<fields>       ::= ""
+                  | <field>
+                  | <field> "," <fields>
+
+<field>        ::= <name> "=" <value>
+\end{lstlisting}
+
+The operators have the same meanings as the grammar AST: semicolon is sequence,
+vertical bar is alternative, and double vertical bar is parallel composition by
+order-preserving interleaving. \texttt{after(P,E)} includes \texttt{E} only on a
+branch in which production \texttt{P} completed. Predicates and repeated field
+variables supply the context-sensitive correlation that plain context-free syntax
+does not express by itself.
+
+The OAuth example decomposes into a collection of independently readable
+interactions:
+
+\begin{lstlisting}[language={}]
+applicationRequestAndRedirect ::=
+  (Browser -> Application : ApplicationRequest(resource=resource) ;
+   Application -> Browser : AuthorizationRedirect(
+     state=state, redirectUri=callback))
+
+authorizationGranted ::=
+  (Authorization -> Browser : AuthorizationCodeReturned(
+     state=state, code=code) ;
+   Browser -> Application : AuthorizationCallback(
+     state=state, code=code))
+
+authorizationDenied ::=
+  (Authorization -> Browser : AuthorizationErrorReturned(
+     state=state, reason=access_denied) ;
+   Browser -> Application : AuthorizationErrorCallback(
+     state=state, reason=access_denied))
+
+authorizeAndDecide ::=
+  (Browser -> Authorization : AuthorizationRequest(
+     state=state, redirectUri=callback) ;
+   (authorizationGranted | authorizationDenied))
+
+exchangeAndFetch ::=
+  (Application -> Authorization : TokenRequest(code=code) ;
+   Authorization -> Application : AccessTokenIssued(token=token) ;
+   Application -> Resource : ResourceRequest(token=token) ;
+   Resource -> Application : ResourceReturned(profile=profile) ;
+   Application -> Browser : ApplicationResponse(profile=profile))
+
+oauth ::=
+  (applicationRequestAndRedirect ;
+   authorizeAndDecide ;
+   after(authorizationGranted, exchangeAndFetch))
+\end{lstlisting}
+
+This form exposes two useful levels without defining two protocols. At the higher
+level, \texttt{oauth} is three production references. Expanding a reference reveals
+its events and nested alternatives. The same productions can be reused in another
+system, placed in parallel with independent interactions, guarded, or repeated.
+Composition operates on their accepted event languages; it is not textual copying.
+
 \section{Parameters carry information}
 
 \index{parameter flow}
