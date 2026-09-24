@@ -38,6 +38,13 @@ without assigned probabilities remain nondeterministic, so composition yields an
 MDP rather than merely a Markov chain. With multiple sessions in flight, paths are
 distributions over the complete queue and per-`(session, task)` state.
 
+`LeanFM/StreamStats.lean` reduces observed task attempts reconstructed from an
+event stream. Events are correlated by `(session, task)` and matched against the
+entry and terminal boundaries declared by the grammar. The reducer reports
+completion probability, success probability conditional on completion, mean
+completed-task latency, and the number still in flight. In-flight attempts are
+not counted as failures or assigned a completed-task latency.
+
 ```lean
 inductive Choice (S A : Type) where
   | action : A -> Nat -> S -> Choice S A

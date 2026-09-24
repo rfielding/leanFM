@@ -5,6 +5,7 @@ import LeanFM.Assets
 import LeanFM.CTL
 import LeanFM.MDP
 import LeanFM.Protocol
+import LeanFM.StreamStats
 import LeanFM.UiModel
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.Requirements

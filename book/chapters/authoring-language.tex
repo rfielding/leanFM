@@ -212,6 +212,45 @@ Dwell is part of the specification, so it can drive latency, throughput, timeout
 and queue-pressure calculations. It does not create causality: the grammar and
 \texttt{priorIds} continue to determine which events depend on which others.
 
+\section{Estimating completion from an event stream}
+
+The same specification can consume observed events. The reducer first partitions
+the stream by \texttt{(session, task)}, orders each partition by its monotonic
+clock timestamp, and matches the production's declared entry and terminal event
+kinds. Each partition then yields a task attempt:
+
+\begin{lstlisting}
+structure TaskAttempt where
+  key         : WorkKey
+  startedAt   : ClockTimestamp
+  completedAt : Option ClockTimestamp
+  outcome     : Option TaskOutcome
+
+def latency (attempt : TaskAttempt) : Option Duration :=
+  attempt.completedAt.map fun finish =>
+    finish - attempt.startedAt
+\end{lstlisting}
+
+For an observation window containing $N$ starts, $C$ matched terminal events,
+$S$ successful terminals, and completed latencies $L_1,\ldots,L_C$, the basic
+estimates are
+\[
+  \widehat P(\text{complete}) = \frac{C}{N}, \qquad
+  \widehat P(\text{success}\mid\text{complete}) = \frac{S}{C}, \qquad
+  \widehat E[L\mid\text{complete}] = \frac{\sum_i L_i}{C}.
+\]
+
+Attempts without a terminal event remain \emph{in flight}. They contribute to the
+number started and to queue/load measurements, but not to completed-task latency
+or to the conditional success denominator. Calling them failures would bias both
+probability and latency whenever the observation window ends before they do.
+
+The reducer can group these sufficient statistics by task, actor, time bucket,
+maximum concurrency, or queue occupancy and feed them directly to pie, time-series,
+and XY plots. Specified probabilities and dwell times are therefore predictions;
+stream-derived estimates provide measurements against which those predictions can
+be checked.
+
 \section{Composing requirements means intersecting constraints}
 
 \index{composition!requirement intersection}

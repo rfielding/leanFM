@@ -19,6 +19,7 @@ The model treats a protocol as globally observable behavior:
 - optional chance nodes support MDP-style probabilistic outcomes
 - specifications attach dwell durations to transitions or productions
 - dwell advances the event clock and supports latency, throughput, and queue metrics
+- correlated event streams estimate task completion probability and completed-task latency
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph
 
