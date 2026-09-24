@@ -31,7 +31,8 @@ Every terminal elaborates to the common event envelope. For example, the vague
 message ``authorization redirected'' becomes conceptually:
 
 \begin{lstlisting}
-{ tstamp := t2, id := e2, priorIds := [e1]
+{ clock := t2, id := e2, priorIds := [e1]
+, session := browserSession, task := oauthAuthorizationTask
 , from := Actor.app, to := Actor.browser
 , kind := "authorization redirected"
 , fields := [field "state" state, field "redirectUri" callback]
@@ -296,26 +297,66 @@ model.
 
 \section{Probabilities and charts}
 
-An operational model may refine the decision and exchange outcomes:
+The authorization service need not be random. The user supplies random input by
+granting or denying consent; the browser, queues, transport, and authorization
+service then react deterministically to the input they receive:
 
 \begin{lstlisting}
-def measuredAuthorizationDecision : Scenario :=
-  choose "authorization decision"
-    [ weighted (87 / 100) authorizationGranted
-    , weighted (13 / 100) authorizationDenied ]
+inductive UserDecision where
+  | grant | deny
+
+def userDecision : Choice UserDecision :=
+  choose .user "consent decision"
+    [ weighted (87 / 100) .grant
+    , weighted (13 / 100) .deny ]
+
+def authorizationServer
+    (input : UserDecision) : Scenario :=
+  match input with
+  | .grant => authorizationGranted
+  | .deny  => authorizationDenied
 
 def oauthCharts : List ChartSpec :=
   [ pie "authorization outcomes" do
       source events; groupBy terminalOutcome; value count
   , line "end-to-end authorization latency" do
       source (correlate events by "state")
-      x tstamp; y (elapsed "authorization requested" "application response")
+      x clock; y (elapsed "authorization requested" "application response")
   ]
 \end{lstlisting}
 
-The percentages are model inputs or measurements, not truths inferred from the
-grammar. The grammar continues to define which behaviours are possible; the
-probabilistic refinement says how mass is distributed over them.
+After the user's choice, every transition may have probability one and the global
+model is still probabilistic. The grant branch carries probability mass $0.87$
+through the user's outbound queue, transport, the server's inbound queue, and the
+deterministic grant response. The denial branch similarly carries mass $0.13$.
+Deterministic processing transports probability mass; it does not remove it.
+
+For the simplified path with no loss or timeout,
+\[
+  P(\text{grant callback}) = 0.87 \cdot 1 \cdot 1 \cdot 1 = 0.87,
+  \qquad
+  P(\text{denial callback}) = 0.13.
+\]
+The factors of one are deterministic enqueue, transport, and server steps. Their
+dwell times still affect the latency distribution even though they do not split
+the probability mass.
+
+With queue scheduling and other unresolved choices included, the complete system
+is therefore a Markov decision process. Probabilistic edges describe inputs or
+measured outcomes; nondeterministic edges describe decisions not assigned a
+distribution, such as which enabled actor is scheduled next. An analysis first
+fixes or quantifies over a scheduling policy and then propagates the user-originated
+mass through the resulting paths.
+
+For several sessions in flight, the MDP state contains every actor's bounded
+queues and its per-\texttt{(session, task)} residuals. One user's random event can
+change later queue pressure and scheduling possibilities for other sessions, so
+the probabilistic state is the composed system state rather than a special marker
+attached only to the user actor.
+
+The percentages remain model inputs or measurements, not truths inferred from the
+grammar. The grammar defines which behaviours are possible; the probabilistic
+refinement says how mass is distributed over them.
 
 \section{Residual state machine}
 

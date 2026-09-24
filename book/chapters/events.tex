@@ -7,25 +7,29 @@ Every execution is represented by an event sequence. A deliberately small common
 envelope makes histories comparable across protocols:
 
 \begin{lstlisting}
-structure Event (Actor Kind Payload : Type) where
-  tstamp  : Nat
+structure Event (Actor Session Task Kind Payload : Type) where
+  clock   : ClockTimestamp
   id      : String
   priorIds : List String
+  session : Session
+  task    : Task
   from    : Actor
   to      : Actor
   kind    : Kind
   payload : Payload
 
-abbrev Trace (Actor Kind Payload : Type) :=
-  List (Event Actor Kind Payload)
+abbrev Trace (Actor Session Task Kind Payload : Type) :=
+  List (Event Actor Session Task Kind Payload)
 \end{lstlisting}
 
 The fields have different jobs. \texttt{id} identifies a visible fact;
 \texttt{priorIds} records zero or more immediate causal claims; \texttt{from} and
-\texttt{to} name the parties; and \texttt{kind} supplies a stable discriminator.
+\texttt{to} name the parties; \texttt{(session, task)} correlates independently
+progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
-production to the next. A timestamp is useful, but order and causality must not be
-silently reduced to wall-clock order.
+production to the next. \texttt{clock} is sampled from the model's shared monotonic
+clock. Its differences measure elapsed time; it is not a civil-time date and its
+origin is immaterial.
 
 The causal links form a directed acyclic graph rather than a singly linked list.
 An initial event has no prior identifiers. A fork is represented by several later
@@ -61,3 +65,20 @@ ideas that are often conflated:
 Grammar structure handles sequence, identifiers handle causal linkage, and typed
 constraints handle duration. This keeps a change in timeout policy from rewriting
 the protocol's entire behavioural shape.
+
+For two events from the same \texttt{(session, task)}, elapsed time is defined when
+the first event's clock value does not exceed the second's:
+
+\begin{lstlisting}
+def elapsed (start finish : Event) : Option Duration :=
+  if start.session = finish.session &&
+     start.task = finish.task &&
+     start.clock <= finish.clock
+  then some (finish.clock - start.clock)
+  else none
+\end{lstlisting}
+
+Latency queries name their boundary event kinds and correlate them by
+\texttt{(session, task)} before subtracting clock values. Causality still comes
+from grammar structure and \texttt{priorIds}: equal timestamps may occur, and a
+clock value alone does not establish that one event caused another.

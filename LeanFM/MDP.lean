@@ -1,13 +1,16 @@
 namespace LeanFM
 
+/-- A nonnegative number of ticks on the model clock. -/
+abbrev Duration := Nat
+
 structure Weighted (α : Type) where
   weight : Nat
-  dwell : Nat
+  dwell : Duration
   value : α
 deriving DecidableEq, Repr
 
 inductive Choice (S A : Type) where
-  | action : A -> Nat -> S -> Choice S A
+  | action : A -> Duration -> S -> Choice S A
   | chance : A -> List (Weighted S) -> Choice S A
   | chanceEvents : List (Weighted (A × S)) -> Choice S A
 deriving Repr
@@ -70,7 +73,7 @@ def Component.successors {S A : Type} (c : Component S A) (s : S) : List S :=
 
 structure PathMass (S : Type) where
   mass : Nat
-  dwell : Nat
+  dwell : Duration
   state : S
 deriving DecidableEq, Repr
 
@@ -95,8 +98,8 @@ def bucketMass (measure : S -> Nat) (paths : List (PathMass S)) : List (Nat × N
 structure PathStats (S A : Type) where
   mass : Nat
   scale : Nat
-  lastDwell : Nat
-  elapsed : Nat
+  lastDwell : Duration
+  elapsed : Duration
   state : S
   trace : List A
 deriving Repr

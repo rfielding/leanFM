@@ -63,9 +63,11 @@ inductive WireTerm where
   | sign    : KeyRef -> WireTerm -> WireTerm
 
 structure WireEvent where
-  tstamp : Nat
+  clock : ClockTimestamp
   id     : EventId
   priorIds : List EventId
+  session : SessionId
+  task   : TaskId
   from   : Actor
   to     : Actor
   term   : WireTerm

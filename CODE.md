@@ -23,7 +23,20 @@ structure Weighted (α : Type) where
   value : α
 ```
 
-A weighted value represents a probabilistic branch and how long that branch dwells. Probabilities are stored as integer weights instead of floats. For example, a 95/5 split is represented as two outcomes with weights `95` and `5`. Dwell time is also an integer, currently an abstract time unit.
+A weighted value represents a probabilistic branch and how long that branch
+dwells. Probabilities are stored as integer weights instead of floats. For example,
+a 95/5 split is represented as two outcomes with weights `95` and `5`. Dwell is a
+`Duration` measured in ticks of the same monotonic clock used by event timestamps.
+Completing a transition advances the clock by its dwell before recording the
+resulting event. `PathStats.elapsed` is the accumulated dwell along the path.
+
+Randomness need not originate in a server. A user action can be a weighted choice
+while every server transition is deterministic conditional on the message it
+receives. The user branch's probability mass then propagates through outbound and
+inbound queues and all deterministic processing steps. Scheduling or other choices
+without assigned probabilities remain nondeterministic, so composition yields an
+MDP rather than merely a Markov chain. With multiple sessions in flight, paths are
+distributions over the complete queue and per-`(session, task)` state.
 
 ```lean
 inductive Choice (S A : Type) where
@@ -158,10 +171,14 @@ structure Envelope where
   dst : Actor
   transport : Transport
   proto : ProtoPayload
-  ts : Nat
+  clock : ClockTimestamp
 ```
 
-This is the wrapper around a protobuf-like message body. The wrapper carries sequencing information: task, source actor, destination actor, transport, and timestamp. The payload carries the message type, bytes, and parsed fields.
+This is the wrapper around a protobuf-like message body. The wrapper carries task,
+source actor, destination actor, transport, and a timestamp sampled from the
+model's shared monotonic clock. The payload carries the message type, bytes, and
+parsed fields. Durations are clock differences between correlated boundary events;
+causal order still comes from grammar structure and prior-event identifiers.
 
 ```lean
 structure ProtoPayload where
@@ -205,10 +222,18 @@ inductive BlockReason where
 
 This models the queue rules:
 
-- every actor has one queue;
-- queues have capacity;
-- an actor sleeps on read from empty;
-- an actor sleeps on write into full.
+- every actor has distinct inbound and outbound queues;
+- both queues have finite capacity;
+- producing a message appends it to the source actor's outbound queue;
+- transport moves an outbound head to the destination inbound queue;
+- an actor sleeps on receive from an empty inbound queue;
+- an actor sleeps on production into a full outbound queue;
+- transport blocks while the destination inbound queue is full.
+
+Every envelope is correlated by a `(session, task)` key. An actor may retain many
+such keys in its in-flight table, each associated with its own task-machine state.
+Receiving a message dispatches to the matching entry instead of replacing one
+actor-wide current task. Events belonging to different keys may interleave.
 
 The sample worker-world queue capacities are defined by:
 
@@ -225,25 +250,24 @@ The observable worker-world state is:
 
 ```lean
 structure Observation where
-  task : Option TaskKind
+  inFlight : List (SessionId × TaskKind × TaskState)
   client : ActorState
-  clientQ : Nat
-  clientMsg : Option Envelope
+  clientInbound : QueueView Envelope
+  clientOutbound : QueueView Envelope
   gateway : ActorState
-  gatewayQ : Nat
-  gatewayMsg : Option Envelope
+  gatewayInbound : QueueView Envelope
+  gatewayOutbound : QueueView Envelope
   worker : ActorState
-  workerQ : Nat
-  workerMsg : Option Envelope
+  workerInbound : QueueView Envelope
+  workerOutbound : QueueView Envelope
   proof : Option AuthProof
 ```
 
 This is deliberately not an implementation state. It contains only visible things:
 
-- current task, if any;
+- active `(session, task)` states;
 - observable actor states;
-- queue lengths;
-- queue heads;
+- inbound and outbound queue lengths and heads;
 - auth proof artifact.
 
 `withinCapacity` checks queue capacities, and CTL uses it to prove/check that all reachable states stay within declared bounds.
@@ -503,7 +527,7 @@ The Charts section is intentionally moving toward "dataset = function of ordered
 - destination actor;
 - protobuf type;
 - byte count;
-- timestamp.
+- monotonic clock timestamp.
 
 Chart datasets are then defined as functions over `orderedMessages`, for example:
 

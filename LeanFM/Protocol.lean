@@ -32,6 +32,9 @@ inductive Transport where
   | https
 deriving DecidableEq, Repr
 
+/-- Ticks on the model's shared monotonic clock. Only differences are meaningful. -/
+abbrev ClockTimestamp := Nat
+
 structure ProtoField where
   number : Nat
   name : String
@@ -51,7 +54,7 @@ structure Envelope where
   dst : Actor
   transport : Transport
   proto : ProtoPayload
-  ts : Nat
+  clock : ClockTimestamp
 deriving DecidableEq, Repr
 
 def parseProtoFields : String -> List Nat -> List ProtoField
@@ -127,10 +130,19 @@ def protoWasParsed (p : ProtoPayload) : Bool :=
   !p.fields.isEmpty
 
 def msg (task : TaskKind) (src dst : Actor) (transport : Transport)
-    (typeName summary : String) (bytes : List Nat) (ts : Nat) : Envelope :=
+    (typeName summary : String) (bytes : List Nat) (clock : ClockTimestamp) : Envelope :=
   { task := task, src := src, dst := dst, transport := transport
-  , proto := proto typeName summary bytes, ts := ts
+  , proto := proto typeName summary bytes, clock := clock
   }
+
+def elapsedBetween (start finish : Envelope) : Option Duration :=
+  if start.task = finish.task && start.clock <= finish.clock then
+    some (finish.clock - start.clock)
+  else
+    none
+
+def advanceClock (now : ClockTimestamp) (dwell : Duration) : ClockTimestamp :=
+  now + dwell
 
 inductive BlockReason where
   | readEmpty
@@ -927,7 +939,7 @@ structure VisibleMessageSpec where
   proto : String
   bytes : List Nat
   fields : List String
-  ts : Nat
+  clock : ClockTimestamp
 deriving DecidableEq, Repr
 
 structure VisibleProtocolSpec where
@@ -951,42 +963,42 @@ def kerberosDhTokenSpec : VisibleProtocolSpec :=
         , proto := "Kerberos.AsReq"
         , bytes := [0x6b, 0x01]
         , fields := ["client_principal", "realm", "client_dh_share", "nonce"]
-        , ts := 1
+        , clock := 1
         }
       , { src := "AuthServer"
         , dst := "Client"
         , proto := "Kerberos.AsRep"
         , bytes := [0x6b, 0x02]
         , fields := ["client_principal", "tgt_proof", "server_dh_share", "dh_commutativity_proof", "token_server_signature_proof", "nonce"]
-        , ts := 2
+        , clock := 2
         }
       , { src := "Client"
         , dst := "TicketGrantingServer"
         , proto := "Kerberos.TgsReq"
         , bytes := [0x6b, 0x03]
         , fields := ["service_principal", "tgt_proof", "authenticator_proof", "client_dh_share", "nonce"]
-        , ts := 3
+        , clock := 3
         }
       , { src := "TicketGrantingServer"
         , dst := "Client"
         , proto := "Kerberos.TgsRep"
         , bytes := [0x6b, 0x04]
         , fields := ["service_ticket_proof", "service_session_key_proof", "server_dh_share", "dh_commutativity_proof", "nonce"]
-        , ts := 4
+        , clock := 4
         }
       , { src := "Client"
         , dst := "Service"
         , proto := "Kerberos.ApReq"
         , bytes := [0x6b, 0x05]
         , fields := ["service_ticket_proof", "authenticator_proof", "operation"]
-        , ts := 5
+        , clock := 5
         }
       , { src := "Service"
         , dst := "Client"
         , proto := "Kerberos.ApRep"
         , bytes := [0x6b, 0x06]
         , fields := ["service_accept_proof", "operation", "status"]
-        , ts := 6
+        , clock := 6
         }
       ]
   , proofFields :=

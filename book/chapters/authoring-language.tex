@@ -171,19 +171,46 @@ attaches a distribution when the abstraction has one.
 def paymentOutcome : Scenario :=
   oneOf "payment outcome" [paymentApproved, paymentRejected]
 
-def estimatedPaymentOutcome : Scenario :=
-  choose "estimated payment outcome"
-    [ weighted (95 / 100) paymentApproved
-    , weighted ( 5 / 100) paymentRejected
+def estimatedCustomerDecision : Scenario :=
+  choose customer "customer decision"
+    [ weighted (95 / 100) customerSubmitsPayment
+    , weighted ( 5 / 100) customerAbandonsPayment
     ]
 \end{lstlisting}
 
-Probabilities belong to choices, not to messages. An early requirement can use
+Probabilities belong to a choice source, not to messages. A deterministic service
+that consumes probabilistic user input remains part of the induced probabilistic
+system: its probability-one transitions carry the incoming path mass forward. An
+early requirement can use
 \texttt{oneOf}, a symbolic weight, or a range such as \texttt{between 0.90 0.99}.
 Implementation refinement resolves those claims to a well-defined stochastic
 model or to deterministic conditions. Refinement must preserve possibility even
 when a current implementation assigns probability zero to a legal abstract branch;
 otherwise changing operational policy would silently change the contract.
+
+\section{Specified dwell time}
+
+A specification may attach a dwell time to an event step or to a named production.
+The dwell is a duration on the same monotonic time scale as event clocks:
+
+\begin{lstlisting}
+emit "token requested" [field "code" code]
+  |>.dwell 3.milliseconds
+
+include exchangeAndFetch
+  |>.dwell 12.milliseconds
+\end{lstlisting}
+
+Taking a step with dwell $d$ advances the model clock from $t$ to $t+d$ before
+timestamping the event that completes the step. A production dwell constrains the
+elapsed time between its entry and exit boundary events; it does not assign the
+same dwell independently to every contained event. Exact values, bounded ranges,
+or weighted dwell outcomes may be used when the corresponding timing information
+is available.
+
+Dwell is part of the specification, so it can drive latency, throughput, timeout,
+and queue-pressure calculations. It does not create causality: the grammar and
+\texttt{priorIds} continue to determine which events depend on which others.
 
 \section{Composing requirements means intersecting constraints}
 
@@ -272,10 +299,34 @@ def outcomeShare : ChartSpec :=
 def responseLatency : ChartSpec :=
   line "quote response latency" do
     source (correlate events by "quoteId")
-    x tstamp
+    x clock
     y (elapsed "quote offered" "customer decision")
     series "p50" median
+
+def latencyByConcurrency : ChartSpec :=
+  xyplot "latency by concurrent sessions" do
+    source completedRuns
+    x maxConcurrentSessions
+    y (mean (elapsed firstEvent terminalEvent))
+
+def queueByOfferedLoad : ChartSpec :=
+  xyplot "queue occupancy by offered load" do
+    source completedRuns
+    x requestsPerSecond
+    y (mean totalQueueOccupancy)
+
+def propagatedGrantProbability : ChartSpec :=
+  xyplot "user probability propagated through deterministic servers" do
+    source parameterSweep
+    x userGrantProbability
+    y terminalGrantProbability
 \end{lstlisting}
+
+An XY plot preserves two numeric axes. It differs from a time series, whose
+$x$-axis is specifically an event clock, and from a categorical chart, whose
+$x$ values are labels. The first two examples reduce each completed model run to
+one point. The third sweeps a model parameter and checks that deterministic
+downstream processing transports the user's probability mass.
 
 \begin{figure}[htbp]
 \centering
@@ -305,6 +356,61 @@ def responseLatency : ChartSpec :=
 \end{minipage}
 \caption{Example pie and line renderings from declarative chart specifications.}
 \label{fig:charts}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\begin{minipage}{.48\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.2cm,
+  xlabel={maximum concurrent sessions},
+  ylabel={mean latency (ms)},
+  xmin=0,xmax=9,ymin=0,ymax=450,
+  grid=major]
+  \addplot[color=leanblue,mark=*] coordinates
+    {(1,90) (2,110) (4,160) (6,250) (8,390)};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}{.48\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.2cm,
+  xlabel={offered load (requests/s)},
+  ylabel={mean queued messages},
+  xmin=0,xmax=55,ymin=0,ymax=5,
+  grid=major]
+  \addplot[color=orange!85!black,mark=square*] coordinates
+    {(10,.4) (20,.9) (30,1.7) (40,2.8) (50,4.2)};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}
+
+\vspace{1em}
+
+\begin{minipage}{.62\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.2cm,
+  xlabel={user grant probability},
+  ylabel={terminal grant probability},
+  xmin=0,xmax=1,ymin=0,ymax=1,
+  grid=major,
+  legend pos=north west]
+  \addplot[color=leangreen,mark=triangle*] coordinates
+    {(0,0) (.2,.2) (.4,.4) (.6,.6) (.8,.8) (1,1)};
+  \addlegendentry{deterministic propagation}
+\end{axis}
+\end{tikzpicture}
+\end{minipage}
+\caption{XY-plot examples. The values are illustrative model-run data: clocks
+and correlation produce latency, bounded queues produce occupancy, and
+probability-one server steps preserve user-originated grant mass.}
+\label{fig:xyplots}
 \end{figure}
 
 Interaction diagrams, state machines, and charts are projections of the same typed

@@ -7,14 +7,18 @@ A tiny Lean 4 formal-methods sketch for message-passing processes.
 The model treats a protocol as globally observable behavior:
 
 - each actor has its own observable local state machine
-- every actor has exactly one observable input queue
-- each queue has a fixed capacity
+- every actor has distinct observable inbound and outbound queues
+- both queues have fixed capacities
+- messages are correlated by a `(session, task)` key
+- an actor may have multiple `(session, task)` conversations in flight
 - actors take scheduled turns and run at most one step per turn
 - messages are globally visible byte envelopes
+- every message event has a shared monotonic-clock timestamp for latency calculations
 - each envelope carries `src`, `dst`, and protocol `bytes`
 - the global graph is the product observation of actor states
 - optional chance nodes support MDP-style probabilistic outcomes
-- dwell time supports expected latency, throughput, and queue metrics
+- specifications attach dwell durations to transitions or productions
+- dwell advances the event clock and supports latency, throughput, and queue metrics
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph
 
@@ -164,19 +168,21 @@ The executable prints:
 Queue semantics:
 
 ```text
-write to non-full queue: enqueue at dst
-write to full queue: scheduled actor sleeps
-read from non-empty queue: scheduled actor consumes one message
-read from empty queue: scheduled actor sleeps
-wake condition: the actor's queue becomes non-empty
+produce with outbound space: enqueue at src outbound
+produce with outbound full: producing actor sleeps
+transport with destination inbound space: move outbound head to dst inbound
+transport with destination inbound full: transport blocks
+receive from non-empty inbound: consume and dispatch by (session, task)
+receive from empty inbound: receiving actor sleeps
+wake condition: the queue needed by the blocked step has capacity or data
 ```
 
 Worker group capacities:
 
 ```text
-Client queue capacity: 1
-Gateway queue capacity: 2
-Worker queue capacity: 1
+Client inbound/outbound capacity: 1/1
+Gateway inbound/outbound capacity: 2/2
+Worker inbound/outbound capacity: 1/1
 ```
 
 Example metrics:

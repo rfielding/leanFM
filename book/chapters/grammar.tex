@@ -54,3 +54,51 @@ global grammar states the contract, while projection derives each participant's
 view. Composition should preserve independently specified modules and make shared
 events explicit. Proving useful projection and composition theorems is a core
 research obligation, not an implementation footnote.
+
+\section{Actors multiplex bounded conversations}
+
+An actor has separate finite-capacity inbound and outbound message queues. Queue
+capacity is part of the observable execution model: producing a message may block
+when the outbound queue is full, and transport may block when the destination's
+inbound queue is full. Sending is therefore distinct from delivery and from the
+destination actor consuming the message.
+
+Messages carry a session identifier as well as a task identifier. Their pair is
+the correlation key for actor-local work:
+
+\begin{lstlisting}
+structure WorkKey where
+  session : SessionId
+  task    : TaskId
+
+structure ActorRuntime where
+  inboundCapacity  : Nat
+  outboundCapacity : Nat
+  inbound          : List Envelope
+  outbound         : List Envelope
+  inFlight         : List (Prod WorkKey GrammarResidual)
+  inboundBounded   : inbound.length <= inboundCapacity
+  outboundBounded  : outbound.length <= outboundCapacity
+\end{lstlisting}
+
+An actor may have zero or many distinct \texttt{WorkKey}s in flight. Consuming an
+inbound envelope selects or creates the residual associated with that envelope's
+\texttt{(session, task)} pair; it does not replace one actor-wide ``current task.''
+Messages from different keys may interleave while the grammar preserves the order
+required within each conversation.
+
+The queue transitions are explicit:
+
+\begin{itemize}
+  \item an actor step appends a produced envelope to its outbound queue;
+  \item a transport step moves the outbound head to the destination's inbound
+        queue when both operations are within capacity;
+  \item a receive step removes an inbound envelope and advances the matching
+        \texttt{(session, task)} residual;
+  \item a full outbound queue blocks production, a full inbound queue blocks
+        transport, and an empty inbound queue blocks receive.
+\end{itemize}
+
+Queue order and causal order are not identical. FIFO determines which queued
+envelope is available next, while \texttt{priorIds} records the causal graph among
+events, including forks and joins across actors.
