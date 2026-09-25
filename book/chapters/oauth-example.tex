@@ -329,19 +329,10 @@ granting or denying consent; the browser, queues, transport, and authorization
 service then react deterministically to the input they receive:
 
 \begin{lstlisting}
-inductive UserDecision where
-  | grant | deny
-
-def userDecision : Choice UserDecision :=
-  choose .user "consent decision"
-    [ weighted (87 / 100) .grant
-    , weighted (13 / 100) .deny ]
-
-def authorizationServer
-    (input : UserDecision) : Scenario :=
-  match input with
-  | .grant => authorizationGranted
-  | .deny  => authorizationDenied
+def consentDecision : Scenario :=
+  weightedOneOf "consent decision"
+    [ weighted (87 / 100) authorizationGranted
+    , weighted (13 / 100) authorizationDenied ]
 
 def oauthCharts : List ChartSpec :=
   [ pie "authorization outcomes" do
@@ -352,11 +343,14 @@ def oauthCharts : List ChartSpec :=
   ]
 \end{lstlisting}
 
-After the user's choice, every transition may have probability one and the global
-model is still probabilistic. The grant branch carries probability mass $0.87$
-through the user's outbound queue, transport, the server's inbound queue, and the
-deterministic grant response. The denial branch similarly carries mass $0.13$.
-Deterministic processing transports probability mass; it does not remove it.
+No separate field says that the user ``owns'' this choice. The grant and denial
+branches resolve to different consent-event bytes, and that terminal's source
+identifies the user-facing actor that emitted them. After those bytes select a
+branch, every transition may have probability one and the global model is still
+probabilistic. The grant branch carries probability mass $0.87$ through the
+outbound queue, transport, the server's inbound queue, and the deterministic
+grant response. The denial branch similarly carries mass $0.13$. Deterministic
+processing transports probability mass; it does not remove it.
 
 For the simplified path with no loss or timeout,
 \[

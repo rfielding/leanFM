@@ -22,6 +22,7 @@ The model treats a protocol as globally observable behavior:
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes
 - a BNF surface composes named interactions by sequence, choice, parallelism, guards, and references
+- a grammar choice resolves at the first distinguishing byte-level terminal; that terminal's source identifies the observable decision-maker, so choices do not carry a separate chooser label
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph
 

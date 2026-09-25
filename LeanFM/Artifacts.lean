@@ -808,6 +808,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
     , "Define TaskGrammar values with GrammarExpr.event atoms labeled by task, src actor, dst actor, and message atom."
     , "Use GrammarExpr.seqList or the >>> notation for causality, GrammarExpr.alt or <||> for alternatives, GrammarExpr.parallel for commuting independent work, GrammarExpr.guard for context-sensitive visible facts, GrammarExpr.ref for task references, and GrammarExpr.repeat for regex-style repetition."
+    , "Do not add a separate chooser annotation to GrammarExpr.choice. A branch is selected by its distinguishing terminal, whose framed bytes and src/dst identify the observable decision. Merge branches that resolve to identical observable byte languages, or add an observable discriminator."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
     , "Each task transition message must appear in one actor process sends list and one actor process receives list."

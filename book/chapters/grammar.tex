@@ -26,6 +26,15 @@ preserving the internal order of each side. A \texttt{where\_} clause checks a
 fact accumulated from the prior trace and provides the escape from context-free
 structure when genuine context sensitivity is needed.
 
+A choice does not need a separate annotation naming who makes it. Each branch
+eventually resolves to terminal events, and each terminal resolves to framed
+bytes with a source and destination. The first observed terminal that
+distinguishes two branches identifies both the selected branch and the actor
+that emitted the distinguishing bytes. If two branches resolve to the same
+observable bytes, then at this abstraction they are not distinct choices and
+should be merged. This removes an otherwise ambiguous second account of agency
+from the grammar.
+
 Simple finite conversations can compile to regular languages. Nested request
 structure motivates context-free productions. Correlation, freshness, uniqueness,
 and authorization typically require parameter flow or guarded productions.

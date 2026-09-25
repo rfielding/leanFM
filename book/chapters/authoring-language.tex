@@ -172,21 +172,30 @@ def paymentOutcome : Scenario :=
   oneOf "payment outcome" [paymentApproved, paymentRejected]
 
 def estimatedCustomerDecision : Scenario :=
-  choose customer "customer decision"
+  weightedOneOf "customer decision"
     [ weighted (95 / 100) customerSubmitsPayment
     , weighted ( 5 / 100) customerAbandonsPayment
     ]
 \end{lstlisting}
 
-Probabilities belong to a choice source, not to messages. A deterministic service
-that consumes probabilistic user input remains part of the induced probabilistic
-system: its probability-one transitions carry the incoming path mass forward. An
-early requirement can use
+There is no separate \texttt{choose customer} annotation. The branch is resolved
+when its distinguishing terminal becomes bytes: the terminal names its source,
+so the trace already shows that the customer emitted the event that selected the
+branch. Probabilities belong to branches, not to an extra, potentially conflicting
+claim about a chooser. A deterministic service that consumes probabilistic user
+input remains part of the induced probabilistic system: its probability-one
+transitions carry the incoming path mass forward. An early requirement can use
 \texttt{oneOf}, a symbolic weight, or a range such as \texttt{between 0.90 0.99}.
 Implementation refinement resolves those claims to a well-defined stochastic
 model or to deterministic conditions. Refinement must preserve possibility even
 when a current implementation assigns probability zero to a legal abstract branch;
 otherwise changing operational policy would silently change the contract.
+
+Two branches may share a prefix. In that case the choice remains unresolved
+through the common terminals and resolves only at the first different byte-level
+terminal. Branches whose complete terminal byte languages overlap are
+observationally ambiguous at that point; the requirement must merge them or add
+an observable discriminator if downstream actors need to distinguish them.
 
 \section{Specified dwell time}
 
