@@ -229,10 +229,20 @@ structure RequirementMarkdown where
   body : String
 deriving Repr
 
+/-- Finite resource bounds that an implementation must enforce for one actor. -/
+structure ActorResourceContract where
+  actor : String
+  inboundCapacity : Nat
+  outboundCapacity : Nat
+  maxInFlight : Nat
+  memoryBudgetBytes : Nat
+deriving Repr
+
 structure RequirementSpec where
   id : String
   title : String
   actors : List String
+  actorResources : List ActorResourceContract
   messages : List MessageSchema
   tasks : List TaskRequirement
   grammars : List TaskGrammar
@@ -359,6 +369,37 @@ def taskProperties (spec : RequirementSpec) (task : String) : List RequirementPr
 
 def taskProcesses (spec : RequirementSpec) (task : String) : List RequirementProcess :=
   spec.processes.filter (fun process => process.task == task)
+
+def actorResourceActors (spec : RequirementSpec) : List String :=
+  spec.actorResources.map (fun resource => resource.actor)
+
+def validateActorResourceContract (actors : List String)
+    (resource : ActorResourceContract) : List String :=
+  (if actors.contains resource.actor then [] else
+    ["resource contract references unknown actor: " ++ resource.actor]) ++
+  (if resource.inboundCapacity > 0 then [] else
+    ["actor " ++ resource.actor ++ " has zero inbound queue capacity"]) ++
+  (if resource.outboundCapacity > 0 then [] else
+    ["actor " ++ resource.actor ++ " has zero outbound queue capacity"]) ++
+  (if resource.maxInFlight > 0 then [] else
+    ["actor " ++ resource.actor ++ " has zero max in-flight work capacity"]) ++
+  (if resource.memoryBudgetBytes > 0 then [] else
+    ["actor " ++ resource.actor ++ " has zero memory budget"])
+
+def validateActorResources (actors : List String)
+    (resources : List ActorResourceContract) : List String :=
+  let resourceActors := resources.map (fun resource => resource.actor)
+  let duplicates :=
+    (duplicateStrings resourceActors).map fun id =>
+      "duplicate resource contract for actor: " ++ id
+  let missing :=
+    actors.filterMap fun actor =>
+      if resourceActors.contains actor then none else
+        some ("actor has no finite resource contract: " ++ actor)
+  let contractErrors :=
+    resources.foldr
+      (fun resource acc => validateActorResourceContract actors resource ++ acc) []
+  duplicates ++ missing ++ contractErrors
 
 def taskTransitionMessages (task : TaskRequirement) : List String :=
   task.transitions.map (fun tr => tr.message)
@@ -562,6 +603,7 @@ def validateRequiredProof (spec : RequirementSpec) (proof : RequiredProof) : Lis
 
 def validateRequirementSpec (spec : RequirementSpec) : List String :=
   let duplicateActors := (duplicateStrings spec.actors).map fun id => "duplicate actor: " ++ id
+  let resourceErrors := validateActorResources spec.actors spec.actorResources
   let duplicateMessages := (duplicateStrings (messageNames spec)).map fun id => "duplicate message: " ++ id
   let duplicateTasks := (duplicateStrings (taskIds spec)).map fun id => "duplicate task: " ++ id
   let duplicateGrammars := (duplicateStrings (grammarIds spec)).map fun id => "duplicate grammar for task: " ++ id
@@ -607,7 +649,9 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.processes.isEmpty then ["requirement " ++ spec.id ++ " has no communicating sequential processes"] else []) ++
   (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
   (if spec.requiredProofs.isEmpty then ["requirement " ++ spec.id ++ " has no required proof obligations"] else []) ++
-  duplicateActors ++ duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++ grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ chartErrors ++ markdownErrors
+  duplicateActors ++ resourceErrors ++
+    duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++
+    grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ chartErrors ++ markdownErrors
 
 def transitionMessageLabel (spec : RequirementSpec) (message : String) : String :=
   match spec.messages.find? (fun msg => msg.name == message) with
@@ -770,6 +814,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly; include probability when the abstraction has a known exact or estimated probability mass for the predicate."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
+    , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]

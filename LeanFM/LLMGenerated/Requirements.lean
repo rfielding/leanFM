@@ -624,6 +624,17 @@ def workerRequirement : LeanFM.RequirementSpec :=
   { id := "worker.visible_behavior"
   , title := "Worker visible-behavior requirements"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker].map LeanFM.requirementName
+  , actorResources :=
+      [ { actor := LeanFM.requirementName WorkerActor.Client
+        , inboundCapacity := 1, outboundCapacity := 1
+        , maxInFlight := 2, memoryBudgetBytes := 4096 }
+      , { actor := LeanFM.requirementName WorkerActor.Gateway
+        , inboundCapacity := 2, outboundCapacity := 2
+        , maxInFlight := 4, memoryBudgetBytes := 16384 }
+      , { actor := LeanFM.requirementName WorkerActor.Worker
+        , inboundCapacity := 1, outboundCapacity := 1
+        , maxInFlight := 2, memoryBudgetBytes := 8192 }
+      ]
   , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
   , grammars := [getDocsGrammar, postReviewGrammar]
@@ -645,6 +656,7 @@ def workerRequirement : LeanFM.RequirementSpec :=
   , markdown :=
       [ { id := "overview", title := "Overview", body := "This generated requirement describes only visible messages, visible states, and properties over message fields." }
       , { id := "auth", title := "Authentication proof", body := "Both tasks require `auth_proof` on the initiating client message. Security properties forbid success traces where that field is absent." }
+      , { id := "resources", title := "Resource bounds", body := "Queue, concurrent-work, and byte budgets are example requirement bounds. They are inputs to implementation and trace checks, not measurements of the Lean runtime." }
       ]
   }
 

@@ -34,6 +34,7 @@ validate:
 	@lake exe leanfm | rg 'Per-task FSM CTL checks|CTL from initial observation|AF terminal|AG capacity'
 	@lake exe leanfm-validate | rg '^ok: all generated requirements'
 	@lake env lean LeanFM/LLMGenerated/Requirements.lean
+	@lake env lean LeanFM/ArtifactsTests.lean
 
 http-check:
 	@curl -fsS "$(BASE_URL)/health"
