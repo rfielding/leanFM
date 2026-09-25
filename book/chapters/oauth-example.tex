@@ -233,6 +233,183 @@ the refinement also fixes deterministic serialization and length-delimited messa
 framing. An instantiated envelope can then be serialized and displayed as the
 actual bytes sent between the named actors.
 
+\section{Generate one legal trace and its artifacts}
+
+We can now run the specification in one direction. Grammar generation chooses
+productions and concrete field values; everything after that is a deterministic
+projection or reduction of the resulting events. For this run choose the
+authentication-accepted and authorization-granted alternatives and instantiate
+
+\begin{lstlisting}[language={}]
+session = "s1"             task = "oauth"
+resource = "profile"       state = "x7"
+redirectUri = "https://a/cb"
+protectedCredentials = aa bb
+code = 01 02               accessToken = 03 04
+profile = 05 06
+\end{lstlisting}
+
+The production derivation is
+
+\begin{lstlisting}[language={}]
+oauth
+=> applicationRequestAndRedirect ;
+   authorizeAndDecide ;
+   after(authorizationGranted, exchangeAndFetch)
+=> applicationRequestAndRedirect ;
+   authorizationRequested ;
+   credentialsSubmitted ; authenticationAccepted ;
+   authorizationGranted ; exchangeAndFetch
+\end{lstlisting}
+
+Because \texttt{authorizationGranted} was selected, the \texttt{after} guard
+admits \texttt{exchangeAndFetch}. Selecting the denial alternative would disable
+that production. Expanding every remaining nonterminal yields this terminal word:
+
+\begin{enumerate}[label=\texttt{e\arabic*:},leftmargin=4em]
+  \item Browser $\to$ Application: \texttt{applicationRequest}
+  \item Application $\to$ Browser: \texttt{authorizationRedirect}
+  \item Browser $\to$ Authorization: \texttt{authorizationRequest}
+  \item Browser $\to$ Authorization: \texttt{credentialsSubmitted}
+  \item Authorization $\to$ Browser: \texttt{authenticationResult(true)}
+  \item Authorization $\to$ Browser: \texttt{authorizationCodeReturned}
+  \item Browser $\to$ Application: \texttt{authorizationCallback}
+  \item Application $\to$ Authorization: \texttt{tokenRequest}
+  \item Authorization $\to$ Application: \texttt{accessTokenIssued}
+  \item Application $\to$ Resource: \texttt{protectedResourceRequest}
+  \item Resource $\to$ Application: \texttt{protectedResourceReturned}
+  \item Application $\to$ Browser: \texttt{applicationResponse}
+\end{enumerate}
+
+The choice has now disappeared into ordinary terminals. Event \texttt{e5}'s
+payload bytes select the accepted authentication result. Event \texttt{e6}'s
+\texttt{authorizationCodeReturned} oneof tag, source, and bytes distinguish the
+grant branch from the error-returned branch. No independent ``chooser'' value is
+needed.
+
+\subsection{Envelope stream and concrete bytes}
+
+Assign monotonically increasing clock ticks and event identifiers. This example
+has a linear causal chain, so \texttt{priorIds(e1)} is empty and
+\texttt{priorIds(e$n$)} is \texttt{[e$n-1$]}. A fork or join would make these
+lists non-linear without changing the procedure. Deterministic protobuf
+serialization of the schema on the preceding pages produces:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\tiny,
+  breaklines=true]{examples/oauth-granted.bytes}
+
+These are complete \texttt{EventEnvelope} encodings, not illustrative message
+tags. They were generated with deterministic protobuf serialization. The twelve
+envelopes occupy 440 bytes; the largest is 46 bytes. Protobuf deterministic mode
+makes this fixture reproducible for a given implementation, while the grammar's
+semantic requirement remains successful decoding to the same terminals and field
+values.
+
+\subsection{Residual state-machine path}
+
+Parsing each envelope selects a payload alternative, checks its declared
+\texttt{src}/\texttt{dst}, and consumes one grammar terminal. The residual after
+each prefix is therefore:
+
+\begin{lstlisting}[language={}]
+oauth
+--e1--> waitingForRedirect
+--e2--> waitingForAuthorizationRequest
+--e3--> authenticating
+--e4--> waitingForAuthenticationResult
+--e5--> waitingForAuthorizationDecision
+--e6--> waitingForCallback
+--e7--> waitingForTokenRequest
+--e8--> waitingForToken
+--e9--> waitingForResourceRequest
+--e10-> waitingForResource
+--e11-> waitingForApplicationResponse
+--e12-> done
+\end{lstlisting}
+
+This path is one highlighted route through the generated state machine. The
+machine itself is derived from all grammar residuals and therefore also contains
+the rejected-authentication and denied-authorization paths.
+
+\subsection{Actor projections}
+
+Projection erases terminals an actor neither sends nor receives while preserving
+the order of the rest. The same word generates four local replay scripts:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lp{.72\textwidth}@{}}
+\toprule
+Actor & Projected actions \\
+\midrule
+Browser & send e1; receive e2; send e3; send e4; receive e5; receive e6;
+          send e7; receive e12 \\
+Application & receive e1; send e2; receive e7; send e8; receive e9; send e10;
+              receive e11; send e12 \\
+Authorization & receive e3; receive e4; send e5; send e6; receive e8; send e9 \\
+Resource & receive e10; send e11 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each line can become a component conformance test. The global word remains the
+authority for cross-component order and parameter equality; a local projection
+does not grant an actor knowledge of erased events.
+
+\subsection{Causality, queues, and memory}
+
+The \texttt{priorIds} fields generate a twelve-node causal graph with edges
+$e_i\to e_{i+1}$. The interaction diagram is the same graph laid out by actor;
+the state-machine path lays it out by grammar residual. Neither is independently
+authored.
+
+The message word does not uniquely determine a transport schedule. For a concrete
+queue artifact, choose the canonical schedule that performs, for each event,
+\texttt{produce; transport; receive} before generating the next event. With
+positive inbound and outbound capacities, each queue peaks at one message. The
+queued-byte peak for an actor is the largest encoded envelope waiting at that
+actor in this schedule, and the global queued-byte peak is 46. A different legal
+interleaving may have a larger peak and must be explored when checking the
+universal memory-budget property. The selected schedule is a witness, not the
+capacity proof.
+
+\subsection{Measurements, plots, and verdicts}
+
+From the clocks and correlation key, the generated task attempt is
+
+\begin{lstlisting}[language={}]
+{ key = ("s1", "oauth"), startedAt = 0, completedAt = 23,
+  outcome = succeeded, latency = 23 ticks }
+\end{lstlisting}
+
+It contributes one point \texttt{(maxConcurrency=1, latency=23)} to the latency
+XY plot, a cumulative-byte series ending at \texttt{(clock=23, bytes=440)}, and
+one successful slice to the outcome chart. It does \emph{not} establish a 100
+percent success probability. The grammar-level weight predicts 0.87 mass on the
+grant branch; estimating that probability requires many generated or observed
+sessions, including incomplete ones.
+
+Trace-local monitors accept the matching \texttt{state=x7}, the code flow
+\texttt{01 02}, and the fact that no exchange follows denial. CTL obligations
+such as ``every decision reaches the application'' are not proved by this trace;
+the checker must examine every reachable grammar residual. The complete artifact
+pipeline is thus
+
+\begin{lstlisting}[language={}]
+grammar + field values
+  -> legal terminal word
+  -> typed EventEnvelope stream
+  -> framed protobuf bytes
+  -> causal graph + interaction diagram
+  -> residual FSM path + per-actor projections
+  -> queue schedule + byte-pressure samples
+  -> task attempt + probability/latency/XY reducers
+  -> replay fixture + trace-local property verdicts
+\end{lstlisting}
+
+Every arrow is reproducible. Only the initial branch and value generation, and
+the separately stated transport schedule, add choices.
+
 \section{Interaction diagrams by scenario}
 
 \begin{figure}[p]
