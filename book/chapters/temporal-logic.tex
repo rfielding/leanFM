@@ -17,10 +17,28 @@ $EF\,p$ & some future can reach $p$ & possibility / witness \\
 $AF\,p$ & every future eventually reaches $p$ & termination / response \\
 $EG\,p$ & some path preserves $p$ forever & viable invariant path \\
 $AG\,p$ & every reachable state satisfies $p$ & safety invariant \\
-$A[p\ U\ q]$ & every path keeps $p$ until $q$ & constrained progress \\
+$(p\ AU\ q)$ & every path keeps $p$ until $q$ & constrained progress \\
+$(p\ EU\ q)$ & some path keeps $p$ until $q$ & possible progress \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+The path quantifier is part of the until operator. We write \texttt{AU} and
+\texttt{EU} as binary algebraic operators, not an outer \texttt{A} or \texttt{E}
+wrapped around a bracketed until formula. Consequently a subexpression never
+changes meaning merely because another expression surrounds it:
+
+\begin{lstlisting}
+def boundedUntilTerminal : CTL Observation :=
+  atom withinCapacity AU atom isTerminal
+
+def someAuthorizedContinuation : CTL Observation :=
+  atom hasValidAuth EU atom isSucceeded
+\end{lstlisting}
+
+This convention also makes tree structure explicit. In
+\texttt{r \&\& (p AU q)}, the right operand is the complete \texttt{AU} expression;
+there is no context-sensitive reinterpretation of \texttt{[p U q]}.
 
 For a request event carrying identifier $r$, an expected response property might
 say that on every continuation a matching success or failure eventually occurs.

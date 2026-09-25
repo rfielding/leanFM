@@ -6,8 +6,8 @@
 This part revisits examples from \citet{ryan2001modelling} and its official Casper
 companion scripts. The goal is not to transliterate CSP operators. It is to use
 well-known security protocols as demanding exercises for the grammar-based method:
-multiple roles, fresh values, encrypted components, an active intruder, secrecy,
-agreement, and messages whose legality depends on the preceding trace.
+multiple roles, fresh values, encrypted components, an active intruder, calculated
+knowledge sets, agreement, and messages whose legality depends on the preceding trace.
 
 \section{Can actors really be specified separately?}
 
@@ -216,21 +216,22 @@ This is the grammar analogue of the CSP/Dolev--Yao attacker: possible hostile
 messages are generated from observable history and constrained by a
 context-sensitive derivability relation.
 
-\section{Secrecy and agreement become theorems}
+\section{Knowledge and agreement become theorems}
 
 \index{secrecy}
 \index{agreement}
-A secrecy theorem quantifies over every accepted trace, not merely the happy-path
-scenario. For Yahalom:
+Knowledge is calculated for every actor from every accepted trace, not merely the
+happy-path scenario. A traditional secrecy claim is recovered by comparing that
+set with the actors permitted to know the value. For Yahalom:
 
 \begin{lstlisting}
-theorem yahalom_session_key_secret
+theorem yahalom_session_key_knowers
     (trace : Trace WireEvent)
     (accepted : yahalom.Accepts trace)
     (honest : Uncompromised [.alice, .bob, .server]) :
-    not (Derives (knowledgeOf .ivo trace) (sessionKey accepted.kab)) := by
+    knowers (sessionKey accepted.kab) trace = [.alice, .bob, .server] := by
   -- proof uses the fixed symbolic-crypto library
-  exact secrecyFromKeyOwnership accepted honest
+  exact knowledgeClosureFromKeyOwnership accepted honest
 
 theorem yahalom_bob_agrees_with_alice
     (trace : Trace WireEvent)
@@ -266,11 +267,11 @@ not context-free once equality of an unbounded marker and actor parameters matte
 Keeping these tests as named guards preserves the readable protocol skeleton while
 making the extra context explicit.
 
-The example also distinguishes ordinary secrecy from \emph{strong secrecy}: an
-attacker should not be able to distinguish executions merely by substituting one
-candidate session key for another. That is a relational property over pairs of
-trace distributions, beyond a single CTL state formula, and should be represented
-as a separate theorem family.
+The example also asks whether an observer can distinguish executions after one
+candidate session key is substituted for another. That cannot be answered by a
+single knowledge set: it is a relational property over pairs of trace
+distributions, beyond a single CTL state formula, and should be represented as a
+separate theorem family.
 
 \section{Needham--Schroeder: public-key lookup as behaviour}
 
@@ -319,7 +320,8 @@ The three case studies produce a concrete implementation checklist:
   \item a transport-neutral term-to-byte relation;
   \item explicit initial knowledge and compromise assumptions;
   \item attacker closure under symbolic construction and decryption;
-  \item trace secrecy, agreement, and relational strong-secrecy theorem schemas;
+  \item per-value knowledge sets, agreement, and relational indistinguishability
+        theorem schemas;
   \item counterexamples rendered simultaneously as a global interaction diagram
         and as each actor's local projection.
 \end{enumerate}

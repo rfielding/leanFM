@@ -43,7 +43,7 @@ message ``authorization redirected'' becomes conceptually:
 
 Before the redirect returns, the authorization service may authenticate the person.
 OAuth does not prescribe the authentication mechanism; we include a password branch
-to exercise secret input without pretending that the password is an OAuth protocol
+to exercise knowledge flow without pretending that the password is an OAuth protocol
 parameter.
 
 \begin{lstlisting}
@@ -53,7 +53,7 @@ def authenticateAtAuthorizationServer (password : Password) : Scenario :=
     to_ .authorizationServer
     emitBytes "credentials submitted"
       (protectFor .authorizationServer
-        (encode [secretField "password" password]))
+        (encode [field "password" password]))
 
     from_ .authorizationServer
     to_ .browser
@@ -67,7 +67,8 @@ The wire bytes are specified even though the transport is not. The abstract
 \texttt{protectFor} constructor promises confidentiality to the named endpoint. A
 later refinement may realize that promise with TLS, message-level encryption, or a
 local trusted channel. Merely placing the password inside a field would not support
-a secrecy theorem: a network observer would then derive it from the bytes.
+the intended knowledge set: without protection, a network observer would also
+derive the password from the bytes.
 
 \section{Production 1: application request and redirect}
 
@@ -443,33 +444,34 @@ def oauthRequirements : List Requirement :=
   ]
 \end{lstlisting}
 
-\subsection{Password secrecy}
+\subsection{Who knows the password?}
 
-\index{password secrecy}
-Observable events are not the same as universally readable plaintext. Every actor
-may observe that credential bytes were sent; only actors within the trusted
-user-agent boundary and authorization service may derive the password value. The
-theorem must name both the observer and its assumptions.
+\index{knowledge!derived from events}
+Observable bytes are not the same as knowledge of their plaintext. Rather than
+introducing ``secrecy'' as a special property, calculate the actors that can
+derive the password from initial knowledge and the event list.
 
 \begin{lstlisting}
-theorem oauth_password_secret
+def passwordKnowers (trace : Trace WireEvent) : List Actor :=
+  allActors.filter fun actor =>
+    Derives (knowledgeFrom actor trace) (value password)
+
+theorem oauth_password_knowers
     (trace : Trace WireEvent)
     (accepted : (oauthSystem resource password).Accepts trace)
     (initial : InitiallyKnown password [.browser, .authorizationServer])
     (honest : Uncompromised [.browser, .authorizationServer])
     (protection : PerfectProtection protectFor) :
-    not (Derives (knowledgeOf .networkAttacker trace) (secret password)) := by
-  exact protectedFieldNotDerivable accepted initial honest protection
+    passwordKnowers trace = [.browser, .authorizationServer] := by
+  exact knowledgeClosureOfProtectedField accepted initial honest protection
 \end{lstlisting}
 
-This statement deliberately permits the trusted browser boundary and authorization
-service to know the password. A theorem claiming secrecy from the browser would be
-false for a password typed into that browser. If the desired boundary is narrower,
-the actor model must represent a trusted credential component separately.
-
-The theorem is also conditional. A compromised endpoint, logging side channel, or
-failed concrete protection refinement invalidates an assumption rather than being
-hidden by the grammar.
+The result says directly who knows the value. A password typed into the modeled
+browser is derivable by that browser; hiding this behind the word ``secret'' would
+lose information. If a narrower result is required, the actor model must represent
+a trusted credential component separately. The calculation remains conditional:
+a compromised endpoint, logging event, newly visible key, or failed protection
+refinement changes the knowledge closure and therefore changes the returned set.
 
 \subsection{Byte-level refinement without choosing a transport}
 

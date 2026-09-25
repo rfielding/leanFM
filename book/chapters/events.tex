@@ -36,6 +36,130 @@ An initial event has no prior identifiers. A fork is represented by several late
 events that each name the same prior event. A join is represented by one event
 whose \texttt{priorIds} names every branch on which it immediately depends.
 
+\section{Compute everything from a fork/join event list}
+
+For analysis, normalize each terminal to an interval view. An implementation may
+record \texttt{start} and \texttt{stop} directly, or derive one from the terminal's
+clock and specified dwell. No additional execution-state object is required.
+
+\begin{lstlisting}
+structure AnalysisEvent where
+  id       : EventId
+  priorIds : List EventId
+  start    : ClockTimestamp
+  stop     : ClockTimestamp
+  bytes    : ByteArray
+  reveals  : List ValueRef
+
+def Event.ms (e : AnalysisEvent) : Duration := e.stop - e.start
+def elapsed (first last : AnalysisEvent) : Duration :=
+  last.stop - first.start
+\end{lstlisting}
+
+Consider the first order in \texttt{examples/bakery-events.jsonl}. Payment and
+baking fork after the order is placed and join before the order is accepted:
+
+\begin{center}
+\small
+\begin{tabular}{@{}llllrl@{}}
+\toprule
+Event & Immediate prior & Interval & Meaning & Bytes & Reveals \\
+\midrule
+$e_0$ & $[]$ & $[258312,258726]$ & order placed & 85 & order \\
+$e_1$ & $[e_0]$ & $[258726,258921]$ & payment requested & 71 & price \\
+$e_2$ & $[e_0]$ & $[258726,259194]$ & bake requested & 73 & product \\
+$e_3$ & $[e_1]$ & $[258921,262219]$ & payment authorized & 49 & authorization \\
+$e_4$ & $[e_2]$ & $[259194,2055947]$ & bake completed & 55 & completion \\
+$e_5$ & $[e_3,e_4]$ & $[2055947,2056288]$ & order accepted & 57 & outcome \\
+$e_6$ & $[e_5]$ & $[2056288,2056291]$ & delivery requested & 54 & delivery \\
+$e_7$ & $[e_6]$ & $[2056291,2283253]$ & courier assigned & 40 & courier \\
+$e_8$ & $[e_7]$ & $[2283253,6946819]$ & order delivered & 65 & outcome \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The list order is a serialization convenient for storage. Causal order is the
+transitive closure of \texttt{priorIds}. Both $e_1$ and $e_2$ cite $e_0$, so they
+fork. Event $e_4$ cites both $e_2$ and $e_3$, so it joins the branches. The
+following quantities are folds or graph queries over this one list:
+
+\begin{align*}
+  \operatorname{duration}(e_3) &= e_3.stop-e_3.start = 3298,\\
+  \operatorname{latency}(e_0,e_8) &= e_8.stop-e_0.start = 6688507,\\
+  \operatorname{wireBytes} &= 85+71+73+49+55+57+54+40+65 = 549.
+\end{align*}
+
+Two events are causally concurrent when neither is an ancestor of the other:
+
+\begin{lstlisting}
+def concurrent (events : List AnalysisEvent) (a b : EventId) : Bool :=
+  !reachable events a b && !reachable events b a
+\end{lstlisting}
+
+The maximum concurrency permitted by the trace is the width of this partial
+order: the size of its largest antichain. Here $\{e_1,e_2\}$ is an antichain, as
+is $\{e_3,e_4\}$, and no three events are pairwise concurrent. Thus the maximal
+causal concurrency is two. The recorded schedule also reaches two simultaneously
+active events during $[258726,258921]$ and again during $[259194,262219]$.
+This is stronger than counting
+adjacent list elements and different from measuring average runtime concurrency.
+
+Durations and causal links also give the critical path. Starting a root at zero
+and starting every other event at the maximum stop of its immediate priors yields
+
+\begin{lstlisting}
+earliestStart(e) := max ((prior e).map earliestStop)
+earliestStop(e)  := earliestStart(e) + (e.stop - e.start)
+\end{lstlisting}
+
+The critical path is $e_0,e_2,e_4,e_5,e_6,e_7,e_8$, with length 6,688,507 ms.
+The payment branch finishes at tick 262,219 and has 1,793,728 ms of slack before the join.
+Queue occupancy, queued
+bytes, active \texttt{(session,task)} keys, and memory pressure are computed by
+adding enqueue/dequeue events to the same alphabet and folding them in clock
+order.
+
+The entire checked-in corpus contains \BakeryOrders{} orders and
+\BakeryEvents{} events. Streaming that file produces the following model inputs;
+the numbers in this table are generated LaTeX macros, not independently typed
+constants:
+
+\begin{center}
+\begin{tabular}{@{}lr@{}}
+\toprule
+Reduction over \texttt{bakery-events.jsonl} & Observed value \\
+\midrule
+payment authorized / orders & \BakeryPaymentRatio \\
+bake completed / orders & \BakeryBakeRatio \\
+order accepted / orders & \BakeryAcceptRatio \\
+delivered / orders & \BakeryDeliveredRatio \\
+mean terminal latency & \BakeryMeanLatency{} ms \\
+median terminal latency & \BakeryPFiftyLatency{} ms \\
+95th-percentile terminal latency & \BakeryPNinetyFiveLatency{} ms \\
+maximum simultaneously active orders & \BakeryMaxActive \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These ratios are suitable probability estimates for this corpus. Regeneration
+with a different source stream changes the macros and therefore changes every
+book example that consumes them.
+
+Knowledge is another event reduction. For a value $v$, calculate the actors that
+can derive it from initial knowledge and the bytes visible to them:
+
+\begin{lstlisting}
+def knowers (actors : List Actor) (v : ValueRef)
+    (events : List AnalysisEvent) : List Actor :=
+  actors.filter fun actor =>
+    Derives (knowledgeFrom actor events) v
+\end{lstlisting}
+
+Encryption, signing, projection, key possession, and compromise contribute rules
+to \texttt{Derives}. The primary result is the set \texttt{knowers v events}.
+``Only these actors know $v$'' is a comparison between that computed set and an
+allowed set, not a separate primitive called secrecy.
+
 \section{Derived state}
 
 A current session, an authenticated principal, or an outstanding request can often

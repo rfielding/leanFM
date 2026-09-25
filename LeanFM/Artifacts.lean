@@ -813,9 +813,11 @@ def generatedRequirementSystemPrompt : String :=
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
     , "Each task transition message must appear in one actor process sends list and one actor process receives list."
     , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly; include probability when the abstraction has a known exact or estimated probability mass for the predicate."
+    , "Write quantified until formulas with the binary AU and EU operators, for example p AU q; do not use context-sensitive A[p U q] or E[p U q] wrapper notation."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
     , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
+    , "Express information flow by calculating knowers(value, events) from initial knowledge, visible bytes, and derivation rules. Treat secrecy only as a comparison between that computed actor set and an allowed set."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]

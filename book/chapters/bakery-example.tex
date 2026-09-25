@@ -1,0 +1,144 @@
+\chapter{The Bakery Event Corpus}
+\label{ch:bakery}
+
+\index{XY plot}
+\index{profit!derived from events}
+\index{waste!derived from events}
+The bakery is the quantitative worked example. Its source is not a table of
+percentages copied into this chapter. It is the \BakeryEvents{}-line
+\texttt{examples/bakery-events.jsonl} stream. The reducer reads those events and
+generates both \texttt{examples/bakery-stats.json} and the coordinates plotted
+below. Changing the stream changes the book.
+
+\section{The grammar represented by events}
+
+An order begins with \texttt{OrderPlaced}. Payment and baking fork from that
+event, and \texttt{OrderAccepted} or \texttt{OrderRejected} joins their result
+events. An accepted order either resolves to customer cancellation or continues
+through courier assignment to delivery or delivery failure. The file also
+contains \texttt{ShiftPaid} events, one per employee shift. Thus operational and
+accounting facts share the same event algebra without being the same task.
+
+For each calendar-day bucket $d$, the reducer computes
+
+\begin{align*}
+\operatorname{grossSales}_d
+  &= \sum_{e.kind=\mathrm{PaymentAuthorized}} e.amount,\\
+\operatorname{refunds}_d
+  &= \sum_e e.refund,\\
+\operatorname{netRevenue}_d
+  &= \operatorname{grossSales}_d-\operatorname{refunds}_d,\\
+\operatorname{ingredientCost}_d
+  &= \sum_{e.kind\in\{\mathrm{BakeCompleted},\mathrm{BakeFailed}\}} e.ingredientCost,\\
+\operatorname{employeePay}_d
+  &= \sum_{e.kind=\mathrm{ShiftPaid}} e.pay,\\
+\operatorname{profit}_d
+  &= \operatorname{netRevenue}_d-\operatorname{ingredientCost}_d
+     -\operatorname{employeePay}_d.
+\end{align*}
+
+Waste cost is already part of ingredient cost, so subtracting it again would
+double count. It is tracked separately to explain lost margin. This modeled
+profit excludes rent, utilities, tax, equipment depreciation, and any other cost
+for which the stream has no event. Adding such events extends the equation rather
+than changing the meaning of existing fields.
+
+\section{Money by day is the primary XY plot}
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=.96\textwidth,height=7.2cm,
+  xlabel={day},ylabel={dollars},
+  grid=major,legend pos=south west,
+  scaled ticks=false]
+  \addplot[color=leanblue,mark=none,thick] coordinates {\BakeryDailyRevenueCoordinates};
+  \addlegendentry{net revenue}
+  \addplot[color=leangreen,mark=*,mark size=1.2pt,thick] coordinates {\BakeryDailyProfitCoordinates};
+  \addlegendentry{profit after ingredients and pay}
+  \addplot[color=orange!85!black,mark=none,dashed,thick] coordinates {\BakeryDailyPayCoordinates};
+  \addlegendentry{employee pay}
+\end{axis}
+\end{tikzpicture}
+\caption{Daily bakery economics reduced from events. Day 35 is a partial day in
+the corpus, which explains its lower revenue and profit.}
+\label{fig:bakery-daily-money}
+\end{figure}
+
+The employee-pay line is not a constant assumption. Each \texttt{ShiftPaid}
+event carries employee, role, minutes, hourly rate, and calculated pay. This lets
+the same chart answer counterfactual questions after a staffing event stream is
+changed.
+
+\section{Waste explains part of the margin}
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{.48\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=6cm,
+  xlabel={day},ylabel={waste cost (dollars)},grid=major,
+  scaled ticks=false]
+  \addplot[color=red!75!black,mark=none,thick]
+    coordinates {\BakeryDailyWasteCostCoordinates};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}{.48\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=6cm,
+  xlabel={day},ylabel={wasted units},grid=major,
+  scaled ticks=false]
+  \addplot[color=orange!90!black,mark=square*,mark size=1pt]
+    coordinates {\BakeryDailyWasteUnitsCoordinates};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}
+\caption{Waste cost and units by day, derived from failed bakes, cancellations,
+and failed deliveries in the same event stream.}
+\label{fig:bakery-waste}
+\end{figure}
+
+Cost and units are deliberately separate. A wasted sourdough loaf and a wasted
+croissant do not have the same economic effect. Grouping the same events by
+product, outcome, employee shift, or hour of day produces further XY datasets
+without changing the scenario.
+
+\section{XY plots as questions over scenarios}
+
+The XY chart is not restricted to time on the horizontal axis. The reducer also
+generates daily order count against daily profit:
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=.72\textwidth,height=6.5cm,
+  xlabel={orders placed in day},ylabel={profit (dollars)},grid=major,
+  scaled ticks=false]
+  \addplot[only marks,color=leanblue,mark=*]
+    coordinates {\BakeryOrdersProfitCoordinates};
+\end{axis}
+\end{tikzpicture}
+\caption{Daily order volume against profit. Each point is one day reduced from
+the event corpus.}
+\label{fig:bakery-orders-profit}
+\end{figure}
+
+The same mechanism can measure many scenarios: offered load against latency,
+staffing hours against profit, price against cancellation probability, queue
+capacity against completed orders, or waste against bake batch size. In each
+case the axes are named reductions over event streams. A parameter sweep produces
+several streams; observed operation supplies streams from different days. The
+chart renderer need not know which kind it received.
+
+The corpus currently reports \BakeryDeliveredRatio{} delivered orders, median
+terminal latency \BakeryPFiftyLatency{} ms, 95th-percentile latency
+\BakeryPNinetyFiveLatency{} ms, and a maximum of \BakeryMaxActive{} active orders.
+These values are generated from the checked-in stream and serve as the default
+probability and performance inputs for the bakery model.

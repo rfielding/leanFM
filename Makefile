@@ -8,7 +8,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check http-check validate proto diagrams scripts book book-clean clean
+.PHONY: build run serve stop check http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
 
 build:
 	lake build leanfm-server
@@ -35,6 +35,15 @@ validate:
 	@lake exe leanfm-validate | rg '^ok: all generated requirements'
 	@lake env lean LeanFM/LLMGenerated/Requirements.lean
 	@lake env lean LeanFM/ArtifactsTests.lean
+	@python3 scripts/reduce_bakery_events.py --output /tmp/leanfm-bakery-stats.json --tex-output /tmp/leanfm-bakery-stats.tex >/dev/null
+	@cmp examples/bakery-stats.json /tmp/leanfm-bakery-stats.json
+	@cmp book/generated/bakery-stats.tex /tmp/leanfm-bakery-stats.tex
+
+bakery-data:
+	python3 scripts/generate_bakery_events.py
+
+bakery-stats:
+	python3 scripts/reduce_bakery_events.py --tex-output book/generated/bakery-stats.tex
 
 http-check:
 	@curl -fsS "$(BASE_URL)/health"

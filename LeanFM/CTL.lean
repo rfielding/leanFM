@@ -16,6 +16,9 @@ inductive CTL (S : Type) where
 
 namespace CTL
 
+infixr:45 " AU " => CTL.au
+infixr:45 " EU " => CTL.eu
+
 def implies {S : Type} (p q : CTL S) : CTL S :=
   CTL.or (CTL.neg p) q
 

@@ -46,10 +46,18 @@ make serve       # run the web server on 127.0.0.1:8080
 make http-check  # validate live server routes after make serve
 make stop        # stop the process listening on PORT, default 8080
 make book        # build the LaTeX book, bibliography, contents, and index
+make bakery-data # deterministically regenerate 20,000 bakery order traces
+make bakery-stats # stream the bakery JSONL and derive probabilities/latencies
 ```
 
 The book source is in `book/`; its rendered PDF is `book/main.pdf` after a
 successful build. Use `make book-clean` to remove generated LaTeX artifacts.
+
+The large quantitative example is `examples/bakery-events.jsonl`: 20,000 bakery
+orders represented as a stream of fork/join events. `examples/bakery-stats.json`
+contains reductions calculated from that file. See `BAKERY_SCENARIO.md` for the
+grammar and data contract. Quantitative examples should read this corpus or a
+reduction reproducibly derived from it instead of embedding invented percentages.
 
 The Lean HTTP server listens on:
 

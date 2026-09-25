@@ -147,8 +147,12 @@ def noSuccessWithoutAuth : CTL Observation :=
   CTL.ag (CTL.implies (CTL.neg (CTL.atom hasValidAuth)) (CTL.neg (CTL.atom isSucceeded)))
 
 def taskQueuesStayBoundedUntilTerminal : CTL Observation :=
-  CTL.au (CTL.atom withinCapacity) (CTL.atom isTerminal)
+  CTL.atom withinCapacity AU CTL.atom isTerminal
 ```
+
+`AU` and `EU` are binary operators. The quantifier is part of the operator, so
+an until subexpression has one algebraic meaning regardless of its surrounding
+formula; the notation does not use context-sensitive `A[p U q]` wrappers.
 
 These are evaluated either against the whole worker MDP or against per-task FSMs.
 
