@@ -1,0 +1,219 @@
+\chapter{Arguing Requirements through the Lean Web Server}
+\label{ch:web-server}
+
+\index{vibecoding}
+\index{requirements!durable}
+The LeanFM web server presents a conversational workbench, but conversation is
+not its product. Its product is a durable pair of artifacts: a typed Lean
+requirements model and a protobuf description of the bytes exchanged by the
+participants. The useful form of requirements vibecoding is therefore not
+``ask a model to write the system.'' It is an argument in which a person keeps
+challenging a proposed boundary until the remaining claims can be compiled,
+checked, measured, or left as explicit proof obligations.
+
+Chat history is evidence about how a decision was reached. It is not the
+decision. A future reader must be able to discard the transcript, open the
+generated files, and recover the actors, observable events, alternatives,
+correlation rules, timing assumptions, resource bounds, and properties.
+
+\section{The argument loop}
+
+The interface resembles ChatGPT because natural language is convenient for
+finding omissions. The loop, however, has a formal boundary:
+
+\begin{center}
+\begin{tikzpicture}[>=Latex,node distance=1.15cm,
+  box/.style={draw,rounded corners,align=center,minimum width=3.1cm,
+    minimum height=.75cm,fill=black!3},flow/.style={->,thick}]
+  \node[box] (claim) {state or challenge\\a requirement};
+  \node[box,right=of claim] (draft) {materialize a candidate\\Lean + protobuf pair};
+  \node[box,below=of draft] (check) {compile, validate,\\simulate, and render};
+  \node[box,left=of check] (evidence) {inspect traces, plots,\\violations, and obligations};
+  \draw[flow] (claim) -- (draft);
+  \draw[flow] (draft) -- (check);
+  \draw[flow] (check) -- (evidence);
+  \draw[flow] (evidence) -- node[left,align=right,font=\small]
+    {counterexample or\\sharper question} (claim);
+\end{tikzpicture}
+\end{center}
+
+The human contribution is often adversarial. ``The upload completes'' should
+prompt: what observable event constitutes completion, who observes it, and does
+it mean receipt, durable storage, or policy acceptance? ``The service handles
+load'' should prompt: how many messages fit in each queue, how many
+\texttt{(session, task)} pairs may be active, and what happens at the bound?
+The assistant's job is to turn each answer into structure, not merely agreeable
+prose.
+
+A productive exchange might proceed as follows.
+
+\begin{quote}\small
+\textbf{Person:} A submitted upload eventually completes.\\
+\textbf{Assistant:} I will treat an \texttt{uploadCompleted} response as
+completion.\\
+\textbf{Person:} No. Completion requires the storage actor's acknowledgment,
+and the client must be able to distinguish rejection from timeout. Both queues
+are finite.\\
+\textbf{Assistant:} Then the grammar has accepted, rejected, and timed-out
+alternatives; acceptance contains a storage acknowledgment before the response.
+I will add queue capacities and a bounded-liveness obligation.\\
+\textbf{Person:} Also show the behavior with many sessions in flight, estimate
+the completion distribution from an event stream, and fail the requirement if
+queued bytes exceed the memory budget.
+\end{quote}
+
+Every turn should change a named assumption, artifact, check, or open
+obligation. If it changes none of them, it has not improved the specification.
+
+\section{The server is a staging environment}
+
+The executable \texttt{lake exe leanfm-server} serves the assistant workbench
+on the loopback interface. An authenticated session has its own generated
+\texttt{Requirements.lean} and \texttt{Requirements.proto}. The HTTP interface
+can read and replace these files through
+\texttt{/api/session/generated/requirements.lean} and
+\texttt{/api/session/generated/requirements.proto}. Validation, rendered views,
+metrics, reports, and OpenAPI descriptions are projections of the same model.
+
+Session isolation is useful during an argument, but the current session files
+live below \texttt{/tmp/leanfm-sessions}. That is a workspace, not durable
+storage. A concluded argument must export or commit the accepted files---for
+example as \texttt{LeanFM/LLMGenerated/Requirements.lean} and
+\texttt{LeanFM/LLMGenerated/Requirements.proto}---together with any evidence
+needed by the project. Durability means that the specification has an ordinary
+name, history, review boundary, and reproducible checks independent of the chat
+service.
+
+The server may use a language model to propose edits. Compilation and validation
+remain deterministic. The model is not the proof checker, and fluent prose is
+not evidence that an obligation holds.
+
+\section{What the Lean artifact must settle}
+
+The Lean file is the semantic source. It records actors, messages, per-task
+state machines, multiparty grammar productions, CSP-style processes, framing,
+properties, proof obligations, probability summaries, charts, and explanatory
+Markdown. A serious argument should force answers in each of the following
+dimensions.
+
+\begin{description}[style=nextline]
+  \item[Observable behavior]
+  Which actor sends and receives each event? Which fields can an observer see?
+  A message carries its \texttt{session} and \texttt{task}, its clock timestamp,
+  and a list of prior event identifiers. Thus a join may cite several prior
+  events, while several events may fork from the same prior event.
+
+  \item[Component interactions]
+  Global grammar productions state legal conversations; actor projections state
+  what each component may send or receive. Composition must preserve endpoints,
+  message types, correlation, and causal references. A diagram is useful
+  evidence, but the grammar is the compositional object.
+
+  \item[Statistical properties]
+  User choices make the input probabilistic even when every server component is
+  deterministic. Those choices propagate through the composed system as an MDP.
+  The specification distinguishes unconstrained alternatives from weighted
+  choices, states dwell-time distributions, and names reducers for success,
+  latency, throughput, and queue occupancy. An observed event stream can then
+  estimate the same quantities and be compared with the model.
+
+  \item[Queueing and concurrency]
+  Every actor has finite inbound and outbound queues. Several
+  \texttt{(session, task)} pairs may be in flight at once, so a requirement must
+  not silently reason about only one conversation. Full and empty queues produce
+  observable blocking or sleeping behavior, and transport is a separate step
+  from production and receipt.
+
+  \item[Memory pressure]
+  Message-count capacity alone is insufficient when payload sizes vary. A
+  checkable requirement should declare a byte budget and derive queued bytes from
+  the encoded envelopes. If active tasks retain additional state, the model must
+  declare a bounded footprint for that state too. A representative obligation is
+  \[
+    \mathrm{AG}\bigl(\operatorname{queuedBytes}(a) +
+      \operatorname{inFlightBytes}(a) \leq \operatorname{budget}(a)\bigr).
+  \]
+  This is a modeling obligation for LeanFM, not a claim that the present
+  validator already proves heap usage of an arbitrary implementation.
+\end{description}
+
+\section{The protobuf artifact is part of the requirement}
+
+The parallel protobuf schema answers a question that a state diagram cannot:
+what bytes can cross a component boundary? Atomic payload messages and a
+\texttt{RequirementEnvelope.oneof} discriminator connect a grammar terminal to
+its wire representation. Validation checks, among other things, that field tags
+are nonzero and unique and that framing is explicit.
+
+This pairing exposes useful disagreements. A Lean event may require a
+\texttt{priorIds} list while the wire schema provides only one predecessor. A
+latency property may depend on a clock that is never transmitted or recorded. A
+memory budget may be stated in bytes while an unbounded protobuf field remains.
+These are requirements defects, not serialization trivia.
+
+The exact wire size is also an input to resource analysis:
+
+\begin{lstlisting}
+queuedBytes actor observation :=
+  (observation.inbound actor).sum encodedSize
+  + (observation.outbound actor).sum encodedSize
+
+memoryPressure actor observation :=
+  queuedBytes actor observation
+  + inFlightFootprint actor observation.activeWork
+\end{lstlisting}
+
+The first term can be computed from concrete envelopes. The second requires a
+declared abstraction of implementation state and must remain visibly labeled as
+such.
+
+\section{A ladder of checks}
+
+No single green check answers every kind of requirement. The workbench should
+present a ladder of evidence:
+
+\begin{enumerate}
+  \item Lean elaboration and protobuf parsing establish well-formed artifacts.
+  \item Structural validation rejects missing actors, endpoints, terminals,
+        framing, terminal states, process coverage, or real proof obligations.
+  \item Grammar and projected state-machine checks cover ordering and component
+        interaction.
+  \item Temporal checking covers safety, reachability, and appropriately bounded
+        liveness over observable states.
+  \item Probability and dwell reducers predict completion probability and
+        latency; event-stream reducers estimate them from observations.
+  \item Queue and byte-budget checks cover capacity, backpressure, concurrency,
+        and modeled memory pressure.
+  \item Rendered interaction diagrams, state machines, plots, and reports make
+        the same typed model reviewable by people.
+\end{enumerate}
+
+The distinction between model prediction and measurement must remain visible.
+An incomplete observation window may censor slow tasks; a frequency estimate is
+not automatically a proof of the declared probability; and a bounded trace does
+not establish unbounded liveness. Good generated reports say which claim was
+proved, calculated, sampled, or merely assumed.
+
+\section{How to argue well}
+
+The most useful prompts attack boundaries rather than ask for polish:
+
+\begin{itemize}
+  \item ``Show me the observable event that makes that sentence true.''
+  \item ``Which alternative ends here, and how is it bracketed in the grammar?''
+  \item ``What happens when this inbound or outbound queue is full?''
+  \item ``Run two sessions and two tasks concurrently; which events correlate?''
+  \item ``Which random choice belongs to the user, and how does it change the
+        downstream completion and latency distributions?''
+  \item ``Derive the plot from the event stream, including incomplete tasks.''
+  \item ``Show the corresponding protobuf payload and its encoded-size bound.''
+  \item ``Is this result proved, model-checked, simulated, measured, or assumed?''
+\end{itemize}
+
+The argument is finished enough to review when deleting the transcript loses no
+normative information; a clean checkout can compile and validate the artifacts;
+every diagram and plot is derived rather than independently drawn; failures have
+observable outcomes; quantitative assumptions have units and scope; and every
+unsettled claim is an explicit obligation. That is the requirements-centered
+meaning of vibecoding in LeanFM: conversation discovers the specification, but
+the checked artifacts outlive the conversation.

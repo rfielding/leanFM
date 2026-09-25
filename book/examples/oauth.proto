@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package leanfm.oauth;
+
+enum Actor {
+  ACTOR_UNSPECIFIED = 0;
+  BROWSER = 1;
+  APPLICATION = 2;
+  AUTHORIZATION_SERVER = 3;
+  RESOURCE_SERVER = 4;
+}
+
+message EventEnvelope {
+  string event_id = 1;
+  repeated string prior_ids = 2;
+  string session_id = 3;
+  string task_id = 4;
+  uint64 clock_tick = 5;
+  Actor src = 6;
+  Actor dst = 7;
+
+  oneof payload {
+    ApplicationRequest application_request = 20;
+    AuthorizationRedirect authorization_redirect = 21;
+    AuthorizationRequest authorization_request = 22;
+    CredentialsSubmitted credentials_submitted = 23;
+    AuthenticationResult authentication_result = 24;
+    AuthorizationCodeReturned authorization_code_returned = 25;
+    AuthorizationCallback authorization_callback = 26;
+    AuthorizationErrorReturned authorization_error_returned = 27;
+    AuthorizationErrorCallback authorization_error_callback = 28;
+    TokenRequest token_request = 29;
+    AccessTokenIssued access_token_issued = 30;
+    ProtectedResourceRequest protected_resource_request = 31;
+    ProtectedResourceReturned protected_resource_returned = 32;
+    ApplicationResponse application_response = 33;
+  }
+}
+
+message ApplicationRequest {
+  string resource = 1;
+}
+
+message AuthorizationRedirect {
+  string state = 1;
+  string redirect_uri = 2;
+}
+
+message AuthorizationRequest {
+  string state = 1;
+  string redirect_uri = 2;
+}
+
+message CredentialsSubmitted {
+  bytes protected_credentials = 1;
+}
+
+message AuthenticationResult {
+  bool accepted = 1;
+}
+
+message AuthorizationCodeReturned {
+  string state = 1;
+  bytes code = 2;
+}
+
+message AuthorizationCallback {
+  string state = 1;
+  bytes code = 2;
+}
+
+message AuthorizationErrorReturned {
+  string state = 1;
+  string reason = 2;
+}
+
+message AuthorizationErrorCallback {
+  string state = 1;
+  string reason = 2;
+}
+
+message TokenRequest {
+  bytes code = 1;
+}
+
+message AccessTokenIssued {
+  bytes access_token = 1;
+}
+
+message ProtectedResourceRequest {
+  bytes access_token = 1;
+  string resource = 2;
+}
+
+message ProtectedResourceReturned {
+  string resource = 1;
+  bytes profile = 2;
+}
+
+message ApplicationResponse {
+  bytes profile = 1;
+}
