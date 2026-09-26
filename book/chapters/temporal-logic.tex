@@ -41,6 +41,8 @@ $EG\,p$ & possibly, always $p$ & viable invariant path \\
 $AG\,p$ & necessarily, always $p$ & safety invariant \\
 $(p\ AU\ q)$ & every path keeps $p$ until $q$ & constrained progress \\
 $(p\ EU\ q)$ & some path keeps $p$ until $q$ & possible progress \\
+$(p\ AW\ q)$ & every path: $p$ until $q$, or $p$ forever & necessary weak until \\
+$(p\ EW\ q)$ & some path: $p$ until $q$, or $p$ forever & possible weak until \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -128,6 +130,36 @@ def boundedUntilTerminal : CTL Observation :=
 
 def someAuthorizedContinuation : CTL Observation :=
   atom hasValidAuth EU atom isSucceeded
+\end{lstlisting}
+
+\section{Weak until: AW and EW}
+
+Strong until requires the right operand eventually to occur. Weak until permits
+it never to occur, provided the left operand continues to hold. Thus
+
+\begin{align*}
+  p\ AW\ q &: \text{on every future, $p$ holds until $q$, or $p$ remains forever},\\
+  p\ EW\ q &: \text{on some future, $p$ holds until $q$, or $p$ remains forever}.
+\end{align*}
+
+The boundary state satisfying $q$ need not also satisfy $p$; $p$ is required
+only before $q$. On a future where $q$ never occurs, every state must satisfy
+$p$. This makes weak until useful for requirements such as ``necessarily remain
+available until shutdown, while shutdown is permitted but not required.''
+
+For existential paths, $p\ EW\ q$ is equivalent to
+$(p\ EU\ q)\lor EG\,p$. The analogous-looking
+$(p\ AU\ q)\lor AG\,p$ is \emph{not} a correct definition of $AW$ on a branching
+system. Some futures may reach $q$ while other futures preserve $p$ forever;
+neither global disjunct need hold even though every individual future satisfies
+weak until. LeanFM therefore implements \texttt{AW} directly.
+
+\begin{lstlisting}
+def serviceMayRunUntilShutdown : CTL Observation :=
+  atom available AW atom shutdown
+
+def someWorkerCanRemainReady : CTL Observation :=
+  atom ready EW atom retired
 \end{lstlisting}
 
 This convention also makes tree structure explicit. In

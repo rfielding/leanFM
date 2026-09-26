@@ -1072,6 +1072,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly; include probability when the abstraction has a known exact or estimated probability mass for the predicate."
     , "Every possibly proof has a handlingPlan. At least one implementation mapping must cite that proof ID, because declaring temporal possibility means the generated system has a plan to handle a witness trace."
     , "Write quantified until formulas with the binary AU and EU operators, for example p AU q; do not use context-sensitive A[p U q] or E[p U q] wrapper notation."
+    , "Use binary AW and EW for weak until: q need not occur if p persists forever on every path (AW) or at least one path (EW). Do not rewrite AW as (AU) or AG; mixed branching futures make that equivalence false."
     , "Use CTL, not LTL. Explain A/E as temporal necessity/possibility over forward continuations and G/F as always/eventually along them. Observed values change only by advancing to successor states."
     , "Use CTL.stronglyImplies p q, meaning EF p and AG(p implies q), when implication must be non-vacuous. Plain material implication is weak and may hold only because p never occurs."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."

@@ -120,6 +120,8 @@ inductive CTL (S : Type) where
   | ag : CTL S -> CTL S
   | eu : CTL S -> CTL S -> CTL S
   | au : CTL S -> CTL S -> CTL S
+  | ew : CTL S -> CTL S -> CTL S
+  | aw : CTL S -> CTL S -> CTL S
 ```
 
 The evaluator is:
@@ -140,6 +142,8 @@ The most useful operators in this project are:
 - `AG p`: necessarily always, `p`.
 - `EU p q`: some path keeps `p` true until `q` becomes true.
 - `AU p q`: all paths keep `p` true until `q` becomes true.
+- `EW p q`: some path keeps `p` true until `q`, or keeps `p` forever.
+- `AW p q`: every path keeps `p` true until `q`, or keeps `p` forever.
 
 In LeanFM, a required `possibly` property is an operational preparedness claim.
 It must have a legal witness branch, a nonempty handling plan, and at least one
@@ -151,6 +155,11 @@ or unknown.
 implication is weak because it is true wherever `p` is false. Strong implication
 requires a reachable `p` witness and requires every reachable `p` state to
 satisfy `q`; consequently the model also has a reachable `q` witness.
+
+`AW` is implemented directly. It is not generally equivalent to
+`(p AU q) ∨ AG p`, because a branching state may have some paths that reach `q`
+and other paths that preserve `p` forever. `EW` does admit the corresponding
+existential decomposition `(p EU q) ∨ EG p`.
 
 Examples from `Protocol.lean`:
 

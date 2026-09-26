@@ -41,6 +41,7 @@ The model treats a protocol as globally observable behavior:
 - LeanFM does not use LTL: CTL combines always/eventually with temporal necessity/possibility over forward continuations; recorded observations are immutable and values change only at successor states
 - declaring a condition `possibly` reachable means the system is prepared for it: the requirement needs a witness branch and handling plan, and implementation code must cite that possibility
 - non-vacuous strong implication is `EF p ∧ AG(p → q)`; unlike weak material implication, it requires a reachable antecedent witness and a necessary temporal relationship to the consequent
+- `p AW q` and `p EW q` are weak-until operators: `q` may never occur when `p` persists forever on every path or some path, respectively
 
 Run it with:
 

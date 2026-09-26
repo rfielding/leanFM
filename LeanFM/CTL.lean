@@ -13,11 +13,15 @@ inductive CTL (S : Type) where
   | ag : CTL S -> CTL S
   | eu : CTL S -> CTL S -> CTL S
   | au : CTL S -> CTL S -> CTL S
+  | ew : CTL S -> CTL S -> CTL S
+  | aw : CTL S -> CTL S -> CTL S
 
 namespace CTL
 
 infixr:45 " AU " => CTL.au
 infixr:45 " EU " => CTL.eu
+infixr:45 " AW " => CTL.aw
+infixr:45 " EW " => CTL.ew
 
 def implies {S : Type} (p q : CTL S) : CTL S :=
   CTL.or (CTL.neg p) q
@@ -88,6 +92,32 @@ partial def allUntil [DecidableEq S]
     | [] => false
     | next => next.all (allUntil succ p q (s :: seen))
 
+partial def existsWeakUntil [DecidableEq S]
+    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
+  if q s then
+    true
+  else if !p s then
+    false
+  else if seen.contains s then
+    true
+  else
+    match succ s with
+    | [] => true
+    | next => next.any (existsWeakUntil succ p q (s :: seen))
+
+partial def allWeakUntil [DecidableEq S]
+    (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
+  if q s then
+    true
+  else if !p s then
+    false
+  else if seen.contains s then
+    true
+  else
+    match succ s with
+    | [] => true
+    | next => next.all (allWeakUntil succ p q (s :: seen))
+
 partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
   | atom p => p s
   | neg p => !(holds succ s p)
@@ -101,6 +131,8 @@ partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
   | ag p => allReachable succ (fun s' => holds succ s' p) [] s
   | eu p q => existsUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
   | au p q => allUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
+  | ew p q => existsWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
+  | aw p q => allWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
 
 end CTL
 end LeanFM
