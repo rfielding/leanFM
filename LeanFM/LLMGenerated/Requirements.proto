@@ -38,7 +38,20 @@ message RequirementEnvelope {
     Reviews_ModerationRejected reviews_moderation_rejected = 10;
     Reviews_PostResponse201 reviews_post_response201 = 11;
     Reviews_PostResponse400 reviews_post_response400 = 12;
+    Reliability_Unavailable reliability_unavailable = 13;
+    Reliability_Recovered reliability_recovered = 14;
   }
+}
+
+message Reliability_Unavailable {
+  string actor_spec = 1;
+  string actor_instance = 2;
+  string reason = 3;
+}
+
+message Reliability_Recovered {
+  string actor_spec = 1;
+  string actor_instance = 2;
 }
 
 message Docs_GetRequest {

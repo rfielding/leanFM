@@ -39,6 +39,8 @@ validate:
 	@lake env lean LeanFM/ArtifactsTests.lean
 	@lake env lean LeanFM/ProtocolTests.lean
 	@lake env lean LeanFM/StreamStatsTests.lean
+	@lake env lean LeanFM/PopulationTests.lean
+	@lake env lean LeanFM/CharacterizationTests.lean
 	@python3 scripts/roundtrip_generated_scenario.py
 	@python3 scripts/reduce_bakery_events.py --output /tmp/leanfm-bakery-stats.json --tex-output /tmp/leanfm-bakery-stats.tex >/dev/null
 	@cmp examples/bakery-stats.json /tmp/leanfm-bakery-stats.json

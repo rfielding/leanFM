@@ -197,6 +197,105 @@ terminal. Branches whose complete terminal byte languages overlap are
 observationally ambiguous at that point; the requirement must merge them or add
 an observable discriminator if downstream actors need to distinguish them.
 
+\section{Actor specifications and instances}
+
+An actor name in a grammar denotes a reusable specification, not necessarily one
+process. A finite population gives that specification concrete identities:
+
+\begin{lstlisting}
+actor Client
+  |>.instances "client-" 20
+
+actor Server
+  |>.instances "server-" 2
+\end{lstlisting}
+
+The grammar may say \texttt{Client -> Server}; a generated scenario resolves
+those roles to instances such as \texttt{client-7 -> server-2}. Each instance
+has its own inbound and outbound queues and its own set of in-flight
+\texttt{(session,task)} pairs, while inheriting behavior and resource bounds from
+the actor specification. Population size is finite and explicit so queue,
+memory, probability, and temporal checks still have a bounded state space.
+
+\section{Non-functional rates and scalability}
+
+Timing requirements are stated over boundary messages rather than intervals
+hidden inside an event. Suppose every client repeatedly creates a fresh server
+task. Each completed unit records a start message, an end message that
+backpoints to that start, and a nonnegative amount of work. If one moved byte is
+one work unit and timestamps are milliseconds, an exhaustive observation list
+supports two different rates.
+
+The client-experienced, properly weighted rate is
+
+\[
+ X_{\mathrm{client}}(N)=
+ \frac{\sum_i \mathrm{work}_i}
+      {\sum_i(e_i.timeAt-s_i.timeAt)}.
+\]
+
+This is the duration-weighted mean of the individual observed rates. Long
+requests therefore contribute in proportion to how long a client experienced
+them. It is not the unweighted mean of per-request ratios.
+
+The aggregate server throughput is instead
+
+\[
+ X_{\mathrm{server}}(N)=
+ \frac{\sum_i \mathrm{work}_i}
+      {\max_i(e_i.timeAt)-\min_i(s_i.timeAt)}.
+\]
+
+Its denominator is one wall-clock observation window, so overlapping client
+waits are counted once. The two quantities answer different questions and must
+not share a metric name. Plotting either explicitly chosen rate against the
+number of active client instances yields observations that can be fitted to the
+Universal Scalability Law,
+
+\[
+ X(N)=\frac{\gamma N}{1+\alpha(N-1)+\beta N(N-1)}.
+\]
+
+The event list supplies the observations; estimating $\gamma$, $\alpha$, and
+$\beta$ is a separate statistical step. The list must be exhaustive for the
+declared observation window, or omitted work and unfinished tasks bias both
+rates.
+
+\section{Outages, recovery, and replica populations}
+
+Reliability assumptions belong to actor specifications and are inherited by
+their instances. A contract may set an outage probability and an expected mean
+time to repair (MTTR):
+
+\begin{lstlisting}
+actor Server
+  |>.instances "server-" 2
+  |>.outageProbability (20 / 10000)
+  |>.meanTimeToRepair 45.seconds
+\end{lstlisting}
+
+These are specified assumptions. Measurements come from separate
+\texttt{Unavailable} and \texttt{Recovered} messages. The recovery message
+backpoints to the unavailable message, so one repair duration is
+\texttt{recovered.timeAt - unavailable.timeAt}. For $R$ replicas observed from
+$t_0$ through $t_1$, the observed outage fraction and MTTR are
+
+\[
+ \widehat O=
+ \frac{\sum_i (r_i.timeAt-u_i.timeAt)}{R(t_1-t_0)},
+ \qquad
+ \widehat{MTTR}=
+ \frac{\sum_i (r_i.timeAt-u_i.timeAt)}{\lvert incidents\rvert}.
+\]
+
+Availability over the same complete window is $1-\widehat O$. Both values can
+be plotted against time, replica count, offered load, or a deployment policy.
+This supports Kubernetes-style experiments in which pods are actor instances,
+restarts are recovery events, and changing replica populations yields different
+reliability and throughput observations. A configured outage probability or
+MTTR is not silently replaced by its observed estimate; comparing them is the
+check.
+
 \section{Specified dwell time}
 
 A specification may attach a dwell time to an event step or to a named production.

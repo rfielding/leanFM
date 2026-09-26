@@ -215,6 +215,21 @@ structure RequirementChart where
   value : String
 deriving Repr
 
+inductive PerformanceMetric where
+  | clientExperiencedRate
+  | serverAggregateRate
+deriving DecidableEq, Repr
+
+/-- A minimum non-functional work rate, expressed as work units per millisecond. -/
+structure PerformanceRequirement where
+  name : String
+  task : String
+  metric : PerformanceMetric
+  workField : String
+  minimumWork : Nat
+  perMilliseconds : Nat
+deriving Repr
+
 structure RequirementProcess where
   actor : String
   task : String
@@ -238,20 +253,44 @@ structure ActorResourceContract where
   memoryBudgetBytes : Nat
 deriving Repr
 
+/-- Specified reliability assumptions for every instance of an actor spec. -/
+structure ActorReliabilityContract where
+  actor : String
+  outageProbability : Probability
+  meanTimeToRepairMs : Nat
+deriving Repr
+
+/-- A reusable actor specification may be instantiated many times. -/
+structure ActorPopulation where
+  actorSpec : String
+  instancePrefix : String
+  count : Nat
+deriving DecidableEq, Repr
+
+def ActorPopulation.instanceIds (population : ActorPopulation) : List String :=
+  (List.range population.count).map fun index =>
+    population.instancePrefix ++ toString (index + 1)
+
 structure RequirementSpec where
   id : String
   title : String
   actors : List String
+  actorPopulations : List ActorPopulation
   actorResources : List ActorResourceContract
+  actorReliability : List ActorReliabilityContract
   messages : List MessageSchema
   tasks : List TaskRequirement
   grammars : List TaskGrammar
   processes : List RequirementProcess
   properties : List RequirementProperty
   requiredProofs : List RequiredProof
+  performance : List PerformanceRequirement
   charts : List RequirementChart
   markdown : List RequirementMarkdown
 deriving Repr
+
+def RequirementSpec.actorInstances (spec : RequirementSpec) : List String :=
+  spec.actorPopulations.flatMap ActorPopulation.instanceIds
 
 inductive TargetLanguage where
   | go
@@ -662,7 +701,31 @@ def validateRequiredProof (spec : RequirementSpec) (proof : RequiredProof) : Lis
 
 def validateRequirementSpec (spec : RequirementSpec) : List String :=
   let duplicateActors := (duplicateStrings spec.actors).map fun id => "duplicate actor: " ++ id
+  let populationSpecs := spec.actorPopulations.map (fun population => population.actorSpec)
+  let populationInstances := spec.actorInstances
+  let populationErrors :=
+    (duplicateStrings populationSpecs).map (fun actor => "duplicate actor population: " ++ actor) ++
+    (duplicateStrings populationInstances).map (fun instanceId => "duplicate actor instance id: " ++ instanceId) ++
+    spec.actors.filterMap (fun actor =>
+      if populationSpecs.contains actor then none else some ("actor has no population: " ++ actor)) ++
+    populationSpecs.filterMap (fun actor =>
+      if spec.actors.contains actor then none else some ("population references unknown actor spec: " ++ actor)) ++
+    spec.actorPopulations.foldr (fun population errors =>
+      (if population.count == 0 then ["actor population has zero instances: " ++ population.actorSpec] else []) ++
+      (if population.instancePrefix == "" then ["actor population has empty instance prefix: " ++ population.actorSpec] else []) ++
+      errors) []
   let resourceErrors := validateActorResources spec.actors spec.actorResources
+  let reliabilityActors := spec.actorReliability.map (fun contract => contract.actor)
+  let reliabilityErrors :=
+    (duplicateStrings reliabilityActors).map (fun actor => "duplicate actor reliability contract: " ++ actor) ++
+    spec.actorReliability.foldr (fun contract errors =>
+      (if spec.actors.contains contract.actor then [] else
+        ["reliability contract references unknown actor: " ++ contract.actor]) ++
+      (if contract.outageProbability.isValid then [] else
+        ["actor has invalid outage probability: " ++ contract.actor]) ++
+      (if contract.outageProbability.numerator > 0 && contract.meanTimeToRepairMs == 0 then
+        ["actor with nonzero outage probability has zero MTTR: " ++ contract.actor] else []) ++
+      errors) []
   let duplicateMessages := (duplicateStrings (messageNames spec)).map fun id => "duplicate message: " ++ id
   let duplicateTasks := (duplicateStrings (taskIds spec)).map fun id => "duplicate task: " ++ id
   let duplicateGrammars := (duplicateStrings (grammarIds spec)).map fun id => "duplicate grammar for task: " ++ id
@@ -683,6 +746,14 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
         acc)
       []
   let proofErrors := spec.requiredProofs.foldr (fun proof acc => validateRequiredProof spec proof ++ acc) []
+  let performanceErrors := spec.performance.foldr (fun requirement acc =>
+    (if requirement.name == "" then ["performance requirement has empty name"] else []) ++
+    (if (taskIds spec).contains requirement.task then [] else
+      ["performance requirement " ++ requirement.name ++ " references unknown task: " ++ requirement.task]) ++
+    (if requirement.workField == "" then ["performance requirement has empty work field: " ++ requirement.name] else []) ++
+    (if requirement.minimumWork == 0 then ["performance requirement has zero minimum work: " ++ requirement.name] else []) ++
+    (if requirement.perMilliseconds == 0 then ["performance requirement has zero time denominator: " ++ requirement.name] else []) ++
+    acc) []
   let chartErrors :=
     spec.charts.foldr
       (fun chart acc =>
@@ -708,9 +779,9 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.processes.isEmpty then ["requirement " ++ spec.id ++ " has no communicating sequential processes"] else []) ++
   (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
   (if spec.requiredProofs.isEmpty then ["requirement " ++ spec.id ++ " has no required proof obligations"] else []) ++
-  duplicateActors ++ resourceErrors ++
+  duplicateActors ++ populationErrors ++ resourceErrors ++ reliabilityErrors ++
     duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++
-    grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ chartErrors ++ markdownErrors
+    grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ performanceErrors ++ chartErrors ++ markdownErrors
 
 def transitionMessageLabel (spec : RequirementSpec) (message : String) : String :=
   match spec.messages.find? (fun msg => msg.name == message) with
@@ -902,6 +973,8 @@ def generatedRequirementSystemPrompt : String :=
     , "The committed static DSL/runtime lives outside LeanFM/LLMGenerated/ and must be treated as read-only."
     , "Output LeanFM/LLMGenerated/Requirements.lean, LeanFM/LLMGenerated/Requirements.proto, and LeanFM/LLMGenerated/Implementation.lean."
     , "Requirements.lean contains only observable requirements. Protobuf defines values that resolve to bytes; it does not select how those bytes are transported."
+    , "Define actor specifications separately from ActorPopulation values. Events use concrete instance IDs; every instance inherits the resource contract and behavior of its actorSpec."
+    , "ActorReliabilityContract may specify an outage probability and meanTimeToRepairMs. Keep specified reliability assumptions distinct from outage percentages and MTTR reduced from Unavailable/Recovered events."
     , "Put target language, filenames, runtime APIs, framework choices, per-message transport choices (such as HTTP method/path), and software code-generation mappings only in Implementation.lean."
     , "Requirements.lean imports LeanFM.Artifacts and defines namespace LeanFM.LLMGenerated.Requirements."
     , "Define requirement-local inductive types for actors, message atoms, and each task's states."
@@ -925,6 +998,9 @@ def generatedRequirementSystemPrompt : String :=
     , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly; include probability when the abstraction has a known exact or estimated probability mass for the predicate."
     , "Write quantified until formulas with the binary AU and EU operators, for example p AU q; do not use context-sensitive A[p U q] or E[p U q] wrapper notation."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
+    , "Interrogate the user until every requested result is identifiable: scenario boundaries, start/end pairing, work units, clock units, actor instances and populations, queue capacities, outage/recovery boundaries, observation windows, and whether each probability or distribution is observed, expected, or unknown. Do not invent missing values."
+    , "From every sufficiently identified stream generate per-scenario interaction diagrams and state machines, XY line metrics, pie-chart histograms, uptime/reliability, throughput, and latency. Mark outputs indeterminate when required fields are absent."
+    , "For synthetic similarity, first characterize the source with named exact reducers and distributions, generate a candidate stream, replay the same reducers, and accept only when every target is within its declared tolerance."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
     , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
     , "Model finite queues as blocking channels: send to full and blocking receive from empty make no progress; a distinct nonblocking tryReceive may return none and leave the actor runnable."
@@ -932,6 +1008,22 @@ def generatedRequirementSystemPrompt : String :=
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Implementation.lean imports Requirements, defines one ImplementationSpec referencing the RequirementSpec id, and covers every requirement actor and message exactly once."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
+    ]
+
+def requirementsInterrogationChecklist : String :=
+  joinWithNewline
+    [ "LeanFM requirements interrogation checklist"
+    , "1. What identifies a scenario, session, task, event, and concrete actor instance?"
+    , "2. Which event kinds start and end each measurement, and does every end backpoint to its start?"
+    , "3. What is the monotonic clock unit and observation window?"
+    , "4. What is work: bytes moved, requests completed, money, or another additive unit?"
+    , "5. Which actor populations, queue capacities, memory budgets, and in-flight limits apply?"
+    , "6. Which alternatives are probabilistic, and are distributions observed, expected, or unknown?"
+    , "7. Which events mean unavailable and recovered; what outage probability and expected MTTR are assumed?"
+    , "8. Which client-experienced and server-aggregate throughput definitions are required?"
+    , "9. Which latency percentiles, histogram bins, uptime, reliability, and XY groupings are required?"
+    , "10. For generated similar scenarios, what metrics and relative tolerances define acceptance?"
+    , "Required default outputs: interaction diagrams; state machines; XY line metrics; pie-chart histograms; uptime/reliability; throughput; latency."
     ]
 
 end LeanFM

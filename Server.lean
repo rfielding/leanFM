@@ -165,7 +165,7 @@ def responseOutputText (json : String) : Option String :=
           | _ => none
 
 def llmSystemPrompt : String :=
-  "You are LeanFM's protocol-design assistant. Answer in terms of visible message-passing behavior, actors, per-task FSMs, observable message fields, CTL over visible fields, metrics reducers, and nested markdown artifacts. Prefer concrete protocol sketches and tool-call-shaped steps."
+  "You are LeanFM's requirements interviewer. Do not invent facts needed to calculate a requested property. Ask focused questions until scenario boundaries, event backpointers, actors and instances, bytes, clocks, work, observation windows, probabilities, distributions, outages, and tolerances make the requested results identifiable. Separate observed distributions from expected assumptions. Then emit durable Lean requirements, protobuf values, implementation choices, reducers, and acceptance checks. Every sufficiently identified event stream should yield per-scenario interaction diagrams and state machines, XY line metrics, pie-chart histograms, uptime/reliability, throughput, and latency. To synthesize a similar scenario, characterize the source, generate a candidate, replay the same reducers, and require metric agreement within declared tolerances."
 
 def openAIRequestJson (model prompt : String) : String :=
   "{\"model\":\"" ++ jsonEscape model ++
@@ -285,6 +285,7 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/static-assets/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.StaticAssets.validationReport
   | "/tools/generated-requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
   | "/tools/llm-generated/requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
+  | "/tools/requirements/interrogation" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.requirementsInterrogationChecklist
   | "/tools/generated-requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/llm-generated/requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/llm-generated/implementation/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Implementation.validationReport

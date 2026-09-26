@@ -142,6 +142,41 @@ dimensions.
   validator already proves heap usage of an arbitrary implementation.
 \end{description}
 
+\section{Interrogate, characterize, synthesize, replay}
+
+The conversational interface is not merely a code generator. Its first job is
+to discover whether the desired claims are identifiable. It asks for scenario
+and task boundaries, start-to-end backpointers, concrete actor populations,
+clock and work units, observation windows, queue and memory limits, outage and
+recovery events, and the provenance of probabilities. A missing answer is
+reported as an indeterminate metric rather than replaced by an invented value.
+
+Once those fields are available, one event stream should produce a standard
+characterization out of the box:
+
+\begin{itemize}
+  \item one interaction diagram and derived state machine per scenario;
+  \item XY line graphs for time-, load-, population-, and replica-indexed metrics;
+  \item pie-chart histograms for categorical outcomes and distributions;
+  \item uptime, outage fraction, reliability, and MTTR;
+  \item client-experienced and server-aggregate throughput; and
+  \item latency distributions and named percentiles.
+\end{itemize}
+
+Some streams contain observations; other requirements contain only expected
+distributions. These are labeled separately. An expected distribution can drive
+generation, but it is not presented as a measurement.
+
+Generative similarity closes the loop. Reducers first turn the source stream
+into a named metric vector, including histogram bins as individual exact ratios.
+The generator produces a candidate scenario, serializes it to bytes, decodes it,
+and runs the same reducers. The candidate is accepted only when every required
+metric lies within its declared relative tolerance. Thus ``similar'' means
+measurement-equivalent for the stated characterization, not visually plausible
+or textually similar. Several very different event processes may satisfy the
+same finite metric vector; the grammar, invariants, and byte-level language still
+constrain which candidates are legal.
+
 \section{The protobuf artifact is part of the requirement}
 
 The parallel protobuf schema answers a question that a state diagram cannot:

@@ -21,6 +21,11 @@ The model treats a protocol as globally observable behavior:
 - dwell advances the event clock and supports latency, throughput, and queue metrics
 - each event has one `timeAt`; latency is computed between separate start and completion messages
 - an end message of any kind may backpoint to its start message, so overlapping attempts are paired by event identity
+- actor specifications are reusable; finite populations create concrete instances such as 20 clients and 2 servers, each with its own queues and in-flight tasks
+- non-functional rates distinguish client-experienced `sum(work)/sum(observationTime)` from server aggregate `sum(work)/(max(end)-min(start))`; either can be plotted by client count for USL fitting
+- actor reliability contracts specify outage probability and expected MTTR; `Unavailable`/`Recovered` backpointer pairs produce observed outage percentage and MTTR XY series for replica-based deployments
+- the LLM requirements interviewer refuses to invent missing measurement facts; characterized streams produce diagrams, FSMs, XY lines, pie histograms, reliability, throughput, and latency by default
+- synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
 - generated scenarios round-trip through protobuf bytes without losing causal `prior` links
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes

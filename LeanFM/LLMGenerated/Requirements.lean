@@ -624,6 +624,11 @@ def workerRequirement : LeanFM.RequirementSpec :=
   { id := "worker.visible_behavior"
   , title := "Worker visible-behavior requirements"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker].map LeanFM.requirementName
+  , actorPopulations :=
+      [ { actorSpec := "Client", instancePrefix := "client-", count := 20 }
+      , { actorSpec := "Gateway", instancePrefix := "gateway-", count := 2 }
+      , { actorSpec := "Worker", instancePrefix := "worker-", count := 2 }
+      ]
   , actorResources :=
       [ { actor := LeanFM.requirementName WorkerActor.Client
         , inboundCapacity := 1, outboundCapacity := 1
@@ -634,6 +639,17 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { actor := LeanFM.requirementName WorkerActor.Worker
         , inboundCapacity := 1, outboundCapacity := 1
         , maxInFlight := 2, memoryBudgetBytes := 8192 }
+      ]
+  , actorReliability :=
+      [ { actor := "Client"
+        , outageProbability := { numerator := 0, denominator := 10000 }
+        , meanTimeToRepairMs := 0 }
+      , { actor := "Gateway"
+        , outageProbability := { numerator := 10, denominator := 10000 }
+        , meanTimeToRepairMs := 30000 }
+      , { actor := "Worker"
+        , outageProbability := { numerator := 20, denominator := 10000 }
+        , meanTimeToRepairMs := 45000 }
       ]
   , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
@@ -648,8 +664,22 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { name := "EF post_review moderation rejection", mode := LeanFM.PropertyMode.eventually, task := "post_review", expression := "decision=rejected", probability := some { numerator := 10, denominator := 100 } }
       ]
   , requiredProofs := requiredProofs
+  , performance :=
+      [ { name := "client-experienced byte rate"
+        , task := "get_docs"
+        , metric := LeanFM.PerformanceMetric.clientExperiencedRate
+        , workField := "bytes_moved", minimumWork := 1, perMilliseconds := 1 }
+      , { name := "server aggregate byte throughput"
+        , task := "get_docs"
+        , metric := LeanFM.PerformanceMetric.serverAggregateRate
+        , workField := "bytes_moved", minimumWork := 1, perMilliseconds := 1 }
+      ]
   , charts :=
       [ { name := "latency by task", kind := LeanFM.ChartKind.xy, source := "messages", groupBy := some "task", value := "sum(dwellMs)" }
+      , { name := "client-experienced USL observations", kind := LeanFM.ChartKind.xy, source := "completed work", groupBy := some "client_count", value := "sum(bytes_moved)/sum(observation_ms)" }
+      , { name := "server aggregate USL observations", kind := LeanFM.ChartKind.xy, source := "completed work", groupBy := some "client_count", value := "sum(bytes_moved)/(max(end.timeAt)-min(start.timeAt))" }
+      , { name := "observed outage percentage", kind := LeanFM.ChartKind.xy, source := "reliability events", groupBy := some "actor_spec", value := "sum(outage_ms)/(replicas*observation_ms)" }
+      , { name := "observed MTTR", kind := LeanFM.ChartKind.xy, source := "reliability events", groupBy := some "actor_spec", value := "sum(repair_ms)/incident_count" }
       , { name := "bytes by actor", kind := LeanFM.ChartKind.pie, source := "messages", groupBy := some "src", value := "sum(bytes_moved)" }
       , { name := "queue pressure", kind := LeanFM.ChartKind.xy, source := "messages", groupBy := some "dst", value := "queue_length" }
       ]
