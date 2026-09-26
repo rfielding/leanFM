@@ -574,6 +574,17 @@ Each chart slot can be rendered as either a line chart or a pie chart. The chart
 
 `LeanFM/LLMGenerated/Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the intended output files. Requirements state observable behavior, protobuf defines values that resolve to bytes, and the implementation file independently selects transports and code-generation details. Thus a protobuf object may be carried over HTTP today and a channel or TCP adapter in another implementation without changing the requirement. The `LLMGenerated` directory marks the ownership boundary: these files are produced by the LLM and committed into the repo; the DSL/runtime modules outside that directory are static committed code.
 
+Code generation is stateless with respect to the requirements conversation.
+Fresh generation is `(Requirements.lean, Implementation.lean,
+Requirements.proto) -> code`. Revision is the same function with the current
+code supplied as an additional input. The durable files, not chat history, are
+the current understanding of the system. If they omit a required choice, the
+generator must report that omission rather than infer it from an earlier turn.
+Every generated source unit and conformance test must retain a machine-readable
+requirement ID and a short justification. These references produce a
+requirements-to-code traceability manifest and allow validation to reject orphan
+code that cannot be explained by the durable specification.
+
 The generated Lean should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced through the common `RequirementName` typeclass at the renderer/persistence boundary.
 
 Generated enums should follow naming conventions instead of writing per-constructor string functions:

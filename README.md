@@ -26,10 +26,13 @@ The model treats a protocol as globally observable behavior:
 - actor reliability contracts specify outage probability and expected MTTR; `Unavailable`/`Recovered` backpointer pairs produce observed outage percentage and MTTR XY series for replica-based deployments
 - the LLM requirements interviewer refuses to invent missing measurement facts; characterized streams produce diagrams, FSMs, XY lines, pie histograms, reliability, throughput, and latency by default
 - synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
+- stateless code generation uses `(Requirements.lean, Implementation.lean, Requirements.proto) -> code`; revision adds existing code as an input and never relies on prior chat history
+- every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
 - generated scenarios round-trip through protobuf bytes without losing causal `prior` links
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes
 - a BNF surface composes named interactions by sequence, choice, parallelism, guards, and references
+- explicit `mOfN` threshold joins record both the declared threshold and the concrete branch-terminal IDs that satisfied each join
 - a grammar choice resolves at the first distinguishing byte-level terminal; that terminal's source identifies the observable decision-maker, so choices do not carry a separate chooser label
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph

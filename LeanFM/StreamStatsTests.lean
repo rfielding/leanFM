@@ -54,6 +54,17 @@ def recovered : ObservedTaskEvent :=
   , key := { session := "cluster", task := "reliability" }
   , timeAt := 140, boundary := .succeeded }
 
+def thresholdJoinEvent : ObservedTaskEvent :=
+  { id := "join", prior := ["branch-a", "branch-c", "start"]
+  , key := testKey, timeAt := 50, boundary := .progress
+  , join := some { required := 2, total := 3, selected := ["branch-a", "branch-c"] } }
+
+example : thresholdJoinEvent.hasValidJoinEvidence := by native_decide
+example :
+    !({ thresholdJoinEvent with join := some { required := 3, total := 2
+                                               , selected := ["branch-a", "branch-c"] } }).hasValidJoinEvidence := by
+  native_decide
+
 def gatewayOutage : OutageObservation :=
   { actorSpec := "Gateway", actorInstance := "gateway-1"
   , unavailable := unavailable, recovered := recovered }

@@ -151,6 +151,7 @@ inductive GrammarExpr where
   | seq : GrammarExpr -> GrammarExpr -> GrammarExpr
   | choice : List GrammarExpr -> GrammarExpr
   | parallel : GrammarExpr -> GrammarExpr -> GrammarExpr
+  | thresholdJoin : Nat -> List GrammarExpr -> GrammarExpr
   | guard : String -> GrammarExpr -> GrammarExpr
   | ref : String -> GrammarExpr
   | repeat : GrammarExpr -> GrammarExpr
@@ -171,6 +172,10 @@ def alt : List GrammarExpr -> GrammarExpr :=
 
 def par : GrammarExpr -> GrammarExpr -> GrammarExpr :=
   GrammarExpr.parallel
+
+/-- Continue after any `required` of the branch expressions have completed. -/
+def mOfN (required : Nat) (branches : List GrammarExpr) : GrammarExpr :=
+  GrammarExpr.thresholdJoin required branches
 
 def when (predicate : String) (body : GrammarExpr) : GrammarExpr :=
   GrammarExpr.guard predicate body
@@ -298,10 +303,17 @@ inductive TargetLanguage where
   | lean
 deriving DecidableEq, Repr
 
+/-- Traceability from generated implementation material to a durable requirement. -/
+structure RequirementJustification where
+  requirementId : String
+  reason : String
+deriving Repr
+
 structure ActorCodegen where
   actor : String
   typeName : String
   sourceFile : String
+  justifications : List RequirementJustification
 deriving Repr
 
 /-- How protobuf bytes are carried is an implementation choice, not a wire-schema fact. -/
@@ -317,6 +329,7 @@ structure MessageCodegen where
   message : String
   wireType : String
   transport : TransportSpec
+  justifications : List RequirementJustification
 deriving Repr
 
 inductive SendFullSemantics where
@@ -338,6 +351,7 @@ structure ChannelCodegen where
   sendFull : SendFullSemantics
   receiveEmpty : ReceiveEmptySemantics
   tryReceiveEmpty : TryReceiveEmptySemantics
+  justifications : List RequirementJustification
 deriving Repr
 
 /-- Implementation/code-generation decisions kept separate from requirements. -/
@@ -511,6 +525,7 @@ partial def grammarAtoms : GrammarExpr -> List GrammarAtom
   | GrammarExpr.seq left right => grammarAtoms left ++ grammarAtoms right
   | GrammarExpr.choice branches => branches.foldr (fun branch acc => grammarAtoms branch ++ acc) []
   | GrammarExpr.parallel left right => grammarAtoms left ++ grammarAtoms right
+  | GrammarExpr.thresholdJoin _ branches => branches.foldr (fun branch acc => grammarAtoms branch ++ acc) []
   | GrammarExpr.guard _ body => grammarAtoms body
   | GrammarExpr.ref _ => []
   | GrammarExpr.repeat body => grammarAtoms body
@@ -521,9 +536,23 @@ partial def grammarRefs : GrammarExpr -> List String
   | GrammarExpr.seq left right => grammarRefs left ++ grammarRefs right
   | GrammarExpr.choice branches => branches.foldr (fun branch acc => grammarRefs branch ++ acc) []
   | GrammarExpr.parallel left right => grammarRefs left ++ grammarRefs right
+  | GrammarExpr.thresholdJoin _ branches => branches.foldr (fun branch acc => grammarRefs branch ++ acc) []
   | GrammarExpr.guard _ body => grammarRefs body
   | GrammarExpr.ref task => [task]
   | GrammarExpr.repeat body => grammarRefs body
+
+partial def validateThresholdJoins : GrammarExpr -> List String
+  | .empty | .event _ | .ref _ => []
+  | .seq left right | .parallel left right =>
+      validateThresholdJoins left ++ validateThresholdJoins right
+  | .choice branches => branches.flatMap validateThresholdJoins
+  | .thresholdJoin required branches =>
+      (if required == 0 then ["m-of-n join requires at least one branch"] else []) ++
+      (if required > branches.length then
+        ["m-of-n join requires " ++ toString required ++ " of only " ++ toString branches.length ++ " branches"]
+       else []) ++
+      branches.flatMap validateThresholdJoins
+  | .guard _ body | .repeat body => validateThresholdJoins body
 
 def listIntersects [DecidableEq α] (xs ys : List α) : Bool :=
   xs.any (fun x => ys.contains x)
@@ -686,6 +715,7 @@ def validateTaskGrammar (spec : RequirementSpec) (grammar : TaskGrammar) : List 
   (grammar.terminals.filterMap fun terminal =>
     if taskStateIds.contains terminal then none else some ("grammar " ++ grammar.task ++ " terminal is not a task state: " ++ terminal)) ++
   (if atoms.isEmpty then ["grammar " ++ grammar.task ++ " has no event atoms"] else []) ++
+  validateThresholdJoins grammar.body ++
   refs.filterMap (fun task =>
     if (taskIds spec).contains task then none else some ("grammar " ++ grammar.task ++ " references unknown grammar task: " ++ task)) ++
   atoms.foldr (fun atom acc => validateGrammarAtom spec grammar atom ++ acc) []
@@ -914,8 +944,20 @@ def validateGeneratedRequirement : GeneratedRequirement -> List String
 def validateGeneratedRequirements (requirements : List GeneratedRequirement) : List String :=
   requirements.foldr (fun requirement acc => validateGeneratedRequirement requirement ++ acc) []
 
+def requirementReferenceIds (requirement : RequirementSpec) : List String :=
+  [requirement.id] ++
+  requirement.actors.map (fun actor => "actor:" ++ actor) ++
+  requirement.actorResources.map (fun resource => "resource:" ++ resource.actor) ++
+  requirement.actorReliability.map (fun reliability => "reliability:" ++ reliability.actor) ++
+  requirement.messages.map (fun message => "message:" ++ message.name) ++
+  requirement.tasks.map (fun task => "task:" ++ task.id) ++
+  requirement.properties.map (fun property => "property:" ++ property.name) ++
+  requirement.requiredProofs.map (fun proof => "proof:" ++ proof.name) ++
+  requirement.performance.map (fun performance => "performance:" ++ performance.name)
+
 def validateImplementationSpec (requirement : RequirementSpec)
     (implementation : ImplementationSpec) : List String :=
+  let validRequirementRefs := requirementReferenceIds requirement
   let implementationActors := implementation.actors.map (fun actor => actor.actor)
   let implementationMessages := implementation.messages.map (fun message => message.message)
   let missingActors := requirement.actors.filterMap fun actor =>
@@ -935,7 +977,12 @@ def validateImplementationSpec (requirement : RequirementSpec)
   missingActors ++ unknownActors ++ missingMessages ++ unknownMessages ++
   implementation.actors.foldr (fun actor errors =>
     (if actor.typeName == "" then ["actor binding has empty typeName: " ++ actor.actor] else []) ++
-    (if actor.sourceFile == "" then ["actor binding has empty sourceFile: " ++ actor.actor] else []) ++ errors) [] ++
+    (if actor.sourceFile == "" then ["actor binding has empty sourceFile: " ++ actor.actor] else []) ++
+    (if actor.justifications.isEmpty then ["actor binding has no requirement justification: " ++ actor.actor] else []) ++
+    actor.justifications.foldr (fun justification more =>
+      (if justification.requirementId == "" then ["actor binding has empty requirement reference: " ++ actor.actor] else []) ++
+      (if validRequirementRefs.contains justification.requirementId then [] else ["actor binding references unknown requirement: " ++ justification.requirementId]) ++
+      (if justification.reason == "" then ["actor binding has empty justification reason: " ++ actor.actor] else []) ++ more) errors) [] ++
   implementation.messages.foldr (fun message errors =>
     (if message.wireType == "" then ["message binding has empty wireType: " ++ message.message] else []) ++
     (match message.transport with
@@ -950,10 +997,20 @@ def validateImplementationSpec (requirement : RequirementSpec)
       | .tcp endpoint =>
           if endpoint == "" then ["TCP transport has empty endpoint: " ++ message.message] else []
       | .custom adapter _ =>
-          if adapter == "" then ["custom transport has empty adapter: " ++ message.message] else []) ++ errors) [] ++
+          if adapter == "" then ["custom transport has empty adapter: " ++ message.message] else []) ++
+    (if message.justifications.isEmpty then ["message binding has no requirement justification: " ++ message.message] else []) ++
+    message.justifications.foldr (fun justification more =>
+      (if justification.requirementId == "" then ["message binding has empty requirement reference: " ++ message.message] else []) ++
+      (if validRequirementRefs.contains justification.requirementId then [] else ["message binding references unknown requirement: " ++ justification.requirementId]) ++
+      (if justification.reason == "" then ["message binding has empty justification reason: " ++ message.message] else []) ++ more) errors) [] ++
   (if implementation.channels.sendFunction == "" then ["channel sendFunction is empty"] else []) ++
   (if implementation.channels.receiveFunction == "" then ["channel receiveFunction is empty"] else []) ++
   (if implementation.channels.tryReceiveFunction == "" then ["channel tryReceiveFunction is empty"] else [])
+  ++ (if implementation.channels.justifications.isEmpty then ["channel binding has no requirement justification"] else [])
+  ++ implementation.channels.justifications.foldr (fun justification errors =>
+    (if validRequirementRefs.contains justification.requirementId then [] else
+      ["channel binding references unknown requirement: " ++ justification.requirementId]) ++
+    (if justification.reason == "" then ["channel binding has empty justification reason"] else []) ++ errors) []
 
 def implementationValidationReport (requirement : RequirementSpec)
     (implementation : ImplementationSpec) : String :=
@@ -990,7 +1047,8 @@ def generatedRequirementSystemPrompt : String :=
     , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
     , "Define TaskGrammar values with GrammarExpr.event atoms labeled by task, src actor, dst actor, and message atom."
-    , "Use GrammarExpr.seqList or the >>> notation for causality, GrammarExpr.alt or <||> for alternatives, GrammarExpr.parallel for commuting independent work, GrammarExpr.guard for context-sensitive visible facts, GrammarExpr.ref for task references, and GrammarExpr.repeat for regex-style repetition."
+    , "Use GrammarExpr.seqList or the >>> notation for causality, GrammarExpr.alt or <||> for alternatives, GrammarExpr.parallel for all-branch joins, GrammarExpr.mOfN m branches for threshold joins, GrammarExpr.guard for context-sensitive visible facts, GrammarExpr.ref for task references, and GrammarExpr.repeat for regex-style repetition."
+    , "For an m-of-n join, the emitted continuation event records required=m, total=n, and exactly m selected branch terminal IDs, all also present in its prior backpointers."
     , "Do not add a separate chooser annotation to GrammarExpr.choice. A branch is selected by its distinguishing terminal, whose framed bytes and src/dst identify the observable decision. Merge branches that resolve to identical observable byte languages, or add an observable discriminator."
     , "Define one TypedTaskRequirement per task. Transitions must reference typed state and message constructors."
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
@@ -1007,6 +1065,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Express information flow by calculating knowers(value, events) from initial knowledge, visible bytes, and derivation rules. Treat secrecy only as a comparison between that computed actor set and an allowed set."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Implementation.lean imports Requirements, defines one ImplementationSpec referencing the RequirementSpec id, and covers every requirement actor and message exactly once."
+    , "Every code-generation mapping carries nonempty RequirementJustification values. Generated code preserves them as comments or annotations beside the code they justify."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]
 
@@ -1024,6 +1083,22 @@ def requirementsInterrogationChecklist : String :=
     , "9. Which latency percentiles, histogram bins, uptime, reliability, and XY groupings are required?"
     , "10. For generated similar scenarios, what metrics and relative tolerances define acceptance?"
     , "Required default outputs: interaction diagrams; state machines; XY line metrics; pie-chart histograms; uptime/reliability; throughput; latency."
+    ]
+
+def codeGenerationSystemPrompt : String :=
+  joinWithNewline
+    [ "You generate or revise software from durable LeanFM artifacts."
+    , "Authoritative inputs are the complete current Requirements.lean and Implementation.lean files. Requirements.proto supplies the byte schema."
+    , "Do not depend on, summarize, or infer requirements from earlier chat history. The files are the current understanding."
+    , "Fresh mode is (Requirements.lean, Implementation.lean, Requirements.proto) -> code."
+    , "Revision mode is (Requirements.lean, Implementation.lean, Requirements.proto, existing code) -> revised code."
+    , "In revision mode preserve existing code that conforms, replace code that conflicts, and report any requirement that cannot be implemented from the supplied artifacts."
+    , "Generate parsers and emitters whose decoded event traces are accepted by the grammar, including list-valued prior links, end-to-start backpointers, and m-of-n join evidence."
+    , "Generate bounded per-instance queues, multiple in-flight (session,task) pairs, selected transports, protobuf bindings, reliability events, and named metric reducers."
+    , "Produce deterministic conformance tests: legal generated traces round-trip through bytes and replay successfully; illegal traces are rejected."
+    , "Never silently fill an unspecified implementation decision from conversational memory; emit a diagnostic that identifies the missing durable field."
+    , "Every generated code unit and test includes a machine-readable requirement reference and short justification. Do not generate orphan code with no durable requirement reference."
+    , "Emit a traceability manifest mapping every requirement reference to generated source files, symbols, and conformance tests."
     ]
 
 end LeanFM

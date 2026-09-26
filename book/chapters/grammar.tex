@@ -58,6 +58,7 @@ interaction into a larger one.
                   | "(" <expression> "|" <expression> ")"
                   | "(" <expression> "||" <expression> ")"
                   | "repeat" "(" <expression> ")"
+                  | "join" "(" <natural> "of" <expressions> ")"
                   | "when" "(" <predicate> "," <expression> ")"
                   | "after" "(" <name> "," <expression> ")"
 
@@ -77,6 +78,23 @@ order-preserving interleaving. \texttt{after(P,E)} includes \texttt{E} only on a
 branch in which production \texttt{P} completed. Predicates and repeated field
 variables supply the context-sensitive correlation that plain context-free syntax
 does not express by itself.
+
+A threshold join is explicit rather than inferred from the number of observed
+predecessors:
+
+\begin{lstlisting}[language={}]
+firstTwoReplicas ::= join(2 of replicaA, replicaB, replicaC)
+firstTwoThenReply ::= (firstTwoReplicas ; reply)
+\end{lstlisting}
+
+The continuation becomes enabled after any two of the three branches complete.
+Its first emitted event records \texttt{joinRequired=2},
+\texttt{joinTotal=3}, and exactly two selected branch-terminal IDs. Those IDs
+also occur in the event's ordinary \texttt{prior} list, which may contain other
+backpointers such as the task start. The threshold declaration says why two
+predecessors suffice; the selected IDs say which two satisfied this instance.
+Unselected branches are not implicitly canceled and may still emit events.
+Cancellation, if required, must be an explicit message or production.
 
 The OAuth example decomposes into a collection of independently readable
 interactions:

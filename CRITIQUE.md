@@ -99,11 +99,18 @@ check:
 - the predecessor graph is acyclic;
 - causal edges do not travel backward in `timeAt`;
 - actor/message endpoints agree with the selected terminal;
-- joins name all required branches rather than merely some convenient subset;
+- ordinary joins name all required branches; threshold joins preserve valid
+  `m`, `n`, and distinct selected branch IDs;
 - roots and terminal events agree with the selected grammar production.
 
 Without these checks, a syntactically valid event list can describe an
 impossible or incomplete execution.
+
+The grammar and event model now represent $m$-of-$n$ joins, but no scheduler yet
+defines simultaneous completion ties, deterministic winner selection, or an
+automatic cancellation policy for the remaining $n-m$ branches. Those choices
+can affect cost, queue pressure, and reliability and must be specified when they
+matter.
 
 ## “Maximal concurrency” has multiple meanings
 
@@ -213,6 +220,22 @@ validator does not check endpoint compatibility, status mappings, protobuf
 content types, authentication behavior, timeout behavior, or whether alternative
 responses are exhaustive and exclusive. A complete implementation argument
 needs conformance tests or refinement proofs against observable traces.
+
+The code-generation prompt now treats the durable requirements, protobuf, and
+implementation files as its complete authority, with existing code optional for
+revision. This removes dependence on chat history but does not make code
+generation deterministic: model version, prompt version, backend tools, and
+sampling settings can still change the output. Reproducible builds require those
+inputs to be pinned, and generated diffs still require review and conformance
+tests.
+
+Requirement justifications provide traceability, not correctness. A generated
+comment can cite a real requirement while the adjacent code implements it
+incorrectly, and overly broad requirement IDs can become meaningless catch-all
+citations. Useful enforcement still requires stable fine-grained IDs,
+bidirectional coverage checks, and behavioral conformance tests. Hand-written
+code also needs a policy: either acquire a valid justification or be explicitly
+classified as infrastructure outside the generated requirement surface.
 
 The `custom "unassigned"` fallback also makes generation total while potentially
 hiding an unfinished transport decision. Production validation should reject

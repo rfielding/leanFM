@@ -286,6 +286,7 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/generated-requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
   | "/tools/llm-generated/requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
   | "/tools/requirements/interrogation" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.requirementsInterrogationChecklist
+  | "/tools/code-generation/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.codeGenerationSystemPrompt
   | "/tools/generated-requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/llm-generated/requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/llm-generated/implementation/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Implementation.validationReport

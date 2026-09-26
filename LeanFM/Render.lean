@@ -455,6 +455,7 @@ def openApiRoutes : List OpenApiRoute :=
   , openApiRoute "/tools/generated-requirements/prompt" "Prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
   , openApiRoute "/tools/llm-generated/requirements/prompt" "Canonical prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
   , openApiRoute "/tools/requirements/interrogation" "Questions required before event-derived properties are identifiable" "text/plain" "string" "checklist" ["LLM"]
+  , openApiRoute "/tools/code-generation/prompt" "Stateless code generation and revision contract over durable LeanFM artifacts" "text/plain" "string" "prompt" ["LLM"]
   , openApiRoute "/tools/generated-requirements/validate" "Generated typed Lean requirement validation report" "text/plain" "string" "validation" ["Validation"]
   , openApiRoute "/tools/llm-generated/requirements/validate" "Canonical generated typed Lean requirement validation report" "text/plain" "string" "validation" ["Validation"]
   , openApiRoute "/tools/llm-generated/implementation/validate" "Generated software implementation-plan validation report" "text/plain" "string" "validation" ["Validation"]

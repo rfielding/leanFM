@@ -26,4 +26,13 @@ example :
     !(validateActorResources ["A"] [validResource, validResource]).isEmpty := by
   native_decide
 
+def grammarLeaf : GrammarExpr :=
+  .event { task := "t", src := "A", dst := "B", message := "Done" }
+
+example : validateThresholdJoins (GrammarExpr.mOfN 2 [grammarLeaf, grammarLeaf, grammarLeaf]) = [] := by
+  native_decide
+
+example : !(validateThresholdJoins (GrammarExpr.mOfN 3 [grammarLeaf, grammarLeaf])).isEmpty := by
+  native_decide
+
 end LeanFM

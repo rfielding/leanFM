@@ -19,13 +19,30 @@ inductive TaskBoundary where
   | failed
 deriving DecidableEq, Repr
 
+structure JoinThreshold where
+  required : Nat
+  total : Nat
+  selected : List String
+deriving DecidableEq, Repr
+
 structure ObservedTaskEvent where
   id : String
   prior : List String
   key : TaskKey
   timeAt : ClockTimestamp
   boundary : TaskBoundary
+  join : Option JoinThreshold := none
 deriving DecidableEq, Repr
+
+def ObservedTaskEvent.hasValidJoinEvidence (event : ObservedTaskEvent) : Bool :=
+  match event.join with
+  | none => true
+  | some threshold =>
+      threshold.required > 0 &&
+      threshold.required <= threshold.total &&
+      threshold.selected.length == threshold.required &&
+      threshold.selected.eraseDups.length == threshold.selected.length &&
+      threshold.selected.all event.prior.contains
 
 /-- One `(session, task)` attempt reconstructed from an observed event stream. -/
 structure TaskAttempt where

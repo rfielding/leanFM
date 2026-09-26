@@ -142,3 +142,129 @@ terminal latency \BakeryPFiftyLatency{} ms, 95th-percentile latency
 \BakeryPNinetyFiveLatency{} ms, and a maximum of \BakeryMaxActive{} active orders.
 These values are generated from the checked-in stream and serve as the default
 probability and performance inputs for the bakery model.
+
+\section{AI rendering from durable requirements to pseudocode}
+
+The grammar is useful for more than recognizing a saved corpus. It generates
+legal traces, so the same durable specification can drive software generation.
+The inputs are files, not the conversation that produced them. Let $R$ be the
+complete current \texttt{Requirements.lean}, $I$ the complete current
+\texttt{Implementation.lean}, $P$ the protobuf schema, and $C_k$ an optional
+existing implementation. Code generation has two forms:
+
+\[
+  (R,I,P) \longrightarrow C_0,
+  \qquad
+  (R,I,P,C_k) \longrightarrow C_{k+1}.
+\]
+
+The first creates software from scratch. The second revises existing software
+against the same stable inputs, retaining conforming code and replacing code
+that conflicts. Prior chat messages are deliberately absent from both
+functions. If a necessary decision is not present in $R$, $I$, or $P$, the
+generator reports the missing durable fact instead of recovering it from a long
+conversation.
+
+For the bakery, an AI rendering of those inputs can first produce implementation-
+neutral pseudocode. This is a review artifact before a target-language backend
+uses filenames, transports, queue APIs, and protobuf bindings from $I$:
+
+\begin{lstlisting}[language={}]
+type Event = {
+  id, prior[], session, task, srcInstance, dstInstance,
+  kind, payload, timeAt, joinRequired?, joinTotal?, joinSelected[]
+}
+
+// @requirement bakery.task.fulfill_order
+// Justification: realize the legal order-fulfillment production.
+function handleOrderPlaced(placed):
+  // @requirement bakery.wire.round_trip
+  require decode(encode(placed)) == placed
+  // @requirement bakery.resource.max_in_flight
+  key = (placed.session, placed.task)
+  reserveInFlight(StorefrontInstance, key)
+
+  // @requirement bakery.grammar.payment_parallel_bake
+  paymentRequest = emit PaymentRequested(
+    prior=[placed.id], values={price_cents})
+  bakeRequest = emit BakeRequested(
+    prior=[placed.id], values={product, quantity})
+
+  // Grammar parallelism: either result may arrive first.
+  sendBlocking(Payment.outbound, encode(paymentRequest))
+  sendBlocking(Bakery.outbound, encode(bakeRequest))
+
+  // @requirement bakery.join.payment_and_bake
+  paymentResult = receiveFor(key, PaymentResult)
+  bakeResult = receiveFor(key, BakeResult)
+
+  // Ordinary all-of join: two of two branches are required.
+  decision = emit OrderAccepted or OrderRejected(
+    prior=[paymentResult.id, bakeResult.id, placed.id],
+    joinRequired=2, joinTotal=2,
+    joinSelected=[paymentResult.id, bakeResult.id],
+    timeAt=clock.now())
+
+  if decision is OrderRejected:
+    releaseInFlight(StorefrontInstance, key)
+    return
+
+  if probabilisticUserChoice(Cancel, Continue) is Cancel:
+    emit OrderCancelled(prior=[decision.id, placed.id])
+  else:
+    requested = emit DeliveryRequested(prior=[decision.id])
+    assigned = await CourierAssigned(backpointing=requested.id)
+    emit OrderDelivered or DeliveryFailed(
+      prior=[assigned.id, placed.id], timeAt=clock.now())
+
+  releaseInFlight(StorefrontInstance, key)
+
+// @requirement bakery.metrics.event_characterization
+// Justification: derive the required observable metrics from events.
+function reduce(events):
+  assert uniqueIds(events)
+  assert acyclicPriorGraph(events)
+  assert everyEndBackpointsToItsStart(events)
+  assert everyJoinHasValidThresholdEvidence(events)
+
+  latency = end.timeAt - start.timeAt
+  clientRate = sum(bytesMoved) / sum(latency)
+  serverRate = sum(bytesMoved) /
+               (max(end.timeAt) - min(start.timeAt))
+  outage = sum(recovered.timeAt - unavailable.timeAt) /
+           (replicas * observationWindowMs)
+  mttr = sum(recovered.timeAt - unavailable.timeAt) / incidents
+
+  emit interactionDiagramPerScenario(events)
+  emit stateMachinePerScenario(events)
+  emit xyLines(latency, throughput, profit, waste, outage, mttr)
+  emit pieHistograms(outcomes, products, failures)
+
+// @requirement bakery.conformance.legal_trace_bytes
+// Justification: generated code must preserve and recognize legal traces.
+function conformanceTest(trace):
+  bytes = protobufEncode(trace)
+  replay = protobufDecode(bytes)
+  require replay == trace
+  require grammarAccepts(replay)
+  require stateMachinesAccept(replay)
+  require resourceContractsHold(replay)
+\end{lstlisting}
+
+The pseudocode does not become a second source of requirements. It is discarded
+and regenerated when $R$ or $I$ changes. Generated source code is likewise a
+projection, except that revision mode accepts the current code as an additional
+input so hand-written conforming sections need not be destroyed. In both modes,
+the grammar supplies positive tests by generating legal traces and negative
+tests by rejecting mutations outside its language. Byte round trips then check
+that the implementation and its transport bindings preserve the observable
+scenario.
+
+Every generated code unit carries a machine-readable requirement reference and
+a short justification beside the code it explains. The reference points into
+the durable requirement namespace, not to a chat turn. Generation also emits a
+traceability manifest mapping requirement IDs to source files, symbols, and
+tests. An implementation mapping without a requirement reference is an orphan
+and fails implementation-plan validation; generated-source validation must apply
+the same rule to emitted symbols. Several code units may cite one requirement, and one code unit may
+cite several requirements; the mapping is many-to-many.

@@ -6,11 +6,17 @@ open LeanFM.LLMGenerated.Requirements
 
 def actorBinding : WorkerActor -> LeanFM.ActorCodegen
   | .Client => { actor := LeanFM.requirementName WorkerActor.Client
-               , typeName := "ClientActor", sourceFile := "internal/actors/client.go" }
+               , typeName := "ClientActor", sourceFile := "internal/actors/client.go"
+               , justifications := [{ requirementId := workerRequirement.id
+                                    , reason := "implements the required Client actor specification" }] }
   | .Gateway => { actor := LeanFM.requirementName WorkerActor.Gateway
-                , typeName := "GatewayActor", sourceFile := "internal/actors/gateway.go" }
+                , typeName := "GatewayActor", sourceFile := "internal/actors/gateway.go"
+                , justifications := [{ requirementId := workerRequirement.id
+                                     , reason := "implements the required Gateway actor specification" }] }
   | .Worker => { actor := LeanFM.requirementName WorkerActor.Worker
-               , typeName := "WorkerActor", sourceFile := "internal/actors/worker.go" }
+               , typeName := "WorkerActor", sourceFile := "internal/actors/worker.go"
+               , justifications := [{ requirementId := workerRequirement.id
+                                    , reason := "implements the required Worker actor specification" }] }
 
 def messageBinding (message : LeanFM.MessageSchema) : LeanFM.MessageCodegen :=
   { message := message.name
@@ -30,6 +36,9 @@ def messageBinding (message : LeanFM.MessageSchema) : LeanFM.MessageCodegen :=
       | "Reviews.PostResponse201" => .httpResponse "Reviews.PostRequest"
       | "Reviews.PostResponse400" => .httpResponse "Reviews.PostRequest"
       | _ => .custom "unassigned" ""
+  , justifications :=
+      [{ requirementId := "message:" ++ message.name
+       , reason := "encodes and transports the required observable message" }]
   }
 
 def workerImplementation : LeanFM.ImplementationSpec :=
@@ -46,6 +55,14 @@ def workerImplementation : LeanFM.ImplementationSpec :=
       , sendFull := LeanFM.SendFullSemantics.blockWithoutMutation
       , receiveEmpty := LeanFM.ReceiveEmptySemantics.blockWithoutMutation
       , tryReceiveEmpty := LeanFM.TryReceiveEmptySemantics.returnNoneKeepRunnable
+      , justifications :=
+          [ { requirementId := "resource:Client"
+            , reason := "implements the Client bounded queues" }
+          , { requirementId := "resource:Gateway"
+            , reason := "implements the Gateway bounded queues" }
+          , { requirementId := "resource:Worker"
+            , reason := "implements the Worker bounded queues" }
+          ]
       }
   }
 

@@ -18,6 +18,9 @@ message ScenarioEvent {
   string dst = 6;
   uint64 time_at = 7;
   RequirementEnvelope message = 8;
+  uint32 join_required = 9;
+  uint32 join_total = 10;
+  repeated string join_selected = 11;
 }
 
 message Scenario {

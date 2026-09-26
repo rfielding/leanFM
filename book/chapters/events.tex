@@ -41,6 +41,12 @@ attempts with the same \texttt{(session, task)} overlap. A backpointer to an
 already-ancestral start is a redundant causal edge, but it is useful correlation
 data and does not alter the partial order.
 
+For an $m$-of-$n$ join, the event additionally records $m$, $n$, and the exact
+$m$ branch-terminal IDs that satisfied the threshold. The selected IDs must be
+distinct members of \texttt{priorIds}. Merely seeing two predecessors is not
+enough to distinguish a two-of-three threshold from an ordinary two-branch
+all-of join.
+
 \section{Compute everything from a fork/join event list}
 
 Each event is one observation at one instant. Starting and completing are
