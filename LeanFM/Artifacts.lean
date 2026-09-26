@@ -59,6 +59,7 @@ structure RequiredProof where
   task : String
   predicate : String
   probability : Option Probability
+  handlingPlan : Option String := none
 deriving Repr
 
 inductive ChartKind where
@@ -724,6 +725,10 @@ def validateRequiredProof (spec : RequirementSpec) (proof : RequiredProof) : Lis
   (if proof.name == "" then ["required proof has empty name"] else []) ++
   (if (taskIds spec).contains proof.task then [] else ["required proof " ++ proof.name ++ " references unknown task: " ++ proof.task]) ++
   (if proof.predicate == "" then ["required proof " ++ proof.name ++ " has empty predicate"] else []) ++
+  (match proof.mode, proof.handlingPlan with
+  | .possibly, some plan => if plan == "" then ["possible requirement has an empty handling plan: " ++ proof.name] else []
+  | .possibly, none => ["possible requirement has no handling plan: " ++ proof.name]
+  | _, _ => []) ++
   (match proof.probability with
   | none => []
   | some p =>
@@ -961,6 +966,15 @@ def validateImplementationSpec (requirement : RequirementSpec)
   let validRequirementRefs := requirementReferenceIds requirement
   let implementationActors := implementation.actors.map (fun actor => actor.actor)
   let implementationMessages := implementation.messages.map (fun message => message.message)
+  let implementationJustificationIds :=
+    (implementation.actors.flatMap (fun actor => actor.justifications.map (fun item => item.requirementId))) ++
+    (implementation.messages.flatMap (fun message => message.justifications.map (fun item => item.requirementId))) ++
+    implementation.channels.justifications.map (fun item => item.requirementId)
+  let missingPossibilityPlans := requirement.requiredProofs.filterMap fun proof =>
+    if proof.mode == RequiredProofMode.possibly &&
+        !implementationJustificationIds.contains ("proof:" ++ proof.name) then
+      some ("implementation has no handler justified by possible requirement: " ++ proof.name)
+    else none
   let missingActors := requirement.actors.filterMap fun actor =>
     if implementationActors.contains actor then none else some ("implementation has no actor binding: " ++ actor)
   let unknownActors := implementationActors.filterMap fun actor =>
@@ -975,7 +989,7 @@ def validateImplementationSpec (requirement : RequirementSpec)
   (if implementation.outputDirectory == "" then ["implementation outputDirectory is empty"] else []) ++
   (duplicateStrings implementationActors).map (fun actor => "duplicate implementation actor binding: " ++ actor) ++
   (duplicateStrings implementationMessages).map (fun message => "duplicate implementation message binding: " ++ message) ++
-  missingActors ++ unknownActors ++ missingMessages ++ unknownMessages ++
+  missingActors ++ unknownActors ++ missingMessages ++ unknownMessages ++ missingPossibilityPlans ++
   implementation.actors.foldr (fun actor errors =>
     (if actor.typeName == "" then ["actor binding has empty typeName: " ++ actor.actor] else []) ++
     (if actor.sourceFile == "" then ["actor binding has empty sourceFile: " ++ actor.actor] else []) ++
@@ -1027,6 +1041,7 @@ def generatedRequirementValidationReport (requirements : List GeneratedRequireme
 def generatedRequirementSystemPrompt : String :=
   joinWithNewline
     [ "You generate LeanFM visible-behavior requirements as Lean 4 code."
+    , "Assume the original LLM conversation will be lost. Materialize the complete current understanding in the durable generated files; never require chat history to interpret them."
     , "You only write files under LeanFM/LLMGenerated/."
     , "The committed static DSL/runtime lives outside LeanFM/LLMGenerated/ and must be treated as read-only."
     , "Output LeanFM/LLMGenerated/Requirements.lean, LeanFM/LLMGenerated/Requirements.proto, and LeanFM/LLMGenerated/Implementation.lean."
@@ -1055,7 +1070,9 @@ def generatedRequirementSystemPrompt : String :=
     , "Define communicating sequential processes with TypedRequirementProcess or RequirementProcess for every actor participating in every task."
     , "Each task transition message must appear in one actor process sends list and one actor process receives list."
     , "Define RequiredProof obligations for the required proof modes: never, always, eventually, and possibly; include probability when the abstraction has a known exact or estimated probability mass for the predicate."
+    , "Every possibly proof has a handlingPlan. At least one implementation mapping must cite that proof ID, because declaring temporal possibility means the generated system has a plan to handle a witness trace."
     , "Write quantified until formulas with the binary AU and EU operators, for example p AU q; do not use context-sensitive A[p U q] or E[p U q] wrapper notation."
+    , "Use CTL, not LTL. Explain A/E as temporal necessity/possibility over forward continuations and G/F as always/eventually along them. Observed values change only by advancing to successor states."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Interrogate the user until every requested result is identifiable: scenario boundaries, start/end pairing, work units, clock units, actor instances and populations, queue capacities, outage/recovery boundaries, observation windows, and whether each probability or distribution is observed, expected, or unknown. Do not invent missing values."
     , "From every sufficiently identified stream generate per-scenario interaction diagrams and state machines, XY line metrics, pie-chart histograms, uptime/reliability, throughput, and latency. Mark outputs indeterminate when required fields are absent."
@@ -1089,6 +1106,7 @@ def requirementsInterrogationChecklist : String :=
 def codeGenerationSystemPrompt : String :=
   joinWithNewline
     [ "You generate or revise software from durable LeanFM artifacts."
+    , "Assume every earlier LLM conversation has been lost."
     , "Authoritative inputs are the complete current Requirements.lean and Implementation.lean files. Requirements.proto supplies the byte schema."
     , "Do not depend on, summarize, or infer requirements from earlier chat history. The files are the current understanding."
     , "Fresh mode is (Requirements.lean, Implementation.lean, Requirements.proto) -> code."

@@ -3,25 +3,79 @@
 
 \index{CTL}
 \index{temporal logic}
+\index{LTL}
 A grammar generates a branching transition system. CTL speaks directly about that
 branching: path quantifiers distinguish \emph{there exists a future} from
 \emph{every future}, while temporal operators distinguish the next state,
 eventuality, invariance, and until.
+
+The author's modal-logic background used here was learned mostly from
+\citet{kroger2008temporal}. This citation identifies the source of that education;
+it is not a claim that the authors originated modal or temporal logic.
+
+LeanFM does not use Linear Temporal Logic (LTL). LTL describes properties along
+a linear path. The questions here deliberately combine two independent axes:
+
+\begin{itemize}
+  \item \emph{always} or \emph{eventually} says where along forward time a
+        predicate must hold; and
+  \item \emph{necessarily} or \emph{possibly} says whether it must hold on every
+        permitted forward continuation or may hold on at least one.
+\end{itemize}
+
+``Necessary'' and ``possible'' are therefore temporal readings. They quantify
+over futures from the current observation, not over timeless logical worlds.
+An observation is immutable once recorded. A value changes only by moving
+forward to a successor observation; it is never updated retroactively inside the
+current state. This does not mean that values are monotone---a queue may grow and
+later shrink---but every change occurs on a forward transition.
 
 \begin{center}
 \begin{tabular}{@{}lll@{}}
 \toprule
 Formula & Reading & Typical use \\
 \midrule
-$EF\,p$ & some future can reach $p$ & possibility / witness \\
-$AF\,p$ & every future eventually reaches $p$ & termination / response \\
-$EG\,p$ & some path preserves $p$ forever & viable invariant path \\
-$AG\,p$ & every reachable state satisfies $p$ & safety invariant \\
+$EF\,p$ & possibly, eventually $p$ & temporal possibility / witness \\
+$AF\,p$ & necessarily, eventually $p$ & termination / response \\
+$EG\,p$ & possibly, always $p$ & viable invariant path \\
+$AG\,p$ & necessarily, always $p$ & safety invariant \\
 $(p\ AU\ q)$ & every path keeps $p$ until $q$ & constrained progress \\
 $(p\ EU\ q)$ & some path keeps $p$ until $q$ & possible progress \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+For example, $AF\,p$ is not merely ``eventually $p$'' and $EF\,p$ is not a
+weaker spelling of the same linear claim. The first requires $p$ on every legal
+future generated from the current trace prefix; the second needs one legal
+future as a witness. Branching is part of the requirement.
+
+\section{Possibility means preparedness}
+
+There is a practical consequence to treating possibility as a first-class
+temporal mode. When a requirement declares $EF\,p$, it does more than acknowledge
+that a model checker can find an accidental path to $p$. It says that $p$ is a
+supported future for which the system has a plan.
+
+A \texttt{possibly} obligation therefore contains three linked artifacts:
+
+\begin{enumerate}
+  \item a legal grammar branch and witness trace reaching the condition;
+  \item a handling plan in \texttt{Requirements.lean}; and
+  \item generated implementation code whose justification cites that
+        possibility requirement.
+\end{enumerate}
+
+For example, ``a bakery delivery may fail'' requires a decodable
+\texttt{DeliveryFailed} message, a legal failure branch, and code that performs
+the specified refund or notification behavior. Removing every failure branch
+does not implement reliability; it makes the real failure trace out-of-spec.
+
+Possibility is distinct from probability. A possible condition may have a small
+estimated probability, an expected distribution, or no known probability at
+all. Conversely, assigning positive probability to a condition makes its branch
+possible. The handling obligation comes from supported possibility, not from
+whether the estimated percentage crosses a threshold.
 
 The path quantifier is part of the until operator. We write \texttt{AU} and
 \texttt{EU} as binary algebraic operators, not an outer \texttt{A} or \texttt{E}

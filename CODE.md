@@ -100,7 +100,11 @@ A policy chooses one `Choice` at each state. This is useful when computing expec
 
 ## CTL
 
-`LeanFM/CTL.lean` defines Computation Tree Logic over a finite state graph.
+`LeanFM/CTL.lean` defines Computation Tree Logic over a finite state graph. This
+project does not use LTL. CTL combines always/eventually with temporal
+necessity/possibility: `A` ranges over every permitted forward continuation and
+`E` over at least one. Observations are immutable; a value can differ only in a
+forward successor state, although the value itself need not change monotonically.
 
 ```lean
 inductive CTL (S : Type) where
@@ -128,12 +132,20 @@ It takes a successor function, a starting state, and a formula. The CTL implemen
 
 The most useful operators in this project are:
 
-- `EX p`: some immediate successor satisfies `p`.
-- `EF p`: some reachable state eventually satisfies `p`.
-- `AF p`: all paths eventually satisfy `p`.
-- `AG p`: all reachable states satisfy `p`.
+- `EX p`: possibly next, `p`.
+- `AX p`: necessarily next, `p`.
+- `EF p`: possibly eventually, `p`.
+- `AF p`: necessarily eventually, `p`.
+- `EG p`: possibly always, `p`.
+- `AG p`: necessarily always, `p`.
 - `EU p q`: some path keeps `p` true until `q` becomes true.
 - `AU p q`: all paths keep `p` true until `q` becomes true.
+
+In LeanFM, a required `possibly` property is an operational preparedness claim.
+It must have a legal witness branch, a nonempty handling plan, and at least one
+implementation mapping justified by that proof ID. This is separate from branch
+probability: possible behavior requires a plan even when its likelihood is small
+or unknown.
 
 Examples from `Protocol.lean`:
 

@@ -4,9 +4,9 @@
 \index{vibecoding}
 \index{requirements!durable}
 The LeanFM web server presents a conversational workbench, but conversation is
-not its product. Its product is a durable pair of artifacts: a typed Lean
-requirements model and a protobuf description of the bytes exchanged by the
-participants. The useful form of requirements vibecoding is therefore not
+not its product. Its product is a durable set of artifacts: a typed Lean
+requirements model, a protobuf description of the bytes exchanged by the
+participants, and a separate Lean implementation plan. The useful form of requirements vibecoding is therefore not
 ``ask a model to write the system.'' It is an argument in which a person keeps
 challenging a proposed boundary until the remaining claims can be compiled,
 checked, measured, or left as explicit proof obligations.
@@ -76,7 +76,8 @@ selects how those bytes travel---for example HTTP method and path, an
 in-process channel, TCP, or another adapter. The HTTP interface
 can read and replace these files through
 \texttt{/api/session/generated/requirements.lean} and
-\texttt{/api/session/generated/requirements.proto}. Validation, rendered views,
+\texttt{/api/session/generated/requirements.proto}, and
+\texttt{/api/session/generated/implementation.lean}. Validation, rendered views,
 metrics, reports, and OpenAPI descriptions are projections of the same model.
 
 Session isolation is useful during an argument, but the current session files

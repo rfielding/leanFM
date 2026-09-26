@@ -18,6 +18,14 @@ these artifacts denote the same protocol. A stronger system would have one
 typed source from which the other artifacts are total, deterministic
 projections.
 
+The event-only boundary is practical for production trace conformance but loses
+properties whose truth depends on uninstrumented internal state. In contrast, a
+TLA+-style specification can declare such state explicitly and check invariants
+over it. LeanFM must either add an observable event, accept an abstraction with a
+justification, or admit that the property cannot be determined from the stream.
+Avoiding internal variables reduces modeling friction; it does not make hidden
+state irrelevant.
+
 ## Grammar-to-bytes is demonstrated only for one example
 
 `scripts/roundtrip_generated_scenario.py` proves that one hand-constructed
@@ -275,6 +283,12 @@ Claims proved on those abstractions need an explicit abstraction argument before
 being applied to unbounded implementations. State-space truncation can remove
 the very queue growth, retry loop, or timing behavior a property is intended to
 find.
+
+Treating `possibly` as preparedness improves traceability, but the current check
+only proves that some implementation mapping cites the possibility proof. It
+does not yet prove that the cited handler correctly covers every witness trace or
+that recovery itself terminates. Those require generated conformance traces and
+additional necessary-eventually obligations.
 
 ## The Lean trust story is mixed
 

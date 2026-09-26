@@ -593,6 +593,7 @@ def requiredProofs : List LeanFM.RequiredProof :=
     , task := "get_docs"
     , predicate := "Docs.FetchResult404"
     , probability := some { numerator := 5, denominator := 100 }
+    , handlingPlan := some "Decode Docs.FetchResult404 and return the declared client-visible error response."
     }
   , { name := "Never post_review success without auth proof"
     , mode := LeanFM.RequiredProofMode.never
@@ -617,6 +618,7 @@ def requiredProofs : List LeanFM.RequiredProof :=
     , task := "post_review"
     , predicate := "Reviews.ModerationRejected"
     , probability := some { numerator := 10, denominator := 100 }
+    , handlingPlan := some "Decode Reviews.ModerationRejected and return Reviews.PostResponse400."
     }
   ]
 

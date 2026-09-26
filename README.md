@@ -28,6 +28,8 @@ The model treats a protocol as globally observable behavior:
 - synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
 - stateless code generation uses `(Requirements.lean, Implementation.lean, Requirements.proto) -> code`; revision adds existing code as an input and never relies on prior chat history
 - every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
+- unlike an explicit-variable state model, LeanFM primarily recognizes and generates observable event traces; private implementation variables are omitted unless they change an observable requirement
+- `Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the durable memory of the requirements argument, so a new LLM session does not require the original conversation
 - generated scenarios round-trip through protobuf bytes without losing causal `prior` links
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes
@@ -36,6 +38,8 @@ The model treats a protocol as globally observable behavior:
 - a grammar choice resolves at the first distinguishing byte-level terminal; that terminal's source identifies the observable decision-maker, so choices do not carry a separate chooser label
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph
+- LeanFM does not use LTL: CTL combines always/eventually with temporal necessity/possibility over forward continuations; recorded observations are immutable and values change only at successor states
+- declaring a condition `possibly` reachable means the system is prepared for it: the requirement needs a witness branch and handling plan, and implementation code must cite that possibility
 
 Run it with:
 

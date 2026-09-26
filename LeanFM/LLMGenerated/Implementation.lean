@@ -38,7 +38,14 @@ def messageBinding (message : LeanFM.MessageSchema) : LeanFM.MessageCodegen :=
       | _ => .custom "unassigned" ""
   , justifications :=
       [{ requirementId := "message:" ++ message.name
-       , reason := "encodes and transports the required observable message" }]
+       , reason := "encodes and transports the required observable message" }] ++
+      (if message.name == "Docs.FetchResult404" then
+        [{ requirementId := "proof:Possibly get_docs fetch failure"
+         , reason := "implements the declared plan for the possible fetch-failure trace" }]
+       else if message.name == "Reviews.ModerationRejected" then
+        [{ requirementId := "proof:Possibly post_review moderation rejection"
+         , reason := "implements the declared plan for the possible moderation-rejection trace" }]
+       else [])
   }
 
 def workerImplementation : LeanFM.ImplementationSpec :=
