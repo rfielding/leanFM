@@ -42,7 +42,7 @@ def main() -> None:
             total_events += 1
             total_bytes += event["bytes"]
             kinds[event["kind"]] += 1
-            day = event["start_ms"] // 86_400_000
+            day = event["timeAt"] // 86_400_000
             values = event["values"]
             bucket = daily[day]
             bucket["events"] += 1
@@ -65,10 +65,9 @@ def main() -> None:
             order = orders[event["session"]]
             order["events"] = int(order["events"]) + 1
             order["bytes"] = int(order["bytes"]) + event["bytes"]
-            start = event["start_ms"]
-            stop = event["stop_ms"]
-            order["start"] = start if order["start"] is None else min(int(order["start"]), start)
-            order["stop"] = stop if order["stop"] is None else max(int(order["stop"]), stop)
+            time_at = event["timeAt"]
+            order["start"] = time_at if order["start"] is None else min(int(order["start"]), time_at)
+            order["stop"] = time_at if order["stop"] is None else max(int(order["stop"]), time_at)
             if event["kind"] in TERMINALS:
                 order["terminal"] = event["kind"]
 

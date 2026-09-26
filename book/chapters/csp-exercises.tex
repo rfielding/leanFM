@@ -63,7 +63,7 @@ inductive WireTerm where
   | sign    : KeyRef -> WireTerm -> WireTerm
 
 structure WireEvent where
-  clock : ClockTimestamp
+  timeAt : ClockTimestamp
   id     : EventId
   priorIds : List EventId
   session : SessionId

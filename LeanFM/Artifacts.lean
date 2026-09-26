@@ -253,6 +253,65 @@ structure RequirementSpec where
   markdown : List RequirementMarkdown
 deriving Repr
 
+inductive TargetLanguage where
+  | go
+  | rust
+  | lean
+deriving DecidableEq, Repr
+
+structure ActorCodegen where
+  actor : String
+  typeName : String
+  sourceFile : String
+deriving Repr
+
+/-- How protobuf bytes are carried is an implementation choice, not a wire-schema fact. -/
+inductive TransportSpec where
+  | httpRequest (method : String) (path : String)
+  | httpResponse (requestMessage : String)
+  | inProcessChannel (channelName : String)
+  | tcp (endpoint : String)
+  | custom (adapter : String) (configuration : String)
+deriving Repr
+
+structure MessageCodegen where
+  message : String
+  wireType : String
+  transport : TransportSpec
+deriving Repr
+
+inductive SendFullSemantics where
+  | blockWithoutMutation
+deriving DecidableEq, Repr
+
+inductive ReceiveEmptySemantics where
+  | blockWithoutMutation
+deriving DecidableEq, Repr
+
+inductive TryReceiveEmptySemantics where
+  | returnNoneKeepRunnable
+deriving DecidableEq, Repr
+
+structure ChannelCodegen where
+  sendFunction : String
+  receiveFunction : String
+  tryReceiveFunction : String
+  sendFull : SendFullSemantics
+  receiveEmpty : ReceiveEmptySemantics
+  tryReceiveEmpty : TryReceiveEmptySemantics
+deriving Repr
+
+/-- Implementation/code-generation decisions kept separate from requirements. -/
+structure ImplementationSpec where
+  requirementId : String
+  target : TargetLanguage
+  moduleName : String
+  outputDirectory : String
+  actors : List ActorCodegen
+  messages : List MessageCodegen
+  channels : ChannelCodegen
+deriving Repr
+
 structure TypedMessageSchema (Actor Message : Type) where
   name : Message
   src : Actor
@@ -784,6 +843,53 @@ def validateGeneratedRequirement : GeneratedRequirement -> List String
 def validateGeneratedRequirements (requirements : List GeneratedRequirement) : List String :=
   requirements.foldr (fun requirement acc => validateGeneratedRequirement requirement ++ acc) []
 
+def validateImplementationSpec (requirement : RequirementSpec)
+    (implementation : ImplementationSpec) : List String :=
+  let implementationActors := implementation.actors.map (fun actor => actor.actor)
+  let implementationMessages := implementation.messages.map (fun message => message.message)
+  let missingActors := requirement.actors.filterMap fun actor =>
+    if implementationActors.contains actor then none else some ("implementation has no actor binding: " ++ actor)
+  let unknownActors := implementationActors.filterMap fun actor =>
+    if requirement.actors.contains actor then none else some ("implementation binds unknown actor: " ++ actor)
+  let missingMessages := messageNames requirement |>.filterMap fun message =>
+    if implementationMessages.contains message then none else some ("implementation has no message binding: " ++ message)
+  let unknownMessages := implementationMessages.filterMap fun message =>
+    if (messageNames requirement).contains message then none else some ("implementation binds unknown message: " ++ message)
+  (if implementation.requirementId == requirement.id then [] else
+    ["implementation requirementId does not match requirement: " ++ implementation.requirementId]) ++
+  (if implementation.moduleName == "" then ["implementation moduleName is empty"] else []) ++
+  (if implementation.outputDirectory == "" then ["implementation outputDirectory is empty"] else []) ++
+  (duplicateStrings implementationActors).map (fun actor => "duplicate implementation actor binding: " ++ actor) ++
+  (duplicateStrings implementationMessages).map (fun message => "duplicate implementation message binding: " ++ message) ++
+  missingActors ++ unknownActors ++ missingMessages ++ unknownMessages ++
+  implementation.actors.foldr (fun actor errors =>
+    (if actor.typeName == "" then ["actor binding has empty typeName: " ++ actor.actor] else []) ++
+    (if actor.sourceFile == "" then ["actor binding has empty sourceFile: " ++ actor.actor] else []) ++ errors) [] ++
+  implementation.messages.foldr (fun message errors =>
+    (if message.wireType == "" then ["message binding has empty wireType: " ++ message.message] else []) ++
+    (match message.transport with
+      | .httpRequest method path =>
+          (if method == "" then ["HTTP request has empty method: " ++ message.message] else []) ++
+          (if path == "" then ["HTTP request has empty path: " ++ message.message] else [])
+      | .httpResponse requestMessage =>
+          if (messageNames requirement).contains requestMessage then []
+          else ["HTTP response names unknown request message: " ++ message.message ++ " -> " ++ requestMessage]
+      | .inProcessChannel channelName =>
+          if channelName == "" then ["in-process transport has empty channel name: " ++ message.message] else []
+      | .tcp endpoint =>
+          if endpoint == "" then ["TCP transport has empty endpoint: " ++ message.message] else []
+      | .custom adapter _ =>
+          if adapter == "" then ["custom transport has empty adapter: " ++ message.message] else []) ++ errors) [] ++
+  (if implementation.channels.sendFunction == "" then ["channel sendFunction is empty"] else []) ++
+  (if implementation.channels.receiveFunction == "" then ["channel receiveFunction is empty"] else []) ++
+  (if implementation.channels.tryReceiveFunction == "" then ["channel tryReceiveFunction is empty"] else [])
+
+def implementationValidationReport (requirement : RequirementSpec)
+    (implementation : ImplementationSpec) : String :=
+  match validateImplementationSpec requirement implementation with
+  | [] => "ok: generated implementation plan covers the requirement\n"
+  | errors => "invalid generated implementation plan\n" ++ joinWithNewline errors ++ "\n"
+
 def generatedRequirementValidationReport (requirements : List GeneratedRequirement) : String :=
   match validateGeneratedRequirements requirements with
   | [] => "ok: all generated requirements are well-formed typed Lean values\n"
@@ -794,7 +900,9 @@ def generatedRequirementSystemPrompt : String :=
     [ "You generate LeanFM visible-behavior requirements as Lean 4 code."
     , "You only write files under LeanFM/LLMGenerated/."
     , "The committed static DSL/runtime lives outside LeanFM/LLMGenerated/ and must be treated as read-only."
-    , "Output LeanFM/LLMGenerated/Requirements.lean and LeanFM/LLMGenerated/Requirements.proto."
+    , "Output LeanFM/LLMGenerated/Requirements.lean, LeanFM/LLMGenerated/Requirements.proto, and LeanFM/LLMGenerated/Implementation.lean."
+    , "Requirements.lean contains only observable requirements. Protobuf defines values that resolve to bytes; it does not select how those bytes are transported."
+    , "Put target language, filenames, runtime APIs, framework choices, per-message transport choices (such as HTTP method/path), and software code-generation mappings only in Implementation.lean."
     , "Requirements.lean imports LeanFM.Artifacts and defines namespace LeanFM.LLMGenerated.Requirements."
     , "Define requirement-local inductive types for actors, message atoms, and each task's states."
     , "Each generated enum must derive DecidableEq and Repr."
@@ -803,6 +911,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Use NameStyle.dot for message constructors like Docs_GetRequest, which render as Docs.GetRequest."
     , "Define message atoms as List (TypedMessageSchema Actor Message)."
     , "Every message atom must have src, dst, MessageFraming, and numbered protobuf fields that correspond to a message in LLMGenerated/Requirements.proto."
+    , "Requirements.proto must also define Scenario and ScenarioEvent envelopes that preserve id, repeated prior links, session, task, actors, timeAt, and the selected message atom, so a generated scenario round-trips through bytes."
     , "MessageFraming must say how bytes are emitted and consumed: protobufMessage, protobufOneof, or transportEnvelope."
     , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."
@@ -817,8 +926,10 @@ def generatedRequirementSystemPrompt : String :=
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
     , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
+    , "Model finite queues as blocking channels: send to full and blocking receive from empty make no progress; a distinct nonblocking tryReceive may return none and leave the actor runnable."
     , "Express information flow by calculating knowers(value, events) from initial knowledge, visible bytes, and derivation rules. Treat secrecy only as a comparison between that computed actor set and an allowed set."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
+    , "Implementation.lean imports Requirements, defines one ImplementationSpec referencing the RequirementSpec id, and covers every requirement actor and message exactly once."
     , "Do not generate JavaScript, HTML, JSON renderer data, or untyped string references for actors/messages/states."
     ]
 

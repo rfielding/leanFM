@@ -9,7 +9,8 @@ The repo has four main layers:
 - `LeanFM/Protocol.lean`: the actual actor/message/task model.
 - `LeanFM/UiModel.lean`: explicit, checkable UI data structures for renderer inputs.
 - `LeanFM/Artifacts.lean`: static, committed requirement DSL.
-- `LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto`: LLM-generated requirement instances and protobuf atoms.
+- `LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto`: LLM-generated observable requirements and protobuf value atoms.
+- `LeanFM/LLMGenerated/Implementation.lean`: separate software-generation choices, including transport adapters, target language, runtime APIs, and source-file mappings.
 - `LeanFM/Render.lean`, `Server.lean`, and `Main.lean`: reports, Graphviz, canvas visualizations, and the local web server.
 
 ## The Generic State Model
@@ -189,13 +190,13 @@ structure Envelope where
   dst : Actor
   transport : Transport
   proto : ProtoPayload
-  clock : ClockTimestamp
+  timeAt : ClockTimestamp
 ```
 
 This is the wrapper around a protobuf-like message body. The wrapper carries task,
 source actor, destination actor, transport, and a timestamp sampled from the
 model's shared monotonic clock. The payload carries the message type, bytes, and
-parsed fields. Durations are clock differences between correlated boundary events;
+parsed fields. Durations are timestamp differences between correlated boundary events;
 causal order still comes from grammar structure and prior-event identifiers.
 
 ```lean
@@ -247,6 +248,12 @@ This models the queue rules:
 - an actor sleeps on receive from an empty inbound queue;
 - an actor sleeps on production into a full outbound queue;
 - transport blocks while the destination inbound queue is full.
+- a nonblocking `tryReceive` on an empty queue returns `none` without sleeping.
+
+These are operation semantics, like finite Go channels. A blocked send does not
+insert a message, a blocked receive does not consume anything, and blocked state
+is reconsidered only when the channel gains space or data. Polling is represented
+as a distinct operation so `none` cannot be mistaken for a blocked actor.
 
 Every envelope is correlated by a `(session, task)` key. An actor may retain many
 such keys in its in-flight table, each associated with its own task-machine state.
@@ -565,7 +572,7 @@ Each chart slot can be rendered as either a line chart or a pie chart. The chart
 
 ## Generated Requirements
 
-`LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto` are the intended output files for an LLM that is asked to sketch or revise requirements. The `LLMGenerated` directory marks the ownership boundary: these files are produced by the LLM and committed into the repo; the DSL/runtime modules outside that directory are static committed code.
+`LeanFM/LLMGenerated/Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the intended output files. Requirements state observable behavior, protobuf defines values that resolve to bytes, and the implementation file independently selects transports and code-generation details. Thus a protobuf object may be carried over HTTP today and a channel or TCP adapter in another implementation without changing the requirement. The `LLMGenerated` directory marks the ownership boundary: these files are produced by the LLM and committed into the repo; the DSL/runtime modules outside that directory are static committed code.
 
 The generated Lean should construct typed Lean values, not JavaScript and not raw renderer JSON. The generated file can define requirement-local `inductive` types for actors, messages, and task states, then use those constructors in the records. String names are produced through the common `RequirementName` typeclass at the renderer/persistence boundary.
 

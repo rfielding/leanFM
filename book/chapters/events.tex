@@ -8,7 +8,7 @@ envelope makes histories comparable across protocols:
 
 \begin{lstlisting}
 structure Event (Actor Session Task Kind Payload : Type) where
-  clock   : ClockTimestamp
+  timeAt  : ClockTimestamp
   id      : String
   priorIds : List String
   session : Session
@@ -27,7 +27,7 @@ The fields have different jobs. \texttt{id} identifies a visible fact;
 \texttt{to} name the parties; \texttt{(session, task)} correlates independently
 progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
-production to the next. \texttt{clock} is sampled from the model's shared monotonic
+production to the next. \texttt{timeAt} is sampled from the model's shared monotonic
 clock. Its differences measure elapsed time; it is not a civil-time date and its
 origin is immaterial.
 
@@ -38,22 +38,20 @@ whose \texttt{priorIds} names every branch on which it immediately depends.
 
 \section{Compute everything from a fork/join event list}
 
-For analysis, normalize each terminal to an interval view. An implementation may
-record \texttt{start} and \texttt{stop} directly, or derive one from the terminal's
-clock and specified dwell. No additional execution-state object is required.
+Each event is one observation at one instant. Starting and completing are
+different messages, so an event does not contain an interval. Durations are
+derived by selecting the two boundary events and subtracting their timestamps.
 
 \begin{lstlisting}
 structure AnalysisEvent where
   id       : EventId
   priorIds : List EventId
-  start    : ClockTimestamp
-  stop     : ClockTimestamp
+  timeAt   : ClockTimestamp
   bytes    : ByteArray
   reveals  : List ValueRef
 
-def Event.ms (e : AnalysisEvent) : Duration := e.stop - e.start
-def elapsed (first last : AnalysisEvent) : Duration :=
-  last.stop - first.start
+def elapsed (started completed : AnalysisEvent) : Duration :=
+  completed.timeAt - started.timeAt
 \end{lstlisting}
 
 Consider the first order in \texttt{examples/bakery-events.jsonl}. Payment and
@@ -63,29 +61,29 @@ baking fork after the order is placed and join before the order is accepted:
 \small
 \begin{tabular}{@{}llllrl@{}}
 \toprule
-Event & Immediate prior & Interval & Meaning & Bytes & Reveals \\
+Event & Immediate prior & \texttt{timeAt} & Meaning & Bytes & Reveals \\
 \midrule
-$e_0$ & $[]$ & $[258312,258726]$ & order placed & 85 & order \\
-$e_1$ & $[e_0]$ & $[258726,258921]$ & payment requested & 71 & price \\
-$e_2$ & $[e_0]$ & $[258726,259194]$ & bake requested & 73 & product \\
-$e_3$ & $[e_1]$ & $[258921,262219]$ & payment authorized & 49 & authorization \\
-$e_4$ & $[e_2]$ & $[259194,2055947]$ & bake completed & 55 & completion \\
-$e_5$ & $[e_3,e_4]$ & $[2055947,2056288]$ & order accepted & 57 & outcome \\
-$e_6$ & $[e_5]$ & $[2056288,2056291]$ & delivery requested & 54 & delivery \\
-$e_7$ & $[e_6]$ & $[2056291,2283253]$ & courier assigned & 40 & courier \\
-$e_8$ & $[e_7]$ & $[2283253,6946819]$ & order delivered & 65 & outcome \\
+$e_0$ & $[]$ & $258726$ & order placed & 85 & order \\
+$e_1$ & $[e_0]$ & $258921$ & payment requested & 71 & price \\
+$e_2$ & $[e_0]$ & $259194$ & bake requested & 73 & product \\
+$e_3$ & $[e_1]$ & $262219$ & payment authorized & 49 & authorization \\
+$e_4$ & $[e_2]$ & $2055947$ & bake completed & 55 & completion \\
+$e_5$ & $[e_3,e_4]$ & $2056288$ & order accepted & 57 & outcome \\
+$e_6$ & $[e_5]$ & $2056291$ & delivery requested & 54 & delivery \\
+$e_7$ & $[e_6]$ & $2283253$ & courier assigned & 40 & courier \\
+$e_8$ & $[e_7]$ & $6946819$ & order delivered & 65 & outcome \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 The list order is a serialization convenient for storage. Causal order is the
 transitive closure of \texttt{priorIds}. Both $e_1$ and $e_2$ cite $e_0$, so they
-fork. Event $e_4$ cites both $e_2$ and $e_3$, so it joins the branches. The
+fork. Event $e_5$ cites both $e_3$ and $e_4$, so it joins the branches. The
 following quantities are folds or graph queries over this one list:
 
 \begin{align*}
-  \operatorname{duration}(e_3) &= e_3.stop-e_3.start = 3298,\\
-  \operatorname{latency}(e_0,e_8) &= e_8.stop-e_0.start = 6688507,\\
+  \operatorname{paymentTime}(e_1,e_3) &= e_3.timeAt-e_1.timeAt = 3298,\\
+  \operatorname{latency}(e_0,e_8) &= e_8.timeAt-e_0.timeAt = 6688093,\\
   \operatorname{wireBytes} &= 85+71+73+49+55+57+54+40+65 = 549.
 \end{align*}
 
@@ -99,20 +97,18 @@ def concurrent (events : List AnalysisEvent) (a b : EventId) : Bool :=
 The maximum concurrency permitted by the trace is the width of this partial
 order: the size of its largest antichain. Here $\{e_1,e_2\}$ is an antichain, as
 is $\{e_3,e_4\}$, and no three events are pairwise concurrent. Thus the maximal
-causal concurrency is two. The recorded schedule also reaches two simultaneously
-active events during $[258726,258921]$ and again during $[259194,262219]$.
-This is stronger than counting
+causal concurrency is two. A timestamped point event has no active interval;
+runtime concurrency requires separate start and completion messages. This is stronger than counting
 adjacent list elements and different from measuring average runtime concurrency.
 
-Durations and causal links also give the critical path. Starting a root at zero
-and starting every other event at the maximum stop of its immediate priors yields
+Timestamps and causal links also give elapsed time along a selected path:
 
 \begin{lstlisting}
-earliestStart(e) := max ((prior e).map earliestStop)
-earliestStop(e)  := earliestStart(e) + (e.stop - e.start)
+edgeTime(prior, event) := event.timeAt - prior.timeAt
+elapsed(started, completed) := completed.timeAt - started.timeAt
 \end{lstlisting}
 
-The critical path is $e_0,e_2,e_4,e_5,e_6,e_7,e_8$, with length 6,688,507 ms.
+The critical path is $e_0,e_2,e_4,e_5,e_6,e_7,e_8$, with elapsed time 6,688,093 ms.
 The payment branch finishes at tick 262,219 and has 1,793,728 ms of slack before the join.
 Queue occupancy, queued
 bytes, active \texttt{(session,task)} keys, and memory pressure are computed by
@@ -191,18 +187,30 @@ constraints handle duration. This keeps a change in timeout policy from rewritin
 the protocol's entire behavioural shape.
 
 For two events from the same \texttt{(session, task)}, elapsed time is defined when
-the first event's clock value does not exceed the second's:
+the first event's \texttt{timeAt} value does not exceed the second's:
 
 \begin{lstlisting}
 def elapsed (start finish : Event) : Option Duration :=
   if start.session = finish.session &&
      start.task = finish.task &&
-     start.clock <= finish.clock
-  then some (finish.clock - start.clock)
+     start.timeAt <= finish.timeAt
+  then some (finish.timeAt - start.timeAt)
   else none
 \end{lstlisting}
 
 Latency queries name their boundary event kinds and correlate them by
-\texttt{(session, task)} before subtracting clock values. Causality still comes
+\texttt{(session, task)} before subtracting timestamps. Causality still comes
 from grammar structure and \texttt{priorIds}: equal timestamps may occur, and a
-clock value alone does not establish that one event caused another.
+timestamp alone does not establish that one event caused another.
+
+\section{Round trip through bytes}
+
+A generated scenario is not complete until it can cross the byte boundary in
+both directions. \texttt{ScenarioEvent} in \texttt{Requirements.proto} carries
+the event identity, complete \texttt{prior} list, correlation key, actors,
+\texttt{timeAt}, and the selected protobuf atom. Encoding a \texttt{Scenario}
+therefore produces bytes for both its causal envelope and payload. Decoding those
+bytes must reconstruct the same ordered event list. The executable round-trip
+check compares the decoded protobuf value with the generated value and separately
+checks the reconstructed \texttt{prior} graph; loss of a fork or join fails the
+build.

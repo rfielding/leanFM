@@ -37,8 +37,7 @@ def event(order: int, index: int, prior: list[str], kind: str, src: str,
         "kind": kind,
         "src": src,
         "dst": dst,
-        "start_ms": start,
-        "stop_ms": start + duration,
+        "timeAt": start + duration,
         "bytes": byte_count,
         "values": values or {},
     }
@@ -57,7 +56,7 @@ def generate_order(order: int, arrival: int, rng: Lcg) -> list[dict[str, object]
                 "ingredient_cost_cents": ingredient_cost_cents})
     events.append(e0)
 
-    fork_start = int(e0["stop_ms"])
+    fork_start = int(e0["timeAt"])
     e1 = event(order, 1, [str(e0["id"])], "PaymentRequested", "Storefront", "Payment",
                fork_start, 100 + rng.below(401), 48 + rng.below(24), {"price_cents": price_cents})
     e2 = event(order, 2, [str(e0["id"])], "BakeRequested", "Storefront", "Bakery",
@@ -70,19 +69,19 @@ def generate_order(order: int, arrival: int, rng: Lcg) -> list[dict[str, object]
     baked_ok = rng.chance(970)
     e3 = event(order, 3, [str(e1["id"])],
                "PaymentAuthorized" if payment_ok else "PaymentDeclined",
-               "Payment", "Storefront", int(e1["stop_ms"]), 500 + rng.below(4501),
+               "Payment", "Storefront", int(e1["timeAt"]), 500 + rng.below(4501),
                44 + rng.below(20), {"authorized": payment_ok,
                                      "amount_cents": price_cents if payment_ok else 0})
     e4 = event(order, 4, [str(e2["id"])],
                "BakeCompleted" if baked_ok else "BakeFailed",
-               "Bakery", "Storefront", int(e2["stop_ms"]), 600_000 + rng.below(3_000_001),
+               "Bakery", "Storefront", int(e2["timeAt"]), 600_000 + rng.below(3_000_001),
                52 + rng.below(36), {"completed": baked_ok,
                                     "ingredient_cost_cents": ingredient_cost_cents,
                                     "waste_units": 0 if baked_ok else quantity,
                                     "waste_cents": 0 if baked_ok else ingredient_cost_cents})
     events.extend([e3, e4])
 
-    join_start = max(int(e3["stop_ms"]), int(e4["stop_ms"]))
+    join_start = max(int(e3["timeAt"]), int(e4["timeAt"]))
     accepted = payment_ok and baked_ok
     e5 = event(order, 5, [str(e3["id"]), str(e4["id"])],
                "OrderAccepted" if accepted else "OrderRejected",
@@ -96,20 +95,20 @@ def generate_order(order: int, arrival: int, rng: Lcg) -> list[dict[str, object]
 
     if rng.chance(80):
         e6 = event(order, 6, [str(e5["id"])], "OrderCancelled", "Customer", "Storefront",
-                   int(e5["stop_ms"]), 100 + rng.below(901), 36 + rng.below(20),
+                   int(e5["timeAt"]), 100 + rng.below(901), 36 + rng.below(20),
                    {"outcome": "cancelled", "refund_cents": price_cents,
                     "waste_units": quantity, "waste_cents": ingredient_cost_cents})
         events.append(e6)
         return events
 
     e6 = event(order, 6, [str(e5["id"])], "DeliveryRequested", "Storefront", "Courier",
-               int(e5["stop_ms"]), 1 + rng.below(5), 48 + rng.below(24))
+               int(e5["timeAt"]), 1 + rng.below(5), 48 + rng.below(24))
     e7 = event(order, 7, [str(e6["id"])], "CourierAssigned", "Courier", "Storefront",
-               int(e6["stop_ms"]), 30_000 + rng.below(270_001), 40 + rng.below(24))
+               int(e6["timeAt"]), 30_000 + rng.below(270_001), 40 + rng.below(24))
     delivered = rng.chance(960)
     e8 = event(order, 8, [str(e7["id"])],
                "OrderDelivered" if delivered else "DeliveryFailed",
-               "Courier", "Customer", int(e7["stop_ms"]), 600_000 + rng.below(4_800_001),
+               "Courier", "Customer", int(e7["timeAt"]), 600_000 + rng.below(4_800_001),
                44 + rng.below(28),
                {"outcome": "delivered" if delivered else "delivery_failed",
                 "price_cents": price_cents,
@@ -138,7 +137,7 @@ def shift_events(days: int, rng: Lcg) -> list[dict[str, object]]:
                 "id": f"day-{day + 1:03d}-shift-{index + 1}", "prior": [],
                 "session": f"day-{day + 1:03d}", "task": "employee_pay",
                 "kind": "ShiftPaid", "src": "Payroll", "dst": "Employee",
-                "start_ms": start, "stop_ms": stop, "bytes": 52,
+                "timeAt": stop, "bytes": 52,
                 "values": {"employee": employee, "role": role, "minutes": minutes,
                            "hourly_cents": hourly_cents, "pay_cents": pay_cents},
             })

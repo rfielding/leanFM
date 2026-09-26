@@ -33,8 +33,13 @@ check: build validate diagrams
 validate:
 	@lake exe leanfm | rg 'Per-task FSM CTL checks|CTL from initial observation|AF terminal|AG capacity'
 	@lake exe leanfm-validate | rg '^ok: all generated requirements'
+	@lake exe leanfm-validate | rg '^ok: generated implementation plan'
 	@lake env lean LeanFM/LLMGenerated/Requirements.lean
+	@lake env lean LeanFM/LLMGenerated/Implementation.lean
 	@lake env lean LeanFM/ArtifactsTests.lean
+	@lake env lean LeanFM/ProtocolTests.lean
+	@lake env lean LeanFM/StreamStatsTests.lean
+	@python3 scripts/roundtrip_generated_scenario.py
 	@python3 scripts/reduce_bakery_events.py --output /tmp/leanfm-bakery-stats.json --tex-output /tmp/leanfm-bakery-stats.tex >/dev/null
 	@cmp examples/bakery-stats.json /tmp/leanfm-bakery-stats.json
 	@cmp book/generated/bakery-stats.tex /tmp/leanfm-bakery-stats.tex

@@ -54,7 +54,7 @@ structure Envelope where
   dst : Actor
   transport : Transport
   proto : ProtoPayload
-  clock : ClockTimestamp
+  timeAt : ClockTimestamp
 deriving DecidableEq, Repr
 
 def parseProtoFields : String -> List Nat -> List ProtoField
@@ -130,14 +130,14 @@ def protoWasParsed (p : ProtoPayload) : Bool :=
   !p.fields.isEmpty
 
 def msg (task : TaskKind) (src dst : Actor) (transport : Transport)
-    (typeName summary : String) (bytes : List Nat) (clock : ClockTimestamp) : Envelope :=
+    (typeName summary : String) (bytes : List Nat) (timeAt : ClockTimestamp) : Envelope :=
   { task := task, src := src, dst := dst, transport := transport
-  , proto := proto typeName summary bytes, clock := clock
+  , proto := proto typeName summary bytes, timeAt := timeAt
   }
 
 def elapsedBetween (start finish : Envelope) : Option Duration :=
-  if start.task = finish.task && start.clock <= finish.clock then
-    some (finish.clock - start.clock)
+  if start.task = finish.task && start.timeAt <= finish.timeAt then
+    some (finish.timeAt - start.timeAt)
   else
     none
 
@@ -148,6 +148,41 @@ inductive BlockReason where
   | readEmpty
   | writeFull
 deriving DecidableEq, Repr
+
+/-- A finite FIFO channel. Operations, rather than post-state validation, enforce capacity. -/
+structure Channel (α : Type) where
+  capacity : Nat
+  queued : List α
+deriving DecidableEq, Repr
+
+inductive SendResult (α : Type) where
+  | sent : Channel α -> SendResult α
+  | blocked : SendResult α
+deriving DecidableEq, Repr
+
+inductive ReceiveResult (α : Type) where
+  | received : α -> Channel α -> ReceiveResult α
+  | blocked : ReceiveResult α
+deriving DecidableEq, Repr
+
+/-- Go-channel-like blocking send: a full channel is unchanged and the sender blocks. -/
+def Channel.send (channel : Channel α) (value : α) : SendResult α :=
+  if channel.queued.length < channel.capacity then
+    .sent { channel with queued := channel.queued ++ [value] }
+  else
+    .blocked
+
+/-- Go-channel-like blocking receive: an empty channel is unchanged and the reader blocks. -/
+def Channel.receive (channel : Channel α) : ReceiveResult α :=
+  match channel.queued with
+  | [] => .blocked
+  | value :: rest => .received value { channel with queued := rest }
+
+/-- Nonblocking poll: `none` means empty now; it does not put the actor to sleep. -/
+def Channel.tryReceive (channel : Channel α) : Option (α × Channel α) :=
+  match channel.queued with
+  | [] => none
+  | value :: rest => some (value, { channel with queued := rest })
 
 structure Turn where
   actor : Actor
@@ -939,7 +974,7 @@ structure VisibleMessageSpec where
   proto : String
   bytes : List Nat
   fields : List String
-  clock : ClockTimestamp
+  timeAt : ClockTimestamp
 deriving DecidableEq, Repr
 
 structure VisibleProtocolSpec where
@@ -963,42 +998,42 @@ def kerberosDhTokenSpec : VisibleProtocolSpec :=
         , proto := "Kerberos.AsReq"
         , bytes := [0x6b, 0x01]
         , fields := ["client_principal", "realm", "client_dh_share", "nonce"]
-        , clock := 1
+        , timeAt := 1
         }
       , { src := "AuthServer"
         , dst := "Client"
         , proto := "Kerberos.AsRep"
         , bytes := [0x6b, 0x02]
         , fields := ["client_principal", "tgt_proof", "server_dh_share", "dh_commutativity_proof", "token_server_signature_proof", "nonce"]
-        , clock := 2
+        , timeAt := 2
         }
       , { src := "Client"
         , dst := "TicketGrantingServer"
         , proto := "Kerberos.TgsReq"
         , bytes := [0x6b, 0x03]
         , fields := ["service_principal", "tgt_proof", "authenticator_proof", "client_dh_share", "nonce"]
-        , clock := 3
+        , timeAt := 3
         }
       , { src := "TicketGrantingServer"
         , dst := "Client"
         , proto := "Kerberos.TgsRep"
         , bytes := [0x6b, 0x04]
         , fields := ["service_ticket_proof", "service_session_key_proof", "server_dh_share", "dh_commutativity_proof", "nonce"]
-        , clock := 4
+        , timeAt := 4
         }
       , { src := "Client"
         , dst := "Service"
         , proto := "Kerberos.ApReq"
         , bytes := [0x6b, 0x05]
         , fields := ["service_ticket_proof", "authenticator_proof", "operation"]
-        , clock := 5
+        , timeAt := 5
         }
       , { src := "Service"
         , dst := "Client"
         , proto := "Kerberos.ApRep"
         , bytes := [0x6b, 0x06]
         , fields := ["service_accept_proof", "operation", "status"]
-        , clock := 6
+        , timeAt := 6
         }
       ]
   , proofFields :=

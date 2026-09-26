@@ -180,7 +180,33 @@ inbound envelope selects or creates the residual associated with that envelope's
 Messages from different keys may interleave while the grammar preserves the order
 required within each conversation.
 
-The queue transitions are explicit:
+The queues have Go-channel-like operational semantics. Capacity is enforced when
+an operation is attempted, not checked only after constructing a new state:
+
+\begin{lstlisting}
+send(channel, message) =
+  if channel.length < channel.capacity
+  then sent(channel ++ [message])
+  else blocked
+
+receive(channel) =
+  if channel = message :: rest
+  then received(message, rest)
+  else blocked
+
+tryReceive(channel) =
+  if channel = message :: rest
+  then some(message, rest)
+  else none
+\end{lstlisting}
+
+A blocked operation makes no progress and leaves the channel unchanged. A
+blocking actor may run again when the required space or data becomes available.
+\texttt{tryReceive} is a different operation: \texttt{none} reports that the
+channel is empty now and lets the actor continue. It does not put the actor to
+sleep, and it must not be confused with receiving a valid optional payload.
+
+The resulting transitions are explicit:
 
 \begin{itemize}
   \item an actor step appends a produced envelope to its outbound queue;
@@ -188,8 +214,11 @@ The queue transitions are explicit:
         queue when both operations are within capacity;
   \item a receive step removes an inbound envelope and advances the matching
         \texttt{(session, task)} residual;
-  \item a full outbound queue blocks production, a full inbound queue blocks
-        transport, and an empty inbound queue blocks receive.
+  \item sending to a full outbound queue blocks the sender without enqueueing;
+  \item transport to a full inbound queue blocks without removing the outbound
+        head;
+  \item blocking receive on an empty inbound queue blocks, while nonblocking
+        \texttt{tryReceive} returns \texttt{none} and permits later work.
 \end{itemize}
 
 Queue order and causal order are not identical. FIFO determines which queued

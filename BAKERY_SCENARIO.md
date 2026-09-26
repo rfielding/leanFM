@@ -30,7 +30,7 @@ Each event records:
 - stable event identity and a list of immediate causal predecessors;
 - `(session, task)` correlation;
 - source and destination actors;
-- `start_ms` and `stop_ms`;
+- one `timeAt` timestamp; elapsed time is the difference between separate boundary messages;
 - encoded byte count;
 - visible values used by reducers.
 

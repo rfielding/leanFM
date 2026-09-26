@@ -31,7 +31,7 @@ Every terminal elaborates to the common event envelope. For example, the vague
 message ``authorization redirected'' becomes conceptually:
 
 \begin{lstlisting}
-{ clock := t2, id := e2, priorIds := [e1]
+{ timeAt := t2, id := e2, priorIds := [e1]
 , session := browserSession, task := oauthAuthorizationTask
 , from := Actor.app, to := Actor.browser
 , kind := "authorization redirected"
@@ -379,7 +379,9 @@ capacity proof.
 From the clocks and correlation key, the generated task attempt is
 
 \begin{lstlisting}[language={}]
-{ key = ("s1", "oauth"), startedAt = 0, completedAt = 23,
+{ key = ("s1", "oauth"),
+  started = { kind = applicationRequest, timeAt = 0 },
+  completed = { kind = applicationResponse, timeAt = 23 },
   outcome = succeeded, latency = 23 ticks }
 \end{lstlisting}
 

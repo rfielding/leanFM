@@ -82,6 +82,9 @@ def sessionGeneratedLeanString (sessionId : String) : String :=
 def sessionGeneratedProtoString (sessionId : String) : String :=
   sessionWorkspaceString sessionId ++ "/Requirements.proto"
 
+def sessionGeneratedImplementationString (sessionId : String) : String :=
+  sessionWorkspaceString sessionId ++ "/Implementation.lean"
+
 def sessionWorkspace (sessionId : String) : System.FilePath :=
   System.FilePath.mk (sessionWorkspaceString sessionId)
 
@@ -90,6 +93,9 @@ def sessionGeneratedLeanPath (sessionId : String) : System.FilePath :=
 
 def sessionGeneratedProtoPath (sessionId : String) : System.FilePath :=
   System.FilePath.mk (sessionGeneratedProtoString sessionId)
+
+def sessionGeneratedImplementationPath (sessionId : String) : System.FilePath :=
+  System.FilePath.mk (sessionGeneratedImplementationString sessionId)
 
 def ensureSessionWorkspace (sessionId : String) : IO Unit :=
   IO.FS.createDirAll (sessionWorkspace sessionId)
@@ -201,6 +207,10 @@ def readTextOrElse (path : System.FilePath) (fallback : IO String) : IO String :
 def defaultGeneratedRequirementsLean : IO String :=
   readTextOrElse (System.FilePath.mk "LeanFM/LLMGenerated/Requirements.lean") (pure LeanFM.workerLeanFile)
 
+def defaultGeneratedImplementationLean : IO String :=
+  readTextOrElse (System.FilePath.mk "LeanFM/LLMGenerated/Implementation.lean")
+    (pure "import LeanFM.LLMGenerated.Requirements\n\n-- Supply an ImplementationSpec here.\n")
+
 def sessionRequiredResponse (request : String) : IO Response := do
   match sessionId? request with
   | some sessionId =>
@@ -208,7 +218,7 @@ def sessionRequiredResponse (request : String) : IO Response := do
       pure <| response 200 "application/json; charset=utf-8"
         ("{\"session\":\"" ++ jsonEscape sessionId ++
           "\",\"workspace\":\"" ++ jsonEscape (sessionWorkspaceString sessionId) ++
-          "\",\"files\":{\"requirementsLean\":\"/api/session/generated/requirements.lean\",\"requirementsProto\":\"/api/session/generated/requirements.proto\"}}\n")
+          "\",\"files\":{\"requirementsLean\":\"/api/session/generated/requirements.lean\",\"requirementsProto\":\"/api/session/generated/requirements.proto\",\"implementationLean\":\"/api/session/generated/implementation.lean\"}}\n")
   | none =>
       pure <| response 401 "application/json; charset=utf-8" "{\"error\":\"missing session\"}\n"
 
@@ -243,6 +253,17 @@ def sessionGeneratedProtoResponse (request : String) : IO Response := do
         let body ← readTextOrElse (sessionGeneratedProtoPath sessionId) (pure LeanFM.LLMGenerated.Requirements.workerProtoFile)
         pure <| response 200 "text/x-protobuf; charset=utf-8" body
 
+def sessionGeneratedImplementationResponse (request : String) : IO Response := do
+  match sessionId? request with
+  | none => pure <| response 401 "text/plain; charset=utf-8" "missing session\n"
+  | some sessionId =>
+      if requestMethod request == "POST" then
+        saveSessionArtifactResponse sessionId (sessionGeneratedImplementationString sessionId) "text/plain; charset=utf-8" (requestBody request)
+      else
+        ensureSessionWorkspace sessionId
+        let body ← readTextOrElse (sessionGeneratedImplementationPath sessionId) defaultGeneratedImplementationLean
+        pure <| response 200 "text/plain; charset=utf-8" body
+
 def responseBody (path : String) (request : String) : IO Response := do
   match path with
   | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
@@ -266,14 +287,17 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/llm-generated/requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
   | "/tools/generated-requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
   | "/tools/llm-generated/requirements/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
-  | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Requirements.validationReport
+  | "/tools/llm-generated/implementation/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.LLMGenerated.Implementation.validationReport
+  | "/tools/generated-artifacts/validate" => pure <| response 200 "text/plain; charset=utf-8" (LeanFM.LLMGenerated.Requirements.validationReport ++ LeanFM.LLMGenerated.Implementation.validationReport)
   | "/tools/aggregate-graph/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.aggregateGraphDataValidationReport
   | "/api/session" => sessionRequiredResponse request
   | "/api/session/files" => sessionRequiredResponse request
   | "/api/session/generated/requirements.lean" => sessionGeneratedLeanResponse request
   | "/api/session/generated/requirements.proto" => sessionGeneratedProtoResponse request
+  | "/api/session/generated/implementation.lean" => sessionGeneratedImplementationResponse request
   | "/generated/worker.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.LLMGenerated.Requirements.workerProtoFile
   | "/llm-generated/requirements.proto" => pure <| response 200 "text/x-protobuf; charset=utf-8" LeanFM.LLMGenerated.Requirements.workerProtoFile
+  | "/llm-generated/implementation.lean" => defaultGeneratedImplementationLean >>= fun body => pure <| response 200 "text/plain; charset=utf-8" body
   | "/api/llm" => callLLM (requestBody request)
   | "/lean/auth.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.authLeanFile
   | "/lean/get_docs.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.getDocsLeanFile

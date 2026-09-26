@@ -5,7 +5,24 @@ package leanfm.generated;
 // LLM-generated atomic message payloads for LeanFM.LLMGenerated.Requirements.
 // RequirementEnvelope.oneof atom is the byte-level sum-type discriminator.
 // The Lean requirement file defines src/dst traffic, framing, valid ordering,
-// probabilities, dwell time, CTL-style properties, charts, and markdown.
+// probabilities, timestamp differences, CTL-style properties, charts, and markdown.
+
+// The event envelope is also protobuf so a complete generated scenario can be
+// serialized and reconstructed, including its fork/join causal graph.
+message ScenarioEvent {
+  string id = 1;
+  repeated string prior = 2;
+  string session = 3;
+  string task = 4;
+  string src = 5;
+  string dst = 6;
+  uint64 time_at = 7;
+  RequirementEnvelope message = 8;
+}
+
+message Scenario {
+  repeated ScenarioEvent events = 1;
+}
 
 message RequirementEnvelope {
   oneof atom {

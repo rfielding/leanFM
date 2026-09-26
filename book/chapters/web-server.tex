@@ -69,7 +69,11 @@ obligation. If it changes none of them, it has not improved the specification.
 
 The executable \texttt{lake exe leanfm-server} serves the assistant workbench
 on the loopback interface. An authenticated session has its own generated
-\texttt{Requirements.lean} and \texttt{Requirements.proto}. The HTTP interface
+\texttt{Requirements.lean}, \texttt{Requirements.proto}, and
+\texttt{Implementation.lean}. The first two specify observable behavior and
+values that resolve to bytes. They do not imply HTTP. The implementation file
+selects how those bytes travel---for example HTTP method and path, an
+in-process channel, TCP, or another adapter. The HTTP interface
 can read and replace these files through
 \texttt{/api/session/generated/requirements.lean} and
 \texttt{/api/session/generated/requirements.proto}. Validation, rendered views,
@@ -78,8 +82,9 @@ metrics, reports, and OpenAPI descriptions are projections of the same model.
 Session isolation is useful during an argument, but the current session files
 live below \texttt{/tmp/leanfm-sessions}. That is a workspace, not durable
 storage. A concluded argument must export or commit the accepted files---for
-example as \texttt{LeanFM/LLMGenerated/Requirements.lean} and
-\texttt{LeanFM/LLMGenerated/Requirements.proto}---together with any evidence
+example as \texttt{LeanFM/LLMGenerated/Requirements.lean},
+\texttt{LeanFM/LLMGenerated/Requirements.proto}, and the separate
+\texttt{LeanFM/LLMGenerated/Implementation.lean}---together with any evidence
 needed by the project. Durability means that the specification has an ordinary
 name, history, review boundary, and reproducible checks independent of the chat
 service.

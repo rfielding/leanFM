@@ -19,6 +19,8 @@ The model treats a protocol as globally observable behavior:
 - optional chance nodes support MDP-style probabilistic outcomes
 - specifications attach dwell durations to transitions or productions
 - dwell advances the event clock and supports latency, throughput, and queue metrics
+- each event has one `timeAt`; latency is computed between separate start and completion messages
+- generated scenarios round-trip through protobuf bytes without losing causal `prior` links
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes
 - a BNF surface composes named interactions by sequence, choice, parallelism, guards, and references
@@ -80,7 +82,8 @@ GET /tools/generated-requirements/prompt LLM system prompt for generated require
 GET /tools/llm-generated/requirements/prompt canonical LLM system prompt route
 GET /tools/generated-requirements/validate generated typed Lean requirement validation
 GET /tools/llm-generated/requirements/validate canonical LLM-generated requirement validation route
-GET /tools/generated-artifacts/validate compatibility alias for generated requirement validation
+GET /tools/llm-generated/implementation/validate validates the separate software-generation plan
+GET /tools/generated-artifacts/validate validates requirements and implementation together
 GET /tools/aggregate-graph/validate typed aggregate graph data validation
 GET /api/session current authenticated workspace id and per-session artifact links
 GET /api/session/generated/requirements.lean current session's generated Lean file, falling back to the built-in example
@@ -118,7 +121,7 @@ diagrams/assembled.dot
 
 The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
 
-`LeanFM/LLMGenerated/Requirements.lean` and `LeanFM/LLMGenerated/Requirements.proto` are the files an LLM should produce for generated requirements. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code. The proto file defines atomic payloads and a `RequirementEnvelope.oneof` sum-type discriminator for consuming bytes. The Lean file defines typed values: requirement-local actor/message/state enums, message references, per-task state machines, multiparty grammars, communicating sequential processes, framing, CTL-style property declarations, required proof obligations, optional probability summaries, chart specs, and Markdown blocks. Renderer inputs such as the aggregate graph are deterministic projections from that typed requirement, not generated JavaScript.
+`LeanFM/LLMGenerated/Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the generated artifacts. `Requirements.lean` describes observable behavior; the proto file describes values that resolve to bytes. Neither chooses a transport. `Implementation.lean` separately chooses the target language, files, runtime APIs, and how each protobuf message is carried—for example an HTTP request with a method and path, an HTTP response, an in-process channel, TCP, or a custom adapter. Validation requires the implementation plan to cover every required actor and message without redefining the requirement. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code.
 
 Generated requirements are rejected as vacuous unless tasks involve multiple actors, message transitions, terminal states, temporal/property annotations, multiparty grammars, required proof obligations, and per-actor process send/receive coverage for each transition.
 
@@ -186,6 +189,7 @@ transport with destination inbound space: move outbound head to dst inbound
 transport with destination inbound full: transport blocks
 receive from non-empty inbound: consume and dispatch by (session, task)
 receive from empty inbound: receiving actor sleeps
+try-receive from empty inbound: return none immediately; actor remains runnable
 wake condition: the queue needed by the blocked step has capacity or data
 ```
 

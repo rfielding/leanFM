@@ -21,35 +21,35 @@ deriving DecidableEq, Repr
 
 structure ObservedTaskEvent where
   key : TaskKey
-  clock : ClockTimestamp
+  timeAt : ClockTimestamp
   boundary : TaskBoundary
 deriving DecidableEq, Repr
 
 /-- One `(session, task)` attempt reconstructed from an observed event stream. -/
 structure TaskAttempt where
   key : TaskKey
-  startedAt : ClockTimestamp
-  completedAt : Option ClockTimestamp
+  started : ObservedTaskEvent
+  completed : Option ObservedTaskEvent
   outcome : Option TaskOutcome
 deriving DecidableEq, Repr
 
 def TaskAttempt.latency (attempt : TaskAttempt) : Option Duration :=
-  match attempt.completedAt with
-  | some completedAt =>
-      if attempt.startedAt <= completedAt then
-        some (completedAt - attempt.startedAt)
+  match attempt.completed with
+  | some completed =>
+      if attempt.started.timeAt <= completed.timeAt then
+        some (completed.timeAt - attempt.started.timeAt)
       else
         none
   | none => none
 
-private def closeAttempt (key : TaskKey) (clock : ClockTimestamp)
+private def closeAttempt (event : ObservedTaskEvent)
     (outcome : TaskOutcome) : List TaskAttempt -> List TaskAttempt
   | [] => []
   | attempt :: rest =>
-      if attempt.key = key && attempt.completedAt.isNone then
-        { attempt with completedAt := some clock, outcome := some outcome } :: rest
+      if attempt.key = event.key && attempt.completed.isNone then
+        { attempt with completed := some event, outcome := some outcome } :: rest
       else
-        attempt :: closeAttempt key clock outcome rest
+        attempt :: closeAttempt event outcome rest
 
 def observeTaskEvent (attempts : List TaskAttempt)
     (event : ObservedTaskEvent) : List TaskAttempt :=
@@ -57,12 +57,12 @@ def observeTaskEvent (attempts : List TaskAttempt)
   | .started =>
       attempts ++
         [{ key := event.key
-         , startedAt := event.clock
-         , completedAt := none
+         , started := event
+         , completed := none
          , outcome := none }]
   | .progress => attempts
-  | .succeeded => closeAttempt event.key event.clock .succeeded attempts
-  | .failed => closeAttempt event.key event.clock .failed attempts
+  | .succeeded => closeAttempt event .succeeded attempts
+  | .failed => closeAttempt event .failed attempts
 
 /-- Reconstruct task attempts from a stream ordered by the shared monotonic clock. -/
 def attemptsFromEventStream (events : List ObservedTaskEvent) : List TaskAttempt :=
@@ -87,7 +87,7 @@ def emptyTaskEstimate : TaskEstimate :=
   }
 
 def TaskEstimate.observe (estimate : TaskEstimate) (attempt : TaskAttempt) : TaskEstimate :=
-  match attempt.completedAt, attempt.outcome with
+  match attempt.completed, attempt.outcome with
   | some _, some .succeeded =>
       { estimate with
         started := estimate.started + 1

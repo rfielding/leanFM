@@ -53,7 +53,7 @@ def proofName : Option AuthProof -> String
   | none => "no-proof"
 
 def envelopeName (e : Envelope) : String :=
-  s!"wrapper(task={taskName e.task}, src={actorName e.src}, dst={actorName e.dst}, via={transportName e.transport}, clock={e.clock}); protobuf(type={e.proto.typeName}, bytes={bytesName e.proto.bytes}, fields={protoFieldsName e.proto.fields})"
+  s!"wrapper(task={taskName e.task}, src={actorName e.src}, dst={actorName e.dst}, via={transportName e.transport}, timeAt={e.timeAt}); protobuf(type={e.proto.typeName}, bytes={bytesName e.proto.bytes}, fields={protoFieldsName e.proto.fields})"
 
 def optionEnvelopeName : Option Envelope -> String
   | some e => envelopeName e
@@ -265,7 +265,7 @@ def distributionLine (bucket : Nat × Nat) : String :=
 
 def traceEventName (t : Turn) : String :=
   match t.emitted with
-  | some e => s!"src={actorName e.src}, dst={actorName e.dst}, proto={e.proto.typeName}, fields={protoFieldsName e.proto.fields}, clock={e.clock}"
+  | some e => s!"src={actorName e.src}, dst={actorName e.dst}, proto={e.proto.typeName}, fields={protoFieldsName e.proto.fields}, timeAt={e.timeAt}"
   | none =>
       match t.blocked with
       | some reason => s!"actor={actorName t.actor}, {blockReasonName reason}"
@@ -456,7 +456,8 @@ def openApiRoutes : List OpenApiRoute :=
   , openApiRoute "/tools/llm-generated/requirements/prompt" "Canonical prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
   , openApiRoute "/tools/generated-requirements/validate" "Generated typed Lean requirement validation report" "text/plain" "string" "validation" ["Validation"]
   , openApiRoute "/tools/llm-generated/requirements/validate" "Canonical generated typed Lean requirement validation report" "text/plain" "string" "validation" ["Validation"]
-  , openApiRoute "/tools/generated-artifacts/validate" "Compatibility alias for generated requirement validation" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/tools/llm-generated/implementation/validate" "Generated software implementation-plan validation report" "text/plain" "string" "validation" ["Validation"]
+  , openApiRoute "/tools/generated-artifacts/validate" "Combined requirement and implementation validation" "text/plain" "string" "validation" ["Validation"]
   , openApiRoute "/tools/aggregate-graph/validate" "Aggregate graph validation report" "text/plain" "string" "validation" ["Validation"]
   , openApiRoute "/generated/worker.proto" "Generated protobuf schema for worker requirements" "text/x-protobuf" "string" "protobuf" ["Generated"]
   , openApiRoute "/llm-generated/requirements.proto" "Canonical generated protobuf schema for requirements" "text/x-protobuf" "string" "protobuf" ["Generated"]
@@ -599,18 +600,18 @@ def trafficAnimation : String :=
   "const traceEl=document.getElementById('trafficTrace');" ++
   "const actors={Client:{x:120,y:95},Gateway:{x:450,y:95},Worker:{x:780,y:95}};" ++
   "const events=[" ++
-  "{src:'Client',dst:'Gateway',payload:'GET /docs/index.html',proto:'Docs.GetRequest',bytes:'[1 16]',fields:'1:method=GET, 2:path=/docs/index.html',clock:1}," ++
-  "{src:'Gateway',dst:'Worker',payload:'fetch /docs/index.html',proto:'Docs.FetchCommand',bytes:'[2 32]',fields:'1:path=/docs/index.html, 2:cache_mode=normal',clock:3}," ++
-  "{src:'Worker',dst:'Gateway',payload:'200 /docs/index.html',proto:'Docs.FetchResult',bytes:'[3 48]',fields:'1:status=200, 2:path=/docs/index.html',clock:7}," ++
-  "{src:'Gateway',dst:'Client',payload:'200 /docs/index.html',proto:'Docs.GetResponse',bytes:'[4 64]',fields:'1:status=200, 2:path=/docs/index.html',clock:8}," ++
-  "{src:'Client',dst:'Gateway',payload:'POST /reviews',proto:'Reviews.PostRequest',bytes:'[17 16]',fields:'1:method=POST, 2:path=/reviews, 3:body_hash=review#1',clock:1}," ++
-  "{src:'Gateway',dst:'Worker',payload:'moderate review',proto:'Reviews.ModerateCommand',bytes:'[18 32]',fields:'1:body_hash=review#1, 2:policy=default',clock:2}," ++
-  "{src:'Worker',dst:'Gateway',payload:'review accepted',proto:'Reviews.ModerationResult',bytes:'[19 48]',fields:'1:decision=accepted, 2:body_hash=review#1',clock:5}," ++
-  "{src:'Gateway',dst:'Client',payload:'201 /reviews',proto:'Reviews.PostResponse',bytes:'[20 64]',fields:'1:status=201, 2:path=/reviews',clock:6}" ++
+  "{src:'Client',dst:'Gateway',payload:'GET /docs/index.html',proto:'Docs.GetRequest',bytes:'[1 16]',fields:'1:method=GET, 2:path=/docs/index.html',timeAt:1}," ++
+  "{src:'Gateway',dst:'Worker',payload:'fetch /docs/index.html',proto:'Docs.FetchCommand',bytes:'[2 32]',fields:'1:path=/docs/index.html, 2:cache_mode=normal',timeAt:3}," ++
+  "{src:'Worker',dst:'Gateway',payload:'200 /docs/index.html',proto:'Docs.FetchResult',bytes:'[3 48]',fields:'1:status=200, 2:path=/docs/index.html',timeAt:7}," ++
+  "{src:'Gateway',dst:'Client',payload:'200 /docs/index.html',proto:'Docs.GetResponse',bytes:'[4 64]',fields:'1:status=200, 2:path=/docs/index.html',timeAt:8}," ++
+  "{src:'Client',dst:'Gateway',payload:'POST /reviews',proto:'Reviews.PostRequest',bytes:'[17 16]',fields:'1:method=POST, 2:path=/reviews, 3:body_hash=review#1',timeAt:1}," ++
+  "{src:'Gateway',dst:'Worker',payload:'moderate review',proto:'Reviews.ModerateCommand',bytes:'[18 32]',fields:'1:body_hash=review#1, 2:policy=default',timeAt:2}," ++
+  "{src:'Worker',dst:'Gateway',payload:'review accepted',proto:'Reviews.ModerationResult',bytes:'[19 48]',fields:'1:decision=accepted, 2:body_hash=review#1',timeAt:5}," ++
+  "{src:'Gateway',dst:'Client',payload:'201 /reviews',proto:'Reviews.PostResponse',bytes:'[20 64]',fields:'1:status=201, 2:path=/reviews',timeAt:6}" ++
   "];" ++
   "function drawActor(name,a){ctx.fillStyle='#000';ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.fillRect(a.x-70,a.y-36,140,72);ctx.strokeRect(a.x-70,a.y-36,140,72);ctx.fillStyle='#fff';ctx.font='18px sans-serif';ctx.textAlign='center';ctx.fillText(name,a.x,a.y+6);}" ++
   "function arrow(ctx,x1,y1,x2,y2,color,width){ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();const a=Math.atan2(y2-y1,x2-x1);ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-13*Math.cos(a-.45),y2-13*Math.sin(a-.45));ctx.lineTo(x2-13*Math.cos(a+.45),y2-13*Math.sin(a+.45));ctx.closePath();ctx.fill();}" ++
-  "function draw(){const w=canvas.width,h=canvas.height;ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);Object.entries(actors).forEach(([n,a])=>drawActor(n,a));ctx.strokeStyle='#666';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(120,180);ctx.lineTo(780,180);ctx.stroke();const now=performance.now();const span=1500;const i=Math.floor(now/span)%events.length;const p=(now%span)/span;const e=events[i];const a=actors[e.src],b=actors[e.dst];const sx=a.x+(b.x>a.x?70:-70),tx=b.x-(b.x>a.x?70:-70);const x=sx+(tx-sx)*p;const y=180+Math.sin(p*Math.PI)*-42;arrow(ctx,sx,180,tx,180,'#93c5fd',3);ctx.fillStyle='#f8f8f8';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText(e.proto+' bytes='+e.bytes,x,250);ctx.fillText(e.fields,x,276);ctx.fillText(e.src+' -> '+e.dst+'  clock='+e.clock,x,302);traceEl.innerHTML=events.map((ev,j)=>'<li'+(j===i?' class=\"active\"':'')+'>'+ev.src+' -> '+ev.dst+' | '+ev.proto+' | bytes='+ev.bytes+' | '+ev.fields+' | clock='+ev.clock+'</li>').join('');requestAnimationFrame(draw);}draw();" ++
+  "function draw(){const w=canvas.width,h=canvas.height;ctx.fillStyle='#111';ctx.fillRect(0,0,w,h);Object.entries(actors).forEach(([n,a])=>drawActor(n,a));ctx.strokeStyle='#666';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(120,180);ctx.lineTo(780,180);ctx.stroke();const now=performance.now();const span=1500;const i=Math.floor(now/span)%events.length;const p=(now%span)/span;const e=events[i];const a=actors[e.src],b=actors[e.dst];const sx=a.x+(b.x>a.x?70:-70),tx=b.x-(b.x>a.x?70:-70);const x=sx+(tx-sx)*p;const y=180+Math.sin(p*Math.PI)*-42;arrow(ctx,sx,180,tx,180,'#93c5fd',3);ctx.fillStyle='#f8f8f8';ctx.beginPath();ctx.arc(x,y,9,0,Math.PI*2);ctx.fill();ctx.font='16px sans-serif';ctx.textAlign='center';ctx.fillText(e.proto+' bytes='+e.bytes,x,250);ctx.fillText(e.fields,x,276);ctx.fillText(e.src+' -> '+e.dst+'  timeAt='+e.timeAt,x,302);traceEl.innerHTML=events.map((ev,j)=>'<li'+(j===i?' class=\"active\"':'')+'>'+ev.src+' -> '+ev.dst+' | '+ev.proto+' | bytes='+ev.bytes+' | '+ev.fields+' | timeAt='+ev.timeAt+'</li>').join('');requestAnimationFrame(draw);}draw();" ++
   "</script>"
 
 def scenarioCatalogJson : String :=

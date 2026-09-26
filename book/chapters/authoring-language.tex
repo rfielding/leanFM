@@ -230,14 +230,14 @@ kinds. Each partition then yields a task attempt:
 
 \begin{lstlisting}
 structure TaskAttempt where
-  key         : WorkKey
-  startedAt   : ClockTimestamp
-  completedAt : Option ClockTimestamp
+  key       : WorkKey
+  started   : Event
+  completed : Option Event
   outcome     : Option TaskOutcome
 
 def latency (attempt : TaskAttempt) : Option Duration :=
-  attempt.completedAt.map fun finish =>
-    finish - attempt.startedAt
+  attempt.completed.map fun completed =>
+    completed.timeAt - attempt.started.timeAt
 \end{lstlisting}
 
 For an observation window containing $N$ starts, $C$ matched terminal events,
