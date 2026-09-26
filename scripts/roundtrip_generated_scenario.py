@@ -36,7 +36,9 @@ def scenario(pb):
          {"path": "/docs/index.html", "cache_mode": "normal", "return_to": "Gateway"}),
         ("e2", ["e1"], "Worker", "Gateway", 20, "docs_fetch_result200",
          {"status": 200, "path": "/docs/index.html", "bytes_moved": 4096, "cpu_ms": 3}),
-        ("e3", ["e2"], "Gateway", "Client", 22, "docs_get_response",
+        # The terminal keeps its immediate predecessor and a boundary backpointer
+        # to the start, so latency is e3.time_at - e0.time_at.
+        ("e3", ["e2", "e0"], "Gateway", "Client", 22, "docs_get_response",
          {"status": 200, "path": "/docs/index.html", "bytes_moved": 4096}),
     ]
     for event_id, prior, src, dst, time_at, atom_name, fields in rows:
@@ -59,7 +61,7 @@ def main() -> None:
         decoded.ParseFromString(wire_bytes)
         if decoded != generated:
             raise SystemExit("scenario changed during protobuf round trip")
-        if [list(event.prior) for event in decoded.events] != [[], ["e0"], ["e1"], ["e2"]]:
+        if [list(event.prior) for event in decoded.events] != [[], ["e0"], ["e1"], ["e2", "e0"]]:
             raise SystemExit("decoded causal graph does not reconstruct the scenario")
         print(f"ok: scenario -> {len(wire_bytes)} protobuf bytes -> identical scenario")
 

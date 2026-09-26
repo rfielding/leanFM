@@ -912,6 +912,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Define message atoms as List (TypedMessageSchema Actor Message)."
     , "Every message atom must have src, dst, MessageFraming, and numbered protobuf fields that correspond to a message in LLMGenerated/Requirements.proto."
     , "Requirements.proto must also define Scenario and ScenarioEvent envelopes that preserve id, repeated prior links, session, task, actors, timeAt, and the selected message atom, so a generated scenario round-trips through bytes."
+    , "A terminal event of any message kind may include a backpointer to its start event in prior; use that identity and timeAt difference for duration instead of embedding startedAt/completedAt fields or guessing by adjacency."
     , "MessageFraming must say how bytes are emitted and consumed: protobufMessage, protobufOneof, or transportEnvelope."
     , "For protobufOneof or transportEnvelope framing, dispatchField must name the observable field that selects the concrete message atom."
     , "Use protobuf fields for the payload body; use task FSM transitions for valid traffic order."

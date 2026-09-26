@@ -20,6 +20,8 @@ inductive TaskBoundary where
 deriving DecidableEq, Repr
 
 structure ObservedTaskEvent where
+  id : String
+  prior : List String
   key : TaskKey
   timeAt : ClockTimestamp
   boundary : TaskBoundary
@@ -46,7 +48,8 @@ private def closeAttempt (event : ObservedTaskEvent)
     (outcome : TaskOutcome) : List TaskAttempt -> List TaskAttempt
   | [] => []
   | attempt :: rest =>
-      if attempt.key = event.key && attempt.completed.isNone then
+      if attempt.key = event.key && attempt.completed.isNone &&
+          event.prior.contains attempt.started.id then
         { attempt with completed := some event, outcome := some outcome } :: rest
       else
         attempt :: closeAttempt event outcome rest
@@ -64,7 +67,7 @@ def observeTaskEvent (attempts : List TaskAttempt)
   | .succeeded => closeAttempt event .succeeded attempts
   | .failed => closeAttempt event .failed attempts
 
-/-- Reconstruct task attempts from a stream ordered by the shared monotonic clock. -/
+/-- Reconstruct attempts by terminal-to-start backpointer, not by stream adjacency. -/
 def attemptsFromEventStream (events : List ObservedTaskEvent) : List TaskAttempt :=
   events.foldl observeTaskEvent []
 

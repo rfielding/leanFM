@@ -23,7 +23,7 @@ abbrev Trace (Actor Session Task Kind Payload : Type) :=
 \end{lstlisting}
 
 The fields have different jobs. \texttt{id} identifies a visible fact;
-\texttt{priorIds} records zero or more immediate causal claims; \texttt{from} and
+\texttt{priorIds} records zero or more causal backpointers; \texttt{from} and
 \texttt{to} name the parties; \texttt{(session, task)} correlates independently
 progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
@@ -34,7 +34,12 @@ origin is immaterial.
 The causal links form a directed acyclic graph rather than a singly linked list.
 An initial event has no prior identifiers. A fork is represented by several later
 events that each name the same prior event. A join is represented by one event
-whose \texttt{priorIds} names every branch on which it immediately depends.
+whose \texttt{priorIds} names every branch on which it depends. An end event of
+any kind may also name its corresponding start event. That backpointer makes
+elapsed time simply \texttt{end.timeAt - start.timeAt}, even when several
+attempts with the same \texttt{(session, task)} overlap. A backpointer to an
+already-ancestral start is a redundant causal edge, but it is useful correlation
+data and does not alter the partial order.
 
 \section{Compute everything from a fork/join event list}
 
@@ -61,7 +66,7 @@ baking fork after the order is placed and join before the order is accepted:
 \small
 \begin{tabular}{@{}llllrl@{}}
 \toprule
-Event & Immediate prior & \texttt{timeAt} & Meaning & Bytes & Reveals \\
+Event & Prior backpointers & \texttt{timeAt} & Meaning & Bytes & Reveals \\
 \midrule
 $e_0$ & $[]$ & $258726$ & order placed & 85 & order \\
 $e_1$ & $[e_0]$ & $258921$ & payment requested & 71 & price \\
@@ -198,8 +203,10 @@ def elapsed (start finish : Event) : Option Duration :=
   else none
 \end{lstlisting}
 
-Latency queries name their boundary event kinds and correlate them by
-\texttt{(session, task)} before subtracting timestamps. Causality still comes
+Latency queries name their boundary event kinds and follow the end event's
+backpointer to the start before subtracting timestamps. The
+\texttt{(session, task)} values must agree, but are not sufficient to choose a
+start when attempts overlap. Causality still comes
 from grammar structure and \texttt{priorIds}: equal timestamps may occur, and a
 timestamp alone does not establish that one event caused another.
 

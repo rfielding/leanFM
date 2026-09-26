@@ -20,6 +20,7 @@ The model treats a protocol as globally observable behavior:
 - specifications attach dwell durations to transitions or productions
 - dwell advances the event clock and supports latency, throughput, and queue metrics
 - each event has one `timeAt`; latency is computed between separate start and completion messages
+- an end message of any kind may backpoint to its start message, so overlapping attempts are paired by event identity
 - generated scenarios round-trip through protobuf bytes without losing causal `prior` links
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes

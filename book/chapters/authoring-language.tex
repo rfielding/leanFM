@@ -223,10 +223,10 @@ and queue-pressure calculations. It does not create causality: the grammar and
 
 \section{Estimating completion from an event stream}
 
-The same specification can consume observed events. The reducer first partitions
-the stream by \texttt{(session, task)}, orders each partition by its monotonic
-clock timestamp, and matches the production's declared entry and terminal event
-kinds. Each partition then yields a task attempt:
+The same specification can consume observed events. A terminal event of any kind
+names its corresponding start event in its backpointer list. The reducer follows
+that identity rather than guessing from adjacency or selecting the first open
+\texttt{(session, task)} attempt. Each matched pair yields a task attempt:
 
 \begin{lstlisting}
 structure TaskAttempt where

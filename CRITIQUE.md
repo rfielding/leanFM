@@ -84,8 +84,9 @@ Several questions remain:
   themselves imply causality. The book says this, but some charts may encourage
   a stronger interpretation.
 - A task may have retries or overlapping attempts with the same `(session,
-  task)`. The current stream reducer closes the first matching open attempt and
-  may not reconstruct the intended pairing in every such trace.
+  task)`. The stream reducer now pairs a terminal with the start ID in its
+  backpointer list, but malformed, missing, or multiple start backpointers still
+  need explicit validation and error reporting.
 
 ## Causal links permit fork and join but need stronger validation
 
@@ -298,4 +299,3 @@ than it is.
    the accepted requirement language.
 10. Label every major claim by its evidence level: assumption, example, test,
     model check, or proof.
-
