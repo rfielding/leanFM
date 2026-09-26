@@ -951,6 +951,7 @@ def requirementReferenceIds (requirement : RequirementSpec) : List String :=
   requirement.actorReliability.map (fun reliability => "reliability:" ++ reliability.actor) ++
   requirement.messages.map (fun message => "message:" ++ message.name) ++
   requirement.tasks.map (fun task => "task:" ++ task.id) ++
+  requirement.grammars.map (fun grammar => "grammar:" ++ grammar.task) ++
   requirement.properties.map (fun property => "property:" ++ property.name) ++
   requirement.requiredProofs.map (fun proof => "proof:" ++ proof.name) ++
   requirement.performance.map (fun performance => "performance:" ++ performance.name)

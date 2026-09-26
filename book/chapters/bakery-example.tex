@@ -165,91 +165,12 @@ functions. If a necessary decision is not present in $R$, $I$, or $P$, the
 generator reports the missing durable fact instead of recovering it from a long
 conversation.
 
-For the bakery, an AI rendering of those inputs can first produce implementation-
-neutral pseudocode. This is a review artifact before a target-language backend
-uses filenames, transports, queue APIs, and protobuf bindings from $I$:
+For the bakery, the selected implementation backend is Go. The generated code
+uses Go protobuf bindings, deterministic \texttt{proto.Marshal},
+\texttt{proto.Unmarshal}, and bounded channels. Requirement comments are emitted
+beside the symbols and statements they justify:
 
-\begin{lstlisting}[language={}]
-type Event = {
-  id, prior[], session, task, srcInstance, dstInstance,
-  kind, payload, timeAt, joinRequired?, joinTotal?, joinSelected[]
-}
-
-// @requirement bakery.task.fulfill_order
-// Justification: realize the legal order-fulfillment production.
-function handleOrderPlaced(placed):
-  // @requirement bakery.wire.round_trip
-  require decode(encode(placed)) == placed
-  // @requirement bakery.resource.max_in_flight
-  key = (placed.session, placed.task)
-  reserveInFlight(StorefrontInstance, key)
-
-  // @requirement bakery.grammar.payment_parallel_bake
-  paymentRequest = emit PaymentRequested(
-    prior=[placed.id], values={price_cents})
-  bakeRequest = emit BakeRequested(
-    prior=[placed.id], values={product, quantity})
-
-  // Grammar parallelism: either result may arrive first.
-  sendBlocking(Payment.outbound, encode(paymentRequest))
-  sendBlocking(Bakery.outbound, encode(bakeRequest))
-
-  // @requirement bakery.join.payment_and_bake
-  paymentResult = receiveFor(key, PaymentResult)
-  bakeResult = receiveFor(key, BakeResult)
-
-  // Ordinary all-of join: two of two branches are required.
-  decision = emit OrderAccepted or OrderRejected(
-    prior=[paymentResult.id, bakeResult.id, placed.id],
-    joinRequired=2, joinTotal=2,
-    joinSelected=[paymentResult.id, bakeResult.id],
-    timeAt=clock.now())
-
-  if decision is OrderRejected:
-    releaseInFlight(StorefrontInstance, key)
-    return
-
-  if probabilisticUserChoice(Cancel, Continue) is Cancel:
-    emit OrderCancelled(prior=[decision.id, placed.id])
-  else:
-    requested = emit DeliveryRequested(prior=[decision.id])
-    assigned = await CourierAssigned(backpointing=requested.id)
-    emit OrderDelivered or DeliveryFailed(
-      prior=[assigned.id, placed.id], timeAt=clock.now())
-
-  releaseInFlight(StorefrontInstance, key)
-
-// @requirement bakery.metrics.event_characterization
-// Justification: derive the required observable metrics from events.
-function reduce(events):
-  assert uniqueIds(events)
-  assert acyclicPriorGraph(events)
-  assert everyEndBackpointsToItsStart(events)
-  assert everyJoinHasValidThresholdEvidence(events)
-
-  latency = end.timeAt - start.timeAt
-  clientRate = sum(bytesMoved) / sum(latency)
-  serverRate = sum(bytesMoved) /
-               (max(end.timeAt) - min(start.timeAt))
-  outage = sum(recovered.timeAt - unavailable.timeAt) /
-           (replicas * observationWindowMs)
-  mttr = sum(recovered.timeAt - unavailable.timeAt) / incidents
-
-  emit interactionDiagramPerScenario(events)
-  emit stateMachinePerScenario(events)
-  emit xyLines(latency, throughput, profit, waste, outage, mttr)
-  emit pieHistograms(outcomes, products, failures)
-
-// @requirement bakery.conformance.legal_trace_bytes
-// Justification: generated code must preserve and recognize legal traces.
-function conformanceTest(trace):
-  bytes = protobufEncode(trace)
-  replay = protobufDecode(bytes)
-  require replay == trace
-  require grammarAccepts(replay)
-  require stateMachinesAccept(replay)
-  require resourceContractsHold(replay)
-\end{lstlisting}
+\lstinputlisting[language=Go,basicstyle=\ttfamily\scriptsize]{examples/bakery-generated.go}
 
 The pseudocode does not become a second source of requirements. It is discarded
 and regenerated when $R$ or $I$ changes. Generated source code is likewise a
