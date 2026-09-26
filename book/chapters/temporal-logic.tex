@@ -77,6 +77,46 @@ all. Conversely, assigning positive probability to a condition makes its branch
 possible. The handling obligation comes from supported possibility, not from
 whether the estimated percentage crosses a threshold.
 
+\section{Strong implication and the Chewbacca argument}
+
+Material implication is weak in the precise sense that
+$p\mathbin{\to}q$ is true whenever $p$ is false. That is useful inside a state,
+but it permits a vacuous global claim when no reachable state ever satisfies the
+antecedent. LeanFM names the non-vacuous temporal combination
+
+\[
+  p\mathbin{\Rightarrow_s}q
+  \quad\stackrel{\mathrm{def}}{=}\quad
+  EF\,p \;\land\; AG(p\mathbin{\to}q).
+\]
+
+The first conjunct requires a legal future witnessing $p$. The second requires
+that, necessarily always, every reachable occurrence of $p$ also satisfies $q$.
+Together they imply $EF\,q$: the $p$ witness cannot avoid $q$.
+
+The deliberately absurd test uses
+
+\begin{align*}
+  p &= \text{``Chewbacca lives on Endor''},\\
+  q &= \text{``you must acquit''}.
+\end{align*}
+
+A Chewbacca argument cannot obtain $q$ merely by mentioning $p$. To enter the
+requirements as strong implication, the model must admit a reachable $p$ witness
+and establish $AG(p\to q)$ over every permitted continuation. If the observable
+grammar supplies no relation between residence and acquittal, that second
+obligation has no justification and is rejected. Logic cannot determine the
+meaning or relevance of arbitrary English propositions by itself; the useful
+point is that neither a missing antecedent nor a single rhetorical occurrence of
+it can make the formal implication pass vacuously.
+
+In Lean the definition is direct:
+
+\begin{lstlisting}
+def stronglyImplies (p q : CTL S) : CTL S :=
+  CTL.and (CTL.ef p) (CTL.ag (CTL.implies p q))
+\end{lstlisting}
+
 The path quantifier is part of the until operator. We write \texttt{AU} and
 \texttt{EU} as binary algebraic operators, not an outer \texttt{A} or \texttt{E}
 wrapped around a bracketed until formula. Consequently a subexpression never

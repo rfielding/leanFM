@@ -22,6 +22,10 @@ infixr:45 " EU " => CTL.eu
 def implies {S : Type} (p q : CTL S) : CTL S :=
   CTL.or (CTL.neg p) q
 
+/-- Non-vacuous temporal implication: `p` is possible and necessarily implies `q`. -/
+def stronglyImplies {S : Type} (p q : CTL S) : CTL S :=
+  CTL.and (CTL.ef p) (CTL.ag (implies p q))
+
 partial def anyReachable [DecidableEq S]
     (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
   if p s then

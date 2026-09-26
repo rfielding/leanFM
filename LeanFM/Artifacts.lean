@@ -1073,6 +1073,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Every possibly proof has a handlingPlan. At least one implementation mapping must cite that proof ID, because declaring temporal possibility means the generated system has a plan to handle a witness trace."
     , "Write quantified until formulas with the binary AU and EU operators, for example p AU q; do not use context-sensitive A[p U q] or E[p U q] wrapper notation."
     , "Use CTL, not LTL. Explain A/E as temporal necessity/possibility over forward continuations and G/F as always/eventually along them. Observed values change only by advancing to successor states."
+    , "Use CTL.stronglyImplies p q, meaning EF p and AG(p implies q), when implication must be non-vacuous. Plain material implication is weak and may hold only because p never occurs."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Interrogate the user until every requested result is identifiable: scenario boundaries, start/end pairing, work units, clock units, actor instances and populations, queue capacities, outage/recovery boundaries, observation windows, and whether each probability or distribution is observed, expected, or unknown. Do not invent missing values."
     , "From every sufficiently identified stream generate per-scenario interaction diagrams and state machines, XY line metrics, pie-chart histograms, uptime/reliability, throughput, and latency. Mark outputs indeterminate when required fields are absent."

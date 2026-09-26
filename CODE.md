@@ -147,6 +147,11 @@ implementation mapping justified by that proof ID. This is separate from branch
 probability: possible behavior requires a plan even when its likelihood is small
 or unknown.
 
+`CTL.stronglyImplies p q` is defined as `EF p ∧ AG(p → q)`. Ordinary material
+implication is weak because it is true wherever `p` is false. Strong implication
+requires a reachable `p` witness and requires every reachable `p` state to
+satisfy `q`; consequently the model also has a reachable `q` witness.
+
 Examples from `Protocol.lean`:
 
 ```lean
