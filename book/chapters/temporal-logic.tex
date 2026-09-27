@@ -4,17 +4,60 @@
 \index{CTL}
 \index{temporal logic}
 \index{LTL}
-A grammar generates a branching transition system. CTL speaks directly about that
-branching: path quantifiers distinguish \emph{there exists a future} from
-\emph{every future}, while temporal operators distinguish the next state,
-eventuality, invariance, and until.
+\index{modal logic}
+A grammar generates a branching transition system. CTL speaks directly about
+that branching, but its vocabulary becomes clearer when placed between basic
+modal logic and linear temporal logic. Path quantifiers distinguish \emph{there
+exists a future} from \emph{every future}, while temporal operators distinguish
+the next state, eventuality, invariance, and until.
 
 The author's modal-logic background used here was learned mostly from
 \citet{kroger2008temporal}. This citation identifies the source of that education;
 it is not a claim that the authors originated modal or temporal logic.
 
-LeanFM does not use Linear Temporal Logic (LTL). LTL describes properties along
-a linear path. The questions here deliberately combine two independent axes:
+\section{Basic modal logic}
+
+Propositional logic evaluates a formula at one world or state. Basic modal logic
+adds an accessibility relation $R$ between worlds and two operators:
+
+\begin{align*}
+  w \models \Box p &\quad\text{iff}\quad
+    \text{$p$ holds at every $v$ such that $wRv$},\\
+  w \models \Diamond p &\quad\text{iff}\quad
+    \text{$p$ holds at some $v$ such that $wRv$}.
+\end{align*}
+
+The readings are ``necessarily $p$'' and ``possibly $p$.'' Under classical
+negation they are dual: $\Diamond p \equiv \neg\Box\neg p$. The symbols do not
+fix the meaning of accessibility. Depending on the model, an accessible world
+may be a next computation state, a world compatible with an actor's knowledge,
+a normatively permitted world, or something else.
+
+The basic normal modal logic K allows arbitrary Kripke frames. Additional frame
+conditions validate additional principles: reflexivity, transitivity, symmetry,
+and the Euclidean condition lead to familiar stronger systems. Those principles
+must not be imported merely because the English word ``necessarily'' sounds
+strong. LeanFM uses a directed computation-successor relation and does not
+silently treat it as reflexive, symmetric, or epistemic.
+
+\section{LTL: time along one path}
+
+Linear Temporal Logic (LTL) describes one linear path with operators including
+$X$ (next), $F$ (eventually), $G$ (always), and $U$ (until). Thus $F p$ says that
+$p$ occurs at some suffix of the selected path, while $G p$ says that $p$ holds
+at every suffix of that path.
+
+LTL's temporal words answer \emph{where along this path}; they do not themselves
+choose between one possible branch and every branch of a transition system. A
+model-checking convention often asks whether every initial path satisfies an LTL
+formula. That outer convention should not be confused with a path quantifier in
+the LTL syntax. For example, asking whether some legal execution eventually
+reaches recovery and asking whether all legal executions eventually reach
+recovery require different branching claims even though both contain the words
+``eventually recovery.''
+
+LeanFM does not currently implement LTL. It uses CTL because the requirements
+deliberately combine two independent axes:
 
 \begin{itemize}
   \item \emph{always} or \emph{eventually} says where along forward time a
@@ -23,8 +66,29 @@ a linear path. The questions here deliberately combine two independent axes:
         permitted forward continuation or may hold on at least one.
 \end{itemize}
 
-``Necessary'' and ``possible'' are therefore temporal readings. They quantify
-over futures from the current observation, not over timeless logical worlds.
+\section{CTL: path modality combined with time}
+
+CTL pairs a path quantifier with each temporal operator. $E$ is existential:
+there is at least one permitted continuation. $A$ is universal: every permitted
+continuation satisfies the temporal condition. In the vocabulary of modal
+logic, $E$ supplies temporal possibility and $A$ supplies temporal necessity.
+
+``Necessary'' and ``possible'' are therefore future-relative readings here.
+They quantify over computations from the current observation, not over timeless
+logical worlds. The four most important combinations can be read literally:
+
+\begin{align*}
+ EF\,p &: \text{possibly eventually $p$}, &
+ AF\,p &: \text{necessarily eventually $p$},\\
+ EG\,p &: \text{possibly always $p$}, &
+ AG\,p &: \text{necessarily always $p$}.
+\end{align*}
+
+The temporal word and modal word do different work. $F$ versus $G$ chooses
+eventuality versus invariance \emph{along} a continuation. $E$ versus $A$
+chooses some versus all permitted continuations. Neither axis should be omitted
+when stating a branching-time requirement.
+
 An observation is immutable once recorded. A value changes only by moving
 forward to a successor observation; it is never updated retroactively inside the
 current state. This does not mean that values are monotone---a queue may grow and
@@ -39,6 +103,8 @@ $EF\,p$ & possibly, eventually $p$ & temporal possibility / witness \\
 $AF\,p$ & necessarily, eventually $p$ & termination / response \\
 $EG\,p$ & possibly, always $p$ & viable invariant path \\
 $AG\,p$ & necessarily, always $p$ & safety invariant \\
+$EX\,p$ & possibly, next $p$ & enabled successor / one-step witness \\
+$AX\,p$ & necessarily, next $p$ & required one-step consequence \\
 $(p\ AU\ q)$ & every path keeps $p$ until $q$ & constrained progress \\
 $(p\ EU\ q)$ & some path keeps $p$ until $q$ & possible progress \\
 $(p\ AW\ q)$ & every path: $p$ until $q$, or $p$ forever & necessary weak until \\
@@ -51,6 +117,37 @@ For example, $AF\,p$ is not merely ``eventually $p$'' and $EF\,p$ is not a
 weaker spelling of the same linear claim. The first requires $p$ on every legal
 future generated from the current trace prefix; the second needs one legal
 future as a witness. Branching is part of the requirement.
+
+Strict CTL requires every temporal operator to be governed by $A$ or $E$. CTL*
+is a more general branching-time language in which state formulas and path
+formulas can be nested more freely; LeanFM does not implement CTL*. This matters
+when translating prose: not every arbitrary alternation of ``on all paths'' and
+``eventually'' is a formula of the small CTL datatype used here.
+
+\section{General and multiple modalities}
+
+General modal logic need not have only one accessibility relation. A multimodal
+model can use $\Box_t/\Diamond_t$ for temporal reachability,
+$K_a/\widehat K_a$ for what actor $a$ knows or considers possible, and a
+different pair for permission or obligation. Dynamic logic can index modalities
+by programs. Tense logics can add past-directed relations. These systems share
+the Kripke-style idea of evaluating modal formulas through accessibility, but
+their modalities are not interchangeable.
+
+LeanFM's CTL $A$ and $E$ range only over legal forward computations generated by
+the current model. They do not mean:
+
+\begin{itemize}
+  \item probability one versus positive probability;
+  \item known versus merely believed by an actor;
+  \item obligatory versus permitted by a policy; or
+  \item physically necessary versus logically possible.
+\end{itemize}
+
+Probability, knowledge, authorization, and normative requirements need their
+own named structures or modalities. Keeping the relations separate prevents an
+easy category error: a branch can be computationally possible while having
+unknown probability, being unknown to an actor, or being forbidden by policy.
 
 \section{Possibility means preparedness}
 
@@ -80,6 +177,12 @@ possible. The handling obligation comes from supported possibility, not from
 whether the estimated percentage crosses a threshold.
 
 \section{Strong implication and the Chewbacca argument}
+
+The name ``Chewbacca defense'' is a cultural reference to the \emph{South Park}
+episode ``Chef Aid,'' whose courtroom parody uses an irrelevant claim about
+Chewbacca to distract from the conclusion at issue. The reference supplies a
+memorable example of non sequitur; it is not a technical term originating in
+modal or temporal logic.
 
 Material implication is weak in the precise sense that
 $p\mathbin{\to}q$ is true whenever $p$ is false. That is useful inside a state,

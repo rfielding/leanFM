@@ -24,7 +24,10 @@ The model treats a protocol as globally observable behavior:
 - actor specifications are reusable; finite populations create concrete instances such as 20 clients and 2 servers, each with its own queues and in-flight tasks
 - non-functional rates distinguish client-experienced `sum(work)/sum(observationTime)` from server aggregate `sum(work)/(max(end)-min(start))`; either can be plotted by client count for USL fitting
 - actor reliability contracts specify outage probability and expected MTTR; `Unavailable`/`Recovered` backpointer pairs produce observed outage percentage and MTTR XY series for replica-based deployments
-- the LLM requirements interviewer refuses to invent missing measurement facts; characterized streams produce diagrams, FSMs, XY lines, pie histograms, reliability, throughput, and latency by default
+- the LLM requirements interviewer plans derived properties before fixing fields; each sufficiently identified `(session, scenario)` produces its own interaction diagram and state machine plus planned line and pie/histogram derivatives
+- the baseline derived-property catalog covers latency, throughput, outcomes, queues, concurrency, reliability, financial flows (including taxes and profit/loss under a declared boundary), and waste units/cost/rate; missing inputs are marked indeterminate rather than invented
+- load-derived outputs include observed and fitted Universal Scalability Law curves, queue length paired with causal latency, per-instance memory headroom with exhaustion treated as fatal, and outage impact propagated across actor interaction networks
+- every scalar metric, 2D function rendering, interaction diagram, and state machine preserves the originating prompt, the question being answered, and the event reducer; `/metrics` exports durable output IDs alongside event-informed numeric series
 - synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
 - stateless code generation uses `(Requirements.lean, Implementation.lean, Requirements.proto) -> code`; revision adds existing code as an input and never relies on prior chat history
 - every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
@@ -38,7 +41,7 @@ The model treats a protocol as globally observable behavior:
 - a grammar choice resolves at the first distinguishing byte-level terminal; that terminal's source identifies the observable decision-maker, so choices do not carry a separate chooser label
 - components can be built independently and assembled into larger systems
 - CTL formulas run over the support graph
-- LeanFM does not use LTL: CTL combines always/eventually with temporal necessity/possibility over forward continuations; recorded observations are immutable and values change only at successor states
+- LeanFM uses CTL rather than LTL for executable branching checks: LTL's always/eventually describe positions along one path, while CTL combines them with `A`/`E`, read here as necessarily/possibly over legal forward continuations
 - declaring a condition `possibly` reachable means the system is prepared for it: the requirement needs a witness branch and handling plan, and implementation code must cite that possibility
 - non-vacuous strong implication is `EF p ∧ AG(p → q)`; unlike weak material implication, it requires a reachable antecedent witness and a necessary temporal relationship to the consequent
 - `p AW q` and `p EW q` are weak-until operators: `q` may never occur when `p` persists forever on every path or some path, respectively
@@ -76,6 +79,11 @@ contains reductions calculated from that file. See `BAKERY_SCENARIO.md` for the
 grammar and data contract. Quantitative examples should read this corpus or a
 reduction reproducibly derived from it instead of embedding invented percentages.
 
+`PROJECT_CHAT_EXAMPLE.md` is a complete example requirements chat in which a
+user creates one project as an inter-related set of interaction grammars. It
+shows grammar references, shared correlation fields, and prompt-derived scalar,
+2D, interaction-diagram, and state-machine outputs.
+
 The Lean HTTP server listens on:
 
 ```text
@@ -92,6 +100,9 @@ GET /metrics   Prometheus metrics
 GET /openapi.yaml OpenAPI description of LeanFM routes and generated message schemas
 GET /report    generated plain-text report
 GET /tools/conversations conversation-to-Lean-file catalog
+GET /tools/leanfm-language/reference authoritative LeanFM language reference for requirement-generation tools
+GET /tools/leanfm-language/requirements-reference authoritative RequirementSpec, protobuf, grammar, logic, and output reference
+GET /tools/leanfm-language/implementation-reference authoritative ImplementationSpec, transport, channel, and traceability reference
 GET /tools/static-assets/validate static JavaScript renderer validation
 GET /tools/generated-requirements/prompt LLM system prompt for generated requirements
 GET /tools/llm-generated/requirements/prompt canonical LLM system prompt route

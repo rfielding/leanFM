@@ -22,4 +22,25 @@ example : characterizationMatches 25 targetCharacterization similarCharacterizat
 example : !characterizationMatches 10 targetCharacterization similarCharacterization := by
   native_decide
 
+example : validateDerivedPropertyPlan baselineDerivedProperties = [] := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "finance.tax" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "finance.profit_loss" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "waste.rate" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "scalability.usl" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "memory.headroom" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "reliability.network_outage_impact" := by
+  native_decide
+
 end LeanFM

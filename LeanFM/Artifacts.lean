@@ -221,6 +221,24 @@ structure RequirementChart where
   value : String
 deriving Repr
 
+inductive DerivedOutputKind where
+  | scalar
+  | function2d
+  | interactionDiagram
+  | stateMachine
+deriving DecidableEq, Repr
+
+/-- Provenance for an output argued for during requirements discovery. -/
+structure DesiredOutput where
+  id : String
+  prompt : String
+  question : String
+  kind : DerivedOutputKind
+  eventSource : String
+  reducer : String
+  unit : String
+deriving Repr
+
 inductive PerformanceMetric where
   | clientExperiencedRate
   | serverAggregateRate
@@ -292,6 +310,7 @@ structure RequirementSpec where
   requiredProofs : List RequiredProof
   performance : List PerformanceRequirement
   charts : List RequirementChart
+  desiredOutputs : List DesiredOutput
   markdown : List RequirementMarkdown
 deriving Repr
 
@@ -797,6 +816,16 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
         (if chart.value == "" then ["chart " ++ chart.name ++ " has empty value"] else []) ++
         acc)
       []
+  let outputErrors :=
+    spec.desiredOutputs.foldr
+      (fun output acc =>
+        (if output.id == "" then ["desired output has empty id"] else []) ++
+        (if output.prompt == "" then ["desired output " ++ output.id ++ " has no originating prompt"] else []) ++
+        (if output.question == "" then ["desired output " ++ output.id ++ " has no question"] else []) ++
+        (if output.eventSource == "" then ["desired output " ++ output.id ++ " has no event source"] else []) ++
+        (if output.reducer == "" then ["desired output " ++ output.id ++ " has no event reducer"] else []) ++
+        (if output.unit == "" then ["desired output " ++ output.id ++ " has no unit"] else []) ++ acc)
+      []
   let markdownErrors :=
     spec.markdown.foldr
       (fun md acc =>
@@ -814,9 +843,10 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.processes.isEmpty then ["requirement " ++ spec.id ++ " has no communicating sequential processes"] else []) ++
   (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
   (if spec.requiredProofs.isEmpty then ["requirement " ++ spec.id ++ " has no required proof obligations"] else []) ++
+  (if spec.desiredOutputs.isEmpty then ["requirement " ++ spec.id ++ " has no prompt-derived outputs"] else []) ++
   duplicateActors ++ populationErrors ++ resourceErrors ++ reliabilityErrors ++
     duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++
-    grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ performanceErrors ++ chartErrors ++ markdownErrors
+    grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ performanceErrors ++ chartErrors ++ outputErrors ++ markdownErrors
 
 def transitionMessageLabel (spec : RequirementSpec) (message : String) : String :=
   match spec.messages.find? (fun msg => msg.name == message) with
@@ -958,6 +988,7 @@ def requirementReferenceIds (requirement : RequirementSpec) : List String :=
   requirement.tasks.map (fun task => "task:" ++ task.id) ++
   requirement.grammars.map (fun grammar => "grammar:" ++ grammar.task) ++
   requirement.properties.map (fun property => "property:" ++ property.name) ++
+  requirement.desiredOutputs.map (fun output => "output:" ++ output.id) ++
   requirement.requiredProofs.map (fun proof => "proof:" ++ proof.name) ++
   requirement.performance.map (fun performance => "performance:" ++ performance.name)
 
@@ -1038,9 +1069,89 @@ def generatedRequirementValidationReport (requirements : List GeneratedRequireme
   | [] => "ok: all generated requirements are well-formed typed Lean values\n"
   | errors => "invalid generated requirements\n" ++ joinWithNewline errors ++ "\n"
 
+/-- HTTP-served authoring reference fetched as a tool result before an LLM
+    constructs requirement objects. -/
+def leanFMRequirementsReference : String :=
+  joinWithNewline
+    [ "# LeanFM requirement language reference"
+    , ""
+    , "Use this reference to construct typed Lean values in LeanFM/LLMGenerated/Requirements.lean. Do not emit renderer JSON as the durable requirement."
+    , ""
+    , "## RequirementSpec"
+    , "Required collections: actors, actorPopulations, actorResources, actorReliability, messages, tasks, grammars, processes, properties, requiredProofs, performance, charts, desiredOutputs, markdown."
+    , "Actors, messages, task states, and transitions should be typed locally, then converted at the RequirementSpec boundary."
+    , ""
+    , "## Observable event atom"
+    , "GrammarExpr.event accepts { task, src, dst, message }. MessageSchema supplies src, dst, framing, and numbered protobuf fields."
+    , "ScenarioEvent protobuf envelopes preserve id, repeated prior links, session, task, src, dst, timeAt, and a oneof message atom."
+    , "End events point to start-event IDs through prior; durations are differences between separate event timestamps."
+    , ""
+    , "## GrammarExpr"
+    , "event atom | seq left right | choice branches | parallel branches | mOfN required branches | guard predicate body | ref task | repeat body"
+    , "Helpers: GrammarExpr.seqList, GrammarExpr.alt, left >>> right, left <||> right, GrammarExpr.star, GrammarExpr.plus."
+    , "Use ref to compose a project from related named interaction grammars. Use guards only for visible trace facts."
+    , "A choice is resolved by the first distinguishing framed terminal; do not add an invisible chooser."
+    , ""
+    , "## Tasks and actor projections"
+    , "Each TypedTaskRequirement has actors, states, an initial state, and message-labeled transitions with probabilityNum, probabilityDen, and dwellMs."
+    , "Each participating actor has a RequirementProcess naming its local states, sends, and receives. Every transition message needs both sender and receiver coverage."
+    , ""
+    , "## Logic"
+    , "RequirementProperty and RequiredProof express CTL-style obligations. A/E mean necessarily/possibly over legal forward continuations; F/G mean eventually/always along them."
+    , "Supported proof modes are never, always, eventually, and possibly. Every possibly proof requires a nonempty handlingPlan and an implementation justification."
+    , "Use binary AU, EU, AW, and EW. Use CTL.stronglyImplies p q for EF p and AG(p implies q)."
+    , ""
+    , "## Prompt-derived outputs"
+    , "Every scalar, function2d, interactionDiagram, and stateMachine answer needs DesiredOutput { id, prompt, question, kind, eventSource, reducer, unit }."
+    , "Charts are presentation requests; DesiredOutput is the durable reason and event-reduction provenance. Numeric event reductions may be exposed at /metrics."
+    , "Load questions may request a Universal Scalability Law fit over comparable population runs, including observed points, fitted curve, parameters, and fit error. Queue/latency outputs pair queue length at admission with causally measured completion latency; queue size alone does not prove latency."
+    , "Memory reports compare observed resident bytes with the per-instance memoryBudgetBytes contract. Exhaustion is a fatal outcome, not an ordinary latency sample. Network-outage reports join Unavailable/Recovered intervals to the actor interaction/dependency graph and report affected tasks as well as per-actor uptime and MTTR."
+    , ""
+    , "## Separation and validation"
+    , "Requirements.lean holds observable behavior. Requirements.proto holds byte values. Implementation.lean holds transports, languages, filenames, APIs, and framework choices."
+    , "Generate all three, then call the generated-requirements and implementation validation tools. Never invent a missing observation needed by a reducer."
+    ]
+
+def leanFMImplementationReference : String :=
+  joinWithNewline
+    [ "# LeanFM implementation language reference"
+    , ""
+    , "Use this reference to construct LeanFM/LLMGenerated/Implementation.lean. Implementation choices must cite durable requirement IDs and must not redefine observable behavior."
+    , ""
+    , "## ImplementationSpec"
+    , "ImplementationSpec { requirementId, target, moduleName, outputDirectory, actors, messages, channels }."
+    , "requirementId must equal the RequirementSpec id. TargetLanguage is go, rust, or lean. Filenames, packages, runtime APIs, and framework choices belong here rather than in Requirements.lean."
+    , ""
+    , "## ActorCodegen"
+    , "ActorCodegen { actor, typeName, sourceFile, justifications }. Provide exactly one binding for every requirement actor and no unknown actors."
+    , ""
+    , "## MessageCodegen and transports"
+    , "MessageCodegen { message, wireType, transport, justifications }. Provide exactly one binding for every requirement message and no unknown messages."
+    , "TransportSpec is httpRequest method path | httpResponse requestMessage | inProcessChannel channelName | tcp endpoint | custom adapter configuration."
+    , "HTTP responses name a known request message. Transport selects how protobuf bytes move; it does not alter the protobuf payload or legal grammar order."
+    , ""
+    , "## Channels"
+    , "ChannelCodegen names sendFunction, receiveFunction, and tryReceiveFunction. Required semantics are blockWithoutMutation for full sends and empty blocking receives, and returnNoneKeepRunnable for an empty tryReceive."
+    , "Implement actor resource contracts with finite per-instance inbound/outbound capacities, maxInFlight, and memory budgets. Preserve multiple simultaneous (session,task) conversations."
+    , ""
+    , "## Traceability"
+    , "Every actor, message, and channel mapping has nonempty RequirementJustification { requirementId, reason }. References may target requirement:, grammar:, process:, property:, proof:, performance:, chart:, output:, or message: IDs returned by requirementReferenceIds."
+    , "Generated source and tests retain those IDs beside the code they justify. Do not generate orphan behavior."
+    , ""
+    , "## Conformance"
+    , "Generated emitters and parsers preserve event id, repeated prior links, session, task, actors, timeAt, and the selected protobuf atom."
+    , "Test legal trace round-trips and replay, illegal trace rejection, bounded-channel behavior, possible-branch handling plans, and event reducers feeding desired outputs and /metrics."
+    , "After construction, call GET /tools/llm-generated/implementation/validate and the combined generated-artifacts validator."
+    ]
+
+/-- Compatibility document containing both independently addressable references. -/
+def leanFMLanguageReference : String :=
+  leanFMRequirementsReference ++ "\n\n---\n\n" ++ leanFMImplementationReference
+
 def generatedRequirementSystemPrompt : String :=
   joinWithNewline
     [ "You generate LeanFM visible-behavior requirements as Lean 4 code."
+    , "Before constructing or revising generated artifacts, call both HTTP tools: GET /tools/leanfm-language/requirements-reference and GET /tools/leanfm-language/implementation-reference. Treat those results as the authoritative guides for RequirementSpec/Requirements.proto and ImplementationSpec respectively. If either tool cannot be called, report that limitation instead of guessing its language."
     , "Assume the original LLM conversation will be lost. Materialize the complete current understanding in the durable generated files; never require chat history to interpret them."
     , "You only write files under LeanFM/LLMGenerated/."
     , "The committed static DSL/runtime lives outside LeanFM/LLMGenerated/ and must be treated as read-only."
@@ -1077,9 +1188,10 @@ def generatedRequirementSystemPrompt : String :=
     , "Use CTL.stronglyImplies p q, meaning EF p and AG(p implies q), when implication must be non-vacuous. Plain material implication is weak and may hold only because p never occurs."
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Interrogate the user until every requested result is identifiable: scenario boundaries, start/end pairing, work units, clock units, actor instances and populations, queue capacities, outage/recovery boundaries, observation windows, and whether each probability or distribution is observed, expected, or unknown. Do not invent missing values."
-    , "From every sufficiently identified stream generate per-scenario interaction diagrams and state machines, XY line metrics, pie-chart histograms, uptime/reliability, throughput, and latency. Mark outputs indeterminate when required fields are absent."
+    , "Before fixing the event schema, create a derived-property plan for the domain: stable name, originating user prompt, precise question, required observable fields, event reducer, unit, visualization, and scenario/accounting boundary. Start from LeanFM.baselineDerivedProperties; explicitly retain, replace, extend, or mark each applicable entry indeterminate."
+    , "From every sufficiently identified (session, scenario) stream generate its own interaction diagram and state machine, plus the planned XY lines and pie/histogram derivatives. The baseline includes latency, client/server throughput, USL load fitting, queue/latency relation, memory headroom with fatal exhaustion, outcomes, concurrency, uptime, MTTR, actor-network outage impact, gross sales, refunds, net revenue, labor, material cost, taxes by type, other costs, profit/loss under a declared accounting model, and waste units/cost/rate."
     , "For synthetic similarity, first characterize the source with named exact reducers and distributions, generate a candidate stream, replay the same reducers, and accept only when every target is within its declared tolerance."
-    , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, and markdown."
+    , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, desiredOutputs, and markdown. Every scalar, 2D function rendering, interaction diagram, and state machine must have one DesiredOutput preserving the prompt that requested it and the event reducer that answers it."
     , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
     , "Model finite queues as blocking channels: send to full and blocking receive from empty make no progress; a distinct nonblocking tryReceive may return none and leave the actor runnable."
     , "Express information flow by calculating knowers(value, events) from initial knowledge, visible bytes, and derivation rules. Treat secrecy only as a comparison between that computed actor set and an allowed set."
@@ -1101,13 +1213,19 @@ def requirementsInterrogationChecklist : String :=
     , "7. Which events mean unavailable and recovered; what outage probability and expected MTTR are assumed?"
     , "8. Which client-experienced and server-aggregate throughput definitions are required?"
     , "9. Which latency percentiles, histogram bins, uptime, reliability, and XY groupings are required?"
-    , "10. For generated similar scenarios, what metrics and relative tolerances define acceptance?"
-    , "Required default outputs: interaction diagrams; state machines; XY line metrics; pie-chart histograms; uptime/reliability; throughput; latency."
+    , "10. For load questions, which comparable client populations, warm-up, censored-work policy, throughput definition, and USL fit/error report apply?"
+    , "11. Which queue observation is paired with each task latency, and which memory observations prove headroom or fatal exhaustion against the per-instance budget?"
+    , "12. Which actor dependencies let an Unavailable/Recovered interval affect downstream tasks, and how are correlated or partial outages represented?"
+    , "13. Which financial boundary applies: currency, period, recognition rule, sales, refunds, labor, materials, taxes by jurisdiction/type, and other costs?"
+    , "14. Which waste units, costs, denominator, categories, and double-counting rules apply?"
+    , "15. For generated similar scenarios, what metrics and relative tolerances define acceptance?"
+    , "Required default outputs per (session, scenario): interaction diagram; state machine; planned XY lines and pie/histograms. Plan all baseline derived properties before finalizing fields; mark inapplicable or indeterminate entries explicitly."
     ]
 
 def codeGenerationSystemPrompt : String :=
   joinWithNewline
     [ "You generate or revise software from durable LeanFM artifacts."
+    , "Before interpreting the inputs or generating code, call GET /tools/leanfm-language/requirements-reference and GET /tools/leanfm-language/implementation-reference. Use the first to interpret required observable behavior and the second to interpret implementation mappings and traceability."
     , "Assume every earlier LLM conversation has been lost."
     , "Authoritative inputs are the complete current Requirements.lean and Implementation.lean files. Requirements.proto supplies the byte schema."
     , "Do not depend on, summarize, or infer requirements from earlier chat history. The files are the current understanding."

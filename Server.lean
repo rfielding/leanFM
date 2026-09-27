@@ -164,8 +164,12 @@ def responseOutputText (json : String) : Option String :=
           | _ :: rest :: _ => some (takeJsonString rest)
           | _ => none
 
-def llmSystemPrompt : String :=
-  "You are LeanFM's requirements interviewer. Do not invent facts needed to calculate a requested property. Ask focused questions until scenario boundaries, event backpointers, actors and instances, bytes, clocks, work, observation windows, probabilities, distributions, outages, and tolerances make the requested results identifiable. Separate observed distributions from expected assumptions. Then emit durable Lean requirements, protobuf values, implementation choices, reducers, and acceptance checks. Assume this conversation will be lost: the generated files must contain the complete current understanding. Every sufficiently identified event stream should yield per-scenario interaction diagrams and state machines, XY line metrics, pie-chart histograms, uptime/reliability, throughput, and latency. To synthesize a similar scenario, characterize the source, generate a candidate, replay the same reducers, and require metric agreement within declared tolerances."
+def languageReferenceToolInstruction : String :=
+  "Before generating or revising artifacts, use both HTTP tools GET /tools/leanfm-language/requirements-reference and GET /tools/leanfm-language/implementation-reference when available. Use the first for observable requirements and protobuf objects, and the second for implementation mappings; do not guess constructors from memory. Both references are included below as a fallback for this server-hosted chat.\n\n" ++
+  LeanFM.leanFMLanguageReference ++ "\n\n"
+
+def llmSystemPrompt : String := languageReferenceToolInstruction ++
+  "You are LeanFM's requirements interviewer. Do not invent facts needed to calculate a requested property. Treat the conversation as an argument over which answers and artifacts are desired. Before fixing fields, plan every derived property with its originating prompt, precise question, required observations, event reducer, unit, visualization, and scenario/accounting boundary. Start with interaction diagrams, state machines, latency, throughput, outcomes, queues, concurrency, reliability, gross sales, refunds, net revenue, labor, materials, taxes, other costs, profit/loss, and waste units/cost/rate; explicitly mark inapplicable or indeterminate entries. Ask focused questions until scenario boundaries, event backpointers, actors and instances, bytes, clocks, work, observation windows, financial recognition rules, probabilities, distributions, outages, and tolerances make the requested results identifiable. Separate observed distributions from expected assumptions. Then emit durable Lean requirements, protobuf values, implementation choices, event reducers, desired outputs, and acceptance checks. Assume this conversation will be lost: the generated files must contain the complete current understanding. Every sufficiently identified (session, scenario) stream should yield its own interaction diagram and state machine plus planned line and pie/histogram derivatives. Every scalar, 2D rendering, diagram, and state machine must retain the prompt and question that justified it. Never call contribution margin profit after tax unless the tax and cost boundary supports that claim. To synthesize a similar scenario, characterize the source, generate a candidate, replay the same reducers, and require metric agreement within declared tolerances."
 
 def openAIRequestJson (model prompt : String) : String :=
   "{\"model\":\"" ++ jsonEscape model ++
@@ -282,6 +286,9 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tools/scenarios" => pure <| response 200 "application/json; charset=utf-8" LeanFM.scenarioCatalogJson
   | "/tools/protocol-sketches" => pure <| response 200 "application/json; charset=utf-8" LeanFM.protocolSketchCatalogJson
   | "/tools/conversations" => pure <| response 200 "application/json; charset=utf-8" LeanFM.conversationCatalogJson
+  | "/tools/leanfm-language/reference" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.leanFMLanguageReference
+  | "/tools/leanfm-language/requirements-reference" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.leanFMRequirementsReference
+  | "/tools/leanfm-language/implementation-reference" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.leanFMImplementationReference
   | "/tools/static-assets/validate" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.StaticAssets.validationReport
   | "/tools/generated-requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt
   | "/tools/llm-generated/requirements/prompt" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.generatedRequirementSystemPrompt

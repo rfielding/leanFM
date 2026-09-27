@@ -303,6 +303,16 @@ def promBool (b : Bool) : Nat :=
 def promMetricLine (name labels value : String) : String :=
   "leanfm_" ++ name ++ "{" ++ labels ++ "} " ++ value
 
+def derivedOutputKindName : DerivedOutputKind -> String
+  | .scalar => "scalar"
+  | .function2d => "function2d"
+  | .interactionDiagram => "interaction_diagram"
+  | .stateMachine => "state_machine"
+
+def promDesiredOutput (output : DesiredOutput) : String :=
+  promMetricLine "desired_output_info"
+    s!"output_id=\"{output.id}\",kind=\"{derivedOutputKindName output.kind}\"" "1"
+
 def promComponentMetrics (component : String) (m : Metrics) : List String :=
   [ promMetricLine "success_probability" s!"component=\"{component}\"" (fixed4Text m.successNum m.successDen)
   , promMetricLine "expected_latency" s!"component=\"{component}\"" (fixed4Text m.latencyNum m.latencyDen)
@@ -352,7 +362,10 @@ def prometheusMetrics : String :=
     , "# TYPE leanfm_visible_protocol_proof_fields gauge"
     , "# HELP leanfm_visible_protocol_assertions Number of assertions attached to a typed visible protocol sketch."
     , "# TYPE leanfm_visible_protocol_assertions gauge"
+    , "# HELP leanfm_desired_output_info Prompt-derived output catalog; output_id links metrics and renderings to durable requirements provenance."
+    , "# TYPE leanfm_desired_output_info gauge"
     ] ++
+    (LeanFM.LLMGenerated.Requirements.workerRequirement.desiredOutputs.map promDesiredOutput) ++
     promComponentMetrics "auth_group" authMetrics ++
     promTaskMetrics "get_docs" purchaseTaskFSM purchaseMetrics ++
     promTaskMetrics "post_review" reviewTaskFSM reviewMetrics ++
@@ -436,6 +449,10 @@ deriving Repr
 def openApiRoute (path summary contentType schema leanfmKind : String) (tags : List String := ["LeanFM"]) : OpenApiRoute :=
   { path := path, method := "get", summary, contentType, schema, tags, leanfmKind }
 
+def openApiOperationId (route : OpenApiRoute) : String :=
+  "leanfm_" ++ route.method ++ "_" ++ String.ofList (route.path.toList.map fun c =>
+    if c == '/' || c == '.' || c == '-' then '_' else c)
+
 def openApiRoutes : List OpenApiRoute :=
   [ openApiRoute "/" "LeanFM assistant workbench" "text/html" "string" "workbench" ["UI"]
   , openApiRoute "/examples" "Example dashboard with charts, graphs, generated sources, and renders" "text/html" "string" "workbench" ["UI"]
@@ -451,6 +468,9 @@ def openApiRoutes : List OpenApiRoute :=
   , openApiRoute "/tools/scenarios" "Scenario catalog" "application/json" "object" "catalog" ["Tools"]
   , openApiRoute "/tools/protocol-sketches" "Protocol sketch catalog" "application/json" "object" "catalog" ["Tools"]
   , openApiRoute "/tools/conversations" "Conversation-to-Lean-file catalog" "application/json" "object" "catalog" ["Tools"]
+  , openApiRoute "/tools/leanfm-language/reference" "Authoritative LeanFM language reference; call before constructing requirement objects" "text/markdown" "string" "language-reference" ["LLM", "Tools"]
+  , openApiRoute "/tools/leanfm-language/requirements-reference" "Authoritative LeanFM requirements and protobuf language reference" "text/markdown" "string" "requirements-reference" ["LLM", "Tools"]
+  , openApiRoute "/tools/leanfm-language/implementation-reference" "Authoritative LeanFM implementation-mapping language reference" "text/markdown" "string" "implementation-reference" ["LLM", "Tools"]
   , openApiRoute "/tools/static-assets/validate" "Static JavaScript asset validation report" "text/plain" "string" "validation" ["Validation"]
   , openApiRoute "/tools/generated-requirements/prompt" "Prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
   , openApiRoute "/tools/llm-generated/requirements/prompt" "Canonical prompt for LLM-generated LeanFM requirements" "text/plain" "string" "prompt" ["LLM"]
@@ -488,6 +508,7 @@ def openApiRoutes : List OpenApiRoute :=
 def openApiRouteYaml (route : OpenApiRoute) : List String :=
   [ s!"{jsonString route.path}:"
   , s!"  {route.method}:"
+  , s!"    operationId: {openApiOperationId route}"
   , s!"    summary: {jsonString route.summary}"
   , s!"    tags: [{joinWith ", " (route.tags.map jsonString)}]"
   , s!"    x-leanfm-kind: {jsonString route.leanfmKind}"
@@ -746,6 +767,11 @@ def requiredProofSummaryLine (proof : RequiredProof) : String :=
 def chartSummaryLine (chart : RequirementChart) : String :=
   chart.name ++ " (" ++ frontChartKindName chart.kind ++ ", source=" ++ chart.source ++ ", value=" ++ chart.value ++ ")"
 
+def desiredOutputSummaryLine (output : DesiredOutput) : String :=
+  output.id ++ " [" ++ derivedOutputKindName output.kind ++ "]: " ++ output.question ++
+    "; events=" ++ output.eventSource ++ "; reducer=" ++ output.reducer ++
+    "; requested by: " ++ output.prompt
+
 def currentRequirementSubjectJson : String :=
   let spec := LeanFM.LLMGenerated.Requirements.workerRequirement
   let markdown :=
@@ -765,6 +791,7 @@ def currentRequirementSubjectJson : String :=
   "\"messages\":" ++ jsonList (spec.messages.map (fun msg => jsonString (messageSummaryLine msg))) ++ "," ++
   "\"properties\":" ++ jsonList ((spec.properties.map propertySummaryLine ++ spec.requiredProofs.map requiredProofSummaryLine).map jsonString) ++ "," ++
   "\"reducers\":" ++ jsonList (spec.charts.map (fun chart => jsonString (chartSummaryLine chart))) ++ "," ++
+  "\"desiredOutputs\":" ++ jsonList (spec.desiredOutputs.map (fun output => jsonString (desiredOutputSummaryLine output))) ++ "," ++
   "\"markdown\":" ++ jsonString markdown ++
   "}"
 
@@ -795,6 +822,7 @@ def frontPageOverview : String :=
   "</div>" ++
   "<div class=\"overviewCard wide\"><h3>Message Atoms</h3>" ++ htmlList (spec.messages.map messageSummaryLine) ++ "</div>" ++
   "<div class=\"overviewCard wide\"><h3>Reducers</h3>" ++ htmlList (spec.charts.map chartSummaryLine) ++ "</div>" ++
+  "<div class=\"overviewCard wide\"><h3>Prompt-derived outputs</h3>" ++ htmlList (spec.desiredOutputs.map desiredOutputSummaryLine) ++ "</div>" ++
   "</div></div></section>"
 
 def liveSubjectGraph : String :=

@@ -101,10 +101,65 @@ A policy chooses one `Choice` at each state. This is useful when computing expec
 ## CTL
 
 `LeanFM/CTL.lean` defines Computation Tree Logic over a finite state graph. This
-project does not use LTL. CTL combines always/eventually with temporal
-necessity/possibility: `A` ranges over every permitted forward continuation and
-`E` over at least one. Observations are immutable; a value can differ only in a
-forward successor state, although the value itself need not change monotonically.
+section places it in the larger modal-logic family before describing the
+implementation.
+
+### From modal logic to temporal logic
+
+Propositional logic evaluates `p`, `not p`, `p and q`, and similar formulas at
+one state. Basic modal logic adds an accessibility relation between states and
+two dual operators:
+
+- `necessarily p` (`box p`, conventionally `□p`): `p` holds at every accessible state;
+- `possibly p` (`diamond p`, conventionally `◇p`): `p` holds at some accessible state.
+
+They are dual when the logic is classical: `◇p = not □not p`. What
+“accessible” means belongs to the model. It can mean a next computation state,
+an epistemically possible world, a permitted state, or something else. Frame
+conditions change the resulting modal logic: arbitrary frames give the basic
+normal logic K, while reflexive, transitive, symmetric, or Euclidean relations
+validate additional axioms. LeanFM does not silently assume those conditions;
+its relevant relation is the directed successor graph.
+
+Temporal logic specializes accessibility to time. LTL evaluates a formula on
+one linear path and supplies operators such as `X p` (next), `F p`
+(eventually), `G p` (always), and `p U q` (until). `F` and `G` locate a fact
+along that selected path; by themselves they do not say whether the path is one
+possible future or every possible future. In model-checking presentations an
+outer universal interpretation of an LTL formula is common, but it is still
+important not to confuse that convention with an operator inside LTL.
+
+CTL makes branching explicit in the formula. It combines a path modality with
+a temporal operator:
+
+| Path modality | Temporal operator | CTL | Reading |
+| --- | --- | --- | --- |
+| possibly (`E`) | next (`X`) | `EX p` | possibly next `p` |
+| necessarily (`A`) | next (`X`) | `AX p` | necessarily next `p` |
+| possibly (`E`) | eventually (`F`) | `EF p` | possibly eventually `p` |
+| necessarily (`A`) | eventually (`F`) | `AF p` | necessarily eventually `p` |
+| possibly (`E`) | always (`G`) | `EG p` | possibly always `p` |
+| necessarily (`A`) | always (`G`) | `AG p` | necessarily always `p` |
+
+This is the central two-axis reading in LeanFM. “Eventually” and “always” say
+*when along a continuation*; “possibly” and “necessarily” say *which
+continuations*. Thus `EF p` and `AF p` share the temporal word “eventually” but
+make materially different requirements. CTL also quantifies strong and weak
+until. In strict CTL every temporal operator is paired with `A` or `E`; CTL*,
+which LeanFM does not implement, permits freer nesting of path and state
+formulas.
+
+General modal logic may have several accessibility relations and therefore
+several boxes and diamonds—for example, one pair for computation steps, another
+for what an actor knows, and another for what policy permits. Such modalities
+must remain named and must not be collapsed into CTL's `A` and `E`. LeanFM's
+`A`/`E` mean only universal/existential quantification over permitted forward
+computations from the current observation. They are not probability operators,
+epistemic certainty, moral necessity, or implementation obligation.
+
+LeanFM therefore uses CTL rather than LTL for its executable branching checks.
+Observations are immutable; a value can differ only in a forward successor
+state, although the value itself need not change monotonically.
 
 ```lean
 inductive CTL (S : Type) where
@@ -132,7 +187,7 @@ partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
 
 It takes a successor function, a starting state, and a formula. The CTL implementation works over explicitly listed finite states. It uses visited-state lists to terminate on cycles.
 
-The most useful operators in this project are:
+The implemented operators are:
 
 - `EX p`: possibly next, `p`.
 - `AX p`: necessarily next, `p`.
@@ -489,6 +544,17 @@ lake exe leanfm
 ## Metrics
 
 Metrics are computed from `PathStats` paths.
+
+Those paths are ordered modeled events, not unrelated monitoring counters. A
+metric or rendering is admitted only because the requirements conversation
+identified a question to answer. `RequirementSpec.desiredOutputs` preserves a
+stable output ID, the originating prompt, the precise question, the event
+source and reducer, the unit, and whether the answer is a scalar, 2D function,
+interaction diagram, or state machine. `/metrics` publishes those output IDs as
+`leanfm_desired_output_info`; numeric series and UI renderings can therefore be
+traced back to the durable desire that justified them. Runtime observations may
+feed the same reducers, but model-derived and observed values must remain
+distinguishable.
 
 ```lean
 structure Metrics where
