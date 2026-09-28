@@ -482,7 +482,7 @@
     "p95": 7863807
   },
   "max_active_orders": 46,
-  "max_causal_concurrency_per_order": 2,
+  "max_order_concurrency_per_order": 2,
   "orders": 20000,
   "outcomes": {
     "DeliveryFailed": 648,

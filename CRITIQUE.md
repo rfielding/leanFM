@@ -6,8 +6,9 @@ is intentionally critical. Passing the build does not resolve these issues.
 
 ## The central abstraction is promising but not yet closed
 
-LeanFM treats a scenario as a list of timestamped events with explicit causal
-predecessors. That is a useful common representation, but the project does not
+LeanFM treats a scenario as a list of timestamped events with explicit immediate
+predecessors. Their transitive closure gives an event order, not a causation
+claim. That is a useful common representation, but the project does not
 yet show that every artifact can be derived from that representation without
 additional hand-authored information.
 
@@ -53,7 +54,7 @@ The project correctly separates transport choices from protobuf values:
 protobuf says what bytes represent a value, while `Implementation.lean` says
 whether those bytes use HTTP, TCP, or a channel. However, placing
 `ScenarioEvent` and `Scenario` in `Requirements.proto` also chooses a particular
-serialization for event identity, causality, correlation, actors, and time.
+serialization for event identity, predecessor order, correlation, actors, and time.
 
 That may be appropriate as part of the observable contract, but the boundary
 should be stated explicitly. If the event envelope is merely an implementation
@@ -96,7 +97,7 @@ Several questions remain:
   backpointer list, but malformed, missing, or multiple start backpointers still
   need explicit validation and error reporting.
 
-## Causal links permit fork and join but need stronger validation
+## Predecessor links permit fork and join but need stronger validation
 
 A list-valued `prior` field naturally expresses roots, forks, and joins. The
 current examples use it effectively. General validation should additionally
@@ -105,7 +106,7 @@ check:
 - event IDs are unique;
 - every predecessor exists or is explicitly external;
 - the predecessor graph is acyclic;
-- causal edges do not travel backward in `timeAt`;
+- predecessor edges do not travel backward in `timeAt`;
 - actor/message endpoints agree with the selected terminal;
 - ordinary joins name all required branches; threshold joins preserve valid
   `m`, `n`, and distinct selected branch IDs;
@@ -122,12 +123,12 @@ matter.
 
 ## “Maximal concurrency” has multiple meanings
 
-The width of the causal partial order gives the maximum number of pairwise
+The width of the predecessor partial order gives the maximum number of pairwise
 unordered events. That is not automatically the maximum number of concurrently
 executing operations. Point events have no duration. Runtime concurrency
 requires separate start and completion events and a rule pairing them.
 
-Resource concurrency introduces another distinction: causal independence may
+Resource concurrency introduces another distinction: order independence may
 permit two operations while actor capacity, queue capacity, or scheduling makes
 their simultaneous execution impossible. The book should consistently label
 partial-order width, observed in-flight work, and feasible scheduled concurrency
@@ -317,7 +318,7 @@ Generated prose should not silently supply facts that the user did not state.
 The new characterize-and-synthesize loop defines similarity as agreement on a
 finite list of reduced metrics. This is testable but underdetermined: many event
 processes can share latency percentiles, throughput, uptime, and histogram bins
-while differing in burstiness, tail dependence, causal structure, or rare
+while differing in burstiness, tail dependence, predecessor-order structure, or rare
 failures. Passing the tolerance check proves only equivalence under the named
 reducers. It does not show that the generated process has the same joint
 distribution or operational risk. Tolerances, sample sizes, random seeds, and
@@ -353,10 +354,10 @@ than it is.
 3. Implement or bind protobuf encoding and decoding for that model, then prove
    or exhaustively check round-trip preservation for the bounded domain.
 4. Revalidate the decoded trace against the grammar, FSM, actor endpoints, and
-   causal graph.
+   predecessor graph.
 5. Derive diagrams, protobuf declarations, implementation bindings, reducers,
    and test vectors from the same typed source where possible.
-6. Add causal-graph validation: unique IDs, complete predecessors, acyclicity,
+6. Add predecessor-graph validation: unique IDs, complete predecessors, acyclicity,
    monotonic timestamps, and valid fork/join boundaries.
 7. Make metric boundary selection typed and explicit instead of relying on
    naming conventions.

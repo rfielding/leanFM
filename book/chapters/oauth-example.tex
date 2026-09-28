@@ -210,7 +210,7 @@ the denial branch ends without exchanging a code.
 \section{The parallel protobuf alphabet}
 
 The scenario and its wire alphabet are maintained side by side. The scenario says
-which messages may occur, in what causal structure, and with which parameter
+which messages may occur, in what predecessor-order structure, and with which parameter
 relationships. The protobuf file assigns field numbers and concrete wire types to
 those same message atoms:
 
@@ -291,7 +291,7 @@ needed.
 \subsection{Envelope stream and concrete bytes}
 
 Assign monotonically increasing clock ticks and event identifiers. This example
-has a linear causal chain, so \texttt{priorIds(e1)} is empty and
+has a linear predecessor chain, so \texttt{priorIds(e1)} is empty and
 \texttt{priorIds(e$n$)} is \texttt{[e$n-1$]}. A fork or join would make these
 lists non-linear without changing the procedure. Deterministic protobuf
 serialization of the schema on the preceding pages produces:
@@ -357,9 +357,9 @@ Each line can become a component conformance test. The global word remains the
 authority for cross-component order and parameter equality; a local projection
 does not grant an actor knowledge of erased events.
 
-\subsection{Causality, queues, and memory}
+\subsection{Event order, queues, and memory}
 
-The \texttt{priorIds} fields generate a twelve-node causal graph with edges
+The \texttt{priorIds} fields generate a twelve-node order graph with edges
 $e_i\to e_{i+1}$. The interaction diagram is the same graph laid out by actor;
 the state-machine path lays it out by grammar residual. Neither is independently
 authored.
@@ -403,7 +403,7 @@ grammar + field values
   -> legal terminal word
   -> typed EventEnvelope stream
   -> framed protobuf bytes
-  -> causal graph + interaction diagram
+  -> partial-order graph + interaction diagram
   -> residual FSM path + per-actor projections
   -> queue schedule + byte-pressure samples
   -> task attempt + probability/latency/XY reducers

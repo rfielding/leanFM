@@ -23,7 +23,7 @@ size grows exponentially with independently varying components. Worse, it makes
 the specification brittle under harmless refactoring.
 
 We therefore begin with \emph{behaviour}: who communicated with whom, what kind of
-event occurred, what information it carried, and what causal history it extends.
+event occurred, what information it carried, and which predecessor order it extends.
 Internal state enters only when it changes an observable promise.
 
 \section{Comparison with TLA+}
@@ -38,7 +38,7 @@ model checking.
 
 LeanFM chooses a different primary boundary. The object available to us is often
 an event stream scraped from a running system. We can decode its messages,
-correlate them, follow causal backpointers, and classify the resulting sequence
+correlate them, follow predecessor backpointers, and classify the resulting sequence
 as in-spec or out-of-spec. We generally cannot observe the implementation's
 private variables at every step, so \texttt{Requirements.lean} does not pretend
 to maintain them. Its grammar both recognizes legal traces and generates them;
@@ -60,7 +60,7 @@ The trade is deliberate:
 \toprule
 Question & TLA+-style state specification & LeanFM event-language specification \\
 \midrule
-Primary behavior & sequence of states & sequence or causal graph of events \\
+Primary behavior & sequence of states & sequence or partial-order graph of events \\
 Queue representation & usually an explicit variable & observable enqueue, send, receive, blocking, and capacity facts \\
 Conformance input & modeled states or action correspondence & decoded production event stream \\
 Hidden variables & available when declared & omitted unless they affect an observable contract \\

@@ -47,7 +47,7 @@ completed-task latency, and the number still in flight. In-flight attempts are
 not counted as failures or assigned a completed-task latency.
 
 The worked OAuth scenario has a parallel protobuf alphabet in
-`book/examples/oauth.proto`. Its envelope carries event identity, causal
+`book/examples/oauth.proto`. Its envelope carries event identity, predecessor
 predecessors, `(session, task)`, clock, and endpoints; its `oneof` selects the
 scenario message payload. The grammar owns behavior, while protobuf owns field
 numbers and wire types. Exact byte comparison additionally requires a deterministic
@@ -278,7 +278,9 @@ This is the wrapper around a protobuf-like message body. The wrapper carries tas
 source actor, destination actor, transport, and a timestamp sampled from the
 model's shared monotonic clock. The payload carries the message type, bytes, and
 parsed fields. Durations are timestamp differences between correlated boundary events;
-causal order still comes from grammar structure and prior-event identifiers.
+prior-event identifiers induce the event partial order. Incomparable events may
+commute in a serialization. Causation is a separate grammar or domain claim and
+is not implied by a `prior` pointer.
 
 ```lean
 structure ProtoPayload where

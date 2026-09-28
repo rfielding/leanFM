@@ -465,8 +465,9 @@ or weighted dwell outcomes may be used when the corresponding timing information
 is available.
 
 Dwell is part of the specification, so it can drive latency, throughput, timeout,
-and queue-pressure calculations. It does not create causality: the grammar and
-\texttt{priorIds} continue to determine which events depend on which others.
+and queue-pressure calculations. It does not create event order:
+\texttt{priorIds} supplies the predecessor relation, while the grammar separately
+states why a sequence or dependency is legal.
 
 \section{Estimating completion from an event stream}
 

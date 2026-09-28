@@ -575,4 +575,4 @@ AG(owner_inactive -> AF(manager_admin || quarantined_with_audit))
 A[pending_upload U (readable || quarantined || garbage_collected)]
 ```
 
-The OpenAPI document tells clients how to speak to the server. The LeanFM grammar is stricter: it says which causally dependent messages must exist before a response is legal. That is where we can prove that a server following the spec does not produce the obvious spill and orphan traces.
+The OpenAPI document tells clients how to speak to the server. The LeanFM grammar is stricter: it says which predecessor messages must exist before a response is legal. That is where we can prove that a server following the spec does not produce the obvious spill and orphan traces. The resulting event order does not, by itself, assert causation.

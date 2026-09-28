@@ -27,7 +27,7 @@ separate chooser field exists.
 
 Each event records:
 
-- stable event identity and a list of immediate causal predecessors;
+- stable event identity and a list of immediate ordering predecessors;
 - `(session, task)` correlation;
 - source and destination actors;
 - one `timeAt` timestamp; elapsed time is the difference between separate boundary messages;

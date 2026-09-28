@@ -109,7 +109,7 @@ def main() -> None:
         "events": total_events,
         "bytes": total_bytes,
         "max_active_orders": max_active,
-        "max_causal_concurrency_per_order": 2,
+        "max_order_concurrency_per_order": 2,
         "probabilities": {
             "payment_authorized": ratio(kinds["PaymentAuthorized"], order_count),
             "bake_completed": ratio(kinds["BakeCompleted"], order_count),

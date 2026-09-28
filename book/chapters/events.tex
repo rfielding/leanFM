@@ -23,7 +23,7 @@ abbrev Trace (Actor Session Task Kind Payload : Type) :=
 \end{lstlisting}
 
 The fields have different jobs. \texttt{id} identifies a visible fact;
-\texttt{priorIds} records zero or more causal backpointers; \texttt{from} and
+\texttt{priorIds} records zero or more immediate predecessor backpointers; \texttt{from} and
 \texttt{to} name the parties; \texttt{(session, task)} correlates independently
 progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
@@ -31,15 +31,17 @@ production to the next. \texttt{timeAt} is sampled from the model's shared monot
 clock. Its differences measure elapsed time; it is not a civil-time date and its
 origin is immaterial.
 
-The causal links form a directed acyclic graph rather than a singly linked list.
+The predecessor links form a directed acyclic graph rather than a singly linked list.
 An initial event has no prior identifiers. A fork is represented by several later
 events that each name the same prior event. A join is represented by one event
 whose \texttt{priorIds} names every branch on which it depends. An end event of
 any kind may also name its corresponding start event. That backpointer makes
 elapsed time simply \texttt{end.timeAt - start.timeAt}, even when several
 attempts with the same \texttt{(session, task)} overlap. A backpointer to an
-already-ancestral start is a redundant causal edge, but it is useful correlation
-data and does not alter the partial order.
+already-ancestral start is a redundant ordering edge, but it is useful
+correlation data and does not alter the partial order. The edge says ``ordered
+after,'' not ``caused by.'' A causal interpretation requires a separate grammar
+or domain assertion.
 
 For an $m$-of-$n$ join, the event additionally records $m$, $n$, and the exact
 $m$ branch-terminal IDs that satisfied the threshold. The selected IDs must be
@@ -114,13 +116,13 @@ $e_8$ & $[e_7]$ & $6946819$ & order delivered & 65 & outcome \\
   \draw[prior] (e7) -- (e6);
   \draw[prior] (e8) -- (e7);
 \end{tikzpicture}
-\caption{The table's immediate causal backpointers rendered as a graph. Each
+\caption{The table's immediate predecessor backpointers rendered as an order graph. Each
 arrow points from an event to an ID in its \texttt{priorIds} list: for example,
 $e_2\to e_0$. The two arrows from $e_5$ expose the payment/baking join.}
 \label{fig:bakery-prior-graph}
 \end{figure}
 
-The list order is a serialization convenient for storage. Causal order is the
+The list order is one serialization convenient for storage. Event order is the
 transitive closure of \texttt{priorIds}. Both $e_1$ and $e_2$ cite $e_0$, so they
 fork. Event $e_5$ cites both $e_3$ and $e_4$, so it joins the branches. The
 following quantities are folds or graph queries over this one list:
@@ -131,7 +133,7 @@ following quantities are folds or graph queries over this one list:
   \operatorname{wireBytes} &= 85+71+73+49+55+57+54+40+65 = 549.
 \end{align*}
 
-Two events are causally concurrent when neither is an ancestor of the other:
+Two events are concurrent in this order when neither is an ancestor of the other:
 
 \begin{lstlisting}
 def concurrent (events : List AnalysisEvent) (a b : EventId) : Bool :=
@@ -141,11 +143,13 @@ def concurrent (events : List AnalysisEvent) (a b : EventId) : Bool :=
 The maximum concurrency permitted by the trace is the width of this partial
 order: the size of its largest antichain. Here $\{e_1,e_2\}$ is an antichain, as
 is $\{e_3,e_4\}$, and no three events are pairwise concurrent. Thus the maximal
-causal concurrency is two. A timestamped point event has no active interval;
+order concurrency is two. Incomparable events may commute: swapping them in a
+linear serialization preserves the same partial order, provided each event
+still appears after all of its named predecessors. A timestamped point event has no active interval;
 runtime concurrency requires separate start and completion messages. This is stronger than counting
 adjacent list elements and different from measuring average runtime concurrency.
 
-Timestamps and causal links also give elapsed time along a selected path:
+Timestamps and predecessor links also give elapsed time along a selected path:
 
 \begin{lstlisting}
 edgeTime(prior, event) := event.timeAt - prior.timeAt
@@ -222,12 +226,15 @@ ideas that are often conflated:
 
 \begin{itemize}
   \item sequence order: one visible event occurs before another;
-  \item causality: an event extends or responds to another event;
+  \item declared dependency or causality: a grammar says that one event extends
+        or responds to another;
   \item duration: an amount of physical or logical time elapses.
 \end{itemize}
 
-Grammar structure handles sequence, identifiers handle causal linkage, and typed
-constraints handle duration. This keeps a change in timeout policy from rewriting
+Grammar structure declares legal sequence and domain dependency,
+\texttt{priorIds} encodes the resulting predecessor order, and typed constraints
+handle duration. A predecessor link alone is not evidence of causation. This
+keeps a change in timeout policy from rewriting
 the protocol's entire behavioural shape.
 
 For two events from the same \texttt{(session, task)}, elapsed time is defined when
@@ -245,9 +252,10 @@ def elapsed (start finish : Event) : Option Duration :=
 Latency queries name their boundary event kinds and follow the end event's
 backpointer to the start before subtracting timestamps. The
 \texttt{(session, task)} values must agree, but are not sufficient to choose a
-start when attempts overlap. Causality still comes
-from grammar structure and \texttt{priorIds}: equal timestamps may occur, and a
-timestamp alone does not establish that one event caused another.
+start when attempts overlap. Ordering comes from \texttt{priorIds}; any causal
+meaning comes from the grammar or another explicit domain relation. Equal
+timestamps may occur, and neither a timestamp nor a predecessor pointer alone
+establishes that one event caused another.
 
 \section{Round trip through bytes}
 
@@ -255,7 +263,7 @@ A generated scenario is not complete until it can cross the byte boundary in
 both directions. \texttt{ScenarioEvent} in \texttt{Requirements.proto} carries
 the event identity, complete \texttt{prior} list, correlation key, actors,
 \texttt{timeAt}, and the selected protobuf atom. Encoding a \texttt{Scenario}
-therefore produces bytes for both its causal envelope and payload. Decoding those
+therefore produces bytes for both its ordering envelope and payload. Decoding those
 bytes must reconstruct the same ordered event list. The executable round-trip
 check compares the decoded protobuf value with the generated value and separately
 checks the reconstructed \texttt{prior} graph; loss of a fork or join fails the

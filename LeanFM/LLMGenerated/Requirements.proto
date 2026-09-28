@@ -8,7 +8,7 @@ package leanfm.generated;
 // probabilities, timestamp differences, CTL-style properties, charts, and markdown.
 
 // The event envelope is also protobuf so a complete generated scenario can be
-// serialized and reconstructed, including its fork/join causal graph.
+// serialized and reconstructed, including its fork/join predecessor-order graph.
 message ScenarioEvent {
   string id = 1;
   repeated string prior = 2;

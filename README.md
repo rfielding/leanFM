@@ -26,14 +26,14 @@ The model treats a protocol as globally observable behavior:
 - actor reliability contracts specify outage probability and expected MTTR; `Unavailable`/`Recovered` backpointer pairs produce observed outage percentage and MTTR XY series for replica-based deployments
 - the LLM requirements interviewer plans derived properties before fixing fields; each sufficiently identified `(session, scenario)` produces its own interaction diagram and state machine plus planned line and pie/histogram derivatives
 - the baseline derived-property catalog covers latency, throughput, outcomes, queues, concurrency, reliability, financial flows (including taxes and profit/loss under a declared boundary), and waste units/cost/rate; missing inputs are marked indeterminate rather than invented
-- load-derived outputs include observed and fitted Universal Scalability Law curves, queue length paired with causal latency, per-instance memory headroom with exhaustion treated as fatal, and outage impact propagated across actor interaction networks
+- load-derived outputs include observed and fitted Universal Scalability Law curves, queue length paired with explicitly related latency boundaries, per-instance memory headroom with exhaustion treated as fatal, and outage impact propagated across actor interaction networks
 - every scalar metric, 2D function rendering, interaction diagram, and state machine preserves the originating prompt, the question being answered, and the event reducer; `/metrics` exports durable output IDs alongside event-informed numeric series
 - synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
 - stateless code generation uses `(Requirements.lean, Implementation.lean, Requirements.proto) -> code`; revision adds existing code as an input and never relies on prior chat history
 - every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
 - unlike an explicit-variable state model, LeanFM primarily recognizes and generates observable event traces; private implementation variables are omitted unless they change an observable requirement
 - `Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the durable memory of the requirements argument, so a new LLM session does not require the original conversation
-- generated scenarios round-trip through protobuf bytes without losing causal `prior` links
+- generated scenarios round-trip through protobuf bytes without losing `prior` predecessor links; these links induce a partial order in which incomparable concurrent events may commute, but do not alone assert causation
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes
 - a BNF surface composes named interactions by sequence, choice, parallelism, guards, and references

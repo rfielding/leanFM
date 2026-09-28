@@ -239,6 +239,7 @@ The resulting transitions are explicit:
         \texttt{tryReceive} returns \texttt{none} and permits later work.
 \end{itemize}
 
-Queue order and causal order are not identical. FIFO determines which queued
-envelope is available next, while \texttt{priorIds} records the causal graph among
-events, including forks and joins across actors.
+Queue order and predecessor order are not identical. FIFO determines which queued
+envelope is available next, while \texttt{priorIds} records the event-order graph,
+including forks and joins across actors. Incomparable branches may commute; the
+pointer relation does not itself claim that one event caused another.

@@ -31,7 +31,7 @@ Refund can fail and be retried up to three times. Finance records tax reversal
 separately from the refund.
 
 **Assistant:** To answer “where returns stall,” I need timestamps on separate
-start/end events, causal `prior` links, and an observation-window policy for
+start/end events, predecessor `prior` links, and an observation-window policy for
 unfinished returns. Should the output include one interaction diagram and one
 state machine for every `(session_id, return_id)` scenario, plus stage-latency
 and queue-depth functions over time?
@@ -130,7 +130,7 @@ triples. Neither visual is independently authored.
 
 | Output ID | Shape | Question retained from the chat | Event reducer |
 | --- | --- | --- | --- |
-| `return.interaction` | interaction diagram | How did this return unfold between actors? | Partition by `(session_id,return_id)`; causally order messages by `prior` and `timeAt` |
+| `return.interaction` | interaction diagram | How did this return unfold between actors? | Partition by `(session_id,return_id)`; use `prior` as a partial order and allow incomparable messages to commute |
 | `return.state_machine` | state machine | Which return states and transitions occurred? | Project observable state/message/state triples |
 | `return.stage_latency` | 2D function | Where do returns stall? | Pair stage end to start; plot p50/p95/p99 by stage |
 | `return.queue_depth` | 2D function | Which service accumulates work? | Time-weight queue observations by service |

@@ -70,7 +70,7 @@ def main() -> None:
         if [list(event.prior) for event in decoded.events] != [
             [], ["e0"], ["e1"], ["e2", "e0"], [], ["u0"]
         ]:
-            raise SystemExit("decoded causal graph does not reconstruct the scenario")
+            raise SystemExit("decoded predecessor graph does not reconstruct the scenario")
         print(f"ok: scenario -> {len(wire_bytes)} protobuf bytes -> identical scenario")
 
 
