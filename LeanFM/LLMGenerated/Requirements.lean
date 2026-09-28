@@ -627,9 +627,12 @@ def workerRequirement : LeanFM.RequirementSpec :=
   , title := "Worker visible-behavior requirements"
   , actors := [WorkerActor.Client, WorkerActor.Gateway, WorkerActor.Worker].map LeanFM.requirementName
   , actorPopulations :=
-      [ { actorSpec := "Client", instancePrefix := "client-", count := 20 }
-      , { actorSpec := "Gateway", instancePrefix := "gateway-", count := 2 }
-      , { actorSpec := "Worker", instancePrefix := "worker-", count := 2 }
+      [ { actorSpec := "Client", instancePrefix := "client-", count := 20
+        , routing := .sticky "session" }
+      , { actorSpec := "Gateway", instancePrefix := "gateway-", count := 2
+        , routing := .roundRobin }
+      , { actorSpec := "Worker", instancePrefix := "worker-", count := 2
+        , routing := .shardHash "task" }
       ]
   , actorResources :=
       [ { actor := LeanFM.requirementName WorkerActor.Client
@@ -652,6 +655,14 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { actor := "Worker"
         , outageProbability := { numerator := 20, denominator := 10000 }
         , meanTimeToRepairMs := 45000 }
+      ]
+  , actorCosts :=
+      [ { actor := "Gateway", hardwarePool := "general-purpose", currency := "USD-cent"
+        , hardwareCostPerProvisionedHour := 12, serviceCostPerAvailableHour := 3
+        , capacityWorkPerHour := 3600000 }
+      , { actor := "Worker", hardwarePool := "compute", currency := "USD-cent"
+        , hardwareCostPerProvisionedHour := 20, serviceCostPerAvailableHour := 4
+        , capacityWorkPerHour := 1800000 }
       ]
   , messages := workerMessages.map LeanFM.typedMessageSchemaToSchema
   , tasks := [getDocsTask, postReviewTask]
@@ -687,6 +698,7 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { name := "queue length against latency", kind := LeanFM.ChartKind.xy, source := "explicitly paired task events", groupBy := some "queue_length_at_start", value := "end.timeAt-start.timeAt" }
       , { name := "memory headroom", kind := LeanFM.ChartKind.xy, source := "actor resource observations", groupBy := some "actor_instance", value := "memory_budget_bytes-resident_bytes" }
       , { name := "network outage impact", kind := LeanFM.ChartKind.xy, source := "reliability and task events", groupBy := some "actor_dependency", value := "affected_task_count" }
+      , { name := "load and cost by replica count", kind := LeanFM.ChartKind.xy, source := "demand, completed work, and actor cost contracts", groupBy := some "actor_spec", value := "nominal demand/replicas, observed per-instance work/hour, sustainable supply, and hourly cost" }
       ]
   , desiredOutputs :=
       [ { id := "scenario.interaction", prompt := "Show how each scenario unfolds between actors.", question := "Which actor sent each partially ordered message to whom?", kind := .interactionDiagram, eventSource := "scenario events", reducer := "partition by (session,scenario), render src/dst lifelines and a prior-pointer order graph; show task-start/task-complete pairs inside fork/join branches and permit incomparable events to commute", unit := "events" }
@@ -701,6 +713,7 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { id := "load.queue_latency", prompt := "Show whether big queues mean increasing latency.", question := "How does completion latency vary with queue length at task admission?", kind := .function2d, eventSource := "queue observations and task events paired by prior ID", reducer := "x=queue_length_at_start; y=end.timeAt-start.timeAt, grouped by actor and task", unit := "milliseconds by queued messages" }
       , { id := "resource.memory_headroom", prompt := "Treat running out of memory as fatal.", question := "How close does each actor instance come to its memory budget, and did exhaustion terminate it?", kind := .function2d, eventSource := "actor memory observations and fatal outcomes", reducer := "x=timeAt; y=memoryBudgetBytes-residentBytes, with exhaustion events at zero", unit := "bytes" }
       , { id := "reliability.network_outages", prompt := "Include outages in reports for networks of actors.", question := "Which actor outages affected which dependent tasks, for how long, and with what outcome?", kind := .function2d, eventSource := "Unavailable/Recovered pairs, actor message edges, and task outcomes", reducer := "join outage intervals to actor dependency edges and aggregate affected, failed, and delayed tasks", unit := "milliseconds, tasks, and ratio" }
+      , { id := "capacity.optimal_supply", prompt := "Find an economical server supply that satisfies demand.", question := "As more servers split the demand and lower per-server load, which permitted replica count has the lowest hardware plus service-uptime cost while meeting capacity and availability targets?", kind := .function2d, eventSource := "actor cost contracts, routing policy, demand observations, availability observations, and per-instance completed work", reducer := "for each permitted replica count plot nominal load=demand/replicas, observed per-instance load and imbalance, availability-adjusted sustainable supply, and hourly cost; discard capacity below demand and select the minimum-cost feasible point", unit := "replicas, bytes per hour per server, and USD-cent per hour" }
       ]
   , markdown :=
       [ { id := "overview", title := "Overview", body := "This generated requirement describes only visible messages, visible states, and properties over message fields." }

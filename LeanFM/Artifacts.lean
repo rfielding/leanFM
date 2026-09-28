@@ -284,11 +284,72 @@ structure ActorReliabilityContract where
   meanTimeToRepairMs : Nat
 deriving Repr
 
-/-- A reusable actor specification may be instantiated many times. -/
+/-- Economic and supply inputs for a deployable service instance. Monetary
+    amounts use minor currency units so the requirement remains exact. -/
+structure ActorCostContract where
+  actor : String
+  hardwarePool : String
+  currency : String
+  hardwareCostPerProvisionedHour : Nat
+  serviceCostPerAvailableHour : Nat
+  capacityWorkPerHour : Nat
+deriving DecidableEq, Repr
+
+/-- One exact candidate in a finite supply search. Rational hourly values share
+    `denominator`, inherited from the availability target. -/
+structure SupplyPlan where
+  replicas : Nat
+  averageLoadNumerator : Nat
+  averageLoadDenominator : Nat
+  effectiveCapacityNumerator : Nat
+  hourlyCostNumerator : Nat
+  denominator : Nat
+deriving DecidableEq, Repr
+
+def supplyPlan? (contract : ActorCostContract) (availability : Probability)
+    (demandWorkPerHour replicas : Nat) : Option SupplyPlan :=
+  if replicas == 0 || !availability.isValid || availability.denominator == 0 then none
+  else
+    let capacityNum := replicas * contract.capacityWorkPerHour * availability.numerator
+    if capacityNum < demandWorkPerHour * availability.denominator then none
+    else some
+      { replicas := replicas
+      , averageLoadNumerator := demandWorkPerHour
+      , averageLoadDenominator := replicas
+      , effectiveCapacityNumerator := capacityNum
+      , hourlyCostNumerator := replicas *
+          (contract.hardwareCostPerProvisionedHour * availability.denominator +
+           contract.serviceCostPerAvailableHour * availability.numerator)
+      , denominator := availability.denominator }
+
+/-- Least expected hourly cost among replica counts `1..maxReplicas` that meet
+    availability-adjusted sustainable demand. -/
+def optimalSupply? (contract : ActorCostContract) (availability : Probability)
+    (demandWorkPerHour maxReplicas : Nat) : Option SupplyPlan :=
+  (List.range maxReplicas).foldl (fun best index =>
+    match supplyPlan? contract availability demandWorkPerHour (index + 1), best with
+    | none, current => current
+    | some candidate, none => some candidate
+    | some candidate, some current =>
+        if candidate.hourlyCostNumerator < current.hourlyCostNumerator
+        then some candidate else some current) none
+
+/-- How a service routes successive task messages to its homogeneous instances. -/
+inductive ActorRoutingPolicy where
+  /-- Reuse the instance selected for the named observable affinity field. -/
+  | sticky (affinityField : String)
+  /-- Select instances cyclically in a declared, deterministic order. -/
+  | roundRobin
+  /-- Hash the named observable field to select a stable shard. -/
+  | shardHash (shardKeyField : String)
+deriving DecidableEq, Repr
+
+/-- A homogeneous service cluster: every instance implements one actor spec. -/
 structure ActorPopulation where
   actorSpec : String
   instancePrefix : String
   count : Nat
+  routing : ActorRoutingPolicy
 deriving DecidableEq, Repr
 
 def ActorPopulation.instanceIds (population : ActorPopulation) : List String :=
@@ -302,6 +363,7 @@ structure RequirementSpec where
   actorPopulations : List ActorPopulation
   actorResources : List ActorResourceContract
   actorReliability : List ActorReliabilityContract
+  actorCosts : List ActorCostContract
   messages : List MessageSchema
   tasks : List TaskRequirement
   grammars : List TaskGrammar
@@ -767,8 +829,22 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
     spec.actorPopulations.foldr (fun population errors =>
       (if population.count == 0 then ["actor population has zero instances: " ++ population.actorSpec] else []) ++
       (if population.instancePrefix == "" then ["actor population has empty instance prefix: " ++ population.actorSpec] else []) ++
+      (match population.routing with
+       | .sticky field => if field == "" then ["sticky actor population has empty affinity field: " ++ population.actorSpec] else []
+       | .roundRobin => []
+       | .shardHash field => if field == "" then ["shard-hash actor population has empty shard-key field: " ++ population.actorSpec] else []) ++
       errors) []
   let resourceErrors := validateActorResources spec.actors spec.actorResources
+  let costActors := spec.actorCosts.map (fun contract => contract.actor)
+  let costErrors :=
+    (duplicateStrings costActors).map (fun actor => "duplicate actor cost contract: " ++ actor) ++
+    spec.actorCosts.foldr (fun contract errors =>
+      (if spec.actors.contains contract.actor then [] else
+        ["cost contract references unknown actor: " ++ contract.actor]) ++
+      (if contract.hardwarePool == "" then ["actor cost contract has empty hardware pool: " ++ contract.actor] else []) ++
+      (if contract.currency == "" then ["actor cost contract has empty currency: " ++ contract.actor] else []) ++
+      (if contract.capacityWorkPerHour == 0 then ["actor cost contract has zero hourly capacity: " ++ contract.actor] else []) ++
+      errors) []
   let reliabilityActors := spec.actorReliability.map (fun contract => contract.actor)
   let reliabilityErrors :=
     (duplicateStrings reliabilityActors).map (fun actor => "duplicate actor reliability contract: " ++ actor) ++
@@ -844,7 +920,7 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
   (if spec.requiredProofs.isEmpty then ["requirement " ++ spec.id ++ " has no required proof obligations"] else []) ++
   (if spec.desiredOutputs.isEmpty then ["requirement " ++ spec.id ++ " has no prompt-derived outputs"] else []) ++
-  duplicateActors ++ populationErrors ++ resourceErrors ++ reliabilityErrors ++
+  duplicateActors ++ populationErrors ++ resourceErrors ++ reliabilityErrors ++ costErrors ++
     duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++
     grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ performanceErrors ++ chartErrors ++ outputErrors ++ markdownErrors
 
@@ -1157,7 +1233,8 @@ def generatedRequirementSystemPrompt : String :=
     , "The committed static DSL/runtime lives outside LeanFM/LLMGenerated/ and must be treated as read-only."
     , "Output LeanFM/LLMGenerated/Requirements.lean, LeanFM/LLMGenerated/Requirements.proto, and LeanFM/LLMGenerated/Implementation.lean."
     , "Requirements.lean contains only observable requirements. Protobuf defines values that resolve to bytes; it does not select how those bytes are transported."
-    , "Define actor specifications separately from ActorPopulation values. Events use concrete instance IDs; every instance inherits the resource contract and behavior of its actorSpec."
+    , "Define actor specifications separately from ActorPopulation values. Each ActorPopulation is one homogeneous service cluster: all of its concrete instances implement the same actorSpec and inherit that specification's resource contract and behavior. Declare its routing as sticky with a nonempty affinity field, roundRobin, or shardHash with a nonempty shard-key field. Events use the selected concrete instance IDs."
+    , "For costed services, define ActorCostContract inputs in minor currency units: hardware pool, hardware cost per provisioned instance-hour, service cost per available instance-hour, and sustainable work capacity per instance-hour. Keep provisioned time distinct from available time and from busy time."
     , "ActorReliabilityContract may specify an outage probability and meanTimeToRepairMs. Keep specified reliability assumptions distinct from outage percentages and MTTR reduced from Unavailable/Recovered events."
     , "Put target language, filenames, runtime APIs, framework choices, per-message transport choices (such as HTTP method/path), and software code-generation mappings only in Implementation.lean."
     , "Requirements.lean imports LeanFM.Artifacts and defines namespace LeanFM.LLMGenerated.Requirements."
@@ -1189,7 +1266,7 @@ def generatedRequirementSystemPrompt : String :=
     , "Use probabilities as probabilityNum/probabilityDen and dwell time as dwellMs."
     , "Interrogate the user until every requested result is identifiable: scenario boundaries, start/end pairing, work units, clock units, actor instances and populations, queue capacities, outage/recovery boundaries, observation windows, and whether each probability or distribution is observed, expected, or unknown. Do not invent missing values."
     , "Before fixing the event schema, create a derived-property plan for the domain: stable name, originating user prompt, precise question, required observable fields, event reducer, unit, visualization, and scenario/accounting boundary. Start from LeanFM.baselineDerivedProperties; explicitly retain, replace, extend, or mark each applicable entry indeterminate."
-    , "From every sufficiently identified (session, scenario) stream generate its own interaction diagram and state machine, plus the planned XY lines and pie/histogram derivatives. Also render the prior-pointer order graph when it clarifies forks, joins, or task-start/task-complete boundaries nested inside concurrent branches; incomparable branches may commute. The baseline includes latency, client/server throughput, USL load fitting, queue/latency relation, memory headroom with fatal exhaustion, outcomes, concurrency, uptime, MTTR, actor-network outage impact, gross sales, refunds, net revenue, labor, material cost, taxes by type, other costs, profit/loss under a declared accounting model, and waste units/cost/rate."
+    , "From every sufficiently identified (session, scenario) stream generate its own interaction diagram and state machine, plus the planned XY lines and pie/histogram derivatives. Also render the prior-pointer order graph when it clarifies forks, joins, or task-start/task-complete boundaries nested inside concurrent branches; incomparable branches may commute. The baseline includes latency, client/server throughput, USL load fitting, queue/latency relation, memory headroom with fatal exhaustion, outcomes, concurrency, uptime, MTTR, actor-network outage impact, hardware and service uptime cost, least-cost supply satisfying declared demand/reliability constraints, gross sales, refunds, net revenue, labor, material cost, taxes by type, other costs, profit/loss under a declared accounting model, and waste units/cost/rate."
     , "For synthetic similarity, first characterize the source with named exact reducers and distributions, generate a candidate stream, replay the same reducers, and accept only when every target is within its declared tolerance."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, desiredOutputs, and markdown. Every scalar, 2D function rendering, interaction diagram, and state machine must have one DesiredOutput preserving the prompt that requested it and the event reducer that answers it."
     , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
@@ -1208,7 +1285,7 @@ def requirementsInterrogationChecklist : String :=
     , "2. Which event kinds start and end each measurement, and does every end backpoint to its start?"
     , "3. What is the monotonic clock unit and observation window?"
     , "4. What is work: bytes moved, requests completed, money, or another additive unit?"
-    , "5. Which actor populations, queue capacities, memory budgets, and in-flight limits apply?"
+    , "5. Which homogeneous actor clusters, routing policies (sticky affinity, round-robin, or shard-key hash), queue capacities, memory budgets, and in-flight limits apply?"
     , "6. Which alternatives are probabilistic, and are distributions observed, expected, or unknown?"
     , "7. Which events mean unavailable and recovered; what outage probability and expected MTTR are assumed?"
     , "8. Which client-experienced and server-aggregate throughput definitions are required?"
@@ -1216,8 +1293,9 @@ def requirementsInterrogationChecklist : String :=
     , "10. For load questions, which comparable client populations, warm-up, censored-work policy, throughput definition, and USL fit/error report apply?"
     , "11. Which queue observation is paired with each task latency, and which memory observations prove headroom or fatal exhaustion against the per-instance budget?"
     , "12. Which actor dependencies let an Unavailable/Recovered interval affect downstream tasks, and how are correlated or partial outages represented?"
-    , "13. Which financial boundary applies: currency, period, recognition rule, sales, refunds, labor, materials, taxes by jurisdiction/type, and other costs?"
-    , "14. Which waste units, costs, denominator, categories, and double-counting rules apply?"
+    , "13. Which infrastructure costs apply: hardware pool and cost per provisioned instance-hour, service cost per available instance-hour, sustainable work capacity, demand curve, availability target, and permitted supply choices?"
+    , "14. Which financial boundary applies: currency, period, recognition rule, sales, refunds, labor, materials, taxes by jurisdiction/type, and other costs?"
+    , "15. Which waste units, costs, denominator, categories, and double-counting rules apply?"
     , "15. For generated similar scenarios, what metrics and relative tolerances define acceptance?"
     , "Required default outputs per (session, scenario): interaction diagram; state machine; planned XY lines and pie/histograms. Plan all baseline derived properties before finalizing fields; mark inapplicable or indeterminate entries explicitly."
     ]

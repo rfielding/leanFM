@@ -43,4 +43,13 @@ example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "memo
 example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "reliability.network_outage_impact" := by
   native_decide
 
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "infrastructure.cost" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "capacity.load_per_instance" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "capacity.optimal_supply" := by
+  native_decide
+
 end LeanFM

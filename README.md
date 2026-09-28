@@ -21,11 +21,11 @@ The model treats a protocol as globally observable behavior:
 - dwell advances the event clock and supports latency, throughput, and queue metrics
 - each event has one `timeAt`; latency is computed between separate start and completion messages
 - an end message of any kind may backpoint to its start message, so overlapping attempts are paired by event identity
-- actor specifications are reusable; finite populations create concrete instances such as 20 clients and 2 servers, each with its own queues and in-flight tasks
+- actor specifications are reusable; each finite population is a homogeneous service cluster whose instances share one actor kind and whose routing is declared as sticky, round-robin, or shard-key hash
 - non-functional rates distinguish client-experienced `sum(work)/sum(observationTime)` from server aggregate `sum(work)/(max(end)-min(start))`; either can be plotted by client count for USL fitting
 - actor reliability contracts specify outage probability and expected MTTR; `Unavailable`/`Recovered` backpointer pairs produce observed outage percentage and MTTR XY series for replica-based deployments
 - the LLM requirements interviewer plans derived properties before fixing fields; each sufficiently identified `(session, scenario)` produces its own interaction diagram and state machine plus planned line and pie/histogram derivatives
-- the baseline derived-property catalog covers latency, throughput, outcomes, queues, concurrency, reliability, financial flows (including taxes and profit/loss under a declared boundary), and waste units/cost/rate; missing inputs are marked indeterminate rather than invented
+- the baseline derived-property catalog covers latency, throughput, outcomes, queues, concurrency, reliability, infrastructure cost and least-cost supply for declared demand, financial flows (including taxes and profit/loss under a declared boundary), and waste units/cost/rate; missing inputs are marked indeterminate rather than invented
 - load-derived outputs include observed and fitted Universal Scalability Law curves, queue length paired with explicitly related latency boundaries, per-instance memory headroom with exhaustion treated as fatal, and outage impact propagated across actor interaction networks
 - every scalar metric, 2D function rendering, interaction diagram, and state machine preserves the originating prompt, the question being answered, and the event reducer; `/metrics` exports durable output IDs alongside event-informed numeric series
 - synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances

@@ -204,17 +204,29 @@ process. A finite population gives that specification concrete identities:
 
 \begin{lstlisting}
 actor Client
-  |>.instances "client-" 20
+  |>.instances "client-" 20 (sticky "session")
 
 actor Server
-  |>.instances "server-" 2
+  |>.instances "server-" 2 (shardHash "tenant_id")
 \end{lstlisting}
 
 The grammar may say \texttt{Client -> Server}; a generated scenario resolves
 those roles to instances such as \texttt{client-7 -> server-2}. Each instance
 has its own inbound and outbound queues and its own set of in-flight
 \texttt{(session,task)} pairs, while inheriting behavior and resource bounds from
-the actor specification. Population size is finite and explicit so queue,
+the actor specification. A population is a homogeneous service cluster: every
+member must implement that one actor specification. A cluster cannot quietly mix
+gateways, databases, and workers merely because they share a deployment boundary.
+
+The cluster also declares how a message selects an instance. \texttt{sticky}
+keeps the value of an observable affinity field on the same member;
+\texttt{roundRobin} cycles through members in a declared order; and
+\texttt{shardHash} hashes an observable shard-key field. This decision changes
+the legal per-instance histories and therefore queue pressure, hot spots,
+failure impact, and replay. Kafka partition keys, MongoDB shard keys, and
+DynamoDB partition keys motivate the shard-hash abstraction, although each
+real system adds product-specific replication and routing semantics beyond this
+small model. Population size is finite and explicit so queue,
 memory, probability, and temporal checks still have a bounded state space.
 
 \section{Non-functional rates and scalability}
@@ -417,7 +429,7 @@ time to repair (MTTR):
 
 \begin{lstlisting}
 actor Server
-  |>.instances "server-" 2
+  |>.instances "server-" 2 (roundRobin)
   |>.outageProbability (20 / 10000)
   |>.meanTimeToRepair 45.seconds
 \end{lstlisting}
@@ -443,6 +455,57 @@ restarts are recovery events, and changing replica populations yields different
 reliability and throughput observations. A configured outage probability or
 MTTR is not silently replaced by its observed estimate; comparing them is the
 check.
+
+\section{Infrastructure cost and demand-constrained supply}
+
+A running service has at least two distinct time-based costs. Hardware is paid
+for while an instance is provisioned, whether or not the service is healthy.
+The service may also have a license, managed-service, or operational cost for
+each hour it is available. Those are not task-event costs and must not be
+multiplied by request count:
+
+\begin{lstlisting}
+cost Server
+  |>.hardwarePool "general-purpose"
+  |>.hardwareCostPerProvisionedHour 12 USD.cent
+  |>.serviceCostPerAvailableHour 3 USD.cent
+  |>.sustainableCapacityPerHour 3600000 bytes
+\end{lstlisting}
+
+For $R$ replicas, provisioned hours $H_r$, available hours $A_r$, hardware rate
+$c_h$, and service rate $c_s$, the accounting-period infrastructure cost is
+
+\[
+ C(R)=\sum_{r=1}^{R}(H_r c_h + A_r c_s).
+\]
+
+Supply planning is a constrained optimization, not merely ``pick the cheapest
+server.'' Let one replica sustain $\mu$ work units per hour and let $a$ be the
+required availability fraction. A candidate replica count is feasible for
+demand $D$ only when
+
+\[
+R\mu a \ge D.
+\]
+
+With an ideally balanced routing policy, the nominal load on each server is
+$D/R$. Spawning more homogeneous servers therefore lowers average per-server
+load. That statement alone cannot choose a replica count: every added server
+also adds provisioned hardware cost and, while healthy, service cost. The useful
+graph places $D/R$, observed load for each concrete instance, effective supply,
+and total hourly cost on the same replica-count axis.
+
+LeanFM enumerates the declared finite set of permitted replica counts, rejects
+infeasible points, and chooses the remaining point with minimum expected hourly
+cost $R(c_h+a c_s)$. The derived XY artifact plots demand, effective supply, and
+cost against replica count and marks the feasible optimum. It also reports
+headroom and rejected demand so an apparently cheap under-supplied plan cannot
+win. The average $D/R$ is not a promise of balance. Routing policy matters here:
+shard hashing can create a hot shard even when
+aggregate supply exceeds demand, while sticky routing and round-robin make
+different balance assumptions. Product-specific replication, reserved pricing,
+autoscaling delay, and nonlinear volume tiers require additional declared
+constraints rather than silent arithmetic.
 
 \section{Specified dwell time}
 
