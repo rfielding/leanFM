@@ -261,6 +261,154 @@ $\beta$ is a separate statistical step. The list must be exhaustive for the
 declared observation window, or omitted work and unfinished tasks bias both
 rates.
 
+\subsection{The three USL regimes and capacity}
+
+The scale parameter $\gamma$ is analogous to clock speed: it is the
+single-client service-rate scale and multiplies the entire curve vertically.
+It is not literally a processor clock, because an observed unit of work may
+include networks, storage, and several actors. Changing $\gamma$ does not move
+the population at which the dimensionless USL curve peaks.
+
+The two overhead parameters have distinct effects:
+
+\begin{align*}
+ \alpha=0,\ \beta=0 &: \quad X(N)=\gamma N,
+   &&\text{ideal linear scaling},\\
+ \beta=0 &: \quad X(N)=\frac{\gamma N}{1+\alpha(N-1)},
+   &&\text{contention-limited saturation},\\
+ \beta>0 &: \quad X(N)=
+   \frac{\gamma N}{1+\alpha(N-1)+\beta N(N-1)},
+   &&\text{coherency-limited retrograde scaling}.
+\end{align*}
+
+For $0\leq\alpha<1$ and $\beta>0$, differentiation gives the finite capacity
+population
+
+\[
+ N_* = \sqrt{\frac{1-\alpha}{\beta}}.
+\]
+
+The observed integer capacity is one of the adjacent integer populations,
+whichever has the larger measured or fitted throughput. When $\beta=0$ and
+$\alpha<1$, the curve increases toward the asymptote $\gamma/\alpha$ but has no
+finite USL peak. When both parameters are zero, the mathematical model has no
+internal capacity limit; a real finite system must eventually reveal an omitted
+bottleneck or cease to fit that ideal case.
+
+Figure~\ref{fig:usl-regimes} uses normalized throughput $X/\gamma$. The fitted
+example uses $\alpha=0.1$ and, in the third panel, $\beta=0.005$, giving
+$N_*\simeq13.42$. Throughput to the right of the marked point declines even as
+more clients are added.
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{.32\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.4cm,
+  xlabel={$N$},ylabel={$X(N)/\gamma$},
+  xmin=0,xmax=32,ymin=0,ymax=32,grid=major,
+  title={$\alpha=0,\ \beta=0$}]
+  \addplot[color=leangreen,thick,domain=0:32,samples=80] {x};
+\end{axis}
+\end{tikzpicture}
+\small ideal: no fitted capacity
+\end{minipage}\hfill
+\begin{minipage}{.32\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.4cm,
+  xlabel={$N$},ylabel={$X(N)/\gamma$},
+  xmin=0,xmax=32,ymin=0,ymax=10,grid=major,
+  title={$\alpha=.1,\ \beta=0$}]
+  \addplot[color=leanblue,thick,domain=0:32,samples=100]
+    {x/(1+0.1*(x-1))};
+  \addplot[color=black,dashed,domain=0:32] {10};
+\end{axis}
+\end{tikzpicture}
+\small contention: asymptotic capacity
+\end{minipage}\hfill
+\begin{minipage}{.32\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.4cm,
+  xlabel={$N$},ylabel={$X(N)/\gamma$},
+  xmin=0,xmax=32,ymin=0,ymax=5,grid=major,
+  title={$\alpha=.1,\ \beta=.005$}]
+  \addplot[color=orange!85!black,thick,domain=0:32,samples=120]
+    {x/(1+0.1*(x-1)+0.005*x*(x-1))};
+  \addplot[color=red!75!black,dashed] coordinates {(13.416,0) (13.416,4.37)};
+  \addplot[only marks,color=red!75!black,mark=*,mark size=2.2pt]
+    coordinates {(13.416,4.363)};
+  \node[anchor=south west,font=\scriptsize] at (axis cs:13.416,4.363)
+    {at capacity $N_*$};
+\end{axis}
+\end{tikzpicture}
+\small coherency: worse beyond $N_*$
+\end{minipage}
+\caption{Universal Scalability Law regimes. $\gamma$ rescales every vertical
+axis. Contention alone saturates; coherency creates a finite peak and declining
+throughput beyond capacity.}
+\label{fig:usl-regimes}
+\end{figure}
+
+Population capacity is not the only overload boundary. For a fixed deployment
+with sustainable service rate $\mu$, offered load $\lambda$ is at capacity when
+$\lambda=\mu$. Below capacity, a simple queueing illustration has response time
+proportional to $1/(\mu-\lambda)$ and queued work proportional to
+$\lambda/(\mu-\lambda)$. At and above capacity these steady-state quantities
+are unbounded: completed throughput is capped by $\mu$, while unfinished work,
+latency, queued bytes, and memory pressure accumulate. A finite queue converts
+that growth into blocking or rejection; exhausting the memory budget is a fatal
+terminal event rather than another slow sample.
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{.48\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.5cm,
+  xlabel={offered load $\lambda/\mu$},
+  ylabel={completed throughput $X/\mu$},
+  xmin=0,xmax=1.35,ymin=0,ymax=1.15,grid=major]
+  \path[fill=red!10] (axis cs:1,0) rectangle (axis cs:1.35,1.15);
+  \addplot[color=leanblue,thick,domain=0:1,samples=60] {x};
+  \addplot[color=leanblue,thick,domain=1:1.35,samples=30] {1};
+  \addplot[color=red!75!black,dashed] coordinates {(1,0) (1,1.15)};
+  \node[anchor=south east,font=\scriptsize] at (axis cs:1,1) {at capacity};
+  \node[font=\tiny,align=center] at (axis cs:1.175,.35) {over capacity:\\throughput capped};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}\hfill
+\begin{minipage}{.48\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth,height=5.5cm,
+  xlabel={offered load $\lambda/\mu$},
+  ylabel={normalized latency / queued work},
+  xmin=0,xmax=1.35,ymin=0,ymax=12,grid=major]
+  \path[fill=red!10] (axis cs:1,0) rectangle (axis cs:1.35,12);
+  \addplot[color=orange!85!black,thick,domain=0:0.96,samples=100]
+    {1/(1-x)};
+  \addplot[color=red!75!black,dashed] coordinates {(1,0) (1,12)};
+  \node[anchor=south east,font=\scriptsize] at (axis cs:1,10.5) {at capacity};
+  \node[font=\tiny,align=center] at (axis cs:1.175,5.5) {over capacity:\\unstable queue};
+\end{axis}
+\end{tikzpicture}
+\end{minipage}
+\caption{Offered-load capacity. Beyond $\lambda/\mu=1$, throughput cannot
+increase but queued work and latency continue to worsen until backpressure,
+rejection, an outage, or fatal memory exhaustion intervenes.}
+\label{fig:offered-load-capacity}
+\end{figure}
+
+\clearpage
+
 \section{Outages, recovery, and replica populations}
 
 Reliability assumptions belong to actor specifications and are inherited by

@@ -45,6 +45,41 @@ example :
     (scalabilityObservation 2 workObservations).map (fun point => point.clientCount) = some 2 := by
   native_decide
 
+def idealUSL : USLParameters :=
+  { gamma := 100, alphaNum := 0, alphaDen := 1, betaNum := 0, betaDen := 1 }
+
+def contentionUSL : USLParameters :=
+  { gamma := 100, alphaNum := 1, alphaDen := 10, betaNum := 0, betaDen := 1 }
+
+def coherencyUSL : USLParameters :=
+  { gamma := 100, alphaNum := 1, alphaDen := 10, betaNum := 1, betaDen := 200 }
+
+example : idealUSL.regime = .ideal := by native_decide
+example : contentionUSL.regime = .contentionOnly := by native_decide
+example : coherencyUSL.regime = .coherencyLimited := by native_decide
+example : idealUSL.throughput 4 = some (400, 1) := by native_decide
+example : contentionUSL.throughput 10 = some (10000, 19) := by native_decide
+example : idealUSL.capacityPopulation? 32 = none := by native_decide
+example : contentionUSL.capacityPopulation? 32 = none := by native_decide
+example : coherencyUSL.capacityPopulation? 32 = some 13 := by native_decide
+example :
+    (match coherencyUSL.throughput 13, coherencyUSL.throughput 32 with
+    | some atCapacity, some overCapacity => ratioLess overCapacity atCapacity
+    | _, _ => false) = true := by
+  native_decide
+example : offeredLoadState 99 100 = some .belowCapacity := by native_decide
+example : offeredLoadState 100 100 = some .atCapacity := by native_decide
+example : offeredLoadState 101 100 = some .overCapacity := by native_decide
+example : admittedThroughput 120 100 = some 100 := by native_decide
+example : queueingSteadyState 80 100 = some ((100, 20), (80, 20)) := by native_decide
+example :
+    (match queueingSteadyState 80 100, queueingSteadyState 90 100 with
+    | some (_, queued80), some (_, queued90) => ratioLess queued80 queued90
+    | _, _ => false) = true := by
+  native_decide
+example : queueingSteadyState 100 100 = none := by native_decide
+example : queueingSteadyState 120 100 = none := by native_decide
+
 def unavailable : ObservedTaskEvent :=
   { id := "gateway-1-down", prior := [], key := { session := "cluster", task := "reliability" }
   , timeAt := 100, boundary := .started }

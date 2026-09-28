@@ -213,6 +213,84 @@ def scalabilityObservation (clientCount : Nat)
   let serverRate ← serverAggregateRate observations
   pure { clientCount := clientCount, clientExperienced := clientRate, serverAggregate := serverRate }
 
+/-- Exact Universal Scalability Law parameters. `gamma` supplies the vertical
+    single-client rate scale; alpha and beta are nonnegative rational values. -/
+structure USLParameters where
+  gamma : Nat
+  alphaNum : Nat
+  alphaDen : Nat
+  betaNum : Nat
+  betaDen : Nat
+deriving DecidableEq, Repr
+
+inductive USLRegime where
+  | ideal
+  | contentionOnly
+  | coherencyLimited
+deriving DecidableEq, Repr
+
+def USLParameters.isValid (parameters : USLParameters) : Bool :=
+  parameters.gamma > 0 && parameters.alphaDen > 0 && parameters.betaDen > 0
+
+def USLParameters.regime (parameters : USLParameters) : USLRegime :=
+  if parameters.betaNum > 0 then .coherencyLimited
+  else if parameters.alphaNum > 0 then .contentionOnly
+  else .ideal
+
+/-- Exact `X(N)` as an unreduced numerator/denominator pair. -/
+def USLParameters.throughput (parameters : USLParameters) (clients : Nat) : Option (Nat × Nat) :=
+  if !parameters.isValid || clients == 0 then none
+  else
+    let prior := clients - 1
+    let commonDen := parameters.alphaDen * parameters.betaDen
+    let denominator := commonDen +
+      parameters.alphaNum * parameters.betaDen * prior +
+      parameters.betaNum * parameters.alphaDen * clients * prior
+    some (parameters.gamma * clients * commonDen, denominator)
+
+def ratioLess (left right : Nat × Nat) : Bool :=
+  left.1 * right.2 < right.1 * left.2
+
+/-- The best integer population in a declared search range. Ideal and
+    contention-only USL curves have no finite intrinsic peak, so return none. -/
+def USLParameters.capacityPopulation? (parameters : USLParameters)
+    (maxClients : Nat) : Option Nat :=
+  if !parameters.isValid || parameters.betaNum == 0 || maxClients == 0 then none
+  else
+    (List.range maxClients).foldl (fun best zeroBased =>
+      let clients := zeroBased + 1
+      match best, parameters.throughput clients with
+      | none, some _ => some clients
+      | some current, some candidate =>
+          match parameters.throughput current with
+          | some incumbent => if ratioLess incumbent candidate then some clients else some current
+          | none => some clients
+      | _, none => best) none
+
+inductive OfferedLoadState where
+  | belowCapacity
+  | atCapacity
+  | overCapacity
+deriving DecidableEq, Repr
+
+def offeredLoadState (offered capacity : Nat) : Option OfferedLoadState :=
+  if capacity == 0 then none
+  else if offered < capacity then some .belowCapacity
+  else if offered == capacity then some .atCapacity
+  else some .overCapacity
+
+/-- Completed throughput is capped by sustainable service capacity. -/
+def admittedThroughput (offered capacity : Nat) : Option Nat :=
+  if capacity == 0 then none else some (min offered capacity)
+
+/-- Below capacity, normalized response time and queued work for the simple
+    queueing illustration in the book. At/over capacity no steady state exists. -/
+def queueingSteadyState (offered capacity : Nat) : Option ((Nat × Nat) × (Nat × Nat)) :=
+  if capacity == 0 || offered >= capacity then none
+  else
+    let headroom := capacity - offered
+    some ((capacity, headroom), (offered, headroom))
+
 /-- One observed outage, delimited by Unavailable and Recovered messages. -/
 structure OutageObservation where
   actorSpec : String

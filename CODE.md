@@ -660,6 +660,17 @@ There are also model-derived datasets:
 - task success rates;
 - expected latency and throughput.
 
+`StreamStats.lean` also implements the USL and offered-load cases used in the
+book. `USLParameters.throughput` evaluates the curve with exact rational
+arithmetic; `regime` distinguishes ideal, contention-only, and
+coherency-limited cases; and `capacityPopulation?` selects the best integer
+population for a coherency-limited curve in a declared search range. The ideal
+and contention-only cases correctly report no finite intrinsic peak.
+`offeredLoadState` distinguishes below, at, and over capacity,
+`admittedThroughput` caps completions at service capacity, and
+`queueingSteadyState` returns no value at or above capacity because the simple
+queue has no finite steady state there.
+
 Each chart slot can be rendered as either a line chart or a pie chart. The chart choice is presentation; the dataset is the real model artifact.
 
 ## Generated Requirements
