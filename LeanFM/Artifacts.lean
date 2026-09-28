@@ -1181,6 +1181,7 @@ def leanFMRequirementsReference : String :=
     , "Every scalar, function2d, interactionDiagram, and stateMachine answer needs DesiredOutput { id, prompt, question, kind, eventSource, reducer, unit }."
     , "Charts are presentation requests; DesiredOutput is the durable reason and event-reduction provenance. Numeric event reductions may be exposed at /metrics."
     , "Load questions may request a Universal Scalability Law fit over comparable population runs, including observed points, fitted curve, parameters, and fit error. Queue/latency outputs pair queue length at admission with completion latency measured between explicitly paired predecessor events; queue size alone does not prove latency."
+    , "Treat performance and capacity as requirements needed before first deployment: state forecast demand, service capacity, queue bounds, overload behavior, availability, and cost inputs so the design can be rejected if it would collapse under its first realistic load."
     , "Memory reports compare observed resident bytes with the per-instance memoryBudgetBytes contract. Exhaustion is a fatal outcome, not an ordinary latency sample. Network-outage reports join Unavailable/Recovered intervals to the actor interaction/dependency graph and report affected tasks as well as per-actor uptime and MTTR."
     , ""
     , "## Separation and validation"

@@ -268,6 +268,13 @@ Universal Scalability Law,
  X(N)=\frac{\gamma N}{1+\alpha(N-1)+\beta N(N-1)}.
 \]
 
+Gunther's \emph{Guerrilla Capacity Planning} gives the practical capacity-planning
+setting for this law and develops it as the Universal Law of Computational
+Scaling~\citep{gunther2007guerrilla}. The point is operational, not decorative:
+a requirements argument should expose contention, coherency, saturation, and
+retrograde scaling before the first production deployment supplies those facts
+by falling over.
+
 The event list supplies the observations; estimating $\gamma$, $\alpha$, and
 $\beta$ is a separate statistical step. The list must be exhaustive for the
 declared observation window, or omitted work and unfinished tasks bias both
@@ -377,6 +384,16 @@ latency, queued bytes, and memory pressure accumulate. A finite queue converts
 that growth into blocking or rejection; exhausting the memory budget is a fatal
 terminal event rather than another slow sample.
 
+For the queueing foundation behind this illustration---including workload
+characterization, service demand, utilization, response time, queueing networks,
+and cost/performance tradeoffs---see Menasc\'e and Almeida's
+\emph{Capacity Planning for Web Services}~\citep{menasce2002capacity}. USL and a
+single queue answer different questions and belong together: USL summarizes
+scaling across populations, while queueing models explain how offered work waits
+for finite service centers. Neither rescues a requirements model whose demand,
+service rates, queue bounds, observation window, and overload behavior were
+never stated.
+
 \begin{figure}[htbp]
 \centering
 \begin{minipage}{.48\textwidth}
@@ -418,6 +435,14 @@ increase but queued work and latency continue to worsen until backpressure,
 rejection, an outage, or fatal memory exhaustion intervenes.}
 \label{fig:offered-load-capacity}
 \end{figure}
+
+This is why performance belongs in requirements rather than in a post-deployment
+incident report. Before implementation, the specification should make it
+possible to ask whether forecast demand fits below sustainable capacity, whether
+latency and queue bounds remain acceptable, what happens to rejected or blocked
+work, how many replicas are affordable, and which failure modes are fatal. The
+goal is not to predict every scheduler tick. It is to rule out designs that work
+only at toy load and collapse the first time real users arrive.
 
 \clearpage
 
