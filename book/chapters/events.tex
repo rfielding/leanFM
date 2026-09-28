@@ -149,6 +149,44 @@ still appears after all of its named predecessors. A timestamped point event has
 runtime concurrency requires separate start and completion messages. This is stronger than counting
 adjacent list elements and different from measuring average runtime concurrency.
 
+Start and completion boundaries make nested concurrent work especially readable
+as an order graph. In the following trace, the request forks into two task
+attempts. Each completion points back to its own start, and the response joins
+the two completions. The shaded columns are visual grouping only; the arrows are
+still exactly the stored predecessor pointers.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  event/.style={draw,rounded corners,fill=white,minimum width=3.2cm,
+    minimum height=.72cm,align=center,font=\small},
+  start/.style={event,fill=leanblue!8},
+  finish/.style={event,fill=green!8},
+  prior/.style={->,>=Stealth,thick,leanblue}
+]
+  \fill[leanblue!3,rounded corners] (-4.35,-.88) rectangle (-.45,-4.52);
+  \fill[leanblue!3,rounded corners] (.45,-.88) rectangle (4.35,-4.52);
+  \node[event]  (e20) at (0,0) {$e_{20}$\\request received};
+  \node[start]  (e21) at (-2.4,-1.35) {$e_{21}$\\payment task started};
+  \node[start]  (e22) at ( 2.4,-1.35) {$e_{22}$\\bake task started};
+  \node[finish] (e23) at (-2.4,-3.70) {$e_{23}$\\payment task completed};
+  \node[finish] (e24) at ( 2.4,-3.70) {$e_{24}$\\bake task completed};
+  \node[event]  (e25) at (0,-5.40) {$e_{25}$\\response emitted};
+
+  \draw[prior] (e21) -- (e20);
+  \draw[prior] (e22) -- (e20);
+  \draw[prior] (e23) -- (e21);
+  \draw[prior] (e24) -- (e22);
+  \draw[prior] (e25) -- (e23);
+  \draw[prior] (e25) -- (e24);
+\end{tikzpicture}
+\caption{Task boundaries nested inside a concurrent fork/join. The intervals
+$e_{21}\ldots e_{23}$ and $e_{22}\ldots e_{24}$ may overlap, while the two
+branches remain incomparable in predecessor order. Either branch may appear
+first in a linear serialization without changing the graph.}
+\label{fig:concurrent-task-boundaries}
+\end{figure}
+
 Timestamps and predecessor links also give elapsed time along a selected path:
 
 \begin{lstlisting}
