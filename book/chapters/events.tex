@@ -87,6 +87,39 @@ $e_8$ & $[e_7]$ & $6946819$ & order delivered & 65 & outcome \\
 \end{tabular}
 \end{center}
 
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  event/.style={draw,rounded corners,fill=white,minimum width=3.5cm,
+    minimum height=.72cm,align=center,font=\small},
+  prior/.style={->,>=Stealth,thick,leanblue}
+]
+  \node[event] (e0) at (0,0) {$e_0$\\order placed};
+  \node[event] (e1) at (-2.4,-1.35) {$e_1$\\payment requested};
+  \node[event] (e2) at (2.4,-1.35) {$e_2$\\bake requested};
+  \node[event] (e3) at (-2.4,-2.70) {$e_3$\\payment authorized};
+  \node[event] (e4) at (2.4,-2.70) {$e_4$\\bake completed};
+  \node[event] (e5) at (0,-4.05) {$e_5$\\order accepted};
+  \node[event] (e6) at (0,-5.40) {$e_6$\\delivery requested};
+  \node[event] (e7) at (0,-6.75) {$e_7$\\courier assigned};
+  \node[event] (e8) at (0,-8.10) {$e_8$\\order delivered};
+
+  \draw[prior] (e1) -- (e0);
+  \draw[prior] (e2) -- (e0);
+  \draw[prior] (e3) -- (e1);
+  \draw[prior] (e4) -- (e2);
+  \draw[prior] (e5) -- (e3);
+  \draw[prior] (e5) -- (e4);
+  \draw[prior] (e6) -- (e5);
+  \draw[prior] (e7) -- (e6);
+  \draw[prior] (e8) -- (e7);
+\end{tikzpicture}
+\caption{The table's immediate causal backpointers rendered as a graph. Each
+arrow points from an event to an ID in its \texttt{priorIds} list: for example,
+$e_2\to e_0$. The two arrows from $e_5$ expose the payment/baking join.}
+\label{fig:bakery-prior-graph}
+\end{figure}
+
 The list order is a serialization convenient for storage. Causal order is the
 transitive closure of \texttt{priorIds}. Both $e_1$ and $e_2$ cite $e_0$, so they
 fork. Event $e_5$ cites both $e_3$ and $e_4$, so it joins the branches. The
