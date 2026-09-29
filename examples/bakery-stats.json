@@ -475,14 +475,14 @@
     "ShiftPaid": 280
   },
   "events": 171991,
-  "latency_ms": {
+  "max_active_orders": 46,
+  "max_order_concurrency_per_order": 2,
+  "order_to_terminal_elapsed_ms": {
     "maximum": 9245325,
     "mean": 4766280.64235,
     "p50": 4821533,
     "p95": 7863807
   },
-  "max_active_orders": 46,
-  "max_order_concurrency_per_order": 2,
   "orders": 20000,
   "outcomes": {
     "DeliveryFailed": 648,

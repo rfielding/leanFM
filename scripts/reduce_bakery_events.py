@@ -118,7 +118,7 @@ def main() -> None:
             "delivered_given_dispatched": ratio(kinds["OrderDelivered"], dispatched),
             "completed_successfully": ratio(kinds["OrderDelivered"], order_count),
         },
-        "latency_ms": {
+        "order_to_terminal_elapsed_ms": {
             "mean": sum(latencies) / len(latencies),
             "p50": percentile(latencies, 50),
             "p95": percentile(latencies, 95),
