@@ -143,6 +143,9 @@ def main() -> None:
             f"\\newcommand{{\\BakeryMeanLatency}}{{{sum(latencies) / len(latencies):,.3f}}}",
             f"\\newcommand{{\\BakeryPFiftyLatency}}{{{percentile(latencies, 50):,}}}",
             f"\\newcommand{{\\BakeryPNinetyFiveLatency}}{{{percentile(latencies, 95):,}}}",
+            f"\\newcommand{{\\BakeryMeanLatencyMinutes}}{{{sum(latencies) / len(latencies) / 60_000:,.3f}}}",
+            f"\\newcommand{{\\BakeryPFiftyLatencyMinutes}}{{{percentile(latencies, 50) / 60_000:,.3f}}}",
+            f"\\newcommand{{\\BakeryPNinetyFiveLatencyMinutes}}{{{percentile(latencies, 95) / 60_000:,.3f}}}",
             f"\\newcommand{{\\BakeryMaxActive}}{{{max_active}}}",
             "\\def\\BakeryDailyProfitCoordinates{" + " ".join(
                 f"({row['day']},{row['profit_cents'] / 100:.2f})" for row in daily_rows) + "}",
