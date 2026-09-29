@@ -101,6 +101,9 @@ def baselineDerivedProperties : List DerivedPropertyPlan :=
   , { name := "waste.units", requiredFields := ["wasteType", "wasteUnits"], reducer := "sum(wasteUnits) by wasteType", unit := "declared item unit", visual := "line and pie", boundary := "scenario and accounting period" }
   , { name := "waste.cost", requiredFields := ["wasteType", "wasteCost", "currency"], reducer := "sum(wasteCost) by wasteType", unit := "currency", visual := "line and pie", boundary := "scenario and accounting period" }
   , { name := "waste.rate", requiredFields := ["wasteUnits", "producedUnits"], reducer := "sum(wasteUnits) / sum(producedUnits)", unit := "ratio", visual := "line", boundary := "scenario and accounting period" }
+  , { name := "inventory.sell_through", requiredFields := ["batchId", "breadKind", "unitsStocked", "unitsReserved", "stocked.timeAt", "reserved.timeAt"], reducer := "sum(unitsReserved) / sum(unitsStocked), grouped by bread kind and batch age", unit := "ratio", visual := "line and histogram", boundary := "batch schedule and freshness window" }
+  , { name := "inventory.stockout", requiredFields := ["breadKind", "requestedUnits", "availableUnits", "timeAt"], reducer := "count stockout orders and unfilled units by bread kind and time", unit := "orders, units, and ratio", visual := "line and pie", boundary := "storefront and demand window" }
+  , { name := "inventory.charity_transfer", requiredFields := ["batchId", "breadKind", "freshnessWindow", "donatedUnits", "eligibleDonationValue", "currency", "timeAt"], reducer := "sum donated units and eligible receipt value by bread kind and batch age; leave tax savings indeterminate without declared tax rules and rate", unit := "units and currency", visual := "line and pie", boundary := "charity transfer and accounting period" }
   ]
 
 def validateDerivedPropertyPlan (plans : List DerivedPropertyPlan) : List String :=

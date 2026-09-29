@@ -71,7 +71,6 @@ def main() -> None:
             if event["kind"] in TERMINALS:
                 order["terminal"] = event["kind"]
 
-    latencies = [int(o["stop"]) - int(o["start"]) for o in orders.values()]
     outcomes = Counter(str(o["terminal"]) for o in orders.values())
     starts_stops: list[tuple[int, int]] = []
     for order in orders.values():
@@ -118,12 +117,6 @@ def main() -> None:
             "delivered_given_dispatched": ratio(kinds["OrderDelivered"], dispatched),
             "completed_successfully": ratio(kinds["OrderDelivered"], order_count),
         },
-        "order_to_terminal_elapsed_ms": {
-            "mean": sum(latencies) / len(latencies),
-            "p50": percentile(latencies, 50),
-            "p95": percentile(latencies, 95),
-            "maximum": max(latencies),
-        },
         "outcomes": dict(sorted(outcomes.items())),
         "event_kinds": dict(sorted(kinds.items())),
         "daily": daily_rows,
@@ -140,12 +133,6 @@ def main() -> None:
             f"\\newcommand{{\\BakeryBakeRatio}}{{{kinds['BakeCompleted']:,}/{order_count:,}}}",
             f"\\newcommand{{\\BakeryAcceptRatio}}{{{accepted:,}/{order_count:,}}}",
             f"\\newcommand{{\\BakeryDeliveredRatio}}{{{kinds['OrderDelivered']:,}/{order_count:,}}}",
-            f"\\newcommand{{\\BakeryMeanLatency}}{{{sum(latencies) / len(latencies):,.3f}}}",
-            f"\\newcommand{{\\BakeryPFiftyLatency}}{{{percentile(latencies, 50):,}}}",
-            f"\\newcommand{{\\BakeryPNinetyFiveLatency}}{{{percentile(latencies, 95):,}}}",
-            f"\\newcommand{{\\BakeryMeanLatencyMinutes}}{{{sum(latencies) / len(latencies) / 60_000:,.3f}}}",
-            f"\\newcommand{{\\BakeryPFiftyLatencyMinutes}}{{{percentile(latencies, 50) / 60_000:,.3f}}}",
-            f"\\newcommand{{\\BakeryPNinetyFiveLatencyMinutes}}{{{percentile(latencies, 95) / 60_000:,.3f}}}",
             f"\\newcommand{{\\BakeryMaxActive}}{{{max_active}}}",
             "\\def\\BakeryDailyProfitCoordinates{" + " ".join(
                 f"({row['day']},{row['profit_cents'] / 100:.2f})" for row in daily_rows) + "}",

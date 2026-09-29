@@ -4,26 +4,26 @@ The canonical quantitative example is `examples/bakery-events.jsonl`. It contain
 one JSON object per observable event and is generated deterministically by
 `scripts/generate_bakery_events.py`.
 
-The grammar is:
+The retail bakery has two related grammars. Production is scheduled by bread
+kind, baked in batches, and shipped to the storefront before opening:
 
 ```text
-fulfillOrder ::=
-  OrderPlaced ;
-  (PaymentRequested ; (PaymentAuthorized | PaymentDeclined)
-   ||
-   BakeRequested ; (BakeCompleted | BakeFailed)) ;
-  join(paymentResult, bakeResult) ;
-  (OrderRejected
-   | OrderAccepted ;
-       (OrderCancelled
-        | DeliveryRequested ; CourierAssigned ;
-          (OrderDelivered | DeliveryFailed)))
+produceBatch ::=
+  BatchScheduled ; BatchBaked ; BatchShipped ; InventoryStocked ;
+  (InventorySoldOut | FreshnessWindowElapsed ;
+     RemainingInventoryMovedToCharity ; DonationReceiptRecorded)
+
+sellFromInventory ::=
+  OrderPlaced ; PaymentRequested ;
+  (PaymentDeclined ; OrderRejected
+   | PaymentAuthorized ;
+     (InventoryReserved ; OrderFulfilled | Stockout ; OrderRejected))
 ```
 
-`PaymentRequested` and `BakeRequested` both reference `OrderPlaced`, forming a
-fork. `OrderAccepted` or `OrderRejected` references both result events, forming a
-join. The first byte-level terminal that differs resolves each alternative; no
-separate chooser field exists.
+An inventory reservation names both the paid order and every stocked batch lot
+that supplies it. Lots are consumed oldest-first while still within their
+declared two- or three-day freshness window. There is no per-order baking and no
+same-day custom-loaf wait.
 
 Each event records:
 
@@ -34,11 +34,11 @@ Each event records:
 - encoded byte count;
 - visible values used by reducers.
 
-The stream also contains `ShiftPaid` events with employee, role, minutes, rate,
-and pay. Payment, refund, ingredient-cost, and waste fields allow the reducer to
-calculate daily gross sales, net revenue, employee pay, ingredient cost, profit,
-waste cost, and waste units. Waste is reported separately but is not subtracted
-twice: its ingredient cost is already included in total ingredient cost.
+The stream also contains `ShiftPaid` events. Payment, batch ingredient-cost,
+inventory, and donation fields support sales, profit, stockout, sell-through,
+inventory-age, and donated-unit/value reducers. A receipt may establish eligible
+donation value; actual tax savings remain indeterminate until jurisdiction,
+entity type, valuation, deduction limits, and tax rate are declared.
 
 Regenerate and reduce the corpus with:
 
@@ -48,6 +48,6 @@ make bakery-stats
 ```
 
 The checked-in `examples/bakery-stats.json` is calculated by streaming the event
-file. Its ratios, latencies, outcome counts, byte totals, and concurrency values
+file. Its ratios, outcome counts, byte totals, and concurrency values
 are the source for quantitative examples. They are observations of this corpus,
 not probabilities asserted independently of it.

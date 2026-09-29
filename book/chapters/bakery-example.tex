@@ -12,12 +12,14 @@ below. Changing the stream changes the book.
 
 \section{The grammar represented by events}
 
-An order begins with \texttt{OrderPlaced}. Payment and baking fork from that
-event, and \texttt{OrderAccepted} or \texttt{OrderRejected} joins their result
-events. An accepted order either resolves to customer cancellation or continues
-through courier assignment to delivery or delivery failure. The file also
-contains \texttt{ShiftPaid} events, one per employee shift. Thus operational and
-accounting facts share the same event algebra without being the same task.
+Bread is not baked in response to an individual order. A predictable schedule
+creates batches by bread kind; each batch is baked, shipped before opening, and
+stocked at the storefront. Customer orders reserve fresh inventory from those
+lots. After the declared two- or three-day freshness window, remaining units
+move to a charity rack and produce a donation receipt. An
+\texttt{InventoryReserved} event names both the paid order and the stocked batch
+lots that supplied it, making FIFO allocation, age, quality, and stockouts
+replayable. No event permits a customer to wait for a same-day custom loaf.
 
 For each calendar-day bucket $d$, the reducer computes
 
@@ -29,7 +31,9 @@ For each calendar-day bucket $d$, the reducer computes
 \operatorname{netRevenue}_d
   &= \operatorname{grossSales}_d-\operatorname{refunds}_d,\\
 \operatorname{ingredientCost}_d
-  &= \sum_{e.kind\in\{\mathrm{BakeCompleted},\mathrm{BakeFailed}\}} e.ingredientCost,\\
+  &= \sum_{e.kind=\mathrm{BatchBaked}} e.ingredientCost,\\
+\operatorname{donationValue}_d
+  &= \sum_{e.kind=\mathrm{DonationReceiptRecorded}} e.eligibleValue,\\
 \operatorname{employeePay}_d
   &= \sum_{e.kind=\mathrm{ShiftPaid}} e.pay,\\
 \operatorname{profit}_d
@@ -37,11 +41,11 @@ For each calendar-day bucket $d$, the reducer computes
      -\operatorname{employeePay}_d.
 \end{align*}
 
-Waste cost is already part of ingredient cost, so subtracting it again would
-double count. It is tracked separately to explain lost margin. This modeled
-profit excludes rent, utilities, tax, equipment depreciation, and any other cost
-for which the stream has no event. Adding such events extends the equation rather
-than changing the meaning of existing fields.
+Donated bread is already part of batch ingredient cost, so subtracting it again
+would double count. Donation value is not revenue and is not itself a tax
+saving. The tax effect is calculated only after the applicable rules and rate
+are supplied. This modeled profit excludes other costs for which the stream has
+no event.
 
 \section{Money by day is the primary XY plot}
 
@@ -99,14 +103,14 @@ changed.
 \end{axis}
 \end{tikzpicture}
 \end{minipage}
-\caption{Waste cost and units by day, derived from failed bakes, cancellations,
-and failed deliveries in the same event stream.}
+\caption{Donation-eligible cost and units by day, derived from batch inventory
+remaining when its freshness window closes.}
 \label{fig:bakery-waste}
 \end{figure}
 
-Cost and units are deliberately separate. A wasted sourdough loaf and a wasted
+Cost and units are deliberately separate. A donated sourdough loaf and a donated
 croissant do not have the same economic effect. Grouping the same events by
-product, outcome, employee shift, or hour of day produces further XY datasets
+product, batch age, employee shift, or day produces further XY datasets
 without changing the scenario.
 
 \section{XY plots as questions over scenarios}
@@ -137,14 +141,10 @@ case the axes are named reductions over event streams. A parameter sweep produce
 several streams; observed operation supplies streams from different days. The
 chart renderer need not know which kind it received.
 
-The corpus currently reports \BakeryDeliveredRatio{} delivered orders, median
-order-placement-to-terminal-outcome elapsed time \BakeryPFiftyLatencyMinutes{}
-minutes, 95th-percentile order-to-terminal elapsed time
-\BakeryPNinetyFiveLatencyMinutes{} minutes, and a maximum of \BakeryMaxActive{}
-active orders. These durations cover the entire bakery and delivery scenario;
-they are not request/response latency.
-These values are generated from the checked-in stream and serve as the default
-probability and performance inputs for the bakery model.
+The old made-to-order order-lifetime statistic is intentionally absent. Useful
+service metrics are payment and inventory-reservation time, storefront
+fulfillment time, stockout rate, inventory age at sale, freshness-window
+sell-through, and units and eligible value transferred to charity.
 
 \section{AI rendering from durable requirements to pseudocode}
 
