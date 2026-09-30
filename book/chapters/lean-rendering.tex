@@ -36,20 +36,10 @@ The repository's \texttt{book/logic.lean} uses Mathlib to define the real
 function $A(x)=1/(1-x)$ and prove that its derivative is
 $F(x)=1/(1-x)^2$ away from the singularity at $x=1$:
 
-\begin{lstlisting}
-noncomputable def Ar (x : Real) : Real := 1 / (1 - x)
-noncomputable def Fr (x : Real) : Real := 1 / (1 - x)^2
+The complete source file follows. It uses Lean's ASCII type and proposition
+names so the exact checked text can also be rendered by pdf\LaTeX{}:
 
-theorem deriv_Ar_eq_Fr (x : Real) (hx : Ne x 1) :
-    deriv Ar x = Fr x := by
-  have h : Ne (1 - x) 0 := sub_ne_zero.mpr hx.symm
-  have hd := (((hasDerivAt_id x).const_sub 1).inv h).deriv
-  unfold Ar Fr
-  simpa only [one_div, id_eq, neg_neg] using hd
-\end{lstlisting}
-
-This is an ASCII rendering of the source excerpt: \texttt{Real} is written as
-$\mathbb{R}$ and \texttt{Ne} as $\ne$ in \texttt{logic.lean}.
+\lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize]{logic.lean}
 
 The hypothesis \texttt{hx : x != 1} is not commentary: it is required to prove
 that the denominator is nonzero. The proof composes Mathlib's derivative rule
