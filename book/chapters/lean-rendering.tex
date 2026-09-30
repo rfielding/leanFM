@@ -29,6 +29,43 @@ normally supplies only:
 This boundary matters for automation. Generated Lean remains small enough to
 review, while library proofs and algorithms are reused rather than regenerated.
 
+\section{A checked mathematical example}
+
+Lean is not limited to validating data structures or executing finite checks.
+The repository's \texttt{book/logic.lean} uses Mathlib to define the real
+function $A(x)=1/(1-x)$ and prove that its derivative is
+$F(x)=1/(1-x)^2$ away from the singularity at $x=1$:
+
+\begin{lstlisting}
+noncomputable def Ar (x : Real) : Real := 1 / (1 - x)
+noncomputable def Fr (x : Real) : Real := 1 / (1 - x)^2
+
+theorem deriv_Ar_eq_Fr (x : Real) (hx : Ne x 1) :
+    deriv Ar x = Fr x := by
+  have h : Ne (1 - x) 0 := sub_ne_zero.mpr hx.symm
+  have hd := (((hasDerivAt_id x).const_sub 1).inv h).deriv
+  unfold Ar Fr
+  simpa only [one_div, id_eq, neg_neg] using hd
+\end{lstlisting}
+
+This is an ASCII rendering of the source excerpt: \texttt{Real} is written as
+$\mathbb{R}$ and \texttt{Ne} as $\ne$ in \texttt{logic.lean}.
+
+The hypothesis \texttt{hx : x != 1} is not commentary: it is required to prove
+that the denominator is nonzero. The proof composes Mathlib's derivative rule
+for the identity function with subtraction and reciprocal, extracts the proved
+derivative, unfolds the local definitions, and asks the simplifier to match the
+resulting expression. Lean checks every type conversion and proof obligation;
+removing the singularity condition leaves the reciprocal rule unjustified.
+
+The same file then defines exact rational finite sums and correction tails and
+proves identities about them with normalization tactics. In particular, its
+final theorem is carefully stated as a finite sum plus the explicitly defined
+\texttt{Tail\_S}; it does not claim that an ordinary convergent sum of all
+positive integers equals $-1/12$. This illustrates an important benefit of Lean:
+the precise proposition being proved remains visible, even when an informal
+slogan would be easy to overstate.
+
 \section{From specification to service}
 
 Lean can host executable code, including a small web server. That makes the formal
