@@ -29,17 +29,29 @@ normally supplies only:
 This boundary matters for automation. Generated Lean remains small enough to
 review, while library proofs and algorithms are reused rather than regenerated.
 
-\section{A checked mathematical example}
+\section{A checked discrete account of
+  \texorpdfstring{$1+2+3+\cdots=-1/12$}{1+2+3+...=-1/12}}
 
 Lean is not limited to validating data structures or executing finite checks.
 The repository's \texttt{book/logic.lean} uses Mathlib to define the real
 function $A(x)=1/(1-x)$ and prove that its derivative is
-$F(x)=1/(1-x)^2$ away from the singularity at $x=1$:
+$F(x)=1/(1-x)^2$ away from the singularity at $x=1$.  It then moves from
+that analytic motivation to an exact, discrete construction over rational
+numbers.  This construction explains precisely what the file means by the
+famous shorthand
+\[
+  S=1+2+3+\cdots=-\frac{1}{12}.
+\]
 
-The complete source file follows. It uses Lean's ASCII type and proposition
-names so the exact checked text can also be rendered by pdf\LaTeX{}:
+The complete source file follows, without elision.  The listing starts on this
+page and continues onto the next page through the final theorem
+\texttt{Goal}.  The listing preserves the idiomatic Lean notation used by the
+checked source, including Lean's $\land$ notation; the listing configuration maps those
+Unicode glyphs to matching mathematical symbols for pdf\LaTeX{}:
 
-\lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize]{logic.lean}
+\lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize,
+  caption={The complete \texttt{book/logic.lean} source.},
+  label={lst:logic-lean}]{logic.lean}
 
 The hypothesis \texttt{hx : x != 1} is not commentary: it is required to prove
 that the denominator is nonzero. The proof composes Mathlib's derivative rule
@@ -48,13 +60,25 @@ derivative, unfolds the local definitions, and asks the simplifier to match the
 resulting expression. Lean checks every type conversion and proof obligation;
 removing the singularity condition leaves the reciprocal rule unjustified.
 
-The same file then defines exact rational finite sums and correction tails and
-proves identities about them with normalization tactics. In particular, its
-final theorem is carefully stated as a finite sum plus the explicitly defined
-\texttt{Tail\_S}; it does not claim that an ordinary convergent sum of all
-positive integers equals $-1/12$. This illustrates an important benefit of Lean:
-the precise proposition being proved remains visible, even when an informal
-slogan would be easy to overstate.
+The discrete part begins with the ordinary finite triangular sum
+\[
+  \texttt{Sum\_S}(n)=\frac{n(n+1)}{2}.
+\]
+It then defines an exact rational correction \texttt{Tail\_S}(n), using the
+alternating construction \texttt{Tail\_B}, so that the corrected value is
+independent of where the finite prefix is cut.  The last theorem states, for
+\emph{every} natural number $n$,
+\[
+  -\frac{1}{12}=\frac{n(n+1)}{2}+\texttt{Tail\_S}(n).
+\]
+Thus the ellipsis in $1+2+3+\cdots$ is given explicit content: retain a finite
+prefix and pair it with the particular tail assigned by the preceding
+self-similarity identities.  Moving the cutoff changes both terms but not their
+sum.  This is a discrete, algebraically checked account of the regularized
+value $-1/12$; it is not the false claim that the ordinary partial sums of
+positive integers converge to a negative number.  Lean makes that distinction
+hard to blur because the exact proposition---including the tail and the
+quantification over $n$---is visible in Listing~\ref{lst:logic-lean}.
 
 \section{From specification to service}
 
