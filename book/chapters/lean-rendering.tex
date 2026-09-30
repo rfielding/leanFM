@@ -80,6 +80,30 @@ positive integers converge to a negative number.  Lean makes that distinction
 hard to blur because the exact proposition---including the tail and the
 quantification over $n$---is visible in Listing~\ref{lst:logic-lean}.
 
+At the end, Lean's goal is the fully elaborated proposition
+
+\begin{lstlisting}[language=Lean]
+⊢ ∀ (n : ℕ), -1 / 12 = ↑n * (↑n + 1) / 2 + Tail_S n
+\end{lstlisting}
+
+The single turnstile $\vdash$ separates the assumptions in the local proof
+context from the proposition to be derived.  Here nothing appears to its left,
+so there are no additional local assumptions: Lean is asking for a term that
+derives the universally quantified proposition from the imported theory and
+the definitions above.  By contrast, the double turnstile $\vDash$ is normally
+used for semantic entailment: $\Gamma\vDash p$ says that $p$ is true in every
+interpretation in which the assumptions $\Gamma$ are true.  Thus $\Gamma$
+contains the assumptions; the double turnstile denotes their semantic
+consequence.
+
+The completed proof establishes the displayed proposition for every $n$.  The
+\texttt{def} declarations define the mathematics: the finite sums, correction
+tails, and the values assembled from them.  The \texttt{theorem} declarations
+then state claims about those definitions and require proofs that Lean checks.
+Thus the final theorem is not a numerical experiment over a selection of
+cutoffs.  It verifies the universally quantified identity that results from
+the definitions.
+
 \section{From specification to service}
 
 Lean can host executable code, including a small web server. That makes the formal
