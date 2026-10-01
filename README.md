@@ -29,7 +29,7 @@ The model treats a protocol as globally observable behavior:
 - load-derived outputs include observed and fitted Universal Scalability Law curves, queue length paired with explicitly related latency boundaries, per-instance memory headroom with exhaustion treated as fatal, and outage impact propagated across actor interaction networks
 - every scalar metric, 2D function rendering, interaction diagram, and state machine preserves the originating prompt, the question being answered, and the event reducer; `/metrics` exports durable output IDs alongside event-informed numeric series
 - synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
-- stateless code generation uses `(Requirements.lean, Implementation.lean, Requirements.proto) -> code`; revision adds existing code as an input and never relies on prior chat history
+- stateless code generation uses `(book/main.pdf, Requirements.lean, Implementation.lean, Requirements.proto) -> actual code`; revision adds the existing source tree as an input and never relies on prior chat history
 - every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
 - unlike an explicit-variable state model, LeanFM primarily recognizes and generates observable event traces; private implementation variables are omitted unless they change an observable requirement
 - `Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the durable memory of the requirements argument, so a new LLM session does not require the original conversation
@@ -116,6 +116,8 @@ GET /api/session/generated/requirements.lean current session's generated Lean fi
 POST /api/session/generated/requirements.lean replace the current session's generated Lean file
 GET /api/session/generated/requirements.proto current session's generated protobuf file, falling back to the built-in example
 POST /api/session/generated/requirements.proto replace the current session's generated protobuf file
+GET /api/session/generated/implementation.lean current session's implementation specification, falling back to the built-in example
+POST /api/session/generated/implementation.lean replace the current session's implementation specification
 GET /generated/worker.proto protobuf schema generated from requirement messages
 GET /llm-generated/requirements.proto canonical LLM-generated protobuf schema
 GET /lean/get_docs.lean generated Lean view for a conversation
