@@ -83,6 +83,7 @@ diagrams:
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
 	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
 	@dot -Tpng diagrams/paxos-recovery.dot -o diagrams/paxos-recovery.png
+	@dot -Tpng diagrams/paxos-quorum-write-messages.dot -o diagrams/paxos-quorum-write-messages.png
 
 scripts:
 	node scripts/format_assets.js

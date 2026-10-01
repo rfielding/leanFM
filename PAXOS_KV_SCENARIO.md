@@ -90,9 +90,13 @@ Browser A      Browser B        WebApp          KV leader       KV followers
     |               |<-- success + current list ------|                 |
 ```
 
-The durable event representation must keep separate `(session, task)` keys and
-use `prior` IDs to connect each completion to its start. It must not serialize
-the two browser requests merely because an event file has a line order.
+The durable event representation must keep separate `(session, scenario)` keys
+and use `priorIds` to record immediate predecessor order. `priorIds = []` means
+that an event is a minimal (first) event in the scenario. If several events
+have no predecessor, they are mutually unordered and may proceed in parallel.
+A singleton list is the ordinary prior-event link; a list with several IDs is
+a join. These links are ordering backpointers, not claims of causation. Event
+file line order must not serialize otherwise unordered browser requests.
 
 ## Observable safety and progress obligations
 
@@ -114,7 +118,7 @@ the two browser requests merely because an event file has a line order.
 
 | Output ID | Shape | Prompt/question | Reducer |
 | --- | --- | --- | --- |
-| `paxos.write.interaction` | interaction diagram | How does a browser write become persistent? | Partition write events by `(session,request_id)` and render quorum branches in `prior` order |
+| `paxos.write.interaction` | interaction diagram | How does a browser write become persistent? | Partition write events by `(session,request_id)` and render quorum branches in `priorIds` order, with typed message fields in each node |
 | `paxos.write.state_machine` | state machine | Which observable write states and failure exits exist? | Render residuals of `quorum_write` |
 | `paxos.list.interaction` | interaction diagram | How is the complete key/value listing made linearizable? | Render list and read-barrier events by `(session,request_id)` |
 | `paxos.list.state_machine` | state machine | Which observable list states and failure exits exist? | Render residuals of `linearizable_list` |

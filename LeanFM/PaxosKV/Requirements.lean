@@ -7,6 +7,66 @@ def framing : MessageFraming := { kind := .protobufMessage, dispatchField := som
 def field (n : Nat) (name : String) (scalar : ProtoScalar) : ProtoFieldSchema := { number := n, name, scalar }
 def message (name src dst : String) (fields : List ProtoFieldSchema) : MessageSchema := { name, src, dst, framing, fields }
 
+/-- The ordering envelope shared by every concrete message event.  `priorIds`
+contains immediate predecessors, not causes.  An empty list makes the event a
+minimal (first) event in its scenario; multiple minimal events are unordered
+and may proceed in parallel.  More than one predecessor represents a join. -/
+structure ScenarioEvent where
+  id : String
+  priorIds : List String
+  session : String
+  scenario : String
+  src : String
+  dst : String
+  timeAt : Nat
+  message : String
+  fieldValues : List (String × String)
+deriving Repr
+
+def eventEnvelopeFields : List String :=
+  [ "id: unique event identifier"
+  , "priorIds: zero or more immediate predecessor event identifiers"
+  , "session: independently progressing browser session"
+  , "scenario: scenario instance containing the event"
+  , "src: concrete sending actor instance"
+  , "dst: concrete receiving actor instance"
+  , "timeAt: monotonic observation timestamp"
+  , "message: selected typed message atom"
+  , "fieldValues: values corresponding to the selected message schema"
+  ]
+
+def exampleEvent (id : String) (priorIds : List String) (src dst message : String)
+    (fieldValues : List (String × String)) : ScenarioEvent :=
+  { id, priorIds, session := "browser-a", scenario := "write-a", src, dst
+  , timeAt := 0, message, fieldValues }
+
+/-- A concrete quorum-write projection used to derive the detailed message
+order graph.  The two Promise events fork from `e2`; `e5` joins them. -/
+def quorumWriteExample : List ScenarioEvent :=
+  [ exampleEvent "e0" [] "browser-a" "web-0" "PutRequest"
+      [("session", "browser-a"), ("request_id", "put-17"), ("key", "color"), ("value", "blue")]
+  , exampleEvent "e1" ["e0"] "web-0" "kv-0" "Propose"
+      [("request_id", "put-17"), ("key", "color"), ("value", "blue")]
+  , exampleEvent "e2" ["e1"] "kv-0" "kv-*" "Prepare"
+      [("ballot_counter", "4"), ("ballot_node", "kv-0"), ("slot", "12")]
+  , exampleEvent "e3" ["e2"] "kv-1" "kv-0" "Promise"
+      [("ballot_counter", "4"), ("ballot_node", "kv-0"), ("slot", "12")]
+  , exampleEvent "e4" ["e2"] "kv-2" "kv-0" "Promise"
+      [("ballot_counter", "4"), ("ballot_node", "kv-0"), ("slot", "12")]
+  , exampleEvent "e5" ["e3", "e4"] "kv-0" "kv-*" "Accept"
+      [("ballot_counter", "4"), ("ballot_node", "kv-0"), ("slot", "12"), ("key", "color"), ("value", "blue")]
+  , exampleEvent "e6" ["e5"] "kv-1" "kv-0" "DurableAccepted"
+      [("ballot_counter", "4"), ("ballot_node", "kv-0"), ("slot", "12")]
+  , exampleEvent "e7" ["e5"] "kv-2" "kv-0" "DurableAccepted"
+      [("ballot_counter", "4"), ("ballot_node", "kv-0"), ("slot", "12")]
+  , exampleEvent "e8" ["e6", "e7"] "kv-0" "kv-*" "Commit"
+      [("slot", "12"), ("key", "color"), ("value", "blue")]
+  , exampleEvent "e9" ["e8"] "kv-0" "web-0" "PutResult"
+      [("request_id", "put-17"), ("slot", "12"), ("success", "true")]
+  , exampleEvent "e10" ["e9"] "web-0" "browser-a" "PutResponse"
+      [("request_id", "put-17"), ("slot", "12"), ("success", "true")]
+  ]
+
 def messages : List MessageSchema :=
   [ message "PutRequest" "Browser" "WebApp" [field 1 "session" .string, field 2 "request_id" .string, field 3 "key" .string, field 4 "value" .string]
   , message "Propose" "WebApp" "KVReplica" [field 1 "request_id" .string, field 2 "key" .string, field 3 "value" .string]
@@ -27,6 +87,30 @@ def messages : List MessageSchema :=
   , message "RecoverAcceptedLog" "KVReplica" "KVReplica" [field 1 "replica_id" .string, field 2 "committed_slot" .uint64]
   , message "Available" "KVReplica" "WebApp" [field 1 "replica_id" .string, field 2 "committed_slot" .uint64]
   ]
+
+private def eventFieldsMatchSchema (event : ScenarioEvent) : Bool :=
+  match messages.find? (fun schema => schema.name == event.message) with
+  | none => false
+  | some schema =>
+      let actual := event.fieldValues.map Prod.fst
+      schema.fields.all (fun expected => actual.contains expected.name) &&
+        actual.all (fun name => schema.fields.any (fun expected => expected.name == name))
+
+private def scenarioOrderWellFormedAux (seen : List String) : List ScenarioEvent -> Bool
+  | [] => true
+  | event :: rest =>
+      !seen.contains event.id &&
+      event.priorIds.all (fun priorId => seen.contains priorId) &&
+      eventFieldsMatchSchema event &&
+      scenarioOrderWellFormedAux (event.id :: seen) rest
+
+/-- Checks unique IDs, backward/acyclic predecessor links, and that every
+displayed field belongs to (and covers) the selected typed message schema.
+It deliberately permits any number of events with `priorIds = []`. -/
+def scenarioOrderWellFormed (events : List ScenarioEvent) : Bool :=
+  scenarioOrderWellFormedAux [] events
+
+example : scenarioOrderWellFormed quorumWriteExample := by native_decide
 
 def state (id label group : String) (terminal : Bool := false) : RequirementState := { id, label, group, markdown := label, terminal }
 def transition (src dst msg : String) (ms : Nat := 1) : RequirementTransition := { src, dst, message := msg, probabilityNum := 1, probabilityDen := 1, dwellMs := ms }

@@ -1,6 +1,27 @@
 syntax = "proto3";
 package leanfm.paxoskv;
 // The executable wire schema is internal/protocol/requirements.proto.
+
+// Every message occurrence is wrapped in an ordering envelope. Empty prior_ids
+// means a minimal (first) event in the scenario. Multiple such events are
+// unordered and may proceed in parallel. Multiple prior_ids represent a join;
+// the links express predecessor order, not causation.
+message ScenarioEvent {
+  string id = 1;
+  repeated string prior_ids = 2;
+  string session = 3;
+  string scenario = 4;
+  string src = 5;
+  string dst = 6;
+  uint64 time_at = 7;
+  string message_type = 8;
+  bytes message_payload = 9;
+}
+
+message Scenario {
+  repeated ScenarioEvent events = 1;
+}
+
 message PutRequest {}
 message Propose {}
 message Prepare {}

@@ -10,15 +10,17 @@ import (
 )
 
 type Event struct {
-	ID      string         `json:"id"`
-	Prior   []string       `json:"prior"`
-	Session string         `json:"session"`
-	Task    string         `json:"task"`
-	Src     string         `json:"src"`
-	Dst     string         `json:"dst"`
-	TimeAt  int64          `json:"timeAt"`
-	Message string         `json:"message"`
-	Fields  map[string]any `json:"fields,omitempty"`
+	ID string `json:"id"`
+	// PriorIDs records immediate predecessor order, not causation. An omitted or
+	// empty list makes this a minimal event; multiple minimal events commute.
+	PriorIDs []string       `json:"priorIds,omitempty"`
+	Session  string         `json:"session"`
+	Task     string         `json:"task"`
+	Src      string         `json:"src"`
+	Dst      string         `json:"dst"`
+	TimeAt   int64          `json:"timeAt"`
+	Message  string         `json:"message"`
+	Fields   map[string]any `json:"fields,omitempty"`
 }
 type Sink struct {
 	mu   sync.Mutex
