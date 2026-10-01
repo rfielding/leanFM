@@ -31,33 +31,67 @@ def Sf (n : ℕ) : ℚ     := Sum_S n + Tail_S n
 def S : ℚ              := Sf 0
 
 theorem selfSimilarS (n : ℕ) :
-  (Sum_S (2*n) - Sum_B (2*n) = 4*Sum_S n) ∧
-  (Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n) ∧
-  (S - B = 4*S)
-  := by
-    unfold S B Sf Bf Tail_S Sum_S Sum_B Tail_B F
+    (Sum_S (2*n) - Sum_B (2*n) = 4*Sum_S n) ∧
+    (Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n) ∧
+    (S - B = 4*S) := by
+  have finite :
+      Sum_S (2*n) - Sum_B (2*n) = 4*Sum_S n := by
+    unfold Sum_S Sum_B Tail_B F
     simp
     ring_nf
+  have tails :
+      Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n := by
+    unfold Tail_S Sum_S Tail_B
     simp
+    ring_nf
+  have splitS (k : ℕ) : S = Sum_S k + Tail_S k := by
+    unfold S Sf Tail_S Sum_S Tail_B
+    simp
+    ring_nf
+  have splitB (k : ℕ) : B = Sum_B k + Tail_B k := by
+    unfold B Bf Sum_B
+    simp
+  refine ⟨finite, tails, ?_⟩
+  calc
+    S - B =
+        (Sum_S (2*n) + Tail_S (2*n)) -
+        (Sum_B (2*n) + Tail_B (2*n)) := by
+      rw [splitS (2*n), splitB (2*n)]
+    _ = (Sum_S (2*n) - Sum_B (2*n)) +
+        (Tail_S (2*n) - Tail_B (2*n)) := by ring
+    _ = 4*Sum_S n + 4*Tail_S n := by
+      rw [finite, tails]
+    _ = 4*(Sum_S n + Tail_S n) := by ring
+    _ = 4*S := by rw [splitS n]
 
 theorem whyTailS (n : ℕ) :
-  Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n ∧
-  4*Tail_S n                = Tail_S (2*n) - Tail_B (2*n) ∧
-  4*Tail_S n                = S - Sum_S (2*n) - Tail_B (2*n) ∧
-  4*(S - S + Tail_S n)      = S - (Sum_S (2*n) + Tail_B (2*n)) ∧
-  (4 * S - 4*(S - Tail_S n) = S - (Sum_S (2*n) + Tail_B (2*n))) ∧
-  (4 * S - 4*Sum_S n        = S - (Sum_S (2*n) + Tail_B (2*n))) ∧
-  (4 * S - 4*Sum_S n        = (S - Sum_S (2*n) - Tail_B (2*n))) ∧
-  (4 * S                    = (S + 4*Sum_S n - Sum_S (2*n) - Tail_B (2*n))) ∧
-  (3 * S                    = (4*Sum_S n - Sum_S (2*n) - Tail_B (2*n))) ∧
-  (S                        = (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n))) / 3) ∧
-  (Sum_S n + Tail_S n       = (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n))) / 3) ∧
-  (Tail_S n                 = (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n))) / 3 - Sum_S n)
-  := by
-    unfold Tail_S Sum_S Tail_B S Sf Tail_S Sum_S Tail_B
+    Tail_S n =
+      (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n)))/3
+        - Sum_S n := by
+  have split (k : ℕ) : Tail_S k = S - Sum_S k := by
+    unfold S Sf Tail_S Sum_S Tail_B
     simp
     ring_nf
-    simp
+  have hn := split n
+  have h2n := split (2*n)
+  have derivation :
+      (Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n) ↔
+      (Tail_S n =
+        (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n)))/3
+          - Sum_S n) := by
+    calc
+      (Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n)
+        ↔ (4*(S - Sum_S n) =
+            S - (Sum_S (2*n) + Tail_B (2*n))) := by
+          constructor <;> intro h <;> linarith
+      _ ↔ (3*S =
+            4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n))) := by
+          constructor <;> intro h <;> linarith
+      _ ↔ (Tail_S n =
+            (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n)))/3
+              - Sum_S n) := by
+          constructor <;> intro h <;> linarith
+  exact derivation.mp (selfSimilarS n).2.1
 
 theorem whyTailB (n : ℕ) :
   Tail_B 0 = F (-1) ∧
