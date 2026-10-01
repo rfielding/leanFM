@@ -11,5 +11,7 @@ import LeanFM.UiModel
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.Implementation
+import LeanFM.PaxosKV.Requirements
+import LeanFM.PaxosKV.Implementation
 import LeanFM.StaticAssets
 import LeanFM.Render

@@ -1,0 +1,21 @@
+syntax = "proto3";
+package leanfm.paxoskv;
+// The executable wire schema is internal/protocol/requirements.proto.
+message PutRequest {}
+message Propose {}
+message Prepare {}
+message Promise {}
+message Accept {}
+message DurableAccepted {}
+message Commit {}
+message PutResult {}
+message PutResponse {}
+message ListRequest {}
+message ReadBarrier {}
+message ReadBarrierAck {}
+message Snapshot {}
+message ListResponse {}
+message Unavailable {}
+message Restarted {}
+message RecoverAcceptedLog {}
+message Available {}

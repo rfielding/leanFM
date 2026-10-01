@@ -1,0 +1,9 @@
+{
+  "requirement:paxos_kv.visible_behavior": ["cmd/paxos-kv/main.go", "internal/protocol/requirements.proto"],
+  "grammar:quorum_write": ["internal/paxos/node.go", "internal/paxos/storage.go", "internal/paxos/node_test.go"],
+  "grammar:linearizable_list": ["internal/paxos/node.go", "internal/web/app.go", "internal/web/app_test.go"],
+  "proof:durable quorum": ["internal/paxos/storage.go", "internal/paxos/storage_test.go"],
+  "output:paxos.concurrent.order": ["internal/trace/events.go"],
+  "output:paxos.commit_latency": ["internal/metrics/metrics.go"],
+  "web.simple_form": ["internal/web/app.go", "internal/web/app_test.go"]
+}

@@ -8,7 +8,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
+.PHONY: build run serve stop check paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
 
 build:
 	lake build leanfm-server
@@ -28,7 +28,14 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams
+check: build validate diagrams paxos-check
+
+paxos-check:
+	@lake env lean ValidatePaxosKV.lean | rg '^ok: Paxos KV requirements|^ok: generated implementation plan'
+	@go test ./...
+
+paxos-run:
+	@echo 'Run three replicas, then: go run ./cmd/paxos-kv web'
 
 validate:
 	@lake exe leanfm | rg 'Per-task FSM CTL checks|CTL from initial observation|AF terminal|AG capacity'
@@ -72,6 +79,10 @@ proto:
 
 diagrams:
 	lake exe leanfm-diagrams
+	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
+	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
+	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
+	@dot -Tpng diagrams/paxos-recovery.dot -o diagrams/paxos-recovery.png
 
 scripts:
 	node scripts/format_assets.js
