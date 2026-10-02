@@ -1,3 +1,5 @@
+[Read the LeanFM PDF book](book/main.pdf)
+
 Lean Formal Methods, based on communicating heirarchial processes.
 =======
 # LeanFM
