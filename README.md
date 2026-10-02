@@ -172,7 +172,11 @@ diagrams/worker.dot
 diagrams/assembled.dot
 ```
 
-The web UI renders diagrams with `<canvas>` from explicit Lean data serialized to JSON and consumed by constant JavaScript renderers. It does not serve SVG or PNG image files.
+The web UI retains interactive `<canvas>` views, but `/renders/` now primarily
+shows ordinary SVG files generated from typed Lean requirements: UML-style
+interaction diagrams per scenario, message-passing state machines, line graphs,
+and pie charts. Each image has a standalone `/renders/<name>.svg` route and is
+also emitted under `diagrams/` by `make diagrams`.
 
 `LeanFM/LLMGenerated/Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the generated artifacts. `Requirements.lean` describes observable behavior; the proto file describes values that resolve to bytes. Neither chooses a transport. `Implementation.lean` separately chooses the target language, files, runtime APIs, and how each protobuf message is carried—for example an HTTP request with a method and path, an HTTP response, an in-process channel, TCP, or a custom adapter. Validation requires the implementation plan to cover every required actor and message without redefining the requirement. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code.
 

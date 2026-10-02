@@ -269,7 +269,12 @@ def sessionGeneratedImplementationResponse (request : String) : IO Response := d
         pure <| response 200 "text/plain; charset=utf-8" body
 
 def responseBody (path : String) (request : String) : IO Response := do
-  match path with
+  if path.startsWith "/renders/" && path.endsWith ".svg" then
+    let name := ((path.drop "/renders/".length).dropEnd ".svg".length).toString
+    match LeanFM.renderSvg name with
+    | some body => pure <| response 200 "image/svg+xml; charset=utf-8" body
+    | none => pure <| response 404 "text/plain; charset=utf-8" "unknown render\n"
+  else match path with
   | "/" => pure <| response 200 "text/html; charset=utf-8" LeanFM.htmlPage
   | "/examples" => pure <| response 200 "text/html; charset=utf-8" LeanFM.examplesPage
   | "/diagrams/" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "all")
@@ -280,6 +285,7 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/renders/post_review" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "post_review")
   | "/renders/tasks" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "tasks")
   | "/renders/assembled" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "assembled")
+  | "/renders/theorems" => pure <| response 200 "text/html; charset=utf-8" LeanFM.theoremRenderPage
   | "/metrics" => pure <| response 200 "text/plain; version=0.0.4; charset=utf-8" LeanFM.prometheusMetrics
   | "/openapi.yaml" => pure <| response 200 "application/yaml; charset=utf-8" LeanFM.openApiYaml
   | "/report" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.textReport
@@ -313,6 +319,7 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/lean/post_review.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.postReviewLeanFile
   | "/lean/worker.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.workerLeanFile
   | "/lean/assembled.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.assembledLeanFile
+  | "/lean/logic.lean" => pure <| response 200 "text/plain; charset=utf-8" (include_str "book/logic.lean")
   | "/lean/sketch/kerberos.lean" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.kerberosLeanSketch
   | "/docs/" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.docsIndex
   | "/docs/index.md" => pure <| response 200 "text/markdown; charset=utf-8" LeanFM.docsIndex

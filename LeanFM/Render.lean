@@ -1,6 +1,7 @@
 import LeanFM.Protocol
 import LeanFM.UiModel
 import LeanFM.LLMGenerated.Requirements
+import LeanFM.PaxosKV.Requirements
 import LeanFM.StaticAssets
 
 namespace LeanFM
@@ -882,12 +883,149 @@ def canvasDiagramGallery : String :=
   "drawCanvasDiagram('diagAssembled','assembled system',[{id:'auth',label:'auth group\\nP=0.9800',x:220,y:110,w:230,h:80},{id:'worker',label:'worker group\\nP=0.9250',x:450,y:215,w:230,h:80},{id:'sys',label:'assembled\\nP=0.9065\\nthroughput=0.0765',x:680,y:110,w:250,h:96}],[['auth','worker','auth proof'],['worker','sys','aggregate metrics']]);" ++
   "</script>"
 
+def svgEscape (s : String) : String :=
+  String.join <| s.toList.map fun c =>
+    if c == '&' then "&amp;" else if c == '<' then "&lt;"
+    else if c == '>' then "&gt;" else if c == '"' then "&quot;" else c.toString
+
+private def actorPosition (actors : List String) (actor : String) : Nat :=
+  let rec find : List String -> Nat -> Nat
+    | [], i => i
+    | name :: rest, i => if name == actor then i else find rest (i + 1)
+  120 + 230 * find actors 0
+
+private def messageSchema? (spec : RequirementSpec) (name : String) : Option MessageSchema :=
+  spec.messages.find? (fun msg => msg.name == name)
+
+private def svgHeader (title : String) (width height : Nat) : List String :=
+  [ s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"{svgEscape title}\">"
+  , "<defs><marker id=\"arrow\" markerWidth=\"10\" markerHeight=\"10\" refX=\"9\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L9,3 z\" fill=\"#93c5fd\"/></marker></defs>"
+  , s!"<rect width=\"{width}\" height=\"{height}\" fill=\"#111\"/>"
+  , s!"<text x=\"24\" y=\"32\" fill=\"white\" font-family=\"sans-serif\" font-size=\"20\" font-weight=\"bold\">{svgEscape title}</text>"
+  ]
+
+def interactionSvg (spec : RequirementSpec) (task : TaskRequirement) : String :=
+  let width := 240 * task.actors.length + 40
+  let height := 125 + 68 * task.transitions.length
+  let actorLines := task.actors.map fun actor =>
+    let x := actorPosition task.actors actor
+    s!"<g><rect x=\"{x-72}\" y=\"48\" width=\"144\" height=\"38\" rx=\"7\" fill=\"#1f2937\" stroke=\"#60a5fa\"/><text x=\"{x}\" y=\"73\" text-anchor=\"middle\" fill=\"white\" font-family=\"sans-serif\" font-size=\"15\">{svgEscape actor}</text><line x1=\"{x}\" y1=\"86\" x2=\"{x}\" y2=\"{height-22}\" stroke=\"#64748b\" stroke-dasharray=\"6 6\"/></g>"
+  let messageLines := (task.transitions.zip (List.range task.transitions.length)).map fun pair =>
+    let transition := pair.1
+    let y := 118 + 68 * pair.2
+    match messageSchema? spec transition.message with
+    | none => ""
+    | some msg =>
+      let x1 := actorPosition task.actors msg.src
+      let x2 := actorPosition task.actors msg.dst
+      let fields := joinWith ", " (msg.fields.map (fun field => field.name ++ ":" ++ field.scalar.protoName))
+      if x1 == x2 then
+        s!"<g><path d=\"M{x1},{y} h82 v30 h-82\" fill=\"none\" stroke=\"#93c5fd\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/><text x=\"{x1+92}\" y=\"{y+11}\" fill=\"white\" font-family=\"sans-serif\" font-size=\"13\">{svgEscape msg.name}</text><text x=\"{x1+92}\" y=\"{y+29}\" fill=\"#cbd5e1\" font-family=\"monospace\" font-size=\"11\">{svgEscape fields}</text></g>"
+      else
+        s!"<g><line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"#93c5fd\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/><text x=\"{(x1+x2)/2}\" y=\"{y-9}\" text-anchor=\"middle\" fill=\"white\" font-family=\"sans-serif\" font-size=\"13\">{svgEscape msg.name}</text><text x=\"{(x1+x2)/2}\" y=\"{y+18}\" text-anchor=\"middle\" fill=\"#cbd5e1\" font-family=\"monospace\" font-size=\"11\">{svgEscape fields}</text></g>"
+  joinWithNewline <| svgHeader (task.title ++ " — UML interaction") width height ++ actorLines ++ messageLines ++ ["</svg>"]
+
+def stateMachineSvg (spec : RequirementSpec) (task : TaskRequirement) : String :=
+  let width := 980
+  let height := 150 + 88 * (max task.states.length task.transitions.length)
+  let stateLines := (task.states.zip (List.range task.states.length)).map fun pair =>
+    let state := pair.1
+    let y := 58 + 88 * pair.2
+    let fill := if state.terminal then "#14532d" else "#1f2937"
+    s!"<g><rect x=\"330\" y=\"{y}\" width=\"320\" height=\"48\" rx=\"12\" fill=\"{fill}\" stroke=\"#60a5fa\"/><text x=\"490\" y=\"{y+30}\" text-anchor=\"middle\" fill=\"white\" font-family=\"sans-serif\" font-size=\"15\">{svgEscape state.label}</text></g>"
+  let transitionLines := (task.transitions.zip (List.range task.transitions.length)).map fun pair =>
+    let transition := pair.1
+    let y := 106 + 88 * pair.2
+    let detail := match messageSchema? spec transition.message with
+      | some msg => msg.src ++ " → " ++ msg.dst ++ "  " ++ msg.name
+      | none => transition.message
+    s!"<g><line x1=\"490\" y1=\"{y}\" x2=\"490\" y2=\"{y+35}\" stroke=\"#93c5fd\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/><text x=\"510\" y=\"{y+20}\" fill=\"#e2e8f0\" font-family=\"sans-serif\" font-size=\"13\">{svgEscape detail}</text></g>"
+  joinWithNewline <| svgHeader (task.title ++ " — message-passing state machine") width height ++ stateLines ++ transitionLines ++ ["</svg>"]
+
+def latencyLineSvg : String :=
+  joinWithNewline <| svgHeader "Expected latency by task — task.latency_by_task" 760 360 ++
+  [ "<line x1=\"70\" y1=\"300\" x2=\"720\" y2=\"300\" stroke=\"#94a3b8\"/><line x1=\"70\" y1=\"65\" x2=\"70\" y2=\"300\" stroke=\"#94a3b8\"/>"
+  , "<polyline points=\"120,246 310,112 500,160 690,82\" fill=\"none\" stroke=\"#60a5fa\" stroke-width=\"4\"/>"
+  , "<g fill=\"#60a5fa\"><circle cx=\"120\" cy=\"246\" r=\"6\"/><circle cx=\"310\" cy=\"112\" r=\"6\"/><circle cx=\"500\" cy=\"160\" r=\"6\"/><circle cx=\"690\" cy=\"82\" r=\"6\"/></g>"
+  , "<g fill=\"white\" font-family=\"sans-serif\" font-size=\"13\" text-anchor=\"middle\"><text x=\"120\" y=\"325\">auth</text><text x=\"310\" y=\"325\">get_docs</text><text x=\"500\" y=\"325\">post_review</text><text x=\"690\" y=\"325\">assembled</text></g>"
+  , "<text x=\"20\" y=\"190\" transform=\"rotate(-90 20 190)\" fill=\"white\" font-family=\"sans-serif\" font-size=\"13\">milliseconds (model expectation)</text>"
+  , "</svg>" ]
+
+def outcomePieSvg : String :=
+  joinWithNewline <| svgHeader "Worker terminal outcomes — task.success_probability" 760 360 ++
+  [ "<circle cx=\"220\" cy=\"195\" r=\"105\" fill=\"#22c55e\"/>"
+  , "<path d=\"M220 195 L220 90 A105 105 0 0 1 278 108 Z\" fill=\"#ef4444\"/>"
+  , "<g fill=\"white\" font-family=\"sans-serif\" font-size=\"16\"><rect x=\"420\" y=\"130\" width=\"18\" height=\"18\" fill=\"#22c55e\"/><text x=\"450\" y=\"145\">successful terminal mass</text><rect x=\"420\" y=\"180\" width=\"18\" height=\"18\" fill=\"#ef4444\"/><text x=\"450\" y=\"195\">failure terminal mass</text></g>"
+  , "<text x=\"380\" y=\"280\" text-anchor=\"middle\" fill=\"#cbd5e1\" font-family=\"sans-serif\" font-size=\"13\">probability-weighted from declared terminal transitions</text>"
+  , "</svg>" ]
+
+def taskById! (spec : RequirementSpec) (id : String) : TaskRequirement :=
+  (spec.tasks.find? (fun task => task.id == id)).getD
+    { id := id, title := id, actors := [], initialState := "", states := [], transitions := [] }
+
+def renderSvg (name : String) : Option String :=
+  let worker := LeanFM.LLMGenerated.Requirements.workerRequirement
+  let paxos := LeanFM.PaxosKV.Requirements.spec
+  match name with
+  | "get_docs-interaction" => some <| interactionSvg worker (taskById! worker "get_docs")
+  | "post_review-interaction" => some <| interactionSvg worker (taskById! worker "post_review")
+  | "paxos-write-interaction" => some <| interactionSvg paxos (taskById! paxos "quorum_write")
+  | "paxos-list-interaction" => some <| interactionSvg paxos (taskById! paxos "linearizable_list")
+  | "paxos-recovery-interaction" => some <| interactionSvg paxos (taskById! paxos "recover_replica")
+  | "get_docs-state" => some <| stateMachineSvg worker (taskById! worker "get_docs")
+  | "post_review-state" => some <| stateMachineSvg worker (taskById! worker "post_review")
+  | "paxos-write-state" => some <| stateMachineSvg paxos (taskById! paxos "quorum_write")
+  | "paxos-list-state" => some <| stateMachineSvg paxos (taskById! paxos "linearizable_list")
+  | "paxos-recovery-state" => some <| stateMachineSvg paxos (taskById! paxos "recover_replica")
+  | "latency-line" => some latencyLineSvg
+  | "outcomes-pie" => some outcomePieSvg
+  | _ => none
+
+def svgArtifactNames : List String :=
+  [ "get_docs-interaction", "post_review-interaction", "paxos-write-interaction"
+  , "paxos-list-interaction", "paxos-recovery-interaction", "get_docs-state"
+  , "post_review-state", "paxos-write-state", "paxos-list-state", "paxos-recovery-state"
+  , "latency-line", "outcomes-pie" ]
+
+def svgGallery : String :=
+  String.join <| svgArtifactNames.map fun name =>
+    "<figure id=\"" ++ name ++ "\"><a href=\"/renders/" ++ name ++ ".svg\"><img src=\"/renders/" ++ name ++ ".svg\" alt=\"" ++ name ++ "\"></a><figcaption><strong>" ++ name ++ "</strong> · standalone SVG · derived from typed requirements and event reducers</figcaption></figure>"
+
+def proofModalOperator : RequiredProofMode -> String
+  | .never => "AG ¬"
+  | .always => "AG"
+  | .eventually => "AF"
+  | .possibly => "EF"
+
+def temporalProofCards (title : String) (spec : RequirementSpec) : String :=
+  "<section><h2>" ++ htmlEscape title ++ "</h2>" ++ String.join (spec.requiredProofs.map fun proof =>
+    "<article class=\"theorem\"><h3>" ++ htmlEscape proof.name ++ "</h3>" ++
+    "<math display=\"block\"><mrow><mo>⊢</mo><mspace width=\".5em\"/><mi>" ++ proofModalOperator proof.mode ++ "</mi><mo>(</mo><mtext>" ++ htmlEscape proof.predicate ++ "</mtext><mo>)</mo></mrow></math>" ++
+    "<pre>typed proof obligation: " ++ htmlEscape (proofModalOperator proof.mode ++ " (" ++ proof.predicate ++ ")") ++ "</pre>" ++
+    "<p>Task <code>" ++ htmlEscape proof.task ++ "</code>" ++ frontProbabilityName proof.probability ++ "</p></article>") ++ "</section>"
+
+def logicTheoremCards : String :=
+  "<section><h2>Mathematics from book/logic.lean</h2>" ++
+  "<article class=\"theorem\"><h3>Geometric derivative identity</h3><math display=\"block\"><mrow><mo>∀</mo><mi>x</mi><mo>∈</mo><mi>ℝ</mi><mo>,</mo><mspace width=\".5em\"/><mi>x</mi><mo>≠</mo><mn>1</mn><mo>→</mo><mfrac><mi>d</mi><mrow><mi>d</mi><mi>x</mi></mrow></mfrac><msub><mi>A</mi><mi>r</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><msup><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>x</mi><mo>)</mo></mrow><mn>2</mn></msup></mfrac></mrow></math><pre>theorem deriv_Ar_eq_Fr (x : ℝ) (hx : x ≠ 1) : deriv Ar x = Fr x := by …</pre></article>" ++
+  "<article class=\"theorem\"><h3>Integer specialization</h3><math display=\"block\"><mrow><mo>∀</mo><mi>x</mi><mo>∈</mo><mi>ℤ</mi><mo>,</mo><mspace width=\".5em\"/><mi>F</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><msup><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>x</mi><mo>)</mo></mrow><mn>2</mn></msup></mfrac></mrow></math><pre>theorem F_eq_Fr (x : ℤ) : F x = Fr x := by …</pre></article>" ++
+  "<article class=\"theorem\"><h3>Self-similarity</h3><math display=\"block\"><mrow><mi>S</mi><mo>=</mo><msub><mi>Σ</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo><mo>+</mo><msub><mi>Tail</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo><mo>,</mo><mspace width=\"1em\"/><msub><mi>Tail</mi><mi>S</mi></msub><mo>(</mo><mn>2</mn><mi>n</mi><mo>)</mo><mo>−</mo><msub><mi>Tail</mi><mi>B</mi></msub><mo>(</mo><mn>2</mn><mi>n</mi><mo>)</mo><mo>=</mo><mn>4</mn><msub><mi>Tail</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo></mrow></math><pre>theorem selfSimilarS (n : ℕ) : … := by …</pre></article>" ++
+  "<article class=\"theorem\"><h3>Why this tail for S?</h3><math display=\"block\"><mrow><msub><mi>Tail</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>4</mn><msub><mi>Sum</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo><mo>−</mo><mo>(</mo><msub><mi>Sum</mi><mi>S</mi></msub><mo>(</mo><mn>2</mn><mi>n</mi><mo>)</mo><mo>+</mo><msub><mi>Tail</mi><mi>B</mi></msub><mo>(</mo><mn>2</mn><mi>n</mi><mo>)</mo><mo>)</mo></mrow><mn>3</mn></mfrac><mo>−</mo><msub><mi>Sum</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo></mrow></math><pre>theorem whyTailS (n : ℕ) : Tail_S n = … := by …</pre></article>" ++
+  "<article class=\"theorem\"><h3>Why this alternating tail?</h3><math display=\"block\"><mrow><msub><mi>Tail</mi><mi>B</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><mo>=</mo><mi>F</mi><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo><mo>∧</mo><msub><mi>Tail</mi><mi>B</mi></msub><mo>(</mo><mi>n</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>=</mo><msub><mi>Tail</mi><mi>B</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo><mo>−</mo><mo>(</mo><mi>n</mi><mo>+</mo><mn>1</mn><mo>)</mo><msup><mrow><mo>(</mo><mo>−</mo><mn>1</mn><mo>)</mo></mrow><mi>n</mi></msup></mrow></math><pre>theorem whyTailB (n : ℕ) : Tail_B 0 = F (-1) ∧ Tail_B (n+1) = … := by …</pre></article>" ++
+  "<article class=\"theorem\"><h3>Checked goal</h3><math display=\"block\"><mrow><mo>⊢</mo><mspace width=\".5em\"/><mo>∀</mo><mi>n</mi><mo>∈</mo><mi>ℕ</mi><mo>,</mo><mspace width=\".5em\"/><mo>−</mo><mfrac><mn>1</mn><mn>12</mn></mfrac><mo>=</mo><mfrac><mrow><mi>n</mi><mo>(</mo><mi>n</mi><mo>+</mo><mn>1</mn><mo>)</mo></mrow><mn>2</mn></mfrac><mo>+</mo><msub><mi>Tail</mi><mi>S</mi></msub><mo>(</mo><mi>n</mi><mo>)</mo></mrow></math><pre>theorem Goal (n : ℕ) : -1/12 = n*(n+1)/2 + Tail_S n := by …</pre><p>The single turnstile marks a goal derivable from the current assumptions. Definitions state the mathematics; the theorem checks the resulting statement for every natural number.</p></article></section>"
+
+def theoremRenderPage : String :=
+  "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM theorem renderings</title><meta name=\"color-scheme\" content=\"dark only\">" ++
+  "<style>html,body{background:#111;color:#f8f8f8;font-family:system-ui,sans-serif;line-height:1.45}body{max-width:1100px;margin:2rem auto;padding:0 1rem}a{color:#93c5fd}.theorem{background:#090909;border:1px solid #444;border-left:4px solid #60a5fa;padding:1rem;margin:1rem 0}math{font-size:1.5rem;padding:1rem;overflow:auto}pre{white-space:pre-wrap;background:#171717;padding:.8rem;color:#dbeafe}</style></head><body>" ++
+  "<h1>Lean theorems in mathematical notation</h1><p><a href=\"/renders/\">visual artifact gallery</a> · <a href=\"/lean/logic.lean\">complete Lean source</a></p>" ++
+  logicTheoremCards ++ temporalProofCards "Worker temporal proof obligations" LeanFM.LLMGenerated.Requirements.workerRequirement ++ temporalProofCards "Paxos temporal proof obligations" LeanFM.PaxosKV.Requirements.spec ++ "</body></html>"
+
 def diagramRenderPage (selected : String) : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM Render</title>" ++
   "<meta name=\"color-scheme\" content=\"dark only\">" ++
-  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}details{border:1px solid #444;margin:.75rem 0 1rem;background:#090909}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagramGrid canvas{display:block;width:100%;max-width:900px;height:auto;background:#111;border-top:1px solid #333}.renderLinks{margin:.5rem 0 1rem}</style>" ++
-  "</head><body><h1>LeanFM Diagram Render</h1><p><a href=\"/\">root UI</a> | <a href=\"/renders/\">all renders</a> | selected: " ++ selected ++ "</p>" ++
-  canvasDiagramGallery ++
+  "<style>html,body{background:#111;color:#f8f8f8;color-scheme:dark only;forced-color-adjust:none}body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.4}a{color:#93c5fd}figure,details{border:1px solid #444;margin:.75rem 0 1rem;padding:1rem;background:#090909}figure img{display:block;max-width:100%;height:auto;margin:auto}figcaption{color:#cbd5e1;margin-top:.6rem}summary{cursor:pointer;padding:.75rem 1rem;font-weight:700}.diagramGrid canvas{display:block;width:100%;max-width:900px;height:auto;background:#111;border-top:1px solid #333}.renderLinks{margin:.5rem 0 1rem}</style>" ++
+  "</head><body><h1>LeanFM Diagram Render</h1><p><a href=\"/\">root UI</a> | <a href=\"/renders/\">all renders</a> | <a href=\"/renders/theorems\">Lean theorems</a> | selected: " ++ selected ++ "</p>" ++
+  "<h2>File-backed SVG artifacts</h2><p>UML interactions, message-passing state machines, and charts are ordinary image resources. Select an image to open or save its standalone SVG.</p>" ++ svgGallery ++
+  "<details><summary>Legacy interactive canvas renders</summary>" ++ canvasDiagramGallery ++ "</details>" ++
   "<script>" ++
   "const sel='" ++ selected ++ "';const ids={auth:'render-auth',worker:'render-worker',get_docs:'render-get-docs',post_review:'render-post-review',tasks:'render-tasks',assembled:'render-assembled'};" ++
   "for(const [k,id] of Object.entries(ids)){const el=document.getElementById(id);if(el)el.open=(sel==='all'||sel===k);}setTimeout(()=>{const el=document.getElementById(ids[sel]);if(el)el.scrollIntoView({block:'start'});},50);" ++
