@@ -4,6 +4,173 @@ This document records weaknesses, unresolved questions, and places where the
 current implementation supports a smaller claim than the book may suggest. It
 is intentionally critical. Passing the build does not resolve these issues.
 
+## Audit snapshot: 2026-10-02
+
+The book has a compelling core idea: make externally meaningful histories the
+durable specification boundary, argue requirements into typed artifacts, and
+derive code, tests, diagrams, metrics, and proofs from those artifacts. The
+software demonstrates many ingredients of that idea. It does not yet implement
+the integrated method described by the book.
+
+The largest gap is no longer a missing data type. It is the absence of a single
+executable semantic path connecting the types that now exist. `GrammarExpr`
+has constructors and structural validators, but there is no general interpreter
+that generates accepted event DAGs or recognizes an arbitrary decoded event DAG.
+The server, charts, diagrams, protobuf round trip, finite protocol model, and Go
+Paxos example each use related but separate representations. Consequently, a
+successful build establishes local consistency, not the book's stronger claim
+that one scenario grammar produced all of the reviewable and executable
+artifacts.
+
+The current evidence should be separated by kind rather than presented as one
+undifferentiated notion of verification:
+
+| Area | What exists | What the evidence establishes | What it does not establish |
+| --- | --- | --- | --- |
+| Lean requirement values | Typed records plus structural validation | Names, references, tags, coverage, and several well-formedness conditions | That the requirement matches user intent or has executable trace semantics |
+| Finite protocol model | Executable transitions and `native_decide` checks | Properties of the bounded enumerated model | Refinement to arbitrary generated requirements or deployed code |
+| Protobuf test | One generated worker scenario round trip | Equality after one Python protobuf encode/decode path | Grammar generation, recognition after decode, schema evolution, or generality |
+| Paxos application | Working three-process Go example and tests | Useful behavior for the tested executions | Refinement from `Requirements.lean`, complete trace emission, or full Multi-Paxos |
+| SVG/HTML output | Browser-visible files and gallery routes | The server can display ordinary visual artifacts | That every picture is reduced from the declared event source |
+| Book theorems | Some real Lean theorems plus many proposed statements | The checked `book/logic.lean` statements compile when separately run | That pseudocode theorem schemas or typed `RequiredProof` records are proved |
+
+The software is therefore best described as an executable design notebook with
+several checked islands. Calling it an end-to-end formal-methods environment is
+premature until those islands share one trace semantics and refinement story.
+
+## The rendered book is not currently a reproducible release artifact
+
+The checked-in `book/main.pdf` is stale relative to its source. For example,
+`book/chapters/vision.tex` now explains why protocols and persistent disk formats
+outlive chaotic internal structures, but the rendered PDF still moves directly
+from state-space explosion to “We therefore begin with behaviour.” Current
+source edits have not been rebuilt into the user-facing book.
+
+This matters because `book/main.pdf` is also declared to be an input to code
+generation. If source and PDF disagree, two agents can receive different
+languages and requirements. The build should fail when the committed PDF is not
+the deterministic product of the committed TeX, generated tables, figures, and
+code listings. Ideally the release records tool versions and a content manifest,
+then tests that regenerating the book leaves no diff.
+
+## The implemented language is smaller than the book's authoring language
+
+Chapters 4, 5, 7, and 11 use an attractive surface language with `scenario`,
+`declare`, `from_`, `to_`, `emit`, `receive`, exported bindings,
+`refineMessage`, actor-local role projection, symbolic encryption, and
+`composeRoles`. Most of these forms do not exist as executable Lean definitions
+in the repository. The implemented artifact language is principally
+`RequirementSpec`, `TaskRequirement`, and `GrammarExpr`, whose guards are strings
+and whose events contain names rather than typed bound values.
+
+The book sometimes labels the fictional compiler's behavior in the present
+tense: it “reads all referenced scenarios,” “checks exported bindings,”
+“detects cycles,” “builds one grammar,” generates traces, recognizes traces, and
+projects executable participants. The current code structurally walks grammar
+atoms and references for validation; it does not implement that compiler. The
+security-protocol theorem scripts explicitly depend on a library “still to be
+built,” but comparable caveats are not consistently attached to the Chapter 5
+surface syntax.
+
+The book should either:
+
+1. mark every non-executable listing as proposed notation and give the current
+   executable equivalent beside it; or
+2. implement the surface elaborator and make every major book example compile
+   in CI.
+
+Until then, the book teaches a better system than the repository contains.
+
+## The new visual gallery exposes derivation gaps
+
+Serving ordinary SVG files is a real usability improvement. The gallery now
+contains multiple interaction diagrams, state machines, a line graph, a pie
+chart, and a MathML theorem page. Their current captions overclaim their
+provenance.
+
+- `interactionSvg` iterates over `TaskRequirement.transitions`, not over a
+  `(session, scenario)` event stream ordered by `priorIds`. Choices become a
+  flat transition list, threshold branches are not recovered from the grammar,
+  and actor specifications such as `KVReplica -> KVReplica` become a self-loop
+  rather than concrete leader/follower lifelines. These are schema diagrams,
+  not per-session scenario interactions.
+- `stateMachineSvg` positions states and transitions by independent list index.
+  It does not use `RequirementTransition.src` or `.dst` to draw edges. A branch,
+  loop, or transition ordering different from the state list can therefore
+  render a false machine while still looking polished.
+- `latencyLineSvg` contains literal point coordinates and labels. It does not
+  reduce paired start/end events or even interpolate the named Lean metric
+  values into the SVG.
+- `outcomePieSvg` is fixed geometry rather than a reduction of terminal-event
+  mass. The wedge has no checked connection to the displayed categories.
+- The portable `diagrams/` gallery is regenerated locally but the entire
+  directory is ignored by Git. A README link to those paths works in a developer
+  checkout only after generation; it does not publish durable artifacts.
+
+This directly violates one of the book's best rules: a persuasive diagram must
+not become a second specification. Each renderer needs an explicit typed input,
+the matching `DesiredOutput`, and a test showing that changing the input changes
+the expected geometry or series. The gallery should distinguish “requirement
+schema,” “example trace,” “observed trace,” and “modeled prediction.”
+
+## The theorem gallery conflates rendering, obligations, and proofs
+
+The MathML page improves readability but has three different epistemic statuses:
+
+- theorem statements manually copied from `book/logic.lean`;
+- hand-authored mathematical paraphrases of those statements; and
+- `RequiredProof` records rendered as modal formulas.
+
+Only the first category has actual Lean proof terms. A `RequiredProof` value is
+an obligation, not a theorem, and structural validation does not prove its
+predicate. The page now labels these as typed proof obligations, which is better,
+but the mathematical and Lean views are still separately maintained and can
+drift. The derivative formula already demonstrated this risk when the first
+rendering omitted `deriv` from the displayed equation.
+
+The theorem page should be generated from elaborated declarations or a small
+typed mathematical AST, not duplicated HTML strings. It should show a badge for
+`proved`, `decided on finite model`, `tested`, `assumed`, or `unproved
+obligation`, and link each proof to the declaration and build result that
+supports the badge.
+
+The `-1/12` chapter also needs unusually careful wording. `book/logic.lean`
+defines `Tail_S` algebraically so that the finite-prefix-plus-tail identity is
+true and proves self-similarity properties of that definition. This is a valid
+discrete account of a chosen summation assignment. It is not a proof that the
+ordinary divergent series of natural-number partial sums converges to `-1/12`.
+The text should keep “regularized value under these definitions” visibly
+separate from ordinary convergence.
+
+## The Paxos example is useful but does not yet validate the method
+
+The three-replica application is the strongest implementation example because
+it has durable storage, a browser interface, recovery tests, concurrency, and a
+real quorum. It also exposes important inconsistencies:
+
+- `LeanFM/PaxosKV/Requirements.proto` declares empty payload messages while
+  `internal/protocol/requirements.proto` uses one generic `Envelope` with the
+  executable fields. The requirement artifact is therefore not the schema from
+  which the implementation bindings were generated.
+- The requirement now defines `ScenarioEvent.priorIds` and a checked example
+  DAG, but runtime tracing emits only `PutSucceeded` and `ListSucceeded` events
+  and supplies no predecessor IDs. The detailed quorum graph is an authored
+  requirement example, not a rendering of a live execution.
+- The accepted implementation narrative says stable-leader Multi-Paxos, while
+  `internal/paxos/node.go` describes classic Paxos and performs a prepare phase
+  for each proposed slot. This may be correct repeated Paxos, but it is not the
+  documented implementation.
+- `Implementation.lean` maps outage atoms to TCP even though the code does not
+  emit the complete declared outage/restart/recovery protocol over that mapping.
+- Metrics expose a few counters and a latency accumulator, but not the full
+  accepted output catalog for availability, recovery lag, queue pressure,
+  memory headroom, or per-session diagrams.
+
+The example should become the conformance harness for the whole project: capture
+a real legal write, outage, recovery, concurrent write, and list trace; decode
+them through the requirement protobuf; validate them against the grammar; and
+generate the browser diagrams and metrics from those exact traces.
+
 ## The central abstraction is promising but not yet closed
 
 LeanFM treats a scenario as a list of timestamped events with explicit immediate
@@ -99,12 +266,15 @@ Several questions remain:
 
 ## Predecessor links permit fork and join but need stronger validation
 
-A list-valued `prior` field naturally expresses roots, forks, and joins. The
-current examples use it effectively. General validation should additionally
+A list-valued `priorIds` field naturally expresses roots, forks, and joins. The
+Paxos example now checks unique IDs, backward references, acyclicity induced by
+list order, and agreement between displayed fields and its message schema. That
+is useful, but it is local to one example and assumes every predecessor occurs
+earlier in the storage list. A general event-DAG validator should additionally
 check:
 
-- event IDs are unique;
-- every predecessor exists or is explicitly external;
+- every predecessor exists or is explicitly external without requiring one
+  particular topological serialization;
 - the predecessor graph is acyclic;
 - predecessor edges do not travel backward in `timeAt`;
 - actor/message endpoints agree with the selected terminal;
@@ -347,23 +517,41 @@ than it is.
 
 ## Highest-value next steps
 
-1. Define one typed `ScenarioEvent` model in Lean with `timeAt`, list-valued
-   predecessors, correlation, terminal value, and payload.
-2. Generate a scenario directly from a typed grammar and explicit random or
-   policy choices.
-3. Implement or bind protobuf encoding and decoding for that model, then prove
-   or exhaustively check round-trip preservation for the bounded domain.
-4. Revalidate the decoded trace against the grammar, FSM, actor endpoints, and
-   predecessor graph.
-5. Derive diagrams, protobuf declarations, implementation bindings, reducers,
-   and test vectors from the same typed source where possible.
-6. Add predecessor-graph validation: unique IDs, complete predecessors, acyclicity,
-   monotonic timestamps, and valid fork/join boundaries.
-7. Make metric boundary selection typed and explicit instead of relying on
-   naming conventions.
-8. Distinguish empirical probability, specified randomness, nondeterminism, and
-   policy decisions in the data model and book.
-9. Add implementation conformance tests that compare observed byte traces with
-   the accepted requirement language.
-10. Label every major claim by its evidence level: assumption, example, test,
-    model check, or proof.
+1. Implement one executable semantics for `GrammarExpr`: generation from
+   explicit choices and recognition of partially ordered `ScenarioEvent` DAGs.
+   Make sequence, choice, parallel, threshold join, guard, reference, and repeat
+   testable rather than merely structurally valid.
+2. Unify the event envelope and protobuf story. Generate the worker and Paxos
+   requirement schemas from the same typed message definitions, remove the
+   empty Paxos placeholder messages, and round-trip multiple legal and illegal
+   traces through the actual runtime binding.
+3. Make the Paxos program emit every declared protocol event with IDs,
+   `priorIds`, concrete actor instances, timestamps, and typed payload fields.
+   Replay those traces through the grammar and derive the displayed quorum DAG,
+   interaction diagram, state path, latency, availability, and recovery lag.
+4. Replace the SVG shortcuts with real reducers. Interaction diagrams must take
+   event DAGs; state machines must use transition `src`/`dst` or grammar
+   residuals; line and pie charts must consume named numeric series. Add golden
+   tests for branch, loop, fork, all-of join, and `m`-of-`n` join layouts.
+5. Turn evidence level into a typed, visible property of every artifact:
+   `assumption`, `illustration`, `observed`, `tested`, `finite-model checked`, or
+   `Lean proved`. Do not render a `RequiredProof` as though it had a proof term.
+6. Either implement the book's scenario surface language or rewrite the book to
+   use the actual `RequirementSpec`/`GrammarExpr` API. Compile every purportedly
+   executable listing in CI and visibly mark pseudocode.
+7. Add a deterministic book-release check: rebuild `book/main.pdf`, generated
+   tables, SVG/PNG figures, theorem pages, and referenced-book assets, then fail
+   on drift. Because the PDF is a code-generation input, stale output is a
+   semantic defect, not cosmetic debt.
+8. Reconcile the Paxos implementation document with the code: either implement
+   stable-leader Multi-Paxos or specify repeated classic Paxos. Then add fault
+   tests for lost, duplicated, delayed, reordered, and partially written frames,
+   not only clean process loss.
+9. Make metric boundaries typed and executable. Distinguish empirical
+   probability, specified randomness, nondeterminism, and policy decisions;
+   include warm-up, censorship, observation windows, uncertainty, and
+   accounting boundaries in reducer inputs.
+10. Prove or test refinement at the observable boundary: generated or existing
+    code traces must be accepted by the requirement language, and every required
+    legal branch—especially `possibly` branches—must have a tested handling
+    path. Traceability comments alone are insufficient.

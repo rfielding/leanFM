@@ -284,6 +284,17 @@ structure ActorReliabilityContract where
   meanTimeToRepairMs : Nat
 deriving Repr
 
+/-- A named availability gate. Members are concrete actor-instance IDs or
+    other gate IDs. Requiring every member is series composition; requiring one
+    is parallel redundancy; intermediate values are k-of-n. Nested gates form
+    the dependency graph used for cascade analysis. -/
+structure ReliabilityDependencyGate where
+  id : String
+  members : List String
+  requiredCount : Nat
+  affectedTasks : List String
+deriving DecidableEq, Repr
+
 /-- Economic and supply inputs for a deployable service instance. Monetary
     amounts use minor currency units so the requirement remains exact. -/
 structure ActorCostContract where
@@ -363,6 +374,7 @@ structure RequirementSpec where
   actorPopulations : List ActorPopulation
   actorResources : List ActorResourceContract
   actorReliability : List ActorReliabilityContract
+  reliabilityGates : List ReliabilityDependencyGate
   actorCosts : List ActorCostContract
   messages : List MessageSchema
   tasks : List TaskRequirement
@@ -856,6 +868,24 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
       (if contract.outageProbability.numerator > 0 && contract.meanTimeToRepairMs == 0 then
         ["actor with nonzero outage probability has zero MTTR: " ++ contract.actor] else []) ++
       errors) []
+  let gateIds := spec.reliabilityGates.map (fun gate => gate.id)
+  let gateMemberNames := populationInstances ++ gateIds
+  let reliabilityGateErrors :=
+    (duplicateStrings gateIds).map (fun id => "duplicate reliability dependency gate: " ++ id) ++
+    spec.reliabilityGates.foldr (fun gate errors =>
+      (if gate.id == "" then ["reliability dependency gate has empty id"] else []) ++
+      (if gate.members.isEmpty then ["reliability dependency gate has no members: " ++ gate.id] else []) ++
+      (if gate.requiredCount == 0 || gate.requiredCount > gate.members.length then
+        ["reliability dependency gate has invalid required count: " ++ gate.id] else []) ++
+      (if gate.members.contains gate.id then
+        ["reliability dependency gate directly contains itself: " ++ gate.id] else []) ++
+      gate.members.filterMap (fun member =>
+        if gateMemberNames.contains member then none
+        else some ("reliability dependency gate " ++ gate.id ++ " references unknown member: " ++ member)) ++
+      gate.affectedTasks.filterMap (fun task =>
+        if (taskIds spec).contains task then none
+        else some ("reliability dependency gate " ++ gate.id ++ " references unknown task: " ++ task)) ++
+      errors) []
   let duplicateMessages := (duplicateStrings (messageNames spec)).map fun id => "duplicate message: " ++ id
   let duplicateTasks := (duplicateStrings (taskIds spec)).map fun id => "duplicate task: " ++ id
   let duplicateGrammars := (duplicateStrings (grammarIds spec)).map fun id => "duplicate grammar for task: " ++ id
@@ -920,7 +950,7 @@ def validateRequirementSpec (spec : RequirementSpec) : List String :=
   (if spec.properties.isEmpty then ["requirement " ++ spec.id ++ " has no temporal/property annotations"] else []) ++
   (if spec.requiredProofs.isEmpty then ["requirement " ++ spec.id ++ " has no required proof obligations"] else []) ++
   (if spec.desiredOutputs.isEmpty then ["requirement " ++ spec.id ++ " has no prompt-derived outputs"] else []) ++
-  duplicateActors ++ populationErrors ++ resourceErrors ++ reliabilityErrors ++ costErrors ++
+  duplicateActors ++ populationErrors ++ resourceErrors ++ reliabilityErrors ++ reliabilityGateErrors ++ costErrors ++
     duplicateMessages ++ duplicateTasks ++ duplicateGrammars ++ messageErrors ++ taskErrors ++
     grammarErrors ++ processErrors ++ propertyErrors ++ proofErrors ++ performanceErrors ++ chartErrors ++ outputErrors ++ markdownErrors
 
@@ -1060,6 +1090,7 @@ def requirementReferenceIds (requirement : RequirementSpec) : List String :=
   requirement.actors.map (fun actor => "actor:" ++ actor) ++
   requirement.actorResources.map (fun resource => "resource:" ++ resource.actor) ++
   requirement.actorReliability.map (fun reliability => "reliability:" ++ reliability.actor) ++
+  requirement.reliabilityGates.map (fun gate => "reliability-gate:" ++ gate.id) ++
   requirement.messages.map (fun message => "message:" ++ message.name) ++
   requirement.tasks.map (fun task => "task:" ++ task.id) ++
   requirement.grammars.map (fun grammar => "grammar:" ++ grammar.task) ++
@@ -1182,7 +1213,7 @@ def leanFMRequirementsReference : String :=
     , "Charts are presentation requests; DesiredOutput is the durable reason and event-reduction provenance. Numeric event reductions may be exposed at /metrics."
     , "Load questions may request a Universal Scalability Law fit over comparable population runs, including observed points, fitted curve, parameters, and fit error. Queue/latency outputs pair queue length at admission with completion latency measured between explicitly paired predecessor events; queue size alone does not prove latency."
     , "Treat performance and capacity as requirements needed before first deployment: state forecast demand, service capacity, queue bounds, overload behavior, availability, and cost inputs so the design can be rejected if it would collapse under its first realistic load."
-    , "Memory reports compare observed resident bytes with the per-instance memoryBudgetBytes contract. Exhaustion is a fatal outcome, not an ordinary latency sample. Network-outage reports join Unavailable/Recovered intervals to the actor interaction/dependency graph and report affected tasks as well as per-actor uptime and MTTR."
+    , "Memory reports compare observed resident bytes with the per-instance memoryBudgetBytes contract. Exhaustion is a fatal outcome, not an ordinary latency sample. ReliabilityDependencyGate members are concrete actor-instance IDs or nested gate IDs; requiredCount=member count is series, requiredCount=1 is parallel, and intermediate values are k-of-n. Reliability reports preserve synchronized Unavailable/Recovered intervals, calculate composed uptime, and propagate named service failures to a fixed point. An unavailable instance sends and receives no ordinary protocol messages until recovery; pending work must stall, reject, time out, cancel, or resume as explicitly required. Report initiating failures, propagation edges, affected services/tasks/outcomes, recovery order, violated safety/liveness properties, per-instance uptime, composed uptime, and MTTR; never multiply marginal availabilities unless independence is explicitly assumed."
     , ""
     , "## Separation and validation"
     , "Requirements.lean holds observable behavior. Requirements.proto holds byte values. Implementation.lean holds transports, languages, filenames, APIs, and framework choices."
@@ -1293,7 +1324,7 @@ def requirementsInterrogationChecklist : String :=
     , "9. Which latency percentiles, histogram bins, uptime, reliability, and XY groupings are required?"
     , "10. For load questions, which comparable client populations, warm-up, censored-work policy, throughput definition, and USL fit/error report apply?"
     , "11. Which queue observation is paired with each task latency, and which memory observations prove headroom or fatal exhaustion against the per-instance budget?"
-    , "12. Which actor dependencies let an Unavailable/Recovered interval affect downstream tasks, and how are correlated or partial outages represented?"
+    , "12. Which actor dependencies are series, parallel, or k-of-n gates; which consumers and tasks require them; which named service-down combinations must be replayed; how are correlated outages, failure cascades, and recovery order represented; and for denial-of-service analysis what attacker failure-set size, PageRank-like edge weighting, task value, and cut-set report are required?"
     , "13. Which infrastructure costs apply: hardware pool and cost per provisioned instance-hour, service cost per available instance-hour, sustainable work capacity, demand curve, availability target, and permitted supply choices?"
     , "14. Which financial boundary applies: currency, period, recognition rule, sales, refunds, labor, materials, taxes by jurisdiction/type, and other costs?"
     , "15. Which waste units, costs, denominator, categories, and double-counting rules apply?"

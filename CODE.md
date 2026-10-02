@@ -1,6 +1,6 @@
 # Code Walkthrough
 
-This project is a Lean 4 model of message-passing processes. The core idea is to describe only observable behavior: actor states, actor queues, messages, probabilities, dwell times, and task-level state machines. Internal implementation variables are intentionally left out. That keeps the model graphable as finite state machines and makes CTL model checks practical.
+This project is a Lean 4 model of message-passing processes. The core idea is to describe only observable behavior: actor states, actor queues, messages, probabilities, dwell times, and task-level state machines. Protocols and persistent disk formats tend to live forever as compatibility boundaries, while internal software structure changes much more chaotically. Internal implementation variables are therefore intentionally left out unless they affect the contract. This avoids coupling requirements to short-lived machinery, reduces the state space that must be explored, keeps the model graphable as finite state machines, and makes CTL model checks practical.
 
 The repo has four main layers:
 

@@ -656,6 +656,14 @@ def workerRequirement : LeanFM.RequirementSpec :=
         , outageProbability := { numerator := 20, denominator := 10000 }
         , meanTimeToRepairMs := 45000 }
       ]
+  , reliabilityGates :=
+      [ { id := "gateway_pool", members := ["gateway-1", "gateway-2"], requiredCount := 1
+        , affectedTasks := ["get_docs", "post_review"] }
+      , { id := "worker_pool", members := ["worker-1", "worker-2"], requiredCount := 1
+        , affectedTasks := ["get_docs", "post_review"] }
+      , { id := "worker_request_path", members := ["gateway_pool", "worker_pool"], requiredCount := 2
+        , affectedTasks := ["get_docs", "post_review"] }
+      ]
   , actorCosts :=
       [ { actor := "Gateway", hardwarePool := "general-purpose", currency := "USD-cent"
         , hardwareCostPerProvisionedHour := 12, serviceCostPerAvailableHour := 3
@@ -698,6 +706,9 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { name := "queue length against latency", kind := LeanFM.ChartKind.xy, source := "explicitly paired task events", groupBy := some "queue_length_at_start", value := "end.timeAt-start.timeAt" }
       , { name := "memory headroom", kind := LeanFM.ChartKind.xy, source := "actor resource observations", groupBy := some "actor_instance", value := "memory_budget_bytes-resident_bytes" }
       , { name := "network outage impact", kind := LeanFM.ChartKind.xy, source := "reliability and task events", groupBy := some "actor_dependency", value := "affected_task_count" }
+      , { name := "series and parallel service uptime", kind := LeanFM.ChartKind.xy, source := "synchronized reliability intervals and declared dependency gates", groupBy := some "dependency_gate", value := "time-weighted series/parallel/threshold availability" }
+      , { name := "failure cascade impact", kind := LeanFM.ChartKind.xy, source := "named failure scenarios, dependency gates, and task outcomes", groupBy := some "initiating_failure_set", value := "derived unavailable services and affected tasks" }
+      , { name := "denial-of-service criticality", kind := LeanFM.ChartKind.xy, source := "dependency gates, message traffic, task value, and cascade simulations", groupBy := some "actor_instance", value := "PageRank-like centrality, cut-set membership, and cascade loss" }
       , { name := "load and cost by replica count", kind := LeanFM.ChartKind.xy, source := "demand, completed work, and actor cost contracts", groupBy := some "actor_spec", value := "nominal demand/replicas, observed per-instance work/hour, sustainable supply, and hourly cost" }
       ]
   , desiredOutputs :=
@@ -713,6 +724,9 @@ def workerRequirement : LeanFM.RequirementSpec :=
       , { id := "load.queue_latency", prompt := "Show whether big queues mean increasing latency.", question := "How does completion latency vary with queue length at task admission?", kind := .function2d, eventSource := "queue observations and task events paired by prior ID", reducer := "x=queue_length_at_start; y=end.timeAt-start.timeAt, grouped by actor and task", unit := "milliseconds by queued messages" }
       , { id := "resource.memory_headroom", prompt := "Treat running out of memory as fatal.", question := "How close does each actor instance come to its memory budget, and did exhaustion terminate it?", kind := .function2d, eventSource := "actor memory observations and fatal outcomes", reducer := "x=timeAt; y=memoryBudgetBytes-residentBytes, with exhaustion events at zero", unit := "bytes" }
       , { id := "reliability.network_outages", prompt := "Include outages in reports for networks of actors.", question := "Which actor outages affected which dependent tasks, for how long, and with what outcome?", kind := .function2d, eventSource := "Unavailable/Recovered pairs, actor message edges, and task outcomes", reducer := "join outage intervals to actor dependency edges and aggregate affected, failed, and delayed tasks", unit := "milliseconds, tasks, and ratio" }
+      , { id := "reliability.composed_uptime", prompt := "Measure uptimes in series and in parallel.", question := "For each declared series, parallel, or k-of-n dependency gate, when was the composed service available?", kind := .function2d, eventSource := "synchronized Unavailable/Recovered intervals and declared dependency gates", reducer := "sweep interval boundaries and integrate all-up for series gates, any-up for parallel gates, and surviving providers >= k for threshold gates; preserve correlated outages", unit := "availability ratio over milliseconds" }
+      , { id := "reliability.failure_cascades", prompt := "Show what happens when particular interdependent services go down.", question := "Which initial service failures cascade through which dependency edges; which sends/receives stop; and which services, tasks, protocol obligations, and client outcomes are affected?", kind := .function2d, eventSource := "named service-down scenarios, dependency gates, outage/recovery events, attempted messages, and task outcomes", reducer := "compute the unavailable-service fixed point at every boundary; forbid ordinary sends/receives for unavailable instances; retain initiating failures, propagation edges, stalled/rejected/timed-out/cancelled work, safety and liveness verdicts, and recovery order", unit := "services, tasks, messages, milliseconds, and ratio" }
+      , { id := "reliability.dos_criticality", prompt := "If an attacker tries to deny service, locate the most important nodes with something like PageRank.", question := "Which actor instances are the highest-value denial-of-service targets, and does disabling them actually cut off important tasks?", kind := .function2d, eventSource := "reliability dependency gates, observed message traffic, declared task value, and named attacker failure sets", reducer := "compute declared PageRank-like dependency centrality; enumerate permitted single/multi-node failures; report minimal cut sets, cascade fixed points, lost capacity, violated progress obligations, and client outcomes", unit := "centrality score, services, tasks, work/time, and ratio" }
       , { id := "capacity.optimal_supply", prompt := "Find an economical server supply that satisfies demand.", question := "As more servers split the demand and lower per-server load, which permitted replica count has the lowest hardware plus service-uptime cost while meeting capacity and availability targets?", kind := .function2d, eventSource := "actor cost contracts, routing policy, demand observations, availability observations, and per-instance completed work", reducer := "for each permitted replica count plot nominal load=demand/replicas, observed per-instance load and imbalance, availability-adjusted sustainable supply, and hourly cost; discard capacity below demand and select the minimum-cost feasible point", unit := "replicas, bytes per hour per server, and USD-cent per hour" }
       ]
   , markdown :=

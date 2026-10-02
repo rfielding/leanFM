@@ -43,6 +43,17 @@ example :
 example : optimalSupply? costedServer { numerator := 9, denominator := 10 } 1000 8 = none := by
   native_decide
 
+def seriesGate : ReliabilityDependencyGate :=
+  { id := "request_path", members := ["gateway_pool", "worker_pool"]
+  , requiredCount := 2, affectedTasks := ["get_docs"] }
+
+def parallelGate : ReliabilityDependencyGate :=
+  { id := "worker_pool", members := ["worker-1", "worker-2"]
+  , requiredCount := 1, affectedTasks := ["get_docs"] }
+
+example : seriesGate.requiredCount = seriesGate.members.length := by native_decide
+example : parallelGate.requiredCount = 1 := by native_decide
+
 def grammarLeaf : GrammarExpr :=
   .event { task := "t", src := "A", dst := "B", message := "Done" }
 

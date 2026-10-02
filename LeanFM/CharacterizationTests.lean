@@ -43,6 +43,15 @@ example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "memo
 example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "reliability.network_outage_impact" := by
   native_decide
 
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "reliability.composed_uptime" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "reliability.failure_cascade" := by
+  native_decide
+
+example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "reliability.dos_criticality" := by
+  native_decide
+
 example : (baselineDerivedProperties.map (fun plan => plan.name)).contains "infrastructure.cost" := by
   native_decide
 

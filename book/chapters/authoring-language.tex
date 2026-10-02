@@ -229,7 +229,7 @@ real system adds product-specific replication and routing semantics beyond this
 small model. Population size is finite and explicit so queue,
 memory, probability, and temporal checks still have a bounded state space.
 
-\section{Non-functional rates and scalability}
+\section{Non-functional requirements: rates and scalability}
 
 Timing requirements are stated over boundary messages rather than intervals
 hidden inside an event. Suppose every client repeatedly creates a fresh server
@@ -480,6 +480,85 @@ restarts are recovery events, and changing replica populations yields different
 reliability and throughput observations. A configured outage probability or
 MTTR is not silently replaced by its observed estimate; comparing them is the
 check.
+
+Per-instance uptime is only the first reliability result. Services form a
+dependency network, and each dependency gate must say whether its members are
+required in \emph{series} or provide redundancy in \emph{parallel}. Let
+$u_i(t)\in\{0,1\}$ be the observed up/down indicator reconstructed from one
+instance's \texttt{Unavailable}/\texttt{Recovered} intervals. For a series gate,
+every member must be up:
+
+\[
+ u_{\mathrm{series}}(t)=\prod_i u_i(t).
+\]
+
+For a parallel gate, at least one member must be up:
+
+\[
+ u_{\mathrm{parallel}}(t)=1-\prod_i(1-u_i(t)).
+\]
+
+More generally, a replicated service declares a threshold $k$ and is available
+when $\sum_i u_i(t)\geq k$. Its measured availability is the fraction of the
+observation window for which that predicate is true. These formulas operate on
+synchronized observed indicators, so simultaneous and correlated failures are
+preserved. Products such as $\prod_i A_i$ or
+$1-\prod_i(1-A_i)$ may estimate expected availability from marginal
+availabilities only under an explicit independence assumption; they must not
+replace the interval calculation when joint outage observations exist.
+
+A dependency edge points from a consumer service or task to the provider gate
+it requires. At each outage boundary, failure propagation repeatedly marks a
+consumer unavailable when one of its series requirements is unavailable or
+when a parallel/threshold requirement has too few surviving providers. The
+fixed point is the cascade for that particular set of failed services. The
+report must retain the initiating outage set, every derived unavailable
+service, the dependency edge that propagated each failure, affected tasks,
+client-visible outcomes, and recovery order. This makes questions such as
+``what happens if the database and one authorization replica fail together?''
+answerable without pretending that all outages are independent.
+
+The standard reliability output therefore includes per-instance uptime,
+series/parallel/threshold service uptime, a time-aligned outage chart, and a
+dependency graph overlaid with each observed or proposed failure cascade.
+Named service-down scenarios should be replayable even when they have not yet
+occurred in production; such a replay is a model prediction and must be labeled
+separately from measured uptime.
+
+An unavailable actor stops sending and receiving ordinary protocol messages.
+From its \texttt{Unavailable} event until the matching \texttt{Recovered}
+event, any ordinary send or receive attributed to that concrete instance is an
+invalid trace. Work waiting on the actor remains stalled, is rejected, or ends
+in an explicit timeout/cancellation outcome according to the requirement. Thus
+an outage commonly falsifies a nominal liveness promise (for example, ``every
+accepted request eventually receives a response'') even when safety remains
+intact. Silence alone is not a self-identifying event: detecting the violation
+requires the declared expected-message boundary and clock or an explicit
+unavailability observation.
+
+The nominal protocol language and its failure extension must therefore be
+distinguished. The nominal language describes ordinary successful and rejected
+conversations. The failure extension adds \texttt{Unavailable}, stalled or
+censored work, explicit failure outcomes, \texttt{Recovered}, and any legal
+resume/retry behavior. Cascade analysis disables sends and receives for every
+instance made unavailable at the dependency fixed point, then reports which
+nominal safety and progress properties remain true, become false, or cannot be
+decided before the observation window closes.
+
+The same dependency graph supports denial-of-service analysis. A PageRank-like
+centrality calculation, with dependency edges directed toward the consumers
+whose operation they enable, highlights nodes whose failure influence is
+reinforced by other important services. Edge weights may incorporate observed
+message traffic, affected task value, or measured cascade frequency, but the
+chosen weighting is part of the requirement and must be shown in the report.
+Centrality is a prioritization heuristic, not an availability proof: ordinary
+PageRank can miss a low-traffic series dependency, a cut vertex, or the exact
+number of replica failures that crosses a quorum threshold. The denial-of-
+service report therefore places the centrality ranking beside single-node and
+named multi-node cascade simulations, minimal service cut sets, lost task
+capacity, and client-visible outcomes. This answers both ``which node looks
+important?'' and the stronger question ``what actually stops if an attacker
+makes this set unavailable?''
 
 \section{Infrastructure cost and demand-constrained supply}
 

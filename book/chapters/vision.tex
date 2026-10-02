@@ -22,6 +22,17 @@ Promoting all internal state into the model creates a product state space whose
 size grows exponentially with independently varying components. Worse, it makes
 the specification brittle under harmless refactoring.
 
+Protocols and persistent disk formats tend to live forever. Once another
+process, customer, or stored data set depends on their bytes and ordering, they
+become compatibility boundaries that must survive many implementations. The
+internal structure of software is more chaotic: data structures, control flow,
+threads, caches, and retry machinery are routinely replaced while the external
+contract remains. Modeling every such choice would couple the specification to
+short-lived machinery and introduce many more independently varying states to
+explore. Concentrating first on the durable external boundary therefore both
+protects what is hardest to change and keeps the tractable state space focused
+on behavior that implementations must continue to preserve.
+
 We therefore begin with \emph{behaviour}: who communicated with whom, what kind of
 event occurred, what information it carried, and which predecessor order it extends.
 Internal state enters only when it changes an observable promise.
