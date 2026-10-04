@@ -157,6 +157,57 @@ then add the target system's accepted facts: observable behavior in
 specification and continue the argument; a successful build does not count as
 acceptance.
 
+\section{One project, one directory}
+
+\index{project!directory boundary}
+Project creation establishes one exclusive filesystem root. Everything owned by
+that project must be below it. This is both an operational requirement and a
+reproducibility boundary: deleting that one directory must remove the project
+without requiring a search for session files, generated diagrams, caches, or
+logs elsewhere on the machine.
+
+The exact book used as a critical prompt input is part of the project's evidence,
+so the project stores a snapshot beneath its root rather than depending only on
+a mutable shared copy. A representative layout is:
+
+\begin{lstlisting}
+order-cancellation/
+  project.toml
+  inputs/book/main.pdf
+  specification/Requirements.lean
+  specification/Requirements.proto
+  specification/Implementation.lean
+  source/
+  tests/
+  generated/renders/
+  generated/metrics/
+  evidence/traces/
+  evidence/reports/
+  .cache/
+  logs/
+\end{lstlisting}
+
+The names may vary, but the containment invariant may not. Configured output
+paths and symbolic links must resolve inside the project root. Temporary files
+must be created there and atomically renamed there. Export is an explicit copy
+of a declared artifact, not an unrecorded second project location. Import must
+copy an input into the root or record a content-addressed, immutable dependency;
+it must not silently turn an arbitrary external pathname into project state.
+
+Globally installed LeanFM binaries and content-addressed dependency caches may
+be shared because they are tooling, not state owned by one project. They must not
+hold mutable project-specific data. A launcher may keep a global recent-project
+index, but that index is disposable: it must be reconstructible from manifests
+inside project roots and must not be needed to delete a project completely.
+
+This changes the current staging design. A session directory under
+\texttt{/tmp/leanfm-sessions} and committed artifacts under a separate source
+tree cannot jointly be the durable project. A conforming implementation chooses
+the project root first, places session work beneath it, and promotes accepted
+artifacts by atomic moves within that same root. Project deletion resolves and
+validates the exact root, refuses filesystem-root or escaping targets, and then
+removes only that directory.
+
 \section{What the Lean artifact must settle}
 
 The Lean file is the semantic source. It records actors, messages, per-task

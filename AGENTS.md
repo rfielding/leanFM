@@ -11,6 +11,15 @@ Use it together with the live LeanFM language references, the accepted
 `Requirements.lean`, `Requirements.proto`, `Implementation.lean`, and the
 existing source tree.
 
+Every new project has one exclusive project-root directory. Put every
+project-owned input, book snapshot, specification, source file, test, generated
+view, event trace, report, log, and project-specific cache below that root; no
+configured output or symlink may escape it. External LeanFM installations and
+content-addressed shared dependency caches may be reused only when they contain
+no project-owned state. Any global project index must be reconstructible from
+the project roots. Deleting one project root must remove all state owned by that
+project without searching elsewhere.
+
 During a requirements conversation, use LeanFM to derive and show the user the
 requested interaction diagrams, state machines, order graphs, charts, metrics,
 and reports. A visual or number must retain the prompt, question, event source,
@@ -42,4 +51,3 @@ include `/tools/leanfm-language/requirements-reference`,
 `/tools/leanfm-language/implementation-reference`,
 `/tools/requirements/interrogation`, `/tools/code-generation/prompt`,
 `/tools/generated-artifacts/validate`, `/renders/`, and `/metrics`.
-

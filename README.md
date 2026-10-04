@@ -64,6 +64,7 @@ lake exe leanfm-server
 Common development commands:
 
 ```sh
+make go-toolchain # install the checksum-pinned Go toolchain under .toolchains/
 make check       # build, evaluate generated requirement validation, and emit diagrams
 make serve       # run the web server on 127.0.0.1:8080
 make http-check  # validate live server routes after make serve

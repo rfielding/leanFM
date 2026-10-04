@@ -1,5 +1,13 @@
 SHELL := /usr/bin/env bash
 
+GO_VERSION ?= 1.23.12
+GO_SHA256 ?= d3847fef834e9db11bf64e3fb34db9c04db14e068eeb064f49af747010454f90
+GO_ARCHIVE := /tmp/leanfm-go$(GO_VERSION).linux-amd64.tar.gz
+LOCAL_GO := $(CURDIR)/.toolchains/go/bin/go
+export PATH := $(CURDIR)/.toolchains/go/bin:$(PATH)
+export GOCACHE := $(CURDIR)/.cache/go-build
+export GOMODCACHE := $(CURDIR)/.cache/go-mod
+
 HOST ?= 127.0.0.1
 PORT ?= 8080
 BASE_URL := http://$(HOST):$(PORT)
@@ -8,7 +16,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
+.PHONY: build run serve stop check go-toolchain paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
 
 build:
 	lake build leanfm-server
@@ -29,6 +37,18 @@ stop:
 	fi
 
 check: build validate diagrams paxos-check
+
+go-toolchain:
+	@set -e; if [[ -x "$(LOCAL_GO)" ]]; then \
+	  "$(LOCAL_GO)" version; \
+	else \
+	  mkdir -p .toolchains; \
+	  curl -fsSL "https://go.dev/dl/go$(GO_VERSION).linux-amd64.tar.gz" -o "$(GO_ARCHIVE)"; \
+	  echo "$(GO_SHA256)  $(GO_ARCHIVE)" | sha256sum -c -; \
+	  tar -C .toolchains -xzf "$(GO_ARCHIVE)"; \
+	  rm -f "$(GO_ARCHIVE)"; \
+	  "$(LOCAL_GO)" version; \
+	fi
 
 paxos-check:
 	@lake env lean ValidatePaxosKV.lean | rg '^ok: Paxos KV requirements|^ok: generated implementation plan'

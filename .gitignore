@@ -1,6 +1,8 @@
 /book/main.pdf
 /.lake/
 /.lean/
+/.cache/
+/.toolchains/
 /docs/
 /diagrams/
 

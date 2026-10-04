@@ -25,6 +25,21 @@ Preserve these separate inputs:
 - the existing source tree: code to preserve, revise, or replace after the
   specifications are accepted.
 
+## Keep one project in one directory
+
+At project creation, choose one exclusive project root and record it in the
+project manifest. Copy or snapshot the exact `book/main.pdf` used as a prompt
+input beneath that root. Store all project-owned requirements, implementation
+specifications, source, tests, generated views, traces, reports, logs, and
+project-specific caches beneath the same root. Reject output paths and symlinks
+that escape it.
+
+A LeanFM installation and a content-addressed dependency cache may be shared
+outside project roots only when they contain no project-owned mutable state.
+Any external project index must be disposable and reconstructible by scanning
+project manifests. Deleting the project root must delete the complete project;
+never require a user to discover project files elsewhere.
+
 ## Connect to LeanFM
 
 Use `${LEANFM_URL:-http://127.0.0.1:8080}`. Before authoring artifacts, obtain:
@@ -109,4 +124,3 @@ and return to the appropriate specification phase.
 Finish only after running the repository's proportional build, tests, LeanFM
 artifact validation, and generated trace round trips. Report changed source
 files, validation evidence, and any requirement that could not be implemented.
-
