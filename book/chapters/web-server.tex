@@ -94,6 +94,69 @@ The server may use a language model to propose edits. Compilation and validation
 remain deterministic. The model is not the proof checker, and fluent prose is
 not evidence that an obligation holds.
 
+\section{Using the agent in Codex}
+
+\index{Codex}
+Codex can drive the complete bootstrap, not only the final code-generation
+step. Open the LeanFM repository as the Codex workspace, or start its
+command-line interface from the repository root:
+
+\begin{lstlisting}[language=bash]
+cd /path/to/leanFM
+codex
+\end{lstlisting}
+
+The repository's \texttt{AGENTS.md} directs the agent to the LeanFM workflow in
+\texttt{SKILL.md}. Both files make \texttt{book/main.pdf} a critical prompt
+input rather than merely the publication produced by the source in
+\texttt{book/}. The agent must read the book together with the live language
+references and the existing source tree while developing LeanFM itself. Once
+that software is operational, the agent uses it to construct and check the
+durable requirements for the target system. Only accepted requirements become
+input to a separately checked implementation specification, and only both
+accepted specifications authorize generation or revision of application code.
+
+Thus the intended order is:
+
+\begin{enumerate}
+  \item develop and verify the LeanFM tooling described by this book;
+  \item use the running tooling and the book to interrogate the target system,
+        produce its durable requirements artifacts, and validate their
+        prompt-derived views;
+  \item after explicit requirements acceptance, produce and validate the
+        traceable implementation specification; and
+  \item after explicit implementation acceptance, generate or revise the actual
+        application from the book, all three accepted artifacts, and the existing
+        source tree.
+\end{enumerate}
+
+A Codex prompt can state this bootstrap explicitly. For example:
+
+\begin{lstlisting}[breaklines=true]
+Treat book/main.pdf as a required system-prompt input, not merely an output of
+this repository. Read it with AGENTS.md, SKILL.md, the live LeanFM language
+references, and the existing source tree. First develop and verify the LeanFM
+software described by the book. Once LeanFM is operational, use it to develop
+verified requirements for an order-cancellation service: a customer may cancel
+an order until warehouse packing starts. Generate from the specification an
+interaction diagram, state machine, cancellation-success rate, and p95
+cancellation latency, each retaining its question, event source, reducer, unit,
+and boundary. Stop for my explicit acceptance of Requirements.lean,
+Requirements.proto, and those derived outputs. Then develop a separately
+traceable Implementation.lean and stop for my explicit acceptance. Only after
+both gates, implement the application from book/main.pdf, the three accepted
+artifacts, and the existing source tree; add tests and run the repository checks.
+\end{lstlisting}
+
+The book remains in the input set throughout this process because it defines the
+language and method by which the typed artifacts are interpreted. The artifacts
+then add the target system's accepted facts: observable behavior in
+\texttt{Requirements.lean}, byte-resolving values in
+\texttt{Requirements.proto}, and runtime choices plus traceability in
+\texttt{Implementation.lean}. A person can reject either candidate
+specification and continue the argument; a successful build does not count as
+acceptance.
+
 \section{What the Lean artifact must settle}
 
 The Lean file is the semantic source. It records actors, messages, per-task
