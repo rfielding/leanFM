@@ -4,13 +4,17 @@ This document records weaknesses, unresolved questions, and places where the
 current implementation supports a smaller claim than the book may suggest. It
 is intentionally critical. Passing the build does not resolve these issues.
 
-## Audit snapshot: 2026-10-02
+## Audit snapshot: 2026-10-06
 
 The book has a compelling core idea: make externally meaningful histories the
 durable specification boundary, argue requirements into typed artifacts, and
 derive code, tests, diagrams, metrics, and proofs from those artifacts. The
-software demonstrates many ingredients of that idea. It does not yet implement
-the integrated method described by the book.
+new preface now states the intended workflow clearly: requirements emerge from
+an iterative argument between a person and an LLM; two explicit acceptance
+gates freeze the observable and implementation specifications; only then does
+the LLM attempt a one-shot, reviewable pull request. The software demonstrates
+many ingredients of that idea. It does not yet implement the integrated method
+described by the book.
 
 The largest gap is no longer a missing data type. It is the absence of a single
 executable semantic path connecting the types that now exist. `GrammarExpr`
@@ -38,20 +42,72 @@ The software is therefore best described as an executable design notebook with
 several checked islands. Calling it an end-to-end formal-methods environment is
 premature until those islands share one trace semantics and refinement story.
 
-## The rendered book is not currently a reproducible release artifact
+## The book is substantially too verbose
 
-The checked-in `book/main.pdf` is stale relative to its source. For example,
-`book/chapters/vision.tex` now explains why protocols and persistent disk formats
-outlive chaotic internal structures, but the rendered PDF still moves directly
-from state-space explosion to “We therefore begin with behaviour.” Current
-source edits have not been rebuilt into the user-facing book.
+The 86-page book has a concise thesis, but it repeatedly restates the same
+distinctions: observable behavior versus private state, predecessor order versus
+causation, point events versus durations, nondeterminism versus probability,
+predictions versus measurements, generated views versus independent
+specifications, and durable artifacts versus chat history. Repetition can help a
+chapter stand alone, but here it weakens the argument by making the reader search
+for what is new. The revised preface already states the complete method; later
+chapters should build on it rather than repeatedly reintroducing it.
 
-This matters because `book/main.pdf` is also declared to be an input to code
-generation. If source and PDF disagree, two agents can receive different
-languages and requirements. The build should fail when the committed PDF is not
-the deterministic product of the committed TeX, generated tables, figures, and
-code listings. Ideally the release records tool versions and a content manifest,
-then tests that regenerating the book leaves no diff.
+Chapter 5 is the main source of sprawl. Its ostensible subject is the scenario
+authoring language, but it also contains actor populations, two throughput
+definitions, a USL tutorial, queueing overload, outages and MTTR, dependency
+cascades, PageRank-like denial-of-service ranking, infrastructure-cost
+optimization, dwell semantics, censored completion estimates, requirement
+intersection, state-machine rendering, and five chart forms. These are useful
+topics, but together they obscure the language being introduced. The chapter
+should retain only the constructs needed to read and compose scenarios. Move
+performance, reliability, cost, and statistical reducers into separate chapters
+or an analysis reference.
+
+Several long demonstrations would work better as appendices or checked fixtures:
+
+- The bakery chapter prints four pages of generated Go-like pseudocode before
+  the reader has seen the actual authoring language. A short excerpt showing
+  traceability would make the point; the full generated file belongs beside the
+  executable example.
+- OAuth is presented in the cover image, the grammar chapter, a complete worked
+  chapter, a twelve-event word, 440 bytes of hex, four actor projections, an
+  interaction diagram, and a residual state machine. The complete pipeline is
+  valuable, but the byte dump and replay tables should be linked artifacts rather
+  than uninterrupted main-text listings.
+- Chapter 9 devotes roughly four pages to a complete Lean proof concerning the
+  regularized value of `1 + 2 + 3 + ...`. It demonstrates that Lean checks real
+  proofs, but it does not advance the requirements-to-PR method. A much smaller,
+  domain-relevant proof—such as trace recognition, correlation, or a protocol
+  invariant—would provide stronger evidence with less digression.
+- Three pages of referenced-book cover images add bulk without helping the
+  technical argument. A normal annotated bibliography would carry more useful
+  information in less space.
+
+The prose also often anticipates every qualification inline. Examples include
+extended defenses of terminology, product analogies, and repeated warnings about
+what a formula does not prove. Important boundary conditions should remain, but
+they can be consolidated into explicit “scope of claim” paragraphs or evidence
+labels. The target should be a shorter main narrative with executable examples
+and reference material available by link or appendix.
+
+A useful editorial test is: if removing a paragraph loses no definition, new
+claim, example step, or limitation, remove it. Applied consistently, the present
+book could likely lose a quarter to a third of its prose while becoming more
+persuasive.
+
+## The rendered book still needs a reproducible release check
+
+The checked-in `book/main.pdf` now reflects the current preface and source, and
+`make book` completes successfully. That removes the stale-PDF defect reported
+by the previous audit. It does not yet guarantee that future commits keep the
+PDF synchronized.
+
+Because `book/main.pdf` is also an input to code generation, the build should
+fail when the committed PDF is not the deterministic product of the committed
+TeX, generated tables, figures, and code listings. Ideally the release records
+tool versions and a content manifest, then tests that regenerating the book
+leaves no semantic diff.
 
 ## The implemented language is smaller than the book's authoring language
 
@@ -501,6 +557,26 @@ artifact derivation, probabilities, queues, knowledge, temporal logic, code
 generation, and replay. Individual pieces exist, but the end-to-end path is not
 yet a single implementation with one checked theorem connecting all of them.
 
+The tense and status of examples remain inconsistent across the complete book.
+Chapter 5 correctly says that its DSL is a design target, Chapter 6 labels some
+memory claims as modeling obligations, and Chapter 11 admits that its proof
+scripts depend on a library still to be built. Elsewhere the text says that “the
+compiler” reads references and detects cycles, that LeanFM enumerates replica
+counts and chooses a cost optimum, that generation supplies positive and
+negative tests, and that every arrow in the OAuth artifact pipeline is
+reproducible. Those sentences read as descriptions of the present system even
+when the repository implements only a structural representation, hand-produced
+fixture, or proposed interface.
+
+The roadmap compounds this uncertainty. It presents event-envelope and grammar
+semantics work as future milestones after earlier chapters have already spoken
+of generation, recognition, projection, residual state machines, and complete
+artifact derivation in the present tense. The book needs one visible maturity
+legend used everywhere: implemented and checked, implemented experimentally,
+illustrative pseudocode, or proposed. The roadmap should then describe the same
+status without forcing the reader to infer it from caveats scattered across the
+text.
+
 Examples should say which of the following they provide:
 
 - an explanatory notation;
@@ -517,41 +593,48 @@ than it is.
 
 ## Highest-value next steps
 
-1. Implement one executable semantics for `GrammarExpr`: generation from
+1. Perform a structural edit of the book. Preserve the preface and the central
+   requirements-to-PR narrative, split Chapter 5 by concern, remove repeated
+   boundary explanations, move full byte/code listings to checked appendices or
+   linked artifacts, replace the `-1/12` excursion with a LeanFM-domain proof,
+   and use a visible maturity label on every substantial example. Aim to remove
+   25--35 percent of the main-text prose without removing a definition, unique
+   claim, or limitation.
+2. Implement one executable semantics for `GrammarExpr`: generation from
    explicit choices and recognition of partially ordered `ScenarioEvent` DAGs.
    Make sequence, choice, parallel, threshold join, guard, reference, and repeat
    testable rather than merely structurally valid.
-2. Unify the event envelope and protobuf story. Generate the worker and Paxos
+3. Unify the event envelope and protobuf story. Generate the worker and Paxos
    requirement schemas from the same typed message definitions, remove the
    empty Paxos placeholder messages, and round-trip multiple legal and illegal
    traces through the actual runtime binding.
-3. Make the Paxos program emit every declared protocol event with IDs,
+4. Make the Paxos program emit every declared protocol event with IDs,
    `priorIds`, concrete actor instances, timestamps, and typed payload fields.
    Replay those traces through the grammar and derive the displayed quorum DAG,
    interaction diagram, state path, latency, availability, and recovery lag.
-4. Replace the SVG shortcuts with real reducers. Interaction diagrams must take
+5. Replace the SVG shortcuts with real reducers. Interaction diagrams must take
    event DAGs; state machines must use transition `src`/`dst` or grammar
    residuals; line and pie charts must consume named numeric series. Add golden
    tests for branch, loop, fork, all-of join, and `m`-of-`n` join layouts.
-5. Turn evidence level into a typed, visible property of every artifact:
+6. Turn evidence level into a typed, visible property of every artifact:
    `assumption`, `illustration`, `observed`, `tested`, `finite-model checked`, or
    `Lean proved`. Do not render a `RequiredProof` as though it had a proof term.
-6. Either implement the book's scenario surface language or rewrite the book to
+7. Either implement the book's scenario surface language or rewrite the book to
    use the actual `RequirementSpec`/`GrammarExpr` API. Compile every purportedly
    executable listing in CI and visibly mark pseudocode.
-7. Add a deterministic book-release check: rebuild `book/main.pdf`, generated
+8. Add a deterministic book-release check: rebuild `book/main.pdf`, generated
    tables, SVG/PNG figures, theorem pages, and referenced-book assets, then fail
-   on drift. Because the PDF is a code-generation input, stale output is a
-   semantic defect, not cosmetic debt.
-8. Reconcile the Paxos implementation document with the code: either implement
+   on drift. Because the PDF is a code-generation input, future stale output
+   would be a semantic defect, not cosmetic debt.
+9. Reconcile the Paxos implementation document with the code: either implement
    stable-leader Multi-Paxos or specify repeated classic Paxos. Then add fault
    tests for lost, duplicated, delayed, reordered, and partially written frames,
    not only clean process loss.
-9. Make metric boundaries typed and executable. Distinguish empirical
+10. Make metric boundaries typed and executable. Distinguish empirical
    probability, specified randomness, nondeterminism, and policy decisions;
    include warm-up, censorship, observation windows, uncertainty, and
    accounting boundaries in reducer inputs.
-10. Prove or test refinement at the observable boundary: generated or existing
+11. Prove or test refinement at the observable boundary: generated or existing
     code traces must be accepted by the requirement language, and every required
     legal branch—especially `possibly` branches—must have a tested handling
     path. Traceability comments alone are insufficient.
