@@ -169,12 +169,28 @@
 
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
-Formal methods should be the easy way to build software. This book develops that
-claim into a practical method: describe externally meaningful behaviour as a
-parameterised, multiparty grammar; interpret its sentences as event traces; state
-temporal requirements in CTL; and render the whole specification as ordinary Lean.
-The specification says what participants may observe, not how an implementation
-stores every intermediate detail.
+LeanFM is a system for arguing requirements with an LLM until the result is precise
+enough to implement. Requirements are not expected to emerge complete from one
+prompt. A person and an LLM instead conduct an iterative argument: they expose
+ambiguities, challenge assumptions, add observable scenarios and properties, and
+inspect generated diagrams, state machines, traces, and measurements. Each turn
+updates checked, durable artifacts, so the accepted result does not depend on the
+LLM remembering the conversation.
+
+The purpose of that iteration is to make the implementation itself a one-shot
+change: after the observable requirements and a separate implementation
+specification have both been explicitly accepted, an LLM can read those artifacts
+together with the existing source tree and produce one complete, reviewable pull
+request---code, tests, generated bindings, and traceability. ``One-shot'' describes
+the implementation pass, not the discovery of requirements. The argument may take
+many turns; the resulting pull request should not have to rediscover the design.
+
+Formal methods should therefore be the easy way to build software. This book
+develops that claim into a practical method: describe externally meaningful
+behaviour as a parameterised, multiparty grammar; interpret its sentences as event
+traces; state temporal requirements in CTL; and render the whole specification as
+ordinary Lean. The specification says what participants may observe, not how an
+implementation stores every intermediate detail.
 
 This is a working book and an executable design notebook. Definitions will migrate
 into a stable Lean library; systems built with the library should consist mostly of
