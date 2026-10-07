@@ -39,6 +39,7 @@
 \definecolor{leangreen}{RGB}{35,110,70}
 \definecolor{leangray}{RGB}{90,90,90}
 \definecolor{leangold}{RGB}{226,185,75}
+\definecolor{covernavy}{RGB}{30,58,94}
 \ifdefined\darkmode
   \definecolor{leanblue}{RGB}{126,174,255}
   \definecolor{leangreen}{RGB}{109,211,154}
@@ -161,11 +162,11 @@
 \pagenumbering{gobble}
 \begin{titlepage}
 \begin{tikzpicture}[remember picture,overlay]
-  \fill[leanblue!75!black]
+  \fill[covernavy]
     (current page.south west) rectangle (current page.north east);
-  \node[fill=leanblue!75!black,inner sep=10pt]
+  \node[fill=covernavy,inner sep=10pt]
     at ([yshift=-1.0cm]current page.center)
-    {\resizebox{.78\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{leanblue!75!black}{leanblue!75!black}}};
+    {\resizebox{.78\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{covernavy}{covernavy}}};
   \node[anchor=north west,text width=.82\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.75cm]current page.north west)
     {\color{leangold}\fontsize{27}{31}\selectfont\bfseries
