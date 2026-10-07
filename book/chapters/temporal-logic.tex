@@ -88,7 +88,7 @@ logical worlds. The four most important combinations can be read literally:
 \begin{align*}
  EF\,p &: \text{possibly eventually $p$}, &
  AF\,p &: \text{necessarily eventually $p$},\\
- EG\,p &: \text{possibly always $p$}, &
+ EG\,p &: \text{$p$ always on some future}, &
  AG\,p &: \text{necessarily always $p$}.
 \end{align*}
 
@@ -102,15 +102,18 @@ For requirements argument, the four formulas also form a useful modal square:
 \begin{align*}
  EF\,p &: \text{maybe possible $p$}, &
  AG\,p \equiv \neg EF\,\neg p &: \text{always necessary $p$},\\
- AF\,p &: \text{always possible $p$}, &
- EG\,p \equiv \neg AF\,\neg p &: \text{maybe always $p$}.
+ AF\,p &: \text{always eventually $p$}, &
+ EG\,p \equiv \neg AF\,\neg p &: \text{$p$ always in some cases}.
 \end{align*}
 
-These are exact CTL dualities, not merely slogans. They expose two meanings
-often hidden by ``always'': $A$ ranges over all legal futures, while $G$ ranges
-over all positions along one future. Calling necessity ``always'' without naming
-the coordinate loses information precisely where a requirements argument needs
-it.
+These are exact CTL dualities, not a demand that the English glosses look
+syntactically dual. In particular, $AF$ is ``on every legal future, eventually
+$p$''---always eventually. $EG$ is harder to name compactly: it means that some
+legal future exists on which $p$ holds at every position---$p$ always in some
+cases. The formulas expose two meanings often hidden by ``always'': $A$ ranges
+over all legal futures, while $G$ ranges over all positions along one future.
+Calling necessity ``always'' without naming the coordinate loses information
+precisely where a requirements argument needs it.
 
 The dualities are also computationally central. LeanFM need not establish a
 universal claim by enumerating every complete future. It searches for an
@@ -237,12 +240,12 @@ all. Conversely, assigning positive probability to a condition makes its branch
 possible. The handling obligation comes from supported possibility, not from
 whether the estimated percentage crosses a threshold.
 
-The dual operational obligation applies to $EG\,p$---``maybe always $p$.'' It
-identifies at least one future on which $p$ persists. The system must pay attention
-to the conditions that keep that future viable: monitor them, expose their loss,
-and, where required, control choices that would destroy the invariant path.
-$EG\,p$ alone does not promise that every execution preserves $p$; that stronger
-claim is $AG\,p$.
+The separate operational obligation applies to $EG\,p$---``$p$ always in some
+cases.'' It identifies at least one future on which $p$ persists. The system must
+pay attention to the conditions that keep that future viable: monitor them,
+expose their loss, and, where required, control choices that would destroy the
+invariant path. $EG\,p$ alone does not promise that every execution preserves
+$p$; that stronger claim is $AG\,p$.
 
 \section{Strong implication and the Chewbacca argument}
 
