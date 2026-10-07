@@ -12,11 +12,19 @@
 \definecolor{foregroundink}{RGB}{20,20,22}
 \definecolor{diagramsurface}{RGB}{247,247,249}
 \definecolor{diagramink}{RGB}{20,20,22}
+\definecolor{diagramgroup}{RGB}{241,245,251}
+\definecolor{diagramblue}{RGB}{232,240,252}
+\definecolor{diagramgreen}{RGB}{232,247,237}
+\definecolor{diagramdanger}{RGB}{252,232,234}
 \ifdefined\darkmode
   \definecolor{pagebackground}{RGB}{18,18,20}
   \definecolor{foregroundink}{RGB}{232,232,235}
   \definecolor{diagramsurface}{RGB}{34,36,42}
   \definecolor{diagramink}{RGB}{232,232,235}
+  \definecolor{diagramgroup}{RGB}{25,29,36}
+  \definecolor{diagramblue}{RGB}{29,42,61}
+  \definecolor{diagramgreen}{RGB}{27,48,36}
+  \definecolor{diagramdanger}{RGB}{55,31,34}
 \fi
 \pagecolor{pagebackground}
 \color{foregroundink}
@@ -30,7 +38,12 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,automata,positioning,shapes.geometric}
 \usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
+\pgfplotsset{
+  compat=1.18,
+  every axis legend/.append style={
+    fill=diagramsurface,draw=diagramink,text=diagramink
+  }
+}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,noabbrev]{cleveref}
 
@@ -160,6 +173,17 @@
   \draw[->,very thick,draw=#1] (1.75,-2.15) -- (1.75,-2.65);
   \draw[->,very thick,draw=#1] (3.58,-3.80) -- node[right,text=#1,font=\scriptsize]{granted} (3.58,-4.30);
 \end{tikzpicture}%
+}
+
+\newcommand{\BookCover}[1]{%
+  \begin{tikzpicture}[baseline=(cover.base)]
+    \node[inner sep=0,outer sep=0] (cover)
+      {\includegraphics[height=1.9in,keepaspectratio]{#1}};
+    \ifdefined\darkmode
+      \fill[pagebackground,opacity=.45]
+        (cover.south west) rectangle (cover.north east);
+    \fi
+  \end{tikzpicture}%
 }
 
 \input{generated/bakery-stats.tex}

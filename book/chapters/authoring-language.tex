@@ -405,7 +405,7 @@ never stated.
   xlabel={offered load $\lambda/\mu$},
   ylabel={completed throughput $X/\mu$},
   xmin=0,xmax=1.35,ymin=0,ymax=1.15,grid=major]
-  \path[fill=red!10] (axis cs:1,0) rectangle (axis cs:1.35,1.15);
+  \path[fill=diagramdanger] (axis cs:1,0) rectangle (axis cs:1.35,1.15);
   \addplot[color=leanblue,thick,domain=0:1,samples=60] {x};
   \addplot[color=leanblue,thick,domain=1:1.35,samples=30] {1};
   \addplot[color=red!75!black,dashed] coordinates {(1,0) (1,1.15)};
@@ -422,7 +422,7 @@ never stated.
   xlabel={offered load $\lambda/\mu$},
   ylabel={normalized latency / queued work},
   xmin=0,xmax=1.35,ymin=0,ymax=12,grid=major]
-  \path[fill=red!10] (axis cs:1,0) rectangle (axis cs:1.35,12);
+  \path[fill=diagramdanger] (axis cs:1,0) rectangle (axis cs:1.35,12);
   \addplot[color=orange!85!black,thick,domain=0:0.96,samples=100]
     {1/(1-x)};
   \addplot[color=red!75!black,dashed] coordinates {(1,0) (1,12)};

@@ -160,12 +160,12 @@ still exactly the stored predecessor pointers.
 \begin{tikzpicture}[
   event/.style={draw,rounded corners,fill=diagramsurface,minimum width=3.2cm,
     minimum height=.72cm,align=center,font=\small},
-  start/.style={event,fill=leanblue!8},
-  finish/.style={event,fill=green!8},
+  start/.style={event,fill=diagramblue},
+  finish/.style={event,fill=diagramgreen},
   prior/.style={->,>=Stealth,thick,leanblue}
 ]
-  \fill[leanblue!3,rounded corners] (-4.35,-.88) rectangle (-.45,-4.52);
-  \fill[leanblue!3,rounded corners] (.45,-.88) rectangle (4.35,-4.52);
+  \fill[diagramgroup,rounded corners] (-4.35,-.88) rectangle (-.45,-4.52);
+  \fill[diagramgroup,rounded corners] (.45,-.88) rectangle (4.35,-4.52);
   \node[event]  (e20) at (0,0) {$e_{20}$\\request received};
   \node[start]  (e21) at (-2.4,-1.35) {$e_{21}$\\payment task started};
   \node[start]  (e22) at ( 2.4,-1.35) {$e_{22}$\\bake task started};
