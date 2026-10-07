@@ -66,6 +66,14 @@ deliberately combine two independent axes:
         permitted forward continuation or may hold on at least one.
 \end{itemize}
 
+This choice arose from trying to combine temporal logic with alethic logic while
+investigating whether all the familiar modal families could be combined. The
+construction retained by LeanFM is specifically \emph{temporally alethic}:
+possible means possible now or at some point along a legal future. Ordinary
+language uses ``always'' both for universal modality and for temporal persistence.
+CTL keeps those coordinates visible long enough to prevent the ambiguity from
+disappearing inside an English gloss.
+
 \section{CTL: path modality combined with time}
 
 CTL pairs a path quantifier with each temporal operator. $E$ is existential:
@@ -88,6 +96,37 @@ The temporal word and modal word do different work. $F$ versus $G$ chooses
 eventuality versus invariance \emph{along} a continuation. $E$ versus $A$
 chooses some versus all permitted continuations. Neither axis should be omitted
 when stating a branching-time requirement.
+
+For requirements argument, the four formulas also form a useful modal square:
+
+\begin{align*}
+ EF\,p &: \text{maybe possible $p$}, &
+ AG\,p \equiv \neg EF\,\neg p &: \text{always necessary $p$},\\
+ AF\,p &: \text{always possible $p$}, &
+ EG\,p \equiv \neg AF\,\neg p &: \text{maybe always $p$}.
+\end{align*}
+
+These are exact CTL dualities, not merely slogans. They expose two meanings
+often hidden by ``always'': $A$ ranges over all legal futures, while $G$ ranges
+over all positions along one future. Calling necessity ``always'' without naming
+the coordinate loses information precisely where a requirements argument needs
+it.
+
+The dualities are also computationally central. LeanFM need not establish a
+universal claim by enumerating every complete future. It searches for an
+existential counterexample:
+
+\begin{align*}
+ AG\,p &\equiv \neg EF\,\neg p, &
+ AF\,p &\equiv \neg EG\,\neg p.
+\end{align*}
+
+Thus a safety proof searches for a reachable violation of $p$, and a universal
+eventuality proof searches for a path on which $\neg p$ persists forever. A
+counterexample is a witness; absence of such a witness in the finite checked
+model establishes the corresponding universal result. Keeping the exact CTL
+form is what permits this reduction from universal checking to existential
+witness search through negation.
 
 An observation is immutable once recorded. A value changes only by moving
 forward to a successor observation; it is never updated retroactively inside the
@@ -124,7 +163,23 @@ formulas can be nested more freely; LeanFM does not implement CTL*. This matters
 when translating prose: not every arbitrary alternation of ``on all paths'' and
 ``eventually'' is a formula of the small CTL datatype used here.
 
-\section{General and multiple modalities}
+\section{Projecting to LTL-style F and G}
+
+Requirements often want the simpler LTL surface forms $F p$ and $G p$. LeanFM
+may display or accept those forms only with an explicit path-policy boundary.
+On a selected linear execution, the branching coordinate has already been fixed,
+so $AF p$ and $EF p$ both project to $F p$, while $AG p$ and $EG p$ both project
+to $G p$. Under the common model-checking convention that an LTL formula must
+hold on every initial path, $F p$ corresponds to $AF p$ and $G p$ corresponds to
+$AG p$.
+
+Consequently, presenting frequently used $AF$ and $EG$ obligations as $F$ and
+$G$ is a deliberate interface reduction, not a CTL equivalence on a branching
+model. The durable artifact retains the exact originating CTL formula so the
+checker can still use existential witnesses, negation, and the correct
+counterexample search.
+
+\section{General and unresolved modalities}
 
 General modal logic need not have only one accessibility relation. A multimodal
 model can use $\Box_t/\Diamond_t$ for temporal reachability,
@@ -144,17 +199,23 @@ the current model. They do not mean:
   \item physically necessary versus logically possible.
 \end{itemize}
 
-Probability, knowledge, authorization, and normative requirements need their
-own named structures or modalities. Keeping the relations separate prevents an
-easy category error: a branch can be computationally possible while having
-unknown probability, being unknown to an actor, or being forbidden by policy.
+The original investigation also sought exact combinations for belief and
+knowledge, and for permitted and required behavior. LeanFM does not yet have
+accepted formulas or proof rules for those modalities. It therefore must not
+encode $E/A$ as if they meant believed/known or permitted/required. For now,
+probability, epistemic claims, authorization, and normative requirements need
+separately named predicates or future modal extensions. Keeping that absence
+explicit prevents an easy category error: a branch can be temporally alethically
+possible while having unknown probability, being unknown to an actor, or being
+forbidden by policy.
 
 \section{Possibility means preparedness}
 
 There is a practical consequence to treating possibility as a first-class
-temporal mode. When a requirement declares $EF\,p$, it does more than acknowledge
-that a model checker can find an accidental path to $p$. It says that $p$ is a
-supported future for which the system has a plan.
+temporal mode. When a requirement declares $EF\,p$---``maybe possible
+$p$''---it does more than acknowledge that a model checker can find an accidental
+path to $p$. It says that $p$ is a supported future for which the system must
+prepare.
 
 A \texttt{possibly} obligation therefore contains three linked artifacts:
 
@@ -175,6 +236,13 @@ estimated probability, an expected distribution, or no known probability at
 all. Conversely, assigning positive probability to a condition makes its branch
 possible. The handling obligation comes from supported possibility, not from
 whether the estimated percentage crosses a threshold.
+
+The dual operational obligation applies to $EG\,p$---``maybe always $p$.'' It
+identifies at least one future on which $p$ persists. The system must pay attention
+to the conditions that keep that future viable: monitor them, expose their loss,
+and, where required, control choices that would destroy the invariant path.
+$EG\,p$ alone does not promise that every execution preserves $p$; that stronger
+claim is $AG\,p$.
 
 \section{Strong implication and the Chewbacca argument}
 

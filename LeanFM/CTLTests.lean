@@ -51,4 +51,16 @@ example : !CTL.holds weakBranches .start (CTL.or (weakP AU weakQ) (CTL.ag weakP)
 
 example : CTL.holds weakBranches .start (weakP EW weakQ) := by native_decide
 
+/-- AG is implemented as the absence of an existentially reachable violation. -/
+example :
+    CTL.holds weakBranches .start (CTL.ag weakP) ==
+      CTL.holds weakBranches .start (CTL.neg (CTL.ef (CTL.neg weakP))) := by
+  native_decide
+
+/-- AF is implemented as the absence of a path where the negation persists. -/
+example :
+    CTL.holds weakBranches .start (CTL.af weakQ) ==
+      CTL.holds weakBranches .start (CTL.neg (CTL.eg (CTL.neg weakQ))) := by
+  native_decide
+
 end LeanFM

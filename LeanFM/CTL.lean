@@ -126,9 +126,13 @@ partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
   | ex p => (succ s).any (fun s' => holds succ s' p)
   | ax p => (succ s).all (fun s' => holds succ s' p)
   | ef p => anyReachable succ (fun s' => holds succ s' p) [] s
-  | af p => allPathsEventually succ (fun s' => holds succ s' p) [] s
+  /- Keep universal eventuality in its exact dual form: search for one path on
+     which the negation persists, then negate that existential witness. -/
+  | af p => !(existsPathAlways succ (fun s' => !(holds succ s' p)) [] s)
   | eg p => existsPathAlways succ (fun s' => holds succ s' p) [] s
-  | ag p => allReachable succ (fun s' => holds succ s' p) [] s
+  /- Keep universal invariance in its exact dual form: search for one reachable
+     counterexample instead of implementing a separate universal traversal. -/
+  | ag p => !(anyReachable succ (fun s' => !(holds succ s' p)) [] s)
   | eu p q => existsUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
   | au p q => allUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
   | ew p q => existsWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
