@@ -16,7 +16,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check go-toolchain paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
+.PHONY: build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
 
 build:
 	lake build leanfm-server
@@ -37,6 +37,9 @@ stop:
 	fi
 
 check: build validate diagrams paxos-check
+
+chatui-check: build
+	bash scripts/chatui_http_check.sh
 
 go-toolchain:
 	@set -e; if [[ -x "$(LOCAL_GO)" ]]; then \

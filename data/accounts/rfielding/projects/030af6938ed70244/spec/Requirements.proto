@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package leanfm.chatui;
+
+message EventEnvelope {
+  string event_id = 1;
+  repeated string prior_ids = 2;
+  string session_id = 3;
+  string task_id = 4;
+  uint64 time_at_ms = 5;
+  string src = 6;
+  string dst = 7;
+
+  oneof payload {
+    LoginSubmitted login_submitted = 20;
+    LoginAccepted login_accepted = 21;
+    LoginRejected login_rejected = 22;
+    ProjectListRequested project_list_requested = 23;
+    ProjectListReturned project_list_returned = 24;
+    ProjectCreateRequested project_create_requested = 25;
+    ProjectCreated project_created = 26;
+    ProjectOpenRequested project_open_requested = 27;
+    ProjectOpened project_opened = 28;
+    ProjectDeleteRequested project_delete_requested = 29;
+    ProjectDeleted project_deleted = 30;
+    ProviderCredentialSubmitted provider_credential_submitted = 31;
+    ProviderCredentialAccepted provider_credential_accepted = 32;
+    ProviderCredentialRejected provider_credential_rejected = 33;
+    ChatPromptSubmitted chat_prompt_submitted = 34;
+    ModelRequestIssued model_request_issued = 35;
+    ModelResponseReturned model_response_returned = 36;
+    ChatResponseRendered chat_response_rendered = 37;
+    ChatTurnFailed chat_turn_failed = 38;
+    MermaidDraftSaved mermaid_draft_saved = 39;
+    MermaidPreviewRendered mermaid_preview_rendered = 40;
+    MediaUploaded media_uploaded = 41;
+    MediaRendered media_rendered = 42;
+    ArtifactPromoted artifact_promoted = 43;
+    CandidateRequirementUpdated candidate_requirement_updated = 44;
+    ArtifactListRequested artifact_list_requested = 45;
+    ArtifactListReturned artifact_list_returned = 46;
+    ArtifactOpenRequested artifact_open_requested = 47;
+    ArtifactOpened artifact_opened = 48;
+    AccountCreateSubmitted account_create_submitted = 49;
+    ProviderKeyCheckRequested provider_key_check_requested = 50;
+    ProviderKeyVerified provider_key_verified = 51;
+    ProviderKeyRejected provider_key_rejected = 52;
+    AccountCreated account_created = 53;
+    AccountCreateRejected account_create_rejected = 54;
+    TaskModelRequested task_model_requested = 55;
+    TaskModelReturned task_model_returned = 56;
+    MessageSequenceRequested message_sequence_requested = 57;
+    MessageSequenceReturned message_sequence_returned = 58;
+    ProtobufObjectRequested protobuf_object_requested = 59;
+    ProtobufObjectReturned protobuf_object_returned = 60;
+  }
+}
+
+enum ContentKind {
+  CONTENT_KIND_UNSPECIFIED = 0;
+  MARKDOWN = 1;
+  LATEX = 2;
+  MERMAID = 3;
+  GRAPHVIZ_DOT = 4;
+  IMAGE = 5;
+  VIDEO = 6;
+  CODE = 7;
+  FILE = 8;
+  LEANFM_VIEW = 9;
+}
+
+message ChatContentPart {
+  string part_id = 1;
+  ContentKind kind = 2;
+  string text = 3;
+  string artifact_id = 4;
+  uint64 artifact_revision = 5;
+  string media_type = 6;
+  bytes inline_content = 7;
+  string alt_text = 8;
+}
+
+message LoginSubmitted { string username = 1; bytes credential = 2; }
+message LoginAccepted { string user_id = 1; string session_id = 2; }
+message LoginRejected { string reason = 1; }
+
+message AccountCreateSubmitted {
+  string username = 1;
+  bytes login_credential = 2;
+  string provider = 3;
+  bytes api_key = 4;
+}
+message ProviderKeyCheckRequested { string provider = 1; string verification_id = 2; }
+message ProviderKeyVerified { string verification_id = 1; string provider_account = 2; }
+message ProviderKeyRejected { string verification_id = 1; string reason = 2; }
+message AccountCreated { string user_id = 1; string credential_ref = 2; }
+message AccountCreateRejected { string reason = 1; }
+
+message TaskModelRequested { string project_id = 1; string task_id = 2; string requirements_revision = 3; }
+message TaskModelReturned {
+  string task_id = 1;
+  string interaction_artifact_id = 2;
+  string state_machine_artifact_id = 3;
+  string message_sequence_artifact_id = 4;
+  repeated string constraint_ids = 5;
+}
+message MessageSequenceRequested { string project_id = 1; string task_id = 2; string session_id = 3; }
+message MessageSequenceReturned { string task_id = 1; string session_id = 2; repeated string event_ids = 3; }
+message ProtobufObjectRequested { string project_id = 1; string event_id = 2; }
+message ProtobufObjectReturned { string event_id = 1; string protobuf_type = 2; bytes encoded_object = 3; string redacted_json = 4; }
+
+message ProjectListRequested { string user_id = 1; }
+message ProjectListReturned { repeated string project_ids = 1; }
+message ProjectCreateRequested { string display_name = 1; }
+message ProjectCreated { string project_id = 1; string display_name = 2; }
+message ProjectOpenRequested { string project_id = 1; }
+message ProjectOpened { string project_id = 1; string current_requirements_revision = 2; }
+message ProjectDeleteRequested { string project_id = 1; string confirmation = 2; }
+message ProjectDeleted { string project_id = 1; }
+
+message ProviderCredentialSubmitted {
+  string provider = 1;
+  bytes api_key = 2;
+  string retention = 3;
+}
+message ProviderCredentialAccepted { string credential_ref = 1; string billing_source = 2; }
+message ProviderCredentialRejected { string reason = 1; }
+
+message ChatPromptSubmitted {
+  string project_id = 1;
+  string conversation_id = 2;
+  string message_id = 3;
+  repeated ChatContentPart parts = 4;
+  repeated string attachment_ids = 5;
+  string credential_ref = 6;
+}
+message ModelRequestIssued {
+  string project_id = 1;
+  string conversation_id = 2;
+  string request_id = 3;
+  string model = 4;
+}
+message ModelResponseReturned {
+  string request_id = 1;
+  repeated ChatContentPart parts = 2;
+  uint64 input_tokens = 3;
+  uint64 cached_input_tokens = 4;
+  uint64 output_tokens = 5;
+  uint64 context_window_tokens = 6;
+}
+message ChatResponseRendered {
+  string conversation_id = 1;
+  string message_id = 2;
+  repeated ChatContentPart parts = 3;
+  repeated string artifact_ids = 4;
+  uint64 input_tokens = 5;
+  uint64 cached_input_tokens = 6;
+  uint64 output_tokens = 7;
+  uint64 context_window_tokens = 8;
+  string usage_warning = 9;
+}
+message ChatTurnFailed { string request_id = 1; string reason = 2; }
+
+message MermaidDraftSaved {
+  string project_id = 1;
+  string artifact_id = 2;
+  uint64 revision = 3;
+  string diagram_kind = 4;
+  string source = 5;
+}
+message MermaidPreviewRendered { string artifact_id = 1; uint64 revision = 2; bytes svg = 3; }
+message MediaUploaded {
+  string project_id = 1;
+  string artifact_id = 2;
+  string media_type = 3;
+  bytes content = 4;
+}
+message MediaRendered { string artifact_id = 1; string media_type = 2; string content_url = 3; }
+message ArtifactPromoted { string artifact_id = 1; uint64 revision = 2; string target_status = 3; }
+message CandidateRequirementUpdated { string requirements_revision = 1; repeated string source_artifact_ids = 2; }
+
+message ArtifactListRequested {
+  string project_id = 1;
+  string kind_filter = 2;
+  string scenario_filter = 3;
+  string status_filter = 4;
+}
+message ArtifactSummary {
+  string artifact_id = 1;
+  uint64 current_revision = 2;
+  uint64 accepted_revision = 3;
+  string status = 4;
+  string validation = 5;
+  string media_type = 6;
+  string title = 7;
+  string scenario_id = 8;
+  string diagram_kind = 9;
+  string updated_by = 10;
+  uint64 updated_at_ms = 11;
+}
+message ArtifactListReturned { repeated ArtifactSummary artifacts = 1; }
+message ArtifactOpenRequested { string artifact_id = 1; uint64 revision = 2; }
+message ArtifactOpened {
+  string artifact_id = 1;
+  uint64 revision = 2;
+  string status = 3;
+  string media_type = 4;
+  bytes content = 5;
+  string provenance = 6;
+}

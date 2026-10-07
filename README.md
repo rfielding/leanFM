@@ -67,6 +67,7 @@ Common development commands:
 make go-toolchain # install the checksum-pinned Go toolchain under .toolchains/
 make check       # build, evaluate generated requirement validation, and emit diagrams
 make serve       # run the web server on 127.0.0.1:8080
+make chatui-check # deterministic BYOK ChatUI bootstrap and isolation test
 make http-check  # validate live server routes after make serve
 make stop        # stop the process listening on PORT, default 8080
 make book        # build the LaTeX book, bibliography, contents, and index
@@ -92,6 +93,12 @@ The Lean HTTP server listens on:
 
 ```text
 http://127.0.0.1:8080
+
+The root URL is the LeanFM ChatUI. On first use, create an account with a
+username, password, and your own OpenAI API key, then create the first project.
+The server needs no `OPENAI_API_KEY`; it will not issue a model request without
+an authenticated user's verified credential. Account data defaults to `data/`
+and can be relocated with `LEANFM_DATA_ROOT`.
 ```
 
 Endpoints:

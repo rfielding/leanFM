@@ -1,0 +1,11 @@
+{
+  "requirement": "leanfm.chatui",
+  "mappings": [
+    {"references":["task:authenticate_user","task:create_account"],"sources":["LeanFM/ChatUI/Store.lean","LeanFM/ChatUI/Server.lean","LeanFM/ChatUI/Web.lean","scripts/chatui_crypto.py"],"tests":["scripts/chatui_http_check.sh"]},
+    {"references":["task:manage_projects","proof:Deleting a project requires no hunt"],"sources":["LeanFM/ChatUI/Store.lean","LeanFM/ChatUI/Server.lean"],"tests":["scripts/chatui_http_check.sh"]},
+    {"references":["task:argue_requirements","proof:Concurrent BYOK isolation","proof:Keyless launch cannot spend provider funds"],"sources":["LeanFM/ChatUI/Provider.lean","LeanFM/ChatUI/Server.lean","assets/chatui.js"],"tests":["scripts/chatui_http_check.sh"]},
+    {"references":["output:chatui.usage.tokens","output:chatui.usage.context"],"sources":["LeanFM/ChatUI/Provider.lean","LeanFM/ChatUI/Server.lean","assets/chatui.js"],"tests":["scripts/chatui_http_check.sh"]},
+    {"references":["task:markerboard","task:inspect_artifacts","task:inspect_task_model"],"sources":["LeanFM/ChatUI/Web.lean","assets/chatui.js","assets/chatui.css","LeanFM/ChatUI/Server.lean"],"tests":["scripts/chatui_http_check.sh"]},
+    {"references":["property:stored_provider_keys_are_base64","proof:Base64 storage is deliberately limited"],"sources":["LeanFM/ChatUI/Store.lean"],"tests":["scripts/chatui_http_check.sh"]}
+  ]
+}

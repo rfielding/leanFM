@@ -1,4 +1,5 @@
 import LeanFM
+import LeanFM.ChatUI.Server
 import Std.Internal.Async.TCP
 
 open Std
@@ -347,30 +348,39 @@ def redirectResponse (location : String) (headers : List String := []) : Respons
 
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
-  if path == "/health" then
-    responseBody path request
-  else if path == "/login" then
-    if requestMethod request == "POST" then
-      let password ← configuredPassword
-      if (requestBody request).contains ("password=" ++ password) then
-        let sessionId ← newSessionId
-        ensureSessionWorkspace sessionId
-        pure <| redirectResponse "/" ["Set-Cookie: leanfm_session=" ++ sessionId ++ "; Path=/; HttpOnly; SameSite=Lax"]
+  let method := requestMethod request
+  match ← LeanFM.ChatUI.Server.handle? path method request with
+  | some chatResponse =>
+      pure <| response chatResponse.status chatResponse.contentType chatResponse.body chatResponse.headers
+  | none =>
+      if path == "/health" then
+        responseBody path request
+      else if path == "/login" then
+        if requestMethod request == "POST" then
+          let password ← configuredPassword
+          if (requestBody request).contains ("password=" ++ password) then
+            let sessionId ← newSessionId
+            ensureSessionWorkspace sessionId
+            pure <| redirectResponse "/" ["Set-Cookie: leanfm_session=" ++ sessionId ++ "; Path=/; HttpOnly; SameSite=Lax"]
+          else
+            pure <| response 403 "text/html; charset=utf-8" loginPage
+        else
+          pure <| response 200 "text/html; charset=utf-8" loginPage
+      else if hasSession request then
+        responseBody path request
       else
-        pure <| response 403 "text/html; charset=utf-8" loginPage
-    else
-      pure <| response 200 "text/html; charset=utf-8" loginPage
-  else if hasSession request then
-    responseBody path request
-  else
-    pure <| redirectResponse "/login"
+        pure <| redirectResponse "/login"
 
 def statusText : Nat -> String
   | 200 => "OK"
+  | 201 => "Created"
+  | 400 => "Bad Request"
   | 303 => "See Other"
   | 403 => "Forbidden"
   | 401 => "Unauthorized"
   | 404 => "Not Found"
+  | 409 => "Conflict"
+  | 500 => "Internal Server Error"
   | 502 => "Bad Gateway"
   | 503 => "Service Unavailable"
   | _ => "OK"
@@ -395,10 +405,9 @@ def handleClient (client : TcpClient) : IO Unit := do
 
 partial def serveLoop (server : TcpServer) : IO Unit := do
   let client ← (server.accept).block
-  try
-    handleClient client
-  catch err =>
-    IO.eprintln s!"request failed: {err}"
+  let _ ← IO.asTask (do
+    try handleClient client
+    catch err => IO.eprintln s!"request failed: {err}") Task.Priority.dedicated
   serveLoop server
 
 def main : IO Unit := do
