@@ -8,12 +8,18 @@
 \usepackage[margin=1.15in]{geometry}
 \usepackage{microtype}
 \usepackage{xcolor}
+\definecolor{pagebackground}{RGB}{255,255,255}
+\definecolor{foregroundink}{RGB}{20,20,22}
+\definecolor{diagramsurface}{RGB}{247,247,249}
+\definecolor{diagramink}{RGB}{20,20,22}
 \ifdefined\darkmode
-  \definecolor{white}{RGB}{18,18,20}
-  \definecolor{black}{RGB}{232,232,235}
-  \pagecolor{white}
-  \color{black}
+  \definecolor{pagebackground}{RGB}{18,18,20}
+  \definecolor{foregroundink}{RGB}{232,232,235}
+  \definecolor{diagramsurface}{RGB}{34,36,42}
+  \definecolor{diagramink}{RGB}{232,232,235}
 \fi
+\pagecolor{pagebackground}
+\color{foregroundink}
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{booktabs}

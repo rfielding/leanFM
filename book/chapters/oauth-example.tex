@@ -417,7 +417,7 @@ the separately stated transport schedule, add choices.
 
 \begin{figure}[p]
 \centering
-\resizebox{\textwidth}{!}{\OAuthInteractionDiagram{black}{white}{black!4}}
+\resizebox{\textwidth}{!}{\OAuthInteractionDiagram{diagramink}{diagramsurface}{diagramsurface}}
 \caption{OAuth interaction view. Production frames provide collapsible abstraction
 boundaries. The authorization production contains its request and both alternatives;
 the guarded exchange production is enabled only by the granted alternative.}
@@ -575,13 +575,13 @@ refinement says how mass is distributed over them.
   \node[state] (fetch) [below=of token] {fetch};
   \node[state,accepting] (done) [below=of fetch] {done};
   \path
-    (start) edge node[right,fill=white,inner sep=1pt] {request} (requested)
-    (requested) edge node[right,fill=white,inner sep=1pt] {authorize} (decision)
-    (decision) edge node[left,fill=white,inner sep=1pt,align=right] {code} (callback)
-    (decision) edge node[right,fill=white,inner sep=1pt,align=left] {deny} (denied)
-    (callback) edge node[right,fill=white,inner sep=1pt] {exchange} (token)
-    (token) edge node[right,fill=white,inner sep=1pt] {issued} (fetch)
-    (fetch) edge node[right,fill=white,inner sep=1pt] {resource} (done);
+    (start) edge node[right,fill=diagramsurface,inner sep=1pt] {request} (requested)
+    (requested) edge node[right,fill=diagramsurface,inner sep=1pt] {authorize} (decision)
+    (decision) edge node[left,fill=diagramsurface,inner sep=1pt,align=right] {code} (callback)
+    (decision) edge node[right,fill=diagramsurface,inner sep=1pt,align=left] {deny} (denied)
+    (callback) edge node[right,fill=diagramsurface,inner sep=1pt] {exchange} (token)
+    (token) edge node[right,fill=diagramsurface,inner sep=1pt] {issued} (fetch)
+    (fetch) edge node[right,fill=diagramsurface,inner sep=1pt] {resource} (done);
 \end{tikzpicture}
 \caption{OAuth state machine derived from legal grammar continuations.}
 \label{fig:oauth-state-machine}

@@ -145,8 +145,9 @@ implementation architecture.
 
 \begin{figure}[htbp]
 \centering
-\begin{tikzpicture}[>=Latex,actor/.style={draw,rounded corners,minimum width=2.6cm,
-  minimum height=.7cm,fill=black!4},message/.style={->,thick}]
+\begin{tikzpicture}[>=Latex,actor/.style={draw=diagramink,text=diagramink,
+  rounded corners,minimum width=2.6cm,minimum height=.7cm,fill=diagramsurface},
+  message/.style={->,thick,draw=diagramink,text=diagramink}]
   \node[actor] (customer) at (0,0) {Customer};
   \node[actor] (shop) at (7,0) {Shop};
   \draw[dashed] (customer.south) -- ++(0,-5.2);
@@ -344,7 +345,7 @@ more clients are added.
   title={$\alpha=.1,\ \beta=0$}]
   \addplot[color=leanblue,thick,domain=0:32,samples=100]
     {x/(1+0.1*(x-1))};
-  \addplot[color=black,dashed,domain=0:32] {10};
+  \addplot[color=diagramink,dashed,domain=0:32] {10};
 \end{axis}
 \end{tikzpicture}
 \small contention: asymptotic capacity
@@ -740,10 +741,10 @@ private implementation memory.
   \node[state,accepting] (accepted) [below left=1.8cm and 2.2cm of offered] {accepted};
   \node[state,accepting] (declined) [below right=1.8cm and 2.2cm of offered] {declined};
   \path
-    (start) edge node[right,fill=white,inner sep=1pt] {quote requested} (asked)
-    (asked) edge node[right,fill=white,inner sep=1pt] {quote offered} (offered)
-    (offered) edge node[left,fill=white,inner sep=1pt,align=right] {quote accepted} (accepted)
-    (offered) edge node[right,fill=white,inner sep=1pt,align=left] {quote declined} (declined);
+    (start) edge node[right,fill=diagramsurface,inner sep=1pt] {quote requested} (asked)
+    (asked) edge node[right,fill=diagramsurface,inner sep=1pt] {quote offered} (offered)
+    (offered) edge node[left,fill=diagramsurface,inner sep=1pt,align=right] {quote accepted} (accepted)
+    (offered) edge node[right,fill=diagramsurface,inner sep=1pt,align=left] {quote declined} (declined);
 \end{tikzpicture}
 \caption{A state machine derived from grammar residuals.}
 \label{fig:quote-state-machine}
