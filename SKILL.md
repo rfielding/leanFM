@@ -10,7 +10,10 @@ argument. The conversation is provisional; checked artifacts are authoritative.
 
 ## Inputs
 
-Read `book/main.pdf` as part of the language and method reference. When source
+Every LeanFM project, including the LeanFM repository itself, always contains
+`book/main.pdf` as a central Codex input. `book/main-dark.pdf` is an accessible
+rendering of the same source, not a different specification. Read
+`book/main.pdf` as part of the language and method reference. When source
 and rendered book are both available, also call the live language-reference
 routes below; report any material disagreement rather than silently choosing.
 
@@ -28,8 +31,9 @@ Preserve these separate inputs:
 ## Keep one project in one directory
 
 At project creation, choose one exclusive project root and record it in the
-project manifest. Copy or snapshot the exact `book/main.pdf` used as a prompt
-input beneath that root. Store all project-owned requirements, implementation
+project manifest. Create or snapshot the exact book at `book/main.pdf` beneath
+that root and generate `book/main-dark.pdf` from the same source. Store all
+project-owned requirements, implementation
 specifications, source, tests, generated views, traces, reports, logs, and
 project-specific caches beneath the same root. Reject output paths and symlinks
 that escape it.
@@ -39,6 +43,14 @@ outside project roots only when they contain no project-owned mutable state.
 Any external project index must be disposable and reconstructible by scanning
 project manifests. Deleting the project root must delete the complete project;
 never require a user to discover project files elsewhere.
+
+Keep `Requirements.lean`, `Requirements.proto`, and the one canonical accepted
+`Implementation.lean` together at stable project-relative paths recorded by the
+manifest. Multiple deliberate implementation targets may use explicitly named
+sibling files, but each must identify its target and retain full traceability.
+Copying the project root must yield a directory ready to initialize or use as a
+repository with Codex; it must not require project-owned state from LeanFM's
+installation.
 
 ## Connect to LeanFM
 

@@ -166,14 +166,18 @@ reproducibility boundary: deleting that one directory must remove the project
 without requiring a search for session files, generated diagrams, caches, or
 logs elsewhere on the machine.
 
-The exact book used as a critical prompt input is part of the project's evidence,
-so the project stores a snapshot beneath its root rather than depending only on
-a mutable shared copy. A representative layout is:
+The exact book used as a critical prompt input is part of the project itself.
+Every project always has \texttt{book/main.pdf}; a dark reading copy,
+\texttt{book/main-dark.pdf}, is generated from the same source. The specification
+paths are stable within the project and recorded by its manifest rather than
+rediscovered by searching. A representative exported layout is:
 
 \begin{lstlisting}
 order-cancellation/
   project.toml
-  inputs/book/main.pdf
+  book/main.tex
+  book/main.pdf
+  book/main-dark.pdf
   specification/Requirements.lean
   specification/Requirements.proto
   specification/Implementation.lean
@@ -187,7 +191,20 @@ order-cancellation/
   logs/
 \end{lstlisting}
 
-The names may vary, but the containment invariant may not. Configured output
+There is one canonical accepted \texttt{Implementation.lean} for each project
+revision. Multiple intentional implementation targets may add explicitly named
+siblings such as \texttt{Implementation.server.lean}; each must identify its
+target and retain complete requirement traceability. They may not become an
+unindexed collection from which an agent guesses.
+
+The LeanFM repository is itself one such project. Its canonical self-hosting
+specifications currently live together under \texttt{LeanFM/LLMGenerated/}; its
+manifest and agent instructions make those stable repository-relative paths
+explicit. Copying the complete project directory therefore produces a repository
+candidate that Codex can enter and use without external project-owned state.
+
+The exported directory names may vary only when the manifest states their stable
+locations; the containment invariant may not. Configured output
 paths and symbolic links must resolve inside the project root. Temporary files
 must be created there and atomically renamed there. Export is an explicit copy
 of a declared artifact, not an unrecorded second project location. Import must

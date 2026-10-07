@@ -8,6 +8,12 @@
 \usepackage[margin=1.15in]{geometry}
 \usepackage{microtype}
 \usepackage{xcolor}
+\ifdefined\darkmode
+  \definecolor{white}{RGB}{18,18,20}
+  \definecolor{black}{RGB}{232,232,235}
+  \pagecolor{white}
+  \color{black}
+\fi
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{booktabs}
@@ -23,7 +29,7 @@
 \usepackage[nameinlink,noabbrev]{cleveref}
 
 \hypersetup{
-  pdftitle={Formal Methods via LLM Grammars},
+  pdftitle={LeanFM Software Engineering},
   pdfauthor={Rob Fielding and ChatGPT}
 }
 
@@ -33,6 +39,11 @@
 \definecolor{leangreen}{RGB}{35,110,70}
 \definecolor{leangray}{RGB}{90,90,90}
 \definecolor{leangold}{RGB}{226,185,75}
+\ifdefined\darkmode
+  \definecolor{leanblue}{RGB}{126,174,255}
+  \definecolor{leangreen}{RGB}{109,211,154}
+  \definecolor{leangray}{RGB}{190,190,198}
+\fi
 \lstdefinelanguage{Lean}{
   morekeywords={abbrev,def,deriving,inductive,namespace,structure,theorem,where,
     match,with,if,then,else,let,in,fun,forall,exists,Type,Nat,String,Bool,List},
@@ -158,7 +169,7 @@
   \node[anchor=north west,text width=.82\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.75cm]current page.north west)
     {\color{leangold}\fontsize{27}{31}\selectfont\bfseries
-      Formal Methods via LLM Grammars};
+      LeanFM Software Engineering};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and ChatGPT\\[.35em]
@@ -169,34 +180,88 @@
 
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
-LeanFM is a system for arguing requirements with an LLM until the result is precise
-enough to implement. Requirements are not expected to emerge complete from one
-prompt. A person and an LLM instead conduct an iterative argument: they expose
-ambiguities, challenge assumptions, add observable scenarios and properties, and
-inspect generated diagrams, state machines, traces, and measurements. Each turn
-updates checked, durable artifacts, so the accepted result does not depend on the
-LLM remembering the conversation.
+LeanFM is a software-engineering methodology for arguing a system into existence
+with an LLM. Requirements are not expected to emerge complete from one prompt.
+Stakeholders and an LLM instead conduct an iterative argument: they expose
+ambiguities, challenge assumptions, add scenarios and properties, and inspect
+generated interaction diagrams, state machines, traces, and measurements. The
+objective is not to make an LLM remember a long conversation. It is to turn the
+argument into checked, durable project artifacts.
 
-The purpose of that iteration is to make the implementation itself a one-shot
-change: after the observable requirements and a separate implementation
-specification have both been explicitly accepted, an LLM can read those artifacts
-together with the existing source tree and produce one complete, reviewable pull
-request---code, tests, generated bindings, and traceability. ``One-shot'' describes
-the implementation pass, not the discovery of requirements. The argument may take
-many turns; the resulting pull request should not have to rediscover the design.
+The book is the principal design artifact. Every LeanFM project begins with
+\texttt{./book/main.pdf}, and the stakeholders argue over what that book says.
+It carries the purpose, vocabulary, boundaries, examples, diagrams, and reasoning
+that would otherwise be scattered through meetings, markerboards, and chat history.
+For the LLM, the book acts like a project-specific section of the system prompt:
+it supplies the durable design context from which the more exact requirements and
+implementation specifications are developed. Diagrams accepted into the final
+design are generated from the same model and reused in the book; they are not a
+second, independently maintained account of the system.
 
-Formal methods should therefore be the easy way to build software. This book
-develops that claim into a practical method: describe externally meaningful
-behaviour as a parameterised, multiparty grammar; interpret its sentences as event
-traces; state temporal requirements in CTL; and render the whole specification as
-ordinary Lean. The specification says what participants may observe, not how an
-implementation stores every intermediate detail.
+The book itself is vibecoded. As the design argument exposes a missing notation,
+view, check, or editing operation, the tools needed to produce the book are built
+alongside it. A project will eventually live in a source repository, but all of
+its owned material begins and remains beneath one project directory: the book,
+Lean specifications, protobuf schemas, generated views, conversations, source,
+tests, and evidence. This makes the project portable and makes deletion mean
+deleting one directory rather than hunting for its state across a machine.
 
-This is a working book and an executable design notebook. Definitions will migrate
-into a stable Lean library; systems built with the library should consist mostly of
-domain types, grammar productions, and theorems about expected behaviour.
-The evolving implementation, examples, and book sources are maintained in the
-LeanFM repository \citep{leanfmrepo}.
+The LeanFM repository is itself a valid LeanFM project, not merely the tool that
+creates other projects. Its checked-in \texttt{book/main.pdf}, specifications,
+implementation, tests, and source tree are the inputs used to develop LeanFM with
+LeanFM. A project directory is therefore a self-contained repository candidate:
+it can be copied away, initialized as its own repository, and opened directly in
+Codex without reconstructing project context from another installation.
+
+Inside Codex, \texttt{./book/main.pdf} is always a central input and always
+exists. The accessible rendering \texttt{./book/main-dark.pdf} is generated from
+the same source and differs only in presentation. Requirements and implementation
+specifications likewise occupy stable, project-relative locations recorded by the
+project. There is one canonical accepted \texttt{Implementation.lean} for a
+project revision. If a project deliberately maintains multiple target-specific
+implementation specifications, they remain beside it with explicit target names
+and traceability; an agent never searches arbitrary directories to guess which
+one governs a change.
+
+LeanFM splits vibecoding into explicit layers. Stakeholders first work on the
+book---the main artifact---and argue about the system it describes. The accepted
+book guides a \texttt{Requirements.lean} specification of observable behavior,
+permitted conversations, and required properties. A separate
+\texttt{Implementation.lean} resolves how those requirements map to runtimes,
+transports, files, actors, and tests. The Lean files are precise refinements of the
+book, not replacements for it. Together, the current book, requirements,
+implementation specification, and repository are intended to be sufficient for
+an LLM to produce one complete, reviewable pull request. ``One-shot'' describes
+that implementation pass, not requirements discovery; discovery may take as many
+arguments and revisions as necessary.
+
+This differs from software engineering organized primarily around coordinating
+people who debate separate drawings. LeanFM centers the shared, executable account
+of the design and records communication between actors down to the bytes represented
+by protobuf objects. Parameterized multiparty grammars describe legal message
+sequences; generated views let people reason about them; and Lean theorems check
+their consistency. Many important requirements, however, are not themselves
+observable messages. Security properties, referential integrity, and constraints
+between protobuf objects also belong in the theory. Protobuf has no standard
+foreign-key mechanism: it can encode an identifier and field presence, but it
+neither declares that the identifier resolves to another object nor enforces what
+must exist. Those relationships are predicates over decoded objects and reachable
+system states, stated and proved as Lean theorems in the requirements specification.
+The implementation specification must then identify the storage, transaction, or
+validation mechanism that preserves each theorem.
+
+For example, if $A$ carries an identifier for $B$, every reachable $A$ may be
+required to resolve to an existing $B$. If $B$ in turn requires a $C$, while policy
+disallows every admissible $C$, Lean should expose that the predicates are jointly
+unsatisfiable: $A$ cannot consistently exist. The design must change, perhaps by
+making the relationship to $C$ optional or by changing the policy. Such
+contradictions are requirements discoveries even when no new wire event reveals
+them; they are not foreign-key declarations hidden in a \texttt{.proto} file.
+
+Formal methods should therefore be the easy way to build software. This working
+book develops that claim into a practical method, while the LeanFM repository
+contains the evolving language, tooling, examples, and implementation
+\citep{leanfmrepo}.
 
 \tableofcontents
 

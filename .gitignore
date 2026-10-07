@@ -42,4 +42,5 @@
 /book/*.run.xml
 /book/*.toc
 /book/*.pdf
+!/book/main-dark.pdf
 /book/chapters/*.aux

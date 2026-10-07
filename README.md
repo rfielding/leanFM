@@ -1,4 +1,4 @@
-[Read the LeanFM PDF book](book/main.pdf)
+[Read the LeanFM PDF book](book/main.pdf) · [Dark PDF](book/main-dark.pdf)
 
 Lean Formal Methods, based on communicating heirarchial processes.
 =======
@@ -75,8 +75,14 @@ make bakery-data # deterministically regenerate 20,000 bakery order traces
 make bakery-stats # stream the bakery JSONL and derive probabilities/latencies
 ```
 
-The book source is in `book/`; its rendered PDF is `book/main.pdf` after a
-successful build. Use `make book-clean` to remove generated LaTeX artifacts.
+This repository is itself a valid, self-contained LeanFM project. Its central
+Codex input is always `book/main.pdf`; `book/main-dark.pdf` is the equivalent
+low-glare rendering. A successful `make book` builds both from the same source.
+The canonical self-hosting `Requirements.lean`, `Requirements.proto`, and
+`Implementation.lean` remain together in `LeanFM/LLMGenerated/`. Copying the
+whole project directory preserves every project-owned input and stable relative
+path, so the copy can become its own repository and be opened directly in Codex.
+Use `make book-clean` to remove generated LaTeX artifacts.
 
 The large quantitative example is `examples/bakery-events.jsonl`: 20,000 bakery
 orders represented as a stream of fork/join events. `examples/bakery-stats.json`
