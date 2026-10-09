@@ -959,6 +959,29 @@ def outcomePieSvg : String :=
   , "<text x=\"380\" y=\"280\" text-anchor=\"middle\" fill=\"#cbd5e1\" font-family=\"sans-serif\" font-size=\"13\">probability-weighted from declared terminal transitions</text>"
   , "</svg>" ]
 
+def assumedUptimeText (spec : RequirementSpec) (actor : String) : String :=
+  match spec.actorReliability.find? (fun contract => contract.actor == actor) with
+  | some contract =>
+      if contract.outageProbability.denominator == 0 then "unknown"
+      else s!"{contract.outageProbability.denominator - contract.outageProbability.numerator}/{contract.outageProbability.denominator}"
+  | none => "undeclared"
+
+/-- A derived view of the declared Paxos reliability gates and the named
+    ordered shutdown scenario in `paxos.quorum_shutdown_network`. -/
+def quorumShutdownNetworkSvg (spec : RequirementSpec) : String :=
+  let runtimeUp := assumedUptimeText spec "Runtime"
+  let webUp := assumedUptimeText spec "WebApp"
+  let replicaUp := assumedUptimeText spec "KVReplica"
+  joinWithNewline <| svgHeader "Majority service: redundancy inside a series path — paxos.quorum_shutdown_network" 1120 650 ++
+  [ "<defs><marker id=\"arrowRed\" markerWidth=\"10\" markerHeight=\"10\" refX=\"8\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L0,6 L9,3 z\" fill=\"#f87171\"/></marker></defs>"
+  , "<g transform=\"translate(0 40)\" font-family=\"sans-serif\" fill=\"#f8fafc\"><rect x=\"25\" y=\"20\" width=\"160\" height=\"65\" rx=\"12\" fill=\"#312e81\" stroke=\"#a78bfa\"/><text x=\"105\" y=\"48\" text-anchor=\"middle\" font-size=\"16\">runtime-1</text><text x=\"105\" y=\"70\" text-anchor=\"middle\" font-size=\"12\">uptime " ++ runtimeUp ++ "; scales web</text><line x1=\"185\" y1=\"52\" x2=\"215\" y2=\"52\" stroke=\"#a78bfa\" stroke-dasharray=\"5 4\" stroke-width=\"2\"/>"
+  , "<rect x=\"215\" y=\"5\" width=\"275\" height=\"230\" rx=\"16\" fill=\"#0f172a\" stroke=\"#60a5fa\" stroke-width=\"2\"/><text x=\"352\" y=\"32\" text-anchor=\"middle\" font-size=\"17\">web_pool: any 1 stateless server</text><g font-size=\"13\" text-anchor=\"middle\"><rect x=\"255\" y=\"50\" width=\"195\" height=\"45\" rx=\"9\" fill=\"#172554\" stroke=\"#60a5fa\"/><text x=\"352\" y=\"78\">web-1 · uptime " ++ webUp ++ "</text><rect x=\"255\" y=\"108\" width=\"195\" height=\"45\" rx=\"9\" fill=\"#172554\" stroke=\"#60a5fa\"/><text x=\"352\" y=\"136\">web-2 · uptime " ++ webUp ++ "</text><rect x=\"255\" y=\"166\" width=\"195\" height=\"45\" rx=\"9\" fill=\"#172554\" stroke=\"#60a5fa\"/><text x=\"352\" y=\"194\">web-3 · uptime " ++ webUp ++ "</text></g><line x1=\"490\" y1=\"120\" x2=\"540\" y2=\"120\" stroke=\"#93c5fd\" stroke-width=\"3\"/><text x=\"515\" y=\"105\" text-anchor=\"middle\" font-size=\"12\">SERIES</text>"
+  , "<rect x=\"540\" y=\"5\" width=\"550\" height=\"230\" rx=\"16\" fill=\"#0f172a\" stroke=\"#a78bfa\" stroke-width=\"2\"/><text x=\"815\" y=\"35\" text-anchor=\"middle\" font-size=\"18\">replica_quorum: require 2 of 3 votes</text>"
+  , "<g font-size=\"14\" text-anchor=\"middle\"><rect x=\"575\" y=\"75\" width=\"145\" height=\"80\" rx=\"12\" fill=\"#14532d\" stroke=\"#4ade80\"/><text x=\"647\" y=\"107\">kv-1</text><text x=\"647\" y=\"132\">uptime " ++ replicaUp ++ "</text><rect x=\"742\" y=\"75\" width=\"145\" height=\"80\" rx=\"12\" fill=\"#14532d\" stroke=\"#4ade80\"/><text x=\"814\" y=\"107\">kv-2</text><text x=\"814\" y=\"132\">uptime " ++ replicaUp ++ "</text><rect x=\"909\" y=\"75\" width=\"145\" height=\"80\" rx=\"12\" fill=\"#14532d\" stroke=\"#4ade80\"/><text x=\"981\" y=\"107\">kv-3</text><text x=\"981\" y=\"132\">uptime " ++ replicaUp ++ "</text></g><text x=\"815\" y=\"200\" text-anchor=\"middle\" font-size=\"15\">autoscaling web does not add a vote here</text></g>"
+  , "<g font-family=\"sans-serif\"><text x=\"55\" y=\"310\" fill=\"#f8fafc\" font-size=\"20\">Named planned-shutdown cascade</text><text x=\"75\" y=\"360\" fill=\"#fbbf24\" font-size=\"17\">1. Stop kv-1 after hours → kv-2 + kv-3 = 2 votes → service remains available</text><text x=\"75\" y=\"405\" fill=\"#f87171\" font-size=\"17\">2. Stop kv-2 too → only kv-3 = 1 vote → quorum unavailable</text><line x1=\"265\" y1=\"420\" x2=\"265\" y2=\"495\" stroke=\"#f87171\" stroke-width=\"4\" marker-end=\"url(#arrowRed)\"/><rect x=\"75\" y=\"505\" width=\"930\" height=\"90\" rx=\"12\" fill=\"#450a0a\" stroke=\"#f87171\" stroke-width=\"2\"/><text x=\"540\" y=\"540\" text-anchor=\"middle\" fill=\"#fecaca\" font-size=\"18\">web_and_quorum is DOWN although all three web servers and kv-3 are UP</text><text x=\"540\" y=\"570\" text-anchor=\"middle\" fill=\"#fecaca\" font-size=\"15\">the runtime can add web capacity, but it cannot manufacture a database vote</text></g>"
+  , "<text x=\"560\" y=\"630\" text-anchor=\"middle\" fill=\"#cbd5e1\" font-family=\"sans-serif\" font-size=\"13\">Probabilities are declared per-actor assumptions; the ordered operator shutdown is correlated and must not be estimated by multiplying independent marginals.</text>"
+  , "</svg>" ]
+
 def taskById! (spec : RequirementSpec) (id : String) : TaskRequirement :=
   (spec.tasks.find? (fun task => task.id == id)).getD
     { id := id, title := id, actors := [], initialState := "", states := [], transitions := [] }
@@ -979,13 +1002,14 @@ def renderSvg (name : String) : Option String :=
   | "paxos-recovery-state" => some <| stateMachineSvg paxos (taskById! paxos "recover_replica")
   | "latency-line" => some latencyLineSvg
   | "outcomes-pie" => some outcomePieSvg
+  | "paxos-quorum-shutdown-network" => some <| quorumShutdownNetworkSvg paxos
   | _ => none
 
 def svgArtifactNames : List String :=
   [ "get_docs-interaction", "post_review-interaction", "paxos-write-interaction"
   , "paxos-list-interaction", "paxos-recovery-interaction", "get_docs-state"
   , "post_review-state", "paxos-write-state", "paxos-list-state", "paxos-recovery-state"
-  , "latency-line", "outcomes-pie" ]
+  , "latency-line", "outcomes-pie", "paxos-quorum-shutdown-network" ]
 
 def svgGallery : String :=
   String.join <| svgArtifactNames.map fun name =>

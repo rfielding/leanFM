@@ -1,6 +1,8 @@
 import Mathlib
 
-/- Justify the origin of our choice of F, with a real variant -/
+/- Ramanujan-inspired motivation for the choice of F, using a real derivative.
+   This is not a Riemann-zeta or analytic-continuation construction.  The exact
+   result below is discrete rational algebra over defined prefixes and tails. -/
 noncomputable def Ar (x : ℝ) : ℝ := 1 / (1 - x)
 noncomputable def Fr (x : ℝ) : ℝ := 1 / (1 - x)^2
 def F (x : ℤ) : ℚ                := 1 / (1 - x)^2

@@ -270,6 +270,10 @@ dimensions.
     \mathrm{AG}\bigl(\operatorname{queuedBytes}(a) +
       \operatorname{inFlightBytes}(a) \leq \operatorname{budget}(a)\bigr).
   \]
+  Read this as: ``necessarily, at every reachable observation, queued bytes for
+  actor $a$ plus in-flight bytes for actor $a$ is no greater than actor $a$'s
+  byte budget.''  $\mathrm{AG}$ means ``on every permitted future, at every
+  position''; the repeated argument $a$ identifies the same actor throughout.
   This is a modeling obligation for LeanFM, not a claim that the present
   validator already proves heap usage of an arbitrary implementation.
 \end{description}

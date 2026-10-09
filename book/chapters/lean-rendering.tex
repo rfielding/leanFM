@@ -7,6 +7,11 @@ no second opaque specification file: domain declarations are Lean definitions,
 expected behaviours are Lean values, and requirements are Lean propositions or
 checked queries.
 
+Throughout this book, every displayed mathematical formula is accompanied by a
+literal English reading that accounts for each operator, index, bound, and new
+glyph.  The reading is part of the notation discipline: it must map back to the
+symbols one-to-one rather than merely paraphrase the formula's intent.
+
 \begin{lstlisting}
 def checkout : Grammar CheckoutEvent :=
   request >>> (accepted <||> rejected)
@@ -29,10 +34,17 @@ normally supplies only:
 This boundary matters for automation. Generated Lean remains small enough to
 review, while library proofs and algorithms are reused rather than regenerated.
 
-\section{A checked discrete account of
+\section{A Ramanujan-inspired checked discrete account of
   \texorpdfstring{$1+2+3+\cdots=-1/12$}{1+2+3+...=-1/12}}
 
 Lean is not limited to validating data structures or executing finite checks.
+This section starts from the less formal result associated with Srinivasa
+Ramanujan. What is different here is not the value $-1/12$, but the deliberately
+elementary route used to make that value precise and checkable. The construction
+does not invoke the Riemann zeta function, analytic continuation, complex
+analysis, or a theorem identifying $\zeta(-1)$. Its final proof is exact rational
+algebra over explicitly defined finite prefixes and correction tails.
+
 The repository's \texttt{book/logic.lean} uses Mathlib to define the real
 function $A(x)=1/(1-x)$ and prove that its derivative is
 $F(x)=1/(1-x)^2$ away from the singularity at $x=1$.  It then moves from
@@ -42,6 +54,18 @@ famous shorthand
 \[
   S=1+2+3+\cdots=-\frac{1}{12}.
 \]
+Read this as: ``$S$, defined by the regularized expression one plus two plus
+three and so on, equals negative one twelfth.''  The qualification
+``regularized'' is essential; the later formula defines what the ellipsis
+means here.
+
+The derivative establishes only the origin of the chosen rational function
+$F$; it is not an appeal to zeta regularization. After that motivation, the
+definitions of \texttt{Tail\_B}, \texttt{Sum\_B}, \texttt{Tail\_S}, and
+\texttt{Sum\_S}, and the proof of the final identity, use discrete identities
+and rational arithmetic. Thus the checked claim stands on the definitions
+printed here rather than importing a higher-level theory that already assigns
+a value to the divergent series.
 
 The complete source file follows, without elision.  The listing starts on this
 page and continues onto the next page through the final theorem
@@ -64,6 +88,8 @@ The discrete part begins with the ordinary finite triangular sum
 \[
   \texttt{Sum\_S}(n)=\frac{n(n+1)}{2}.
 \]
+Read this as: ``\texttt{Sum\_S} at cutoff $n$ equals $n$ times $n+1$, divided
+by two.''  Here $n$ is a natural-number parameter naming the finite cutoff.
 It then defines an exact rational correction \texttt{Tail\_S}(n), using the
 alternating construction \texttt{Tail\_B}, so that the corrected value is
 independent of where the finite prefix is cut.  The last theorem states, for
@@ -71,6 +97,8 @@ independent of where the finite prefix is cut.  The last theorem states, for
 \[
   -\frac{1}{12}=\frac{n(n+1)}{2}+\texttt{Tail\_S}(n).
 \]
+Read this as: ``negative one twelfth equals $n$ times $n+1$, divided by two,
+plus \texttt{Tail\_S} at that same cutoff $n$.''
 Thus the ellipsis in $1+2+3+\cdots$ is given explicit content: retain a finite
 prefix and pair it with the particular tail assigned by the preceding
 self-similarity identities.  Moving the cutoff changes both terms but not their
@@ -86,15 +114,33 @@ At the end, Lean's goal is the fully elaborated proposition
 ⊢ ∀ (n : ℕ), -1 / 12 = ↑n * (↑n + 1) / 2 + Tail_S n
 \end{lstlisting}
 
-The single turnstile $\vdash$ separates the assumptions in the local proof
-context from the proposition to be derived.  Here nothing appears to its left,
-so there are no additional local assumptions: Lean is asking for a term that
-derives the universally quantified proposition from the imported theory and
-the definitions above.  By contrast, the double turnstile $\vDash$ is normally
-used for semantic entailment: $\Gamma\vDash p$ says that $p$ is true in every
-interpretation in which the assumptions $\Gamma$ are true.  Thus $\Gamma$
-contains the assumptions; the double turnstile denotes their semantic
-consequence.
+Read the Lean goal one symbol at a time as: ``prove, for every $n$ of type
+natural number, that negative one divided by twelve equals coerced $n$ times
+coerced $n$ plus one, divided by two, plus \texttt{Tail\_S} applied to $n$.''
+The upward arrows are coercions: they convert the natural number $n$ into the
+rational-number type used by the arithmetic around it.
+
+The single turnstile $\vdash$, pronounced ``proves'' or ``derives,'' separates
+the local proof context on its left from the proposition to be derived on its
+right.  A context may contain assumptions, variables, local definitions, and
+previously established facts.  Here nothing is printed to the left, so there
+are no additional local entries: Lean is asking for a term that derives the
+universally quantified proposition from the imported theory and the definitions
+above.
+
+By contrast, the double turnstile $\vDash$, pronounced ``semantically
+entails,'' describes truth in interpretations rather than the construction of a
+proof term.  Read
+\[
+  \Gamma \vDash p
+\]
+as: ``Gamma semantically entails $p$.''  Symbol for symbol, $\Gamma$ is the
+theory or context---its assumptions, definitions, and axioms; $\vDash$ is the
+semantic-entailment relation; and $p$ is the proposition.  The whole statement
+means that every interpretation satisfying every entry in $\Gamma$ also
+satisfies $p$.  The two readings therefore remain distinct: $\Gamma\vdash p$
+says that $p$ is derivable from the context, while $\Gamma\vDash p$ says that
+$p$ is true in every model of the context.
 
 For the proof-theoretic background behind derivations, natural deduction,
 sequent calculus, normalization, and cut elimination, see Mancosu, Galvan, and

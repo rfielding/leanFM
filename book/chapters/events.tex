@@ -133,6 +133,12 @@ following quantities are folds or graph queries over this one list:
   \operatorname{wireBytes} &= 85+71+73+49+55+57+54+40+65 = 549.
 \end{align*}
 
+Read these as follows.  Payment time from $e_1$ to $e_3$ is the timestamp of
+$e_3$ minus that of $e_1$, or 3298.  End-to-end latency from $e_0$ to $e_8$ is
+the timestamp of $e_8$ minus that of $e_0$, or 6688093.  Wire bytes is the sum
+of the nine listed event sizes, or 549.  Each subscript identifies the exact
+event used as a boundary.
+
 Two events are concurrent in this order when neither is an ancestor of the other:
 
 \begin{lstlisting}

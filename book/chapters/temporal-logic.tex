@@ -27,7 +27,11 @@ adds an accessibility relation $R$ between worlds and two operators:
     \text{$p$ holds at some $v$ such that $wRv$}.
 \end{align*}
 
-The readings are ``necessarily $p$'' and ``possibly $p$.'' Under classical
+Read the first line as: ``world $w$ satisfies box $p$ if and only if $p$ holds
+at every world $v$ for which $w$ is related to $v$ by accessibility relation
+$R$.''  Read the second with ``diamond'' and ``some world $v$'' in place of
+``box'' and ``every world $v$.''  The readings are ``necessarily $p$'' and
+``possibly $p$.'' Under classical
 negation they are dual: $\Diamond p \equiv \neg\Box\neg p$. The symbols do not
 fix the meaning of accessibility. Depending on the model, an accessible world
 may be a next computation state, a world compatible with an actor's knowledge,
@@ -92,6 +96,12 @@ logical worlds. The four most important combinations can be read literally:
  AG\,p &: \text{necessarily always $p$}.
 \end{align*}
 
+Read these as: ``there exists a future on which eventually $p$''; ``on every
+future, eventually $p$''; ``there exists a future on which $p$ holds globally,
+at every position''; and ``on every future, $p$ holds globally.''  Thus $E$ is
+``there exists a future,'' $A$ is ``every future,'' $F$ is ``eventually,'' and
+$G$ is ``at every position.''
+
 The temporal word and modal word do different work. $F$ versus $G$ chooses
 eventuality versus invariance \emph{along} a continuation. $E$ versus $A$
 chooses some versus all permitted continuations. Neither axis should be omitted
@@ -105,6 +115,12 @@ For requirements argument, the four formulas also form a useful modal square:
  AF\,p &: \text{always eventually $p$}, &
  EG\,p \equiv \neg AF\,\neg p &: \text{$p$ always in some cases}.
 \end{align*}
+
+Read each equivalence sign as ``if and only if.''  $EF\,p$ is ``maybe possible
+$p$.''  $AG\,p$ is ``always necessary $p$,'' equivalently ``not: there exists
+a future that eventually reaches not-$p$.''  $AF\,p$ is ``always eventually
+$p$.''  $EG\,p$ is ``$p$ always in some cases,'' equivalently ``not: every
+future eventually reaches not-$p$.''
 
 These are exact CTL dualities, not a demand that the English glosses look
 syntactically dual. In particular, $AF$ is ``on every legal future, eventually
@@ -123,6 +139,10 @@ existential counterexample:
  AG\,p &\equiv \neg EF\,\neg p, &
  AF\,p &\equiv \neg EG\,\neg p.
 \end{align*}
+
+Read these as: ``$AG\,p$ if and only if not $EF$ not-$p$,'' and ``$AF\,p$ if
+and only if not $EG$ not-$p$.''  Each negation applies to the expression
+immediately following it.
 
 Thus a safety proof searches for a reachable violation of $p$, and a universal
 eventuality proof searches for a path on which $\neg p$ persists forever. A
@@ -266,6 +286,12 @@ antecedent. LeanFM names the non-vacuous temporal combination
   EF\,p \;\land\; AG(p\mathbin{\to}q).
 \]
 
+Read this as: ``$p$ strongly implies $q$ is defined to mean: there exists a
+future eventually witnessing $p$, and on every future at every position,
+ordinary material implication from $p$ to $q$ holds.''  The subscript $s$
+names this strong, non-vacuous implication; the equals sign topped by `def'
+means ``is defined as.''
+
 The first conjunct requires a legal future witnessing $p$. The second requires
 that, necessarily always, every reachable occurrence of $p$ also satisfies $q$.
 Together they imply $EF\,q$: the $p$ witness cannot avoid $q$.
@@ -276,6 +302,9 @@ The deliberately absurd test uses
   p &= \text{``Chewbacca lives on Endor''},\\
   q &= \text{``you must acquit''}.
 \end{align*}
+
+Read these as definitions of proposition names: ``$p$ means `Chewbacca lives
+on Endor','' and ``$q$ means `you must acquit'.''
 
 A Chewbacca argument cannot obtain $q$ merely by mentioning $p$. To enter the
 requirements as strong implication, the model must admit a reachable $p$ witness
@@ -315,6 +344,10 @@ it never to occur, provided the left operand continues to hold. Thus
   p\ AW\ q &: \text{on every future, $p$ holds until $q$, or $p$ remains forever},\\
   p\ EW\ q &: \text{on some future, $p$ holds until $q$, or $p$ remains forever}.
 \end{align*}
+
+Read the first line as: ``on every future, $p$ holds until $q$, or if $q$ never
+occurs, $p$ remains forever.''  Read the second with ``on some future.''  $AW$
+and $EW$ are the universal-path and existential-path weak-until operators.
 
 The boundary state satisfying $q$ need not also satisfy $p$; $p$ is required
 only before $q$. On a future where $q$ never occurs, every state must satisfy

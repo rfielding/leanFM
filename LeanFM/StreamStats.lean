@@ -237,7 +237,7 @@ def USLParameters.regime (parameters : USLParameters) : USLRegime :=
   else if parameters.alphaNum > 0 then .contentionOnly
   else .ideal
 
-/-- Exact `X(N)` as an unreduced numerator/denominator pair. -/
+/-- Exact `X(n)` at varying load `n` as an unreduced numerator/denominator pair. -/
 def USLParameters.throughput (parameters : USLParameters) (clients : Nat) : Option (Nat × Nat) :=
   if !parameters.isValid || clients == 0 then none
   else
@@ -291,7 +291,7 @@ def queueingSteadyState (offered capacity : Nat) : Option ((Nat × Nat) × (Nat 
     let headroom := capacity - offered
     some ((capacity, headroom), (offered, headroom))
 
-/-- One observed outage, delimited by Unavailable and Recovered messages. -/
+/-- One inferred outage interval, delimited by observer-derived availability boundaries. -/
 structure OutageObservation where
   actorSpec : String
   actorInstance : String

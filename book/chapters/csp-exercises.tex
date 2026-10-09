@@ -34,6 +34,12 @@ actor $a$. The composition accepts exactly when every local role accepts its vie
   = \{t \mid \forall i,\; t\!\upharpoonright_{a_i} \in L(R_i)\}.
 \]
 
+Read this as: ``the language $L$ accepted by the composition of roles $R_1$
+through $R_n$ is the set of global traces $t$ such that, for every role index
+$i$, trace $t$ restricted to actor $a_i$ belongs to the language accepted by
+role $R_i$.''  Here $n$ is the number of roles, $i$ is one role's index, the
+vertical bar means ``such that,'' and $\upharpoonright$ means ``restricted to.''
+
 One global message is therefore not duplicated into unrelated send and receive
 events. It has a single identity, byte string, sender, and recipient; both endpoint
 grammars constrain it. An unmatched send, an unexpected receive, or disagreement

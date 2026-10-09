@@ -239,13 +239,25 @@ backpoints to that start, and a nonnegative amount of work. If one moved byte is
 one work unit and timestamps are milliseconds, an exhaustive observation list
 supports two different rates.
 
-The client-experienced, properly weighted rate is
+The word \emph{load} is too ambiguous to serve as a variable. Let $N$ be the
+declared upper limit on the number of active clients in the study, and let the
+parameter $n$ be the active-client population for one observation, with
+$1\leq n\leq N$. Separately, let $\lambda_o$ be offered work per unit time,
+$\lambda_a$ be work admitted per unit time, and $X$ be work completed per unit
+time. Offering work, accepting it into a queue, and completing it are three
+different observable boundaries. The client-experienced, properly weighted
+rate is
 
 \[
- X_{\mathrm{client}}(N)=
+ X_{\mathrm{client}}(n)=
  \frac{\sum_i \mathrm{work}_i}
       {\sum_i(e_i.timeAt-s_i.timeAt)}.
 \]
+
+Read this as: ``client throughput at active-client population $n$ equals the sum, over requests
+$i$, of work for request $i$, divided by the sum of end time $e_i.timeAt$
+minus start time $s_i.timeAt$ for that request.'' Lowercase $n$ is the varying
+client population; uppercase $N$ is only its declared upper limit.
 
 This is the duration-weighted mean of the individual observed rates. Long
 requests therefore contribute in proportion to how long a client experienced
@@ -254,10 +266,37 @@ them. It is not the unweighted mean of per-request ratios.
 The aggregate server throughput is instead
 
 \[
- X_{\mathrm{server}}(N)=
+ X_{\mathrm{server}}(n)=
  \frac{\sum_i \mathrm{work}_i}
       {\max_i(e_i.timeAt)-\min_i(s_i.timeAt)}.
 \]
+
+Read this as: ``server throughput at active-client population $n$ equals total completed work over requests
+$i$, divided by the latest request-end time minus the earliest request-start
+time.''  The maximum and minimum make the denominator one wall-clock window.
+
+For an observation window of duration $T$, the boundary rates and backlog obey
+
+\[
+ \lambda_o=\frac{W_o}{T},\qquad
+ \lambda_a=\frac{W_a}{T},\qquad
+ X=\frac{W_c}{T},\qquad
+ B_1=B_0+W_a-W_c.
+\]
+
+Read this as: ``offered rate lambda sub $o$ is offered work $W_o$ divided by
+window duration $T$; admitted rate lambda sub $a$ is admitted work $W_a$
+divided by $T$; completed throughput $X$ is completed work $W_c$ divided by
+$T$; and ending backlog $B_1$ is starting backlog $B_0$ plus admitted work
+minus completed work.'' The backlog identity assumes one conserved work unit
+and requires cancellations, expiry, and failures to be recorded as explicit
+terminal dispositions when they remove work.
+
+Consequently, $\lambda_o>X$ does not mean that the system handled the offered
+load. The difference is rejected, remains queued or in flight, or receives
+another explicit terminal disposition. Nor does $\lambda_a$ measure handled
+work: an implementation can admit requests faster than it completes them while
+latency and backlog grow without bound.
 
 Its denominator is one wall-clock observation window, so overlapping client
 waits are counted once. The two quantities answer different questions and must
@@ -266,8 +305,15 @@ number of active client instances yields observations that can be fitted to the
 Universal Scalability Law,
 
 \[
- X(N)=\frac{\gamma N}{1+\alpha(N-1)+\beta N(N-1)}.
+ X(n)=\frac{\gamma n}{1+\alpha(n-1)+\beta n(n-1)},
+ \qquad 1\leq n\leq N.
 \]
+
+Read this as: ``completed throughput $X$ at active-client population $n$ equals gamma times $n$, divided by
+one plus alpha times $n-1$ plus beta times $n$ times $n-1$; $n$ ranges from one
+through the upper limit $N$.'' This curve uses population or concurrency as its
+independent variable. It is not, without an explicit experimental mapping, a
+curve whose horizontal axis is offered work rate $\lambda_o$.
 
 Gunther's \emph{Guerrilla Capacity Planning} gives the practical capacity-planning
 setting for this law and develops it as the Universal Law of Computational
@@ -276,7 +322,10 @@ a requirements argument should expose contention, coherency, saturation, and
 retrograde scaling before the first production deployment supplies those facts
 by falling over.
 
-The event list supplies the observations; estimating $\gamma$, $\alpha$, and
+Every USL observation must therefore retain $n$, $\lambda_o$, $\lambda_a$,
+$X$, latency, backlog, rejection or other terminal outcomes, server population,
+and observation-window boundaries. The event list supplies the observations;
+estimating $\gamma$, $\alpha$, and
 $\beta$ is a separate statistical step. The list must be exhaustive for the
 declared observation window, or omitted work and unfinished tasks bias both
 rates.
@@ -292,21 +341,30 @@ the population at which the dimensionless USL curve peaks.
 The two overhead parameters have distinct effects:
 
 \begin{align*}
- \alpha=0,\ \beta=0 &: \quad X(N)=\gamma N,
+ \alpha=0,\ \beta=0 &: \quad X(n)=\gamma n,
    &&\text{ideal linear scaling},\\
- \beta=0 &: \quad X(N)=\frac{\gamma N}{1+\alpha(N-1)},
+ \beta=0 &: \quad X(n)=\frac{\gamma n}{1+\alpha(n-1)},
    &&\text{contention-limited saturation},\\
- \beta>0 &: \quad X(N)=
-   \frac{\gamma N}{1+\alpha(N-1)+\beta N(N-1)},
+ \beta>0 &: \quad X(n)=
+   \frac{\gamma n}{1+\alpha(n-1)+\beta n(n-1)},
    &&\text{coherency-limited retrograde scaling}.
 \end{align*}
+
+Read the three lines as follows.  When alpha and beta are both zero,
+throughput at load $n$ is gamma times $n$.  When beta is zero, throughput is
+gamma times $n$ divided by one plus alpha times $n-1$.  When beta is positive,
+the denominator additionally contains beta times $n$ times $n-1$.
 
 For $0\leq\alpha<1$ and $\beta>0$, differentiation gives the finite capacity
 population
 
 \[
- N_* = \sqrt{\frac{1-\alpha}{\beta}}.
+ n_* = \sqrt{\frac{1-\alpha}{\beta}}.
 \]
+
+Read this as: ``the peak load $n$ star equals the square root of one minus
+alpha, divided by beta.''  This fitted peak is a load value and need not equal
+the study limit $N$.
 
 The observed integer capacity is one of the adjacent integer populations,
 whichever has the larger measured or fitted throughput. When $\beta=0$ and
@@ -317,7 +375,7 @@ bottleneck or cease to fit that ideal case.
 
 Figure~\ref{fig:usl-regimes} uses normalized throughput $X/\gamma$. The fitted
 example uses $\alpha=0.1$ and, in the third panel, $\beta=0.005$, giving
-$N_*\simeq13.42$. Throughput to the right of the marked point declines even as
+$n_*\simeq13.42$. Throughput to the right of the marked point declines even as
 more clients are added.
 
 \begin{figure}[htbp]
@@ -327,7 +385,7 @@ more clients are added.
 \begin{tikzpicture}
 \begin{axis}[
   width=\linewidth,height=5.4cm,
-  xlabel={$N$},ylabel={$X(N)/\gamma$},
+  xlabel={$n$},ylabel={$X(n)/\gamma$},
   xmin=0,xmax=32,ymin=0,ymax=32,grid=major,
   title={$\alpha=0,\ \beta=0$}]
   \addplot[color=leangreen,thick,domain=0:32,samples=80] {x};
@@ -340,7 +398,7 @@ more clients are added.
 \begin{tikzpicture}
 \begin{axis}[
   width=\linewidth,height=5.4cm,
-  xlabel={$N$},ylabel={$X(N)/\gamma$},
+  xlabel={$n$},ylabel={$X(n)/\gamma$},
   xmin=0,xmax=32,ymin=0,ymax=10,grid=major,
   title={$\alpha=.1,\ \beta=0$}]
   \addplot[color=leanblue,thick,domain=0:32,samples=100]
@@ -355,7 +413,7 @@ more clients are added.
 \begin{tikzpicture}
 \begin{axis}[
   width=\linewidth,height=5.4cm,
-  xlabel={$N$},ylabel={$X(N)/\gamma$},
+  xlabel={$n$},ylabel={$X(n)/\gamma$},
   xmin=0,xmax=32,ymin=0,ymax=5,grid=major,
   title={$\alpha=.1,\ \beta=.005$}]
   \addplot[color=orange!85!black,thick,domain=0:32,samples=120]
@@ -364,10 +422,10 @@ more clients are added.
   \addplot[only marks,color=red!75!black,mark=*,mark size=2.2pt]
     coordinates {(13.416,4.363)};
   \node[anchor=south west,font=\scriptsize] at (axis cs:13.416,4.363)
-    {at capacity $N_*$};
+    {at capacity $n_*$};
 \end{axis}
 \end{tikzpicture}
-\small coherency: worse beyond $N_*$
+\small coherency: worse beyond $n_*$
 \end{minipage}
 \caption{Universal Scalability Law regimes. $\gamma$ rescales every vertical
 axis. Contention alone saturates; coherency creates a finite peak and declining
@@ -460,11 +518,24 @@ actor Server
   |>.meanTimeToRepair 45.seconds
 \end{lstlisting}
 
-These are specified assumptions. Measurements come from separate
-\texttt{Unavailable} and \texttt{Recovered} messages. The recovery message
-backpoints to the unavailable message, so one repair duration is
-\texttt{recovered.timeAt - unavailable.timeAt}. For $R$ replicas observed from
-$t_0$ through $t_1$, the observed outage fraction and MTTR are
+These are specified assumptions. A failed actor does not reliably announce its
+own failure: there is no ordinary \texttt{Unavailable} message to receive.
+Measurements instead come from evidence visible to an observer. Expected
+heartbeats stop arriving; an inbound queue ceases to drain; or messages expected
+from the actor's outbound side cease to appear. Each detector must declare its
+heartbeat or progress expectation, timeout, clock, observer, and attribution
+boundary. Silence without such an expectation is not evidence of failure.
+
+The detector may emit derived observations such as
+\texttt{AvailabilityLost} and \texttt{AvailabilityRestored}, but these are
+observer conclusions, not protocol messages sent by the failed actor. A loss
+observation retains the last known healthy time, the deadline that was missed,
+the detection time, and the evidence stream. Restoration retains the first new
+heartbeat or queue/message progress that justifies it and backpoints to the loss
+observation. The true failure time is generally bounded between the last healthy
+observation and detection rather than known exactly. If the declared accounting
+policy uses derived boundary times $u_i$ and $r_i$, then for $R$ replicas observed
+from $t_0$ through $t_1$, the estimated outage fraction and repair duration are
 
 \[
  \widehat O=
@@ -474,7 +545,15 @@ $t_0$ through $t_1$, the observed outage fraction and MTTR are
  \frac{\sum_i (r_i.timeAt-u_i.timeAt)}{\lvert incidents\rvert}.
 \]
 
-Availability over the same complete window is $1-\widehat O$. Both values can
+Read these as follows.  Estimated outage fraction, $\widehat O$, is the sum
+over incidents $i$ of restoration time $r_i.timeAt$ minus outage-boundary time
+$u_i.timeAt$, divided by replica count $R$ times window duration $t_1-t_0$.
+Estimated mean time to repair, $\widehat{MTTR}$, is that same total outage time
+divided by the number of incidents.  A hat marks an estimate from observations.
+
+Availability over the same complete window is $1-\widehat O$. The report must
+label whether $u_i$ is the last-known-healthy time, missed deadline, or detection
+time; otherwise its outage and MTTR numbers are not reproducible. Both values can
 be plotted against time, replica count, offered load, or a deployment policy.
 This supports Kubernetes-style experiments in which pods are actor instances,
 restarts are recovery events, and changing replica populations yields different
@@ -485,19 +564,25 @@ check.
 Per-instance uptime is only the first reliability result. Services form a
 dependency network, and each dependency gate must say whether its members are
 required in \emph{series} or provide redundancy in \emph{parallel}. Let
-$u_i(t)\in\{0,1\}$ be the observed up/down indicator reconstructed from one
-instance's \texttt{Unavailable}/\texttt{Recovered} intervals. For a series gate,
+$u_i(t)\in\{0,1\}$ be the derived up/down indicator reconstructed from one
+instance's detector observations and declared boundary policy. For a series gate,
 every member must be up:
 
 \[
  u_{\mathrm{series}}(t)=\prod_i u_i(t).
 \]
 
+Read this as: ``series availability at time $t$ equals the product, over
+instances $i$, of instance $i$'s up indicator at time $t$.''
+
 For a parallel gate, at least one member must be up:
 
 \[
  u_{\mathrm{parallel}}(t)=1-\prod_i(1-u_i(t)).
 \]
+
+Read this as: ``parallel availability at time $t$ equals one minus the product,
+over instances $i$, of one minus instance $i$'s up indicator at time $t$.''
 
 More generally, a replicated service declares a threshold $k$ and is available
 when $\sum_i u_i(t)\geq k$. Its measured availability is the fraction of the
@@ -526,23 +611,56 @@ Named service-down scenarios should be replayable even when they have not yet
 occurred in production; such a replay is a model prediction and must be labeled
 separately from measured uptime.
 
-An unavailable actor stops sending and receiving ordinary protocol messages.
-From its \texttt{Unavailable} event until the matching \texttt{Recovered}
-event, any ordinary send or receive attributed to that concrete instance is an
-invalid trace. Work waiting on the actor remains stalled, is rejected, or ends
-in an explicit timeout/cancellation outcome according to the requirement. Thus
-an outage commonly falsifies a nominal liveness promise (for example, ``every
-accepted request eventually receives a response'') even when safety remains
-intact. Silence alone is not a self-identifying event: detecting the violation
-requires the declared expected-message boundary and clock or an explicit
-unavailability observation.
+The generated artifact
+\texttt{paxos-quorum-shutdown-network.svg} gives a concrete majority-service
+example. A Kubernetes-like runtime manages a parallel pool of three stateless
+web actors; the one-of-three web pool is in series with a two-of-three
+database-replica gate. Each web actor has specified uptime $9999/10000$; each
+replica has specified uptime $999/1000$. If replica outages were independent and each replica had
+uptime $p$, the quorum's assumed uptime would be
+
+\[
+ A_{2\text{-of-}3}=3p^2(1-p)+p^3.
+\]
+
+Read this as: ``two-of-three availability equals three times the probability
+that exactly two replicas are up, $p$ squared times one minus $p$, plus the
+probability that all three replicas are up, $p$ cubed.'' This calculation is
+only an independent-marginal baseline. It does not describe an operator who
+deliberately stops correlated members.
+
+The named shutdown cascade first stops \texttt{kv-1}. Two voters remain, so the
+successful first maintenance action appears to confirm that the cluster is
+redundant. Stopping \texttt{kv-2} next leaves \texttt{kv-3} running but destroys
+the majority: the quorum gate and the web-plus-quorum series path become
+unavailable. This is the operational trap familiar from ZooKeeper-backed Kafka
+deployments and Paxos- or Raft-like services. ``A database process is still
+up'' is not the service predicate; ``a majority of the configured voting set is
+available and mutually communicating'' is. Planned shutdowns, shared power,
+network partitions, and common automation are correlated failures and must be
+replayed as named sets rather than hidden inside multiplied uptime percentages.
+The runtime may create arbitrarily many healthy stateless web instances without
+creating another database vote. Autoscaling the parallel web tier therefore
+cannot repair the failed serial quorum gate; it may merely increase the number
+of requests waiting on that unavailable dependency.
+
+An actor inferred unavailable produces no observed heartbeat or outbound
+protocol progress and does not drain its observed inbound queue. Work waiting on
+it remains stalled, is rejected, or ends in an explicit timeout/cancellation
+outcome according to the requirement. An ordinary send or receive attributed to
+that instance after a detector's loss boundary is evidence that either recovery
+occurred or the detector/attribution model was wrong; it is not silently discarded
+as an invalid trace. Thus an outage commonly falsifies a nominal liveness promise
+(for example, ``every accepted request eventually receives a response'') even
+when safety remains intact.
 
 The nominal protocol language and its failure extension must therefore be
 distinguished. The nominal language describes ordinary successful and rejected
-conversations. The failure extension adds \texttt{Unavailable}, stalled or
-censored work, explicit failure outcomes, \texttt{Recovered}, and any legal
-resume/retry behavior. Cascade analysis disables sends and receives for every
-instance made unavailable at the dependency fixed point, then reports which
+conversations. The failure extension adds heartbeat expectations, queue and
+message-progress observations, derived availability boundaries, stalled or
+censored work, explicit failure outcomes, and legal resume/retry behavior.
+Cascade analysis suppresses modeled progress for every instance inferred
+unavailable at the dependency fixed point, then reports which
 nominal safety and progress properties remain true, become false, or cannot be
 decided before the observation window closes.
 
@@ -584,18 +702,43 @@ $c_h$, and service rate $c_s$, the accounting-period infrastructure cost is
  C(R)=\sum_{r=1}^{R}(H_r c_h + A_r c_s).
 \]
 
+Read this as: ``cost at replica count $R$ equals the sum from replica index
+$r=1$ through $R$ of provisioned hours $H_r$ times hardware rate $c_h$, plus
+available hours $A_r$ times service rate $c_s$.''
+
 Supply planning is a constrained optimization, not merely ``pick the cheapest
-server.'' Let one replica sustain $\mu$ work units per hour and let $a$ be the
-required availability fraction. A candidate replica count is feasible for
-demand $D$ only when
+server.'' Let one replica sustain $\mu$ completed work units per hour, let $a$
+be the required availability fraction, and let $D$ be the work rate that must
+complete within the declared latency boundary. A candidate replica count is
+feasible for demand $D$ only when
 
 \[
 R\mu a \ge D.
 \]
 
-With an ideally balanced routing policy, the nominal load on each server is
-$D/R$. Spawning more homogeneous servers therefore lowers average per-server
-load. That statement alone cannot choose a replica count: every added server
+Read this as: ``replica count $R$ times per-replica completed-work capacity mu
+times required availability fraction $a$ must be at least required completed
+demand $D$.'' This inequality is necessary but not sufficient: routing
+imbalance, queueing, and latency can still make the observed system infeasible.
+
+For total offered rate $\lambda_o$ routed across $R$ servers, let
+$\lambda_{o,r}$ be the rate offered to server $r$:
+
+\[
+ \lambda_o=\sum_{r=1}^{R}\lambda_{o,r},
+ \qquad
+ \lambda_{o,r}=\frac{\lambda_o}{R}\ \text{only under ideal balance}.
+\]
+
+Read this as: ``total offered rate lambda sub $o$ equals the sum, from server
+index $r=1$ through server count $R$, of the rate offered to server $r$; under
+ideal balance only, each server's offered rate is total offered rate divided by
+$R$.'' Handled work must still be measured at each completion boundary; neither
+formula says that the offered work completed.
+
+With an ideally balanced routing policy, the nominal demand on each server is
+therefore $D/R$. Spawning more homogeneous servers lowers nominal average
+per-server demand. That statement alone cannot choose a replica count: every added server
 also adds provisioned hardware cost and, while healthy, service cost. The useful
 graph places $D/R$, observed load for each concrete instance, effective supply,
 and total hourly cost on the same replica-count axis.
@@ -611,6 +754,15 @@ aggregate supply exceeds demand, while sticky routing and round-robin make
 different balance assumptions. Product-specific replication, reserved pricing,
 autoscaling delay, and nonlinear volume tiers require additional declared
 constraints rather than silent arithmetic.
+
+Server count by itself is not a scalability result. An unbounded thought
+experiment can pair unbounded offered work with unbounded servers, backlog,
+cost, and latency; it says nothing useful about work completed within a finite
+deadline. A valid capacity claim fixes a finite observation window and reports
+offered, admitted, completed, rejected, and still-outstanding work together
+with latency, server count, utilization or imbalance, and cost. ``Handled''
+means completed within the declared outcome and latency boundary, not merely
+accepted somewhere in an arbitrarily large system.
 
 \section{Specified dwell time}
 
@@ -656,14 +808,21 @@ def latency (attempt : TaskAttempt) : Option Duration :=
     completed.timeAt - attempt.started.timeAt
 \end{lstlisting}
 
-For an observation window containing $N$ starts, $C$ matched terminal events,
+For an observation window containing $M$ starts, $C$ matched terminal events,
 $S$ successful terminals, and completed latencies $L_1,\ldots,L_C$, the basic
 estimates are
 \[
-  \widehat P(\text{complete}) = \frac{C}{N}, \qquad
+  \widehat P(\text{complete}) = \frac{C}{M}, \qquad
   \widehat P(\text{success}\mid\text{complete}) = \frac{S}{C}, \qquad
   \widehat E[L\mid\text{complete}] = \frac{\sum_i L_i}{C}.
 \]
+
+Read these as follows.  Estimated completion probability is completed count
+$C$ divided by started count $M$.  Estimated success probability conditional
+on completion is successful count $S$ divided by completed count $C$.
+Estimated latency conditional on completion is the sum of completed latencies
+$L_i$, over completed attempts $i$, divided by $C$.  The vertical bar is read
+``given,'' and each hat marks an estimate from the observation window.
 
 Attempts without a terminal event remain \emph{in flight}. They contribute to the
 number started and to queue/load measurements, but not to completed-task latency

@@ -41,6 +41,15 @@ For each calendar-day bucket $d$, the reducer computes
      -\operatorname{employeePay}_d.
 \end{align*}
 
+Read every line at day $d$.  Gross sales is the sum of amount on events $e$
+whose kind is PaymentAuthorized; refunds is the sum of each event's refund;
+net revenue is gross sales minus refunds; ingredient cost is the sum of
+ingredient cost on BatchBaked events; donation value is the sum of eligible
+value on DonationReceiptRecorded events; employee pay is the sum of pay on
+ShiftPaid events; and profit is net revenue minus ingredient cost minus
+employee pay.  The subscript $d$ means that every sum and result is restricted
+to the same calendar-day bucket.
+
 Donated bread is already part of batch ingredient cost, so subtracting it again
 would double count. Donation value is not revenue and is not itself a tax
 saving. The tax effect is calculated only after the applicable rules and rate
@@ -160,6 +169,12 @@ existing implementation. Code generation has two forms:
   \qquad
   (R,I,P,C_k) \longrightarrow C_{k+1}.
 \]
+
+Read the first mapping as: ``requirements $R$, implementation specification
+$I$, and protobuf schema $P$ generate initial code $C_0$.''  Read the second as:
+``those same three specifications plus current code revision $C_k$ generate
+the next revision $C_{k+1}$.''  Subscript zero is the initial revision;
+subscripts $k$ and $k+1$ are the current and next revisions.
 
 The first creates software from scratch. The second revises existing software
 against the same stable inputs, retaining conforming code and replacing code

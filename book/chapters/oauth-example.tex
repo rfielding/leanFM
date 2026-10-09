@@ -539,6 +539,10 @@ For the simplified path with no loss or timeout,
   \qquad
   P(\text{denial callback}) = 0.13.
 \]
+Read these as: ``the probability of a grant callback equals 0.87 times three
+deterministic factors of one, hence 0.87; the probability of a denial callback
+equals 0.13.''  $P$ denotes probability, and the parenthesized text names the
+event whose probability is measured.
 The factors of one are deterministic enqueue, transport, and server steps. Their
 dwell times still affect the latency distribution even though they do not split
 the probability mass.
