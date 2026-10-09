@@ -26,12 +26,13 @@ def sessionUser? (request : String) : IO (Option String) := do
   | none => pure none
   | some token => userForSession? token
 
-def credentialKey (username : String) : IO (Except String String) := do
-  let root ← accountRoot username
-  let encoded ← readOr (root ++ "/credentials/default.b64") ""
-  if encoded.trim.isEmpty then return .error "No user API key is configured."
-  try pure (.ok (← base64Decode encoded.trim))
-  catch _ => pure (.error "The stored API key is invalid.")
+def credentialKey (username request : String) : IO (Except String String) := do
+  match cookieValue? request "leanfm_session" with
+  | none => pure (.error "Password login is required to unlock the API key.")
+  | some token =>
+      match ← sessionCredential? token username with
+      | none => pure (.error "Password login is required to unlock the API key.")
+      | some key => pure (.ok key)
 
 def authorizedProjectRoot? (username projectId : String) : IO (Option String) := do
   if !safeId projectId then return none
@@ -161,7 +162,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
           | ["chat"], "POST" =>
               let prompt := (formValue? (requestBody request) "prompt").getD ""
               if prompt.trim.isEmpty then return some (errorResponse 400 "A prompt is required.")
-              match ← credentialKey username with
+              match ← credentialKey username request with
               | .error message => return some (errorResponse 409 message)
               | .ok key =>
                   let prior ← conversationContext root

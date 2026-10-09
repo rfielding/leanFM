@@ -39,6 +39,7 @@ stop:
 check: build validate diagrams paxos-check
 
 chatui-check: build
+	python3 scripts/chatui_crypto_test.py
 	bash scripts/chatui_http_check.sh
 
 go-toolchain:

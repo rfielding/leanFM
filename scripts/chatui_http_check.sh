@@ -47,20 +47,23 @@ rg -q 'What are we building|Create account|Diagrams / Artifacts' <<<"$root_html"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/me)" = 401
 
 register() {
-  local username="$1" cookie="$2"
+  local username="$1" cookie="$2" key="$3"
   curl -fsS -c "$cookie" -b "$cookie" \
     --data-urlencode "username=$username" \
     --data-urlencode 'password=correct horse battery staple' \
     --data-urlencode 'provider=openai' \
-    --data-urlencode 'api_key=test-user-key' \
+    --data-urlencode "api_key=$key" \
     http://127.0.0.1:8080/api/accounts | rg -q "\"username\":\"$username\""
 }
 
-register rfielding "$cookie_a"
-register second_user "$cookie_b"
+register rfielding "$cookie_a" test-user-key
+register second_user "$cookie_b" second-user-key
 
-test "$(tr -d '\n' <"$test_root/data/accounts/rfielding/credentials/default.b64")" = 'dGVzdC11c2VyLWtleQ=='
-! rg -q 'test-user-key|correct horse battery staple' "$test_root/data"
+test -f "$test_root/data/accounts/rfielding/credentials/default.json"
+test ! -e "$test_root/data/accounts/rfielding/credentials/default.b64"
+test ! -d "$test_root/data/accounts/rfielding/sessions"
+! rg -q 'dGVzdC11c2VyLWtleQ==' "$test_root/data"
+! rg -q 'test-user-key|second-user-key|correct horse battery staple' "$test_root/data"
 
 create_project() {
   local cookie="$1" name="$2"
@@ -93,3 +96,36 @@ rg -q 'make a state machine' <(curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/a
 ! rg -q 'keep this separate' <(curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/api/projects/$project_a/conversation")
 
 echo 'ok: ChatUI bootstrap, usage, artifacts, and concurrent session isolation'
+
+# Requirement: password verification precedes migration; copied sessions cannot spend.
+login_status() {
+  curl -sS -o /dev/null -w '%{http_code}' --data-urlencode 'username=rfielding' \
+    --data-urlencode "password=$1" http://127.0.0.1:8080/api/login
+}
+rg -q 'alice response' "$test_root/chat-a.json"
+rg -q 'bob response' "$test_root/chat-b.json"
+cp "$test_root/data/accounts/rfielding/credentials/default.json" "$test_root/original.json"
+cp "$test_root/data/accounts/second_user/credentials/default.json" "$test_root/data/accounts/rfielding/credentials/default.json"
+test "$(login_status 'correct horse battery staple')" = 403
+cp "$test_root/original.json" "$test_root/data/accounts/rfielding/credentials/default.json"
+printf '%s\n' 'dGVzdC11c2VyLWtleQ==' > "$test_root/data/accounts/rfielding/credentials/default.b64"
+printf '%s' '' > "$test_root/data/accounts/rfielding/credentials/default.json"
+test "$(login_status 'correct horse battery staple')" = 403
+rm "$test_root/data/accounts/rfielding/credentials/default.json"
+test "$(login_status wrong-password)" = 403
+test -f "$test_root/data/accounts/rfielding/credentials/default.b64"
+test "$(login_status 'correct horse battery staple')" = 200
+test ! -f "$test_root/data/accounts/rfielding/credentials/default.b64"
+test -f "$test_root/data/accounts/rfielding/credentials/default.json"
+test "$(stat -c %a "$test_root/data/accounts/rfielding/credentials/default.json")" = 600
+kill "$server_pid"
+wait "$server_pid" || true
+LEANFM_DATA_ROOT="$test_root/data" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
+  .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
+server_pid=$!
+for _ in $(seq 1 50); do
+  curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && break
+  sleep 0.1
+done
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/me)" = 401
+echo 'ok: encrypted credentials, account isolation, migration and restart invalidation'

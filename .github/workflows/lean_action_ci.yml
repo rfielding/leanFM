@@ -11,4 +11,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install -r scripts/chatui_requirements.txt
+      - name: Reject tracked runtime account data
+        run: |
+          if git ls-files -- data/ | rg .; then
+            echo 'Runtime account data must not be committed.' >&2
+            exit 1
+          fi
       - uses: leanprover/lean-action@v1
+      - run: cp book/main-dark.pdf book/main.pdf
+      - run: make chatui-check
+      - run: lake build LeanFM.ChatUI.Implementation
+      - run: lake env lean LeanFM/ChatUI/Validate.lean

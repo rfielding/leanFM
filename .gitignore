@@ -44,3 +44,7 @@
 /book/*.pdf
 !/book/main-dark.pdf
 /book/chapters/*.aux
+
+# Account credentials, password verifiers, sessions, and private project state
+/data/
+__pycache__/

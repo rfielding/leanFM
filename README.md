@@ -107,6 +107,24 @@ an authenticated user's verified credential. Account data defaults to `data/`
 and can be relocated with `LEANFM_DATA_ROOT`.
 ```
 
+Before pulling this security upgrade into an existing installation, stop the
+server and back up `data/`: Git previously tracked these files, so pulling their
+removal can delete them from the working tree. Restore the backup afterward;
+`data/` is now ignored. Rotate previously exposed provider keys. An old account
+can migrate its credential on password login, but a revoked key remains revoked.
+
+Credential protection requires `python3 -m pip install -r scripts/chatui_requirements.txt`.
+Use a unique login password; phishing or reuse of that password defeats
+password-derived encryption if an attacker also obtains the credential files.
+Passwords are salted PBKDF2 verifiers. API keys use AES-256-GCM with a separate
+password-derived key and account-bound authentication. Server-memory sessions
+expire after eight hours; restart requires login. No password recovery is
+implemented: a password reset must replace the provider key. Legacy Base64 keys
+are encrypted and removed on successful password login. Already exposed keys
+must still be revoked; encryption cannot undo prior exposure. Keep `data/` and
+any alternate `LEANFM_DATA_ROOT` out of version control. Each user supplies their
+own key; API usage is billed separately from a ChatGPT subscription.
+
 Endpoints:
 
 ```text

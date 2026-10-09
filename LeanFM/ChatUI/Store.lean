@@ -27,6 +27,10 @@ def writeAtomic (path body : String) : IO Unit := do
   let nonce ← IO.rand 100000000 999999999
   let temporary := path ++ ".tmp-" ++ toString nonce
   IO.FS.writeFile (fp temporary) body
+  let permissions ← IO.Process.output { cmd := "chmod", args := #["600", temporary] }
+  if permissions.exitCode != 0 then
+    IO.FS.removeFile (fp temporary)
+    throw <| IO.userError "cannot restrict file permissions"
   IO.FS.rename (fp temporary) (fp path)
 
 def entries (path : String) : IO (Array IO.FS.DirEntry) := do
@@ -123,7 +127,7 @@ def randomHex (bytes : Nat) : IO String := do
 def runCrypto (mode input : String) : IO String := do
   let out ← IO.Process.output { cmd := "python3", args := #["scripts/chatui_crypto.py", mode] } (some input)
   if out.exitCode == 0 then pure out.stdout.trim
-  else throw <| IO.userError ("password verifier failed: " ++ out.stderr.trim)
+  else throw <| IO.userError "credential operation failed"
 
 def passwordRecord (password : String) : IO String :=
   runCrypto "hash" ("{\"password_b64\":\"" ++ base64Encode password ++ "\"}")
@@ -137,6 +141,45 @@ def verifyPassword (password record : String) : IO Bool := do
     toString iterations ++ ",\"salt_b64\":\"" ++ salt ++ "\",\"digest_b64\":\"" ++ digest ++ "\"}"
   return (← runCrypto "verify" input) == "ok"
 
+-- Keys and session bearers are never persisted. Restart requires password login.
+structure UnlockedSession where
+  token : String
+  username : String
+  apiKey : String
+  expiresAt : Nat
+
+initialize unlockedSessions : IO.Ref (List UnlockedSession) ← IO.mkRef []
+
+def encryptCredential (username password apiKey : String) : IO String :=
+  runCrypto "encrypt" ("{\"username\":\"" ++ jsonEscape username ++ "\",\"password_b64\":\"" ++
+    base64Encode password ++ "\",\"secret_b64\":\"" ++ base64Encode apiKey ++ "\"}")
+
+def unlockCredential (username password : String) : IO String := do
+  let root ← accountRoot username
+  let path := root ++ "/credentials/default.json"
+  let record ← readOr path ""
+  if ← (fp path).pathExists then
+    let encoded ← runCrypto "decrypt" ("{\"username\":\"" ++ jsonEscape username ++
+      "\",\"password_b64\":\"" ++ base64Encode password ++ "\",\"record\":" ++ record ++ "}")
+    -- Remove any legacy duplicate only after authenticated decryption succeeds.
+    let legacy := fp (root ++ "/credentials/default.b64")
+    if ← legacy.pathExists then IO.FS.removeFile legacy
+    return ← base64Decode encoded
+  let legacy := fp (root ++ "/credentials/default.b64")
+  let encoded ← IO.FS.readFile legacy
+  let key ← base64Decode encoded.trim
+  if key.trim.isEmpty then throw <| IO.userError "missing credential"
+  let encrypted ← encryptCredential username password key
+  writeAtomic path (encrypted ++ "\n")
+  IO.FS.removeFile legacy
+  return key
+
+def sessionCredential? (token username : String) : IO (Option String) := do
+  let now ← IO.monoMsNow
+  return (← unlockedSessions.get).findSome? fun session =>
+    if session.token == token && session.username == username && session.expiresAt > now then
+      some session.apiKey else none
+
 def createAccount (username password provider apiKey : String) : IO (Except String String) := do
   if !safeId username then return .error "Username must contain only letters, digits, '-' or '_'."
   if password.length < 8 then return .error "Password must contain at least 8 characters."
@@ -145,12 +188,12 @@ def createAccount (username password provider apiKey : String) : IO (Except Stri
   let root ← accountRoot username
   if ← (fp root).pathExists then return .error "That account already exists."
   IO.FS.createDirAll (fp (root ++ "/credentials"))
-  IO.FS.createDirAll (fp (root ++ "/sessions"))
   IO.FS.createDirAll (fp (root ++ "/projects"))
+  let encrypted ← encryptCredential username password apiKey
   let verifier ← passwordRecord password
   writeAtomic (root ++ "/password.json") (verifier ++ "\n")
   writeAtomic (root ++ "/account.json") ("{\"username\":\"" ++ jsonEscape username ++ "\",\"provider\":\"" ++ jsonEscape provider ++ "\"}\n")
-  writeAtomic (root ++ "/credentials/default.b64") (base64Encode apiKey ++ "\n")
+  writeAtomic (root ++ "/credentials/default.json") (encrypted ++ "\n")
   pure (.ok "default")
 
 def login (username password : String) : IO (Except String String) := do
@@ -158,16 +201,21 @@ def login (username password : String) : IO (Except String String) := do
   let root ← accountRoot username
   let record ← readOr (root ++ "/password.json") ""
   if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
+  let key ← try unlockCredential username password catch _ =>
+    return .error "The stored API key could not be unlocked."
   let token ← randomHex 32
-  IO.FS.createDirAll (fp (root ++ "/sessions"))
-  writeAtomic (root ++ "/sessions/" ++ token) "active\n"
+  let now ← IO.monoMsNow
+  unlockedSessions.modify fun sessions =>
+    { token, username, apiKey := key, expiresAt := now + 8 * 60 * 60 * 1000 } ::
+      ((sessions.filter (fun session => session.expiresAt > now)).take 255)
   pure (.ok token)
 
 def userForSession? (token : String) : IO (Option String) := do
   if token.length != 64 || !token.toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then return none
-  for account in (← entries (← accountsRoot)) do
-    if ← (fp (account.path.toString ++ "/sessions/" ++ token)).pathExists then return some account.fileName
-  return none
+  let now ← IO.monoMsNow
+  unlockedSessions.modify (List.filter (fun session => session.expiresAt > now))
+  return (← unlockedSessions.get).findSome? fun session =>
+    if session.token == token then some session.username else none
 
 def createProject (username name : String) : IO (Except String String) := do
   let projectId ← randomHex 8
