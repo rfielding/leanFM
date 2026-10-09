@@ -7,7 +7,7 @@ import json
 
 class Handler(BaseHTTPRequestHandler):
     def _authorized(self):
-        return self.headers.get("Authorization") == "Bearer test-user-key"
+        return self.headers.get("Authorization") in {"Bearer test-user-key", "Bearer second-user-key"}
 
     def do_GET(self):
         if self.path == "/v1/models" and self._authorized():
@@ -24,7 +24,7 @@ class Handler(BaseHTTPRequestHandler):
         self.rfile.read(length)
         if self.path == "/v1/responses" and self._authorized():
             body = {
-                "output_text": "The deterministic provider response includes a diagram.\n```mermaid\nstateDiagram-v2\n  [*] --> specified\n```",
+                "output_text": ("alice response: " if self.headers.get("Authorization") == "Bearer test-user-key" else "bob response: ") + "The deterministic provider response includes a diagram.\n```mermaid\nstateDiagram-v2\n  [*] --> specified\n```",
                 "usage": {
                     "input_tokens": 11,
                     "input_tokens_details": {"cached_tokens": 3},
