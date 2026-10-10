@@ -49,6 +49,29 @@ The model treats a protocol as globally observable behavior:
 - non-vacuous strong implication is `EF p ∧ AG(p → q)`; unlike weak material implication, it requires a reachable antecedent witness and a necessary temporal relationship to the consequent
 - `p AW q` and `p EW q` are weak-until operators: `q` may never occur when `p` persists forever on every path or some path, respectively
 
+## Multimodal language direction
+
+CTL remains the executable temporal core. The agreed next extension adds actor
+knowledge (`K_a`), epistemic possibility, policy obligation (`O_a`), and permission
+(`P_a`) over explicitly distinct observation and policy relations. These describe
+what an actor knows and what a named policy requires or permits, not morality.
+Belief, strategic ability, and arbitrary modal logics are not automatically
+included. **The general epistemic/deontic checker is not implemented yet.**
+The [language-extension design](MULTIMODAL_LOGIC.md) records exact semantics,
+boundaries, and the bounded Kerberos verification milestone; the book explains
+the same design. Past conditions may become forward monitors only with a stated
+equivalence and concurrency boundary.
+
+Useful nested CTL forms include `AF AG p` (eventually reach permanent safety on
+every path) and `AG AF p` (always eventually, on every future). These are not a
+complete replacement for LTL: branching quantification matters, especially for
+LTL's pathwise `F G p`.
+
+Multimodal checking is not unique to LeanFM: [MCMAS](https://sail.doc.ic.ac.uk/software/mcmas/)
+already supports temporal and epistemic specifications. LeanFM's intended
+contribution is integrating explicit modal relations with byte-defined message
+grammars, event-derived views, and the book-to-specification-to-code workflow.
+
 Run it with:
 
 ```sh

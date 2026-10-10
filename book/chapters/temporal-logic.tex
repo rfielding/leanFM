@@ -202,7 +202,42 @@ model. The durable artifact retains the exact originating CTL formula so the
 checker can still use existential witnesses, negation, and the correct
 counterexample search.
 
-\section{General and unresolved modalities}
+\section{Persistence and recurrence}
+
+Nested CTL operators express two common requirements:
+\[
+ AF\,AG\,p, \qquad AG\,AF\,p.
+\]
+Read the first, symbol by symbol: ``On every path, eventually reach a state
+from which, on every path, $p$ always holds.'' This is eventual permanent safety:
+for example, eventually finish key rotation and never again accept the old key.
+Read the second: ``On every path, at every state, on every path from that state,
+eventually $p$ holds.'' This is universal recurrence, often pronounced ``always
+eventually $p$'': for example, service keeps returning to a ready state.
+
+For witness searches their duals are:
+\[
+ \neg(AF\,AG\,p)\equiv EG\,EF\,\neg p,\qquad
+ \neg(AG\,AF\,p)\equiv EF\,EG\,\neg p.
+\]
+Read: ``Failure of eventual permanent safety means some path always retains
+some future reaching not-$p$. Failure of universal recurrence means some future
+reaches a state with some path on which not-$p$ holds forever.''
+
+The corresponding existential forms are $EF\,EG\,p$ and $EG\,EF\,p$.
+Read: ``Some path eventually reaches a state with some path keeping $p$ forever,''
+and ``some path always visits states from which some path eventually reaches
+$p$.'' In the second formula those eventual witnesses may leave the outer path;
+it does not require infinitely many occurrences of $p$ on that same path.
+
+These forms cover useful LTL-style persistence and recurrence, not all LTL.
+Under universal LTL path semantics, $G F p$ corresponds to $AG AF p$ on the
+usual total transition model. But $AF AG p$ is stronger than pathwise $F G p$:
+it requires eventually reaching a state where \emph{all} continuations stay
+safe, not merely a separate stabilization point on each path. Terminal states
+require the same explicit continuation convention used by the core checker.
+
+\section{Knowledge, obligation, and permission}
 
 General modal logic need not have only one accessibility relation. A multimodal
 model can use $\Box_t/\Diamond_t$ for temporal reachability,
@@ -222,15 +257,78 @@ the current model. They do not mean:
   \item physically necessary versus logically possible.
 \end{itemize}
 
-The original investigation also sought exact combinations for belief and
-knowledge, and for permitted and required behavior. LeanFM does not yet have
-accepted formulas or proof rules for those modalities. It therefore must not
-encode $E/A$ as if they meant believed/known or permitted/required. For now,
-probability, epistemic claims, authorization, and normative requirements need
-separately named predicates or future modal extensions. Keeping that absence
-explicit prevents an easy category error: a branch can be temporally alethically
-possible while having unknown probability, being unknown to an actor, or being
-forbidden by policy.
+LeanFM's next language extension separates these relations explicitly. This is
+an agreed design direction, not a claim that the current CTL evaluator already
+checks epistemic or deontic formulas. The Kerberos video illustrates the intended
+semantics; it is not a checked security proof.
+
+For knowledge, let $W$ be the declared set of legal histories and
+$\operatorname{obs}_a(h)$ actor $a$'s local observation of history $h$:
+\[
+ K_a\varphi(h) \iff
+ \forall h'\in W.\;
+ (\operatorname{obs}_a(h)=\operatorname{obs}_a(h')\Rightarrow\varphi(h')).
+\]
+Read: ``Actor $a$ knows $\varphi$ at history $h$ if and only if, for every
+history $h'$ in $W$, if $a$ observes the same thing in $h$ and $h'$, then
+$\varphi$ holds at $h'$.'' Observations must declare visible messages, private
+keys, clock information, and retained memory. With the current history included
+in $W$, knowledge is factive: what is known is true in that model. Belief needs
+a different relation; it must not inherit this guarantee accidentally.
+\[
+ \widehat K_a\varphi \equiv \neg K_a\neg\varphi.
+\]
+Read: ``$a$ considers $\varphi$ possible exactly when $a$ does not know that
+$\varphi$ is false.'' This is epistemic possibility, not temporal reachability.
+
+For policy, let $\operatorname{Ideal}_a(h)$ be the declared policy-compliant
+futures from $h$, and let $\psi$ be a condition on a whole future path:
+\[
+ O_a\psi(h)\iff\forall\pi\in\operatorname{Ideal}_a(h).\;\psi(\pi),
+ \qquad
+ P_a\psi(h)\iff\exists\pi\in\operatorname{Ideal}_a(h).\;\psi(\pi).
+\]
+Read: ``$a$ is required to satisfy $\psi$ at $h$ exactly when every ideal future
+$\pi$ satisfies $\psi$; $a$ is permitted to satisfy $\psi$ exactly when some
+ideal future satisfies $\psi$.'' Require a nonempty set of ideal futures:
+contradictory policies must be reported, not certified by vacuous quantification.
+Actual legal executions may violate policy; detecting that violation is part of
+the analysis. These are obligations under a named policy, not judgments of
+morality.
+\[
+ P_a\psi\equiv\neg O_a\neg\psi.
+\]
+Read: ``$\psi$ is permitted exactly when its negation is not required.'' This
+duality applies only when both operators use the same declared policy relation.
+For example:
+\[
+ O_a F\,\operatorname{audit}(r)(h)\iff
+ \forall\pi\in\operatorname{Ideal}_a(h).\;\exists i\geq0.\;
+ \operatorname{audit}(r,\pi_i).
+\]
+Read: ``$a$ must eventually audit request $r$ at $h$ exactly when, for every
+ideal future $\pi$, there is a position $i$, zero or later, where $r$ is audited.''
+Here $F$ is a path operator, not an unqualified CTL state formula. The extension
+must type state and path conditions separately before accepting nested formulas.
+
+Temporal, epistemic, and policy quantification can then be combined without
+confusing their domains. A legal future may be possible, unknown to Alice, and
+forbidden by policy at the same time. Probability, belief, strategic ability,
+and program-indexed modalities remain separate design work; adding named
+relations does not implement every modal logic.
+
+Past predicates remain useful for security: a ticket must have been issued
+before it is accepted. Compile bounded past conditions into forward monitor
+state where an equivalence can be established. Evaluate ``previously issued''
+before updating the monitor with the current event. On concurrent histories,
+declare whether ``before'' means causal ancestry or a chosen linearization;
+screen order is not evidence. Unbounded past logic is not thereby implemented.
+
+The first checker milestone is a bounded Kerberos model with explicit observation
+and policy relations, counterexamples for missing knowledge and violated
+obligations, and regression tests for composition with CTL. Symbolic
+uncompromised-key assumptions must remain visible; they do not establish
+computational cryptographic security.
 
 \section{Possibility means preparedness}
 

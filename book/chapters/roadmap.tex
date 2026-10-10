@@ -20,6 +20,10 @@ complete logic and compiler at once.
   \item Generate finite transition systems and evaluate the CTL fragment already
         represented by the LeanFM library.
   \item Compare past-trace predicates with explicit past operators.
+  \item Extend the temporal core with separately typed knowledge and policy
+        modalities. Begin with bounded Kerberos histories, explicit local
+        observations and nonempty ideal futures, and checked counterexamples;
+        do not present the narrated example as an implemented checker.
   \item Render declarative pie and line charts as reductions over observable events.
   \item Connect specifications to a Lean web service and generated protocol
         schemas, preserving one source of typed domain truth.
@@ -36,6 +40,9 @@ The initial metatheory should make the following questions precise:
   \item Which guards can be compiled into finite monitor state?
   \item When does modular composition preserve an established temporal property?
   \item Which fairness and timing assumptions are required by a liveness theorem?
+  \item Which observation and policy relations justify each knowledge,
+        permission, and obligation assertion, and which bounds make their
+        combination with CTL executable?
 \end{itemize}
 
 The intended outcome is not merely a verifier. It is a development loop in which
