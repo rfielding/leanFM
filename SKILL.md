@@ -94,6 +94,26 @@ Continue the argument until the user explicitly accepts the requirements
 specification. Do not interpret silence, a successful build, or an attractive
 diagram as acceptance.
 
+## Consolidate the vibecoded book
+
+Treat the working book as an intentionally permissive design notebook during
+discovery: it may contain stream-of-consciousness exploration, alternatives,
+and ideas that never become requirements. Before an acceptance gate or a
+one-shot implementation, perform a separate conservative cleanup pass:
+
+- classify each normative idea as accepted in `Requirements.lean`, assigned to
+  `Implementation.lean`, explicitly deferred, or removed;
+- preserve technical claims and necessary qualifications while deleting
+  repetition, throat-clearing, and defensive restatement;
+- when prose is mainly describing actors, message flow, states, ordering,
+  dependencies, or quantities, create the corresponding `DesiredOutput` and
+  replace most of that prose with the generated view plus a short interpretation;
+- never promote a speculative book passage into an implementation obligation
+  merely because it survived an early draft.
+
+The cleanup phase does not make the book secondary. It makes the relationship
+between the central design argument and the accepted typed artifacts explicit.
+
 ## Settle the implementation specification
 
 After requirements acceptance, resolve implementation choices in

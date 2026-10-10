@@ -10,13 +10,14 @@ export GOMODCACHE := $(CURDIR)/.cache/go-mod
 
 HOST ?= 127.0.0.1
 PORT ?= 8080
+VIDEO_PYTHON ?= video/.conda/bin/python
 BASE_URL := http://$(HOST):$(PORT)
 PASSWORD ?= leanfm
 COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean clean
+.PHONY: build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
 
 build:
 	lake build leanfm-server
@@ -36,7 +37,25 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams paxos-check
+check: build validate diagrams paxos-check video-check
+
+video-check:
+	python3 scripts/validate_video_overview.py
+
+video: video-check
+	$(VIDEO_PYTHON) -m manim -qm --media_dir video/media --output_file leanfm-overview.mp4 video/manim_overview.py LeanFMOverview
+	cp video/media/videos/manim_overview/720p30/leanfm-overview.mp4 video/leanfm-overview.mp4
+
+video-narrated: video-check
+	$(VIDEO_PYTHON) scripts/prepare_video_narration.py
+	$(MAKE) video
+	$(VIDEO_PYTHON) scripts/render_video_narration.py
+
+.PHONY: kerberos-video
+kerberos-video:
+	$(VIDEO_PYTHON) scripts/prepare_video_narration.py --project video/kerberos
+	$(VIDEO_PYTHON) -m manim -qm --media_dir video/kerberos/media --output_file kerberos.mp4 video/kerberos/scenes.py KerberosVideo
+	ffmpeg -hide_banner -loglevel error -y -i video/kerberos/media/videos/scenes/720p30/kerberos.mp4 -i video/kerberos/narration.wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 160k -shortest video/kerberos/kerberos-narrated.mp4
 
 chatui-check: build
 	python3 scripts/chatui_crypto_test.py

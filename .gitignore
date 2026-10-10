@@ -48,3 +48,15 @@
 # Account credentials, password verifiers, sessions, and private project state
 /data/
 __pycache__/
+
+# Project-local video toolchains and intermediate renders
+/video/.conda/
+/video/.venv/
+/video/media/
+/video/voices/
+/video/narration.wav
+/video/audio/
+/video/kerberos/audio/
+/video/kerberos/narration.wav
+/video/kerberos/media/
+/video/kerberos/render.log

@@ -309,6 +309,7 @@ def derivedOutputKindName : DerivedOutputKind -> String
   | .function2d => "function2d"
   | .interactionDiagram => "interaction_diagram"
   | .stateMachine => "state_machine"
+  | .video => "video"
 
 def promDesiredOutput (output : DesiredOutput) : String :=
   promMetricLine "desired_output_info"

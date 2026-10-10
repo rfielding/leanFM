@@ -97,6 +97,32 @@ implementation files, with requirement-to-code justifications. A new model
 session reads those files and continues from them; it need not reconstruct intent
 from a transcript.
 
+\section{Discovery first, consolidation before commitment}
+
+The working book is deliberately allowed to begin as a vibecoded stream of
+consciousness. Stakeholders can introduce examples, possible abstractions,
+warnings, abandoned alternatives, and future work without pretending that every
+sentence is already an accepted requirement. That freedom is useful during
+discovery, but an unedited transcript is not a finished design.
+
+LeanFM therefore has a distinct cleanup phase before acceptance and again before
+one-shot implementation. Each normative idea is classified as an observable
+requirement, an implementation decision, deferred work, or material to remove.
+The edit preserves definitions, constraints, formula readings, and necessary
+qualifications while removing repetition, throat-clearing, and defensive
+restatement. An idea mentioned in the book does not become an implementation
+obligation merely by surviving an early draft; the accepted Lean artifacts say
+which ideas bind the software.
+
+Wordy prose is also evidence that a missing view may already be latent in the
+requirements. Paragraphs that mainly enumerate actors, messages, state changes,
+ordering, dependency gates, or measured quantities should normally collapse
+into a generated interaction diagram, state machine, order graph, dependency
+view, or chart followed by a short interpretation. The view must be reduced from
+the current typed requirements and retain its prompt, question, event source,
+reducer, units, and boundary. Drawing a persuasive picture independently would
+only create another specification that can drift.
+
 \section{Three ingredients}
 
 The method combines three traditions.
