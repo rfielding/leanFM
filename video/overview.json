@@ -1,0 +1,22 @@
+{
+  "id": "book.overview_video",
+  "prompt": "Create a rigorous, several-minute Manim explanation of how LeanFM applies CTL to a formal grammar of protobuf messages moving between actors, including a careful Diffie-Hellman exchange.",
+  "question": "How does a typed protobuf message alphabet become a legal multiparty grammar and branching transition system; how do CTL constraints quantify over its paths and positions; and how are cryptographic message flow and non-observable security claims kept distinct?",
+  "eventSource": ["LeanFM event envelope", "priorIds", "LeanFM/CTL.lean", "Requirements.lean", "Implementation.lean"],
+  "reducer": "protobuf oneof -> typed actor/message atoms -> multiparty grammar -> legal trace prefixes -> branching transition system -> quantified CTL semantics -> witness/counterexample search -> toy cube key exchange -> real g^(ab) Diffie-Hellman -> security theorems",
+  "formulas": [
+    {"symbol": "EF p", "quantified": "∃ π ∈ Paths(s). ∃ i ≥ 0. p(πᵢ)", "reading": "There exists a permitted future on which p eventually holds."},
+    {"symbol": "AF p", "quantified": "∀ π ∈ Paths(s). ∃ i ≥ 0. p(πᵢ)", "reading": "On every permitted future, p eventually holds."},
+    {"symbol": "EG p", "quantified": "∃ π ∈ Paths(s). ∀ i ≥ 0. p(πᵢ)", "reading": "There exists a permitted future on which p holds at every position."},
+    {"symbol": "AG p", "quantified": "∀ π ∈ Paths(s). ∀ i ≥ 0. p(πᵢ)", "reading": "On every permitted future, p holds at every position."}
+  ],
+  "dualities": ["AG p ⇔ ¬ EF ¬p", "AF p ⇔ ¬ EG ¬p"],
+  "events": [
+    {"id": "e0", "label": "request received", "prior": []},
+    {"id": "e1", "label": "payment started", "prior": ["e0"]},
+    {"id": "e2", "label": "bake started", "prior": ["e0"]},
+    {"id": "e3", "label": "payment complete", "prior": ["e1"]},
+    {"id": "e4", "label": "bake complete", "prior": ["e2"]},
+    {"id": "e5", "label": "response emitted", "prior": ["e3", "e4"]}
+  ]
+}

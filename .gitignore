@@ -60,3 +60,6 @@ __pycache__/
 /video/kerberos/narration.wav
 /video/kerberos/media/
 /video/kerberos/render.log
+/video/render.log
+/video/*-preview.png
+/video/kerberos/*-preview.png

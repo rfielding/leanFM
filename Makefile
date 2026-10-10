@@ -37,7 +37,13 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams paxos-check video-check
+check: build validate diagrams paxos-check video-check selfhost-check
+
+.PHONY: selfhost-check
+selfhost-check:
+	lake build LeanFM.LLMGenerated.Requirements
+	lake env lean LeanFM/LLMGenerated/SelfHostingTests.lean
+	lake env lean --run ReviewSelfHosting.lean
 
 video-check:
 	python3 scripts/validate_video_overview.py

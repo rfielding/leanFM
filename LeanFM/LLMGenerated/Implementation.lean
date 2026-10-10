@@ -1,8 +1,17 @@
 import LeanFM.LLMGenerated.Requirements
+import LeanFM.ChatUI.Implementation
 
 namespace LeanFM.LLMGenerated.Implementation
 
 open LeanFM.LLMGenerated.Requirements
+
+/-- Existing product bindings are preserved separately from the example.
+    This is not an implementation mapping for the proposed selfhost workflow. -/
+def existingProductImplementation : LeanFM.ImplementationSpec :=
+  LeanFM.ChatUI.Implementation.implementation
+
+def selfHostingImplementationStatus : String :=
+  "Pending requirements acceptance and separate implementation specification for selfhost workflow, typed modal/probability formulas, checker evidence, revision acceptance, and demand-driven indexes. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
 
 def actorBinding : WorkerActor -> LeanFM.ActorCodegen
   | .Client => { actor := LeanFM.requirementName WorkerActor.Client

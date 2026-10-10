@@ -107,6 +107,17 @@ whole project directory preserves every project-owned input and stable relative
 path, so the copy can become its own repository and be opened directly in Codex.
 Use `make book-clean` to remove generated LaTeX artifacts.
 
+The canonical `Requirements.lean` now exposes `selfHostingRequirement`, composing
+the existing ChatUI product specification with a proposed revision-bound
+requirements-to-PR workflow. The Worker example remains separate. Component
+paths and pending decisions are registered in `LeanFM/LLMGenerated/SelfHosting.lean`.
+Run `make selfhost-check` to structurally validate the composition, check protobuf
+declarations, run regression tests, and regenerate [the review](SELF_HOSTING_REVIEW.md)
+with specification-derived interaction and state diagrams.
+The new workflow and language/checker clauses await requirements acceptance and
+separate implementation mappings; the repository is not yet fully one-shot-ready.
+See [the fresh-session handoff](SELF_HOSTING.md).
+
 The large quantitative example is `examples/bakery-events.jsonl`: 20,000 bakery
 orders represented as a stream of fork/join events. `examples/bakery-stats.json`
 contains reductions calculated from that file. See `BAKERY_SCENARIO.md` for the

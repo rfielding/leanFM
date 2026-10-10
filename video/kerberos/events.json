@@ -1,0 +1,1022 @@
+[
+  {
+    "id": "e000",
+    "task": "login",
+    "src": "Alice",
+    "dst": "AS",
+    "message": "AS-REQ",
+    "prior": []
+  },
+  {
+    "id": "e001",
+    "task": "login",
+    "src": "AS",
+    "dst": "Alice",
+    "message": "AS-REP",
+    "prior": [
+      "e000"
+    ]
+  },
+  {
+    "id": "e002",
+    "task": "workspace/0",
+    "src": "Alice",
+    "dst": "Workspace",
+    "message": "start",
+    "prior": [
+      "e001"
+    ]
+  },
+  {
+    "id": "e003",
+    "task": "workspace/0/Documents",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e002"
+    ]
+  },
+  {
+    "id": "e014",
+    "task": "workspace/0/Reports",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e002"
+    ]
+  },
+  {
+    "id": "e004",
+    "task": "workspace/0/Documents",
+    "src": "Alice",
+    "dst": "TGS",
+    "message": "TGS-REQ",
+    "prior": [
+      "e003",
+      "e001"
+    ]
+  },
+  {
+    "id": "e015",
+    "task": "workspace/0/Reports",
+    "src": "Alice",
+    "dst": "TGS",
+    "message": "TGS-REQ",
+    "prior": [
+      "e014",
+      "e001"
+    ]
+  },
+  {
+    "id": "e005",
+    "task": "workspace/0/Documents",
+    "src": "TGS",
+    "dst": "Alice",
+    "message": "TGS-REP",
+    "prior": [
+      "e004"
+    ]
+  },
+  {
+    "id": "e016",
+    "task": "workspace/0/Reports",
+    "src": "TGS",
+    "dst": "Alice",
+    "message": "TGS-REP",
+    "prior": [
+      "e015"
+    ]
+  },
+  {
+    "id": "e006",
+    "task": "workspace/0/Documents",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "AP-REQ",
+    "prior": [
+      "e005"
+    ]
+  },
+  {
+    "id": "e017",
+    "task": "workspace/0/Reports",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "AP-REQ",
+    "prior": [
+      "e016"
+    ]
+  },
+  {
+    "id": "e007",
+    "task": "workspace/0/Documents",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "AP-REP",
+    "prior": [
+      "e006"
+    ]
+  },
+  {
+    "id": "e018",
+    "task": "workspace/0/Reports",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "AP-REP",
+    "prior": [
+      "e017"
+    ]
+  },
+  {
+    "id": "e008",
+    "task": "workspace/0/Documents/metadata",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e007"
+    ]
+  },
+  {
+    "id": "e010",
+    "task": "workspace/0/Documents/content",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e007"
+    ]
+  },
+  {
+    "id": "e019",
+    "task": "workspace/0/Reports/report1",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e018"
+    ]
+  },
+  {
+    "id": "e025",
+    "task": "workspace/0/Reports/report2",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e018"
+    ]
+  },
+  {
+    "id": "e009",
+    "task": "workspace/0/Documents/metadata",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e008",
+      "e008"
+    ]
+  },
+  {
+    "id": "e011",
+    "task": "workspace/0/Documents/content",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e010",
+      "e010"
+    ]
+  },
+  {
+    "id": "e020",
+    "task": "workspace/0/Reports/report1/data",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e019"
+    ]
+  },
+  {
+    "id": "e022",
+    "task": "workspace/0/Reports/report1/template",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e019"
+    ]
+  },
+  {
+    "id": "e026",
+    "task": "workspace/0/Reports/report2/data",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e025"
+    ]
+  },
+  {
+    "id": "e028",
+    "task": "workspace/0/Reports/report2/template",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e025"
+    ]
+  },
+  {
+    "id": "e012",
+    "task": "workspace/0/Documents",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e003",
+      "e009",
+      "e011"
+    ]
+  },
+  {
+    "id": "e021",
+    "task": "workspace/0/Reports/report1/data",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e020"
+    ]
+  },
+  {
+    "id": "e023",
+    "task": "workspace/0/Reports/report1/template",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e022"
+    ]
+  },
+  {
+    "id": "e027",
+    "task": "workspace/0/Reports/report2/data",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e026"
+    ]
+  },
+  {
+    "id": "e029",
+    "task": "workspace/0/Reports/report2/template",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e028"
+    ]
+  },
+  {
+    "id": "e013",
+    "task": "workspace/0/Documents",
+    "src": "Documents",
+    "dst": "Audit",
+    "message": "audit",
+    "prior": [
+      "e012"
+    ]
+  },
+  {
+    "id": "e024",
+    "task": "workspace/0/Reports/report1",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e019",
+      "e021",
+      "e023"
+    ]
+  },
+  {
+    "id": "e030",
+    "task": "workspace/0/Reports/report2",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e025",
+      "e027",
+      "e029"
+    ]
+  },
+  {
+    "id": "e031",
+    "task": "workspace/0/Reports",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e014",
+      "e024",
+      "e030"
+    ]
+  },
+  {
+    "id": "e032",
+    "task": "workspace/0/Reports",
+    "src": "Reports",
+    "dst": "Audit",
+    "message": "audit",
+    "prior": [
+      "e031"
+    ]
+  },
+  {
+    "id": "e033",
+    "task": "workspace/0",
+    "src": "Workspace",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e002",
+      "e013",
+      "e032"
+    ]
+  },
+  {
+    "id": "e034",
+    "task": "workspace/1",
+    "src": "Alice",
+    "dst": "Workspace",
+    "message": "start",
+    "prior": [
+      "e033"
+    ]
+  },
+  {
+    "id": "e035",
+    "task": "workspace/1/Documents",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e034"
+    ]
+  },
+  {
+    "id": "e046",
+    "task": "workspace/1/Reports",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e034"
+    ]
+  },
+  {
+    "id": "e036",
+    "task": "workspace/1/Documents",
+    "src": "Alice",
+    "dst": "TGS",
+    "message": "TGS-REQ",
+    "prior": [
+      "e035",
+      "e033"
+    ]
+  },
+  {
+    "id": "e047",
+    "task": "workspace/1/Reports",
+    "src": "Alice",
+    "dst": "TGS",
+    "message": "TGS-REQ",
+    "prior": [
+      "e046",
+      "e033"
+    ]
+  },
+  {
+    "id": "e037",
+    "task": "workspace/1/Documents",
+    "src": "TGS",
+    "dst": "Alice",
+    "message": "TGS-REP",
+    "prior": [
+      "e036"
+    ]
+  },
+  {
+    "id": "e048",
+    "task": "workspace/1/Reports",
+    "src": "TGS",
+    "dst": "Alice",
+    "message": "TGS-REP",
+    "prior": [
+      "e047"
+    ]
+  },
+  {
+    "id": "e038",
+    "task": "workspace/1/Documents",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "AP-REQ",
+    "prior": [
+      "e037"
+    ]
+  },
+  {
+    "id": "e049",
+    "task": "workspace/1/Reports",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "AP-REQ",
+    "prior": [
+      "e048"
+    ]
+  },
+  {
+    "id": "e039",
+    "task": "workspace/1/Documents",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "AP-REP",
+    "prior": [
+      "e038"
+    ]
+  },
+  {
+    "id": "e050",
+    "task": "workspace/1/Reports",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "AP-REP",
+    "prior": [
+      "e049"
+    ]
+  },
+  {
+    "id": "e040",
+    "task": "workspace/1/Documents/metadata",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e039"
+    ]
+  },
+  {
+    "id": "e042",
+    "task": "workspace/1/Documents/content",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e039"
+    ]
+  },
+  {
+    "id": "e051",
+    "task": "workspace/1/Reports/report1",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e050"
+    ]
+  },
+  {
+    "id": "e057",
+    "task": "workspace/1/Reports/report2",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e050"
+    ]
+  },
+  {
+    "id": "e041",
+    "task": "workspace/1/Documents/metadata",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e040",
+      "e040"
+    ]
+  },
+  {
+    "id": "e043",
+    "task": "workspace/1/Documents/content",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e042",
+      "e042"
+    ]
+  },
+  {
+    "id": "e052",
+    "task": "workspace/1/Reports/report1/data",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e051"
+    ]
+  },
+  {
+    "id": "e054",
+    "task": "workspace/1/Reports/report1/template",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e051"
+    ]
+  },
+  {
+    "id": "e058",
+    "task": "workspace/1/Reports/report2/data",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e057"
+    ]
+  },
+  {
+    "id": "e060",
+    "task": "workspace/1/Reports/report2/template",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e057"
+    ]
+  },
+  {
+    "id": "e044",
+    "task": "workspace/1/Documents",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e035",
+      "e041",
+      "e043"
+    ]
+  },
+  {
+    "id": "e053",
+    "task": "workspace/1/Reports/report1/data",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e052"
+    ]
+  },
+  {
+    "id": "e055",
+    "task": "workspace/1/Reports/report1/template",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e054"
+    ]
+  },
+  {
+    "id": "e059",
+    "task": "workspace/1/Reports/report2/data",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e058"
+    ]
+  },
+  {
+    "id": "e061",
+    "task": "workspace/1/Reports/report2/template",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e060"
+    ]
+  },
+  {
+    "id": "e045",
+    "task": "workspace/1/Documents",
+    "src": "Documents",
+    "dst": "Audit",
+    "message": "audit",
+    "prior": [
+      "e044"
+    ]
+  },
+  {
+    "id": "e056",
+    "task": "workspace/1/Reports/report1",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e051",
+      "e053",
+      "e055"
+    ]
+  },
+  {
+    "id": "e062",
+    "task": "workspace/1/Reports/report2",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e057",
+      "e059",
+      "e061"
+    ]
+  },
+  {
+    "id": "e063",
+    "task": "workspace/1/Reports",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e046",
+      "e056",
+      "e062"
+    ]
+  },
+  {
+    "id": "e064",
+    "task": "workspace/1/Reports",
+    "src": "Reports",
+    "dst": "Audit",
+    "message": "audit",
+    "prior": [
+      "e063"
+    ]
+  },
+  {
+    "id": "e065",
+    "task": "workspace/1",
+    "src": "Workspace",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e034",
+      "e045",
+      "e064"
+    ]
+  },
+  {
+    "id": "e066",
+    "task": "workspace/2",
+    "src": "Alice",
+    "dst": "Workspace",
+    "message": "start",
+    "prior": [
+      "e065"
+    ]
+  },
+  {
+    "id": "e067",
+    "task": "workspace/2/Documents",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e066"
+    ]
+  },
+  {
+    "id": "e078",
+    "task": "workspace/2/Reports",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e066"
+    ]
+  },
+  {
+    "id": "e068",
+    "task": "workspace/2/Documents",
+    "src": "Alice",
+    "dst": "TGS",
+    "message": "TGS-REQ",
+    "prior": [
+      "e067",
+      "e065"
+    ]
+  },
+  {
+    "id": "e079",
+    "task": "workspace/2/Reports",
+    "src": "Alice",
+    "dst": "TGS",
+    "message": "TGS-REQ",
+    "prior": [
+      "e078",
+      "e065"
+    ]
+  },
+  {
+    "id": "e069",
+    "task": "workspace/2/Documents",
+    "src": "TGS",
+    "dst": "Alice",
+    "message": "TGS-REP",
+    "prior": [
+      "e068"
+    ]
+  },
+  {
+    "id": "e080",
+    "task": "workspace/2/Reports",
+    "src": "TGS",
+    "dst": "Alice",
+    "message": "TGS-REP",
+    "prior": [
+      "e079"
+    ]
+  },
+  {
+    "id": "e070",
+    "task": "workspace/2/Documents",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "AP-REQ",
+    "prior": [
+      "e069"
+    ]
+  },
+  {
+    "id": "e081",
+    "task": "workspace/2/Reports",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "AP-REQ",
+    "prior": [
+      "e080"
+    ]
+  },
+  {
+    "id": "e071",
+    "task": "workspace/2/Documents",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "AP-REP",
+    "prior": [
+      "e070"
+    ]
+  },
+  {
+    "id": "e082",
+    "task": "workspace/2/Reports",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "AP-REP",
+    "prior": [
+      "e081"
+    ]
+  },
+  {
+    "id": "e072",
+    "task": "workspace/2/Documents/metadata",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e071"
+    ]
+  },
+  {
+    "id": "e074",
+    "task": "workspace/2/Documents/content",
+    "src": "Alice",
+    "dst": "Documents",
+    "message": "start",
+    "prior": [
+      "e071"
+    ]
+  },
+  {
+    "id": "e083",
+    "task": "workspace/2/Reports/report1",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e082"
+    ]
+  },
+  {
+    "id": "e089",
+    "task": "workspace/2/Reports/report2",
+    "src": "Alice",
+    "dst": "Reports",
+    "message": "start",
+    "prior": [
+      "e082"
+    ]
+  },
+  {
+    "id": "e073",
+    "task": "workspace/2/Documents/metadata",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e072",
+      "e072"
+    ]
+  },
+  {
+    "id": "e075",
+    "task": "workspace/2/Documents/content",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e074",
+      "e074"
+    ]
+  },
+  {
+    "id": "e084",
+    "task": "workspace/2/Reports/report1/data",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e083"
+    ]
+  },
+  {
+    "id": "e086",
+    "task": "workspace/2/Reports/report1/template",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e083"
+    ]
+  },
+  {
+    "id": "e090",
+    "task": "workspace/2/Reports/report2/data",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e089"
+    ]
+  },
+  {
+    "id": "e092",
+    "task": "workspace/2/Reports/report2/template",
+    "src": "Reports",
+    "dst": "Backend",
+    "message": "request",
+    "prior": [
+      "e089"
+    ]
+  },
+  {
+    "id": "e076",
+    "task": "workspace/2/Documents",
+    "src": "Documents",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e067",
+      "e073",
+      "e075"
+    ]
+  },
+  {
+    "id": "e085",
+    "task": "workspace/2/Reports/report1/data",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e084"
+    ]
+  },
+  {
+    "id": "e087",
+    "task": "workspace/2/Reports/report1/template",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e086"
+    ]
+  },
+  {
+    "id": "e091",
+    "task": "workspace/2/Reports/report2/data",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e090"
+    ]
+  },
+  {
+    "id": "e093",
+    "task": "workspace/2/Reports/report2/template",
+    "src": "Backend",
+    "dst": "Reports",
+    "message": "complete",
+    "prior": [
+      "e092"
+    ]
+  },
+  {
+    "id": "e077",
+    "task": "workspace/2/Documents",
+    "src": "Documents",
+    "dst": "Audit",
+    "message": "audit",
+    "prior": [
+      "e076"
+    ]
+  },
+  {
+    "id": "e088",
+    "task": "workspace/2/Reports/report1",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e083",
+      "e085",
+      "e087"
+    ]
+  },
+  {
+    "id": "e094",
+    "task": "workspace/2/Reports/report2",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e089",
+      "e091",
+      "e093"
+    ]
+  },
+  {
+    "id": "e095",
+    "task": "workspace/2/Reports",
+    "src": "Reports",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e078",
+      "e088",
+      "e094"
+    ]
+  },
+  {
+    "id": "e096",
+    "task": "workspace/2/Reports",
+    "src": "Reports",
+    "dst": "Audit",
+    "message": "audit",
+    "prior": [
+      "e095"
+    ]
+  },
+  {
+    "id": "e097",
+    "task": "workspace/2",
+    "src": "Workspace",
+    "dst": "Alice",
+    "message": "complete",
+    "prior": [
+      "e066",
+      "e077",
+      "e096"
+    ]
+  }
+]

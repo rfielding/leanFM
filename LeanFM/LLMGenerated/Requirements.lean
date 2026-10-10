@@ -1,4 +1,5 @@
 import LeanFM.Artifacts
+import LeanFM.LLMGenerated.SelfHosting
 
 namespace LeanFM.LLMGenerated.Requirements
 
@@ -747,11 +748,16 @@ def workerGeneratedRequirement : LeanFM.GeneratedRequirement :=
   LeanFM.GeneratedRequirement.requirement workerRequirement
 
 def all : List LeanFM.GeneratedRequirement :=
-  [workerGeneratedRequirement]
+  [workerGeneratedRequirement, .requirement LeanFM.LLMGenerated.SelfHosting.spec]
+
+/-- Canonical product entry point; workerRequirement remains an example. -/
+def selfHostingRequirement : LeanFM.RequirementSpec :=
+  LeanFM.LLMGenerated.SelfHosting.spec
 
 def validationReport : String :=
   let errors :=
     LeanFM.validateGeneratedRequirements all ++
+    LeanFM.LLMGenerated.SelfHosting.errors ++
     LeanFM.validateRequirementProtoFile workerRequirement generatedRequirementsProto
   match errors with
   | [] => "ok: all generated requirements are well-formed typed Lean values\n"

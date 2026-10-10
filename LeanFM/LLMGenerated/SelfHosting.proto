@@ -1,0 +1,70 @@
+syntax = "proto3";
+package leanfm.selfhost;
+// Proposed workflow payloads; snapshot_id is the digest of the input manifest.
+// Digest algorithm and executable mappings await implementation acceptance.
+message RevisionProposed {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message RequirementsChecked {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message RequirementsAccepted {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message ImplementationProposed {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message ImplementationAccepted {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message GenerationRequested {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message GenerationDispatched {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message PatchReturned {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message VerificationReported {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message PRDelivered {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string artifact_digest = 4;
+}
+message WorkflowRejected {
+  string project_id = 1;
+  string snapshot_id = 2;
+  string request_id = 3;
+  string reason = 4;
+}

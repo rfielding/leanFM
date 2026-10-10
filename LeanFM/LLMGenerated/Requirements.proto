@@ -2,6 +2,11 @@ syntax = "proto3";
 
 package leanfm.generated;
 
+// Preserved Worker example schema, not the complete LeanFM product schema.
+// Canonical product composition: Requirements.lean.selfHostingRequirement.
+// Product payloads: LeanFM/ChatUI/Requirements.proto and
+// LeanFM/LLMGenerated/SelfHosting.proto. Paths are project-root relative.
+
 // LLM-generated atomic message payloads for LeanFM.LLMGenerated.Requirements.
 // RequirementEnvelope.oneof atom is the byte-level sum-type discriminator.
 // The Lean requirement file defines src/dst traffic, framing, valid ordering,
