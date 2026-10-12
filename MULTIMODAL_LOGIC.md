@@ -59,7 +59,8 @@ only with a justified equivalence. Evaluate strictly prior facts before adding
 the current event. Define causal ancestry versus linearized order explicitly;
 concurrent screen order is not causal evidence. Unbounded past logic is deferred.
 
-The [Kerberos video](video/kerberos/kerberos-narrated.mp4) illustrates the design,
+The [Kerberos video on YouTube](https://www.youtube.com/watch?v=f2efwxq8BaY)
+([local MP4](video/kerberos/kerberos-narrated.mp4)) illustrates the design,
 not an implemented modal checker. The central book contains the formulas and
 their English readings. Existing tools such as
 [MCMAS](https://sail.doc.ic.ac.uk/software/mcmas/) already combine temporal and

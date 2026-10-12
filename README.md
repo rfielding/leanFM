@@ -59,7 +59,8 @@ Belief, strategic ability, and arbitrary modal logics are not automatically
 included. **The general epistemic/deontic checker is not implemented yet.**
 The [language-extension design](MULTIMODAL_LOGIC.md) records exact semantics,
 boundaries, and the bounded Kerberos verification milestone; the book explains
-the same design. Past conditions may become forward monitors only with a stated
+the same design. The [Kerberos video](https://www.youtube.com/watch?v=f2efwxq8BaY)
+illustrates these modalities. Past conditions may become forward monitors only with a stated
 equivalence and concurrency boundary.
 
 Useful nested CTL forms include `AF AG p` (eventually reach permanent safety on
