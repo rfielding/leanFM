@@ -11,13 +11,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep
+          rg --version
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python3 -m pip install -r scripts/chatui_requirements.txt
       - name: Reject tracked runtime account data
         run: |
-          if git ls-files -- data/ | rg .; then
+          tracked_data="$(git ls-files -- data/)"
+          if [[ -n "$tracked_data" ]]; then
+            printf '%s\n' "$tracked_data" >&2
             echo 'Runtime account data must not be committed.' >&2
             exit 1
           fi
