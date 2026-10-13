@@ -1,0 +1,7 @@
+{ id := "runtime.actor_network",
+  prompt := "Start the reliability/Kubernetes section with actors highlighting series, parallel, thresholds and sharding.",
+  question := "Which actor pools and selected shard gate are required by one targeted write?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "RuntimeReliabilityDiagram.lean typed illustrative populations and dependency gates; no empirical events",
+  reducer := "project pool member IDs and gate thresholds into a topology, showing shared tiers in series and one selected shard dependency",
+  unit := "actors and eligibility gates; illustrative targeted-write topology, excludes metadata and infrastructure detail" }
