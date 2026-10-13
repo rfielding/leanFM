@@ -561,6 +561,51 @@ reliability and throughput observations. A configured outage probability or
 MTTR is not silently replaced by its observed estimate; comparing them is the
 check.
 
+\subsection{Redundant, load-balanced runtimes and blast radius}
+\label{sec:runtime-blast-radius}
+
+The purpose of modelling a Kubernetes-like runtime is to determine what stops,
+for whom, and for how long when actors fail or lose capacity. Replica counts
+alone do not answer that question. The model combines timestamped protocol
+observations, uptime and MTTR estimates, operation-specific dependency gates,
+and the placement of instances in shared failure domains.
+
+The standard runtime profile has a redundant ingress/reverse-proxy pool,
+round-robin stateless web actors serving React and API requests, and a sharded
+document service. A shard router selects the owner of each document; each
+owner is a replicated group rather than one interchangeable database process.
+Ingress, routers, metadata services, storage, and network connectivity are
+dependencies in their own right. Kubernetes restarts and schedules actors; it
+does not supply the application's quorum or consistency protocol.
+
+\begin{description}
+  \item[Stateless pool.] Zero ready instances makes new requests unavailable.
+    With surviving instances, compare offered work with the pool's sustainable
+    capacity under the declared latency bound. Overload may cause bounded
+    rejection, growing queues, or deadline failures while heartbeats continue.
+    Round-robin request counts need not balance work when requests differ in cost.
+  \item[Replicated shard.] Majority-acknowledged writes require a current primary
+    and a communicating quorum of eligible configured members. Heartbeats
+    received by one external observer do not establish mutual reachability.
+    A restarted member must catch up before it counts as ready.
+  \item[Read operation.] Declare its consistency separately. Loss of write
+    quorum does not automatically forbid local stale reads; neither does a
+    surviving copy establish that a linearizable read is available.
+  \item[Shared dependency.] A failed ingress path or routing service can affect
+    every shard. Metadata-service effects depend on the operation and whether
+    valid routing information is already cached; do not mark every read or write
+    unavailable merely because a metadata update cannot proceed.
+\end{description}
+
+For eight shards with three data-bearing voting replicas each, there are 24
+shard replicas, plus any routers and metadata replicas. One failed member in
+each shard preserves the two-of-three write quorums, subject to primary election
+and recovery. Two failed members in one shard remove that shard's write quorum,
+even if all other shards are healthy. A targeted operation depends on its target
+shard; a multi-shard operation depends on all shards required by its semantics.
+Thus the relevant question is not ``how many of the 24 are up?'' but ``which
+operation still has its required providers?''
+
 Per-instance uptime is only the first reliability result. Services form a
 dependency network, and each dependency gate must say whether its members are
 required in \emph{series} or provide redundancy in \emph{parallel}. Let
@@ -610,6 +655,66 @@ dependency graph overlaid with each observed or proposed failure cascade.
 Named service-down scenarios should be replayable even when they have not yet
 occurred in production; such a replay is a model prediction and must be labeled
 separately from measured uptime.
+
+\paragraph{Calculate impact before estimating its frequency.}
+For a named initiating failure set $F$, let $C(F)$ be the unavailable-operation
+set obtained by repeatedly evaluating the dependency gates until no further
+operation becomes unavailable. Read $C(F)$ as ``the failure closure of F.''
+The closure is the structural blast radius. Retain its propagation paths and
+identify the affected shards, request classes, tenants, and workload. A degraded
+read path and an unavailable write path are different outcomes, not one
+undifferentiated red service box. Minimal cut sets identify the smallest
+initiating sets that disable each operation.
+
+Uptime estimates help assign frequencies or probabilities to these scenarios;
+MTTR estimates help assign recovery durations. Neither marginal uptime nor mean
+repair time determines a cascade by itself. The dependency graph determines
+which operations are exposed, while correlated failure and repair models
+determine how often and how long. If scenarios $F_j$ form a mutually exclusive,
+exhaustive partition of a declared snapshot model, with probabilities $\pi_j$,
+then the expected number of unavailable operations is
+\[
+ \mathbb{E}[B]=\sum_j \pi_j\,\lvert C(F_j)\rvert.
+\]
+Read this as: ``the expected blast-radius count B is the sum, over scenarios j,
+of scenario probability pi-sub-j times the number of operations in that
+scenario's failure closure.'' A count weights every operation equally; a report
+may instead use an explicitly declared demand or business-impact weight.
+Overlapping outage scenarios cannot simply be added as if they were disjoint.
+
+For a time-aligned trace, let $C(t)$ be the unavailable-operation set at time
+$t$, and let $\lambda_o(t)$ be offered requests per second for operation $o$.
+The offered-request exposure over window $[t_0,t_1]$ is
+\[
+ L=\int_{t_0}^{t_1}\sum_{o\in C(t)}\lambda_o(t)\,dt.
+\]
+Read this as: ``L is the integral, from t-zero to t-one, of the sum of offered
+request rates for operations unavailable at time t.'' L has units of requests.
+It is exposure, not necessarily lost work: queues, retries, deadlines and
+recovery determine which requests ultimately fail or complete late. For
+overload, measure unmet work and deadline violations separately rather than
+counting every request as unavailable.
+
+\paragraph{Repair the operation, not just the process.}
+Actor MTTR is not automatically service MTTR. Service recovery may include
+failure detection, replacement scheduling, volume attachment, election,
+replication catch-up, routing refresh, and backlog draining. These stages can
+overlap, so compose their event dependencies rather than blindly adding their
+means. The end boundary is restored operation readiness or the declared latency
+target, not merely receipt of the first heartbeat. Open incidents at the end of
+the window remain censored observations, not zero-duration repairs.
+
+A prediction from uptime and MTTR therefore also declares a failure/repair
+process, correlated failure domains, placement, workload and recovery policy.
+Independent-marginal estimates provide a baseline only. Rack loss, zone loss,
+network partition, operator shutdown and common deployment errors require named
+joint scenarios. The runtime report places assumed and observed values beside
+the generated dependency/cascade view, time-aligned availability, affected
+operations, request exposure, deadline outcomes, and recovery sequence. Existing
+\texttt{DesiredOutput} entries for composed availability and failure cascades
+provide the provenance boundary; additional calibrated forecasts require their
+own sources and reducers. This subsection defines the analysis contract, not a
+claim that a general Kubernetes deployment or forecast engine is implemented.
 
 The generated artifact
 \texttt{paxos-quorum-shutdown-network.svg} gives a concrete majority-service
