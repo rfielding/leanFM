@@ -86,14 +86,17 @@
   sensitive=true,
   morecomment=[l]{--},
   morecomment=[s]{/-}{-/},
-  morestring=[b]"
+  % Use an explicit start/end pair.  The generic [b] rule can leave the
+  % remainder of a Lean line styled as a string after its closing quote.
+  morestring=[s]{"}{"}
 }
 \lstset{
   language=Lean,
   basicstyle=\ttfamily\small,
   keywordstyle=\color{leanblue}\bfseries,
   commentstyle=\color{leangreen},
-  stringstyle=\color{leangray},
+  stringstyle=\color{leangold},
+  showstringspaces=false,
   columns=fullflexible,
   keepspaces=true,
   literate={ℝ}{{$\mathbb{R}$}}1

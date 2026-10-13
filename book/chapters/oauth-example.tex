@@ -267,20 +267,14 @@ Because \texttt{authorizationGranted} was selected, the \texttt{after} guard
 admits \texttt{exchangeAndFetch}. Selecting the denial alternative would disable
 that production. Expanding every remaining nonterminal yields this terminal word:
 
-\begin{enumerate}[label=\texttt{e\arabic*:},leftmargin=4em]
-  \item Browser $\to$ Application: \texttt{applicationRequest}
-  \item Application $\to$ Browser: \texttt{authorizationRedirect}
-  \item Browser $\to$ Authorization: \texttt{authorizationRequest}
-  \item Browser $\to$ Authorization: \texttt{credentialsSubmitted}
-  \item Authorization $\to$ Browser: \texttt{authenticationResult(true)}
-  \item Authorization $\to$ Browser: \texttt{authorizationCodeReturned}
-  \item Browser $\to$ Application: \texttt{authorizationCallback}
-  \item Application $\to$ Authorization: \texttt{tokenRequest}
-  \item Authorization $\to$ Application: \texttt{accessTokenIssued}
-  \item Application $\to$ Resource: \texttt{protectedResourceRequest}
-  \item Resource $\to$ Application: \texttt{protectedResourceReturned}
-  \item Application $\to$ Browser: \texttt{applicationResponse}
-\end{enumerate}
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{Accepted OAuth trace with twelve messages. Browser requests the application and follows its redirect. Browser requests authorization and submits protected credentials. Authorization reports authentication success and returns a code. Browser returns the code to the application. Application exchanges it for a token then fetches the resource and responds to Browser.}{%
+\resizebox{\textwidth}{!}{\input{generated/oauth-accepted-trace.tex}}}
+\caption{The selected terminal word as an interaction diagram. Event IDs label
+messages on arrows; no actor-to-actor arrow is written as implication-like text.}
+\label{fig:oauth-accepted-terminal-word}
+\end{figure}
 
 The choice has now disappeared into ordinary terminals. Event \texttt{e5}'s
 payload bytes select the accepted authentication result. Event \texttt{e6}'s
@@ -306,31 +300,25 @@ makes this fixture reproducible for a given implementation, while the grammar's
 semantic requirement remains successful decoding to the same terminals and field
 values.
 
-\subsection{Residual state-machine path}
+\subsection{Event graph with stored backpointers}
 
 Parsing each envelope selects a payload alternative, checks its declared
-\texttt{src}/\texttt{dst}, and consumes one grammar terminal. The residual after
-each prefix is therefore:
+\texttt{src}/\texttt{dst}, and consumes one grammar terminal.  For this selected
+trace, the useful concrete view is the event graph itself:
 
-\begin{lstlisting}[language={}]
-oauth
---e1--> waitingForRedirect
---e2--> waitingForAuthorizationRequest
---e3--> authenticating
---e4--> waitingForAuthenticationResult
---e5--> waitingForAuthorizationDecision
---e6--> waitingForCallback
---e7--> waitingForTokenRequest
---e8--> waitingForToken
---e9--> waitingForResourceRequest
---e10-> waitingForResource
---e11-> waitingForApplicationResponse
---e12-> done
-\end{lstlisting}
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{OAuth accepted event-order graph. Events e one through e twelve form one predecessor chain. Every arrow points backward from an event to the event ID stored in its prior IDs list.}{%
+\resizebox{.92\textwidth}{!}{\input{generated/oauth-accepted-prior-graph.tex}}}
+\caption{The accepted trace as an event graph. Arrows are stored backpointers:
+\texttt{e1} has none and each later event points to its immediate predecessor.}
+\label{fig:oauth-accepted-prior-graph}
+\end{figure}
 
-This path is one highlighted route through the generated state machine. The
-machine itself is derived from all grammar residuals and therefore also contains
-the rejected-authentication and denied-authorization paths.
+This graph is one selected path.  The full residual state machine is derived
+from every legal grammar residual and also contains the rejected-authentication
+and denied-authorization branches; it should be rendered as a separate graph
+when those alternatives are under discussion.
 
 \subsection{Actor projections}
 

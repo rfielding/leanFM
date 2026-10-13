@@ -96,46 +96,33 @@ predecessors suffice; the selected IDs say which two satisfied this instance.
 Unselected branches are not implicitly canceled and may still emit events.
 Cancellation, if required, must be an explicit message or production.
 
-The OAuth example decomposes into a collection of independently readable
-interactions:
+The OAuth example decomposes into independently readable interactions.  These
+generated views show the two complete branches without making a message arrow
+look like logical implication:
 
-\begin{lstlisting}[language={}]
-applicationRequestAndRedirect ::=
-  (Browser -> Application : ApplicationRequest(resource=resource) ;
-   Application -> Browser : AuthorizationRedirect(
-     state=state, redirectUri=callback))
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{OAuth granted interaction. Browser requests the application. The application redirects the browser. The browser requests authorization. The authorization service returns a code through the browser. The application exchanges the code for a token. The application fetches the resource and responds to the browser.}{%
+\resizebox{\textwidth}{!}{\input{generated/oauth-granted-interaction.tex}}}
+\caption{Granted OAuth interaction. The resource exchange occurs only after the
+authorization-code branch succeeds.}
+\label{fig:oauth-grammar-granted}
+\end{figure}
 
-authorizationGranted ::=
-  (Authorization -> Browser : AuthorizationCodeReturned(
-     state=state, code=code) ;
-   Browser -> Application : AuthorizationCallback(
-     state=state, code=code))
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{OAuth denied interaction. Browser requests the application. The application redirects the browser. The browser requests authorization. The authorization service returns an error through the browser to the application.}{%
+\resizebox{\textwidth}{!}{\input{generated/oauth-denied-interaction.tex}}}
+\caption{Denied OAuth interaction. No token or resource request follows the error.}
+\label{fig:oauth-grammar-denied}
+\end{figure}
+\clearpage
 
-authorizationDenied ::=
-  (Authorization -> Browser : AuthorizationErrorReturned(
-     state=state, reason=access_denied) ;
-   Browser -> Application : AuthorizationErrorCallback(
-     state=state, reason=access_denied))
+At the composition level, \texttt{oauth} sequences the request-and-redirect
+interaction with the authorization choice.  It includes the exchange-and-fetch
+interaction only after the granted branch.
 
-authorizeAndDecide ::=
-  (Browser -> Authorization : AuthorizationRequest(
-     state=state, redirectUri=callback) ;
-   (authorizationGranted | authorizationDenied))
-
-exchangeAndFetch ::=
-  (Application -> Authorization : TokenRequest(code=code) ;
-   Authorization -> Application : AccessTokenIssued(token=token) ;
-   Application -> Resource : ResourceRequest(token=token) ;
-   Resource -> Application : ResourceReturned(profile=profile) ;
-   Application -> Browser : ApplicationResponse(profile=profile))
-
-oauth ::=
-  (applicationRequestAndRedirect ;
-   authorizeAndDecide ;
-   after(authorizationGranted, exchangeAndFetch))
-\end{lstlisting}
-
-This form exposes two useful levels without defining two protocols. At the higher
+This exposes two useful levels without defining two protocols. At the higher
 level, \texttt{oauth} is three production references. Expanding a reference reveals
 its events and nested alternatives. The same productions can be reused in another
 system, placed in parallel with independent interactions, guarded, or repeated.

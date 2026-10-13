@@ -271,8 +271,9 @@ actor Server
   |>.instances "server-" 2 (shardHash "tenant_id")
 \end{lstlisting}
 
-The grammar may say \texttt{Client -> Server}; a generated scenario resolves
-those roles to instances such as \texttt{client-7 -> server-2}. Each instance
+The grammar may send a message from the \texttt{Client} role to the
+\texttt{Server} role; a generated scenario resolves those roles to instances
+such as \texttt{client-7} and \texttt{server-2}. Each instance
 has its own inbound and outbound queues and its own set of in-flight
 \texttt{(session,task)} pairs, while inheriting behavior and resource bounds from
 the actor specification. A population is a homogeneous service cluster: every

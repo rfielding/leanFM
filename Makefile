@@ -135,6 +135,7 @@ diagrams:
 	lake env lean --run NestedForkJoinExample.lean
 	lake env lean --run StochasticUserMDPExample.lean
 	lake env lean --run BakeryFlowExample.lean
+	lake env lean --run OAuthGrammarExample.lean
 	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
 	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
@@ -150,6 +151,7 @@ book:
 	lake env lean --run NestedForkJoinExample.lean
 	lake env lean --run StochasticUserMDPExample.lean
 	lake env lean --run BakeryFlowExample.lean
+	lake env lean --run OAuthGrammarExample.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

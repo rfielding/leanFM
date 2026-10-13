@@ -1,0 +1,7 @@
+{ id := "oauth.grammar.interactions",
+  prompt := "Replace actor arrow text such as Browser to Application with interaction diagrams.",
+  question := "Which actors exchange the messages on the granted and denied OAuth branches?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "the named OAuth productions and correlated fields in book/chapters/oauth-example.tex",
+  reducer := "expand the granted and denied productions into their ordered actor-message projections",
+  unit := "messages on one OAuth session branch" }
