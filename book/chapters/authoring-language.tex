@@ -579,7 +579,13 @@ dependencies must be added for a complete deployment analysis.
     a router and its selected shard. Adding required stages cannot improve that
     path's availability; independent stage availabilities multiply. Long series
     paths therefore tend to reduce reliability even when each stage is reliable.
-  \item[Parallel adds alternatives.] An additional usable alternative can improve
+  \item[Parallel replicas provide failover.] Proxy and web actors are duplicated
+    in parallel within their series stages. Database shards run as parallel data
+    partitions with separately calculated availability gates; each shard is
+    itself replicated in parallel. A shard's quorum threshold determines how
+    many of its replicas must communicate for writes. ``Parallel shards'' does
+    not mean one shard can serve another shard's missing data.
+    An additional usable alternative can improve
     a pool's availability. Shared failure domains and increased quorum thresholds
     mean that additional replicas do not provide an unconditional improvement.
   \item[Sharding divides offered work.] Additional shards can increase handled
