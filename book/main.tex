@@ -194,9 +194,11 @@
 \begin{tikzpicture}[remember picture,overlay]
   \fill[covernavy]
     (current page.south west) rectangle (current page.north east);
-  \node[fill=covernavy,inner sep=10pt]
+  % Reuse the book's original interaction drawing. Only its palette changes;
+  % title and author text remain outside the drawing, never over its contents.
+  \node[inner sep=0pt]
     at ([yshift=-1.0cm]current page.center)
-    {\resizebox{.78\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{covernavy}{covernavy}}};
+    {\resizebox{.68\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{covernavy}{covernavy}}};
   \node[anchor=north west,text width=.82\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.75cm]current page.north west)
     {\color{leangold}\fontsize{27}{31}\selectfont\bfseries
