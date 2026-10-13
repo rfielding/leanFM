@@ -20,12 +20,12 @@ it is not a claim that the authors originated modal or temporal logic.
 Propositional logic evaluates a formula at one world or state. Basic modal logic
 adds an accessibility relation $R$ between worlds and two operators:
 
-\begin{align*}
+\AccessibleEquation{World w satisfies box p if and only if p holds at every world v such that w is related to v. World w satisfies diamond p if and only if p holds at some world v such that w is related to v.}{\begin{align*}
   w \models \Box p &\quad\text{iff}\quad
     \text{$p$ holds at every $v$ such that $wRv$},\\
   w \models \Diamond p &\quad\text{iff}\quad
     \text{$p$ holds at some $v$ such that $wRv$}.
-\end{align*}
+\end{align*}}
 
 Read the first line as: ``world $w$ satisfies box $p$ if and only if $p$ holds
 at every world $v$ for which $w$ is related to $v$ by accessibility relation
@@ -89,12 +89,12 @@ logic, $E$ supplies temporal possibility and $A$ supplies temporal necessity.
 They quantify over computations from the current observation, not over timeless
 logical worlds. The four most important combinations can be read literally:
 
-\begin{align*}
+\AccessibleEquation{E F p: possibly eventually p. A F p: necessarily eventually p. E G p: p is always true on some future. A G p: necessarily always p.}{\begin{align*}
  EF\,p &: \text{possibly eventually $p$}, &
  AF\,p &: \text{necessarily eventually $p$},\\
  EG\,p &: \text{$p$ always on some future}, &
  AG\,p &: \text{necessarily always $p$}.
-\end{align*}
+\end{align*}}
 
 Read these as: ``there exists a future on which eventually $p$''; ``on every
 future, eventually $p$''; ``there exists a future on which $p$ holds globally,
@@ -109,12 +109,12 @@ when stating a branching-time requirement.
 
 For requirements argument, the four formulas also form a useful modal square:
 
-\begin{align*}
+\AccessibleEquation{E F p: maybe possible p. A G p is equivalent to not E F not p: always necessary p. A F p: always eventually p. E G p is equivalent to not A F not p: p is always true in some cases.}{\begin{align*}
  EF\,p &: \text{maybe possible $p$}, &
  AG\,p \equiv \neg EF\,\neg p &: \text{always necessary $p$},\\
  AF\,p &: \text{always eventually $p$}, &
  EG\,p \equiv \neg AF\,\neg p &: \text{$p$ always in some cases}.
-\end{align*}
+\end{align*}}
 
 Read each equivalence sign as ``if and only if.''  $EF\,p$ is ``maybe possible
 $p$.''  $AG\,p$ is ``always necessary $p$,'' equivalently ``not: there exists
@@ -135,10 +135,10 @@ The dualities are also computationally central. LeanFM need not establish a
 universal claim by enumerating every complete future. It searches for an
 existential counterexample:
 
-\begin{align*}
+\AccessibleEquation{A G p if and only if not E F not p. A F p if and only if not E G not p.}{\begin{align*}
  AG\,p &\equiv \neg EF\,\neg p, &
  AF\,p &\equiv \neg EG\,\neg p.
-\end{align*}
+\end{align*}}
 
 Read these as: ``$AG\,p$ if and only if not $EF$ not-$p$,'' and ``$AF\,p$ if
 and only if not $EG$ not-$p$.''  Each negation applies to the expression
@@ -205,9 +205,9 @@ counterexample search.
 \section{Persistence and recurrence}
 
 Nested CTL operators express two common requirements:
-\[
+\AccessibleEquation{A F A G p: on every future it eventually becomes true that p remains true forever. A G A F p: on every future p occurs again eventually.}{\[
  AF\,AG\,p, \qquad AG\,AF\,p.
-\]
+\]}
 Read the first, symbol by symbol: ``On every path, eventually reach a state
 from which, on every path, $p$ always holds.'' This is eventual permanent safety:
 for example, eventually finish key rotation and never again accept the old key.
@@ -216,10 +216,10 @@ eventually $p$ holds.'' This is universal recurrence, often pronounced ``always
 eventually $p$'': for example, service keeps returning to a ready state.
 
 For witness searches their duals are:
-\[
+\AccessibleEquation{Not A F A G p is equivalent to E G E F not p. Not A G A F p is equivalent to E F E G not p.}{\[
  \neg(AF\,AG\,p)\equiv EG\,EF\,\neg p,\qquad
  \neg(AG\,AF\,p)\equiv EF\,EG\,\neg p.
-\]
+\]}
 Read: ``Failure of eventual permanent safety means some path always retains
 some future reaching not-$p$. Failure of universal recurrence means some future
 reaches a state with some path on which not-$p$ holds forever.''
@@ -264,30 +264,30 @@ verify the protocol.
 
 For knowledge, let $W$ be the declared set of legal histories and
 $\operatorname{obs}_a(h)$ actor $a$'s local observation of history $h$:
-\[
+\AccessibleEquation{Actor a knows phi at history h if and only if for every history h prime in W: if actor a has the same observation at h and h prime then phi holds at h prime.}{\[
  K_a\varphi(h) \iff
  \forall h'\in W.\;
  (\operatorname{obs}_a(h)=\operatorname{obs}_a(h')\Rightarrow\varphi(h')).
-\]
+\]}
 Read: ``Actor $a$ knows $\varphi$ at history $h$ if and only if, for every
 history $h'$ in $W$, if $a$ observes the same thing in $h$ and $h'$, then
 $\varphi$ holds at $h'$.'' Observations must declare visible messages, private
 keys, clock information, and retained memory. With the current history included
 in $W$, knowledge is factive: what is known is true in that model. Belief needs
 a different relation; it must not inherit this guarantee accidentally.
-\[
+\AccessibleEquation{It is epistemically possible for actor a that phi if and only if actor a does not know not phi.}{\[
  \widehat K_a\varphi \equiv \neg K_a\neg\varphi.
-\]
+\]}
 Read: ``$a$ considers $\varphi$ possible exactly when $a$ does not know that
 $\varphi$ is false.'' This is epistemic possibility, not temporal reachability.
 
 For policy, let $\operatorname{Ideal}_a(h)$ be the declared policy-compliant
 futures from $h$, and let $\psi$ be a condition on a whole future path:
-\[
+\AccessibleEquation{Actor a is obligated to ensure psi at history h if and only if psi holds on every path pi that is ideal for actor a at h. Actor a is permitted to ensure psi at history h if and only if psi holds on some path pi that is ideal for actor a at h.}{\[
  O_a\psi(h)\iff\forall\pi\in\operatorname{Ideal}_a(h).\;\psi(\pi),
  \qquad
  P_a\psi(h)\iff\exists\pi\in\operatorname{Ideal}_a(h).\;\psi(\pi).
-\]
+\]}
 Read: ``$a$ is required to satisfy $\psi$ at $h$ exactly when every ideal future
 $\pi$ satisfies $\psi$; $a$ is permitted to satisfy $\psi$ exactly when some
 ideal future satisfies $\psi$.'' Require a nonempty set of ideal futures:
@@ -295,17 +295,17 @@ contradictory policies must be reported, not certified by vacuous quantification
 Actual legal executions may violate policy; detecting that violation is part of
 the analysis. These are obligations under a named policy, not judgments of
 morality.
-\[
+\AccessibleEquation{Actor a is permitted to ensure psi if and only if actor a is not obligated to ensure not psi.}{\[
  P_a\psi\equiv\neg O_a\neg\psi.
-\]
+\]}
 Read: ``$\psi$ is permitted exactly when its negation is not required.'' This
 duality applies only when both operators use the same declared policy relation.
 For example:
-\[
+\AccessibleEquation{Actor a is obligated eventually to audit record r at history h if and only if for every path pi ideal for actor a at h there exists a nonnegative index i such that audit of r holds at state pi sub i.}{\[
  O_a F\,\operatorname{audit}(r)(h)\iff
  \forall\pi\in\operatorname{Ideal}_a(h).\;\exists i\geq0.\;
  \operatorname{audit}(r,\pi_i).
-\]
+\]}
 Read: ``$a$ must eventually audit request $r$ at $h$ exactly when, for every
 ideal future $\pi$, there is a position $i$, zero or later, where $r$ is audited.''
 Here $F$ is a path operator; a project implementation must distinguish state
@@ -375,11 +375,11 @@ $p\mathbin{\to}q$ is true whenever $p$ is false. That is useful inside a state,
 but it permits a vacuous global claim when no reachable state ever satisfies the
 antecedent. LeanFM names the non-vacuous temporal combination
 
-\[
+\AccessibleEquation{p strongly implies q is defined as E F p and A G of p implies q. In words: p is reachable and whenever p holds q also holds.}{\[
   p\mathbin{\Rightarrow_s}q
   \quad\stackrel{\mathrm{def}}{=}\quad
   EF\,p \;\land\; AG(p\mathbin{\to}q).
-\]
+\]}
 
 Read this as: ``$p$ strongly implies $q$ is defined to mean: there exists a
 future eventually witnessing $p$, and on every future at every position,
@@ -393,10 +393,10 @@ Together they imply $EF\,q$: the $p$ witness cannot avoid $q$.
 
 The deliberately absurd test uses
 
-\begin{align*}
+\AccessibleEquation{p is defined as Chewbacca lives on Endor. q is defined as you must acquit.}{\begin{align*}
   p &= \text{``Chewbacca lives on Endor''},\\
   q &= \text{``you must acquit''}.
-\end{align*}
+\end{align*}}
 
 Read these as definitions of proposition names: ``$p$ means `Chewbacca lives
 on Endor','' and ``$q$ means `you must acquit'.''
@@ -435,10 +435,10 @@ def someAuthorizedContinuation : CTL Observation :=
 Strong until requires the right operand eventually to occur. Weak until permits
 it never to occur, provided the left operand continues to hold. Thus
 
-\begin{align*}
+\AccessibleEquation{p A W q means: on every future p holds until q or p remains forever. p E W q means: on some future p holds until q or p remains forever.}{\begin{align*}
   p\ AW\ q &: \text{on every future, $p$ holds until $q$, or $p$ remains forever},\\
   p\ EW\ q &: \text{on some future, $p$ holds until $q$, or $p$ remains forever}.
-\end{align*}
+\end{align*}}
 
 Read the first line as: ``on every future, $p$ holds until $q$, or if $q$ never
 occurs, $p$ remains forever.''  Read the second with ``on some future.''  $AW$

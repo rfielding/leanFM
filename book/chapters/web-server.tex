@@ -266,10 +266,10 @@ dimensions.
   checkable requirement should declare a byte budget and derive queued bytes from
   the encoded envelopes. If active tasks retain additional state, the model must
   declare a bounded footprint for that state too. A representative obligation is
-  \[
+  \AccessibleEquation{Necessarily at every reachable observation the queued bytes for actor a plus its in-flight bytes are less than or equal to its byte budget.}{\[
     \mathrm{AG}\bigl(\operatorname{queuedBytes}(a) +
       \operatorname{inFlightBytes}(a) \leq \operatorname{budget}(a)\bigr).
-  \]
+  \]}
   Read this as: ``necessarily, at every reachable observation, queued bytes for
   actor $a$ plus in-flight bytes for actor $a$ is no greater than actor $a$'s
   byte budget.''  $\mathrm{AG}$ means ``on every permitted future, at every

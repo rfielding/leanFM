@@ -37,6 +37,21 @@ def totalWeight {S A : Type} : Choice S A -> Nat
   | chance _ outcomes => outcomes.foldl (fun n outcome => n + outcome.weight) 0
   | chanceEvents outcomes => outcomes.foldl (fun n outcome => n + outcome.weight) 0
 
+/-- A probabilistic choice has nonempty support and strictly positive branch
+weights. Deterministic actions are valid by construction. Weights are relative:
+dividing each branch weight by `totalWeight` yields its probability. -/
+def isValid {S A : Type} : Choice S A -> Bool
+  | action _ _ _ => true
+  | chance _ outcomes =>
+      !outcomes.isEmpty && outcomes.all (fun outcome => outcome.weight > 0)
+  | chanceEvents outcomes =>
+      !outcomes.isEmpty && outcomes.all (fun outcome => outcome.weight > 0)
+
+def isDeterministic {S A : Type} : Choice S A -> Bool
+  | action _ _ _ => true
+  | chance _ _ => false
+  | chanceEvents _ => false
+
 def timedSupport {S A : Type} : Choice S A -> List (Weighted S)
   | action _ dwell s => [{ weight := 1, dwell := dwell, value := s }]
   | chance _ outcomes => outcomes
@@ -55,6 +70,9 @@ end Choice
 
 structure MDP (S A : Type) where
   choices : S -> List (Choice S A)
+
+def MDP.isValidOn {S A : Type} (m : MDP S A) (states : List S) : Bool :=
+  states.all fun state => (m.choices state).all Choice.isValid
 
 def MDP.successors {S A : Type} (m : MDP S A) (s : S) : List S :=
   (m.choices s).flatMap Choice.support

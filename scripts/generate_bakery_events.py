@@ -1,172 +1,149 @@
 #!/usr/bin/env python3
-"""Generate the canonical deterministic LeanFM bakery event stream."""
-
+"""Generate bakery production, truck-queue, inventory, and retail events."""
 from __future__ import annotations
-
-import argparse
-import json
+import argparse, json
+from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 
 DAY_MS = 86_400_000
-
+MINUTE_MS = 60_000
+PRODUCTS = {"baguette": (450,115,2), "croissant": (325,95,2),
+            "rye": (700,180,3), "sourdough": (850,225,3)}
 
 class Lcg:
-    def __init__(self, seed: int) -> None:
-        self.state = seed & 0xFFFFFFFF
-
-    def next(self) -> int:
-        self.state = (1664525 * self.state + 1013904223) & 0xFFFFFFFF
+    def __init__(self, seed: int): self.state = seed & 0xFFFFFFFF
+    def next(self):
+        self.state = (1664525*self.state + 1013904223) & 0xFFFFFFFF
         return self.state
+    def below(self, bound: int): return (self.next() * bound) >> 32
 
-    def below(self, bound: int) -> int:
-        return self.next() % bound
+@dataclass
+class Lot:
+    batch_id: str; product: str; baked_day: int; freshness_days: int
+    unit_cost_cents: int; units: int
 
-    def chance(self, numerator: int, denominator: int = 1000) -> bool:
-        return self.below(denominator) < numerator
+def event(event_id, prior, session, task, kind, src, dst, time_at, byte_count, values=None):
+    return {"id":event_id, "prior":prior, "session":session, "task":task,
+            "kind":kind, "src":src, "dst":dst, "timeAt":time_at,
+            "bytes":byte_count, "values":values or {}}
 
+def expire_lots(day, inventory, rng, events):
+    for product, lots in inventory.items():
+        while lots and day-lots[0].baked_day >= lots[0].freshness_days:
+            lot = lots.popleft()
+            if not lot.units: continue
+            session = f"charity-{lot.batch_id}"
+            transfer = event(f"{session}-transfer", [], session, "charity_transfer", "CharityTransfer",
+                "Storefront", "Charity", day*DAY_MS+4*60*MINUTE_MS, 64+rng.below(20),
+                {"batch_id":lot.batch_id,"product":product,"donated_units":lot.units,
+                 "eligible_value_cents":lot.units*lot.unit_cost_cents,
+                 "freshness_days":lot.freshness_days})
+            receipt = event(f"{session}-receipt", [transfer["id"]], session, "charity_transfer", "DonationReceiptRecorded",
+                "Charity", "Storefront", transfer["timeAt"]+250+rng.below(751), 52+rng.below(18),
+                {"batch_id":lot.batch_id,"product":product,"donated_units":lot.units,
+                 "eligible_value_cents":lot.units*lot.unit_cost_cents})
+            events += [transfer, receipt]
 
-def event(order: int, index: int, prior: list[str], kind: str, src: str,
-          dst: str, start: int, duration: int, byte_count: int,
-          values: dict[str, object] | None = None) -> dict[str, object]:
-    session = f"bakery-{order:06d}"
-    return {
-        "id": f"{session}-e{index}",
-        "prior": prior,
-        "session": session,
-        "task": "fulfill_order",
-        "kind": kind,
-        "src": src,
-        "dst": dst,
-        "timeAt": start + duration,
-        "bytes": byte_count,
-        "values": values or {},
-    }
+def morning_production(day, orders_today, inventory, rng, events):
+    truck = f"Truck-{1+day%2}"
+    queued = []
+    # Mean requested quantity is 3.5 and products are equiprobable. Bake with
+    # headroom so ordinary variation produces waste as well as occasional
+    # stockout rather than making nearly half of customers fail.
+    per_product = max(1, orders_today)*11//10
+    for production_slot, (product, (_, unit_cost, freshness)) in enumerate(PRODUCTS.items()):
+        units = per_product+rng.below(max(2, per_product//3+1))
+        batch_id, session = f"day-{day+1:03d}-{product}", f"batch-day-{day+1:03d}-{product}"
+        started_at = day*DAY_MS+(4*60+production_slot*8)*MINUTE_MS
+        started = event(f"{session}-start", [], session, "stock_storefront", "BakeStarted", "Scheduler", "Bakery",
+            started_at, 48+rng.below(16), {"batch_id":batch_id,"product":product,"planned_units":units})
+        baked = event(f"{session}-baked", [started["id"]], session, "stock_storefront", "BatchBaked", "Bakery", "Shipping",
+            started_at+(50+rng.below(31))*MINUTE_MS, 64+rng.below(24),
+            {"batch_id":batch_id,"product":product,"units_baked":units,
+             "ingredient_cost_cents":units*unit_cost,"freshness_days":freshness})
+        loaded = event(f"{session}-enqueued", [baked["id"]], session, "stock_storefront", "ShipmentEnqueued", "Bakery", truck,
+            baked["timeAt"]+500+rng.below(1501), 60+rng.below(20),
+            {"batch_id":batch_id,"product":product,"units":units,"truck_id":truck,
+             "queue_position":0,"queue_capacity_batches":len(PRODUCTS)})
+        lot = Lot(batch_id,product,day,freshness,unit_cost,units)
+        events += [started,baked,loaded]; queued.append((lot,loaded))
+    # Queue position and dequeue order come from the observable enqueue time,
+    # not from product declaration or production-start order.
+    queued.sort(key=lambda pair: (pair[1]["timeAt"], pair[1]["id"]))
+    for position, (_, loaded) in enumerate(queued):
+        loaded["values"]["queue_position"] = position
+    previous = None; arrival_base = day*DAY_MS+7*60*MINUTE_MS
+    for position, (lot,loaded) in enumerate(queued):
+        prior = [loaded["id"]]+([previous] if previous else [])
+        unloaded = event(f"batch-{lot.batch_id}-dequeued", prior, f"batch-{lot.batch_id}",
+            "stock_storefront", "ShipmentDequeued", truck, "Storefront", arrival_base+position*2*MINUTE_MS+rng.below(30001),
+            58+rng.below(22), {"batch_id":lot.batch_id,"product":lot.product,
+            "units_stocked":lot.units,"truck_id":truck,"queue_position":position})
+        events.append(unloaded); inventory[lot.product].append(lot); previous = unloaded["id"]
 
+def reserve_fifo(lots, quantity):
+    if sum(lot.units for lot in lots) < quantity: return None
+    remaining, allocation = quantity, []
+    for lot in lots:
+        take=min(lot.units,remaining)
+        if take: allocation.append((lot,take)); remaining-=take
+        if not remaining: break
+    for lot,take in allocation: lot.units-=take
+    while lots and not lots[0].units: lots.popleft()
+    return allocation
 
-def generate_order(order: int, arrival: int, rng: Lcg) -> list[dict[str, object]]:
-    product = ["baguette", "croissant", "rye", "sourdough"][rng.below(4)]
-    quantity = 1 + rng.below(6)
-    price_cents = {"baguette": 450, "croissant": 325, "rye": 700, "sourdough": 850}[product] * quantity
-    ingredient_cost_cents = {"baguette": 115, "croissant": 95, "rye": 180, "sourdough": 225}[product] * quantity
-    events: list[dict[str, object]] = []
+def retail_sale(order, arrival, inventory, rng):
+    product=list(PRODUCTS)[rng.below(len(PRODUCTS))]; quantity=1+rng.below(6)
+    price=PRODUCTS[product][0]*quantity; session=f"retail-{order:06d}"
+    requested=event(f"{session}-request",[],session,"retail_sale","PurchaseRequested","Customer","Storefront",arrival,
+        58+rng.below(24),{"product":product,"quantity":quantity,"price_cents":price})
+    allocation=reserve_fifo(inventory[product],quantity)
+    if allocation is None:
+        stockout=event(f"{session}-stockout",[requested["id"]],session,"retail_sale","StockoutReported","Storefront","Customer",
+            arrival+80+rng.below(421),44+rng.below(18),{"product":product,"requested_units":quantity,
+            "available_units":sum(lot.units for lot in inventory[product]),"outcome":"stockout"})
+        return [requested,stockout]
+    reserved=event(f"{session}-reserved",[requested["id"]],session,"retail_sale","InventoryReserved","Storefront","Customer",
+        arrival+80+rng.below(421),62+rng.below(24),{"product":product,"quantity":quantity,
+        "batch_allocations":[{"batch_id":lot.batch_id,"units":units} for lot,units in allocation]})
+    tendered=event(f"{session}-payment",[reserved["id"]],session,"retail_sale","PaymentTendered","Customer","Storefront",
+        reserved["timeAt"]+150+rng.below(851),48+rng.below(20),{"amount_cents":price})
+    completed=event(f"{session}-completed",[reserved["id"],tendered["id"]],session,"retail_sale","SaleCompleted",
+        "Storefront","Customer",tendered["timeAt"]+100+rng.below(401),54+rng.below(22),
+        {"product":product,"quantity":quantity,"amount_cents":price,"outcome":"sold"})
+    return [requested,reserved,tendered,completed]
 
-    e0 = event(order, 0, [], "OrderPlaced", "Customer", "Storefront",
-               arrival, 100 + rng.below(901), 72 + rng.below(40),
-               {"product": product, "quantity": quantity, "price_cents": price_cents,
-                "ingredient_cost_cents": ingredient_cost_cents})
-    events.append(e0)
-
-    fork_start = int(e0["timeAt"])
-    e1 = event(order, 1, [str(e0["id"])], "PaymentRequested", "Storefront", "Payment",
-               fork_start, 100 + rng.below(401), 48 + rng.below(24), {"price_cents": price_cents})
-    e2 = event(order, 2, [str(e0["id"])], "BakeRequested", "Storefront", "Bakery",
-               fork_start, 100 + rng.below(401), 56 + rng.below(32),
-               {"product": product, "quantity": quantity,
-                "ingredient_cost_cents": ingredient_cost_cents})
-    events.extend([e1, e2])
-
-    payment_ok = rng.chance(940)
-    baked_ok = rng.chance(970)
-    e3 = event(order, 3, [str(e1["id"])],
-               "PaymentAuthorized" if payment_ok else "PaymentDeclined",
-               "Payment", "Storefront", int(e1["timeAt"]), 500 + rng.below(4501),
-               44 + rng.below(20), {"authorized": payment_ok,
-                                     "amount_cents": price_cents if payment_ok else 0})
-    e4 = event(order, 4, [str(e2["id"])],
-               "BakeCompleted" if baked_ok else "BakeFailed",
-               "Bakery", "Storefront", int(e2["timeAt"]), 600_000 + rng.below(3_000_001),
-               52 + rng.below(36), {"completed": baked_ok,
-                                    "ingredient_cost_cents": ingredient_cost_cents,
-                                    "waste_units": 0 if baked_ok else quantity,
-                                    "waste_cents": 0 if baked_ok else ingredient_cost_cents})
-    events.extend([e3, e4])
-
-    join_start = max(int(e3["timeAt"]), int(e4["timeAt"]))
-    accepted = payment_ok and baked_ok
-    e5 = event(order, 5, [str(e3["id"]), str(e4["id"])],
-               "OrderAccepted" if accepted else "OrderRejected",
-               "Storefront", "Customer", join_start, 100 + rng.below(901),
-               40 + rng.below(24),
-               {"outcome": "accepted" if accepted else "rejected",
-                "refund_cents": price_cents if payment_ok and not accepted else 0})
-    events.append(e5)
-    if not accepted:
-        return events
-
-    if rng.chance(80):
-        e6 = event(order, 6, [str(e5["id"])], "OrderCancelled", "Customer", "Storefront",
-                   int(e5["timeAt"]), 100 + rng.below(901), 36 + rng.below(20),
-                   {"outcome": "cancelled", "refund_cents": price_cents,
-                    "waste_units": quantity, "waste_cents": ingredient_cost_cents})
-        events.append(e6)
-        return events
-
-    e6 = event(order, 6, [str(e5["id"])], "DeliveryRequested", "Storefront", "Courier",
-               int(e5["timeAt"]), 1 + rng.below(5), 48 + rng.below(24))
-    e7 = event(order, 7, [str(e6["id"])], "CourierAssigned", "Courier", "Storefront",
-               int(e6["timeAt"]), 30_000 + rng.below(270_001), 40 + rng.below(24))
-    delivered = rng.chance(960)
-    e8 = event(order, 8, [str(e7["id"])],
-               "OrderDelivered" if delivered else "DeliveryFailed",
-               "Courier", "Customer", int(e7["timeAt"]), 600_000 + rng.below(4_800_001),
-               44 + rng.below(28),
-               {"outcome": "delivered" if delivered else "delivery_failed",
-                "price_cents": price_cents,
-                "refund_cents": 0 if delivered else price_cents,
-                "waste_units": 0 if delivered else quantity,
-                "waste_cents": 0 if delivered else ingredient_cost_cents})
-    events.extend([e6, e7, e8])
-    return events
-
-
-def shift_events(days: int, rng: Lcg) -> list[dict[str, object]]:
-    staff = [
-        ("Baker-A", "baker", 2200), ("Baker-B", "baker", 2200),
-        ("Baker-C", "baker", 2300), ("Counter-A", "counter", 1800),
-        ("Counter-B", "counter", 1800), ("Courier-A", "courier", 2000),
-        ("Courier-B", "courier", 2000), ("Manager", "manager", 2800),
-    ]
-    result: list[dict[str, object]] = []
-    for day in range(days):
-        for index, (employee, role, hourly_cents) in enumerate(staff):
-            minutes = 420 + rng.below(181)
-            start = day * DAY_MS + (5 * 60 + rng.below(180)) * 60_000
-            stop = start + minutes * 60_000
-            pay_cents = (minutes * hourly_cents) // 60
-            result.append({
-                "id": f"day-{day + 1:03d}-shift-{index + 1}", "prior": [],
-                "session": f"day-{day + 1:03d}", "task": "employee_pay",
-                "kind": "ShiftPaid", "src": "Payroll", "dst": "Employee",
-                "timeAt": stop, "bytes": 52,
-                "values": {"employee": employee, "role": role, "minutes": minutes,
-                           "hourly_cents": hourly_cents, "pay_cents": pay_cents},
-            })
+def shift_events(day,rng):
+    staff=[("Baker-A","baker",2200),("Baker-B","baker",2200),("Baker-C","baker",2300),
+           ("Counter-A","counter",1800),("Counter-B","counter",1800),("Driver-A","driver",2000),
+           ("Manager","manager",2800)]
+    result=[]
+    for index,(employee,role,hourly) in enumerate(staff):
+        minutes=420+rng.below(121); stop=day*DAY_MS+(13*60+rng.below(180))*MINUTE_MS
+        result.append(event(f"day-{day+1:03d}-shift-{index+1}",[],f"day-{day+1:03d}","employee_pay","ShiftPaid",
+            "Payroll","Employee",stop,52,{"employee":employee,"role":role,"minutes":minutes,
+            "hourly_cents":hourly,"pay_cents":minutes*hourly//60}))
     return result
 
+def main():
+    parser=argparse.ArgumentParser(); parser.add_argument("--orders",type=int,default=20_000)
+    parser.add_argument("--days",type=int,default=35); parser.add_argument("--seed",type=int,default=0xBA4E12)
+    parser.add_argument("--output",type=Path,default=Path("examples/bakery-events.jsonl")); args=parser.parse_args()
+    rng=Lcg(args.seed); inventory={product:deque() for product in PRODUCTS}; events=[]; order=0
+    base,remainder=divmod(args.orders,args.days)
+    for day in range(args.days):
+        expire_lots(day,inventory,rng,events); orders_today=base+(day<remainder)
+        morning_production(day,orders_today,inventory,rng,events)
+        open_at=day*DAY_MS+8*60*MINUTE_MS; window=9*60*MINUTE_MS
+        for index in range(orders_today):
+            order+=1; arrival=open_at+(index+1)*window//(orders_today+1)+rng.below(5001)
+            events += retail_sale(order,arrival,inventory,rng)
+        events += shift_events(day,rng)
+    events.sort(key=lambda item:(item["timeAt"],item["id"])); args.output.parent.mkdir(parents=True,exist_ok=True)
+    with args.output.open("w",encoding="utf-8") as stream:
+        for item in events: stream.write(json.dumps(item,separators=(",",":"),sort_keys=True)+"\n")
+    print(json.dumps({"orders":args.orders,"events":len(events),"days":args.days,
+                      "seed":args.seed,"output":str(args.output)},sort_keys=True))
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--orders", type=int, default=20_000)
-    parser.add_argument("--seed", type=int, default=0xBA4E12)
-    parser.add_argument("--output", type=Path, default=Path("examples/bakery-events.jsonl"))
-    args = parser.parse_args()
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    rng = Lcg(args.seed)
-    arrival = 0
-    event_count = 0
-    with args.output.open("w", encoding="utf-8") as stream:
-        for order in range(1, args.orders + 1):
-            arrival += 30_000 + rng.below(240_001)
-            for item in generate_order(order, arrival, rng):
-                stream.write(json.dumps(item, separators=(",", ":"), sort_keys=True) + "\n")
-                event_count += 1
-        days = arrival // DAY_MS + 1
-        for item in shift_events(days, rng):
-            stream.write(json.dumps(item, separators=(",", ":"), sort_keys=True) + "\n")
-            event_count += 1
-    print(json.dumps({"orders": args.orders, "events": event_count,
-                      "seed": args.seed, "output": str(args.output)}, sort_keys=True))
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

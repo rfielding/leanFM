@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
-TERMINALS = {"OrderRejected", "OrderCancelled", "OrderDelivered", "DeliveryFailed"}
+TERMINALS = {"SaleCompleted", "StockoutReported"}
 
 
 def ratio(numerator: int, denominator: int) -> dict[str, object]:
@@ -47,20 +47,23 @@ def main() -> None:
             bucket = daily[day]
             bucket["events"] += 1
             bucket["bytes"] += event["bytes"]
-            if event["kind"] == "OrderPlaced":
+            if event["kind"] == "PurchaseRequested":
                 bucket["orders"] += 1
-            if event["kind"] == "PaymentAuthorized":
+            if event["kind"] == "SaleCompleted":
                 bucket["gross_sales_cents"] += values.get("amount_cents", 0)
-            if event["kind"] in {"BakeCompleted", "BakeFailed"}:
+            if event["kind"] == "BatchBaked":
                 bucket["ingredient_cost_cents"] += values.get("ingredient_cost_cents", 0)
             bucket["refunds_cents"] += values.get("refund_cents", 0)
             bucket["waste_units"] += values.get("waste_units", 0)
             bucket["waste_cents"] += values.get("waste_cents", 0)
+            if event["kind"] == "DonationReceiptRecorded":
+                bucket["waste_units"] += values.get("donated_units", 0)
+                bucket["waste_cents"] += values.get("eligible_value_cents", 0)
             if event["kind"] == "ShiftPaid":
                 bucket["employee_pay_cents"] += values.get("pay_cents", 0)
-            if event["kind"] == "OrderDelivered":
-                bucket["delivered"] += 1
-            if event["task"] != "fulfill_order":
+            if event["kind"] == "SaleCompleted":
+                bucket["sold"] += 1
+            if event["task"] != "retail_sale":
                 continue
             order = orders[event["session"]]
             order["events"] = int(order["events"]) + 1
@@ -82,8 +85,8 @@ def main() -> None:
         max_active = max(max_active, active)
 
     order_count = len(orders)
-    accepted = kinds["OrderAccepted"]
-    dispatched = kinds["DeliveryRequested"]
+    completed = kinds["SaleCompleted"]
+    stockouts = kinds["StockoutReported"]
     daily_rows = []
     for day in sorted(daily):
         bucket = daily[day]
@@ -92,7 +95,7 @@ def main() -> None:
         daily_rows.append({
             "day": day + 1,
             "orders": bucket["orders"],
-            "delivered": bucket["delivered"],
+            "sold": bucket["sold"],
             "gross_sales_cents": bucket["gross_sales_cents"],
             "refunds_cents": bucket["refunds_cents"],
             "net_revenue_cents": net_revenue,
@@ -110,12 +113,9 @@ def main() -> None:
         "max_active_orders": max_active,
         "max_order_concurrency_per_order": 2,
         "probabilities": {
-            "payment_authorized": ratio(kinds["PaymentAuthorized"], order_count),
-            "bake_completed": ratio(kinds["BakeCompleted"], order_count),
-            "order_accepted": ratio(accepted, order_count),
-            "cancelled_given_accepted": ratio(kinds["OrderCancelled"], accepted),
-            "delivered_given_dispatched": ratio(kinds["OrderDelivered"], dispatched),
-            "completed_successfully": ratio(kinds["OrderDelivered"], order_count),
+            "sale_completed": ratio(completed, order_count),
+            "stockout": ratio(stockouts, order_count),
+            "shipment_dequeued": ratio(kinds["ShipmentDequeued"], kinds["ShipmentEnqueued"]),
         },
         "outcomes": dict(sorted(outcomes.items())),
         "event_kinds": dict(sorted(kinds.items())),
@@ -129,10 +129,10 @@ def main() -> None:
             f"\\newcommand{{\\BakeryOrders}}{{{order_count:,}}}",
             f"\\newcommand{{\\BakeryEvents}}{{{total_events:,}}}",
             f"\\newcommand{{\\BakeryBytes}}{{{total_bytes:,}}}",
-            f"\\newcommand{{\\BakeryPaymentRatio}}{{{kinds['PaymentAuthorized']:,}/{order_count:,}}}",
-            f"\\newcommand{{\\BakeryBakeRatio}}{{{kinds['BakeCompleted']:,}/{order_count:,}}}",
-            f"\\newcommand{{\\BakeryAcceptRatio}}{{{accepted:,}/{order_count:,}}}",
-            f"\\newcommand{{\\BakeryDeliveredRatio}}{{{kinds['OrderDelivered']:,}/{order_count:,}}}",
+            f"\\newcommand{{\\BakerySaleRatio}}{{{completed:,}/{order_count:,}}}",
+            f"\\newcommand{{\\BakeryStockoutRatio}}{{{stockouts:,}/{order_count:,}}}",
+            f"\\newcommand{{\\BakeryBatchCount}}{{{kinds['BatchBaked']:,}}}",
+            f"\\newcommand{{\\BakeryShipmentRatio}}{{{kinds['ShipmentDequeued']:,}/{kinds['ShipmentEnqueued']:,}}}",
             f"\\newcommand{{\\BakeryMaxActive}}{{{max_active}}}",
             "\\def\\BakeryDailyProfitCoordinates{" + " ".join(
                 f"({row['day']},{row['profit_cents'] / 100:.2f})" for row in daily_rows) + "}",

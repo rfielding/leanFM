@@ -79,9 +79,9 @@ These exhaustive finite-model safety-check counts come from TLC 1.7.4 via
 \texttt{book/generated/tla-state-space.json}. With $S$ protocol states, $b$
 independent Boolean cache bits and a counter ranging from zero through $k$, the
 example has
-\[
- S\,2^b(k+1)
-\]
+\AccessibleEquation{S times two to the power b times the quantity k plus one.}{\[
+S\,2^b(k+1)
+\]}
 states. Read: ``S times two to the b times k plus one.'' S is the protocol state
 count, b the cache-bit count and k the counter bound. Each irrelevant bit doubles
 this model's state count. \texttt{ClockBound = -1} allows ticks 0, 1, 2 and onward:

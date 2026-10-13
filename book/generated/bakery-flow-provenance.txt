@@ -1,0 +1,7 @@
+{ id := "bakery.production_transport_retail",
+  prompt := "Bread is premade in the morning; trucks are queues shipping it to the storefront; customers exchange bread for money at the storefront.",
+  question := "Where are baking, truck queueing, storefront inventory and the customer sale separated?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "the BatchBaked, ShipmentEnqueued, ShipmentDequeued, PurchaseRequested, InventoryReserved, PaymentTendered and SaleCompleted event schemas in scripts/generate_bakery_events.py",
+  reducer := "project the morning production and FIFO shipment prefix followed by the independent short retail-sale interaction",
+  unit := "messages, batches, queue positions, bread units and cents; one morning and one representative sale" }

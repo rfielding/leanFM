@@ -1,3 +1,4 @@
+\DocumentMetadata{lang=en-US}
 \documentclass[11pt,oneside]{book}
 
 \usepackage[T1]{fontenc}
@@ -29,6 +30,8 @@
 \pagecolor{pagebackground}
 \color{foregroundink}
 \usepackage{graphicx}
+\usepackage{tagpdf}
+\tagpdfsetup{activate-all,interwordspace=true}
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{booktabs}
 \usepackage{enumitem}
@@ -46,6 +49,19 @@
 }
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,noabbrev]{cleveref}
+
+% Give diagrams genuine PDF /Alt entries. The text is metadata for assistive
+% readers; it is not printed as a second caption in the book.
+\newcommand{\AccessibleFigure}[2]{%
+  \tagstructbegin{tag=Figure,alttext={#1}}%
+  \tagmcbegin{tag=Figure}#2\tagmcend%
+  \tagstructend%
+}
+\newcommand{\AccessibleEquation}[2]{%
+  \tagstructbegin{tag=Formula,alttext={#1}}%
+  \tagmcbegin{tag=Formula}#2\tagmcend%
+  \tagstructend%
+}
 
 \hypersetup{
   pdftitle={LeanFM Software Engineering},

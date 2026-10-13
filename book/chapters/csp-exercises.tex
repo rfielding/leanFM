@@ -29,10 +29,10 @@ def composeRoles (roles : List RoleSpec) : GlobalGrammar :=
 For a global trace $t$, let $t\!\upharpoonright_a$ retain events sent or received by
 actor $a$. The composition accepts exactly when every local role accepts its view:
 
-\[
+\AccessibleEquation{The language accepted by compose roles R one through R n equals the set of traces t such that for every i the projection of t onto alphabet a sub i belongs to the language of role R sub i.}{\[
   L(\operatorname{composeRoles}(R_1,\ldots,R_n))
   = \{t \mid \forall i,\; t\!\upharpoonright_{a_i} \in L(R_i)\}.
-\]
+\]}
 
 Read this as: ``the language $L$ accepted by the composition of roles $R_1$
 through $R_n$ is the set of global traces $t$ such that, for every role index

@@ -4,11 +4,13 @@ import LeanFM.Basic
 import LeanFM.Assets
 import LeanFM.CTL
 import LeanFM.MDP
+import LeanFM.MDPDiagram
 import LeanFM.Protocol
 import LeanFM.StreamStats
 import LeanFM.Characterization
 import LeanFM.UiModel
 import LeanFM.Artifacts
+import LeanFM.ReliabilityDiagram
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.Implementation
 import LeanFM.PaxosKV.Requirements

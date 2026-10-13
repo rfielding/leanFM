@@ -21,11 +21,22 @@ move to a charity rack and produce a donation receipt. An
 lots that supplied it, making FIFO allocation, age, quality, and stockouts
 replayable. No event permits a customer to wait for a same-day custom loaf.
 
+\begin{center}
+\AccessibleFigure{Interaction diagram with Scheduler Bakery Truck Storefront and Customer lifelines. Before opening the Scheduler starts a bake. The Bakery enqueues the finished batch into a truck and the truck dequeues it in first-in first-out order at the Storefront. Later the Customer requests bread. The Storefront reserves existing inventory. The Customer tenders payment and the Storefront completes the exchange.}{%
+  \resizebox{\textwidth}{!}{\input{generated/bakery-flow.tex}}%
+}
+\end{center}
+
+The truck is a bounded FIFO queue. \texttt{ShipmentEnqueued} records its queue
+position and capacity; \texttt{ShipmentDequeued} backpoints to both the matching
+enqueue and the preceding dequeue. The retail interaction begins only after
+\texttt{ShipmentDequeued} has added the batch to storefront inventory.
+
 For each calendar-day bucket $d$, the reducer computes
 
-\begin{align*}
+\AccessibleEquation{Gross sales on day d equals the sum of amounts on Sale Completed events. Refunds on day d equals the sum of refund values. Net revenue equals gross sales minus refunds. Ingredient cost equals the sum of ingredient costs on Batch Baked events. Donation value equals the sum of eligible values on Donation Receipt Recorded events. Employee pay equals the sum of pay on Shift Paid events. Profit equals net revenue minus ingredient cost minus employee pay.}{\begin{align*}
 \operatorname{grossSales}_d
-  &= \sum_{e.kind=\mathrm{PaymentAuthorized}} e.amount,\\
+  &= \sum_{e.kind=\mathrm{SaleCompleted}} e.amount,\\
 \operatorname{refunds}_d
   &= \sum_e e.refund,\\
 \operatorname{netRevenue}_d
@@ -39,10 +50,10 @@ For each calendar-day bucket $d$, the reducer computes
 \operatorname{profit}_d
   &= \operatorname{netRevenue}_d-\operatorname{ingredientCost}_d
      -\operatorname{employeePay}_d.
-\end{align*}
+\end{align*}}
 
 Read every line at day $d$.  Gross sales is the sum of amount on events $e$
-whose kind is PaymentAuthorized; refunds is the sum of each event's refund;
+whose kind is SaleCompleted; refunds is the sum of each event's refund;
 net revenue is gross sales minus refunds; ingredient cost is the sum of
 ingredient cost on BatchBaked events; donation value is the sum of eligible
 value on DonationReceiptRecorded events; employee pay is the sum of pay on
@@ -74,8 +85,8 @@ no event.
   \addlegendentry{employee pay}
 \end{axis}
 \end{tikzpicture}
-\caption{Daily bakery economics reduced from events. Day 35 is a partial day in
-the corpus, which explains its lower revenue and profit.}
+\caption{Daily bakery economics reduced from morning production, retail sales,
+payroll and charity-transfer events.}
 \label{fig:bakery-daily-money}
 \end{figure}
 
@@ -164,11 +175,11 @@ complete current \texttt{Requirements.lean}, $I$ the complete current
 \texttt{Implementation.lean}, $P$ the protobuf schema, and $C_k$ an optional
 existing implementation. Code generation has two forms:
 
-\[
+\AccessibleEquation{Requirements R and implementation I and protobuf schema P generate initial code C zero. Requirements R and implementation I and protobuf schema P and code revision C sub k generate revision C sub k plus one.}{\[
   (R,I,P) \longrightarrow C_0,
   \qquad
   (R,I,P,C_k) \longrightarrow C_{k+1}.
-\]
+\]}
 
 Read the first mapping as: ``requirements $R$, implementation specification
 $I$, and protobuf schema $P$ generate initial code $C_0$.''  Read the second as:

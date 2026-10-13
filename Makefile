@@ -17,7 +17,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+.PHONY: build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
 
 build:
 	lake build leanfm-server
@@ -37,7 +37,10 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams paxos-check video-check selfhost-check
+check: build validate diagrams mdp-example-check paxos-check video-check selfhost-check
+
+mdp-example-check:
+	lake env lean --run StochasticUserMDPExample.lean
 
 .PHONY: selfhost-check
 selfhost-check:
@@ -130,6 +133,8 @@ diagrams:
 	lake exe leanfm-diagrams
 	lake env lean --run RuntimeReliabilityDiagram.lean
 	lake env lean --run NestedForkJoinExample.lean
+	lake env lean --run StochasticUserMDPExample.lean
+	lake env lean --run BakeryFlowExample.lean
 	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
 	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
@@ -143,6 +148,8 @@ scripts:
 book:
 	lake env lean --run RuntimeReliabilityDiagram.lean
 	lake env lean --run NestedForkJoinExample.lean
+	lake env lean --run StochasticUserMDPExample.lean
+	lake env lean --run BakeryFlowExample.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

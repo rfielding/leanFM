@@ -51,9 +51,9 @@ $F(x)=1/(1-x)^2$ away from the singularity at $x=1$.  It then moves from
 that analytic motivation to an exact, discrete construction over rational
 numbers.  This construction explains precisely what the file means by the
 famous shorthand
-\[
+\AccessibleEquation{S is defined by the regularized expression one plus two plus three and so on and equals negative one twelfth.}{\[
   S=1+2+3+\cdots=-\frac{1}{12}.
-\]
+\]}
 Read this as: ``$S$, defined by the regularized expression one plus two plus
 three and so on, equals negative one twelfth.''  The qualification
 ``regularized'' is essential; the later formula defines what the ellipsis
@@ -85,18 +85,18 @@ resulting expression. Lean checks every type conversion and proof obligation;
 removing the singularity condition leaves the reciprocal rule unjustified.
 
 The discrete part begins with the ordinary finite triangular sum
-\[
+\AccessibleEquation{Sum sub S at cutoff n equals n times n plus one divided by two.}{\[
   \texttt{Sum\_S}(n)=\frac{n(n+1)}{2}.
-\]
+\]}
 Read this as: ``\texttt{Sum\_S} at cutoff $n$ equals $n$ times $n+1$, divided
 by two.''  Here $n$ is a natural-number parameter naming the finite cutoff.
 It then defines an exact rational correction \texttt{Tail\_S}(n), using the
 alternating construction \texttt{Tail\_B}, so that the corrected value is
 independent of where the finite prefix is cut.  The last theorem states, for
 \emph{every} natural number $n$,
-\[
+\AccessibleEquation{Negative one twelfth equals n times n plus one divided by two plus Tail sub S at cutoff n.}{\[
   -\frac{1}{12}=\frac{n(n+1)}{2}+\texttt{Tail\_S}(n).
-\]
+\]}
 Read this as: ``negative one twelfth equals $n$ times $n+1$, divided by two,
 plus \texttt{Tail\_S} at that same cutoff $n$.''
 Thus the ellipsis in $1+2+3+\cdots$ is given explicit content: retain a finite
@@ -132,15 +132,15 @@ For a LeanFM runtime judgment, define the double turnstile $\vDash$ relative
 to the declared transition model and initial state. It means ``at every reachable
 state, the premises require at least one of these conclusions.'' Write it in a
 rule-like form, familiar from Prolog:
-\[
+\AccessibleEquation{a and b and so on through w semantically entail x or the remaining alternatives through z.}{\[
   a\land b\land\cdots\land w\;\vDash\;x\lor\cdots\lor z.
-\]
+\]}
 Its executable definition is that the following CTL formula holds at the
 declared initial state:
-\[
+\AccessibleEquation{A G of: if a and b and so on through w then x or the remaining alternatives through z. In words: at every reachable observation all the premises imply at least one conclusion.}{\[
  AG\bigl((a\land b\land\cdots\land w)
        \to(x\lor\cdots\lor z)\bigr).
-\]
+\]}
 Read: ``at every reachable state, if a and b and so on through w all hold,
 then x or so on through z holds.'' A means every continuation; G means every
 position along it, including the current state. This is entailment within the
@@ -165,9 +165,9 @@ The evaluator and successor relation come from the declared model. A sampled
 trace checks only that sample, not all reachable states.
 
 The same counterexample condition can be constructed symbolically:
-\[
+\AccessibleEquation{Not E F of a and b and so on through w and not x and the remaining negated conclusions through not z. In words: there is no reachable counterexample where every premise holds and every conclusion fails.}{\[
  \neg EF(a\land b\land\cdots\land w\land\neg x\land\cdots\land\neg z).
-\]
+\]}
 Read: ``there is no reachable state with a and b and so on through w, and
 not x and so on through not z.'' This is exactly the AG implication above,
 using $AG\,p=\neg EF\,\neg p$, read ``always p is no reachable not-p.''

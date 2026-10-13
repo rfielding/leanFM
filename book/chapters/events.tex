@@ -54,15 +54,12 @@ all-of join.
 \subsection{Nested joins: choose a winner, then cancel the rest}
 
 \begin{center}
-\resizebox{.88\textwidth}{!}{\input{generated/nested-race.tex}}
+\AccessibleFigure{Read from top to bottom. A search-start event forks into two concurrent branches: a three-candidate race and an audit. Candidates A B and C start together. A produces the first qualifying result and satisfies a one-of-three join. That winner and the completed audit join to produce the reply. The reply does not wait for cleanup. Separate requests cancel B and C. Their cancellation acknowledgments arrive later. A final join marks cleanup complete.}{%
+  \resizebox{.88\textwidth}{!}{\input{generated/nested-race.tex}}%
+}
 \end{center}
-\noindent A synthetic search-style task forks into a speculative race and an
-audit. The race starts three candidate jobs. The first qualifying result, A,
-satisfies a 1-of-3 join; B and C need not finish before the winner is chosen.
-The reply joins that winner with the audit. Cancellation then terminates the
-losing work, and a separate cleanup join reclaims it. Arrows show predecessor
-order with redundant transitive edges removed; full backpointers remain in the
-event list. The event list and provenance are generated from
+\noindent Arrows show predecessor order with redundant transitive edges removed; full
+backpointers remain in the event list. The event list and provenance are generated from
 \texttt{NestedForkJoinExample.lean}; this is not a claim about Google's implementation.
 
 The winner event records threshold 1, population 3 and selected terminal
@@ -98,8 +95,10 @@ def elapsed (started completed : AnalysisEvent) : Duration :=
   completed.timeAt - started.timeAt
 \end{lstlisting}
 
-Consider the first order in \texttt{examples/bakery-events.jsonl}. Payment and
-baking fork after the order is placed and join before the order is accepted:
+Consider the first retail purchase in \texttt{examples/bakery-events.jsonl}.
+Its bread was baked and shipped before the storefront opened.  The purchase
+itself reserves that inventory, tenders payment, and completes in about a
+second:
 
 \begin{center}
 \small
@@ -107,15 +106,10 @@ baking fork after the order is placed and join before the order is accepted:
 \toprule
 Event & Prior backpointers & \texttt{timeAt} & Meaning & Bytes & Reveals \\
 \midrule
-$e_0$ & $[]$ & $258726$ & order placed & 85 & order \\
-$e_1$ & $[e_0]$ & $258921$ & payment requested & 71 & price \\
-$e_2$ & $[e_0]$ & $259194$ & bake requested & 73 & product \\
-$e_3$ & $[e_1]$ & $262219$ & payment authorized & 49 & authorization \\
-$e_4$ & $[e_2]$ & $2055947$ & bake completed & 55 & completion \\
-$e_5$ & $[e_3,e_4]$ & $2056288$ & order accepted & 57 & outcome \\
-$e_6$ & $[e_5]$ & $2056291$ & delivery requested & 54 & delivery \\
-$e_7$ & $[e_6]$ & $2283253$ & courier assigned & 40 & courier \\
-$e_8$ & $[e_7]$ & $6946819$ & order delivered & 65 & outcome \\
+$e_0$ & $[]$ & $28859991$ & purchase requested & 59 & product and quantity \\
+$e_1$ & $[e_0]$ & $28860343$ & inventory reserved & 62 & batch allocation \\
+$e_2$ & $[e_1]$ & $28861004$ & payment tendered & 55 & amount \\
+$e_3$ & $[e_1,e_2]$ & $28861248$ & sale completed & 72 & bread and payment \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -127,48 +121,39 @@ $e_8$ & $[e_7]$ & $6946819$ & order delivered & 65 & outcome \\
     minimum height=.72cm,align=center,font=\small},
   prior/.style={->,>=Stealth,thick,leanblue}
 ]
-  \node[event] (e0) at (0,0) {$e_0$\\order placed};
-  \node[event] (e1) at (-2.4,-1.35) {$e_1$\\payment requested};
-  \node[event] (e2) at (2.4,-1.35) {$e_2$\\bake requested};
-  \node[event] (e3) at (-2.4,-2.70) {$e_3$\\payment authorized};
-  \node[event] (e4) at (2.4,-2.70) {$e_4$\\bake completed};
-  \node[event] (e5) at (0,-4.05) {$e_5$\\order accepted};
-  \node[event] (e6) at (0,-5.40) {$e_6$\\delivery requested};
-  \node[event] (e7) at (0,-6.75) {$e_7$\\courier assigned};
-  \node[event] (e8) at (0,-8.10) {$e_8$\\order delivered};
+  \node[event] (e0) at (0,0) {$e_0$\\purchase requested};
+  \node[event] (e1) at (0,-1.35) {$e_1$\\inventory reserved};
+  \node[event] (e2) at (0,-2.70) {$e_2$\\payment tendered};
+  \node[event] (e3) at (0,-4.05) {$e_3$\\sale completed};
 
   \draw[prior] (e1) -- (e0);
-  \draw[prior] (e2) -- (e0);
-  \draw[prior] (e3) -- (e1);
-  \draw[prior] (e4) -- (e2);
-  \draw[prior] (e5) -- (e3);
-  \draw[prior] (e5) -- (e4);
-  \draw[prior] (e6) -- (e5);
-  \draw[prior] (e7) -- (e6);
-  \draw[prior] (e8) -- (e7);
+  \draw[prior] (e2) -- (e1);
+  \draw[prior] (e3) -- (e2);
+  \draw[prior,bend right=35] (e3) to (e1);
 \end{tikzpicture}
 \caption{The table's immediate predecessor backpointers rendered as an order graph. Each
 arrow points from an event to an ID in its \texttt{priorIds} list: for example,
-$e_2\to e_0$. The two arrows from $e_5$ expose the payment/baking join.}
+$e_2\to e_1$.  The extra $e_3\to e_1$ edge preserves direct correlation with
+the inventory allocation even though $e_1$ is already an ancestor through $e_2$.}
 \label{fig:bakery-prior-graph}
 \end{figure}
 
 The list order is one serialization convenient for storage. Event order is the
-transitive closure of \texttt{priorIds}. Both $e_1$ and $e_2$ cite $e_0$, so they
-fork. Event $e_5$ cites both $e_3$ and $e_4$, so it joins the branches. The
-following quantities are folds or graph queries over this one list:
+transitive closure of \texttt{priorIds}. This sale is sequential; baking and
+shipping belong to the morning production stream, not to the customer purchase.
+The following quantities are folds or graph queries over this one list:
 
-\begin{align*}
-  \operatorname{paymentTime}(e_1,e_3) &= e_3.timeAt-e_1.timeAt = 3298,\\
-  \operatorname{latency}(e_0,e_8) &= e_8.timeAt-e_0.timeAt = 6688093,\\
-  \operatorname{wireBytes} &= 85+71+73+49+55+57+54+40+65 = 549.
-\end{align*}
+\AccessibleEquation{Reservation time from e zero to e one equals 352 milliseconds. Payment time from e one to e two equals 661 milliseconds. Purchase latency from e zero to e three equals 1257 milliseconds. Wire bytes equal 248.}{\begin{align*}
+  \operatorname{reservationTime}(e_0,e_1) &= 28860343-28859991 = 352\text{ ms},\\
+  \operatorname{paymentTime}(e_1,e_2) &= 28861004-28860343 = 661\text{ ms},\\
+  \operatorname{purchaseLatency}(e_0,e_3) &= 28861248-28859991 = 1257\text{ ms},\\
+  \operatorname{wireBytes} &= 59+62+55+72 = 248.
+\end{align*}}
 
-Read these as follows.  Payment time from $e_1$ to $e_3$ is the timestamp of
-$e_3$ minus that of $e_1$, or 3298.  End-to-end latency from $e_0$ to $e_8$ is
-the timestamp of $e_8$ minus that of $e_0$, or 6688093.  Wire bytes is the sum
-of the nine listed event sizes, or 549.  Each subscript identifies the exact
-event used as a boundary.
+Read these as follows. Inventory reservation takes 352 milliseconds; payment
+takes 661 milliseconds; and the complete storefront exchange takes 1257
+milliseconds. Wire bytes is the sum of the four listed event sizes, or 248.
+Each subscript identifies the exact event used as a boundary.
 
 Two events are concurrent in this order when neither is an ancestor of the other:
 
@@ -178,11 +163,10 @@ def concurrent (events : List AnalysisEvent) (a b : EventId) : Bool :=
 \end{lstlisting}
 
 The maximum concurrency permitted by the trace is the width of this partial
-order: the size of its largest antichain. Here $\{e_1,e_2\}$ is an antichain, as
-is $\{e_3,e_4\}$, and no three events are pairwise concurrent. Thus the maximal
-order concurrency is two. Incomparable events may commute: swapping them in a
-linear serialization preserves the same partial order, provided each event
-still appears after all of its named predecessors. A timestamped point event has no active interval;
+order: the size of its largest antichain. This purchase is a chain, so its width
+is one. Other purchases and the morning production and transport streams may
+still be concurrent. Incomparable events may commute in a linear serialization,
+provided each event still appears after all of its named predecessors. A timestamped point event has no active interval;
 runtime concurrency requires separate start and completion messages. This is stronger than counting
 adjacent list elements and different from measuring average runtime concurrency.
 
@@ -204,10 +188,10 @@ still exactly the stored predecessor pointers.
   \fill[diagramgroup,rounded corners] (-4.35,-.88) rectangle (-.45,-4.52);
   \fill[diagramgroup,rounded corners] (.45,-.88) rectangle (4.35,-4.52);
   \node[event]  (e20) at (0,0) {$e_{20}$\\request received};
-  \node[start]  (e21) at (-2.4,-1.35) {$e_{21}$\\payment task started};
-  \node[start]  (e22) at ( 2.4,-1.35) {$e_{22}$\\bake task started};
-  \node[finish] (e23) at (-2.4,-3.70) {$e_{23}$\\payment task completed};
-  \node[finish] (e24) at ( 2.4,-3.70) {$e_{24}$\\bake task completed};
+  \node[start]  (e21) at (-2.4,-1.35) {$e_{21}$\\branch A started};
+  \node[start]  (e22) at ( 2.4,-1.35) {$e_{22}$\\branch B started};
+  \node[finish] (e23) at (-2.4,-3.70) {$e_{23}$\\branch A completed};
+  \node[finish] (e24) at ( 2.4,-3.70) {$e_{24}$\\branch B completed};
   \node[event]  (e25) at (0,-5.40) {$e_{25}$\\response emitted};
 
   \draw[prior] (e21) -- (e20);
@@ -217,7 +201,7 @@ still exactly the stored predecessor pointers.
   \draw[prior] (e25) -- (e23);
   \draw[prior] (e25) -- (e24);
 \end{tikzpicture}
-\caption{Task boundaries nested inside a concurrent fork/join. The intervals
+\caption{A separate synthetic example of task boundaries nested inside a concurrent fork/join. The intervals
 $e_{21}\ldots e_{23}$ and $e_{22}\ldots e_{24}$ may overlap, while the two
 branches remain incomparable in predecessor order. Either branch may appear
 first in a linear serialization without changing the graph.}
@@ -231,8 +215,9 @@ edgeTime(prior, event) := event.timeAt - prior.timeAt
 elapsed(started, completed) := completed.timeAt - started.timeAt
 \end{lstlisting}
 
-The critical path is $e_0,e_2,e_4,e_5,e_6,e_7,e_8$, with elapsed time 6,688,093 ms.
-The payment branch finishes at tick 262,219 and has 1,793,728 ms of slack before the join.
+The retail critical path is $e_0,e_1,e_2,e_3$, with elapsed time 1257 ms.
+The direct $e_3\to e_1$ correlation edge is redundant for reachability and does
+not change that duration.
 Queue occupancy, queued
 bytes, active \texttt{(session,task)} keys, and memory pressure are computed by
 adding enqueue/dequeue events to the same alphabet and folding them in clock
@@ -248,11 +233,11 @@ constants:
 \toprule
 Reduction over \texttt{bakery-events.jsonl} & Observed value \\
 \midrule
-payment authorized / orders & \BakeryPaymentRatio \\
-bake completed / orders & \BakeryBakeRatio \\
-order accepted / orders & \BakeryAcceptRatio \\
-delivered / orders & \BakeryDeliveredRatio \\
-maximum simultaneously active orders & \BakeryMaxActive \\
+sales completed / purchase requests & \BakerySaleRatio \\
+stockouts / purchase requests & \BakeryStockoutRatio \\
+morning batches baked & \BakeryBatchCount \\
+FIFO shipments dequeued / enqueued & \BakeryShipmentRatio \\
+maximum simultaneously active purchases & \BakeryMaxActive \\
 \bottomrule
 \end{tabular}
 \end{center}

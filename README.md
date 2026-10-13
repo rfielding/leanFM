@@ -19,6 +19,10 @@ The model treats a protocol as globally observable behavior:
 - each envelope carries `src`, `dst`, and protocol `bytes`
 - the global graph is the product observation of actor states
 - optional chance nodes support MDP-style probabilistic outcomes
+- reusable `LeanFM.MDPDiagram` renderers derive interaction diagrams, state
+  graphs, and probability charts from typed MDP projections
+- reusable `LeanFM.ReliabilityDiagram` rendering derives series/parallel/
+  threshold topology views from typed actor populations and dependency gates
 - specifications attach dwell durations to transitions or productions
 - dwell advances the event clock and supports latency, throughput, and queue metrics
 - each event has one `timeAt`; latency is computed between separate start and completion messages
