@@ -151,6 +151,58 @@ model establishes the corresponding universal result. Keeping the exact CTL
 form is what permits this reduction from universal checking to existential
 witness search through negation.
 
+\subsection{Least upper bounds and greatest lower bounds}
+
+Eventuality and strong until choose the least solution of their recursive
+equations. Over the lattice of state sets, begin with the empty set and
+repeatedly add states justified by the previous approximation:
+
+\AccessibleEquation{The states satisfying E F p are the least fixed point of Z equal P union existential predecessor of Z. This fixed point is the union or least upper bound of approximations Z zero Z one and onward.}{\[
+  \operatorname{Sat}(EF\,p)
+  = \mu Z.\bigl(P\cup\operatorname{Pre}_{\exists}(Z)\bigr)
+  = \bigcup_{n\ge 0} Z_n,
+  \qquad Z_0=\varnothing.
+\]}
+
+Read this as: ``the states satisfying $EF\,p$ are the least fixed point of
+$Z=P$ union the states with some successor in $Z$. Starting with no states, the
+union of the successive approximations is their least upper bound.'' The same
+construction gives existential until:
+
+\AccessibleEquation{The states satisfying p E U q are the least fixed point of Z equal Q union P intersect existential predecessor of Z.}{\[
+  \operatorname{Sat}(p\ EU\ q)
+  = \mu Z.\bigl(Q\cup(P\cap\operatorname{Pre}_{\exists}(Z))\bigr).
+\]}
+
+Read this as: ``include states satisfying $q$; then repeatedly include a state
+satisfying $p$ when at least one successor is already included.'' $AF$ and
+strong $AU$ are also least fixed points, using universal predecessor. A cycle
+that never reaches the target therefore adds nothing to the least solution.
+
+Invariance and weak until make the dual choice. They begin with all candidate
+states and remove unsupported states, producing the greatest fixed point---the
+greatest lower bound of descending approximations:
+
+\AccessibleEquation{The states satisfying E G p are the greatest fixed point of Z equal P intersect existential predecessor of Z. This fixed point is the intersection or greatest lower bound of descending approximations.}{\[
+  \operatorname{Sat}(EG\,p)
+  = \nu Z.\bigl(P\cap\operatorname{Pre}_{\exists}(Z)\bigr)
+  = \bigcap_{n\ge 0} Y_n.
+\]}
+
+Read this as: ``the states satisfying $EG\,p$ are the greatest fixed point of
+$Z=P$ intersect the states with some successor in $Z$. Starting with all
+candidate states, the intersection of successive approximations is their
+greatest lower bound.''
+
+LeanFM implements these choices with cycle-aware searches rather than by
+materializing every approximation set. An unresolved revisit is false for
+\texttt{EF}, \texttt{EU}, \texttt{AF}, and strong \texttt{AU}, selecting the
+least fixed point. A predicate-preserving revisit is true for \texttt{EG} and
+weak until, selecting the greatest fixed point. \texttt{AG} is checked as
+$\neg EF\,\neg p$, and \texttt{AF} as $\neg EG\,\neg p$. Thus least upper bound
+and greatest lower bound are paired implementation choices; neither describes
+every CTL operator by itself.
+
 An observation is immutable once recorded. A value changes only by moving
 forward to a successor observation; it is never updated retroactively inside the
 current state. This does not mean that values are monotone---a queue may grow and
