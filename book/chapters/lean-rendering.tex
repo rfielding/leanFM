@@ -146,11 +146,8 @@ then x or so on through z holds.'' A means every continuation; G means every
 position along it, including the current state. This is entailment within the
 declared runtime model, not a redefinition of general entailment across every
 possible model. The model and initial state must accompany the judgment.
-Read this as: ``whenever a and b and so on through w all hold, at least one of
-x through z must hold.'' The $\land$ symbols collect premises with ``and'';
-$\vDash$ separates premises from required conclusions; the $\lor$ symbols
-collect alternative conclusions with ``or.'' It does not require every
-conclusion, or the same conclusion in every case.
+The $\land$ symbols collect premises with ``and''; the $\lor$ symbols collect
+alternative conclusions with ``or.'' The conclusion need not be the same in every state.
 
 For code, represent the left side as a list of premises and the right side as
 a list of conclusions. A counterexample is a reachable state where every premise
@@ -164,11 +161,8 @@ entails(successors, initialState, premises, conclusions) :=
   !anyReachable(successors, initialState,
     state => counterexample(state, premises, conclusions))
 \end{lstlisting}
-Read the first definition as: ``a counterexample has all premises true and no
-conclusion true.'' Read the second as: ``the premises entail the conclusions
-when no reachable counterexample exists.'' The evaluator and successor relation
-come from the declared model; checking a finite sample establishes only
-that sample's result, not all possible executions.
+The evaluator and successor relation come from the declared model. A sampled
+trace checks only that sample, not all reachable states.
 
 The same counterexample condition can be constructed symbolically:
 \[
@@ -177,8 +171,6 @@ The same counterexample condition can be constructed symbolically:
 Read: ``there is no reachable state with a and b and so on through w, and
 not x and so on through not z.'' This is exactly the AG implication above,
 using $AG\,p=\neg EF\,\neg p$, read ``always p is no reachable not-p.''
-Conjoin the premises with the negations of every conclusion, search for a
-reachable satisfying state, and negate the result.
 
 With a single conclusion, the analogy is the Prolog rule
 \texttt{x :- a, b, ..., w}: x follows when all its premises hold. The displayed

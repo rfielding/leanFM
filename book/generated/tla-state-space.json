@@ -1,0 +1,46 @@
+{
+  "provenance": {
+    "prompt": "Compare TLA+ queue actors with and without irrelevant internal state.",
+    "question": "How many distinct states does TLC enumerate for the same order protocol?",
+    "event_source": "Pinned TLC 1.7.4 exhaustive safety-check logs for OrderQueue.tla and four finite configurations",
+    "reducer": "parse final distinct-state counts; verify independent cache/clock product factors",
+    "unit": "distinct model states",
+    "boundary": "one client, one server, two order IDs, FIFO capacity two; no liveness or refinement proof",
+    "tool_sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+    "model_sha256": "d8af4fac1461fb6461899815226a271be7289e912c9e52e5b0f1fdcdd081f9ed"
+  },
+  "runs": [
+    {
+      "config": "Baseline",
+      "cache_bits": 0,
+      "clock_bound": 0,
+      "generated": 37,
+      "distinct": 26,
+      "elapsed_seconds": 0.607
+    },
+    {
+      "config": "Cache4",
+      "cache_bits": 4,
+      "clock_bound": 0,
+      "generated": 2241,
+      "distinct": 416,
+      "elapsed_seconds": 0.638
+    },
+    {
+      "config": "Cache8",
+      "cache_bits": 8,
+      "clock_bound": 0,
+      "generated": 62465,
+      "distinct": 6656,
+      "elapsed_seconds": 0.701
+    },
+    {
+      "config": "Clock7",
+      "cache_bits": 0,
+      "clock_bound": 7,
+      "generated": 471,
+      "distinct": 208,
+      "elapsed_seconds": 0.602
+    }
+  ]
+}

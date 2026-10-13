@@ -1,7 +1,8 @@
 # Multimodal language extension
 
-Status: agreed design direction. CTL is implemented; general knowledge and
-policy evaluation is not. This document does not replace the accepted canonical
+Status: documented modelling techniques; built-in support is deferred. CTL is
+implemented; general knowledge and policy evaluation is not. Projects may define
+their own observation and policy relations. This document does not replace the accepted canonical
 specifications in `LeanFM/LLMGenerated/`. Typed requirements, implementation
 mappings, and their acceptance gates must precede checker implementation.
 
@@ -43,9 +44,9 @@ be the outer path. Universal LTL `G F p` matches `AG AF p` under the usual total
 transition semantics; `AF AG p` is stronger than universal LTL `F G p`.
 These additions do not make CTL equivalent to LTL.
 
-## First verification milestone
+## Project-specific verification example
 
-Use a bounded Kerberos model with named actors, byte-defined messages, task and
+A project can use a bounded Kerberos model with named actors, byte-defined messages, task and
 ticket correlation, nested concurrency, and interaction-diagram assertions.
 Declare each actor's visible messages, private keys, retained memory, and clock
 observations. Define policy futures independently of actual legal behavior.

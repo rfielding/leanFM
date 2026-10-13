@@ -51,14 +51,15 @@ The model treats a protocol as globally observable behavior:
 
 ## Multimodal language direction
 
-CTL remains the executable temporal core. The agreed next extension adds actor
+CTL remains the executable temporal core. The book documents actor
 knowledge (`K_a`), epistemic possibility, policy obligation (`O_a`), and permission
 (`P_a`) over explicitly distinct observation and policy relations. These describe
 what an actor knows and what a named policy requires or permits, not morality.
 Belief, strategic ability, and arbitrary modal logics are not automatically
-included. **The general epistemic/deontic checker is not implemented yet.**
-The [language-extension design](MULTIMODAL_LOGIC.md) records exact semantics,
-boundaries, and the bounded Kerberos verification milestone; the book explains
+included. **Built-in knowledge and policy checking is deferred.** Projects may
+define these relations explicitly; no general evaluator is implemented.
+The [modelling notes](MULTIMODAL_LOGIC.md) record exact semantics,
+boundaries, and a bounded Kerberos example; the book explains
 the same design. The [Kerberos video](https://www.youtube.com/watch?v=f2efwxq8BaY)
 illustrates these modalities. Past conditions may become forward monitors only with a stated
 equivalence and concurrency boundary.

@@ -51,6 +51,37 @@ all-of join.
 
 \section{Compute everything from a fork/join event list}
 
+\subsection{Nested joins: choose a winner, then cancel the rest}
+
+\begin{center}
+\resizebox{.88\textwidth}{!}{\input{generated/nested-race.tex}}
+\end{center}
+\noindent A synthetic search-style task forks into a speculative race and an
+audit. The race starts three candidate jobs. The first qualifying result, A,
+satisfies a 1-of-3 join; B and C need not finish before the winner is chosen.
+The reply joins that winner with the audit. Cancellation then terminates the
+losing work, and a separate cleanup join reclaims it. Arrows show predecessor
+order with redundant transitive edges removed; full backpointers remain in the
+event list. The event list and provenance are generated from
+\texttt{NestedForkJoinExample.lean}; this is not a claim about Google's implementation.
+
+The winner event records threshold 1, population 3 and selected terminal
+\texttt{e7}. Its predecessors are \texttt{[e1,e7]}, not the results of all
+three jobs. The outer reply records \texttt{[e0,e8,e6]}: task start, chosen result
+and completed audit. Reply time is 12 synthetic milliseconds; cleanup ends at
+18. These times illustrate ordering, not measured search performance.
+
+For a general $n$-of-$m$ join, choose $n$ distinct qualifying terminals from $m$
+declared branches. Selection is atomic, so racing results cannot select two
+winners for a 1-of-$m$ task. ``First'' means the coordinator's observed order,
+with a declared tie rule, not unsynchronized worker clocks. A cancellation request
+is not a cancellation acknowledgment; late results must not replace the chosen
+result. The requirement must say whether a reply waits for losing-task cleanup.
+Here it does not. Selected-ID and threshold metadata belongs in the join event,
+not inferred from the picture's number of incoming arrows.
+
+\subsection{Durations from boundary events}
+
 Each event is one observation at one instant. Starting and completing are
 different messages, so an event does not contain an interval. Durations are
 derived by selecting the two boundary events and subtracting their timestamps.

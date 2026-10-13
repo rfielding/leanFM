@@ -1,0 +1,29 @@
+// Proposed TLA+-inspired notation. Not standard TLA+, not compiled by LeanFM.
+message placeOrder(orderId: OrderId, replyTo: ClientId)
+message placedOrder(orderId: OrderId)
+
+actor class Client {
+  input placedOrder
+  output placeOrder
+}
+actor class Shop {
+  input placeOrder
+  output placedOrder
+  inbox FIFO(capacity = 2)
+  on placeOrder(orderId, replyTo) {
+    require commitRecorded(orderId)
+    self:replyTo ! placedOrder(orderId)
+  }
+}
+
+alice = new Client()
+bob = new Shop()
+alice:bob ! placeOrder(o1, replyTo = alice)
+bob ? placeOrder(o1, replyTo = alice)
+// Shop handler records the commit and sends placedOrder.
+alice ? placedOrder(o1)
+
+web = instances(WebServer, count = 3, route = roundRobin)
+documents = shards(DocumentStore, count = 8,
+                   key = documentPartition, replicas = 3,
+                   writeQuorum = 2)

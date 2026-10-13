@@ -1,33 +1,8 @@
-\chapter{Research and Implementation Roadmap}
+\chapter{Scope and Open Questions}
 \label{ch:roadmap}
 
-The project will proceed through small executable examples rather than attempting a
-complete logic and compiler at once.
-
-\section{Milestones}
-
-\begin{enumerate}
-  \item Stabilise the event envelope, including identity, predecessor links, actor
-        endpoints, kind, payload, and a disciplined account of time.
-  \item Give the grammar algebra a trace semantics and establish laws for sequence,
-        choice, guarded context, and interleaving.
-  \item Define parameter binding and participant projection, then test both on
-        authentication and ordinary web request protocols.
-  \item Preserve named scenario boundaries while reading their references into one
-        grammar; render interaction diagrams and residual state machines per scenario.
-  \item Treat independent requirements as trace-language intersections and report
-        minimal inconsistent requirement sets.
-  \item Generate finite transition systems and evaluate the CTL fragment already
-        represented by the LeanFM library.
-  \item Compare past-trace predicates with explicit past operators.
-  \item Extend the temporal core with separately typed knowledge and policy
-        modalities. Begin with bounded Kerberos histories, explicit local
-        observations and nonempty ideal futures, and checked counterexamples;
-        do not present the narrated example as an implemented checker.
-  \item Render declarative pie and line charts as reductions over observable events.
-  \item Connect specifications to a Lean web service and generated protocol
-        schemas, preserving one source of typed domain truth.
-\end{enumerate}
+The implementation backlog and audit findings live in \texttt{CRITIQUE.md}.
+This chapter distinguishes current evidence from open technical questions.
 
 \section*{Self-hosting consolidation}
 
@@ -39,12 +14,11 @@ Worker protocol remains an example, not a specification of the whole product.
 machine. A component registry and fresh-session handoff preserve decisions
 without requiring conversation history.
 
-The consolidation records demand-driven modal indexes, optional probability
-with explicit interpretation, checker outcomes, acceptance invalidation, and
-PR evidence. These are pending requirements, not implemented checker features
-or proven predicates. Error protocols, executable formula semantics, and
-complete implementation traceability still require refinement and both
-acceptance gates before claiming a complete one-shot specification.
+The consolidation proposes checker outcomes, acceptance invalidation, probability
+interpretations and PR evidence. Earlier proposals also cover modal indexes;
+built-in knowledge and policy checking is now deferred. These records are not
+implemented features or proofs. Error protocols, formula semantics and complete
+traceability remain prerequisites for a complete one-shot specification.
 
 \section{Proof obligations}
 

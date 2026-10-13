@@ -47,12 +47,83 @@ valued variable, and an action can append to or remove from that sequence. This
 is expressive and makes internal state transitions available to invariants and
 model checking.
 
+\subsection{An executable queue model}
+
+This TLA+ module sends an order to Bob's inbox, then lets Bob consume it and
+change his control state:
+
+\lstinputlisting[language={},firstline=1,lastline=30,basicstyle=\ttfamily\footnotesize]{examples/tla/OrderQueue.tla}
+
+Read \texttt{inbox'} as ``the next value of inbox,'' \texttt{@} as ``the old
+value at this selected entry,'' and \texttt{UNCHANGED} as ``these variables
+retain their values.'' \texttt{Append} adds a message; \texttt{Head} selects the
+first message; \texttt{Tail} removes it. Alice's send updates Bob's inbox, not
+Bob's private control state. Bob's receive performs the latter transition.
+The configuration instantiates \texttt{Clients = \{"alice"\}} and
+\texttt{Servers = \{"bob"\}}; functions indexed by those sets hold instance state.
+The full module commits the order, sends a reply, and checks that no reply
+precedes placement. Its temporal specification means ``start in Init, then
+always take Next or a stuttering step.'' No eventual-reply property is checked.
+
+\subsection{The cost of irrelevant state}
+
+The module includes optional cache-bit toggles and a clock increment that
+cannot affect an order message. TLC nevertheless distinguishes their values:
+
+\begin{center}
+\input{generated/tla-state-space.tex}
+\end{center}
+
+These exhaustive finite-model safety-check counts come from TLC 1.7.4 via
+\texttt{make tla-check}; evidence and provenance are in
+\texttt{book/generated/tla-state-space.json}. With $S$ protocol states, $b$
+independent Boolean cache bits and a counter ranging from zero through $k$, the
+example has
+\[
+ S\,2^b(k+1)
+\]
+states. Read: ``S times two to the b times k plus one.'' S is the protocol state
+count, b the cache-bit count and k the counter bound. Each irrelevant bit doubles
+this model's state count. \texttt{ClockBound = -1} allows ticks 0, 1, 2 and onward:
+infinitely many states with the same order behavior. Exhaustive explicit-state
+search cannot finish that variant. Unbounded queues or retained histories can
+also make a model infinite.
+
+This is checker state growth, not measured application memory. More states
+usually require more exploration time and storage; the table gives no fixed
+bytes-per-state or timing law. TLA+ supports abstraction, hiding and refinement.
+The lesson is to omit irrelevant state, not to blame the language for its inclusion.
+
+\subsection{Proposed message-first notation}
+
+This is invented TLA+-inspired syntax, not standard TLA+ or a compiled LeanFM feature:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\footnotesize]{examples/tla/MessageFirst.proposed}
+
+Read \texttt{alice:bob ! placeOrder} as ``Alice sends placeOrder to Bob,'' and
+\texttt{bob ? placeOrder} as ``Bob receives placeOrder.'' Bob consumes the
+request \texttt{placeOrder}; Alice consumes the reply \texttt{placedOrder}.
+A send changes the destination's inbox, a first-class queue owned by its actor
+instance, not an arbitrary private variable. Receive consumes the message;
+the receiver updates its own protocol state. Full queues block send without
+mutation; empty queues block receive. The handler's commit precondition is an
+observable obligation, not a database algorithm.
+
+Actor classes describe behavior; instances have distinct identities, queues and
+local state. WebServer instances share a class, not an inbox. DocumentStore
+shards partition ownership by key; replicas protect each shard, and a quorum
+controls write acknowledgment. These deployment roles are placeholders, not
+classes implemented by the order module. First-class syntax still needs capacity,
+routing, failure and scheduling rules; it does not eliminate their state space.
+
+\subsection{Requirements at the message boundary}
+
 LeanFM chooses a different primary boundary. The object available to us is often
 an event stream scraped from a running system. We can decode its messages,
 correlate them, follow predecessor backpointers, and classify the resulting sequence
 as in-spec or out-of-spec. We generally cannot observe the implementation's
 private variables at every step, so \texttt{Requirements.lean} does not pretend
-to maintain them. Its grammar both recognizes legal traces and generates them;
+to maintain them. Its grammar is intended to recognize legal traces and generate them;
 state machines are projections of visible histories rather than declarations of
 every variable stored by the program.
 

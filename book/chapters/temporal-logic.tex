@@ -257,10 +257,10 @@ the current model. They do not mean:
   \item physically necessary versus logically possible.
 \end{itemize}
 
-LeanFM's next language extension separates these relations explicitly. This is
-an agreed design direction, not a claim that the current CTL evaluator already
-checks epistemic or deontic formulas. The Kerberos video~\citep{leanfmKerberosVideo} illustrates the intended
-semantics; it is not a checked security proof.
+Knowledge and policy relations are documented modelling techniques, not built-in
+operators. Projects may define them explicitly using the relations below.
+The Kerberos video~\citep{leanfmKerberosVideo} illustrates their use; it does not
+verify the protocol.
 
 For knowledge, let $W$ be the declared set of legal histories and
 $\operatorname{obs}_a(h)$ actor $a$'s local observation of history $h$:
@@ -308,8 +308,8 @@ For example:
 \]
 Read: ``$a$ must eventually audit request $r$ at $h$ exactly when, for every
 ideal future $\pi$, there is a position $i$, zero or later, where $r$ is audited.''
-Here $F$ is a path operator, not an unqualified CTL state formula. The extension
-must type state and path conditions separately before accepting nested formulas.
+Here $F$ is a path operator; a project implementation must distinguish state
+formulas from path conditions.
 
 Temporal, epistemic, and policy quantification can then be combined without
 confusing their domains. A legal future may be possible, unknown to Alice, and
@@ -324,11 +324,8 @@ before updating the monitor with the current event. On concurrent histories,
 declare whether ``before'' means causal ancestry or a chosen linearization;
 screen order is not evidence. Unbounded past logic is not thereby implemented.
 
-The first checker milestone is a bounded Kerberos model with explicit observation
-and policy relations, counterexamples for missing knowledge and violated
-obligations, and regression tests for composition with CTL. Symbolic
-uncompromised-key assumptions must remain visible; they do not establish
-computational cryptographic security.
+Symbolic uncompromised-key assumptions do not establish computational
+cryptographic security. General knowledge and policy checking is deferred.
 
 \section{Possibility means preparedness}
 

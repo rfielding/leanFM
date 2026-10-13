@@ -1,0 +1,7 @@
+{ id := "tla.state_space",
+  prompt := "Show how irrelevant internal state increases exploration time and space in an actual TLA+ queue example.",
+  question := "How many distinct states does TLC enumerate with the same order protocol and varying irrelevant-state bounds?",
+  kind := LeanFM.DerivedOutputKind.scalar,
+  eventSource := "TLC 1.7.4 exhaustive finite safety-check logs for OrderQueue.tla and four configurations",
+  reducer := "parse distinct-state counts and verify independent cache/clock product factors",
+  unit := "distinct model states; one client, one server, two orders, FIFO capacity two; not runtime memory or liveness" }

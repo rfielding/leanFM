@@ -63,3 +63,4 @@ __pycache__/
 /video/render.log
 /video/*-preview.png
 /video/kerberos/*-preview.png
+/book/examples/tla/.tlc/

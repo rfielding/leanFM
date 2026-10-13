@@ -4,7 +4,45 @@ This document records weaknesses, unresolved questions, and places where the
 current implementation supports a smaller claim than the book may suggest. It
 is intentionally critical. Passing the build does not resolve these issues.
 
-## Audit snapshot: 2026-10-06
+## Editorial and scope update: 2026-10-13
+
+The book's core is sound: argue over one book, formalize requirements, accept a
+separate implementation specification, and produce a reviewable PR. The current
+cleanup consolidates the preface, removes duplicate turnstile explanations,
+marks knowledge/policy checking as deferred, and moves implementation milestones
+here. Formula pronunciations, examples, and substantive boundaries remain.
+
+The audit below is dated 2026-10-06. Its page counts and findings are historical,
+not a fresh certification of the current tree. Current spot checks confirm that
+the general knowledge/policy evaluator and self-hosting implementation are still
+absent, and the SVG state-machine renderer still positions edges by list index.
+
+### Implementation backlog (moved from the book)
+
+- Consolidate event identity, predecessor links, actor endpoints and time semantics.
+- Give the grammar algebra executable trace semantics for sequence, choice,
+  guards and interleaving.
+- Implement parameter binding and faithful actor-local projection.
+- Derive scenario interactions and residual state machines from those semantics;
+  render edges from source/destination IDs, not list position.
+- Check requirement intersections and report inconsistent subsets.
+- Connect generated finite models to the existing CTL evaluator, preserving bounds
+  and witness/counterexample evidence.
+- Derive charts from event reducers instead of independently maintained geometry.
+- Connect schemas, implementation mappings, runtime traces and revision-bound PR
+  evidence into one reproducible workflow.
+- Keep past-logic extensions and general knowledge/policy checking deferred.
+  The book explains project-specific modelling; it does not commit to built-ins.
+
+### Next editorial pass
+
+Move performance and reliability out of the crowded authoring-language chapter.
+Keep one definition, one English reading, one operational example and one scope
+qualification per concept. Use generated diagrams before topology/order prose.
+Move long dumps and reference listings out of the main narrative. Preserve the
+author's chosen mathematical examples and referenced-book images.
+
+## Historical audit snapshot: 2026-10-06
 
 The book has a compelling core idea: make externally meaningful histories the
 durable specification boundary, argue requirements into typed artifacts, and

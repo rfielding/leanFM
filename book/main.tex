@@ -213,60 +213,38 @@
 
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
-LeanFM is a software-engineering methodology for arguing a system into existence
-with an LLM. Requirements are not expected to emerge complete from one prompt.
-Stakeholders and an LLM instead conduct an iterative argument: they expose
-ambiguities, challenge assumptions, add scenarios and properties, and inspect
-generated interaction diagrams, state machines, traces, and measurements. The
-objective is not to make an LLM remember a long conversation. It is to turn the
-argument into checked, durable project artifacts.
+LeanFM is a software-engineering methodology for arguing requirements into
+existence with an LLM. Stakeholders challenge assumptions, add scenarios and
+constraints, and inspect generated diagrams, traces and measurements. The
+argument produces durable project artifacts rather than relying on chat memory.
 
-The book is the principal design artifact. Every LeanFM project begins with
-\texttt{./book/main.pdf}, and the stakeholders argue over what that book says.
-It carries the purpose, vocabulary, boundaries, examples, diagrams, and reasoning
-that would otherwise be scattered through meetings, markerboards, and chat history.
-For the LLM, the book acts like a project-specific section of the system prompt:
-it supplies the durable design context from which the more exact requirements and
-implementation specifications are developed. Diagrams accepted into the final
-design are generated from the same model and reused in the book; they are not a
-second, independently maintained account of the system.
+The book is the main artifact. Every project begins with \texttt{./book/main.pdf}:
+its purpose, vocabulary, boundaries, examples and design argument. It acts as
+project-specific context for the LLM. Final diagrams come from the specification
+and are reused in the book, not maintained as separate designs.
 
-The book itself is vibecoded. As the design argument exposes a missing notation,
-view, check, or editing operation, the tools needed to produce the book are built
-alongside it. A project will eventually live in a source repository, but all of
-its owned material begins and remains beneath one project directory: the book,
-Lean specifications, protobuf schemas, generated views, conversations, source,
-tests, and evidence. This makes the project portable and makes deletion mean
-deleting one directory rather than hunting for its state across a machine.
+The book is itself vibecoded: missing views, checks and editing tools are built
+as the argument needs them. Each project owns one directory containing its book,
+specifications, schemas, conversations, source, tests and generated artifacts.
+Copying that directory preserves the project; deleting it removes its local
+state. External deployments require explicit teardown.
 
-The LeanFM repository is itself a valid LeanFM project, not merely the tool that
-creates other projects. Its checked-in \texttt{book/main.pdf}, specifications,
-implementation, tests, and source tree are the inputs used to develop LeanFM with
-LeanFM. A project directory is therefore a self-contained repository candidate:
-it can be copied away, initialized as its own repository, and opened directly in
-Codex without reconstructing project context from another installation.
+This repository is also a LeanFM project. Its book, specifications and source
+are the inputs used to develop LeanFM itself. Other projects can be copied into
+their own repositories and opened in Codex without reconstructing the conversation.
 
-Inside Codex, \texttt{./book/main.pdf} is always a central input and always
-exists. The accessible rendering \texttt{./book/main-dark.pdf} is generated from
-the same source and differs only in presentation. Requirements and implementation
-specifications likewise occupy stable, project-relative locations recorded by the
-project. There is one canonical accepted \texttt{Implementation.lean} for a
-project revision. If a project deliberately maintains multiple target-specific
-implementation specifications, they remain beside it with explicit target names
-and traceability; an agent never searches arbitrary directories to guess which
-one governs a change.
+\texttt{book/main.pdf} remains a central input in Codex; \texttt{book/main-dark.pdf}
+is its accessible rendering from the same source. Requirements and implementation
+specifications have stable project-relative paths. Each revision identifies one
+canonical implementation specification; deliberate alternatives name their targets.
 
-LeanFM splits vibecoding into explicit layers. Stakeholders first work on the
-book---the main artifact---and argue about the system it describes. The accepted
-book guides a \texttt{Requirements.lean} specification of observable behavior,
-permitted conversations, and required properties. A separate
-\texttt{Implementation.lean} resolves how those requirements map to runtimes,
-transports, files, actors, and tests. The Lean files are precise refinements of the
-book, not replacements for it. Together, the current book, requirements,
-implementation specification, and repository are intended to be sufficient for
-an LLM to produce one complete, reviewable pull request. ``One-shot'' describes
-that implementation pass, not requirements discovery; discovery may take as many
-arguments and revisions as necessary.
+The workflow has two acceptance gates. First accept \texttt{Requirements.lean}:
+observable behavior, legal conversations and properties. Then accept
+\texttt{Implementation.lean}: runtime, transport, actor, file and test mappings.
+These specifications refine the book. Together with the current repository, they
+are intended to support one complete, reviewable PR. ``One-shot'' describes this
+implementation pass; requirements discovery remains iterative. The integrated
+requirements-to-PR workflow is still under development.
 
 This differs from software engineering organized primarily around coordinating
 people who debate separate drawings. LeanFM centers the shared, executable account

@@ -129,6 +129,7 @@ proto:
 diagrams:
 	lake exe leanfm-diagrams
 	lake env lean --run RuntimeReliabilityDiagram.lean
+	lake env lean --run NestedForkJoinExample.lean
 	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
 	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
@@ -141,7 +142,17 @@ scripts:
 
 book:
 	lake env lean --run RuntimeReliabilityDiagram.lean
+	lake env lean --run NestedForkJoinExample.lean
 	$(MAKE) -C book
+
+.PHONY: tla-toolchain tla-check
+tla-toolchain:
+	mkdir -p .toolchains/tla
+	curl -fsSL https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar -o .toolchains/tla/tla2tools-1.7.4.jar
+	echo '936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  .toolchains/tla/tla2tools-1.7.4.jar' | sha256sum -c -
+
+tla-check:
+	python3 scripts/check_tla_example.py
 
 book-clean:
 	$(MAKE) -C book clean
