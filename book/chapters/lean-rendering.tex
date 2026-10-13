@@ -128,19 +128,68 @@ are no additional local entries: Lean is asking for a term that derives the
 universally quantified proposition from the imported theory and the definitions
 above.
 
-By contrast, the double turnstile $\vDash$, pronounced ``semantically
-entails,'' describes truth in interpretations rather than the construction of a
-proof term.  Read
+For a LeanFM runtime judgment, define the double turnstile $\vDash$ relative
+to the declared transition model and initial state. It means ``at every reachable
+state, the premises require at least one of these conclusions.'' Write it in a
+rule-like form, familiar from Prolog:
 \[
-  \Gamma \vDash p
+  a\land b\land\cdots\land w\;\vDash\;x\lor\cdots\lor z.
 \]
-as: ``Gamma semantically entails $p$.''  Symbol for symbol, $\Gamma$ is the
-theory or context---its assumptions, definitions, and axioms; $\vDash$ is the
-semantic-entailment relation; and $p$ is the proposition.  The whole statement
-means that every interpretation satisfying every entry in $\Gamma$ also
-satisfies $p$.  The two readings therefore remain distinct: $\Gamma\vdash p$
-says that $p$ is derivable from the context, while $\Gamma\vDash p$ says that
-$p$ is true in every model of the context.
+Its executable definition is that the following CTL formula holds at the
+declared initial state:
+\[
+ AG\bigl((a\land b\land\cdots\land w)
+       \to(x\lor\cdots\lor z)\bigr).
+\]
+Read: ``at every reachable state, if a and b and so on through w all hold,
+then x or so on through z holds.'' A means every continuation; G means every
+position along it, including the current state. This is entailment within the
+declared runtime model, not a redefinition of general entailment across every
+possible model. The model and initial state must accompany the judgment.
+Read this as: ``whenever a and b and so on through w all hold, at least one of
+x through z must hold.'' The $\land$ symbols collect premises with ``and'';
+$\vDash$ separates premises from required conclusions; the $\lor$ symbols
+collect alternative conclusions with ``or.'' It does not require every
+conclusion, or the same conclusion in every case.
+
+For code, represent the left side as a list of premises and the right side as
+a list of conclusions. A counterexample is a reachable state where every premise
+is true and every conclusion is false:
+\begin{lstlisting}
+counterexample(state, premises, conclusions) :=
+  premises.all(p => evaluate(p, state)) &&
+  !conclusions.any(q => evaluate(q, state))
+
+entails(successors, initialState, premises, conclusions) :=
+  !anyReachable(successors, initialState,
+    state => counterexample(state, premises, conclusions))
+\end{lstlisting}
+Read the first definition as: ``a counterexample has all premises true and no
+conclusion true.'' Read the second as: ``the premises entail the conclusions
+when no reachable counterexample exists.'' The evaluator and successor relation
+come from the declared model; checking a finite sample establishes only
+that sample's result, not all possible executions.
+
+The same counterexample condition can be constructed symbolically:
+\[
+ \neg EF(a\land b\land\cdots\land w\land\neg x\land\cdots\land\neg z).
+\]
+Read: ``there is no reachable state with a and b and so on through w, and
+not x and so on through not z.'' This is exactly the AG implication above,
+using $AG\,p=\neg EF\,\neg p$, read ``always p is no reachable not-p.''
+Conjoin the premises with the negations of every conclusion, search for a
+reachable satisfying state, and negate the result.
+
+With a single conclusion, the analogy is the Prolog rule
+\texttt{x :- a, b, ..., w}: x follows when all its premises hold. The displayed
+disjunctive conclusion is more general than an ordinary single-head Prolog
+rule; $\vDash$ does not specify Prolog's execution or search order.
+The compact notation $\Gamma\vDash p$, read ``Gamma semantically entails p,''
+collects the premises into a context $\Gamma$ and names the conclusion $p$.
+The distinction remains: $\Gamma\vdash p$, read ``Gamma derives p,'' asserts a
+derivation. Our runtime judgment checks that no reachable state makes all the
+premises true and p false. General semantic entailment uses all models of the
+assumptions instead; it must not be confused with this explicitly scoped CTL test.
 
 For the proof-theoretic background behind derivations, natural deduction,
 sequent calculus, normalization, and cut elimination, see Mancosu, Galvan, and
