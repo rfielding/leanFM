@@ -54,6 +54,24 @@ change his control state:
 
 \lstinputlisting[language={},firstline=1,lastline=30,basicstyle=\ttfamily\footnotesize]{examples/tla/OrderQueue.tla}
 
+The excerpt above defines actions but does not yet connect them to a behavior.
+That connection appears later in the same module:
+
+\lstinputlisting[language={},firstline=55,lastline=58,basicstyle=\ttfamily\footnotesize]{examples/tla/OrderQueue.tla}
+
+TLA+ does not call \texttt{Send} or \texttt{Receive} like procedures.
+\texttt{Next} is a relation between the current variables and their primed next
+values.  Its disjunction says that one step may be a \texttt{Send} for some
+client, server and order; a \texttt{Receive} or \texttt{Finish} for some server;
+a \texttt{ReadReply} for some client; a cache step; or a clock step.  A candidate
+action whose guards are false is disabled.  TLC explores every enabled choice.
+
+Read \verb|Spec == Init /\ [][Next]_vars| as: ``the first state satisfies
+\texttt{Init}; thereafter, every state transition satisfies \texttt{Next} or
+leaves every variable in \texttt{vars} unchanged.''  The configuration closes
+the final loop with \texttt{SPECIFICATION Spec}; it tells TLC which temporal
+formula to explore.
+
 Read \texttt{inbox'} as ``the next value of inbox,'' \texttt{@} as ``the old
 value at this selected entry,'' and \texttt{UNCHANGED} as ``these variables
 retain their values.'' \texttt{Append} adds a message; \texttt{Head} selects the
@@ -62,8 +80,7 @@ Bob's private control state. Bob's receive performs the latter transition.
 The configuration instantiates \texttt{Clients = \{"alice"\}} and
 \texttt{Servers = \{"bob"\}}; functions indexed by those sets hold instance state.
 The full module commits the order, sends a reply, and checks that no reply
-precedes placement. Its temporal specification means ``start in Init, then
-always take Next or a stuttering step.'' No eventual-reply property is checked.
+precedes placement. No eventual-reply property is checked.
 
 \subsection{The cost of irrelevant state}
 
