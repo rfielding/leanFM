@@ -564,6 +564,38 @@ check.
 \subsection{Redundant, load-balanced runtimes and blast radius}
 \label{sec:runtime-blast-radius}
 
+\begin{center}
+\resizebox{\textwidth}{!}{\input{generated/runtime-actor-network.tex}}
+\end{center}
+\noindent\textbf{Actor topology for a targeted document write.}
+Generated from \texttt{RuntimeReliabilityDiagram.lean}, with provenance in
+\texttt{runtime-actor-network-provenance.txt}. Arrows show required provider
+paths, not logical implication or a message sequence. Replica counts are an
+illustrative configuration, not measured uptime. Metadata, storage and network
+dependencies must be added for a complete deployment analysis.
+
+\begin{description}
+  \item[Series adds failure dependencies.] A request needs ingress, a web actor,
+    a router and its selected shard. Adding required stages cannot improve that
+    path's availability; independent stage availabilities multiply. Long series
+    paths therefore tend to reduce reliability even when each stage is reliable.
+  \item[Parallel adds alternatives.] An additional usable alternative can improve
+    a pool's availability. Shared failure domains and increased quorum thresholds
+    mean that additional replicas do not provide an unconditional improvement.
+  \item[Sharding divides offered work.] Additional shards can increase handled
+    load when requests distribute well. Hot keys, shared routing, storage and
+    cross-shard operations can limit the gain. Shards are data partitions, not
+    interchangeable failover copies; replication protects each partition.
+  \item[USL models scaling penalties.] Fit completed throughput against active
+    load $n$: contention/serialization, including queueing for shared resources,
+    contributes the $\alpha$ term; coherency or coordination contributes the
+    $\beta$ term~\citep{gunther2007guerrilla}. Read these symbols as ``alpha,
+    the contention parameter'' and ``beta, the coherency parameter.'' USL is a
+    throughput-scaling model, not a full queue-length or latency model. Retain
+    offered/admitted/completed rates, queue observations and deadlines alongside
+    the fit described earlier in this chapter.
+\end{description}
+
 The purpose of modelling a Kubernetes-like runtime is to determine what stops,
 for whom, and for how long when actors fail or lose capacity. Replica counts
 alone do not answer that question. The model combines timestamped protocol

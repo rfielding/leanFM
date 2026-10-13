@@ -128,6 +128,7 @@ proto:
 
 diagrams:
 	lake exe leanfm-diagrams
+	lake env lean --run RuntimeReliabilityDiagram.lean
 	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
 	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
@@ -139,6 +140,7 @@ scripts:
 	node scripts/embed_static_assets.js
 
 book:
+	lake env lean --run RuntimeReliabilityDiagram.lean
 	$(MAKE) -C book
 
 book-clean:
