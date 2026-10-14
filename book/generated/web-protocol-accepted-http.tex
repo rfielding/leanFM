@@ -1,0 +1,22 @@
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[POST \nolinkurl{/api/login}] Request: \nolinkurl{LoginSubmitted}. Response: \nolinkurl{LoginAccepted}, \nolinkurl{LoginRejected}.
+\item[POST \nolinkurl{/api/accounts}] Request: \nolinkurl{AccountCreateSubmitted}. Response: \nolinkurl{AccountCreated}, \nolinkurl{AccountCreateRejected}.
+\item[GET \nolinkurl{/api/projects/{project_id}/tasks/{task_id}}] Request: \nolinkurl{TaskModelRequested}. Response: \nolinkurl{TaskModelReturned}.
+\item[GET \nolinkurl{/api/projects/{project_id}/tasks/{task_id}/sessions/{session_id}/events}] Request: \nolinkurl{MessageSequenceRequested}. Response: \nolinkurl{MessageSequenceReturned}.
+\item[GET \nolinkurl{/api/projects/{project_id}/events/{event_id}}] Request: \nolinkurl{ProtobufObjectRequested}. Response: \nolinkurl{ProtobufObjectReturned}.
+\item[POST \nolinkurl{/api/projects/{project_id}/research}] Request: \nolinkurl{WebResearchRequested}. Response: \nolinkurl{WebResearchReturned}, \nolinkurl{WebResearchFailed}.
+\item[POST \nolinkurl{/api/projects/{project_id}/markerboard/assist}] Request: \nolinkurl{MarkerboardAssistRequested}. Response: \nolinkurl{MarkerboardSyntaxHelpReturned}, \nolinkurl{MarkerboardPatchProposed}.
+\item[POST \nolinkurl{/api/projects/{project_id}/markerboard/assist/{artifact_id}/accept}] Request: \nolinkurl{MarkerboardPatchAccepted}. Response: \nolinkurl{MarkerboardDraftUpdated}.
+\item[POST \nolinkurl{/api/projects/{project_id}/markerboard/assist/{artifact_id}/reject}] Request: \nolinkurl{MarkerboardPatchRejected}. Response: \nolinkurl{HTTP 204 (no payload)}.
+\item[GET \nolinkurl{/api/projects}] Request: \nolinkurl{ProjectListRequested}. Response: \nolinkurl{ProjectListReturned}.
+\item[POST \nolinkurl{/api/projects}] Request: \nolinkurl{ProjectCreateRequested}. Response: \nolinkurl{ProjectCreated}.
+\item[GET \nolinkurl{/api/projects/{project_id}}] Request: \nolinkurl{ProjectOpenRequested}. Response: \nolinkurl{ProjectOpened}.
+\item[DELETE \nolinkurl{/api/projects/{project_id}}] Request: \nolinkurl{ProjectDeleteRequested}. Response: \nolinkurl{ProjectDeleted}.
+\item[POST \nolinkurl{/api/credentials}] Request: \nolinkurl{ProviderCredentialSubmitted}. Response: \nolinkurl{ProviderCredentialAccepted}, \nolinkurl{ProviderCredentialRejected}.
+\item[POST \nolinkurl{/api/projects/{project_id}/conversations/{conversation_id}/messages}] Request: \nolinkurl{ChatPromptSubmitted}. Response: \nolinkurl{ChatResponseRendered}, \nolinkurl{ChatTurnFailed}.
+\item[POST \nolinkurl{/api/projects/{project_id}/markerboard/mermaid}] Request: \nolinkurl{MermaidDraftSaved}. Response: \nolinkurl{MermaidPreviewRendered}.
+\item[POST \nolinkurl{/api/projects/{project_id}/markerboard/media}] Request: \nolinkurl{MediaUploaded}. Response: \nolinkurl{MediaRendered}.
+\item[POST \nolinkurl{/api/projects/{project_id}/artifacts/{artifact_id}/promotions}] Request: \nolinkurl{ArtifactPromoted}. Response: \nolinkurl{CandidateRequirementUpdated}.
+\item[GET \nolinkurl{/api/projects/{project_id}/artifacts}] Request: \nolinkurl{ArtifactListRequested}. Response: \nolinkurl{ArtifactListReturned}.
+\item[GET \nolinkurl{/api/projects/{project_id}/artifacts/{artifact_id}/revisions/{revision}}] Request: \nolinkurl{ArtifactOpenRequested}. Response: \nolinkurl{ArtifactOpened}.
+\end{description}

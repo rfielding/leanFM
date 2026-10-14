@@ -1,0 +1,11 @@
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[POST \nolinkurl{/api/accounts}] Request: AccountCreateSubmitted. Response: AccountCreated or AccountCreateRejected. Encoding: application/x-www-form-urlencoded.
+\item[POST \nolinkurl{/api/login}] Request: LoginSubmitted. Response: LoginAccepted or LoginRejected. Encoding: application/x-www-form-urlencoded.
+\item[GET \nolinkurl{/api/me}] Request: authenticated session. Response: user identity JSON. Encoding: cookie only.
+\item[GET \nolinkurl{/api/projects}] Request: ProjectListRequested. Response: ProjectListReturned. Encoding: cookie plus path.
+\item[POST \nolinkurl{/api/projects}] Request: ProjectCreateRequested. Response: ProjectCreated. Encoding: application/x-www-form-urlencoded.
+\item[GET \nolinkurl{/api/projects/{project_id}/conversation}] Request: project identifier. Response: conversation JSON. Encoding: path field plus cookie.
+\item[GET \nolinkurl{/api/projects/{project_id}/tasks}] Request: project identifier. Response: task model JSON. Encoding: path field plus cookie.
+\item[GET \nolinkurl{/api/projects/{project_id}/artifacts}] Request: ArtifactListRequested. Response: ArtifactListReturned. Encoding: path field plus cookie.
+\item[POST \nolinkurl{/api/projects/{project_id}/chat}] Request: ChatPromptSubmitted. Response: ChatResponseRendered or ChatTurnFailed. Encoding: application/x-www-form-urlencoded.
+\end{description}

@@ -1,0 +1,170 @@
+\chapter{The LeanFM Web-Server Protocol}
+\label{ch:web-protocol}
+
+\index{HTTP!protobuf adapter}
+\index{protocol!LeanFM web server}
+This chapter is the protocol reference for the LeanFM web server. It is also
+machine-oriented context for an implementation agent. The normative behavioral
+source is \nolinkurl{LeanFM/ChatUI/Requirements.lean}; the byte vocabulary is
+\nolinkurl{LeanFM/ChatUI/Requirements.proto}; and transport selection is
+\nolinkurl{LeanFM/ChatUI/Implementation.lean}. The tables and grammars below are
+generated from those files. They are not a second, hand-maintained API design.
+
+Two versions of the protocol must not be confused. The \emph{accepted protocol}
+is the complete typed grammar and intended HTTP mapping. The \emph{running
+adapter} is the subset currently dispatched by \texttt{LeanFM/ChatUI/Server.lean}.
+A route in the accepted table is not a claim that its handler already exists.
+
+\section{One exchange across four representations}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{generated/web-protocol-overview.tex}}
+\caption{HTTP is an adapter around the typed LeanFM conversation. Source,
+reducer, question, and unit are recorded in
+\texttt{generated/web-protocol-provenance.txt}.}
+\label{fig:web-protocol-overview}
+\end{figure}
+
+Read the figure as five transformations:
+
+\begin{enumerate}
+  \item HTTP supplies a method, path, headers, cookies, and body octets.
+  \item The adapter authenticates the session, matches the method and path
+        template, percent-decodes fields, and constructs one named protobuf
+        request value.
+  \item That message may advance only the task grammar that names it. A legal
+        accepted event is wrapped in an \texttt{EventEnvelope} carrying event,
+        predecessor, session, task, time, source, destination, and exactly one
+        \texttt{payload} alternative.
+  \item The selected task produces one of the response alternatives associated
+        with the request. Internal provider messages remain in-process messages;
+        they are not invented HTTP calls merely because the outer request used
+        HTTP.
+  \item The adapter selects an HTTP status and projects the response fields to
+        JSON. Session establishment additionally emits a secure cookie.
+\end{enumerate}
+
+The protobuf value and HTTP request are therefore not the same bytes. Protobuf
+defines the typed event and its stable field tags. HTTP selects how a browser
+presents or receives that value. The current browser adapter uses
+\texttt{application/x-www-form-urlencoded} for implemented POST requests and
+JSON for responses. The project event journal is separately specified as
+length-delimited binary \texttt{EventEnvelope} values. A future binary HTTP
+adapter could use \texttt{application/protobuf} without changing the grammar,
+provided it preserves the same message value and correlation fields.
+
+\section{The conversion, field by field}
+
+For a request binding \texttt{httpRequest(method, pathTemplate)}, conversion is
+defined in this order:
+
+\begin{enumerate}
+  \item Match the HTTP method exactly and split the path into decoded segments.
+  \item For each \texttt{\{field\}} in the template, take the protobuf field of
+        that name, encode it as one path segment, and reject slashes, traversal,
+        or a value that escapes the authenticated project root.
+  \item For the currently implemented POST subset, encode remaining browser
+        input fields as UTF-8 form values. A protobuf \texttt{bytes} field is
+        opaque bytes at the protocol boundary; a form adapter must use an
+        explicitly declared textual encoding and must never place credentials
+        in a URL, trace, diagnostic, or returned object.
+  \item Recover the authenticated user from the
+        \texttt{leanfm\_session} HttpOnly, SameSite cookie. The cookie is
+        transport authorization, not a field silently added to every protobuf
+        message. Its resolved user and session identifiers constrain which
+        project-scoped message may be constructed.
+  \item Validate required fields and task \texttt{where\_} constraints. On
+        success, assign the envelope metadata and the oneof payload. On failure,
+        emit the named rejection alternative when the grammar has one; otherwise
+        return an HTTP error without pretending a successful protocol event
+        occurred.
+\end{enumerate}
+
+For a response binding \texttt{httpResponse(RequestName)}, conversion reverses
+the projection. The request name selects the finite legal response set. Scalar
+fields become JSON strings, booleans, or numbers; repeated fields become JSON
+arrays; nested messages become objects; and \texttt{bytes} become an explicitly
+identified download or Base64 field rather than accidental UTF-8. Secrets are
+redacted before JSON rendering. Success commonly uses 200, creation uses 201,
+authentication failure uses 401 or 403, invalid input uses 400, missing owned
+objects use 404, revision or credential conflicts use 409, and provider failure
+uses 502. The named response message, not the status alone, determines the
+grammar transition.
+
+\section{The running adapter}
+
+The following table is the implemented ChatUI subset. Static assets,
+diagnostic reports, generated source downloads, MCP, and health checks are
+document resources or tool protocols outside the ChatUI task grammar; they must
+not be mistaken for user-task protobuf events.
+
+\input{generated/web-protocol-running-http.tex}
+
+Every \texttt{/api/} route except public account creation and login requires a
+valid in-memory session. Project paths additionally resolve the authenticated
+owner's project root. A missing session yields 401; an unknown or unauthorized
+project is deliberately represented as 404. The server binds to loopback by
+default. Network exposure requires an authenticating reverse proxy or an
+equivalent transport boundary.
+
+\section{The accepted HTTP projection}
+
+This is the complete intended browser mapping from the accepted implementation
+specification. Rows absent from the running-adapter table remain implementation
+obligations.
+
+\input{generated/web-protocol-accepted-http.tex}
+
+Messages between \texttt{LeanFMServer} and \texttt{ModelProvider} map to the
+bounded in-process channels \texttt{provider.requests} and
+\texttt{provider.results}. They retain their protobuf message identities and
+request identifiers even though they do not cross HTTP. This is important for
+concurrency: two users can use different provider credentials because the key,
+session, user, project, conversation, and request identities remain request-local
+instead of being stored in a process-wide environment variable.
+
+\section{Complete protobuf payload vocabulary}
+
+Every accepted event is a length-delimited \texttt{EventEnvelope}. Field 20 and
+above in its \texttt{payload} oneof identify the concrete message. The table
+below is generated from the Lean \texttt{MessageSchema} values; the checked
+\texttt{.proto} file supplies repeated and nested cardinality that the compact
+Lean field summary represents only by its scalar boundary.
+
+\input{generated/web-protocol-protobuf.tex}
+
+The envelope backpointers are semantically significant. \texttt{prior\_ids}
+contains immutable predecessor event identifiers. A derived
+\texttt{map[Event][]Event} successor index may accelerate traversal, but it is
+not serialized as mutable truth. \texttt{session\_id} separates users and
+concurrent conversations; \texttt{task\_id} selects the grammar; and
+\texttt{src}/\texttt{dst} must agree with the selected message schema.
+
+\section{Complete LeanFM task grammar}
+
+The following is the whole accepted ChatUI conversation grammar, rendered from
+the typed \texttt{TaskGrammar} values. Pronounce
+\texttt{A ! B : Message} as ``A sends Message to B.'' \texttt{then} is ordered
+composition; \texttt{choose/or} is an explicit alternative;
+\texttt{optional} permits zero or one occurrence; \texttt{fork/join all} waits
+for every branch; and \texttt{race/join first} accepts the first completion and
+cancels the remaining branches. A message not admitted by the selected task's
+current residual grammar is illegal even if its protobuf bytes decode.
+
+\input{generated/web-protocol-grammar.tex}
+
+\section{What is checked, and what remains}
+
+Lean elaboration checks the actors, message schemas, task states, transitions,
+grammars, constraints, desired-output provenance, and implementation mappings.
+The chapter generator rejects an accepted HTTP request with no named response
+mapping and rejects incomplete running-route records. The ordinary repository
+checks also validate the protobuf source against the typed requirements.
+
+This does not yet prove that every accepted route has a handler: the running
+table makes that gap explicit. Nor does the current server yet append every
+browser exchange to the specified binary event journal. Completing those
+handlers and the schema-specific codec remains implementation work. Until then,
+the accepted grammar is the protocol contract, the running table is the honest
+conformance statement, and neither may be substituted for the other.

@@ -1,0 +1,7 @@
+{ id := "selfhost.mcp.interaction",
+  prompt := "Implement MCP and document it in the book as an agent-facing interface.",
+  question := "How does an agent acquire the durable book and checked project evidence without mutating acceptance state?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "LeanFM.MCP fixed resource and tool dispatch",
+  reducer := "project initialize, resources/read, and tools/call messages onto Codex, MCP, and project lifelines",
+  unit := "JSON-RPC messages per stateless request" }

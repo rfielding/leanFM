@@ -1,0 +1,7 @@
+{ id := "web.protocol.adapter.interaction",
+  prompt := "Fully document the LeanFM web-server protocol in LeanFM grammar and explain protobuf-to-HTTP conversion.",
+  question := "Where does an HTTP exchange enter the typed message grammar and become a journaled protobuf event?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "ChatUI RequirementSpec grammars, protobuf MessageSchema values, and Implementation HTTP bindings",
+  reducer := "project the HTTP adapter, grammar transition, EventEnvelope append, and response projection onto actor lifelines",
+  unit := "messages per HTTP exchange" }

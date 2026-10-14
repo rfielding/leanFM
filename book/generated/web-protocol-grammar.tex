@@ -1,0 +1,162 @@
+\section{Authenticate an individual user}
+\noindent\textbf{Task:} \texttt{authenticate\_user}. Entry: \texttt{signed\_out}; terminals: \texttt{authenticated, rejected}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : LoginSubmitted
+then
+choose
+  LeanFMServer ! UserBrowser : LoginAccepted
+or
+  LeanFMServer ! UserBrowser : LoginRejected
+\end{verbatim}
+\section{Create an account using a user-supplied provider API key}
+\noindent\textbf{Task:} \texttt{create\_account}. Entry: \texttt{registration}; terminals: \texttt{created, rejected}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : AccountCreateSubmitted
+then
+LeanFMServer ! ModelProvider : ProviderKeyCheckRequested
+then
+choose
+  ModelProvider ! LeanFMServer : ProviderKeyVerified
+  then
+  LeanFMServer ! UserBrowser : AccountCreated
+or
+  ModelProvider ! LeanFMServer : ProviderKeyRejected
+  then
+  LeanFMServer ! UserBrowser : AccountCreateRejected
+\end{verbatim}
+\section{List, create, open, and delete owned projects}
+\noindent\textbf{Task:} \texttt{manage\_projects}. Entry: \texttt{ready}; terminals: \texttt{listed, created, opened, deleted}.
+\begin{verbatim}
+choose
+  UserBrowser ! LeanFMServer : ProjectListRequested
+  then
+  LeanFMServer ! UserBrowser : ProjectListReturned
+or
+  UserBrowser ! LeanFMServer : ProjectCreateRequested
+  then
+  LeanFMServer ! UserBrowser : ProjectCreated
+or
+  UserBrowser ! LeanFMServer : ProjectOpenRequested
+  then
+  LeanFMServer ! UserBrowser : ProjectOpened
+or
+  UserBrowser ! LeanFMServer : ProjectDeleteRequested
+  then
+  LeanFMServer ! UserBrowser : ProjectDeleted
+\end{verbatim}
+\section{Select user-funded or platform-funded model access}
+\noindent\textbf{Task:} \texttt{configure\_provider}. Entry: \texttt{unconfigured}; terminals: \texttt{configured, rejected}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : ProviderCredentialSubmitted
+then
+choose
+  LeanFMServer ! UserBrowser : ProviderCredentialAccepted
+or
+  LeanFMServer ! UserBrowser : ProviderCredentialRejected
+\end{verbatim}
+\section{Conduct one durable project-scoped requirements turn}
+\noindent\textbf{Task:} \texttt{argue\_requirements}. Entry: \texttt{ready}; terminals: \texttt{rendered, failed}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : ChatPromptSubmitted
+then
+LeanFMServer ! ModelProvider : ModelRequestIssued
+then
+choose
+  ModelProvider ! LeanFMServer : ModelResponseReturned
+  then
+  LeanFMServer ! UserBrowser : ChatResponseRendered
+or
+  LeanFMServer ! UserBrowser : ChatTurnFailed
+\end{verbatim}
+\section{Sketch and promote multimodal requirement artifacts}
+\noindent\textbf{Task:} \texttt{markerboard}. Entry: \texttt{editing}; terminals: \texttt{candidate}.
+\begin{verbatim}
+choose
+  UserBrowser ! LeanFMServer : MermaidDraftSaved
+  then
+  LeanFMServer ! UserBrowser : MermaidPreviewRendered
+  then
+  UserBrowser ! LeanFMServer : ArtifactPromoted
+  then
+  LeanFMServer ! UserBrowser : CandidateRequirementUpdated
+or
+  UserBrowser ! LeanFMServer : MediaUploaded
+  then
+  LeanFMServer ! UserBrowser : MediaRendered
+  then
+  UserBrowser ! LeanFMServer : ArtifactPromoted
+  then
+  LeanFMServer ! UserBrowser : CandidateRequirementUpdated
+\end{verbatim}
+\section{Inspect current, accepted, superseded, and stale artifacts}
+\noindent\textbf{Task:} \texttt{inspect\_artifacts}. Entry: \texttt{closed}; terminals: \texttt{listed, opened}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : ArtifactListRequested
+then
+LeanFMServer ! UserBrowser : ArtifactListReturned
+then
+choose
+  empty
+or
+  UserBrowser ! LeanFMServer : ArtifactOpenRequested
+  then
+  LeanFMServer ! UserBrowser : ArtifactOpened
+\end{verbatim}
+\section{Inspect one task's linked interaction, state machine, constraints, and protobuf events}
+\noindent\textbf{Task:} \texttt{inspect\_task\_model}. Entry: \texttt{closed}; terminals: \texttt{linked, sequence\_visible, object\_visible}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : TaskModelRequested
+then
+LeanFMServer ! UserBrowser : TaskModelReturned
+then
+choose
+  empty
+or
+  UserBrowser ! LeanFMServer : MessageSequenceRequested
+  then
+  LeanFMServer ! UserBrowser : MessageSequenceReturned
+  then
+  choose
+    empty
+  or
+    UserBrowser ! LeanFMServer : ProtobufObjectRequested
+    then
+    LeanFMServer ! UserBrowser : ProtobufObjectReturned
+\end{verbatim}
+\section{Search the public web, follow supplied HTTP URLs, and return clickable citations}
+\noindent\textbf{Task:} \texttt{research\_web}. Entry: \texttt{ready}; terminals: \texttt{returned, failed}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : WebResearchRequested
+then
+LeanFMServer ! ModelProvider : WebResearchDispatched
+then
+choose
+  ModelProvider ! LeanFMServer : WebSearchPerformed
+  then
+  ModelProvider ! LeanFMServer : WebPageOpened
+  then
+  LeanFMServer ! UserBrowser : WebResearchReturned
+or
+  LeanFMServer ! UserBrowser : WebResearchFailed
+\end{verbatim}
+\section{Recall diagram syntax or propose AI-generated detail for one markerboard revision}
+\noindent\textbf{Task:} \texttt{assist\_markerboard}. Entry: \texttt{editing}; terminals: \texttt{helped, updated, rejected}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : MarkerboardAssistRequested
+then
+choose
+  LeanFMServer ! UserBrowser : MarkerboardSyntaxHelpReturned
+or
+  LeanFMServer ! ModelProvider : MarkerboardAssistDispatched
+  then
+  ModelProvider ! LeanFMServer : MarkerboardAssistReturned
+  then
+  LeanFMServer ! UserBrowser : MarkerboardPatchProposed
+  then
+  choose
+    UserBrowser ! LeanFMServer : MarkerboardPatchAccepted
+    then
+    LeanFMServer ! UserBrowser : MarkerboardDraftUpdated
+  or
+    UserBrowser ! LeanFMServer : MarkerboardPatchRejected
+\end{verbatim}
