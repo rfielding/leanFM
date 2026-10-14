@@ -17,3 +17,4 @@ import LeanFM.PaxosKV.Requirements
 import LeanFM.PaxosKV.Implementation
 import LeanFM.StaticAssets
 import LeanFM.Render
+import LeanFM.MCP

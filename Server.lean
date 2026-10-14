@@ -349,7 +349,16 @@ def redirectResponse (location : String) (headers : List String := []) : Respons
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   let method := requestMethod request
-  match ← LeanFM.ChatUI.Server.handle? path method request with
+  if path == "/mcp" then
+    if method == "POST" then
+      let mcpResponse ← LeanFM.MCP.dispatch (requestBody request)
+      pure <| response mcpResponse.status "application/json; charset=utf-8" mcpResponse.body
+        ["MCP-Protocol-Version: " ++ LeanFM.MCP.protocolVersion]
+    else
+      pure <| response 405 "application/json; charset=utf-8"
+        "{\"error\":\"MCP uses POST with a JSON-RPC body\"}\n"
+        ["Allow: POST", "MCP-Protocol-Version: " ++ LeanFM.MCP.protocolVersion]
+  else match ← LeanFM.ChatUI.Server.handle? path method request with
   | some chatResponse =>
       pure <| response chatResponse.status chatResponse.contentType chatResponse.body chatResponse.headers
   | none =>
@@ -374,12 +383,14 @@ def responseForRequest (request : String) : IO Response := do
 def statusText : Nat -> String
   | 200 => "OK"
   | 201 => "Created"
+  | 202 => "Accepted"
   | 400 => "Bad Request"
   | 303 => "See Other"
   | 403 => "Forbidden"
   | 401 => "Unauthorized"
   | 404 => "Not Found"
   | 409 => "Conflict"
+  | 405 => "Method Not Allowed"
   | 500 => "Internal Server Error"
   | 502 => "Bad Gateway"
   | 503 => "Service Unavailable"

@@ -11,7 +11,7 @@ def existingProductImplementation : LeanFM.ImplementationSpec :=
   LeanFM.ChatUI.Implementation.implementation
 
 def selfHostingImplementationStatus : String :=
-  "Pending requirements acceptance and separate implementation specification for selfhost workflow, typed modal/probability formulas, checker evidence, revision acceptance, and demand-driven indexes. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
+  "The read-only MCP context adapter is implemented by LeanFM/MCP.lean and Server.lean, tested by LeanFM/MCPTests.lean, and documented in the book. Remaining selfhost workflow, typed modal/probability formulas, checker evidence, revision acceptance, and demand-driven indexes still require accepted implementation mappings. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
 
 def actorBinding : WorkerActor -> LeanFM.ActorCodegen
   | .Client => { actor := LeanFM.requirementName WorkerActor.Client

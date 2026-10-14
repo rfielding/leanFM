@@ -200,7 +200,22 @@ GET /graph.dot Graphviz DOT
 GET /auth.dot  auth group DOT
 GET /assembled.dot assembled-system DOT
 GET /health    health check
+POST /mcp      read-only MCP endpoint for project context, prompts, and validation tools
 ```
+
+The MCP endpoint treats `book/main.pdf` as durable agent context, comparable to
+a maintained section of the system prompt. It exposes only a fixed resource
+allowlist and read-only deterministic tools; it cannot accept a requirements or
+implementation gate and cannot mutate project files. Register a running local
+server with Codex:
+
+```sh
+codex mcp add leanfm --url http://127.0.0.1:8080/mcp
+codex mcp list
+```
+
+The bundled server binds to loopback. Add transport or reverse-proxy
+authentication before exposing `/mcp` on a network.
 
 Export DOT sources without starting the server:
 

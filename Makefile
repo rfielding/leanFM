@@ -101,6 +101,7 @@ validate:
 	@lake env lean LeanFM/PopulationTests.lean
 	@lake env lean LeanFM/CharacterizationTests.lean
 	@lake env lean LeanFM/CTLTests.lean
+	@lake env lean --run LeanFM/MCPTests.lean
 	@python3 scripts/roundtrip_generated_scenario.py
 	@python3 scripts/reduce_bakery_events.py --output /tmp/leanfm-bakery-stats.json --tex-output /tmp/leanfm-bakery-stats.tex >/dev/null
 	@cmp examples/bakery-stats.json /tmp/leanfm-bakery-stats.json
@@ -114,6 +115,7 @@ bakery-stats:
 
 http-check:
 	@curl -fsS "$(BASE_URL)/health"
+	@curl -fsS -X POST "$(BASE_URL)/mcp" -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"make-http-check","version":"1"}}}' | rg '"protocolVersion":"2025-06-18"|durable agent context'
 	@curl -fsS -c "$(COOKIES)" -b "$(COOKIES)" -L -d 'password=$(PASSWORD)' -o "$(ROOT_HTML)" "$(BASE_URL)/login"
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/prompt" | rg 'LeanFM/LLMGenerated/Requirements\.lean|Requirements\.proto|MessageFraming'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/validate" | rg '^ok: all generated requirements'
@@ -136,6 +138,8 @@ diagrams:
 	lake env lean --run StochasticUserMDPExample.lean
 	lake env lean --run BakeryFlowExample.lean
 	lake env lean --run OAuthGrammarExample.lean
+	lake env lean --run MCPInteractionExample.lean
+	lake env lean --run WebServerProtocolChapter.lean
 	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
 	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
@@ -152,6 +156,8 @@ book:
 	lake env lean --run StochasticUserMDPExample.lean
 	lake env lean --run BakeryFlowExample.lean
 	lake env lean --run OAuthGrammarExample.lean
+	lake env lean --run MCPInteractionExample.lean
+	lake env lean --run WebServerProtocolChapter.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

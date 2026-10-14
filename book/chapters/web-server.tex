@@ -157,6 +157,52 @@ then add the target system's accepted facts: observable behavior in
 specification and continue the argument; a successful build does not count as
 acceptance.
 
+\section{MCP: the agent-facing entrance}
+
+\index{Model Context Protocol}
+The browser UI is for stakeholders; the Model Context Protocol endpoint is for
+an LLM agent. LeanFM serves stateless JSON-RPC requests at \texttt{POST /mcp}.
+On initialization, the server tells the agent that the book is durable project
+context---effectively a maintained section of the system prompt---rather than
+optional background reading. The agent can enumerate and read fixed resource
+URIs for \texttt{book/main.pdf}, its dark rendering, the canonical requirements,
+protobuf and implementation files, and both live language references.
+
+This interaction is generated from the implemented MCP dispatch surface:
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{generated/mcp-interaction.tex}}
+\caption{An agent obtains durable project context and deterministic evidence
+through MCP. Source: \texttt{LeanFM.MCP}; reducer and provenance:
+\texttt{book/generated/mcp-interaction-provenance.txt}.}
+\label{fig:mcp-interaction}
+\end{figure}
+
+The first surface is intentionally read-only. It provides resource and prompt
+discovery, the requirements interrogation, the post-acceptance code-generation
+prompt, and canonical artifact validation. It exposes no arbitrary pathname and
+no tool can accept a requirements or implementation gate. Those are stakeholder
+decisions, not consequences of a successful tool call. MCP transports context
+and evidence; the existing LeanFM workflow controls revision and acceptance.
+
+The bundled server listens only on loopback. A deployment that exposes MCP to a
+network must add authentication and authorization at the transport or reverse
+proxy before treating the resource contents as safe to publish. Statelessness
+does not make project data public, and a future writable MCP surface must bind
+every request to a user, project, revision and accepted snapshot.
+
+A local Codex client can register the running endpoint and inspect the result:
+
+\begin{lstlisting}[language=bash]
+codex mcp add leanfm --url http://127.0.0.1:8080/mcp
+codex mcp list
+\end{lstlisting}
+
+The MCP interface does not replace the book. It makes the book, specifications,
+and live checker discoverable in a standard agent conversation so that a new
+session need not reconstruct the method from chat history.
+
 \section{One project, one directory}
 
 \index{project!directory boundary}

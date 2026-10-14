@@ -34,6 +34,7 @@
 \tagpdfsetup{activate-all,interwordspace=true}
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{enumitem}
 \usepackage{listings}
 \usepackage[numbers,sort&compress]{natbib}
@@ -238,8 +239,9 @@ constraints, and inspect generated diagrams, traces and measurements. The
 argument produces durable project artifacts rather than relying on chat memory.
 
 The book is the main artifact. Every project begins with \texttt{./book/main.pdf}:
-its purpose, vocabulary, boundaries, examples and design argument. It acts as
-project-specific context for the LLM. Final diagrams come from the specification
+its purpose, vocabulary, boundaries, examples and design argument. It acts as a
+maintained, project-specific section of the LLM's system-prompt context, whether
+supplied directly or discovered through the agent interface. Final diagrams come from the specification
 and are reused in the book, not maintained as separate designs.
 
 The book is itself vibecoded: missing views, checks and editing tools are built
@@ -299,6 +301,7 @@ contains the evolving language, tooling, examples, and implementation
 \part{The Grammar-Based Method}
 \include{chapters/vision}
 \include{chapters/events}
+\include{chapters/web-protocol}
 \include{chapters/bakery-example}
 \include{chapters/grammar}
 \include{chapters/authoring-language}
