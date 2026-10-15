@@ -57,6 +57,10 @@ def browserRequestTransport (name : String) : Option (String × String) :=
   | "MarkerboardAssistRequested" => some ("POST", "/api/projects/{project_id}/markerboard/assist")
   | "MarkerboardPatchAccepted" => some ("POST", "/api/projects/{project_id}/markerboard/assist/{artifact_id}/accept")
   | "MarkerboardPatchRejected" => some ("POST", "/api/projects/{project_id}/markerboard/assist/{artifact_id}/reject")
+  | "ProblemStatementSubmitted" => some ("POST", "/api/projects/{project_id}/specification/problem")
+  | "ClarificationSubmitted" => some ("POST", "/api/projects/{project_id}/specification/ambiguities/{ambiguity_id}")
+  | "SpecificationRequirementsAccepted" => some ("POST", "/api/projects/{project_id}/specification/requirements/{requirements_revision}/accept")
+  | "SpecificationImplementationAccepted" => some ("POST", "/api/projects/{project_id}/specification/implementation/{implementation_revision}/accept")
   | _ => none
 
 def responseRequest (name : String) : Option String :=
@@ -80,6 +84,11 @@ def responseRequest (name : String) : Option String :=
   | "WebResearchReturned" | "WebResearchFailed" => some "WebResearchRequested"
   | "MarkerboardSyntaxHelpReturned" | "MarkerboardPatchProposed" => some "MarkerboardAssistRequested"
   | "MarkerboardDraftUpdated" => some "MarkerboardPatchAccepted"
+  | "ProblemInquiryPresented" => some "ProjectOpenRequested"
+  | "AmbiguityQuestionPresented" | "RequirementsReviewPresented" => some "ProblemStatementSubmitted"
+  | "ProjectBookRevised" => some "ClarificationSubmitted"
+  | "ImplementationReviewPresented" => some "SpecificationRequirementsAccepted"
+  | "ImplementationAuthorizationConfirmed" => some "SpecificationImplementationAccepted"
   | _ => none
 
 def providerChannel (name : String) : Option String :=

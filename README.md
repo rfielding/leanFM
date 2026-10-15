@@ -40,6 +40,7 @@ The model treats a protocol as globally observable behavior:
 - every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
 - unlike an explicit-variable state model, LeanFM primarily recognizes and generates observable event traces; protocols and persistent disk formats tend to live forever as compatibility boundaries, while internal software structure changes more chaotically and introduces a much larger state space to explore, so private implementation variables are omitted unless they change an observable requirement
 - `Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the durable memory of the requirements argument, so a new LLM session does not require the original conversation
+- a fresh agent session needs only the project root; if it contains no durable problem statement, LeanFM first asks what problem the stakeholder is trying to solve, then asks artifact-linked ambiguity questions while producing the book and advancing the two acceptance gates
 - generated scenarios round-trip through protobuf bytes without losing `prior` predecessor links; these links induce a partial order in which incomparable concurrent events may commute, but do not alone assert causation
 - correlated event streams estimate task completion probability and completed-task latency
 - scenarios may carry a parallel protobuf alphabet for concrete wire bytes
@@ -103,6 +104,12 @@ make book        # build the LaTeX book, bibliography, contents, and index
 make bakery-data # deterministically regenerate 20,000 bakery order traces
 make bakery-stats # stream the bakery JSONL and derive probabilities/latencies
 ```
+
+To use an existing Cursor subscription, authenticate Cursor normally, start
+LeanFM, and open this project directory in Cursor. The committed
+`.cursor/mcp.json` points Cursor Agent at LeanFM's local MCP endpoint; see
+[`CURSOR.md`](CURSOR.md). Cursor remains the authenticated and billed agent
+client, so its subscription is not entered into LeanFM as a provider API key.
 
 This repository is itself a valid, self-contained LeanFM project. Its central
 Codex input is always `book/main.pdf`; `book/main-dark.pdf` is the equivalent

@@ -203,6 +203,29 @@ The MCP interface does not replace the book. It makes the book, specifications,
 and live checker discoverable in a standard agent conversation so that a new
 session need not reconstruct the method from chat history.
 
+\subsection{Cursor as an agent client}
+
+A Cursor subscription connects to LeanFM as an authenticated agent client, not
+as a model-provider API key. A project may commit
+\texttt{.cursor/mcp.json} with the local URL
+\texttt{http://127.0.0.1:8080/mcp}. Cursor Agent opens the project root, reads
+\texttt{AGENTS.md}, and discovers LeanFM's book, canonical artifacts, language
+references, prompts and validation tools through MCP. Cursor continues to own
+its subscription authentication and billing; LeanFM receives no Cursor login
+secret. The current MCP surface remains read-only, so Cursor edits files using
+its ordinary project tools and cannot accept either gate through MCP.
+
+For the inverse arrangement---the LeanFM browser driving a Cursor-backed
+conversation---Cursor CLI exposes the Agent Client Protocol over standard input
+and output. A \texttt{CursorACP} adapter can initialize and authenticate the
+local agent, create or load one session for each LeanFM project conversation,
+submit prompts, stream updates, answer explicit permission requests and cancel
+work. This is an implementation direction, not a claim about the running
+server. The adapter must isolate user, project, conversation, process and
+request identity; bound its queues; preserve tool and permission evidence; and
+terminate the process only after its queue is closed and drained. Cursor's
+authentication token is never imported into LeanFM's provider-key store.
+
 \section{One project, one directory}
 
 \index{project!directory boundary}
@@ -325,6 +348,33 @@ dimensions.
 \end{description}
 
 \section{Interrogate, characterize, synthesize, replay}
+
+\subsection{The first question}
+
+A fresh LeanFM conversation is not an empty general-purpose chat. Its only
+required external input is the project-root directory. The server and agent
+load the manifest, editable and rendered book, canonical requirements and
+protobuf, implementation mapping, acceptance revisions, source, generated
+views and evidence from stable paths beneath that root. They do not require a
+copied transcript or a specially composed restart prompt.
+
+When that directory contains no durable problem statement, the first visible
+assistant message is: ``What problem are you trying to solve?'' The answer is
+recorded before the system proposes frameworks or solutions. Subsequent
+questions name a concrete ambiguity and identify which requirement, view,
+proof obligation, implementation choice or acceptance gate depends on the
+answer. A useful turn records a durable decision, updates a derived view, asks
+such a blocking question, reports validation, or advances one of the two
+acceptance gates. Unrelated conversational assistance is outside this project
+conversation's purpose.
+
+The book is produced during this argument rather than written afterward. A
+durable decision revises its editable source and regenerates
+\texttt{book/main.pdf} and \texttt{book/main-dark.pdf} from the same content.
+The revision links its explanation and generated diagrams to the corresponding
+requirements, implementation and evidence revisions. Consequently, starting a
+new model session with the project directory is enough to continue the design
+without reconstructing intent from chat history.
 
 The conversational interface is not merely a code generator. Its first job is
 to discover whether the desired claims are identifiable. It asks for scenario

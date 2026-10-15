@@ -55,6 +55,16 @@ def messages : List MessageSchema :=
   , message "ProjectOpened" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "current_requirements_revision" .string]
   , message "ProjectDeleteRequested" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "confirmation" .string]
   , message "ProjectDeleted" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string]
+  , message "ProblemInquiryPresented" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "question" .string]
+  , message "ProblemStatementSubmitted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "statement" .string]
+  , message "AmbiguityQuestionPresented" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "ambiguity_id" .string, field 3 "question" .string, field 4 "affected_artifacts" .string]
+  , message "ClarificationSubmitted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "ambiguity_id" .string, field 3 "answer" .string]
+  , message "ProjectBookRevised" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "book_revision" .string, field 3 "decision_ids" .string, field 4 "light_pdf" .string, field 5 "dark_pdf" .string]
+  , message "RequirementsReviewPresented" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "derived_artifact_ids" .string, field 4 "open_ambiguity_ids" .string]
+  , message "SpecificationRequirementsAccepted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "requirements_revision" .string]
+  , message "ImplementationReviewPresented" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "implementation_revision" .string, field 4 "traceability_report" .string]
+  , message "SpecificationImplementationAccepted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "implementation_revision" .string]
+  , message "ImplementationAuthorizationConfirmed" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "implementation_revision" .string]
   , message "ProviderCredentialSubmitted" "UserBrowser" "LeanFMServer" [field 1 "provider" .string, field 2 "api_key" .bytes, field 3 "retention" .string]
   , message "ProviderCredentialAccepted" "LeanFMServer" "UserBrowser" [field 1 "credential_ref" .string, field 2 "billing_source" .string]
   , message "ProviderCredentialRejected" "LeanFMServer" "UserBrowser" [field 1 "reason" .string]
@@ -156,6 +166,34 @@ def credentialTask : TaskRequirement :=
       [ transition "unconfigured" "checking" "ProviderCredentialSubmitted"
       , transition "checking" "configured" "ProviderCredentialAccepted"
       , transition "checking" "rejected" "ProviderCredentialRejected" ] }
+
+def specificationConversationTask : TaskRequirement :=
+  { id := "develop_project_specification"
+  , title := "Turn a fresh project conversation into accepted requirements and implementation"
+  , actors := ["UserBrowser", "LeanFMServer"]
+  , initialState := "project_loaded"
+  , states :=
+      [ state "project_loaded" "project directory loaded as the complete initial context" "inquiry"
+      , state "awaiting_problem" "the user is asked what problem they are trying to solve" "inquiry"
+      , state "discovering" "the problem and current durable artifacts are being interrogated" "requirements"
+      , state "awaiting_clarification" "one named ambiguity is awaiting a stakeholder answer" "requirements"
+      , state "requirements_review" "validated requirements and derived views await explicit acceptance" "requirements gate"
+      , state "requirements_accepted" "the exact requirements revision is accepted" "implementation"
+      , state "implementation_review" "traceable implementation mapping awaits explicit acceptance" "implementation gate"
+      , state "implementation_accepted" "the exact implementation revision is accepted" "implementation gate"
+      , state "ready_to_implement" "both exact revisions are accepted for one-shot implementation" "terminal" true ]
+  , transitions :=
+      [ transition "project_loaded" "awaiting_problem" "ProblemInquiryPresented"
+      , transition "awaiting_problem" "discovering" "ProblemStatementSubmitted"
+      , transition "discovering" "discovering" "ProjectBookRevised"
+      , transition "discovering" "awaiting_clarification" "AmbiguityQuestionPresented"
+      , transition "awaiting_clarification" "discovering" "ClarificationSubmitted"
+      , transition "awaiting_clarification" "awaiting_clarification" "ProjectBookRevised"
+      , transition "discovering" "requirements_review" "RequirementsReviewPresented"
+      , transition "requirements_review" "requirements_accepted" "SpecificationRequirementsAccepted"
+      , transition "requirements_accepted" "implementation_review" "ImplementationReviewPresented"
+      , transition "implementation_review" "implementation_accepted" "SpecificationImplementationAccepted"
+      , transition "implementation_accepted" "ready_to_implement" "ImplementationAuthorizationConfirmed" ] }
 
 def chatTask : TaskRequirement :=
   { id := "argue_requirements"
@@ -321,6 +359,22 @@ def credentialGrammar : TaskGrammar :=
         [ atom "configure_provider" "LeanFMServer" "UserBrowser" "ProviderCredentialAccepted"
         , atom "configure_provider" "LeanFMServer" "UserBrowser" "ProviderCredentialRejected" ] }
 
+def specificationConversationGrammar : TaskGrammar :=
+  { task := "develop_project_specification", entry := "project_loaded", terminals := ["ready_to_implement"]
+  , body :=
+      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ProblemInquiryPresented" >>>
+      atom "develop_project_specification" "UserBrowser" "LeanFMServer" "ProblemStatementSubmitted" >>>
+      GrammarExpr.repeat
+        (GrammarExpr.optional (atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ProjectBookRevised") >>>
+         atom "develop_project_specification" "LeanFMServer" "UserBrowser" "AmbiguityQuestionPresented" >>>
+         atom "develop_project_specification" "UserBrowser" "LeanFMServer" "ClarificationSubmitted") >>>
+      GrammarExpr.optional (atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ProjectBookRevised") >>>
+      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "RequirementsReviewPresented" >>>
+      atom "develop_project_specification" "UserBrowser" "LeanFMServer" "SpecificationRequirementsAccepted" >>>
+      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ImplementationReviewPresented" >>>
+      atom "develop_project_specification" "UserBrowser" "LeanFMServer" "SpecificationImplementationAccepted" >>>
+      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ImplementationAuthorizationConfirmed" }
+
 def chatGrammar : TaskGrammar :=
   { task := "argue_requirements", entry := "ready", terminals := ["rendered", "failed"]
   , body := GrammarExpr.seqList
@@ -405,8 +459,15 @@ def taskConstraints : List TaskConstraint :=
   [ where_ "signup_requires_verified_byok" "create_account" "AccountCreated has a same-flow ProviderKeyVerified for AccountCreateSubmitted.api_key"
   , where_ "stored_provider_keys_are_encrypted" "create_account" "a retained provider API key is stored as authenticated ciphertext under a separate password-derived key; passwords are salted KDF verifiers; neither decrypted keys nor sessions are persisted; AccountCreated returns only its credential_ref"
   , where_ "project_owner_is_session_user" "manage_projects" "every project operation is authorized for the authenticated session user"
+  , where_ "fresh_session_needs_only_project_root" "develop_project_specification" "the initial agent input is the project root; the server loads its manifest book canonical specifications accepted revisions source and evidence without requiring a copied transcript or handcrafted bootstrap prompt"
+  , where_ "fresh_project_begins_with_problem_inquiry" "develop_project_specification" "before accepting an ordinary solution prompt a new project visibly asks what problem the stakeholder is trying to solve"
+  , where_ "questions_reduce_named_ambiguities" "develop_project_specification" "each follow-up question names an unresolved ambiguity and the durable artifacts or acceptance decision affected by its answer; it does not divert into unrelated assistance"
+  , where_ "conversation_advances_the_two_gates" "develop_project_specification" "each assistant turn either records a durable decision updates a derived view asks a blocking ambiguity question reports validation or advances the explicit requirements or implementation acceptance gate"
+  , where_ "book_grows_with_durable_decisions" "develop_project_specification" "accepted or provisionally retained design reasoning updates editable book source and regenerates book/main.pdf and book/main-dark.pdf under the project root with links to the requirement implementation and evidence revisions it explains"
+  , where_ "acceptance_names_exact_revisions" "develop_project_specification" "SpecificationRequirementsAccepted and SpecificationImplementationAccepted name the exact validated revisions; later changes invalidate the affected acceptance instead of silently inheriting it"
   , where_ "chat_is_project_scoped" "argue_requirements" "every turn belongs to exactly one authorized project conversation"
   , where_ "model_key_is_request_scoped" "argue_requirements" "ModelRequestIssued resolves exactly the credential_ref authorized for that turn's authenticated user and never reads or mutates a process-global API key"
+  , where_ "cursor_subscription_uses_agent_protocol" "argue_requirements" "a Cursor subscription is used through an authenticated Cursor Agent client and project MCP or through an isolated Cursor ACP session; LeanFM never requests stores or treats Cursor login state as a reusable model-provider API key"
   , where_ "concurrent_keys_do_not_collide" "argue_requirements" "concurrent turns with different credential_ref values cannot share credentials responses accounting retries cancellation or provider-client mutable state"
   , where_ "keyless_server_has_no_provider_spend" "argue_requirements" "without a user-owned credential_ref and without an explicitly configured platform credential no ModelRequestIssued occurs"
   , where_ "usage_is_visible_per_turn" "argue_requirements" "each successful provider turn renders input cached-input output and context-window token counts beside that response"
@@ -426,6 +487,7 @@ def taskConstraints : List TaskConstraint :=
   , where_ "terminal_events_backpoint_to_start" "inspect_task_model" "each duration or byte-delta measurement names a start event and terminal event in the same session and task; the terminal event prior_ids contains the start event_id; reducers subtract the paired timestamps or encoded byte counts rather than relying on adjacency"
   , where_ "parameters_cascade_through_grammar" "inspect_task_model" "each exposed grammar parameter has one typed definition and dependency edges to every affected production queue bound population reducer proof and rendering; changing a parameter invalidates and regenerates all transitive dependents"
   , where_ "http_productions_are_byte_exact" "inspect_task_model" "each production selected for HTTP names its method path request and response protobuf types status mapping content type byte encoder and byte decoder; decoding emitted bytes recovers the same value and illegal bytes or grammar order are visibly rejected"
+  , where_ "default_http_projection_is_deterministic" "inspect_task_model" "when implementation does not override an HTTP binding the generator pairs request and response atoms from the task grammar, emits an OpenAPI operation, uses URL parameters only for explicitly bounded URL-safe scalar selectors, and otherwise uses POST with the protobuf request in the body; bytes repeated nested secret or unbounded fields never become URL parameters"
   , where_ "grammar_canvas_is_progressively_disclosed" "inspect_task_model" "the complete grammar is rendered as one navigable canvas whose task and production nodes can be opened or closed without changing the underlying typed grammar or hiding validation failures" ]
 
 def taskStates (task : TaskRequirement) : List String := task.states.map (fun s => s.id)
@@ -441,6 +503,8 @@ def processes : List RequirementProcess :=
   , process "ModelProvider" accountCreationTask ["ProviderKeyVerified", "ProviderKeyRejected"] ["ProviderKeyCheckRequested"]
   , process "UserBrowser" projectTask ["ProjectListRequested", "ProjectCreateRequested", "ProjectOpenRequested", "ProjectDeleteRequested"] ["ProjectListReturned", "ProjectCreated", "ProjectOpened", "ProjectDeleted"]
   , process "LeanFMServer" projectTask ["ProjectListReturned", "ProjectCreated", "ProjectOpened", "ProjectDeleted"] ["ProjectListRequested", "ProjectCreateRequested", "ProjectOpenRequested", "ProjectDeleteRequested"]
+  , process "UserBrowser" specificationConversationTask ["ProblemStatementSubmitted", "ClarificationSubmitted", "SpecificationRequirementsAccepted", "SpecificationImplementationAccepted"] ["ProblemInquiryPresented", "AmbiguityQuestionPresented", "ProjectBookRevised", "RequirementsReviewPresented", "ImplementationReviewPresented", "ImplementationAuthorizationConfirmed"]
+  , process "LeanFMServer" specificationConversationTask ["ProblemInquiryPresented", "AmbiguityQuestionPresented", "ProjectBookRevised", "RequirementsReviewPresented", "ImplementationReviewPresented", "ImplementationAuthorizationConfirmed"] ["ProblemStatementSubmitted", "ClarificationSubmitted", "SpecificationRequirementsAccepted", "SpecificationImplementationAccepted"]
   , process "UserBrowser" credentialTask ["ProviderCredentialSubmitted"] ["ProviderCredentialAccepted", "ProviderCredentialRejected"]
   , process "LeanFMServer" credentialTask ["ProviderCredentialAccepted", "ProviderCredentialRejected"] ["ProviderCredentialSubmitted"]
   , process "UserBrowser" chatTask ["ChatPromptSubmitted"] ["ChatResponseRendered", "ChatTurnFailed"]
@@ -507,6 +571,8 @@ def outputs : List DesiredOutput :=
   , { id := "chatui.signup.state", prompt := "Users should be able to create their own account if they supply their own API key.", question := "Which registration and provider-verification states are observable?", kind := .stateMachine, eventSource := "create_account grammar", reducer := "render grammar residuals", unit := "states and transitions" }
   , { id := "chatui.projects.interaction", prompt := "Show a list of projects and keep every project in one deletable directory.", question := "How does the user list, create, open, or confirm deletion of a project?", kind := .interactionDiagram, eventSource := "manage_projects events", reducer := "render the selected project-operation branch", unit := "events" }
   , { id := "chatui.projects.state", prompt := "Show a list of projects and keep every project in one deletable directory.", question := "Which project lifecycle states are observable?", kind := .stateMachine, eventSource := "manage_projects grammar", reducer := "render grammar residuals for list create open and confirmed delete", unit := "states and transitions" }
+  , { id := "chatui.specification-conversation.interaction", prompt := "A fresh LeanFM session should begin by asking what problem the user is trying to solve, resolve ambiguities, and remain focused on accepted requirements and implementation.", question := "How does a project directory become an inquiry, clarified requirements, two accepted revisions, and authorization for implementation?", kind := .interactionDiagram, eventSource := "develop_project_specification events", reducer := "render problem inquiry, repeated named clarification loop, book revisions, and both acceptance gates", unit := "events and artifact revisions" }
+  , { id := "chatui.specification-conversation.state", prompt := "A totally fresh prompt should need only the project directory as input.", question := "Which discovery or acceptance state is the project conversation in?", kind := .stateMachine, eventSource := "develop_project_specification grammar", reducer := "render the residual grammar with the current named ambiguity and exact artifact revisions", unit := "states, ambiguities, and revisions" }
   , { id := "chatui.provider.interaction", prompt := "Let a user bring an API key and bound use of the platform key.", question := "How is a provider credential accepted or visibly rejected without exposing the raw secret?", kind := .interactionDiagram, eventSource := "configure_provider events", reducer := "render the selected credential result branch while redacting api_key", unit := "events" }
   , { id := "chatui.provider.state", prompt := "Let a user bring an API key and bound use of the platform key.", question := "Which provider-credential states are observable?", kind := .stateMachine, eventSource := "configure_provider grammar", reducer := "render grammar residuals", unit := "states and transitions" }
   , { id := "chatui.chat.interaction", prompt := "Move this requirements argument from Codex into LeanFM chat, including image and diagram questions and answers.", question := "How does one durable multipart question reach a model and return ordered inline content parts?", kind := .interactionDiagram, eventSource := "argue_requirements events and ChatContentPart values", reducer := "render browser server and provider lifelines with content-part kinds and the visible failure alternative", unit := "events and content parts" }
@@ -546,8 +612,8 @@ def spec : RequirementSpec :=
   , reliabilityGates := []
   , actorCosts := []
   , messages
-  , tasks := [authenticationTask, accountCreationTask, projectTask, credentialTask, chatTask, markerboardTask, artifactsTask, inspectTaskModelTask, webResearchTask, markerboardAssistTask]
-  , grammars := [authenticationGrammar, accountCreationGrammar, projectGrammar, credentialGrammar, chatGrammar, markerboardGrammar, artifactsGrammar, inspectTaskModelGrammar, webResearchGrammar, markerboardAssistGrammar]
+  , tasks := [authenticationTask, accountCreationTask, projectTask, specificationConversationTask, credentialTask, chatTask, markerboardTask, artifactsTask, inspectTaskModelTask, webResearchTask, markerboardAssistTask]
+  , grammars := [authenticationGrammar, accountCreationGrammar, projectGrammar, specificationConversationGrammar, credentialGrammar, chatGrammar, markerboardGrammar, artifactsGrammar, inspectTaskModelGrammar, webResearchGrammar, markerboardAssistGrammar]
   , processes
   , properties := taskProperties
   , requiredProofs := proofs
@@ -559,9 +625,11 @@ def spec : RequirementSpec :=
       , { id := "root_workbench", title := "The root page is the entire ChatGPT-like product surface", body := "GET http://localhost:8080/ is the primary interface. A signed-out visitor sees login and BYOK account creation. A newly registered user with no projects can create the first project. Once a project is open, the surface is intentionally indistinguishable from the familiar ChatGPT conversation layout except for first-class task-linked LeanFM views: project and conversation navigation at the side, conversation in the main pane, a fixed multimodal composer, and direct Diagrams/Artifacts access. The user never lands on an implementation example gallery." }
       , { id := "self_registration", title := "Self-registration is BYOK-only", body := "An unauthenticated visitor may create an account only by supplying a login credential and their own model-provider API key. LeanFM verifies that key with the named provider before creating the account, stores the key as account-owned authenticated ciphertext, and returns only its credential reference. The platform API key cannot satisfy registration." }
       , { id := "project_containment", title := "One project, one directory", body := "Every project-owned input, book snapshot, conversation, artifact revision, specification, source file, test, generated view, trace, report, log, and cache remains below the exclusive project root. A global project index is reconstructible from project manifests." }
+      , { id := "conversation_bootstrap", title := "The project directory is the complete fresh-session prompt", body := "Starting or resuming an agent conversation requires only the project root. LeanFM reads the manifest, editable and rendered book, canonical requirements and protobuf, canonical implementation mapping, acceptance revisions, source tree, generated views, and evidence from stable paths beneath that root. A new empty project first generates its minimal book shell and asks: What problem are you trying to solve? It then asks focused questions tied to named ambiguities. Durable decisions revise the book as the conversation proceeds. The goal is always validated requirements, explicit requirements acceptance, a separately traceable implementation specification, explicit implementation acceptance, and only then implementation." }
       , { id := "markerboard_modes", title := "Think and verify", body := "Scratch Mermaid supports stateDiagram-v2, sequenceDiagram, and flowchart with immediate dark preview. Promotion creates a candidate interpretation for review. Accepted diagrams are regenerated from Requirements.lean and retain provenance; scratch drawings never silently become evidence." }
       , { id := "artifact_tab", title := "Artifacts are not chat scrollback", body := "A stable Diagrams/Artifacts tab lists server-backed project artifacts grouped and filterable by scenario, diagram kind, media kind, status, and revision. It shows current, accepted, superseded, and stale labels, validation, provenance, author, time, dependencies, history, compare, open, and download actions." }
       , { id := "credentials", title := "User-funded and platform-funded model access", body := "A user may supply a provider key ephemerally or through an account credential reference. A retained key is stored outside project roots in the owning account credential store as authenticated ciphertext requiring the supplied login password. Password verifiers and credential encryption use distinct random salts. Unlocked credentials and bearer sessions exist only in server memory and expire; restart requires password login. Platform-funded access is explicit and bounded. Raw or encoded provider secrets never enter project-owned state, browser responses after submission, chat, logs, traces, errors, or generated artifacts." }
+      , { id := "cursor_agent", title := "Cursor subscriptions connect as agents, not provider keys", body := "The immediate integration is Cursor Agent opened at the project root with the committed .cursor/mcp.json pointing to LeanFM's read-only MCP endpoint; Cursor reads AGENTS.md and uses its own authenticated subscription. A browser-hosted integration uses a local Cursor ACP process over stdio, with one isolated ACP session per LeanFM project conversation. Cursor retains authentication and billing responsibility. LeanFM does not collect or persist Cursor login tokens, cannot accept either gate through MCP, and applies the same project, queue, permission, traceability, and acceptance boundaries to ACP-driven edits." }
       , { id := "credential_encryption", title := "Password-derived credential protection", body := "This release must derive a distinct key-encryption key from the user's supplied login password with a salted password KDF, encrypt the provider key with authenticated encryption, and persist only the password verifier plus KDF parameters, salt, nonce, and ciphertext—not the password or derived encryption key. Successful login makes the decryption key available only for the authenticated session. There is no password recovery: resetting a password requires supplying a replacement provider key. Legacy Base64 credentials are encrypted only after successful password verification and then removed; malformed ciphertext never falls back to a legacy key." }
       , { id := "keyless_launch", title := "A keyless server cannot create a billing surprise", body := "LeanFM starts and serves login, account creation, projects, stored conversations, specifications, and artifacts without a platform API key. It issues no provider request unless the authenticated user selected their own verified credential, or an administrator separately and explicitly enabled a bounded platform-funded credential. Missing credentials produce a visible non-billable state." }
       , { id := "usage_display", title := "Token and context usage accompany every model response", body := "Beside each completed assistant response, the page displays provider-reported input, cached-input, output, and total tokens, plus used tokens and percentage of the model context window. The display and warning belong to the same request and credential accounting boundary. Token usage is not labeled as monetary cost unless an identified provider pricing schedule and effective date are also available." }
@@ -576,6 +644,7 @@ def spec : RequirementSpec :=
          , { id := "paired_measurements", title := "Start and terminal events justify calculated differences", body := "Work is generally observed as a start/terminal pair. The terminal event names the start event_id in prior_ids. Within the same session and task, elapsed time is terminal.time_at minus start.time_at; encoded-byte growth or reduction is the corresponding terminal byte count minus start byte count. Reducers follow identity and backpointers, never adjacency, so intermediate detail may be collapsed without losing the evidence for a displayed result." }
          , { id := "grammar_canvas", title := "The whole grammar is a parameterized canvas", body := "The UI renders the complete typed grammar as one navigable canvas. Tasks and productions may be opened or closed; collapsed nodes preserve identity, validation state, parameters, and aggregate measurements. Editing a typed parameter shows and regenerates every transitive dependent production, queue bound, population, reducer, proof, codec, and view." }
          , { id := "byte_exact_http", title := "HTTP-bound productions are executable byte contracts", body := "A production known to cross HTTP may attach its transport renderer at that production: method, path template, request and response protobuf types, status alternatives, content type, encoder, and decoder. Generated fixtures emit exact bytes and read them back. Round-trip equality and residual-grammar acceptance are conformance checks; transport detail does not silently redefine the message value." } ]
+      ++ [ { id := "default_http_projection", title := "Protobuf request-response pairs have a conservative default HTTP projection", body := "The generator pairs request and response message atoms using the task grammar and correlation identity, then emits the resolved operations and schemas as OpenAPI. An explicit Implementation.lean binding wins. Without one, only explicitly bounded URL-safe scalar selectors may enter path or query parameters. Bytes, repeated fields, nested messages, secrets, large or unbounded strings, and requests whose parameter encoding would be unnatural use POST with the protobuf value in the request body. Response alternatives and status mappings come from the paired grammar branches. Generated codecs must round-trip the protobuf value." } ]
       ++ [ { id := "web_protocol_reference", title := "The web protocol is generated from LeanFM artifacts", body := "Part III is a machine-oriented reference derived from the complete accepted ChatUI grammar, protobuf payload vocabulary, and intended HTTP mappings in Requirements.lean, Requirements.proto, and Implementation.lean. It separately enumerates the routes dispatched by the running adapter, so an intended binding is never presented as an implemented handler." } ] }
 
 def validationReport : String :=

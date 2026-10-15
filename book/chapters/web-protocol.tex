@@ -55,6 +55,30 @@ length-delimited binary \texttt{EventEnvelope} values. A future binary HTTP
 adapter could use \texttt{application/protobuf} without changing the grammar,
 provided it preserves the same message value and correlation fields.
 
+\subsection{Conservative default HTTP projection}
+
+LeanFM can generate an HTTP projection and its OpenAPI description when
+\texttt{Implementation.lean} does not provide an explicit binding. The task
+grammar supplies request/response pairing: an initiating browser-to-server
+message is the request, its correlated finite server-to-browser alternatives
+are responses, and their protobuf schemas supply the operation schemas. An
+explicit implementation binding always overrides the default.
+
+The default is deliberately conservative. A field may appear in a path or
+query only when the implementation explicitly classifies it as a bounded,
+URL-safe scalar selector. Bytes, repeated fields, nested messages, secrets,
+large or unbounded strings, and any request whose arguments would be unnatural
+as a URL use \texttt{POST}; the protobuf value is carried in the request body.
+This prevents a convenient generator from leaking credentials, exceeding
+practical URL limits, or inventing ambiguous encodings. Generated encoders and
+decoders must preserve the protobuf value exactly.
+
+The generated OpenAPI operation records the resolved method and path, body
+content type, request schema, every grammar-permitted response schema and
+status, authentication requirement, correlation fields, and LeanFM requirement
+identifier. OpenAPI documents the transport projection; the protobuf and task
+grammar remain the definitions of values and legal ordering.
+
 \section{The conversion, field by field}
 
 For a request binding \texttt{httpRequest(method, pathTemplate)}, conversion is

@@ -68,6 +68,16 @@ message EventEnvelope {
     MarkerboardPatchAccepted markerboard_patch_accepted = 72;
     MarkerboardPatchRejected markerboard_patch_rejected = 73;
     MarkerboardDraftUpdated markerboard_draft_updated = 74;
+    ProblemInquiryPresented problem_inquiry_presented = 75;
+    ProblemStatementSubmitted problem_statement_submitted = 76;
+    AmbiguityQuestionPresented ambiguity_question_presented = 77;
+    ClarificationSubmitted clarification_submitted = 78;
+    ProjectBookRevised project_book_revised = 79;
+    RequirementsReviewPresented requirements_review_presented = 80;
+    SpecificationRequirementsAccepted specification_requirements_accepted = 81;
+    ImplementationReviewPresented implementation_review_presented = 82;
+    SpecificationImplementationAccepted specification_implementation_accepted = 83;
+    ImplementationAuthorizationConfirmed implementation_authorization_confirmed = 84;
   }
 }
 
@@ -101,6 +111,17 @@ message ChatContentPart {
 message LoginSubmitted { string username = 1; bytes credential = 2; }
 message LoginAccepted { string user_id = 1; string session_id = 2; }
 message LoginRejected { string reason = 1; }
+
+message ProblemInquiryPresented { string project_id = 1; string question = 2; }
+message ProblemStatementSubmitted { string project_id = 1; string statement = 2; }
+message AmbiguityQuestionPresented { string project_id = 1; string ambiguity_id = 2; string question = 3; repeated string affected_artifacts = 4; }
+message ClarificationSubmitted { string project_id = 1; string ambiguity_id = 2; string answer = 3; }
+message ProjectBookRevised { string project_id = 1; string book_revision = 2; repeated string decision_ids = 3; string light_pdf = 4; string dark_pdf = 5; }
+message RequirementsReviewPresented { string project_id = 1; string requirements_revision = 2; repeated string derived_artifact_ids = 3; repeated string open_ambiguity_ids = 4; }
+message SpecificationRequirementsAccepted { string project_id = 1; string requirements_revision = 2; }
+message ImplementationReviewPresented { string project_id = 1; string requirements_revision = 2; string implementation_revision = 3; string traceability_report = 4; }
+message SpecificationImplementationAccepted { string project_id = 1; string requirements_revision = 2; string implementation_revision = 3; }
+message ImplementationAuthorizationConfirmed { string project_id = 1; string requirements_revision = 2; string implementation_revision = 3; }
 
 message AccountCreateSubmitted {
   string username = 1;

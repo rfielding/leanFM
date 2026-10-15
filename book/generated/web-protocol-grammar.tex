@@ -44,6 +44,38 @@ or
   then
   LeanFMServer ! UserBrowser : ProjectDeleted
 \end{verbatim}
+\section{Turn a fresh project conversation into accepted requirements and implementation}
+\noindent\textbf{Task:} \texttt{develop\_project\_specification}. Entry: \texttt{project\_loaded}; terminals: \texttt{ready\_to\_implement}.
+\begin{verbatim}
+LeanFMServer ! UserBrowser : ProblemInquiryPresented
+then
+UserBrowser ! LeanFMServer : ProblemStatementSubmitted
+then
+repeat
+  choose
+    empty
+  or
+    LeanFMServer ! UserBrowser : ProjectBookRevised
+  then
+  LeanFMServer ! UserBrowser : AmbiguityQuestionPresented
+  then
+  UserBrowser ! LeanFMServer : ClarificationSubmitted
+then
+choose
+  empty
+or
+  LeanFMServer ! UserBrowser : ProjectBookRevised
+then
+LeanFMServer ! UserBrowser : RequirementsReviewPresented
+then
+UserBrowser ! LeanFMServer : SpecificationRequirementsAccepted
+then
+LeanFMServer ! UserBrowser : ImplementationReviewPresented
+then
+UserBrowser ! LeanFMServer : SpecificationImplementationAccepted
+then
+LeanFMServer ! UserBrowser : ImplementationAuthorizationConfirmed
+\end{verbatim}
 \section{Select user-funded or platform-funded model access}
 \noindent\textbf{Task:} \texttt{configure\_provider}. Entry: \texttt{unconfigured}; terminals: \texttt{configured, rejected}.
 \begin{verbatim}

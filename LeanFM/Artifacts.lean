@@ -1257,6 +1257,7 @@ def leanFMImplementationReference : String :=
     , "MessageCodegen { message, wireType, transport, justifications }. Provide exactly one binding for every requirement message and no unknown messages."
     , "TransportSpec is httpRequest method path | httpResponse requestMessage | inProcessChannel channelName | tcp endpoint | custom adapter configuration."
     , "HTTP responses name a known request message. Transport selects how protobuf bytes move; it does not alter the protobuf payload or legal grammar order."
+    , "A generator may resolve an otherwise unspecified ordinary HTTP choice with the conservative default projection: pair request and response atoms from the task grammar; permit path/query fields only when explicitly bounded and URL-safe scalars; otherwise use POST with the protobuf request body. Bytes, repeated fields, nested messages, secrets, and large or unbounded strings never default to URL parameters. Emit the resolved mapping as OpenAPI and preserve protobuf round-trip equality. An explicit ImplementationSpec transport binding overrides the default."
     , ""
     , "## Channels"
     , "ChannelCodegen names sendFunction, receiveFunction, tryReceiveFunction, and closeFunction. Required semantics are blockWithoutMutation for full sends and empty blocking receives, returnNoneKeepRunnable for an open empty tryReceive, rejectWithoutMutation for every send after close, drainThenReturnClosed for receivers, and idempotentWakeWaiters for close. Iteration is complete exactly when the queue is closed and drained."

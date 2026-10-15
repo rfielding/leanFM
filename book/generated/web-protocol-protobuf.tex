@@ -36,6 +36,16 @@
 \item[\nolinkurl{ProjectOpened}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: current\_requirements\_revision (string).
 \item[\nolinkurl{ProjectDeleteRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: confirmation (string).
 \item[\nolinkurl{ProjectDeleted}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string).
+\item[\nolinkurl{ProblemInquiryPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: question (string).
+\item[\nolinkurl{ProblemStatementSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: statement (string).
+\item[\nolinkurl{AmbiguityQuestionPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: ambiguity\_id (string); 3: question (string); 4: affected\_artifacts (string).
+\item[\nolinkurl{ClarificationSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: ambiguity\_id (string); 3: answer (string).
+\item[\nolinkurl{ProjectBookRevised}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: book\_revision (string); 3: decision\_ids (string); 4: light\_pdf (string); 5: dark\_pdf (string).
+\item[\nolinkurl{RequirementsReviewPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: derived\_artifact\_ids (string); 4: open\_ambiguity\_ids (string).
+\item[\nolinkurl{SpecificationRequirementsAccepted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string).
+\item[\nolinkurl{ImplementationReviewPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: implementation\_revision (string); 4: traceability\_report (string).
+\item[\nolinkurl{SpecificationImplementationAccepted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: implementation\_revision (string).
+\item[\nolinkurl{ImplementationAuthorizationConfirmed}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: implementation\_revision (string).
 \item[\nolinkurl{ProviderCredentialSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: provider (string); 2: api\_key (bytes); 3: retention (string).
 \item[\nolinkurl{ProviderCredentialAccepted}] LeanFMServer sends to UserBrowser. Tagged fields: 1: credential\_ref (string); 2: billing\_source (string).
 \item[\nolinkurl{ProviderCredentialRejected}] LeanFMServer sends to UserBrowser. Tagged fields: 1: reason (string).

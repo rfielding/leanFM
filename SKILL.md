@@ -52,6 +52,13 @@ Copying the project root must yield a directory ready to initialize or use as a
 repository with Codex; it must not require project-owned state from LeanFM's
 installation.
 
+When generating an HTTP adapter, derive OpenAPI from the resolved protobuf
+request/response pairs and implementation transports. An explicit transport
+mapping wins. For an otherwise ordinary default mapping, use path or query
+parameters only for explicitly bounded URL-safe scalar selectors; use POST with
+the protobuf request body for bytes, repeated or nested values, secrets, large
+or unbounded strings, or parameters that do not naturally belong in a URL.
+
 ## Connect to LeanFM
 
 Use `${LEANFM_URL:-http://127.0.0.1:8080}`. Before authoring artifacts, obtain:
@@ -93,6 +100,29 @@ or another generated artifact named by the requirement.
 Continue the argument until the user explicitly accepts the requirements
 specification. Do not interpret silence, a successful build, or an attractive
 diagram as acceptance.
+
+### Start and resume from the project root
+
+A fresh agent invocation needs only the project-root directory. Load the
+manifest, editable and rendered book, canonical requirements and protobuf,
+canonical implementation mapping, acceptance revisions, source tree, generated
+views and evidence from their stable project-relative paths. Do not require the
+user to paste an earlier transcript or manufacture a bootstrap prompt.
+
+If the project has no durable problem statement, begin by asking: "What problem
+are you trying to solve?" Do not begin with framework selection or a proposed
+solution. After the answer, identify concrete ambiguities whose resolution can
+change observable requirements, derived views, proof obligations, or
+implementation choices. Ask focused questions that name the ambiguity and the
+artifact or gate it affects. Each subsequent turn should do at least one of:
+record a durable decision, update a derived view, ask a blocking ambiguity,
+report deterministic validation, or advance an explicit acceptance gate.
+
+Revise the project book as durable understanding develops. Regenerate
+`book/main.pdf` and `book/main-dark.pdf` from the same editable source and link
+the prose and diagrams to the requirement, implementation and evidence
+revisions they explain. The conversation may disappear; the project directory
+must remain sufficient to resume.
 
 ## Consolidate the vibecoded book
 
