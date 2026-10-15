@@ -116,6 +116,9 @@ bakery-stats:
 http-check:
 	@curl -fsS "$(BASE_URL)/health"
 	@curl -fsS -X POST "$(BASE_URL)/mcp" -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"make-http-check","version":"1"}}}' | rg '"protocolVersion":"2025-06-18"|durable agent context'
+	@curl -fsS "$(BASE_URL)/tools/leanfm-language/requirements-reference" | rg '^# LeanFM requirement language reference'
+	@curl -fsS "$(BASE_URL)/tools/leanfm-language/implementation-reference" | rg '^# LeanFM implementation language reference'
+	@curl -fsS "$(BASE_URL)/tools/requirements/interrogation" | rg '^LeanFM requirements interrogation checklist'
 	@curl -fsS -c "$(COOKIES)" -b "$(COOKIES)" -L -d 'password=$(PASSWORD)' -o "$(ROOT_HTML)" "$(BASE_URL)/login"
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/prompt" | rg 'LeanFM/LLMGenerated/Requirements\.lean|Requirements\.proto|MessageFraming'
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/validate" | rg '^ok: all generated requirements'

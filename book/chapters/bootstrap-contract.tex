@@ -1,0 +1,120 @@
+\chapter{The LeanFM Project Bootstrap Contract}
+\label{ch:bootstrap-contract}
+
+This chapter defines the minimum machine-readable context that makes a LeanFM
+project self-hosting. It belongs in the machine reference because an agent must
+apply it before it can turn the rest of the book into checked artifacts. The
+bootstrap defines the language and its tools; it must not contain a hidden copy
+of the product requirements or implementation.
+
+The intended handoff is deliberately simple: send another person the URL of
+this PDF, ask Claude, Gemini, Codex, or another capable construction agent to
+read it, and ask that agent to make the software. The current generic bootstrap
+distribution is published at
+\url{https://github.com/rfielding/leanFM/tree/main/projects/blank-leanfm-webserver}.
+An agent using only the PDF may follow that URL for the language files and
+commands named below. It must not copy the existing LeanFM application source
+or prior ChatUI specifications as an answer key.
+
+\section{Required project inputs}
+
+A copyable project root contains the following stable inputs:
+
+\begin{description}[style=nextline]
+  \item[\texttt{book/main.pdf}] Central product-design argument and maintained
+        system-prompt context.
+  \item[\texttt{book/main-dark.pdf}] Accessible rendering of the same source.
+  \item[\texttt{LeanFM/}] Versioned generic authoring types and deterministic
+        validators. Product actors, messages, tasks and routes do not belong in
+        this directory.
+  \item[\texttt{bootstrap/}] Programs that print the language references and
+        interrogation checklist, validate the conventional specification, and
+        derive review views from its typed value.
+  \item[\texttt{lean-toolchain} and \texttt{lakefile.toml}] The exact compiler
+        selection and module roots needed to run the bootstrap locally.
+  \item[\texttt{project.json}] Project identity, stable artifact paths,
+        acceptance state and the classification of design versus language
+        inputs.
+\end{description}
+
+All of these files are below the exclusive project root. A project may use an
+external immutable dependency cache, but no project-owned mutable state or
+acceptance decision may live there.
+
+\section{Conventional generated interface}
+
+The requirements candidate lives at
+\texttt{Specification/Requirements.lean}, imports
+\texttt{LeanFM.Artifacts}, and defines:
+
+\begin{lstlisting}[language=Lean]
+namespace LeanFMProject.Requirements
+def spec : LeanFM.RequirementSpec := ...
+def all : List LeanFM.GeneratedRequirement := [.requirement spec]
+end LeanFMProject.Requirements
+\end{lstlisting}
+
+The byte vocabulary lives beside it at
+\texttt{Specification/Requirements.proto}. After requirements acceptance, the
+separate implementation mapping lives at
+\texttt{Specification/Implementation.lean}. Capitalization is significant
+because these are Lean module paths, not informal filenames.
+
+\section{Required commands and order}
+
+The project supplies deterministic equivalents of these commands:
+
+\begin{lstlisting}[language=bash]
+make reference       # print the complete requirements-language reference
+make interrogation   # print questions that expose missing observations
+make validate        # elaborate and run LeanFM plus protobuf validation
+make render          # derive interaction and residual-state review views
+make check           # validate, then render
+\end{lstlisting}
+
+An agent runs \texttt{reference} and \texttt{interrogation} before authoring.
+It must not infer constructors from prose or invent a smaller Lean lookalike.
+The validator consumes the exported \texttt{RequirementSpec}; successful Lean
+elaboration by itself is not LeanFM validation. The renderer also consumes that
+same value. A separately written diagram is not evidence that it matches the
+requirements.
+
+\section{Acceptance gates}
+
+The first gate consists of the requirements value, protobuf schema, derived
+views, ambiguity register and validation evidence. A model, successful build or
+attractive diagram cannot accept it. After explicit stakeholder acceptance, the
+second gate adds the traceable implementation specification. Application source
+and tests may be written only after both gates.
+
+The bootstrap therefore solves a circularity without weakening the gates. The
+book explains what is being built; the generic distribution makes the LeanFM
+language executable; accepted project artifacts preserve the decisions. None
+is a substitute for the other two.
+
+\section{Construction is not a runtime dependency}
+
+Codex is not part of the delivered server. Claude, Gemini, Codex, or a human may
+act as the construction agent that turns this PDF and the generic bootstrap
+into accepted specifications and source. After construction, the user starts
+the LeanFM server, visits its root URL in an ordinary browser, creates or logs
+into an account, supplies a model-provider key, and conducts the requirements
+argument through LeanFM's own ChatGPT-like interface. The running server talks
+to the selected model provider through its documented message protocol; it does
+not require the construction agent, its conversation, or its local tooling.
+
+Consequently, a reconstruction is not successful merely because it can be
+driven from a coding-agent terminal. It must build a standalone executable,
+serve the complete browser workflow, start without a platform API key, isolate
+concurrent users and their credentials, and pass its conformance tests without
+Codex being present.
+
+\section{Local and server-hosted references}
+
+The local commands are authoritative when no server is running. A running
+LeanFM server additionally exposes the requirements and implementation language
+references, the interrogation checklist, and read-only MCP context without
+requiring a user login. These public endpoints contain language documentation,
+not project or account data. Project artifacts, conversations, credentials and
+acceptance mutations remain authenticated and owner-scoped.
+

@@ -135,6 +135,15 @@ Lean field summary represents only by its scalar boundary.
 
 \input{generated/web-protocol-protobuf.tex}
 
+\subsection{Canonical byte schema}
+
+The following complete schema is normative. It fixes envelope and payload tag
+numbers, repeated and nested cardinality, enum values, and field names. A
+reconstruction must reproduce these values rather than assigning tags in book
+order or replacing nested messages with opaque bytes.
+
+\input{generated/web-protocol-schema.tex}
+
 The envelope backpointers are semantically significant. \texttt{prior\_ids}
 contains immutable predecessor event identifiers. A derived
 \texttt{map[Event][]Event} successor index may accelerate traversal, but it is

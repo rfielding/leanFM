@@ -69,6 +69,11 @@ def protobufTex : String :=
       texEscape (String.intercalate "; " fields) ++ ".\n"
   "\\begin{description}[style=nextline,leftmargin=0pt]\n" ++ String.join rows ++ "\\end{description}\n"
 
+def protobufSchemaTex : String :=
+  "\\begin{lstlisting}[language={},basicstyle=\\ttfamily\\tiny,breaklines=true]\n" ++
+    Requirements.protoSource ++
+  "\\end{lstlisting}\n"
+
 structure RunningRoute where
   method : String
   path : String
@@ -126,6 +131,7 @@ def main : IO Unit := do
   IO.FS.writeFile "book/generated/web-protocol-accepted-http.tex" acceptedHttpTex
   IO.FS.writeFile "book/generated/web-protocol-running-http.tex" runningHttpTex
   IO.FS.writeFile "book/generated/web-protocol-protobuf.tex" protobufTex
+  IO.FS.writeFile "book/generated/web-protocol-schema.tex" protobufSchemaTex
   IO.FS.writeFile "book/generated/web-protocol-overview.tex"
     (MDPDiagram.renderInteractionTeX ["Browser", "LeanFM Server", "Grammar", "Event Journal"] overviewMessages)
   IO.FS.writeFile "book/generated/web-protocol-provenance.txt" (reprStr overviewOutput ++ "\n")

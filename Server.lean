@@ -358,6 +358,11 @@ def responseForRequest (request : String) : IO Response := do
       pure <| response 405 "application/json; charset=utf-8"
         "{\"error\":\"MCP uses POST with a JSON-RPC body\"}\n"
         ["Allow: POST", "MCP-Protocol-Version: " ++ LeanFM.MCP.protocolVersion]
+  else if path == "/tools/leanfm-language/reference" ||
+      path == "/tools/leanfm-language/requirements-reference" ||
+      path == "/tools/leanfm-language/implementation-reference" ||
+      path == "/tools/requirements/interrogation" then
+    responseBody path request
   else match ← LeanFM.ChatUI.Server.handle? path method request with
   | some chatResponse =>
       pure <| response chatResponse.status chatResponse.contentType chatResponse.body chatResponse.headers
