@@ -253,6 +253,88 @@ design constraint is already visible: theorem statements refer only to accepted
 event traces, knowledge derived from those traces, and explicit compromise
 assumptions.
 
+\subsection{Put calculated knowledge and policy predicates inside CTL}
+
+For routine protocol documentation, knowledge need not begin as a new modal
+operator. Define ordinary state predicates by reducing the accepted event
+history, then place those predicates inside the existing CTL operators:
+
+\begin{lstlisting}
+def knows (actor : Actor) (value : Secret) (s : ProtocolState) : Bool :=
+  value in knowledgeClosure actor s.events s.compromise
+
+def permitted (policy : Policy) (actor : Actor)
+    (action : Action) (s : ProtocolState) : Bool :=
+  policy.allows actor action s
+
+def required (policy : Policy) (actor : Actor)
+    (action : Action) (s : ProtocolState) : Bool :=
+  policy.requires actor action s
+\end{lstlisting}
+
+These are functions that label a state. CTL then says when those labels may or
+must hold. The following formulas are useful documentation because each has a
+direct English pronunciation:
+
+\AccessibleEquation{It is always true that the attacker does not know the session key.}{
+\[
+  AG\bigl(\neg\operatorname{knows}(\mathit{Attacker},K_{AB})\bigr).
+\]}
+
+\AccessibleEquation{It is possible that Bob eventually knows the session key.}{
+\[
+  EF\bigl(\operatorname{knows}(\mathit{Bob},K_{AB})\bigr).
+\]}
+
+\AccessibleEquation{It is always true that if Bob accepts the session then Bob knows the session key and knows that the peer identity is Alice.}{
+\[
+  AG\bigl(\operatorname{accepts}(\mathit{Bob}) \rightarrow
+    (\operatorname{knows}(\mathit{Bob},K_{AB}) \land
+     \operatorname{knows}(\mathit{Bob},\operatorname{peer}(\mathit{Alice})))\bigr).
+\]}
+
+\AccessibleEquation{It is always true that if an actor knows a secret then policy permits that actor to possess the secret.}{
+\[
+  AG\bigl(\operatorname{knows}(a,s) \rightarrow
+    \operatorname{permitted}(\mathit{DisclosurePolicy},a,
+      \operatorname{possess}(s))\bigr).
+\]}
+
+\AccessibleEquation{It is always true that after receiving a valid service ticket policy requires the server to audit it and every future eventually records that audit.}{
+\[
+  AG\bigl(\operatorname{validTicketReceived}(r) \rightarrow
+    (\operatorname{required}(\mathit{AuditPolicy},\mathit{Server},
+      \operatorname{audit}(r)) \land AF\,\operatorname{audited}(r))\bigr).
+\]}
+
+\AccessibleEquation{There exists a reachable attack state in which the attacker knows the session key.}{
+\[
+  EF\bigl(\operatorname{knows}(\mathit{Attacker},K_{AB})\bigr).
+\]}
+
+The last formula is the counterexample search for the first. This is often the
+most practical security check: ask the existential engine for a trace that
+derives the forbidden knowledge. Likewise, a universal policy claim should be
+checked by searching for a reachable violation:
+
+\AccessibleEquation{Every disclosure is always permitted exactly when there is no reachable disclosure that is not permitted.}{
+\[
+ AG(\operatorname{discloses}(a,s) \rightarrow
+    \operatorname{permitted}(P,a,\operatorname{disclose}(s)))
+ \;\equiv\;
+ \neg EF(\operatorname{discloses}(a,s) \land
+    \neg\operatorname{permitted}(P,a,\operatorname{disclose}(s))).
+\]}
+
+This functional style is deliberately different from a full epistemic modality
+$K_a\varphi$, which quantifies over every legal history indistinguishable to
+actor $a$. The calculated predicate
+\texttt{knows(a, secret, state)} asks whether a declared deduction closure
+contains one value in one state. It is cheaper, directly executable, and covers
+many protocol secrecy and authorization properties. Use the full epistemic
+relation only when the requirement truly compares indistinguishable histories,
+such as anonymity, uncertainty, or ``Alice knows that Bob knows.''
+
 \section{Otway--Rees: guards are not optional decoration}
 
 \index{Otway--Rees protocol}

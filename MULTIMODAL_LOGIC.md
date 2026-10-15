@@ -46,6 +46,27 @@ These additions do not make CTL equivalent to LTL.
 
 ## Project-specific verification example
 
+### Prefer CTL over calculated predicates when it answers the question
+
+Many security requirements do not require a new modal evaluator. A project can
+define executable state predicates such as `knows(actor, secret, state)`,
+`permitted(policy, actor, action, state)`, and
+`required(policy, actor, action, state)`, then use the existing CTL checker:
+
+```text
+AG (not knows(Attacker, sessionKey))
+EF (knows(Bob, sessionKey))
+AG (accepts(Bob) -> knows(Bob, sessionKey))
+AG (knows(actor, secret) -> permitted(disclosurePolicy, actor, possess(secret)))
+EF (knows(Attacker, sessionKey))
+```
+
+The last formula searches directly for a secrecy counterexample. This style
+computes a deduction closure at each state and then uses ordinary CTL; it is not
+the full epistemic operator `K_a phi`, which quantifies over indistinguishable
+histories. Reserve that more expensive relation for requirements such as
+anonymity, uncertainty, and nested knowledge.
+
 A project can use a bounded Kerberos model with named actors, byte-defined messages, task and
 ticket correlation, nested concurrency, and interaction-diagram assertions.
 Declare each actor's visible messages, private keys, retained memory, and clock
