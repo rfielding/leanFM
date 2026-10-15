@@ -210,6 +210,11 @@ def decisions : List ImplementationDecision :=
       ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Views.lean", "LeanFM/ChatUI/Web.lean"]
       "Store immutable artifact revisions beneath the project root with a manifest containing status, provenance, author, timestamp, dependencies, validation, and current/accepted pointers. The artifact tab groups and filters these server-backed manifests; compare, open, and download always name an exact revision."
       ["Tests/ChatUIArtifacts.lean"]
+  , decision "default-http-codec-and-openapi"
+      ["property:default_http_projection_is_deterministic"]
+      ["LeanFM/ChatUI/Server.lean", "LeanFM/Render.lean"]
+      "For an HTTP production without an explicit codec binding, encode and decode bodies using the protobuf JSON mapping with application/json. Generate OpenAPI from the resolved protobuf request-response pairs and transport bindings, and serve the resulting YAML at GET /openapi.yaml. Explicit bindings override the default codec, method, path, and content type while remaining subject to byte round-trip validation."
+      ["scripts/chatui_http_check.sh"]
   , decision "traceability-and-build"
       [spec.id]
       ["LeanFM/ChatUI/Traceability.json", "Makefile", "scripts/embed_static_assets.js"]

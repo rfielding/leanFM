@@ -73,6 +73,13 @@ This prevents a convenient generator from leaking credentials, exceeding
 practical URL limits, or inventing ambiguous encodings. Generated encoders and
 decoders must preserve the protobuf value exactly.
 
+Unless an explicit transport binding selects another codec, the default body
+encoder and decoder use the protobuf JSON mapping with
+\texttt{Content-Type: application/json}. This default is part of the generated
+adapter contract, not a change to the protobuf value. The server publishes the
+resolved OpenAPI document at \texttt{GET /openapi.yaml}; this is the default
+discovery endpoint for generated HTTP operations and schemas.
+
 The generated OpenAPI operation records the resolved method and path, body
 content type, request schema, every grammar-permitted response schema and
 status, authentication requirement, correlation fields, and LeanFM requirement

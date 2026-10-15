@@ -58,6 +58,9 @@ mapping wins. For an otherwise ordinary default mapping, use path or query
 parameters only for explicitly bounded URL-safe scalar selectors; use POST with
 the protobuf request body for bytes, repeated or nested values, secrets, large
 or unbounded strings, or parameters that do not naturally belong in a URL.
+Unless an explicit binding selects another codec, encode HTTP bodies with the
+protobuf JSON mapping and `Content-Type: application/json`. Publish the resolved
+OpenAPI document at `GET /openapi.yaml`.
 
 ## Connect to LeanFM
 

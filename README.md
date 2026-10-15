@@ -179,7 +179,7 @@ GET /          clean assistant workbench
 GET /examples  sample dashboard with charts, graphs, and generated sources
 GET /renders/  built-in canvas diagram renders
 GET /metrics   Prometheus metrics
-GET /openapi.yaml OpenAPI description of LeanFM routes and generated message schemas
+GET /openapi.yaml Default OpenAPI description of LeanFM routes and generated message schemas
 GET /report    generated plain-text report
 GET /tools/conversations conversation-to-Lean-file catalog
 GET /tools/leanfm-language/reference authoritative LeanFM language reference for requirement-generation tools
