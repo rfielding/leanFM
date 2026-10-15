@@ -94,6 +94,50 @@ The server may use a language model to propose edits. Compilation and validation
 remain deterministic. The model is not the proof checker, and fluent prose is
 not evidence that an obligation holds.
 
+\subsection{The code that creates the TCP listener}
+
+An address value does not open a port. The running server performs four distinct
+operations: create a socket, bind it to an address, put it into listening mode,
+and repeatedly accept clients. This is the relevant executable pattern from
+\texttt{Server.lean}:
+
+\begin{lstlisting}[language=Lean]
+import Std.Internal.Async.TCP
+
+open Std
+open Std.Net
+
+abbrev TcpServer := Std.Internal.IO.Async.TCP.Socket.Server
+
+def bindAddr : SocketAddress :=
+  SocketAddress.v4
+    { addr := IPv4Addr.ofParts 127 0 0 1
+    , port := 8080
+    }
+
+partial def serveLoop (server : TcpServer) : IO Unit := do
+  let client ← (server.accept).block
+  let _ ← IO.asTask (handleClient client) Task.Priority.dedicated
+  serveLoop server
+
+def main : IO Unit := do
+  let server ← Std.Internal.IO.Async.TCP.Socket.Server.mk
+  server.bind bindAddr
+  server.listen 128
+  IO.println "LeanFM server listening on http://127.0.0.1:8080"
+  serveLoop server
+\end{lstlisting}
+
+Read the final definition as follows: \texttt{Server.mk} creates the TCP socket;
+\texttt{bind} attaches it to loopback port 8080; \texttt{listen 128} changes it
+into a listener with a pending-connection backlog of 128; and
+\texttt{serveLoop} calls \texttt{accept} for each connection. Only after
+\texttt{listen} succeeds is there a TCP listener. HTTP is the application
+protocol implemented by \texttt{handleClient}; there is no separate HTTP socket.
+The actual handler catches per-request errors before returning to the accept
+loop. This shortened excerpt leaves that response logic out so the listener
+lifecycle remains visible.
+
 \section{Using the agent in Codex}
 
 \index{Codex}
