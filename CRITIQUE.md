@@ -37,6 +37,14 @@ absent, and the SVG state-machine renderer still positions edges by list index.
 ### Next editorial pass
 
 Move performance and reliability out of the crowded authoring-language chapter.
+The book must not infer checker speed from the fact that LeanFM usually models
+fewer private variables. The current CTL evaluator uses path-local lists without
+global memoization and can revisit a shared subgraph for every simple path; its
+worst case is exponential in path count. Requirement validation and event-pair
+reconstruction also contain quadratic list scans. Preserve the new asymptotic
+inventory, implement indexed/worklist versions, differentially test their
+equivalence on finite models, and benchmark matched LeanFM and TLA+/TLC models
+before making any comparative performance claim.
 Keep one definition, one English reading, one operational example and one scope
 qualification per concept. Use generated diagrams before topology/order prose.
 Move long dumps and reference listings out of the main narrative. Preserve the

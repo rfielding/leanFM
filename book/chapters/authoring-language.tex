@@ -514,6 +514,58 @@ for finite service centers. Neither rescues a requirements model whose demand,
 service rates, queue bounds, observation window, and overload behavior were
 never stated.
 
+Every modeled actor instance therefore has declared positive inbound and
+outbound queue capacities. Capacity is a requirement parameter, not an
+unbounded runtime default. Sending to a full queue sleeps without changing the
+queue or message until a receive creates space. A blocking receive from an
+empty queue likewise sleeps until a message exists. Neither case may drop,
+duplicate, reorder, partially enqueue, or rewrite work. A separately named
+nonblocking receive may return ``none'' while leaving the actor runnable.
+
+A queue also has an idempotent \texttt{close()} operation. Closing forbids every
+later push. A sender already sleeping for capacity wakes with a closed rejection
+and does not mutate the queue or message. Values accepted before close remain
+available and are received exactly once in order. Receivers report closed only
+after those buffered values have drained; closing an already empty queue wakes
+blocked receivers immediately. Consequently, queue iteration has a precise
+termination condition: the queue is closed and empty. Empty while still open
+means ``wait,'' not ``end of stream.''
+
+\paragraph{Cost of the current executable structures.}
+These bounds describe the present reference implementation, not an optimized
+runtime. If $C$ is the queued item count, the list-backed channel takes $O(C)$
+time to send because it measures and appends to a singly linked list; receive
+is $O(1)$ and storage is $O(C)$. The accepted close semantics above are not yet
+implemented by this reference channel. A two-list or ring-buffer channel can
+make amortized send and receive $O(1)$ while retaining the declared capacity.
+
+Let $H$ be the number of observed task events. The current attempt reducer
+appends starts to a list and linearly searches open attempts for a terminal
+backpointer, so a complete reduction is $O(H^2)$ time and $O(H)$ retained
+attempt data in the worst case. The specified
+\texttt{map[Event][]Event} successor index and an open-attempt hash table have
+expected $O(H+R)$ construction time and $O(H+R)$ space, where $R$ is the number
+of predecessor references. Expected hash-table cost is not a worst-case
+guarantee.
+
+Let $N$ be the number of declarations and cross-references in a requirement
+artifact, and $G$ the grammar-tree size. Validation currently uses repeated
+linear list membership and duplicate checks, giving a conservative $O(N^2)$
+time bound and $O(N)$ auxiliary data; grammar walks are logically $O(G)$, but
+repeated list concatenation can also become $O(G^2)$ for a skewed tree. Indexed
+names and accumulator-based walks are the optimization targets. Probability
+enumeration remains exponential when it intentionally materializes every path:
+branching factor $b$ through depth $d$ can produce $b^d$ path records. These
+bounds make explicit which costs are implementation debt and which result from
+requesting every possible history.
+
+For the initial LeanFM ChatUI profile, browser/session actors have inbound and
+outbound capacities 32 and at most 4 in flight; the LeanFM server has capacities
+256 and at most 32 in flight; provider workers have capacities 64 and at most
+16 in flight. Their memory budgets are respectively 64 MiB, 512 MiB, and
+256 MiB per modeled instance. These are explicit starting requirements that a
+parameter sweep may replace; they are not measured production claims.
+
 \begin{figure}[htbp]
 \centering
 \begin{minipage}{.48\textwidth}

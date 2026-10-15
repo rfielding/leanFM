@@ -203,6 +203,43 @@ $\neg EF\,\neg p$, and \texttt{AF} as $\neg EG\,\neg p$. Thus least upper bound
 and greatest lower bound are paired implementation choices; neither describes
 every CTL operator by itself.
 
+\subsection{Current asymptotic cost}
+
+The smaller model boundary is not itself a faster model-checking algorithm.
+Let $V$ be the number of reachable observations, $E$ the successor edges,
+$L$ the number of nodes in the checked CTL formula, and $P$ the number of
+simple paths inspected by a search. The current Lean implementation carries a
+path-local \texttt{List} of visited observations. Membership in that list is
+linear in the current path length, and completed subgraphs are not memoized
+between branches. A single temporal search therefore costs
+$O(E_P+VP)$ time, where $E_P$ counts edge visits across the inspected paths,
+and $O(V+L)$ stack and path memory. $P$ can be exponential---and in dense
+graphs worse than $2^V$---even though the input graph contains only $V$ states.
+On an acyclic tree, where each state has one path from the root, the list
+membership overhead alone is bounded by $O(V^2)$ and is often smaller for a
+shallow tree.
+
+Read this as: ``the present checker may revisit the same state once for every
+different path that reaches it; its cost is governed by paths, not merely by
+states and edges.'' Formula nesting may repeat those searches because
+subformula results are also not cached.
+
+The intended indexed evaluator first assigns stable state identifiers, stores
+predecessor and successor adjacency, and memoizes the set satisfying each
+subformula. Fixed-point worklists then give a target bound of
+$O(L(V+E))$ time and $O(LV+E)$ space for explicit finite CTL checking. That is
+an implementation target, not the complexity of the current code. The target
+must be accompanied by equivalence tests against the small recursive evaluator
+and by measurements on specified graph families.
+
+No comparison with TLC follows from these bounds. LeanFM often constructs a
+smaller observable-event graph because it deliberately omits irrelevant private
+variables; a carefully abstracted TLA+ model may omit them too. A claim that
+LeanFM is faster than TLA+ requires the same protocol, properties, finite
+bounds, hardware, checker settings, and reported state/edge counts. Until that
+experiment exists, the book claims only a different modeling boundary, not a
+performance victory.
+
 An observation is immutable once recorded. A value changes only by moving
 forward to a successor observation; it is never updated retroactively inside the
 current state. This does not mean that values are monotone---a queue may grow and

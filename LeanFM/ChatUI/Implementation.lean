@@ -116,9 +116,13 @@ def implementation : ImplementationSpec :=
       { sendFunction := "BoundedMailbox.send"
       , receiveFunction := "BoundedMailbox.receive"
       , tryReceiveFunction := "BoundedMailbox.tryReceive"
+      , closeFunction := "BoundedMailbox.close"
       , sendFull := .blockWithoutMutation
       , receiveEmpty := .blockWithoutMutation
       , tryReceiveEmpty := .returnNoneKeepRunnable
+      , sendClosed := .rejectWithoutMutation
+      , receiveClosed := .drainThenReturnClosed
+      , closeSemantics := .idempotentWakeWaiters
       , justifications :=
           [ justification "resource:UserBrowser" "bounds browser-side pending requests and content-part memory"
           , justification "resource:LeanFMServer" "bounds accepted connections, active requests, provider work, and response buffers"

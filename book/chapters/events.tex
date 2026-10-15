@@ -314,6 +314,21 @@ meaning comes from the grammar or another explicit domain relation. Equal
 timestamps may occur, and neither a timestamp nor a predecessor pointer alone
 establishes that one event caused another.
 
+Messages that delimit work are generally paired. A start event has its own
+identity. Its terminal event---completion, failure, cancellation, timeout, or
+another declared stop---includes that start identifier in
+\texttt{priorIds}. Elapsed time is terminal time minus start time. Encoded-byte
+growth or reduction uses the same pair and subtracts like byte counts. Other
+deltas follow the same rule. The reducer never guesses a pair from adjacency,
+because concurrent attempts can interleave.
+
+This pairing is how a view may elide detail without becoming hand-waving. A
+collapsed production retains its boundary event IDs, complete predecessor
+links, parameter assignment, aggregate deltas, and validation status. Opening
+it reveals the intervening events. Closing it again changes only presentation,
+not the history or the evidence supporting the displayed duration, bytes, or
+outcome.
+
 \section{Round trip through bytes}
 
 A generated scenario is not complete until it can cross the byte boundary in

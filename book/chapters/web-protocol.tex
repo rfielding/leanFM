@@ -164,6 +164,30 @@ current residual grammar is illegal even if its protobuf bytes decode.
 
 \input{generated/web-protocol-grammar.tex}
 
+\section{The grammar as an executable canvas}
+
+The complete grammar is one navigable canvas rather than one permanently huge
+drawing. A task or production node may be closed to its typed boundary or
+opened to show its interaction messages, residual states, parameters,
+constraints, paired measurements and nested productions. Opening and closing
+is presentation state only. It never changes the grammar or conceals a failing
+obligation.
+
+Each editable parameter has one typed definition and explicit dependency
+edges. Changing a queue capacity, actor population, timeout, probability or
+other parameter marks every transitive dependent stale and regenerates the
+affected productions, reducers, proofs, codecs, charts and views. The canvas
+shows that cascade before the revised artifact can be accepted.
+
+A production known to cross HTTP may attach its transport renderer at that
+production. The binding names the method, path template, request and response
+protobuf types, status alternatives, content type, byte encoder and byte
+decoder. Generated fixtures emit the exact request and response bytes and read
+them back. Conformance requires decoded emitted values to equal their originals
+and their message atoms to be accepted by the selected residual grammar. Thus
+the high-level canvas can be progressively opened all the way down to bytes
+without confusing transport with the message value.
+
 \section{What is checked, and what remains}
 
 Lean elaboration checks the actors, message schemas, task states, transitions,

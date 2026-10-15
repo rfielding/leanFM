@@ -439,13 +439,29 @@ inductive TryReceiveEmptySemantics where
   | returnNoneKeepRunnable
 deriving DecidableEq, Repr
 
+inductive SendClosedSemantics where
+  | rejectWithoutMutation
+deriving DecidableEq, Repr
+
+inductive ReceiveClosedSemantics where
+  | drainThenReturnClosed
+deriving DecidableEq, Repr
+
+inductive CloseSemantics where
+  | idempotentWakeWaiters
+deriving DecidableEq, Repr
+
 structure ChannelCodegen where
   sendFunction : String
   receiveFunction : String
   tryReceiveFunction : String
+  closeFunction : String
   sendFull : SendFullSemantics
   receiveEmpty : ReceiveEmptySemantics
   tryReceiveEmpty : TryReceiveEmptySemantics
+  sendClosed : SendClosedSemantics
+  receiveClosed : ReceiveClosedSemantics
+  closeSemantics : CloseSemantics
   justifications : List RequirementJustification
 deriving Repr
 
@@ -1159,7 +1175,8 @@ def validateImplementationSpec (requirement : RequirementSpec)
       (if justification.reason == "" then ["message binding has empty justification reason: " ++ message.message] else []) ++ more) errors) [] ++
   (if implementation.channels.sendFunction == "" then ["channel sendFunction is empty"] else []) ++
   (if implementation.channels.receiveFunction == "" then ["channel receiveFunction is empty"] else []) ++
-  (if implementation.channels.tryReceiveFunction == "" then ["channel tryReceiveFunction is empty"] else [])
+  (if implementation.channels.tryReceiveFunction == "" then ["channel tryReceiveFunction is empty"] else []) ++
+  (if implementation.channels.closeFunction == "" then ["channel closeFunction is empty"] else [])
   ++ (if implementation.channels.justifications.isEmpty then ["channel binding has no requirement justification"] else [])
   ++ implementation.channels.justifications.foldr (fun justification errors =>
     (if validRequirementRefs.contains justification.requirementId then [] else
@@ -1192,7 +1209,7 @@ def leanFMRequirementsReference : String :=
     , "## Observable event atom"
     , "GrammarExpr.event accepts { task, src, dst, message }. MessageSchema supplies src, dst, framing, and numbered protobuf fields."
     , "ScenarioEvent protobuf envelopes preserve id, repeated prior links, session, task, src, dst, timeAt, and a oneof message atom."
-    , "End events point to start-event IDs through prior; durations are differences between separate event timestamps."
+    , "Work is generally delimited by explicit start and terminal messages. Terminal events point to their start-event IDs through prior; durations and byte deltas subtract like fields on that identified pair, never guessed adjacent events. This permits a renderer to collapse intermediate detail while retaining boundary identities, predecessor evidence, parameters, deltas, and validation status."
     , ""
     , "## GrammarExpr"
     , "event atom | seq left right | choice branches | parallel branches | mOfN required branches | guard predicate body | ref task | repeat body"
@@ -1212,7 +1229,7 @@ def leanFMRequirementsReference : String :=
     , "Use binary AU, EU, AW, and EW. Use CTL.stronglyImplies p q for EF p and AG(p implies q)."
     , ""
     , "## Prompt-derived outputs"
-    , "Every scalar, function2d, interactionDiagram, and stateMachine answer needs DesiredOutput { id, prompt, question, kind, eventSource, reducer, unit }."
+    , "Every scalar, function2d, interactionDiagram, and stateMachine answer needs DesiredOutput { id, prompt, question, kind, eventSource, reducer, unit }. A whole-grammar canvas is a generated view: task and production nodes may open or close, but collapsed nodes retain identity and validation; parameter changes visibly invalidate and regenerate every transitive dependent."
     , "Charts are presentation requests; DesiredOutput is the durable reason and event-reduction provenance. Numeric event reductions may be exposed at /metrics."
     , "Load questions may request a Universal Scalability Law fit over comparable population runs, including observed points, fitted curve, parameters, and fit error. Queue/latency outputs pair queue length at admission with completion latency measured between explicitly paired predecessor events; queue size alone does not prove latency."
     , "Treat performance and capacity as requirements needed before first deployment: state forecast demand, service capacity, queue bounds, overload behavior, availability, and cost inputs so the design can be rejected if it would collapse under its first realistic load."
@@ -1242,15 +1259,15 @@ def leanFMImplementationReference : String :=
     , "HTTP responses name a known request message. Transport selects how protobuf bytes move; it does not alter the protobuf payload or legal grammar order."
     , ""
     , "## Channels"
-    , "ChannelCodegen names sendFunction, receiveFunction, and tryReceiveFunction. Required semantics are blockWithoutMutation for full sends and empty blocking receives, and returnNoneKeepRunnable for an empty tryReceive."
-    , "Implement actor resource contracts with finite per-instance inbound/outbound capacities, maxInFlight, and memory budgets. Preserve multiple simultaneous (session,task) conversations."
+    , "ChannelCodegen names sendFunction, receiveFunction, tryReceiveFunction, and closeFunction. Required semantics are blockWithoutMutation for full sends and empty blocking receives, returnNoneKeepRunnable for an open empty tryReceive, rejectWithoutMutation for every send after close, drainThenReturnClosed for receivers, and idempotentWakeWaiters for close. Iteration is complete exactly when the queue is closed and drained."
+    , "Implement actor resource contracts with declared positive finite per-instance inbound/outbound capacities, maxInFlight, and memory budgets. Full sends sleep without mutation until a receive creates space; blocking empty receives sleep until a message exists. Preserve multiple simultaneous (session,task) conversations."
     , ""
     , "## Traceability"
     , "Every actor, message, and channel mapping has nonempty RequirementJustification { requirementId, reason }. References may target requirement:, grammar:, process:, property:, proof:, performance:, chart:, output:, or message: IDs returned by requirementReferenceIds."
     , "Generated source and tests retain those IDs beside the code they justify. Do not generate orphan behavior."
     , ""
     , "## Conformance"
-    , "Generated emitters and parsers preserve event id, repeated prior links, session, task, actors, timeAt, and the selected protobuf atom."
+    , "Generated emitters and parsers preserve event id, repeated prior links, session, task, actors, timeAt, and the selected protobuf atom. HTTP-bound productions additionally name method, path, protobuf request/response types, status alternatives, content type, encoder, and decoder; exact byte fixtures must round-trip and remain legal in the residual grammar."
     , "Test legal trace round-trips and replay, illegal trace rejection, bounded-channel behavior, possible-branch handling plans, and event reducers feeding desired outputs and /metrics."
     , "After construction, call GET /tools/llm-generated/implementation/validate and the combined generated-artifacts validator."
     ]
@@ -1305,7 +1322,7 @@ def generatedRequirementSystemPrompt : String :=
     , "For synthetic similarity, first characterize the source with named exact reducers and distributions, generate a candidate stream, replay the same reducers, and accept only when every target is within its declared tolerance."
     , "Define RequirementSpec with actors, messages, tasks, grammars, processes, properties, requiredProofs, charts, desiredOutputs, and markdown. Every scalar, 2D function rendering, interaction diagram, and state machine must have one DesiredOutput preserving the prompt that requested it and the event reducer that answers it."
     , "Define exactly one ActorResourceContract per actor with positive finite inboundCapacity, outboundCapacity, maxInFlight, and memoryBudgetBytes values."
-    , "Model finite queues as blocking channels: send to full and blocking receive from empty make no progress; a distinct nonblocking tryReceive may return none and leave the actor runnable."
+    , "Model finite queues as blocking channels: send to full and blocking receive from an open empty queue make no progress; a distinct nonblocking tryReceive may return none and leave the actor runnable. close is idempotent, forbids later sends, wakes blocked senders with rejection, preserves buffered messages for draining, and makes blocked receivers return closed only after the buffer is empty. Iteration ends exactly at closed-and-empty."
     , "Express information flow by calculating knowers(value, events) from initial knowledge, visible bytes, and derivation rules. Treat secrecy only as a comparison between that computed actor set and an allowed set."
     , "Expose workerRequirement or another named RequirementSpec, generatedRequirementsProto via include_str \"Requirements.proto\", aggregateGraphData, workerProtoFile or another proto export, all : List GeneratedRequirement, and validationReport."
     , "Implementation.lean imports Requirements, defines one ImplementationSpec referencing the RequirementSpec id, and covers every requirement actor and message exactly once."

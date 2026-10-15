@@ -41,9 +41,13 @@ def spec : ImplementationSpec :=
       { sendFunction := "protocol.WriteFrame"
       , receiveFunction := "protocol.ReadFrame"
       , tryReceiveFunction := "bounded nonblocking queue select"
+      , closeFunction := "bounded queue close"
       , sendFull := .blockWithoutMutation
       , receiveEmpty := .blockWithoutMutation
       , tryReceiveEmpty := .returnNoneKeepRunnable
+      , sendClosed := .rejectWithoutMutation
+      , receiveClosed := .drainThenReturnClosed
+      , closeSemantics := .idempotentWakeWaiters
       , justifications := why "resource:KVReplica" "Bounded queues preserve accepted resource limits and leave state unchanged on failed admission." } }
 
 def validationReport : String := implementationValidationReport Requirements.spec spec
