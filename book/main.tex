@@ -52,7 +52,9 @@
 \usepackage[nameinlink,noabbrev]{cleveref}
 
 % Give diagrams genuine PDF /Alt entries. The text is metadata for assistive
-% readers; it is not printed as a second caption in the book.
+% readers; it is not printed as a second caption in the book. In interaction
+% diagrams, pronounce every arrow as "Message from A to B: message" so direction
+% and payload remain unambiguous without relying on the arrow graphic.
 \newcommand{\AccessibleFigure}[2]{%
   \tagstructbegin{tag=Figure,alttext={#1}}%
   \tagmcbegin{tag=Figure}#2\tagmcend%
@@ -62,6 +64,15 @@
   \tagstructbegin{tag=Formula,alttext={#1}}%
   \tagmcbegin{tag=Formula}#2\tagmcend%
   \tagstructend%
+}
+% Reading mode does not benefit from reciting the entire dense alphabetical
+% index. Supply one short replacement in the tagged reading order while
+% retaining the complete printed index for visual lookup.
+\newcommand{\AccessibleIndex}[2]{%
+  \tagstructbegin{tag=Figure,alttext={#1}}%
+  \tagmcbegin{tag=Figure}\mbox{}\tagmcend%
+  \tagstructend%
+  \tagstop#2\tagstart%
 }
 
 \hypersetup{
@@ -323,5 +334,5 @@ contains the evolving language, tooling, examples, and implementation
 \bibliographystyle{plainnat}
 \bibliography{references}
 \addcontentsline{toc}{chapter}{Bibliography}
-\printindex
+\AccessibleIndex{Alphabetical index of LeanFM concepts names protocols and notation. Use PDF search or the printed page references to locate an entry.}{\printindex}
 \end{document}

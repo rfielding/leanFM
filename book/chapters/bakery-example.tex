@@ -22,7 +22,7 @@ lots that supplied it, making FIFO allocation, age, quality, and stockouts
 replayable. No event permits a customer to wait for a same-day custom loaf.
 
 \begin{center}
-\AccessibleFigure{Interaction diagram with Scheduler Bakery Truck Storefront and Customer lifelines. Before opening the Scheduler starts a bake. The Bakery enqueues the finished batch into a truck and the truck dequeues it in first-in first-out order at the Storefront. Later the Customer requests bread. The Storefront reserves existing inventory. The Customer tenders payment and the Storefront completes the exchange.}{%
+\AccessibleFigure{Interaction diagram with Scheduler Bakery Truck Storefront and Customer lifelines. Message from Scheduler to Bakery: Bake Started before opening. Message from Bakery to Truck: Shipment Enqueued. Message from Truck to Storefront: Shipment Dequeued in first-in first-out order. Message from Customer to Storefront: Purchase Requested. Message from Storefront to Customer: Inventory Reserved. Message from Customer to Storefront: Payment Tendered. Message from Storefront to Customer: Sale Completed.}{%
   \resizebox{\textwidth}{!}{\input{generated/bakery-flow.tex}}%
 }
 \end{center}

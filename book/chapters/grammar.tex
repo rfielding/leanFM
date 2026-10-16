@@ -102,7 +102,7 @@ look like logical implication:
 
 \begin{figure}[htbp]
 \centering
-\AccessibleFigure{OAuth granted interaction. Browser requests the application. The application redirects the browser. The browser requests authorization. The authorization service returns a code through the browser. The application exchanges the code for a token. The application fetches the resource and responds to the browser.}{%
+\AccessibleFigure{OAuth granted interaction. Message from Browser to Application: Application Request. Message from Application to Browser: Authorization Redirect. Message from Browser to Authorization: Authorization Request. Message from Authorization to Browser: Authorization Code Returned. Message from Browser to Application: Authorization Callback. Message from Application to Authorization: Token Request. Message from Authorization to Application: Access Token Issued. Message from Application to Resource: Resource Request. Message from Resource to Application: Resource Returned. Message from Application to Browser: Application Response.}{%
 \resizebox{\textwidth}{!}{\input{generated/oauth-granted-interaction.tex}}}
 \caption{Granted OAuth interaction. The resource exchange occurs only after the
 authorization-code branch succeeds.}
@@ -111,7 +111,7 @@ authorization-code branch succeeds.}
 
 \begin{figure}[htbp]
 \centering
-\AccessibleFigure{OAuth denied interaction. Browser requests the application. The application redirects the browser. The browser requests authorization. The authorization service returns an error through the browser to the application.}{%
+\AccessibleFigure{OAuth denied interaction. Message from Browser to Application: Application Request. Message from Application to Browser: Authorization Redirect. Message from Browser to Authorization: Authorization Request. Message from Authorization to Browser: Authorization Error Returned. Message from Browser to Application: Authorization Error Callback.}{%
 \resizebox{\textwidth}{!}{\input{generated/oauth-denied-interaction.tex}}}
 \caption{Denied OAuth interaction. No token or resource request follows the error.}
 \label{fig:oauth-grammar-denied}

@@ -269,7 +269,7 @@ that production. Expanding every remaining nonterminal yields this terminal word
 
 \begin{figure}[htbp]
 \centering
-\AccessibleFigure{Accepted OAuth trace with twelve messages. Browser requests the application and follows its redirect. Browser requests authorization and submits protected credentials. Authorization reports authentication success and returns a code. Browser returns the code to the application. Application exchanges it for a token then fetches the resource and responds to Browser.}{%
+\AccessibleFigure{Accepted OAuth trace with twelve messages. Message from Browser to Application: event e one application Request. Message from Application to Browser: event e two authorization Redirect. Message from Browser to Authorization: event e three authorization Request. Message from Browser to Authorization: event e four credentials Submitted. Message from Authorization to Browser: event e five authentication Result true. Message from Authorization to Browser: event e six authorization Code Returned. Message from Browser to Application: event e seven authorization Callback. Message from Application to Authorization: event e eight token Request. Message from Authorization to Application: event e nine access Token Issued. Message from Application to Resource: event e ten protected Resource Request. Message from Resource to Application: event e eleven protected Resource Returned. Message from Application to Browser: event e twelve application Response.}{%
 \resizebox{\textwidth}{!}{\input{generated/oauth-accepted-trace.tex}}}
 \caption{The selected terminal word as an interaction diagram. Event IDs label
 messages on arrows; no actor-to-actor arrow is written as implication-like text.}

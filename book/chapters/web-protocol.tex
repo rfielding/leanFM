@@ -124,6 +124,28 @@ objects use 404, revision or credential conflicts use 409, and provider failure
 uses 502. The named response message, not the status alone, determines the
 grammar transition.
 
+Before projection, request and response are independent framed events. In that
+limited structural sense the stream resembles a multiplexed protocol such as
+HTTP/2: several exchanges may be in flight and correlation is explicit. This is
+not a claim that the event bytes are HTTP/2 frames. Every response envelope must
+set \texttt{cause\_id} to the exact request event identifier within the same
+session and task. The HTTP adapter follows that causal backpointer to recover the
+exchange and emit the response on the connection that carried the request. It
+never pairs by adjacency, arrival order, or a process-global ``current request.''
+The separate \texttt{prior\_ids} list constrains legal interleavings and is not
+used as a substitute for causal correlation.
+
+HTTP projection is valid only for a causally closed exchange. Every projected
+request must be named by exactly one terminal response's \texttt{cause\_id}, and
+every projected response must name one compatible request in the same session
+and task. Failure is still a response event: it carries an HTTP error status and
+points to the request. An orphan request, a response with no cause, an
+incompatible or cross-session cause, or two terminal responses for one request
+is an unchecked HTTP call and fails validation rather than becoming an
+underspecified adapter behavior. Protocols that deliberately permit interim or
+streaming responses must model those nonterminal messages explicitly and still
+identify one terminal response.
+
 \section{The running adapter}
 
 The following table is the implemented ChatUI subset. Static assets,
@@ -181,6 +203,9 @@ contains immutable predecessor event identifiers. A derived
 not serialized as mutable truth. \texttt{session\_id} separates users and
 concurrent conversations; \texttt{task\_id} selects the grammar; and
 \texttt{src}/\texttt{dst} must agree with the selected message schema.
+The optional \texttt{cause\_id} field is a separate causal relation. For an HTTP
+response event it obligatorily names the corresponding request event.
+\texttt{prior\_ids} continues to mean predecessor order only.
 
 \section{Complete LeanFM task grammar}
 

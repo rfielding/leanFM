@@ -11,6 +11,7 @@ structure Event (Actor Session Task Kind Payload : Type) where
   timeAt  : ClockTimestamp
   id      : String
   priorIds : List String
+  causeId : Option String
   session : Session
   task    : Task
   from    : Actor
@@ -23,7 +24,8 @@ abbrev Trace (Actor Session Task Kind Payload : Type) :=
 \end{lstlisting}
 
 The fields have different jobs. \texttt{id} identifies a visible fact;
-\texttt{priorIds} records zero or more immediate predecessor backpointers; \texttt{from} and
+\texttt{priorIds} records zero or more immediate predecessor backpointers;
+\texttt{causeId} optionally identifies the one direct causal event; \texttt{from} and
 \texttt{to} name the parties; \texttt{(session, task)} correlates independently
 progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
@@ -42,6 +44,14 @@ already-ancestral start is a redundant ordering edge, but it is useful
 correlation data and does not alter the partial order. The edge says ``ordered
 after,'' not ``caused by.'' A causal interpretation requires a separate grammar
 or domain assertion.
+
+Causality uses a different backpointer. An event's optional \texttt{causeId}
+names the event that directly caused it and does not add or remove permitted
+interleavings. For a request/response production, the response's
+\texttt{causeId} is the request's \texttt{id}; read it as ``this response
+answers this request.'' The rule remains unambiguous when many requests are in
+flight because correlation follows event identity rather than adjacency or
+arrival order. \texttt{priorIds} remains exclusively the partial-order relation.
 
 For an $m$-of-$n$ join, the event additionally records $m$, $n$, and the exact
 $m$ branch-terminal IDs that satisfied the threshold. The selected IDs must be

@@ -168,7 +168,7 @@ def decisions : List ImplementationDecision :=
   , decision "protobuf-event-journal"
       ["task:inspect_task_model", "property:protobuf_events_follow_task_grammar", "proof:Linked task views agree"]
       ["LeanFM/ChatUI/Proto.lean", "LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Views.lean"]
-      "Generate a small schema-specific protobuf codec for EventEnvelope and every accepted payload. Append length-delimited objects to the selected project event journal using an atomic temporary-file rename. Preserve event_id, repeated prior_ids, session_id, task_id, time_at_ms, src, dst, and oneof payload. Replay validates each task grammar. The event inspector shows ordered objects and redacted JSON while download returns the selected encoded object."
+      "Generate a small schema-specific protobuf codec for EventEnvelope and every accepted payload. Append length-delimited objects to the selected project event journal using an atomic temporary-file rename. Preserve event_id, repeated prior_ids, optional cause_id, session_id, task_id, time_at_ms, src, dst, and oneof payload. prior_ids governs predecessor order and legal interleavings; cause_id independently identifies the direct causal event. Replay validates each task grammar. The event inspector shows ordered objects and redacted JSON while download returns the selected encoded object."
       ["Tests/ChatUIProtoRoundTrip.lean", "Tests/ChatUITraceReplay.lean"]
   , decision "task-local-derived-views"
       ["output:chatui.task-model.interaction", "output:chatui.task-model.state", "proof:There is no global task diagram", "proof:Linked task views agree"]
@@ -211,9 +211,9 @@ def decisions : List ImplementationDecision :=
       "Store immutable artifact revisions beneath the project root with a manifest containing status, provenance, author, timestamp, dependencies, validation, and current/accepted pointers. The artifact tab groups and filters these server-backed manifests; compare, open, and download always name an exact revision."
       ["Tests/ChatUIArtifacts.lean"]
   , decision "default-http-codec-and-openapi"
-      ["property:default_http_projection_is_deterministic"]
+      ["property:default_http_projection_is_deterministic", "property:http_response_backpoints_to_request", "property:http_exchange_is_causally_closed", "proof:HTTP responses retain their request identity"]
       ["LeanFM/ChatUI/Server.lean", "LeanFM/Render.lean"]
-      "For an HTTP production without an explicit codec binding, encode and decode bodies using the protobuf JSON mapping with application/json. Generate OpenAPI from the resolved protobuf request-response pairs and transport bindings, and serve the resulting YAML at GET /openapi.yaml. Explicit bindings override the default codec, method, path, and content type while remaining subject to byte round-trip validation."
+      "For an HTTP production without an explicit codec binding, encode and decode bodies using the protobuf JSON mapping with application/json. Generate OpenAPI from the resolved protobuf request-response pairs and transport bindings, and serve the resulting YAML at GET /openapi.yaml. Validate a causally closed exchange relation before projection: each terminal response EventEnvelope.cause_id equals one compatible request event_id in the same session and task, and each projected request is named by exactly one terminal success or error response. Reject orphan requests, dangling responses, incompatible or cross-session causes, and duplicate terminal responses as unchecked HTTP calls. Do not alter or infer prior_ids, which separately governs legal interleavings. Explicit bindings override the default codec, method, path, and content type while remaining subject to correlation and byte round-trip validation."
       ["scripts/chatui_http_check.sh"]
   , decision "traceability-and-build"
       [spec.id]

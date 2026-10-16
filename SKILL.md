@@ -60,7 +60,15 @@ the protobuf request body for bytes, repeated or nested values, secrets, large
 or unbounded strings, or parameters that do not naturally belong in a URL.
 Unless an explicit binding selects another codec, encode HTTP bodies with the
 protobuf JSON mapping and `Content-Type: application/json`. Publish the resolved
-OpenAPI document at `GET /openapi.yaml`.
+OpenAPI document at `GET /openapi.yaml`. Preserve events as independently
+framed messages: every event projected as an HTTP response must set `cause_id`
+to the exact corresponding request event ID within the same session and task.
+`prior_ids` separately governs predecessor order and legal interleavings; never
+use it as the causal pointer. Pair exchanges by `cause_id`, never by adjacency
+or a global current request. Validate closure in both directions: every HTTP
+request is the cause of exactly one terminal success or error response, and
+every HTTP response names one compatible request in the same session and task.
+Treat an orphan or multiply answered call as an invalid unchecked HTTP binding.
 
 ## Connect to LeanFM
 
@@ -141,6 +149,10 @@ one-shot implementation, perform a separate conservative cleanup pass:
 - when prose is mainly describing actors, message flow, states, ordering,
   dependencies, or quantities, create the corresponding `DesiredOutput` and
   replace most of that prose with the generated view plus a short interpretation;
+- give every generated PDF figure meaningful invisible alt text; for an
+  interaction diagram, pronounce each arrow as `Message from A to B: message`
+  in diagram order rather than relying on an arrow glyph or implication-like
+  notation;
 - never promote a speculative book passage into an implementation obligation
   merely because it survived an early draft.
 

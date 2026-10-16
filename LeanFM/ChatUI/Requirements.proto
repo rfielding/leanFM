@@ -10,6 +10,9 @@ message EventEnvelope {
   uint64 time_at_ms = 5;
   string src = 6;
   string dst = 7;
+  // Direct causal parent. Empty for an initiating event. Unlike prior_ids,
+  // this does not constrain otherwise legal concurrent interleavings.
+  optional string cause_id = 8;
 
   oneof payload {
     LoginSubmitted login_submitted = 20;

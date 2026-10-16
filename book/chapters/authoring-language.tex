@@ -208,7 +208,7 @@ because the server transports the user's probability mass to its terminal
 responses.
 
 \begin{center}
-\AccessibleFigure{Interaction diagram with User and Server lifelines. The User sends open session with probability one. The Server returns show options with probability one. The User then sends choose browse with probability three fifths or choose purchase with probability two fifths. The Server deterministically returns show results after browse or confirm purchase after purchase.}{%
+\AccessibleFigure{Interaction diagram with User and Server lifelines. Message from User to Server: open Session with probability one. Message from Server to User: show Options with probability one. The next two request and response pairs are alternatives. Message from User to Server: choose Browse with probability three fifths. Message from Server to User: show Results with probability one. Message from User to Server: choose Purchase with probability two fifths. Message from Server to User: confirm Purchase with probability one.}{%
   \resizebox{.72\textwidth}{!}{\input{generated/stochastic-user-interaction.tex}}%
 }
 \end{center}
