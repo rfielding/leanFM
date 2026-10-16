@@ -1268,7 +1268,7 @@ def leanFMImplementationReference : String :=
     , "Generated source and tests retain those IDs beside the code they justify. Do not generate orphan behavior."
     , ""
     , "## Conformance"
-    , "Generated emitters and parsers preserve event id, repeated prior links, optional cause_id, session, task, actors, timeAt, and the selected protobuf atom. HTTP-bound productions additionally name method, path, protobuf request/response types, status alternatives, content type, encoder, and decoder; every HTTP response event has cause_id equal to its request event_id without overloading prior_ids; exact byte fixtures must round-trip and remain legal in the residual grammar."
+    , "Generated emitters and parsers preserve event id, repeated prior links, optional cause_id, session, task, actors, timeAt, and the selected protobuf atom. Any root, intermediate, or terminal event may name one direct cause; cause_id must resolve and remain acyclic, may delimit a nested task, and defines causal containment boxes without changing the prior relation or legal interleavings. HTTP-bound productions additionally name method, path, protobuf request/response types, status alternatives, content type, encoder, and decoder; every HTTP response event has cause_id equal to its request event_id without overloading prior_ids; exact byte fixtures must round-trip and remain legal in the residual grammar."
     , "Test legal trace round-trips and replay, illegal trace rejection, bounded-channel behavior, possible-branch handling plans, and event reducers feeding desired outputs and /metrics."
     , "After construction, call GET /tools/llm-generated/implementation/validate and the combined generated-artifacts validator."
     ]

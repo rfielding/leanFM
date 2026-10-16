@@ -69,6 +69,10 @@ or a global current request. Validate closure in both directions: every HTTP
 request is the cause of exactly one terminal success or error response, and
 every HTTP response names one compatible request in the same session and task.
 Treat an orphan or multiply answered call as an invalid unchecked HTTP binding.
+Do not restrict `cause_id` to HTTP or terminal events. Any intermediate event or
+nested task boundary may name one direct cause. Validate that causes exist and
+are acyclic, derive causal subtrees for nested interaction boxes, and do not
+infer `prior_ids` or a sibling order from causal containment.
 
 ## Connect to LeanFM
 

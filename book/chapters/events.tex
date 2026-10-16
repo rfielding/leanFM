@@ -47,7 +47,14 @@ or domain assertion.
 
 Causality uses a different backpointer. An event's optional \texttt{causeId}
 names the event that directly caused it and does not add or remove permitted
-interleavings. For a request/response production, the response's
+interleavings. It is not restricted to terminal events. A task-start event may
+cause intermediate messages; those messages may cause nested task starts; and
+terminal events may point to the event whose work they finish. Following the
+reverse \texttt{causeId} relation produces a causal subtree. A renderer places
+that subtree inside a labeled box, recursively, so nested work remains visible
+without pretending that concurrent causal children have a fixed order.
+
+For a request/response production, the response's
 \texttt{causeId} is the request's \texttt{id}; read it as ``this response
 answers this request.'' The rule remains unambiguous when many requests are in
 flight because correlation follows event identity rather than adjacency or

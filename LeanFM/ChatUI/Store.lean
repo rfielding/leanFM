@@ -244,7 +244,23 @@ def projectListJson (username : String) : IO String := do
     if safeId entry.fileName then
       let manifest ← readOr (entry.path.toString ++ "/manifest.json") ""
       let name := (jsonStringValue? manifest "display_name").getD entry.fileName
-      items := ("{\"project_id\":\"" ++ entry.fileName ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\"}") :: items
-  pure ("[" ++ String.intercalate "," items.reverse ++ "]")
+      items := ("{\"project_id\":\"" ++ entry.fileName ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\",\"read_only\":false}") :: items
+  let workspace := "{\"project_id\":\"leanfm-workspace\",\"display_name\":\"LeanFM\",\"read_only\":true,\"kind\":\"workspace\"}"
+  pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace]) ++ "]")
+
+def deleteProject (username projectId confirmation : String) : IO (Except String Unit) := do
+  if !safeId projectId then return .error "Invalid project identifier."
+  let parent ← projectsRoot username
+  let root ← projectRoot username projectId
+  let manifest ← readOr (root ++ "/manifest.json") ""
+  if manifest.isEmpty then return .error "Project not found."
+  let displayName := (jsonStringValue? manifest "display_name").getD projectId
+  if confirmation != displayName then return .error "Project name confirmation did not match."
+  let realParent ← IO.FS.realPath (fp parent)
+  let realRoot ← IO.FS.realPath (fp root)
+  if realRoot.toString != realParent.toString ++ "/" ++ projectId then
+    return .error "Project root did not resolve to the owned projects directory."
+  IO.FS.removeDirAll realRoot
+  pure (.ok ())
 
 end LeanFM.ChatUI.Store

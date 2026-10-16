@@ -11,8 +11,10 @@ message EventEnvelope {
   uint64 time_at_ms = 5;
   string src = 6;
   string dst = 7;
-  // Direct causal parent. Empty for an initiating event. Unlike prior_ids,
-  // this does not constrain otherwise legal concurrent interleavings.
+  // Direct causal parent for any event, including nonterminal and intermediate
+  // events. Empty for a causal root. Unlike prior_ids, this does not constrain
+  // otherwise legal concurrent interleavings. Renderers may use the causal
+  // subtree as nested interaction boundaries.
   optional string cause_id = 8;
 
   oneof payload {

@@ -205,7 +205,11 @@ concurrent conversations; \texttt{task\_id} selects the grammar; and
 \texttt{src}/\texttt{dst} must agree with the selected message schema.
 The optional \texttt{cause\_id} field is a separate causal relation. For an HTTP
 response event it obligatorily names the corresponding request event.
-\texttt{prior\_ids} continues to mean predecessor order only.
+That HTTP rule is one use of a general field: roots, nonterminal messages,
+nested task boundaries, and terminal events may all name a direct cause. The
+acyclic causal subtree supplies nested boxes to interaction renderers.
+\texttt{prior\_ids} continues to mean predecessor order only; causal nesting
+does not choose an interleaving among concurrent children.
 
 \section{Complete LeanFM task grammar}
 

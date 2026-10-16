@@ -35,35 +35,94 @@ def credentialKey (username request : String) : IO (Except String String) := do
       | some key => pure (.ok key)
 
 def authorizedProjectRoot? (username projectId : String) : IO (Option String) := do
+  if projectId == "leanfm-workspace" then
+    if ← (fp "book/main.pdf").pathExists then return some "." else return none
   if !safeId projectId then return none
   let root ← projectRoot username projectId
   if ← (fp (root ++ "/manifest.json")).pathExists then pure (some root) else pure none
 
 def pathSegments (path : String) : List String := path.splitOn "/" |>.filter (!·.isEmpty)
 
-def tasksJson : String :=
+def jsonStrings (values : List String) : String :=
+  "[" ++ String.intercalate "," (values.map fun value => "\"" ++ jsonEscape value ++ "\"") ++ "]"
+
+partial def grammarExprJson : GrammarExpr -> String
+  | .empty => "{\"kind\":\"empty\"}"
+  | .event atom =>
+      "{\"kind\":\"event\",\"task\":\"" ++ jsonEscape atom.task ++
+      "\",\"src\":\"" ++ jsonEscape atom.src ++ "\",\"dst\":\"" ++ jsonEscape atom.dst ++
+      "\",\"message\":\"" ++ jsonEscape atom.message ++ "\"}"
+  | .seq left right =>
+      "{\"kind\":\"seq\",\"children\":[" ++ grammarExprJson left ++ "," ++ grammarExprJson right ++ "]}"
+  | .choice branches =>
+      "{\"kind\":\"choice\",\"children\":[" ++ String.intercalate "," (branches.map grammarExprJson) ++ "]}"
+  | .parallel left right =>
+      "{\"kind\":\"parallel\",\"children\":[" ++ grammarExprJson left ++ "," ++ grammarExprJson right ++ "]}"
+  | .thresholdJoin required branches =>
+      "{\"kind\":\"thresholdJoin\",\"required\":" ++ toString required ++
+      ",\"children\":[" ++ String.intercalate "," (branches.map grammarExprJson) ++ "]}"
+  | .guard predicate body =>
+      "{\"kind\":\"guard\",\"predicate\":\"" ++ jsonEscape predicate ++
+      "\",\"children\":[" ++ grammarExprJson body ++ "]}"
+  | .ref task => "{\"kind\":\"ref\",\"task\":\"" ++ jsonEscape task ++ "\"}"
+  | .repeat body => "{\"kind\":\"repeat\",\"children\":[" ++ grammarExprJson body ++ "]}"
+
+def tasksJson (source : String) : String :=
   let items := Requirements.spec.tasks.map fun task =>
-    let constraints := Requirements.taskConstraints.filter (·.task == task.id) |>.map (fun item => "\"" ++ jsonEscape item.predicate ++ "\"")
+    let constraints := Requirements.taskConstraints.filter (·.task == task.id) |>.map (·.predicate)
+    let properties := Requirements.spec.properties.filter (·.task == task.id) |>.map fun property =>
+      "{\"name\":\"" ++ jsonEscape property.name ++ "\",\"mode\":\"" ++
+      jsonEscape (propertyModeName property.mode) ++ "\",\"expression\":\"" ++
+      jsonEscape property.expression ++ "\"}"
+    let states := task.states.map fun state =>
+      "{\"id\":\"" ++ jsonEscape state.id ++ "\",\"label\":\"" ++ jsonEscape state.label ++
+      "\",\"group\":\"" ++ jsonEscape state.group ++ "\",\"terminal\":" ++
+      (if state.terminal then "true" else "false") ++ "}"
+    let transitions := task.transitions.map fun transition =>
+      let schema? := Requirements.messages.find? (·.name == transition.message)
+      let src := schema?.map (·.src) |>.getD "Actor"
+      let dst := schema?.map (·.dst) |>.getD "Actor"
+      let fields := schema?.map (fun schema => schema.fields.map fun field =>
+        "{\"number\":" ++ toString field.number ++ ",\"name\":\"" ++ jsonEscape field.name ++
+        "\",\"type\":\"" ++ jsonEscape field.scalar.protoName ++ "\"}") |>.getD []
+      "{\"src\":\"" ++ jsonEscape transition.src ++ "\",\"dst\":\"" ++
+      jsonEscape transition.dst ++ "\",\"message\":\"" ++ jsonEscape transition.message ++
+      "\",\"source_actor\":\"" ++ jsonEscape src ++ "\",\"destination_actor\":\"" ++
+      jsonEscape dst ++ "\",\"probability\":\"" ++ toString transition.probabilityNum ++ "/" ++
+      toString transition.probabilityDen ++ "\",\"dwell_ms\":" ++ toString transition.dwellMs ++
+      ",\"fields\":[" ++ String.intercalate "," fields ++ "]}"
+    let grammar? := Requirements.spec.grammars.find? (·.task == task.id)
+    let entry := grammar?.map (·.entry) |>.getD task.initialState
+    let terminals := grammar?.map (·.terminals) |>.getD []
     "{\"id\":\"" ++ jsonEscape task.id ++ "\",\"title\":\"" ++ jsonEscape task.title ++
-    "\",\"interaction_mermaid\":\"" ++ jsonEscape (Requirements.interactionMermaid task) ++
+    "\",\"entry\":\"" ++ jsonEscape entry ++ "\",\"terminals\":" ++ jsonStrings terminals ++
+    ",\"actors\":" ++ jsonStrings task.actors ++ ",\"states\":[" ++ String.intercalate "," states ++
+    "],\"transitions\":[" ++ String.intercalate "," transitions ++
+    "],\"grammar\":" ++ (grammar?.map (fun grammar => grammarExprJson grammar.body) |>.getD "null") ++
+    ",\"properties\":[" ++ String.intercalate "," properties ++
+    "],\"interaction_mermaid\":\"" ++ jsonEscape (Requirements.interactionMermaid task) ++
     "\",\"state_mermaid\":\"" ++ jsonEscape (Requirements.stateMachineMermaid task) ++
-    "\",\"constraints\":[" ++ String.intercalate "," constraints ++ "]}"
-  "[" ++ String.intercalate "," items ++ "]"
+    "\",\"constraints\":" ++ jsonStrings constraints ++ "}"
+  "{\"source\":\"" ++ jsonEscape source ++ "\",\"validation\":{\"errors\":0,\"warnings\":0},\"tasks\":[" ++
+    String.intercalate "," items ++ "]}"
 
 def appendConversation (root role text : String) (usage : Option Provider.Completion := none) : IO Unit := do
   let path := root ++ "/conversations/main.log"
   let old ← readOr path ""
+  let messageId ← randomHex 12
   let usageFields := match usage with
     | none => "0|0|0|0"
     | some u => s!"{u.inputTokens}|{u.cachedInputTokens}|{u.outputTokens}|{u.totalTokens}"
-  writeAtomic path (old ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "\n")
+  writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "\n")
 
 def conversationContext (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
   let mut turns : List String := []
   for line in body.splitOn "\n" do
     match line.splitOn "|" with
-    | role :: encoded :: _ =>
+    | [_messageId, role, encoded, _input, _cached, _output, _total] =>
+        try turns := (role ++ ": " ++ (← base64Decode encoded)) :: turns catch _ => pure ()
+    | [role, encoded, _input, _cached, _output, _total] =>
         try turns := (role ++ ": " ++ (← base64Decode encoded)) :: turns catch _ => pure ()
     | _ => pure ()
   pure (String.intercalate "\n\n" ((turns.take 24).reverse))
@@ -72,8 +131,20 @@ def conversationJson (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
   let contextWindow := (← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS").getD "128000"
   let mut messages : List String := []
+  let mut lineNumber := 0
   for line in body.splitOn "\n" do
+    let legacyId := "legacy-" ++ toString lineNumber
     match line.splitOn "|" with
+    | [messageId, role, encoded, input, cached, output, total] =>
+        try
+          let text ← base64Decode encoded
+          let usage := if role == "assistant" then
+              ",\"usage\":{\"input_tokens\":" ++ input ++ ",\"cached_input_tokens\":" ++ cached ++
+              ",\"output_tokens\":" ++ output ++ ",\"total_tokens\":" ++ total ++ ",\"context_window_tokens\":" ++
+              contextWindow ++ "}"
+            else ""
+          messages := ("{\"message_id\":\"" ++ jsonEscape messageId ++ "\",\"role\":\"" ++ role ++ "\",\"text\":\"" ++ jsonEscape text ++ "\"" ++ usage ++ "}") :: messages
+        catch _ => pure ()
     | [role, encoded, input, cached, output, total] =>
         try
           let text ← base64Decode encoded
@@ -82,10 +153,27 @@ def conversationJson (root : String) : IO String := do
               ",\"output_tokens\":" ++ output ++ ",\"total_tokens\":" ++ total ++ ",\"context_window_tokens\":" ++
               contextWindow ++ "}"
             else ""
-          messages := ("{\"role\":\"" ++ role ++ "\",\"text\":\"" ++ jsonEscape text ++ "\"" ++ usage ++ "}") :: messages
+          messages := ("{\"message_id\":\"" ++ legacyId ++ "\",\"role\":\"" ++ role ++ "\",\"text\":\"" ++ jsonEscape text ++ "\"" ++ usage ++ "}") :: messages
         catch _ => pure ()
     | _ => pure ()
+    lineNumber := lineNumber + 1
   pure ("{\"messages\":[" ++ String.intercalate "," messages.reverse ++ "]}\n")
+
+def deleteConversationMessage (root messageId : String) : IO Bool := do
+  let path := root ++ "/conversations/main.log"
+  let body ← readOr path ""
+  let mut kept : List String := []
+  let mut found := false
+  let mut lineNumber := 0
+  for line in body.splitOn "\n" do
+    if !line.isEmpty then
+      let storedId := match line.splitOn "|" with
+        | id :: _role :: _encoded :: _input :: _cached :: _output :: _total :: [] => id
+        | _ => "legacy-" ++ toString lineNumber
+      if storedId == messageId then found := true else kept := line :: kept
+    lineNumber := lineNumber + 1
+  if found then writeAtomic path (String.intercalate "\n" kept.reverse ++ if kept.isEmpty then "" else "\n")
+  pure found
 
 def artifactListJson (root : String) : IO String := do
   let mut artifacts : List String := []
@@ -108,11 +196,11 @@ def saveMermaidArtifacts (root responseText : String) : IO Unit := do
 
 def handlePublic (path method request : String) : IO (Option HttpResponse) := do
   if path == "/" && method == "GET" then
-    return some { status := 200, contentType := "text/html; charset=utf-8", body := Web.page }
-  if path == "/assets/chatui.css" then
-    return some { status := 200, contentType := "text/css; charset=utf-8", body := Web.css }
-  if path == "/assets/chatui.js" then
-    return some { status := 200, contentType := "application/javascript; charset=utf-8", body := Web.javascript }
+    return some (HttpResponse.mk 200 "text/html; charset=utf-8" Web.page ["Cache-Control: no-store"])
+  if path == "/assets/chatui.css" || path == "/assets/chatui-20261016.css" || path == "/assets/chatui-20261016b.css" || path == "/assets/chatui-20261016c.css" || path == "/assets/chatui-20261016d.css" || path == "/assets/chatui-20261016e.css" || path == "/assets/chatui-20261016f.css" || path == "/assets/chatui-20261016g.css" then
+    return some (HttpResponse.mk 200 "text/css; charset=utf-8" Web.css ["Cache-Control: no-store"])
+  if path == "/assets/chatui.js" || path == "/assets/chatui-20261016.js" || path == "/assets/chatui-20261016b.js" || path == "/assets/chatui-20261016c.js" || path == "/assets/chatui-20261016d.js" || path == "/assets/chatui-20261016e.js" || path == "/assets/chatui-20261016f.js" || path == "/assets/chatui-20261016g.js" then
+    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.javascript ["Cache-Control: no-store"])
   if path == "/api/accounts" && method == "POST" then
     let body := requestBody request
     let username := (formValue? body "username").getD ""
@@ -155,11 +243,27 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
       match ← authorizedProjectRoot? username projectId with
       | none => return some (errorResponse 404 "Project not found.")
       | some root =>
+          if rest.isEmpty && method == "DELETE" then
+            if projectId == "leanfm-workspace" then
+              return some (errorResponse 403 "The LeanFM workspace project is read-only and cannot be deleted.")
+            let confirmation := (formValue? (requestBody request) "confirmation").getD ""
+            match ← deleteProject username projectId confirmation with
+            | .error message => return some (errorResponse 400 message)
+            | .ok _ => return some (jsonResponse 200 ("{\"deleted_project_id\":\"" ++ jsonEscape projectId ++ "\"}\n"))
           match rest, method with
           | ["conversation"], "GET" => return some (jsonResponse 200 (← conversationJson root))
-          | ["tasks"], "GET" => return some (jsonResponse 200 ("{\"tasks\":" ++ tasksJson ++ "}\n"))
+          | ["conversation", "messages", messageId], "DELETE" =>
+              if ← deleteConversationMessage root messageId then
+                return some (jsonResponse 200 ("{\"deleted_message_id\":\"" ++ jsonEscape messageId ++ "\"}\n"))
+              else return some (errorResponse 404 "Message not found.")
+          | ["tasks"], "GET" =>
+              let source := if projectId == "leanfm-workspace" then "LeanFM/ChatUI/Requirements.lean (live workspace)"
+                else root ++ "/spec/Requirements.lean"
+              return some (jsonResponse 200 (tasksJson source ++ "\n"))
           | ["artifacts"], "GET" => return some (jsonResponse 200 (← artifactListJson root))
           | ["chat"], "POST" =>
+              if projectId == "leanfm-workspace" then
+                return some (errorResponse 403 "The LeanFM workspace project is read-only.")
               let prompt := (formValue? (requestBody request) "prompt").getD ""
               if prompt.trim.isEmpty then return some (errorResponse 400 "A prompt is required.")
               match ← credentialKey username request with
