@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The sole third-party command boundary for the ChatUI workspace agent.
+# Each operation below has fixed executable semantics; arbitrary shell text is
+# deliberately not accepted.
+operation="${1:-}"
+shift || true
+
+unset LD_LIBRARY_PATH LD_PRELOAD
+
+case "$operation" in
+  list-files)
+    test "$#" -eq 1
+    exec rg --files -- "$1"
+    ;;
+  search-literal)
+    test "$#" -eq 2
+    exec rg -n -F -- "$1" "$2"
+    ;;
+  git-apply-check)
+    test "$#" -eq 1
+    exec git -C "$1" apply --check --whitespace=nowarn -
+    ;;
+  git-apply)
+    test "$#" -eq 1
+    exec git -C "$1" apply --whitespace=nowarn -
+    ;;
+  check-build|check-check|check-book)
+    test "$#" -eq 1
+    target="${operation#check-}"
+    exec timeout 300 make -C "$1" "$target"
+    ;;
+  check-http)
+    test "$#" -eq 1
+    exec timeout 300 make -C "$1" http-check
+    ;;
+  check-go)
+    test "$#" -eq 1
+    exec timeout 300 go -C "$1" test ./...
+    ;;
+  generate-gif)
+    test "$#" -eq 3
+    root="$1"
+    script_relative="$2"
+    output_relative="$3"
+    exec timeout 60 bwrap --die-with-parent --new-session \
+      --unshare-pid --unshare-ipc --unshare-uts \
+      --ro-bind /usr /usr --ro-bind /usr/local /usr/local \
+      --ro-bind /lib /lib --ro-bind /lib64 /lib64 \
+      --proc /proc --dev /dev --tmpfs /tmp \
+      --bind "$root" /work --chdir /work \
+      /usr/bin/python3 "/work/$script_relative" "/work/$output_relative"
+    ;;
+  transcode-mp4)
+    test "$#" -eq 2
+    exec timeout 120 /usr/bin/ffmpeg -hide_banner -loglevel error -y \
+      -i "$1" -vf 'scale=trunc(iw/2)*2:trunc(ih/2)*2' \
+      -an -c:v libx264 -preset medium -crf 20 -profile:v high \
+      -pix_fmt yuv420p -movflags +faststart "$2"
+    ;;
+  *)
+    printf 'Unsupported ChatUI command operation: %s\n' "$operation" >&2
+    exit 64
+    ;;
+esac

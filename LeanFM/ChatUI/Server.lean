@@ -182,7 +182,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
       | .error message => fail message
       | .ok path =>
           record ("Listed " ++ (if normalized.isEmpty then "." else normalized))
-          let out ← IO.Process.output { cmd := "rg", args := #["--files", path] }
+          let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["list-files", path] }
           let body := out.stdout.splitOn "\n" |>.map (fun line =>
             if line.startsWith (root ++ "/") then (line.drop (root.length + 1)).toString else line) |>.intersperse "\n" |> String.join
           pure (compactToolResult body)
@@ -203,15 +203,15 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
       | .error message => fail message
       | .ok path =>
           record ("Searched " ++ (if normalized.isEmpty then "." else normalized) ++ " for " ++ truncateText query 80)
-          let out ← IO.Process.output { cmd := "rg", args := #["-n", "-F", "--", query, path] }
+          let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["search-literal", query, path] }
           pure (compactToolResult (if out.stdout.isEmpty then "No matches." else out.stdout))
   | "workspace_patch" =>
       let some patch := toolArgument? arguments "patch" | fail "Missing patch."
       if patch.length > 2000000 then return ← fail "Patch exceeds the 2 MB limit."
       record "Applying a workspace patch"
-      let checked ← IO.Process.output { cmd := "git", args := #["-C", root, "apply", "--check", "--whitespace=nowarn", "-"] } (some patch)
+      let checked ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["git-apply-check", root] } (some patch)
       if checked.exitCode != 0 then return ← fail ("Patch check failed: " ++ compactToolResult checked.stderr)
-      let applied ← IO.Process.output { cmd := "git", args := #["-C", root, "apply", "--whitespace=nowarn", "-"] } (some patch)
+      let applied ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["git-apply", root] } (some patch)
       if applied.exitCode != 0 then return ← fail ("Patch apply failed: " ++ compactToolResult applied.stderr)
       record "Applied workspace patch"
       pure "OK"
@@ -229,16 +229,16 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
           catch error => fail ("Write failed: " ++ toString error)
   | "workspace_check" =>
       let some target := toolArgument? arguments "target" | fail "Missing target."
-      let (cmd, args) := match target with
-        | "build" => ("make", #["-C", root, "build"])
-        | "check" => ("make", #["-C", root, "check"])
-        | "book" => ("make", #["-C", root, "book"])
-        | "http-check" => ("make", #["-C", root, "http-check"])
-        | "go-test" => ("go", #["-C", root, "test", "./..."])
-        | _ => ("", #[])
-      if cmd.isEmpty then return ← fail "Unknown check target."
+      let operation := match target with
+        | "build" => "check-build"
+        | "check" => "check-check"
+        | "book" => "check-book"
+        | "http-check" => "check-http"
+        | "go-test" => "check-go"
+        | _ => ""
+      if operation.isEmpty then return ← fail "Unknown check target."
       record ("Started check: " ++ target)
-      let out ← IO.Process.output { cmd, args }
+      let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #[operation, root] }
       let result := compactToolResult (out.stdout ++ out.stderr)
       record ((if out.exitCode == 0 then "Finished check: " else "Failed check: ") ++ target ++ " (exit " ++ toString out.exitCode ++ ")")
       pure ("exit_code=" ++ toString out.exitCode ++ "\n" ++ result)
@@ -254,16 +254,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
           | .error message => fail message
           | .ok outputPath =>
               record ("Started sandboxed GIF generator " ++ scriptRelative)
-              let out ← IO.Process.output {
-                cmd := "timeout"
-                args := #["60", "bwrap", "--die-with-parent", "--new-session",
-                  "--unshare-pid", "--unshare-ipc", "--unshare-uts",
-                  "--ro-bind", "/usr", "/usr", "--ro-bind", "/usr/local", "/usr/local",
-                  "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
-                  "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-                  "--bind", root, "/work", "--chdir", "/work",
-                  "/usr/bin/python3", "/work/" ++ scriptRelative, "/work/" ++ outputRelative]
-              }
+              let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["generate-gif", root, scriptRelative, outputRelative] }
               if out.exitCode != 0 then return ← fail ("GIF generator failed: " ++ compactToolResult (out.stdout ++ out.stderr))
               let bytes ← IO.FS.readBinFile (fp outputPath)
               let signature := String.fromUTF8? (bytes.extract 0 (min 6 bytes.size))
@@ -286,14 +277,9 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
           | .ok outputPath =>
               record ("Started MP4 transcode from " ++ inputRelative)
               let out ← try IO.Process.output {
-                  cmd := "timeout"
-                  args := #["120", "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                    "-i", inputPath, "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                    "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                    "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-                    outputPath]
-                  env := #[("LD_LIBRARY_PATH", none), ("LD_PRELOAD", none)]
-                } catch error => return ← fail ("Could not run ffmpeg: " ++ toString error)
+                  cmd := "scripts/chatui_command.sh"
+                  args := #["transcode-mp4", inputPath, outputPath]
+                } catch error => return ← fail ("Could not run MP4 whitelist command: " ++ toString error)
               if out.exitCode != 0 then return ← fail ("MP4 transcode failed: " ++ compactToolResult (out.stdout ++ out.stderr))
               let bytes ← IO.FS.readBinFile (fp outputPath)
               let header := String.fromUTF8? (bytes.extract 4 (min 12 bytes.size))
@@ -392,7 +378,7 @@ def conversationContext (root : String) : IO String := do
   pure (String.intercalate "\n\n" ((turns.take 8).reverse))
 
 def referencedAnimationSource? (root context : String) : IO (Option String) := do
-  let out ← IO.Process.output { cmd := "rg", args := #["--files", root ++ "/spec/images", root ++ "/spec/media", root ++ "/artifacts", root ++ "/renders"] }
+  let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["list-files", root] }
   let candidates := out.stdout.splitOn "\n" |>.filterMap fun path =>
     if path.startsWith (root ++ "/") then
       let relative := (path.drop (root.length + 1)).toString
