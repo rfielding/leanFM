@@ -390,6 +390,21 @@ def conversationContext (root : String) : IO String := do
     | _ => pure ()
   pure (String.intercalate "\n\n" ((turns.take 8).reverse))
 
+def referencedAnimationSource? (root context : String) : IO (Option String) := do
+  let out ← IO.Process.output { cmd := "rg", args := #["--files", root ++ "/spec/images", root ++ "/spec/media", root ++ "/artifacts", root ++ "/renders"] }
+  let candidates := out.stdout.splitOn "\n" |>.filterMap fun path =>
+    if path.startsWith (root ++ "/") then
+      let relative := (path.drop (root.length + 1)).toString
+      let lower := relative.toLower
+      if lower.endsWith ".gif" || lower.endsWith ".webm" then some relative else none
+    else none
+  let rec mostRecentlyReferenced : List String → Option String
+    | [] => none
+    | line :: rest => match candidates.find? (fun candidate => line.contains candidate) with
+      | some candidate => some candidate
+      | none => mostRecentlyReferenced rest
+  pure (mostRecentlyReferenced (context.splitOn "\n" |>.reverse) |>.orElse fun _ => candidates.head?)
+
 def referencedFigureContext (root prompt : String) : IO String := do
   let mut references : List String := []
   for tail in prompt.toLower.splitOn "figure " |>.drop 1 do
@@ -636,10 +651,20 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   match ← Provider.completeAgent key (workspaceAgentInstructions launchRoot) contextualPrompt runner with
                   | .error message => return some (errorResponse 502 message)
                   | .ok answer =>
-                      let activity := (← trace.get).reverse
                       let mp4Requested := prompt.toLower.contains "mp4"
-                      let mp4Generated := activity.any fun item => item.startsWith "Generated " && item.toLower.contains ".mp4"
-                      let missingRequiredArtifact := mp4Requested && !mp4Generated
+                      let mut activity := (← trace.get).reverse
+                      if mp4Requested && !(activity.any fun item => item.startsWith "Generated " && item.toLower.contains ".mp4") then
+                        match ← referencedAnimationSource? root (prior ++ "\n" ++ prompt) with
+                        | none => trace.modify ("workspace_transcode_mp4 rejected: No project GIF or WebM source was found." :: ·)
+                        | some source =>
+                            let stem := if source.toLower.endsWith ".webm" then source.dropEnd 5 else source.dropEnd 4
+                            let destination := stem.toString ++ ".mp4"
+                            let _ ← runner "workspace_transcode_mp4"
+                              ("{\"input_path\":\"" ++ jsonEscape (root ++ "/" ++ source) ++
+                                "\",\"output_path\":\"" ++ jsonEscape (root ++ "/" ++ destination) ++ "\"}")
+                      activity := (← trace.get).reverse
+                      let mp4Artifact := activity.find? fun item => item.startsWith "Generated " && item.toLower.contains ".mp4"
+                      let missingRequiredArtifact := mp4Requested && mp4Artifact.isNone
                       let warned := (answer.text.splitOn "```leanfm-questions").length > 1 || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
                       let status := if missingRequiredArtifact then "fail" else if warned then "warn" else "success"
                       let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
@@ -648,7 +673,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         match mp4Failure with
                         | some failure => "The requested MP4 was not produced. " ++ failure
                         | none => "The requested MP4 was not produced because the MP4 transcoder was not invoked. LeanFM rejected the response instead of presenting another substitute or follow-up question."
-                        else answer.text
+                        else match mp4Artifact with
+                          | some generated =>
+                              let path := String.ofList ((generated.drop 10).toString.toList.takeWhile (· != ' '))
+                              answer.text ++ "\n\nInline MP4: " ++ path
+                          | none => answer.text
                       let responseText := statusMarker ++ visibleAnswer ++ (if activity.isEmpty then "" else
                         "\n\nOperational trace:\n" ++ String.intercalate "\n" (activity.map ("- " ++ ·)))
                       let figureLabels ← saveMermaidArtifacts root responseText
