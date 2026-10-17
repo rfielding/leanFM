@@ -1,0 +1,81 @@
+\chapter{Scenarios}
+\label{ch:scenarios}
+
+A scenario is the primary executable narrative unit in LeanFM. It is a
+named, bounded stream of timestamped events that together describe one
+interaction or one execution trace of interest (for example: a successful
+quote request, an OAuth exchange, or a two-player 9×9 game). Scenarios are the
+basis for generated interaction diagrams, state machines, and the numeric
+and histogram charts used to justify design decisions.
+
+\section{Canonical event fields}
+Every scenario event is an envelope with a small set of durable fields used by
+the tooling and by requirements. Typical fields include:
+
+\begin{itemize}
+  \item id: stable event identifier (unique within the project).
+  \item prior\_ids: zero or more predecessor event ids that establish the
+    partial order for the scenario (forks and joins are permitted).
+  \item cause\_id: the direct causal parent for paired exchanges (for example,
+    an HTTP response names the request event that caused it).
+  \item session, scenario: the pair that bounds the interaction and groups
+    events for derived views.
+  \item src, dst: the actor instance names for sender and receiver lifelines.
+  \item timeAt: ISO-8601 timestamp for wall-clock ordering and latency
+    measurement.
+  \item message: the observable message or terminal label for the event.
+\end{itemize}
+
+These fields support the two distinct orderings used throughout LeanFM: \emph{prior}-based partial order (for concurrency and commutation) and the
+separate \emph{cause} pointer used to pair request/response-style exchanges.
+Do not conflate the two: cause\_id pairs logical call/response, while prior\_ids
+control allowed interleavings and render order in interaction diagrams.
+
+\section{Derived outputs and provenance}
+By default the book and server generate the following per `(session,scenario)`:
+\begin{itemize}
+  \item an interaction diagram (lifelines and arrows rendered from src/dst/\(message\)),
+  \item a residual state machine (observed states and message-labeled transitions),
+  \item latency and throughput charts derived from timeAt and prior start/stop pairs,
+  \item outcome distributions and other question-specific reductions.
+\end{itemize}
+
+Every generated view carries provenance metadata: the originating prompt or
+requirement id, the reducer used to compute the view (for example: partition by
+(session,scenario) and render an order graph from prior pointers), the unit of
+measurement, and the scenario boundary. When prose describes an interaction
+that a generated view can render, replace most of that prose with the view and
+a short interpretation during the book cleanup phase (see SKILL.md).
+
+\section{Example: minimal two-player game scenario}
+Below is an illustrative minimal fragment of a scenario event list for a
+9×9 game (timestamps and ids are abbreviated):
+\begin{verbatim}
+{ "id":"evt-0010", "prior_ids":["evt-0009"], "cause_id":null,
+  "timeAt":"2026-10-17T12:00:30Z", "session":"s-g1", "scenario":"g1",
+  "src":"alice","dst":"server","message":"Move E5 (B)" }
+{ "id":"evt-0011", "prior_ids":["evt-0010"], "cause_id":"evt-0010",
+  "timeAt":"2026-10-17T12:00:30Z", "session":"s-g1", "scenario":"g1",
+  "src":"server","dst":"alice","message":"MoveAccepted E5" }
+\end{verbatim}
+
+This fragment is sufficient for an interaction diagram and for latency
+measurement between a client's Move and the server's MoveAccepted reply.
+
+\section{Guidance for authors}
+When writing or editing the book:
+\begin{itemize}
+  \item prefer concrete scenario examples that the generator can render; include
+    tiny, runnable traces rather than only prose descriptions.
+  \item record the intended derived outputs (interaction diagram, state
+    machine, charts) alongside the scenario so the reader can check the
+    generated views against the prose claim.
+  \item avoid mixing implementation transport details into Requirements. Use
+    Implementation.lean for transport and runtime mapping after requirements
+    acceptance.
+\end{itemize}
+
+Scenario prose and small example traces greatly increase the book's value for
+codex and human reviewers. This chapter is intended as a compact reference and
+as a reminder to bind generated views to the prompt and reducer that justified
+them.
