@@ -124,6 +124,37 @@ def response (status : Nat) (contentType body : String) (headers : List String :
 def byteResponse (status : Nat) (contentType : String) (body : ByteArray) (headers : List String := []) : Response :=
   { status, contentType, body, headers }
 
+def requestedByteRange (request : String) (size : Nat) : Except String (Option (Nat × Nat)) := do
+  let some header := LeanFM.ChatUI.Store.headerValue? request "Range" | return none
+  if !header.startsWith "bytes=" || header.contains "," || size == 0 then throw "invalid range"
+  let spec := (header.drop 6).toString.trimAscii.toString
+  match spec.splitOn "-" with
+  | [startText, endText] =>
+      if startText.isEmpty then
+        let some suffix := endText.toNat? | throw "invalid suffix range"
+        if suffix == 0 then throw "invalid suffix range"
+        let length := min suffix size
+        return some (size - length, size)
+      else
+        let some start := startText.toNat? | throw "invalid range start"
+        if start ≥ size then throw "range starts beyond representation"
+        let inclusiveEnd ← if endText.isEmpty then pure (size - 1) else
+          match endText.toNat? with | some value => pure (min value (size - 1)) | none => throw "invalid range end"
+        if inclusiveEnd < start then throw "range end precedes start"
+        return some (start, inclusiveEnd + 1)
+  | _ => throw "invalid range"
+
+def rangedByteResponse (request contentType : String) (body : ByteArray) (headers : List String := []) : Response :=
+  match requestedByteRange request body.size with
+  | .ok none => byteResponse 200 contentType body ("Accept-Ranges: bytes" :: headers)
+  | .ok (some (start, stop)) =>
+      byteResponse 206 contentType (body.extract start stop)
+        (("Content-Range: bytes " ++ toString start ++ "-" ++ toString (stop - 1) ++ "/" ++ toString body.size) ::
+          "Accept-Ranges: bytes" :: headers)
+  | .error _ =>
+      byteResponse 416 "application/octet-stream" ByteArray.empty
+        ["Content-Range: bytes */" ++ toString body.size, "Accept-Ranges: bytes"]
+
 def jsonEscape (s : String) : String :=
   String.join <| s.toList.map fun c =>
     if c == '"' then "\\\""
@@ -358,7 +389,7 @@ def projectBookResponse? (path method request : String) : IO (Option Response) :
           | some root =>
               let pdf := System.FilePath.mk (root ++ "/book/" ++ file)
               if !(← pdf.pathExists) then return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Book PDF has not been built.\"}\n")
-              return some (byteResponse 200 "application/pdf" (← IO.FS.readBinFile pdf)
+              return some (rangedByteResponse request "application/pdf" (← IO.FS.readBinFile pdf)
                 ["Content-Disposition: inline; filename=\"" ++ file ++ "\"", "Cache-Control: no-store"])
   | _ => return none
 
@@ -378,18 +409,21 @@ def projectImageResponse? (path method request : String) : IO (Option Response) 
                 if lower.endsWith ".gif" then some "image/gif"
                 else if lower.endsWith ".png" then some "image/png"
                 else if lower.endsWith ".jpg" || lower.endsWith ".jpeg" then some "image/jpeg"
+                else if lower.endsWith ".mp4" then some "video/mp4"
+                else if lower.endsWith ".webm" then some "video/webm"
+                else if lower.endsWith ".pdf" then some "application/pdf"
                 else none
-              if !relative.startsWith "spec/images/" then
-                return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project image not found.\"}\n")
+              let permittedRoot := relative.startsWith "spec/images/" || relative.startsWith "spec/media/" ||
+                relative.startsWith "artifacts/" || relative.startsWith "renders/"
+              if !permittedRoot then
+                return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project media not found.\"}\n")
               let some contentType := contentType? | return none
               let realRoot ← IO.FS.realPath (System.FilePath.mk root)
               match ← LeanFM.ChatUI.Server.resolveWorkspacePath realRoot.toString relative with
               | .error _ => return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project image not found.\"}\n")
               | .ok imagePath =>
                   let bytes ← IO.FS.readBinFile (System.FilePath.mk imagePath)
-                  if bytes.size > 33554432 then
-                    return some (response 413 "application/json; charset=utf-8" "{\"error\":\"Project image exceeds the 32 MB display limit.\"}\n")
-                  return some (byteResponse 200 contentType bytes ["Content-Disposition: inline", "Cache-Control: no-store"])
+                  return some (rangedByteResponse request contentType bytes ["Content-Disposition: inline", "Cache-Control: no-store"])
   | _ => return none
 
 def responseForRequest (request : String) : IO Response := do
@@ -437,6 +471,7 @@ def responseForRequest (request : String) : IO Response := do
 
 def statusText : Nat -> String
   | 200 => "OK"
+  | 206 => "Partial Content"
   | 201 => "Created"
   | 202 => "Accepted"
   | 400 => "Bad Request"
@@ -446,6 +481,7 @@ def statusText : Nat -> String
   | 404 => "Not Found"
   | 409 => "Conflict"
   | 413 => "Content Too Large"
+  | 416 => "Range Not Satisfiable"
   | 422 => "Unprocessable Content"
   | 405 => "Method Not Allowed"
   | 500 => "Internal Server Error"

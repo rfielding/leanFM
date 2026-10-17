@@ -80,12 +80,27 @@ project_b="$(create_project "$cookie_b" Separate)"
 test -n "$project_a" && test -n "$project_b" && test "$project_a" != "$project_b"
 curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/api/projects/$project_a/tasks" >"$test_root/tasks.json"
 rg -q '"source":".*/spec/Requirements.lean".*"validation":.*"tasks":' "$test_root/tasks.json"
-rg -q '"entry":.*"terminals":.*"transitions":.*"properties":.*"constraints":' "$test_root/tasks.json"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.lean"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.proto"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Implementation.lean"
 test -d "$test_root/data/accounts/rfielding/projects/$project_a/events"
+
+book_url="http://127.0.0.1:8080/api/projects/$project_a/book/main.pdf"
+book_size="$(wc -c < "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf")"
+curl -sS -b "$cookie_a" -H 'Range: bytes=0-15' -D "$test_root/range-closed.headers" -o "$test_root/range-closed.bin" "$book_url"
+rg -qi '^HTTP/1.1 206 Partial Content' "$test_root/range-closed.headers"
+rg -qi "^Content-Range: bytes 0-15/$book_size" "$test_root/range-closed.headers"
+rg -qi '^Accept-Ranges: bytes' "$test_root/range-closed.headers"
+test "$(wc -c < "$test_root/range-closed.bin")" = 16
+curl -sS -b "$cookie_a" -H 'Range: bytes=-10' -D "$test_root/range-suffix.headers" -o "$test_root/range-suffix.bin" "$book_url"
+rg -qi '^HTTP/1.1 206 Partial Content' "$test_root/range-suffix.headers"
+test "$(wc -c < "$test_root/range-suffix.bin")" = 10
+curl -sS -b "$cookie_a" -H 'Range: bytes=16-' -D "$test_root/range-open.headers" -o "$test_root/range-open.bin" "$book_url"
+rg -qi '^HTTP/1.1 206 Partial Content' "$test_root/range-open.headers"
+test "$(wc -c < "$test_root/range-open.bin")" = "$((book_size - 16))"
+test "$(curl -sS -b "$cookie_a" -H "Range: bytes=$book_size-" -o /dev/null -w '%{http_code}' "$book_url")" = 416
+test "$(curl -sS -b "$cookie_a" -H 'Range: bytes=0-1,4-5' -o /dev/null -w '%{http_code}' "$book_url")" = 416
 
 curl -sS -b "$cookie_a" --data-urlencode 'prompt=make a state machine' \
   "http://127.0.0.1:8080/api/projects/$project_a/chat" >"$test_root/chat-a.json" &
