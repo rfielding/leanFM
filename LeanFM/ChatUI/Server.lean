@@ -292,6 +292,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
                     "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
                     "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
                     outputPath]
+                  env := #[("LD_LIBRARY_PATH", none), ("LD_PRELOAD", none)]
                 } catch error => return ← fail ("Could not run ffmpeg: " ++ toString error)
               if out.exitCode != 0 then return ← fail ("MP4 transcode failed: " ++ compactToolResult (out.stdout ++ out.stderr))
               let bytes ← IO.FS.readBinFile (fp outputPath)
