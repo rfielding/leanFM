@@ -60,7 +60,7 @@ function projectImagePaths(text: string, projectId: string): string[] {
 }
 
 function projectVideoPaths(text: string, projectId: string): string[] {
-  const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?((?:spec/media|artifacts|renders)/[A-Za-z0-9._/-]+\\.(?:mp4|webm))`, "gi");
+  const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?((?:spec/images|spec/media|artifacts|renders)/[A-Za-z0-9._/-]+\\.(?:mp4|webm))`, "gi");
   return [...text.matchAll(pattern)].map(match => match[1]).filter((path, index, paths) => paths.indexOf(path) === index);
 }
 
