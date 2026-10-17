@@ -198,7 +198,7 @@ button { cursor: pointer; }
 .result-badge { display: inline-block; margin: 0 0 10px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 900; letter-spacing: .06em; }
 .result-badge.success { color: #fff; background: #15803d; }
 .result-badge.fail { color: #fff; background: #dc2626; }
-.result-badge.warn { color: #111; background: #facc15; }
+.result-badge.warn { color: #fff; background: #a16207; }
 .operational-trace { margin-top: 14px; color: var(--muted); }
 .operational-trace summary { cursor: pointer; font-weight: 750; }
 .operational-trace pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .78rem/1.45 ui-monospace, monospace; }
