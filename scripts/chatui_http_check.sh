@@ -9,6 +9,8 @@ server_log="$test_root/server.log"
 provider_log="$test_root/provider.log"
 cookie_a="$test_root/a.cookies"
 cookie_b="$test_root/b.cookies"
+server_port=18081
+base_url="http://127.0.0.1:$server_port"
 
 cleanup() {
   status=$?
@@ -34,21 +36,22 @@ provider_pid=$!
 LEANFM_DATA_ROOT="$test_root/data" \
 LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
 LEANFM_LLM_MODEL="test-model" \
+LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 
 for _ in $(seq 1 50); do
-  curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && break
+  curl -fsS "$base_url/health" >/dev/null 2>&1 && break
   sleep 0.1
 done
 
-root_html="$(curl -fsS http://127.0.0.1:8080/)"
+root_html="$(curl -fsS $base_url/)"
 rg -q '<div id="root"></div>' <<<"$root_html"
 rg -q '/assets/chatui-react1.js' <<<"$root_html"
-react_bundle="$(curl -fsS http://127.0.0.1:8080/assets/chatui-react1.js)"
+react_bundle="$(curl -fsS $base_url/assets/chatui-react1.js)"
 rg -q 'Create account' <<<"$react_bundle"
 rg -q 'Project book' <<<"$react_bundle"
-test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/me)" = 401
+test "$(curl -sS -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
 
 register() {
   local username="$1" cookie="$2" key="$3"
@@ -57,13 +60,13 @@ register() {
     --data-urlencode 'password=correct horse battery staple' \
     --data-urlencode 'provider=openai' \
     --data-urlencode "api_key=$key" \
-    http://127.0.0.1:8080/api/accounts | rg -q "\"username\":\"$username\""
+    $base_url/api/accounts | rg -q "\"username\":\"$username\""
 }
 
 register rfielding "$cookie_a" test-user-key
 register second_user "$cookie_b" second-user-key
 
-me_json="$(curl -fsS -b "$cookie_a" http://127.0.0.1:8080/api/me)"
+me_json="$(curl -fsS -b "$cookie_a" $base_url/api/me)"
 rg -q '"provider":"openai"' <<<"$me_json"
 rg -q '"credential_ref":"default"' <<<"$me_json"
 rg -q '"key_fingerprint":"[0-9a-f]{12}"' <<<"$me_json"
@@ -71,7 +74,7 @@ rg -q '"model":"test-model"' <<<"$me_json"
 rg -q '"tokens_used":0' <<<"$me_json"
 rg -q '"tokens_remaining":1000000' <<<"$me_json"
 
-projects_json="$(curl -fsS -b "$cookie_a" http://127.0.0.1:8080/api/projects)"
+projects_json="$(curl -fsS -b "$cookie_a" $base_url/api/projects)"
 rg -q '"project_id":"leanfm-workspace".*"read_only":true' <<<"$projects_json"
 rg -q '"project_id":"go-server-example".*"read_only":true' <<<"$projects_json"
 
@@ -83,14 +86,14 @@ test ! -d "$test_root/data/accounts/rfielding/sessions"
 
 create_project() {
   local cookie="$1" name="$2"
-  curl -fsS -b "$cookie" --data-urlencode "display_name=$name" http://127.0.0.1:8080/api/projects |
+  curl -fsS -b "$cookie" --data-urlencode "display_name=$name" $base_url/api/projects |
     sed -n 's/.*"project_id":"\([^"]*\)".*/\1/p'
 }
 
 project_a="$(create_project "$cookie_a" LeanFM)"
 project_b="$(create_project "$cookie_b" Separate)"
 test -n "$project_a" && test -n "$project_b" && test "$project_a" != "$project_b"
-curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/api/projects/$project_a/tasks" >"$test_root/tasks.json"
+curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/tasks" >"$test_root/tasks.json"
 rg -q '"source":".*/spec/Requirements.lean".*"validation":.*"tasks":' "$test_root/tasks.json"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.lean"
@@ -98,7 +101,7 @@ test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirement
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Implementation.lean"
 test -d "$test_root/data/accounts/rfielding/projects/$project_a/events"
 
-book_url="http://127.0.0.1:8080/api/projects/$project_a/book/main.pdf"
+book_url="$base_url/api/projects/$project_a/book/main.pdf"
 book_size="$(wc -c < "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf")"
 curl -sS -b "$cookie_a" -H 'Range: bytes=0-15' -D "$test_root/range-closed.headers" -o "$test_root/range-closed.bin" "$book_url"
 rg -qi '^HTTP/1.1 206 Partial Content' "$test_root/range-closed.headers"
@@ -115,26 +118,26 @@ test "$(curl -sS -b "$cookie_a" -H "Range: bytes=$book_size-" -o /dev/null -w '%
 test "$(curl -sS -b "$cookie_a" -H 'Range: bytes=0-1,4-5' -o /dev/null -w '%{http_code}' "$book_url")" = 416
 
 curl -sS -b "$cookie_a" --data-urlencode 'prompt=make a state machine' \
-  "http://127.0.0.1:8080/api/projects/$project_a/chat" >"$test_root/chat-a.json" &
+  "$base_url/api/projects/$project_a/chat" >"$test_root/chat-a.json" &
 chat_a_pid=$!
 curl -sS -b "$cookie_b" --data-urlencode 'prompt=keep this separate' \
-  "http://127.0.0.1:8080/api/projects/$project_b/chat" >"$test_root/chat-b.json" &
+  "$base_url/api/projects/$project_b/chat" >"$test_root/chat-b.json" &
 chat_b_pid=$!
 wait "$chat_a_pid" "$chat_b_pid"
 
 rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tokens":18' "$test_root/chat-a.json"
 rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tokens":18' "$test_root/chat-b.json"
-curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/api/projects/$project_a/artifacts" | rg -q '"kind":"mermaid"'
-test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080/api/projects/$project_a/conversation")" = 404
-rg -q 'make a state machine' <(curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/api/projects/$project_a/conversation")
-! rg -q 'keep this separate' <(curl -fsS -b "$cookie_a" "http://127.0.0.1:8080/api/projects/$project_a/conversation")
+curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/artifacts" | rg -q '"kind":"mermaid"'
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/conversation")" = 404
+rg -q 'make a state machine' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
+! rg -q 'keep this separate' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 
 echo 'ok: ChatUI bootstrap, usage, artifacts, and concurrent session isolation'
 
 # Requirement: password verification precedes migration; copied sessions cannot spend.
 login_status() {
   curl -sS -o /dev/null -w '%{http_code}' --data-urlencode 'username=rfielding' \
-    --data-urlencode "password=$1" http://127.0.0.1:8080/api/login
+    --data-urlencode "password=$1" $base_url/api/login
 }
 rg -q 'alice response' "$test_root/chat-a.json"
 rg -q 'bob response' "$test_root/chat-b.json"
@@ -154,12 +157,12 @@ test -f "$test_root/data/accounts/rfielding/credentials/default.json"
 test "$(stat -c %a "$test_root/data/accounts/rfielding/credentials/default.json")" = 600
 kill "$server_pid"
 wait "$server_pid" || true
-LEANFM_DATA_ROOT="$test_root/data" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
+LEANFM_DATA_ROOT="$test_root/data" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 for _ in $(seq 1 50); do
-  curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 && break
+  curl -fsS $base_url/health >/dev/null 2>&1 && break
   sleep 0.1
 done
-test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/me)" = 401
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
 echo 'ok: encrypted credentials, account isolation, migration and restart invalidation'

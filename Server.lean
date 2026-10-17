@@ -10,11 +10,19 @@ namespace LeanFM.Server
 abbrev TcpServer := Std.Internal.IO.Async.TCP.Socket.Server
 abbrev TcpClient := Std.Internal.IO.Async.TCP.Socket.Client
 
-def bindAddr : SocketAddress :=
+def bindAddr (port : UInt16) : SocketAddress :=
   SocketAddress.v4
     { addr := IPv4Addr.ofParts 127 0 0 1
-    , port := 8080
+    , port
     }
+
+def configuredPort : IO UInt16 := do
+  let raw := (← IO.getEnv "LEANFM_PORT").getD "8080"
+  match raw.toNat? with
+  | some port =>
+      if port > 0 && port ≤ 65535 then pure (UInt16.ofNat port)
+      else throw <| IO.userError "LEANFM_PORT must be between 1 and 65535"
+  | none => throw <| IO.userError "LEANFM_PORT must be a decimal port number"
 
 def requestPath (request : String) : String :=
   match request.splitOn "\r\n" with
@@ -523,10 +531,11 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
   serveLoop server
 
 def main : IO Unit := do
+  let port ← configuredPort
   let server ← Std.Internal.IO.Async.TCP.Socket.Server.mk
-  server.bind bindAddr
+  server.bind (bindAddr port)
   server.listen 128
-  IO.println "LeanFM server listening on http://127.0.0.1:8080"
+  IO.println s!"LeanFM server listening on http://127.0.0.1:{port}"
   serveLoop server
 
 end LeanFM.Server
