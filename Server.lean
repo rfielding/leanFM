@@ -362,6 +362,36 @@ def projectBookResponse? (path method request : String) : IO (Option Response) :
                 ["Content-Disposition: inline; filename=\"" ++ file ++ "\"", "Cache-Control: no-store"])
   | _ => return none
 
+def projectImageResponse? (path method request : String) : IO (Option Response) := do
+  match LeanFM.ChatUI.Server.pathSegments path with
+  | "api" :: "projects" :: projectId :: "files" :: fileParts =>
+      if method != "GET" then return none
+      match ← LeanFM.ChatUI.Server.sessionUser? request with
+      | none => return some (response 401 "application/json; charset=utf-8" "{\"error\":\"Authentication required.\"}\n")
+      | some username =>
+          match ← LeanFM.ChatUI.Server.authorizedProjectRoot? username projectId with
+          | none => return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project not found.\"}\n")
+          | some root =>
+              let relative := String.intercalate "/" (fileParts.map LeanFM.ChatUI.Store.urlDecode)
+              let lower := relative.toLower
+              let contentType? :=
+                if lower.endsWith ".gif" then some "image/gif"
+                else if lower.endsWith ".png" then some "image/png"
+                else if lower.endsWith ".jpg" || lower.endsWith ".jpeg" then some "image/jpeg"
+                else none
+              if !relative.startsWith "spec/images/" then
+                return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project image not found.\"}\n")
+              let some contentType := contentType? | return none
+              let realRoot ← IO.FS.realPath (System.FilePath.mk root)
+              match ← LeanFM.ChatUI.Server.resolveWorkspacePath realRoot.toString relative with
+              | .error _ => return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project image not found.\"}\n")
+              | .ok imagePath =>
+                  let bytes ← IO.FS.readBinFile (System.FilePath.mk imagePath)
+                  if bytes.size > 33554432 then
+                    return some (response 413 "application/json; charset=utf-8" "{\"error\":\"Project image exceeds the 32 MB display limit.\"}\n")
+                  return some (byteResponse 200 contentType bytes ["Content-Disposition: inline", "Cache-Control: no-store"])
+  | _ => return none
+
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   let method := requestMethod request
@@ -379,7 +409,9 @@ def responseForRequest (request : String) : IO Response := do
       path == "/tools/leanfm-language/implementation-reference" ||
       path == "/tools/requirements/interrogation" then
     responseBody path request
-  else match ← projectBookResponse? path method request with
+  else match ← projectImageResponse? path method request with
+  | some imageResponse => pure imageResponse
+  | none => match ← projectBookResponse? path method request with
   | some bookResponse => pure bookResponse
   | none => match ← LeanFM.ChatUI.Server.handle? path method request with
   | some chatResponse =>

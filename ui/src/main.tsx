@@ -53,8 +53,8 @@ function extractResult(text: string): {text: string; status?: "success" | "warn"
   } catch { return {text}; }
 }
 
-function projectSvgPaths(text: string, projectId: string): string[] {
-  const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?(spec/images/[A-Za-z0-9._/-]+\\.svg)`, "gi");
+function projectImagePaths(text: string, projectId: string): string[] {
+  const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?(spec/images/[A-Za-z0-9._/-]+\\.(?:svg|gif|png|jpe?g))`, "gi");
   return [...text.matchAll(pattern)].map(match => match[1]).filter((path, index, paths) => paths.indexOf(path) === index);
 }
 
@@ -141,7 +141,7 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
   const structured = extractQuestions(result.text);
   const canvasContent = extractCanvases(structured.text);
   const [answerText, activity] = canvasContent.text.split(/\n\nOperational trace:\n/, 2);
-  const images = projectSvgPaths(answerText, projectId);
+  const images = projectImagePaths(answerText, projectId);
   const internetImages = remoteImages(answerText);
   const pieces = answerText.split(/```mermaid\s*\n?/i);
   const first = pieces.shift() || "";
