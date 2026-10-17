@@ -15,18 +15,33 @@ type Phase = "chat" | "book" | "grammar" | "tasks" | "source";
 type QuestionOption = {value: string; label: string; recommended?: boolean};
 type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: QuestionOption[]};
 
-function extractQuestions(text: string): {text: string; questions: ChatQuestion[]} {
-  const match = text.match(/```leanfm-questions\s*([\s\S]*?)```/i);
+function closeTruncatedJson(source: string): string {
+  const open: string[] = [];
+  let quoted = false, escaped = false;
+  for (const character of source) {
+    if (escaped) { escaped = false; continue; }
+    if (quoted && character === "\\") { escaped = true; continue; }
+    if (character === '"') { quoted = !quoted; continue; }
+    if (quoted) continue;
+    if (character === "{" || character === "[") open.push(character);
+    else if (character === "}" && open.at(-1) === "{") open.pop();
+    else if (character === "]" && open.at(-1) === "[") open.pop();
+  }
+  return source + open.reverse().map(character => character === "{" ? "}" : "]").join("");
+}
+
+function extractQuestions(text: string): {text: string; questions: ChatQuestion[]; invalid?: boolean} {
+  const match = text.match(/```leanfm-(?:questions|qustions)\s*([\s\S]*?)```/i);
   if (!match) return {text, questions: []};
   const source = match[1].trim();
-  for (const candidate of [source, `${source}}`, `${source}]}`]) {
+  for (const candidate of [...new Set([source, closeTruncatedJson(source)])]) {
     try {
       const parsed = JSON.parse(candidate);
       const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((question: ChatQuestion) => question.id && question.prompt && Array.isArray(question.options)) : [];
       return {text: text.replace(match[0], "").trim(), questions};
     } catch { /* try the next bounded repair */ }
   }
-  return {text: text.replace(match[0], "").trim(), questions: []};
+  return {text: text.replace(match[0], "").trim(), questions: [], invalid: true};
 }
 
 function extractResult(text: string): {text: string; status?: "success" | "warn" | "fail"} {
@@ -112,7 +127,7 @@ function MessageView({message, projectId, onDelete, onResend, onAnswer, disabled
   return <article className={`message ${message.role}`}>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text">{first}{pieces.map((part, i) => {
     const end = part.indexOf("```");
     return end < 0 ? <React.Fragment key={i}>{`\`\`\`mermaid\n${part}`}</React.Fragment> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" />{part.slice(end + 3)}</React.Fragment>;
-  })}</div>{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} disabled={disabled} onAnswer={onAnswer} />}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
+  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} disabled={disabled} onAnswer={onAnswer} />}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 
