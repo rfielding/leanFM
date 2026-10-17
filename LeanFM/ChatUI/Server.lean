@@ -285,14 +285,14 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
           | .error message => fail message
           | .ok outputPath =>
               record ("Started MP4 transcode from " ++ inputRelative)
-              let out ← IO.Process.output {
-                cmd := "timeout"
-                args := #["120", "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-                  "-i", inputPath, "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                  "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                  "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-                  outputPath]
-              }
+              let out ← try IO.Process.output {
+                  cmd := "timeout"
+                  args := #["120", "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-i", inputPath, "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                    "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+                    "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                    outputPath]
+                } catch error => return ← fail ("Could not run ffmpeg: " ++ toString error)
               if out.exitCode != 0 then return ← fail ("MP4 transcode failed: " ++ compactToolResult (out.stdout ++ out.stderr))
               let bytes ← IO.FS.readBinFile (fp outputPath)
               let header := String.fromUTF8? (bytes.extract 4 (min 12 bytes.size))
@@ -643,8 +643,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let warned := (answer.text.splitOn "```leanfm-questions").length > 1 || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
                       let status := if missingRequiredArtifact then "fail" else if warned then "warn" else "success"
                       let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
+                      let mp4Failure := activity.find? fun item => item.startsWith "workspace_transcode_mp4 rejected:"
                       let visibleAnswer := if missingRequiredArtifact then
-                        "The requested MP4 was not produced. LeanFM rejected the response instead of presenting another substitute or follow-up question."
+                        match mp4Failure with
+                        | some failure => "The requested MP4 was not produced. " ++ failure
+                        | none => "The requested MP4 was not produced because the MP4 transcoder was not invoked. LeanFM rejected the response instead of presenting another substitute or follow-up question."
                         else answer.text
                       let responseText := statusMarker ++ visibleAnswer ++ (if activity.isEmpty then "" else
                         "\n\nOperational trace:\n" ++ String.intercalate "\n" (activity.map ("- " ++ ·)))
