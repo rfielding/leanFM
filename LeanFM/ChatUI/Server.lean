@@ -374,14 +374,21 @@ def repairBookEdit (key candidate diagnostic : String) : IO (Except String (Book
 def conversationContext (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
   let mut turns : List String := []
+  let excerpt := fun text =>
+    let withoutTrace := match text.splitOn "\n\nOperational trace:\n" with
+      | first :: _ => first
+      | [] => text
+    truncateText withoutTrace 3500
   for line in body.splitOn "\n" do
     match line.splitOn "|" with
+    | [_messageId, role, encoded, _input, _cached, _output, _total, _responseTimeMs] =>
+        try turns := (role ++ ": " ++ excerpt (← base64Decode encoded)) :: turns catch _ => pure ()
     | [_messageId, role, encoded, _input, _cached, _output, _total] =>
-        try turns := (role ++ ": " ++ (← base64Decode encoded)) :: turns catch _ => pure ()
+        try turns := (role ++ ": " ++ excerpt (← base64Decode encoded)) :: turns catch _ => pure ()
     | [role, encoded, _input, _cached, _output, _total] =>
-        try turns := (role ++ ": " ++ (← base64Decode encoded)) :: turns catch _ => pure ()
+        try turns := (role ++ ": " ++ excerpt (← base64Decode encoded)) :: turns catch _ => pure ()
     | _ => pure ()
-  pure (String.intercalate "\n\n" ((turns.take 24).reverse))
+  pure (String.intercalate "\n\n" ((turns.take 8).reverse))
 
 def referencedFigureContext (root prompt : String) : IO String := do
   let mut references : List String := []
@@ -630,9 +637,16 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   | .error message => return some (errorResponse 502 message)
                   | .ok answer =>
                       let activity := (← trace.get).reverse
+                      let mp4Requested := prompt.toLower.contains "mp4"
+                      let mp4Generated := activity.any fun item => item.startsWith "Generated " && item.toLower.contains ".mp4"
+                      let missingRequiredArtifact := mp4Requested && !mp4Generated
                       let warned := (answer.text.splitOn "```leanfm-questions").length > 1 || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
-                      let statusMarker := "```leanfm-result\n{\"status\":\"" ++ (if warned then "warn" else "success") ++ "\"}\n```\n\n"
-                      let responseText := statusMarker ++ answer.text ++ (if activity.isEmpty then "" else
+                      let status := if missingRequiredArtifact then "fail" else if warned then "warn" else "success"
+                      let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
+                      let visibleAnswer := if missingRequiredArtifact then
+                        "The requested MP4 was not produced. LeanFM rejected the response instead of presenting another substitute or follow-up question."
+                        else answer.text
+                      let responseText := statusMarker ++ visibleAnswer ++ (if activity.isEmpty then "" else
                         "\n\nOperational trace:\n" ++ String.intercalate "\n" (activity.map ("- " ++ ·)))
                       let figureLabels ← saveMermaidArtifacts root responseText
                       let responseText := if figureLabels.isEmpty then responseText else
