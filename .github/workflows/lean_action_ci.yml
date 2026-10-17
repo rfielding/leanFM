@@ -14,7 +14,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ripgrep
+          sudo apt-get install --yes ripgrep texlive-latex-base texlive-latex-recommended
           rg --version
       - uses: actions/setup-python@v6
         with:

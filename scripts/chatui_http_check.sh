@@ -55,7 +55,7 @@ test "$(curl -sS -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
 
 register() {
   local username="$1" cookie="$2" key="$3"
-  curl -fsS -c "$cookie" -b "$cookie" \
+  curl --fail-with-body -sS -c "$cookie" -b "$cookie" \
     --data-urlencode "username=$username" \
     --data-urlencode 'password=correct horse battery staple' \
     --data-urlencode 'provider=openai' \
@@ -86,7 +86,7 @@ test ! -d "$test_root/data/accounts/rfielding/sessions"
 
 create_project() {
   local cookie="$1" name="$2"
-  curl -fsS -b "$cookie" --data-urlencode "display_name=$name" $base_url/api/projects |
+  curl --fail-with-body -sS -b "$cookie" --data-urlencode "display_name=$name" $base_url/api/projects |
     sed -n 's/.*"project_id":"\([^"]*\)".*/\1/p'
 }
 
