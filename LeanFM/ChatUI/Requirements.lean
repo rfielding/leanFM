@@ -476,6 +476,7 @@ def taskConstraints : List TaskConstraint :=
   , where_ "keyless_server_has_no_provider_spend" "argue_requirements" "without a user-owned credential_ref and without an explicitly configured platform credential no ModelRequestIssued occurs"
   , where_ "usage_is_visible_per_turn" "argue_requirements" "each successful provider turn renders input cached-input output and context-window token counts beside that response"
   , where_ "response_time_is_visible_per_turn" "argue_requirements" "while a turn runs the composer shows one incrementing elapsed timer without a synthetic assistant message; after completion the measured response_time_ms is durably displayed on that exact assistant response"
+  , where_ "prompts_stack_in_project_order" "argue_requirements" "while one turn is active the composer remains enabled and Send Resend and structured answers append to a visible removable per-project FIFO; each queued prompt begins only after its predecessor completes or fails so it observes all preceding conversation and workspace mutations, and the live timer measures only the active prompt"
   , where_ "diagram_is_task_local" "inspect_task_model" "each interaction diagram and state machine names exactly one task and requirements revision"
   , where_ "linked_views_share_task" "inspect_task_model" "interaction state-machine message-sequence and constraint links share task_id and requirements_revision"
   , where_ "protobuf_events_follow_task_grammar" "inspect_task_model" "the ordered EventEnvelope payloads are accepted by the selected task grammar"

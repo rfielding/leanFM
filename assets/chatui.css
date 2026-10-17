@@ -224,6 +224,11 @@ button { cursor: pointer; }
 .agent-running { display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 8px 10px; color: var(--blue); font-weight: 750; }
 .agent-running time { min-width: 3.5rem; color: var(--text); font: 700 .9rem/1 ui-monospace, monospace; }
 .agent-running-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 0 #72b8e988; animation: agent-pulse 1.4s infinite; }
+.prompt-queue { display: grid; gap: 5px; max-height: 180px; margin: 0 10px 8px; padding: 9px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.prompt-queue > strong { color: var(--blue); font-size: .82rem; }
+.prompt-queue > div { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .82rem; }
+.prompt-queue span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prompt-queue button { color: #fff; background: #075985; border: 1px solid #38bdf8; border-radius: 6px; padding: 3px 8px; }
 @keyframes agent-pulse { 70% { box-shadow: 0 0 0 8px #72b8e900; } 100% { box-shadow: 0 0 0 0 #72b8e900; } }
 .composer { display: flex; gap: 8px; background: var(--raised); padding: 10px; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 6px 24px #0008; }
 .composer textarea { resize: none; flex: 1; max-height: 180px; background: transparent; border: 0; outline: 0; padding: 8px; }
