@@ -202,6 +202,7 @@ button { cursor: pointer; }
 .result-badge.fail { color: #fff; background: #dc2626; }
 .result-badge.warn { color: #fff; background: #a16207; }
 .response-time { margin-top: 8px; color: #9fd5f5; font: .78rem/1.4 ui-monospace, monospace; }
+.answered-question-note { margin-top: 10px; color: var(--muted); font-size: .85rem; font-style: italic; }
 .operational-trace { margin-top: 14px; color: var(--muted); }
 .operational-trace summary { cursor: pointer; font-weight: 750; }
 .operational-trace pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .78rem/1.45 ui-monospace, monospace; }

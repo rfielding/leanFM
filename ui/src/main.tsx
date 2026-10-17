@@ -87,21 +87,23 @@ function CanvasAnimation({source}: {source: string}) {
   return <figure className="chat-canvas"><div className="chat-canvas-controls"><button onClick={() => setRunning(value => !value)}>{running ? "Stop" : "Start"}</button><button onClick={restart}>Restart</button></div>{running ? <iframe key={revision} title="Animated canvas response" sandbox="allow-scripts" srcDoc={document} /> : <div className="chat-canvas-stopped">Animation stopped</div>}</figure>;
 }
 
-function QuestionForm({questions, disabled, onAnswer}: {questions: ChatQuestion[]; disabled?: boolean; onAnswer: (answer: string) => void}) {
+function QuestionForm({questions, answeredIds, disabled, onAnswer}: {questions: ChatQuestion[]; answeredIds: Set<string>; disabled?: boolean; onAnswer: (answer: string) => void}) {
+  const unanswered = questions.filter(question => !answeredIds.has(question.id));
   const [selected, setSelected] = useState<Record<string, string[]>>({});
-  const complete = questions.every(question => (selected[question.id] || []).length > 0);
+  const complete = unanswered.length > 0 && unanswered.every(question => (selected[question.id] || []).length > 0);
   function choose(question: ChatQuestion, value: string, checked: boolean) {
     setSelected(current => ({...current, [question.id]: question.multiple ? (checked ? [...(current[question.id] || []), value] : (current[question.id] || []).filter(item => item !== value)) : [value]}));
   }
   function submitAnswers() {
-    const answer = questions.map(question => {
+    const answer = unanswered.map(question => {
       const values = selected[question.id] || [];
       const labels = values.map(value => question.options.find(option => option.value === value)?.label || value);
-      return `${question.prompt}\nAnswer: ${labels.join(", ")}`;
+      return `Question ID: ${question.id}\n${question.prompt}\nAnswer: ${labels.map((label, index) => `${label} [${values[index]}]`).join(", ")}`;
     }).join("\n\n");
     onAnswer(answer);
   }
-  return <section className="chat-questions" aria-label="Questions requiring answers">{questions.map(question => <fieldset key={question.id}><legend>{question.prompt}</legend>{question.options.map(option => <label key={option.value} className={(selected[question.id] || []).includes(option.value) ? "selected" : ""}><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.value} checked={(selected[question.id] || []).includes(option.value)} onChange={event => choose(question, option.value, event.target.checked)} /> <span>{option.label}{option.recommended && <small>Recommended</small>}</span></label>)}</fieldset>)}<button className="primary" disabled={!complete || disabled} onClick={submitAnswers}>Submit answers</button></section>;
+  if (unanswered.length === 0) return <div className="answered-question-note">Already answered; this question is closed.</div>;
+  return <section className="chat-questions" aria-label="Questions requiring answers">{unanswered.map(question => <fieldset key={question.id}><legend>{question.prompt}</legend>{question.options.map(option => <label key={option.value} className={(selected[question.id] || []).includes(option.value) ? "selected" : ""}><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.value} checked={(selected[question.id] || []).includes(option.value)} onChange={event => choose(question, option.value, event.target.checked)} /> <span>{option.label}{option.recommended && <small>Recommended</small>}</span></label>)}</fieldset>)}<button className="primary" disabled={!complete || disabled} onClick={submitAnswers}>Submit answers</button></section>;
 }
 
 function Auth({onReady}: {onReady: () => void}) {
@@ -134,7 +136,7 @@ function Mermaid({source, className = "large-diagram"}: {source: string; classNa
   return <div ref={ref} className={className}><pre>{source}</pre></div>;
 }
 
-function MessageView({message, projectId, onDelete, onResend, onAnswer, disabled}: {message: Message; projectId: string; onDelete: () => void; onResend?: () => void; onAnswer?: (answer: string) => void; disabled?: boolean}) {
+function MessageView({message, projectId, answeredIds, onDelete, onResend, onAnswer, disabled}: {message: Message; projectId: string; answeredIds: Set<string>; onDelete: () => void; onResend?: () => void; onAnswer?: (answer: string) => void; disabled?: boolean}) {
   const result = extractResult(message.text);
   const structured = extractQuestions(result.text);
   const canvasContent = extractCanvases(structured.text);
@@ -146,7 +148,7 @@ function MessageView({message, projectId, onDelete, onResend, onAnswer, disabled
   return <article className={`message ${message.role}`}>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text">{first}{pieces.map((part, i) => {
     const end = part.indexOf("```");
     return end < 0 ? <React.Fragment key={i}>{`\`\`\`mermaid\n${part}`}</React.Fragment> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" />{part.slice(end + 3)}</React.Fragment>;
-  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} disabled={disabled} onAnswer={onAnswer} />}{message.response_time_ms !== undefined && <div className="response-time">Response time: {(message.response_time_ms / 1000).toFixed(1)} s</div>}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
+  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} answeredIds={answeredIds} disabled={disabled} onAnswer={onAnswer} />}{message.response_time_ms !== undefined && <div className="response-time">Response time: {(message.response_time_ms / 1000).toFixed(1)} s</div>}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 
@@ -160,6 +162,7 @@ function Chat({project}: {project: Project}) {
     return () => window.clearInterval(timer);
   }, [busy]);
   const elapsed = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
+  const answeredIds = new Set(messages.flatMap(message => [...message.text.matchAll(/Question ID:\s*([A-Za-z0-9._-]+)/g)].map(match => match[1])));
   async function load(signal?: AbortSignal) { const data = await api<{messages: Message[]}>(`/api/projects/${project.project_id}/conversation`, {}, signal); setMessages(data.messages || []); }
   useEffect(() => { const controller = new AbortController(); if (!project.read_only) load(controller.signal).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id]);
   async function submit(text: string) { if (!text.trim() || busy) return; text = text.trim(); setElapsedSeconds(0); setPrompt(""); setMessages(v => [...v, {message_id: "pending-user", role: "user", text}]); setBusy(true); setError(""); setErrorTrace("");
@@ -168,7 +171,7 @@ function Chat({project}: {project: Project}) {
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
-    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => submit(m.text) : undefined} onAnswer={m.role === "assistant" ? submit : undefined} disabled={busy} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p>{errorTrace && <details><summary>Development trace</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy trace</button><pre>{errorTrace}</pre></details>}</div>}</div>
+    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => submit(m.text) : undefined} onAnswer={m.role === "assistant" ? submit : undefined} disabled={busy} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p>{errorTrace && <details><summary>Development trace</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy trace</button><pre>{errorTrace}</pre></details>}</div>}</div>
     <div className="composer-wrap">{busy && <div className="agent-running" role="status"><span className="agent-running-dot" />Agent running <time>{elapsed}</time></div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="What are you trying to build?" disabled={busy} /><button disabled={busy}>Send</button></form></div></section>;
 }
 
