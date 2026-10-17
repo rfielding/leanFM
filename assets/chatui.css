@@ -224,6 +224,9 @@ button { cursor: pointer; }
 .composer textarea:disabled, .composer button:disabled { opacity: .55; cursor: not-allowed; }
 .chat-diagram { margin-top: 12px; padding: 14px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .chat-diagram svg { display: block; max-width: 100%; height: auto; margin: auto; }
+.chat-inline-figure { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.chat-inline-figure img { display: block; width: auto; max-width: 100%; max-height: 720px; margin: auto; border-radius: 6px; }
+.chat-inline-figure figcaption { margin-top: 8px; color: var(--muted); font: .78rem/1.4 ui-monospace, monospace; text-align: center; }
 .chat-diagram-source { margin: 0; white-space: pre-wrap; color: var(--muted); }
 .message figure { margin: 12px 0; }
 .chat-figure-caption { margin-top: 5px; color: var(--muted); font-size: .85rem; font-weight: 700; }

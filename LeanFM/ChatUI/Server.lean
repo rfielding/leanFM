@@ -245,7 +245,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
   | _ => fail "Unknown workspace tool."
 
 def workspaceAgentInstructions (root : String) : String :=
-  Provider.hostedChatInstructions ++ " The authenticated user explicitly authorizes you to inspect and edit files beneath the web server launch directory " ++ root ++ ". Use the supplied workspace tools to do requested engineering work, not merely describe a plan. workspace_write creates missing parent directories safely. Read relevant AGENTS.md and SKILL.md files before edits. Preserve unrelated changes. Never try to access a path outside this workspace. A descriptive Lean file containing lists of strings is not a LeanFM grammar: candidate requirements must define and validate a typed RequirementSpec with TaskRequirement and TaskGrammar values, and must derive spec/tasks.json for the Grammar and Tasks UI. If that grammar is absent or invalid, create or repair it before implementation files. Never implement source, generate language bindings, or cross either acceptance gate unless the durable project state records the user's explicit acceptance. Never imitate generated output: invoke the real generator or report the exact missing executable. Do not claim a file changed unless workspace_write or workspace_patch succeeded. Run a proportional named check after edits. Summarize the outcome, changed files, and validation concisely. Tool activity is shown separately, so do not invent or narrate hidden reasoning."
+  Provider.hostedChatInstructions ++ " The authenticated user explicitly authorizes you to inspect and edit files beneath the web server launch directory " ++ root ++ ". Use the supplied workspace tools to do requested engineering work, not merely describe a plan. workspace_write creates missing parent directories safely. Read relevant AGENTS.md and SKILL.md files before edits. Preserve unrelated changes. Never try to access a path outside this workspace. A descriptive Lean file containing lists of strings is not a LeanFM grammar: candidate requirements must define and validate a typed RequirementSpec with TaskRequirement and TaskGrammar values, and must derive spec/tasks.json for the Grammar and Tasks UI. If that grammar is absent or invalid, create or repair it before implementation files. Never implement source, generate language bindings, or cross either acceptance gate unless the durable project state records the user's explicit acceptance. Never imitate generated output: invoke the real generator or report the exact missing executable. When you create or discuss an SVG below the selected project's spec/images directory, cite its project-relative path such as spec/images/example.svg; the host renders that path inline automatically. Do not ask about data URIs, manifests, img tags, or encodings, and do not create alternate compact images unless the user explicitly requests one. Do not ask a follow-up question when the requested reversible action is already identifiable. Do not claim a file changed unless workspace_write or workspace_patch succeeded. Run a proportional named check after edits. Summarize the outcome, changed files, and validation concisely. Tool activity is shown separately, so do not invent or narrate hidden reasoning."
 
 structure BookChatEdit where
   reply : String
@@ -481,6 +481,23 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               if ← deleteConversationMessage root messageId then
                 return some (jsonResponse 200 ("{\"deleted_message_id\":\"" ++ jsonEscape messageId ++ "\"}\n"))
               else return some (errorResponse 404 "Message not found.")
+          | "files" :: fileParts, "GET" =>
+              let relative := String.intercalate "/" (fileParts.map urlDecode)
+              if !relative.startsWith "spec/images/" || !relative.toLower.endsWith ".svg" then
+                return some (errorResponse 404 "Only project SVG images are available from this route.")
+              let realRoot ← IO.FS.realPath (fp root)
+              match ← resolveWorkspacePath realRoot.toString relative with
+              | .error _ => return some (errorResponse 404 "Project image not found.")
+              | .ok imagePath =>
+                  let source ← readOr imagePath ""
+                  if source.isEmpty then return some (errorResponse 404 "Project image not found.")
+                  if source.length > 2000000 then return some (errorResponse 413 "Project SVG exceeds the 2 MB display limit.")
+                  return some ({
+                    status := 200
+                    contentType := "image/svg+xml; charset=utf-8"
+                    body := source
+                    headers := ["X-Content-Type-Options: nosniff", "Content-Security-Policy: sandbox; default-src 'none'; style-src 'unsafe-inline'"]
+                  } : HttpResponse)
           | ["tasks"], "GET" =>
               if projectId == "leanfm-workspace" then
                 return some (jsonResponse 200 (tasksJson "LeanFM/ChatUI/Requirements.lean (live workspace)" ++ "\n"))
