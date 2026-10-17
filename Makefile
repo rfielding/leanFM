@@ -17,10 +17,15 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+.PHONY: build ui-build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
 
-build:
+build: ui-build
 	lake build leanfm-server
+
+ui-build:
+	@test -d ui/node_modules || (cd ui && npm ci)
+	cd ui && npm run check && npm run build && npm run check:bundle
+	@lake clean
 
 run:
 	lake exe leanfm

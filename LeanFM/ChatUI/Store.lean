@@ -1,4 +1,5 @@
 import LeanFM.ChatUI.Requirements
+import Init.System.Uri
 
 namespace LeanFM.ChatUI.Store
 
@@ -45,16 +46,8 @@ def hexDigit? (c : Char) : Option Nat :=
   else if 'A' ≤ c && c ≤ 'F' then some (10 + c.toNat - 'A'.toNat)
   else none
 
-partial def urlDecodeChars : List Char → List Char
-  | [] => []
-  | '+' :: rest => ' ' :: urlDecodeChars rest
-  | '%' :: a :: b :: rest =>
-      match hexDigit? a, hexDigit? b with
-      | some x, some y => Char.ofNat (x * 16 + y) :: urlDecodeChars rest
-      | _, _ => '%' :: a :: b :: urlDecodeChars rest
-  | c :: rest => c :: urlDecodeChars rest
-
-def urlDecode (value : String) : String := String.ofList (urlDecodeChars value.toList)
+def urlDecode (value : String) : String :=
+  System.Uri.UriEscape.decodeUri (value.replace "+" " ")
 
 def formValue? (body key : String) : Option String :=
   (body.splitOn "&").findSome? fun pair =>
@@ -65,13 +58,13 @@ def formValue? (body key : String) : Option String :=
 def headerValue? (request header : String) : Option String :=
   (request.splitOn "\r\n").findSome? fun line =>
     match line.splitOn ":" with
-    | name :: values => if name.toLower == header.toLower then some (String.intercalate ":" values).trim else none
+    | name :: values => if name.toLower == header.toLower then some (String.intercalate ":" values).trimAscii.toString else none
     | _ => none
 
 def cookieValue? (request key : String) : Option String := do
   let cookies ← headerValue? request "Cookie"
   (cookies.splitOn ";").findSome? fun item =>
-    match item.trim.splitOn "=" with
+    match item.trimAscii.toString.splitOn "=" with
     | name :: values => if name == key then some (String.intercalate "=" values) else none
     | _ => none
 
@@ -121,12 +114,12 @@ def base64Decode (value : String) : IO String := do
 
 def randomHex (bytes : Nat) : IO String := do
   let out ← IO.Process.output { cmd := "openssl", args := #["rand", "-hex", toString bytes] }
-  if out.exitCode == 0 then pure out.stdout.trim
+  if out.exitCode == 0 then pure out.stdout.trimAscii.toString
   else throw <| IO.userError "OS cryptographic randomness is unavailable"
 
 def runCrypto (mode input : String) : IO String := do
   let out ← IO.Process.output { cmd := "python3", args := #["scripts/chatui_crypto.py", mode] } (some input)
-  if out.exitCode == 0 then pure out.stdout.trim
+  if out.exitCode == 0 then pure out.stdout.trimAscii.toString
   else throw <| IO.userError "credential operation failed"
 
 def passwordRecord (password : String) : IO String :=
@@ -167,8 +160,8 @@ def unlockCredential (username password : String) : IO String := do
     return ← base64Decode encoded
   let legacy := fp (root ++ "/credentials/default.b64")
   let encoded ← IO.FS.readFile legacy
-  let key ← base64Decode encoded.trim
-  if key.trim.isEmpty then throw <| IO.userError "missing credential"
+  let key ← base64Decode encoded.trimAscii.toString
+  if key.trimAscii.isEmpty then throw <| IO.userError "missing credential"
   let encrypted ← encryptCredential username password key
   writeAtomic path (encrypted ++ "\n")
   IO.FS.removeFile legacy
@@ -217,6 +210,73 @@ def userForSession? (token : String) : IO (Option String) := do
   return (← unlockedSessions.get).findSome? fun session =>
     if session.token == token then some session.username else none
 
+def latexEscape (value : String) : String :=
+  String.join <| value.toList.map fun c =>
+    if c == '\\' then "\\textbackslash{}"
+    else if c == '{' then "\\{"
+    else if c == '}' then "\\}"
+    else if c == '#' then "\\#"
+    else if c == '$' then "\\$"
+    else if c == '%' then "\\%"
+    else if c == '&' then "\\&"
+    else if c == '_' then "\\_"
+    else if c == '^' then "\\textasciicircum{}"
+    else if c == '~' then "\\textasciitilde{}"
+    else c.toString
+
+def projectBookSource (name : String) : String :=
+  "\\documentclass[11pt,oneside]{book}\n" ++
+  "\\usepackage[margin=1in]{geometry}\n\\usepackage{xcolor}\n\\usepackage[hidelinks]{hyperref}\n" ++
+  "\\ifdefined\\darkmode\\pagecolor[HTML]{091117}\\color[HTML]{F0EDE4}\\fi\n" ++
+  "\\title{" ++ latexEscape name ++ "}\\author{Project team}\\date{\\today}\n" ++
+  "\\begin{document}\n\\frontmatter\n\\maketitle\n\\tableofcontents\n\\mainmatter\n" ++
+  "\\chapter{Project sketch}\n" ++
+  "This is the working design book for \\textbf{" ++ latexEscape name ++ "}. It begins as a sketch and is revised primarily through the Book layer of project chat.\n\n" ++
+  "\\section{Problem}\nDescribe the problem, the people or systems affected, and the observable outcome that would make the project useful.\n\n" ++
+  "\\section{Scenarios and tasks}\nRecord the named user and system scenarios. As tasks become precise, their generated interaction diagrams and state machines belong here with their provenance.\n\n" ++
+  "\\section{Open questions}\nKeep unresolved design questions explicit until the conversation supplies durable answers.\n\n" ++
+  "\\chapter{Requirements argument}\nCapture decisions and alternatives here before promoting observable behavior through the requirements acceptance gate.\n\n" ++
+  "\\chapter{Implementation argument}\nAfter requirements acceptance, record implementation mappings, transports, repository choices, and validation evidence here.\n" ++
+  "\\end{document}\n"
+
+def projectBookMakefile : String :=
+  "LATEX := pdflatex\nMAIN := main\nDARK := main-dark\n\n.PHONY: all light dark clean\n\n" ++
+  "all: light dark\n\nlight:\n\t$(LATEX) -interaction=nonstopmode -halt-on-error $(MAIN).tex\n\t$(LATEX) -interaction=nonstopmode -halt-on-error $(MAIN).tex\n\n" ++
+  "dark:\n\t$(LATEX) -jobname=$(DARK) -interaction=nonstopmode -halt-on-error \"\\def\\darkmode{1}\\input{$(MAIN).tex}\"\n\t$(LATEX) -jobname=$(DARK) -interaction=nonstopmode -halt-on-error \"\\def\\darkmode{1}\\input{$(MAIN).tex}\"\n\n" ++
+  "clean:\n\trm -f $(MAIN).aux $(MAIN).log $(MAIN).out $(MAIN).toc $(MAIN).pdf $(DARK).aux $(DARK).log $(DARK).out $(DARK).toc $(DARK).pdf\n"
+
+def cleanProjectBookIntermediates (root : String) : IO Unit := do
+  for file in ["main.aux", "main.log", "main.out", "main.toc", "main-dark.aux", "main-dark.log", "main-dark.out", "main-dark.toc"] do
+    let path := fp (root ++ "/book/" ++ file)
+    if ← path.pathExists then IO.FS.removeFile path
+
+def provisionProjectBook (root name : String) : IO Unit := do
+  IO.FS.createDirAll (fp (root ++ "/book"))
+  cleanProjectBookIntermediates root
+  writeAtomic (root ++ "/book/main.tex") (projectBookSource name)
+  writeAtomic (root ++ "/book/Makefile") projectBookMakefile
+
+def provisionProjectSpecifications (root name : String) : IO Unit := do
+  let escaped := jsonEscape name
+  writeAtomic (root ++ "/spec/Requirements.lean")
+    ("/-- Project-owned observable requirements for " ++ name ++ ".\n" ++
+     "    Book-layer discovery has not yet produced an accepted specification. -/\n" ++
+     "namespace Project.Requirements\n\ndef projectName : String := \"" ++ escaped ++ "\"\n\nend Project.Requirements\n")
+  writeAtomic (root ++ "/spec/Requirements.proto")
+    ("syntax = \"proto3\";\n\npackage project.requirements;\n\n// Generated after this project's observable requirements are identified.\n")
+  writeAtomic (root ++ "/spec/Implementation.lean")
+    ("/-- Project-owned implementation mapping for " ++ name ++ ".\n" ++
+     "    This remains empty until requirements acceptance. -/\n" ++
+     "namespace Project.Implementation\n\ndef projectName : String := \"" ++ escaped ++ "\"\n\nend Project.Implementation\n")
+
+def repairSelfHostingSpecificationLeak (root name : String) : IO Bool := do
+  let projectRequirements ← readOr (root ++ "/spec/Requirements.lean") ""
+  let selfRequirements ← readOr "LeanFM/ChatUI/Requirements.lean" ""
+  if projectRequirements.isEmpty || (!selfRequirements.isEmpty && projectRequirements == selfRequirements) then
+    provisionProjectSpecifications root name
+    pure true
+  else pure false
+
 def createProject (username name : String) : IO (Except String String) := do
   let projectId ← randomHex 8
   let root ← projectRoot username projectId
@@ -224,17 +284,12 @@ def createProject (username name : String) : IO (Except String String) := do
   for dir in ["inputs", "book", "spec", "source", "tests", "artifacts", "renders", "events", "reports", "logs", "cache", "conversations"] do
     IO.FS.createDirAll (fp (root ++ "/" ++ dir))
   writeAtomic (root ++ "/manifest.json") ("{\"project_id\":\"" ++ projectId ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\"}\n")
-  let bookSource := fp "book/main.pdf"
-  if ← bookSource.pathExists then
-    let bytes ← IO.FS.readBinFile bookSource
-    IO.FS.writeBinFile (fp (root ++ "/book/main.pdf")) bytes
-  for (source, target) in
-      [("LeanFM/ChatUI/Requirements.lean", "Requirements.lean"),
-       ("LeanFM/ChatUI/Requirements.proto", "Requirements.proto"),
-       ("LeanFM/ChatUI/Implementation.lean", "Implementation.lean")] do
-    let sourcePath := fp source
-    if ← sourcePath.pathExists then
-      IO.FS.writeFile (fp (root ++ "/spec/" ++ target)) (← IO.FS.readFile sourcePath)
+  provisionProjectBook root name
+  let builtBook ← IO.Process.output { cmd := "make", args := #["-C", root ++ "/book"] }
+  if builtBook.exitCode != 0 then
+    IO.FS.removeDirAll (fp root)
+    return .error "The project book sketch could not be built."
+  provisionProjectSpecifications root name
   pure (.ok projectId)
 
 def projectListJson (username : String) : IO String := do

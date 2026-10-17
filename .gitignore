@@ -47,6 +47,8 @@
 
 # Account credentials, password verifiers, sessions, and private project state
 /data/
+/ui/node_modules/
+/ui/dist/
 __pycache__/
 
 # Project-local video toolchains and intermediate renders

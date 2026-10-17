@@ -106,6 +106,10 @@ def tasksJson (source : String) : String :=
   "{\"source\":\"" ++ jsonEscape source ++ "\",\"validation\":{\"errors\":0,\"warnings\":0},\"tasks\":[" ++
     String.intercalate "," items ++ "]}"
 
+def emptyProjectTasksJson (source : String) : String :=
+  "{\"source\":\"" ++ jsonEscape source ++
+  "\",\"accepted\":false,\"validation\":{\"errors\":0,\"warnings\":0},\"tasks\":[]}"
+
 def appendConversation (root role text : String) (usage : Option Provider.Completion := none) : IO Unit := do
   let path := root ++ "/conversations/main.log"
   let old ← readOr path ""
@@ -114,6 +118,200 @@ def appendConversation (root role text : String) (usage : Option Provider.Comple
     | none => "0|0|0|0"
     | some u => s!"{u.inputTokens}|{u.cachedInputTokens}|{u.outputTokens}|{u.totalTokens}"
   writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "\n")
+
+def truncateText (value : String) (limit : Nat) : String :=
+  if value.length ≤ limit then value else String.ofList (value.toList.take limit) ++ "\n[truncated]\n"
+
+def workspaceRelativePath? (value : String) : Bool :=
+  !value.isEmpty && !value.startsWith "/" && value.length ≤ 4096 &&
+    (value.splitOn "/" |>.all fun part => !part.isEmpty && part != "." && part != "..")
+
+def underRoot (root candidate : String) : Bool :=
+  candidate == root || candidate.startsWith (root ++ "/")
+
+def resolveWorkspacePath (root relative : String) (allowMissing : Bool := false) : IO (Except String String) := do
+  if !workspaceRelativePath? relative then return .error "Path must be a non-empty relative path without '.' or '..' segments."
+  let candidate := root ++ "/" ++ relative
+  try
+    let resolved ← IO.FS.realPath (fp candidate)
+    if underRoot root resolved.toString then return .ok resolved.toString
+    return .error "Path escapes the server launch workspace."
+  catch _ =>
+    if !allowMissing then return .error "Path does not exist."
+    let parent := (fp candidate).parent.getD (fp root)
+    try
+      let resolvedParent ← IO.FS.realPath parent
+      if underRoot root resolvedParent.toString then return .ok candidate
+      return .error "Path parent escapes the server launch workspace."
+    catch _ => return .error "The destination parent does not exist."
+
+partial def ensureWorkspaceDestinationFrom (root current : String) (segments : List String) : IO (Except String String) := do
+  match segments with
+  | [] => return .error "A destination filename is required."
+  | [file] => return .ok (current ++ "/" ++ file)
+  | directory :: rest =>
+      let next := current ++ "/" ++ directory
+      if !(← (fp next).pathExists) then
+        try IO.FS.createDir (fp next)
+        catch _ => return .error ("Could not create destination directory " ++ directory ++ ".")
+      try
+        let resolved ← IO.FS.realPath (fp next)
+        if !underRoot root resolved.toString then return .error "Destination directory escapes the server launch workspace."
+        ensureWorkspaceDestinationFrom root resolved.toString rest
+      catch _ => return .error ("Destination component " ++ directory ++ " is not an accessible directory.")
+
+def ensureWorkspaceDestination (root relative : String) : IO (Except String String) := do
+  if !workspaceRelativePath? relative then return .error "Path must be a non-empty relative path without '.' or '..' segments."
+  ensureWorkspaceDestinationFrom root root (relative.splitOn "/")
+
+def toolArgument? (arguments key : String) : Option String := do
+  let json ← (Lean.Json.parse arguments).toOption
+  Provider.jsonStringField? json key
+
+def compactToolResult (value : String) : String := truncateText value 30000
+
+def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String)) : IO String := do
+  let record (message : String) := trace.modify (message :: ·)
+  let fail (message : String) : IO String := do record (name ++ " rejected: " ++ message); pure ("ERROR: " ++ message)
+  match name with
+  | "workspace_list" =>
+      let relative := (toolArgument? arguments "path").getD "."
+      let normalized := if relative == "." then "" else relative
+      let resolved ← if normalized.isEmpty then pure (.ok root) else resolveWorkspacePath root normalized
+      match resolved with
+      | .error message => fail message
+      | .ok path =>
+          record ("Listed " ++ (if normalized.isEmpty then "." else normalized))
+          let out ← IO.Process.output { cmd := "rg", args := #["--files", path] }
+          let body := out.stdout.splitOn "\n" |>.map (fun line =>
+            if line.startsWith (root ++ "/") then (line.drop (root.length + 1)).toString else line) |>.intersperse "\n" |> String.join
+          pure (compactToolResult body)
+  | "workspace_read" =>
+      let some relative := toolArgument? arguments "path" | fail "Missing path."
+      match ← resolveWorkspacePath root relative with
+      | .error message => fail message
+      | .ok path =>
+          record ("Read " ++ relative)
+          try pure (compactToolResult (← IO.FS.readFile (fp path)))
+          catch _ => fail "File is not readable UTF-8 text."
+  | "workspace_search" =>
+      let some query := toolArgument? arguments "query" | fail "Missing query."
+      let relative := (toolArgument? arguments "path").getD "."
+      let normalized := if relative == "." then "" else relative
+      let resolved ← if normalized.isEmpty then pure (.ok root) else resolveWorkspacePath root normalized
+      match resolved with
+      | .error message => fail message
+      | .ok path =>
+          record ("Searched " ++ (if normalized.isEmpty then "." else normalized) ++ " for " ++ truncateText query 80)
+          let out ← IO.Process.output { cmd := "rg", args := #["-n", "-F", "--", query, path] }
+          pure (compactToolResult (if out.stdout.isEmpty then "No matches." else out.stdout))
+  | "workspace_patch" =>
+      let some patch := toolArgument? arguments "patch" | fail "Missing patch."
+      if patch.length > 2000000 then return ← fail "Patch exceeds the 2 MB limit."
+      record "Applying a workspace patch"
+      let checked ← IO.Process.output { cmd := "git", args := #["-C", root, "apply", "--check", "--whitespace=nowarn", "-"] } (some patch)
+      if checked.exitCode != 0 then return ← fail ("Patch check failed: " ++ compactToolResult checked.stderr)
+      let applied ← IO.Process.output { cmd := "git", args := #["-C", root, "apply", "--whitespace=nowarn", "-"] } (some patch)
+      if applied.exitCode != 0 then return ← fail ("Patch apply failed: " ++ compactToolResult applied.stderr)
+      record "Applied workspace patch"
+      pure "OK"
+  | "workspace_write" =>
+      let some relative := toolArgument? arguments "path" | fail "Missing path."
+      let some content := toolArgument? arguments "content" | fail "Missing content."
+      if content.length > 2000000 then return ← fail "File exceeds the 2 MB write limit."
+      match ← ensureWorkspaceDestination root relative with
+      | .error message => fail message
+      | .ok path =>
+          try
+            writeAtomic path content
+            record ("Wrote " ++ relative ++ " (" ++ toString content.length ++ " characters)")
+            pure "OK"
+          catch error => fail ("Write failed: " ++ toString error)
+  | "workspace_check" =>
+      let some target := toolArgument? arguments "target" | fail "Missing target."
+      let (cmd, args) := match target with
+        | "build" => ("make", #["-C", root, "build"])
+        | "check" => ("make", #["-C", root, "check"])
+        | "book" => ("make", #["-C", root, "book"])
+        | "http-check" => ("make", #["-C", root, "http-check"])
+        | "go-test" => ("go", #["-C", root, "test", "./..."])
+        | _ => ("", #[])
+      if cmd.isEmpty then return ← fail "Unknown check target."
+      record ("Started check: " ++ target)
+      let out ← IO.Process.output { cmd, args }
+      let result := compactToolResult (out.stdout ++ out.stderr)
+      record ((if out.exitCode == 0 then "Finished check: " else "Failed check: ") ++ target ++ " (exit " ++ toString out.exitCode ++ ")")
+      pure ("exit_code=" ++ toString out.exitCode ++ "\n" ++ result)
+  | _ => fail "Unknown workspace tool."
+
+def workspaceAgentInstructions (root : String) : String :=
+  Provider.hostedChatInstructions ++ " The authenticated user explicitly authorizes you to inspect and edit files beneath the web server launch directory " ++ root ++ ". Use the supplied workspace tools to do requested engineering work, not merely describe a plan. workspace_write creates missing parent directories safely. Read relevant AGENTS.md and SKILL.md files before edits. Preserve unrelated changes. Never try to access a path outside this workspace. A descriptive Lean file containing lists of strings is not a LeanFM grammar: candidate requirements must define and validate a typed RequirementSpec with TaskRequirement and TaskGrammar values, and must derive spec/tasks.json for the Grammar and Tasks UI. If that grammar is absent or invalid, create or repair it before implementation files. Never implement source, generate language bindings, or cross either acceptance gate unless the durable project state records the user's explicit acceptance. Never imitate generated output: invoke the real generator or report the exact missing executable. Do not claim a file changed unless workspace_write or workspace_patch succeeded. Run a proportional named check after edits. Summarize the outcome, changed files, and validation concisely. Tool activity is shown separately, so do not invent or narrate hidden reasoning."
+
+structure BookChatEdit where
+  reply : String
+  source : String
+
+def bookChatEdit? (text : String) : Option BookChatEdit := do
+  let trimmed := text.trimAscii.toString
+  let jsonText :=
+    if trimmed.startsWith "```json" && trimmed.endsWith "```" then
+      ((trimmed.drop 7).dropEnd 3 |>.trimAscii).toString
+    else trimmed
+  let json ← (Lean.Json.parse jsonText).toOption
+  let reply ← Provider.jsonStringField? json "reply"
+  let source ← Provider.jsonStringField? json "book_source"
+  guard (!reply.trimAscii.isEmpty && !source.trimAscii.isEmpty)
+  pure { reply, source }
+
+def chatLayerContext (root layer : String) : IO (Except String String) := do
+  let book ← readOr (root ++ "/book/main.tex") ""
+  let requirements ← readOr (root ++ "/spec/Requirements.lean") ""
+  let implementation ← readOr (root ++ "/spec/Implementation.lean") ""
+  let diagramGuidance := "Diagram input is intentionally permissive. The user may supply prose, simplified interaction pseudocode, Mermaid, PlantUML, or refer to an attached sketch or public-web image. Infer the intended semantics, ask only when a material ambiguity remains, and when a diagram is the useful result return corrected, renderable Mermaid in a fenced mermaid block. Preserve the user's original as provenance; do not claim that an informal sketch is an accepted derived LeanFM view.\n\n"
+  match layer with
+  | "guided" => return .ok (diagramGuidance ++ "Working mode: GUIDED PROJECT CONVERSATION. Begin with the user's informal problem and continuously revise the durable book. Do not front-load an exhaustive questionnaire. Ask focused questions only when the answer changes an observable requirement, proof, derived view, or later implementation decision. When the book is specific enough to identify actors, scenarios, messages, outcomes, failure behavior, and requested measurements, say so and ask the remaining focused questions needed to prepare the observable-requirements acceptance gate. Never accept that gate for the user. Only after explicit requirements acceptance, approach the implementation-specification gate by asking unresolved choices such as programming language, process and deployment model, HTTP or another transport, persistence, concurrency, reliability, and tests. Never silently cross either acceptance gate. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"the conversational response, including at most the focused questions needed now\",\"book_source\":\"the complete revised book/main.tex\"}. Current complete book source:\n\n" ++ truncateText book 70000 ++ "\n\nCurrent project Requirements.lean:\n\n" ++ truncateText requirements 40000 ++ "\n\nCurrent project Implementation.lean:\n\n" ++ truncateText implementation 40000)
+  | "book" => return .ok (diagramGuidance ++ "Working layer: BOOK. The user's ordinary request is an instruction to edit the durable project book, not merely advice about how they could edit it. Revise book/main.tex while preserving valid LaTeX and the user's existing material. Do not present generated requirements or code as accepted merely because they are discussed. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"a concise description of the edit\",\"book_source\":\"the complete revised book/main.tex\"}. Do not wrap the JSON in prose or Markdown. If the user is only asking a question and no source change is appropriate, return a normal prose answer instead. Current complete book source:\n\n" ++ truncateText book 70000)
+  | "requirements" => return .ok (diagramGuidance ++ "Working layer: REQUIREMENTS. Derive observable requirements from the book, preserve unresolved design as unresolved, and prepare the requirements acceptance gate. Current book:\n\n" ++ truncateText book 50000 ++ "\n\nCurrent Requirements.lean:\n\n" ++ truncateText requirements 50000)
+  | "implementation_spec" => return .ok (diagramGuidance ++ "Working layer: IMPLEMENTATION SPECIFICATION. Map accepted requirements to languages, transports, runtime APIs, source files, tests, and explicit implementation issues such as Go services or HTTP projection. Do not implement before the separate implementation-specification acceptance gate. Current Requirements.lean:\n\n" ++ truncateText requirements 50000 ++ "\n\nCurrent Implementation.lean:\n\n" ++ truncateText implementation 50000)
+  | "implementation" => return .ok (diagramGuidance ++ "Working layer: IMPLEMENTATION. Implement only from accepted book, requirements, and implementation-specification revisions; preserve traceability and run checks. Current Implementation.lean:\n\n" ++ truncateText implementation 70000)
+  | _ => return .error "Unknown chat working layer."
+
+def buildProjectBook (root : String) : IO (Except String Unit) := do
+  let bookPath := fp (root ++ "/book")
+  if !(← (fp (root ++ "/book/main.tex")).pathExists) then return .error "book/main.tex does not exist in this project."
+  cleanProjectBookIntermediates root
+  let realBook ← IO.FS.realPath bookPath
+  let out ← IO.Process.output {
+    cmd := "bwrap"
+    args := #["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--ro-bind", "/usr", "/usr",
+      "--ro-bind", "/bin", "/bin", "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
+      "--ro-bind", "/etc", "/etc", "--ro-bind", "/var/lib/texmf", "/var/lib/texmf", "--proc", "/proc", "--dev", "/dev",
+      "--tmpfs", "/tmp", "--bind", realBook.toString, "/work", "--chdir", "/work",
+      "--setenv", "HOME", "/tmp", "--", "/usr/bin/make"] }
+  if out.exitCode == 0 then return .ok ()
+  return .error ("Book build failed:\n" ++ truncateText (out.stdout ++ "\n" ++ out.stderr) 10000)
+
+def buildErrorSummary (message : String) : String :=
+  (message.splitOn "\n").find? (fun line => line.startsWith "!") |>.getD
+    "The generated LaTeX did not compile."
+
+def addCompletionUsage (first second : Provider.Completion) (text : String) : Provider.Completion :=
+  { text
+  , inputTokens := first.inputTokens + second.inputTokens
+  , cachedInputTokens := first.cachedInputTokens + second.cachedInputTokens
+  , outputTokens := first.outputTokens + second.outputTokens
+  , totalTokens := first.totalTokens + second.totalTokens }
+
+def repairBookEdit (key candidate diagnostic : String) : IO (Except String (BookChatEdit × Provider.Completion)) := do
+  let instructions := "You repair a complete pdfLaTeX document after a compiler failure. Return ONLY valid JSON with exactly two string fields: reply and book_source. book_source is the complete corrected document, not a patch. Preserve the intended prose and change only what is needed to compile. Pay particular attention to unescaped prose characters: write \\& for ampersand, \\% for percent, \\_ for underscore, \\# for hash, and \\$ for dollar. Do not discuss LeanFM requirements, do not ask questions, and do not emit Markdown fences."
+  let prompt := "An internal validation step rejected the candidate book revision below. Repair only the technical defect while preserving its intended content. Return ONLY one JSON object with exactly the string fields reply and book_source; book_source must be the complete corrected LaTeX document. Do not ask the user to debug this internal failure.\n\nCompiler diagnostic:\n" ++
+    truncateText diagnostic 5000 ++ "\n\nRejected candidate book/main.tex:\n" ++ truncateText candidate 100000
+  match ← Provider.completeWithInstructions key instructions prompt with
+  | .error message => return .error message
+  | .ok completion =>
+      match bookChatEdit? completion.text with
+      | none => return .error "The automatic repair did not return a complete book revision."
+      | some edit => return .ok (edit, completion)
 
 def conversationContext (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
@@ -126,6 +324,19 @@ def conversationContext (root : String) : IO String := do
         try turns := (role ++ ": " ++ (← base64Decode encoded)) :: turns catch _ => pure ()
     | _ => pure ()
   pure (String.intercalate "\n\n" ((turns.take 24).reverse))
+
+def referencedFigureContext (root prompt : String) : IO String := do
+  let mut references : List String := []
+  for tail in prompt.toLower.splitOn "figure " |>.drop 1 do
+    let number := String.ofList (tail.toList.takeWhile Char.isDigit)
+    if !number.isEmpty then
+      for entry in (← entries (root ++ "/artifacts")) do
+        if entry.fileName.startsWith ("figure-" ++ number ++ "-") && entry.fileName.endsWith ".mermaid" then
+          let source ← readOr entry.path.toString ""
+          references := ("Figure " ++ number ++ " resolves to artifact " ++ entry.fileName ++
+            " revision 1:\n```mermaid\n" ++ truncateText source 30000 ++ "\n```") :: references
+  if references.isEmpty then pure "" else
+    pure ("Resolved figure backreferences:\n\n" ++ String.intercalate "\n\n" references.reverse)
 
 def conversationJson (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
@@ -180,26 +391,40 @@ def artifactListJson (root : String) : IO String := do
   for entry in (← entries (root ++ "/artifacts")) do
     if entry.fileName.endsWith ".mermaid" then
       let id := (entry.fileName.dropEnd ".mermaid".length).toString
-      artifacts := ("{\"artifact_id\":\"" ++ jsonEscape id ++ "\",\"title\":\"" ++ jsonEscape id ++
+      let title := if id.startsWith "figure-" then
+          match id.drop "figure-".length |>.toString |>.splitOn "-" with
+          | number :: _ => "Figure " ++ number
+          | _ => id
+        else id
+      artifacts := ("{\"artifact_id\":\"" ++ jsonEscape id ++ "\",\"title\":\"" ++ jsonEscape title ++
         "\",\"kind\":\"mermaid\",\"status\":\"current\",\"revision\":1}") :: artifacts
   pure ("{\"artifacts\":[" ++ String.intercalate "," artifacts.reverse ++ "]}\n")
 
-def saveMermaidArtifacts (root responseText : String) : IO Unit := do
+def saveMermaidArtifacts (root responseText : String) : IO (List String) := do
   let chunks := responseText.splitOn "```mermaid"
-  match chunks with
-  | _ :: diagram :: _ =>
+  let existing := (← entries (root ++ "/artifacts")).toList.filter fun entry =>
+    entry.fileName.endsWith ".mermaid"
+  let mut figureNumber := existing.length + 1
+  let mut labels : List String := []
+  for diagram in chunks.drop 1 do
       let source := (diagram.splitOn "```").headD ""
-      if !source.trim.isEmpty then
+      let trimmedSource := source.trimAscii.toString
+      if !trimmedSource.isEmpty then
         let id ← randomHex 8
-        writeAtomic (root ++ "/artifacts/" ++ id ++ ".mermaid") source.trim
-  | _ => pure ()
+        let label := "Figure " ++ toString figureNumber
+        writeAtomic (root ++ "/artifacts/figure-" ++ toString figureNumber ++ "-" ++ id ++ ".mermaid") trimmedSource
+        labels := label :: labels
+        figureNumber := figureNumber + 1
+  pure labels.reverse
 
 def handlePublic (path method request : String) : IO (Option HttpResponse) := do
   if path == "/" && method == "GET" then
-    return some (HttpResponse.mk 200 "text/html; charset=utf-8" Web.page ["Cache-Control: no-store"])
-  if path == "/assets/chatui.css" || path == "/assets/chatui-20261016.css" || path == "/assets/chatui-20261016b.css" || path == "/assets/chatui-20261016c.css" || path == "/assets/chatui-20261016d.css" || path == "/assets/chatui-20261016e.css" || path == "/assets/chatui-20261016f.css" || path == "/assets/chatui-20261016g.css" then
+    return some (HttpResponse.mk 200 "text/html; charset=utf-8" Web.reactPage ["Cache-Control: no-store"])
+  if path == "/assets/chatui-react1.css" || path == "/assets/chatui.css" || path == "/assets/chatui-20261016.css" || path == "/assets/chatui-20261016b.css" || path == "/assets/chatui-20261016c.css" || path == "/assets/chatui-20261016d.css" || path == "/assets/chatui-20261016e.css" || path == "/assets/chatui-20261016f.css" || path == "/assets/chatui-20261016g.css" || path == "/assets/chatui-20261017a.css" || path == "/assets/chatui-20261017b.css" || path == "/assets/chatui-20261017c.css" || path == "/assets/chatui-20261017d.css" || path == "/assets/chatui-20261017e.css" || path == "/assets/chatui-20261017f.css" || path == "/assets/chatui-20261017g.css" || path == "/assets/chatui-20261017h.css" || path == "/assets/chatui-20261017i.css" then
     return some (HttpResponse.mk 200 "text/css; charset=utf-8" Web.css ["Cache-Control: no-store"])
-  if path == "/assets/chatui.js" || path == "/assets/chatui-20261016.js" || path == "/assets/chatui-20261016b.js" || path == "/assets/chatui-20261016c.js" || path == "/assets/chatui-20261016d.js" || path == "/assets/chatui-20261016e.js" || path == "/assets/chatui-20261016f.js" || path == "/assets/chatui-20261016g.js" then
+  if path == "/assets/chatui-react1.js" then
+    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.reactJavascript ["Cache-Control: no-store"])
+  if path == "/assets/chatui.js" || path == "/assets/chatui-20261016.js" || path == "/assets/chatui-20261016b.js" || path == "/assets/chatui-20261016c.js" || path == "/assets/chatui-20261016d.js" || path == "/assets/chatui-20261016e.js" || path == "/assets/chatui-20261016f.js" || path == "/assets/chatui-20261016g.js" || path == "/assets/chatui-20261017a.js" || path == "/assets/chatui-20261017b.js" || path == "/assets/chatui-20261017c.js" || path == "/assets/chatui-20261017d.js" || path == "/assets/chatui-20261017e.js" || path == "/assets/chatui-20261017f.js" || path == "/assets/chatui-20261017g.js" || path == "/assets/chatui-20261017h.js" || path == "/assets/chatui-20261017i.js" then
     return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.javascript ["Cache-Control: no-store"])
   if path == "/api/accounts" && method == "POST" then
     let body := requestBody request
@@ -234,8 +459,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
     return some (jsonResponse 200 ("{\"projects\":" ++ (← projectListJson username) ++ "}\n"))
   if path == "/api/projects" && method == "POST" then
     let name := (formValue? (requestBody request) "display_name").getD ""
-    if name.trim.isEmpty then return some (errorResponse 400 "Project name is required.")
-    match ← createProject username name.trim with
+    if name.trimAscii.isEmpty then return some (errorResponse 400 "Project name is required.")
+    match ← createProject username name.trimAscii.toString with
     | .error message => return some (errorResponse 400 message)
     | .ok projectId => return some (jsonResponse 201 ("{\"project_id\":\"" ++ projectId ++ "\"}\n"))
   match pathSegments path with
@@ -257,29 +482,77 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                 return some (jsonResponse 200 ("{\"deleted_message_id\":\"" ++ jsonEscape messageId ++ "\"}\n"))
               else return some (errorResponse 404 "Message not found.")
           | ["tasks"], "GET" =>
-              let source := if projectId == "leanfm-workspace" then "LeanFM/ChatUI/Requirements.lean (live workspace)"
-                else root ++ "/spec/Requirements.lean"
-              return some (jsonResponse 200 (tasksJson source ++ "\n"))
+              if projectId == "leanfm-workspace" then
+                return some (jsonResponse 200 (tasksJson "LeanFM/ChatUI/Requirements.lean (live workspace)" ++ "\n"))
+              let manifest ← readOr (root ++ "/manifest.json") ""
+              let name := (jsonStringValue? manifest "display_name").getD projectId
+              discard <| repairSelfHostingSpecificationLeak root name
+              let derived ← readOr (root ++ "/spec/tasks.json") ""
+              if !derived.trimAscii.isEmpty then
+                match Lean.Json.parse derived with
+                | .ok _ => return some (jsonResponse 200 (derived ++ "\n"))
+                | .error _ => return some (errorResponse 422 "spec/tasks.json is not valid derived task JSON.")
+              return some (jsonResponse 200 (emptyProjectTasksJson (root ++ "/spec/Requirements.lean") ++ "\n"))
+          | ["book"], "GET" =>
+              if projectId != "leanfm-workspace" then
+                let sourcePath := root ++ "/book/main.tex"
+                let source ← readOr sourcePath ""
+                let leanFMSource ← readOr "book/main.tex" ""
+                if source.isEmpty || (!leanFMSource.isEmpty && source == leanFMSource) then
+                  let manifest ← readOr (root ++ "/manifest.json") ""
+                  let name := (jsonStringValue? manifest "display_name").getD "Untitled project"
+                  provisionProjectBook root name
+                  match ← buildProjectBook root with
+                  | .error message => return some (errorResponse 500 message)
+                  | .ok _ => pure ()
+              let source ← readOr (root ++ "/book/main.tex") ""
+              if source.isEmpty then return some (errorResponse 404 "This project has no editable book/main.tex source.")
+              return some (jsonResponse 200 ("{\"source\":\"" ++ jsonEscape source ++ "\"}\n"))
+          | ["book"], "POST" =>
+              if projectId == "leanfm-workspace" then return some (errorResponse 403 "The LeanFM workspace book is read-only.")
+              let source := (formValue? (requestBody request) "source").getD ""
+              if source.isEmpty then return some (errorResponse 400 "Book source cannot be empty.")
+              if source.length > 2000000 then return some (errorResponse 413 "Book source exceeds the 2 MB editor limit.")
+              writeAtomic (root ++ "/book/main.tex") source
+              return some (jsonResponse 200 "{\"saved\":true}\n")
+          | ["book", "build"], "POST" =>
+              if projectId == "leanfm-workspace" then return some (errorResponse 403 "The LeanFM workspace book is read-only.")
+              match ← buildProjectBook root with
+              | .ok _ => return some (jsonResponse 200 "{\"built\":true}\n")
+              | .error message => return some (errorResponse 422 message)
           | ["artifacts"], "GET" => return some (jsonResponse 200 (← artifactListJson root))
           | ["chat"], "POST" =>
-              if projectId == "leanfm-workspace" then
-                return some (errorResponse 403 "The LeanFM workspace project is read-only.")
               let prompt := (formValue? (requestBody request) "prompt").getD ""
-              if prompt.trim.isEmpty then return some (errorResponse 400 "A prompt is required.")
+              if prompt.trimAscii.isEmpty then return some (errorResponse 400 "A prompt is required.")
               match ← credentialKey username request with
               | .error message => return some (errorResponse 409 message)
               | .ok key =>
                   let prior ← conversationContext root
-                  let contextualPrompt := if prior.isEmpty then prompt else
-                    "Project conversation so far:\n\n" ++ prior ++ "\n\nCurrent user message:\n" ++ prompt
+                  let figureContext ← referencedFigureContext root prompt
+                  let launchRoot ← IO.FS.realPath (← IO.currentDir)
+                  let launchRoot := launchRoot.toString
+                  let contextualPrompt := "Selected LeanFM project root: " ++ root ++
+                    "\nAuthorized source workspace: " ++ launchRoot ++ "\n\n" ++
+                    (if prior.isEmpty then "" else "Project conversation so far:\n\n" ++ prior ++ "\n\n") ++
+                    (if figureContext.isEmpty then "" else figureContext ++ "\n\n") ++
+                    "Current user message:\n" ++ prompt
                   appendConversation root "user" prompt
-                  match ← Provider.complete key contextualPrompt with
+                  let trace ← IO.mkRef ([] : List String)
+                  let runner : Provider.ToolRunner := fun name arguments => runWorkspaceTool launchRoot name arguments trace
+                  match ← Provider.completeAgent key (workspaceAgentInstructions launchRoot) contextualPrompt runner with
                   | .error message => return some (errorResponse 502 message)
                   | .ok answer =>
-                      appendConversation root "assistant" answer.text (some answer)
-                      saveMermaidArtifacts root answer.text
+                      let activity := (← trace.get).reverse
+                      let warned := activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
+                      let statusMarker := "```leanfm-result\n{\"status\":\"" ++ (if warned then "warn" else "success") ++ "\"}\n```\n\n"
+                      let responseText := statusMarker ++ answer.text ++ (if activity.isEmpty then "" else
+                        "\n\nOperational trace:\n" ++ String.intercalate "\n" (activity.map ("- " ++ ·)))
+                      let figureLabels ← saveMermaidArtifacts root responseText
+                      let responseText := if figureLabels.isEmpty then responseText else
+                        responseText ++ "\n\nFigures created: " ++ String.intercalate ", " figureLabels ++ "."
+                      appendConversation root "assistant" responseText (some answer)
                       let context := (← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS").getD "128000"
-                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape answer.text ++ "\",\"usage\":{\"input_tokens\":" ++
+                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"book_updated\":false,\"usage\":{\"input_tokens\":" ++
                         toString answer.inputTokens ++ ",\"cached_input_tokens\":" ++ toString answer.cachedInputTokens ++
                         ",\"output_tokens\":" ++ toString answer.outputTokens ++ ",\"total_tokens\":" ++ toString answer.totalTokens ++
                         ",\"context_window_tokens\":" ++ context ++ "}}\n"))

@@ -43,7 +43,11 @@ for _ in $(seq 1 50); do
 done
 
 root_html="$(curl -fsS http://127.0.0.1:8080/)"
-rg -q 'What are we building|Create account|Diagrams / Artifacts' <<<"$root_html"
+rg -q '<div id="root"></div>' <<<"$root_html"
+rg -q '/assets/chatui-react1.js' <<<"$root_html"
+react_bundle="$(curl -fsS http://127.0.0.1:8080/assets/chatui-react1.js)"
+rg -q 'Create account' <<<"$react_bundle"
+rg -q 'Project book' <<<"$react_bundle"
 test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/me)" = 401
 
 register() {

@@ -346,6 +346,22 @@ def configuredPassword : IO String := do
 def redirectResponse (location : String) (headers : List String := []) : Response :=
   response 303 "text/plain; charset=utf-8" "see other\n" (("Location: " ++ location) :: headers)
 
+def projectBookResponse? (path method request : String) : IO (Option Response) := do
+  match LeanFM.ChatUI.Server.pathSegments path with
+  | ["api", "projects", projectId, "book", file] =>
+      if method != "GET" || (file != "main.pdf" && file != "main-dark.pdf") then return none
+      match ← LeanFM.ChatUI.Server.sessionUser? request with
+      | none => return some (response 401 "application/json; charset=utf-8" "{\"error\":\"Authentication required.\"}\n")
+      | some username =>
+          match ← LeanFM.ChatUI.Server.authorizedProjectRoot? username projectId with
+          | none => return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project not found.\"}\n")
+          | some root =>
+              let pdf := System.FilePath.mk (root ++ "/book/" ++ file)
+              if !(← pdf.pathExists) then return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Book PDF has not been built.\"}\n")
+              return some (byteResponse 200 "application/pdf" (← IO.FS.readBinFile pdf)
+                ["Content-Disposition: inline; filename=\"" ++ file ++ "\"", "Cache-Control: no-store"])
+  | _ => return none
+
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   let method := requestMethod request
@@ -363,7 +379,9 @@ def responseForRequest (request : String) : IO Response := do
       path == "/tools/leanfm-language/implementation-reference" ||
       path == "/tools/requirements/interrogation" then
     responseBody path request
-  else match ← LeanFM.ChatUI.Server.handle? path method request with
+  else match ← projectBookResponse? path method request with
+  | some bookResponse => pure bookResponse
+  | none => match ← LeanFM.ChatUI.Server.handle? path method request with
   | some chatResponse =>
       pure <| response chatResponse.status chatResponse.contentType chatResponse.body chatResponse.headers
   | none =>
@@ -395,6 +413,8 @@ def statusText : Nat -> String
   | 401 => "Unauthorized"
   | 404 => "Not Found"
   | 409 => "Conflict"
+  | 413 => "Content Too Large"
+  | 422 => "Unprocessable Content"
   | 405 => "Method Not Allowed"
   | 500 => "Internal Server Error"
   | 502 => "Bad Gateway"
@@ -416,7 +436,15 @@ def handleClient (client : TcpClient) : IO Unit := do
     match requestBytes? with
     | some bytes => String.fromUTF8! bytes
     | none => ""
-  let res ← responseForRequest request
+  let requestId := (LeanFM.ChatUI.Store.headerValue? request "X-LeanFM-Request-ID").getD "unassigned"
+  let res ← try
+      responseForRequest request
+    catch err =>
+      IO.eprintln s!"request_id={requestId} unhandled request failure: {err}"
+      pure <| response 500 "application/json; charset=utf-8"
+        ("{\"error\":\"Internal server error\",\"request_id\":\"" ++ jsonEscape requestId ++
+          "\",\"detail\":\"" ++ jsonEscape (toString err) ++ "\"}\n")
+  let res := { res with headers := ("X-LeanFM-Request-ID: " ++ requestId) :: res.headers }
   (client.sendAll #[(httpHeader res.status res.contentType res.body res.headers).toUTF8, res.body]).block
 
 partial def serveLoop (server : TcpServer) : IO Unit := do

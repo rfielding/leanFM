@@ -5,6 +5,28 @@
   const $$ = selector => [...document.querySelectorAll(selector)];
   let me = null, projects = [], project = null, grammar = [], selectedTask = null, grammarSection = "productions";
   let grammarZoom = 1, diagramTask = null, diagramKind = "interaction";
+  let bookVariant = "dark", bookDirty = false;
+  let selectionEpoch = 0;
+
+  const selectionIsCurrent = (selectedProject, epoch) =>
+    project?.project_id === selectedProject.project_id && selectionEpoch === epoch;
+
+  function clearProjectWidgets(item) {
+    grammar = [];
+    selectedTask = null;
+    diagramTask = null;
+    grammarSection = "productions";
+    bookDirty = false;
+    $("#messages").innerHTML = '<div class="empty"><div><h2>Loading project conversation…</h2></div></div>';
+    $("#bookSource").value = "";
+    $("#bookPreview").removeAttribute("src");
+    $("#bookStatus").textContent = `Loading ${item.display_name} book…`;
+    $("#grammarTasks").replaceChildren();
+    $("#grammarMeta").textContent = `Loading ${item.display_name} specification…`;
+    $("#grammarInspector").innerHTML = '<h2>Loading project…</h2>';
+    $("#diagramTasks").replaceChildren();
+    $("#diagramStage").innerHTML = '<div class="empty"><div><h2>Loading project tasks…</h2></div></div>';
+  }
 
   async function request(path, options = {}) {
     const response = await fetch(path, {...options, headers: {Accept: "application/json", ...(options.headers || {})}});
@@ -38,6 +60,8 @@
     for (const item of projects) {
       const row = make("div", "project-row");
       const button = make("button", `project${project?.project_id === item.project_id ? " active" : ""}`, item.display_name);
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", project?.project_id === item.project_id ? "true" : "false");
       if (item.read_only) button.append(make("span", "project-kind", "read-only"));
       button.onclick = () => selectProject(item);
       row.append(button);
@@ -81,25 +105,53 @@
     }
   }
   async function selectProject(item) {
+    const epoch = ++selectionEpoch;
     project = item;
     if (item.read_only) localStorage.removeItem("leanfm-project");
     else localStorage.setItem("leanfm-project", item.project_id);
-    selectedTask = null;
-    diagramTask = null;
-    grammarSection = "productions";
+    clearProjectWidgets(item);
     $("#projectTitle").textContent = item.display_name;
     $("#prompt").disabled = !!item.read_only;
     $("#composer button").disabled = !!item.read_only;
     $("#prompt").placeholder = item.read_only ? "Read-only workspace project" : "Message LeanFM";
     renderProjects();
-    await Promise.all([loadConversation(), loadGrammar()]);
-    await loadArtifacts();
+    await Promise.all([loadConversation(item, epoch), loadGrammar(item, epoch), loadBook(item, epoch)]);
+    if (selectionIsCurrent(item, epoch)) await loadArtifacts(item, epoch);
   }
 
-  function message(role, text, usage, messageId) {
+  function renderChatContent(host, text) {
+    const figureFooter = text.match(/Figures created:\s*((?:Figure\s+\d+(?:,\s*)?)+)\./i);
+    const figureLabels = figureFooter ? [...figureFooter[1].matchAll(/Figure\s+\d+/gi)].map(match => match[0]) : [];
+    let figureIndex = 0;
+    const parts = text.split(/```mermaid\s*\n?/i);
+    host.append(document.createTextNode(parts.shift() || ""));
+    for (const part of parts) {
+      const close = part.indexOf("```");
+      if (close < 0) { host.append(document.createTextNode("```mermaid\n" + part)); continue; }
+      const source = part.slice(0, close).trim();
+      const after = part.slice(close + 3);
+      const diagram = make("div", "chat-diagram");
+      const fallback = make("pre", "chat-diagram-source", source);
+      const figure = document.createElement("figure");
+      const caption = make("figcaption", "chat-figure-caption", figureLabels[figureIndex++] || "Diagram");
+      diagram.append(fallback);
+      figure.append(diagram, caption);
+      host.append(figure, document.createTextNode(after));
+      if (window.mermaid) {
+        mermaid.initialize({startOnLoad: false, theme: "dark", securityLevel: "strict"});
+        mermaid.render(`leanfm-chat-${Date.now()}-${Math.random().toString(16).slice(2)}`, source)
+          .then(({svg}) => { diagram.innerHTML = svg; })
+          .catch(error => { fallback.title = `Diagram could not render: ${error.message}`; });
+      }
+    }
+  }
+
+  function message(role, text, usage, messageId, messageProjectId = project?.project_id) {
     $("#messages .empty")?.remove();
     const element = make("article", `message ${role}`);
-    element.append(make("div", "message-text", text));
+    const content = make("div", "message-text");
+    renderChatContent(content, text);
+    element.append(content);
     if (usage) {
       const percentage = usage.context_window_tokens ? ` · ${Math.round(100 * usage.total_tokens / usage.context_window_tokens)}% context` : "";
       element.append(make("div", "usage", `${usage.input_tokens} input · ${usage.cached_input_tokens} cached · ${usage.output_tokens} output · ${usage.total_tokens} total${percentage} · billed to your API key`));
@@ -110,8 +162,8 @@
       remove.onclick = async () => {
         if (!confirm("Delete this message from the project conversation?")) return;
         try {
-          await request(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(messageId)}`, {method: "DELETE"});
-          await loadConversation();
+          await request(`/api/projects/${messageProjectId}/conversation/messages/${encodeURIComponent(messageId)}`, {method: "DELETE"});
+          if (project?.project_id === messageProjectId) await loadConversation();
         } catch (error) { alert(error.message); }
       };
       element.append(remove);
@@ -119,19 +171,45 @@
     $("#messages").append(element);
     $("#messages").scrollTop = $("#messages").scrollHeight;
   }
-  async function loadConversation() {
-    if (!project) return;
-    if (project.read_only) {
+  async function loadConversation(selectedProject = project, epoch = selectionEpoch) {
+    if (!selectedProject || !selectionIsCurrent(selectedProject, epoch)) return;
+    if (selectedProject.read_only) {
       $("#messages").innerHTML = '<div class="empty"><div><h2>Read-only workspace</h2><p>Inspect LeanFM\'s grammar and artifacts without mixing them into another project.</p></div></div>';
       return;
     }
-    const data = await request(`/api/projects/${project.project_id}/conversation`);
+    const data = await request(`/api/projects/${selectedProject.project_id}/conversation`);
+    if (!selectionIsCurrent(selectedProject, epoch)) return;
     $("#messages").replaceChildren();
     if (!(data.messages || []).length) {
       const empty = make("div", "empty");
       empty.innerHTML = "<div><h2>What are we building?</h2><p>Argue requirements into checked tasks, diagrams, protobuf traces, and a one-shot PR.</p></div>";
       $("#messages").append(empty);
-    } else for (const item of data.messages) message(item.role, item.text, item.usage, item.message_id);
+    } else for (const item of data.messages) message(item.role, item.text, item.usage, item.message_id, selectedProject.project_id);
+  }
+
+  function refreshBookPreview(selectedProject = project) {
+    if (!selectedProject || selectedProject.project_id !== project?.project_id) return;
+    $("#bookPreview").src = `/api/projects/${selectedProject.project_id}/book/${bookVariant === "dark" ? "main-dark.pdf" : "main.pdf"}?revision=${Date.now()}`;
+    $("#previewLight").classList.toggle("active", bookVariant === "light");
+    $("#previewDark").classList.toggle("active", bookVariant === "dark");
+  }
+  async function loadBook(selectedProject = project, epoch = selectionEpoch) {
+    if (!selectedProject || !selectionIsCurrent(selectedProject, epoch)) return;
+    try {
+      const data = await request(`/api/projects/${selectedProject.project_id}/book`);
+      if (!selectionIsCurrent(selectedProject, epoch)) return;
+      $("#bookSource").value = data.source || "";
+      $("#bookSource").readOnly = !!selectedProject.read_only;
+      $("#saveBook").disabled = !!selectedProject.read_only;
+      $("#buildBook").disabled = !!selectedProject.read_only;
+      $("#bookStatus").textContent = selectedProject.read_only ? "Read-only book source and generated PDF" : "book/main.tex · saved";
+      bookDirty = false;
+      refreshBookPreview(selectedProject);
+    } catch (error) {
+      if (!selectionIsCurrent(selectedProject, epoch)) return;
+      $("#bookStatus").textContent = error.message;
+      $("#bookSource").value = "";
+    }
   }
 
   function directionClass(transition) {
@@ -397,7 +475,7 @@
     if (expr.kind === "ref") {
       const ref = make("button", "grammar-terminal grammar-reference", `↪ ${expr.task}`);
       ref.onclick = () => {
-        inspectGrammarNode(expr.task, path, [["nonterminal reference", expr.task], ["resolution", `LeanFM/${expr.task}`]]);
+        inspectGrammarNode(expr.task, path, [["nonterminal reference", expr.task], ["resolution", `${project?.read_only ? "LeanFM" : project?.display_name || "Project"}/${expr.task}`]]);
         const target = $$("[data-grammar-task]").find(item => item.dataset.grammarTask === expr.task);
         if (target) { target.open = true; target.scrollIntoView({block: "nearest"}); }
       };
@@ -419,8 +497,9 @@
     tree.replaceChildren();
     const root = make("details", "grammar-production grammar-root-production");
     root.open = true;
-    const rootSummary = make("summary", "", "LeanFM ::= task/scenario production");
-    rootSummary.onclick = () => inspectGrammarNode("LeanFM", "LeanFM/", [["kind", "start production"], ["alternatives", grammar.length], ["parser", "typed forward grammar; no UI reconstruction from transitions"]]);
+    const grammarName = project?.read_only ? "LeanFM" : project?.display_name || "Project";
+    const rootSummary = make("summary", "", `${grammarName} ::= task/scenario production`);
+    rootSummary.onclick = () => inspectGrammarNode(grammarName, `${grammarName}/`, [["kind", "start production"], ["alternatives", grammar.length], ["parser", "typed forward grammar; no UI reconstruction from transitions"]]);
     root.append(rootSummary);
     const tasks = make("div", "grammar-ast-children");
     for (const task of grammar) {
@@ -428,24 +507,27 @@
       production.dataset.grammarTask = task.id;
       const summary = make("summary");
       summary.append(make("strong", "", `${task.id} ::=`), make("span", "", task.title));
-      summary.onclick = () => inspectGrammarNode(task.id, `LeanFM/${task.id}`, [["kind", "named task/scenario production"], ["entry state", task.entry], ["terminal states", task.terminals.join(", ")]]);
-      production.append(summary, renderGrammarExpression(task.grammar, `LeanFM/${task.id}/body`));
+      summary.onclick = () => inspectGrammarNode(task.id, `${grammarName}/${task.id}`, [["kind", "named task/scenario production"], ["entry state", task.entry], ["terminal states", task.terminals.join(", ")]]);
+      production.append(summary, renderGrammarExpression(task.grammar, `${grammarName}/${task.id}/body`));
       tasks.append(production);
     }
     root.append(tasks); tree.append(root);
-    $("#grammarInspector").innerHTML = "<h2>LeanFM</h2><div class=\"spec-id\">start production</div><p>This is the accepted GrammarExpr tree. Named task/scenario productions resolve into the literal sequence, choice, parallel, join, guard, reference, repetition, empty, and message constructors used by the forward parser.</p>";
+    const inspector = $("#grammarInspector");
+    inspector.replaceChildren(make("h2", "", grammarName), make("div", "spec-id", grammar.length ? "start production" : "no accepted grammar"), make("p", "", grammar.length ? "This is the accepted GrammarExpr tree. Named task/scenario productions resolve into the literal constructors used by the forward parser." : "Use project chat to develop this project's book and requirements. Tasks appear here only after this project has an accepted specification."));
   }
-  async function loadGrammar() {
-    if (!project) return;
-    const data = await request(`/api/projects/${project.project_id}/tasks`);
+  async function loadGrammar(selectedProject = project, epoch = selectionEpoch) {
+    if (!selectedProject || !selectionIsCurrent(selectedProject, epoch)) return;
+    const data = await request(`/api/projects/${selectedProject.project_id}/tasks`);
+    if (!selectionIsCurrent(selectedProject, epoch)) return;
     grammar = data.tasks || [];
     const validation = data.validation || {errors: 0, warnings: 0};
-    $("#grammarMeta").textContent = `LeanFM start production resolving to ${grammar.length} named task/scenario productions from ${data.source || "the accepted specification"} · validation: ${validation.errors} errors, ${validation.warnings} warnings`;
+    const grammarName = selectedProject.read_only ? "LeanFM" : selectedProject.display_name || "Project";
+    $("#grammarMeta").textContent = grammar.length ? `${grammarName} start production resolving to ${grammar.length} named task/scenario productions from ${data.source || "the accepted specification"} · validation: ${validation.errors} errors, ${validation.warnings} warnings` : `No accepted tasks or grammar yet for ${grammarName}. Develop them in project chat.`;
     renderFaithfulGrammar();
   }
 
-  async function loadArtifacts() {
-    if (!project) return;
+  async function loadArtifacts(selectedProject = project, epoch = selectionEpoch) {
+    if (!selectedProject || !selectionIsCurrent(selectedProject, epoch)) return;
     if (!diagramTask && grammar.length) diagramTask = grammar[0];
     renderDiagramTasks();
     if (diagramTask) renderSelectedDiagram();
@@ -456,10 +538,14 @@
     box.replaceChildren();
     for (const task of grammar) {
       const button = make("button", `diagram-task${diagramTask?.id === task.id ? " active" : ""}`);
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", diagramTask?.id === task.id ? "true" : "false");
       button.append(make("strong", "", task.title), make("span", "", `${task.transitions.length} productions · ${task.states.length} states`));
       button.onclick = () => { diagramTask = task; renderDiagramTasks(); renderSelectedDiagram(); };
       box.append(button);
     }
+    if (!grammar.length) box.append(make("p", "empty-task-list", "No accepted project tasks yet."));
+    if (!grammar.length) $("#diagramStage").innerHTML = '<div class="empty"><div><h2>No accepted tasks yet</h2><p>Use Chat and the project book to describe what this project should do.</p></div></div>';
   }
 
   async function renderSelectedDiagram() {
@@ -533,19 +619,61 @@
     event.preventDefault();
     if (!project) return $("#projectDialog").showModal();
     if (project.read_only) return;
+    const selectedProject = project;
+    const epoch = selectionEpoch;
     const prompt = $("#prompt").value.trim();
     if (!prompt) return;
     $("#prompt").value = ""; message("user", prompt); message("assistant", "Thinking…");
     const pending = $("#messages").lastElementChild;
     try {
-      const data = await request(`/api/projects/${project.project_id}/chat`, {method: "POST", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: new URLSearchParams({prompt}).toString()});
-      pending.remove(); await loadConversation(); loadArtifacts();
-    } catch (error) { pending.remove(); await loadConversation(); message("assistant", `Request failed: ${error.message}`); }
+      const data = await request(`/api/projects/${selectedProject.project_id}/chat`, {method: "POST", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: new URLSearchParams({prompt, layer: $("#chatLayer").value}).toString()});
+      pending.remove();
+      if (!selectionIsCurrent(selectedProject, epoch)) return;
+      await loadConversation(selectedProject, epoch); loadArtifacts(selectedProject, epoch);
+      if (data.book_updated) await loadBook(selectedProject, epoch);
+    } catch (error) {
+      pending.remove();
+      if (!selectionIsCurrent(selectedProject, epoch)) return;
+      await loadConversation(selectedProject, epoch); message("assistant", `Request failed: ${error.message}`);
+    }
   };
   $$('[data-pane]').forEach(button => button.onclick = () => {
-    $$('[data-pane]').forEach(item => item.classList.toggle("active", item === button));
-    for (const name of ["chat", "grammar", "artifacts", "markerboard"]) $("#" + name + "Pane").classList.toggle("hidden", name !== button.dataset.pane);
+    $$('[data-pane]').forEach(item => { item.classList.toggle("active", item === button); item.setAttribute("aria-selected", item === button ? "true" : "false"); });
+    for (const name of ["chat", "book", "grammar", "artifacts", "source", "markerboard"]) $("#" + name + "Pane").classList.toggle("hidden", name !== button.dataset.pane);
   });
+  const layerHelp = {
+    guided: "Start with the book; advance by asking only the questions needed for the next acceptance gate.",
+    book: "Develop and revise the durable project book.",
+    requirements: "Derive observable requirements and review the first acceptance gate.",
+    implementation_spec: "Map accepted requirements to runtime choices, transports, files, and implementation issues.",
+    implementation: "Implement only from accepted book, requirements, and implementation revisions."
+  };
+  $("#chatLayer").onchange = event => { $("#chatLayerHelp").textContent = layerHelp[event.target.value]; };
+  $("#bookSource").oninput = () => { bookDirty = true; $("#bookStatus").textContent = "book/main.tex · unsaved changes"; };
+  $("#saveBook").onclick = async () => {
+    if (!project || project.read_only) return;
+    const selectedProject = project, epoch = selectionEpoch;
+    $("#bookStatus").textContent = "Saving…";
+    try {
+      await request(`/api/projects/${selectedProject.project_id}/book`, {method: "POST", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: new URLSearchParams({source: $("#bookSource").value}).toString()});
+      if (!selectionIsCurrent(selectedProject, epoch)) return;
+      bookDirty = false; $("#bookStatus").textContent = "book/main.tex · saved; PDF build required";
+    } catch (error) { if (selectionIsCurrent(selectedProject, epoch)) $("#bookStatus").textContent = error.message; }
+  };
+  $("#buildBook").onclick = async () => {
+    if (!project || project.read_only) return;
+    const selectedProject = project, epoch = selectionEpoch;
+    $("#buildBook").disabled = true; $("#bookStatus").textContent = "Building light and dark PDFs in the project sandbox…";
+    try {
+      if (bookDirty) await request(`/api/projects/${selectedProject.project_id}/book`, {method: "POST", headers: {"Content-Type": "application/x-www-form-urlencoded"}, body: new URLSearchParams({source: $("#bookSource").value}).toString()});
+      await request(`/api/projects/${selectedProject.project_id}/book/build`, {method: "POST"});
+      if (!selectionIsCurrent(selectedProject, epoch)) return;
+      bookDirty = false; $("#bookStatus").textContent = "Book built successfully"; refreshBookPreview();
+    } catch (error) { if (selectionIsCurrent(selectedProject, epoch)) $("#bookStatus").textContent = error.message; }
+    finally { if (selectionIsCurrent(selectedProject, epoch)) $("#buildBook").disabled = false; }
+  };
+  $("#previewLight").onclick = () => { bookVariant = "light"; refreshBookPreview(); };
+  $("#previewDark").onclick = () => { bookVariant = "dark"; refreshBookPreview(); };
   $("#grammarSearch").oninput = event => {
     const query = event.target.value.trim().toLowerCase();
     if (!query) return renderFaithfulGrammar();
@@ -579,7 +707,7 @@
   };
   function selectTaskView(kind, button) {
     diagramKind = kind;
-    $$(".diagram-kind button").forEach(item => item.classList.toggle("active", item === button));
+    $$(".diagram-kind button").forEach(item => { item.classList.toggle("active", item === button); item.setAttribute("aria-selected", item === button ? "true" : "false"); });
     renderSelectedDiagram();
   }
   $("#showProperties").onclick = event => selectTaskView("properties", event.currentTarget);
@@ -597,5 +725,6 @@
     } else host.append(make("pre", "", source));
   };
   $("#prompt").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); $("#composer").requestSubmit(); } };
+  $('[data-pane="chat"]').click();
   boot();
 })();
