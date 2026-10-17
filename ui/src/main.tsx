@@ -18,11 +18,15 @@ type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: Qu
 function extractQuestions(text: string): {text: string; questions: ChatQuestion[]} {
   const match = text.match(/```leanfm-questions\s*([\s\S]*?)```/i);
   if (!match) return {text, questions: []};
-  try {
-    const parsed = JSON.parse(match[1]);
-    const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((question: ChatQuestion) => question.id && question.prompt && Array.isArray(question.options)) : [];
-    return {text: text.replace(match[0], "").trim(), questions};
-  } catch { return {text, questions: []}; }
+  const source = match[1].trim();
+  for (const candidate of [source, `${source}}`, `${source}]}`]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const questions = Array.isArray(parsed.questions) ? parsed.questions.filter((question: ChatQuestion) => question.id && question.prompt && Array.isArray(question.options)) : [];
+      return {text: text.replace(match[0], "").trim(), questions};
+    } catch { /* try the next bounded repair */ }
+  }
+  return {text: text.replace(match[0], "").trim(), questions: []};
 }
 
 function extractResult(text: string): {text: string; status?: "success" | "warn" | "fail"} {
