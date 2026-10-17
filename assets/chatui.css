@@ -234,6 +234,11 @@ button { cursor: pointer; }
 .chat-inline-figure img { display: block; width: auto; max-width: 100%; max-height: 720px; margin: auto; border-radius: 6px; }
 .chat-inline-figure figcaption { margin-top: 8px; color: var(--muted); font: .78rem/1.4 ui-monospace, monospace; text-align: center; }
 .chat-inline-figure figcaption a { color: var(--blue); overflow-wrap: anywhere; }
+.chat-canvas { margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #08141d; }
+.chat-canvas iframe { display: block; width: 100%; height: min(70vh, 720px); border: 0; background: #08141d; }
+.chat-canvas-controls { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.chat-canvas-controls button { color: #fff; background: #075985; border: 1px solid #38bdf8; border-radius: 6px; padding: 6px 12px; }
+.chat-canvas-stopped { display: grid; min-height: 180px; place-items: center; color: var(--muted); }
 .chat-diagram-source { margin: 0; white-space: pre-wrap; color: var(--muted); }
 .message figure { margin: 12px 0; }
 .chat-figure-caption { margin-top: 5px; color: var(--muted); font-size: .85rem; font-weight: 700; }

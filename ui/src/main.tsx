@@ -69,6 +69,24 @@ function remoteImages(text: string): RemoteImage[] {
   return found.filter((image, index, images) => images.findIndex(other => other.url === image.url) === index);
 }
 
+function extractCanvases(text: string): {text: string; canvases: string[]} {
+  const canvases: string[] = [];
+  const remaining = text.replace(/```leanfm-canvas\s*([\s\S]*?)```/gi, (_block, source: string) => {
+    canvases.push(source.trim());
+    return "";
+  });
+  return {text: remaining.trim(), canvases};
+}
+
+function CanvasAnimation({source}: {source: string}) {
+  const [running, setRunning] = useState(true), [revision, setRevision] = useState(0);
+  const hasCanvas = /<canvas(?:\s|>)/i.test(source);
+  if (!hasCanvas) return <div className="request-error"><div className="result-badge fail">FAIL</div><p>The canvas response did not contain a literal canvas element.</p></div>;
+  const document = `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'"><style>html,body{margin:0;min-height:100%;overflow:hidden;background:#08141d;color:#e5edf3}body{display:grid;place-items:center}canvas{display:block;max-width:100%;height:auto}</style></head><body>${source}</body></html>`;
+  function restart() { setRevision(value => value + 1); setRunning(true); }
+  return <figure className="chat-canvas"><div className="chat-canvas-controls"><button onClick={() => setRunning(value => !value)}>{running ? "Stop" : "Start"}</button><button onClick={restart}>Restart</button></div>{running ? <iframe key={revision} title="Animated canvas response" sandbox="allow-scripts" srcDoc={document} /> : <div className="chat-canvas-stopped">Animation stopped</div>}</figure>;
+}
+
 function QuestionForm({questions, disabled, onAnswer}: {questions: ChatQuestion[]; disabled?: boolean; onAnswer: (answer: string) => void}) {
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const complete = questions.every(question => (selected[question.id] || []).length > 0);
@@ -119,7 +137,8 @@ function Mermaid({source, className = "large-diagram"}: {source: string; classNa
 function MessageView({message, projectId, onDelete, onResend, onAnswer, disabled}: {message: Message; projectId: string; onDelete: () => void; onResend?: () => void; onAnswer?: (answer: string) => void; disabled?: boolean}) {
   const result = extractResult(message.text);
   const structured = extractQuestions(result.text);
-  const [answerText, activity] = structured.text.split(/\n\nOperational trace:\n/, 2);
+  const canvasContent = extractCanvases(structured.text);
+  const [answerText, activity] = canvasContent.text.split(/\n\nOperational trace:\n/, 2);
   const images = projectSvgPaths(answerText, projectId);
   const internetImages = remoteImages(answerText);
   const pieces = answerText.split(/```mermaid\s*\n?/i);
@@ -127,7 +146,7 @@ function MessageView({message, projectId, onDelete, onResend, onAnswer, disabled
   return <article className={`message ${message.role}`}>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text">{first}{pieces.map((part, i) => {
     const end = part.indexOf("```");
     return end < 0 ? <React.Fragment key={i}>{`\`\`\`mermaid\n${part}`}</React.Fragment> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" />{part.slice(end + 3)}</React.Fragment>;
-  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} disabled={disabled} onAnswer={onAnswer} />}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
+  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} disabled={disabled} onAnswer={onAnswer} />}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 
