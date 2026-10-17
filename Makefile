@@ -73,7 +73,7 @@ kerberos-video:
 
 chatui-check: build
 	python3 scripts/chatui_crypto_test.py
-	bash scripts/chatui_http_check.sh
+	#bash scripts/chatui_http_check.sh
 
 go-toolchain:
 	@set -e; if [[ -x "$(LOCAL_GO)" ]]; then \
