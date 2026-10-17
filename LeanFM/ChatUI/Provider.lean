@@ -105,6 +105,7 @@ def addUsage (left right : Completion) (text : String := "") : Completion :=
 
 def workspaceToolsJson : String :=
   "[" ++ String.intercalate "," [
+    "{\"type\":\"web_search\"}",
     "{\"type\":\"function\",\"name\":\"workspace_list\",\"description\":\"List tracked and untracked files below the authorized launch workspace.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_read\",\"description\":\"Read a UTF-8 text file below the authorized launch workspace.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_search\",\"description\":\"Search text below the authorized launch workspace using a literal query.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[\"query\",\"path\"],\"additionalProperties\":false}}",

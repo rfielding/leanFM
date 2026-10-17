@@ -101,7 +101,15 @@ function MessageView({message, projectId, onDelete, onResend, onAnswer, disabled
 }
 
 function Chat({project}: {project: Project}) {
-  const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [errorTrace, setErrorTrace] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [busy, setBusy] = useState(false), [elapsedSeconds, setElapsedSeconds] = useState(0), [error, setError] = useState(""), [errorTrace, setErrorTrace] = useState("");
+  useEffect(() => {
+    if (!busy) { setElapsedSeconds(0); return; }
+    const started = Date.now();
+    setElapsedSeconds(0);
+    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
+  const elapsed = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
   async function load(signal?: AbortSignal) { const data = await api<{messages: Message[]}>(`/api/projects/${project.project_id}/conversation`, {}, signal); setMessages(data.messages || []); }
   useEffect(() => { const controller = new AbortController(); if (!project.read_only) load(controller.signal).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id]);
   async function submit(text: string) { if (!text.trim() || busy) return; text = text.trim(); setPrompt(""); setMessages(v => [...v, {message_id: "pending-user", role: "user", text}, {message_id: "pending", role: "assistant", text: "Agent running in the server launch directory… It may inspect files, apply edits, and run checks before replying."}]); setBusy(true); setError(""); setErrorTrace("");
@@ -111,7 +119,7 @@ function Chat({project}: {project: Project}) {
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
     <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => submit(m.text) : undefined} onAnswer={m.role === "assistant" ? submit : undefined} disabled={busy} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p>{errorTrace && <details><summary>Development trace</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy trace</button><pre>{errorTrace}</pre></details>}</div>}</div>
-    <div className="composer-wrap"><form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="What are you trying to build?" disabled={busy} /><button disabled={busy}>Send</button></form></div></section>;
+    <div className="composer-wrap">{busy && <div className="agent-running" role="status"><span className="agent-running-dot" />Agent running <time>{elapsed}</time></div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="What are you trying to build?" disabled={busy} /><button disabled={busy}>Send</button></form></div></section>;
 }
 
 function Book({project}: {project: Project}) {

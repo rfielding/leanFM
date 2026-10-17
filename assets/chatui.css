@@ -217,6 +217,10 @@ button { cursor: pointer; }
 .request-error button { margin: 8px 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; color: var(--text); background: var(--panel-2); }
 .request-error pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .78rem/1.45 ui-monospace, monospace; }
 .composer-wrap { position: relative; z-index: 5; flex: 0 0 auto; padding: 10px max(18px, calc((100% - 800px)/2)) 18px; background: var(--bg); }
+.agent-running { display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 8px 10px; color: var(--blue); font-weight: 750; }
+.agent-running time { min-width: 3.5rem; color: var(--text); font: 700 .9rem/1 ui-monospace, monospace; }
+.agent-running-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 0 #72b8e988; animation: agent-pulse 1.4s infinite; }
+@keyframes agent-pulse { 70% { box-shadow: 0 0 0 8px #72b8e900; } 100% { box-shadow: 0 0 0 0 #72b8e900; } }
 .composer { display: flex; gap: 8px; background: var(--raised); padding: 10px; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 6px 24px #0008; }
 .composer textarea { resize: none; flex: 1; max-height: 180px; background: transparent; border: 0; outline: 0; padding: 8px; }
 .composer button, .primary { border: 0; background: var(--action); color: #fff !important; border-radius: 10px; padding: 9px 15px; font-weight: 800; }
