@@ -46,6 +46,10 @@ button { cursor: pointer; }
 .font-controls button:disabled { opacity: .45; cursor: not-allowed; }
 .main { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .topbar { min-height: 56px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; gap: 18px; }
+.billing-meter { display: grid; flex: 0 0 auto; gap: 0; max-width: 290px; padding: 6px 10px; border: 1px solid #3c8f61; border-radius: 8px; background: #102d22; color: #d9ffe6; font: 700 .72rem/1.3 ui-monospace, monospace; }
+.billing-meter span, .billing-meter small { color: #b9d9c5; font-weight: 500; }
+.billing-meter.warn { border-color: #b88918; background: #3c2d08; color: #fff4cd; }
+.billing-meter.danger { border-color: #ba4848; background: #3b2020; color: #ffe0df; }
 .tabs { display: flex; gap: 7px; flex-wrap: wrap; }
 .phase-tabs { display: flex; align-items: end; justify-content: center; gap: 18px; margin-left: auto; }
 .phase-group { display: grid; gap: 1px; text-align: center; }

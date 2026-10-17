@@ -1,0 +1,8 @@
+name = "LeanFMBlankReconstruction"
+version = "0.1.0"
+
+[[lean_lib]]
+name = "LeanFM"
+
+[[lean_lib]]
+name = "Specification"

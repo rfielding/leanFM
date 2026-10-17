@@ -63,6 +63,18 @@ register() {
 register rfielding "$cookie_a" test-user-key
 register second_user "$cookie_b" second-user-key
 
+me_json="$(curl -fsS -b "$cookie_a" http://127.0.0.1:8080/api/me)"
+rg -q '"provider":"openai"' <<<"$me_json"
+rg -q '"credential_ref":"default"' <<<"$me_json"
+rg -q '"key_fingerprint":"[0-9a-f]{12}"' <<<"$me_json"
+rg -q '"model":"test-model"' <<<"$me_json"
+rg -q '"tokens_used":0' <<<"$me_json"
+rg -q '"tokens_remaining":1000000' <<<"$me_json"
+
+projects_json="$(curl -fsS -b "$cookie_a" http://127.0.0.1:8080/api/projects)"
+rg -q '"project_id":"leanfm-workspace".*"read_only":true' <<<"$projects_json"
+rg -q '"project_id":"go-server-example".*"read_only":true' <<<"$projects_json"
+
 test -f "$test_root/data/accounts/rfielding/credentials/default.json"
 test ! -e "$test_root/data/accounts/rfielding/credentials/default.b64"
 test ! -d "$test_root/data/accounts/rfielding/sessions"

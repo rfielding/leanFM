@@ -1,0 +1,11 @@
+.cache/
+.lake/
+cache/
+conversations/
+logs/
+book/*.aux
+book/*.log
+book/*.out
+book/*.toc
+*.duckdb
+*.db

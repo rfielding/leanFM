@@ -8,7 +8,7 @@ import React, {
 import {createRoot} from "react-dom/client";
 import katex from "katex";
 import {ApiError, api, formRequest} from "./api";
-import type {GrammarExpr, Message, Project, Task} from "./types";
+import type {Billing, GrammarExpr, Message, Project, Task} from "./types";
 
 declare global { interface Window { mermaid?: any } }
 
@@ -267,7 +267,16 @@ function Specification({project, view}: {project: Project; view: "grammar" | "ta
 
 function ProjectWorkspace({project}: {project: Project}) {
   const [phase, setPhase] = useState<Phase>("chat");
-  return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Early</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Intermediate</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Late</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav></header>
+  const [billing, setBilling] = useState<Billing | null>(null);
+  useEffect(() => {
+    let current = true;
+    const refresh = () => api<{billing: Billing | null}>("/api/me").then(result => { if (current) setBilling(result.billing); }).catch(() => {});
+    void refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => { current = false; window.clearInterval(timer); };
+  }, []);
+  const percentRemaining = billing?.token_budget ? Math.round(100 * billing.tokens_remaining / billing.token_budget) : 0;
+  return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Early</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Intermediate</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Late</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget, not an OpenAI dollar balance. The provider project spend limit is authoritative."><strong>{billing.provider} · key {billing.key_fingerprint}</strong><span>{billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce a provider project spend cap</small></div>}</header>
     {phase === "chat" && <Chat project={project} />}{phase === "book" && <Book project={project} />}{phase === "grammar" && <Specification project={project} view="grammar" />}{phase === "tasks" && <Specification project={project} view="tasks" />}{phase === "source" && <div className="empty"><div><h1>Source</h1><p>Repository files, diffs, builds, tests, and logs will appear here.</p></div></div>}</main>;
 }
 

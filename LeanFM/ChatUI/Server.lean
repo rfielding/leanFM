@@ -30,13 +30,37 @@ def credentialKey (username request : String) : IO (Except String String) := do
   match cookieValue? request "leanfm_session" with
   | none => pure (.error "Password login is required to unlock the API key.")
   | some token =>
-      match ← sessionCredential? token username with
+      match ← sessionBilling? token username with
       | none => pure (.error "Password login is required to unlock the API key.")
-      | some key => pure (.ok key)
+      | some billing =>
+          if billing.tokensUsed >= billing.tokenBudget then
+            pure (.error "The local session token safety budget is exhausted. Log in again only after reviewing the provider project's dollar spend limit and usage.")
+          else match ← sessionCredential? token username with
+            | none => pure (.error "Password login is required to unlock the API key.")
+            | some key => pure (.ok key)
+
+def billingJson (username request : String) : IO String := do
+  let model := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"
+  match cookieValue? request "leanfm_session" with
+  | none => pure "null"
+  | some token =>
+      match ← sessionBilling? token username with
+      | none => pure "null"
+      | some billing =>
+          let remaining := billing.tokenBudget - billing.tokensUsed
+          pure ("{\"provider\":\"" ++ jsonEscape billing.provider ++
+            "\",\"credential_ref\":\"" ++ jsonEscape billing.credentialRef ++
+            "\",\"key_fingerprint\":\"" ++ jsonEscape billing.credentialFingerprint ++
+            "\",\"model\":\"" ++ jsonEscape model ++
+            "\",\"tokens_used\":" ++ toString billing.tokensUsed ++
+            ",\"token_budget\":" ++ toString billing.tokenBudget ++
+            ",\"tokens_remaining\":" ++ toString remaining ++ "}")
 
 def authorizedProjectRoot? (username projectId : String) : IO (Option String) := do
   if projectId == "leanfm-workspace" then
     if ← (fp "book/main.pdf").pathExists then return some "." else return none
+  if projectId == "go-server-example" then
+    if ← (fp "projects/go-server/project.json").pathExists then return some "projects/go-server" else return none
   if !safeId projectId then return none
   let root ← projectRoot username projectId
   if ← (fp (root ++ "/manifest.json")).pathExists then pure (some root) else pure none
@@ -532,7 +556,7 @@ def handlePublic (path method request : String) : IO (Option HttpResponse) := do
   pure none
 
 def handleAuthenticated (username path method request : String) : IO (Option HttpResponse) := do
-  if path == "/api/me" then return some (jsonResponse 200 ("{\"username\":\"" ++ jsonEscape username ++ "\"}\n"))
+  if path == "/api/me" then return some (jsonResponse 200 ("{\"username\":\"" ++ jsonEscape username ++ "\",\"billing\":" ++ (← billingJson username request) ++ "}\n"))
   if path == "/api/projects" && method == "GET" then
     return some (jsonResponse 200 ("{\"projects\":" ++ (← projectListJson username) ++ "}\n"))
   if path == "/api/projects" && method == "POST" then
@@ -547,8 +571,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
       | none => return some (errorResponse 404 "Project not found.")
       | some root =>
           if rest.isEmpty && method == "DELETE" then
-            if projectId == "leanfm-workspace" then
-              return some (errorResponse 403 "The LeanFM workspace project is read-only and cannot be deleted.")
+            if projectId == "leanfm-workspace" || projectId == "go-server-example" then
+              return some (errorResponse 403 "Checked-in projects are read-only and cannot be deleted.")
             let confirmation := (formValue? (requestBody request) "confirmation").getD ""
             match ← deleteProject username projectId confirmation with
             | .error message => return some (errorResponse 400 message)
@@ -604,14 +628,14 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               if source.isEmpty then return some (errorResponse 404 "This project has no editable book/main.tex source.")
               return some (jsonResponse 200 ("{\"source\":\"" ++ jsonEscape source ++ "\"}\n"))
           | ["book"], "POST" =>
-              if projectId == "leanfm-workspace" then return some (errorResponse 403 "The LeanFM workspace book is read-only.")
+              if projectId == "leanfm-workspace" || projectId == "go-server-example" then return some (errorResponse 403 "The checked-in project book is read-only.")
               let source := (formValue? (requestBody request) "source").getD ""
               if source.isEmpty then return some (errorResponse 400 "Book source cannot be empty.")
               if source.length > 2000000 then return some (errorResponse 413 "Book source exceeds the 2 MB editor limit.")
               writeAtomic (root ++ "/book/main.tex") source
               return some (jsonResponse 200 "{\"saved\":true}\n")
           | ["book", "build"], "POST" =>
-              if projectId == "leanfm-workspace" then return some (errorResponse 403 "The LeanFM workspace book is read-only.")
+              if projectId == "leanfm-workspace" || projectId == "go-server-example" then return some (errorResponse 403 "The checked-in project book is read-only.")
               match ← buildProjectBook root with
               | .ok _ => return some (jsonResponse 200 "{\"built\":true}\n")
               | .error message => return some (errorResponse 422 message)
@@ -638,6 +662,9 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   match ← Provider.completeAgent key (workspaceAgentInstructions launchRoot) contextualPrompt runner with
                   | .error message => return some (errorResponse 502 message)
                   | .ok answer =>
+                      match cookieValue? request "leanfm_session" with
+                      | some token => recordSessionUsage token username answer.totalTokens
+                      | none => pure ()
                       let mp4Requested := prompt.toLower.contains "mp4"
                       let mut activity := (← trace.get).reverse
                       if mp4Requested && !(activity.any fun item => item.startsWith "Generated " && item.toLower.contains ".mp4") then

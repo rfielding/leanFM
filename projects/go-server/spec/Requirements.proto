@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package project.requirements;
+
+// First-draft observable event/message schema for the GoServer project.
+// Transport: WebSocket primary; HTTP+JSON admin endpoints. KGS wire protocol
+// omitted for this draft (can be added later).
+
+option go_package = "project/requirements";
+
+// Identifiers
+message PlayerId { string id = 1; }
+message AccountId { string id = 1; }
+message GameId { string id = 1; }
+
+// Authentication/session messages
+message LoginRequest { string username = 1; string password = 2; }
+message LoginResponse { AccountId account = 1; string token = 2; int64 expires_unix = 3; }
+message Logout { AccountId account = 1; string token = 2; }
+message SessionInfo { AccountId account = 1; string token = 2; int64 expires_unix = 3; }
+
+// Board sizes supported
+enum BoardSize {
+  BOARD_UNKNOWN = 0;
+  BOARD_19 = 1;
+  BOARD_13 = 2;
+  BOARD_9  = 3;
+}
+
+// Up to 6 players supported in first iteration
+enum Color {
+  COLOR_UNKNOWN = 0;
+  BLACK = 1;
+  WHITE = 2;
+  RED = 3;
+  GREEN = 4;
+  BLUE = 5;
+  YELLOW = 6;
+}
+
+// Rule variants (first-draft defaults)
+enum RuleVariant {
+  RULE_UNSPECIFIED = 0;
+  RULE_NPLAYER_DEFAULT = 1; // cyclic turns among alive players; captures remove stones; last-man-standing; Tromp-Taylor on unanimous pass/resign
+}
+
+// Generic envelope for client -> server commands
+message ClientCommand {
+  oneof payload {
+    LoginRequest login = 1;
+    CreateGame create_game = 2;
+    JoinGame join_game = 3;
+    MakeMove make_move = 4;
+    Pass pass = 5;
+    Resign resign = 6;
+    ChatMessage chat = 7;
+    Subscribe subscribe = 8; // subscribe to game events / board updates
+  }
+}
+
+message CreateGame {
+  string name = 1;
+  BoardSize board = 2;
+  RuleVariant rules = 3;
+  uint32 max_players = 4; // cap enforced by server (<=6)
+  double komi = 5; // optional
+  bool rated = 6; // whether game affects ratings
+}
+
+message JoinGame {
+  GameId game_id = 1;
+  string player_name = 2;
+  AccountId account = 3; // optional
+}
+
+message MakeMove {
+  GameId game_id = 1;
+  PlayerId player = 2;
+  // coordinate: x (file), y (rank). 0-based; (0,0) is a1.
+  uint32 x = 3;
+  uint32 y = 4;
+  bool pass = 5; // if true, x/y ignored
+}
+
+message Pass { GameId game_id = 1; PlayerId player = 2; }
+message Resign { GameId game_id = 1; PlayerId player = 2; }
+
+message ChatMessage {
+  GameId game_id = 1;
+  PlayerId player = 2;
+  string text = 3;
+}
+
+message Subscribe {
+  GameId game_id = 1;
+  // optional filters: full board, move-only, chat-only
+  bool board_updates = 2;
+  bool move_events = 3;
+  bool chat = 4;
+}
+
+// Server -> client events
+message ServerEvent {
+  oneof payload {
+    LoginResponse login_response = 1;
+    GameCreated created = 2;
+    Joined joined = 3;
+    GameState state = 4;
+    MoveEvent move = 5;
+    ChatEvent chat = 6;
+    ErrorEvent error = 7;
+  }
+}
+
+message GameCreated { GameId game_id = 1; string name = 2; }
+message Joined { GameId game_id = 1; PlayerId player = 2; Color assigned = 3; }
+
+// Minimal board state representation for events. Implementations may send
+// compact diffs or full board snapshots depending on subscription.
+message Cell { Color owner = 1; }
+message BoardSnapshot {
+  BoardSize size = 1;
+  repeated Cell cells = 2; // row-major, size*size entries
+}
+
+message GameState {
+  GameId game_id = 1;
+  repeated PlayerInfo players = 2; // in turn order
+  BoardSnapshot board = 3;
+  int32 to_move_index = 4; // index into players[] of who is next
+  bool finished = 5;
+}
+
+message PlayerInfo {
+  PlayerId id = 1;
+  string name = 2;
+  Color color = 3;
+  bool alive = 4; // eliminated players removed from rotation but retained in record
+  // Per-player capture totals: how many stones of each color this player has captured.
+  // Repeated instead of a map so callers can enumerate captured color counts.
+  message CaptureCount { Color color = 1; uint32 count = 2; }
+  repeated CaptureCount captures = 5;
+}
+
+message MoveEvent {
+  GameId game_id = 1;
+  PlayerId player = 2;
+  uint32 x = 3;
+  uint32 y = 4;
+  bool pass = 5;
+  repeated BoardChange changes = 6; // optional incremental changes (captures)
+  // Aggregate counts of stones removed (captured) by this move, per color.
+  repeated PlayerInfo.CaptureCount captures = 7;
+}
+
+message BoardChange { uint32 x = 1; uint32 y = 2; Color before = 3; Color after = 4; }
+
+message ChatEvent { GameId game_id = 1; PlayerId player = 2; string text = 3; }
+
+message ErrorEvent { string code = 1; string message = 2; }
+
+// Administrative / persistence messages
+message AccountRecord { AccountId id = 1; string username = 2; }
+message SGFExport { GameId game_id = 1; string sgf = 2; }
+
+// End of first-draft proto schema.

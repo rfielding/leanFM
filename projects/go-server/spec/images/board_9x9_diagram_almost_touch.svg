@@ -1,0 +1,149 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  9x9 full-board diagram (illustrative pattern).
+  Stones sized to 'almost-touch' for grid spacing = 60 px -> radius = 29 px (diameter 58 px).
+  Centers: (60,60) .. (540,540) stepping by 60 px. Stones placed in a 3-color repeating pattern: (i+j)%3 -> black, white, red.
+  Project path: spec/images/board_9x9_diagram_almost_touch.svg
+-->
+<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600' aria-labelledby='title desc' role='img'>
+  <title id='title'>9x9 Go diagram — illustrative pattern, stones almost-touch</title>
+  <desc id='desc'>Centers at 60..540 with spacing 60. Stones radius 29 px.</desc>
+  <style>
+    .board{fill:#f7f2eb}
+    .panel{fill:#DEB887}
+    .line{stroke:#333;stroke-width:2}
+    .black{fill:#000}
+    .white{fill:#fff;stroke:#333;stroke-width:1}
+    .red{fill:#E53935}
+    .label{font-family:sans-serif;font-size:12px;fill:#222}
+  </style>
+  <rect x='0' y='0' width='600' height='600' class='board'/>
+  <rect x='60' y='60' width='480' height='480' class='panel'/>
+  <!-- grid lines (9 intersections -> 9 vertical, 9 horizontal lines) -->
+  <g fill='none' stroke='#333' stroke-width='2'>
+    <line x1='60' y1='60' x2='60' y2='540' />
+    <line x1='120' y1='60' x2='120' y2='540' />
+    <line x1='180' y1='60' x2='180' y2='540' />
+    <line x1='240' y1='60' x2='240' y2='540' />
+    <line x1='300' y1='60' x2='300' y2='540' />
+    <line x1='360' y1='60' x2='360' y2='540' />
+    <line x1='420' y1='60' x2='420' y2='540' />
+    <line x1='480' y1='60' x2='480' y2='540' />
+    <line x1='540' y1='60' x2='540' y2='540' />
+
+    <line x1='60' y1='60' x2='540' y2='60' />
+    <line x1='60' y1='120' x2='540' y2='120' />
+    <line x1='60' y1='180' x2='540' y2='180' />
+    <line x1='60' y1='240' x2='540' y2='240' />
+    <line x1='60' y1='300' x2='540' y2='300' />
+    <line x1='60' y1='360' x2='540' y2='360' />
+    <line x1='60' y1='420' x2='540' y2='420' />
+    <line x1='60' y1='480' x2='540' y2='480' />
+    <line x1='60' y1='540' x2='540' y2='540' />
+  </g>
+
+  <!-- star points for 9x9 (typically at 3rd & 7th lines and center) -->
+  <g fill='#333'>
+    <circle cx='180' cy='180' r='3' />
+    <circle cx='180' cy='420' r='3' />
+    <circle cx='420' cy='180' r='3' />
+    <circle cx='420' cy='420' r='3' />
+    <circle cx='300' cy='300' r='3' />
+  </g>
+
+  <!-- stones: 3-color repeating pattern. radius = 29 px (almost-touch) -->
+  <g id='stones'>
+    <!-- row 1 -->
+    <circle cx='60' cy='60' r='29' class='black' />
+    <circle cx='120' cy='60' r='29' class='white' />
+    <circle cx='180' cy='60' r='29' class='red' />
+    <circle cx='240' cy='60' r='29' class='black' />
+    <circle cx='300' cy='60' r='29' class='white' />
+    <circle cx='360' cy='60' r='29' class='red' />
+    <circle cx='420' cy='60' r='29' class='black' />
+    <circle cx='480' cy='60' r='29' class='white' />
+    <circle cx='540' cy='60' r='29' class='red' />
+    <!-- row 2 -->
+    <circle cx='60' cy='120' r='29' class='white' />
+    <circle cx='120' cy='120' r='29' class='red' />
+    <circle cx='180' cy='120' r='29' class='black' />
+    <circle cx='240' cy='120' r='29' class='white' />
+    <circle cx='300' cy='120' r='29' class='red' />
+    <circle cx='360' cy='120' r='29' class='black' />
+    <circle cx='420' cy='120' r='29' class='white' />
+    <circle cx='480' cy='120' r='29' class='red' />
+    <circle cx='540' cy='120' r='29' class='black' />
+    <!-- row 3 -->
+    <circle cx='60' cy='180' r='29' class='red' />
+    <circle cx='120' cy='180' r='29' class='black' />
+    <circle cx='180' cy='180' r='29' class='white' />
+    <circle cx='240' cy='180' r='29' class='red' />
+    <circle cx='300' cy='180' r='29' class='black' />
+    <circle cx='360' cy='180' r='29' class='white' />
+    <circle cx='420' cy='180' r='29' class='red' />
+    <circle cx='480' cy='180' r='29' class='black' />
+    <circle cx='540' cy='180' r='29' class='white' />
+    <!-- row 4 -->
+    <circle cx='60' cy='240' r='29' class='black' />
+    <circle cx='120' cy='240' r='29' class='white' />
+    <circle cx='180' cy='240' r='29' class='red' />
+    <circle cx='240' cy='240' r='29' class='black' />
+    <circle cx='300' cy='240' r='29' class='white' />
+    <circle cx='360' cy='240' r='29' class='red' />
+    <circle cx='420' cy='240' r='29' class='black' />
+    <circle cx='480' cy='240' r='29' class='white' />
+    <circle cx='540' cy='240' r='29' class='red' />
+    <!-- row 5 -->
+    <circle cx='60' cy='300' r='29' class='white' />
+    <circle cx='120' cy='300' r='29' class='red' />
+    <circle cx='180' cy='300' r='29' class='black' />
+    <circle cx='240' cy='300' r='29' class='white' />
+    <circle cx='300' cy='300' r='29' class='red' />
+    <circle cx='360' cy='300' r='29' class='black' />
+    <circle cx='420' cy='300' r='29' class='white' />
+    <circle cx='480' cy='300' r='29' class='red' />
+    <circle cx='540' cy='300' r='29' class='black' />
+    <!-- row 6 -->
+    <circle cx='60' cy='360' r='29' class='red' />
+    <circle cx='120' cy='360' r='29' class='black' />
+    <circle cx='180' cy='360' r='29' class='white' />
+    <circle cx='240' cy='360' r='29' class='red' />
+    <circle cx='300' cy='360' r='29' class='black' />
+    <circle cx='360' cy='360' r='29' class='white' />
+    <circle cx='420' cy='360' r='29' class='red' />
+    <circle cx='480' cy='360' r='29' class='black' />
+    <circle cx='540' cy='360' r='29' class='white' />
+    <!-- row 7 -->
+    <circle cx='60' cy='420' r='29' class='black' />
+    <circle cx='120' cy='420' r='29' class='white' />
+    <circle cx='180' cy='420' r='29' class='red' />
+    <circle cx='240' cy='420' r='29' class='black' />
+    <circle cx='300' cy='420' r='29' class='white' />
+    <circle cx='360' cy='420' r='29' class='red' />
+    <circle cx='420' cy='420' r='29' class='black' />
+    <circle cx='480' cy='420' r='29' class='white' />
+    <circle cx='540' cy='420' r='29' class='red' />
+    <!-- row 8 -->
+    <circle cx='60' cy='480' r='29' class='white' />
+    <circle cx='120' cy='480' r='29' class='red' />
+    <circle cx='180' cy='480' r='29' class='black' />
+    <circle cx='240' cy='480' r='29' class='white' />
+    <circle cx='300' cy='480' r='29' class='red' />
+    <circle cx='360' cy='480' r='29' class='black' />
+    <circle cx='420' cy='480' r='29' class='white' />
+    <circle cx='480' cy='480' r='29' class='red' />
+    <circle cx='540' cy='480' r='29' class='black' />
+    <!-- row 9 -->
+    <circle cx='60' cy='540' r='29' class='red' />
+    <circle cx='120' cy='540' r='29' class='black' />
+    <circle cx='180' cy='540' r='29' class='white' />
+    <circle cx='240' cy='540' r='29' class='red' />
+    <circle cx='300' cy='540' r='29' class='black' />
+    <circle cx='360' cy='540' r='29' class='white' />
+    <circle cx='420' cy='540' r='29' class='red' />
+    <circle cx='480' cy='540' r='29' class='black' />
+    <circle cx='540' cy='540' r='29' class='white' />
+  </g>
+
+  <text x='60' y='585' class='label'>Diagram: 9x9 intersections, stones radius=29 px (almost-touch), centers at 60..540 by 60 px.</text>
+</svg>

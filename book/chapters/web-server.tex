@@ -247,6 +247,25 @@ The MCP interface does not replace the book. It makes the book, specifications,
 and live checker discoverable in a standard agent conversation so that a new
 session need not reconstruct the method from chat history.
 
+\subsection{Local credentials and visible billing identity}
+
+Account records are runtime state, not source. By default the salted password
+verifier, password-encrypted provider key, private conversations, and session
+state remain beneath the operator's local \texttt{data/} directory. Git ignores
+that directory and continuous integration rejects any tracked file below it.
+Checked-in example projects therefore contain books, specifications, source,
+tests, and deliberately selected media, but never user logins or credentials.
+
+An authenticated header continuously identifies the provider, model,
+credential reference, and a one-way fingerprint of the exact key used for the
+next request. It also shows provider-reported session tokens used and tokens
+remaining in a finite local safety budget; exhaustion stops another request.
+That number is not an OpenAI credit or dollar balance, because the model
+response does not expose such a balance. The UI says so explicitly. A provider
+project spend cap remains the authoritative protection against monetary
+overrun, while per-response token counts remain attached to the request that
+incurred them.
+
 \subsection{Cursor as an agent client}
 
 A Cursor subscription connects to LeanFM as an authenticated agent client, not

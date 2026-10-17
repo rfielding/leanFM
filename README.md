@@ -161,6 +161,16 @@ removal can delete them from the working tree. Restore the backup afterward;
 can migrate its credential on password login, but a revoked key remains revoked.
 
 Credential protection requires `python3 -m pip install -r scripts/chatui_requirements.txt`.
+
+Account state is local by default. `data/` contains salted password verifiers,
+encrypted provider credentials, private conversations, and user-owned projects;
+it is ignored by Git, and CI rejects any tracked path below it. The checked-in
+`projects/blank-leanfm-webserver` and `projects/go-server` examples are sanitized
+project roots and contain no login or API credential material. While logged in,
+the header shows the active provider/model, a one-way key fingerprint, and the
+used and remaining local session-token safety budget. This is deliberately not
+presented as an OpenAI dollar balance: configure a provider-project spend cap as
+the authoritative monetary guardrail.
 Use a unique login password; phishing or reuse of that password defeats
 password-derived encryption if an attacker also obtains the credential files.
 Passwords are salted PBKDF2 verifiers. API keys use AES-256-GCM with a separate

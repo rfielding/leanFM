@@ -1,0 +1,13 @@
+{
+  "id": "go-server-example",
+  "title": "GoServer n-player Go example",
+  "root": ".",
+  "status": "candidate-requirements",
+  "book": "book/main.pdf",
+  "dark_book": "book/main-dark.pdf",
+  "requirements": "spec/Requirements.lean",
+  "protobuf": "spec/Requirements.proto",
+  "implementation": "spec/Implementation.lean",
+  "tasks": "spec/tasks.json",
+  "note": "Sanitized project snapshot: no account, password verifier, API credential, session bearer, or private conversation is included. Requirements and implementation gates remain unaccepted."
+}

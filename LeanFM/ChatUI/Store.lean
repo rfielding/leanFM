@@ -139,6 +139,11 @@ structure UnlockedSession where
   token : String
   username : String
   apiKey : String
+  provider : String
+  credentialRef : String
+  credentialFingerprint : String
+  tokensUsed : Nat
+  tokenBudget : Nat
   expiresAt : Nat
 
 initialize unlockedSessions : IO.Ref (List UnlockedSession) ← IO.mkRef []
@@ -173,6 +178,35 @@ def sessionCredential? (token username : String) : IO (Option String) := do
     if session.token == token && session.username == username && session.expiresAt > now then
       some session.apiKey else none
 
+structure SessionBilling where
+  provider : String
+  credentialRef : String
+  credentialFingerprint : String
+  tokensUsed : Nat
+  tokenBudget : Nat
+deriving Repr
+
+def sessionBilling? (token username : String) : IO (Option SessionBilling) := do
+  let now ← IO.monoMsNow
+  return (← unlockedSessions.get).findSome? fun session =>
+    if session.token == token && session.username == username && session.expiresAt > now then
+      some { provider := session.provider, credentialRef := session.credentialRef
+           , credentialFingerprint := session.credentialFingerprint
+           , tokensUsed := session.tokensUsed, tokenBudget := session.tokenBudget }
+    else none
+
+def recordSessionUsage (token username : String) (tokens : Nat) : IO Unit := do
+  unlockedSessions.modify fun sessions => sessions.map fun session =>
+    if session.token == token && session.username == username then
+      { session with tokensUsed := session.tokensUsed + tokens }
+    else session
+
+def keyFingerprint (key : String) : IO String := do
+  let out ← IO.Process.output { cmd := "openssl", args := #["dgst", "-sha256"] } (some key)
+  if out.exitCode != 0 then throw <| IO.userError "cannot fingerprint provider credential"
+  let digest := out.stdout.trimAscii.toString.splitOn " " |>.getLast?.getD ""
+  pure (digest.take 12).toString
+
 def createAccount (username password provider apiKey : String) : IO (Except String String) := do
   if !safeId username then return .error "Username must contain only letters, digits, '-' or '_'."
   if password.length < 8 then return .error "Password must contain at least 8 characters."
@@ -196,10 +230,16 @@ def login (username password : String) : IO (Except String String) := do
   if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
   let key ← try unlockCredential username password catch _ =>
     return .error "The stored API key could not be unlocked."
+  let account ← readOr (root ++ "/account.json") ""
+  let provider := (jsonStringValue? account "provider").getD "openai"
+  let fingerprint ← try keyFingerprint key catch _ => return .error "The stored API key could not be identified safely."
+  let tokenBudget := ((← IO.getEnv "LEANFM_SESSION_TOKEN_BUDGET").bind String.toNat?).getD 1000000
   let token ← randomHex 32
   let now ← IO.monoMsNow
   unlockedSessions.modify fun sessions =>
-    { token, username, apiKey := key, expiresAt := now + 8 * 60 * 60 * 1000 } ::
+    { token, username, apiKey := key, provider, credentialRef := "default"
+    , credentialFingerprint := fingerprint, tokensUsed := 0, tokenBudget
+    , expiresAt := now + 8 * 60 * 60 * 1000 } ::
       ((sessions.filter (fun session => session.expiresAt > now)).take 255)
   pure (.ok token)
 
@@ -301,7 +341,8 @@ def projectListJson (username : String) : IO String := do
       let name := (jsonStringValue? manifest "display_name").getD entry.fileName
       items := ("{\"project_id\":\"" ++ entry.fileName ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\",\"read_only\":false}") :: items
   let workspace := "{\"project_id\":\"leanfm-workspace\",\"display_name\":\"LeanFM\",\"read_only\":true,\"kind\":\"workspace\"}"
-  pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace]) ++ "]")
+  let goServer := "{\"project_id\":\"go-server-example\",\"display_name\":\"GoServer example\",\"read_only\":true,\"kind\":\"example\"}"
+  pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace, goServer]) ++ "]")
 
 def deleteProject (username projectId confirmation : String) : IO (Except String Unit) := do
   if !safeId projectId then return .error "Invalid project identifier."
