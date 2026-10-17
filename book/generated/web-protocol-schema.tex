@@ -217,6 +217,7 @@ message ChatResponseRendered {
   uint64 output_tokens = 7;
   uint64 context_window_tokens = 8;
   string usage_warning = 9;
+  uint64 response_time_ms = 10;
 }
 message ChatTurnFailed { string request_id = 1; string reason = 2; }
 
