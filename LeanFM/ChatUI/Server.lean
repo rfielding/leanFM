@@ -110,14 +110,14 @@ def emptyProjectTasksJson (source : String) : String :=
   "{\"source\":\"" ++ jsonEscape source ++
   "\",\"accepted\":false,\"validation\":{\"errors\":0,\"warnings\":0},\"tasks\":[]}"
 
-def appendConversation (root role text : String) (usage : Option Provider.Completion := none) : IO Unit := do
+def appendConversation (root role text : String) (usage : Option Provider.Completion := none) (responseTimeMs : Nat := 0) : IO Unit := do
   let path := root ++ "/conversations/main.log"
   let old ← readOr path ""
   let messageId ← randomHex 12
   let usageFields := match usage with
     | none => "0|0|0|0"
     | some u => s!"{u.inputTokens}|{u.cachedInputTokens}|{u.outputTokens}|{u.totalTokens}"
-  writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "\n")
+  writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "|" ++ toString responseTimeMs ++ "\n")
 
 def truncateText (value : String) (limit : Nat) : String :=
   if value.length ≤ limit then value else String.ofList (value.toList.take limit) ++ "\n[truncated]\n"
@@ -346,6 +346,17 @@ def conversationJson (root : String) : IO String := do
   for line in body.splitOn "\n" do
     let legacyId := "legacy-" ++ toString lineNumber
     match line.splitOn "|" with
+    | [messageId, role, encoded, input, cached, output, total, responseTimeMs] =>
+        try
+          let text ← base64Decode encoded
+          let usage := if role == "assistant" then
+              ",\"usage\":{\"input_tokens\":" ++ input ++ ",\"cached_input_tokens\":" ++ cached ++
+              ",\"output_tokens\":" ++ output ++ ",\"total_tokens\":" ++ total ++ ",\"context_window_tokens\":" ++
+              contextWindow ++ "}"
+            else ""
+          let responseTime := if role == "assistant" then ",\"response_time_ms\":" ++ responseTimeMs else ""
+          messages := ("{\"message_id\":\"" ++ jsonEscape messageId ++ "\",\"role\":\"" ++ role ++ "\",\"text\":\"" ++ jsonEscape text ++ "\"" ++ responseTime ++ usage ++ "}") :: messages
+        catch _ => pure ()
     | [messageId, role, encoded, input, cached, output, total] =>
         try
           let text ← base64Decode encoded
@@ -541,6 +552,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
           | ["chat"], "POST" =>
               let prompt := (formValue? (requestBody request) "prompt").getD ""
               if prompt.trimAscii.isEmpty then return some (errorResponse 400 "A prompt is required.")
+              let responseStarted ← IO.monoMsNow
               match ← credentialKey username request with
               | .error message => return some (errorResponse 409 message)
               | .ok key =>
@@ -567,12 +579,14 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let figureLabels ← saveMermaidArtifacts root responseText
                       let responseText := if figureLabels.isEmpty then responseText else
                         responseText ++ "\n\nFigures created: " ++ String.intercalate ", " figureLabels ++ "."
-                      appendConversation root "assistant" responseText (some answer)
+                      let responseFinished ← IO.monoMsNow
+                      let responseTimeMs := responseFinished - responseStarted
+                      appendConversation root "assistant" responseText (some answer) responseTimeMs
                       let context := (← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS").getD "128000"
                       return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"book_updated\":false,\"usage\":{\"input_tokens\":" ++
                         toString answer.inputTokens ++ ",\"cached_input_tokens\":" ++ toString answer.cachedInputTokens ++
                         ",\"output_tokens\":" ++ toString answer.outputTokens ++ ",\"total_tokens\":" ++ toString answer.totalTokens ++
-                        ",\"context_window_tokens\":" ++ context ++ "}}\n"))
+                        ",\"context_window_tokens\":" ++ context ++ "},\"response_time_ms\":" ++ toString responseTimeMs ++ "}\n"))
           | _, _ => pure ()
   | _ => pure ()
   pure none
