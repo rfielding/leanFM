@@ -58,7 +58,14 @@ def billingJson (username request : String) : IO String := do
 
 def authorizedProjectRoot? (username projectId : String) : IO (Option String) := do
   if projectId == "leanfm-workspace" then
-    if ← (fp "book/main.pdf").pathExists then return some "." else return none
+    -- A generated PDF may be absent while the book is rebuilding or after a
+    -- failed LaTeX pass.  The checked-in project's identity must therefore
+    -- depend on stable source markers, not on a disposable build output.
+    if (← (fp "lakefile.toml").pathExists) &&
+        (← (fp "LeanFM/LLMGenerated/Requirements.lean").pathExists) &&
+        (← (fp "book/main.tex").pathExists) then
+      return some "."
+    else return none
   if projectId == "go-server-example" then
     if ← (fp "projects/go-server/project.json").pathExists then return some "projects/go-server" else return none
   if !safeId projectId then return none
