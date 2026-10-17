@@ -178,6 +178,20 @@ do not represent application code as the final implementation.
 
 ## One-shot the actual code
 
+Before generating or editing implementation source, perform an explicit
+security critique of the accepted design and implementation mapping. Treat
+security requirements primarily as forbidden observable behavior: write
+durable `MUST NOT` constraints for unauthorized access, cross-tenant or
+cross-project disclosure, secret persistence or logging, path and symlink
+escape, injection, unsafe media or executable content, unbounded resource use,
+request confusion, replay, privilege expansion, and fail-open behavior wherever
+they apply. Name trust boundaries, protected assets, attacker capabilities,
+abuse cases, and the intended failure response. Map every applicable negative
+requirement to an implementation control and at least one negative test or proof
+obligation. If a material threat has no accepted mitigation, return to the
+implementation-specification gate; do not generate source and do not silently
+invent policy. A security critique does not itself accept either gate.
+
 Once both specifications are explicitly accepted, perform one implementation
 pass using all of these inputs together:
 
