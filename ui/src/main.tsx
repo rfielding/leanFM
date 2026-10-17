@@ -6,6 +6,7 @@ import React, {
   useState
 } from "react";
 import {createRoot} from "react-dom/client";
+import katex from "katex";
 import {ApiError, api, formRequest} from "./api";
 import type {GrammarExpr, Message, Project, Task} from "./types";
 
@@ -15,6 +16,35 @@ type Phase = "chat" | "book" | "grammar" | "tasks" | "source";
 type QuestionOption = {value: string; label: string; recommended?: boolean};
 type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: QuestionOption[]};
 type QueuedPrompt = {id: string; text: string};
+
+type MathFragment = {source: string; display: boolean; raw: string};
+
+function delimitedMath(fragment: string): MathFragment | undefined {
+  if (fragment.startsWith("$$") && fragment.endsWith("$$")) return {source: fragment.slice(2, -2), display: true, raw: fragment};
+  if (fragment.startsWith("\\[") && fragment.endsWith("\\]")) return {source: fragment.slice(2, -2), display: true, raw: fragment};
+  if (fragment.startsWith("\\(") && fragment.endsWith("\\)")) return {source: fragment.slice(2, -2), display: false, raw: fragment};
+  if (fragment.startsWith("$") && fragment.endsWith("$")) return {source: fragment.slice(1, -1), display: false, raw: fragment};
+  return undefined;
+}
+
+function LatexText({text}: {text: string}) {
+  const codeAndProse = text.split(/(```[\s\S]*?```)/g);
+  return <>{codeAndProse.map((section, sectionIndex) => {
+    if (section.startsWith("```") && section.endsWith("```")) return <React.Fragment key={`code-${sectionIndex}`}>{section}</React.Fragment>;
+    const fragments = section.split(/(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([^\n]+?\\\)|\$(?!\s)[^$\n]+?(?<!\s)\$)/g);
+    return <React.Fragment key={`text-${sectionIndex}`}>{fragments.map((fragment, fragmentIndex) => {
+      const math = delimitedMath(fragment);
+      if (!math) return <React.Fragment key={fragmentIndex}>{fragment}</React.Fragment>;
+      try {
+        const html = katex.renderToString(math.source, {displayMode: math.display, output: "mathml", throwOnError: true, trust: false, strict: "warn"});
+        const Tag = math.display ? "div" : "span";
+        return <Tag key={fragmentIndex} className={math.display ? "chat-math-display" : "chat-math-inline"} dangerouslySetInnerHTML={{__html: html}} />;
+      } catch (error) {
+        return <code key={fragmentIndex} className="chat-math-error" title={(error as Error).message}>{math.raw}</code>;
+      }
+    })}</React.Fragment>;
+  })}</>;
+}
 
 function closeTruncatedJson(source: string): string {
   const open: string[] = [];
@@ -152,9 +182,9 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
   const internetImages = remoteImages(answerText);
   const pieces = answerText.split(/```mermaid\s*\n?/i);
   const first = pieces.shift() || "";
-  return <article className={`message ${message.role}`}>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text">{first}{pieces.map((part, i) => {
+  return <article className={`message ${message.role}`}>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text"><LatexText text={first} />{pieces.map((part, i) => {
     const end = part.indexOf("```");
-    return end < 0 ? <React.Fragment key={i}>{`\`\`\`mermaid\n${part}`}</React.Fragment> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" />{part.slice(end + 3)}</React.Fragment>;
+    return end < 0 ? <LatexText key={i} text={`\`\`\`mermaid\n${part}`} /> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" /><LatexText text={part.slice(end + 3)} /></React.Fragment>;
   })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{videos.map(path => <figure className="chat-inline-figure" key={path}><video controls preload="metadata" src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}><a href={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}>Open {path}</a></video><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} answeredIds={answeredIds} disabled={disabled} onAnswer={onAnswer} />}{message.response_time_ms !== undefined && <div className="response-time">Response time: {(message.response_time_ms / 1000).toFixed(1)} s</div>}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }

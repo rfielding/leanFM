@@ -118,6 +118,74 @@ serve the complete browser workflow, start without a platform API key, isolate
 concurrent users and their credentials, and pass its conformance tests without
 Codex being present.
 
+\section{Build, runtime, and publication dependency inventory}
+\label{sec:dependency-inventory}
+
+The repository does not treat one developer's workstation as an implicit build
+input. The machine-readable \texttt{toolDependencyInventory} in
+\texttt{LeanFM/ChatUI/Requirements.lean} is normative; this section is its
+human review view. ``Required'' means that the default check, server, book, or
+stakeholder-media path invokes the dependency. ``Optional'' means the named
+workflow is outside the default product build. JavaScript versions are fixed by
+\texttt{ui/package-lock.json}, Python ranges by
+\texttt{scripts/chatui\_requirements.txt}, and Lean and Go by
+\texttt{lean-toolchain} and the top-level \texttt{Makefile}.
+
+\begin{description}[style=nextline]
+\item[Lean and Lake --- required.] Lean 4.28.0 from
+  \texttt{lean-toolchain} compiles the DSL, validators, renderers, tests, and
+  server. Lake resolves modules and drives native linking.
+\item[C toolchain and libc headers --- required.] A compiler and linker
+  supported by Lean 4.28 link the native executables emitted by Lean.
+\item[GNU Make, Bash, and coreutils --- required.] The workflows use
+  \texttt{timeout}, \texttt{cmp}, \texttt{cp}, \texttt{tar}, \texttt{gzip},
+  and \texttt{sha256sum} for bounded commands and verified tool downloads.
+\item[Node and npm --- required.] Node 22.12 or newer and \texttt{npm ci}
+  type-check and bundle the React UI. The lockfile fixes React, ReactDOM,
+  TypeScript, Vite, KaTeX, and their transitive packages.
+\item[Python packages --- required.] Python 3.12 or newer with Cryptography
+  41--50, Pillow 10--12, and Protobuf 5--6 protects retained keys, performs
+  protobuf round trips and reductions, and generates animated GIFs.
+\item[Protocol Buffers compiler --- required.] A \texttt{protoc} supporting
+  proto3 and Python output generates the temporary byte-round-trip binding.
+  Target-language generators are declared separately when needed.
+\item[Graphviz --- required.] \texttt{dot} with PNG output rasterizes generated
+  DOT diagrams during \texttt{make diagrams}.
+\item[TeX Live and pdfLaTeX --- required.] Install the base, recommended, extra,
+  pictures, and recommended-font collections. The source uses \texttt{lmodern},
+  TeX Gyre Heros, geometry, microtype, xcolor, graphicx, tagpdf, AMS math,
+  mathtools, booktabs, longtable, enumitem, listings, natbib, imakeidx, TikZ,
+  pgfplots, hyperref, and cleveref.
+\item[Go --- required.] Go 1.23.12, whose archive hash is fixed by the Makefile,
+  compiles and tests the repository Go/Paxos target.
+\item[Bubblewrap --- required on the Linux server.] \texttt{bwrap} with
+  namespace and bind-mount support runs project-local Python/Pillow GIF
+  generators without network access.
+\item[FFmpeg --- required for shareable video.] FFmpeg with \texttt{libx264}
+  H.264 and AAC encoders converts GIF/WebM to validated MP4, adds fast-start
+  metadata, and muxes optional narration.
+\item[curl, ripgrep, and iproute2 --- required for development checks.]
+  \texttt{curl}, \texttt{rg}, and \texttt{ss} exercise HTTP contracts, select
+  validation evidence, and identify the local server.
+\item[Java and TLA+ tools --- optional.] A Java runtime and the checksummed
+  \texttt{tla2tools.jar} 1.7.4 run the separate \texttt{tla-check} example.
+\item[Manim and Piper --- optional.] A project-local video Python environment
+  and selected voice model render explanatory videos and synthetic narration.
+\item[Target compilers and SDKs --- conditional.] The accepted
+  \texttt{ImplementationSpec} inventories every compiler, code generator, SDK,
+  runtime, native library, and version bound before source generation.
+\end{description}
+
+An agent can reconcile this declaration with the current host and report each
+item as satisfied, missing, incompatible, or optional. Installing or upgrading
+host software remains an explicit bounded action; inspection alone never
+silently mutates the machine. DuckDB is not currently invoked by a checked
+LeanFM target and is therefore not a build dependency. If a DuckDB-backed
+reducer is accepted, its CLI or library, binding, storage format, and version
+contract must first enter this inventory and the implementation mapping. The
+same rule prevents a locally installed compiler or media program from silently
+becoming part of the product contract.
+
 \section{Local and server-hosted references}
 
 The local commands are authoritative when no server is running. A running

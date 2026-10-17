@@ -237,6 +237,10 @@ button { cursor: pointer; }
 .composer textarea:disabled, .composer button:disabled { opacity: .55; cursor: not-allowed; }
 .chat-diagram { margin-top: 12px; padding: 14px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .chat-diagram svg { display: block; max-width: 100%; height: auto; margin: auto; }
+.chat-math-inline { display: inline-block; margin: 0 .08em; color: var(--text); }
+.chat-math-display { max-width: 100%; margin: 12px 0; padding: 10px 14px; overflow-x: auto; border-left: 3px solid var(--blue); background: #071016; color: var(--text); text-align: center; }
+.chat-math-inline math, .chat-math-display math { font-size: 1.08em; }
+.chat-math-error { color: #ffd37a; background: #3c2d08; border-radius: 4px; padding: 1px 4px; }
 .chat-inline-figure { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .chat-inline-figure img { display: block; width: auto; max-width: 100%; max-height: 720px; margin: auto; border-radius: 6px; }
 .chat-inline-figure video { display: block; width: 100%; max-height: 75vh; margin: auto; border-radius: 6px; background: #000; }

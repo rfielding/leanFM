@@ -2,6 +2,34 @@ import LeanFM.Artifacts
 
 namespace LeanFM.ChatUI.Requirements
 
+/-- A reviewable inventory entry for software needed by a named LeanFM workflow. -/
+structure ToolDependency where
+  id : String
+  required : Bool
+  workflow : String
+  versionContract : String
+  purpose : String
+deriving Repr
+
+def toolDependencyInventory : List ToolDependency :=
+  [ { id := "lean", required := true, workflow := "build check serve", versionContract := "leanprover/lean4:v4.28.0 from lean-toolchain", purpose := "compile the LeanFM DSL validators renderers and server" }
+  , { id := "lake-and-native-toolchain", required := true, workflow := "build check serve", versionContract := "Lake supplied by Lean plus a supported C compiler linker and libc development files", purpose := "resolve Lean modules and link native executables" }
+  , { id := "gnu-make-bash-coreutils", required := true, workflow := "all Makefile workflows", versionContract := "GNU Make Bash and coreutils including timeout cmp cp tar gzip and sha256sum", purpose := "orchestrate bounded reproducible commands" }
+  , { id := "node-npm", required := true, workflow := "ui-build chatui-check", versionContract := "Node >= 22.12 and npm ci from ui/package-lock.json", purpose := "compile and bundle the React TypeScript UI" }
+  , { id := "react-ui-packages", required := true, workflow := "ui-build", versionContract := "exact transitive versions locked by ui/package-lock.json", purpose := "provide React ReactDOM TypeScript Vite and KaTeX MathML rendering" }
+  , { id := "python", required := true, workflow := "check chatui-check media", versionContract := "Python >= 3.12 with scripts/chatui_requirements.txt", purpose := "run credential crypto protobuf round trips reducers and sandboxed Pillow GIF generation" }
+  , { id := "protobuf-compiler", required := true, workflow := "make validate", versionContract := "protoc supporting proto3 and Python output", purpose := "generate the temporary Python binding used for byte round-trip testing" }
+  , { id := "graphviz", required := true, workflow := "make diagrams and make check", versionContract := "Graphviz dot with PNG output", purpose := "rasterize generated DOT diagrams" }
+  , { id := "tex-live", required := true, workflow := "make book", versionContract := "pdfLaTeX with the packages named in book/main.tex", purpose := "build book/main.pdf and book/main-dark.pdf" }
+  , { id := "go", required := true, workflow := "paxos-check and Go target generation", versionContract := "Go 1.23.12 from the checked Makefile download contract", purpose := "compile and test the repository Go target" }
+  , { id := "bubblewrap", required := true, workflow := "workspace_run_gif_generator", versionContract := "Linux bwrap with namespace and bind-mount support", purpose := "run project-local Pillow animation generators without network access" }
+  , { id := "ffmpeg", required := true, workflow := "workspace_transcode_mp4 and narrated video", versionContract := "ffmpeg with libx264 H.264 and AAC encoders", purpose := "produce validated shareable MP4 media" }
+  , { id := "curl-ripgrep-iproute2", required := true, workflow := "http-check stop validation filters", versionContract := "curl rg and ss", purpose := "exercise HTTP routes select expected diagnostics and locate the development server" }
+  , { id := "java-tla-tools", required := false, workflow := "tla-toolchain tla-check", versionContract := "Java runtime plus tla2tools 1.7.4 with the Makefile SHA-256", purpose := "run optional TLA+ examples" }
+  , { id := "manim-piper", required := false, workflow := "video video-narrated kerberos-video", versionContract := "project-local video Python environment with Manim and Piper plus a selected voice model", purpose := "render optional explanatory videos and narration" }
+  , { id := "target-compilers", required := false, workflow := "accepted implementation target", versionContract := "each ImplementationSpec must name and version every additional compiler generator SDK and runtime before source generation", purpose := "prevent an accepted target from depending on undeclared build machinery" }
+  ]
+
 def protoSource : String := include_str "Requirements.proto"
 
 def framing : MessageFraming :=
@@ -498,6 +526,9 @@ def taskConstraints : List TaskConstraint :=
   , where_ "missing_requested_artifact_is_not_success" "argue_requirements" "an explicit MP4 request deterministically selects the most recently referenced project GIF or WebM and invokes the MP4 transcoder even when the model does not; ffmpeg runs without inherited Lean or Elan LD_LIBRARY_PATH and LD_PRELOAD values; the turn cannot display SUCCESS unless it generated and validated an actual MP4, while no source failure to start ffmpeg or a nonzero ffmpeg diagnostic is shown verbatim as FAIL instead of continuing an interrogation loop"
   , where_ "large_media_supports_http_ranges" "markerboard" "authenticated project MP4 WebM PDF GIF PNG and JPEG responses advertise byte ranges; a valid single closed open-ended or suffix Range returns exactly 206 with Content-Range and the requested bytes, an unsatisfiable or multi-range request returns 416 with the complete representation length, and authorization plus project-root confinement is identical for full and partial responses"
   , where_ "chat_rendering_uses_available_width" "markerboard" "the chat response workspace uses nearly all horizontal space remaining beside project navigation, up to a generous large-screen bound, so interaction diagrams state machines images video canvas animations traces and question forms are not confined to a narrow prose column; compact user message bubbles remain visually distinct"
+  , where_ "logic_and_mathematics_render_as_latex" "argue_requirements" "when symbolic notation makes logic mathematics probability or temporal logic clearer, assistant responses use explicit inline or display LaTeX delimiters and the browser renders them as accessible mathematics; fenced code remains literal and invalid formulas remain visibly recoverable rather than disappearing"
+  , where_ "tool_dependencies_are_complete_and_scoped" "develop_project_specification" "the durable toolDependencyInventory and dependency chapter enumerate every executable language package compiler generator and document or media tool invoked by a checked repository workflow, distinguish default requirements from optional workflows, state version contracts and purposes, and require every accepted implementation target to add its compiler SDK generator runtime and system-library dependencies before source generation"
+  , where_ "dependency_reconciliation_is_actionable" "develop_project_specification" "an agent can compare the declared inventory with executable and package versions on the current host, report satisfied missing incompatible and optional items by workflow, and offer explicit bounded installation or upgrade commands without silently mutating the host or treating an optional target dependency as globally required"
   , where_ "all_queues_are_finite_and_blocking" "inspect_task_model" "every actor instance has declared positive inbound and outbound capacities; sending to a full queue sleeps without mutation until capacity is available; blocking receive from an empty queue sleeps until a message exists"
   , where_ "closed_queues_drain_to_completion" "inspect_task_model" "close is idempotent and forbids every later push; already-buffered messages remain readable in order; blocked senders wake with rejection; receivers report closed only after the buffer is empty; queue iteration terminates exactly at closed and empty"
   , where_ "terminal_events_backpoint_to_start" "inspect_task_model" "each duration or byte-delta measurement names a start event and terminal event in the same session and task; the terminal event prior_ids contains the start event_id; reducers subtract the paired timestamps or encoded byte counts rather than relying on adjacency"
