@@ -169,6 +169,14 @@ function ProjectWorkspace({project}: {project: Project}) {
 
 function App() {
   const [user, setUser] = useState<string | null>(null), [checkingSession, setCheckingSession] = useState(true), [projects, setProjects] = useState<Project[]>([]), [selected, setSelected] = useState<string | null>(null), [authVersion, setAuthVersion] = useState(0), [newName, setNewName] = useState("");
+  const [fontScale, setFontScale] = useState(() => {
+    const stored = Number(window.localStorage.getItem("leanfm:font-scale") || "1");
+    return Number.isFinite(stored) ? Math.min(1.4, Math.max(.8, stored)) : 1;
+  });
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-scale", String(fontScale));
+    window.localStorage.setItem("leanfm:font-scale", String(fontScale));
+  }, [fontScale]);
   async function load() { const me = await api<{username: string}>("/api/me"); const data = await api<{projects: Project[]}>("/api/projects"); setUser(me.username); setProjects(data.projects || []); setSelected(current => (data.projects || []).some(p => p.project_id === current) ? current : (data.projects || []).find(p => !p.read_only)?.project_id || null); }
   useEffect(() => { setCheckingSession(true); load().catch(() => setUser(null)).finally(() => setCheckingSession(false)); }, [authVersion]);
   useEffect(() => {
@@ -181,7 +189,7 @@ function App() {
   const project = projects.find(p => p.project_id === selected);
   async function create(event: FormEvent) { event.preventDefault(); const result = await api<{project_id: string}>("/api/projects", formRequest({display_name: newName})); setNewName(""); await load(); setSelected(result.project_id); }
   async function remove(item: Project) { const confirmation = prompt(`Type ${item.display_name} to permanently delete it:`); if (confirmation === null) return; await api(`/api/projects/${item.project_id}`, {method: "DELETE", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: new URLSearchParams({confirmation}).toString()}); if (selected === item.project_id) setSelected(null); await load(); }
-  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><span>{user}</span></div></aside>{project ? <ProjectWorkspace key={`${user}:${project.project_id}`} project={project} /> : <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}</div>;
+  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" disabled={fontScale >= 1.4} onClick={() => setFontScale(value => Math.min(1.4, Number((value + .1).toFixed(1))))}>＋</button></div><span>{user}</span></div></aside>{project ? <ProjectWorkspace key={`${user}:${project.project_id}`} project={project} /> : <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
