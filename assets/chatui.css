@@ -196,7 +196,7 @@ button { cursor: pointer; }
 .message-delete:hover { color: var(--danger); background: #3b2020; }
 .usage { font-size: 12px; color: var(--muted); margin-top: 8px; }
 .result-badge { display: inline-block; margin: 0 0 10px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 900; letter-spacing: .06em; }
-.result-badge.success { color: #052e16; background: #4ade80; }
+.result-badge.success { color: #fff; background: #15803d; }
 .result-badge.fail { color: #fff; background: #dc2626; }
 .result-badge.warn { color: #111; background: #facc15; }
 .operational-trace { margin-top: 14px; color: var(--muted); }
