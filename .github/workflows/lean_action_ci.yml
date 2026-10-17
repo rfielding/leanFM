@@ -20,6 +20,13 @@ jobs:
         with:
           python-version: '3.12'
       - run: python3 -m pip install -r scripts/chatui_requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install React UI dependencies
+        run: npm ci --prefix ui
       - name: Reject tracked runtime account data
         run: |
           tracked_data="$(git ls-files -- data/)"
