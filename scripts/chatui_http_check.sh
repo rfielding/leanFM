@@ -138,6 +138,12 @@ rg -q 'make a state machine' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/
 rg -q '"sent_at_ms":[0-9]' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 ! rg -q 'keep this separate' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 
+curl -fsS -b "$cookie_b" --data-urlencode 'prompt=implement the server now' \
+  "$base_url/api/projects/$project_b/chat" >"$test_root/empty-source-implementation.json"
+rg -q 'status.*fail' "$test_root/empty-source-implementation.json"
+rg -q 'no files exist beneath the selected project.*source/' "$test_root/empty-source-implementation.json"
+test ! -e "$test_root/data/accounts/second_user/projects/$project_b/source/main.go"
+
 echo 'ok: ChatUI bootstrap, usage, artifacts, and concurrent session isolation'
 
 # Requirement: password verification precedes migration; copied sessions cannot spend.

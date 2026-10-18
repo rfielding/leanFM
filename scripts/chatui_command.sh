@@ -37,7 +37,11 @@ case "$operation" in
     ;;
   check-go)
     test "$#" -eq 1
-    exec timeout 300 go -C "$1" test ./...
+    go_root="$1"
+    if [[ -f "$1/source/go.mod" ]]; then
+      go_root="$1/source"
+    fi
+    exec timeout 300 go -C "$go_root" test ./...
     ;;
   generate-gif)
     test "$#" -eq 3
