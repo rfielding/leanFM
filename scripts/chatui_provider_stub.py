@@ -31,7 +31,29 @@ class Handler(BaseHTTPRequestHandler):
                 "output_tokens": 7,
                 "total_tokens": 18,
             }
-            if "TEST_WRITE_SOURCE" in request_text and "previous_response_id" not in request:
+            if "You repair a complete pdfLaTeX document" in request_text and "TEST_REPAIR_BOOK" in request_text:
+                edit = {
+                    "reply": "Internal repair housekeeping must not replace the requested result.",
+                    "book_source": (
+                        "\\documentclass{book}\n"
+                        "\\begin{document}\n"
+                        "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK\n"
+                        "\\end{document}\n"
+                    ),
+                }
+                body = {"output_text": json.dumps(edit), "usage": usage}
+            elif "TEST_REPAIR_BOOK" in request_text:
+                edit = {
+                    "reply": "Requested MCP animation remains visible after internal repair.",
+                    "book_source": (
+                        "\\documentclass{book}\n"
+                        "\\begin{document}\n"
+                        "Broken durable book: A & B. TEST_REPAIR_BOOK\n"
+                        "\\end{document}\n"
+                    ),
+                }
+                body = {"output_text": json.dumps(edit), "usage": usage}
+            elif "TEST_WRITE_SOURCE" in request_text and "previous_response_id" not in request:
                 body = {
                     "id": "source-write-response",
                     "output": [{

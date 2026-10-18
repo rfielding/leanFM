@@ -27,16 +27,25 @@ def curlConfigEscape (value : String) : String :=
     if c == '\\' then "\\\\" else if c == '"' then "\\\""
     else if c == '\n' then "\\n" else if c == '\r' then "" else c.toString
 
+def providerTimeoutSeconds : IO Nat := do
+  let configured := (← IO.getEnv "LEANFM_PROVIDER_TIMEOUT_SECONDS").bind String.toNat?
+  pure (max 30 (min 900 (configured.getD 300)))
+
 def apiCall (method url key payload : String) : IO (Nat × String) := do
+  let timeoutSeconds ← providerTimeoutSeconds
   let dataLine := if payload.isEmpty then "" else "data = \"" ++ curlConfigEscape payload ++ "\"\n"
   let config := "url = \"" ++ url ++ "\"\nrequest = \"" ++ method ++ "\"\n" ++
     "header = \"Authorization: Bearer " ++ curlConfigEscape key ++ "\"\n" ++
     (if payload.isEmpty then "" else "header = \"Content-Type: application/json\"\n") ++
     dataLine ++ "silent\nshow-error\n"
   let out ← IO.Process.output {
-    cmd := "curl", args := #["--max-time", "120", "--config", "-", "--write-out", "\n__LEANFM_STATUS__%{http_code}"]
+    cmd := "curl", args := #["--connect-timeout", "15", "--max-time", toString timeoutSeconds,
+      "--config", "-", "--write-out", "\n__LEANFM_STATUS__%{http_code}"]
   } (some config)
-  if out.exitCode != 0 then throw <| IO.userError "model provider request failed"
+  if out.exitCode == 28 then
+    throw <| IO.userError ("provider_timeout:" ++ toString timeoutSeconds)
+  if out.exitCode != 0 then
+    throw <| IO.userError ("provider_transport_exit:" ++ toString out.exitCode)
   match out.stdout.splitOn "\n__LEANFM_STATUS__" with
   | [body, status] => pure (status.trimAscii.toString.toNat?.getD 0, body)
   | _ => pure (0, out.stdout)
@@ -150,7 +159,21 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
       let result ← runTool call.name call.arguments
       outputs := toolOutputJson call.callId result :: outputs
     completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool nextUsage (remaining - 1)
-  catch _ => pure (.error "OpenAI workspace-agent request failed before a response was received.")
+  catch error =>
+    let detail := error.toString
+    let completedSteps := 16 - remaining
+    if detail.contains "provider_timeout:" then
+      let timeoutSeconds ← providerTimeoutSeconds
+      pure (.error ("OpenAI workspace-agent request timed out after " ++
+        toString timeoutSeconds ++
+        " seconds; " ++ toString completedSteps ++ " of at most 16 tool steps completed. " ++
+        "The timed-out paid request was not retried automatically."))
+    else if detail.contains "provider_transport_exit:" then
+      pure (.error ("OpenAI workspace-agent transport failed before a response was received; " ++
+        toString completedSteps ++ " of at most 16 tool steps completed. The paid request was not retried automatically."))
+    else
+      pure (.error ("OpenAI workspace-agent failed before a response was received; " ++
+        toString completedSteps ++ " of at most 16 tool steps completed."))
 
 def completeAgent (key instructions prompt : String) (runTool : ToolRunner) : IO (Except String Completion) := do
   let model := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"

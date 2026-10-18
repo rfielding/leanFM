@@ -22,6 +22,10 @@ cleanup() {
     echo "--- chat responses ---" >&2
     test -f "$test_root/chat-a.json" && cat "$test_root/chat-a.json" >&2 || true
     test -f "$test_root/chat-b.json" && cat "$test_root/chat-b.json" >&2 || true
+    test -f "$test_root/book-update.json" && cat "$test_root/book-update.json" >&2 || true
+    test -f "$test_root/book-repair.json" && cat "$test_root/book-repair.json" >&2 || true
+    test -f "$test_root/source-write.json" && cat "$test_root/source-write.json" >&2 || true
+    test -f "$test_root/empty-source-implementation.json" && cat "$test_root/empty-source-implementation.json" >&2 || true
   fi
   if [[ -n "${server_pid:-}" ]]; then kill "$server_pid" 2>/dev/null || true; fi
   if [[ -n "${provider_pid:-}" ]]; then kill "$provider_pid" 2>/dev/null || true; fi
@@ -36,6 +40,7 @@ provider_pid=$!
 LEANFM_DATA_ROOT="$test_root/data" \
 LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
 LEANFM_LLM_MODEL="test-model" \
+LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 \
 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
@@ -144,6 +149,13 @@ rg -q '"book_updated":true' "$test_root/book-update.json"
 rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
 test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
 
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPAIR_BOOK show the requested MCP animation while repairing the book' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/book-repair.json"
+rg -q '"book_updated":true' "$test_root/book-repair.json"
+rg -q 'Requested MCP animation remains visible after internal repair' "$test_root/book-repair.json"
+! rg -q 'Internal repair housekeeping' "$test_root/book-repair.json"
+rg -Fq 'A \& B' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+
 curl -fsS -b "$cookie_b" --data-urlencode 'prompt=TEST_WRITE_SOURCE implement the server now' \
   "$base_url/api/projects/$project_b/chat" >"$test_root/source-write.json"
 rg -q 'status.*success' "$test_root/source-write.json"
@@ -183,7 +195,7 @@ test -f "$test_root/data/accounts/rfielding/credentials/default.json"
 test "$(stat -c %a "$test_root/data/accounts/rfielding/credentials/default.json")" = 600
 kill "$server_pid"
 wait "$server_pid" || true
-LEANFM_DATA_ROOT="$test_root/data" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_PORT="$server_port" \
+LEANFM_DATA_ROOT="$test_root/data" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 for _ in $(seq 1 50); do

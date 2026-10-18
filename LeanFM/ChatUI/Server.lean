@@ -359,13 +359,18 @@ def buildProjectBook (root : String) : IO (Except String Unit) := do
   if !(← (fp (root ++ "/book/main.tex")).pathExists) then return .error "book/main.tex does not exist in this project."
   cleanProjectBookIntermediates root
   let realBook ← IO.FS.realPath bookPath
-  let out ← IO.Process.output {
-    cmd := "bwrap"
-    args := #["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--ro-bind", "/usr", "/usr",
-      "--ro-bind", "/bin", "/bin", "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
-      "--ro-bind", "/etc", "/etc", "--ro-bind", "/var/lib/texmf", "/var/lib/texmf", "--proc", "/proc", "--dev", "/dev",
-      "--tmpfs", "/tmp", "--bind", realBook.toString, "/work", "--chdir", "/work",
-      "--setenv", "HOME", "/tmp", "--", "/usr/bin/make"] }
+  let testOnlyUnsandboxed := (← IO.getEnv "LEANFM_TEST_UNSANDBOXED_BOOK_BUILD") == some "1" &&
+    root.startsWith "/tmp/leanfm-chatui-check."
+  let out ← if testOnlyUnsandboxed then
+      IO.Process.output { cmd := "/usr/bin/make", args := #["-C", realBook.toString] }
+    else
+      IO.Process.output {
+        cmd := "bwrap"
+        args := #["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--ro-bind", "/usr", "/usr",
+          "--ro-bind", "/bin", "/bin", "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
+          "--ro-bind", "/etc", "/etc", "--ro-bind", "/var/lib/texmf", "/var/lib/texmf", "--proc", "/proc", "--dev", "/dev",
+          "--tmpfs", "/tmp", "--bind", realBook.toString, "/work", "--chdir", "/work",
+          "--setenv", "HOME", "/tmp", "--", "/usr/bin/make"] }
   if out.exitCode == 0 then return .ok ()
   return .error ("Book build failed:\n" ++ truncateText (out.stdout ++ "\n" ++ out.stderr) 10000)
 
@@ -410,24 +415,30 @@ def applyBookChatEdit (key root : String) (answer : Provider.Completion) : IO Ap
   | .ok _ => return AppliedChatResult.mk edit.reply answer true none
   | .error diagnostic =>
       writeAtomic path previous
-      match ← repairBookEdit key edit.source diagnostic with
-      | .error repairError =>
-          return AppliedChatResult.mk edit.reply answer false
-            (some ("The proposed book revision did not build and was rolled back. " ++
-              buildErrorSummary diagnostic ++ " Automatic repair failed: " ++ repairError))
-      | .ok (repaired, repairCompletion) =>
-          if repaired.source.length > 2000000 then
-            return AppliedChatResult.mk repaired.reply (addCompletionUsage answer repairCompletion repaired.reply) false
-              (some "The repaired book revision exceeded the 2 MB editor limit and was not applied.")
-          writeAtomic path repaired.source
-          match ← buildProjectBook root with
-          | .ok _ =>
-              return AppliedChatResult.mk repaired.reply (addCompletionUsage answer repairCompletion repaired.reply) true none
-          | .error repairedDiagnostic =>
-              writeAtomic path previous
-              return AppliedChatResult.mk repaired.reply (addCompletionUsage answer repairCompletion repaired.reply) false
-                (some ("The proposed book revision and its automatic repair did not build, so the original book was restored. " ++
-                  buildErrorSummary repairedDiagnostic))
+      let mut candidate := edit.source
+      let mut latestDiagnostic := diagnostic
+      let mut combined := answer
+      for _ in List.range 3 do
+        match ← repairBookEdit key candidate latestDiagnostic with
+        | .error repairError =>
+            return AppliedChatResult.mk edit.reply combined false
+              (some ("The proposed book revision did not build and was rolled back. " ++
+                buildErrorSummary latestDiagnostic ++ " Automatic syntax repair failed: " ++ repairError))
+        | .ok (repaired, repairCompletion) =>
+            combined := addCompletionUsage combined repairCompletion edit.reply
+            if repaired.source.length > 2000000 then
+              return AppliedChatResult.mk edit.reply combined false
+                (some "The repaired book revision exceeded the 2 MB editor limit and was not applied.")
+            candidate := repaired.source
+            writeAtomic path candidate
+            match ← buildProjectBook root with
+            | .ok _ => return AppliedChatResult.mk edit.reply combined true none
+            | .error repairedDiagnostic =>
+                latestDiagnostic := repairedDiagnostic
+                writeAtomic path previous
+      return AppliedChatResult.mk edit.reply combined false
+        (some ("The proposed book revision remained invalid after three automatic syntax-repair attempts, so the original book was restored. " ++
+          buildErrorSummary latestDiagnostic))
 
 def conversationContext (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
