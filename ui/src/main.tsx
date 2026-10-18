@@ -191,6 +191,7 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
 
 function Chat({project}: {project: Project}) {
   const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [queue, setQueue] = useState<QueuedPrompt[]>([]), [busy, setBusy] = useState(false), [elapsedSeconds, setElapsedSeconds] = useState(0), [error, setError] = useState(""), [errorTrace, setErrorTrace] = useState("");
+  const conversationEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!busy) { setElapsedSeconds(0); return; }
     const started = Date.now();
@@ -200,6 +201,9 @@ function Chat({project}: {project: Project}) {
   }, [busy]);
   const elapsed = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
   const answeredIds = new Set(messages.flatMap(message => [...message.text.matchAll(/Question ID:\s*([A-Za-z0-9._-]+)/g)].map(match => match[1])));
+  useEffect(() => {
+    window.requestAnimationFrame(() => conversationEndRef.current?.scrollIntoView({block: "end"}));
+  }, [messages.length, error]);
   async function load(signal?: AbortSignal) { const data = await api<{messages: Message[]}>(`/api/projects/${project.project_id}/conversation`, {}, signal); setMessages(data.messages || []); }
   useEffect(() => { const controller = new AbortController(); if (!project.read_only) load(controller.signal).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id]);
   function enqueue(text: string, clearComposer = false) {
@@ -222,7 +226,7 @@ function Chat({project}: {project: Project}) {
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
-    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p>{errorTrace && <details><summary>Development trace</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy trace</button><pre>{errorTrace}</pre></details>}</div>}</div>
+    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p>{errorTrace && <details><summary>Development trace</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy trace</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
     <div className="composer-wrap">{busy && <div className="agent-running" role="status"><span className="agent-running-dot" />Agent running <time>{elapsed}</time></div>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={!prompt.trim()}>Send</button></form></div></section>;
 }
 
