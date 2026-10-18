@@ -489,6 +489,7 @@ def statusText : Nat -> String
   | 404 => "Not Found"
   | 409 => "Conflict"
   | 413 => "Content Too Large"
+  | 415 => "Unsupported Media Type"
   | 416 => "Range Not Satisfiable"
   | 422 => "Unprocessable Content"
   | 405 => "Method Not Allowed"

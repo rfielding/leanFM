@@ -269,6 +269,28 @@ function Specification({project, view}: {project: Project; view: "grammar" | "ta
   return <section className="pane diagrams-pane"><header className="diagrams-header"><h1>Tasks</h1><div className="diagram-kind">{[["interaction","Productions · interaction"],["state","States · state machine"],["properties","Properties · CTL"],["constraints","where_ · guards"]].map(([id,label]) => <button key={id} className={kind === id ? "active" : ""} onClick={() => setKind(id)}>{label}</button>)}</div></header><div className="diagrams-workbench"><nav className="diagram-task-list vertical-tabs">{tasks.map(t => <button key={t.id} className={`diagram-task ${selected === t.id ? "active" : ""}`} onClick={() => setSelected(t.id)}><strong>{t.title}</strong><span>{t.transitions.length} productions · {t.states.length} states</span></button>)}</nav><main className="diagram-stage"><h2>{task?.title}</h2>{task && (kind === "interaction" || kind === "state") && <Mermaid source={kind === "interaction" ? task.interaction_mermaid : task.state_mermaid} />}{task && kind === "properties" && task.properties.map(p => <article className="task-clause" key={p.name}><strong>{p.mode} · {p.name}</strong><pre>{p.expression}</pre></article>)}{task && kind === "constraints" && task.constraints.map((c,i) => <article className="task-clause" key={i}><strong>where_</strong><pre>{c}</pre></article>)}</main></div></section>;
 }
 
+function Source({project}: {project: Project}) {
+  const [files, setFiles] = useState<string[]>([]), [selected, setSelected] = useState(""), [source, setSource] = useState(""), [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    api<{files: string[]}>(`/api/projects/${project.project_id}/source`, {}, controller.signal).then(result => {
+      const next = result.files || [];
+      setFiles(next); setSelected(next[0] || ""); setSource(""); setError("");
+    }).catch(e => { if (e.name !== "AbortError") setError(e.message); });
+    return () => controller.abort();
+  }, [project.project_id]);
+  useEffect(() => {
+    if (!selected) return;
+    const controller = new AbortController();
+    const path = selected.split("/").map(encodeURIComponent).join("/");
+    api<{source: string}>(`/api/projects/${project.project_id}/source/${path}`, {}, controller.signal).then(result => { setSource(result.source); setError(""); }).catch(e => { if (e.name !== "AbortError") { setSource(""); setError(e.message); } });
+    return () => controller.abort();
+  }, [project.project_id, selected]);
+  if (error && !files.length) return <div className="empty"><p className="error">{error}</p></div>;
+  if (!files.length) return <div className="empty"><div><h1>Source</h1><p>No implementation source exists yet. Ask for implementation after accepting both the requirements and implementation specification; LeanFM will ask focused blocking questions if those inputs are incomplete.</p></div></div>;
+  return <section className="pane source-pane"><nav className="source-files vertical-tabs">{files.map(file => <button key={file} className={selected === file ? "active" : ""} onClick={() => setSelected(file)}>{file}</button>)}</nav><main className="source-view"><header><strong>{selected}</strong></header>{error ? <p className="error">{error}</p> : <pre><code>{source}</code></pre>}</main></section>;
+}
+
 function ProjectWorkspace({project}: {project: Project}) {
   const [phase, setPhase] = useState<Phase>("chat");
   const [billing, setBilling] = useState<Billing | null>(null);
@@ -281,7 +303,7 @@ function ProjectWorkspace({project}: {project: Project}) {
   }, []);
   const percentRemaining = billing?.token_budget ? Math.round(100 * billing.tokens_remaining / billing.token_budget) : 0;
   return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Early</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Intermediate</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Late</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget, not an OpenAI dollar balance. The provider project spend limit is authoritative."><strong>{billing.provider} · key {billing.key_fingerprint}</strong><span>{billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce a provider project spend cap</small></div>}</header>
-    {phase === "chat" && <Chat project={project} />}{phase === "book" && <Book project={project} />}{phase === "grammar" && <Specification project={project} view="grammar" />}{phase === "tasks" && <Specification project={project} view="tasks" />}{phase === "source" && <div className="empty"><div><h1>Source</h1><p>Repository files, diffs, builds, tests, and logs will appear here.</p></div></div>}</main>;
+    {phase === "chat" && <Chat project={project} />}{phase === "book" && <Book project={project} />}{phase === "grammar" && <Specification project={project} view="grammar" />}{phase === "tasks" && <Specification project={project} view="tasks" />}{phase === "source" && <Source project={project} />}</main>;
 }
 
 function App() {

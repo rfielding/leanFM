@@ -182,6 +182,13 @@ button { cursor: pointer; }
 .task-clause { border: 1px solid var(--line); border-radius: 9px; background: #102431; padding: 14px 16px; }
 .task-clause strong { display: block; color: var(--accent); margin-bottom: 7px; }
 .task-clause pre { margin: 0; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.55 ui-monospace, monospace; }
+.source-pane { display: grid; grid-template-columns: minmax(220px, 28%) minmax(0, 1fr); min-height: 0; overflow: hidden; }
+.source-files { overflow: auto; padding: 12px; border-right: 1px solid var(--line); }
+.source-files button { width: 100%; margin-bottom: 5px; border: 1px solid transparent; border-radius: 7px; padding: 8px 10px; color: var(--muted); background: transparent; text-align: left; overflow-wrap: anywhere; }
+.source-files button.active { border-color: var(--action); color: #fff; background: #12395a; }
+.source-view { min-width: 0; overflow: auto; }
+.source-view header { position: sticky; top: 0; padding: 11px 16px; border-bottom: 1px solid var(--line); background: var(--panel); font: .85rem/1.4 ui-monospace, monospace; }
+.source-view pre { min-height: 100%; margin: 0; padding: 18px; overflow: visible; white-space: pre; font: .85rem/1.5 ui-monospace, monospace; }
 
 .chat-pane { display: flex; flex-direction: column; overflow: hidden; }
 .chat-drawer { position: fixed; z-index: 15; top: 56px; right: 0; bottom: 0; width: min(620px, 48vw); background: var(--bg); border-left: 1px solid var(--line); box-shadow: -14px 0 38px #0009; }

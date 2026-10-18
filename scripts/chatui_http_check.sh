@@ -77,6 +77,7 @@ rg -q '"tokens_remaining":1000000' <<<"$me_json"
 projects_json="$(curl -fsS -b "$cookie_a" $base_url/api/projects)"
 rg -q '"project_id":"leanfm-workspace".*"read_only":true' <<<"$projects_json"
 rg -q '"project_id":"go-server-example".*"read_only":true' <<<"$projects_json"
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/leanfm-workspace/source/.git/config")" = 404
 
 test -f "$test_root/data/accounts/rfielding/credentials/default.json"
 test ! -e "$test_root/data/accounts/rfielding/credentials/default.b64"
@@ -100,6 +101,10 @@ test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirement
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.proto"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Implementation.lean"
 test -d "$test_root/data/accounts/rfielding/projects/$project_a/events"
+printf '%s\n' 'package main' > "$test_root/data/accounts/rfielding/projects/$project_a/source/main.go"
+curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/source" | rg -q '"files":\["main.go"\]'
+curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/source/main.go" | rg -q '"source":"package main\\n"'
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/source/main.go")" = 404
 
 book_url="$base_url/api/projects/$project_a/book/main.pdf"
 book_size="$(wc -c < "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf")"

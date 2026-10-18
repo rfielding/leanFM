@@ -509,6 +509,20 @@ def artifactListJson (root : String) : IO String := do
         "\",\"kind\":\"mermaid\",\"status\":\"current\",\"revision\":1}") :: artifacts
   pure ("{\"artifacts\":[" ++ String.intercalate "," artifacts.reverse ++ "]}\n")
 
+def sourceFileNames (root projectId : String) : IO (List String) := do
+  let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server-example" then root else root ++ "/source"
+  if !(← (fp sourceRoot).pathExists) then return []
+  let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["list-files", sourceRoot] }
+  if out.exitCode != 0 then return []
+  let sourcePrefix := sourceRoot ++ "/"
+  return out.stdout.splitOn "\n" |>.filterMap (fun path =>
+    if path.isEmpty then none
+    else if path.startsWith sourcePrefix then some (path.drop sourcePrefix.length).toString
+    else some path) |>.mergeSort
+
+def sourceFilesJson (root projectId : String) : IO String := do
+  pure ("{\"files\":" ++ jsonStrings (← sourceFileNames root projectId) ++ "}\n")
+
 def saveMermaidArtifacts (root responseText : String) : IO (List String) := do
   let chunks := responseText.splitOn "```mermaid"
   let existing := (← entries (root ++ "/artifacts")).toList.filter fun entry =>
@@ -647,6 +661,21 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               | .ok _ => return some (jsonResponse 200 "{\"built\":true}\n")
               | .error message => return some (errorResponse 422 message)
           | ["artifacts"], "GET" => return some (jsonResponse 200 (← artifactListJson root))
+          | ["source"], "GET" => return some (jsonResponse 200 (← sourceFilesJson root projectId))
+          | "source" :: fileParts, "GET" =>
+              let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server-example" then root else root ++ "/source"
+              let relative := String.intercalate "/" (fileParts.map urlDecode)
+              if !(← sourceFileNames root projectId).contains relative then
+                return some (errorResponse 404 "Source file not found.")
+              let realSourceRoot ← IO.FS.realPath (fp sourceRoot)
+              match ← resolveWorkspacePath realSourceRoot.toString relative with
+              | .error _ => return some (errorResponse 404 "Source file not found.")
+              | .ok sourcePath =>
+                  try
+                    let source ← IO.FS.readFile (fp sourcePath)
+                    if source.length > 2000000 then return some (errorResponse 413 "Source file exceeds the 2 MB viewer limit.")
+                    return some (jsonResponse 200 ("{\"path\":\"" ++ jsonEscape relative ++ "\",\"source\":\"" ++ jsonEscape source ++ "\"}\n"))
+                  catch _ => return some (errorResponse 415 "Source file is not readable UTF-8 text.")
           | ["chat"], "POST" =>
               let prompt := (formValue? (requestBody request) "prompt").getD ""
               if prompt.trimAscii.isEmpty then return some (errorResponse 400 "A prompt is required.")
@@ -660,6 +689,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   let launchRoot := launchRoot.toString
                   let contextualPrompt := "Selected LeanFM project root: " ++ root ++
                     "\nAuthorized source workspace: " ++ launchRoot ++ "\n\n" ++
+                    "Implementation-result policy: an explicit implementation request must either write and check the complete implementation beneath the selected project's source/ directory after both acceptance gates and the security critique, or return focused structured leanfm-questions naming the missing gate or material decision. Never claim implementation success while source/ is empty.\n\n" ++
                     (if prior.isEmpty then "" else "Project conversation so far:\n\n" ++ prior ++ "\n\n") ++
                     (if figureContext.isEmpty then "" else figureContext ++ "\n\n") ++
                     "Current user message:\n" ++ prompt
