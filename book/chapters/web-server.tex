@@ -247,7 +247,133 @@ The MCP interface does not replace the book. It makes the book, specifications,
 and live checker discoverable in a standard agent conversation so that a new
 session need not reconstruct the method from chat history.
 
-\subsection{Local credentials and visible billing identity}
+\section{A tour of the LeanFM chat}
+
+The Chat phase is the ordinary front door to a project.  Select one project in
+the left rail and then select \textbf{Chat}; a newly selected project owns a
+newly mounted conversation, book, grammar, task and source workspace.  Nothing
+from a previously selected project is a fallback.  The header identifies the
+provider, model and non-secret key fingerprint that will be billed, while the
+per-turn usage line reports the tokens attributed to that response.  Every
+message has its own visible timestamp.  While a turn is active, an incrementing
+timer distinguishes a slow operation from a stopped browser request, and more
+prompts may be placed in the project-local FIFO without interrupting the active
+one.
+
+Chat is deliberately earlier than Book, Grammar, Tasks and Source.  A
+stakeholder can begin with ordinary language, images, rough pseudocode or a
+question about an unfamiliar protocol.  The response may revise the project
+book, ask one focused blocking question, derive a view from the current
+requirements, or create a scratch visual explanation.  It must not pretend
+that an attractive explanation has passed either acceptance gate.
+
+\subsection{Example: ask to see MCP move}
+
+The following is a useful prompt because it asks for both an explanation and a
+specific interaction technique.  It is reproduced as entered; spelling does
+not need to be polished before the model can act.
+
+\begin{quote}\ttfamily
+i want to understand what MCP looks like. make me an animation that i can step
+forwrd or back in, showing messages passing back and forth in dynamic
+interaction diagrams. visualized right here in the chat ui
+\end{quote}
+
+Here \emph{MCP} means the Model Context Protocol, not MQTT and not a generic
+message broker.  A faithful first tour uses a host or MCP client and an MCP
+server as lifelines.  When the selected example invokes a real downstream tool,
+that tool may be a third lifeline; otherwise it is omitted.  A representative
+walk is:
+
+\begin{enumerate}
+  \item the client sends a JSON-RPC \texttt{initialize} request declaring its
+  protocol version and capabilities;
+  \item the server returns its supported protocol version, capabilities and
+  identity;
+  \item the client sends \texttt{notifications/initialized};
+  \item the client sends \texttt{tools/list} and the server returns the tools it
+  exposes;
+  \item the client sends \texttt{tools/call} with a tool name and arguments;
+  and
+  \item the server returns the correlated JSON-RPC result or error.
+\end{enumerate}
+
+This is the same kind of interaction shown durably in
+\cref{fig:mcp-interaction}, but projected into a small review instrument.  The
+inline view should show the participating lifelines, one selected message in
+motion, its method or result label, and a detail panel containing the request
+ID, direct cause, arguments or result summary.  \textbf{Forward} completes the
+next event; \textbf{Back} restores the immediately preceding prefix;
+\textbf{Play/Pause} advances or suspends automatic stepping;
+\textbf{Restart} returns to the empty prefix; and a scrubber may select any
+event boundary directly.  Keyboard left and right arrows are convenient
+equivalents when focus is inside the animation.
+
+Stepping backward does not send an inverse protocol message.  It changes which
+prefix of the same immutable example trace is visible.  At step $k$, the canvas
+shows exactly events $e_1,\ldots,e_k$; advancing exposes $e_{k+1}$ and stepping
+back hides $e_k$.  Request and response remain correlated by their JSON-RPC
+identifier, while LeanFM's richer event representation can separately retain a
+direct causal pointer and predecessor links.  Thus the animation may explain
+causality without falsely claiming that temporal adjacency alone pairs a
+response with a request.
+
+\subsection{What should appear in the response}
+
+The chat response should contain a short explanation followed by the working
+animation itself.  Its HTML and JavaScript are transport material, not the
+answer: they must not fill the message as pages of source code.  LeanFM expects
+an actual \texttt{leanfm-canvas} fenced block and removes that block from the
+prose before placing its canvas and self-contained script in an isolated frame.
+The frame has no network access, cannot navigate the parent, and may load no
+external library or image.  Stop and Restart controls outside the frame allow
+the stakeholder to halt an expensive or confusing animation.
+
+There is one bounded repair for a common provider formatting error.  If the
+model literally writes ``fenced leanfm-canvas'' and immediately follows it with
+exactly one canvas element and one script element, the client recovers that
+pair into the same sandbox instead of displaying it as noise.  This exception
+does not turn chat into a general HTML renderer: unmarked or arbitrary HTML is
+escaped and remains inert text.  A response that shows the raw program instead
+of an animation is a rendering failure, not SUCCESS.  Resend preserves the
+original user request while allowing the corrected renderer and prompt contract
+to try the turn again.
+
+The animation is initially a scratch explanation.  It answers ``what would this
+interaction look like?'' quickly, but it is not yet a generated view of accepted
+requirements.  If the discussion changes the project design, retain the
+originating prompt, bind the selected messages to a named scenario, update the
+typed grammar and regenerate the interaction diagram from that specification.
+Only that provenance-bearing derived view can serve as evidence at the
+requirements gate.  If stakeholders instead want to share the exact motion,
+promote the chosen canvas revision to a project-owned GIF or MP4 with fixed
+frame timing and serve that media inline.
+
+\subsection{From conversation to implementation artifacts}
+
+After the visual argument becomes precise, the same project proceeds through
+the horizontal phases rather than turning chat into a source-code dump:
+
+\begin{description}
+  \item[Book] records the durable design argument and embeds or references the
+  views that explain it.
+  \item[Grammar and Tasks] expose the accepted task grammar, task-local
+  interaction diagrams, state machines, temporal properties and guards.
+  \item[Source] lists the actual implementation files, generated bindings,
+  build files and tests beneath the selected project's \texttt{source/}
+  directory.
+\end{description}
+
+An implementation request after both explicit gates and the security critique
+must create and check those files.  Chat then reports only a concise artifact
+and validation summary.  Pasting a Go program into a conversational response
+while leaving Source empty is not an implementation result and is rejected as
+FAIL.  If a gate or material decision is still missing, the response instead
+presents focused selectable questions.  This separation keeps the conversation
+useful for stakeholder argument while making the project directory, rather than
+the transcript, the durable engineering product.
+
+\section{Local credentials and visible billing identity}
 
 Account records are runtime state, not source. By default the salted password
 verifier, password-encrypted provider key, private conversations, and session
@@ -266,7 +392,7 @@ project spend cap remains the authoritative protection against monetary
 overrun, while per-response token counts remain attached to the request that
 incurred them.
 
-\subsection{Cursor as an agent client}
+\section{Cursor as an agent client}
 
 A Cursor subscription connects to LeanFM as an authenticated agent client, not
 as a model-provider API key. A project may commit
