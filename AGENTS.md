@@ -30,6 +30,15 @@ and reports. A visual or number must retain the prompt, question, event source,
 reducer, unit, and boundary that justify it. Do not substitute an independently
 drawn diagram for a generated view of the current specification.
 
+Before satisfying any feature request, review its stability and security
+ramifications. State the intended positive invariant (commonly an always/AG
+property), then identify applicable forbidden behavior as explicit negative
+requirements (commonly never or AG not-bad properties). Consider regression,
+failure, concurrency, resource, authorization, isolation, secret, injection,
+and path-boundary consequences in proportion to the change. Map every material
+negative requirement to an implementation control and negative test or proof;
+do not call the feature complete while a material risk is unmitigated.
+
 There are two explicit acceptance gates:
 
 1. observable requirements and their derived outputs;

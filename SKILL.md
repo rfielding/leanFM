@@ -99,6 +99,15 @@ Treat disagreement as requirements discovery. On each substantive turn:
 5. Show the user the resulting diagram, chart, metric, report, or validation
    result and name the prompt/question it answers.
 
+For every feature request, review stability and security before declaring the
+feature complete. Record the desired behavior as a positive invariant (usually
+always/AG), then identify applicable forbidden behavior as negative invariants
+(usually never or AG not-bad). Consider regression, failure, concurrency,
+resource, authorization, isolation, secret, injection, and path-boundary
+effects in proportion to the change. Map every material negative invariant to
+an implementation control and negative test or proof. An unmitigated material
+risk blocks completion.
+
 Do not hand-author a persuasive diagram independently of the model. Every
 interaction diagram, state machine, scalar, and 2D function rendering must have
 `DesiredOutput` provenance: originating prompt, precise question, observable
