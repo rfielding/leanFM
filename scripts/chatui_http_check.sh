@@ -135,6 +135,7 @@ rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tok
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/artifacts" | rg -q '"kind":"mermaid"'
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/conversation")" = 404
 rg -q 'make a state machine' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
+rg -q '"sent_at_ms":[0-9]' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 ! rg -q 'keep this separate' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 
 echo 'ok: ChatUI bootstrap, usage, artifacts, and concurrent session isolation'

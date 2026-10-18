@@ -1,5 +1,6 @@
 import LeanFM.ChatUI.Provider
 import LeanFM.ChatUI.Web
+import Std.Time
 
 namespace LeanFM.ChatUI.Server
 
@@ -148,7 +149,8 @@ def appendConversation (root role text : String) (usage : Option Provider.Comple
   let usageFields := match usage with
     | none => "0|0|0|0"
     | some u => s!"{u.inputTokens}|{u.cachedInputTokens}|{u.outputTokens}|{u.totalTokens}"
-  writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "|" ++ toString responseTimeMs ++ "\n")
+  let sentAtMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
+  writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "|" ++ toString responseTimeMs ++ "|" ++ toString sentAtMs ++ "\n")
 
 def truncateText (value : String) (limit : Nat) : String :=
   if value.length ≤ limit then value else String.ofList (value.toList.take limit) ++ "\n[truncated]\n"
@@ -399,6 +401,8 @@ def conversationContext (root : String) : IO String := do
     truncateText withoutTrace 3500
   for line in body.splitOn "\n" do
     match line.splitOn "|" with
+    | [_messageId, role, encoded, _input, _cached, _output, _total, _responseTimeMs, _sentAtMs] =>
+        try turns := (role ++ ": " ++ excerpt (← base64Decode encoded)) :: turns catch _ => pure ()
     | [_messageId, role, encoded, _input, _cached, _output, _total, _responseTimeMs] =>
         try turns := (role ++ ": " ++ excerpt (← base64Decode encoded)) :: turns catch _ => pure ()
     | [_messageId, role, encoded, _input, _cached, _output, _total] =>
@@ -444,6 +448,17 @@ def conversationJson (root : String) : IO String := do
   for line in body.splitOn "\n" do
     let legacyId := "legacy-" ++ toString lineNumber
     match line.splitOn "|" with
+    | [messageId, role, encoded, input, cached, output, total, responseTimeMs, sentAtMs] =>
+        try
+          let text ← base64Decode encoded
+          let usage := if role == "assistant" then
+              ",\"usage\":{\"input_tokens\":" ++ input ++ ",\"cached_input_tokens\":" ++ cached ++
+              ",\"output_tokens\":" ++ output ++ ",\"total_tokens\":" ++ total ++ ",\"context_window_tokens\":" ++
+              contextWindow ++ "}"
+            else ""
+          let responseTime := if role == "assistant" then ",\"response_time_ms\":" ++ responseTimeMs else ""
+          messages := ("{\"message_id\":\"" ++ jsonEscape messageId ++ "\",\"role\":\"" ++ role ++ "\",\"text\":\"" ++ jsonEscape text ++ "\",\"sent_at_ms\":" ++ sentAtMs ++ responseTime ++ usage ++ "}") :: messages
+        catch _ => pure ()
     | [messageId, role, encoded, input, cached, output, total, responseTimeMs] =>
         try
           let text ← base64Decode encoded
@@ -488,7 +503,7 @@ def deleteConversationMessage (root messageId : String) : IO Bool := do
   for line in body.splitOn "\n" do
     if !line.isEmpty then
       let storedId := match line.splitOn "|" with
-        | id :: _role :: _encoded :: _input :: _cached :: _output :: _total :: [] => id
+        | id :: _role :: _encoded :: _input :: _cached :: _output :: _total :: _rest => id
         | _ => "legacy-" ++ toString lineNumber
       if storedId == messageId then found := true else kept := line :: kept
     lineNumber := lineNumber + 1
