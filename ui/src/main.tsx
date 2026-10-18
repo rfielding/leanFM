@@ -107,9 +107,16 @@ function remoteImages(text: string): RemoteImage[] {
 
 function extractCanvases(text: string): {text: string; canvases: string[]} {
   const canvases: string[] = [];
-  const remaining = text.replace(/```leanfm-canvas\s*([\s\S]*?)```/gi, (_block, source: string) => {
+  let remaining = text.replace(/```leanfm-canvas\s*([\s\S]*?)```/gi, (_block, source: string) => {
     canvases.push(source.trim());
     return "";
+  });
+  // Some providers occasionally spell out the requested fence marker instead
+  // of emitting backticks. Recover only the tightly bounded canvas+script form;
+  // arbitrary HTML remains ordinary escaped chat text.
+  remaining = remaining.replace(/(?:^|\n)\s*(?:fenced\s+)?leanfm-canvas\s*\n\s*(<canvas\b[\s\S]*?<\/canvas>\s*<script\b[\s\S]*?<\/script>)/gi, (_block, source: string) => {
+    canvases.push(source.trim());
+    return "\n";
   });
   return {text: remaining.trim(), canvases};
 }
