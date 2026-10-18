@@ -391,6 +391,44 @@ def repairBookEdit (key candidate diagnostic : String) : IO (Except String (Book
       | none => return .error "The automatic repair did not return a complete book revision."
       | some edit => return .ok (edit, completion)
 
+structure AppliedChatResult where
+  text : String
+  completion : Provider.Completion
+  bookUpdated : Bool
+  notice : Option String
+
+def applyBookChatEdit (key root : String) (answer : Provider.Completion) : IO AppliedChatResult := do
+  let some edit := bookChatEdit? answer.text
+    | return AppliedChatResult.mk answer.text answer false none
+  if edit.source.length > 2000000 then
+    return AppliedChatResult.mk edit.reply answer false
+      (some "The proposed book revision exceeded the 2 MB editor limit and was not applied.")
+  let path := root ++ "/book/main.tex"
+  let previous ← readOr path ""
+  writeAtomic path edit.source
+  match ← buildProjectBook root with
+  | .ok _ => return AppliedChatResult.mk edit.reply answer true none
+  | .error diagnostic =>
+      writeAtomic path previous
+      match ← repairBookEdit key edit.source diagnostic with
+      | .error repairError =>
+          return AppliedChatResult.mk edit.reply answer false
+            (some ("The proposed book revision did not build and was rolled back. " ++
+              buildErrorSummary diagnostic ++ " Automatic repair failed: " ++ repairError))
+      | .ok (repaired, repairCompletion) =>
+          if repaired.source.length > 2000000 then
+            return AppliedChatResult.mk repaired.reply (addCompletionUsage answer repairCompletion repaired.reply) false
+              (some "The repaired book revision exceeded the 2 MB editor limit and was not applied.")
+          writeAtomic path repaired.source
+          match ← buildProjectBook root with
+          | .ok _ =>
+              return AppliedChatResult.mk repaired.reply (addCompletionUsage answer repairCompletion repaired.reply) true none
+          | .error repairedDiagnostic =>
+              writeAtomic path previous
+              return AppliedChatResult.mk repaired.reply (addCompletionUsage answer repairCompletion repaired.reply) false
+                (some ("The proposed book revision and its automatic repair did not build, so the original book was restored. " ++
+                  buildErrorSummary repairedDiagnostic))
+
 def conversationContext (root : String) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
   let mut turns : List String := []
@@ -708,9 +746,13 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               | .ok key =>
                   let prior ← conversationContext root
                   let figureContext ← referencedFigureContext root prompt
+                  let guidedContext ← match ← chatLayerContext root "guided" with
+                    | .ok context => pure context
+                    | .error message => return some (errorResponse 500 message)
                   let contextualPrompt := "Selected LeanFM project root: " ++ root ++
                     "\nAuthorized project workspace: " ++ root ++ "\nImplementation artifacts must be written below source/ and will be displayed from there.\n\n" ++
                     "Implementation-result policy: an explicit implementation request must either write and check the complete implementation beneath the selected project's source/ directory after both acceptance gates and the security critique, or return focused structured leanfm-questions naming the missing gate or material decision. Never claim implementation success while source/ is empty.\n\n" ++
+                    guidedContext ++ "\n\n" ++
                     (if prior.isEmpty then "" else "Project conversation so far:\n\n" ++ prior ++ "\n\n") ++
                     (if figureContext.isEmpty then "" else figureContext ++ "\n\n") ++
                     "Current user message:\n" ++ prompt
@@ -720,6 +762,10 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   match ← Provider.completeAgent key (workspaceAgentInstructions root) contextualPrompt runner with
                   | .error message => return some (errorResponse 502 message)
                   | .ok answer =>
+                      let applied ← if projectId == "leanfm-workspace" || projectId == "go-server-example" then
+                          pure (AppliedChatResult.mk answer.text answer false none)
+                        else applyBookChatEdit key root answer
+                      let answer := applied.completion
                       match cookieValue? request "leanfm_session" with
                       | some token => recordSessionUsage token username answer.totalTokens
                       | none => pure ()
@@ -739,9 +785,9 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let missingRequiredArtifact := mp4Requested && mp4Artifact.isNone
                       let implementationRequested := requestsImplementationSource prompt
                       let sourceFiles ← sourceFileNames root projectId
-                      let returnedQuestions := (answer.text.splitOn "```leanfm-questions").length > 1
+                      let returnedQuestions := (applied.text.splitOn "```leanfm-questions").length > 1
                       let missingRequiredSource := implementationRequested && sourceFiles.isEmpty && !returnedQuestions
-                      let warned := returnedQuestions || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
+                      let warned := returnedQuestions || applied.notice.isSome || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
                       let status := if missingRequiredArtifact || missingRequiredSource then "fail" else if warned then "warn" else "success"
                       let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
                       let mp4Failure := activity.find? fun item => item.startsWith "workspace_transcode_mp4 rejected:"
@@ -754,8 +800,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         else match mp4Artifact with
                           | some generated =>
                               let path := String.ofList ((generated.drop 10).toString.toList.takeWhile (· != ' '))
-                              answer.text ++ "\n\nInline MP4: " ++ path
-                          | none => answer.text
+                              applied.text ++ "\n\nInline MP4: " ++ path
+                          | none => applied.text
+                      let visibleAnswer := match applied.notice with
+                        | some warning => visibleAnswer ++ "\n\n" ++ warning
+                        | none => visibleAnswer
                       let responseText := statusMarker ++ visibleAnswer ++ (if activity.isEmpty then "" else
                         "\n\nOperational trace:\n" ++ String.intercalate "\n" (activity.map ("- " ++ ·)))
                       let figureLabels ← saveMermaidArtifacts root responseText
@@ -765,7 +814,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let responseTimeMs := responseFinished - responseStarted
                       appendConversation root "assistant" responseText (some answer) responseTimeMs
                       let context := (← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS").getD "128000"
-                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"book_updated\":false,\"usage\":{\"input_tokens\":" ++
+                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"book_updated\":" ++ (if applied.bookUpdated then "true" else "false") ++ ",\"usage\":{\"input_tokens\":" ++
                         toString answer.inputTokens ++ ",\"cached_input_tokens\":" ++ toString answer.cachedInputTokens ++
                         ",\"output_tokens\":" ++ toString answer.outputTokens ++ ",\"total_tokens\":" ++ toString answer.totalTokens ++
                         ",\"context_window_tokens\":" ++ context ++ "},\"response_time_ms\":" ++ toString responseTimeMs ++ "}\n"))

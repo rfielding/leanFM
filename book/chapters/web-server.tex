@@ -267,6 +267,46 @@ book, ask one focused blocking question, derive a view from the current
 requirements, or create a scratch visual explanation.  It must not pretend
 that an attractive explanation has passed either acceptance gate.
 
+This is one conversation, not a hidden mode selector.  For every turn the
+server supplies the model with the emph{selected} project's complete editable
+book and canonical requirements and implementation specifications, followed by
+a bounded recent transcript.  The LeanFM book and a previously selected
+project are never fallback context.  This boundary matters: otherwise a fluent
+answer can describe GoServer while silently editing nothing, or can display
+LeanFM's own book inside GoServer.
+
+\subsection{How a chat turn becomes a durable edit}
+
+Ordinary design discussion should normally improve the book.  The provider
+therefore returns a small structured envelope containing a conversational
+reply and, when the turn changes durable understanding, the complete proposed
+\texttt{book/main.tex}.  The server does not trust the claim that this is an
+update.  It enforces the project-root and size boundaries, writes the candidate
+atomically, and builds the project PDF in the isolated book worker.  Only a
+successful build commits the revision and sets \texttt{book\_updated=true}.
+If compilation fails, the exact previous source is restored.  One bounded
+syntax-repair attempt may correct such mechanical errors as an unescaped
+ampersand; if that repair also fails, the response is WARN and the old book
+remains authoritative.
+
+The same rule becomes stricter at the implementation boundary.  After both
+acceptance gates and the security critique, an implementation request writes
+real buildable files, generated bindings, and tests beneath the selected
+project's \texttt{source/} directory by using the project-confined workspace
+tools.  The Source phase reads those files directly.  A provider response that
+says ``implemented,'' or pastes a Go listing into chat, cannot be SUCCESS while
+\texttt{source/} is empty.  When a gate or material implementation decision is
+missing, the valid alternative is a focused selectable question naming that
+blocker---not an invented implementation and not another generic plan.
+
+These positive and negative requirements are paired deliberately.  The
+positive invariant is that a substantive turn can create a validated durable
+artifact.  The negative invariant is that no malformed, oversized,
+cross-project, unbuildable, or merely narrated artifact can be reported as
+committed.  The deterministic HTTP conformance test exercises both a compiled
+book update and an actual \texttt{source/main.go} workspace write, and separately
+checks that an implementation claim with an empty Source phase is rejected.
+
 \subsection{Example: ask to see MCP move}
 
 The following is a useful prompt because it asks for both an explanation and a

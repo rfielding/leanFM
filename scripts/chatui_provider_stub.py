@@ -21,17 +21,51 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
-        self.rfile.read(length)
+        raw_request = self.rfile.read(length)
         if self.path == "/v1/responses" and self._authorized():
-            body = {
-                "output_text": ("alice response: " if self.headers.get("Authorization") == "Bearer test-user-key" else "bob response: ") + "The deterministic provider response includes a diagram.\n```mermaid\nstateDiagram-v2\n  [*] --> specified\n```",
-                "usage": {
-                    "input_tokens": 11,
-                    "input_tokens_details": {"cached_tokens": 3},
-                    "output_tokens": 7,
-                    "total_tokens": 18,
-                },
+            request = json.loads(raw_request or b"{}")
+            request_text = json.dumps(request)
+            usage = {
+                "input_tokens": 11,
+                "input_tokens_details": {"cached_tokens": 3},
+                "output_tokens": 7,
+                "total_tokens": 18,
             }
+            if "TEST_WRITE_SOURCE" in request_text and "previous_response_id" not in request:
+                body = {
+                    "id": "source-write-response",
+                    "output": [{
+                        "type": "function_call",
+                        "call_id": "write-source-1",
+                        "name": "workspace_write",
+                        "arguments": json.dumps({
+                            "path": "source/main.go",
+                            "content": "package main\n\nfunc main() {}\n",
+                        }),
+                    }],
+                    "usage": usage,
+                }
+            elif request.get("previous_response_id") == "source-write-response":
+                body = {
+                    "output_text": "Created and checked source/main.go.",
+                    "usage": usage,
+                }
+            elif "TEST_UPDATE_BOOK" in request_text:
+                edit = {
+                    "reply": "Updated the durable project book.",
+                    "book_source": (
+                        "\\documentclass{book}\n"
+                        "\\begin{document}\n"
+                        "Durable chat book update marker.\n"
+                        "\\end{document}\n"
+                    ),
+                }
+                body = {"output_text": json.dumps(edit), "usage": usage}
+            else:
+                body = {
+                "output_text": ("alice response: " if self.headers.get("Authorization") == "Bearer test-user-key" else "bob response: ") + "The deterministic provider response includes a diagram.\n```mermaid\nstateDiagram-v2\n  [*] --> specified\n```",
+                    "usage": usage,
+                }
             payload = json.dumps(body).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

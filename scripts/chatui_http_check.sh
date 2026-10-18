@@ -138,13 +138,27 @@ rg -q 'make a state machine' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/
 rg -q '"sent_at_ms":[0-9]' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 ! rg -q 'keep this separate' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UPDATE_BOOK update the durable book now' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/book-update.json"
+rg -q '"book_updated":true' "$test_root/book-update.json"
+rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
+
+curl -fsS -b "$cookie_b" --data-urlencode 'prompt=TEST_WRITE_SOURCE implement the server now' \
+  "$base_url/api/projects/$project_b/chat" >"$test_root/source-write.json"
+rg -q 'status.*success' "$test_root/source-write.json"
+test -f "$test_root/data/accounts/second_user/projects/$project_b/source/main.go"
+rg -q 'func main' "$test_root/data/accounts/second_user/projects/$project_b/source/main.go"
+curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["main.go"\]'
+
+project_empty="$(create_project "$cookie_b" Empty)"
 curl -fsS -b "$cookie_b" --data-urlencode 'prompt=implement the server now' \
-  "$base_url/api/projects/$project_b/chat" >"$test_root/empty-source-implementation.json"
+  "$base_url/api/projects/$project_empty/chat" >"$test_root/empty-source-implementation.json"
 rg -q 'status.*fail' "$test_root/empty-source-implementation.json"
 rg -q 'no files exist beneath the selected project.*source/' "$test_root/empty-source-implementation.json"
-test ! -e "$test_root/data/accounts/second_user/projects/$project_b/source/main.go"
+test ! -e "$test_root/data/accounts/second_user/projects/$project_empty/source/main.go"
 
-echo 'ok: ChatUI bootstrap, usage, artifacts, and concurrent session isolation'
+echo 'ok: ChatUI bootstrap, durable book/source edits, artifacts, and concurrent session isolation'
 
 # Requirement: password verification precedes migration; copied sessions cannot spend.
 login_status() {
