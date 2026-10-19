@@ -113,6 +113,9 @@ project_b="$(create_project "$cookie_b" Separate)"
 test -n "$project_a" && test -n "$project_b" && test "$project_a" != "$project_b"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/tasks" >"$test_root/tasks.json"
 rg -q '"source":".*/spec/Requirements.lean".*"validation":.*"tasks":' "$test_root/tasks.json"
+curl -fsS -b "$cookie_a" "$base_url/api/projects/leanfm-workspace/tasks" >"$test_root/workspace-tasks.json"
+rg -Fq '"formula":"AG atom(\"' "$test_root/workspace-tasks.json"
+rg -q '"origin":"Requirements.lean (property|where_)"' "$test_root/workspace-tasks.json"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.lean"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.proto"
@@ -231,12 +234,15 @@ test -f "$diagnostic_b"
 rg -q '"category":"resolved".*source/main.go' "$diagnostic_b"
 ! rg -q 'package main' "$diagnostic_b"
 curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["main.go"\]'
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/source/does-not-exist.go")" = 404
+rg -q '"category":"http_error".*GET /api/projects/.*status=404' "$diagnostic_b"
 
 project_empty="$(create_project "$cookie_b" Empty)"
 curl -fsS -b "$cookie_b" --data-urlencode 'prompt=implement the server now' \
   "$base_url/api/projects/$project_empty/chat" >"$test_root/empty-source-implementation.json"
 rg -q 'status.*fail' "$test_root/empty-source-implementation.json"
 rg -q 'no files exist beneath the selected project.*source/' "$test_root/empty-source-implementation.json"
+rg -q '"category":"chat_result_warning".*requested implementation source missing' "$test_root/data/accounts/second_user/projects/$project_empty/logs/runtime-diagnostics.jsonl"
 test ! -e "$test_root/data/accounts/second_user/projects/$project_empty/source/main.go"
 
 curl -sS -b "$cookie_a" --data-urlencode 'prompt=TEST_CANCEL_AGENT implement a file that cancellation must prevent' \

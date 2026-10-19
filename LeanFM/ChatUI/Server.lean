@@ -103,6 +103,16 @@ def pathSegments (path : String) : List String := path.splitOn "/" |>.filter (!�
 def jsonStrings (values : List String) : String :=
   "[" ++ String.intercalate "," (values.map fun value => "\"" ++ jsonEscape value ++ "\"") ++ "]"
 
+def ctlAtom (expression : String) : String :=
+  "atom(\"" ++ expression ++ "\")"
+
+def propertyCtlFormula (mode : PropertyMode) (expression : String) : String :=
+  match mode with
+  | .always => "AG " ++ ctlAtom expression
+  | .eventually => "AF " ++ ctlAtom expression
+  | .never => "AG ¬" ++ ctlAtom expression
+  | .preparedFor => "EF " ++ ctlAtom expression
+
 partial def grammarExprJson : GrammarExpr -> String
   | .empty => "{\"kind\":\"empty\"}"
   | .event atom =>
@@ -126,11 +136,17 @@ partial def grammarExprJson : GrammarExpr -> String
 
 def tasksJson (source : String) : String :=
   let items := Requirements.spec.tasks.map fun task =>
-    let constraints := Requirements.taskConstraints.filter (·.task == task.id) |>.map (·.predicate)
+    let constraints := Requirements.taskConstraints.filter (·.task == task.id) |>.map fun constraint =>
+      "{\"id\":\"" ++ jsonEscape constraint.id ++ "\",\"predicate\":\"" ++
+      jsonEscape constraint.predicate ++ "\",\"formula\":\"" ++
+      jsonEscape (propertyCtlFormula .always constraint.predicate) ++
+      "\",\"origin\":\"Requirements.lean where_\"}"
     let properties := Requirements.spec.properties.filter (·.task == task.id) |>.map fun property =>
       "{\"name\":\"" ++ jsonEscape property.name ++ "\",\"mode\":\"" ++
       jsonEscape (propertyModeName property.mode) ++ "\",\"expression\":\"" ++
-      jsonEscape property.expression ++ "\"}"
+      jsonEscape property.expression ++ "\",\"formula\":\"" ++
+      jsonEscape (propertyCtlFormula property.mode property.expression) ++
+      "\",\"origin\":\"Requirements.lean property\"}"
     let states := task.states.map fun state =>
       "{\"id\":\"" ++ jsonEscape state.id ++ "\",\"label\":\"" ++ jsonEscape state.label ++
       "\",\"group\":\"" ++ jsonEscape state.group ++ "\",\"terminal\":" ++
@@ -159,7 +175,7 @@ def tasksJson (source : String) : String :=
     ",\"properties\":[" ++ String.intercalate "," properties ++
     "],\"interaction_mermaid\":\"" ++ jsonEscape (Requirements.interactionMermaid task) ++
     "\",\"state_mermaid\":\"" ++ jsonEscape (Requirements.stateMachineMermaid task) ++
-    "\",\"constraints\":" ++ jsonStrings constraints ++ "}"
+    "\",\"constraints\":[" ++ String.intercalate "," constraints ++ "]}"
   "{\"source\":\"" ++ jsonEscape source ++ "\",\"validation\":{\"errors\":0,\"warnings\":0},\"tasks\":[" ++
     String.intercalate "," items ++ "]}"
 
@@ -1097,6 +1113,14 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let missingRequiredSource := implementationRequested && sourceFiles.isEmpty && !returnedQuestions
                       let warned := returnedQuestions || applied.notice.isSome || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
                       let status := if missingRequiredArtifact || missingRequiredSource then "fail" else if warned then "warn" else "success"
+                      if status != "success" then
+                        let reason := if missingRequiredArtifact then "required MP4 artifact missing"
+                          else if missingRequiredSource then "requested implementation source missing"
+                          else if returnedQuestions then "agent returned blocking questions"
+                          else if applied.notice.isSome then "book update warning"
+                          else "workspace operation or check reported a failure"
+                        appendProjectDiagnostic root "chat_result_warning"
+                          ("status=" ++ status ++ " model=" ++ selectedModel ++ " reason=" ++ reason)
                       let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
                       let mp4Failure := activity.find? fun item => item.startsWith "workspace_transcode_mp4 rejected:"
                       let visibleAnswer := if missingRequiredSource then
@@ -1138,7 +1162,22 @@ def handle? (path method request : String) : IO (Option HttpResponse) := do
       if path.startsWith "/api/" then
         match ← sessionUser? request with
         | none => pure (some (errorResponse 401 "Authentication required."))
-        | some username => handleAuthenticated username path method request
+        | some username =>
+            let result ← handleAuthenticated username path method request
+            match result with
+            | some response =>
+                if response.status >= 400 then
+                  match pathSegments path with
+                  | "api" :: "projects" :: projectId :: _ =>
+                      match ← authorizedProjectRoot? username projectId with
+                      | some root =>
+                          appendProjectDiagnostic root "http_error"
+                            (method ++ " " ++ path ++ " status=" ++ toString response.status ++
+                              " response=" ++ truncateText response.body 8000)
+                      | none => pure ()
+                  | _ => pure ()
+                pure (some response)
+            | none => pure none
       else pure none
 
 def logUnhandledProjectFailure (path requestId request detail : String) : IO Unit := do

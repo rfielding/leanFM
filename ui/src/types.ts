@@ -9,6 +9,6 @@ export type Task = {
   id: string; title: string; entry: string; terminals: string[]; actors: string[];
   states: Array<{name: string; description: string}>;
   transitions: Array<{message: string; source: string; target: string; source_actor: string; destination_actor: string}>;
-  properties: Array<{mode: string; name: string; expression: string}>;
-  constraints: string[]; grammar: GrammarExpr | null; interaction_mermaid: string; state_mermaid: string;
+  properties: Array<{mode: string; name: string; expression: string; formula: string; origin: string}>;
+  constraints: Array<{id: string; predicate: string; formula: string; origin: string}>; grammar: GrammarExpr | null; interaction_mermaid: string; state_mermaid: string;
 };
