@@ -147,7 +147,7 @@ rg -q '"model":"test-model-fast"' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REFERENCE put any image into the PDF' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-recovery.json"
-rg -q '"status":"success"' "$test_root/missing-image-recovery.json"
+python3 -c 'import json,sys; assert "\"status\":\"success\"" in json.load(open(sys.argv[1]))["text"]' "$test_root/missing-image-recovery.json"
 rg -q '"book_updated":true' "$test_root/missing-image-recovery.json"
 rg -q 'one bounded output-only recovery' "$test_root/missing-image-recovery.json"
 rg -q 'self-contained vector illustration' "$test_root/missing-image-recovery.json"
@@ -155,7 +155,7 @@ rg -q '\\begin\{tikzpicture\}' "$test_root/data/accounts/rfielding/projects/$pro
 test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REPEAT put an image into the PDF' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-repeat.json"
-rg -q '"status":"fail"' "$test_root/missing-image-repeat.json"
+python3 -c 'import json,sys; assert "\"status\":\"fail\"" in json.load(open(sys.argv[1]))["text"]' "$test_root/missing-image-repeat.json"
 rg -q '"total_tokens":36' "$test_root/missing-image-repeat.json"
 rg -q 'never-created-twice.png' "$test_root/missing-image-repeat.json"
 rg -q 'still references nonexistent media' "$test_root/missing-image-repeat.json"
