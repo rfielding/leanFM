@@ -484,6 +484,17 @@ requirements gate.  If stakeholders instead want to share the exact motion,
 promote the chosen canvas revision to a project-owned GIF or MP4 with fixed
 frame timing and serve that media inline.
 
+Every still image displayed in Chat retains a reference that can leave the
+screen. An adjacent keyboard-accessible \textbf{Copy reference} control copies
+a project image as its stable project-relative artifact path. For a public-web
+image it copies Markdown containing the displayed HTTPS image URL followed by
+the visible source-page URL. It never copies image bytes, a data or ephemeral
+object URL, the host filesystem path, credentials or unrelated response text.
+This makes ``use the image above'' a durable artifact reference that can be
+pasted into a later Chat turn, the book or Codex even after conversation state
+has been discarded. Clipboard failures cross the same client fault barrier as
+other JavaScript errors.
+
 \subsection{From conversation to implementation artifacts}
 
 After the visual argument becomes precise, the same project proceeds through

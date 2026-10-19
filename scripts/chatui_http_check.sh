@@ -70,6 +70,8 @@ rg -q 'Cancel requested' <<<"$react_bundle"
 rg -q 'Model for new prompts' <<<"$react_bundle"
 rg -q 'Unhandled JavaScript exception' <<<"$react_bundle"
 rg -q '/api/client-errors' <<<"$react_bundle"
+rg -q 'Copy reference' <<<"$react_bundle"
+rg -q 'Copying an image reference to the clipboard' <<<"$react_bundle"
 composer_source="$(rg -n 'className="composer"' ui/src/main.tsx)"
 [[ "$composer_source" == *'<textarea'*'<button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">'* ]]
 rg -q 'Long-running model or tool work is still active' <<<"$react_bundle"

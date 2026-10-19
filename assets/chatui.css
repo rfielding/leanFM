@@ -298,8 +298,10 @@ button { cursor: pointer; }
 .chat-inline-figure { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .chat-inline-figure img { display: block; width: auto; max-width: 100%; max-height: 720px; margin: auto; border-radius: 6px; }
 .chat-inline-figure video { display: block; width: 100%; max-height: 75vh; margin: auto; border-radius: 6px; background: #000; }
-.chat-inline-figure figcaption { margin-top: 8px; color: var(--muted); font: .78rem/1.4 ui-monospace, monospace; text-align: center; }
+.chat-inline-figure figcaption { margin-top: 8px; color: var(--muted); font: .78rem/1.4 ui-monospace, monospace; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .chat-inline-figure figcaption a { color: var(--blue); overflow-wrap: anywhere; }
+.copy-image-reference { border: 1px solid var(--line); border-radius: 7px; padding: 4px 8px; background: var(--raised); color: var(--text); font: 700 .75rem/1.2 system-ui, sans-serif; cursor: pointer; }
+.copy-image-reference:hover, .copy-image-reference:focus-visible { border-color: var(--blue); color: var(--blue); }
 .chat-canvas { margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #08141d; }
 .chat-canvas iframe { display: block; width: 100%; height: min(70vh, 720px); border: 0; background: #08141d; }
 .chat-canvas-controls { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
