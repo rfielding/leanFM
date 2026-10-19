@@ -1370,6 +1370,7 @@ def codeGenerationSystemPrompt : String :=
     , "Never silently fill an unspecified implementation decision from conversational memory; emit a diagnostic that identifies the missing durable field."
     , "Every generated code unit and test includes a machine-readable requirement reference and short justification. Do not generate orphan code with no durable requirement reference."
     , "Emit a traceability manifest mapping every requirement reference to generated source files, symbols, and conformance tests."
+    , "Before recommending or performing any commit, inspect the actual candidate diff and generated artifacts for security. State the intended positive invariant; check applicable forbidden behavior including secrets, authorization and isolation failures, injection, path and symlink escape, executable content, unbounded resources, unsafe generated artifacts, replay, request confusion, privilege expansion, and fail-open behavior. Map every material finding to an implementation control and negative test or proof. Do not commit or declare commit readiness while a material threat remains unresolved."
     , "Run the project build, tests, LeanFM validators, and deterministic trace round trips before declaring the implementation complete."
     ]
 

@@ -518,6 +518,7 @@ def handleClient (client : TcpClient) : IO Unit := do
       responseForRequest request
     catch err =>
       IO.eprintln s!"request_id={requestId} unhandled request failure: {err}"
+      LeanFM.ChatUI.Server.logUnhandledProjectFailure (requestPath request) requestId request (toString err)
       pure <| response 500 "application/json; charset=utf-8"
         ("{\"error\":\"Internal server error\",\"request_id\":\"" ++ jsonEscape requestId ++
           "\",\"detail\":\"" ++ jsonEscape (toString err) ++ "\"}\n")

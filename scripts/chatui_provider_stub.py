@@ -3,6 +3,7 @@
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import time
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -31,17 +32,31 @@ class Handler(BaseHTTPRequestHandler):
                 "output_tokens": 7,
                 "total_tokens": 18,
             }
-            if "You repair a complete pdfLaTeX document" in request_text and "TEST_REPAIR_BOOK" in request_text:
-                edit = {
-                    "reply": "Internal repair housekeeping must not replace the requested result.",
-                    "book_source": (
-                        "\\documentclass{book}\n"
-                        "\\begin{document}\n"
-                        "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK\n"
-                        "\\end{document}\n"
-                    ),
+            current_input = request.get("input", "") if isinstance(request.get("input", ""), str) else ""
+            if "Current user message:\nTEST_MODEL_SELECTION" in current_input:
+                body = {
+                    "output_text": "selected model: " + request.get("model", "missing"),
+                    "usage": usage,
                 }
+            elif "You repair exactly one failing line" in request_text and "TEST_REPAIR_BOOK" in request_text:
+                time.sleep(1)
+                edit = {"line_number": 3, "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
+            elif "TEST_CANCEL_AGENT" in request_text:
+                time.sleep(1)
+                body = {
+                    "id": "cancelled-source-write-response",
+                    "output": [{
+                        "type": "function_call",
+                        "call_id": "cancelled-write-1",
+                        "name": "workspace_write",
+                        "arguments": json.dumps({
+                            "path": "source/must-not-exist.go",
+                            "content": "package cancelled\n",
+                        }),
+                    }],
+                    "usage": usage,
+                }
             elif "TEST_REPAIR_BOOK" in request_text:
                 edit = {
                     "reply": "Requested MCP animation remains visible after internal repair.",
@@ -68,6 +83,7 @@ class Handler(BaseHTTPRequestHandler):
                     "usage": usage,
                 }
             elif request.get("previous_response_id") == "source-write-response":
+                time.sleep(1)
                 body = {
                     "output_text": "Created and checked source/main.go.",
                     "usage": usage,

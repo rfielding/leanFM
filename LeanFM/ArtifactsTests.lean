@@ -54,6 +54,12 @@ def parallelGate : ReliabilityDependencyGate :=
 example : seriesGate.requiredCount = seriesGate.members.length := by native_decide
 example : parallelGate.requiredCount = 1 := by native_decide
 
+example : codeGenerationSystemPrompt.contains "Before recommending or performing any commit" := by
+  native_decide
+
+example : codeGenerationSystemPrompt.contains "generated artifacts for security" := by
+  native_decide
+
 def grammarLeaf : GrammarExpr :=
   .event { task := "t", src := "A", dst := "B", message := "Done" }
 

@@ -21,6 +21,7 @@ structure FunctionCall where
 deriving Repr
 
 abbrev ToolRunner := String → String → IO String
+abbrev CancelCheck := IO Bool
 
 def curlConfigEscape (value : String) : String :=
   String.join <| value.toList.map fun c =>
@@ -31,8 +32,7 @@ def providerTimeoutSeconds : IO Nat := do
   let configured := (← IO.getEnv "LEANFM_PROVIDER_TIMEOUT_SECONDS").bind String.toNat?
   pure (max 30 (min 900 (configured.getD 300)))
 
-def apiCall (method url key payload : String) : IO (Nat × String) := do
-  let timeoutSeconds ← providerTimeoutSeconds
+def apiCallWithTimeout (timeoutSeconds : Nat) (method url key payload : String) : IO (Nat × String) := do
   let dataLine := if payload.isEmpty then "" else "data = \"" ++ curlConfigEscape payload ++ "\"\n"
   let config := "url = \"" ++ url ++ "\"\nrequest = \"" ++ method ++ "\"\n" ++
     "header = \"Authorization: Bearer " ++ curlConfigEscape key ++ "\"\n" ++
@@ -49,6 +49,9 @@ def apiCall (method url key payload : String) : IO (Nat × String) := do
   match out.stdout.splitOn "\n__LEANFM_STATUS__" with
   | [body, status] => pure (status.trimAscii.toString.toNat?.getD 0, body)
   | _ => pure (0, out.stdout)
+
+def apiCall (method url key payload : String) : IO (Nat × String) := do
+  apiCallWithTimeout (← providerTimeoutSeconds) method url key payload
 
 def verifyKey (key : String) : IO (Except String Unit) := do
   try
@@ -130,7 +133,9 @@ def toolOutputJson (callId output : String) : String :=
   "\",\"output\":\"" ++ jsonEscape output ++ "\"}"
 
 partial def completeAgentLoop (key baseUrl model instructions prompt previousId : String)
-    (pending : List String) (runTool : ToolRunner) (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
+    (pending : List String) (runTool : ToolRunner) (cancelled : CancelCheck)
+    (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
+  if ← cancelled then return .error "agent_cancelled"
   if remaining == 0 then return .error "The workspace agent exceeded its 16-step tool limit."
   let input := if previousId.isEmpty then "\"" ++ jsonEscape prompt ++ "\"" else
     "[" ++ String.intercalate "," pending ++ "]"
@@ -141,6 +146,7 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
     ",\"tools\":" ++ workspaceToolsJson ++ ",\"tool_choice\":\"auto\"}"
   try
     let (status, body) ← apiCall "POST" (baseUrl ++ "/responses") key payload
+    if ← cancelled then return .error "agent_cancelled"
     if status < 200 || status ≥ 300 then
       let error := (Json.parse body).toOption.bind fun value => (value.getObjVal? "error").toOption
       let code := error.bind (jsonStringField? · "code")
@@ -156,9 +162,12 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
     let some responseId := responseId? json | return .error "OpenAI omitted the response ID needed to continue workspace tools."
     let mut outputs : List String := []
     for call in calls do
+      if ← cancelled then return .error "agent_cancelled"
       let result ← runTool call.name call.arguments
+      if result.startsWith "FATAL: repeated_failed_tool_call:" then
+        return .error "The agent repeated an identical failed workspace operation. LeanFM stopped the turn to prevent further token and compute waste. Inspect the live Operational trace, correct the path or operation, and resend; if the path is already inside the selected project, copy the diagnostic to Codex."
       outputs := toolOutputJson call.callId result :: outputs
-    completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool nextUsage (remaining - 1)
+    completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool cancelled nextUsage (remaining - 1)
   catch error =>
     let detail := error.toString
     let completedSteps := 16 - remaining
@@ -175,10 +184,10 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
       pure (.error ("OpenAI workspace-agent failed before a response was received; " ++
         toString completedSteps ++ " of at most 16 tool steps completed."))
 
-def completeAgent (key instructions prompt : String) (runTool : ToolRunner) : IO (Except String Completion) := do
-  let model := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"
+def completeAgent (key instructions prompt model : String) (runTool : ToolRunner)
+    (cancelled : CancelCheck := pure false) : IO (Except String Completion) := do
   let baseUrl := (← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1"
-  completeAgentLoop key baseUrl model instructions prompt "" [] runTool
+  completeAgentLoop key baseUrl model instructions prompt "" [] runTool cancelled
     { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
 
 -- Return structured provider diagnostics, never the arbitrary response body: provider
@@ -201,20 +210,26 @@ def apiErrorDetail (status : Nat) (body : String) : String :=
   let detail := if identifiers.isEmpty then "" else "; " ++ String.intercalate "; " identifiers
   "OpenAI request failed (HTTP " ++ toString status ++ detail ++ "). " ++ diagnosis
 
-def completeWithInstructions (key instructions prompt : String) : IO (Except String Completion) := do
-  let model := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"
+def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key instructions prompt model : String) : IO (Except String Completion) := do
   let baseUrl := (← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1"
-  let payload := "{\"model\":\"" ++ jsonEscape model ++ "\",\"instructions\":\"" ++ jsonEscape instructions ++ "\",\"input\":\"" ++ jsonEscape prompt ++ "\"}"
+  let payload := "{\"model\":\"" ++ jsonEscape model ++ "\",\"instructions\":\"" ++ jsonEscape instructions ++ "\",\"input\":\"" ++ jsonEscape prompt ++ "\",\"max_output_tokens\":" ++ toString maxOutputTokens ++ "}"
   try
-    let (status, body) ← apiCall "POST" (baseUrl ++ "/responses") key payload
+    let (status, body) ← apiCallWithTimeout timeoutSeconds "POST" (baseUrl ++ "/responses") key payload
     if status < 200 || status ≥ 300 then return .error (apiErrorDetail status body)
     match (Json.parse body).toOption.bind completionFromJson? with
     | none => pure (.error "OpenAI returned an invalid response or no output text.")
     | some completion => pure (.ok completion)
-  catch _ => pure (.error "OpenAI request failed before a response was received.")
+  catch error =>
+    if error.toString.contains "provider_timeout:" then
+      pure (.error ("OpenAI repair request timed out after " ++ toString timeoutSeconds ++ " seconds."))
+    else pure (.error "OpenAI request failed before a response was received.")
+
+def completeWithInstructions (key instructions prompt : String) : IO (Except String Completion) := do
+  let model := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"
+  completeWithInstructionsTimeout (← providerTimeoutSeconds) 20000 key instructions prompt model
 
 def hostedChatInstructions : String :=
-  "You are the model inside LeanFM's project chat. The server supplies the current project book and specification state in the user input. Never claim that you cannot call LeanFM's localhost reference endpoints; the hosting server owns those tools. Make the smallest reversible durable edit justified by the current message. Ask no more than two focused questions at a time and never repeat a question already answered in the supplied conversation or durable artifacts. Do not front-load a requirements checklist. Infer whether the turn develops the book, candidate requirements, implementation mappings, or source. Only the user can accept the requirements and implementation gates. When logic, mathematics, probability, or temporal logic is clearer symbolically, write valid LaTeX using \\( ... \\) for inline expressions and \\[ ... \\] for display expressions; accompany unfamiliar notation with concise prose and never put LaTeX intended for rendering inside a code fence. When a turn needs one or more answers, keep the prose introduction to at most two short sentences and put the questions in a fenced leanfm-questions block containing strict JSON of the form {\"questions\":[{\"id\":\"stable_id\",\"prompt\":\"Question?\",\"multiple\":false,\"options\":[{\"value\":\"value\",\"label\":\"Visible label\",\"recommended\":true}]}]}. Use multiple=true only when selecting several options is valid. Supply two to five mutually meaningful options; do not add an Other option because the user can answer freely in chat. When an animated explanation or simulation directly answers the user, emit the literal opening fence ```leanfm-canvas, then one accessible <canvas> element and its self-contained inline <script>, then the literal closing fence ```; never write the words fenced leanfm-canvas and never expose the animation source as ordinary prose. Do not load libraries, images, or network resources. The canvas runs in an isolated network-disabled frame. MCP means the Model Context Protocol, not MQTT or a message broker: an MCP interaction view uses JSON-RPC exchanges such as initialize/result, notifications/initialized, tools/list/result, and tools/call/result between a host or client and an MCP server, with an optional downstream tool only when that tool is actually part of the example. When the project context requires a JSON reply/book_source envelope, place fenced interactive blocks inside the reply string. When asked to revise the book, return exactly the JSON shape requested by the project context and produce valid pdfLaTeX, escaping prose characters such as &, %, $, #, _, {, and } where required."
+  "You are the model inside LeanFM's project chat. The server supplies the current project book and specification state in the user input. Never claim that you cannot call LeanFM's localhost reference endpoints; the hosting server owns those tools. Make the smallest reversible durable edit justified by the current message. Treat fast exploratory vibecoding as requirements discovery, then turn it on its head before any commit: inspect the actual candidate diff and generated artifacts for security, state the intended positive invariant, identify applicable forbidden behavior, and require each material risk to have an implementation control plus a negative test or proof. Do not recommend or perform a commit while secrets, authorization or isolation failures, injection, path or symlink escape, executable content, unbounded resources, unsafe generated artifacts, or another material threat remains unresolved. Ask no more than two focused questions at a time and never repeat a question already answered in the supplied conversation or durable artifacts. Do not front-load a requirements checklist. Infer whether the turn develops the book, candidate requirements, implementation mappings, or source. Only the user can accept the requirements and implementation gates. When logic, mathematics, probability, or temporal logic is clearer symbolically, write valid LaTeX using \\( ... \\) for inline expressions and \\[ ... \\] for display expressions; accompany unfamiliar notation with concise prose and never put LaTeX intended for rendering inside a code fence. When a turn needs one or more answers, keep the prose introduction to at most two short sentences and put the questions in a fenced leanfm-questions block containing strict JSON of the form {\"questions\":[{\"id\":\"stable_id\",\"prompt\":\"Question?\",\"multiple\":false,\"options\":[{\"value\":\"value\",\"label\":\"Visible label\",\"recommended\":true}]}]}. Use multiple=true only when selecting several options is valid. Supply two to five mutually meaningful options; do not add an Other option because the user can answer freely in chat. When an animated explanation or simulation directly answers the user, emit the literal opening fence ```leanfm-canvas, then one accessible <canvas> element and its self-contained inline <script>, then the literal closing fence ```; never write the words fenced leanfm-canvas and never expose the animation source as ordinary prose. Do not load libraries, images, or network resources. The canvas runs in an isolated network-disabled frame. MCP means the Model Context Protocol, not MQTT or a message broker: an MCP interaction view uses JSON-RPC exchanges such as initialize/result, notifications/initialized, tools/list/result, and tools/call/result between a host or client and an MCP server, with an optional downstream tool only when that tool is actually part of the example. When the project context requires a JSON reply/book_source envelope, place fenced interactive blocks inside the reply string. When asked to revise the book, return exactly the JSON shape requested by the project context and produce valid pdfLaTeX, escaping prose characters such as &, %, $, #, _, {, and } where required."
 
 def complete (key prompt : String) : IO (Except String Completion) :=
   completeWithInstructions key hostedChatInstructions prompt

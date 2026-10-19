@@ -8,14 +8,14 @@ import React, {
 import {createRoot} from "react-dom/client";
 import katex from "katex";
 import {ApiError, api, formRequest} from "./api";
-import type {Billing, GrammarExpr, Message, Project, Task} from "./types";
+import type {Billing, GrammarExpr, Message, Project, ProjectMemory, Task} from "./types";
 
 declare global { interface Window { mermaid?: any } }
 
-type Phase = "chat" | "book" | "grammar" | "tasks" | "source";
+type Phase = "chat" | "memory" | "book" | "grammar" | "tasks" | "source";
 type QuestionOption = {value: string; label: string; recommended?: boolean};
 type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: QuestionOption[]};
-type QueuedPrompt = {id: string; text: string};
+type QueuedPrompt = {id: string; text: string; model: string};
 
 type MathFragment = {source: string; display: boolean; raw: string};
 
@@ -192,40 +192,35 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
   const sentAt = message.sent_at_ms === undefined ? undefined : new Date(message.sent_at_ms);
   const validSentAt = sentAt && !Number.isNaN(sentAt.getTime());
   const timestamp = validSentAt ? sentAt.toLocaleString([], {dateStyle: "medium", timeStyle: "medium"}) : "Time unavailable (legacy message)";
-  return <article className={`message ${message.role}`}><time className="message-timestamp" dateTime={validSentAt ? sentAt.toISOString() : undefined} title={validSentAt ? sentAt.toISOString() : timestamp}>{timestamp}</time>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text"><LatexText text={first} />{pieces.map((part, i) => {
+  return <article className={`message ${message.role}`}><time className="message-timestamp" dateTime={validSentAt ? sentAt.toISOString() : undefined} title={validSentAt ? sentAt.toISOString() : timestamp}>{timestamp}{message.model ? ` · ${message.model}` : ""}</time>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text"><LatexText text={first} />{pieces.map((part, i) => {
     const end = part.indexOf("```");
     return end < 0 ? <LatexText key={i} text={`\`\`\`mermaid\n${part}`} /> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" /><LatexText text={part.slice(end + 3)} /></React.Fragment>;
   })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption>{path}</figcaption></figure>)}{videos.map(path => <figure className="chat-inline-figure" key={path}><video controls preload="metadata" src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}><a href={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}>Open {path}</a></video><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} answeredIds={answeredIds} disabled={disabled} onAnswer={onAnswer} />}{message.response_time_ms !== undefined && <div className="response-time">Response time: {(message.response_time_ms / 1000).toFixed(1)} s</div>}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 
-function Chat({project}: {project: Project}) {
-  const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [queue, setQueue] = useState<QueuedPrompt[]>([]), [busy, setBusy] = useState(false), [elapsedSeconds, setElapsedSeconds] = useState(0), [error, setError] = useState(""), [errorTrace, setErrorTrace] = useState("");
+function Chat({project, models, defaultModel, onWorkspaceChange, onBusyChange}: {project: Project; models: string[]; defaultModel: string; onWorkspaceChange: () => void; onBusyChange: (busy: boolean, model?: string) => void}) {
+  const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [queue, setQueue] = useState<QueuedPrompt[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(""), [errorAction, setErrorAction] = useState(""), [errorTrace, setErrorTrace] = useState("");
+  const [model, setModel] = useState(defaultModel);
   const conversationEndRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!busy) { setElapsedSeconds(0); return; }
-    const started = Date.now();
-    setElapsedSeconds(0);
-    const timer = window.setInterval(() => setElapsedSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
-    return () => window.clearInterval(timer);
-  }, [busy]);
-  const elapsed = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
   const answeredIds = new Set(messages.flatMap(message => [...message.text.matchAll(/Question ID:\s*([A-Za-z0-9._-]+)/g)].map(match => match[1])));
   useEffect(() => {
     window.requestAnimationFrame(() => conversationEndRef.current?.scrollIntoView({block: "end"}));
   }, [messages.length, error]);
   async function load(signal?: AbortSignal) { const data = await api<{messages: Message[]}>(`/api/projects/${project.project_id}/conversation`, {}, signal); setMessages(data.messages || []); }
   useEffect(() => { const controller = new AbortController(); if (!project.read_only) load(controller.signal).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id]);
+  useEffect(() => { if (!models.includes(model)) setModel(defaultModel || models[0] || ""); }, [models, defaultModel, model]);
   function enqueue(text: string, clearComposer = false) {
     text = text.trim();
     if (!text) return;
     const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    setQueue(current => [...current, {id, text}]);
+    if (!model) return;
+    setQueue(current => [...current, {id, text, model}]);
     if (clearComposer) setPrompt("");
   }
   async function run(item: QueuedPrompt) {
-    setElapsedSeconds(0); setMessages(v => [...v, {message_id: `pending-${item.id}`, role: "user", text: item.text, sent_at_ms: Date.now()}]); setBusy(true); setError(""); setErrorTrace("");
-    try { await api(`/api/projects/${project.project_id}/chat`, formRequest({prompt: item.text})); await load(); } catch (e) { setMessages(v => v.filter(message => message.message_id !== `pending-${item.id}`)); setError((e as Error).message); if (e instanceof ApiError) setErrorTrace(JSON.stringify({...e.trace, project_id: project.project_id, prompt: item.text}, null, 2)); await load().catch(() => {}); } finally { setBusy(false); } }
+    setMessages(v => [...v, {message_id: `pending-${item.id}`, role: "user", text: item.text, sent_at_ms: Date.now()}]); setBusy(true); onBusyChange(true, item.model); setError(""); setErrorAction(""); setErrorTrace("");
+    try { await api(`/api/projects/${project.project_id}/chat`, formRequest({prompt: item.text, model: item.model})); await load(); onWorkspaceChange(); } catch (e) { setMessages(v => v.filter(message => message.message_id !== `pending-${item.id}`)); setError((e as Error).message); if (e instanceof ApiError) { setErrorAction(e.action); setErrorTrace("LeanFM error report (safe to paste to Codex)\n" + JSON.stringify({...e.trace, project_id: project.project_id, model: item.model}, null, 2)); } else setErrorAction("Retry once. If it fails again, report this message to Codex."); await load().catch(() => {}); onWorkspaceChange(); } finally { setBusy(false); onBusyChange(false); } }
   useEffect(() => {
     if (busy || queue.length === 0) return;
     const [next, ...remaining] = queue;
@@ -236,11 +231,11 @@ function Chat({project}: {project: Project}) {
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
-    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p>{errorTrace && <details><summary>Development trace</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy trace</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{busy && <div className="agent-running" role="status"><span className="agent-running-dot" />Agent running <time>{elapsed}</time></div>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={!prompt.trim()}>Send</button></form></div></section>;
+    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
+    <div className="composer-wrap">{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => <option key={option} value={option}>{option}</option>)}</select></label><button disabled={!prompt.trim() || !model}>Send</button></form></div></section>;
 }
 
-function Book({project}: {project: Project}) {
+function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
   const [source, setSource] = useState(""), [status, setStatus] = useState("Loading book…"), [revision, setRevision] = useState(0), [dark, setDark] = useState(true);
   const [editorPercent, setEditorPercent] = useState(42), [previewOnly, setPreviewOnly] = useState(false);
   const workbenchRef = useRef<HTMLDivElement>(null), draggingRef = useRef(false);
@@ -255,7 +250,7 @@ function Book({project}: {project: Project}) {
     window.addEventListener("pointerup", stopResize);
     return () => { window.removeEventListener("pointermove", resize); window.removeEventListener("pointerup", stopResize); document.body.classList.remove("resizing-book"); };
   }, [resize, stopResize]);
-  useEffect(() => { const controller = new AbortController(); api<{source: string}>(`/api/projects/${project.project_id}/book`, {}, controller.signal).then(d => { setSource(d.source); setStatus(project.read_only ? "Read-only book" : "book/main.tex · saved"); setRevision(Date.now()); }).catch(e => { if (e.name !== "AbortError") setStatus(e.message); }); return () => controller.abort(); }, [project.project_id]);
+  useEffect(() => { const controller = new AbortController(); api<{source: string}>(`/api/projects/${project.project_id}/book`, {}, controller.signal).then(d => { setSource(d.source); setStatus(project.read_only ? "Read-only book" : "book/main.tex · saved"); setRevision(Date.now()); }).catch(e => { if (e.name !== "AbortError") setStatus(e.message); }); return () => controller.abort(); }, [project.project_id, workspaceRevision]);
   async function save() { setStatus("Saving…"); await api(`/api/projects/${project.project_id}/book`, formRequest({source})); setStatus("Saved; PDF build required"); }
   async function build() { setStatus("Building PDFs…"); await api(`/api/projects/${project.project_id}/book`, formRequest({source})); await api(`/api/projects/${project.project_id}/book/build`, {method: "POST"}); setStatus("Book built successfully"); setRevision(Date.now()); }
   return <section className="pane book-pane"><header className="book-toolbar"><div><h1>Project book</h1><p>{status}</p></div><div>{!project.read_only && <><button onClick={save}>Save source</button><button className="primary" onClick={build}>Build &amp; preview</button></>}<button className={!dark ? "active" : ""} onClick={() => setDark(false)}>Light PDF</button><button className={dark ? "active" : ""} onClick={() => setDark(true)}>Dark PDF</button><button className={previewOnly ? "active" : ""} onClick={() => setPreviewOnly(value => !value)}>{previewOnly ? "Restore split" : "Maximize PDF"}</button></div></header>
@@ -279,16 +274,18 @@ function Specification({project, view}: {project: Project; view: "grammar" | "ta
   return <section className="pane diagrams-pane"><header className="diagrams-header"><h1>Tasks</h1><div className="diagram-kind">{[["interaction","Productions · interaction"],["state","States · state machine"],["properties","Properties · CTL"],["constraints","where_ · guards"]].map(([id,label]) => <button key={id} className={kind === id ? "active" : ""} onClick={() => setKind(id)}>{label}</button>)}</div></header><div className="diagrams-workbench"><nav className="diagram-task-list vertical-tabs">{tasks.map(t => <button key={t.id} className={`diagram-task ${selected === t.id ? "active" : ""}`} onClick={() => setSelected(t.id)}><strong>{t.title}</strong><span>{t.transitions.length} productions · {t.states.length} states</span></button>)}</nav><main className="diagram-stage"><h2>{task?.title}</h2>{task && (kind === "interaction" || kind === "state") && <Mermaid source={kind === "interaction" ? task.interaction_mermaid : task.state_mermaid} />}{task && kind === "properties" && task.properties.map(p => <article className="task-clause" key={p.name}><strong>{p.mode} · {p.name}</strong><pre>{p.expression}</pre></article>)}{task && kind === "constraints" && task.constraints.map((c,i) => <article className="task-clause" key={i}><strong>where_</strong><pre>{c}</pre></article>)}</main></div></section>;
 }
 
-function Source({project}: {project: Project}) {
+function Source({project, workspaceRevision, agentBusy}: {project: Project; workspaceRevision: number; agentBusy: boolean}) {
   const [files, setFiles] = useState<string[]>([]), [selected, setSelected] = useState(""), [source, setSource] = useState(""), [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
-    api<{files: string[]}>(`/api/projects/${project.project_id}/source`, {}, controller.signal).then(result => {
+    const refresh = () => api<{files: string[]}>(`/api/projects/${project.project_id}/source`, {}, controller.signal).then(result => {
       const next = result.files || [];
-      setFiles(next); setSelected(next[0] || ""); setSource(""); setError("");
-    }).catch(e => { if (e.name !== "AbortError") setError(e.message); });
-    return () => controller.abort();
-  }, [project.project_id]);
+      setFiles(next); setSelected(current => current && next.includes(current) ? current : (next[0] || "")); setError("");
+    }).catch(e => { if (e.name !== "AbortError") setFiles(current => { if (!current.length) setError(e.message); return current; }); });
+    void refresh();
+    const timer = agentBusy ? window.setInterval(refresh, 2000) : undefined;
+    return () => { controller.abort(); if (timer !== undefined) window.clearInterval(timer); };
+  }, [project.project_id, workspaceRevision, agentBusy]);
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
@@ -301,9 +298,52 @@ function Source({project}: {project: Project}) {
   return <section className="pane source-pane"><nav className="source-files vertical-tabs">{files.map(file => <button key={file} className={selected === file ? "active" : ""} onClick={() => setSelected(file)}>{file}</button>)}</nav><main className="source-view"><header><strong>{selected}</strong></header>{error ? <p className="error">{error}</p> : <pre><code>{source}</code></pre>}</main></section>;
 }
 
+function ProjectMemoryView({project, workspaceRevision, agentBusy}: {project: Project; workspaceRevision: number; agentBusy: boolean}) {
+  const [memory, setMemory] = useState<ProjectMemory | null>(null), [selected, setSelected] = useState("book"), [source, setSource] = useState(""), [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    const refresh = () => api<ProjectMemory>(`/api/projects/${project.project_id}/memory`, {}, controller.signal).then(result => { setMemory(result); setError(""); }).catch(e => { if (e.name !== "AbortError") setMemory(current => { if (!current) setError(e.message); return current; }); });
+    void refresh();
+    const timer = agentBusy ? window.setInterval(refresh, 2000) : undefined;
+    return () => { controller.abort(); if (timer !== undefined) window.clearInterval(timer); };
+  }, [project.project_id, workspaceRevision, agentBusy]);
+  useEffect(() => {
+    if (selected === "source-summary") { setSource(""); setError(""); return; }
+    const controller = new AbortController();
+    api<{source: string}>(`/api/projects/${project.project_id}/memory/${selected}`, {}, controller.signal).then(result => { setSource(result.source); setError(""); }).catch(e => { if (e.name !== "AbortError") { setSource(""); setError(e.message); } });
+    return () => controller.abort();
+  }, [project.project_id, selected, workspaceRevision]);
+  const complete = (memory?.files.filter(file => file.status === "current").length || 0) + ((memory?.source_files || 0) > 0 ? 1 : 0);
+  return <section className="pane memory-pane"><header className="memory-header"><div><h1>Project memory</h1><p>Durable state used to resume without conversation history.</p></div><strong>{complete} / 5 substantive layers</strong></header><div className="memory-workbench"><nav className="memory-files vertical-tabs">{memory?.files.map(file => <button key={file.id} className={selected === file.id ? "active" : ""} onClick={() => setSelected(file.id)}><span><strong>{file.label}</strong><small>{file.path}</small></span><em className={`memory-status ${file.status}`}>{file.status}</em></button>)}<button className="memory-source-summary" onClick={() => setSelected("source-summary")}><span><strong>Implementation source</strong><small>source/ · {memory?.source_files || 0} files · {memory?.source_bytes || 0} bytes</small></span><em className={`memory-status ${(memory?.source_files || 0) > 0 ? "current" : "missing"}`}>{(memory?.source_files || 0) > 0 ? "current" : "missing"}</em></button></nav><main className="source-view"><header><strong>{selected === "source-summary" ? "source/" : memory?.files.find(file => file.id === selected)?.path}</strong><span>Refreshes after every chat turn</span></header>{error ? <p className="error">{error}</p> : selected === "source-summary" ? <div className="memory-source-help"><h2>{memory?.source_files || 0} implementation files</h2><p>Open the Source phase to inspect generated implementation files. Source appears only after both acceptance gates and the security critique.</p></div> : <pre><code>{source}</code></pre>}</main></div></section>;
+}
+
 function ProjectWorkspace({project}: {project: Project}) {
   const [phase, setPhase] = useState<Phase>("chat");
   const [billing, setBilling] = useState<Billing | null>(null);
+  const [workspaceRevision, setWorkspaceRevision] = useState(0);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentModel, setAgentModel] = useState(""), [agentSeconds, setAgentSeconds] = useState(0), [cancelRequested, setCancelRequested] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<{stage: string; detail: string; attempt: number} | null>(null);
+  const [liveTrace, setLiveTrace] = useState<string[]>([]);
+  useEffect(() => {
+    if (!agentBusy) { setAgentSeconds(0); return; }
+    const started = Date.now();
+    const timer = window.setInterval(() => setAgentSeconds(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [agentBusy]);
+  useEffect(() => {
+    if (!agentBusy) return;
+    let current = true;
+    const refresh = () => {
+      api<{stage: string; detail: string; attempt: number}>(`/api/projects/${project.project_id}/chat/status`)
+        .then(status => { if (current) setAgentStatus(status); }).catch(() => {});
+      api<{entries: string[]}>(`/api/projects/${project.project_id}/chat/trace`)
+        .then(trace => { if (current) setLiveTrace(trace.entries || []); }).catch(() => {});
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 2000);
+    return () => { current = false; window.clearInterval(timer); };
+  }, [project.project_id, agentBusy]);
   useEffect(() => {
     let current = true;
     const refresh = () => api<{billing: Billing | null}>("/api/me").then(result => { if (current) setBilling(result.billing); }).catch(() => {});
@@ -312,8 +352,19 @@ function ProjectWorkspace({project}: {project: Project}) {
     return () => { current = false; window.clearInterval(timer); };
   }, []);
   const percentRemaining = billing?.token_budget ? Math.round(100 * billing.tokens_remaining / billing.token_budget) : 0;
-  return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Early</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Intermediate</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Late</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget, not an OpenAI dollar balance. The provider project spend limit is authoritative."><strong>{billing.provider} · key {billing.key_fingerprint}</strong><span>{billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce a provider project spend cap</small></div>}</header>
-    {phase === "chat" && <Chat project={project} />}{phase === "book" && <Book project={project} />}{phase === "grammar" && <Specification project={project} view="grammar" />}{phase === "tasks" && <Specification project={project} view="tasks" />}{phase === "source" && <Source project={project} />}</main>;
+  const agentElapsed = `${String(Math.floor(agentSeconds / 60)).padStart(2, "0")}:${String(agentSeconds % 60).padStart(2, "0")}`;
+  const agentProgress = cancelRequested ? "Cancellation requested; waiting for the current safe boundary" : agentStatus?.detail || (agentSeconds >= 120 ? "Long-running model or tool work is still active" : agentSeconds >= 30 ? "Model or workspace tools are still working" : "Contacting the model");
+  function agentState(busy: boolean, model?: string) { setAgentBusy(busy); if (busy) { setAgentModel(model || ""); setCancelRequested(false); setAgentStatus(null); setLiveTrace([]); } }
+  async function cancelAgent() { setCancelRequested(true); try { await api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}); } catch { setCancelRequested(false); } }
+  return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Durable</span><button className={phase === "memory" ? "tab active" : "tab"} onClick={() => setPhase("memory")}>Project memory</button></div><div className="phase-group"><span>Discover</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Specify</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Build</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget, not an OpenAI dollar balance. The provider project spend limit is authoritative."><strong>{billing.provider} · key {billing.key_fingerprint}</strong><span>default · {billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce a provider project spend cap</small></div>}</header>
+    {agentBusy && <div className="workspace-agent-progress"><div className="workspace-agent-running" role="status"><span className="agent-running-dot" /><span><strong>Agent running · {agentModel}</strong><small>{agentProgress}. You can inspect any project or phase while it runs.</small></span><time>{agentElapsed}</time><button type="button" onClick={cancelAgent} disabled={cancelRequested}>{cancelRequested ? "Cancel requested…" : "Cancel"}</button></div>{liveTrace.length > 0 && <details className={`live-operational-trace ${liveTrace.some(entry => entry.includes("rejected:") || entry.startsWith("Failed check:")) ? "has-error" : ""}`}><summary>Operational trace · {liveTrace.length} event{liveTrace.length === 1 ? "" : "s"} · latest: {liveTrace[liveTrace.length - 1]}</summary><pre>{liveTrace.map(entry => `- ${entry}`).join("\n")}</pre></details>}</div>}
+    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} models={billing?.models || []} defaultModel={billing?.model || ""} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
+    <div className="phase-panel" hidden={phase !== "memory"}><ProjectMemoryView project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
+    <div className="phase-panel" hidden={phase !== "book"}><Book project={project} workspaceRevision={workspaceRevision} /></div>
+    <div className="phase-panel" hidden={phase !== "grammar"}><Specification project={project} view="grammar" /></div>
+    <div className="phase-panel" hidden={phase !== "tasks"}><Specification project={project} view="tasks" /></div>
+    <div className="phase-panel" hidden={phase !== "source"}><Source project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
+  </main>;
 }
 
 function App() {
@@ -338,7 +389,7 @@ function App() {
   const project = projects.find(p => p.project_id === selected);
   async function create(event: FormEvent) { event.preventDefault(); const result = await api<{project_id: string}>("/api/projects", formRequest({display_name: newName})); setNewName(""); await load(); setSelected(result.project_id); }
   async function remove(item: Project) { const confirmation = prompt(`Type ${item.display_name} to permanently delete it:`); if (confirmation === null) return; await api(`/api/projects/${item.project_id}`, {method: "DELETE", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: new URLSearchParams({confirmation}).toString()}); if (selected === item.project_id) setSelected(null); await load(); }
-  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div><span>{user}</span></div></aside>{project ? <ProjectWorkspace key={`${user}:${project.project_id}`} project={project} /> : <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}</div>;
+  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div><span>{user}</span></div></aside>{projects.map(item => <div className="project-panel" hidden={selected !== item.project_id} key={`${user}:${item.project_id}`}><ProjectWorkspace project={item} /></div>)}{!project && <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

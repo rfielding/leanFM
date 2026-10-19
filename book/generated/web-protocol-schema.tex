@@ -191,6 +191,7 @@ message ChatPromptSubmitted {
   repeated ChatContentPart parts = 4;
   repeated string attachment_ids = 5;
   string credential_ref = 6;
+  string model = 7;
 }
 message ModelRequestIssued {
   string project_id = 1;
