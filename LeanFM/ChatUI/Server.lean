@@ -540,6 +540,32 @@ def addCompletionUsage (first second : Provider.Completion) (text : String) : Pr
   , outputTokens := first.outputTokens + second.outputTokens
   , totalTokens := first.totalTokens + second.totalTokens }
 
+def mediaReferencePath? (token : String) : Option String := do
+  let markers := ["spec/images/", "spec/media/", "renders/", "artifacts/"]
+  let marker ← markers.find? (fun value => token.contains value)
+  let pieces := token.splitOn marker
+  let leading := pieces.headD ""
+  guard (!leading.contains "://")
+  let tail := (pieces.drop 1).headD ""
+  let path := marker ++ String.ofList (tail.toList.takeWhile fun character =>
+    character.isAlphanum || character == '_' || character == '-' || character == '.' || character == '/')
+  guard (path.startsWith marker && !path.contains "..")
+  guard ([".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf", ".mp4", ".webm"] |>.any (fun extension => path.toLower.endsWith extension))
+  some path
+
+def mediaReferences (text : String) : List String :=
+  text.splitOn " " |>.flatMap fun token =>
+    token.splitOn "\n" |>.filterMap mediaReferencePath? |>.foldl
+      (fun found path => if found.contains path then found else found ++ [path]) []
+
+def missingMediaReferences (root text : String) : IO (List String) := do
+  let mut missing := []
+  for path in mediaReferences text do
+    match ← resolveWorkspacePath root path with
+    | .error _ => missing := missing ++ [path]
+    | .ok resolved => if !(← (fp resolved).pathExists) then missing := missing ++ [path]
+  return missing
+
 def bookRepairTimeoutSeconds : IO Nat := do
   let configured := (← IO.getEnv "LEANFM_BOOK_REPAIR_TIMEOUT_SECONDS").bind String.toNat?
   pure (max 10 (min 60 (configured.getD 30)))
@@ -1226,13 +1252,43 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       writeChatStatus root "failed" message
                       appendProjectDiagnostic root "terminal_agent_error" message
                       return some (errorResponse 502 message)
-                  | .ok answer =>
+                  | .ok initialAnswer =>
+                      let mut answer := initialAnswer
+                      let initialVisibleText := (bookChatEdit? answer.text).map (·.reply) |>.getD answer.text
+                      let missingBeforeRecovery ← missingMediaReferences root initialVisibleText
+                      if !missingBeforeRecovery.isEmpty then
+                        appendProjectDiagnostic root "missing_project_artifact_reference"
+                          ("Assistant completion referenced project media that does not exist: " ++
+                            String.intercalate ", " missingBeforeRecovery)
+                        appendLiveTrace root trace ("Detected nonexistent project media before returning a completion: " ++
+                          String.intercalate ", " missingBeforeRecovery ++ "; starting one bounded output-only recovery")
+                        let recoveryPrompt := contextualPrompt ++
+                          "\n\nYour previous completion referenced project media that LeanFM verified does not exist: " ++
+                          String.intercalate ", " missingBeforeRecovery ++
+                          ". This is the single bounded recovery attempt. Do not repeat those paths or claim they were created. For a PDF illustration, replace external image dependencies with a self-contained vector drawing in the book source. Return the corrected result now; use verified artifacts only."
+                        let noRepeatTool : Provider.ToolRunner := fun name _ => do
+                          appendLiveTrace root trace ("Blocked workspace tool " ++ name ++ " during bounded missing-artifact response repair to prevent replaying completed operations")
+                          pure ("FATAL: repeated_failed_tool_call:" ++ name)
+                        match ← Provider.completeAgent key (workspaceAgentInstructions root) recoveryPrompt selectedModel noRepeatTool
+                            (cancelled := chatCancellationRequested root) with
+                        | .error recoveryError =>
+                            appendLiveTrace root trace ("Missing-artifact recovery did not complete: " ++ recoveryError)
+                        | .ok recovered =>
+                            let recoveredVisibleText := (bookChatEdit? recovered.text).map (·.reply) |>.getD recovered.text
+                            answer := addCompletionUsage answer recovered recovered.text
+                            let stillMissing ← missingMediaReferences root recoveredVisibleText
+                            if stillMissing.isEmpty then
+                              appendLiveTrace root trace "Bounded missing-artifact recovery returned only verified project media references"
+                              resolveProjectDiagnostics root "Bounded media-reference recovery verified the corrected project artifact response"
+                                ["missing_project_artifact_reference"]
+                            else
+                              appendLiveTrace root trace ("Bounded missing-artifact recovery still references nonexistent media: " ++ String.intercalate ", " stillMissing)
                       writeChatStatus root "validation" "Validating durable outputs from the model response."
                       let applied ← if projectId == "leanfm-workspace" || projectId == "go-server-example" then
                           pure (AppliedChatResult.mk answer.text answer false none)
                         else applyBookChatEdit key root selectedModel answer trace
                       clearChatCancellation root
-                      let answer := applied.completion
+                      answer := applied.completion
                       match cookieValue? request "leanfm_session" with
                       | some token => recordSessionUsage token username answer.totalTokens
                       | none => pure ()
@@ -1254,13 +1310,21 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let missingRequiredArtifact := mp4Requested && mp4Artifact.isNone
                       let implementationRequested := requestsImplementationSource prompt
                       let sourceFiles ← sourceFileNames root projectId
+                      let missingMedia := ← missingMediaReferences root applied.text
+                      if !missingMedia.isEmpty then
+                        let detail := "Assistant output referenced project media that does not exist: " ++
+                          String.intercalate ", " missingMedia
+                        appendLiveTrace root trace ("Rejected false project-media reference: " ++ String.intercalate ", " missingMedia)
+                        appendProjectDiagnostic root "missing_project_artifact_reference" detail
+                      activity := (← trace.get).reverse
                       let returnedQuestions := (applied.text.splitOn "```leanfm-questions").length > 1
                       let missingRequiredSource := implementationRequested && sourceFiles.isEmpty && !returnedQuestions
                       let warned := returnedQuestions || applied.notice.isSome || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
-                      let status := if missingRequiredArtifact || missingRequiredSource then "fail" else if warned then "warn" else "success"
+                      let status := if missingRequiredArtifact || missingRequiredSource || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"
                       if status != "success" then
                         let reason := if missingRequiredArtifact then "required MP4 artifact missing"
                           else if missingRequiredSource then "requested implementation source missing"
+                          else if !missingMedia.isEmpty then "assistant referenced project media that does not exist"
                           else if returnedQuestions then "agent returned blocking questions"
                           else if applied.notice.isSome then "book update warning"
                           else "workspace operation or check reported a failure"
@@ -1274,6 +1338,9 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         match mp4Failure with
                         | some failure => "The requested MP4 was not produced. " ++ failure
                         | none => "The requested MP4 was not produced because the MP4 transcoder was not invoked. LeanFM rejected the response instead of presenting another substitute or follow-up question."
+                        else if !missingMedia.isEmpty then
+                        "The response still references project media that was never created, so LeanFM rejected the completion claim after one bounded correction attempt. Missing file(s): " ++
+                          String.intercalate ", " missingMedia ++ ". The exact failure is saved to logs/runtime-diagnostics.jsonl; no further paid retry will run."
                         else match mp4Artifact with
                           | some generated =>
                               let path := String.ofList ((generated.drop 10).toString.toList.takeWhile (· != ' '))

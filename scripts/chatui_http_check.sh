@@ -27,6 +27,7 @@ cleanup() {
     test -f "$test_root/book-repair.json" && cat "$test_root/book-repair.json" >&2 || true
     test -f "$test_root/source-write.json" && cat "$test_root/source-write.json" >&2 || true
     test -f "$test_root/empty-source-implementation.json" && cat "$test_root/empty-source-implementation.json" >&2 || true
+    test -f "$test_root/missing-image-recovery.json" && cat "$test_root/missing-image-recovery.json" >&2 || true
   fi
   if [[ -n "${server_pid:-}" ]]; then kill "$server_pid" 2>/dev/null || true; fi
   if [[ -n "${provider_pid:-}" ]]; then kill "$provider_pid" 2>/dev/null || true; fi
@@ -144,6 +145,21 @@ curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MODEL_SELECTION report th
 rg -q 'selected model: test-model-fast' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REFERENCE put any image into the PDF' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-recovery.json"
+rg -q '"status":"success"' "$test_root/missing-image-recovery.json"
+rg -q '"book_updated":true' "$test_root/missing-image-recovery.json"
+rg -q 'one bounded output-only recovery' "$test_root/missing-image-recovery.json"
+rg -q 'self-contained vector illustration' "$test_root/missing-image-recovery.json"
+rg -q '\\begin\{tikzpicture\}' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REPEAT put an image into the PDF' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-repeat.json"
+rg -q '"status":"fail"' "$test_root/missing-image-repeat.json"
+rg -q '"total_tokens":36' "$test_root/missing-image-repeat.json"
+rg -q 'never-created-twice.png' "$test_root/missing-image-repeat.json"
+rg -q 'still references nonexistent media' "$test_root/missing-image-repeat.json"
+test "$(rg -c '"category":"missing_project_artifact_reference"' "$test_root/data/accounts/rfielding/projects/$project_a/logs/runtime-diagnostics.jsonl")" -ge 2
 test "$(curl -sS -b "$cookie_a" --data-urlencode 'prompt=TEST_INVALID_MODEL must not persist' --data-urlencode 'model=not-allowed' -o "$test_root/invalid-model.json" -w '%{http_code}' "$base_url/api/projects/$project_a/chat")" = 400
 rg -q 'server-start model snapshot' "$test_root/invalid-model.json"
 ! rg -q 'TEST_INVALID_MODEL' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
