@@ -193,6 +193,9 @@ curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UPDATE_BOOK update the du
 rg -q '"book_updated":true' "$test_root/book-update.json"
 rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
 test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
+test "$(curl -sS -b "$cookie_a" --data-urlencode 'source=stale editor must not win' --data-urlencode 'source_revision=stale-revision' -o "$test_root/stale-book-save.json" -w '%{http_code}' "$base_url/api/projects/$project_a/book")" = 409
+rg -q 'changed after this editor loaded' "$test_root/stale-book-save.json"
+rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
 
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UNDERSCORE_BOOK add a canvas screenshot path' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/underscore-book.json"

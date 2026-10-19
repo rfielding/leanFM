@@ -617,8 +617,8 @@ def sameBuildFailure (first second : String) : Bool :=
 
 def numberedBookExcerpt (candidate : String) (lineNumber : Nat) : String :=
   let lines := candidate.splitOn "\n"
-  let first := lineNumber - 4
-  let excerpt := lines.drop first |>.take 9
+  let first := lineNumber - 8
+  let excerpt := lines.drop first |>.take 17
   String.intercalate "\n" <| (List.range excerpt.length |>.zip excerpt).map fun (index, line) =>
     toString (first + index + 1) ++ ": " ++ line
 
@@ -631,7 +631,7 @@ def replaceBookLine? (candidate : String) (lineNumber : Nat) (replacement : Stri
 def repairBookEdit (key candidate diagnostic model : String) : IO (Except String (String × Provider.Completion)) := do
   let some lineNumber := diagnosticLineNumber? diagnostic
     | return .error "The compiler did not identify a source line, so no safe bounded line repair was possible."
-  let instructions := "You repair exactly one failing line in a pdfLaTeX document. Return ONLY JSON with numeric line_number and string replacement. Preserve meaning. Never return the full document. Escape LaTeX prose characters such as &, %, _, #, and $ when they are literal."
+  let instructions := "You repair exactly one failing line in the supplied numbered neighborhood of a pdfLaTeX document. The compiler's terminal line may follow the actual malformed construct. Return ONLY JSON with numeric line_number and string replacement. Preserve meaning. Never return the full document. Escape LaTeX prose characters such as &, %, _, #, and $ when they are literal."
   let prompt := "Repair the compiler failure using the numbered excerpt. Return only {\"line_number\":N,\"replacement\":\"complete replacement for that one line\"}.\n\nCompiler diagnostic:\n" ++
     truncateText diagnostic 3000 ++ "\n\nNumbered excerpt:\n" ++ numberedBookExcerpt candidate lineNumber
   match ← Provider.completeWithInstructionsTimeout (← bookRepairTimeoutSeconds) 2000 key instructions prompt model with
@@ -643,7 +643,10 @@ def repairBookEdit (key candidate diagnostic model : String) : IO (Except String
         | return .error "The automatic repair omitted line_number."
       let some replacement := Provider.jsonStringField? json "replacement"
         | return .error "The automatic repair omitted replacement."
-      if repairedLine != lineNumber then return .error "The automatic repair targeted a different line and was rejected."
+      let firstAllowed := lineNumber - 8
+      let lastAllowed := lineNumber + 8
+      if repairedLine < firstAllowed || repairedLine > lastAllowed then
+        return .error "The automatic repair targeted a line outside the bounded diagnostic neighborhood and was rejected."
       let some repaired := replaceBookLine? candidate repairedLine replacement
         | return .error "The automatic repair returned an invalid single-line replacement."
       return .ok (repaired, completion)
@@ -1113,14 +1116,21 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   | .ok _ => pure ()
               let source ← readOr (root ++ "/book/main.tex") ""
               if source.isEmpty then return some (errorResponse 404 "This project has no editable book/main.tex source.")
-              return some (jsonResponse 200 ("{\"source\":\"" ++ jsonEscape source ++ "\"}\n"))
+              let revision ← keyFingerprint source
+              return some (jsonResponse 200 ("{\"source\":\"" ++ jsonEscape source ++
+                "\",\"source_revision\":\"" ++ revision ++ "\"}\n"))
           | ["book"], "POST" =>
               if projectId == "leanfm-workspace" || projectId == "go-server-example" then return some (errorResponse 403 "The checked-in project book is read-only.")
               let source := (formValue? (requestBody request) "source").getD ""
+              let expectedRevision := (formValue? (requestBody request) "source_revision").getD ""
               if source.isEmpty then return some (errorResponse 400 "Book source cannot be empty.")
               if source.length > 2000000 then return some (errorResponse 413 "Book source exceeds the 2 MB editor limit.")
+              let current ← readOr (root ++ "/book/main.tex") ""
+              if !expectedRevision.isEmpty && expectedRevision != (← keyFingerprint current) then
+                return some (errorResponse 409 "The project book changed after this editor loaded. Reloaded source is required before saving so a newer compiling revision is not overwritten.")
               writeAtomic (root ++ "/book/main.tex") source
-              return some (jsonResponse 200 "{\"saved\":true}\n")
+              return some (jsonResponse 200 ("{\"saved\":true,\"source_revision\":\"" ++
+                (← keyFingerprint source) ++ "\"}\n"))
           | ["book", "build"], "POST" =>
               if projectId == "leanfm-workspace" || projectId == "go-server-example" then return some (errorResponse 403 "The checked-in project book is read-only.")
               match ← buildProjectBook root with
