@@ -24,6 +24,7 @@ let diagnosticProjectId = "";
 let reportsThisMinute = 0;
 let reportWindowStarted = Date.now();
 let reportingDiagnostic = false;
+const reportedDiagnosticFingerprints = new Set<string>();
 
 export function setClientDiagnosticProject(projectId: string | null) {
   diagnosticProjectId = projectId || "";
@@ -42,8 +43,12 @@ export function reportClientError(description: string, cause: unknown, projectId
   const now = Date.now();
   if (now - reportWindowStarted >= 60000) { reportWindowStarted = now; reportsThisMinute = 0; }
   if (reportingDiagnostic || reportsThisMinute >= 20) return;
-  reportsThisMinute += 1;
   const error = cause instanceof Error ? cause : new Error(String(cause));
+  const fingerprint = `${projectId}\n${description}\n${error.name}\n${error.message}`;
+  if (reportedDiagnosticFingerprints.has(fingerprint)) return;
+  if (reportedDiagnosticFingerprints.size >= 200) reportedDiagnosticFingerprints.clear();
+  reportedDiagnosticFingerprints.add(fingerprint);
+  reportsThisMinute += 1;
   const body = new URLSearchParams({
     project_id: projectId,
     description: description.slice(0, 1000),

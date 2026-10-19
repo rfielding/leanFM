@@ -247,6 +247,8 @@ button { cursor: pointer; }
 .chat-questions label { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; background: var(--panel-2); }
 .chat-questions label.selected { border-color: #60a5fa; background: #1e40af; color: #fff; }
 .chat-questions input { accent-color: var(--action); }
+.chat-questions .question-qualification { display: grid; align-items: stretch; cursor: text; margin-top: 5px; }
+.chat-questions .question-qualification textarea { width: 100%; resize: vertical; min-height: 72px; background: #071016; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px; font: inherit; }
 .chat-questions small { margin-left: 8px; padding: 2px 6px; border-radius: 999px; color: #fff; background: var(--action); font-weight: 800; }
 .chat-questions .primary { justify-self: start; }
 .chat-questions .primary:disabled { opacity: .5; cursor: not-allowed; }

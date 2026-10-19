@@ -3,8 +3,6 @@
 # proof:Keyless launch cannot spend provider funds, task:manage_projects.
 set -euo pipefail
 
-exit 0
-
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 test_root="$(mktemp -d /tmp/leanfm-chatui-check.XXXXXX)"
 server_log="$test_root/server.log"
@@ -45,7 +43,6 @@ provider_pid=$!
 LEANFM_DATA_ROOT="$data_root_setting" \
 LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
 LEANFM_LLM_MODEL="test-model" \
-LEANFM_LLM_MODELS="test-model,test-model-fast" \
 LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 \
 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
@@ -70,12 +67,18 @@ rg -q 'Cancel requested' <<<"$react_bundle"
 rg -q 'Model for new prompts' <<<"$react_bundle"
 rg -q 'Unhandled JavaScript exception' <<<"$react_bundle"
 rg -q '/api/client-errors' <<<"$react_bundle"
+rg -q 'reportedDiagnosticFingerprints' ui/src/api.ts
 rg -q 'Copy reference' <<<"$react_bundle"
 rg -q 'Copying an image reference to the clipboard' <<<"$react_bundle"
+rg -q 'Qualify this decision or provide a better answer' <<<"$react_bundle"
+rg -q 'No predefined option selected' <<<"$react_bundle"
+rg -q 'Qualification:' <<<"$react_bundle"
 composer_source="$(rg -n 'className="composer"' ui/src/main.tsx)"
 [[ "$composer_source" == *'<textarea'*'<button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">'* ]]
 rg -q 'Long-running model or tool work is still active' <<<"$react_bundle"
 test "$(curl -sS -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
+test "$(curl -sS --data-urlencode 'project_id=leanfm-workspace' --data-urlencode 'description=unauthenticated browser failure' -o "$test_root/unauthenticated-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 401
+rg -q 'Authentication required' "$test_root/unauthenticated-client-error.json"
 
 register() {
   local username="$1" cookie="$2" key="$3"
@@ -142,7 +145,7 @@ rg -q 'selected model: test-model-fast' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 test "$(curl -sS -b "$cookie_a" --data-urlencode 'prompt=TEST_INVALID_MODEL must not persist' --data-urlencode 'model=not-allowed' -o "$test_root/invalid-model.json" -w '%{http_code}' "$base_url/api/projects/$project_a/chat")" = 400
-rg -q 'configured allowlist' "$test_root/invalid-model.json"
+rg -q 'server-start model snapshot' "$test_root/invalid-model.json"
 ! rg -q 'TEST_INVALID_MODEL' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 printf '%s\n' 'package main' > "$test_root/data/accounts/rfielding/projects/$project_a/source/main.go"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/source" | rg -q '"files":\["main.go"\]'
@@ -191,6 +194,13 @@ rg -q '"book_updated":true' "$test_root/book-update.json"
 rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
 test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
 
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UNDERSCORE_BOOK add a canvas screenshot path' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/underscore-book.json"
+rg -q '"book_updated":true' "$test_root/underscore-book.json"
+rg -q '"total_tokens":18' "$test_root/underscore-book.json"
+rg -q 'no paid repair was needed' "$test_root/underscore-book.json"
+rg -Fq 'goban\_frame\_001.png' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPAIR_BOOK show the requested MCP animation while repairing the book' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/book-repair.json" &
 book_repair_pid=$!
@@ -216,6 +226,17 @@ test -f "$diagnostic_a"
 test -f "$test_root/data/accounts/rfielding/projects/$project_a/logs/README.md"
 rg -q '"category":"resolved"' "$diagnostic_a"
 ! rg -q '"category":"book_compiler"' "$diagnostic_a"
+test ! -e "$test_root/data/accounts/rfielding/projects/$project_a/.leanfm/book-recovery.tex"
+
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPEAT_BOOK preserve the exact compiler failure' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/repeated-book-failure.json"
+rg -q '"book_updated":false' "$test_root/repeated-book-failure.json"
+rg -q '"total_tokens":36' "$test_root/repeated-book-failure.json"
+rg -q 'same compiler failure' "$test_root/repeated-book-failure.json"
+rg -q 'logs/runtime-diagnostics.jsonl' "$test_root/repeated-book-failure.json"
+rg -q 'Stopped book repair because the compiler repeated the same diagnostic class' "$test_root/repeated-book-failure.json"
+rg -q '"category":"book_compiler".*TEST_REPEAT_BOOK' "$diagnostic_a"
+rg -q 'TEST_REPEAT_BOOK' "$test_root/data/accounts/rfielding/projects/$project_a/.leanfm/book-recovery.tex"
 
 curl -fsS -b "$cookie_b" --data-urlencode 'prompt=TEST_WRITE_SOURCE implement the server now' \
   "$base_url/api/projects/$project_b/chat" >"$test_root/source-write.json" &
@@ -248,7 +269,8 @@ curl -fsS -b "$cookie_b" --data-urlencode "project_id=$project_b" \
   --data-urlencode 'page=/#source' --data-urlencode 'occurred_at=2026-10-19T12:00:00.000Z' \
   "$base_url/api/client-errors" | rg -q '"recorded":true'
 rg -q '"category":"browser_error".*operation=Rendering the Source phase.*TypeError: fixture failure' "$diagnostic_b"
-test "$(curl -sS -b "$cookie_a" --data-urlencode "project_id=$project_b" --data-urlencode 'description=cross project' -o /dev/null -w '%{http_code}' "$base_url/api/client-errors")" = 202
+test "$(curl -sS -b "$cookie_a" --data-urlencode "project_id=$project_b" --data-urlencode 'description=cross project' -o "$test_root/cross-project-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 404
+rg -q 'Project not found' "$test_root/cross-project-client-error.json"
 ! rg -q 'cross project' "$diagnostic_b"
 curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["main.go"\]'
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/source/does-not-exist.go")" = 404
@@ -306,3 +328,11 @@ for _ in $(seq 1 50); do
 done
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
 echo 'ok: encrypted credentials, account isolation, migration and restart invalidation'
+
+# Requirement: large generated text changes preserve a checked canonical file and recover incrementally.
+rg -q 'project-local scratch candidate' LeanFM/ChatUI/Provider.lean
+rg -q 'project-local scratch candidate' LeanFM/ChatUI/Server.lean
+rg -q 'Never resubmit the complete failing candidate' LeanFM/ChatUI/Server.lean
+rg -q 'No wholesale retry after failed large-file validation' LeanFM/ChatUI/Requirements.lean
+rg -Fq 'disabled={disabled} onClick={submitAnswers}' ui/src/main.tsx
+rg -Fq 'role="alert"' ui/src/main.tsx

@@ -57,22 +57,49 @@ def credentialKey (username request : String) : IO (Except String String) := do
 def validModelId (model : String) : Bool :=
   !model.isEmpty && model.length ≤ 128 && model.toList.all fun c => c.isAlphanum || c == '-' || c == '_' || c == '.' || c == ':'
 
-def configuredModels : IO (List String) := do
+initialize discoveredModels : IO.Ref (Option (List String)) ← IO.mkRef none
+
+def responseModelCandidate (model : String) : Bool :=
+  let lower := model.toLower
+  validModelId model &&
+    !(model.startsWith "ft:") &&
+    !["embedding", "moderation", "whisper", "transcribe", "tts", "realtime", "audio", "image", "dall-e", "search"].any
+      (fun fragment => lower.contains fragment)
+
+def uniqueModels (models : List String) : List String :=
+  models.foldl (fun found model => if found.contains model then found else found ++ [model]) []
+
+def configuredModels (key : Option String := none) : IO (List String) := do
   let fallback := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"
-  let configured := (← IO.getEnv "LEANFM_LLM_MODELS").getD fallback
-  let models := configured.splitOn "," |>.map (·.trimAscii.toString) |>.filter validModelId
-  pure ((fallback :: models).foldl (fun found model => if found.contains model then found else found ++ [model]) [])
+  match ← IO.getEnv "LEANFM_LLM_MODELS" with
+  | some configured =>
+      let models := configured.splitOn "," |>.map (·.trimAscii.toString) |>.filter validModelId
+      pure (uniqueModels (fallback :: models))
+  | none =>
+      match ← discoveredModels.get with
+      | some models => pure models
+      | none =>
+          let discovered ← match key with
+            | none => pure []
+            | some providerKey =>
+                match ← Provider.listedModels providerKey with
+                | .ok models => pure (models.filter responseModelCandidate)
+                | .error _ => pure []
+          let models := uniqueModels (fallback :: discovered) |>.take 40
+          if !discovered.isEmpty then discoveredModels.set (some models)
+          pure models
 
 def billingJson (username request : String) : IO String := do
-  let models ← configuredModels
-  let model := models.headD "gpt-5-mini"
-  let modelJson := "[" ++ String.intercalate "," (models.map fun value => "\"" ++ jsonEscape value ++ "\"") ++ "]"
   match cookieValue? request "leanfm_session" with
   | none => pure "null"
   | some token =>
       match ← sessionBilling? token username with
       | none => pure "null"
       | some billing =>
+          let key ← sessionCredential? token username
+          let models ← configuredModels key
+          let model := models.headD "gpt-5-mini"
+          let modelJson := "[" ++ String.intercalate "," (models.map fun value => "\"" ++ jsonEscape value ++ "\"") ++ "]"
           let remaining := billing.tokenBudget - billing.tokensUsed
           pure ("{\"provider\":\"" ++ jsonEscape billing.provider ++
             "\",\"credential_ref\":\"" ++ jsonEscape billing.credentialRef ++
@@ -196,6 +223,10 @@ def appendConversation (root role text : String) (usage : Option Provider.Comple
 
 def truncateText (value : String) (limit : Nat) : String :=
   if value.length ≤ limit then value else String.ofList (value.toList.take limit) ++ "\n[truncated]\n"
+
+def truncateTailText (value : String) (limit : Nat) : String :=
+  if value.length ≤ limit then value
+  else "[earlier output truncated]\n" ++ (value.drop (value.length - limit)).toString
 
 def diagnosticLogPath (root : String) : String := root ++ "/logs/runtime-diagnostics.jsonl"
 
@@ -437,7 +468,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
   | _ => fail "Unknown workspace tool."
 
 def workspaceAgentInstructions (root : String) : String :=
-  "When a workspace tool returns ERROR or a check fails, inspect that concrete diagnostic, change the input or strategy, exhaust safe reversible alternatives, rerun validation, and continue the original requested task. Do not ask the user to retry an authorized reversible operation and do not repeat the identical failing call. Ask only when recovery needs new authority, a destructive or expensive choice, or an unavailable dependency. " ++
+  "When a workspace tool returns ERROR or a check fails, inspect that concrete diagnostic, change the input or strategy, exhaust safe reversible alternatives, rerun validation, and continue the original requested task. For every generated or substantially rewritten text file, preserve the last revision that passed its proportional check and work on a project-local scratch candidate. Promote it only after validation. On any validation failure, retain the complete bounded diagnostic, restore the last known-good file, divide the intended delta into small ordered independently checkable pieces, apply and validate one piece at a time, and immediately back out the first failing piece. Never resubmit the complete failing candidate, repeat an unchanged failure class, or spend another model request before narrowing the change or failure location. Running a project-local compiler, test, or named check is already authorized reversible work: run it directly and never ask whether the user wants it run. Do not ask the user to retry an authorized reversible operation and do not repeat the identical failing call. Ask only when recovery needs new authority, a destructive or expensive choice, or an unavailable dependency. " ++
   Provider.hostedChatInstructions ++ " The authenticated user explicitly authorizes you to inspect and edit files only beneath the selected project root " ++ root ++ ". Use the supplied workspace tools to do requested engineering work, not merely describe a plan. All final implementation code, build files, generated language bindings, and implementation tests belong beneath source/. Specification artifacts remain beneath spec/. Never present implementation source as a chat code fence or prose substitute: write each file with workspace_write or workspace_patch, run a proportional check, and reply with a concise artifact summary. Use the hosted web_search tool when the user asks you to search the public internet, and cite the selected source URL. When the user asks to find or show an internet image, show the selected image immediately using Markdown image syntax with a direct HTTPS image URL, followed by its source-page URL; do not ask whether to show, preview, import, encode, or register it. workspace_write creates missing parent directories safely. Read relevant AGENTS.md and SKILL.md files before edits. Preserve unrelated changes. Never try to access a path outside this workspace. A descriptive Lean file containing lists of strings is not a LeanFM grammar: candidate requirements must define and validate a typed RequirementSpec with TaskRequirement and TaskGrammar values, and must derive spec/tasks.json for the Grammar and Tasks UI. If that grammar is absent or invalid, create or repair it before implementation files. Never implement source, generate language bindings, or cross either acceptance gate unless the durable project state records the user's explicit acceptance. Immediately before any source-generation pass, critique the accepted design for security. Identify trust boundaries protected assets attacker capabilities and abuse cases, then encode applicable security requirements as durable MUST NOT constraints covering authorization tenant and project isolation secrets logs injection path or symlink escape executable content resource exhaustion replay request confusion privilege expansion and fail-open behavior. Map each negative requirement to an implementation control plus a negative test or proof obligation. If a material threat lacks an accepted mitigation, return to the implementation-specification gate instead of generating source or inventing policy. Immediately before recommending or performing a commit, inspect the exact candidate diff and generated artifacts rather than relying on the earlier design critique. Check for secrets, authorization or isolation failures, injection, path or symlink escape, executable content, unbounded or unsafe generated artifacts, replay, request confusion, privilege expansion, and fail-open behavior; state the positive invariant and map each material forbidden behavior to a control and negative test or proof. Never commit or claim commit readiness while a material finding is unresolved. Never imitate generated output: invoke the real generator or report the exact missing executable. When you create or discuss media below the selected project root, cite its project-relative path; the host renders supported image and video paths inline automatically. For an explicit animated GIF request, write a project-local Python/Pillow generator, run workspace_run_gif_generator, cite the resulting .gif path, and do not substitute canvas WebM or another format or ask whether a substitute is acceptable. For an explicit MP4 request, create or locate the project-local GIF or WebM source, run workspace_transcode_mp4, and cite the resulting project-relative .mp4 path so the remote chat renders an inline video. Never substitute WebM GIF canvas HTML a conversion script or file:// instructions for a requested MP4, and never claim MP4 completion until the transcoder has validated the actual file. Do not ask about data URIs, manifests, HTML tags, encodings, or download mechanisms, and do not create alternate compact media unless the user explicitly requests one. The user is operating the served UI remotely: provide authenticated served project artifacts, never directions to open server-local file:// paths. Question policy is strict: act instead of asking whenever a request is identifiable and reversible; choose a conventional or recommended default unless it changes an observable requirement, crosses an acceptance gate, is destructive, or is expensive and irreversible. When the user explicitly asks whether the project has enough detail to one-shot the software, inspect the durable book requirements implementation mapping and source, identify decisions whose absence prevents a conforming one-pass implementation, and ask at most the two highest-impact unresolved questions in the structured question form; this readiness request is a question-triggering instruction, not an implementation command. The words do it, generate, proceed, continue, now, show, or accept defaults prohibit another clarification round for that requested result. A structured answer includes Question ID and permanently closes both that ID and the same semantic question. After receiving any structured answer, produce a material result or durable edit before asking anything new. A requested result gets at most one clarification turn; afterward state reasonable assumptions and produce the best reversible result. Do not ask a follow-up question when the requested reversible action is already identifiable. Do not claim a file changed unless workspace_write or workspace_patch succeeded. Run a proportional named check after edits. Summarize the outcome, changed files, and validation concisely. Tool activity is shown separately, so do not invent or narrate hidden reasoning."
 
 structure BookChatEdit where
@@ -487,7 +518,11 @@ def buildProjectBook (root : String) : IO (Except String Unit) := do
           "--tmpfs", "/tmp", "--bind", realBook.toString, "/work", "--chdir", "/work",
           "--setenv", "HOME", "/tmp", "--", "/usr/bin/make"] }
   if out.exitCode == 0 then return .ok ()
-  return .error ("Book build failed:\n" ++ truncateText (out.stdout ++ "\n" ++ out.stderr) 10000)
+  let processTail := truncateTailText (out.stdout ++ "\n" ++ out.stderr) 12000
+  let latexLog ← readOr (root ++ "/book/main.log") ""
+  let logTail := if latexLog.isEmpty then "" else
+    "\n\nTail of book/main.log:\n" ++ truncateTailText latexLog 12000
+  return .error ("Book build failed:\n" ++ processTail ++ logTail)
 
 def buildErrorSummary (message : String) : String :=
   let lines := message.splitOn "\n" |>.map (·.trimAscii.toString) |>.filter (!·.isEmpty)
@@ -511,6 +546,21 @@ def bookRepairTimeoutSeconds : IO Nat := do
 
 def chatStatusPath (root : String) : String := root ++ "/.leanfm/chat-status.json"
 def chatCancellationPath (root : String) : String := root ++ "/.leanfm/cancel-requested"
+def bookRecoveryPath (root : String) : String := root ++ "/.leanfm/book-recovery.tex"
+
+def retainBookRecovery (root candidate : String) : IO Unit := do
+  IO.FS.createDirAll (fp (root ++ "/.leanfm"))
+  writeAtomic (bookRecoveryPath root) candidate
+
+def clearBookRecovery (root : String) : IO Unit := do
+  let path := fp (bookRecoveryPath root)
+  if ← path.pathExists then IO.FS.removeFile path
+
+def bookRecoveryContext (root : String) : IO String := do
+  if ← (fp (bookRecoveryPath root)).pathExists then
+    pure ("An earlier proposed book revision failed compilation and is retained at .leanfm/book-recovery.tex. " ++
+      "The active book/main.tex is the last compiling revision. Continue the requested work autonomously: inspect the retained compiler diagnostic, compare the retained target with book/main.tex, reapply it in small independently compilable pieces, run the book check after every piece, and immediately back out the first failing piece. Do not ask the user to perform these steps.\n\n")
+  else pure ""
 
 def clearChatCancellation (root : String) : IO Unit := do
   let path := fp (chatCancellationPath root)
@@ -537,9 +587,33 @@ structure BookLineRepair where
   replacement : String
 
 def diagnosticLineNumber? (diagnostic : String) : Option Nat := do
-  let line ← diagnostic.splitOn "\n" |>.find? (fun value => value.startsWith "l.")
+  let line ← diagnostic.splitOn "\n" |>.map (·.trimAscii.toString) |>.find? (fun value => value.startsWith "l.")
   let digits := (line.drop 2).toString.toList.takeWhile Char.isDigit |> String.ofList
   digits.toNat?
+
+def escapeBareUnderscores (source : String) : String :=
+  let rec loop (previousBackslash : Bool) : List Char → List Char
+    | [] => []
+    | character :: rest =>
+        if character == '_' && !previousBackslash then
+          '\\' :: '_' :: loop false rest
+        else
+          character :: loop (character == '\\' && !previousBackslash) rest
+  String.ofList (loop false source.toList)
+
+def deterministicMissingMathRepair? (candidate diagnostic : String) : Option String := do
+  guard (buildErrorSummary diagnostic == "! Missing $ inserted.")
+  let lineNumber ← diagnosticLineNumber? diagnostic
+  guard (lineNumber > 0)
+  let lines := candidate.splitOn "\n"
+  let original ← lines[lineNumber - 1]?
+  let repaired := escapeBareUnderscores original
+  guard (repaired != original)
+  pure <| String.intercalate "\n" <| lines.zipIdx.map fun (line, index) =>
+    if index == lineNumber - 1 then repaired else line
+
+def sameBuildFailure (first second : String) : Bool :=
+  buildErrorSummary first == buildErrorSummary second
 
 def numberedBookExcerpt (candidate : String) (lineNumber : Nat) : String :=
   let lines := candidate.splitOn "\n"
@@ -594,18 +668,41 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
   appendLiveTrace root trace "Started book build for the proposed revision"
   match ← buildProjectBook root with
   | .ok _ =>
+      clearBookRecovery root
       appendLiveTrace root trace "Finished book build for the proposed revision"
       resolveProjectDiagnostics root "Successful book build superseded earlier compiler and repair failures"
         ["book_compiler", "Failed book build", "automatic book repair"]
       return AppliedChatResult.mk edit.reply answer true none
   | .error diagnostic =>
       writeAtomic path previous
+      retainBookRecovery root edit.source
       appendProjectDiagnostic root "book_compiler" diagnostic
-      appendLiveTrace root trace ("Failed book build: " ++ buildErrorSummary diagnostic)
+      appendLiveTrace root trace ("Failed book build: " ++ buildErrorSummary diagnostic ++
+        " Full compiler diagnostic: logs/runtime-diagnostics.jsonl")
       let mut candidate := edit.source
       let mut latestDiagnostic := diagnostic
       let mut combined := answer
       let mut latestRepairError : Option String := none
+      match deterministicMissingMathRepair? candidate latestDiagnostic with
+      | some deterministicCandidate =>
+          candidate := deterministicCandidate
+          retainBookRecovery root candidate
+          writeAtomic path candidate
+          appendLiveTrace root trace "Applied deterministic escaping to unescaped underscores on the compiler-reported line"
+          match ← buildProjectBook root with
+          | .ok _ =>
+              clearBookRecovery root
+              appendLiveTrace root trace "Finished book build after deterministic LaTeX path escaping; no paid repair was needed"
+              resolveProjectDiagnostics root "Deterministic LaTeX path escaping fixed the compiler failure"
+                ["book_compiler", "Failed book build", "automatic book repair"]
+              return AppliedChatResult.mk edit.reply combined true none
+          | .error deterministicDiagnostic =>
+              writeAtomic path previous
+              appendProjectDiagnostic root "book_compiler" deterministicDiagnostic
+              appendLiveTrace root trace ("Deterministic underscore escaping did not complete the build: " ++
+                buildErrorSummary deterministicDiagnostic ++ " Full compiler diagnostic: logs/runtime-diagnostics.jsonl")
+              latestDiagnostic := deterministicDiagnostic
+      | none => pure ()
       for index in List.range 3 do
         if ← chatCancellationRequested root then
           writeAtomic path previous
@@ -614,6 +711,11 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
             (some ("Book repair was cancelled at a safe boundary, so the original book was restored. " ++
               buildErrorSummary latestDiagnostic))
         let attempt := index + 1
+        if (diagnosticLineNumber? latestDiagnostic).isNone then
+          appendLiveTrace root trace
+            "Skipped automatic book repair because no concrete source line was available; retained the last compiling book"
+          return AppliedChatResult.mk edit.reply combined false
+            (some ("The proposed revision was restored to the last compiling book. The compiler diagnostic had no safe source location, so no blind paid repair was attempted. LeanFM retained the failed target and full diagnostic for autonomous incremental recovery."))
         appendLiveTrace root trace ("Started automatic book repair " ++ toString attempt ++ " of 3")
         writeChatStatus root "book-repair" (buildErrorSummary latestDiagnostic ++
           " Requesting bounded automatic repair " ++ toString attempt ++ " of 3.") attempt
@@ -623,7 +725,7 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
             appendLiveTrace root trace ("Automatic book repair " ++ toString attempt ++ " failed: " ++ repairError)
             return AppliedChatResult.mk edit.reply combined false
               (some ("The proposed book revision was restored after the bounded repair request failed. " ++
-                buildErrorSummary latestDiagnostic ++ " What to do: copy this diagnostic to Codex. Repair detail: " ++ repairError))
+                buildErrorSummary latestDiagnostic ++ " LeanFM retained the failed target and diagnostic for autonomous recovery. Repair detail: " ++ repairError))
         | .ok (repairedSource, repairCompletion) =>
             combined := addCompletionUsage combined repairCompletion edit.reply
             if repairedSource == candidate then
@@ -631,25 +733,35 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
               appendLiveTrace root trace "Stopped book repair because the candidate did not change"
               return AppliedChatResult.mk edit.reply combined false
                 (some ("The proposed book revision was restored because repair made no progress. " ++
-                  buildErrorSummary latestDiagnostic ++ " What to do: copy the diagnostic to Codex."))
+                  buildErrorSummary latestDiagnostic ++ " LeanFM retained the failed target and diagnostic for autonomous recovery."))
             if repairedSource.length > 2000000 then
               return AppliedChatResult.mk edit.reply combined false
                 (some "The repaired book revision exceeded the 2 MB editor limit and was not applied.")
             candidate := repairedSource
+            retainBookRecovery root candidate
             writeAtomic path candidate
             writeChatStatus root "book-build" ("Compiling automatic repair " ++ toString attempt ++ " of 3.") attempt
             match ← buildProjectBook root with
             | .ok _ =>
+                clearBookRecovery root
                 appendLiveTrace root trace ("Finished book build after automatic repair " ++ toString attempt ++ " of 3")
                 resolveProjectDiagnostics root "Successful repaired book build superseded earlier compiler and repair failures"
                   ["book_compiler", "Failed book build", "automatic book repair"]
                 return AppliedChatResult.mk edit.reply combined true none
             | .error repairedDiagnostic =>
-                latestDiagnostic := repairedDiagnostic
                 writeAtomic path previous
                 appendProjectDiagnostic root "book_compiler" repairedDiagnostic
                 appendLiveTrace root trace ("Failed book build after automatic repair " ++
-                  toString attempt ++ " of 3: " ++ buildErrorSummary repairedDiagnostic)
+                  toString attempt ++ " of 3: " ++ buildErrorSummary repairedDiagnostic ++
+                  " Full compiler diagnostic: logs/runtime-diagnostics.jsonl")
+                if sameBuildFailure latestDiagnostic repairedDiagnostic then
+                  appendLiveTrace root trace
+                    "Stopped book repair because the compiler repeated the same diagnostic class"
+                  return AppliedChatResult.mk edit.reply combined false
+                    (some ("The proposed book revision was restored because repair repeated the same compiler failure. " ++
+                      buildErrorSummary repairedDiagnostic ++
+                      " Full diagnostic: logs/runtime-diagnostics.jsonl. No further paid repair was attempted."))
+                latestDiagnostic := repairedDiagnostic
       return AppliedChatResult.mk edit.reply combined false
         (some ("The proposed book revision remained invalid after three automatic syntax-repair attempts, so the original book was restored. " ++
           buildErrorSummary latestDiagnostic ++ match latestRepairError with
@@ -928,9 +1040,10 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
     let detail := "operation=" ++ description ++ " error=" ++ errorName ++ ": " ++ message ++
       " page=" ++ page ++ " occurred_at=" ++ occurredAt ++ "\nstack:\n" ++ stack
     match ← authorizedProjectRoot? username projectId with
-    | some root => appendProjectDiagnostic root "browser_error" detail
-    | none => IO.eprintln ("browser error without an authorized active project: " ++ truncateText detail 4000)
-    return some (jsonResponse 202 "{\"recorded\":true}\n")
+    | some root =>
+        appendProjectDiagnostic root "browser_error" detail
+        return some (jsonResponse 202 "{\"recorded\":true}\n")
+    | none => return some (errorResponse 404 "Project not found.")
   if path == "/api/projects" && method == "GET" then
     return some (jsonResponse 200 ("{\"projects\":" ++ (← projectListJson username) ++ "}\n"))
   if path == "/api/projects" && method == "POST" then
@@ -1048,13 +1161,13 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
           | ["chat"], "POST" =>
               let prompt := (formValue? (requestBody request) "prompt").getD ""
               if prompt.trimAscii.isEmpty then return some (errorResponse 400 "A prompt is required.")
-              let models ← configuredModels
-              let selectedModel := (formValue? (requestBody request) "model").getD (models.headD "gpt-5-mini")
-              if !models.contains selectedModel then return some (errorResponse 400 "The selected model is not in this server's configured allowlist.")
               let responseStarted ← IO.monoMsNow
               match ← credentialKey username request with
               | .error message => return some (errorResponse 409 message)
               | .ok key =>
+                  let models ← configuredModels (some key)
+                  let selectedModel := (formValue? (requestBody request) "model").getD (models.headD "gpt-5-mini")
+                  if !models.contains selectedModel then return some (errorResponse 400 "The selected model is not in this server-start model snapshot.")
                   clearChatCancellation root
                   writeChatStatus root "model" ("Waiting for " ++ selectedModel ++ " to respond.")
                   writeLiveTrace root []
@@ -1064,12 +1177,14 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                     | .ok context => pure context
                     | .error message => return some (errorResponse 500 message)
                   let diagnosticContext ← recentProjectDiagnostics root
+                  let recoveryContext ← bookRecoveryContext root
                   let contextualPrompt := "Selected LeanFM project root: " ++ root ++
                     "\nAuthorized project workspace: " ++ root ++ "\nImplementation artifacts must be written below source/ and will be displayed from there.\n\n" ++
                     "Implementation-result policy: an explicit implementation request must either write and check the complete implementation beneath the selected project's source/ directory after both acceptance gates and the security critique, or return focused structured leanfm-questions naming the missing gate or material decision. Never claim implementation success while source/ is empty.\n\n" ++
                     guidedContext ++ "\n\n" ++
                     (if diagnosticContext.isEmpty then "" else
                       "LeanFM private diagnostic memory from recent project failures. Use it to avoid repeating a failed path or strategy; do not quote it unless it changes the user-facing remedy:\n" ++ diagnosticContext ++ "\n\n") ++
+                    recoveryContext ++
                     (if prior.isEmpty then "" else "Project conversation so far:\n\n" ++ prior ++ "\n\n") ++
                     (if figureContext.isEmpty then "" else figureContext ++ "\n\n") ++
                     "Current user message:\n" ++ prompt

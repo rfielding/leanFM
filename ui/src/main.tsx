@@ -102,7 +102,8 @@ function extractResult(text: string): {text: string; status?: "success" | "warn"
 
 function projectImagePaths(text: string, projectId: string): string[] {
   const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?(spec/images/[A-Za-z0-9._/-]+\\.(?:svg|gif|png|jpe?g))`, "gi");
-  return [...text.matchAll(pattern)].map(match => match[1]).filter((path, index, paths) => paths.indexOf(path) === index);
+  return [...text.matchAll(pattern)].map(match => match[1]).filter(path => !path.includes(".."))
+    .filter((path, index, paths) => paths.indexOf(path) === index);
 }
 
 function projectVideoPaths(text: string, projectId: string): string[] {
@@ -135,6 +136,13 @@ function CopyImageReference({reference}: {reference: string}) {
   return <button type="button" className="copy-image-reference" onClick={copy}>{copied ? "Copied" : "Copy reference"}</button>;
 }
 
+function ProjectImage({projectId, path}: {projectId: string; path: string}) {
+  const [loaded, setLoaded] = useState(false), [missing, setMissing] = useState(false);
+  const src = `/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
+  if (missing) return <div className="request-error"><div className="result-badge fail">FAIL</div><p>Referenced project image does not exist: {path}</p></div>;
+  return <figure className="chat-inline-figure" style={!loaded ? {display: "none"} : undefined}><img src={src} alt={`Project figure ${path}`} onLoad={() => setLoaded(true)} onError={() => { setMissing(true); reportClientError("Loading a referenced project image", new Error(`Project image does not exist: ${path}`)); }} /><figcaption><span>{path}</span><CopyImageReference reference={path} /></figcaption></figure>;
+}
+
 function extractCanvases(text: string): {text: string; canvases: string[]} {
   const canvases: string[] = [];
   let remaining = text.replace(/```leanfm-canvas\s*([\s\S]*?)```/gi, (_block, source: string) => {
@@ -163,20 +171,30 @@ function CanvasAnimation({source}: {source: string}) {
 function QuestionForm({questions, answeredIds, disabled, onAnswer}: {questions: ChatQuestion[]; answeredIds: Set<string>; disabled?: boolean; onAnswer: (answer: string) => void}) {
   const unanswered = questions.filter(question => !answeredIds.has(question.id));
   const [selected, setSelected] = useState<Record<string, string[]>>({});
-  const complete = unanswered.length > 0 && unanswered.every(question => (selected[question.id] || []).length > 0);
+  const [qualifications, setQualifications] = useState<Record<string, string>>({});
+  const [validation, setValidation] = useState("");
   function choose(question: ChatQuestion, value: string, checked: boolean) {
     setSelected(current => ({...current, [question.id]: question.multiple ? (checked ? [...(current[question.id] || []), value] : (current[question.id] || []).filter(item => item !== value)) : [value]}));
   }
   function submitAnswers() {
+    const incomplete = unanswered.find(question =>
+      (selected[question.id] || []).length === 0 && (qualifications[question.id] || "").trim().length === 0);
+    if (incomplete) {
+      setValidation(`Answer “${incomplete.prompt}” by selecting a choice or entering qualifying text.`);
+      return;
+    }
+    setValidation("");
     const answer = unanswered.map(question => {
       const values = selected[question.id] || [];
       const labels = values.map(value => question.options.find(option => option.value === value)?.label || value);
-      return `Question ID: ${question.id}\n${question.prompt}\nAnswer: ${labels.map((label, index) => `${label} [${values[index]}]`).join(", ")}`;
+      const selectedAnswer = labels.length > 0 ? labels.map((label, index) => `${label} [${values[index]}]`).join(", ") : "No predefined option selected.";
+      const qualification = (qualifications[question.id] || "").trim();
+      return `Question ID: ${question.id}\n${question.prompt}\nAnswer: ${selectedAnswer}` + (qualification ? `\nQualification: ${qualification}` : "");
     }).join("\n\n");
     onAnswer(answer);
   }
   if (unanswered.length === 0) return <div className="answered-question-note">Already answered; this question is closed.</div>;
-  return <section className="chat-questions" aria-label="Questions requiring answers">{unanswered.map(question => <fieldset key={question.id}><legend>{question.prompt}</legend>{question.options.map(option => <label key={option.value} className={(selected[question.id] || []).includes(option.value) ? "selected" : ""}><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.value} checked={(selected[question.id] || []).includes(option.value)} onChange={event => choose(question, option.value, event.target.checked)} /> <span>{option.label}{option.recommended && <small>Recommended</small>}</span></label>)}</fieldset>)}<button className="primary" disabled={!complete || disabled} onClick={submitAnswers}>Submit answers</button></section>;
+  return <section className="chat-questions" aria-label="Questions requiring answers">{unanswered.map(question => <fieldset key={question.id}><legend>{question.prompt}</legend>{question.options.map(option => <label key={option.value} className={(selected[question.id] || []).includes(option.value) ? "selected" : ""}><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.value} checked={(selected[question.id] || []).includes(option.value)} onChange={event => { setValidation(""); choose(question, option.value, event.target.checked); }} /> <span>{option.label}{option.recommended && <small>Recommended</small>}</span></label>)}<label className="question-qualification"><span>Qualify this decision or provide a better answer</span><textarea value={qualifications[question.id] || ""} onChange={event => { setValidation(""); setQualifications(current => ({...current, [question.id]: event.target.value})); }} maxLength={4000} rows={3} placeholder="Optional when a choice fits; use this alone when none does." /></label></fieldset>)}{validation && <p className="question-validation" role="alert">{validation}</p>}<button type="button" className="primary" disabled={disabled} onClick={submitAnswers}>Submit answers</button></section>;
 }
 
 function Auth({onReady}: {onReady: () => void}) {
@@ -225,7 +243,7 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
   return <article className={`message ${message.role}`}><time className="message-timestamp" dateTime={validSentAt ? sentAt.toISOString() : undefined} title={validSentAt ? sentAt.toISOString() : timestamp}>{timestamp}{message.model ? ` · ${message.model}` : ""}</time>{result.status && <div className={`result-badge ${result.status}`}>{result.status.toUpperCase()}</div>}<div className="message-text"><LatexText text={first} />{pieces.map((part, i) => {
     const end = part.indexOf("```");
     return end < 0 ? <LatexText key={i} text={`\`\`\`mermaid\n${part}`} /> : <React.Fragment key={i}><Mermaid source={part.slice(0, end).trim()} className="chat-diagram" /><LatexText text={part.slice(end + 3)} /></React.Fragment>;
-  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <figure className="chat-inline-figure" key={path}><img src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`} alt={`Project figure ${path}`} /><figcaption><span>{path}</span><CopyImageReference reference={path} /></figcaption></figure>)}{videos.map(path => <figure className="chat-inline-figure" key={path}><video controls preload="metadata" src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}><a href={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}>Open {path}</a></video><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a><CopyImageReference reference={`![${image.alt}](${image.url})\nSource: ${image.source}`} /></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} answeredIds={answeredIds} disabled={disabled} onAnswer={onAnswer} />}{message.response_time_ms !== undefined && <div className="response-time">Response time: {(message.response_time_ms / 1000).toFixed(1)} s</div>}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
+  })}</div>{structured.invalid && <div className="request-error"><div className="result-badge fail">FAIL</div><p>The model returned a malformed question form. Resend this message to retry.</p></div>}{canvasContent.canvases.map((source, index) => <CanvasAnimation source={source} key={index} />)}{images.map(path => <ProjectImage projectId={projectId} path={path} key={path} />)}{videos.map(path => <figure className="chat-inline-figure" key={path}><video controls preload="metadata" src={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}><a href={`/api/projects/${projectId}/files/${path.split("/").map(encodeURIComponent).join("/")}`}>Open {path}</a></video><figcaption>{path}</figcaption></figure>)}{internetImages.map(image => <figure className="chat-inline-figure" key={image.url}><img src={image.url} alt={image.alt} loading="lazy" referrerPolicy="no-referrer" /><figcaption><a href={image.source} target="_blank" rel="noreferrer noopener">Source: {image.source}</a><CopyImageReference reference={`![${image.alt}](${image.url})\nSource: ${image.source}`} /></figcaption></figure>)}{activity && <details className="operational-trace"><summary>Operational trace</summary><pre>{activity}</pre></details>}{structured.questions.length > 0 && onAnswer && <QuestionForm questions={structured.questions} answeredIds={answeredIds} disabled={disabled} onAnswer={onAnswer} />}{message.response_time_ms !== undefined && <div className="response-time">Response time: {(message.response_time_ms / 1000).toFixed(1)} s</div>}{message.usage && <div className="usage">{message.usage.input_tokens} input · {message.usage.cached_input_tokens} cached · {message.usage.output_tokens} output · {message.usage.total_tokens} total · billed to your API key</div>}
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 

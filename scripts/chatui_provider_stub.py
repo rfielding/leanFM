@@ -15,7 +15,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(b'{"object":"list","data":[{"id":"test-model"}]}')
+            self.wfile.write(b'{"object":"list","data":[{"id":"test-model"},{"id":"test-model-fast"},{"id":"text-embedding-test"},{"id":"gpt-test-audio"}]}')
         else:
             self.send_response(401)
             self.end_headers()
@@ -38,6 +38,9 @@ class Handler(BaseHTTPRequestHandler):
                     "output_text": "selected model: " + request.get("model", "missing"),
                     "usage": usage,
                 }
+            elif "You repair exactly one failing line" in request_text and "TEST_REPEAT_BOOK" in request_text:
+                edit = {"line_number": 3, "replacement": "Still broken: C & D. TEST_REPEAT_BOOK"}
+                body = {"output_text": json.dumps(edit), "usage": usage}
             elif "You repair exactly one failing line" in request_text and "TEST_REPAIR_BOOK" in request_text:
                 time.sleep(1)
                 edit = {"line_number": 3, "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
@@ -57,7 +60,29 @@ class Handler(BaseHTTPRequestHandler):
                     }],
                     "usage": usage,
                 }
-            elif "TEST_REPAIR_BOOK" in request_text:
+            elif "Current user message:\nTEST_UNDERSCORE_BOOK" in current_input:
+                edit = {
+                    "reply": "The screenshot path was repaired deterministically.",
+                    "book_source": (
+                        "\\documentclass{book}\n"
+                        "\\begin{document}\n"
+                        "Screenshot: spec/images/goban_frame_001.png TEST_UNDERSCORE_BOOK\n"
+                        "\\end{document}\n"
+                    ),
+                }
+                body = {"output_text": json.dumps(edit), "usage": usage}
+            elif "Current user message:\nTEST_REPEAT_BOOK" in current_input:
+                edit = {
+                    "reply": "The repeated diagnostic fixture must stop after one repair.",
+                    "book_source": (
+                        "\\documentclass{book}\n"
+                        "\\begin{document}\n"
+                        "Broken durable book: A & B. TEST_REPEAT_BOOK\n"
+                        "\\end{document}\n"
+                    ),
+                }
+                body = {"output_text": json.dumps(edit), "usage": usage}
+            elif "Current user message:\nTEST_REPAIR_BOOK" in current_input:
                 edit = {
                     "reply": "Requested MCP animation remains visible after internal repair.",
                     "book_source": (
