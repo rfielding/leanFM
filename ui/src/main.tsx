@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import {createRoot} from "react-dom/client";
 import katex from "katex";
-import {ApiError, api, formRequest} from "./api";
+import {ApiError, api, formRequest, reportClientError, setClientDiagnosticProject} from "./api";
 import type {Billing, GrammarExpr, Message, Project, ProjectMemory, Task} from "./types";
 
 declare global { interface Window { mermaid?: any } }
@@ -18,6 +18,21 @@ type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: Qu
 type QueuedPrompt = {id: string; text: string; model: string};
 
 type MathFragment = {source: string; display: boolean; raw: string};
+
+class ClientFaultBarrier extends React.Component<{children: React.ReactNode}, {failed: boolean}> {
+  state = {failed: false};
+  static getDerivedStateFromError() { return {failed: true}; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    const enriched = new Error(`${error.message}\nReact component stack:${info.componentStack}`);
+    enriched.name = error.name;
+    enriched.stack = `${error.stack || error.message}\nReact component stack:${info.componentStack}`;
+    reportClientError("Rendering the LeanFM React application", enriched);
+  }
+  render() {
+    if (this.state.failed) return <main className="auth"><div className="auth-card"><h1>LeanFM client error</h1><p>The browser fault was logged to the server for analysis. Reload the page to restart the client.</p></div></main>;
+    return this.props.children;
+  }
+}
 
 function delimitedMath(fragment: string): MathFragment | undefined {
   if (fragment.startsWith("$$") && fragment.endsWith("$$")) return {source: fragment.slice(2, -2), display: true, raw: fragment};
@@ -40,6 +55,7 @@ function LatexText({text}: {text: string}) {
         const Tag = math.display ? "div" : "span";
         return <Tag key={fragmentIndex} className={math.display ? "chat-math-display" : "chat-math-inline"} dangerouslySetInnerHTML={{__html: html}} />;
       } catch (error) {
+        reportClientError("Rendering LaTeX in an assistant response", error);
         return <code key={fragmentIndex} className="chat-math-error" title={(error as Error).message}>{math.raw}</code>;
       }
     })}</React.Fragment>;
@@ -173,7 +189,7 @@ function Mermaid({source, className = "large-diagram"}: {source: string; classNa
     window.mermaid.initialize({startOnLoad: false, theme: "dark", securityLevel: "strict"});
     window.mermaid.render(`leanfm-react-${Date.now()}-${Math.random().toString(16).slice(2)}`, source)
       .then(({svg}: {svg: string}) => { if (current && ref.current) ref.current.innerHTML = svg; })
-      .catch((e: Error) => { if (current && ref.current) ref.current.textContent = `${e.message}\n\n${source}`; });
+      .catch((e: Error) => { reportClientError("Rendering a Mermaid diagram in the project workspace", e); if (current && ref.current) ref.current.textContent = `${e.message}\n\n${source}`; });
     return () => { current = false; };
   }, [source]);
   return <div ref={ref} className={className}><pre>{source}</pre></div>;
@@ -232,7 +248,7 @@ function Chat({project, models, defaultModel, onWorkspaceChange, onBusyChange}: 
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
     <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => <option key={option} value={option}>{option}</option>)}</select></label><button disabled={!prompt.trim() || !model}>Send</button></form></div></section>;
+    <div className="composer-wrap">{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => <option key={option} value={option}>{option}</option>)}</select></label></form></div></section>;
 }
 
 function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
@@ -377,6 +393,7 @@ function App() {
     document.documentElement.style.setProperty("--font-scale", String(fontScale));
     window.localStorage.setItem("leanfm:font-scale", String(fontScale));
   }, [fontScale]);
+  useEffect(() => { setClientDiagnosticProject(selected); }, [selected]);
   async function load() { const me = await api<{username: string}>("/api/me"); const data = await api<{projects: Project[]}>("/api/projects"); setUser(me.username); setProjects(data.projects || []); setSelected(current => (data.projects || []).some(p => p.project_id === current) ? current : (data.projects || []).find(p => !p.read_only)?.project_id || null); }
   useEffect(() => { setCheckingSession(true); load().catch(() => setUser(null)).finally(() => setCheckingSession(false)); }, [authVersion]);
   useEffect(() => {
@@ -392,4 +409,4 @@ function App() {
   return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div><span>{user}</span></div></aside>{projects.map(item => <div className="project-panel" hidden={selected !== item.project_id} key={`${user}:${item.project_id}`}><ProjectWorkspace project={item} /></div>)}{!project && <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}</div>;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<ClientFaultBarrier><App /></ClientFaultBarrier>);

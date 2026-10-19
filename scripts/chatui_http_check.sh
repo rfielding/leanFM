@@ -66,6 +66,10 @@ rg -q 'project-panel' <<<"$react_bundle"
 rg -q 'You can inspect any project or phase while it runs' <<<"$react_bundle"
 rg -q 'Cancel requested' <<<"$react_bundle"
 rg -q 'Model for new prompts' <<<"$react_bundle"
+rg -q 'Unhandled JavaScript exception' <<<"$react_bundle"
+rg -q '/api/client-errors' <<<"$react_bundle"
+composer_source="$(rg -n 'className="composer"' ui/src/main.tsx)"
+[[ "$composer_source" == *'<textarea'*'<button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">'* ]]
 rg -q 'Long-running model or tool work is still active' <<<"$react_bundle"
 test "$(curl -sS -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
 
@@ -233,6 +237,15 @@ diagnostic_b="$test_root/data/accounts/second_user/projects/$project_b/logs/runt
 test -f "$diagnostic_b"
 rg -q '"category":"resolved".*source/main.go' "$diagnostic_b"
 ! rg -q 'package main' "$diagnostic_b"
+curl -fsS -b "$cookie_b" --data-urlencode "project_id=$project_b" \
+  --data-urlencode 'description=Rendering the Source phase' \
+  --data-urlencode 'error_name=TypeError' --data-urlencode 'message=fixture failure' \
+  --data-urlencode $'stack=TypeError: fixture failure\n    at Source (chatui-react1.js:1:42)' \
+  --data-urlencode 'page=/#source' --data-urlencode 'occurred_at=2026-10-19T12:00:00.000Z' \
+  "$base_url/api/client-errors" | rg -q '"recorded":true'
+rg -q '"category":"browser_error".*operation=Rendering the Source phase.*TypeError: fixture failure' "$diagnostic_b"
+test "$(curl -sS -b "$cookie_a" --data-urlencode "project_id=$project_b" --data-urlencode 'description=cross project' -o /dev/null -w '%{http_code}' "$base_url/api/client-errors")" = 202
+! rg -q 'cross project' "$diagnostic_b"
 curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["main.go"\]'
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/source/does-not-exist.go")" = 404
 rg -q '"category":"http_error".*GET /api/projects/.*status=404' "$diagnostic_b"

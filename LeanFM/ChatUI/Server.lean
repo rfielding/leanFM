@@ -911,6 +911,21 @@ def handlePublic (path method request : String) : IO (Option HttpResponse) := do
 
 def handleAuthenticated (username path method request : String) : IO (Option HttpResponse) := do
   if path == "/api/me" then return some (jsonResponse 200 ("{\"username\":\"" ++ jsonEscape username ++ "\",\"billing\":" ++ (← billingJson username request) ++ "}\n"))
+  if path == "/api/client-errors" && method == "POST" then
+    let body := requestBody request
+    let projectId := (formValue? body "project_id").getD ""
+    let description := truncateText ((formValue? body "description").getD "Unspecified browser operation") 1000
+    let errorName := truncateText ((formValue? body "error_name").getD "Error") 200
+    let message := truncateText ((formValue? body "message").getD "No browser error message") 4000
+    let stack := truncateText ((formValue? body "stack").getD "Stack unavailable") 12000
+    let page := truncateText ((formValue? body "page").getD "") 1000
+    let occurredAt := truncateText ((formValue? body "occurred_at").getD "") 100
+    let detail := "operation=" ++ description ++ " error=" ++ errorName ++ ": " ++ message ++
+      " page=" ++ page ++ " occurred_at=" ++ occurredAt ++ "\nstack:\n" ++ stack
+    match ← authorizedProjectRoot? username projectId with
+    | some root => appendProjectDiagnostic root "browser_error" detail
+    | none => IO.eprintln ("browser error without an authorized active project: " ++ truncateText detail 4000)
+    return some (jsonResponse 202 "{\"recorded\":true}\n")
   if path == "/api/projects" && method == "GET" then
     return some (jsonResponse 200 ("{\"projects\":" ++ (← projectListJson username) ++ "}\n"))
   if path == "/api/projects" && method == "POST" then

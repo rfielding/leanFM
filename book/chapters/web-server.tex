@@ -68,27 +68,24 @@ obligation. If it changes none of them, it has not improved the specification.
 \section{The server is a staging environment}
 
 The executable \texttt{lake exe leanfm-server} serves the assistant workbench
-on the loopback interface. An authenticated session has its own generated
-\texttt{Requirements.lean}, \texttt{Requirements.proto}, and
-\texttt{Implementation.lean}. The first two specify observable behavior and
-values that resolve to bytes. They do not imply HTTP. The implementation file
-selects how those bytes travel---for example HTTP method and path, an
-in-process channel, TCP, or another adapter. The HTTP interface
-can read and replace these files through
-\texttt{/api/session/generated/requirements.lean} and
-\texttt{/api/session/generated/requirements.proto}, and
-\texttt{/api/session/generated/implementation.lean}. Validation, rendered views,
-metrics, reports, and OpenAPI descriptions are projections of the same model.
+on the loopback interface. Each new project owns one exclusive project-root
+directory. Its editable and rendered book, \texttt{Requirements.lean},
+\texttt{Requirements.proto}, \texttt{Implementation.lean}, source, tests,
+generated views, traces, reports, logs and project-specific caches all remain
+beneath that root. The first two specifications describe observable behavior
+and values that resolve to bytes; they do not imply HTTP. The implementation
+file selects how those bytes travel---for example HTTP method and path, an
+in-process channel, TCP, or another adapter. Validation, rendered views,
+metrics, reports and OpenAPI descriptions are projections of the same model.
 
-Session isolation is useful during an argument, but the current session files
-live below \texttt{/tmp/leanfm-sessions}. That is a workspace, not durable
-storage. A concluded argument must export or commit the accepted files---for
-example as \texttt{LeanFM/LLMGenerated/Requirements.lean},
-\texttt{LeanFM/LLMGenerated/Requirements.proto}, and the separate
-\texttt{LeanFM/LLMGenerated/Implementation.lean}---together with any evidence
-needed by the project. Durability means that the specification has an ordinary
-name, history, review boundary, and reproducible checks independent of the chat
-service.
+The project directory, rather than a temporary conversation session, is the
+durability boundary. Copying it supplies everything required for a fresh agent
+session; deleting it removes all project-owned state without a search for
+hidden files elsewhere. A disposable global index may help locate projects,
+but must be reconstructible from their manifests. Canonical path checks accept
+both a project-relative path and its canonical absolute equivalent only when
+the resolved target remains beneath the selected root; traversal and escaping
+symlinks fail closed.
 
 The server may use a language model to propose edits. Compilation and validation
 remain deterministic. The model is not the proof checker, and fluent prose is
@@ -249,10 +246,14 @@ session need not reconstruct the method from chat history.
 
 \section{A tour of the LeanFM chat}
 
-The Chat phase is the ordinary front door to a project.  Select one project in
-the left rail and then select \textbf{Chat}; a newly selected project owns a
-newly mounted conversation, book, grammar, task and source workspace.  Nothing
-from a previously selected project is a fallback.  The header identifies the
+The Chat phase is the ordinary front door to a project. Select one project in
+the left rail and then select \textbf{Chat}. Each project owns one complete
+mounted workspace containing Project memory, Chat, Book, Grammar, Tasks and
+Source. Switching project or phase changes visibility without destroying the
+inactive workspace, so drafts, selections, scroll positions, queues, timers,
+previews and fetched results remain in place. An active turn continues while
+its project or Chat phase is hidden. Nothing from a previously selected project
+is a fallback. The header identifies the
 provider, model and non-secret key fingerprint that will be billed, while the
 per-turn usage line reports the tokens attributed to that response.  Every
 message has its own visible timestamp.  While a turn is active, an incrementing
@@ -268,12 +269,99 @@ requirements, or create a scratch visual explanation.  It must not pretend
 that an attractive explanation has passed either acceptance gate.
 
 This is one conversation, not a hidden mode selector.  For every turn the
-server supplies the model with the emph{selected} project's complete editable
+server supplies the model with the \emph{selected} project's complete editable
 book and canonical requirements and implementation specifications, followed by
 a bounded recent transcript.  The LeanFM book and a previously selected
 project are never fallback context.  This boundary matters: otherwise a fluent
 answer can describe GoServer while silently editing nothing, or can display
 LeanFM's own book inside GoServer.
+
+\subsection{Progress, cancellation and the Operational trace}
+
+Long model turns must remain inspectable work, not a blocking chat spinner. A
+project-wide \textbf{Agent running} banner remains visible in every phase. It
+names the model captured for the active prompt, shows elapsed time and the
+latest real stage, and supplies a cooperative \textbf{Cancel} control. The
+client polls status, Project memory, Source and the Operational trace every two
+seconds; a transient polling failure retains the last successful value and is
+retried. Users may therefore inspect a changing book, specification or source
+tree while the agent continues.
+
+The Operational trace is appended before the next agent step. It records each
+bounded workspace action as started, completed, failed or rejected. A proposed
+write names its normalized project-relative destination, content kind and
+character count before validation, so a path failure says what LeanFM was
+trying to write. Failures are highlighted in the collapsed banner summary and
+the accumulated trace may be expanded before the turn completes. Cancellation
+is checked at provider and workspace-tool boundaries: no new mutation begins
+after the request is observed, while already completed durable edits remain
+truthful project state.
+
+Prompts typed during a turn enter a visible removable project-local FIFO and
+execute exactly once in order. Each queued prompt captures the model visible at
+the time it is enqueued. In the composer, focus order is prompt editor,
+\textbf{Send}, then model selector. Thus \textbf{Tab}, \textbf{Enter} commits a
+typed prompt with the already visible model rather than opening the selector.
+
+\subsection{A private fault barrier and actionable errors}
+
+The visible trace is for stakeholder decisions; a separate bounded private
+engineering journal supports diagnosis across navigation, server restarts and
+discarded chat history. Each project stores it at
+\texttt{logs/runtime-diagnostics.jsonl}. It contains sanitized stage
+transitions, tool destinations, compiler diagnostics, failed required
+artifacts, warning results, terminal provider failures, authorized project HTTP
+errors and correlated unhandled server exceptions. A later agent request
+receives the twenty newest unresolved entries before choosing a recovery
+strategy. Verified matching writes and book builds remove superseded failure
+clusters and leave one compact resolution, so the journal remains memory rather
+than an ever-growing graveyard.
+
+The React client is inside the same fault boundary. A React error boundary,
+global JavaScript exception listener, unhandled-promise listener, API wrapper,
+and explicit Mermaid and LaTeX renderer catches send an authenticated report
+back to the server. A report names the operation, error type and message,
+sanitized JavaScript stack, component stack when available, page, time and
+active project. The reporting request uses a recursion guard, bounded fields
+and at most twenty reports per browser minute. Project authorization is checked
+again on the server. Prompts, form and workspace-write bodies, credentials,
+cookies, arbitrary provider responses, URL queries and cross-project data are
+never diagnostic payloads.
+
+Every error shown to a person still has a separate obligation: state what
+happened, recommend a concrete next action, provide a stable code and offer a
+bounded diagnostic safe to paste to Codex. An unknown proxy response such as
+``527 Something went wrong'' is insufficient. The private journal normally
+means the person need not paste anything: LeanFM or Codex can inspect the
+project root, repair the cause and continue the original task.
+
+Repeated failure is bounded at the point of expense. Within an active turn, a
+second tool call with the same name and exact arguments after an error is not
+executed; it terminates that strategy before a third paid attempt. Provider
+timeouts are never automatically retried because a timed-out request may have
+consumed tokens or completed an earlier mutation. The agent instead reads the
+diagnostic, changes strategy, exhausts safe reversible alternatives, validates
+the result and resumes the requested task. Only missing authority, a destructive
+choice or an unavailable dependency should return control to the user.
+
+\subsection{Requirements properties and implementation provenance}
+
+The Tasks page separates four views of one selected task: interaction
+productions, residual states, temporal properties and guarded constraints. A
+property is an observable requirement originating in
+\texttt{Requirements.lean}; it is not silently invented by
+\texttt{Implementation.lean}. The UI renders its actual CTL wrapper rather than
+labeling prose as CTL: \texttt{always} becomes $AG\,p$,
+\texttt{eventually} becomes $AF\,p$, \texttt{never} becomes
+$AG\,\neg p$, and \texttt{preparedFor} becomes $EF\,p$. A
+\texttt{where\_} trace predicate is displayed with its stable identifier under
+the invariant $AG\,p$. Each card identifies its requirements origin.
+
+The implementation specification remains separate. It maps each accepted
+property and negative proof obligation to runtime controls, files and tests. It
+may choose a queue, transport, journal or browser mechanism, but it cannot
+quietly become the source of a new observable property. This provenance keeps
+the two acceptance gates meaningful.
 
 \subsection{How a chat turn becomes a durable edit}
 
@@ -284,10 +372,17 @@ reply and, when the turn changes durable understanding, the complete proposed
 update.  It enforces the project-root and size boundaries, writes the candidate
 atomically, and builds the project PDF in the isolated book worker.  Only a
 successful build commits the revision and sets \texttt{book\_updated=true}.
-If compilation fails, the exact previous source is restored.  One bounded
-syntax-repair attempt may correct such mechanical errors as an unescaped
-ampersand; if that repair also fails, the response is WARN and the old book
-remains authoritative.
+If compilation fails, the first bounded compiler diagnostic becomes visible
+before repair begins and the exact previous source is restored after every
+candidate. At most three repair requests may run, each with a short deadline.
+Each request receives only the compiler diagnostic and a numbered nine-line
+source excerpt, asks for one replacement line with at most 2000 output tokens,
+and is rejected if it targets another line or makes no change. A successful
+candidate is rebuilt before commit; exhaustion produces WARN and leaves the
+last valid book authoritative. Deterministic syntax mistakes such as literal
+ampersands and underscores should be corrected directly when their intended
+prose meaning is unambiguous rather than rediscovered through repeated paid
+model calls.
 
 The same rule becomes stricter at the implementation boundary.  After both
 acceptance gates and the security critique, an implementation request writes
