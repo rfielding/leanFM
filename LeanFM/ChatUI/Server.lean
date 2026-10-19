@@ -475,7 +475,7 @@ def buildProjectBook (root : String) : IO (Except String Unit) := do
   cleanProjectBookIntermediates root
   let realBook ← IO.FS.realPath bookPath
   let testOnlyUnsandboxed := (← IO.getEnv "LEANFM_TEST_UNSANDBOXED_BOOK_BUILD") == some "1" &&
-    root.startsWith "/tmp/leanfm-chatui-check."
+    realBook.toString.startsWith "/tmp/leanfm-chatui-check."
   let out ← if testOnlyUnsandboxed then
       IO.Process.output { cmd := "/usr/bin/make", args := #["-C", realBook.toString] }
     else
@@ -490,8 +490,13 @@ def buildProjectBook (root : String) : IO (Except String Unit) := do
   return .error ("Book build failed:\n" ++ truncateText (out.stdout ++ "\n" ++ out.stderr) 10000)
 
 def buildErrorSummary (message : String) : String :=
-  (message.splitOn "\n").find? (fun line => line.startsWith "!") |>.getD
-    "The generated LaTeX did not compile."
+  let lines := message.splitOn "\n" |>.map (·.trimAscii.toString) |>.filter (!·.isEmpty)
+  (lines.find? (fun line => line.startsWith "!")).orElse (fun _ =>
+    lines.find? (fun line =>
+      !line.startsWith "Book build failed:" && !line.startsWith "make[" &&
+      !line.startsWith "make:" && !line.startsWith "Entering directory" &&
+      !line.startsWith "Leaving directory")) |>.getD
+    "The book worker failed before producing a compiler diagnostic. Inspect logs/runtime-diagnostics.jsonl."
 
 def addCompletionUsage (first second : Provider.Completion) (text : String) : Provider.Completion :=
   { text
