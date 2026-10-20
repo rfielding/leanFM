@@ -934,36 +934,6 @@ Dwell can drive modeled latency, throughput, timeout, and queue-pressure
 predictions, but does not create event order: \texttt{priorIds} supplies
 predecessors, while the grammar states which sequences and dependencies are legal.
 
-\section{Estimating completion from an event stream}
-
-The same boundary-event model can consume observed events. The
-\texttt{LeanFM.StreamStats} implementation reconstructs attempts from stored
-terminal-to-start predecessor links and computes completion, conditional-success,
-and completed-latency statistics. Chapter~\ref{ch:events} defines event pairing
-and admissible elapsed time.
-
-For an observation window containing $M$ starts, $C$ matched terminal events,
-$S$ successful terminals, and completed latencies $L_1,\ldots,L_C$, the basic
-estimates are
-\AccessibleEquation{Estimated completion probability equals completed count C divided by started count M. Estimated probability of success given completion equals success count S divided by completed count C. Estimated expected latency given completion equals the sum of completed latencies L sub i divided by C.}{\[
-  \widehat P(\text{complete}) = \frac{C}{M}, \qquad
-  \widehat P(\text{success}\mid\text{complete}) = \frac{S}{C}, \qquad
-  \widehat E[L\mid\text{complete}] = \frac{\sum_i L_i}{C}.
-\]}
-
-The vertical bar means ``given''; hats mark estimates from the observation
-window.
-
-Attempts without a terminal event remain \emph{in flight}. They contribute to the
-number started and to queue/load measurements, but not to completed-task latency
-or to the conditional success denominator. Calling them failures would bias both
-probability and latency whenever the observation window ends before they do.
-
-The reducer can group these sufficient statistics by task, actor, time bucket,
-maximum concurrency, or queue occupancy and feed them directly to pie, time-series,
-and XY plots. Specified probabilities and dwell times are predictions; stream-derived
-estimates are measurements to compare with them.
-
 \section{Composing requirements means intersecting constraints}
 
 \index{composition!requirement intersection}
@@ -1007,53 +977,3 @@ assemble possible stories; intersection layers independent obligations over thos
 stories. A system is consistent only if the intersection remains nonempty. When it
 is empty, tooling should return a minimal conflicting set of requirements and the
 shortest available counterexample prefix.
-
-\section{Charts as declarative trace reductions}
-
-\index{chart specification}
-The proposed chart declaration names an observable event source, a grouping or
-$x$ expression, and an aggregate or $y$ expression. It describes the reduction,
-not rendering code; this syntax is illustrative, not an implemented renderer.
-
-\begin{lstlisting}
-def outcomeShare : ChartSpec :=
-  pie "quote outcomes" do
-    source events
-    where_ (kind == "quote accepted" || kind == "quote declined")
-    groupBy kind
-    value count
-
-def responseLatency : ChartSpec :=
-  line "quote response latency" do
-    source (correlate events by "quoteId")
-    x clock
-    y (elapsed "quote offered" "customer decision")
-    series "p50" median
-
-def latencyByConcurrency : ChartSpec :=
-  xyplot "latency by concurrent sessions" do
-    source completedRuns
-    x maxConcurrentSessions
-    y (mean (elapsed firstEvent terminalEvent))
-
-def queueByOfferedLoad : ChartSpec :=
-  xyplot "queue occupancy by offered load" do
-    source completedRuns
-    x requestsPerSecond
-    y (mean totalQueueOccupancy)
-
-def propagatedGrantProbability : ChartSpec :=
-  xyplot "user probability propagated through deterministic servers" do
-    source parameterSweep
-    x userGrantProbability
-    y terminalGrantProbability
-\end{lstlisting}
-
-An XY plot preserves two numeric axes. It differs from a time series, whose
-$x$-axis is specifically an event clock, and from a categorical chart, whose
-$x$ values are labels. The first two examples reduce each completed model run to
-one point. The third sweeps a model parameter and checks that deterministic
-downstream processing transports the user's probability mass.
-
-Apply the provenance and implementation-status rule in
-Section~\ref{ch:scenarios} to each generated chart.

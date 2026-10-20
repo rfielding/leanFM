@@ -609,56 +609,32 @@ single manifest/path contract.
 
 \section{What the Lean artifact must settle}
 
-The Lean file is the semantic source. It records actors, messages, per-task
-state machines, multiparty grammar productions, CSP-style processes, framing,
-properties, proof obligations, probability summaries, charts, and explanatory
-Markdown. A serious argument should force answers in each of the following
-dimensions.
+The Lean artifact is the semantic source for actors, framed messages, process
+projections, grammars, properties, proof obligations, and desired outputs. To
+keep this workflow chapter from restating their definitions, use the canonical
+treatments:
 
-\begin{description}[style=nextline]
-  \item[Observable behavior]
-  Which actor sends and receives each event? Which fields can an observer see?
-  A message carries its \texttt{session} and \texttt{task}, its clock timestamp,
-  and a list of prior event identifiers. Thus a join may cite several prior
-  events, while several events may fork from the same prior event.
+\begin{itemize}
+  \item event fields, correlation, predecessor order, causation, and elapsed
+        time: Chapter~\ref{ch:events};
+  \item legal conversations, actor projections, and bounded queue semantics:
+        Chapter~\ref{ch:grammar};
+  \item choices, dwell, rates, scalability, reliability, and infrastructure
+        cost: Chapter~\ref{ch:authoring-language}.
+\end{itemize}
 
-  \item[Component interactions]
-  Global grammar productions state legal conversations; actor projections state
-  what each component may send or receive. Composition must preserve endpoints,
-  message types, correlation, and predecessor references. A diagram is useful
-  evidence, but the grammar is the compositional object.
-
-  \item[Statistical properties]
-  User choices make the input probabilistic even when every server component is
-  deterministic. Those choices propagate through the composed system as an MDP.
-  The specification distinguishes unconstrained alternatives from weighted
-  choices, states dwell-time distributions, and names reducers for success,
-  latency, throughput, and queue occupancy. An observed event stream can then
-  estimate the same quantities and be compared with the model.
-
-  \item[Queueing and concurrency]
-  Every actor has finite inbound and outbound queues. Several
-  \texttt{(session, task)} pairs may be in flight at once, so a requirement must
-  not silently reason about only one conversation. Full and empty queues produce
-  observable blocking or sleeping behavior, and transport is a separate step
-  from production and receipt.
-
-  \item[Memory pressure]
-  Message-count capacity alone is insufficient when payload sizes vary. A
-  checkable requirement should declare a byte budget and derive queued bytes from
-  the encoded envelopes. If active tasks retain additional state, the model must
-  declare a bounded footprint for that state too. A representative obligation is
-  \AccessibleEquation{Necessarily at every reachable observation the queued bytes for actor a plus its in-flight bytes are less than or equal to its byte budget.}{\[
-    \mathrm{AG}\bigl(\operatorname{queuedBytes}(a) +
-      \operatorname{inFlightBytes}(a) \leq \operatorname{budget}(a)\bigr).
-  \]}
-  Read this as: ``necessarily, at every reachable observation, queued bytes for
-  actor $a$ plus in-flight bytes for actor $a$ is no greater than actor $a$'s
-  byte budget.''  $\mathrm{AG}$ means ``on every permitted future, at every
-  position''; the repeated argument $a$ identifies the same actor throughout.
-  This is a modeling obligation for LeanFM, not a claim that the present
-  validator already proves heap usage of an arbitrary implementation.
-\end{description}
+One cross-cutting obligation deserves emphasis: message-count capacity alone
+does not bound memory when payload sizes vary. Derive queued bytes from encoded
+envelopes and declare a bounded footprint for active task state. A representative
+requirement is
+\AccessibleEquation{Necessarily at every reachable observation the queued bytes for actor a plus its in-flight bytes are less than or equal to its byte budget.}{\[
+  \mathrm{AG}\bigl(\operatorname{queuedBytes}(a) +
+    \operatorname{inFlightBytes}(a) \leq \operatorname{budget}(a)\bigr).
+\]}
+Here $\mathrm{AG}$ means every position on every permitted future, and the
+repeated $a$ fixes the actor being measured. This is a modeling obligation, not
+a claim that the current validator proves the heap usage of an arbitrary
+implementation.
 
 \section{Interrogate, characterize, synthesize, replay}
 
