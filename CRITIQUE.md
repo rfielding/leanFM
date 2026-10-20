@@ -221,11 +221,9 @@ epistemic uncertainty; these support different claims and verification methods.
 
 ## Statistical claims need uncertainty and sampling assumptions
 
-The deterministic pseudo-random bakery corpus generates probabilities, latency
-distributions, profit, pay, and waste analyses. It validates the pipeline, not
-real-world behavior; label results as properties of this generated population.
-The descriptive analysis lacks confidence intervals, sensitivity/stationarity
-checks, and treatment of censored in-flight tasks.
+The reproducible synthetic bakery corpus validates the analysis pipeline, not
+real-world behavior. Its descriptive analysis lacks confidence intervals,
+sensitivity/stationarity checks, and treatment of censored in-flight tasks.
 
 The code now emits separate client-experienced and server-aggregate work rates
 by client population. These are observations suitable for a Universal
@@ -234,11 +232,9 @@ fit uncertainty. The formulas also assume an exhaustive observation list.
 Warm-up, unfinished tasks, client think time, changing populations, and omitted
 failed work can materially change the result and need explicit policies.
 
-Daily profit also depends on an accounting model. Current calculations include
-sales, refunds, ingredient cost, and employee pay, but omit rent, utilities,
-taxes, depreciation, payment fees, delivery costs, inventory timing, and other
-expenses. The chart is contribution under the modeled costs, not necessarily
-business profit.
+The bakery chart now labels its measure modeled contribution after ingredients
+and pay, not business profit; costs absent from the event corpus remain outside
+that accounting model.
 
 ## Requirements and implementation are separated structurally, not logically
 
