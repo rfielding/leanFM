@@ -37,9 +37,16 @@ A copyable project root contains the following stable inputs:
         inputs.
 \end{description}
 
-All of these files are below the exclusive project root. A project may use an
-external immutable dependency cache, but no project-owned mutable state or
-acceptance decision may live there.
+All project-owned state and acceptance decisions belong below the exclusive
+root: inputs, conversations, artifact revisions, source, tests, generated views,
+traces, reports, logs, and project-specific caches. Choose the root before
+session work; temporary files and atomic promotion stay inside it. Reject
+configured outputs and symlinks that escape. Export declared artifacts
+explicitly; import by copying into the root or recording an immutable,
+content-addressed dependency. Shared tools and caches may live outside only
+without project-owned state. A global index must be reconstructible from
+manifests, and deleting one root must remove all its state without an external
+search.
 
 The project root is also the complete input to a fresh agent conversation. The
 agent discovers the stable paths from the manifest and repository instructions;
@@ -90,11 +97,10 @@ requirements.
 
 \section{Acceptance gates}
 
-The first gate consists of the requirements value, protobuf schema, derived
-views, ambiguity register and validation evidence. A model, successful build or
-attractive diagram cannot accept it. After explicit stakeholder acceptance, the
-second gate adds the traceable implementation specification. Application source
-and tests may be written only after both gates.
+The Preface defines the two acceptance gates and their evidence. A model,
+successful build or attractive diagram cannot substitute for explicit
+stakeholder acceptance; application source and tests may be written only after
+both gates.
 
 The bootstrap therefore solves a circularity without weakening the gates. The
 book explains what is being built; the generic distribution makes the LeanFM

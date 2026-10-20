@@ -34,99 +34,17 @@ normally supplies only:
 This boundary matters for automation. Generated Lean remains small enough to
 review, while library proofs and algorithms are reused rather than regenerated.
 
-\section{A Ramanujan-inspired checked discrete account of
-  \texorpdfstring{$1+2+3+\cdots=-1/12$}{1+2+3+...=-1/12}}
+\section{An exploratory Lean proof fixture}
 
-Lean is not limited to validating data structures or executing finite checks.
-This section starts from the less formal result associated with Srinivasa
-Ramanujan. What is different here is not the value $-1/12$, but the deliberately
-elementary route used to make that value precise and checkable. The construction
-does not invoke the Riemann zeta function, analytic continuation, complex
-analysis, or a theorem identifying $\zeta(-1)$. Its final proof is exact rational
-algebra over explicitly defined finite prefixes and correction tails.
-
-The repository's \texttt{book/logic.lean} uses Mathlib to define the real
-function $A(x)=1/(1-x)$ and prove that its derivative is
-$F(x)=1/(1-x)^2$ away from the singularity at $x=1$.  It then moves from
-that analytic motivation to an exact, discrete construction over rational
-numbers.  This construction explains precisely what the file means by the
-famous shorthand
-\AccessibleEquation{S is defined by the regularized expression one plus two plus three and so on and equals negative one twelfth.}{\[
-  S=1+2+3+\cdots=-\frac{1}{12}.
-\]}
-Read this as: ``$S$, defined by the regularized expression one plus two plus
-three and so on, equals negative one twelfth.''  The qualification
-``regularized'' is essential; the later formula defines what the ellipsis
-means here.
-
-The derivative establishes only the origin of the chosen rational function
-$F$; it is not an appeal to zeta regularization. After that motivation, the
-definitions of \texttt{Tail\_B}, \texttt{Sum\_B}, \texttt{Tail\_S}, and
-\texttt{Sum\_S}, and the proof of the final identity, use discrete identities
-and rational arithmetic. Thus the checked claim stands on the definitions
-printed here rather than importing a higher-level theory that already assigns
-a value to the divergent series.
-
-The complete source file follows, without elision.  The listing starts on this
-page and continues onto the next page through the final theorem
-\texttt{Goal}.  The listing preserves the idiomatic Lean notation used by the
-checked source, including Lean's $\land$ notation; the listing configuration maps those
-Unicode glyphs to matching mathematical symbols for pdf\LaTeX{}:
-
-\lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize,
-  caption={The complete \texttt{book/logic.lean} source.},
-  label={lst:logic-lean}]{logic.lean}
-
-The hypothesis \texttt{hx : x != 1} is not commentary: it is required to prove
-that the denominator is nonzero. The proof composes Mathlib's derivative rule
-for the identity function with subtraction and reciprocal, extracts the proved
-derivative, unfolds the local definitions, and asks the simplifier to match the
-resulting expression. Lean checks every type conversion and proof obligation;
-removing the singularity condition leaves the reciprocal rule unjustified.
-
-The discrete part begins with the ordinary finite triangular sum
-\AccessibleEquation{Sum sub S at cutoff n equals n times n plus one divided by two.}{\[
-  \texttt{Sum\_S}(n)=\frac{n(n+1)}{2}.
-\]}
-Read this as: ``\texttt{Sum\_S} at cutoff $n$ equals $n$ times $n+1$, divided
-by two.''  Here $n$ is a natural-number parameter naming the finite cutoff.
-It then defines an exact rational correction \texttt{Tail\_S}(n), using the
-alternating construction \texttt{Tail\_B}, so that the corrected value is
-independent of where the finite prefix is cut.  The last theorem states, for
-\emph{every} natural number $n$,
-\AccessibleEquation{Negative one twelfth equals n times n plus one divided by two plus Tail sub S at cutoff n.}{\[
-  -\frac{1}{12}=\frac{n(n+1)}{2}+\texttt{Tail\_S}(n).
-\]}
-Read this as: ``negative one twelfth equals $n$ times $n+1$, divided by two,
-plus \texttt{Tail\_S} at that same cutoff $n$.''
-Thus the ellipsis in $1+2+3+\cdots$ is given explicit content: retain a finite
-prefix and pair it with the particular tail assigned by the preceding
-self-similarity identities.  Moving the cutoff changes both terms but not their
-sum.  This is a discrete, algebraically checked account of the regularized
-value $-1/12$; it is not the false claim that the ordinary partial sums of
-positive integers converge to a negative number.  Lean makes that distinction
-hard to blur because the exact proposition---including the tail and the
-quantification over $n$---is visible in Listing~\ref{lst:logic-lean}.
-
-At the end, Lean's goal is the fully elaborated proposition
-
-\begin{lstlisting}[language=Lean]
-⊢ ∀ (n : ℕ), -1 / 12 = ↑n * (↑n + 1) / 2 + Tail_S n
-\end{lstlisting}
-
-Read the Lean goal one symbol at a time as: ``prove, for every $n$ of type
-natural number, that negative one divided by twelve equals coerced $n$ times
-coerced $n$ plus one, divided by two, plus \texttt{Tail\_S} applied to $n$.''
-The upward arrows are coercions: they convert the natural number $n$ into the
-rational-number type used by the arithmetic around it.
-
-The single turnstile $\vdash$, pronounced ``proves'' or ``derives,'' separates
-the local proof context on its left from the proposition to be derived on its
-right.  A context may contain assumptions, variables, local definitions, and
-previously established facts.  Here nothing is printed to the left, so there
-are no additional local entries: Lean is asking for a term that derives the
-universally quantified proposition from the imported theory and the definitions
-above.
+\texttt{book/logic.lean} explores a regularized assignment for
+$1+2+3+\cdots$. Its theorem states that, for each finite cutoff $n$, the
+triangular prefix $n(n+1)/2$ plus the explicitly defined correction
+\texttt{Tail\_S}(n) equals $-1/12$. This is an identity under that definition,
+not convergence of the ordinary partial sums. The file is an optional
+mathematical example, separate from LeanFM's protocol and trace semantics; it is
+not compiled by \texttt{make book}. In this checkout, running
+\texttt{lake env lean book/logic.lean} stops because Mathlib is not installed,
+so this PDF does not claim that the fixture was checked here.
 
 For a LeanFM runtime judgment, define the double turnstile $\vDash$ relative
 to the declared transition model and initial state. It means ``at every reachable
@@ -186,14 +104,6 @@ assumptions instead; it must not be confused with this explicitly scoped CTL tes
 For the proof-theoretic background behind derivations, natural deduction,
 sequent calculus, normalization, and cut elimination, see Mancosu, Galvan, and
 Zach's \emph{An Introduction to Proof Theory} \citep{mancosu2021proof}.
-
-The completed proof establishes the displayed proposition for every $n$.  The
-\texttt{def} declarations define the mathematics: the finite sums, correction
-tails, and the values assembled from them.  The \texttt{theorem} declarations
-then state claims about those definitions and require proofs that Lean checks.
-Thus the final theorem is not a numerical experiment over a selection of
-cutoffs.  It verifies the universally quantified identity that results from
-the definitions.
 
 \section{From specification to service}
 

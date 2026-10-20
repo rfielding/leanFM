@@ -92,12 +92,6 @@ logical worlds. The four most important combinations can be read literally:
  AG\,p &: \text{necessarily always $p$}.
 \end{align*}}
 
-Read these as: ``there exists a future on which eventually $p$''; ``on every
-future, eventually $p$''; ``there exists a future on which $p$ holds globally,
-at every position''; and ``on every future, $p$ holds globally.''  Thus $E$ is
-``there exists a future,'' $A$ is ``every future,'' $F$ is ``eventually,'' and
-$G$ is ``at every position.''
-
 The temporal word and modal word do different work. $F$ versus $G$ chooses
 eventuality versus invariance \emph{along} a continuation. $E$ versus $A$
 chooses some versus all permitted continuations. Neither axis should be omitted
@@ -111,12 +105,6 @@ For requirements argument, the four formulas also form a useful modal square:
  AF\,p &: \text{always eventually $p$}, &
  EG\,p \equiv \neg AF\,\neg p &: \text{$p$ always in some cases}.
 \end{align*}}
-
-Read each equivalence sign as ``if and only if.''  $EF\,p$ is ``maybe possible
-$p$.''  $AG\,p$ is ``always necessary $p$,'' equivalently ``not: there exists
-a future that eventually reaches not-$p$.''  $AF\,p$ is ``always eventually
-$p$.''  $EG\,p$ is ``$p$ always in some cases,'' equivalently ``not: every
-future eventually reaches not-$p$.''
 
 These are exact CTL dualities, not a demand that the English glosses look
 syntactically dual. In particular, $AF$ is ``on every legal future, eventually
@@ -136,9 +124,7 @@ existential counterexample:
  AF\,p &\equiv \neg EG\,\neg p.
 \end{align*}}
 
-Read these as: ``$AG\,p$ if and only if not $EF$ not-$p$,'' and ``$AF\,p$ if
-and only if not $EG$ not-$p$.''  Each negation applies to the expression
-immediately following it.
+Each negation applies to the expression immediately following it.
 
 Thus a safety proof searches for a reachable violation of $p$, and a universal
 eventuality proof searches for a path on which $\neg p$ persists forever. A
@@ -467,9 +453,6 @@ The deliberately absurd test uses
   p &= \text{``Chewbacca lives on Endor''},\\
   q &= \text{``you must acquit''}.
 \end{align*}}
-
-Read these as definitions of proposition names: ``$p$ means `Chewbacca lives
-on Endor','' and ``$q$ means `you must acquit'.''
 
 A Chewbacca argument cannot obtain $q$ merely by mentioning $p$. To enter the
 requirements as strong implication, the model must admit a reachable $p$ witness

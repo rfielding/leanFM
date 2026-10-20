@@ -132,34 +132,14 @@ def quoteOutcome (customer shop : Actor) : Scenario :=
     ]
 \end{lstlisting}
 
-\texttt{include} is textual only in the rendered book view; semantically it is a
-reference to a named nonterminal. The compiler reads all referenced scenarios,
-checks exported bindings, detects cycles, and builds one grammar. Tools retain the
-scenario boundary for navigation, diagrams, tests, and counterexamples.
+\texttt{include} expands text only in the rendered view; semantically it denotes
+a named nonterminal. A future compiler would resolve references, check exports,
+reject cycles, and build the grammar. Tools can retain scenario boundaries for
+navigation, diagrams, tests, and counterexamples.
 
-\section{Interaction diagram: accepted quote}
-
-The first rendering of any scenario is a sequence-style interaction diagram.
-It shows observable messages and parameter flow without suggesting an internal
-implementation architecture.
-
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[>=Latex,actor/.style={draw=diagramink,text=diagramink,
-  rounded corners,minimum width=2.6cm,minimum height=.7cm,fill=diagramsurface},
-  message/.style={->,thick,draw=diagramink,text=diagramink}]
-  \node[actor] (customer) at (0,0) {Customer};
-  \node[actor] (shop) at (7,0) {Shop};
-  \draw[dashed] (customer.south) -- ++(0,-5.2);
-  \draw[dashed] (shop.south) -- ++(0,-5.2);
-  \draw[message] (0,-1) -- node[above,sloped]{quote requested(requestId)} (7,-1);
-  \draw[message] (7,-2) -- node[above,sloped]{quote offered(requestId, quoteId, amount)} (0,-2);
-  \draw[message] (0,-3) -- node[above,sloped]{quote accepted(quoteId)} (7,-3);
-  \draw[message] (7,-4) -- node[above,sloped]{order confirmed(quoteId, orderId)} (0,-4);
-\end{tikzpicture}
-\caption{Interaction diagram derived from the accepted-quote scenario.}
-\label{fig:quote-interaction}
-\end{figure}
+\noindent No quote diagram is generated yet. The event-derived diagram contract
+is in Chapter~\ref{ch:scenarios}; generated interaction examples are in
+Chapter~\ref{ch:grammar}.
 
 \section{Choices and unresolved probability}
 
@@ -179,33 +159,21 @@ def estimatedCustomerDecision : Scenario :=
     ]
 \end{lstlisting}
 
-There is no separate \texttt{choose customer} annotation. The branch is resolved
-when its distinguishing terminal becomes bytes: the terminal names its source,
-so the trace already shows that the customer emitted the event that selected the
-branch. Probabilities belong to branches, not to an extra, potentially conflicting
-claim about a chooser. A deterministic service that consumes probabilistic user
-input remains part of the induced probabilistic system: its probability-one
-transitions carry the incoming path mass forward. An early requirement can use
-\texttt{oneOf}, a symbolic weight, or a range such as \texttt{between 0.90 0.99}.
-Implementation refinement resolves those claims to a well-defined stochastic
-model or to deterministic conditions. Refinement must preserve possibility even
-when a current implementation assigns probability zero to a legal abstract branch;
-otherwise changing operational policy would silently change the contract.
+Do not add a separate chooser annotation: the terminal's source identifies who
+selected the branch. Deterministic service transitions carry incoming
+probability mass forward. Requirements may begin with \texttt{oneOf}, symbolic
+weights, or ranges; refinement must resolve these claims and preserve every
+abstractly legal branch, including one assigned zero probability by the current
+implementation.
 
-Two branches may share a prefix. In that case the choice remains unresolved
-through the common terminals and resolves only at the first different byte-level
-terminal. Branches whose complete terminal byte languages overlap are
-observationally ambiguous at that point; the requirement must merge them or add
-an observable discriminator if downstream actors need to distinguish them.
+A shared prefix leaves the choice unresolved until the first differing
+byte-level terminal. If complete terminal byte languages overlap, merge the
+branches or add an observable discriminator for downstream actors.
 
 \section{Worked MDP: a stochastic user and deterministic server}
 
-This finite example separates the sources of uncertainty. The user opens a
-session, receives two options and chooses browse with weight 3 or purchase with
-weight 2. The server does not toss a coin: for a fixed state and received
-message, it has exactly one next action. The composed system is probabilistic
-because the server transports the user's probability mass to its terminal
-responses.
+This bounded MDP isolates user uncertainty: the user selects Browse or Purchase
+at weights 3:2, while each received message determines a single server action.
 
 \begin{center}
 \AccessibleFigure{Interaction diagram with User and Server lifelines. Message from User to Server: open Session with probability one. Message from Server to User: show Options with probability one. The next two request and response pairs are alternatives. Message from User to Server: choose Browse with probability three fifths. Message from Server to User: show Results with probability one. Message from User to Server: choose Purchase with probability two fifths. Message from Server to User: confirm Purchase with probability one.}{%
@@ -213,10 +181,8 @@ responses.
 }
 \end{center}
 
-The two user-choice arrows are alternatives after \texttt{showOptions}; they are
-not two messages in one execution. Every server arrow is labeled 1. The labels
-come from the checked \texttt{Choice} values rather than from a separately drawn
-explanation.
+Only one user-choice pair occurs in a run; probabilities and probability-one
+server edges come from the checked \texttt{Choice} values.
 
 \begin{center}
 \AccessibleFigure{State diagram read from top to bottom. Start proceeds deterministically to request queued and then menu ready. Menu ready splits left to browse queued with probability three fifths and right to purchase queued with probability two fifths. Both branches then proceed deterministically through a ready state to a terminal state. Browse takes six synthetic milliseconds end to end. Purchase takes nine.}{%
@@ -228,10 +194,9 @@ The branch weights are relative integers. Their sum supplies the denominator:
 \AccessibleEquation{Three fifths plus two fifths equals one.}{\[
   \frac{3}{5}+\frac{2}{5}=1.
 \]}
-Read this as: ``three fifths plus two fifths equals one.'' The checker rejects an
-empty chance set and every zero-weight branch. Normalization divides each
-positive branch weight by the total weight; it does not require floating-point
-arithmetic.
+The checker rejects an empty chance set and every zero-weight branch.
+Normalization divides each positive branch weight by the total weight; it does
+not require floating-point arithmetic.
 
 Assign reward 1 to browsing and reward 8 to purchasing. The terminal paths and
 their durations give
@@ -240,10 +205,6 @@ their durations give
   \qquad
   \mathbb{E}[T]=\frac35(6)+\frac25(9)=\frac{36}{5}\ \mathrm{ms}=7.2\ \mathrm{ms}.
 \]}
-Read these as: ``expected reward is probability-weighted terminal reward and
-equals nineteen fifths; expected latency is probability-weighted end-to-end
-duration and equals thirty-six fifths milliseconds, or 7.2 milliseconds.''
-
 \begin{center}
 \AccessibleFigure{Bar chart of the terminal distribution. Browse has probability three fifths. Purchase has probability two fifths. Together the bars have probability mass one.}{%
   \input{generated/stochastic-user-outcomes.tex}%
@@ -293,12 +254,11 @@ memory, probability, and temporal checks still have a bounded state space.
 
 \section{Non-functional requirements: rates and scalability}
 
-Timing requirements are stated over boundary messages rather than intervals
-hidden inside an event. Suppose every client repeatedly creates a fresh server
-task. Each completed unit records a start message, an end message that
-backpoints to that start, and a nonnegative amount of work. If one moved byte is
-one work unit and timestamps are milliseconds, an exhaustive observation list
-supports two different rates.
+Using the boundary-event model from Chapter~\ref{ch:events}, suppose every
+client repeatedly creates a fresh server task. Each completed unit records a
+start, a terminal that backpoints to it, and a nonnegative amount of work. For
+illustration, let one moved byte be one work unit and timestamps be milliseconds;
+an exhaustive observation list supports two different rates.
 
 The word \emph{load} is too ambiguous to serve as a variable. Let $N$ be the
 declared upper limit on the number of active clients in the study, and let the
@@ -315,14 +275,8 @@ rate is
       {\sum_i(e_i.timeAt-s_i.timeAt)}.
 \]}
 
-Read this as: ``client throughput at active-client population $n$ equals the sum, over requests
-$i$, of work for request $i$, divided by the sum of end time $e_i.timeAt$
-minus start time $s_i.timeAt$ for that request.'' Lowercase $n$ is the varying
-client population; uppercase $N$ is only its declared upper limit.
-
-This is the duration-weighted mean of the individual observed rates. Long
-requests therefore contribute in proportion to how long a client experienced
-them. It is not the unweighted mean of per-request ratios.
+Long requests contribute in proportion to their duration; this is not an
+unweighted mean of per-request ratios.
 
 The aggregate server throughput is instead
 
@@ -332,9 +286,8 @@ The aggregate server throughput is instead
       {\max_i(e_i.timeAt)-\min_i(s_i.timeAt)}.
 \]}
 
-Read this as: ``server throughput at active-client population $n$ equals total completed work over requests
-$i$, divided by the latest request-end time minus the earliest request-start
-time.''  The maximum and minimum make the denominator one wall-clock window.
+Its denominator is the wall-clock interval from the earliest start to latest
+end, so overlapping client waits are counted once.
 
 For an observation window of duration $T$, the boundary rates and backlog obey
 
@@ -345,36 +298,21 @@ For an observation window of duration $T$, the boundary rates and backlog obey
  B_1=B_0+W_a-W_c.
 \]}
 
-Read this as: ``offered rate lambda sub $o$ is offered work $W_o$ divided by
-window duration $T$; admitted rate lambda sub $a$ is admitted work $W_a$
-divided by $T$; completed throughput $X$ is completed work $W_c$ divided by
-$T$; and ending backlog $B_1$ is starting backlog $B_0$ plus admitted work
-minus completed work.'' The backlog identity assumes one conserved work unit
-and requires cancellations, expiry, and failures to be recorded as explicit
-terminal dispositions when they remove work.
-
-Consequently, $\lambda_o>X$ does not mean that the system handled the offered
-load. The difference is rejected, remains queued or in flight, or receives
-another explicit terminal disposition. Nor does $\lambda_a$ measure handled
-work: an implementation can admit requests faster than it completes them while
-latency and backlog grow without bound.
-
-Its denominator is one wall-clock observation window, so overlapping client
-waits are counted once. The two quantities answer different questions and must
-not share a metric name. Plotting either explicitly chosen rate against the
-number of active client instances yields observations that can be fitted to the
-Universal Scalability Law,
+The backlog identity assumes a conserved work unit; record cancellations,
+expiry, and failures as terminal dispositions when they remove work. If
+$\lambda_o>X$, some offered work is rejected, remains queued or in flight, or
+ends in another recorded disposition; admitted work can also outpace completion
+while latency and backlog grow. Window throughput differs from the client- and
+server-task rates above, so choose its event boundary explicitly before fitting
+it against active-client population using the Universal Scalability Law,
 
 \AccessibleEquation{Throughput X at load n equals gamma times n divided by one plus alpha times n minus one plus beta times n times n minus one. n is between one and upper limit N inclusive.}{\[
  X(n)=\frac{\gamma n}{1+\alpha(n-1)+\beta n(n-1)},
  \qquad 1\leq n\leq N.
 \]}
 
-Read this as: ``completed throughput $X$ at active-client population $n$ equals gamma times $n$, divided by
-one plus alpha times $n-1$ plus beta times $n$ times $n-1$; $n$ ranges from one
-through the upper limit $N$.'' This curve uses population or concurrency as its
-independent variable. It is not, without an explicit experimental mapping, a
-curve whose horizontal axis is offered work rate $\lambda_o$.
+This curve uses population or concurrency $n$ as its independent variable, not
+offered work rate $\lambda_o$ unless the experiment defines an explicit mapping.
 
 Gunther's \emph{Guerrilla Capacity Planning} gives the practical capacity-planning
 setting for this law and develops it as the Universal Law of Computational
@@ -383,13 +321,11 @@ a requirements argument should expose contention, coherency, saturation, and
 retrograde scaling before the first production deployment supplies those facts
 by falling over.
 
-Every USL observation must therefore retain $n$, $\lambda_o$, $\lambda_a$,
-$X$, latency, backlog, rejection or other terminal outcomes, server population,
-and observation-window boundaries. The event list supplies the observations;
-estimating $\gamma$, $\alpha$, and
-$\beta$ is a separate statistical step. The list must be exhaustive for the
-declared observation window, or omitted work and unfinished tasks bias both
-rates.
+Retain per observation $n$, the selected throughput and event boundary,
+$\lambda_o$, $\lambda_a$, window throughput $X$, latency, backlog, terminal
+outcomes, server count, and window boundaries. The event list supplies the data;
+parameter fitting is separate and requires exhaustive windows to avoid bias from
+omitted or unfinished work.
 
 \subsection{The three USL regimes and capacity}
 
@@ -411,11 +347,6 @@ The two overhead parameters have distinct effects:
    &&\text{coherency-limited retrograde scaling}.
 \end{align*}}
 
-Read the three lines as follows.  When alpha and beta are both zero,
-throughput at load $n$ is gamma times $n$.  When beta is zero, throughput is
-gamma times $n$ divided by one plus alpha times $n-1$.  When beta is positive,
-the denominator additionally contains beta times $n$ times $n-1$.
-
 For $0\leq\alpha<1$ and $\beta>0$, differentiation gives the finite capacity
 population
 
@@ -423,9 +354,7 @@ population
  n_* = \sqrt{\frac{1-\alpha}{\beta}}.
 \]}
 
-Read this as: ``the peak load $n$ star equals the square root of one minus
-alpha, divided by beta.''  This fitted peak is a load value and need not equal
-the study limit $N$.
+This fitted peak need not equal the study limit $N$.
 
 The observed integer capacity is one of the adjacent integer populations,
 whichever has the larger measured or fitted throughput. When $\beta=0$ and
@@ -608,13 +537,9 @@ rejection, an outage, or fatal memory exhaustion intervenes.}
 \label{fig:offered-load-capacity}
 \end{figure}
 
-This is why performance belongs in requirements rather than in a post-deployment
-incident report. Before implementation, the specification should make it
-possible to ask whether forecast demand fits below sustainable capacity, whether
-latency and queue bounds remain acceptable, what happens to rejected or blocked
-work, how many replicas are affordable, and which failure modes are fatal. The
-goal is not to predict every scheduler tick. It is to rule out designs that work
-only at toy load and collapse the first time real users arrive.
+Use these models before implementation to check forecast demand against
+sustainable capacity, latency and queue bounds, dispositions for rejected or
+blocked work, affordable replica counts, and fatal failure modes.
 
 \clearpage
 
@@ -657,12 +582,6 @@ from $t_0$ through $t_1$, the estimated outage fraction and repair duration are
  \widehat{MTTR}=
  \frac{\sum_i (r_i.timeAt-u_i.timeAt)}{\lvert incidents\rvert}.
 \]}
-
-Read these as follows.  Estimated outage fraction, $\widehat O$, is the sum
-over incidents $i$ of restoration time $r_i.timeAt$ minus outage-boundary time
-$u_i.timeAt$, divided by replica count $R$ times window duration $t_1-t_0$.
-Estimated mean time to repair, $\widehat{MTTR}$, is that same total outage time
-divided by the number of incidents.  A hat marks an estimate from observations.
 
 Availability over the same complete window is $1-\widehat O$. The report must
 label whether $u_i$ is the last-known-healthy time, missed deadline, or detection
@@ -760,17 +679,11 @@ every member must be up:
  u_{\mathrm{series}}(t)=\prod_i u_i(t).
 \]}
 
-Read this as: ``series availability at time $t$ equals the product, over
-instances $i$, of instance $i$'s up indicator at time $t$.''
-
 For a parallel gate, at least one member must be up:
 
 \AccessibleEquation{Parallel availability at time t equals one minus the product over components i of one minus component availability u sub i at time t.}{\[
  u_{\mathrm{parallel}}(t)=1-\prod_i(1-u_i(t)).
 \]}
-
-Read this as: ``parallel availability at time $t$ equals one minus the product,
-over instances $i$, of one minus instance $i$'s up indicator at time $t$.''
 
 More generally, a replicated service declares a threshold $k$ and is available
 when $\sum_i u_i(t)\geq k$. Its measured availability is the fraction of the
@@ -819,10 +732,8 @@ then the expected number of unavailable operations is
 \AccessibleEquation{Expected blast-radius count B equals the sum over failure scenarios j of scenario probability pi sub j times the cardinality of the failure closure of F sub j.}{\[
  \mathbb{E}[B]=\sum_j \pi_j\,\lvert C(F_j)\rvert.
 \]}
-Read this as: ``the expected blast-radius count B is the sum, over scenarios j,
-of scenario probability pi-sub-j times the number of operations in that
-scenario's failure closure.'' A count weights every operation equally; a report
-may instead use an explicitly declared demand or business-impact weight.
+A count weights every operation equally; a report may instead use an explicitly
+declared demand or business-impact weight.
 Overlapping outage scenarios cannot simply be added as if they were disjoint.
 
 For a time-aligned trace, let $C(t)$ be the unavailable-operation set at time
@@ -831,12 +742,10 @@ The offered-request exposure over window $[t_0,t_1]$ is
 \AccessibleEquation{Lost work L equals the integral from t zero to t one of the sum over affected operations o in the failure closure at time t of offered rate lambda sub o at time t with respect to t.}{\[
  L=\int_{t_0}^{t_1}\sum_{o\in C(t)}\lambda_o(t)\,dt.
 \]}
-Read this as: ``L is the integral, from t-zero to t-one, of the sum of offered
-request rates for operations unavailable at time t.'' L has units of requests.
-It is exposure, not necessarily lost work: queues, retries, deadlines and
-recovery determine which requests ultimately fail or complete late. For
-overload, measure unmet work and deadline violations separately rather than
-counting every request as unavailable.
+This exposure is measured in requests, not necessarily lost work: queues,
+retries, deadlines, and recovery determine which requests ultimately fail or
+complete late. For overload, measure unmet work and deadline violations
+separately rather than counting every request as unavailable.
 
 \paragraph{Repair the operation, not just the process.}
 Actor MTTR is not automatically service MTTR. Service recovery may include
@@ -946,13 +855,9 @@ cost Server
 For $R$ replicas, provisioned hours $H_r$, available hours $A_r$, hardware rate
 $c_h$, and service rate $c_s$, the accounting-period infrastructure cost is
 
-\AccessibleEquation{Cost at replica count R equals the sum from replica r equals one through R of hosted hours H sub r times hosted-hour cost c sub h plus stored amount A sub r times storage cost c sub s.}{\[
+\AccessibleEquation{Cost at replica count R equals the sum from replica r equals one through R of provisioned hours H sub r times hardware cost c sub h plus available hours A sub r times service cost per hour c sub s.}{\[
  C(R)=\sum_{r=1}^{R}(H_r c_h + A_r c_s).
 \]}
-
-Read this as: ``cost at replica count $R$ equals the sum from replica index
-$r=1$ through $R$ of provisioned hours $H_r$ times hardware rate $c_h$, plus
-available hours $A_r$ times service rate $c_s$.''
 
 Supply planning is a constrained optimization, not merely ``pick the cheapest
 server.'' Let one replica sustain $\mu$ completed work units per hour, let $a$
@@ -964,9 +869,7 @@ feasible for demand $D$ only when
 R\mu a \ge D.
 \]}
 
-Read this as: ``replica count $R$ times per-replica completed-work capacity mu
-times required availability fraction $a$ must be at least required completed
-demand $D$.'' This inequality is necessary but not sufficient: routing
+This inequality is necessary but not sufficient: routing
 imbalance, queueing, and latency can still make the observed system infeasible.
 
 For total offered rate $\lambda_o$ routed across $R$ servers, let
@@ -978,11 +881,8 @@ $\lambda_{o,r}$ be the rate offered to server $r$:
  \lambda_{o,r}=\frac{\lambda_o}{R}\ \text{only under ideal balance}.
 \]}
 
-Read this as: ``total offered rate lambda sub $o$ equals the sum, from server
-index $r=1$ through server count $R$, of the rate offered to server $r$; under
-ideal balance only, each server's offered rate is total offered rate divided by
-$R$.'' Handled work must still be measured at each completion boundary; neither
-formula says that the offered work completed.
+Handled work must still be measured at each completion boundary; neither formula
+says that the offered work completed.
 
 With an ideally balanced routing policy, the nominal demand on each server is
 therefore $D/R$. Spawning more homogeneous servers lowers nominal average
@@ -1014,8 +914,8 @@ accepted somewhere in an arbitrarily large system.
 
 \section{Specified dwell time}
 
-A specification may attach a dwell time to an event step or to a named production.
-The dwell is a duration on the same monotonic time scale as event clocks:
+A \texttt{dwell} constrains modeled duration for a step or named production;
+observed event-pair durations are defined in Chapter \ref{ch:events}:
 
 \begin{lstlisting}
 emit "token requested" [field "code" code]
@@ -1025,52 +925,34 @@ include exchangeAndFetch
   |>.dwell 12.milliseconds
 \end{lstlisting}
 
-Taking a step with dwell $d$ advances the model clock from $t$ to $t+d$ before
-timestamping the event that completes the step. A production dwell constrains the
-elapsed time between its entry and exit boundary events; it does not assign the
-same dwell independently to every contained event. Exact values, bounded ranges,
-or weighted dwell outcomes may be used when the corresponding timing information
-is available.
+Step dwell $d$ advances the model clock from $t$ to $t+d$ before timestamping its
+completion event. Production dwell constrains entry-to-exit time, not each
+contained event. Use exact values, bounded ranges, or weighted outcomes when
+supported by the timing information.
 
-Dwell is part of the specification, so it can drive latency, throughput, timeout,
-and queue-pressure calculations. It does not create event order:
-\texttt{priorIds} supplies the predecessor relation, while the grammar separately
-states why a sequence or dependency is legal.
+Dwell can drive modeled latency, throughput, timeout, and queue-pressure
+predictions, but does not create event order: \texttt{priorIds} supplies
+predecessors, while the grammar states which sequences and dependencies are legal.
 
 \section{Estimating completion from an event stream}
 
-The same specification can consume observed events. A terminal event of any kind
-names its corresponding start event in its backpointer list. The reducer follows
-that identity rather than guessing from adjacency or selecting the first open
-\texttt{(session, task)} attempt. Each matched pair yields a task attempt:
-
-\begin{lstlisting}
-structure TaskAttempt where
-  key       : WorkKey
-  started   : Event
-  completed : Option Event
-  outcome     : Option TaskOutcome
-
-def latency (attempt : TaskAttempt) : Option Duration :=
-  attempt.completed.map fun completed =>
-    completed.timeAt - attempt.started.timeAt
-\end{lstlisting}
+The same boundary-event model can consume observed events. The
+\texttt{LeanFM.StreamStats} implementation reconstructs attempts from stored
+terminal-to-start predecessor links and computes completion, conditional-success,
+and completed-latency statistics. Chapter~\ref{ch:events} defines event pairing
+and admissible elapsed time.
 
 For an observation window containing $M$ starts, $C$ matched terminal events,
 $S$ successful terminals, and completed latencies $L_1,\ldots,L_C$, the basic
 estimates are
-\AccessibleEquation{Estimated completion probability equals completed count C divided by message count M. Estimated probability of success given completion equals success count S divided by completed count C. Estimated expected latency given completion equals the sum of completed latencies L sub i divided by C.}{\[
+\AccessibleEquation{Estimated completion probability equals completed count C divided by started count M. Estimated probability of success given completion equals success count S divided by completed count C. Estimated expected latency given completion equals the sum of completed latencies L sub i divided by C.}{\[
   \widehat P(\text{complete}) = \frac{C}{M}, \qquad
   \widehat P(\text{success}\mid\text{complete}) = \frac{S}{C}, \qquad
   \widehat E[L\mid\text{complete}] = \frac{\sum_i L_i}{C}.
 \]}
 
-Read these as follows.  Estimated completion probability is completed count
-$C$ divided by started count $M$.  Estimated success probability conditional
-on completion is successful count $S$ divided by completed count $C$.
-Estimated latency conditional on completion is the sum of completed latencies
-$L_i$, over completed attempts $i$, divided by $C$.  The vertical bar is read
-``given,'' and each hat marks an estimate from the observation window.
+The vertical bar means ``given''; hats mark estimates from the observation
+window.
 
 Attempts without a terminal event remain \emph{in flight}. They contribute to the
 number started and to queue/load measurements, but not to completed-task latency
@@ -1079,14 +961,8 @@ probability and latency whenever the observation window ends before they do.
 
 The reducer can group these sufficient statistics by task, actor, time bucket,
 maximum concurrency, or queue occupancy and feed them directly to pie, time-series,
-and XY plots. Specified probabilities and dwell times are therefore predictions;
-stream-derived estimates provide measurements against which those predictions can
-be checked.
-
-In the executable reducer, an entry event opens a \texttt{TaskAttempt}, progress
-events leave it open, and a success or failure event closes the open attempt with
-the same \texttt{(session, task)} key. The resulting attempts feed the estimates
-above.
+and XY plots. Specified probabilities and dwell times are predictions; stream-derived
+estimates are measurements to compare with them.
 
 \section{Composing requirements means intersecting constraints}
 
@@ -1132,37 +1008,12 @@ stories. A system is consistent only if the intersection remains nonempty. When 
 is empty, tooling should return a minimal conflicting set of requirements and the
 shortest available counterexample prefix.
 
-\section{State-machine rendering}
-
-The same scenario grammar can be rendered as a state machine. States are grammar
-residuals---the legal continuations after a trace prefix---rather than snapshots of
-private implementation memory.
-
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[->,>=Latex,node distance=1.8cm,on grid,
-  every state/.style={draw,minimum size=1.05cm}]
-  \node[state,initial] (start) {start};
-  \node[state] (asked) [below=of start] {asked};
-  \node[state] (offered) [below=of asked] {offered};
-  \node[state,accepting] (accepted) [below left=1.8cm and 2.2cm of offered] {accepted};
-  \node[state,accepting] (declined) [below right=1.8cm and 2.2cm of offered] {declined};
-  \path
-    (start) edge node[right,fill=diagramsurface,inner sep=1pt] {quote requested} (asked)
-    (asked) edge node[right,fill=diagramsurface,inner sep=1pt] {quote offered} (offered)
-    (offered) edge node[left,fill=diagramsurface,inner sep=1pt,align=right] {quote accepted} (accepted)
-    (offered) edge node[right,fill=diagramsurface,inner sep=1pt,align=left] {quote declined} (declined);
-\end{tikzpicture}
-\caption{A state machine derived from grammar residuals.}
-\label{fig:quote-state-machine}
-\end{figure}
-
-\section{Charts are declarative trace reductions}
+\section{Charts as declarative trace reductions}
 
 \index{chart specification}
-Charts are also specified in the Lean subset. A chart names an observable event
-source, a grouping or $x$ expression, and an aggregate or $y$ expression. It does
-not contain rendering code.
+The proposed chart declaration names an observable event source, a grouping or
+$x$ expression, and an aggregate or $y$ expression. It describes the reduction,
+not rendering code; this syntax is illustrative, not an implemented renderer.
 
 \begin{lstlisting}
 def outcomeShare : ChartSpec :=
@@ -1204,91 +1055,5 @@ $x$ values are labels. The first two examples reduce each completed model run to
 one point. The third sweeps a model parameter and checks that deterministic
 downstream processing transports the user's probability mass.
 
-\begin{figure}[htbp]
-\centering
-\begin{minipage}{.43\textwidth}
-\centering
-\begin{tikzpicture}
-  \def\r{1.55}
-  \fill[leanblue!80] (0,0) -- (90:\r) arc (90:-234:\r) -- cycle;
-  \fill[orange!80] (0,0) -- (-234:\r) arc (-234:-270:\r) -- cycle;
-  \node at (0,-2.05) {accepted 90\%};
-  \node at (0,-2.45) {declined 10\%};
-\end{tikzpicture}
-\end{minipage}\hfill
-\begin{minipage}{.52\textwidth}
-\centering
-\resizebox{.97\linewidth}{!}{%
-\begin{tikzpicture}
-\begin{axis}[
-  width=\linewidth,height=5cm,
-  xlabel={event time},ylabel={latency (ms)},
-  xmin=1,xmax=5,ymin=0,ymax=500,
-  grid=major]
-  \addplot[color=leanblue,mark=*] coordinates {(1,310) (2,240) (3,180) (4,205) (5,145)};
-\end{axis}
-\end{tikzpicture}
-}
-\end{minipage}
-\caption{Example pie and line renderings from declarative chart specifications.}
-\label{fig:charts}
-\end{figure}
-
-\begin{figure}[p]
-\centering
-\begin{minipage}{.48\textwidth}
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-  width=\linewidth,height=5.2cm,
-  xlabel={maximum concurrent sessions},
-  ylabel={mean latency (ms)},
-  xmin=0,xmax=9,ymin=0,ymax=450,
-  grid=major]
-  \addplot[color=leanblue,mark=*] coordinates
-    {(1,90) (2,110) (4,160) (6,250) (8,390)};
-\end{axis}
-\end{tikzpicture}
-\end{minipage}\hfill
-\begin{minipage}{.48\textwidth}
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-  width=\linewidth,height=5.2cm,
-  xlabel={offered load (requests/s)},
-  ylabel={mean queued messages},
-  xmin=0,xmax=55,ymin=0,ymax=5,
-  grid=major]
-  \addplot[color=orange!85!black,mark=square*] coordinates
-    {(10,.4) (20,.9) (30,1.7) (40,2.8) (50,4.2)};
-\end{axis}
-\end{tikzpicture}
-\end{minipage}
-
-\vspace{1em}
-
-\begin{minipage}{.62\textwidth}
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-  width=\linewidth,height=5.2cm,
-  xlabel={user grant probability},
-  ylabel={terminal grant probability},
-  xmin=0,xmax=1,ymin=0,ymax=1,
-  grid=major,
-  legend pos=north west]
-  \addplot[color=leangreen,mark=triangle*] coordinates
-    {(0,0) (.2,.2) (.4,.4) (.6,.6) (.8,.8) (1,1)};
-  \addlegendentry{deterministic propagation}
-\end{axis}
-\end{tikzpicture}
-\end{minipage}
-\caption{XY-plot examples. The values are illustrative model-run data: clocks
-and correlation produce latency, bounded queues produce occupancy, and
-probability-one server steps preserve user-originated grant mass.}
-\label{fig:xyplots}
-\end{figure}
-
-Interaction diagrams, state machines, and charts are projections of the same typed
-scenario and event definitions. Keeping them derived prevents a diagram from
-becoming a second, drifting specification.
+Apply the provenance and implementation-status rule in
+Section~\ref{ch:scenarios} to each generated chart.

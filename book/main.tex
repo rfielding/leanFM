@@ -112,6 +112,7 @@
   columns=fullflexible,
   keepspaces=true,
   literate={ℝ}{{$\mathbb{R}$}}1
+           {⁻¹}{{$^{-1}$}}2
            {ℤ}{{$\mathbb{Z}$}}1
            {ℚ}{{$\mathbb{Q}$}}1
            {ℕ}{{$\mathbb{N}$}}1
@@ -207,17 +208,6 @@
 \end{tikzpicture}%
 }
 
-\newcommand{\BookCover}[1]{%
-  \begin{tikzpicture}[baseline=(cover.base)]
-    \node[inner sep=0,outer sep=0] (cover)
-      {\includegraphics[height=1.9in,keepaspectratio]{#1}};
-    \ifdefined\darkmode
-      \fill[pagebackground,opacity=.45]
-        (cover.south west) rectangle (cover.north east);
-    \fi
-  \end{tikzpicture}%
-}
-
 \input{generated/bakery-stats.tex}
 
 \begin{document}
@@ -253,8 +243,10 @@ argument produces durable project artifacts rather than relying on chat memory.
 The book is the main artifact. Every project begins with \texttt{./book/main.pdf}:
 its purpose, vocabulary, boundaries, examples and design argument. It acts as a
 maintained, project-specific section of the LLM's system-prompt context, whether
-supplied directly or discovered through the agent interface. Final diagrams come from the specification
-and are reused in the book, not maintained as separate designs.
+supplied directly or discovered through the agent interface. Final diagrams come
+from the specification and are reused in the book, not maintained as separate
+designs. \texttt{book/main-dark.pdf} is the accessible rendering of the same
+source.
 
 The book is itself vibecoded: missing views, checks and editing tools are built
 as the argument needs them. Each project owns one directory containing its book,
@@ -265,42 +257,39 @@ state. External deployments require explicit teardown.
 This repository is also a LeanFM project. Its book, specifications and source
 are the inputs used to develop LeanFM itself. Other projects can be copied into
 their own repositories and opened in Codex without reconstructing the conversation.
+In this workspace, example projects are separate roots under
+\texttt{projects/}: for example, the GoServer book is
+\texttt{projects/go-server/book/main.pdf}, not this repository's
+\texttt{book/main.pdf}. Each root carries its own book, specifications, source
+and tests; the root directory, not a chat transcript, is the handoff to a fresh
+session.
 
-\texttt{book/main.pdf} remains a central input in Codex; \texttt{book/main-dark.pdf}
-is its accessible rendering from the same source. Requirements and implementation
-specifications have stable project-relative paths. Each revision identifies one
-canonical implementation specification; deliberate alternatives name their targets.
+Requirements and implementation specifications have stable project-relative
+paths. Each revision identifies one canonical implementation specification;
+deliberate alternatives name their targets.
 
-The workflow has two acceptance gates. First accept \texttt{Requirements.lean}:
-observable behavior, legal conversations and properties. Then accept
-\texttt{Implementation.lean}: runtime, transport, actor, file and test mappings.
-These specifications refine the book. Together with the current repository, they
-are intended to support one complete, reviewable PR. ``One-shot'' describes this
-implementation pass; requirements discovery remains iterative. The integrated
-requirements-to-PR workflow is still under development.
+The workflow has two acceptance gates. First accept \texttt{Requirements.lean}
+with its protobuf schema, derived views, ambiguity register and validation
+evidence: these define observable behavior, legal conversations and properties.
+Then accept \texttt{Implementation.lean}, which maps those requirements to
+runtime, transport, actor, file and test choices. Together with the current
+repository, the accepted specifications are intended to support one complete,
+reviewable PR. ``One-shot'' describes this implementation pass; requirements
+discovery remains iterative. The integrated requirements-to-PR workflow is still
+under development. Its readiness is measured by generated source that passes
+increasingly realistic in-project tests, not by a plausible chat response or by
+asking the stakeholder to run unavailable external checks.
 
-This differs from software engineering organized primarily around coordinating
-people who debate separate drawings. LeanFM centers the shared, executable account
-of the design and records communication between actors down to the bytes represented
-by protobuf objects. Parameterized multiparty grammars describe legal message
-sequences; generated views let people reason about them; and Lean theorems check
-their consistency. Many important requirements, however, are not themselves
-observable messages. Security properties, referential integrity, and constraints
-between protobuf objects also belong in the theory. Protobuf has no standard
-foreign-key mechanism: it can encode an identifier and field presence, but it
-neither declares that the identifier resolves to another object nor enforces what
-must exist. Those relationships are predicates over decoded objects and reachable
-system states, stated and proved as Lean theorems in the requirements specification.
-The implementation specification must then identify the storage, transaction, or
-validation mechanism that preserves each theorem.
-
-For example, if $A$ carries an identifier for $B$, every reachable $A$ may be
-required to resolve to an existing $B$. If $B$ in turn requires a $C$, while policy
-disallows every admissible $C$, Lean should expose that the predicates are jointly
-unsatisfiable: $A$ cannot consistently exist. The design must change, perhaps by
-making the relationship to $C$ optional or by changing the policy. Such
-contradictions are requirements discoveries even when no new wire event reveals
-them; they are not foreign-key declarations hidden in a \texttt{.proto} file.
+LeanFM centers a shared, executable account of actor communication down to
+protobuf bytes. Parameterized multiparty grammars describe legal sequences;
+generated views and Lean theorems check the model. Not every requirement is an
+observable message: referential integrity and cross-object constraints are
+predicates over decoded values and reachable states. Protobuf can encode an ID,
+but does not enforce its relationship to another object. Requirements.lean states
+and proves such predicates; Implementation.lean maps them to storage, transactions,
+or validation. For example, if $A$ must reference $B$ and $B$ requires a $C$ that
+policy forbids, the requirements are inconsistent and must change before
+implementation.
 
 Formal methods should therefore be the easy way to build software. This working
 book develops that claim into a practical method, while the LeanFM repository

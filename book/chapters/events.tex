@@ -107,9 +107,6 @@ structure AnalysisEvent where
   timeAt   : ClockTimestamp
   bytes    : ByteArray
   reveals  : List ValueRef
-
-def elapsed (started completed : AnalysisEvent) : Duration :=
-  completed.timeAt - started.timeAt
 \end{lstlisting}
 
 Consider the first retail purchase in \texttt{examples/bakery-events.jsonl}.
@@ -167,10 +164,7 @@ The following quantities are folds or graph queries over this one list:
   \operatorname{wireBytes} &= 59+62+55+72 = 248.
 \end{align*}}
 
-Read these as follows. Inventory reservation takes 352 milliseconds; payment
-takes 661 milliseconds; and the complete storefront exchange takes 1257
-milliseconds. Wire bytes is the sum of the four listed event sizes, or 248.
-Each subscript identifies the exact event used as a boundary.
+The subscripted arguments identify each duration's exact start and end events.
 
 Two events are concurrent in this order when neither is an ancestor of the other:
 
@@ -295,21 +289,10 @@ graph into the specification.
 \section{Time is more than a timestamp}
 
 \index{time}
-The central modelling problem is maintainable time evolution. We separate three
-ideas that are often conflated:
-
-\begin{itemize}
-  \item sequence order: one visible event occurs before another;
-  \item declared dependency or causality: a grammar says that one event extends
-        or responds to another;
-  \item duration: an amount of physical or logical time elapses.
-\end{itemize}
-
-Grammar structure declares legal sequence and domain dependency,
-\texttt{priorIds} encodes the resulting predecessor order, and typed constraints
-handle duration. A predecessor link alone is not evidence of causation. This
-keeps a change in timeout policy from rewriting
-the protocol's entire behavioural shape.
+As defined above, \texttt{priorIds} records predecessor order while
+\texttt{causeId} records direct causation; typed constraints express durations
+over selected start and finish events. A predecessor link alone does not prove
+causation, so changing timeout policy need not rewrite protocol order.
 
 For two events from the same \texttt{(session, task)}, elapsed time is defined when
 the first event's \texttt{timeAt} value does not exceed the second's:
@@ -323,21 +306,12 @@ def elapsed (start finish : Event) : Option Duration :=
   else none
 \end{lstlisting}
 
-Latency queries name their boundary event kinds and follow the end event's
-backpointer to the start before subtracting timestamps. The
-\texttt{(session, task)} values must agree, but are not sufficient to choose a
-start when attempts overlap. Ordering comes from \texttt{priorIds}; any causal
-meaning comes from the grammar or another explicit domain relation. Equal
-timestamps may occur, and neither a timestamp nor a predecessor pointer alone
-establishes that one event caused another.
-
-Messages that delimit work are generally paired. A start event has its own
-identity. Its terminal event---completion, failure, cancellation, timeout, or
-another declared stop---includes that start identifier in
-\texttt{priorIds}. Elapsed time is terminal time minus start time. Encoded-byte
-growth or reduction uses the same pair and subtracts like byte counts. Other
-deltas follow the same rule. The reducer never guesses a pair from adjacency,
-because concurrent attempts can interleave.
+Latency queries name their boundary event kinds and use the terminal's
+\texttt{priorIds} backpointer to select the start. Matching
+\texttt{(session, task)} values alone cannot disambiguate overlapping attempts,
+so reducers never pair by adjacency. Completion, failure, cancellation, timeout,
+and other declared terminals use the same explicit pairing for elapsed time,
+byte deltas, and other measurements.
 
 This pairing is how a view may elide detail without becoming hand-waving. A
 collapsed production retains its boundary event IDs, complete predecessor

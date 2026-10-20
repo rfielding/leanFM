@@ -3,18 +3,9 @@
 
 \index{vibecoding}
 \index{requirements!durable}
-The LeanFM web server presents a conversational workbench, but conversation is
-not its product. Its product is a durable set of artifacts: a typed Lean
-requirements model, a protobuf description of the bytes exchanged by the
-participants, and a separate Lean implementation plan. The useful form of requirements vibecoding is therefore not
-``ask a model to write the system.'' It is an argument in which a person keeps
-challenging a proposed boundary until the remaining claims can be compiled,
-checked, measured, or left as explicit proof obligations.
-
-Chat history is evidence about how a decision was reached. It is not the
-decision. A future reader must be able to discard the transcript, open the
-generated files, and recover the actors, observable events, alternatives,
-correlation rules, timing assumptions, resource bounds, and properties.
+This chapter documents the staging server that implements the workbench, its
+project isolation, and its interface for the two acceptance gates defined in the
+Preface.
 
 \section{The argument loop}
 
@@ -78,13 +69,10 @@ file selects how those bytes travel---for example HTTP method and path, an
 in-process channel, TCP, or another adapter. Validation, rendered views,
 metrics, reports and OpenAPI descriptions are projections of the same model.
 
-The project directory, rather than a temporary conversation session, is the
-durability boundary. Copying it supplies everything required for a fresh agent
-session; deleting it removes all project-owned state without a search for
-hidden files elsewhere. A disposable global index may help locate projects,
-but must be reconstructible from their manifests. Canonical path checks accept
-both a project-relative path and its canonical absolute equivalent only when
-the resolved target remains beneath the selected root; traversal and escaping
+Chapter~\ref{ch:bootstrap-contract} defines the portable root and ownership
+contract; the Preface explains the project-copy and deletion rationale. Path
+checks accept project-relative or canonical absolute forms only when the
+resolved target remains beneath the selected root; traversal and escaping
 symlinks fail closed.
 
 The server may use a language model to propose edits. Compilation and validation
@@ -240,9 +228,8 @@ codex mcp add leanfm --url http://127.0.0.1:8080/mcp
 codex mcp list
 \end{lstlisting}
 
-The MCP interface does not replace the book. It makes the book, specifications,
-and live checker discoverable in a standard agent conversation so that a new
-session need not reconstruct the method from chat history.
+The MCP interface does not replace the book; it makes the book, specifications
+and live checker discoverable to an agent client.
 
 \section{A tour of the LeanFM chat}
 
@@ -510,14 +497,11 @@ the horizontal phases rather than turning chat into a source-code dump:
   directory.
 \end{description}
 
-An implementation request after both explicit gates and the security critique
-must create and check those files.  Chat then reports only a concise artifact
-and validation summary.  Pasting a Go program into a conversational response
-while leaving Source empty is not an implementation result and is rejected as
-FAIL.  If a gate or material decision is still missing, the response instead
-presents focused selectable questions.  This separation keeps the conversation
-useful for stakeholder argument while making the project directory, rather than
-the transcript, the durable engineering product.
+After both gates and the security critique, an implementation request must
+create and check real project files; a chat-only listing with Source empty fails.
+The response summarizes the artifacts and validation. If a gate or material
+decision is missing, it asks a focused question instead of inventing an
+implementation.
 
 \subsection{Screenshot-first documentation}
 
@@ -589,70 +573,15 @@ authentication token is never imported into LeanFM's provider-key store.
 \section{One project, one directory}
 
 \index{project!directory boundary}
-Project creation establishes one exclusive filesystem root. Everything owned by
-that project must be below it. This is both an operational requirement and a
-reproducibility boundary: deleting that one directory must remove the project
-without requiring a search for session files, generated diagrams, caches, or
-logs elsewhere on the machine.
-
-The exact book used as a critical prompt input is part of the project itself.
-Every project always has \texttt{book/main.pdf}; a dark reading copy,
-\texttt{book/main-dark.pdf}, is generated from the same source. The specification
-paths are stable within the project and recorded by its manifest rather than
-rediscovered by searching. A representative exported layout is:
-
-\begin{lstlisting}
-order-cancellation/
-  project.toml
-  book/main.tex
-  book/main.pdf
-  book/main-dark.pdf
-  specification/Requirements.lean
-  specification/Requirements.proto
-  specification/Implementation.lean
-  source/
-  tests/
-  generated/renders/
-  generated/metrics/
-  evidence/traces/
-  evidence/reports/
-  .cache/
-  logs/
-\end{lstlisting}
-
-There is one canonical accepted \texttt{Implementation.lean} for each project
-revision. Multiple intentional implementation targets may add explicitly named
-siblings such as \texttt{Implementation.server.lean}; each must identify its
-target and retain complete requirement traceability. They may not become an
-unindexed collection from which an agent guesses.
-
-The LeanFM repository is itself one such project. Its canonical self-hosting
-specifications currently live together under \texttt{LeanFM/LLMGenerated/}; its
-manifest and agent instructions make those stable repository-relative paths
-explicit. Copying the complete project directory therefore produces a repository
-candidate that Codex can enter and use without external project-owned state.
-
-The exported directory names may vary only when the manifest states their stable
-locations; the containment invariant may not. Configured output
-paths and symbolic links must resolve inside the project root. Temporary files
-must be created there and atomically renamed there. Export is an explicit copy
-of a declared artifact, not an unrecorded second project location. Import must
-copy an input into the root or record a content-addressed, immutable dependency;
-it must not silently turn an arbitrary external pathname into project state.
-
-Globally installed LeanFM binaries and content-addressed dependency caches may
-be shared because they are tooling, not state owned by one project. They must not
-hold mutable project-specific data. A launcher may keep a global recent-project
-index, but that index is disposable: it must be reconstructible from manifests
-inside project roots and must not be needed to delete a project completely.
-
-This changes the current staging design. A session directory under
-\texttt{/tmp/leanfm-sessions} and committed artifacts under a separate source
-tree cannot jointly be the durable project. A conforming implementation chooses
-the project root first, places session work beneath it, and promotes accepted
-artifacts by atomic moves within that same root. Project deletion resolves and
-validates the exact root, refuses filesystem-root or escaping targets, and then
-removes only that directory.
+The portable root and containment rules are in
+Chapter~\ref{ch:bootstrap-contract}; this section records the hosted-runtime
+mapping. \texttt{LeanFM.ChatUI.Store.createProject} creates account-owned roots
+under \texttt{data/accounts/<user>/projects/<id>}, writes a runtime
+\texttt{manifest.json}, and provisions the book, \texttt{spec/}, source, tests,
+artifacts, renders, events, reports, logs, cache, and conversations beneath that
+root. The copyable bootstrap template instead uses \texttt{project.json} and
+\texttt{Specification/}; these are distinct template and runtime layouts, not a
+single manifest/path contract.
 
 \section{What the Lean artifact must settle}
 
@@ -711,30 +640,20 @@ dimensions.
 
 \subsection{The first question}
 
-A fresh LeanFM conversation is not an empty general-purpose chat. Its only
-required external input is the project-root directory. The server and agent
-load the manifest, editable and rendered book, canonical requirements and
-protobuf, implementation mapping, acceptance revisions, source, generated
-views and evidence from stable paths beneath that root. They do not require a
-copied transcript or a specially composed restart prompt.
+Fresh sessions resume from the project root, as specified in
+Chapter~\ref{ch:bootstrap-contract}; no copied transcript or restart prompt is
+required.
 
-When that directory contains no durable problem statement, the first visible
-assistant message is: ``What problem are you trying to solve?'' The answer is
-recorded before the system proposes frameworks or solutions. Subsequent
-questions name a concrete ambiguity and identify which requirement, view,
-proof obligation, implementation choice or acceptance gate depends on the
-answer. A useful turn records a durable decision, updates a derived view, asks
-such a blocking question, reports validation, or advances one of the two
-acceptance gates. Unrelated conversational assistance is outside this project
-conversation's purpose.
+If the root has no durable problem statement, the first message is
+``What problem are you trying to solve?'' The system records the answer before
+proposing frameworks or solutions. Later questions identify a concrete
+ambiguity and the requirement, view, proof, implementation choice or gate it
+affects. Each useful turn records a decision, updates a view, asks a blocking
+question, reports validation or advances an acceptance gate.
 
-The book is produced during this argument rather than written afterward. A
-durable decision revises its editable source and regenerates
-\texttt{book/main.pdf} and \texttt{book/main-dark.pdf} from the same content.
-The revision links its explanation and generated diagrams to the corresponding
-requirements, implementation and evidence revisions. Consequently, starting a
-new model session with the project directory is enough to continue the design
-without reconstructing intent from chat history.
+Each durable decision regenerates both PDF variants and links its explanation
+and generated views to the matching requirements, implementation and evidence
+revisions.
 
 The conversational interface is not merely a code generator. Its first job is
 to discover whether the desired claims are identifiable. It asks for scenario
@@ -744,16 +663,11 @@ recovery events, and the provenance of probabilities. A missing answer is
 reported as an indeterminate metric rather than replaced by an invented value.
 
 Once those fields are available, one event stream should produce a standard
-characterization out of the box:
-
-\begin{itemize}
-  \item one interaction diagram and derived state machine per scenario;
-  \item XY line graphs for time-, load-, population-, and replica-indexed metrics;
-  \item pie-chart histograms for categorical outcomes and distributions;
-  \item uptime, outage fraction, reliability, and MTTR;
-  \item client-experienced and server-aggregate throughput; and
-  \item latency distributions and named percentiles.
-\end{itemize}
+characterization. The canonical artifact inventory is
+\texttt{outOfBoxArtifacts} in \texttt{LeanFM/Characterization.lean};
+\texttt{baselineDerivedProperties} records each property's required fields,
+reducer, unit, visualization and boundary. A domain explicitly retains,
+replaces, extends, or marks each applicable property indeterminate.
 
 Some streams contain observations; other requirements contain only expected
 distributions. These are labeled separately. An expected distribution can drive

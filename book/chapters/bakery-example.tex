@@ -166,14 +166,12 @@ service metrics are payment and inventory-reservation time, storefront
 fulfillment time, stockout rate, inventory age at sale, freshness-window
 sell-through, and units and eligible value transferred to charity.
 
-\section{AI rendering from durable requirements to pseudocode}
+\section{A code-generation boundary}
 
-The grammar is useful for more than recognizing a saved corpus. It generates
-legal traces, so the same durable specification can drive software generation.
-The inputs are files, not the conversation that produced them. Let $R$ be the
-complete current \texttt{Requirements.lean}, $I$ the complete current
+The intended code-generation boundary uses durable files, not the conversation
+that produced them. Let $R$ be \texttt{Requirements.lean}, $I$ be
 \texttt{Implementation.lean}, $P$ the protobuf schema, and $C_k$ an optional
-existing implementation. Code generation has two forms:
+existing implementation:
 
 \AccessibleEquation{Requirements R and implementation I and protobuf schema P generate initial code C zero. Requirements R and implementation I and protobuf schema P and code revision C sub k generate revision C sub k plus one.}{\[
   (R,I,P) \longrightarrow C_0,
@@ -181,40 +179,23 @@ existing implementation. Code generation has two forms:
   (R,I,P,C_k) \longrightarrow C_{k+1}.
 \]}
 
-Read the first mapping as: ``requirements $R$, implementation specification
-$I$, and protobuf schema $P$ generate initial code $C_0$.''  Read the second as:
-``those same three specifications plus current code revision $C_k$ generate
-the next revision $C_{k+1}$.''  Subscript zero is the initial revision;
-subscripts $k$ and $k+1$ are the current and next revisions.
+Initial generation uses $(R,I,P)$; revision also receives $C_k$ so conforming
+code can be retained. Missing decisions must be reported rather than recovered
+from chat. This is the intended boundary, not a claim that the bakery sketch
+below was generated or that the complete code-generation pipeline is implemented.
 
-The first creates software from scratch. The second revises existing software
-against the same stable inputs, retaining conforming code and replacing code
-that conflicts. Prior chat messages are deliberately absent from both
-functions. If a necessary decision is not present in $R$, $I$, or $P$, the
-generator reports the missing durable fact instead of recovering it from a long
-conversation.
+The following short Go-like excerpt illustrates the purchase event sequence and
+its predecessor links. It is schematic: protobuf bindings, event plumbing, and
+runnable implementations of the helper functions are omitted.
 
-For the bakery, the selected implementation backend is Go. The generated code
-uses Go protobuf bindings, deterministic \texttt{proto.Marshal},
-\texttt{proto.Unmarshal}, and bounded channels. Requirement comments are emitted
-beside the symbols and statements they justify:
+\lstinputlisting[language=Go,basicstyle=\ttfamily\scriptsize,firstline=49,lastline=64]{examples/bakery-generated.go}
 
-\lstinputlisting[language=Go,basicstyle=\ttfamily\scriptsize]{examples/bakery-generated.go}
-
-The pseudocode does not become a second source of requirements. It is discarded
-and regenerated when $R$ or $I$ changes. Generated source code is likewise a
-projection, except that revision mode accepts the current code as an additional
-input so hand-written conforming sections need not be destroyed. In both modes,
-the grammar supplies positive tests by generating legal traces and negative
-tests by rejecting mutations outside its language. Byte round trips then check
-that the implementation and its transport bindings preserve the observable
-scenario.
-
-Every generated code unit carries a machine-readable requirement reference and
-a short justification beside the code it explains. The reference points into
-the durable requirement namespace, not to a chat turn. Generation also emits a
-traceability manifest mapping requirement IDs to source files, symbols, and
-tests. An implementation mapping without a requirement reference is an orphan
-and fails implementation-plan validation; generated-source validation must apply
-the same rule to emitted symbols. Several code units may cite one requirement, and one code unit may
-cite several requirements; the mapping is many-to-many.
+The full 74-line sketch remains at
+\texttt{book/examples/bakery-generated.go}; it is not an executable fixture.
+The general conformance target is that generated units carry machine-readable
+requirement references and justifications, with a manifest linking IDs to
+files, symbols, and tests. Current validation checks requirement references in
+implementation mappings; symbol-level validation of generated code remains a
+separate requirement. The grammar should supply legal-trace tests, reject
+mutations outside its language, and pair byte round trips with the mapped
+implementation.

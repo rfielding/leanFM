@@ -1,4 +1,4 @@
-// Code generated from the bakery specification. DO NOT EDIT.
+// Illustrative Go-like pseudocode, not generated from an accepted bakery specification.
 package bakery
 
 import "context"

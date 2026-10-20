@@ -288,17 +288,17 @@ Assign monotonically increasing clock ticks and event identifiers. This example
 has a linear predecessor chain, so \texttt{priorIds(e1)} is empty and
 \texttt{priorIds(e$n$)} is \texttt{[e$n-1$]}. A fork or join would make these
 lists non-linear without changing the procedure. Deterministic protobuf
-serialization of the schema on the preceding pages produces:
+serialization is the intended encoding; the companion fixture records one
+concrete stream:
 
 \lstinputlisting[language={},basicstyle=\ttfamily\tiny,
-  breaklines=true]{examples/oauth-granted.bytes}
+  breaklines=true,firstline=3,lastline=3]{examples/oauth-granted.bytes}
 
-These are complete \texttt{EventEnvelope} encodings, not illustrative message
-tags. They were generated with deterministic protobuf serialization. The twelve
-envelopes occupy 440 bytes; the largest is 46 bytes. Protobuf deterministic mode
-makes this fixture reproducible for a given implementation, while the grammar's
-semantic requirement remains successful decoding to the same terminals and field
-values.
+The companion fixture \texttt{examples/oauth-granted.bytes} retains all twelve
+envelopes (440 encoded bytes total; largest envelope 46 bytes). The excerpt above
+shows one complete envelope. The repository does not currently include a
+generator or round-trip check for this particular fixture, so it is a concrete
+example rather than evidence that serialization was reproduced or verified.
 
 \subsection{Event graph with stored backpointers}
 
@@ -322,28 +322,12 @@ when those alternatives are under discussion.
 
 \subsection{Actor projections}
 
-Projection erases terminals an actor neither sends nor receives while preserving
-the order of the rest. The same word generates four local replay scripts:
-
-\begin{center}
-\small
-\begin{tabular}{@{}lp{.72\textwidth}@{}}
-\toprule
-Actor & Projected actions \\
-\midrule
-Browser & send e1; receive e2; send e3; send e4; receive e5; receive e6;
-          send e7; receive e12 \\
-Application & receive e1; send e2; receive e7; send e8; receive e9; send e10;
-              receive e11; send e12 \\
-Authorization & receive e3; receive e4; send e5; send e6; receive e8; send e9 \\
-Resource & receive e10; send e11 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Each line can become a component conformance test. The global word remains the
-authority for cross-component order and parameter equality; a local projection
-does not grant an actor knowledge of erased events.
+Project each terminal onto its sender and receiver, preserving order and erasing
+the rest. For example, Resource receives \texttt{e10} and sends \texttt{e11}; the
+other local scripts follow the same endpoint filter. The example generator emits
+the shared interaction and predecessor diagrams, not replay scripts. The global
+word remains authoritative for cross-component order and parameter equality; a
+local projection does not reveal erased events.
 
 \subsection{Event order, queues, and memory}
 
