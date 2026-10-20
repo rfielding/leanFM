@@ -350,11 +350,17 @@ $AG\,\neg p$, and \texttt{preparedFor} becomes $EF\,p$. A
 \texttt{where\_} trace predicate is displayed with its stable identifier under
 the invariant $AG\,p$. Each card identifies its requirements origin.
 
-The implementation specification remains separate. It maps each accepted
-property and negative proof obligation to runtime controls, files and tests. It
-may choose a queue, transport, journal or browser mechanism, but it cannot
-quietly become the source of a new observable property. This provenance keeps
-the two acceptance gates meaningful.
+The implementation specification remains separate. Requirements define the
+observable behavior the system must provide. Implementation records choices
+needed to realize that accepted behavior in code, mapping each choice to the
+relevant requirement; it does not add requirements or change the contract. It
+may choose a queue, transport, journal or browser mechanism. If observable
+behavior is missing, revise and accept the requirements rather than inventing
+it in the implementation specification. An implementation question asks how to
+realize accepted behavior, not what the user-facing behavior should be. Its
+answer is recorded only in the implementation layer and may be dropped when a
+requirements change makes that choice unnecessary. This provenance keeps the
+two acceptance gates meaningful.
 
 \subsection{How a chat turn becomes a durable edit}
 
@@ -535,6 +541,12 @@ artifacts, this section describes the intended replacement and does not claim
 that screenshots already exist.
 
 \section{Local credentials and visible billing identity}
+
+The login shown by LeanFM is not an OpenAI login. The user's LeanFM password
+protects the OpenAI API key with authenticated encryption and unlocks it for the
+active session; the key is never stored in plaintext. The project list exposes
+the checked-in GoServer project under one canonical \texttt{GoServer} identity,
+not a separate ``GoServer example'' tab.
 
 Account records are runtime state, not source. By default the salted password
 verifier, password-encrypted provider key, private conversations, and session

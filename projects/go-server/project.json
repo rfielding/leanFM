@@ -1,6 +1,6 @@
 {
-  "id": "go-server-example",
-  "title": "GoServer n-player Go example",
+  "id": "go-server",
+  "title": "GoServer n-player Go project",
   "root": ".",
   "status": "candidate-requirements",
   "book": "book/main.pdf",

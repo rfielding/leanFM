@@ -217,7 +217,7 @@ function Auth({onReady}: {onReady: () => void}) {
     try { await api(register ? "/api/accounts" : "/api/login", formRequest(data)); window.localStorage.setItem("leanfm:last-username", data.username); onReady(); }
     catch (e) { setError((e as Error).message); }
   }
-  return <section className="auth"><div className="auth-card"><h1>LeanFM</h1><p>Use your own API key. This server has no platform key to bill.</p>
+  return <section className="auth"><div className="auth-card"><h1>LeanFM</h1><p>Sign in to unlock your encrypted OpenAI API key. This is not an OpenAI account login; the key is never stored in plaintext.</p>
     <div className="auth-tabs"><button className={!register ? "active" : ""} onClick={() => setRegister(false)}>Log in</button><button className={register ? "active" : ""} onClick={() => setRegister(true)}>Create account</button></div>
     <form onSubmit={submit}><label>Username<input name="username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required /></label><label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : undefined} required /></label>
       {register && <><label>Provider<select name="provider"><option value="openai">OpenAI</option></select></label><label>API key<input name="api_key" type="password" autoComplete="off" required /></label></>}

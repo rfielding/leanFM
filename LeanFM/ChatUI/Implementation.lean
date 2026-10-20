@@ -285,6 +285,16 @@ def decisions : List ImplementationDecision :=
       ["LeanFM/ChatUI/Server.lean", "LeanFM/Render.lean"]
       "For an HTTP production without an explicit codec binding, encode and decode bodies using the protobuf JSON mapping with application/json. Generate OpenAPI from the resolved protobuf request-response pairs and transport bindings, and serve the resulting YAML at GET /openapi.yaml. Validate a causally closed exchange relation before projection: each terminal response EventEnvelope.cause_id equals one compatible request event_id in the same session and task, and each projected request is named by exactly one terminal success or error response. Reject orphan requests, dangling responses, incompatible or cross-session causes, and duplicate terminal responses as unchecked HTTP calls. Do not alter or infer prior_ids, which separately governs legal interleavings. Explicit bindings override the default codec, method, path, and content type while remaining subject to correlation and byte round-trip validation."
       ["scripts/chatui_http_check.sh"]
+  , decision "canonical-goserver-project-tab"
+      ["task:manage_projects", "property:GoServer is listed once under its canonical identity", "property:The obsolete GoServer example identity is not routable"]
+      ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "projects/go-server/project.json", "projects/go-server/README.md"]
+      "Expose the checked-in projects/go-server workspace once as the read-only project with project_id go-server and display name GoServer. Route that ID to its canonical project root. Do not expose a separate go-server-example identity; reject stale requests under the old identity rather than aliasing it, so it cannot create a second project tab or weaken ownership checks."
+      ["scripts/chatui_http_check.sh verifies one canonical GoServer list entry, old-ID rejection, and read-only write denial"]
+  , decision "login-openai-key-purpose-copy"
+      ["task:authenticate_user", "property:login_explains_openai_key_protection", "property:stored_provider_keys_are_encrypted", "proof:Credential ciphertext requires password login"]
+      ["ui/src/main.tsx", "LeanFM/ChatUI/Web.lean", "LeanFM/ChatUI/Store.lean"]
+      "Explain on both login and account-creation screens that the LeanFM password protects and unlocks the user's encrypted OpenAI API key, and that this is not an OpenAI login. Preserve password-derived authenticated encryption, session handling, and account/project authorization; never imply plaintext key storage."
+      ["scripts/chatui_http_check.sh verifies the explanation is served; existing credential checks verify password unlock and no plaintext key persistence"]
   , decision "traceability-and-build"
       [spec.id]
       ["LeanFM/ChatUI/Traceability.json", "Makefile", "scripts/embed_static_assets.js"]

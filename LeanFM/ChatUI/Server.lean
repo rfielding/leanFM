@@ -119,7 +119,7 @@ def authorizedProjectRoot? (username projectId : String) : IO (Option String) :=
         (← (fp "book/main.tex").pathExists) then
       return some "."
     else return none
-  if projectId == "go-server-example" then
+  if projectId == "go-server" then
     if ← (fp "projects/go-server/project.json").pathExists then return some "projects/go-server" else return none
   if !safeId projectId then return none
   let root ← projectRoot username projectId
@@ -978,7 +978,7 @@ def artifactListJson (root : String) : IO String := do
   pure ("{\"artifacts\":[" ++ String.intercalate "," artifacts.reverse ++ "]}\n")
 
 def sourceFileNames (root projectId : String) : IO (List String) := do
-  let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server-example" then root else root ++ "/source"
+  let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server" then root else root ++ "/source"
   if !(← (fp sourceRoot).pathExists) then return []
   let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["list-files", sourceRoot] }
   if out.exitCode != 0 then return []
@@ -1019,7 +1019,7 @@ def projectMemoryJson (root projectId : String) : IO String := do
         "\",\"label\":\"" ++ jsonEscape label ++ "\",\"stage\":\"" ++ stage ++
         "\",\"bytes\":" ++ toString source.length ++ ",\"status\":\"" ++ memoryStatus id source ++ "\"}") :: files
   let sourceNames ← sourceFileNames root projectId
-  let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server-example" then root else root ++ "/source"
+  let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server" then root else root ++ "/source"
   let mut sourceBytes := 0
   for name in sourceNames do
     sourceBytes := sourceBytes + (← readOr (sourceRoot ++ "/" ++ name) "").length
@@ -1120,7 +1120,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
       | none => return some (errorResponse 404 "Project not found.")
       | some root =>
           if rest.isEmpty && method == "DELETE" then
-            if projectId == "leanfm-workspace" || projectId == "go-server-example" then
+            if projectId == "leanfm-workspace" || projectId == "go-server" then
               return some (errorResponse 403 "Checked-in projects are read-only and cannot be deleted.")
             let confirmation := (formValue? (requestBody request) "confirmation").getD ""
             match ← deleteProject username projectId confirmation with
@@ -1179,7 +1179,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               return some (jsonResponse 200 ("{\"source\":\"" ++ jsonEscape source ++
                 "\",\"source_revision\":\"" ++ revision ++ "\"}\n"))
           | ["book"], "POST" =>
-              if projectId == "leanfm-workspace" || projectId == "go-server-example" then return some (errorResponse 403 "The checked-in project book is read-only.")
+              if projectId == "leanfm-workspace" || projectId == "go-server" then return some (errorResponse 403 "The checked-in project book is read-only.")
               let source := (formValue? (requestBody request) "source").getD ""
               let expectedRevision := (formValue? (requestBody request) "source_revision").getD ""
               if source.isEmpty then return some (errorResponse 400 "Book source cannot be empty.")
@@ -1191,7 +1191,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               return some (jsonResponse 200 ("{\"saved\":true,\"source_revision\":\"" ++
                 (← keyFingerprint source) ++ "\"}\n"))
           | ["book", "build"], "POST" =>
-              if projectId == "leanfm-workspace" || projectId == "go-server-example" then return some (errorResponse 403 "The checked-in project book is read-only.")
+              if projectId == "leanfm-workspace" || projectId == "go-server" then return some (errorResponse 403 "The checked-in project book is read-only.")
               match ← buildProjectBook root with
               | .ok _ => return some (jsonResponse 200 "{\"built\":true}\n")
               | .error message => return some (errorResponse 422 message)
@@ -1214,7 +1214,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               return some (jsonResponse 202 "{\"cancel_requested\":true}\n")
           | ["source"], "GET" => return some (jsonResponse 200 (← sourceFilesJson root projectId))
           | "source" :: fileParts, "GET" =>
-              let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server-example" then root else root ++ "/source"
+              let sourceRoot := if projectId == "leanfm-workspace" || projectId == "go-server" then root else root ++ "/source"
               let relative := String.intercalate "/" (fileParts.map urlDecode)
               if !(← sourceFileNames root projectId).contains relative then
                 return some (errorResponse 404 "Source file not found.")
@@ -1330,7 +1330,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                             else
                               appendLiveTrace root trace ("Bounded missing-artifact recovery still references nonexistent media: " ++ String.intercalate ", " stillMissing)
                       writeChatStatus root "validation" "Validating durable outputs from the model response."
-                      let applied ← if projectId == "leanfm-workspace" || projectId == "go-server-example" then
+                      let applied ← if projectId == "leanfm-workspace" || projectId == "go-server" then
                           pure (AppliedChatResult.mk answer.text answer false none)
                         else applyBookChatEdit key root selectedModel answer trace
                       clearChatCancellation root

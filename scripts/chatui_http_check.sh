@@ -58,6 +58,7 @@ root_html="$(curl -fsS $base_url/)"
 rg -q '<div id="root"></div>' <<<"$root_html"
 rg -q '/assets/chatui-react1.js' <<<"$root_html"
 react_bundle="$(curl -fsS $base_url/assets/chatui-react1.js)"
+rg -Fq 'Sign in to unlock your encrypted OpenAI API key.' <<<"$react_bundle"
 rg -q 'Create account' <<<"$react_bundle"
 rg -q 'Project book' <<<"$react_bundle"
 rg -q 'Project memory' <<<"$react_bundle"
@@ -110,8 +111,14 @@ rg -q '"tokens_used":0' <<<"$me_json"
 rg -q '"tokens_remaining":1000000' <<<"$me_json"
 
 projects_json="$(curl -fsS -b "$cookie_a" $base_url/api/projects)"
+login_html="$(curl -fsS $base_url/)"
+rg -q '/assets/chatui-react1.js' <<<"$login_html"
 rg -q '"project_id":"leanfm-workspace".*"read_only":true' <<<"$projects_json"
-rg -q '"project_id":"go-server-example".*"read_only":true' <<<"$projects_json"
+rg -q '"project_id":"go-server".*"display_name":"GoServer".*"read_only":true' <<<"$projects_json"
+! rg -q 'go-server-example|GoServer example' <<<"$projects_json"
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 200
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server-example/book")" = 404
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' --data-urlencode 'source=not allowed' "$base_url/api/projects/go-server/book")" = 403
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/leanfm-workspace/source/.git/config")" = 404
 
 test -f "$test_root/data/accounts/rfielding/credentials/default.json"

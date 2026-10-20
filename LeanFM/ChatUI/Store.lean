@@ -341,7 +341,7 @@ def projectListJson (username : String) : IO String := do
       let name := (jsonStringValue? manifest "display_name").getD entry.fileName
       items := ("{\"project_id\":\"" ++ entry.fileName ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\",\"read_only\":false}") :: items
   let workspace := "{\"project_id\":\"leanfm-workspace\",\"display_name\":\"LeanFM\",\"read_only\":true,\"kind\":\"workspace\"}"
-  let goServer := "{\"project_id\":\"go-server-example\",\"display_name\":\"GoServer example\",\"read_only\":true,\"kind\":\"example\"}"
+  let goServer := "{\"project_id\":\"go-server\",\"display_name\":\"GoServer\",\"read_only\":true,\"kind\":\"project\"}"
   pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace, goServer]) ++ "]")
 
 def deleteProject (username projectId confirmation : String) : IO (Except String Unit) := do
