@@ -15,7 +15,7 @@ message GameId { string id = 1; }
 
 // Authentication/session messages
 message LoginRequest { string username = 1; string password = 2; }
-message LoginResponse { AccountId account = 1; string token = 2; int64 expires_unix = 3; }
+message LoginResponse { AccountId account = 1; string token = 2; uint64 expires_unix = 3; }
 message Logout { AccountId account = 1; string token = 2; }
 message SessionInfo { AccountId account = 1; string token = 2; int64 expires_unix = 3; }
 

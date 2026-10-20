@@ -11,7 +11,7 @@ def message (name src dst : String) (fields : List ProtoFieldSchema) : MessageSc
 -- Core messages (kept in sync with Requirements.proto)
 def messages : List MessageSchema :=
   [ message "LoginRequest" "Client" "GoServer" [field 1 "username" .string, field 2 "password" .string]
-  , message "LoginResponse" "GoServer" "Client" [field 1 "account_id" .string, field 2 "token" .string, field 3 "expires" .int64]
+  , message "LoginResponse" "GoServer" "Client" [field 1 "account_id" .string, field 2 "token" .string, field 3 "expires_unix" .uint64]
   , message "Logout" "Client" "GoServer" [field 1 "account_id" .string, field 2 "token" .string]
   , message "CreateGame" "Client" "GoServer" [field 1 "name" .string, field 2 "board" .string, field 3 "rules" .string, field 4 "max_players" .uint64]
   , message "GameCreated" "GoServer" "Client" [field 1 "game_id" .string, field 2 "name" .string]
