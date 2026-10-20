@@ -259,6 +259,7 @@ button { cursor: pointer; }
 .request-error button { margin: 8px 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; color: var(--text); background: var(--panel-2); }
 .request-error pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .78rem/1.45 ui-monospace, monospace; }
 .composer-wrap { position: relative; z-index: 5; flex: 0 0 auto; padding: 10px max(18px, calc((100% - 1600px)/2)) 18px; background: var(--bg); }
+.pending-question-hint { margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
 .agent-running { display: flex; align-items: center; gap: 8px; width: fit-content; margin: 0 0 8px 10px; color: var(--blue); font-weight: 750; }
 .agent-running > span:not(.agent-running-dot) { display: grid; gap: 2px; }
 .agent-running small { color: var(--muted); font-weight: 500; }

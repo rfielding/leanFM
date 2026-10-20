@@ -74,6 +74,9 @@ rg -q 'Copying an image reference to the clipboard' <<<"$react_bundle"
 rg -q 'Qualify this decision or provide a better answer' <<<"$react_bundle"
 rg -q 'No predefined option selected' <<<"$react_bundle"
 rg -q 'Qualification:' <<<"$react_bundle"
+rg -q 'Your next message will answer:' <<<"$react_bundle"
+rg -q 'Question ID: \$\{pendingQuestion.id\}' ui/src/main.tsx
+rg -q 'Qualification: \$\{text\}' ui/src/main.tsx
 composer_source="$(rg -n 'className="composer"' ui/src/main.tsx)"
 [[ "$composer_source" == *'<textarea'*'<button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">'* ]]
 rg -q 'Long-running model or tool work is still active' <<<"$react_bundle"

@@ -91,6 +91,17 @@ function extractQuestions(text: string): {text: string; questions: ChatQuestion[
   return {text: text.replace(match[0], "").trim(), questions: [], invalid: true};
 }
 
+function latestUnansweredQuestion(messages: Message[], answeredIds: Set<string>): ChatQuestion | undefined {
+  for (const message of [...messages].reverse()) {
+    if (message.role !== "assistant") continue;
+    const questions = extractQuestions(message.text).questions;
+    for (const question of questions.reverse()) {
+      if (!answeredIds.has(question.id)) return question;
+    }
+  }
+  return undefined;
+}
+
 function extractResult(text: string): {text: string; status?: "success" | "warn" | "fail"} {
   const match = text.match(/```leanfm-result\s*([\s\S]*?)```/i);
   if (!match) return {text};
@@ -252,6 +263,7 @@ function Chat({project, models, defaultModel, onWorkspaceChange, onBusyChange}: 
   const [model, setModel] = useState(defaultModel);
   const conversationEndRef = useRef<HTMLDivElement>(null);
   const answeredIds = new Set(messages.flatMap(message => [...message.text.matchAll(/Question ID:\s*([A-Za-z0-9._-]+)/g)].map(match => match[1])));
+  const pendingQuestion = latestUnansweredQuestion(messages, answeredIds);
   useEffect(() => {
     window.requestAnimationFrame(() => conversationEndRef.current?.scrollIntoView({block: "end"}));
   }, [messages.length, error]);
@@ -275,12 +287,20 @@ function Chat({project, models, defaultModel, onWorkspaceChange, onBusyChange}: 
     setQueue(remaining);
     void run(next);
   }, [busy, queue]);
-  function send(event: FormEvent) { event.preventDefault(); enqueue(prompt, true); }
+  function send(event: FormEvent) {
+    event.preventDefault();
+    const text = prompt.trim();
+    if (!text) return;
+    const answer = pendingQuestion
+      ? `Question ID: ${pendingQuestion.id}\n${pendingQuestion.prompt}\nAnswer: No predefined option selected.\nQualification: ${text}`
+      : text;
+    enqueue(answer, true);
+  }
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
     <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What are we building?</h2><p>Start informally. LeanFM will grow the book and specifications with you.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => <option key={option} value={option}>{option}</option>)}</select></label></form></div></section>;
+    <div className="composer-wrap">{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => <option key={option} value={option}>{option}</option>)}</select></label></form></div></section>;
 }
 
 function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
