@@ -9,6 +9,13 @@ well-known security protocols as demanding exercises for the grammar-based metho
 multiple roles, fresh values, encrypted components, an active intruder, calculated
 knowledge sets, agreement, and messages whose legality depends on the preceding trace.
 
+Status: this chapter is a design exercise, not an account of implemented LeanFM
+features. Its `RoleSpec`, `WireTerm`, `composeRoles`, and attacker-deduction
+listings are proposed notation; the current executable model has `GrammarExpr`
+and finite trace/CTL checks, but no role-projection or composition engine,
+symbolic byte algebra, or attacker-knowledge evaluator. The checklist below is
+a set of proposed library requirements, not implemented capabilities.
+
 \section{Can actors really be specified separately?}
 
 Yes, provided composition is defined as synchronization over the same observable

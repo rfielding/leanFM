@@ -46,18 +46,17 @@ leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
-Chapters 6–7 still mix proposed notation and future compiler behavior with
-current artifacts; Chapter 11 now labels its DSL and integrations as targets,
-not implemented behavior. Proposed forms such as `scenario`, `declare`,
-`from_`, `to_`, `emit`, `receive`, exported bindings, `refineMessage`, role
-projection, symbolic encryption, and `composeRoles` lack executable Lean
-definitions. Current core types are `RequirementSpec`, `TaskRequirement`, and
-`GrammarExpr`; guards are strings and event values named rather than typed-bound.
-Validation checks grammar/task and message references, atom endpoints, and
-threshold bounds, but does not compile that DSL, generate or recognize traces,
-or derive participant projections. Chapter 6 labels its DSL a target; Chapter 7,
-the CSP library-capability list, and claims about cost optimization, test
-generation, and OAuth artifact reproduction still need evidence-matched labels.
+Chapters 6–7 mix proposed notation and future compiler behavior with current
+artifacts; Chapter 11 labels its DSL and integrations as targets. Proposed forms
+(`scenario`, `declare`, `from_`, `to_`, `emit`, `receive`, exported bindings,
+`refineMessage`, role projection, symbolic encryption, `composeRoles`) lack
+executable Lean definitions. Current types are `RequirementSpec`,
+`TaskRequirement`, and `GrammarExpr`; guards are strings and event values are
+named, not typed-bound. Validation checks grammar/task and message references,
+atom endpoints, and threshold bounds, but cannot compile that DSL, generate or
+recognize traces, or derive participant projections. Chapter 7 and claims about
+cost optimization, test generation, and OAuth artifact reproduction still need
+evidence-matched labels.
 
 Use one maturity legend throughout the book and roadmap: proposed notation,
 executable code, finite-model check, test, generated analysis, Lean proof, or
