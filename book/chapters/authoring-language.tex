@@ -217,7 +217,9 @@ generating these views. The present evaluator expands a finite number of steps
 under a selected policy. It does not yet compute an optimal policy, solve an
 unbounded fixed point, or take minimum and maximum values over unresolved
 schedulers. Those are distinct extensions; this example establishes that exact
-probability propagation already works for a bounded policy.
+probability propagation already works for a bounded policy. Under this fixed
+policy, the example is a finite Markov chain: its only branching is the user's
+specified chance distribution, not a policy choice or unresolved scheduler.
 
 \section{Actor specifications and instances}
 

@@ -213,13 +213,11 @@ or some reproducible accounting model.
 
 ## The MDP interpretation needs a sharper decision boundary
 
-The generic `MDP` permits policy choices, but the checked example's fixed
-`policy` selects the sole `Choice` at each state. Its only branching is user
-chance, so it demonstrates a stochastic transition system (a Markov chain under
-that policy), not policy-controlled decision-making or optimization. Keep
-empirical frequencies, specified distributions, nondeterministic alternatives,
-policy choices, and epistemic uncertainty distinct: they support different
-claims and verification methods and need explicit typed metric boundaries.
+The generic `MDP` permits policy choices; the checked example is a finite Markov
+chain under its fixed policy, with branching only from specified user chance.
+Metrics still need typed boundaries that distinguish empirical frequencies,
+specified distributions, unresolved nondeterminism, policy choices, and
+epistemic uncertainty; these support different claims and verification methods.
 
 ## Statistical claims need uncertainty and sampling assumptions
 
