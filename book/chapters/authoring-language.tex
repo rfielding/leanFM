@@ -443,13 +443,8 @@ for finite service centers. Neither rescues a requirements model whose demand,
 service rates, queue bounds, observation window, and overload behavior were
 never stated.
 
-Every modeled actor instance therefore has declared positive inbound and
-outbound queue capacities. Capacity is a requirement parameter, not an
-unbounded runtime default. Sending to a full queue sleeps without changing the
-queue or message until a receive creates space. A blocking receive from an
-empty queue likewise sleeps until a message exists. Neither case may drop,
-duplicate, reorder, partially enqueue, or rewrite work. A separately named
-nonblocking receive may return ``none'' while leaving the actor runnable.
+These examples use the positive finite per-instance inbound/outbound capacities
+and full/empty blocking semantics defined in Chapter~\ref{ch:grammar}.
 
 A queue also has an idempotent \texttt{close()} operation. Closing forbids every
 later push. A sender already sleeping for capacity wakes with a closed rejection

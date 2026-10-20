@@ -161,7 +161,7 @@ research obligation, not an implementation footnote.
 
 \section{Actors multiplex bounded conversations}
 
-An actor has separate finite-capacity inbound and outbound message queues. Queue
+An actor has separate positive finite-capacity inbound and outbound message queues. Queue
 capacity is part of the observable execution model: producing a message may block
 when the outbound queue is full, and transport may block when the destination's
 inbound queue is full. Sending is therefore distinct from delivery and from the
