@@ -248,6 +248,19 @@ from the specification and are reused in the book, not maintained as separate
 designs. \texttt{book/main-dark.pdf} is the accessible rendering of the same
 source.
 
+A project conversation is a working transaction, not the durable specification.
+The proposed ``Compact and clear conversation'' action checkpoints its decisions
+into the current book, typed interaction grammar, and task-scoped contextual
+constraints. It clears only the captured message prefix after the candidate
+artifacts and generated views validate and the checkpoint is recoverably
+committed. Missing context or failed checks leave both the existing artifacts
+and conversation intact; newer messages are never swept into an older
+checkpoint. This action does not accept either specification gate. A qualifying
+answer is accepted against its identified question and that same semantic
+question is not asked again unless the user reopens it; a different justified
+ambiguity may still be asked. An ordinary prompt can proceed while a structured
+question remains deferred.
+
 The book is itself vibecoded: missing views, checks and editing tools are built
 as the argument needs them. Each project owns one directory containing its book,
 specifications, schemas, conversations, source, tests and generated artifacts.

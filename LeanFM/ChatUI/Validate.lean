@@ -30,4 +30,8 @@ open LeanFM.ChatUI.Requirements
 #eval IO.println markerboardAssistInteractionMermaid
 #eval IO.println "--- markerboard AI assistance state machine ---"
 #eval IO.println markerboardAssistStateMachineMermaid
+#eval IO.println "--- conversation checkpoint interaction ---"
+#eval IO.println (interactionMermaid conversationCheckpointTask)
+#eval IO.println "--- conversation checkpoint state machine ---"
+#eval IO.println (stateMachineMermaid conversationCheckpointTask)
 #eval IO.print LeanFM.ChatUI.Implementation.validationReport

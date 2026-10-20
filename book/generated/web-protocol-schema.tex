@@ -83,6 +83,10 @@ message EventEnvelope {
     ImplementationReviewPresented implementation_review_presented = 82;
     SpecificationImplementationAccepted specification_implementation_accepted = 83;
     ImplementationAuthorizationConfirmed implementation_authorization_confirmed = 84;
+    ConversationCheckpointRequested conversation_checkpoint_requested = 85;
+    ConversationCheckpointBlocked conversation_checkpoint_blocked = 86;
+    ConversationCheckpointCommitted conversation_checkpoint_committed = 87;
+    ConversationHistoryCleared conversation_history_cleared = 88;
   }
 }
 
@@ -221,6 +225,10 @@ message ChatResponseRendered {
   uint64 response_time_ms = 10;
 }
 message ChatTurnFailed { string request_id = 1; string reason = 2; }
+message ConversationCheckpointRequested { string project_id = 1; string conversation_id = 2; string through_message_id = 3; }
+message ConversationCheckpointBlocked { string project_id = 1; string conversation_id = 2; string checkpoint_id = 3; string reason_code = 4; repeated string blocking_artifact_ids = 5; }
+message ConversationCheckpointCommitted { string project_id = 1; string conversation_id = 2; string through_message_id = 3; repeated string artifact_revisions = 4; string manifest_digest = 5; }
+message ConversationHistoryCleared { string project_id = 1; string conversation_id = 2; string cleared_through_message_id = 3; uint64 retained_message_count = 4; }
 
 message MermaidDraftSaved {
   string project_id = 1;

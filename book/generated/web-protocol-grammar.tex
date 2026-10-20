@@ -100,6 +100,18 @@ choose
 or
   LeanFMServer ! UserBrowser : ChatTurnFailed
 \end{verbatim}
+\section{Compact a project conversation into durable specifications before clearing it}
+\noindent\textbf{Task:} \texttt{checkpoint\_conversation}. Entry: \texttt{retained}; terminals: \texttt{cleared, blocked}.
+\begin{verbatim}
+UserBrowser ! LeanFMServer : ConversationCheckpointRequested
+then
+choose
+  LeanFMServer ! UserBrowser : ConversationCheckpointBlocked
+or
+  LeanFMServer ! UserBrowser : ConversationCheckpointCommitted
+  then
+  LeanFMServer ! UserBrowser : ConversationHistoryCleared
+\end{verbatim}
 \section{Sketch and promote multimodal requirement artifacts}
 \noindent\textbf{Task:} \texttt{markerboard}. Entry: \texttt{editing}; terminals: \texttt{candidate}.
 \begin{verbatim}
