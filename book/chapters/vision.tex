@@ -178,12 +178,9 @@ the additional decisions needed to generate software: target language, files,
 transports, runtime APIs, and bindings. Existing source code may be supplied when
 revising an implementation, but it does not redefine the requirement.
 
-The separation is designed for loss of conversational context. The original LLM
-conversation is expected to disappear repeatedly. After each argument, the
-current understanding must survive in the requirements, protobuf, and
-implementation files, with requirement-to-code justifications. A new model
-session reads those files and continues from them; it need not reconstruct intent
-from a transcript.
+The durable handoff is the project-root artifact set. The bootstrap contract
+(Chapter~\ref{ch:bootstrap-contract}) specifies how a fresh session resumes
+without transcript-dependent intent.
 
 \section{Discovery first, consolidation before commitment}
 
