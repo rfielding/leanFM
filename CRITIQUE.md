@@ -46,19 +46,18 @@ leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
-Chapters 6–7 and 11 still mix proposed notation and future compiler behavior
-with current artifacts. Forms such as `scenario`, `declare`, `from_`, `to_`,
-`emit`, `receive`, exported bindings, `refineMessage`, role projection,
-symbolic encryption, and `composeRoles` lack executable Lean definitions. The
-core artifact types are `RequirementSpec`, `TaskRequirement`, and `GrammarExpr`,
-with string guards and named rather than typed-bound event values. Validation
-checks grammar/task and message references, atom endpoints, and threshold
-bounds; it does not compile the proposed DSL, generate or recognize traces, or
-derive participant projections. Chapter 6 labels its DSL a design target, but
-other chapters need equally explicit maturity labels. The CSP exercises frame
-their capabilities as library requirements. Cost optimization, test generation,
-and OAuth artifact reproduction also remain described more strongly than their
-evidence supports.
+Chapters 6–7 still mix proposed notation and future compiler behavior with
+current artifacts; Chapter 11 now labels its DSL and integrations as targets,
+not implemented behavior. Proposed forms such as `scenario`, `declare`,
+`from_`, `to_`, `emit`, `receive`, exported bindings, `refineMessage`, role
+projection, symbolic encryption, and `composeRoles` lack executable Lean
+definitions. Current core types are `RequirementSpec`, `TaskRequirement`, and
+`GrammarExpr`; guards are strings and event values named rather than typed-bound.
+Validation checks grammar/task and message references, atom endpoints, and
+threshold bounds, but does not compile that DSL, generate or recognize traces,
+or derive participant projections. Chapter 6 labels its DSL a target; Chapter 7,
+the CSP library-capability list, and claims about cost optimization, test
+generation, and OAuth artifact reproduction still need evidence-matched labels.
 
 Use one maturity legend throughout the book and roadmap: proposed notation,
 executable code, finite-model check, test, generated analysis, Lean proof, or

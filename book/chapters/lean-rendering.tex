@@ -5,7 +5,10 @@
 The user-facing notation should render to a conservative subset of Lean. There is
 no second opaque specification file: domain declarations are Lean definitions,
 expected behaviours are Lean values, and requirements are Lean propositions or
-checked queries.
+checked queries. This is the design target, not a claim that the proposed
+scenario DSL is implemented: the executable artifact surface is the typed
+LeanFM API, while the scenario-language listings remain illustrative unless a
+matching compiled declaration is identified.
 
 Throughout this book, every displayed mathematical formula is accompanied by a
 literal English reading that accounts for each operator, index, bound, and new
@@ -108,8 +111,9 @@ Zach's \emph{An Introduction to Proof Theory} \citep{mancosu2021proof}.
 \section{From specification to service}
 
 Lean can host executable code, including a small web server. That makes the formal
-artifact part of the running project rather than a document beside it. The same
-typed definitions can drive validation endpoints, test-trace generation, protocol
-schemas, visualisations, and runtime monitors. Extraction and integration choices
-must preserve the distinction between a verified behavioural boundary and an
-unverified infrastructure layer.
+artifact part of the running project rather than a document beside it. The design
+target is for typed definitions to drive validation endpoints, test-trace
+generation, protocol schemas, visualisations, and runtime monitors; current
+coverage is partial, as Chapter~\ref{ch:web-protocol} records. Extraction and
+integration choices must preserve the distinction between a checked behavioural
+model and an unverified infrastructure layer.
