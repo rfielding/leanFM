@@ -217,8 +217,9 @@ curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UNDERSCORE_BOOK add a can
   "$base_url/api/projects/$project_a/chat" >"$test_root/underscore-book.json"
 rg -q '"book_updated":true' "$test_root/underscore-book.json"
 rg -q '"total_tokens":18' "$test_root/underscore-book.json"
-rg -q 'no paid repair was needed' "$test_root/underscore-book.json"
-rg -Fq 'goban\_frame\_001.png' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+rg -q 'Finished book build for the proposed revision' "$test_root/underscore-book.json"
+rg -Fq 'goban_frame_001.png' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+rg -Fq '\usepackage{underscore}' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
 
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPAIR_BOOK show the requested MCP animation while repairing the book' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/book-repair.json" &

@@ -500,9 +500,24 @@ def chatLayerContext (root layer : String) : IO (Except String String) := do
   | "implementation" => return .ok (diagramGuidance ++ "Working layer: IMPLEMENTATION. Implement only from accepted book, requirements, and implementation-specification revisions; preserve traceability and run checks. Current Implementation.lean:\n\n" ++ truncateText implementation 70000)
   | _ => return .error "Unknown chat working layer."
 
+/- Make plain-text underscores safe before the first pdfLaTeX build. The
+   underscore package leaves `_` as a math subscript and permits it in text. -/
+def ensureTextUnderscoreSupport (source : String) : String := Id.run do
+  if source.contains "\\usepackage{underscore}" || source.contains "\\usepackage[nohyphen]{underscore}" ||
+      source.contains "\\usepackage[strings]{underscore}" then
+    return source
+  let lines := source.splitOn "\n"
+  let some index := (List.range lines.length).find? (fun index => (lines[index]!).trimAscii.toString.startsWith "\\documentclass")
+    | return source
+  return String.intercalate "\n" <| (lines.take (index + 1)) ++ ["\\usepackage{underscore}"] ++ (lines.drop (index + 1))
+
 def buildProjectBook (root : String) : IO (Except String Unit) := do
   let bookPath := fp (root ++ "/book")
-  if !(← (fp (root ++ "/book/main.tex")).pathExists) then return .error "book/main.tex does not exist in this project."
+  let sourcePath := fp (root ++ "/book/main.tex")
+  if !(← sourcePath.pathExists) then return .error "book/main.tex does not exist in this project."
+  let source ← IO.FS.readFile sourcePath
+  let normalized := ensureTextUnderscoreSupport source
+  if normalized != source then writeAtomic (root ++ "/book/main.tex") normalized
   cleanProjectBookIntermediates root
   let realBook ← IO.FS.realPath bookPath
   let testOnlyUnsandboxed := (← IO.getEnv "LEANFM_TEST_UNSANDBOXED_BOOK_BUILD") == some "1" &&
@@ -692,7 +707,8 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
       (some "The proposed book revision exceeded the 2 MB editor limit and was not applied.")
   let path := root ++ "/book/main.tex"
   let previous ← readOr path ""
-  writeAtomic path edit.source
+  let source := ensureTextUnderscoreSupport edit.source
+  writeAtomic path source
   writeChatStatus root "book-build" "Compiling the proposed book revision."
   appendLiveTrace root trace "Started book build for the proposed revision"
   match ← buildProjectBook root with
@@ -704,11 +720,11 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
       return AppliedChatResult.mk edit.reply answer true none
   | .error diagnostic =>
       writeAtomic path previous
-      retainBookRecovery root edit.source
+      retainBookRecovery root source
       appendProjectDiagnostic root "book_compiler" diagnostic
       appendLiveTrace root trace ("Failed book build: " ++ buildErrorSummary diagnostic ++
         " Full compiler diagnostic: logs/runtime-diagnostics.jsonl")
-      let mut candidate := edit.source
+      let mut candidate := source
       let mut latestDiagnostic := diagnostic
       let mut combined := answer
       let mut latestRepairError : Option String := none

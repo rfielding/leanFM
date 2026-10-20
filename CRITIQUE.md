@@ -19,6 +19,27 @@ absent, and the SVG state-machine renderer still positions edges by list index.
 
 ### Implementation backlog (moved from the book)
 
+#### CTL implementation status (verified 2026-10-20)
+
+CTL is implemented; it is not an absent feature. `LeanFM/CTL.lean` defines a
+typed formula language and an executable `holds` evaluator for Boolean
+connectives, EX/AX, EF/AF, EG/AG, strong until (EU/AU), and weak until (EW/AW).
+`LeanFM/CTLTests.lean` checks branching, vacuity, until/release behavior, and the
+AG/AF existential-counterexample duals with `native_decide`. The finite protocol
+model also exposes `TaskFSM.holds`, declares task properties as CTL formulas,
+and reports concrete evaluations in the executable and `/metrics`.
+
+The backlog item below is specifically about the missing derivation/refinement
+bridge from general generated grammar/event models into finite transition
+systems checked by this evaluator, with explicit bounds and retained witnesses
+or counterexamples. It does not call for reimplementing CTL. The current
+evaluator is an executable Boolean checker over the supplied successor
+function—not, by itself, a proved-correct general model-checking algorithm, a
+grammar interpreter, or evidence that a checked finite model refines deployed
+code. Its path-local cycle detection also makes worst-case repeated work
+exponential on shared graphs; performance and the finite-model boundary remain
+valid separate critiques.
+
 - Consolidate event identity, predecessor links, actor endpoints and time semantics.
 - Give the grammar algebra executable trace semantics for sequence, choice,
   guards and interleaving.

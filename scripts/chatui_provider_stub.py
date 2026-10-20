@@ -60,11 +60,11 @@ class Handler(BaseHTTPRequestHandler):
                     "usage": usage,
                 }
             elif "You repair exactly one failing line" in request_text and "TEST_REPEAT_BOOK" in request_text:
-                edit = {"line_number": 3, "replacement": "Still broken: C & D. TEST_REPEAT_BOOK"}
+                edit = {"line_number": 4, "replacement": "Still broken: C & D. TEST_REPEAT_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
             elif "You repair exactly one failing line" in request_text and "TEST_REPAIR_BOOK" in request_text:
                 time.sleep(1)
-                edit = {"line_number": 3, "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
+                edit = {"line_number": 4, "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
             elif "TEST_CANCEL_AGENT" in request_text:
                 time.sleep(1)
@@ -88,6 +88,7 @@ class Handler(BaseHTTPRequestHandler):
                         "\\documentclass{book}\n"
                         "\\begin{document}\n"
                         "Screenshot: spec/images/goban_frame_001.png TEST_UNDERSCORE_BOOK\n"
+                        "Math subscript regression: $E_a$.\n"
                         "\\end{document}\n"
                     ),
                 }
