@@ -5,10 +5,10 @@
 The user-facing notation should render to a conservative subset of Lean. There is
 no second opaque specification file: domain declarations are Lean definitions,
 expected behaviours are Lean values, and requirements are Lean propositions or
-checked queries. This is the design target, not a claim that the proposed
-scenario DSL is implemented: the executable artifact surface is the typed
-LeanFM API, while the scenario-language listings remain illustrative unless a
-matching compiled declaration is identified.
+checked queries. Rendering the proposed scenario DSL into Lean is a
+\textbf{future interface}; its listings are \textbf{proposed notation}. Current
+\textbf{executable code} is the typed LeanFM API, and a \textbf{Lean proof} claim
+applies only when its theorem and proof are checked in the declared build.
 
 Throughout this book, every displayed mathematical formula is accompanied by a
 literal English reading that accounts for each operator, index, bound, and new

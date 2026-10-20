@@ -32,7 +32,7 @@ gate.
 
 ## Book length and consolidation (reviewed 2026-10-20)
 
-The 138-page book still overconcentrates grammar and non-functional material in
+The 139-page book still overconcentrates grammar and non-functional material in
 `authoring-language.tex`; continue consolidating without losing the preface-to-PR
 narrative or technical qualifications.
 
@@ -46,11 +46,11 @@ leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
-Chapters 6–7 mix proposed notation and future compiler behavior with current
-artifacts; Chapter 11 labels its DSL and integrations as targets. Proposed forms
-(`scenario`, `declare`, `from_`, `to_`, `emit`, `receive`, exported bindings,
-`refineMessage`, role projection, symbolic encryption, `composeRoles`) lack
-executable Lean definitions. Current types are `RequirementSpec`,
+Chapters 5–7 and 11 now reference one evidence-label vocabulary, distinguishing
+proposal from current implementation. Proposed forms (`scenario`, `declare`,
+`from_`, `to_`, `emit`, `receive`, exported bindings, `refineMessage`, role
+projection, symbolic encryption, `composeRoles`) still lack executable Lean
+definitions. Current types are `RequirementSpec`,
 `TaskRequirement`, and `GrammarExpr`; guards are strings and event values are
 named, not typed-bound. Validation checks grammar/task and message references,
 atom endpoints, and threshold bounds, but cannot compile that DSL, generate or
@@ -58,12 +58,10 @@ recognize traces, or derive participant projections. Chapter 7 and claims about
 cost optimization, test generation, and OAuth artifact reproduction still need
 evidence-matched labels.
 
-Use one maturity legend throughout the book and roadmap: proposed notation,
-executable code, finite-model check, test, generated analysis, Lean proof, or
-future interface. Lean evidence covers only definitions and proofs actually
-checked in Lean; Python, JavaScript, shell, Graphviz, protobuf, and LaTeX outputs
-are not proved by their presence in the same project. `native_decide` checks
-finite decidable propositions, not empirical assumptions or external parsers.
+Lean evidence covers only definitions and proofs actually checked in Lean;
+Python, JavaScript, shell, Graphviz, protobuf, and LaTeX outputs are not proved
+by their presence in the same project. `native_decide` checks finite decidable
+propositions, not empirical assumptions or external parsers.
 Compile claimed executable listings in CI, label the rest illustrative, and do
 not let a polished figure or successful build imply stronger evidence.
 

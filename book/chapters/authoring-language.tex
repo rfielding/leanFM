@@ -3,12 +3,13 @@
 
 \index{scenario}
 \index{observable event}
-This chapter proposes the first concrete surface language. It is intentionally a
-small Lean DSL: ordinary \texttt{def}, function parameters, \texttt{let}, typed
-values, and \texttt{do} notation provide the host language; a fixed library adds
-scenario, endpoint, choice, probability, and rendering operations. The examples
-are a design target. Names may change as the Lean implementation makes their
-semantics precise.
+\textbf{Proposed notation:} this chapter develops a concrete surface language
+using ordinary Lean \texttt{def}, function parameters, \texttt{let}, typed values,
+and \texttt{do} notation, with library operations for scenarios, endpoints,
+choices, probability, and rendering. Names may change as semantics are
+implemented. The worked MDP later in this chapter is a separate
+\textbf{finite-model check}; its figures are \textbf{generated analyses} from
+the named Lean source.
 
 \section{The smallest useful scenario}
 

@@ -13,6 +13,13 @@ work: it supplies message types, scenario tests, model-checking input,
 documentation, and the skeleton of the service itself. Going without it should be
 the inconvenient choice.
 
+\noindent\textbf{Evidence labels used throughout:} proposed notation (uncompiled);
+executable code (builds or runs, not proof); finite-model check (exhaustive only
+within declared bounds); test (named finite cases); generated analysis (named
+inputs and reducer); Lean proof (kernel-checked under stated assumptions); future
+interface (planned, unavailable). Labels scope evidence, not rank it; several may
+apply to one artifact.
+
 \section{Behaviour before machinery}
 
 The primary object is a set of permitted, visible histories. An implementation may
