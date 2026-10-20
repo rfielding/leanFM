@@ -181,6 +181,16 @@ transports, protobuf bindings, failure handling, observability, tests, and
 requirement-to-code traceability. Keep implementation choices out of
 `Requirements.lean` unless they change observable behavior.
 
+Treat an accepted multi-actor wire grammar as the conformance oracle: complete,
+decoded traffic is either legal under that grammar or has a counterexample; an
+incomplete capture cannot establish conformance. During implementation, ask
+questions until the accepted behavior can be realized. Store answers that do
+not change observable behavior in `Implementation.lean`, each mapped to the
+requirements it realizes. If an answer changes a message, field, ordering, or
+other observable behavior, return to the requirements gate instead. If a later
+requirements change makes an implementation answer unnecessary, remove that
+implementation detail without preserving it as a requirement.
+
 Validate the requirements and implementation independently and together. Ask
 for explicit acceptance of the implementation specification. Before that gate,
 do not represent application code as the final implementation.

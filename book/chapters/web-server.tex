@@ -351,16 +351,22 @@ $AG\,\neg p$, and \texttt{preparedFor} becomes $EF\,p$. A
 the invariant $AG\,p$. Each card identifies its requirements origin.
 
 The implementation specification remains separate. Requirements define the
-observable behavior the system must provide. Implementation records choices
-needed to realize that accepted behavior in code, mapping each choice to the
-relevant requirement; it does not add requirements or change the contract. It
-may choose a queue, transport, journal or browser mechanism. If observable
-behavior is missing, revise and accept the requirements rather than inventing
-it in the implementation specification. An implementation question asks how to
-realize accepted behavior, not what the user-facing behavior should be. Its
-answer is recorded only in the implementation layer and may be dropped when a
-requirements change makes that choice unnecessary. This provenance keeps the
-two acceptance gates meaningful.
+observable behavior the system must provide. For a wire protocol, the accepted
+grammar is the oracle over messages among all actors: a complete, decoded
+traffic trace should be classifiable as conforming or rejected with a
+counterexample. An incomplete capture is not evidence of conformance.
+
+Implementation records choices needed to realize that accepted behavior in
+code, mapping each choice to the relevant requirement; it does not add
+requirements or change the contract. It may choose a queue, transport, journal
+or browser mechanism. Once requirements are accepted, implementation questions
+ask how to realize them, not what the protocol should be. Record their answers
+in \texttt{Implementation.lean}. If an answer changes messages, fields,
+ordering, or any other observable behavior, it is not merely an implementation
+choice: revise and reaccept Requirements first. Conversely, if a requirements
+change makes an implementation answer unnecessary, remove that answer without
+changing the protocol. This provenance keeps the two acceptance gates
+meaningful.
 
 \subsection{How a chat turn becomes a durable edit}
 

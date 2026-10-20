@@ -1236,7 +1236,7 @@ def leanFMRequirementsReference : String :=
     , "Memory reports compare observed resident bytes with the per-instance memoryBudgetBytes contract. Exhaustion is a fatal outcome, not an ordinary latency sample. ReliabilityDependencyGate members are concrete actor-instance IDs or nested gate IDs; requiredCount=member count is series, requiredCount=1 is parallel, and intermediate values are k-of-n. A failed actor does not send an Unavailable message. Reliability evidence is absence of expected heartbeats, failure of observed inbound queues to drain, or absence of expected outbound-message progress. Every detector declares observer, cadence/progress expectation, timeout, clock, attribution boundary, and whether the derived outage begins at last-known-healthy, missed-deadline, or detection time. AvailabilityLost/AvailabilityRestored may be derived observer events but are never messages from the failed actor. Reports preserve synchronized derived intervals, evidence and uncertainty, calculate composed uptime, and propagate named service failures to a fixed point. Pending work must stall, reject, time out, cancel, or resume as explicitly required. Report initiating failures, propagation edges, affected services/tasks/outcomes, recovery order, violated safety/liveness properties, per-instance uptime, composed uptime, and MTTR; never multiply marginal availabilities unless independence is explicitly assumed."
     , ""
     , "## Separation and validation"
-    , "Requirements.lean holds observable behavior. Requirements.proto holds byte values. Implementation.lean holds transports, languages, filenames, APIs, and framework choices."
+    , "Requirements.lean holds observable behavior and the accepted multi-actor wire grammar is the conformance oracle: complete decoded traces are legal or have a counterexample; incomplete captures cannot establish conformance. Requirements.proto holds byte values. Implementation.lean holds realization choices that answer implementation questions without changing observable behavior, each mapped to the requirement it realizes. If an answer changes messages, fields, order, or other observable behavior, revise Requirements first; when a requirement change makes an implementation choice unnecessary, remove that choice rather than preserving it as a requirement."
     , "Generate all three, then call the generated-requirements and implementation validation tools. Never invent a missing observation needed by a reducer."
     ]
 
@@ -1244,7 +1244,7 @@ def leanFMImplementationReference : String :=
   joinWithNewline
     [ "# LeanFM implementation language reference"
     , ""
-    , "Use this reference to construct LeanFM/LLMGenerated/Implementation.lean. Implementation choices must cite durable requirement IDs and must not redefine observable behavior."
+    , "Use this reference to construct LeanFM/LLMGenerated/Implementation.lean. It records answers to implementation questions needed to realize accepted requirements. Each choice must cite durable requirement IDs and must not redefine observable behavior. If an answer changes the wire protocol or another observable behavior, revise Requirements.lean and reaccept it first; remove implementation choices made unnecessary by a later requirements change."
     , ""
     , "## ImplementationSpec"
     , "ImplementationSpec { requirementId, target, moduleName, outputDirectory, actors, messages, channels }."
