@@ -74,6 +74,8 @@ kerberos-video:
 chatui-check: build
 	python3 scripts/chatui_crypto_test.py
 	bash scripts/chatui_http_check.sh
+	lake build LeanFM.ChatUI.Implementation
+	@lake env lean LeanFM/ChatUI/Validate.lean | rg '^ok: ChatUI implementation decisions are traceable$$'
 
 go-toolchain:
 	@set -e; if [[ -x "$(LOCAL_GO)" ]]; then \
