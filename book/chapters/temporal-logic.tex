@@ -164,20 +164,16 @@ repeatedly add states justified by the previous approximation:
   \qquad Z_0=\varnothing.
 \]}
 
-Read this as: ``the states satisfying $EF\,p$ are the least fixed point of
-$Z=P$ union the states with some successor in $Z$. Starting with no states, the
-union of the successive approximations is their least upper bound.'' The same
-construction gives existential until:
+The same construction gives existential until:
 
 \AccessibleEquation{The states satisfying p E U q are the least fixed point of Z equal Q union P intersect existential predecessor of Z.}{\[
   \operatorname{Sat}(p\ EU\ q)
   = \mu Z.\bigl(Q\cup(P\cap\operatorname{Pre}_{\exists}(Z))\bigr).
 \]}
 
-Read this as: ``include states satisfying $q$; then repeatedly include a state
-satisfying $p$ when at least one successor is already included.'' $AF$ and
-strong $AU$ are also least fixed points, using universal predecessor. A cycle
-that never reaches the target therefore adds nothing to the least solution.
+$AF$ and strong $AU$ are also least fixed points, using universal predecessor. A
+cycle that never reaches the target therefore adds nothing to the least
+solution.
 
 Invariance and weak until make the dual choice. They begin with all candidate
 states and remove unsupported states, producing the greatest fixed point---the
@@ -188,11 +184,6 @@ greatest lower bound of descending approximations:
   = \nu Z.\bigl(P\cap\operatorname{Pre}_{\exists}(Z)\bigr)
   = \bigcap_{n\ge 0} Y_n.
 \]}
-
-Read this as: ``the states satisfying $EG\,p$ are the greatest fixed point of
-$Z=P$ intersect the states with some successor in $Z$. Starting with all
-candidate states, the intersection of successive approximations is their
-greatest lower bound.''
 
 LeanFM implements these choices with cycle-aware searches rather than by
 materializing every approximation set. An unresolved revisit is false for
