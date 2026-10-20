@@ -32,7 +32,7 @@ gate.
 
 ## Book length and consolidation (reviewed 2026-10-20)
 
-The 139-page book still overconcentrates grammar and non-functional material in
+The 138-page book still overconcentrates grammar and non-functional material in
 `authoring-language.tex`; continue consolidating without losing the preface-to-PR
 narrative or technical qualifications.
 
@@ -213,8 +213,6 @@ or some reproducible accounting model.
 
 ## The MDP interpretation needs a sharper decision boundary
 
-The generic `MDP` permits policy choices; the checked example is a finite Markov
-chain under its fixed policy, with branching only from specified user chance.
 Metrics still need typed boundaries that distinguish empirical frequencies,
 specified distributions, unresolved nondeterminism, policy choices, and
 epistemic uncertainty; these support different claims and verification methods.
