@@ -705,14 +705,6 @@ dependencies must be added for a complete deployment analysis.
     load when requests distribute well. Hot keys, shared routing, storage and
     cross-shard operations can limit the gain. Shards are data partitions, not
     interchangeable failover copies; replication protects each partition.
-  \item[USL models scaling penalties.] Fit completed throughput against active
-    load $n$: contention/serialization, including queueing for shared resources,
-    contributes the $\alpha$ term; coherency or coordination contributes the
-    $\beta$ term~\citep{gunther2007guerrilla}. Read these symbols as ``alpha,
-    the contention parameter'' and ``beta, the coherency parameter.'' USL is a
-    throughput-scaling model, not a full queue-length or latency model. Retain
-    offered/admitted/completed rates, queue observations and deadlines alongside
-    the fit described earlier in this chapter.
 \end{description}
 
 The purpose of modelling a Kubernetes-like runtime is to determine what stops,
