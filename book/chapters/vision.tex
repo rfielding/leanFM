@@ -7,11 +7,11 @@ translate a simplified version into a model, and finally ask a specialist tool a
 few questions. That workflow taxes correctness. The model drifts, the difficult
 translation is postponed, and proofs concern yesterday's architecture.
 
-Our aim is the reverse. The shortest path to a running service should pass through
-an executable behavioural specification. Writing the specification should remove
-work: it supplies message types, scenario tests, model-checking input,
-documentation, and the skeleton of the service itself. Going without it should be
-the inconvenient choice.
+Our design target is the reverse: the shortest path to a running service passes
+through an executable behavioural specification. The specification is intended
+to supply message types, scenario tests, model-checking input, documentation, and
+the service skeleton. This is the target workflow, not a claim that every
+generator is already implemented.
 
 \noindent\textbf{Evidence labels used throughout:} proposed notation (uncompiled);
 executable code (builds or runs, not proof); finite-model check (exhaustive only

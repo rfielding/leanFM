@@ -889,12 +889,14 @@ also adds provisioned hardware cost and, while healthy, service cost. The useful
 graph places $D/R$, observed load for each concrete instance, effective supply,
 and total hourly cost on the same replica-count axis.
 
-LeanFM enumerates the declared finite set of permitted replica counts, rejects
-infeasible points, and chooses the remaining point with minimum expected hourly
-cost $R(c_h+a c_s)$. The derived XY artifact plots demand, effective supply, and
-cost against replica count and marks the feasible optimum. It also reports
-headroom and rejected demand so an apparently cheap under-supplied plan cannot
-win. The average $D/R$ is not a promise of balance. Routing policy matters here:
+\textbf{Executable code and finite-model tests:} \texttt{optimalSupply?} in
+\texttt{LeanFM/Artifacts.lean} searches replica counts $1$ through
+\texttt{maxReplicas}, rejects availability-adjusted capacity below demand, and
+selects the least expected hourly cost. \texttt{LeanFM/ArtifactsTests.lean}
+checks one feasible optimum and one infeasible demand. This bounded function does
+not compute observed routing imbalance, latency, or workload-window results; the
+full supply-planning XY output above remains a target, not generated evidence.
+The average $D/R$ is not a promise of balance. Routing policy matters here:
 shard hashing can create a hot shard even when
 aggregate supply exceeds demand, while sticky routing and round-robin make
 different balance assumptions. Product-specific replication, reserved pricing,

@@ -54,9 +54,7 @@ definitions. Current types are `RequirementSpec`,
 `TaskRequirement`, and `GrammarExpr`; guards are strings and event values are
 named, not typed-bound. Validation checks grammar/task and message references,
 atom endpoints, and threshold bounds, but cannot compile that DSL, generate or
-recognize traces, or derive participant projections. Chapter 7 and claims about
-cost optimization, test generation, and OAuth artifact reproduction still need
-evidence-matched labels.
+recognize traces, or derive participant projections.
 
 Lean evidence covers only definitions and proofs actually checked in Lean;
 Python, JavaScript, shell, Graphviz, protobuf, and LaTeX outputs are not proved
