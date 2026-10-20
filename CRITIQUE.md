@@ -25,9 +25,10 @@ requirement validation and event-pair reconstruction use quadratic list scans.
 ### Project-root discoverability and code-generation readiness
 
 End-to-end readiness remains unverified: a fresh session must recover the
-project from its book/specifications, generate source, and run increasingly
-realistic in-project tests with reported evidence—not depend on chat history or
-ask the stakeholder to run unavailable external checks.
+project specifications, generate an application whose observable traces conform
+to its grammar, and validate it with increasingly realistic in-project tests.
+Persist that evidence in the project; screenshots are auxiliary, not a readiness
+gate.
 
 ## Book length and consolidation (reviewed 2026-10-20)
 
