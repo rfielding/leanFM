@@ -21,7 +21,7 @@ def messages : List MessageSchema :=
   , message "Pass" "Client" "GoServer" [field 1 "game_id" .string, field 2 "player_id" .string]
   , message "Resign" "Client" "GoServer" [field 1 "game_id" .string, field 2 "player_id" .string]
   , message "MoveEvent" "GoServer" "Client" [field 1 "game_id" .string, field 2 "player_id" .string, field 3 "changes" .bytes]
-  , message "GameState" "GoServer" "Client" [field 1 "game_id" .string, field 2 "players" .bytes, field 3 "board" .bytes, field 4 "to_move_index" .uint64, field 5 "finished" .bool]
+  , message "GameState" "GoServer" "Client" [field 1 "game_id" .string, field 2 "players" .bytes, field 3 "board" .bytes, field 4 "to_move_index" .uint64, field 5 "finished" .bool, field 6 "ko_point" .bytes]
   , message "ErrorEvent" "GoServer" "Client" [field 1 "code" .string, field 2 "message" .string] ]
 
 -- Requirement states and transitions
@@ -87,6 +87,7 @@ def spec : RequirementSpec :=
        {name := "Login terminates visibly", mode := .eventually, task := "login", expression := "LoginResponse or ErrorEvent", probability := none},
        {name := "Illegal action cannot mutate board", mode := .always, task := "play_turn", expression := "ErrorEvent terminates without MoveEvent", probability := none},
        {name := "Captures are counted and reflected in GameState", mode := .always, task := "play_turn", expression := "When MoveEvent reports captures, subsequent GameState.players[].captures reflect aggregated counts", probability := none},
+       {name := "Simple ko is represented in GameState", mode := .always, task := "play_turn", expression := "GameState.ko_point identifies the forbidden immediate recapture intersection when simple ko applies and is absent otherwise", probability := none},
        {name := "Server does not autonomously play for clients", mode := .always, task := "play_turn", expression := "MakeMove messages originate from Client actors only (no server-originated MoveEvent without prior Client MakeMove)", probability := none}]
   , requiredProofs := [{name := "Every turn terminates visibly", mode := .eventually, task := "play_turn", predicate := "GameState or ErrorEvent", probability := none}]
   , performance := [], charts := [], desiredOutputs := outputs

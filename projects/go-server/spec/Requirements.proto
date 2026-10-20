@@ -129,6 +129,12 @@ message GameState {
   BoardSnapshot board = 3;
   int32 to_move_index = 4; // index into players[] of who is next
   bool finished = 5;
+  KoPoint ko_point = 6; // absent when no immediate simple-ko recapture is forbidden
+}
+
+message KoPoint {
+  uint32 x = 1;
+  uint32 y = 2;
 }
 
 message PlayerInfo {
