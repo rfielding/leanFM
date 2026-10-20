@@ -250,6 +250,23 @@ def appendProjectDiagnostic (root category detail : String) : IO Unit := do
   if !(← (fp readme).pathExists) then
     writeAtomic readme ("# LeanFM private diagnostics\n\n`runtime-diagnostics.jsonl` is a bounded, project-owned engineering journal for LeanFM and Codex. Read it before diagnosing a failed agent turn. It records sanitized stages, tool destinations, compiler output, exit decisions, and terminal failures. It intentionally excludes prompts, credentials, cookies, and arbitrary provider response bodies. Do not ask the user to copy this file into chat; inspect it directly from the project root.\n")
 
+def safeDiagnosticQuestionId (id : String) : Bool :=
+  !id.isEmpty && id.length ≤ 80 && id.toList.all fun character =>
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-".toList.contains character
+
+def structuredQuestionIds (text : String) : List String := Id.run do
+  let marker := if text.contains "```leanfm-questions" then "```leanfm-questions"
+    else if text.contains "```leanfm-qustions" then "```leanfm-qustions" else ""
+  if marker.isEmpty then return []
+  let blocks := text.splitOn marker
+  let some block := blocks[1]? | return []
+  let jsonText := (block.splitOn "```").headD ""
+  let some json := (Lean.Json.parse jsonText).toOption | return []
+  let questions := (Provider.jsonArrayField? json "questions").getD #[]
+  return questions.toList.filterMap fun question => do
+    let id ← Provider.jsonStringField? question "id"
+    if safeDiagnosticQuestionId id then some id else none
+
 def resolveProjectDiagnostics (root resolution : String) (signatures : List String) : IO Unit := do
   let path := diagnosticLogPath root
   let old ← readOr path ""
@@ -1223,7 +1240,21 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   clearChatCancellation root
                   writeChatStatus root "model" ("Waiting for " ++ selectedModel ++ " to respond.")
                   writeLiveTrace root []
+                  let trace ← IO.mkRef ([] : List String)
                   let prior ← conversationContext root
+                  let composerQuestionId := (formValue? (requestBody request) "composer_question_id").getD ""
+                  if !composerQuestionId.isEmpty then
+                    let knownQuestion := (structuredQuestionIds prior).contains composerQuestionId
+                    let loggedQuestionId := if knownQuestion then composerQuestionId else "unverified"
+                    let questionPromptLength := (((formValue? (requestBody request) "composer_question_prompt_length").getD "").toNat?.getD 0).min 4000
+                    let composerTextLength := (((formValue? (requestBody request) "composer_text_length").getD "").toNat?.getD 0).min 4000
+                    let detail := "source=ordinary_chat_composer question_id=" ++ loggedQuestionId ++
+                      " question_known_in_recent_conversation=" ++ (if knownQuestion then "true" else "false") ++
+                      " question_prompt_chars=" ++ toString questionPromptLength ++
+                      " composer_text_chars=" ++ toString composerTextLength ++
+                      " submitted_via_answer_form=false"
+                    appendLiveTrace root trace ("Operator continued via ordinary chat composer while structured question was pending: " ++ detail)
+                    appendProjectDiagnostic root "structured_question_composer_submission" detail
                   let figureContext ← referencedFigureContext root prompt
                   let guidedContext ← match ← chatLayerContext root "guided" with
                     | .ok context => pure context
@@ -1241,7 +1272,6 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                     (if figureContext.isEmpty then "" else figureContext ++ "\n\n") ++
                     "Current user message:\n" ++ prompt
                   appendConversation root "user" prompt
-                  let trace ← IO.mkRef ([] : List String)
                   let failedToolCalls ← IO.mkRef ([] : List String)
                   let runner : Provider.ToolRunner := fun name arguments => do
                     let fingerprint := name ++ "\n" ++ arguments
@@ -1333,7 +1363,17 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         appendLiveTrace root trace ("Rejected false project-media reference: " ++ String.intercalate ", " missingMedia)
                         appendProjectDiagnostic root "missing_project_artifact_reference" detail
                       activity := (← trace.get).reverse
-                      let returnedQuestions := (applied.text.splitOn "```leanfm-questions").length > 1
+                      let returnedQuestions := applied.text.contains "```leanfm-questions" || applied.text.contains "```leanfm-qustions"
+                      if returnedQuestions then
+                        let ids := structuredQuestionIds applied.text
+                        let idSummary := if ids.isEmpty then "question_ids=unavailable" else
+                          "question_ids=" ++ String.intercalate "," ids
+                        appendLiveTrace root trace
+                          ("Assistant returned structured question(s): " ++ idSummary ++
+                            "; see logs/runtime-diagnostics.jsonl category=structured_question_asked")
+                        appendProjectDiagnostic root "structured_question_asked"
+                          (idSummary ++ " question_count=" ++ toString ids.length ++
+                            " parsed=" ++ (if ids.isEmpty then "false" else "true"))
                       let missingRequiredSource := implementationRequested && sourceFiles.isEmpty && !returnedQuestions
                       let warned := returnedQuestions || applied.notice.isSome || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
                       let status := if missingRequiredArtifact || missingRequiredSource || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"

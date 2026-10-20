@@ -15,7 +15,7 @@ declare global { interface Window { mermaid?: any } }
 type Phase = "chat" | "memory" | "book" | "grammar" | "tasks" | "source";
 type QuestionOption = {value: string; label: string; recommended?: boolean};
 type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: QuestionOption[]};
-type QueuedPrompt = {id: string; text: string; model: string};
+type QueuedPrompt = {id: string; text: string; model: string; pendingQuestion?: {id: string; promptLength: number; composerTextLength: number}};
 
 type MathFragment = {source: string; display: boolean; raw: string};
 
@@ -270,17 +270,17 @@ function Chat({project, models, defaultModel, onWorkspaceChange, onBusyChange}: 
   async function load(signal?: AbortSignal) { const data = await api<{messages: Message[]}>(`/api/projects/${project.project_id}/conversation`, {}, signal); setMessages(data.messages || []); }
   useEffect(() => { const controller = new AbortController(); if (!project.read_only) load(controller.signal).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id]);
   useEffect(() => { if (!models.includes(model)) setModel(defaultModel || models[0] || ""); }, [models, defaultModel, model]);
-  function enqueue(text: string, clearComposer = false) {
+  function enqueue(text: string, clearComposer = false, pendingQuestion?: QueuedPrompt["pendingQuestion"]) {
     text = text.trim();
     if (!text) return;
     const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     if (!model) return;
-    setQueue(current => [...current, {id, text, model}]);
+    setQueue(current => [...current, {id, text, model, pendingQuestion}]);
     if (clearComposer) setPrompt("");
   }
   async function run(item: QueuedPrompt) {
     setMessages(v => [...v, {message_id: `pending-${item.id}`, role: "user", text: item.text, sent_at_ms: Date.now()}]); setBusy(true); onBusyChange(true, item.model); setError(""); setErrorAction(""); setErrorTrace("");
-    try { await api(`/api/projects/${project.project_id}/chat`, formRequest({prompt: item.text, model: item.model})); await load(); onWorkspaceChange(); } catch (e) { setMessages(v => v.filter(message => message.message_id !== `pending-${item.id}`)); setError((e as Error).message); if (e instanceof ApiError) { setErrorAction(e.action); setErrorTrace("LeanFM error report (safe to paste to Codex)\n" + JSON.stringify({...e.trace, project_id: project.project_id, model: item.model}, null, 2)); } else setErrorAction("Retry once. If it fails again, report this message to Codex."); await load().catch(() => {}); onWorkspaceChange(); } finally { setBusy(false); onBusyChange(false); } }
+    try { await api(`/api/projects/${project.project_id}/chat`, formRequest({prompt: item.text, model: item.model, ...(item.pendingQuestion ? {composer_question_id: item.pendingQuestion.id, composer_question_prompt_length: String(item.pendingQuestion.promptLength), composer_text_length: String(item.pendingQuestion.composerTextLength)} : {})})); await load(); onWorkspaceChange(); } catch (e) { setMessages(v => v.filter(message => message.message_id !== `pending-${item.id}`)); setError((e as Error).message); if (e instanceof ApiError) { setErrorAction(e.action); setErrorTrace("LeanFM error report (safe to paste to Codex)\n" + JSON.stringify({...e.trace, project_id: project.project_id, model: item.model}, null, 2)); } else setErrorAction("Retry once. If it fails again, report this message to Codex."); await load().catch(() => {}); onWorkspaceChange(); } finally { setBusy(false); onBusyChange(false); } }
   useEffect(() => {
     if (busy || queue.length === 0) return;
     const [next, ...remaining] = queue;
@@ -294,7 +294,7 @@ function Chat({project, models, defaultModel, onWorkspaceChange, onBusyChange}: 
     const answer = pendingQuestion
       ? `Question ID: ${pendingQuestion.id}\n${pendingQuestion.prompt}\nAnswer: No predefined option selected.\nQualification: ${text}`
       : text;
-    enqueue(answer, true);
+    enqueue(answer, true, pendingQuestion ? {id: pendingQuestion.id, promptLength: pendingQuestion.prompt.length, composerTextLength: text.length} : undefined);
   }
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;

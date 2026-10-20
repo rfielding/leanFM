@@ -77,6 +77,9 @@ rg -q 'Qualification:' <<<"$react_bundle"
 rg -q 'Your next message will answer:' <<<"$react_bundle"
 rg -q 'Question ID: \$\{pendingQuestion.id\}' ui/src/main.tsx
 rg -q 'Qualification: \$\{text\}' ui/src/main.tsx
+rg -q 'composer_question_id: item.pendingQuestion.id' ui/src/main.tsx
+rg -q 'structured_question_composer_submission' LeanFM/ChatUI/Server.lean
+rg -q 'structured_question_asked' LeanFM/ChatUI/Server.lean
 composer_source="$(rg -n 'className="composer"' ui/src/main.tsx)"
 [[ "$composer_source" == *'<textarea'*'<button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">'* ]]
 rg -q 'Long-running model or tool work is still active' <<<"$react_bundle"
@@ -148,6 +151,24 @@ curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MODEL_SELECTION report th
 rg -q 'selected model: test-model-fast' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_RETURN_STRUCTURED_QUESTION' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/structured-question.json"
+rg -q 'test_mcts_budget' "$test_root/structured-question.json"
+diagnostic_a="$test_root/data/accounts/rfielding/projects/$project_a/logs/runtime-diagnostics.jsonl"
+rg -q '"category":"structured_question_asked".*test_mcts_budget' "$diagnostic_a"
+rg -q 'structured question\(s\): question_ids=test_mcts_budget' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
+test "$(curl -sS -b "$cookie_b" --data-urlencode 'prompt=unauthorized composer submission' \
+  --data-urlencode 'composer_question_id=test_mcts_budget' -o "$test_root/unauthorized-question-composer.json" -w '%{http_code}' \
+  "$base_url/api/projects/$project_a/chat")" = 404
+! rg -q 'structured_question_composer_submission' "$diagnostic_a"
+curl -fsS -b "$cookie_a" --data-urlencode 'prompt=CONTINUE_WITHOUT_FIXED_COUNT_SECRET_SENTINEL' \
+  --data-urlencode 'composer_question_id=test_mcts_budget' \
+  --data-urlencode 'composer_question_prompt_length=41' \
+  --data-urlencode 'composer_text_length=43' \
+  "$base_url/api/projects/$project_a/chat" >"$test_root/question-composer-bypass.json"
+rg -q '"category":"structured_question_composer_submission".*question_id=test_mcts_budget.*submitted_via_answer_form=false' "$diagnostic_a"
+! rg -q 'CONTINUE_WITHOUT_FIXED_COUNT_SECRET_SENTINEL' "$diagnostic_a"
+rg -q 'ordinary_chat_composer question_id=test_mcts_budget' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REFERENCE put any image into the PDF' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-recovery.json"
 python3 -c 'import json,sys; assert "\"status\":\"success\"" in json.load(open(sys.argv[1]))["text"]' "$test_root/missing-image-recovery.json"

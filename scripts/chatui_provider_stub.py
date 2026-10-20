@@ -33,7 +33,17 @@ class Handler(BaseHTTPRequestHandler):
                 "total_tokens": 18,
             }
             current_input = request.get("input", "") if isinstance(request.get("input", ""), str) else ""
-            if "TEST_MISSING_IMAGE_REPEAT" in request_text and "single bounded recovery attempt" in request_text:
+            if "Current user message:\nTEST_RETURN_STRUCTURED_QUESTION" in current_input:
+                body = {
+                    "output_text": (
+                        "How many MCTS playouts should be used?\n"
+                        "```leanfm-questions\n"
+                        "{\"questions\":[{\"id\":\"test_mcts_budget\",\"prompt\":\"How many MCTS playouts should be used?\",\"options\":[{\"value\":\"1000\",\"label\":\"1000\"}]}]}\n"
+                        "```"
+                    ),
+                    "usage": usage,
+                }
+            elif "TEST_MISSING_IMAGE_REPEAT" in request_text and "single bounded recovery attempt" in request_text:
                 body = {"output_text": "Image created: [preview](spec/images/never-created-twice.png)", "usage": usage}
             elif "Current user message:\nTEST_MISSING_IMAGE_REPEAT" in current_input:
                 body = {"output_text": "Image created: [preview](spec/images/never-created-twice.png)", "usage": usage}

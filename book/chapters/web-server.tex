@@ -290,6 +290,12 @@ the time it is enqueued. In the composer, focus order is prompt editor,
 \textbf{Send}, then model selector. Thus \textbf{Tab}, \textbf{Enter} commits a
 typed prompt with the already visible model rather than opening the selector.
 
+Structured clarification is also observable: a returned question logs its
+stable ID, and a composer submission while that question is pending logs that
+it bypassed the answer form. Both events appear in the turn trace and the
+project diagnostic journal. They retain the question ID and bounded text
+lengths, never the operator's prompt or answer text.
+
 \subsection{A private fault barrier and actionable errors}
 
 The visible trace is for stakeholder decisions; a separate bounded private
