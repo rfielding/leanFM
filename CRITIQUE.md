@@ -46,22 +46,19 @@ leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
-Across Chapters 4–7 and 11, the book uses surface forms such as `scenario`,
-`declare`, `from_`, `to_`, `emit`, `receive`, exported bindings,
-`refineMessage`, role projection, symbolic encryption, and `composeRoles`. Most
-have no executable Lean definitions here. The actual artifact language is
-principally `RequirementSpec`, `TaskRequirement`, and `GrammarExpr`, with string
-guards and named rather than typed-bound event values.
-
-The book also describes future behavior in the present tense: a compiler reads
-references, checks exports, detects cycles, builds a grammar, generates and
-recognizes traces, and projects participants. Current code structurally validates
-grammar atoms and references but does not implement that compiler. Chapter 6
-labels its DSL a design target; other chapters are less consistent, and the
-security-protocol proof scripts disclose their missing library more clearly than
-the DSL chapters disclose their missing elaborator. Elsewhere, cost optimization,
-test generation, and OAuth artifact reproduction are also described more
-strongly than their evidence supports.
+Chapters 6–7 and 11 still mix proposed notation and future compiler behavior
+with current artifacts. Forms such as `scenario`, `declare`, `from_`, `to_`,
+`emit`, `receive`, exported bindings, `refineMessage`, role projection,
+symbolic encryption, and `composeRoles` lack executable Lean definitions. The
+core artifact types are `RequirementSpec`, `TaskRequirement`, and `GrammarExpr`,
+with string guards and named rather than typed-bound event values. Validation
+checks grammar/task and message references, atom endpoints, and threshold
+bounds; it does not compile the proposed DSL, generate or recognize traces, or
+derive participant projections. Chapter 6 labels its DSL a design target, but
+other chapters need equally explicit maturity labels. The CSP exercises frame
+their capabilities as library requirements. Cost optimization, test generation,
+and OAuth artifact reproduction also remain described more strongly than their
+evidence supports.
 
 Use one maturity legend throughout the book and roadmap: proposed notation,
 executable code, finite-model check, test, generated analysis, Lean proof, or

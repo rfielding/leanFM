@@ -4,9 +4,15 @@
 \index{grammar!multiparty}
 \index{grammar!context-free}
 A protocol is a language whose terminal symbols are visible events. A production
-describes a legal continuation. The context-free grammar is the visual and
-conceptual starting point, not a claim that every useful protocol language is
-context-free.
+describes a legal continuation. The \texttt{Grammar} algebra and BNF below are
+proposed notation, not an executable API. Durable artifacts use
+\texttt{GrammarExpr} (
+\texttt{event}, \texttt{seq}, \texttt{choice}, \texttt{parallel},
+\texttt{thresholdJoin}, \texttt{guard}, \texttt{ref}, \texttt{repeat}).
+Current validation checks grammar/task and message references, atom endpoints,
+and threshold bounds; it does not compile this notation into trace generation or
+recognition, or prove actor projection. The queue rules later in this chapter
+are model semantics, not a proof of equivalence to a Go runtime.
 
 \section{A small authoring algebra}
 
