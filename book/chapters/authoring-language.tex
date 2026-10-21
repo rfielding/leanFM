@@ -673,8 +673,8 @@ $a$, and work rate $D$ within the declared latency boundary, feasibility require
 R\mu a \ge D.
 \]}
 
-This inequality is necessary but not sufficient: routing
-imbalance, queueing, and latency can still make the observed system infeasible.
+This is only a necessary capacity condition: routing imbalance, queues, or
+latency can still make the observed system infeasible.
 
 Route total offered rate $\lambda_o$ across $R$ servers; let $\lambda_{o,r}$
 be server $r$'s offered share:
@@ -686,9 +686,8 @@ be server $r$'s offered share:
 \]}
 
 Under ideal balance, nominal demand is $D/R$; verify observed instance loads
-and effective supply because routing can skew them. Each replica adds
-provisioned hardware cost and, while healthy, service cost; compare their total
-hourly cost with the optimizer's result.
+and effective supply. Each replica incurs hardware cost while provisioned and
+service cost while healthy; compare the hourly total with the optimizer's result.
 
 \textbf{Executable code and finite-model tests:} \texttt{optimalSupply?} in
 \texttt{LeanFM/Artifacts.lean} searches replica counts $1$ through
