@@ -671,29 +671,25 @@ such.
 \section{A ladder of checks}
 
 No single green check answers every kind of requirement. The workbench should
-present a ladder of evidence:
+present layered evidence:
 
 \begin{enumerate}
-  \item Lean elaboration and protobuf parsing establish well-formed artifacts.
-  \item Structural validation rejects missing actors, endpoints, terminals,
-        framing, terminal states, process coverage, or real proof obligations.
-  \item Grammar and projected state-machine checks cover ordering and component
-        interaction.
-  \item Temporal checking covers safety, reachability, and appropriately bounded
-        liveness over observable states.
-  \item Probability and dwell reducers predict completion probability and
-        latency; event-stream reducers estimate them from observations.
-  \item Queue and byte-budget checks cover capacity, backpressure, concurrency,
-        and modeled memory pressure.
-  \item Rendered interaction diagrams, state machines, plots, and reports make
-        the same typed model reviewable by people.
+  \item Lean/protobuf checks establish well-formed syntax; structural checks
+        reject missing actors, endpoints, terminals, framing, process coverage
+        or proof obligations.
+  \item Grammar/state-machine checks cover ordering; temporal checks cover
+        safety, reachability and bounded liveness over observable states.
+  \item Probability/dwell reducers predict outcomes; event-stream reducers
+        estimate them. Queue and byte-budget checks model capacity, backpressure,
+        concurrency and memory pressure.
+  \item Generated diagrams, state machines, plots and reports make the typed
+        model reviewable.
 \end{enumerate}
 
-The distinction between model prediction and measurement must remain visible.
-An incomplete observation window may censor slow tasks; a frequency estimate is
-not automatically a proof of the declared probability; and a bounded trace does
-not establish unbounded liveness. Good generated reports say which claim was
-proved, calculated, sampled, or merely assumed.
+Keep evidence labels explicit: predictions are not measurements, incomplete
+windows censor tasks, frequencies do not prove specified probabilities, and
+bounded traces do not prove unbounded liveness. Reports identify each result as
+proved, calculated, sampled or assumed.
 
 \section{How to argue well}
 
