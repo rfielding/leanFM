@@ -31,15 +31,16 @@ the preface-to-PR narrative or technical qualifications; because `book/main.pdf`
 feeds code generation, verify deterministic rendering, tool-version/content
 manifests, and no semantic diff after regeneration.
 
-## The book's language and maturity claims exceed current implementation
+## Proposed DSL remains unimplemented
 
-Proposed forms (`scenario`, `declare`, `from_`, `to_`, `emit`, `receive`, exports,
-`refineMessage`, role projection, symbolic encryption, `composeRoles`) lack
-executable Lean definitions. The current API is `RequirementSpec`,
-`TaskRequirement`, and `GrammarExpr`; guards are strings and event values are not
-typed-bound. Validation checks grammar/task/message references, atom endpoints,
-and threshold bounds, but cannot compile the DSL, generate or recognize traces,
-or project participants.
+The book labels `scenario`, `declare`, `from_`, `to_`, `emit`, `receive`,
+exports, `refineMessage`, role projection, symbolic `WireTerm`, and
+`composeRoles` as proposed syntax or design exercises. They are absent from the
+executable API (`RequirementSpec`, `TaskRequirement`, `GrammarExpr`). Guards
+remain strings and event values are not typed-bound. Validation checks
+grammar/task/message references, atom endpoints, and threshold bounds, but does
+not compile the proposed DSL, generate or recognize traces, or project
+participants.
 
 Lean verifies only elaborated definitions and proofs; co-located Python,
 JavaScript, shell, Graphviz, protobuf, and LaTeX outputs are not thereby proved.
