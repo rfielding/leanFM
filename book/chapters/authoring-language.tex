@@ -740,15 +740,14 @@ power, network partitions and common automation therefore belong in named joint
 scenarios, not independent uptime factors. Adding stateless web instances cannot
 restore the failed database quorum and may only accumulate waiting requests.
 
-An actor inferred unavailable produces no observed heartbeat or outbound
-protocol progress and does not drain its observed inbound queue. Work waiting on
-it remains stalled, is rejected, or ends in an explicit timeout/cancellation
-outcome according to the requirement. An ordinary send or receive attributed to
-that instance after a detector's loss boundary is evidence that either recovery
-occurred or the detector/attribution model was wrong; it is not silently discarded
-as an invalid trace. Thus an outage commonly falsifies a nominal liveness promise
-(for example, ``every accepted request eventually receives a response'') even
-when safety remains intact.
+Work waiting on an instance inferred unavailable remains stalled, is rejected,
+or ends in an explicit timeout/cancellation outcome according to the requirement.
+An ordinary send or receive attributed to that instance after a detector's loss
+boundary is evidence that either recovery occurred or the detector/attribution
+model was wrong; it is not silently discarded as an invalid trace. Thus an
+outage commonly falsifies a nominal liveness promise (for example, ``every
+accepted request eventually receives a response'') even when safety remains
+intact.
 
 The nominal protocol language and its failure extension must therefore be
 distinguished. The nominal language describes ordinary successful and rejected
