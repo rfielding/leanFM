@@ -27,11 +27,10 @@ in-project tests, and persist evidence under the root. Screenshots are not a gat
 
 ## Book length and release reproducibility (reviewed 2026-10-20)
 
-At 134 pages (`authoring-language.tex`: 769 lines), consolidate without losing
-the preface-to-PR narrative or technical qualifications. Because `book/main.pdf`
-feeds code generation, release checks must verify deterministic rendering from
-committed inputs, record tool versions and a content manifest, and leave no
-semantic diff after regeneration.
+At 132 pages (`authoring-language.tex`: 769 lines), consolidate while retaining
+the preface-to-PR narrative and technical qualifications. Since `book/main.pdf`
+feeds code generation, release checks still need deterministic rendering,
+tool-version and content manifests, and no semantic diff after regeneration.
 
 ## The book's language and maturity claims exceed current implementation
 
