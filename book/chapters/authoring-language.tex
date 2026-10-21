@@ -212,25 +212,22 @@ actor Server
   |>.instances "server-" 2 (shardHash "tenant_id")
 \end{lstlisting}
 
-The grammar may send a message from the \texttt{Client} role to the
-\texttt{Server} role; a generated scenario resolves those roles to instances
-such as \texttt{client-7} and \texttt{server-2}. Each instance follows the
-queue and in-flight \texttt{(session,task)} semantics of
-Chapter~\ref{ch:grammar}, inheriting behavior and resource bounds from its actor
-specification. A population is a homogeneous service cluster: every member must
-implement that one actor specification. A cluster cannot quietly mix gateways,
-databases, and workers merely because they share a deployment boundary.
+Generated scenarios resolve grammar roles to concrete instances such as
+\texttt{client-7} and \texttt{server-2}. Each instance inherits its actor's
+behavior and resource bounds and follows the queue and in-flight
+\texttt{(session,task)} semantics of Chapter~\ref{ch:grammar}. A population is
+homogeneous: every member implements the same actor specification, so a cluster
+cannot mix gateways, databases, and workers merely because they share a
+deployment boundary.
 
-The cluster also declares how a message selects an instance. \texttt{sticky}
-keeps the value of an observable affinity field on the same member;
-\texttt{roundRobin} cycles through members in a declared order; and
-\texttt{shardHash} hashes an observable shard-key field. This decision changes
-the legal per-instance histories and therefore queue pressure, hot spots,
-failure impact, and replay. Kafka partition keys, MongoDB shard keys, and
-DynamoDB partition keys motivate the shard-hash abstraction, although each
-real system adds product-specific replication and routing semantics beyond this
-small model. Population size is finite and explicit so queue,
-memory, probability, and temporal checks still have a bounded state space.
+Each cluster declares message routing: \texttt{sticky} keeps the value of an
+observable affinity field on the same member, \texttt{roundRobin} cycles through
+members in declared order, and \texttt{shardHash} hashes an observable shard
+key. Routing changes legal
+per-instance histories, queue pressure, hot spots, failure impact, and replay.
+Kafka and DynamoDB partition keys and MongoDB shard keys motivate shard hashing,
+but each product has additional replication and routing semantics. Explicit
+finite populations keep queue, memory, probability, and temporal checks bounded.
 
 \section{Non-functional requirements: rates and scalability}
 
