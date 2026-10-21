@@ -160,33 +160,28 @@ changing populations also need declared policies.
 ## Structural validation does not prove intent or generated conformance
 
 Validators check typed structure, actor/message coverage, and known
-justification IDs; they do not establish user intent or generated
-symbol-to-test conformance. Require stable fine-grained IDs, bidirectional
-coverage, behavioral trace tests, and classification of handwritten code as
-requirement-justified or infrastructure. Human review must still catch
-misstated assumptions, trust boundaries, failure alternatives, cost models,
-probability provenance, and observability; generated prose must not invent
-facts. The accepted `custom "unassigned" ""` fallback can conceal a missing
-transport mapping.
+justification IDs—not user intent or generated symbol-to-test behavior. Require
+stable fine-grained IDs, bidirectional coverage, behavioral trace tests, and
+classification of handwritten code as requirement-backed or infrastructure.
+Human review remains necessary for assumptions, trust boundaries, failure
+alternatives, costs, probability provenance, and observability; generation must
+not invent facts. The accepted `custom "unassigned" ""` fallback can conceal a
+missing transport mapping.
 
-Generic `TransportSpec` records an HTTP request's method/path or the request
-message named by a response; its validator checks only nonempty method/path and
-that the response target is any known message, not that it is an HTTP request.
-The ChatUI contract now specifies status/content-type/codecs and
-one-to-one event `cause_id` closure, and its implementation mapping describes
-OpenAPI, but validation and tests do not prove every binding against runtime
-handlers. The generic transport mapping has no fields for authentication,
-deadlines, headers, streaming, retries/idempotency, connection reuse,
-intermediaries, redirects, cancellation, or status alternatives, and has no
-binding-level validation for them.
+Generic `TransportSpec` records method/path or a response's named message; its
+validator checks nonempty method/path and any known response target, not that
+the target is an HTTP request. ChatUI specifies status, content type, codecs,
+one-to-one event `cause_id` closure, and an OpenAPI mapping, but validation and
+tests do not prove bindings against runtime handlers. The generic mapping omits
+authentication, deadlines, headers, streaming, retry/idempotency, connection
+reuse, intermediaries, redirects, cancellation, status alternatives, and
+binding-level validation.
 
-Generation from the book, specifications, and existing code reduces transcript
-dependence, not variance. Pin model, prompt, tools, and sampling; review diffs
-and behavior. Characterize-and-synthesize accepts only agreement on its named
-finite metrics; matching latency, throughput, uptime, or histograms does not
-establish agreement on burstiness, tail dependence, predecessor order, rare
-failures, or operational risk. Specify tolerances, sample sizes, seeds, and
-distributional tests.
+Generation from durable artifacts reduces transcript dependence, not variance:
+pin model, prompt, tools, and sampling, then review diffs and behavior.
+Agreement on named finite metrics does not establish burstiness, tail
+dependence, predecessor order, rare failures, or operational risk. Specify
+tolerances, sample sizes, seeds, and distributional tests.
 
 ## Security knowledge is not yet a complete epistemic model
 
