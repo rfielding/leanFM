@@ -171,7 +171,9 @@ Blocking send on a full queue and blocking receive on an empty queue capture the
 most important bounded-channel behavior. They do not yet model:
 
 - multiple blocked senders or receivers and their wake-up order;
-- `select`, cancellation, deadlines, or closed channels;
+- `select`, cancellation, or deadlines. Closed-channel behavior is named in
+  `ImplementationSpec`, but no executable `BoundedMailbox` implementation was
+  found in this checkout;
 - fairness and starvation;
 - atomicity between queue operations and actor-state transitions;
 - scheduler behavior;
