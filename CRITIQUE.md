@@ -37,19 +37,14 @@ to its grammar, and validate it with increasingly realistic in-project tests.
 Persist that evidence in the project; screenshots are auxiliary, not a readiness
 gate.
 
-## Book length and consolidation (reviewed 2026-10-20)
+## Book length and release reproducibility (reviewed 2026-10-20)
 
-The 136-page book remains too long, especially `authoring-language.tex`;
-continue chapter-wide consolidation while preserving its preface-to-PR narrative
-and technical qualifications.
-
-## The rendered book still needs a reproducible release check
-
-Because `book/main.pdf` is also an input to code generation, the build should
-fail when the committed PDF is not the deterministic product of the committed
-TeX, generated tables, figures, and code listings. Ideally the release records
-tool versions and a content manifest, then tests that regenerating the book
-leaves no semantic diff.
+At 136 pages, the book remains too long, especially `authoring-language.tex`;
+continue consolidating chapter by chapter while preserving its preface-to-PR
+narrative and technical qualifications. Because `book/main.pdf` also feeds code
+generation, release validation should verify that it is the deterministic
+product of committed TeX, tables, figures, and listings. Record tool versions
+and a content manifest, then check that regeneration leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
