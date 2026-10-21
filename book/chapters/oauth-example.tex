@@ -421,9 +421,8 @@ def oauthRequirements : List Requirement :=
 \subsection{Who knows the password?}
 
 \index{knowledge!derived from events}
-Observable bytes are not the same as knowledge of their plaintext. Rather than
-introducing ``secrecy'' as a special property, calculate the actors that can
-derive the password from initial knowledge and the event list.
+This OAuth instance applies the trace-derived knowledge closure from
+Section~\ref{sec:knowledge-closure}:
 
 \begin{lstlisting}
 def passwordKnowers (trace : Trace WireEvent) : List Actor :=
@@ -440,12 +439,9 @@ theorem oauth_password_knowers
   exact knowledgeClosureOfProtectedField accepted initial honest protection
 \end{lstlisting}
 
-The result says directly who knows the value. A password typed into the modeled
-browser is derivable by that browser; hiding this behind the word ``secret'' would
-lose information. If a narrower result is required, the actor model must represent
-a trusted credential component separately. The calculation remains conditional:
-a compromised endpoint, logging event, newly visible key, or failed protection
-refinement changes the knowledge closure and therefore changes the returned set.
+The browser itself knows a typed password. A narrower boundary requires a trusted
+credential actor; compromise, logging, a visible key, or failed protection changes
+the result.
 
 \subsection{Byte-level refinement without choosing a transport}
 

@@ -190,12 +190,9 @@ distributional tests.
 
 ## Security knowledge is not yet a complete epistemic model
 
-Replacing an overstrong “secrecy” theorem with “who can calculate this value?”
-is an improvement. The answer still depends on explicit deduction rules:
-decryption keys, signatures, hashes, randomness, compromise, browser scripting,
-logs, caches, and side channels.
-
-A list of actors who receive a value is not equivalent to the set of actors who
-can derive it. Any knowledge calculation should state its symbolic algebra and
-trusted boundaries. Computational security claims would require a substantially
-different model.
+The book sketches, but does not implement, a Dolev–Yao `Derives` relation for
+initial terms, tuples/projection, and perfect encryption/decryption, plus CTL
+checks over its closure. Completeness still needs explicit rules and trust
+boundaries for signatures, hashes, randomness, compromise, browser scripting,
+logs/caches, and side channels. This symbolic model is not a computational
+cryptographic proof.
