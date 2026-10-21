@@ -1,33 +1,24 @@
 \chapter{Scenarios}
 \label{ch:scenarios}
 
-A scenario is the intended narrative unit in LeanFM. It is a
-named, bounded stream of timestamped events that together describe one
-interaction or one execution trace of interest (for example: a successful
-quote request, an OAuth exchange, or a two-player 9×9 game).
+A scenario is LeanFM's named, bounded stream of timestamped events for one
+interaction or execution trace (for example, a quote request, OAuth exchange,
+or 9×9 game).
 
 \section{Event envelope and scenario grouping}
-Chapter~\ref{ch:events} defines the shared typed event envelope and the semantics
-of event identity, \texttt{priorIds}, \texttt{causeId}, actor endpoints,
-correlation, and monotonic \texttt{timeAt}. Any serialized \texttt{scenario} key
-or aliases such as
-\texttt{src}/\texttt{message} must be declared by the accepted schema and its
-reducers; they are not additional canonical event fields.
+The shared envelope and semantics of \texttt{id}, \texttt{priorIds},
+\texttt{causeId}, actor endpoints, correlation and monotonic \texttt{timeAt}
+are defined in Chapter~\ref{ch:events}. A serialized \texttt{scenario} key or
+aliases such as \texttt{src}/\texttt{message} are canonical only if the accepted
+schema and reducers declare them.
 
 \section{Derived outputs and provenance}
-The intended per-scenario views include:
-\begin{itemize}
-  \item an interaction diagram (lifelines and arrows from message endpoints and kinds),
-  \item a residual state machine (observed states and message-labeled transitions),
-  \item latency and throughput charts derived from timeAt and prior start/stop pairs,
-  \item outcome distributions and other question-specific reductions.
-\end{itemize}
-
-A view should carry its originating prompt or requirement id, reducer, unit, and
-scenario boundary. Generate it only when those inputs and its renderer are
-implemented; do not infer implementation from this target list. When a generated
-view can carry the explanation, prefer it to repeated prose and add a short
-interpretation (see SKILL.md).
+Question-driven outputs include interaction diagrams, residual state machines,
+latency/throughput charts and outcome distributions. Each \texttt{DesiredOutput}
+must bind its prompt, precise question, event source, reducer, unit and scenario
+boundary. A listed output is not implemented until its renderer exists; when a
+generated view carries the explanation, prefer it to repeated prose and add a
+short interpretation.
 
 \section{Example: minimal two-player game scenario}
 Below is an illustrative event fragment for a 9×9 game. Times are milliseconds
