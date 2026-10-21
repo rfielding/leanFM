@@ -227,12 +227,12 @@ actor Server
 
 The grammar may send a message from the \texttt{Client} role to the
 \texttt{Server} role; a generated scenario resolves those roles to instances
-such as \texttt{client-7} and \texttt{server-2}. Each instance
-has its own inbound and outbound queues and its own set of in-flight
-\texttt{(session,task)} pairs, while inheriting behavior and resource bounds from
-the actor specification. A population is a homogeneous service cluster: every
-member must implement that one actor specification. A cluster cannot quietly mix
-gateways, databases, and workers merely because they share a deployment boundary.
+such as \texttt{client-7} and \texttt{server-2}. Each instance follows the
+queue and in-flight \texttt{(session,task)} semantics of
+Chapter~\ref{ch:grammar}, inheriting behavior and resource bounds from its actor
+specification. A population is a homogeneous service cluster: every member must
+implement that one actor specification. A cluster cannot quietly mix gateways,
+databases, and workers merely because they share a deployment boundary.
 
 The cluster also declares how a message selects an instance. \texttt{sticky}
 keeps the value of an observable affinity field on the same member;
