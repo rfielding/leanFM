@@ -94,38 +94,31 @@ input-sensitive tests for branches, loops, forks and joins. Label each result as
 a requirement schema, example trace, observed trace or modeled prediction; a
 polished view must not become a second specification.
 
-## The Paxos example is useful but does not yet validate the method
+## Grammar-to-wire path and the Paxos example remain incomplete
 
-The three-replica application has durable storage, a browser interface, recovery
-tests, concurrency and a real quorum, but does not yet validate the integrated
-method:
+The three-replica Paxos app has durable storage, a browser UI, recovery tests,
+concurrency, and a real quorum, but does not yet validate the integrated method.
+`LeanFM/PaxosKV/Requirements.proto` declares empty payload messages while
+`internal/protocol/requirements.proto` defines the generic executable
+`Envelope`; the requirement schema is not the source of those bindings.
+Requirements check a `ScenarioEvent.priorIds` quorum DAG, but runtime tracing
+emits only terminal `PutSucceeded`/`ListSucceeded` events. The sink assigns IDs
+and timestamps, and these events name their source, destination, session, and
+task; they have no predecessor links or starts, so they cannot reconstruct
+write, outage/recovery, concurrent-write, or list interactions. Outage atoms are
+mapped to TCP without the full declared outage/recovery protocol. `node.go`
+prepares per slot; protocol tests reject truncated protobuf payloads but do not
+inject partial TCP frames, loss, duplication, delay, or reordering. Metrics omit
+accepted outputs for availability, recovery lag, queue pressure, memory
+headroom, and per-session diagrams.
 
-- `LeanFM/PaxosKV/Requirements.proto` declares empty payload messages while
-  `internal/protocol/requirements.proto` uses one generic `Envelope` with the
-  executable fields. The requirement artifact is therefore not the schema from
-  which the implementation bindings were generated.
-- Requirements contain a checked `ScenarioEvent.priorIds` quorum DAG, but runtime
-  tracing emits only `PutSucceeded`/`ListSucceeded` without predecessor IDs.
-  Write, outage/recovery, concurrent-write and list traces lack the IDs,
-  predecessors, concrete actors and timestamps needed to derive runtime views.
-  The implementation also maps outage atoms to TCP without emitting the full
-  declared outage/recovery protocol.
-- `node.go` performs a prepare phase per slot. Protocol tests reject truncated
-  protobuf payloads, but do not inject partial TCP-frame delivery, loss,
-  duplication, delay, or reordering.
-- Metrics expose a few counters and a latency accumulator, but not the full
-  accepted output catalog for availability, recovery lag, queue pressure,
-  memory headroom, or per-session diagrams.
-
-## Grammar, protobuf, and choice do not yet form one checked wire path
-
-`scripts/roundtrip_generated_scenario.py` manually builds one `get_docs`
-`Scenario`, round-trips it with generated Python protobuf, and checks equality
-and `prior`; it does not run grammar generation or recognition. End-to-end
-coverage must exercise every `GrammarExpr` constructor and legal/illegal branch
-(including `possibly`), then check decoded grammar/FSM acceptance, schema
-evolution and malformed input, duplicate IDs, missing or cyclic predecessors,
-and out-of-order events. The target is
+The grammar-to-wire path is not yet checked end to end. `scripts/roundtrip_generated_scenario.py`
+manually constructs one `get_docs` `Scenario`, round-trips it with generated
+Python protobuf, and checks equality and predecessor IDs; it does not generate
+or recognize traces from the grammar. Tests still need every `GrammarExpr`
+constructor and legal/illegal branch (including `possibly`), decoded grammar/FSM
+acceptance, schema evolution, malformed input, duplicate IDs, missing or cyclic
+predecessors, and out-of-order events. The target is
 `decode(encode(generate(grammar, choices)))`.
 
 `Requirements.proto` puts event identity, order, correlation, actors, and time in
