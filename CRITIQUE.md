@@ -5,23 +5,19 @@ the book claims. A successful build alone does not resolve them.
 
 ### CTL implementation and temporal coverage remain bounded
 
-Verified 2026-10-20:
+Verified 2026-10-20: `LeanFM/CTL.lean` implements `holds` for Boolean, EX/AX,
+EF/AF, EG/AG, EU/AU, and EW/AW. `CTLTests.lean` checks branching, vacuity,
+until/release, and AG/AF duals with `native_decide`; `TaskFSM.holds` supplies
+task-property results to the executable and `/metrics`.
 
-`LeanFM/CTL.lean` implements `holds` for Boolean, EX/AX, EF/AF, EG/AG, EU/AU,
-and EW/AW. `CTLTests.lean` checks branching, vacuity, until/release, and AG/AF
-duals with `native_decide`; `TaskFSM.holds` feeds task-property results to the
-executable and `/metrics`. The notation `(p AU q)` and `(p EU q)` keeps the
-temporal operator outside its subformulas.
-
-The remaining gap is deriving bounded transition systems with
-witnesses/counterexamples from general grammar/event models. `holds` is not a
+The remaining gap is deriving bounded transition systems and
+witnesses/counterexamples from general grammar/event models: `holds` is not a
 proved-correct model checker, grammar interpreter, or deployed-code refinement
-proof. Its path-local cycle detection can be exponential on shared graphs;
+proof. Path-local cycle detection can be exponential on shared graphs;
 requirement validation and event-pair reconstruction use quadratic list scans.
-Finite examples are tractable partly because payload domains, queues, tasks,
-and clocks are bounded. Applying their claims to unbounded implementations
-needs an explicit abstraction argument: truncation can hide queue growth,
-retry loops, or timing behavior.
+Finite examples rely partly on bounded payload domains, queues, tasks, and
+clocks. Truncation can hide queue growth, retry loops, or timing behavior, so
+claims about unbounded implementations need an explicit abstraction argument.
 
 Treating `possibly` as preparedness improves traceability, but the current
 check only proves that some implementation mapping cites the possibility
