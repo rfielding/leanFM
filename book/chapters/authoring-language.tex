@@ -566,15 +566,11 @@ from $t_0$ through $t_1$, the estimated outage fraction and repair duration are
  \frac{\sum_i (r_i.timeAt-u_i.timeAt)}{\lvert incidents\rvert}.
 \]}
 
-Availability over the same complete window is $1-\widehat O$. The report must
-label whether $u_i$ is the last-known-healthy time, missed deadline, or detection
-time; otherwise its outage and MTTR numbers are not reproducible. Both values can
-be plotted against time, replica count, offered load, or a deployment policy.
-This supports Kubernetes-style experiments in which pods are actor instances,
-restarts are recovery events, and changing replica populations yields different
-reliability and throughput observations. A configured outage probability or
-MTTR is not silently replaced by its observed estimate; comparing them is the
-check.
+Availability over the same complete window is $1-\widehat O$. Reports must
+identify each $u_i$ boundary (last healthy, missed deadline, or detection),
+since it changes the outage and MTTR estimates. In Kubernetes-style experiments,
+pods may be actor instances and restarts recovery events; compare configured
+outage probability and MTTR with observations rather than replacing them.
 
 \subsection{Redundant, load-balanced runtimes and blast radius}
 \label{sec:runtime-blast-radius}
@@ -639,12 +635,9 @@ two failures in the target shard remove it, even if every other shard is healthy
 A multi-shard operation depends on every shard its semantics require, so
 availability is operation-specific, not a total replica count.
 
-Per-instance uptime is only the first reliability result. Services form a
-dependency network, and each dependency gate must say whether its members are
-required in \emph{series} or provide redundancy in \emph{parallel}. Let
-$u_i(t)\in\{0,1\}$ be the derived up/down indicator reconstructed from one
-instance's detector observations and declared boundary policy. For a series gate,
-every member must be up:
+Use detector-derived $u_i(t)\in\{0,1\}$ values and declared boundaries to
+combine instances through each operation's series, parallel, or threshold gate.
+For a series gate, every member must be up:
 
 \AccessibleEquation{Series availability at time t equals the product over components i of component availability u sub i at time t.}{\[
  u_{\mathrm{series}}(t)=\prod_i u_i(t).
