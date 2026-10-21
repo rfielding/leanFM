@@ -27,10 +27,9 @@ necessary-eventually obligations.
 
 ### Project-root discoverability and code-generation readiness
 
-Fresh-session readiness remains unverified: recover the durable project specs,
-generate an application, establish that its observable traces conform to the
-grammar, and validate it with increasingly realistic in-project tests. Persist
-that evidence under the project root; screenshots are not a readiness gate.
+Fresh-session readiness is unverified: resume from durable specs, generate an
+application, demonstrate grammar-conforming traces with increasingly realistic
+in-project tests, and persist evidence under the root. Screenshots are not a gate.
 
 ## Book length and release reproducibility (reviewed 2026-10-20)
 

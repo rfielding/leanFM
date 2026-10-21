@@ -11,144 +11,58 @@ implemented. The worked MDP later in this chapter is a separate
 \textbf{finite-model check}; its figures are \textbf{generated analyses} from
 the named Lean source.
 
-\section{The smallest useful scenario}
+\section{Proposed scenario notation}
 
-A scenario is a named grammar fragment whose emitted terminals are observable
-message events. The spellings \texttt{from\_} and \texttt{to\_} avoid Lean's
-\texttt{from} syntax and set authoring context, which elaboration copies into
-every event; an \texttt{emit} before both endpoints are set is rejected.
+\index{alphabet!vague}
+A scenario is a named grammar fragment whose terminals are observable message
+events. This proposed syntax uses \texttt{from\_} and \texttt{to\_} (avoiding
+Lean's \texttt{from} syntax) to set the endpoints copied into each event; an
+\texttt{emit} without both endpoints is invalid. Ordinary \texttt{let x := e}
+evaluates a Lean expression, while \texttt{let x <- declare T "x"} introduces
+an immutable typed symbolic value bound by trace generation or matching.
+Reusing a binding expresses identity, while receiving an event binds its fields
+for later messages. \texttt{emit} and \texttt{receive} denote the same
+grammar-terminal kind; they differ only in participant projection.
 
 \begin{lstlisting}
 def requestQuote (customer shop : Actor) : Scenario :=
   scenario "request a quote" do
     let requestId <- declare RequestId "requestId"
-
-    from_ customer
-    to_ shop
-    emit "quote requested" [field "requestId" requestId]
-
     let quoteId <- declare QuoteId "quoteId"
-    let amount  <- declare Money "amount"
-
-    from_ shop
-    to_ customer
+    let amount <- declare Money "amount"
+    from_ customer; to_ shop
+    emit "quote requested" [field "requestId" requestId]
+    from_ shop; to_ customer
     emit "quote offered"
-      [ field "requestId" requestId
-      , field "quoteId" quoteId
-      , field "amount" amount
-      ]
+      [field "requestId" requestId, field "quoteId" quoteId,
+       field "amount" amount]
 \end{lstlisting}
 
-\subsection{Variables and assignment}
+Early requirements can use stable semantic message names and typed fields
+without committing to a protobuf schema; these suffice for ordering,
+correlation and temporal properties. A later refinement maps those fields to a
+concrete alphabet; its obligation is language inclusion after representation
+details are erased. Serialization, retries and internal state may be chosen
+there, but externally visible behavior forbidden by the abstract grammar may
+not be added.
 
-Ordinary \texttt{let x := expression} evaluates a known Lean expression;
-\texttt{let x <- declare T "x"} introduces a symbolic value of type
-\texttt{T}, bound by trace generation or matching and reusable in later events.
-Bindings are immutable: a later \texttt{let attempt := attempt + 1} creates a
-new binding rather than mutable hidden state. Data flow is therefore explicit,
-and repeated \texttt{requestId} occurrences denote the same value, not merely
-values with the same field name.
-
-A value received from the environment is bound by matching an observable event:
-
-\begin{lstlisting}
-from_ customer
-to_ shop
-receive "quote accepted" do
-  let quoteId <- take QuoteId "quoteId"
-  let payment <- take PaymentToken "paymentToken"
-
-from_ shop
-to_ bank
-emit "payment authorization requested"
-  [field "quoteId" quoteId, field "paymentToken" payment]
-\end{lstlisting}
-
-\texttt{receive} and \texttt{emit} both denote grammar terminals; they differ only
-in the viewpoint used when projecting a global scenario to executable participant
-code.
-
-\section{Vague messages first, typed alphabets later}
-
-\index{alphabet!vague}
-Early requirements should not require a finished protobuf schema. A vague message
-has a stable semantic name and a list of named, typed fields. It is already precise
-enough to express ordering, correlation, and temporal properties.
-
-The preceding \texttt{quote offered} terminal can later be refined to a concrete
-alphabet:
-
-\begin{lstlisting}
-refineMessage "quote offered" with Proto.Shop.QuoteOffered where
-  request_id := field "requestId"
-  quote_id   := field "quoteId"
-  cents      := encodeMoney (field "amount")
-\end{lstlisting}
-
-The refinement obligation is language inclusion: every concrete implementation
-trace, after erasing representation details, must be admitted by the abstract
-grammar. Refinement may decide serialization, retry mechanics, and internal state;
-it must not invent externally visible behaviour forbidden by the requirements.
-
-\section{One concern per scenario}
-
-Keep each scenario an independently rendered story; here the quote outcomes
-split into named branches:
-
-\begin{lstlisting}
-def quoteAccepted (customer shop : Actor) : Scenario :=
-  scenario "quote accepted" do
-    include (requestQuote customer shop)
-    -- bind quoteId from the included scenario's exports
-    use quoteId <- exported QuoteId "quoteId"
-    from_ customer; to_ shop
-    emit "quote accepted" [field "quoteId" quoteId]
-
-def quoteDeclined (customer shop : Actor) : Scenario :=
-  scenario "quote declined" do
-    include (requestQuote customer shop)
-    use quoteId <- exported QuoteId "quoteId"
-    from_ customer; to_ shop
-    emit "quote declined" [field "quoteId" quoteId]
-
-def quoteOutcome (customer shop : Actor) : Scenario :=
-  oneOf "customer decision"
-    [ quoteAccepted customer shop
-    , quoteDeclined customer shop
-    ]
-\end{lstlisting}
-
-\texttt{include} renders its referenced body for readability but denotes a
-named nonterminal, not textual copying. A future compiler must resolve
-references, check exports, reject cycles, and build the grammar.
-
-\noindent No quote diagram is generated yet. The event-derived diagram contract
-is in Chapter~\ref{ch:scenarios}; generated interaction examples are in
+Named inclusions represent reusable productions rather than textual copying.
+They can export values for later events; a compiler must resolve references,
+check exports, reject cycles and build the grammar. For example, a quote outcome
+can choose between named accepted and declined branches. Keep those branches
+independently renderable rather than combining unrelated concerns in one story.
+No quote diagram is generated yet: the event-derived diagram contract is in
+Chapter~\ref{ch:scenarios}, with generated interaction examples in
 Chapter~\ref{ch:grammar}.
 
-\section{Choices and unresolved probability}
-
 \index{probability}
-Nondeterminism and probability are different. \texttt{oneOf} says that multiple
-behaviours are legal without claiming how often they occur. \texttt{weighted}
-attaches a distribution when the abstraction has one.
-
-\begin{lstlisting}
-def paymentOutcome : Scenario :=
-  oneOf "payment outcome" [paymentApproved, paymentRejected]
-
-def estimatedCustomerDecision : Scenario :=
-  weightedOneOf "customer decision"
-    [ weighted (95 / 100) customerSubmitsPayment
-    , weighted ( 5 / 100) customerAbandonsPayment
-    ]
-\end{lstlisting}
-
-Chapter~\ref{ch:grammar} defines branch agency by the first distinguishing
-terminal. Deterministic service transitions carry incoming probability mass
-forward. Requirements may begin with \texttt{oneOf}, symbolic weights, or
-ranges; refinement must resolve these claims and preserve every abstractly legal
-branch, even one assigned zero probability by the current implementation.
+\texttt{oneOf} states nondeterminism without claiming branch frequencies;
+\texttt{weightedOneOf} supplies a distribution when one is supported.
+Chapter~\ref{ch:grammar} assigns agency to the first distinguishing terminal,
+and deterministic service transitions carry incoming probability mass forward.
+Requirements may begin with unresolved choices, symbolic weights or ranges.
+Refinement must resolve these claims and preserve every abstractly legal branch,
+including one assigned zero probability by the current implementation.
 
 \section{Worked MDP: a stochastic user and deterministic server}
 
