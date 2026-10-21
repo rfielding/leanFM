@@ -48,6 +48,16 @@ mathematical example, separate from LeanFM's protocol and trace semantics; it is
 not compiled by \texttt{make book}. In this checkout, running
 \texttt{lake env lean book/logic.lean} stops because Mathlib is not installed,
 so this PDF does not claim that the fixture was checked here.
+A validity objection should identify the circular dependency, unchecked
+assumption, or mismatch between a definition and the intended interpretation;
+kernel acceptance alone proves only the stated theorem from its imports and
+axioms.
+
+The complete source is reproduced below so the mathematical construction can be
+read and assessed without relying on chat history or an external file. Its
+inclusion is not a claim that the proof has been checked in this checkout.
+
+\lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize,breaklines=true]{logic.lean}
 
 For a LeanFM runtime judgment, define the double turnstile $\vDash$ relative
 to the declared transition model and initial state. It means ``at every reachable
