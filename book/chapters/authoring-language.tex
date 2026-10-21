@@ -620,11 +620,10 @@ The model asks what stops, for whom, and for how long; replica counts alone do
 not answer it. It combines timestamped protocol observations and uptime/MTTR
 estimates with operation-specific dependency gates and shared failure domains.
 
-The illustrative profile has redundant ingress and routing pools, round-robin
-stateless React/API actors, and a sharded document service whose router selects
-a replicated owner group. Ingress, routers, metadata, storage, and network are
-dependencies in their own right. Kubernetes schedules and restarts actors but
-does not supply the application's quorum or consistency protocol.
+The profile adds round-robin stateless React/API actors and a router-selected
+sharded document service. Metadata, storage, and network are additional
+dependencies. Kubernetes schedules and restarts actors but does not supply the
+application's quorum or consistency protocol.
 
 \begin{description}
   \item[Stateless pool.] Zero ready instances makes new requests unavailable.
@@ -743,9 +742,9 @@ A prediction from uptime and MTTR therefore also declares a failure/repair
 process, correlated failure domains, placement, workload and recovery policy.
 Independent-marginal estimates provide a baseline only. Rack loss, zone loss,
 network partition, operator shutdown and common deployment errors require named
-joint scenarios. The runtime report places assumed and observed values beside
-the generated dependency/cascade view, time-aligned availability, affected
-operations, request exposure, deadline outcomes, and recovery sequence. Existing
+joint scenarios. Place assumed and observed values beside the standard outputs
+above, adding affected operations, request exposure, deadline outcomes, and
+recovery sequence. Existing
 \texttt{DesiredOutput} entries for composed availability and failure cascades
 provide the provenance boundary; additional calibrated forecasts require their
 own sources and reducers. This subsection defines the analysis contract, not a
@@ -765,9 +764,8 @@ uptime $p$, the quorum's assumed uptime would be
 
 Read this as: ``two-of-three availability equals three times the probability
 that exactly two replicas are up, $p$ squared times one minus $p$, plus the
-probability that all three replicas are up, $p$ cubed.'' This calculation is
-only an independent-marginal baseline. It does not describe an operator who
-deliberately stops correlated members.
+probability that all three replicas are up, $p$ cubed.'' This independent-marginal
+baseline excludes correlated shutdowns.
 
 The named shutdown cascade first stops \texttt{kv-1}. Two voters remain, so the
 successful first maintenance action appears to confirm that the cluster is
