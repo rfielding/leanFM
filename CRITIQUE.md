@@ -31,20 +31,19 @@ necessary-eventually obligations.
 
 ### Project-root discoverability and code-generation readiness
 
-End-to-end readiness remains unverified: a fresh session must recover the
-project specifications, generate an application whose observable traces conform
-to its grammar, and validate it with increasingly realistic in-project tests.
-Persist that evidence in the project; screenshots are auxiliary, not a readiness
-gate.
+Fresh-session readiness remains unverified: recover the durable project specs,
+generate an application, establish that its observable traces conform to the
+grammar, and validate it with increasingly realistic in-project tests. Persist
+that evidence under the project root; screenshots are not a readiness gate.
 
 ## Book length and release reproducibility (reviewed 2026-10-20)
 
 At 136 pages, the book remains too long, especially `authoring-language.tex`;
-continue consolidating chapter by chapter while preserving its preface-to-PR
-narrative and technical qualifications. Because `book/main.pdf` also feeds code
-generation, release validation should verify that it is the deterministic
-product of committed TeX, tables, figures, and listings. Record tool versions
-and a content manifest, then check that regeneration leaves no semantic diff.
+consolidate without losing its preface-to-PR narrative or technical
+qualifications. Since `book/main.pdf` feeds code generation, release validation
+must verify its deterministic derivation from committed TeX, tables, figures,
+and listings; record tool versions and a content manifest, and ensure
+regeneration leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
