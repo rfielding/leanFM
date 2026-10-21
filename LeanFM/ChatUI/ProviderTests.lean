@@ -53,4 +53,29 @@ example : (errorResponse 409 "The local session token safety budget is exhausted
 example : (errorResponse 409 "A different revision is current.").body
     |>.contains "leanfm_http_409" := by native_decide
 
+-- Both provider protocols preserve the same workspace controls. Anthropic's
+-- cache counters are additive, not a subset of input_tokens as in Responses.
+def claudeUsage : Json := Json.mkObj [("usage", Json.mkObj
+  [("input_tokens", toJson (7 : Nat)), ("cache_creation_input_tokens", toJson (2 : Nat)),
+   ("cache_read_input_tokens", toJson (3 : Nat)), ("output_tokens", toJson (5 : Nat))])]
+
+example : (anthropicUsage claudeUsage).inputTokens = 12 := by native_decide
+example : (anthropicUsage claudeUsage).cachedInputTokens = 3 := by native_decide
+example : (anthropicUsage claudeUsage).totalTokens = 17 := by native_decide
+example : (anthropicFailure? (Json.mkObj [("stop_reason", toJson "max_tokens")])).isSome := by native_decide
+example : (anthropicFailure? (Json.mkObj [("stop_reason", toJson "model_context_window_exceeded")])).isSome := by native_decide
+example : (anthropicFailure? (Json.mkObj [("stop_reason", toJson "refusal")])).isSome := by native_decide
+example : (anthropicFailure? (Json.mkObj [("stop_reason", toJson "end_turn")])).isNone := by native_decide
+example : !(anthropicErrorDetail 402 hostileError).contains "credential-body" := by native_decide
+example : !(anthropicErrorDetail 402 hostileError).contains "private-prompt" := by native_decide
+example : !(anthropicErrorDetail 402 hostileError).contains "sk-secret" := by native_decide
+example : (anthropicErrorDetail 400 "{\"error\":{\"type\":\"invalid_request_error\",\"message\":\"Your credit balance is too low.\"}}")
+    |>.contains "credit balance is too low" := by native_decide
+example : ((anthropicTools false).getArr?.toOption.getD #[]).size =
+    (((Json.parse workspaceToolsJson).toOption.bind fun value => value.getArr?.toOption).getD #[]).size - 1 := by native_decide
+example : (submittedProviderKeys "provider=other&api_key=value").toOption.isNone := by native_decide
+example : (submittedProviderKeys "openai_api_key=one&anthropic_api_key=two").toOption ==
+    some [("openai", "one"), ("anthropic", "two")] := by native_decide
+example : (submittedProviderKeys "provider=anthropic&api_key=one&anthropic_api_key=two").toOption.isNone := by native_decide
+
 end LeanFM.ChatUI.ProviderTests

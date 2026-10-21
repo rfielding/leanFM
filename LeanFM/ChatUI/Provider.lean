@@ -15,6 +15,23 @@ structure Completion where
   failure : Option String := none
 deriving Repr
 
+structure ModelInfo where
+  id : String
+  model : String
+  provider : String
+  label : String
+  maxOutputTokens : Nat := 4096
+  contextWindowTokens : Nat := 0
+  webSearch : Bool := false
+deriving Repr
+
+def providerName (provider : String) : String := if provider == "anthropic" then "Anthropic" else "OpenAI"
+
+def providerBaseUrl (provider : String) : IO String := do
+  if provider == "anthropic" then
+    pure ((← IO.getEnv "LEANFM_ANTHROPIC_BASE_URL").getD "https://api.anthropic.com/v1")
+  else pure ((← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1")
+
 structure FunctionCall where
   callId : String
   name : String
@@ -33,10 +50,15 @@ def providerTimeoutSeconds : IO Nat := do
   let configured := (← IO.getEnv "LEANFM_PROVIDER_TIMEOUT_SECONDS").bind String.toNat?
   pure (max 30 (min 900 (configured.getD 300)))
 
-def apiCallWithTimeout (timeoutSeconds : Nat) (method url key payload : String) : IO (Nat × String) := do
+def apiCallWithTimeout (timeoutSeconds : Nat) (method url key payload : String)
+    (provider : String := "openai") : IO (Nat × String) := do
+  if !validCredentialPairs [(provider, key)] then throw (IO.userError "invalid provider credential")
   let dataLine := if payload.isEmpty then "" else "data = \"" ++ curlConfigEscape payload ++ "\"\n"
+  let authorization := if provider == "anthropic" then
+    "header = \"x-api-key: " ++ curlConfigEscape key ++ "\"\nheader = \"anthropic-version: 2023-06-01\"\n"
+    else "header = \"Authorization: Bearer " ++ curlConfigEscape key ++ "\"\n"
   let config := "url = \"" ++ url ++ "\"\nrequest = \"" ++ method ++ "\"\n" ++
-    "header = \"Authorization: Bearer " ++ curlConfigEscape key ++ "\"\n" ++
+    authorization ++
     (if payload.isEmpty then "" else "header = \"Content-Type: application/json\"\n") ++
     dataLine ++ "silent\nshow-error\n"
   let out ← IO.Process.output {
@@ -51,15 +73,16 @@ def apiCallWithTimeout (timeoutSeconds : Nat) (method url key payload : String) 
   | [body, status] => pure (status.trimAscii.toString.toNat?.getD 0, body)
   | _ => pure (0, out.stdout)
 
-def apiCall (method url key payload : String) : IO (Nat × String) := do
-  apiCallWithTimeout (← providerTimeoutSeconds) method url key payload
+def apiCall (method url key payload : String) (provider : String := "openai") : IO (Nat × String) := do
+  apiCallWithTimeout (← providerTimeoutSeconds) method url key payload provider
 
-def verifyKey (key : String) : IO (Except String Unit) := do
+def verifyKey (key : String) (provider : String := "openai") : IO (Except String Unit) := do
+  if !validCredentialPairs [(provider, key)] then return .error "Supply a nonempty key of at most 4096 visible ASCII characters for a supported provider."
   try
-    let baseUrl := (← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1"
-    let (status, _) ← apiCall "GET" (baseUrl ++ "/models") key ""
-    if status == 200 then pure (.ok ()) else pure (.error ("OpenAI rejected the API key (HTTP " ++ toString status ++ ")."))
-  catch _ => pure (.error "OpenAI key verification could not reach the provider.")
+    let baseUrl ← providerBaseUrl provider
+    let (status, _) ← apiCall "GET" (baseUrl ++ "/models") key "" provider
+    if status == 200 then pure (.ok ()) else pure (.error (providerName provider ++ " rejected the API key (HTTP " ++ toString status ++ ")."))
+  catch _ => pure (.error (providerName provider ++ " key verification could not reach the provider."))
 
 def jsonStringField? (json : Json) (key : String) : Option String :=
   ((json.getObjVal? key).bind Json.getStr?).toOption
@@ -79,6 +102,30 @@ def listedModels (key : String) : IO (Except String (List String)) := do
     let some data := jsonArrayField? json "data" | return .error "OpenAI model discovery omitted its model list."
     return .ok (data.toList.filterMap fun item => jsonStringField? item "id")
   catch _ => pure (.error "OpenAI model discovery could not reach the provider.")
+
+def jsonPath? (json : Json) (path : List String) : Option Json :=
+  path.foldlM (fun value name => (value.getObjVal? name).toOption) json
+
+def listedModelInfos (key provider : String) : IO (Except String (List ModelInfo)) := do
+  try
+    let baseUrl ← providerBaseUrl provider
+    let query := if provider == "anthropic" then "?limit=100" else ""
+    let (status, body) ← apiCall "GET" (baseUrl ++ "/models" ++ query) key "" provider
+    if status != 200 then return .error (providerName provider ++ " model discovery failed (HTTP " ++ toString status ++ ").")
+    let some json := (Json.parse body).toOption | return .error "Provider model discovery returned invalid JSON."
+    let some data := jsonArrayField? json "data" | return .error "Provider model discovery omitted its model list."
+    return .ok (data.toList.filterMap fun item => do
+      let model ← jsonStringField? item "id"
+      guard (jsonStringField? item "lifecycle" != some "retired")
+      let maxOutput := (jsonNatField? item "max_tokens").getD 4096
+      let webSearch := ((jsonPath? item ["capabilities", "server_tools", "web_search", "supported"]).bind
+        (fun value => value.getBool?.toOption)).getD false
+      pure { id := if provider == "anthropic" then "anthropic:" ++ model else model
+           , model, provider, label := (jsonStringField? item "display_name").getD model
+           , maxOutputTokens := min 20000 (if maxOutput > 0 then maxOutput else 4096)
+           , contextWindowTokens := (jsonNatField? item "max_input_tokens").getD 0
+           , webSearch })
+  catch _ => pure (.error (providerName provider ++ " model discovery could not reach the provider."))
 
 def responseText? (json : Json) : Option String :=
   jsonStringField? json "output_text" |>.orElse fun _ => do
@@ -244,27 +291,156 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
       pure (.error ("OpenAI workspace-agent failed before a response was received; " ++
         toString completedSteps ++ " of at most 16 tool steps completed."))
 
+def anthropicErrorDetail (status : Nat) (body : String) : String :=
+  let error := (Json.parse body).toOption.bind fun json => (json.getObjVal? "error").toOption
+  let errorType := error.bind (jsonStringField? · "type")
+  let knownType := errorType.filter (["invalid_request_error", "authentication_error", "billing_error",
+    "permission_error", "not_found_error", "rate_limit_error", "api_error", "overloaded_error"].contains ·)
+  let message := (error.bind (jsonStringField? · "message")).getD "" |>.toLower
+  let diagnosis := if message.contains "credit balance is too low" then
+      "Anthropic credit balance is too low; review Claude Console billing."
+    else if message.contains "spend limit" then "Anthropic account or workspace spend limit reached."
+    else match knownType with
+      | some "billing_error" => "Anthropic billing or payment restriction; review Claude Console billing."
+      | some "rate_limit_error" => "Anthropic rate limit reached; wait before sending another request."
+      | some "authentication_error" => "Anthropic rejected this key; update the Anthropic credential."
+      | some "overloaded_error" => "Anthropic is temporarily overloaded."
+      | _ => "Anthropic rejected the request; inspect its HTTP status and error type."
+  "Anthropic request failed (HTTP " ++ toString status ++
+    (knownType.map ("; type=" ++ ·)).getD "" ++ "). " ++ diagnosis ++
+    " No automatic paid retry was attempted."
+
+def anthropicUsage (json : Json) : Completion :=
+  let usage := (json.getObjVal? "usage").toOption
+  let count := fun name => (usage.bind (jsonNatField? · name)).getD 0
+  let cached := count "cache_read_input_tokens"
+  let input := count "input_tokens" + count "cache_creation_input_tokens" + cached
+  let output := count "output_tokens"
+  { text := "", inputTokens := input, cachedInputTokens := cached, outputTokens := output, totalTokens := input + output }
+
+def anthropicFailure? (json : Json) : Option String :=
+  match jsonStringField? json "stop_reason" with
+  | some "end_turn" | some "stop_sequence" | some "tool_use" | some "pause_turn" => none
+  | some "max_tokens" | some "model_context_window_exceeded" =>
+      some "anthropic_output_limit: The model response hit its output or context token limit. Its partial answer and tool calls were not applied; reported usage is retained and no automatic paid retry was attempted. This is not a reported credit exhaustion."
+  | some "refusal" => some "anthropic_refusal: Anthropic declined this request. No automatic paid retry or model substitution was attempted."
+  | _ => some "anthropic_response_not_completed: The provider returned no recognized terminal stop reason. No answer or tool calls were applied."
+
+def anthropicText (json : Json) : String :=
+  String.intercalate "\n" <| ((jsonArrayField? json "content").getD #[]).toList.filterMap fun block =>
+    if jsonStringField? block "type" == some "text" then jsonStringField? block "text" else none
+
+def anthropicCalls (json : Json) : List FunctionCall :=
+  ((jsonArrayField? json "content").getD #[]).toList.filterMap fun block => do
+    guard (jsonStringField? block "type" == some "tool_use")
+    let callId ← jsonStringField? block "id"
+    let name ← jsonStringField? block "name"
+    let input ← (block.getObjVal? "input").toOption
+    guard input.getObj?.toOption.isSome
+    pure { callId, name, arguments := input.compress }
+
+def anthropicTools (webSearch : Bool) : Json :=
+  let tools := ((Json.parse workspaceToolsJson).toOption.bind fun value => value.getArr?.toOption).getD #[]
+  let functions := tools.toList.filterMap fun tool => do
+    guard (jsonStringField? tool "type" == some "function")
+    let name ← jsonStringField? tool "name"
+    let parameters ← (tool.getObjVal? "parameters").toOption
+    pure <| Json.mkObj [("name", toJson name),
+      ("description", toJson ((jsonStringField? tool "description").getD "")), ("input_schema", parameters)]
+  toJson (functions ++ if webSearch then [Json.mkObj [("type", toJson "web_search_20250305"),
+    ("name", toJson "web_search"), ("max_uses", toJson (3 : Nat))]] else [])
+
+partial def completeAnthropicLoop (key baseUrl model instructions : String) (messages : List Json)
+    (maxOutputTokens : Nat) (webSearch : Bool) (runTool : ToolRunner) (cancelled : CancelCheck)
+    (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
+  if ← cancelled then return .error "agent_cancelled"
+  if remaining == 0 then return .ok { usage with failure := some "Anthropic workspace agent exceeded its 16-step limit; no further request was sent." }
+  let payload := (Json.mkObj [("model", toJson model), ("system", toJson instructions),
+    ("max_tokens", toJson maxOutputTokens), ("messages", toJson messages), ("tools", anthropicTools webSearch)]).compress
+  try
+    let (status, body) ← apiCall "POST" (baseUrl ++ "/messages") key payload "anthropic"
+    if ← cancelled then return .error "agent_cancelled"
+    if status < 200 || status ≥ 300 then return .ok { usage with failure := some (anthropicErrorDetail status body) }
+    let some json := (Json.parse body).toOption | return .ok { usage with failure := some "Anthropic returned invalid JSON; no tools or answer were applied." }
+    let nextUsage := addUsage usage (anthropicUsage json)
+    if let some failure := anthropicFailure? json then return .ok { nextUsage with failure := some failure }
+    let content := (jsonArrayField? json "content").getD #[]
+    let assistant := Json.mkObj [("role", toJson "assistant"), ("content", toJson content)]
+    let calls := anthropicCalls json
+    let declaredCalls := content.toList.filter (fun block => jsonStringField? block "type" == some "tool_use")
+    if calls.length != declaredCalls.length || (calls.map (·.callId)).eraseDups.length != calls.length then
+      return .ok { nextUsage with failure := some "Anthropic returned malformed or duplicate tool calls; none were executed and no automatic paid retry was attempted." }
+    if calls.isEmpty then
+      if jsonStringField? json "stop_reason" == some "pause_turn" then
+        return ← completeAnthropicLoop key baseUrl model instructions (messages ++ [assistant])
+          maxOutputTokens webSearch runTool cancelled nextUsage (remaining - 1)
+      if jsonStringField? json "stop_reason" == some "tool_use" then
+        return .ok { nextUsage with failure := some "Anthropic requested tool use without valid client tool calls; no completion was claimed and no automatic paid retry was attempted." }
+      let text := anthropicText json
+      if text.trimAscii.isEmpty then return .ok { nextUsage with failure := some "Anthropic returned no answer text or valid workspace tools; no automatic paid retry was attempted." }
+      return .ok { nextUsage with text }
+    if jsonStringField? json "stop_reason" != some "tool_use" then
+      return .ok { nextUsage with failure := some "Anthropic returned tool calls without a tool_use stop reason; they were not executed." }
+    let mut results : List Json := []
+    for call in calls do
+      if ← cancelled then return .error "agent_cancelled"
+      let result ← runTool call.name call.arguments
+      if result.startsWith "FATAL: repeated_failed_tool_call:" then
+        return .ok { nextUsage with failure := some "The Anthropic agent repeated an identical failed workspace operation. LeanFM stopped before another paid request." }
+      results := results ++ [Json.mkObj [("type", toJson "tool_result"), ("tool_use_id", toJson call.callId),
+        ("content", toJson result), ("is_error", toJson (result.startsWith "ERROR:"))]]
+    completeAnthropicLoop key baseUrl model instructions
+      (messages ++ [assistant, Json.mkObj [("role", toJson "user"), ("content", toJson results)]])
+      maxOutputTokens webSearch runTool cancelled nextUsage (remaining - 1)
+  catch error =>
+    let timeout := error.toString.contains "provider_timeout:"
+    return .ok { usage with failure := some (if timeout then
+      "Anthropic request timed out; the paid request was not retried automatically and earlier completed workspace actions remain."
+      else "Anthropic transport failed; the paid request was not retried automatically and earlier completed workspace actions remain.") }
+
 def completeAgent (key instructions prompt model : String) (runTool : ToolRunner)
-    (cancelled : CancelCheck := pure false) : IO (Except String Completion) := do
-  let baseUrl := (← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1"
+    (cancelled : CancelCheck := pure false) (provider : String := "openai")
+    (maxOutputTokens : Nat := 20000) (webSearch : Bool := false) : IO (Except String Completion) := do
+  let baseUrl ← providerBaseUrl provider
+  if provider == "anthropic" then
+    return ← completeAnthropicLoop key baseUrl model instructions
+      [Json.mkObj [("role", toJson "user"), ("content", toJson prompt)]]
+      maxOutputTokens webSearch runTool cancelled
+      { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
+  if provider != "openai" then return .error "Unsupported model provider; no request was sent."
   completeAgentLoop key baseUrl model instructions prompt "" [] runTool cancelled
     { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
 
-def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key instructions prompt model : String) : IO (Except String Completion) := do
-  let baseUrl := (← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1"
-  let payload := "{\"model\":\"" ++ jsonEscape model ++ "\",\"instructions\":\"" ++ jsonEscape instructions ++ "\",\"input\":\"" ++ jsonEscape prompt ++ "\",\"max_output_tokens\":" ++ toString maxOutputTokens ++ "}"
+def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key instructions prompt model : String)
+    (provider : String := "openai") (cancelled : CancelCheck := pure false) : IO (Except String Completion) := do
+  if ← cancelled then return .error "agent_cancelled"
+  let baseUrl ← providerBaseUrl provider
+  let payload := if provider == "anthropic" then
+    (Json.mkObj [("model", toJson model), ("system", toJson instructions), ("max_tokens", toJson maxOutputTokens),
+      ("messages", toJson [Json.mkObj [("role", toJson "user"), ("content", toJson prompt)]])]).compress
+    else "{\"model\":\"" ++ jsonEscape model ++ "\",\"instructions\":\"" ++ jsonEscape instructions ++ "\",\"input\":\"" ++ jsonEscape prompt ++ "\",\"max_output_tokens\":" ++ toString maxOutputTokens ++ "}"
   try
-    let (status, body) ← apiCallWithTimeout timeoutSeconds "POST" (baseUrl ++ "/responses") key payload
-    if status < 200 || status ≥ 300 then return .error (apiErrorDetail status body)
-    let some json := (Json.parse body).toOption | return .error "OpenAI returned invalid response JSON."
+    let endpoint := if provider == "anthropic" then "/messages" else "/responses"
+    let (status, body) ← apiCallWithTimeout timeoutSeconds "POST" (baseUrl ++ endpoint) key payload provider
+    if ← cancelled then return .error "agent_cancelled"
+    if status < 200 || status ≥ 300 then
+      return .error (if provider == "anthropic" then anthropicErrorDetail status body else apiErrorDetail status body)
+    let some json := (Json.parse body).toOption | return .error (providerName provider ++ " returned invalid response JSON.")
+    if provider == "anthropic" then
+      if let some failure := anthropicFailure? json then return .error failure
+      if !( ["end_turn", "stop_sequence"].contains ((jsonStringField? json "stop_reason").getD "")) then
+        return .error "Anthropic repair did not finish; no partial repair was applied."
+      let text := anthropicText json
+      if text.trimAscii.isEmpty then return .error "Anthropic returned no repair text."
+      return .ok { anthropicUsage json with text }
     if let some failure := responseFailure? json then return .error failure
     match completionFromJson? json with
     | none => pure (.error "OpenAI returned an invalid response or no output text.")
     | some completion => pure (.ok completion)
   catch error =>
     if error.toString.contains "provider_timeout:" then
-      pure (.error ("OpenAI repair request timed out after " ++ toString timeoutSeconds ++ " seconds."))
-    else pure (.error "OpenAI request failed before a response was received.")
+      pure (.error (providerName provider ++ " repair request timed out after " ++ toString timeoutSeconds ++ " seconds."))
+    else pure (.error (providerName provider ++ " request failed before a response was received."))
 
 def completeWithInstructions (key instructions prompt : String) : IO (Except String Completion) := do
   let model := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"

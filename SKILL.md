@@ -52,9 +52,18 @@ Copying the project root must yield a directory ready to initialize or use as a
 repository with Codex; it must not require project-owned state from LeanFM's
 installation.
 
+Published HTTP conversions are observable interoperability requirements, not
+implementation choices. Keep methods, paths, encodings, headers, status
+alternatives, authentication, correlation and framing in Requirements.lean;
+Implementation.lean selects libraries and runtime machinery that realize them
+and must not override the accepted wire contract. A changed released conversion
+requires a requirements revision and compatibility evidence. Existing
+implementation-owned bindings still need migration; see CRITIQUE.md.
+
 When generating an HTTP adapter, derive OpenAPI from the resolved protobuf
-request/response pairs and implementation transports. An explicit transport
-mapping wins. For an otherwise ordinary default mapping, use path or query
+request/response pairs and accepted requirements-owned HTTP contract. A default
+mapping is a proposal for requirements acceptance, not permission to change a
+released interface. For an otherwise ordinary default mapping, use path or query
 parameters only for explicitly bounded URL-safe scalar selectors; use POST with
 the protobuf request body for bytes, repeated or nested values, secrets, large
 or unbounded strings, or parameters that do not naturally belong in a URL.

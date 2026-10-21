@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local deterministic OpenAI-shaped stub for LeanFM ChatUI conformance tests."""
+"""Local deterministic provider protocols; never contacts a real provider."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -9,23 +9,58 @@ from threading import Lock
 
 class Handler(BaseHTTPRequestHandler):
     request_count = 0
+    stats = {"openai_models": 0, "anthropic_models": 0, "anthropic_requests": 0,
+             "wrong_headers": 0, "invalid_messages": 0}
     count_lock = Lock()
+
+    def _increment(self, name):
+        with self.count_lock:
+            Handler.stats[name] += 1
+
     def _authorized(self):
-        return self.headers.get("Authorization") in {"Bearer test-user-key", "Bearer second-user-key"}
+        if self.headers.get("x-api-key") or self.headers.get("anthropic-version"):
+            self._increment("wrong_headers")
+            return False
+        return self.headers.get("Authorization") in {"Bearer test-user-key", "Bearer second-user-key",
+                                                      "Bearer rotated-openai-key"}
+
+    def _anthropic_authorized(self):
+        if self.headers.get("Authorization") or self.headers.get("anthropic-version") != "2023-06-01":
+            self._increment("wrong_headers")
+            return False
+        return self.headers.get("x-api-key") in {"anthropic-user-key", "anthropic-second-key",
+                                                "anthropic-rotated-key"}
+
+    def _json(self, status, body):
+        payload = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
     def do_GET(self):
         if self.path == "/test/requests" and self._authorized():
             with self.count_lock:
-                payload = json.dumps({"requests": Handler.request_count}).encode()
+                payload = json.dumps({"requests": Handler.request_count, **Handler.stats}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(payload)
         elif self.path == "/v1/models" and self._authorized():
+            self._increment("openai_models")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(b'{"object":"list","data":[{"id":"test-model"},{"id":"test-model-fast"},{"id":"text-embedding-test"},{"id":"gpt-test-audio"}]}')
+        elif self.path.split("?", 1)[0] == "/anthropic/v1/models" and self._anthropic_authorized():
+            self._increment("anthropic_models")
+            self._json(200, {"has_more": False, "data": [
+                {"id": "claude-test", "display_name": "Claude Test", "max_tokens": 16384,
+                 "max_input_tokens": 200000,
+                 "capabilities": {"server_tools": {"web_search": {"supported": True}}}},
+                {"id": "claude-test-fast", "display_name": "Claude Test Fast", "max_tokens": 4096},
+                {"id": "claude-retired", "lifecycle": "retired"}]})
         else:
             self.send_response(401)
             self.end_headers()
@@ -33,6 +68,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
         raw_request = self.rfile.read(length)
+        if self.path == "/anthropic/v1/messages" and self._anthropic_authorized():
+            self._increment("anthropic_requests")
+            return self._anthropic_message(json.loads(raw_request or b"{}"))
         if self.path == "/v1/responses" and self._authorized():
             with self.count_lock:
                 Handler.request_count += 1
@@ -121,6 +159,10 @@ class Handler(BaseHTTPRequestHandler):
                     "output_text": "selected model: " + request.get("model", "missing"),
                     "usage": usage,
                 }
+            elif marker == "TEST_PROVIDER_ROUTE":
+                body = {"output_text": "OpenAI credential " + (
+                    "alice" if self.headers.get("Authorization") == "Bearer test-user-key" else "bob") +
+                    " model " + request.get("model", "missing"), "usage": usage}
             elif "You repair exactly one failing line" in request_text and "TEST_REPEAT_BOOK" in request_text:
                 edit = {"line_number": 4, "replacement": "Still broken: C & D. TEST_REPEAT_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
@@ -224,6 +266,69 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_response(401)
             self.end_headers()
+
+    def _anthropic_message(self, request):
+        messages = request.get("messages", [])
+        text = str(messages[0].get("content", "")) if messages else ""
+        marker = text.rsplit("Current user message:\n", 1)[-1].split(" ", 1)[0].split("\n", 1)[0]
+        system = request.get("system", "")
+        repair = "You repair exactly one failing line" in system
+        if (request.get("model") not in {"claude-test", "claude-test-fast"}
+                or "input" in request or "previous_response_id" in request
+                or request.get("max_tokens", 0) > (16384 if request.get("model") == "claude-test" else 4096)
+                or (not repair and not request.get("tools"))):
+            self._increment("invalid_messages")
+            return self._json(400, {"error": {"type": "invalid_request_error", "message": "Invalid Messages protocol"}})
+        usage = {"input_tokens": 7, "cache_creation_input_tokens": 2,
+                 "cache_read_input_tokens": 3, "output_tokens": 5}
+        stop = "end_turn"
+        text_block = lambda value: {"type": "text", "text": value}
+        content = [text_block("Anthropic credential " + (
+            "alice" if self.headers.get("x-api-key") == "anthropic-user-key" else "bob") +
+            " model " + request.get("model", "missing"))]
+        if marker == "TEST_ANTHROPIC_BILLING":
+            return self._json(402, {"error": {"type": "billing_error",
+                                             "message": "HIDDEN_ANTHROPIC_BODY"}})
+        if marker == "TEST_ANTHROPIC_PAUSE":
+            if len(messages) == 1:
+                stop, content = "pause_turn", [text_block("Working on server tools.")]
+            else:
+                assert messages[-1] == {"role": "assistant", "content": [text_block("Working on server tools.")]}
+                content = [text_block("Completed paused turn.")]
+        if marker == "TEST_ANTHROPIC_UNFINISHED":
+            stop, content = "tool_use", [text_block("Not a completed answer.")]
+        if marker in {"TEST_ANTHROPIC_TOOL", "TEST_ANTHROPIC_INCOMPLETE", "TEST_ANTHROPIC_CANCEL", "TEST_ANTHROPIC_DUPLICATE"}:
+            if len(messages) == 1:
+                if marker == "TEST_ANTHROPIC_CANCEL":
+                    time.sleep(2)
+                stop = "max_tokens" if marker == "TEST_ANTHROPIC_INCOMPLETE" else "tool_use"
+                path = "spec/anthropic-note.txt" if marker == "TEST_ANTHROPIC_TOOL" else "spec/must-not-exist.txt"
+                content = [{"type": "tool_use", "id": "native-write", "name": "workspace_write",
+                            "input": {"path": path, "content": "Native Anthropic workspace note.\n"}}]
+                if marker == "TEST_ANTHROPIC_DUPLICATE":
+                    content = content * 2
+            else:
+                # Tool results must refer to the exact native assistant tool ID.
+                valid = (len(messages) == 3 and messages[1]["role"] == "assistant"
+                         and messages[1]["content"][0]["id"] == "native-write"
+                         and messages[2]["role"] == "user"
+                         and messages[2]["content"][0]["type"] == "tool_result"
+                         and messages[2]["content"][0]["tool_use_id"] == "native-write"
+                         and messages[2]["content"][0]["is_error"] is False)
+                if not valid:
+                    self._increment("invalid_messages")
+                    return self._json(400, {"error": {"type": "invalid_request_error"}})
+                content = [text_block("Saved spec/anthropic-note.txt through the native tool protocol.")]
+        if marker == "TEST_ANTHROPIC_BOOK":
+            content = [text_block(json.dumps({"reply": "Updated the book through Anthropic.",
+                "book_source": "\\documentclass{article}\n\\begin{document}\nAnthropic durable book.\n\\end{document}\n"}))]
+        if marker == "TEST_ANTHROPIC_REPAIR" and not repair:
+            content = [text_block(json.dumps({"reply": "Repair this book through the selected provider.",
+                "book_source": "\\documentclass{article}\n\\usepackage{underscore}\n\\begin{document}\nBroken A & B.\n\\end{document}\n"}))]
+        if repair:
+            content = [text_block(json.dumps({"line_number": 4, "replacement": "Repaired A \\& B."}))]
+        self._json(200, {"id": "anthropic-response", "type": "message", "role": "assistant",
+                         "content": content, "model": request["model"], "stop_reason": stop, "usage": usage})
 
     def log_message(self, *_):
         pass

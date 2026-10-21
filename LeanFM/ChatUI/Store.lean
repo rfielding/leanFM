@@ -1,6 +1,7 @@
 import LeanFM.ChatUI.Requirements
 import Lean.Data.Json
 import Init.System.Uri
+import Std.Sync.Mutex
 
 namespace LeanFM.ChatUI.Store
 
@@ -57,7 +58,7 @@ def formValue? (body key : String) : Option String :=
     | _ => none
 
 def headerValue? (request header : String) : Option String :=
-  (request.splitOn "\r\n").findSome? fun line =>
+  (((request.splitOn "\r\n\r\n").headD "").splitOn "\r\n").findSome? fun line =>
     match line.splitOn ":" with
     | name :: values => if name.toLower == header.toLower then some (String.intercalate ":" values).trimAscii.toString else none
     | _ => none
@@ -155,6 +156,15 @@ structure UnlockedSession where
   credentials : List UnlockedCredential := []
 
 initialize unlockedSessions : IO.Ref (List UnlockedSession) ← IO.mkRef []
+
+-- Serialize credential read/modify/write and login snapshots. Otherwise two
+-- simultaneous provider updates can silently discard one another, or a login
+-- can publish a session with keys read immediately before a rotation.
+initialize credentialLock : Std.BaseMutex ← Std.BaseMutex.new
+
+private def withCredentialLock (action : IO α) : IO α := do
+  credentialLock.lock
+  try action finally credentialLock.unlock
 
 def encryptCredential (username password apiKey : String) : IO String :=
   runCrypto "encrypt" ("{\"username\":\"" ++ jsonEscape username ++ "\",\"password_b64\":\"" ++
@@ -277,7 +287,7 @@ def unlockCredentialPairs (username password : String) : IO (List (String × Str
   if !supportedProvider provider then throw (IO.userError "unsupported stored credential provider")
   return [(provider, ← unlockCredential username password)]
 
-def updateCredentialBundle (username password : String) (additions : List (String × String)) : IO (Except String Unit) := do
+private def updateCredentialBundleUnlocked (username password : String) (additions : List (String × String)) : IO (Except String Unit) := do
   let root ← accountRoot username
   let record ← readOr (root ++ "/password.json") ""
   if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
@@ -285,12 +295,17 @@ def updateCredentialBundle (username password : String) (additions : List (Strin
   try
     let existing ← unlockCredentialPairs username password
     let replaced := additions.map Prod.fst
-    saveCredentialBundle username password (existing.filter (fun pair => !replaced.contains pair.1) ++ additions)
+    -- Revoke before promotion, including when obsolete-file cleanup fails after
+    -- a successful promotion. A failed update may sign out, never retain old keys.
     unlockedSessions.modify (List.filter (·.username != username))
+    saveCredentialBundle username password (existing.filter (fun pair => !replaced.contains pair.1) ++ additions)
     return .ok ()
   catch _ => return .error "The encrypted key bundle could not be updated or its obsolete credential files could not be removed."
 
-def createAccount (username password provider apiKey : String)
+def updateCredentialBundle (username password : String) (additions : List (String × String)) : IO (Except String Unit) :=
+  withCredentialLock (updateCredentialBundleUnlocked username password additions)
+
+private def createAccountUnlocked (username password provider apiKey : String)
     (additionalKeys : List (String × String) := []) : IO (Except String String) := do
   if !safeId username then return .error "Username must contain only letters, digits, '-' or '_'."
   if password.length < 8 then return .error "Password must contain at least 8 characters."
@@ -309,7 +324,11 @@ def createAccount (username password provider apiKey : String)
   else saveCredentialBundle username password ((provider, apiKey) :: additionalKeys)
   pure (.ok "default")
 
-def login (username password : String) : IO (Except String String) := do
+def createAccount (username password provider apiKey : String)
+    (additionalKeys : List (String × String) := []) : IO (Except String String) :=
+  withCredentialLock (createAccountUnlocked username password provider apiKey additionalKeys)
+
+private def loginUnlocked (username password : String) : IO (Except String String) := do
   if !safeId username then return .error "Invalid username or password."
   let root ← accountRoot username
   let record ← readOr (root ++ "/password.json") ""
@@ -332,6 +351,9 @@ def login (username password : String) : IO (Except String String) := do
     , expiresAt := now + 8 * 60 * 60 * 1000 } ::
       ((sessions.filter (fun session => session.expiresAt > now)).take 255)
   pure (.ok token)
+
+def login (username password : String) : IO (Except String String) :=
+  withCredentialLock (loginUnlocked username password)
 
 def userForSession? (token : String) : IO (Option String) := do
   if token.length != 64 || !token.toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then return none

@@ -44,6 +44,12 @@ trace, or modeled prediction.
 
 ## Grammar-to-code and validation claims remain incomplete
 
+Compatibility follow-up (2026-10-21): move published HTTP bindings from
+Implementation into Requirements, then enforce realization against that wire
+contract. Methods, paths, codecs, headers, status alternatives, authentication,
+correlation and framing affect interoperability; implementation cannot override
+them. Current transport validation does not establish this guarantee.
+
 The proposed `scenario`/`declare`/`from_`/`to_`/`emit`/`receive` DSL,
 exports, `refineMessage`, role projection, `WireTerm`, and `composeRoles` are
 absent from `RequirementSpec`, `TaskRequirement`, and `GrammarExpr`; guards are

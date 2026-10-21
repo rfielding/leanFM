@@ -31,7 +31,7 @@ def errorAction (status : Nat) : String :=
 def errorResponse (status : Nat) (message : String) : HttpResponse :=
   let localBudget := message.contains "local session token safety budget is exhausted"
   let action := if localBudget then
-    "Review provider billing and usage before unlocking another local session. This local token safety limit does not report your OpenAI credit balance."
+    "Review provider billing and usage before unlocking another local session. This local token safety limit does not report any provider credit balance."
     else errorAction status
   let code := if localBudget then "leanfm_session_token_budget_exhausted"
     else "leanfm_http_" ++ toString status
@@ -47,7 +47,7 @@ def sessionUser? (request : String) : IO (Option String) := do
   | none => pure none
   | some token => userForSession? token
 
-def credentialKey (username request : String) : IO (Except String String) := do
+def credentialKey (username request : String) (provider : String := "openai") : IO (Except String String) := do
   match cookieValue? request "leanfm_session" with
   | none => pure (.error "Password login is required to unlock the API key.")
   | some token =>
@@ -56,18 +56,24 @@ def credentialKey (username request : String) : IO (Except String String) := do
       | some billing =>
           if billing.tokensUsed >= billing.tokenBudget then
             pure (.error "The local session token safety budget is exhausted. Log in again only after reviewing the provider project's dollar spend limit and usage.")
-          else match ← sessionCredential? token username with
-            | none => pure (.error "Password login is required to unlock the API key.")
+          else match ← sessionCredential? token username provider with
+            | none => pure (.error ("No unlocked " ++ Provider.providerName provider ++ " key is available. Open API keys and unlock that provider with your account password."))
             | some key => pure (.ok key)
 
 def validModelId (model : String) : Bool :=
   !model.isEmpty && model.length ≤ 128 && model.toList.all fun c => c.isAlphanum || c == '-' || c == '_' || c == '.' || c == ':'
 
-initialize discoveredModels : IO.Ref (Option (List String)) ← IO.mkRef none
+structure ModelSnapshot where
+  cacheKey : String
+  models : List Provider.ModelInfo
+  warning : String := ""
+
+initialize discoveredModels : IO.Ref (List ModelSnapshot) ← IO.mkRef []
 
 def responseModelCandidate (model : String) : Bool :=
   let lower := model.toLower
   validModelId model &&
+    !model.startsWith "anthropic:" &&
     !(model.startsWith "ft:") &&
     !["embedding", "moderation", "whisper", "transcribe", "tts", "realtime", "audio", "image", "dall-e", "search"].any
       (fun fragment => lower.contains fragment)
@@ -75,25 +81,37 @@ def responseModelCandidate (model : String) : Bool :=
 def uniqueModels (models : List String) : List String :=
   models.foldl (fun found model => if found.contains model then found else found ++ [model]) []
 
-def configuredModels (key : Option String := none) : IO (List String) := do
-  let fallback := (← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini"
-  match ← IO.getEnv "LEANFM_LLM_MODELS" with
-  | some configured =>
-      let models := configured.splitOn "," |>.map (·.trimAscii.toString) |>.filter validModelId
-      pure (uniqueModels (fallback :: models))
-  | none =>
-      match ← discoveredModels.get with
-      | some models => pure models
-      | none =>
-          let discovered ← match key with
-            | none => pure []
-            | some providerKey =>
-                match ← Provider.listedModels providerKey with
-                | .ok models => pure (models.filter responseModelCandidate)
-                | .error _ => pure []
-          let models := uniqueModels (fallback :: discovered) |>.take 40
-          if !discovered.isEmpty then discoveredModels.set (some models)
-          pure models
+def providerModelSnapshot (credential : UnlockedCredential) : IO ModelSnapshot := do
+  let cacheKey := credential.provider ++ ":" ++ credential.fingerprint
+  if let some snapshot := (← discoveredModels.get).find? (·.cacheKey == cacheKey) then return snapshot
+  let discovered ← Provider.listedModelInfos credential.apiKey credential.provider
+  let (available, warning) : List Provider.ModelInfo × String := match discovered with
+    | .ok models => (models.filter (fun model =>
+        if credential.provider == "openai" then responseModelCandidate model.model else validModelId model.model), "")
+    | .error message => ([], message)
+  let configured ← IO.getEnv (if credential.provider == "openai" then "LEANFM_LLM_MODELS" else "LEANFM_ANTHROPIC_MODELS")
+  let preferred ← if credential.provider == "openai" then
+      pure ((← IO.getEnv "LEANFM_LLM_MODEL").getD "gpt-5-mini")
+    else pure ((← IO.getEnv "LEANFM_ANTHROPIC_MODEL").getD "")
+  let declared : List String := match configured with
+    | some value => value.splitOn "," |>.map (fun (name : String) => name.trimAscii.toString) |>.filter validModelId
+    | none => available.map (·.model)
+  let names := uniqueModels ((if preferred.isEmpty then [] else [preferred]) ++ declared)
+  let models : List Provider.ModelInfo := (names.filterMap fun model => do
+    guard (validModelId model && !model.startsWith "anthropic:")
+    pure ((available.find? (·.model == model)).getD
+      { id := if credential.provider == "anthropic" then "anthropic:" ++ model else model
+      , model, provider := credential.provider, label := model })) |>.take 80
+  let snapshot := { cacheKey, models, warning : ModelSnapshot }
+  discoveredModels.modify (fun snapshots => snapshot :: snapshots.take 255)
+  return snapshot
+
+def configuredModelOptions (credentials : List UnlockedCredential) : IO (List Provider.ModelInfo) := do
+  let mut models := []
+  for provider in ["openai", "anthropic"] do
+    if let some credential := credentials.find? (·.provider == provider) then
+      models := models ++ (← providerModelSnapshot credential).models
+  return models
 
 def billingJson (username request : String) : IO String := do
   match cookieValue? request "leanfm_session" with
@@ -102,15 +120,26 @@ def billingJson (username request : String) : IO String := do
       match ← sessionBilling? token username with
       | none => pure "null"
       | some billing =>
-          let key ← sessionCredential? token username
-          let models ← configuredModels key
-          let model := models.headD "gpt-5-mini"
-          let modelJson := "[" ++ String.intercalate "," (models.map fun value => "\"" ++ jsonEscape value ++ "\"") ++ "]"
+          let credentials ← sessionCredentials token username
+          let models ← configuredModelOptions credentials
+          let model := models.head?.map (·.id) |>.getD ""
+          let metadata := models.map fun info =>
+            let credential := credentials.find? (·.provider == info.provider)
+            Lean.Json.mkObj [("id", Lean.toJson info.id), ("model", Lean.toJson info.model),
+              ("label", Lean.toJson info.label), ("provider", Lean.toJson info.provider),
+              ("credential_ref", Lean.toJson ((credential.map (·.credentialRef)).getD "")),
+              ("key_fingerprint", Lean.toJson ((credential.map (·.fingerprint)).getD "")),
+              ("context_window_tokens", Lean.toJson info.contextWindowTokens)]
+          let warnings := (← discoveredModels.get).filterMap fun snapshot =>
+            if !snapshot.warning.isEmpty && credentials.any (fun credential =>
+                snapshot.cacheKey == credential.provider ++ ":" ++ credential.fingerprint) then some snapshot.warning else none
           let remaining := billing.tokenBudget - billing.tokensUsed
           pure ("{\"provider\":\"" ++ jsonEscape billing.provider ++
             "\",\"credential_ref\":\"" ++ jsonEscape billing.credentialRef ++
             "\",\"key_fingerprint\":\"" ++ jsonEscape billing.credentialFingerprint ++
-            "\",\"model\":\"" ++ jsonEscape model ++ "\",\"models\":" ++ modelJson ++
+            "\",\"model\":\"" ++ jsonEscape model ++ "\",\"models\":" ++ (Lean.toJson (models.map (·.id))).compress ++
+            ",\"model_details\":" ++ (Lean.toJson metadata).compress ++
+            ",\"model_warnings\":" ++ (Lean.toJson warnings).compress ++
             ",\"tokens_used\":" ++ toString billing.tokensUsed ++
             ",\"token_budget\":" ++ toString billing.tokenBudget ++
             ",\"tokens_remaining\":" ++ toString remaining ++ "}")
@@ -731,13 +760,14 @@ def replaceBookLine? (candidate : String) (lineNumber : Nat) (replacement : Stri
   guard (lineNumber ≤ lines.length)
   pure (String.intercalate "\n" (lines.set (lineNumber - 1) replacement))
 
-def repairBookEdit (key candidate diagnostic model : String) : IO (Except String (String × Provider.Completion)) := do
+def repairBookEdit (key candidate diagnostic model : String) (provider : String := "openai")
+    (cancelled : Provider.CancelCheck := pure false) : IO (Except String (String × Provider.Completion)) := do
   let some lineNumber := diagnosticLineNumber? diagnostic
     | return .error "The compiler did not identify a source line, so no safe bounded line repair was possible."
   let instructions := "You repair exactly one failing line in the supplied numbered neighborhood of a pdfLaTeX document. The compiler's terminal line may follow the actual malformed construct. Return ONLY JSON with numeric line_number and string replacement. Preserve meaning. Never return the full document. Escape LaTeX prose characters such as &, %, _, #, and $ when they are literal."
   let prompt := "Repair the compiler failure using the numbered excerpt. Return only {\"line_number\":N,\"replacement\":\"complete replacement for that one line\"}.\n\nCompiler diagnostic:\n" ++
     truncateText diagnostic 3000 ++ "\n\nNumbered excerpt:\n" ++ numberedBookExcerpt candidate lineNumber
-  match ← Provider.completeWithInstructionsTimeout (← bookRepairTimeoutSeconds) 2000 key instructions prompt model with
+  match ← Provider.completeWithInstructionsTimeout (← bookRepairTimeoutSeconds) 2000 key instructions prompt model provider cancelled with
   | .error message => return .error message
   | .ok completion =>
       let some json := (Lean.Json.parse completion.text.trimAscii.toString).toOption
@@ -761,7 +791,9 @@ structure AppliedChatResult where
   notice : Option String
 
 def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
-    (trace : IO.Ref (List String)) : IO AppliedChatResult := do
+    (trace : IO.Ref (List String)) (provider : String := "openai")
+    (cancelled : Provider.CancelCheck := pure false) : IO AppliedChatResult := do
+  if ← cancelled then return AppliedChatResult.mk "The turn stopped before a book update because its session ended or cancellation was requested." answer false (some "No book revision was applied.")
   if let some failure := answer.failure then
     appendProjectDiagnostic root "provider_response_failure" failure
     appendLiveTrace root trace failure
@@ -827,7 +859,7 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
               latestDiagnostic := deterministicDiagnostic
       | none => pure ()
       for index in List.range 3 do
-        if ← chatCancellationRequested root then
+        if (← chatCancellationRequested root) || (← cancelled) then
           writeAtomic path previous
           appendLiveTrace root trace "Cancelled automatic book repair; restored the previous book"
           return AppliedChatResult.mk edit.reply combined false
@@ -842,7 +874,7 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
         appendLiveTrace root trace ("Started automatic book repair " ++ toString attempt ++ " of 3")
         writeChatStatus root "book-repair" (buildErrorSummary latestDiagnostic ++
           " Requesting bounded automatic repair " ++ toString attempt ++ " of 3.") attempt
-        match ← repairBookEdit key candidate latestDiagnostic model with
+        match ← repairBookEdit key candidate latestDiagnostic model provider cancelled with
         | .error repairError =>
             latestRepairError := some repairError
             appendLiveTrace root trace ("Automatic book repair " ++ toString attempt ++ " failed: " ++ repairError)
@@ -942,7 +974,7 @@ def referencedFigureContext (root prompt : String) : IO String := do
   if references.isEmpty then pure "" else
     pure ("Resolved figure backreferences:\n\n" ++ String.intercalate "\n\n" references.reverse)
 
-def conversationJson (root : String) : IO String := do
+def conversationJson (root : String) (models : List Provider.ModelInfo := []) : IO String := do
   let body ← readOr (root ++ "/conversations/main.log") ""
   let contextWindow := (← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS").getD "128000"
   let mut messages : List String := []
@@ -953,6 +985,8 @@ def conversationJson (root : String) : IO String := do
     | [messageId, role, encoded, input, cached, output, total, responseTimeMs, sentAtMs, model] =>
         try
           let text ← base64Decode encoded
+          let modelContext := (models.find? (·.id == model)).map (·.contextWindowTokens) |>.getD 0
+          let contextWindow := if modelContext > 0 then toString modelContext else contextWindow
           let usage := if role == "assistant" then
               ",\"usage\":{\"input_tokens\":" ++ input ++ ",\"cached_input_tokens\":" ++ cached ++
               ",\"output_tokens\":" ++ output ++ ",\"total_tokens\":" ++ total ++ ",\"context_window_tokens\":" ++
@@ -1113,6 +1147,28 @@ def saveMermaidArtifacts (root responseText : String) : IO (List String) := do
         figureNumber := figureNumber + 1
   pure labels.reverse
 
+def submittedProviderKeys (body : String) : Except String (List (String × String)) := do
+  let provider := (formValue? body "provider").getD "openai"
+  if !supportedProvider provider then throw "Choose OpenAI or Anthropic."
+  let legacy := (formValue? body "api_key").getD "" |>.trimAscii.toString
+  let mut pairs := []
+  for name in ["openai", "anthropic"] do
+    let supplied := (formValue? body (name ++ "_api_key")).getD "" |>.trimAscii.toString
+    if !supplied.isEmpty && provider == name && !legacy.isEmpty && supplied != legacy then
+      throw "Two different keys were supplied for the same provider."
+    let key := if !supplied.isEmpty then supplied else if provider == name then legacy else ""
+    if !key.isEmpty then pairs := pairs ++ [(name, key)]
+  if !pairs.isEmpty && !validCredentialPairs pairs then
+    throw "Provider keys must contain at most 4096 visible ASCII characters."
+  return pairs
+
+def verifySubmittedKeys (pairs : List (String × String)) : IO (Except String Unit) := do
+  for (provider, key) in pairs do
+    match ← Provider.verifyKey key provider with
+    | .error message => return .error message
+    | .ok _ => pure ()
+  return .ok ()
+
 def handlePublic (path method request : String) : IO (Option HttpResponse) := do
   if path == "/" && method == "GET" then
     return some (HttpResponse.mk 200 "text/html; charset=utf-8" Web.reactPage ["Cache-Control: no-store"])
@@ -1126,13 +1182,13 @@ def handlePublic (path method request : String) : IO (Option HttpResponse) := do
     let body := requestBody request
     let username := (formValue? body "username").getD ""
     let password := (formValue? body "password").getD ""
-    let provider := (formValue? body "provider").getD "openai"
-    let apiKey := (formValue? body "api_key").getD ""
-    if provider != "openai" then return some (errorResponse 400 "Only the OpenAI provider is currently supported.")
-    match ← Provider.verifyKey apiKey with
+    if !safeId username || password.length < 8 then return some (errorResponse 400 "Supply a valid username and a password of at least 8 characters.")
+    let .ok pairs := submittedProviderKeys body | return some (errorResponse 400 "Supply valid OpenAI and/or Anthropic keys.")
+    let (provider, apiKey) :: additionalKeys := pairs | return some (errorResponse 400 "At least one provider API key is required.")
+    match ← verifySubmittedKeys pairs with
     | .error message => return some (errorResponse 403 message)
     | .ok _ =>
-        match ← createAccount username password provider apiKey with
+        match ← createAccount username password provider apiKey additionalKeys with
         | .error message => return some (errorResponse 400 message)
         | .ok _ =>
             match ← login username password with
@@ -1143,6 +1199,18 @@ def handlePublic (path method request : String) : IO (Option HttpResponse) := do
     let body := requestBody request
     let username := (formValue? body "username").getD ""
     let password := (formValue? body "password").getD ""
+    let .ok additions := submittedProviderKeys body | return some (errorResponse 400 "Supply valid OpenAI and/or Anthropic keys.")
+    if !additions.isEmpty then
+      if !safeId username then return some (errorResponse 403 "Invalid username or password.")
+      let record ← readOr ((← accountRoot username) ++ "/password.json") ""
+      if record.isEmpty || !(← verifyPassword password record) then
+        return some (errorResponse 403 "Invalid username or password.")
+      match ← verifySubmittedKeys additions with
+      | .error message => return some (errorResponse 403 message)
+      | .ok _ => pure ()
+      match ← updateCredentialBundle username password additions with
+      | .error message => return some (errorResponse 403 message)
+      | .ok _ => pure ()
     match ← login username password with
     | .error message => return some (errorResponse 403 message)
     | .ok token => return some (jsonResponse 200 ("{\"username\":\"" ++ jsonEscape username ++ "\"}\n")
@@ -1188,7 +1256,9 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
             | .error message => return some (errorResponse 400 message)
             | .ok _ => return some (jsonResponse 200 ("{\"deleted_project_id\":\"" ++ jsonEscape projectId ++ "\"}\n"))
           match rest, method with
-          | ["conversation"], "GET" => return some (jsonResponse 200 (← conversationJson root))
+          | ["conversation"], "GET" =>
+              let credentials ← sessionCredentials ((cookieValue? request "leanfm_session").getD "") username
+              return some (jsonResponse 200 (← conversationJson root (← configuredModelOptions credentials)))
           | ["conversation", "messages", messageId], "DELETE" =>
               if ← deleteConversationMessage root messageId then
                 return some (jsonResponse 200 ("{\"deleted_message_id\":\"" ++ jsonEscape messageId ++ "\"}\n"))
@@ -1292,12 +1362,17 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               let prompt := (formValue? (requestBody request) "prompt").getD ""
               if prompt.trimAscii.isEmpty then return some (errorResponse 400 "A prompt is required.")
               let responseStarted ← IO.monoMsNow
-              match ← credentialKey username request with
+              let token := (cookieValue? request "leanfm_session").getD ""
+              let credentials ← sessionCredentials token username
+              let models ← configuredModelOptions credentials
+              let selectedModel := (formValue? (requestBody request) "model").getD (models.head?.map (·.id) |>.getD "")
+              if selectedModel.startsWith "anthropic:" && !(credentials.any (·.provider == "anthropic")) then
+                return some (errorResponse 409 "No unlocked Anthropic key is available. Open API keys and unlock it with your account password.")
+              let some modelInfo := models.find? (·.id == selectedModel)
+                | return some (errorResponse 400 "The selected model is not in this server-start model snapshot.")
+              match ← credentialKey username request modelInfo.provider with
               | .error message => return some (errorResponse 409 message)
               | .ok key =>
-                  let models ← configuredModels (some key)
-                  let selectedModel := (formValue? (requestBody request) "model").getD (models.headD "gpt-5-mini")
-                  if !models.contains selectedModel then return some (errorResponse 400 "The selected model is not in this server-start model snapshot.")
                   clearChatCancellation root
                   writeChatStatus root "model" ("Waiting for " ++ selectedModel ++ " to respond.")
                   writeLiveTrace root []
@@ -1344,8 +1419,12 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                     if result.startsWith "ERROR:" then failedToolCalls.modify (fingerprint :: ·)
                     writeChatStatus root "model" ("Workspace tool " ++ name ++ " completed; waiting for " ++ selectedModel ++ ".")
                     pure result
-                  match ← Provider.completeAgent key (workspaceAgentInstructions root) contextualPrompt selectedModel runner
-                      (cancelled := chatCancellationRequested root) with
+                  let cancelled : Provider.CancelCheck := do
+                    if ← chatCancellationRequested root then return true
+                    return !(← sessionActive? token username)
+                  match ← Provider.completeAgent key (workspaceAgentInstructions root) contextualPrompt modelInfo.model runner
+                      (cancelled := cancelled) (provider := modelInfo.provider)
+                      (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) with
                   | .error "agent_cancelled" =>
                       clearChatCancellation root
                       writeChatStatus root "cancelled" "Agent turn cancelled at a safe boundary."
@@ -1376,8 +1455,9 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         let noRepeatTool : Provider.ToolRunner := fun name _ => do
                           appendLiveTrace root trace ("Blocked workspace tool " ++ name ++ " during bounded missing-artifact response repair to prevent replaying completed operations")
                           pure ("FATAL: repeated_failed_tool_call:" ++ name)
-                        match ← Provider.completeAgent key (workspaceAgentInstructions root) recoveryPrompt selectedModel noRepeatTool
-                            (cancelled := chatCancellationRequested root) with
+                        match ← Provider.completeAgent key (workspaceAgentInstructions root) recoveryPrompt modelInfo.model noRepeatTool
+                            (cancelled := cancelled) (provider := modelInfo.provider)
+                            (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) with
                         | .error recoveryError =>
                             appendLiveTrace root trace ("Missing-artifact recovery did not complete: " ++ recoveryError)
                         | .ok recovered =>
@@ -1401,7 +1481,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         (looksLikeBookEnvelope answer.text && (bookChatEdit? answer.text).isNone)
                       let applied ← if !invalidAnswer && (projectId == "leanfm-workspace" || projectId == "go-server") then
                           pure (AppliedChatResult.mk (bookVisibleText answer.text) answer false none)
-                        else applyBookChatEdit key root selectedModel answer trace
+                        else applyBookChatEdit key root modelInfo.model answer trace modelInfo.provider cancelled
                       clearChatCancellation root
                       answer := applied.completion
                       match cookieValue? request "leanfm_session" with
@@ -1486,8 +1566,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let responseFinished ← IO.monoMsNow
                       let responseTimeMs := responseFinished - responseStarted
                       appendConversation root "assistant" responseText (some answer) responseTimeMs selectedModel
-                      let context := (← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS").getD "128000"
-                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"model\":\"" ++ jsonEscape selectedModel ++ "\",\"book_updated\":" ++ (if applied.bookUpdated then "true" else "false") ++ ",\"usage\":{\"input_tokens\":" ++
+                      let fallbackContext ← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS"
+                      let context := if modelInfo.contextWindowTokens > 0 then toString modelInfo.contextWindowTokens
+                        else fallbackContext.getD "128000"
+                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"model\":\"" ++ jsonEscape selectedModel ++
+                        "\",\"provider\":\"" ++ jsonEscape modelInfo.provider ++ "\",\"book_updated\":" ++ (if applied.bookUpdated then "true" else "false") ++ ",\"usage\":{\"input_tokens\":" ++
                         toString answer.inputTokens ++ ",\"cached_input_tokens\":" ++ toString answer.cachedInputTokens ++
                         ",\"output_tokens\":" ++ toString answer.outputTokens ++ ",\"total_tokens\":" ++ toString answer.totalTokens ++
                         ",\"context_window_tokens\":" ++ context ++ "},\"response_time_ms\":" ++ toString responseTimeMs ++ "}\n"))

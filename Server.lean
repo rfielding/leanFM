@@ -1,6 +1,8 @@
 import LeanFM
 import LeanFM.ChatUI.Server
+import LeanFM.ChatUI.HttpRequest
 import Std.Internal.Async.TCP
+import Std.Internal.Async.Timer
 
 open Std
 open Std.Net
@@ -493,6 +495,9 @@ def statusText : Nat -> String
   | 416 => "Range Not Satisfiable"
   | 422 => "Unprocessable Content"
   | 405 => "Method Not Allowed"
+  | 408 => "Request Timeout"
+  | 417 => "Expectation Failed"
+  | 431 => "Request Header Fields Too Large"
   | 500 => "Internal Server Error"
   | 502 => "Bad Gateway"
   | 503 => "Service Unavailable"
@@ -507,12 +512,41 @@ def httpHeader (status : Nat) (contentType : String) (body : ByteArray) (extraHe
   (String.join (extraHeaders.map fun h => h ++ "\r\n")) ++
   "Connection: close\r\n\r\n"
 
+def readRequest (client : TcpClient) : IO (Except LeanFM.ChatUI.HttpRequest.FrameError String) := do
+  let deadline := (← IO.monoMsNow) + 15000
+  let mut bytes := ByteArray.empty
+  repeat
+    match LeanFM.ChatUI.HttpRequest.frameLength? bytes with
+    | .error failure => return .error failure
+    | .ok (some expected) =>
+        if bytes.size == expected then
+          return match String.fromUTF8? bytes with
+            | some text => .ok text
+            | none => .error (400, "HTTP request is not valid UTF-8.")
+    | .ok none => pure ()
+    let now ← IO.monoMsNow
+    if now >= deadline then return .error (408, "HTTP request did not complete within 15 seconds.")
+    let received ← (do
+      let timer ← Std.Internal.IO.Async.Selector.sleep (Std.Time.Millisecond.Offset.ofNat (deadline - now))
+      Std.Internal.IO.Async.Selectable.one #[
+        .case (client.recvSelector 65536) (fun chunk => pure (some chunk)),
+        .case timer (fun _ => pure none)]).block
+    match received with
+    | none => return .error (408, "HTTP request did not complete within 15 seconds.")
+    | some none => return .error (400, "HTTP request ended before its complete frame arrived.")
+    | some (some chunk) =>
+        if chunk.isEmpty then return .error (400, "HTTP request ended before its complete frame arrived.")
+        bytes := bytes ++ chunk
+  return .error (400, "Incomplete HTTP request.")
+
 def handleClient (client : TcpClient) : IO Unit := do
-  let requestBytes? ← (client.recv? 1048576).block
-  let request :=
-    match requestBytes? with
-    | some bytes => String.fromUTF8! bytes
-    | none => ""
+  let request ← match ← readRequest client with
+    | .ok request => pure request
+    | .error (status, detail) =>
+        let res := response status "application/json; charset=utf-8"
+          ("{\"error\":\"" ++ jsonEscape detail ++ "\",\"code\":\"leanfm_http_frame_invalid\"}\n")
+        (client.sendAll #[(httpHeader res.status res.contentType res.body res.headers).toUTF8, res.body]).block
+        return
   let requestId := (LeanFM.ChatUI.Store.headerValue? request "X-LeanFM-Request-ID").getD "unassigned"
   let res ← try
       responseForRequest request

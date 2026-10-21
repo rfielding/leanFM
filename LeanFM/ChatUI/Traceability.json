@@ -2,6 +2,34 @@
   "requirement": "leanfm.chatui",
   "mappings": [
     {
+      "references": ["property:http_dispatch_requires_complete_frame"],
+      "sources": ["Server.lean", "LeanFM/ChatUI/HttpRequest.lean"],
+      "tests": ["LeanFM/ChatUI/HttpRequestTests.lean", "scripts/chatui_multi_provider_test.py"]
+    },
+    {
+      "references": [
+        "property:one_password_unlocks_all_provider_keys",
+        "property:selected_model_determines_provider_credential",
+        "property:provider_protocols_preserve_workspace_controls",
+        "property:stored_provider_keys_are_encrypted",
+        "property:model_key_is_request_scoped"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Store.lean",
+        "LeanFM/ChatUI/Provider.lean",
+        "LeanFM/ChatUI/Server.lean",
+        "ui/src/main.tsx",
+        "ui/src/types.ts"
+      ],
+      "tests": [
+        "LeanFM/ChatUI/CredentialTests.lean",
+        "LeanFM/ChatUI/ProviderTests.lean",
+        "scripts/chatui_multi_provider_test.py",
+        "scripts/chatui_crypto_test.py",
+        "scripts/chatui_http_check.sh"
+      ]
+    },
+    {
       "references": [
         "property:provider_outcomes_are_distinguishable",
         "property:book_envelopes_never_leak_into_chat",

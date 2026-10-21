@@ -32,7 +32,11 @@ cleanup() {
   fi
   if [[ -n "${server_pid:-}" ]]; then kill "$server_pid" 2>/dev/null || true; fi
   if [[ -n "${provider_pid:-}" ]]; then kill "$provider_pid" 2>/dev/null || true; fi
-  rm -rf -- "$test_root"
+  if [[ $status -eq 0 ]]; then
+    rm -rf -- "$test_root"
+  else
+    echo "Failure evidence retained at $test_root" >&2
+  fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -57,6 +61,7 @@ provider_pid=$!
 # continue to inspect the same canonical temporary directory.
 LEANFM_DATA_ROOT="$data_root_setting" \
 LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
+LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" \
 LEANFM_LLM_MODEL="test-model" \
 LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 \
 LEANFM_PORT="$server_port" \
@@ -72,7 +77,7 @@ root_html="$(curl -fsS $base_url/)"
 rg -q '<div id="root"></div>' <<<"$root_html"
 rg -q '/assets/chatui-react1.js' <<<"$root_html"
 react_bundle="$(curl -fsS $base_url/assets/chatui-react1.js)"
-rg -Fq 'Sign in to unlock your encrypted OpenAI API key.' <<<"$react_bundle"
+rg -Fq 'Sign in to unlock your encrypted provider API keys.' <<<"$react_bundle"
 rg -q 'Create account' <<<"$react_bundle"
 rg -q 'Project book' <<<"$react_bundle"
 rg -q 'Project memory' <<<"$react_bundle"
@@ -116,6 +121,7 @@ register() {
 
 register rfielding "$cookie_a" test-user-key
 register second_user "$cookie_b" second-user-key
+python3 scripts/chatui_multi_provider_test.py "$base_url" "$test_root/data"
 
 me_json="$(curl -fsS -b "$cookie_a" $base_url/api/me)"
 rg -q '"provider":"openai"' <<<"$me_json"
@@ -388,7 +394,7 @@ test -f "$test_root/data/accounts/rfielding/credentials/default.json"
 test "$(stat -c %a "$test_root/data/accounts/rfielding/credentials/default.json")" = 600
 kill "$server_pid"
 wait "$server_pid" || true
-LEANFM_DATA_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
+LEANFM_DATA_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 for _ in $(seq 1 50); do
@@ -396,6 +402,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
+python3 scripts/chatui_multi_provider_test.py "$base_url" "$test_root/data" --after-restart
 echo 'ok: encrypted credentials, account isolation, migration and restart invalidation'
 
 # Requirement: large generated text changes preserve a checked canonical file and recover incrementally.
