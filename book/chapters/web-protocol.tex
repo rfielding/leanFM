@@ -197,19 +197,14 @@ order or replacing nested messages with opaque bytes.
 
 \input{generated/web-protocol-schema.tex}
 
-The envelope backpointers are semantically significant. \texttt{prior\_ids}
-contains immutable predecessor event identifiers. A derived
-\texttt{map[Event][]Event} successor index may accelerate traversal, but it is
-not serialized as mutable truth. \texttt{session\_id} separates users and
-concurrent conversations; \texttt{task\_id} selects the grammar; and
-\texttt{src}/\texttt{dst} must agree with the selected message schema.
-The optional \texttt{cause\_id} field is a separate causal relation. For an HTTP
-response event it obligatorily names the corresponding request event.
-That HTTP rule is one use of a general field: roots, nonterminal messages,
-nested task boundaries, and terminal events may all name a direct cause. The
-acyclic causal subtree supplies nested boxes to interaction renderers.
-\texttt{prior\_ids} continues to mean predecessor order only; causal nesting
-does not choose an interleaving among concurrent children.
+Envelope metadata remain distinct. \texttt{prior\_ids} stores immutable
+predecessor links; any \texttt{map[Event][]Event} successor index is derived,
+not serialized as mutable truth. \texttt{session\_id} separates concurrent
+conversations, \texttt{task\_id} selects the grammar, and
+\texttt{src}/\texttt{dst} must match the message schema. As defined above,
+\texttt{cause\_id} is a separate acyclic direct-cause relation usable by roots,
+intermediate messages, nested task boundaries, and terminals. Its tree groups
+renderer boxes without ordering concurrent children.
 
 \section{Complete LeanFM task grammar}
 
