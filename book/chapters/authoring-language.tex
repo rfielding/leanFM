@@ -586,8 +586,7 @@ dependencies must be added for a complete deployment analysis.
   \item[Parallel replicas provide failover.] Proxy and web actors are duplicated
     in parallel within their series stages. Database shards run as parallel data
     partitions with separately calculated availability gates; each shard is
-    itself replicated in parallel. A shard's quorum threshold determines how
-    many of its replicas must communicate for writes. ``Parallel shards'' does
+    itself replicated in parallel. ``Parallel shards'' does
     not mean one shard can serve another shard's missing data.
     An additional usable alternative can improve
     a pool's availability. Shared failure domains and increased quorum thresholds
@@ -621,8 +620,6 @@ but does not supply the application's quorum or consistency protocol.
     unavailable merely because a metadata update cannot proceed.
 \end{description}
 
-In this profile, one failed member preserves a shard's two-of-three quorum;
-two failures in the target shard remove it, even if every other shard is healthy.
 A multi-shard operation depends on every shard its semantics require, so
 availability is operation-specific, not a total replica count.
 
@@ -726,13 +723,13 @@ uptime $p$, the quorum's assumed uptime would be
 
 This independent-marginal baseline excludes correlated shutdowns.
 
-Stopping \texttt{kv-1} leaves two voters and preserves quorum; stopping
-\texttt{kv-2} next leaves \texttt{kv-3} alive but makes the quorum and dependent
-web service unavailable. One live database process is not a live service: a
-communicating majority must satisfy the service gate. Planned shutdowns, shared
+Stopping \texttt{kv-1} leaves two voters; stopping \texttt{kv-2} next leaves only
+\texttt{kv-3} in that shard, below quorum, and makes the dependent web service
+unavailable even if other shards remain healthy. Planned shutdowns, shared
 power, network partitions and common automation therefore belong in named joint
-scenarios, not independent uptime factors. Adding stateless web instances cannot
-restore the failed database quorum and may only accumulate waiting requests.
+scenarios, not independent uptime factors. Adding stateless web instances
+cannot restore the failed database quorum and may only accumulate waiting
+requests.
 
 Work waiting on an instance inferred unavailable remains stalled, is rejected,
 or ends in an explicit timeout/cancellation outcome according to the requirement.
