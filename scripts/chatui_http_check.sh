@@ -72,6 +72,8 @@ rg -q '/api/client-errors' <<<"$react_bundle"
 rg -q 'reportedDiagnosticFingerprints' ui/src/api.ts
 rg -q 'Copy reference' <<<"$react_bundle"
 rg -q 'Copying an image reference to the clipboard' <<<"$react_bundle"
+rg -Fq 'default text foregrounds to white or near-white over dark canvas drawing backgrounds and black or near-black over light canvas drawing backgrounds' LeanFM/ChatUI/Server.lean
+rg -Fq 'preserve a text color only when the user specifically requests it' LeanFM/ChatUI/Server.lean
 rg -q 'Qualify this decision or provide a better answer' <<<"$react_bundle"
 rg -q 'No predefined option selected' <<<"$react_bundle"
 rg -q 'Qualification:' <<<"$react_bundle"

@@ -622,18 +622,14 @@ dependencies must be added for a complete deployment analysis.
     interchangeable failover copies; replication protects each partition.
 \end{description}
 
-The purpose of modelling a Kubernetes-like runtime is to determine what stops,
-for whom, and for how long when actors fail or lose capacity. Replica counts
-alone do not answer that question. The model combines timestamped protocol
-observations, uptime and MTTR estimates, operation-specific dependency gates,
-and the placement of instances in shared failure domains.
+The model asks what stops, for whom, and for how long; replica counts alone do
+not answer it. It combines timestamped protocol observations and uptime/MTTR
+estimates with operation-specific dependency gates and shared failure domains.
 
-The standard runtime profile has a redundant ingress/reverse-proxy pool,
-round-robin stateless web actors serving React and API requests, and a sharded
-document service. A shard router selects the owner of each document; each
-owner is a replicated group rather than one interchangeable database process.
-Ingress, routers, metadata services, storage, and network connectivity are
-dependencies in their own right. Kubernetes restarts and schedules actors; it
+The illustrative profile has redundant ingress and routing pools, round-robin
+stateless React/API actors, and a sharded document service whose router selects
+a replicated owner group. Ingress, routers, metadata, storage, and network are
+dependencies in their own right. Kubernetes schedules and restarts actors but
 does not supply the application's quorum or consistency protocol.
 
 \begin{description}

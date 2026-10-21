@@ -470,6 +470,10 @@ prose before placing its canvas and self-contained script in an isolated frame.
 The frame has no network access, cannot navigate the parent, and may load no
 external library or image.  Stop and Restart controls outside the frame allow
 the stakeholder to halt an expensive or confusing animation.
+Unless the user specifically requests a text color, canvas labels, legends, and
+annotations use a contrasting foreground: light text on dark drawn backgrounds
+and dark text on light drawn backgrounds.  Choose from the canvas drawing's
+actual background rather than the surrounding page theme.
 
 There is one bounded repair for a common provider formatting error.  If the
 model literally writes ``fenced leanfm-canvas'' and immediately follows it with
