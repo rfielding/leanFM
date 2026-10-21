@@ -738,17 +738,13 @@ means. The end boundary is restored operation readiness or the declared latency
 target, not merely receipt of the first heartbeat. Open incidents at the end of
 the window remain censored observations, not zero-duration repairs.
 
-A prediction from uptime and MTTR therefore also declares a failure/repair
-process, correlated failure domains, placement, workload and recovery policy.
-Independent-marginal estimates provide a baseline only. Rack loss, zone loss,
-network partition, operator shutdown and common deployment errors require named
-joint scenarios. Place assumed and observed values beside the standard outputs
-above, adding affected operations, request exposure, deadline outcomes, and
-recovery sequence. Existing
-\texttt{DesiredOutput} entries for composed availability and failure cascades
-provide the provenance boundary; additional calibrated forecasts require their
-own sources and reducers. This subsection defines the analysis contract, not a
-claim that a general Kubernetes deployment or forecast engine is implemented.
+Forecasts also require a declared failure/repair process, correlated domains,
+placement, workload and recovery policy. Keep assumptions separate from
+observations in the standard outputs above, adding affected operations, request
+exposure, deadline outcomes and recovery sequence. Existing
+\texttt{DesiredOutput} entries establish provenance; additional calibrated
+forecasts need their own sources and reducers. This is an analysis contract, not
+a claim that a general Kubernetes deployment or forecast engine is implemented.
 
 The generated artifact
 \texttt{paxos-quorum-shutdown-network.svg} gives a concrete majority-service
