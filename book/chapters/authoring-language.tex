@@ -550,11 +550,10 @@ unavailable write path are distinct outcomes. This makes questions such as
 answerable without pretending that all outages are independent. Minimal cut
 sets identify the smallest initiating sets that disable each operation.
 
-The standard reliability output therefore includes per-instance uptime,
-series/parallel/threshold service uptime, a time-aligned outage chart, and a
-dependency graph overlaid with each observed or proposed failure cascade.
-Named service-down scenarios should be replayable even when they have not yet
-occurred in production; such a replay is a model prediction and must be labeled
+The standard reliability output includes per-instance and
+series/parallel/threshold service uptime, a time-aligned outage chart, and the
+dependency graph overlaid with observed or proposed cascades. Named service-down
+scenarios remain replayable when unobserved and must be labeled predictions,
 separately from measured uptime.
 
 \paragraph{Calculate impact before estimating its frequency.}
@@ -592,13 +591,13 @@ means. The end boundary is restored operation readiness or the declared latency
 target, not merely receipt of the first heartbeat. Open incidents at the end of
 the window remain censored observations, not zero-duration repairs.
 
-Forecasts also require a declared failure/repair process, correlated domains,
-placement, workload and recovery policy. Keep assumptions separate from
-observations in the standard outputs above, adding affected operations, request
-exposure, deadline outcomes and recovery sequence. Existing
-\texttt{DesiredOutput} entries establish provenance; additional calibrated
-forecasts need their own sources and reducers. This is an analysis contract, not
-a claim that a general Kubernetes deployment or forecast engine is implemented.
+Calibrated forecasts require a declared failure/repair process, correlated
+domains, placement, workload and recovery policy. Keep those assumptions
+separate from observations; report affected operations, request exposure,
+deadline outcomes and recovery sequence, with a source and reducer for each
+forecast. Existing \texttt{DesiredOutput} entries establish provenance. This is
+an analysis contract, not a claim that a general Kubernetes deployment or
+forecast engine is implemented.
 
 The generated artifact
 \texttt{paxos-quorum-shutdown-network.svg} gives a concrete majority-service
