@@ -155,17 +155,16 @@ censored-interval, joint-outage, and outage-boundary policies lack reducer tests
 
 ## Probability and statistical evidence need explicit assumptions
 
-Rational probability fields lack an evidence type, conflating empirical
-frequencies, assumptions, unresolved nondeterminism, policy, and epistemic
-uncertainty. The seeded 81,039-line bakery corpus tests reducers on synthetic
-data only; its summaries lack confidence intervals, sensitivity/stationarity
-checks, and a censored-task policy.
+Rational probabilities lack an evidence-kind tag, conflating empirical
+frequencies, assumed distributions, unresolved nondeterminism, policies, and
+epistemic uncertainty. The seeded 81,039-line bakery corpus is synthetic; its
+reducer summaries lack confidence intervals, sensitivity/stationarity checks,
+and censored-task treatment.
 
-`StreamStats` computes client-weighted and server-window work rates and tests
-USL curves for supplied parameters, but does not fit parameters or uncertainty.
-Completed, explicitly paired samples can bias estimates when work is omitted,
-unfinished, or failed. Declare warm-up, client think-time, and population-change
-policies.
+`StreamStats` computes client-weighted/server-window rates and evaluates supplied
+USL parameters, but fits neither parameters nor fit uncertainty. Its completed,
+paired-only observations can bias estimates when omitted, in-flight, or failed
+work is excluded. Declare warm-up, think-time, and population-change policies.
 
 ## Security knowledge is not yet a complete epistemic model
 
