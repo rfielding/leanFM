@@ -787,9 +787,10 @@ be server $r$'s offered share:
  \lambda_{o,r}=\frac{\lambda_o}{R}\ \text{only under ideal balance}.
 \]}
 
-Under ideal balance, nominal demand is $D/R$. Choose using observed instance
-loads and effective supply as well: each server adds provisioned hardware cost
-and, while healthy, service cost. Compare both with total hourly cost.
+Under ideal balance, nominal demand is $D/R$; verify observed instance loads
+and effective supply because routing can skew them. Each replica adds
+provisioned hardware cost and, while healthy, service cost; compare their total
+hourly cost with the optimizer's result.
 
 \textbf{Executable code and finite-model tests:} \texttt{optimalSupply?} in
 \texttt{LeanFM/Artifacts.lean} searches replica counts $1$ through
@@ -798,15 +799,15 @@ selects the least expected hourly cost. \texttt{LeanFM/ArtifactsTests.lean}
 checks one feasible optimum and one infeasible demand. This bounded function does
 not compute observed routing imbalance, latency, or workload-window results; the
 full supply-planning XY output above remains a target, not generated evidence.
-Routing determines whether $D/R$ is realized: shard hashing can create a hot
-shard despite aggregate spare capacity, while sticky routing and round-robin
-make different balance assumptions. Product replication, reserved pricing,
-autoscaling delay, and nonlinear tiers require explicit constraints.
+Shard hashing can create a hot shard despite aggregate spare capacity; sticky
+routing and round-robin make different balance assumptions. Product
+replication, reserved pricing, autoscaling delay, and nonlinear tiers require
+explicit constraints.
 
-Reuse the observation window and completion boundary above, adding hourly cost and
-per-server utilization or imbalance to the report. Count only demand completed
-within the declared outcome and latency boundary; unbounded supply, backlog, cost
-or latency does not guarantee finite-deadline service.
+Reuse the observation window and completion boundary above, adding hourly cost
+and per-server utilization or imbalance. Count only demand completed within the
+declared outcome and latency boundary; unbounded supply, backlog, cost, or
+latency does not guarantee finite-deadline service.
 
 \section{Specified dwell time}
 
