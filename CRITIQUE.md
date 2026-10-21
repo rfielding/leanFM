@@ -118,33 +118,28 @@ point events), active work (paired starts/completions), and feasible scheduling
 
 ## Runtime queue, population, reliability, and memory models remain limited
 
-Blocking send-on-full and receive-on-empty cover basic bounded-channel behavior,
-but not multiple blocked senders/receivers and wake order, `select`, cancellation,
-deadlines, fairness/starvation, queue/state-transition atomicity, scheduler
-semantics, or duplicate ownership of bytes across inbound/outbound queues.
-Closed-channel behavior is named in `ImplementationSpec`, but this checkout has
-no executable `BoundedMailbox` implementation.
+A finite FIFO models blocking send-on-full and receive-on-empty, but not waiter
+sets or wake order, `select`, cancellation, deadlines, fairness, scheduler
+semantics, queue/state-transition atomicity, or duplicate byte ownership.
+`ImplementationSpec` names closed-channel `BoundedMailbox` operations, but no
+executable mailbox exists; these semantics therefore do not establish Go-channel
+behavior.
 
-Consequently, queue-capacity and memory-pressure conclusions apply to the
-modeled channel semantics, not automatically to an implementation using Go
-channels.
+The model expands finite instance IDs and validates one resource contract per
+actor specification, inherited by its instances. It omits dynamic lifecycle,
+discovery, load balancing, and migration; the concrete 20-client/2-server sample
+does not establish behavior at other scales.
 
-Checks expand finite names from reusable actor specifications and apply one
-resource contract per instance, but omit dynamic creation/removal, discovery,
-load balancing, and migration. Results for 20 clients and 2 servers do not
-generalize to other population sizes.
+`queue.pressure` integrates queue length in messages, not bytes. Even payload-byte
+sums omit envelopes, allocator and queue storage, decoder state, retained and
+transport buffers, actor state, duplicated payloads, and blocked tasks. A memory
+budget must define wire bytes, owned heap, resident memory, or another reproducible
+accounting model.
 
-The current `queue.pressure` reducer counts messages, not bytes. Summing encoded
-payload lengths would still be only a lower bound: envelopes, allocator and
-queue storage, protobuf decoder state, retained and transport buffers, actor
-state, duplicated payloads, and blocked goroutines or tasks also consume memory.
-Any byte budget must specify wire bytes, owned heap, resident memory, or a
-reproducible accounting model.
-
-`Characterization.lean` names uptime, MTTR, composed-availability, and cascade
-reducers; tests only check their names. Executable handling and tests for
-duplicate/censored intervals, joint failures, and the book's boundary policies
-remain absent.
+`Characterization.lean` records uptime, MTTR, composed-availability, and cascade
+reducer plans; tests validate plan shape and names, not their calculations. The
+book's policies for censored intervals, joint failures, and outage boundaries
+lack corresponding executable reducer tests.
 
 ## Probability and statistical evidence need explicit assumptions
 
