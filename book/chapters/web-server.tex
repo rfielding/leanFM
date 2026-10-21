@@ -495,13 +495,11 @@ implementation.
 
 \subsection{Screenshot-first documentation}
 
-Once the scenario runner is available, this tour should become substantially
-shorter.  A named scenario will drive the production React DOM with a
-deterministic provider, stop at an exact event prefix, and capture the real
-LeanFM interface.  A small sequence---prompt submitted, MCP initialization in
-flight, tool discovery complete, and Source artifacts visible---can replace
-several pages of instructions.  The prose around each image should say only
-what prompt produced it, what to notice, and which claim it demonstrates.
+When the scenario runner is available, replace this procedural tour with a
+named capture of the production React DOM using a deterministic provider. Stop
+at a declared event prefix, such as prompt submission, MCP initialization,
+tool discovery, or Source artifacts. Each caption should name the prompt, what
+to notice, and the claim demonstrated.
 
 A screenshot is useful evidence only when it is reproducible.  Its manifest
 retains the project and requirements revision, scenario and visible event IDs,
@@ -511,12 +509,10 @@ runs with a disposable account and deterministic data, without a provider key,
 external network or arbitrary target URL.  A missing or stale required capture
 fails the book build instead of silently leaving a blank figure.
 
-This is an editorial rule, not permission to decorate every page.  Prefer one
-real UI example over a wall of procedural text when the screen carries the
-structure.  Keep formal definitions, security boundaries and qualifications in
-text when a screenshot cannot express them.  Until the runner produces those
-artifacts, this section describes the intended replacement and does not claim
-that screenshots already exist.
+Use captures selectively: keep formal definitions, security boundaries and
+qualifications in text when an image cannot express them. Until the runner
+produces these artifacts, this describes the intended replacement, not existing
+screenshots.
 
 \section{Local credentials and visible billing identity}
 
