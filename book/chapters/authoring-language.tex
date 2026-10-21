@@ -884,13 +884,12 @@ shard despite aggregate spare capacity, while sticky routing and round-robin
 make different balance assumptions. Product replication, reserved pricing,
 autoscaling delay, and nonlinear tiers require explicit constraints.
 
-Server count alone is not a scalability result: unbounded offered work paired
-with unbounded servers, backlog, cost, or latency says nothing about service
-within a finite deadline. A capacity claim fixes the observation window and reports
-offered, admitted, completed, rejected, and outstanding work with latency,
-server count, utilization or imbalance, and cost. ``Handled'' means work is
-measured at completion and completed within the declared outcome and latency
-boundary, not merely accepted.
+Unlimited offered work together with unlimited servers, backlog, cost, or
+latency does not establish service within a finite deadline. A capacity claim
+fixes the observation window and reports offered, admitted, completed, rejected,
+and outstanding work; latency; server count; utilization or imbalance; and cost.
+Count work only at completion within the declared outcome and latency boundary,
+not at acceptance.
 
 \section{Specified dwell time}
 
