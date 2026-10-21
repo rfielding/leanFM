@@ -194,13 +194,11 @@ reducers; tests only check their names. Executable handling and tests for
 duplicate/censored intervals, joint failures, and the book's boundary policies
 remain absent.
 
-## The MDP interpretation needs a sharper decision boundary
+## Probability and statistical evidence need explicit assumptions
 
 Metrics still need typed boundaries that distinguish empirical frequencies,
 specified distributions, unresolved nondeterminism, policy choices, and
 epistemic uncertainty; these support different claims and verification methods.
-
-## Statistical claims need uncertainty and sampling assumptions
 
 The reproducible synthetic bakery corpus validates the analysis pipeline, not
 real-world behavior. Its descriptive analysis lacks confidence intervals,
