@@ -66,36 +66,32 @@ trace, or modeled prediction.
 
 ## Grammar-to-wire path and the Paxos example remain incomplete
 
-The three-replica Paxos app has durable storage, a browser UI, recovery tests,
-concurrency, and a real quorum, but does not yet validate the integrated method.
-`LeanFM/PaxosKV/Requirements.proto` declares empty payload messages while
-`internal/protocol/requirements.proto` defines the generic executable
-`Envelope`; the requirement schema is not the source of those bindings.
-Requirements check a `ScenarioEvent.priorIds` quorum DAG, but runtime tracing
-emits only terminal `PutSucceeded`/`ListSucceeded` events. The sink assigns IDs
-and timestamps, and these events name their source, destination, session, and
-task; they have no predecessor links or starts, so they cannot reconstruct
-write, outage/recovery, concurrent-write, or list interactions. Outage atoms are
-mapped to TCP without the full declared outage/recovery protocol. `node.go`
-prepares per slot; protocol tests reject truncated protobuf payloads but do not
-inject partial TCP frames, loss, duplication, delay, or reordering. Metrics omit
-accepted outputs for availability, recovery lag, queue pressure, memory
-headroom, and per-session diagrams.
+The three-replica Paxos app has durable storage, browser UI, recovery/concurrency
+tests and quorum, but lacks end-to-end conformance. Its requirement schema has
+empty payloads; runtime uses a separate generic TCP `Envelope`, not bindings
+generated from it. Requirements define a `ScenarioEvent.priorIds` quorum DAG,
+but runtime `trace.Event` has no predecessors and `node.go` emits only terminal
+`PutSucceeded`/`ListSucceeded`. The sink fills missing IDs/timestamps; events
+identify endpoints, session and task but have no starts, so write, list,
+concurrent-write and outage/recovery traces cannot be reconstructed. The modeled
+outage/recovery lifecycle is not traced, and prepare is slot-scoped. Protocol tests
+round-trip envelopes and reject truncated protobuf, but do not inject partial
+TCP frames, loss, duplication, delay or reordering. `/metrics` exposes request
+outcomes, commit latency and quorum size, not required availability, recovery
+lag, queue pressure, memory headroom or per-session diagrams.
 
-The grammar-to-wire path is not yet checked end to end. `scripts/roundtrip_generated_scenario.py`
-manually constructs one `get_docs` `Scenario`, round-trips it with generated
-Python protobuf, and checks equality and predecessor IDs; it does not generate
-or recognize traces from the grammar. Tests still need every `GrammarExpr`
-constructor and legal/illegal branch (including `possibly`), decoded grammar/FSM
-acceptance, schema evolution, malformed input, duplicate IDs, missing or cyclic
-predecessors, and out-of-order events. The target is
+`scripts/roundtrip_generated_scenario.py` manually builds one `get_docs` scenario
+from `LeanFM/LLMGenerated/Requirements.proto` and checks Python-protobuf equality
+and predecessor IDs; it does not generate or recognize grammar traces. Tests
+still need every `GrammarExpr` constructor and legal/illegal branch (including
+`possibly`), decoded grammar/FSM acceptance, schema evolution, malformed input,
+duplicate IDs, missing/cyclic predecessors and out-of-order events. The target is
 `decode(encode(generate(grammar, choices)))`.
 
-`Requirements.proto` puts event identity, order, correlation, actors, and time in
-protobuf. Decide whether this envelope is interoperable requirements data or an
-implementation choice, then define its evolution compatibility. Decoded bytes
-also need an unambiguous grammar branch: require disjoint terminal byte
-languages or define a selector. Neither boundary nor selector is validated.
+`LeanFM/PaxosKV/Requirements.proto`'s `ScenarioEvent` role (interoperable
+requirement data or implementation choice) and evolution policy are undecided.
+`RequirementEnvelope.oneof atom` selects a message, but branch disjointness is
+unchecked; require disjoint terminal byte languages or explicit branch metadata.
 
 ## Event order, time and concurrency need stronger validation
 
