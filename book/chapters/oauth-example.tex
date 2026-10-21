@@ -507,20 +507,13 @@ For the simplified path with no loss or timeout,
   \qquad
   P(\text{denial callback}) = 0.13.
 \]}
-Read these as: ``the probability of a grant callback equals 0.87 times three
-deterministic factors of one, hence 0.87; the probability of a denial callback
-equals 0.13.''  $P$ denotes probability, and the parenthesized text names the
-event whose probability is measured.
-The factors of one are deterministic enqueue, transport, and server steps. Their
-dwell times still affect the latency distribution even though they do not split
-the probability mass.
+Here $P$ denotes probability; each factor of one is a deterministic enqueue,
+transport, or server step. Dwell affects latency, not probability mass.
 
-With queue scheduling and other unresolved choices included, the complete system
-is therefore a Markov decision process. Probabilistic edges describe inputs or
-measured outcomes; nondeterministic edges describe decisions not assigned a
-distribution, such as which enabled actor is scheduled next. An analysis first
-fixes or quantifies over a scheduling policy and then propagates the user-originated
-mass through the resulting paths.
+Unassigned scheduling choices (such as which enabled actor runs next) are
+nondeterministic, while consent and measured outcomes supply probabilities. The
+composed system is an MDP: analysis fixes or quantifies over a scheduling policy
+before propagating consent mass (see Chapter~\ref{ch:authoring-language}).
 
 For several sessions in flight, the MDP state contains every actor's bounded
 queues and its per-\texttt{(session, task)} residuals. One user's random event can
