@@ -144,12 +144,11 @@ def estimatedCustomerDecision : Scenario :=
     ]
 \end{lstlisting}
 
-Branch agency follows observable terminal bytes: merge overlapping branches
-or add a discriminator (Chapter~\ref{ch:grammar}). Deterministic service
-transitions carry incoming probability mass forward. Requirements may begin with
-\texttt{oneOf}, symbolic weights, or ranges; refinement must resolve these
-claims and preserve every abstractly legal branch, including one assigned zero
-probability by the current implementation.
+Chapter~\ref{ch:grammar} defines branch agency by the first distinguishing
+terminal. Deterministic service transitions carry incoming probability mass
+forward. Requirements may begin with \texttt{oneOf}, symbolic weights, or
+ranges; refinement must resolve these claims and preserve every abstractly legal
+branch, even one assigned zero probability by the current implementation.
 
 \section{Worked MDP: a stochastic user and deterministic server}
 

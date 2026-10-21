@@ -48,8 +48,7 @@ and a content manifest, then check that regeneration leaves no semantic diff.
 
 ## The book's language and maturity claims exceed current implementation
 
-Chapters 5–7 and 11 now reference one evidence-label vocabulary, distinguishing
-proposal from current implementation. Proposed forms (`scenario`, `declare`,
+Proposed forms (`scenario`, `declare`,
 `from_`, `to_`, `emit`, `receive`, exported bindings, `refineMessage`, role
 projection, symbolic encryption, `composeRoles`) still lack executable Lean
 definitions. Current types are `RequirementSpec`,
@@ -205,10 +204,6 @@ Scalability Law fit; the project does not yet estimate USL parameters or report
 fit uncertainty. The formulas also assume an exhaustive observation list.
 Warm-up, unfinished tasks, client think time, changing populations, and omitted
 failed work can materially change the result and need explicit policies.
-
-The bakery chart now labels its measure modeled contribution after ingredients
-and pay, not business profit; costs absent from the event corpus remain outside
-that accounting model.
 
 ## Requirements and implementation are separated structurally, not logically
 
