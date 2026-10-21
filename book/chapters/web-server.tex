@@ -61,21 +61,18 @@ obligation. If it changes none of them, it has not improved the specification.
 \section{The server is a staging environment}
 
 The executable \texttt{lake exe leanfm-server} serves the assistant workbench
-on the loopback interface. Each new project owns one exclusive project-root
-directory. Its editable and rendered book, \texttt{Requirements.lean},
-\texttt{Requirements.proto}, \texttt{Implementation.lean}, source, tests,
-generated views, traces, reports, logs and project-specific caches all remain
-beneath that root. The first two specifications describe observable behavior
-and values that resolve to bytes; they do not imply HTTP. The implementation
-file selects how those bytes travel---for example HTTP method and path, an
-in-process channel, TCP, or another adapter. Validation, rendered views,
-metrics, reports and OpenAPI descriptions are projections of the same model.
+on the loopback interface. Every project owns one exclusive root;
+Section~\ref{sec:one-project-directory} gives the hosted layout and
+Chapter~\ref{ch:bootstrap-contract} the portable contract.
+\texttt{Requirements.lean} specifies observable behavior;
+\texttt{Requirements.proto} fixes byte values, not transport.
+\texttt{Implementation.lean} maps them to HTTP, in-process channels, TCP, or
+another adapter; validation, views, metrics, reports, and OpenAPI project the
+same model.
 
-Chapter~\ref{ch:bootstrap-contract} defines the portable root and ownership
-contract; the Preface explains the project-copy and deletion rationale. Path
-checks accept project-relative or canonical absolute forms only when the
-resolved target remains beneath the selected root; traversal and escaping
-symlinks fail closed.
+The Preface explains the project-copy and deletion rationale. Path checks accept
+project-relative or canonical absolute forms only when the resolved target
+remains beneath the selected root; traversal and escaping symlinks fail closed.
 
 The server may use a language model to propose edits. Compilation and validation
 remain deterministic. The model is not the proof checker, and fluent prose is
@@ -531,6 +528,7 @@ terminate the process only after its queue is closed and drained. Cursor's
 authentication token is never imported into LeanFM's provider-key store.
 
 \section{One project, one directory}
+\label{sec:one-project-directory}
 
 \index{project!directory boundary}
 The portable root and containment rules are in
