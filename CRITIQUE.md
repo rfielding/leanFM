@@ -28,7 +28,7 @@ gate.
 
 ## Book length and consolidation (reviewed 2026-10-20)
 
-The 140-page book remains too long, especially `authoring-language.tex`;
+The 138-page book remains too long, especially `authoring-language.tex`;
 continue chapter-wide consolidation while preserving its preface-to-PR narrative
 and technical qualifications.
 

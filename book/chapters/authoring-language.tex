@@ -873,25 +873,11 @@ predecessors, while the grammar states which sequences and dependencies are lega
 \section{Composing requirements means intersecting constraints}
 
 \index{composition!requirement intersection}
-Scenario composition builds behaviour in familiar language-theoretic ways:
-
-\begin{center}
-\begin{tabular}{@{}lll@{}}
-\toprule
-Operator & Language operation & Purpose \\
-\midrule
-\texttt{then a b} & concatenation & $a$ happens before $b$ \\
-\texttt{oneOf [a,b]} & union & either story is legal \\
-\texttt{together a b} & shuffle/interleaving & independent concurrent stories \\
-\texttt{repeat a} & closure & repeated conversation \\
-\texttt{where\_ p a} & trace filtering & context-sensitive legality \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Combining requirements is subtler. A requirement usually does not add another
-message sequence; it removes histories that violate a concern. Therefore
-\texttt{requireAll} denotes intersection of accepted trace sets.
+Scenario composition reuses the grammar chapter's operations for sequencing,
+alternatives, independent interleavings, repetition, and context-sensitive
+filtering (Chapter~\ref{ch:grammar}). Requirements add a different operation:
+\texttt{requireAll} intersects the generated trace language with independent
+constraints instead of adding message sequences.
 
 \begin{lstlisting}
 def quoteSystem : SystemSpec :=
@@ -908,8 +894,6 @@ def quoteSystem : SystemSpec :=
       ]
 \end{lstlisting}
 
-This distinction prevents an important category error: union and concatenation
-assemble possible stories; intersection layers independent obligations over those
-stories. A system is consistent only if the intersection remains nonempty. When it
-is empty, tooling should return a minimal conflicting set of requirements and the
-shortest available counterexample prefix.
+Consistency requires a nonempty intersection. If it is empty, tooling should
+report a minimal conflicting requirement set and the shortest available
+counterexample prefix.
