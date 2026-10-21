@@ -143,20 +143,19 @@ lack corresponding executable reducer tests.
 
 ## Probability and statistical evidence need explicit assumptions
 
-Metrics still need typed boundaries that distinguish empirical frequencies,
-specified distributions, unresolved nondeterminism, policy choices, and
-epistemic uncertainty; these support different claims and verification methods.
+Probability fields are rational numbers without a typed evidence kind, so
+empirical frequencies, assumed distributions, unresolved nondeterminism, policy
+choices, and epistemic uncertainty remain easy to conflate.
 
-The reproducible synthetic bakery corpus validates the analysis pipeline, not
-real-world behavior. Its descriptive analysis lacks confidence intervals,
+The seeded 81,039-line bakery corpus exercises the reducer pipeline but describes
+synthetic data, not real behavior. Its summaries lack confidence intervals,
 sensitivity/stationarity checks, and treatment of censored in-flight tasks.
 
-The code now emits separate client-experienced and server-aggregate work rates
-by client population. These are observations suitable for a Universal
-Scalability Law fit; the project does not yet estimate USL parameters or report
-fit uncertainty. The formulas also assume an exhaustive observation list.
-Warm-up, unfinished tasks, client think time, changing populations, and omitted
-failed work can materially change the result and need explicit policies.
+`StreamStats` computes client-weighted and server-window work rates, and tests
+USL curves for supplied parameters; it has no parameter-fitting or fit-uncertainty
+estimator. Rates use completed, explicitly paired observations, so omitted,
+unfinished or failed work can bias results. Warm-up, client think time, and
+changing populations also need declared policies.
 
 ## Requirements and implementation are separated structurally, not logically
 
