@@ -648,42 +648,33 @@ implementation.
 
 If the root has no durable problem statement, the first message is
 ``What problem are you trying to solve?'' The system records the answer before
-proposing frameworks or solutions. Later questions identify a concrete
-ambiguity and the requirement, view, proof, implementation choice or gate it
-affects. Each useful turn records a decision, updates a view, asks a blocking
-question, reports validation or advances an acceptance gate.
+proposing frameworks or solutions. Later questions name the ambiguity and the
+requirement, view, proof, implementation choice or gate it affects. Each durable
+decision regenerates both PDF variants and links its explanation and views to
+the relevant specification and evidence revisions.
 
-Each durable decision regenerates both PDF variants and links its explanation
-and generated views to the matching requirements, implementation and evidence
-revisions.
+Chat first determines whether desired claims are identifiable. It asks for
+scenario and task boundaries, terminal-to-start links, actor populations,
+clocks and units, observation windows, resource bounds, failure evidence and
+probability provenance; missing inputs remain indeterminate, not invented.
 
-The conversational interface is not merely a code generator. Its first job is
-to discover whether the desired claims are identifiable. It asks for scenario
-and task boundaries, start-to-end backpointers, concrete actor populations,
-clock and work units, observation windows, queue and memory limits, outage and
-recovery events, and the provenance of probabilities. A missing answer is
-reported as an indeterminate metric rather than replaced by an invented value.
-
-Once those fields are available, one event stream should produce a standard
-characterization. The canonical artifact inventory is
+One event stream should produce the standard characterization. Its canonical
+inventory is
 \texttt{outOfBoxArtifacts} in \texttt{LeanFM/Characterization.lean};
 \texttt{baselineDerivedProperties} records each property's required fields,
-reducer, unit, visualization and boundary. A domain explicitly retains,
-replaces, extends, or marks each applicable property indeterminate.
+reducer, unit, visualization and boundary. A domain retains, replaces, extends
+or marks each applicable property indeterminate.
 
 Specified distributions may drive predictions or generation, but are never
 presented as measurements; event-stream estimators are detailed in
 Chapter~\ref{ch:events}.
 
-Generative similarity closes the loop. Reducers first turn the source stream
-into a named metric vector, including histogram bins as individual exact ratios.
-The generator produces a candidate scenario, serializes it to bytes, decodes it,
-and runs the same reducers. The candidate is accepted only when every required
-metric lies within its declared relative tolerance. Thus ``similar'' means
-measurement-equivalent for the stated characterization, not visually plausible
-or textually similar. Several very different event processes may satisfy the
-same finite metric vector; the grammar, invariants, and byte-level language still
-constrain which candidates are legal.
+For generative similarity, reducers map the source stream to a named metric
+vector, with each histogram bin represented as an exact ratio. A candidate is
+serialized, decoded and reduced identically; it passes only when every required
+metric is within its declared relative tolerance. ``Similar'' therefore means
+equivalent under this finite characterization, not visually or textually
+similar. The grammar, invariants and byte language still constrain legal traces.
 
 \section{The protobuf artifact is part of the requirement}
 
