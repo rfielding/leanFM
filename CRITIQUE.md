@@ -3,10 +3,6 @@
 This document records unresolved gaps where implementation supports less than
 the book claims. A successful build alone does not resolve them.
 
-## Editorial and scope update: 2026-10-13
-
-General knowledge/policy checking and past-logic extensions remain deferred.
-
 ### CTL implementation status and scope
 
 Verified 2026-10-20:
@@ -32,7 +28,7 @@ gate.
 
 ## Book length and consolidation (reviewed 2026-10-20)
 
-The 139-page book still overconcentrates grammar and non-functional material in
+The 140-page book still overconcentrates grammar and non-functional material in
 `authoring-language.tex`; continue consolidating without losing the preface-to-PR
 narrative or technical qualifications.
 
