@@ -157,25 +157,36 @@ estimator. Rates use completed, explicitly paired observations, so omitted,
 unfinished or failed work can bias results. Warm-up, client think time, and
 changing populations also need declared policies.
 
-## Requirements and implementation are separated structurally, not logically
+## Structural validation does not prove intent or generated conformance
 
-Separate requirements/implementation files and actor/message coverage are only
-structural; validation does not prove generated-code conformance.
+Validators check typed structure, actor/message coverage, and known
+justification IDs; they do not establish user intent or generated
+symbol-to-test conformance. Require stable fine-grained IDs, bidirectional
+coverage, behavioral trace tests, and classification of handwritten code as
+requirement-justified or infrastructure. Human review must still catch
+misstated assumptions, trust boundaries, failure alternatives, cost models,
+probability provenance, and observability; generated prose must not invent
+facts. The accepted `custom "unassigned" ""` fallback can conceal a missing
+transport mapping.
 
-HTTP records method/path and associates responses with requests, but validation
-omits endpoint/status/content-type maps, authentication, timeouts and complete
-response alternatives. Headers, streaming, retries, idempotency, connection
-reuse, intermediaries, redirects, cancellation and request/connection
-correlation remain unspecified. Bind each response to its request and test
-conformance against observable traces.
+Generic `TransportSpec` records an HTTP request's method/path or the request
+message named by a response; its validator checks only nonempty method/path and
+that the response target is any known message, not that it is an HTTP request.
+The ChatUI contract now specifies status/content-type/codecs and
+one-to-one event `cause_id` closure, and its implementation mapping describes
+OpenAPI, but validation and tests do not prove every binding against runtime
+handlers. The generic transport mapping has no fields for authentication,
+deadlines, headers, streaming, retries/idempotency, connection reuse,
+intermediaries, redirects, cancellation, or status alternatives, and has no
+binding-level validation for them.
 
-Generation uses the book, specifications and existing code: this reduces
-transcript dependence, not variance. Pin model, prompt, tools and sampling;
-review diffs and test behavior. Justifications do not prove correctness; require
-stable fine-grained IDs, bidirectional coverage and behavioral tests, and
-classify handwritten code as justified or infrastructure. The
-`custom "unassigned" ""` fallback can hide transport gaps and should be rejected
-in production validation.
+Generation from the book, specifications, and existing code reduces transcript
+dependence, not variance. Pin model, prompt, tools, and sampling; review diffs
+and behavior. Characterize-and-synthesize accepts only agreement on its named
+finite metrics; matching latency, throughput, uptime, or histograms does not
+establish agreement on burstiness, tail dependence, predecessor order, rare
+failures, or operational risk. Specify tolerances, sample sizes, seeds, and
+distributional tests.
 
 ## Security knowledge is not yet a complete epistemic model
 
@@ -188,17 +199,3 @@ A list of actors who receive a value is not equivalent to the set of actors who
 can derive it. Any knowledge calculation should state its symbolic algebra and
 trusted boundaries. Computational security claims would require a substantially
 different model.
-
-## Generated specifications need intent and distribution review
-
-Structural validation catches missing actors, duplicate names, malformed fields,
-and some coverage gaps; it cannot determine whether a requirement matches user
-intent. Review assumptions, trust boundaries, failure alternatives, cost models,
-probability provenance, and observability. Generated prose must not invent facts.
-
-Characterize-and-synthesize currently defines similarity by finite reducers such
-as latency percentiles, throughput, uptime, and histogram bins. Different event
-processes can match these while differing in burstiness, tail dependence,
-predecessor order, or rare failures. Passing tolerances establishes agreement
-only on the named reducers, not the joint distribution or operational risk.
-Specify tolerances, sample sizes, random seeds, and distributional tests.
