@@ -3,20 +3,31 @@
 This document records unresolved gaps where implementation supports less than
 the book claims. A successful build alone does not resolve them.
 
-### CTL implementation status and scope
+### CTL implementation and temporal coverage remain bounded
 
 Verified 2026-10-20:
 
-CTL is implemented in `LeanFM/CTL.lean`: `holds` evaluates Boolean, EX/AX,
-EF/AF, EG/AG, EU/AU, and EW/AW formulas. `CTLTests.lean` checks branching,
-vacuity, until/release, and AG/AF duals with `native_decide`; `TaskFSM.holds`
-feeds task-property results to the executable and `/metrics`.
+`LeanFM/CTL.lean` implements `holds` for Boolean, EX/AX, EF/AF, EG/AG, EU/AU,
+and EW/AW. `CTLTests.lean` checks branching, vacuity, until/release, and AG/AF
+duals with `native_decide`; `TaskFSM.holds` feeds task-property results to the
+executable and `/metrics`. The notation `(p AU q)` and `(p EU q)` keeps the
+temporal operator outside its subformulas.
 
 The remaining gap is deriving bounded transition systems with
 witnesses/counterexamples from general grammar/event models. `holds` is not a
 proved-correct model checker, grammar interpreter, or deployed-code refinement
 proof. Its path-local cycle detection can be exponential on shared graphs;
 requirement validation and event-pair reconstruction use quadratic list scans.
+Finite examples are tractable partly because payload domains, queues, tasks,
+and clocks are bounded. Applying their claims to unbounded implementations
+needs an explicit abstraction argument: truncation can hide queue growth,
+retry loops, or timing behavior.
+
+Treating `possibly` as preparedness improves traceability, but the current
+check only proves that some implementation mapping cites the possibility
+proof. It does not prove that the cited handler covers every witness trace or
+that recovery terminates; those require generated conformance traces and
+necessary-eventually obligations.
 
 ### Project-root discoverability and code-generation readiness
 
@@ -247,24 +258,6 @@ A list of actors who receive a value is not equivalent to the set of actors who
 can derive it. Any knowledge calculation should state its symbolic algebra and
 trusted boundaries. Computational security claims would require a substantially
 different model.
-
-## Temporal-logic syntax is clearer than its current coverage
-
-Using `(p AU q)` and `(p EU q)` keeps the temporal operator outside the
-subformula and avoids context-dependent notation. The main limitation is not
-syntax but state-space coverage. The finite examples are tractable partly
-because payload domains, queues, tasks, and clocks are heavily bounded.
-
-Claims proved on those abstractions need an explicit abstraction argument before
-being applied to unbounded implementations. State-space truncation can remove
-the very queue growth, retry loop, or timing behavior a property is intended to
-find.
-
-Treating `possibly` as preparedness improves traceability, but the current check
-only proves that some implementation mapping cites the possibility proof. It
-does not yet prove that the cited handler correctly covers every witness trace or
-that recovery itself terminates. Those require generated conformance traces and
-additional necessary-eventually obligations.
 
 ## Generated specifications need intent and distribution review
 
