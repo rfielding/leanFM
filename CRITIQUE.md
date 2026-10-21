@@ -54,16 +54,15 @@ declarations or a typed AST, linked to source and successful builds.
 
 ## The new visual gallery exposes derivation gaps
 
-The SVG gallery is not derived from event semantics. `interactionSvg` draws flat
-task transitions instead of `(session, scenario)` traces ordered by `priorIds`,
-losing choices/thresholds and rendering `KVReplica -> KVReplica` as a self-loop
-rather than leader/follower lifelines. `stateMachineSvg` ignores transition
-`src`/`dst`; `latencyLineSvg` and `outcomePieSvg` hard-code geometry instead of
-reducing paired events or terminal mass. `/diagrams/` is Git-ignored, so README
-links are not durable. Require typed `DesiredOutput` inputs and input-sensitive
-tests for branches, loops, forks and joins; label each result as a requirement
-schema, example trace, observed trace or modeled prediction. A polished view
-must not become a second specification.
+The SVG gallery is not event-derived: `interactionSvg` plots task transitions
+in list order rather than `(session, scenario)` traces ordered by `priorIds`,
+omitting choices/thresholds and misrendering `KVReplica -> KVReplica` as a
+self-loop rather than leader/follower lifelines. `stateMachineSvg` draws a linear
+chain without applying transition `src`/`dst`; latency and outcome SVGs use fixed
+geometry, not event reducers. `/diagrams/` is Git-ignored, so README links are
+not durable. Require typed `DesiredOutput` inputs, branch/loop/fork/join-sensitive
+tests, and labels distinguishing requirement schema, example trace, observed
+trace, or modeled prediction.
 
 ## Grammar-to-wire path and the Paxos example remain incomplete
 
