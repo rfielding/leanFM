@@ -45,43 +45,41 @@ trace, or modeled prediction.
 
 ## Grammar-to-code and validation claims remain incomplete
 
-The book's proposed `scenario`, `declare`, `from_`, `to_`, `emit`, `receive`,
-exports, `refineMessage`, role projection, symbolic `WireTerm`, and
-`composeRoles` are absent from `RequirementSpec`, `TaskRequirement`, and
-`GrammarExpr`; guards remain strings and event values are not type-bound.
-Validation checks grammar/task/message references, atom endpoints, and
-threshold bounds, but does not compile that DSL, generate or recognize traces,
+The proposed `scenario`/`declare`/`from_`/`to_`/`emit`/`receive` DSL,
+exports, `refineMessage`, role projection, `WireTerm`, and `composeRoles` are
+absent from `RequirementSpec`, `TaskRequirement`, and `GrammarExpr`; guards are
+strings and event values untyped. Validation checks references, atom endpoints,
+and threshold bounds, but does not compile the DSL, generate/recognize traces,
 or project participants.
 
-The three-replica Paxos app lacks end-to-end conformance: its requirement schema
-has empty payloads, runtime uses a separate generic TCP `Envelope`, and the
-requirements' quorum-DAG `ScenarioEvent.priorIds` has no runtime counterpart
-(`trace.Event` has no predecessors). `node.go` emits only terminal
-`PutSucceeded`/`ListSucceeded`; the sink fills missing IDs/timestamps. Events
-identify endpoints, session and task but have no starts, so write, list,
-concurrent-write, and outage/recovery traces cannot be reconstructed. Outage
-recovery is not traced and prepare is slot-scoped. Protocol tests cover envelope
-round trips and truncated protobuf, not partial TCP frames, loss, duplication,
-delay, or reordering. `/metrics` exposes request outcomes, commit latency, and
-quorum size, but lacks required availability, recovery lag, queue pressure,
+The three-replica Paxos app lacks end-to-end conformance: requirement payloads
+are empty; runtime uses a separate generic TCP `Envelope`; and quorum-DAG
+`ScenarioEvent.priorIds` has no runtime counterpart (`trace.Event` has no
+predecessors). `node.go` emits only terminal `PutSucceeded`/`ListSucceeded`,
+while the sink fills IDs/timestamps. Endpoint/session/task events lack starts,
+so write, list, concurrent-write, and outage/recovery traces are unreconstructable;
+outage recovery is untraced and prepare is slot-scoped. Protocol tests cover
+envelope round trips and truncated protobuf, not partial TCP frames, loss,
+duplication, delay, or reordering. `/metrics` has request outcomes, commit
+latency, and quorum size, but lacks availability, recovery lag, queue pressure,
 memory headroom, and per-session diagrams.
 
 `scripts/roundtrip_generated_scenario.py` manually builds one `get_docs`
 scenario from `LeanFM/LLMGenerated/Requirements.proto` and checks
-Python-protobuf equality and predecessor IDs; it does not generate or recognize
-grammar traces. Missing coverage includes every `GrammarExpr` constructor and
-legal/illegal branch (including `possibly`), decoded grammar/FSM acceptance,
-schema evolution, malformed input, duplicate IDs, missing/cyclic predecessors,
-and out-of-order events. The target is
+Python-protobuf equality and predecessor IDs, not grammar trace generation or
+recognition. Tests still need every `GrammarExpr` constructor and legal/illegal
+branch (including `possibly`), decoded grammar/FSM acceptance, schema evolution,
+malformed input, duplicate IDs, missing/cyclic predecessors, and out-of-order
+events. The target is
 `decode(encode(generate(grammar, choices)))`. The role of
 `LeanFM/PaxosKV/Requirements.proto`'s `ScenarioEvent` (interoperable requirement
 data or implementation choice) and its evolution policy remain undecided;
 `RequirementEnvelope.oneof atom` does not validate branch disjointness, which
 needs disjoint terminal byte languages or explicit metadata.
 
-Lean verifies elaborated definitions and proof terms, not co-located Python,
-JavaScript, shell, Graphviz, protobuf, or LaTeX outputs. `native_decide` covers
-finite decidable propositions, not empirical assumptions or external parsers.
+Lean verifies definitions and proof terms, not co-located Python, JavaScript,
+shell, Graphviz, protobuf, or LaTeX outputs. `native_decide` covers finite
+decidable propositions, not empirical assumptions or external parsers.
 `RequiredProof` is not a proof term and its predicate is unchecked;
 `lake env lean book/logic.lean` still fails without Mathlib.
 `LeanFM/Render.lean` hard-codes theorem-gallery cards instead of reading
@@ -92,17 +90,16 @@ cards from declarations or a typed AST linked to source and successful builds.
 Structural validation checks typed shape, actor/message coverage, and known
 justification IDs—not intent or generated symbol-to-test behavior. Add stable
 fine-grained IDs, bidirectional coverage, behavioral trace tests, and classify
-handwritten code as requirement-backed or infrastructure. Human review remains
-necessary for assumptions, trust boundaries, failure alternatives, costs,
+handwritten code as requirement-backed or infrastructure. Human review must
+still cover assumptions, trust boundaries, failure alternatives, costs,
 probability provenance, and observability; generation must not invent facts.
-The accepted `custom "unassigned" ""` fallback can conceal a missing transport
-mapping. `TransportSpec` checks nonempty method/path and a known response target,
-not that the target is an HTTP request. ChatUI specifies status, content type,
-codecs, one-to-one event `cause_id` closure, and OpenAPI, but validation/tests do
-not prove bindings against runtime handlers. Generic mappings omit
-authentication, deadlines, headers, streaming, retry/idempotency, connection
-reuse, intermediaries, redirects, cancellation, status alternatives, and
-binding-level validation.
+The `custom "unassigned" ""` fallback can hide a missing transport mapping;
+`TransportSpec` checks nonempty method/path and a known response target, not an
+HTTP request. ChatUI specifies status, content type, codecs, one-to-one event
+`cause_id` closure, and OpenAPI, but validation/tests do not prove runtime
+bindings. Generic mappings omit authentication, deadlines, headers, streaming, retry/idempotency,
+connection reuse, intermediaries, redirects, cancellation, status alternatives,
+and binding validation.
 
 Generation varies with model, prompt, tools, and sampling; pin them and review
 diffs and behavior. Named finite metrics do not establish burstiness, tail
