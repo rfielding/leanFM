@@ -29,7 +29,7 @@ in-project tests, and persist evidence under the root. Screenshots are not a gat
 At 132 pages (`authoring-language.tex`: 758 lines), keep consolidating while
 preserving the preface-to-PR narrative and technical qualifications. Since
 `book/main.pdf` feeds code generation, verify deterministic rendering,
-tool/content manifests, and no semantic diff after regeneration.
+tool/content manifests, and semantic equivalence on regeneration.
 
 ## The new visual gallery exposes derivation gaps
 
