@@ -142,26 +142,18 @@ routing, failure and scheduling rules; it does not eliminate their state space.
 
 \subsection{Requirements at the message boundary}
 
-LeanFM chooses a different primary boundary. The object available to us is often
-an event stream scraped from a running system. We can decode its messages,
-correlate them, follow predecessor backpointers, and classify the resulting sequence
-as in-spec or out-of-spec. We generally cannot observe the implementation's
-private variables at every step, so \texttt{Requirements.lean} does not pretend
-to maintain them. Its grammar is intended to recognize legal traces and generate them;
-state machines are projections of visible histories rather than declarations of
-every variable stored by the program.
+LeanFM starts from decoded production events: correlate messages and classify
+their order as conforming or a counterexample without pretending to observe
+private variables. Its grammar is intended to describe legal traces and generate
+scenarios; state machines project visible histories. The executable grammar
+limits are documented in Chapter~\ref{ch:grammar}. A property dependent on
+hidden state needs an observable event or justified abstraction; otherwise its
+status is indeterminate.
 
-If a requested property depends on hidden state, instrument an observable event,
-justify an abstraction from the available events, or label the property
-undetermined by the current trace. Grammar conformance alone cannot establish it.
-
-The distinction is methodological, not a claim that TLA+ is unable to express
-queues or traces. This project began with an attempt to extend a TLA+-style model
-with the desired message queues and MDP probabilities. The practical difficulty
-was upstream: explaining an ordinary real scenario required choosing and
-maintaining a small internal-state model before the observed behavior could even
-be recorded. The abstraction work could exceed the apparently trivial example.
-LeanFM instead asks first for the messages that would be visible in production.
+This is a workflow choice, not a claim that TLA+ cannot express queues or traces.
+Our initial TLA+-style attempt required modeling internal state before an
+ordinary observed scenario could be recorded, so LeanFM makes production-visible
+messages the starting point.
 
 The trade is deliberate:
 
@@ -181,17 +173,11 @@ Main risk & state model may drift from instrumentation & event model may omit a 
 \end{tabular}
 \end{center}
 
-This boundary also separates the two durable Lean files.
-\texttt{Requirements.lean} contains specified observable behavior: accepted
-messages, legal ordering, probabilities, timing and reliability constraints,
-and properties measurable from events. \texttt{Implementation.lean} contains
-the additional decisions needed to generate software: target language, files,
-transports, runtime APIs, and bindings. Existing source code may be supplied when
-revising an implementation, but it does not redefine the requirement.
-
-The durable handoff is the project-root artifact set. The bootstrap contract
-(Chapter~\ref{ch:bootstrap-contract}) specifies how a fresh session resumes
-without transcript-dependent intent.
+This boundary separates the durable specifications:
+\texttt{Requirements.lean} defines observable behavior, while
+\texttt{Implementation.lean} maps it to generation and runtime choices. Existing
+source does not redefine requirements; Chapter~\ref{ch:bootstrap-contract}
+defines the project-root handoff.
 
 \section{Discovery first, consolidation before commitment}
 
