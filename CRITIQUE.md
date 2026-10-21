@@ -58,6 +58,13 @@ by their presence in the same project. `native_decide` checks finite decidable
 propositions, not empirical assumptions or external parsers.
 Compile claimed executable listings in CI, label the rest illustrative, and do
 not let a polished figure or successful build imply stronger evidence.
+The theorem gallery in `LeanFM/Render.lean` also hard-codes cards rather than
+reading elaborated declarations; despite being labeled summaries, they can drift
+or conflate definitions and theorems. `RequiredProof` is an obligation, not a
+proof term, and validation does not check its predicate. The local
+`lake env lean book/logic.lean` fails because Mathlib is unavailable. Generate
+cards from declarations or a typed AST, and link them to source and successful
+builds.
 
 ## The new visual gallery exposes derivation gaps
 
@@ -80,15 +87,6 @@ Require each renderer to consume typed inputs tied to its `DesiredOutput`, with
 input-sensitive tests for branches, loops, forks and joins. Label each result as
 a requirement schema, example trace, observed trace or modeled prediction; a
 polished view must not become a second specification.
-
-## The theorem gallery can drift from its Lean source
-
-`LeanFM/Render.lean` hard-codes theorem cards instead of reading elaborated
-declarations, so they can drift or conflate definitions and theorems. Although
-the page labels them summaries, `RequiredProof` is an obligation, not a proof
-term, and validation does not check its predicate. `lake env lean book/logic.lean`
-fails because Mathlib is unavailable. Generate cards from declarations or a
-typed AST, and link evidence labels to their source and build.
 
 ## The Paxos example is useful but does not yet validate the method
 
