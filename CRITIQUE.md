@@ -113,24 +113,24 @@ tolerances, sample sizes, seeds, and distributional tests.
 
 Events are timestamped points: paired boundaries give durations; `priorIds`
 orders events but does not assert causation. Paxos `scenarioOrderWellFormed`
-checks unique IDs, message fields and links only to earlier serialized IDs.
-General validation still needs to establish:
+checks unique IDs, message fields, and links only to earlier serialized IDs.
+General validation must still:
 
-- whether properties depend on hidden state; instrument it, justify an
-  abstraction, or mark the property undetermined;
-- unique, valid start/terminal pairing across retries and overlapping
+- observe hidden state, justify an abstraction, or mark dependent properties
+  undetermined;
+- pair starts and terminals uniquely across retries and overlapping
   `(session, task)` attempts;
-- clock domain, resolution, monotonicity, overflow and cross-actor sync; valid
-  predecessor IDs (including declared external IDs), acyclicity independent of
-  serialization, and no edge backward in `timeAt`;
-- actor/message endpoint agreement with selected terminals, valid grammar
-  roots/terminals, and complete joins with valid $m$-of-$n$ thresholds and
-  distinct branch IDs.
+- validate clock domain, resolution, monotonicity, overflow, and cross-actor
+  synchronization; ensure predecessor IDs exist (or are declared external),
+  the graph is acyclic independent of serialization, and no edge contradicts
+  `timeAt`;
+- check actor/message endpoints against selected terminals, grammar roots and
+  terminals, complete joins, valid $m$-of-$n$ thresholds, and distinct branch IDs.
 
-Also validate `dwellMs` against boundary times and define $m$-of-$n$ completion
-ties, winner selection and cancellation. Partial-order width (incomparable
-point events), active work (paired starts/completions), and feasible scheduling
-(also actor capacity, queues and scheduler) are distinct measures.
+Validate `dwellMs` against boundary times and define $m$-of-$n$ ties, winner
+selection, and cancellation. Partial-order width (incomparable point events),
+active work (paired starts/completions), and feasible scheduling (including
+actor capacity, queues, and scheduler) are distinct measures.
 
 ## Runtime queue, population, reliability, and memory models remain limited
 
