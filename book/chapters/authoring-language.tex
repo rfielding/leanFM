@@ -129,10 +129,9 @@ def quoteOutcome (customer shop : Actor) : Scenario :=
     ]
 \end{lstlisting}
 
-\texttt{include} expands text only in the rendered listing and denotes a named
-nonterminal, as in Chapter~\ref{ch:grammar}. A future compiler must resolve
-references, check exports, reject cycles, and build the grammar; retaining
-boundaries supports navigation, diagrams, tests, and counterexamples.
+\texttt{include} renders its referenced body for readability but denotes a
+named nonterminal, not textual copying. A future compiler must resolve
+references, check exports, reject cycles, and build the grammar.
 
 \noindent No quote diagram is generated yet. The event-derived diagram contract
 is in Chapter~\ref{ch:scenarios}; generated interaction examples are in
@@ -156,10 +155,9 @@ def estimatedCustomerDecision : Scenario :=
     ]
 \end{lstlisting}
 
-Branch agency follows the terminal-observation rule in
-Chapter~\ref{ch:grammar}; if terminal byte languages overlap, merge the
-branches or add an observable discriminator. Deterministic service transitions
-carry incoming probability mass forward. Requirements may begin with
+Branch agency follows observable terminal bytes: merge overlapping branches
+or add a discriminator (Chapter~\ref{ch:grammar}). Deterministic service
+transitions carry incoming probability mass forward. Requirements may begin with
 \texttt{oneOf}, symbolic weights, or ranges; refinement must resolve these
 claims and preserve every abstractly legal branch, including one assigned zero
 probability by the current implementation.
