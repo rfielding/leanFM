@@ -13,9 +13,10 @@ the named Lean source.
 
 \section{The smallest useful scenario}
 
-A scenario is a named grammar fragment. Every emitted terminal is an observable
-message event. Endpoint commands establish the \texttt{from} and \texttt{to}
-context for the messages that follow.
+A scenario is a named grammar fragment whose emitted terminals are observable
+message events. The spellings \texttt{from\_} and \texttt{to\_} avoid Lean's
+\texttt{from} syntax and set authoring context, which elaboration copies into
+every event; an \texttt{emit} before both endpoints are set is rejected.
 
 \begin{lstlisting}
 def requestQuote (customer shop : Actor) : Scenario :=
@@ -37,11 +38,6 @@ def requestQuote (customer shop : Actor) : Scenario :=
       , field "amount" amount
       ]
 \end{lstlisting}
-
-The spelling \texttt{from\_} avoids collision with Lean syntax while remaining
-visually explicit. Endpoint commands affect authoring context only; elaboration
-copies both endpoints into every event. A scenario with an \texttt{emit} before
-both endpoints have been established is rejected.
 
 \subsection{Variables and assignment}
 
