@@ -787,11 +787,9 @@ makes this set unavailable?''
 
 \section{Infrastructure cost and demand-constrained supply}
 
-A running service has at least two distinct time-based costs. Hardware is paid
-for while an instance is provisioned, whether or not the service is healthy.
-The service may also have a license, managed-service, or operational cost for
-each hour it is available. Those are not task-event costs and must not be
-multiplied by request count:
+Hardware accrues per provisioned hour; licenses, managed services, and operations
+may cost per available hour. Neither is a task-event cost to multiply by request
+count:
 
 \begin{lstlisting}
 cost Server
@@ -808,11 +806,9 @@ $c_h$, and service rate $c_s$, the accounting-period infrastructure cost is
  C(R)=\sum_{r=1}^{R}(H_r c_h + A_r c_s).
 \]}
 
-Supply planning is a constrained optimization, not merely ``pick the cheapest
-server.'' Let one replica sustain $\mu$ completed work units per hour, let $a$
-be the required availability fraction, and let $D$ be the work rate that must
-complete within the declared latency boundary. A candidate replica count is
-feasible for demand $D$ only when
+Supply planning is a constrained optimization, not ``pick the cheapest server.''
+Given per-replica capacity $\mu$ in work units per hour, required availability
+$a$, and work rate $D$ within the declared latency boundary, feasibility requires
 
 \AccessibleEquation{Replica count R times per-replica completed-work capacity mu times availability a must be greater than or equal to demand D.}{\[
 R\mu a \ge D.
@@ -821,8 +817,8 @@ R\mu a \ge D.
 This inequality is necessary but not sufficient: routing
 imbalance, queueing, and latency can still make the observed system infeasible.
 
-For total offered rate $\lambda_o$ routed across $R$ servers, let
-$\lambda_{o,r}$ be the rate offered to server $r$:
+Route total offered rate $\lambda_o$ across $R$ servers; let $\lambda_{o,r}$
+be server $r$'s offered share:
 
 \AccessibleEquation{Total offered rate lambda sub o equals the sum from replica r equals one through R of per-replica offered rate lambda sub o comma r. Per-replica offered rate equals total offered rate divided by R only under ideal balance.}{\[
  \lambda_o=\sum_{r=1}^{R}\lambda_{o,r},
@@ -830,10 +826,9 @@ $\lambda_{o,r}$ be the rate offered to server $r$:
  \lambda_{o,r}=\frac{\lambda_o}{R}\ \text{only under ideal balance}.
 \]}
 
-Under ideal balance, nominal per-server demand is $D/R$, but this cannot
-choose a replica count by itself: each added server adds provisioned hardware
-cost and, while healthy, service cost. Compare $D/R$, observed instance loads,
-effective supply, and total hourly cost across replica counts.
+Under ideal balance, nominal demand is $D/R$. Choose using observed instance
+loads and effective supply as well: each server adds provisioned hardware cost
+and, while healthy, service cost. Compare both with total hourly cost.
 
 \textbf{Executable code and finite-model tests:} \texttt{optimalSupply?} in
 \texttt{LeanFM/Artifacts.lean} searches replica counts $1$ through
@@ -847,12 +842,11 @@ shard despite aggregate spare capacity, while sticky routing and round-robin
 make different balance assumptions. Product replication, reserved pricing,
 autoscaling delay, and nonlinear tiers require explicit constraints.
 
-Unlimited offered work together with unlimited servers, backlog, cost, or
-latency does not establish service within a finite deadline. A capacity claim
-fixes the observation window and reports offered, admitted, completed, rejected,
-and outstanding work; latency; server count; utilization or imbalance; and cost.
-Count work only at completion within the declared outcome and latency boundary,
-not at acceptance.
+Use the observation window and completion boundary from the throughput analysis
+above. Report cost with offered, admitted, completed, rejected and outstanding
+work; latency; server count; and utilization or imbalance. Count demand only
+when completed within the declared outcome and latency boundary. Unbounded
+supply, backlog, cost or latency does not guarantee finite-deadline service.
 
 \section{Specified dwell time}
 
