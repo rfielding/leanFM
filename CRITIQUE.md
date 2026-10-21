@@ -103,44 +103,35 @@ languages or define a selector. Neither boundary nor selector is validated.
 
 ## Event order, time and concurrency need stronger validation
 
-Events are timestamped points: paired boundaries give durations, while
-`priorIds` expresses predecessor order, not causation. The Paxos
-`scenarioOrderWellFormed` helper checks unique IDs, message-field coverage, and
-links only to IDs earlier in the supplied list. General trace validation still
-needs to check:
+Events are timestamped points: paired boundaries give durations; `priorIds`
+orders events but does not assert causation. Paxos `scenarioOrderWellFormed`
+checks unique IDs, message fields and links only to earlier serialized IDs.
+General validation still needs to establish:
 
-- whether declared properties depend on hidden state the event stream cannot
-  determine; instrument it, justify an abstraction, or mark it undetermined;
-- unambiguous start/terminal pairing across retries and overlapping
-  `(session, task)` attempts, rejecting missing, malformed, or multiple start
-  backpointers;
-- clock domain, resolution, monotonicity, overflow and cross-actor
-  synchronization; predecessor existence (allowing declared external IDs),
-  acyclicity independent of serialization, and no edge backward in `timeAt`;
-- actor/message endpoint agreement with the selected terminal; grammar roots and
-  terminals; complete joins with valid `m`-of-`n` thresholds and distinct branch
-  IDs.
+- whether properties depend on hidden state; instrument it, justify an
+  abstraction, or mark the property undetermined;
+- unique, valid start/terminal pairing across retries and overlapping
+  `(session, task)` attempts;
+- clock domain, resolution, monotonicity, overflow and cross-actor sync; valid
+  predecessor IDs (including declared external IDs), acyclicity independent of
+  serialization, and no edge backward in `timeAt`;
+- actor/message endpoint agreement with selected terminals, valid grammar
+  roots/terminals, and complete joins with valid $m$-of-$n$ thresholds and
+  distinct branch IDs.
 
-`dwellMs` is not consistently checked against boundary times. The grammar's
-$m$-of-$n$ joins leave completion ties, winner selection and cancellation
-unspecified. Partial-order width counts incomparable point events, not active
-work; runtime concurrency needs paired starts/completions, while feasible
-scheduling also depends on actor capacity, queues and the scheduler. Keep these
-three measures distinct.
+Also validate `dwellMs` against boundary times and define $m$-of-$n$ completion
+ties, winner selection and cancellation. Partial-order width (incomparable
+point events), active work (paired starts/completions), and feasible scheduling
+(also actor capacity, queues and scheduler) are distinct measures.
 
 ## Runtime queue, population, reliability, and memory models remain limited
 
-Blocking send on a full queue and blocking receive on an empty queue capture the
-most important bounded-channel behavior. They do not yet model:
-
-- multiple blocked senders or receivers and their wake-up order;
-- `select`, cancellation, or deadlines. Closed-channel behavior is named in
-  `ImplementationSpec`, but no executable `BoundedMailbox` implementation was
-  found in this checkout;
-- fairness and starvation;
-- atomicity between queue operations and actor-state transitions;
-- scheduler behavior;
-- whether outbound and inbound queues duplicate ownership of the same bytes.
+Blocking send-on-full and receive-on-empty cover basic bounded-channel behavior,
+but not multiple blocked senders/receivers and wake order, `select`, cancellation,
+deadlines, fairness/starvation, queue/state-transition atomicity, scheduler
+semantics, or duplicate ownership of bytes across inbound/outbound queues.
+Closed-channel behavior is named in `ImplementationSpec`, but this checkout has
+no executable `BoundedMailbox` implementation.
 
 Consequently, queue-capacity and memory-pressure conclusions apply to the
 modeled channel semantics, not automatically to an implementation using Go

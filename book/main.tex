@@ -240,58 +240,29 @@ existence with an LLM. Stakeholders challenge assumptions, add scenarios and
 constraints, and inspect generated diagrams, traces and measurements. The
 argument produces durable project artifacts rather than relying on chat memory.
 
-The book is the main artifact. Every project begins with \texttt{./book/main.pdf}:
-its purpose, vocabulary, boundaries, examples and design argument. It acts as a
-maintained, project-specific section of the LLM's system-prompt context, whether
-supplied directly or discovered through the agent interface. Final diagrams come
-from the specification and are reused in the book, not maintained as separate
-designs. \texttt{book/main-dark.pdf} is the accessible rendering of the same
-source.
+The book is the central, project-specific design argument and LLM context;
+\texttt{book/main-dark.pdf} is its accessible companion. Generated diagrams
+come from the specification and are reused here, not maintained as separate
+designs. The Bootstrap chapter defines the project-root inputs and handoff.
 
-A project conversation is a working transaction, not the durable specification.
-The proposed ``Compact and clear conversation'' action checkpoints its decisions
-into the current book, typed interaction grammar, and task-scoped contextual
-constraints. It clears only the captured message prefix after the candidate
-artifacts and generated views validate and the checkpoint is recoverably
-committed. Missing context or failed checks leave both the existing artifacts
-and conversation intact; newer messages are never swept into an older
-checkpoint. This action does not accept either specification gate. A qualifying
-answer is accepted against its identified question and that same semantic
-question is not asked again unless the user reopens it; a different justified
-ambiguity may still be asked. An ordinary prompt can proceed while a structured
-question remains deferred.
+A conversation is provisional. The proposed ``Compact and clear conversation''
+action checkpoints decisions into the book, grammar, and task constraints, then
+clears only the captured message prefix after artifacts and views validate and
+the checkpoint is recoverably committed. Failure preserves prior artifacts and
+messages; newer messages remain untouched. Compaction accepts neither gate.
+Answers attach to their identified questions; the same semantic question is not
+repeated unless reopened, though a distinct ambiguity may still be asked.
+Ordinary prompts may proceed while a clarification is deferred. The Chat chapter
+describes this interaction.
 
-The book is itself vibecoded: missing views, checks and editing tools are built
-as the argument needs them. Each project owns one directory containing its book,
-specifications, schemas, conversations, source, tests and generated artifacts.
-Copying that directory preserves the project; deleting it removes its local
-state. External deployments require explicit teardown.
-
-This repository is also a LeanFM project. Its book, specifications and source
-are the inputs used to develop LeanFM itself. Other projects can be copied into
-their own repositories and opened in Codex without reconstructing the conversation.
-In this workspace, example projects are separate roots under
-\texttt{projects/}: for example, the GoServer book is
-\texttt{projects/go-server/book/main.pdf}, not this repository's
-\texttt{book/main.pdf}. Each root carries its own book, specifications, source
-and tests; the root directory, not a chat transcript, is the handoff to a fresh
-session.
-
-Requirements and implementation specifications have stable project-relative
-paths. Each revision identifies one canonical implementation specification;
-deliberate alternatives name their targets.
-
-The workflow has two acceptance gates. First accept \texttt{Requirements.lean}
-with its protobuf schema, derived views, ambiguity register and validation
-evidence: these define observable behavior, legal conversations and properties.
-Then accept \texttt{Implementation.lean}, which maps those requirements to
-runtime, transport, actor, file and test choices. Together with the current
-repository, the accepted specifications are intended to support one complete,
-reviewable PR. ``One-shot'' describes this implementation pass; requirements
-discovery remains iterative. The integrated requirements-to-PR workflow is still
-under development. Its readiness is measured by generated source that passes
-increasingly realistic in-project tests, not by a plausible chat response or by
-asking the stakeholder to run unavailable external checks.
+Each project root contains its complete resumable state; this repository is
+itself one such project. Example roots live under \texttt{projects/} (the
+GoServer book is \texttt{projects/go-server/book/main.pdf}). The Bootstrap
+chapter defines stable artifact paths and the two explicit gates: observable
+requirements first, then their implementation mapping. Discovery remains
+iterative; the intended one-pass implementation is ready only when generated
+source passes increasingly realistic in-project tests. That integrated
+requirements-to-PR workflow remains under development.
 
 LeanFM centers a shared, executable account of actor communication down to
 protobuf bytes. Parameterized multiparty grammars describe legal sequences;
