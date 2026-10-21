@@ -591,7 +591,9 @@ check.
 \label{sec:runtime-blast-radius}
 
 \begin{center}
-\resizebox{\textwidth}{!}{\input{generated/runtime-actor-network.tex}}
+\AccessibleFigure{Illustrative dependency topology for a targeted document write. The browser requires an ingress pool of two with one available. It then requires a web pool of three with one available and a router pool of two with one available before reaching its selected shard. Eight separate shards each have three replicas and a two-replica write quorum. This is illustrative rather than empirical uptime. Metadata storage and network dependencies are omitted.}{%
+\resizebox{\textwidth}{!}{\input{generated/runtime-actor-network.tex}}%
+}
 \end{center}
 \noindent\textbf{Actor topology for a targeted document write.}
 Generated from \texttt{RuntimeReliabilityDiagram.lean}, with provenance in
@@ -653,14 +655,11 @@ does not supply the application's quorum or consistency protocol.
     unavailable merely because a metadata update cannot proceed.
 \end{description}
 
-For eight shards with three data-bearing voting replicas each, there are 24
-shard replicas, plus any routers and metadata replicas. One failed member in
-each shard preserves the two-of-three write quorums, subject to primary election
-and recovery. Two failed members in one shard remove that shard's write quorum,
-even if all other shards are healthy. A targeted operation depends on its target
-shard; a multi-shard operation depends on all shards required by its semantics.
-Thus the relevant question is not ``how many of the 24 are up?'' but ``which
-operation still has its required providers?''
+Across the eight shards, one failed member per shard preserves each two-of-three
+write quorum, subject to primary election and recovery. Two failures in a target
+shard remove its write quorum even if every other shard is healthy. A targeted
+operation needs its shard; a multi-shard operation needs every shard required by
+its semantics. Availability is operation-specific, not a count of all replicas.
 
 Per-instance uptime is only the first reliability result. Services form a
 dependency network, and each dependency gate must say whether its members are
