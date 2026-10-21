@@ -9,8 +9,8 @@ quote request, an OAuth exchange, or a two-player 9×9 game).
 \section{Event envelope and scenario grouping}
 Chapter~\ref{ch:events} defines the shared typed event envelope and the semantics
 of event identity, \texttt{priorIds}, \texttt{causeId}, actor endpoints,
-correlation, and monotonic \texttt{timeAt}. A scenario is the named interaction
-or trace analyzed here. Any serialized \texttt{scenario} key or aliases such as
+correlation, and monotonic \texttt{timeAt}. Any serialized \texttt{scenario} key
+or aliases such as
 \texttt{src}/\texttt{message} must be declared by the accepted schema and its
 reducers; they are not additional canonical event fields.
 
@@ -43,8 +43,7 @@ on the model's monotonic clock:
   "payload":{"move":"E5"} }
 \end{verbatim}
 
-This fragment is sufficient for an interaction diagram and for latency
-measurement between a client's Move and the server's MoveAccepted reply.
+The latency pair is \texttt{evt-0010} to \texttt{evt-0011}: one millisecond.
 
 Prefer runnable scenario traces to prose-only examples, declare their expected
 derived views and provenance, and keep transport mappings in
