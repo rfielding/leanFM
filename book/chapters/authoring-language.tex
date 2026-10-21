@@ -758,25 +758,15 @@ uptime $p$, the quorum's assumed uptime would be
  A_{2\text{-of-}3}=3p^2(1-p)+p^3.
 \]}
 
-Read this as: ``two-of-three availability equals three times the probability
-that exactly two replicas are up, $p$ squared times one minus $p$, plus the
-probability that all three replicas are up, $p$ cubed.'' This independent-marginal
-baseline excludes correlated shutdowns.
+This independent-marginal baseline excludes correlated shutdowns.
 
-The named shutdown cascade first stops \texttt{kv-1}. Two voters remain, so the
-successful first maintenance action appears to confirm that the cluster is
-redundant. Stopping \texttt{kv-2} next leaves \texttt{kv-3} running but destroys
-the majority: the quorum gate and the web-plus-quorum series path become
-unavailable. This is the operational trap familiar from ZooKeeper-backed Kafka
-deployments and Paxos- or Raft-like services. ``A database process is still
-up'' is not the service predicate; ``a majority of the configured voting set is
-available and mutually communicating'' is. Planned shutdowns, shared power,
-network partitions, and common automation are correlated failures and must be
-replayed as named sets rather than hidden inside multiplied uptime percentages.
-The runtime may create arbitrarily many healthy stateless web instances without
-creating another database vote. Autoscaling the parallel web tier therefore
-cannot repair the failed serial quorum gate; it may merely increase the number
-of requests waiting on that unavailable dependency.
+Stopping \texttt{kv-1} leaves two voters and preserves quorum; stopping
+\texttt{kv-2} next leaves \texttt{kv-3} alive but makes the quorum and dependent
+web service unavailable. One live database process is not a live service: a
+communicating majority must satisfy the service gate. Planned shutdowns, shared
+power, network partitions and common automation therefore belong in named joint
+scenarios, not independent uptime factors. Adding stateless web instances cannot
+restore the failed database quorum and may only accumulate waiting requests.
 
 An actor inferred unavailable produces no observed heartbeat or outbound
 protocol progress and does not drain its observed inbound queue. Work waiting on
