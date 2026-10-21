@@ -182,28 +182,23 @@ failed work can materially change the result and need explicit policies.
 
 ## Requirements and implementation are separated structurally, not logically
 
-Separate `Requirements.lean`/`Implementation.lean` files and actor/message
-coverage form a boundary; validation still does not prove generated-code
-conformance.
+Separate requirements/implementation files and actor/message coverage are only
+structural; validation does not prove generated-code conformance.
 
-HTTP records method/path and associates a request with each response, but
-validation omits endpoint/status/content-type mappings, authentication, timeouts,
-and exhaustive response alternatives. Independently transported request/response
-atoms leave headers, streaming, retries, idempotency, connection reuse,
-intermediaries, redirects, cancellation, and request/connection correlation
-unspecified. Bind each response to its request and test or prove conformance
-against observable traces.
+HTTP records method/path and associates responses with requests, but validation
+omits endpoint/status/content-type maps, authentication, timeouts and complete
+response alternatives. Headers, streaming, retries, idempotency, connection
+reuse, intermediaries, redirects, cancellation and request/connection
+correlation remain unspecified. Bind each response to its request and test
+conformance against observable traces.
 
-Code generation treats the book and typed specifications as authority; revision
-also supplies existing code. This reduces chat-history dependence, not
-generation variance: pin the model, prompt, tools, and sampling; review diffs and
-test behavior. Justifications link code to requirements but do not prove
-correctness. Require stable fine-grained IDs, bidirectional coverage, and
-behavioral tests; classify handwritten code as justified or as infrastructure
-outside the generated surface.
-
-The `custom "unassigned" ""` fallback makes generation total but can hide
-transport gaps; production validation should reject it.
+Generation uses the book, specifications and existing code: this reduces
+transcript dependence, not variance. Pin model, prompt, tools and sampling;
+review diffs and test behavior. Justifications do not prove correctness; require
+stable fine-grained IDs, bidirectional coverage and behavioral tests, and
+classify handwritten code as justified or infrastructure. The
+`custom "unassigned" ""` fallback can hide transport gaps and should be rejected
+in production validation.
 
 ## Security knowledge is not yet a complete epistemic model
 
