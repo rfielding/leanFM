@@ -159,19 +159,17 @@ lack corresponding executable reducer tests.
 
 ## Probability and statistical evidence need explicit assumptions
 
-Probability fields are rational numbers without a typed evidence kind, so
-empirical frequencies, assumed distributions, unresolved nondeterminism, policy
-choices, and epistemic uncertainty remain easy to conflate.
+Rational probability fields lack an evidence type, conflating empirical
+frequencies, assumptions, unresolved nondeterminism, policy, and epistemic
+uncertainty. The seeded 81,039-line bakery corpus tests reducers on synthetic
+data only; its summaries lack confidence intervals, sensitivity/stationarity
+checks, and a censored-task policy.
 
-The seeded 81,039-line bakery corpus exercises the reducer pipeline but describes
-synthetic data, not real behavior. Its summaries lack confidence intervals,
-sensitivity/stationarity checks, and treatment of censored in-flight tasks.
-
-`StreamStats` computes client-weighted and server-window work rates, and tests
-USL curves for supplied parameters; it has no parameter-fitting or fit-uncertainty
-estimator. Rates use completed, explicitly paired observations, so omitted,
-unfinished or failed work can bias results. Warm-up, client think time, and
-changing populations also need declared policies.
+`StreamStats` computes client-weighted and server-window work rates and tests
+USL curves for supplied parameters, but does not fit parameters or uncertainty.
+Completed, explicitly paired samples can bias estimates when work is omitted,
+unfinished, or failed. Declare warm-up, client think-time, and population-change
+policies.
 
 ## Security knowledge is not yet a complete epistemic model
 
