@@ -127,11 +127,11 @@ This is invented TLA+-inspired syntax, not standard TLA+ or a compiled LeanFM fe
 Read \texttt{alice:bob ! placeOrder} as ``Alice sends placeOrder to Bob,'' and
 \texttt{bob ? placeOrder} as ``Bob receives placeOrder.'' Bob consumes the
 request \texttt{placeOrder}; Alice consumes the reply \texttt{placedOrder}.
-A send changes the destination's inbox, a first-class queue owned by its actor
-instance, not an arbitrary private variable. Receive consumes the message;
-the receiver updates its own protocol state. Full queues block send without
-mutation; empty queues block receive. The handler's commit precondition is an
-observable obligation, not a database algorithm.
+The proposal treats inboxes as first-class actor-owned queue state, not arbitrary
+private variables. Blocking and capacity semantics are specified in
+Chapter~\ref{ch:grammar}; this proposed syntax does not implement them. The
+handler's commit precondition is an observable obligation, not a database
+algorithm.
 
 Actor classes describe behavior; instances have distinct identities, queues and
 local state. WebServer instances share a class, not an inbox. DocumentStore
