@@ -134,28 +134,24 @@ actor capacity, queues, and scheduler) are distinct measures.
 
 ## Runtime queue, population, reliability, and memory models remain limited
 
-A finite FIFO models blocking send-on-full and receive-on-empty, but not waiter
-sets or wake order, `select`, cancellation, deadlines, fairness, scheduler
-semantics, queue/state-transition atomicity, or duplicate byte ownership.
-`ImplementationSpec` names closed-channel `BoundedMailbox` operations, but no
-executable mailbox exists; these semantics therefore do not establish Go-channel
-behavior.
+Finite FIFO semantics cover blocking send-on-full and receive-on-empty, not
+waiter sets/wake order, `select`, cancellation/deadlines, fairness/scheduling,
+queue/state atomicity, or duplicate byte ownership. `ImplementationSpec` names
+closed-channel `BoundedMailbox` operations, but no executable mailbox exists;
+it therefore establishes no Go-channel equivalence.
 
-The model expands finite instance IDs and validates one resource contract per
-actor specification, inherited by its instances. It omits dynamic lifecycle,
-discovery, load balancing, and migration; the concrete 20-client/2-server sample
-does not establish behavior at other scales.
+The model expands finite instance IDs, each inheriting one resource contract per
+actor specification. Dynamic lifecycle, discovery, load balancing, and migration
+are absent; the 20-client/2-server sample establishes no other scale.
 
-`queue.pressure` integrates queue length in messages, not bytes. Even payload-byte
-sums omit envelopes, allocator and queue storage, decoder state, retained and
-transport buffers, actor state, duplicated payloads, and blocked tasks. A memory
-budget must define wire bytes, owned heap, resident memory, or another reproducible
-accounting model.
+`queue.pressure` integrates messages, not bytes. Payload-byte sums also omit
+envelopes, allocator/queue storage, decoder state, retained/transport buffers,
+actor state, duplicates, and blocked tasks. A memory budget must define a
+reproducible boundary such as wire bytes, owned heap, or resident memory.
 
 `Characterization.lean` records uptime, MTTR, composed-availability, and cascade
-reducer plans; tests validate plan shape and names, not their calculations. The
-book's policies for censored intervals, joint failures, and outage boundaries
-lack corresponding executable reducer tests.
+reducer plans; tests check plan shape/names, not calculations. The book's
+censored-interval, joint-outage, and outage-boundary policies lack reducer tests.
 
 ## Probability and statistical evidence need explicit assumptions
 
