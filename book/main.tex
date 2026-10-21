@@ -240,28 +240,25 @@ existence with an LLM. Stakeholders challenge assumptions, add scenarios and
 constraints, and inspect generated diagrams, traces and measurements. The
 argument produces durable project artifacts rather than relying on chat memory.
 
-The book is the central, project-specific design argument and LLM context;
-\texttt{book/main-dark.pdf} is its accessible companion. Generated diagrams
-come from the specification and are reused here, not maintained as separate
-designs. The Bootstrap chapter defines the project-root inputs and handoff.
+The book is the project's durable design argument and LLM context;
+\texttt{book/main-dark.pdf} is its accessible companion. Figures are generated
+from the shared specification. The Bootstrap chapter defines the project-root
+handoff.
 
-A conversation is provisional. The proposed ``Compact and clear conversation''
-action checkpoints decisions into the book, grammar, and task constraints, then
-clears only the captured message prefix after artifacts and views validate and
-the checkpoint is recoverably committed. Failure preserves prior artifacts and
-messages; newer messages remain untouched. Compaction accepts neither gate.
-Answers attach to their identified questions; the same semantic question is not
-repeated unless reopened, though a distinct ambiguity may still be asked.
-Ordinary prompts may proceed while a clarification is deferred. The Chat chapter
-describes this interaction.
+A conversation is provisional. The proposed compaction transaction checkpoints
+decisions into durable artifacts and clears only the captured message prefix
+after artifact and view validation and recoverable commit; failure preserves
+prior artifacts and messages. It accepts neither gate. Answers attach to
+identified questions; the same semantic question is not repeated unless
+reopened, though a new ambiguity may be asked. Ordinary prompts may proceed
+while clarification is deferred. The Chat chapter specifies these policies.
 
 Each project root contains its complete resumable state; this repository is
-itself one such project. Example roots live under \texttt{projects/} (the
-GoServer book is \texttt{projects/go-server/book/main.pdf}). The Bootstrap
-chapter defines stable artifact paths and the two explicit gates: observable
-requirements first, then their implementation mapping. Discovery remains
-iterative; the intended one-pass implementation is ready only when generated
-source passes increasingly realistic in-project tests. That integrated
+itself one such project. Examples live under \texttt{projects/} (GoServer:
+\texttt{projects/go-server/book/main.pdf}). Bootstrap defines stable paths and
+the two gates: observable requirements, then their implementation mapping.
+Discovery remains iterative; one-pass implementation is ready only when
+generated source passes increasingly realistic in-project tests. This
 requirements-to-PR workflow remains under development.
 
 LeanFM centers a shared, executable account of actor communication down to
