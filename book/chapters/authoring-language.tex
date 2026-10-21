@@ -434,40 +434,31 @@ blocked receivers immediately. Consequently, queue iteration has a precise
 termination condition: the queue is closed and empty. Empty while still open
 means ``wait,'' not ``end of stream.''
 
-\paragraph{Cost of the current executable structures.}
-These bounds describe the present reference implementation, not an optimized
-runtime. If $C$ is the queued item count, the list-backed channel takes $O(C)$
-time to send because it measures and appends to a singly linked list; receive
-is $O(1)$ and storage is $O(C)$. The accepted close semantics above are not yet
-implemented by this reference channel. A two-list or ring-buffer channel can
-make amortized send and receive $O(1)$ while retaining the declared capacity.
+\paragraph{Current costs and resource profile (not optimized).}
+For $C$ queued items, the list-backed channel sends in $O(C)$, receives in
+$O(1)$, and stores $O(C)$; the close semantics above are not yet implemented.
+Two-list or ring-buffer channels can make send and receive amortized $O(1)$ at
+the same capacity.
 
-Let $H$ be the number of observed task events. The current attempt reducer
-appends starts to a list and linearly searches open attempts for a terminal
-backpointer, so a complete reduction is $O(H^2)$ time and $O(H)$ retained
-attempt data in the worst case. The specified
-\texttt{map[Event][]Event} successor index and an open-attempt hash table have
-expected $O(H+R)$ construction time and $O(H+R)$ space, where $R$ is the number
-of predecessor references. Expected hash-table cost is not a worst-case
-guarantee.
+With $H$ task events and $R$ predecessor references, the current attempt
+reducer appends starts and linearly searches for terminal backpointers, costing
+$O(H^2)$ time and $O(H)$ retained attempts in the worst case. An indexed
+\texttt{map[Event][]Event} successor structure plus an open-attempt hash table
+targets expected $O(H+R)$ construction time and space; hashing is not a
+worst-case guarantee.
 
-Let $N$ be the number of declarations and cross-references in a requirement
-artifact, and $G$ the grammar-tree size. Validation currently uses repeated
-linear list membership and duplicate checks, giving a conservative $O(N^2)$
-time bound and $O(N)$ auxiliary data; grammar walks are logically $O(G)$, but
-repeated list concatenation can also become $O(G^2)$ for a skewed tree. Indexed
-names and accumulator-based walks are the optimization targets. Probability
-enumeration remains exponential when it intentionally materializes every path:
-branching factor $b$ through depth $d$ can produce $b^d$ path records. These
-bounds make explicit which costs are implementation debt and which result from
-requesting every possible history.
+For $N$ declarations and cross-references and grammar size $G$, repeated list
+membership and duplicate checks make validation $O(N^2)$ time with $O(N)$
+auxiliary data. Grammar traversal is $O(G)$, but repeated concatenation can make
+skewed trees $O(G^2)$; indexed names and accumulator walks are optimization
+targets. Enumerating every path is exponential ($b^d$ for branching factor $b$
+and depth $d$) only when all paths are materialized.
 
-For the initial LeanFM ChatUI profile, browser/session actors have inbound and
-outbound capacities 32 and at most 4 in flight; the LeanFM server has capacities
-256 and at most 32 in flight; provider workers have capacities 64 and at most
-16 in flight. Their memory budgets are respectively 64 MiB, 512 MiB, and
-256 MiB per modeled instance. These are explicit starting requirements that a
-parameter sweep may replace; they are not measured production claims.
+The initial ChatUI profile gives browser/session actors capacities 32 inbound
+and outbound, with at most 4 in flight; the server has capacities 256 and 32
+in flight; provider workers have capacities 64 and 16 in flight. Per-instance
+memory budgets are 64, 512, and 256 MiB, respectively. These replaceable
+starting values are not measured production claims.
 
 \begin{figure}[htbp]
 \centering
