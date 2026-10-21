@@ -159,7 +159,7 @@ work; runtime concurrency needs paired starts/completions, while feasible
 scheduling also depends on actor capacity, queues and the scheduler. Keep these
 three measures distinct.
 
-## Runtime queue, population, and reliability models remain limited
+## Runtime queue, population, reliability, and memory models remain limited
 
 Blocking send on a full queue and blocking receive on an empty queue capture the
 most important bounded-channel behavior. They do not yet model:
@@ -182,21 +182,17 @@ resource contract per instance, but omit dynamic creation/removal, discovery,
 load balancing, and migration. Results for 20 clients and 2 servers do not
 generalize to other population sizes.
 
+The current `queue.pressure` reducer counts messages, not bytes. Summing encoded
+payload lengths would still be only a lower bound: envelopes, allocator and
+queue storage, protobuf decoder state, retained and transport buffers, actor
+state, duplicated payloads, and blocked goroutines or tasks also consume memory.
+Any byte budget must specify wire bytes, owned heap, resident memory, or a
+reproducible accounting model.
+
 `Characterization.lean` names uptime, MTTR, composed-availability, and cascade
 reducers; tests only check their names. Executable handling and tests for
 duplicate/censored intervals, joint failures, and the book's boundary policies
 remain absent.
-
-## Memory accounting is underspecified
-
-The project can count encoded bytes waiting in queues. Actual memory pressure
-also includes envelope objects, allocator overhead, queue storage, protobuf
-decoder state, retained buffers, actor state, duplicated payloads, blocked
-goroutines or tasks, and transport-library buffers.
-
-A byte budget based only on payload length is a lower bound. The requirements
-need to say whether they constrain wire bytes, owned heap bytes, resident memory,
-or some reproducible accounting model.
 
 ## The MDP interpretation needs a sharper decision boundary
 
