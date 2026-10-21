@@ -86,12 +86,8 @@ Early requirements should not require a finished protobuf schema. A vague messag
 has a stable semantic name and a list of named, typed fields. It is already precise
 enough to express ordering, correlation, and temporal properties.
 
-\begin{lstlisting}
-emit "quote offered"
-  [field "requestId" requestId, field "amount" amount]
-\end{lstlisting}
-
-Later, a refinement maps that terminal to a concrete alphabet:
+The preceding \texttt{quote offered} terminal can later be refined to a concrete
+alphabet:
 
 \begin{lstlisting}
 refineMessage "quote offered" with Proto.Shop.QuoteOffered where
