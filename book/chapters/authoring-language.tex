@@ -166,9 +166,6 @@ probability by the current implementation.
 
 \section{Worked MDP: a stochastic user and deterministic server}
 
-This bounded MDP isolates user uncertainty: the user selects Browse or Purchase
-at weights 3:2, while each received message determines a single server action.
-
 \begin{center}
 \AccessibleFigure{Interaction diagram with User and Server lifelines. Message from User to Server: open Session with probability one. Message from Server to User: show Options with probability one. The next two request and response pairs are alternatives. Message from User to Server: choose Browse with probability three fifths. Message from Server to User: show Results with probability one. Message from User to Server: choose Purchase with probability two fifths. Message from Server to User: confirm Purchase with probability one.}{%
   \resizebox{.72\textwidth}{!}{\input{generated/stochastic-user-interaction.tex}}%
