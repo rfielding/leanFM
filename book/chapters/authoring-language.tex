@@ -842,11 +842,10 @@ shard despite aggregate spare capacity, while sticky routing and round-robin
 make different balance assumptions. Product replication, reserved pricing,
 autoscaling delay, and nonlinear tiers require explicit constraints.
 
-Use the observation window and completion boundary from the throughput analysis
-above. Report cost with offered, admitted, completed, rejected and outstanding
-work; latency; server count; and utilization or imbalance. Count demand only
-when completed within the declared outcome and latency boundary. Unbounded
-supply, backlog, cost or latency does not guarantee finite-deadline service.
+Reuse the observation window and completion boundary above, adding hourly cost and
+per-server utilization or imbalance to the report. Count only demand completed
+within the declared outcome and latency boundary; unbounded supply, backlog, cost
+or latency does not guarantee finite-deadline service.
 
 \section{Specified dwell time}
 
