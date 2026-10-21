@@ -616,14 +616,9 @@ dependencies must be added for a complete deployment analysis.
     interchangeable failover copies; replication protects each partition.
 \end{description}
 
-The model asks what stops, for whom, and for how long; replica counts alone do
-not answer it. It combines timestamped protocol observations and uptime/MTTR
-estimates with operation-specific dependency gates and shared failure domains.
-
-The profile adds round-robin stateless React/API actors and a router-selected
-sharded document service. Metadata, storage, and network are additional
-dependencies. Kubernetes schedules and restarts actors but does not supply the
-application's quorum or consistency protocol.
+Evaluate these illustrative dependency gates against timestamped observations
+and declared uptime/MTTR assumptions. Kubernetes schedules and restarts actors
+but does not supply the application's quorum or consistency protocol.
 
 \begin{description}
   \item[Stateless pool.] Zero ready instances makes new requests unavailable.
@@ -644,11 +639,10 @@ application's quorum or consistency protocol.
     unavailable merely because a metadata update cannot proceed.
 \end{description}
 
-Across the eight shards, one failed member per shard preserves each two-of-three
-write quorum, subject to primary election and recovery. Two failures in a target
-shard remove its write quorum even if every other shard is healthy. A targeted
-operation needs its shard; a multi-shard operation needs every shard required by
-its semantics. Availability is operation-specific, not a count of all replicas.
+In this profile, one failed member preserves a shard's two-of-three quorum;
+two failures in the target shard remove it, even if every other shard is healthy.
+A multi-shard operation depends on every shard its semantics require, so
+availability is operation-specific, not a total replica count.
 
 Per-instance uptime is only the first reliability result. Services form a
 dependency network, and each dependency gate must say whether its members are
