@@ -696,21 +696,18 @@ proved, calculated, sampled or assumed.
 The most useful prompts attack boundaries rather than ask for polish:
 
 \begin{itemize}
-  \item ``Show me the observable event that makes that sentence true.''
-  \item ``Which alternative ends here, and how is it bracketed in the grammar?''
-  \item ``What happens when this inbound or outbound queue is full?''
-  \item ``Run two sessions and two tasks concurrently; which events correlate?''
+  \item ``Which event and grammar branch make this claim true?''
+  \item ``With two concurrent sessions and tasks, what blocks on a full queue
+        and which events correlate?''
   \item ``Which random choice belongs to the user, and how does it change the
         downstream completion and latency distributions?''
-  \item ``Derive the plot from the event stream, including incomplete tasks.''
+  \item ``Derive the plot from the event stream, including in-flight tasks.''
   \item ``Show the corresponding protobuf payload and its encoded-size bound.''
   \item ``Is this result proved, model-checked, simulated, measured, or assumed?''
 \end{itemize}
 
-The argument is finished enough to review when deleting the transcript loses no
-normative information; a clean checkout can compile and validate the artifacts;
-every diagram and plot is derived rather than independently drawn; failures have
-observable outcomes; quantitative assumptions have units and scope; and every
-unsettled claim is an explicit obligation. That is the requirements-centered
-meaning of vibecoding in LeanFM: conversation discovers the specification, but
-the checked artifacts outlive the conversation.
+Review readiness means a clean checkout can compile and validate without
+transcript-dependent decisions; every diagram and plot is derived; failures have
+observable outcomes; quantitative claims have units and scope; and unresolved
+claims remain explicit obligations. Conversation discovers the specification;
+durable artifacts retain it.
