@@ -337,6 +337,7 @@ changing the protocol. This provenance keeps the two acceptance gates
 meaningful.
 
 \subsection{How a chat turn becomes a durable edit}
+\label{subsec:chat-turn-durable-edit}
 
 Ordinary design discussion should normally improve the book.  The provider
 therefore returns a small structured envelope containing a conversational
@@ -487,11 +488,9 @@ the horizontal phases rather than turning chat into a source-code dump:
   directory.
 \end{description}
 
-After both gates and the security critique, an implementation request must
-create and check real project files; a chat-only listing with Source empty fails.
-The response summarizes the artifacts and validation. If a gate or material
-decision is missing, it asks a focused question instead of inventing an
-implementation.
+The implementation gate, real-file requirement, empty-Source rejection, and
+blocking-question behavior are specified in
+Section~\ref{subsec:chat-turn-durable-edit}.
 
 \subsection{Screenshot-first documentation}
 
