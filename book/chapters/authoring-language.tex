@@ -292,11 +292,10 @@ Gunther's \emph{Guerrilla Capacity Planning} develops the USL as a practical
 capacity-planning tool for exposing contention, coherency, saturation, and
 retrograde scaling before deployment supplies those facts~\citep{gunther2007guerrilla}.
 
-Retain per observation $n$, the selected throughput and event boundary,
+Record per observation its $n$, selected throughput and event boundary,
 $\lambda_o$, $\lambda_a$, window throughput $X$, latency, backlog, terminal
-outcomes, server count, and window boundaries. The event list supplies the data;
-parameter fitting is separate and requires exhaustive windows to avoid bias from
-omitted or unfinished work.
+outcomes, server count, and window boundaries. Fit parameters separately and
+only on exhaustive windows, avoiding bias from omitted or unfinished work.
 
 \subsection{The three USL regimes and capacity}
 
