@@ -375,22 +375,14 @@ interaction diagrams. visualized right here in the chat ui
 
 Here \emph{MCP} means the Model Context Protocol, not MQTT and not a generic
 message broker.  A faithful first tour uses a host or MCP client and an MCP
-server as lifelines.  When the selected example invokes a real downstream tool,
-that tool may be a third lifeline; otherwise it is omitted.  A representative
-walk is:
-
-\begin{enumerate}
-  \item the client sends a JSON-RPC \texttt{initialize} request declaring its
-  protocol version and capabilities;
-  \item the server returns its supported protocol version, capabilities and
-  identity;
-  \item the client sends \texttt{notifications/initialized};
-  \item the client sends \texttt{tools/list} and the server returns the tools it
-  exposes;
-  \item the client sends \texttt{tools/call} with a tool name and arguments;
-  and
-  \item the server returns the correlated JSON-RPC result or error.
-\end{enumerate}
+server as lifelines. When the selected example invokes a real downstream tool,
+that tool may be a third lifeline; otherwise it is omitted. A representative
+trace is: the client sends JSON-RPC \texttt{initialize} with its version and
+capabilities; the server replies with its supported version, capabilities and
+identity;
+the client sends \texttt{notifications/initialized}, discovers tools with
+\texttt{tools/list}, then sends \texttt{tools/call} with a tool name and
+arguments and receives its result or error correlated by JSON-RPC ID.
 
 This is the same kind of interaction shown durably in
 \cref{fig:mcp-interaction}, but projected into a small review instrument.  The

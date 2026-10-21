@@ -57,25 +57,16 @@ successful builds.
 
 ## The new visual gallery exposes derivation gaps
 
-The SVG gallery is not derived from the claimed event semantics:
-
-- `interactionSvg` renders a flat `TaskRequirement.transitions` list, not a
-  `(session, scenario)` stream ordered by `priorIds`; it loses choices and
-  threshold branches, and a `KVReplica -> KVReplica` actor spec becomes a
-  self-loop instead of leader/follower lifelines. These are schema, not
-  per-session, diagrams.
-- `stateMachineSvg` lays out states and edges by list position, ignoring
-  `RequirementTransition.src` and `.dst`; branches or loops can therefore be
-  drawn falsely.
-- `latencyLineSvg` and `outcomePieSvg` hard-code geometry rather than reducing
-  paired events or terminal mass to named metrics.
-- `/diagrams/` is Git-ignored, so generated README links do not publish durable
-  artifacts.
-
-Require each renderer to consume typed inputs tied to its `DesiredOutput`, with
-input-sensitive tests for branches, loops, forks and joins. Label each result as
-a requirement schema, example trace, observed trace or modeled prediction; a
-polished view must not become a second specification.
+The SVG gallery is not derived from event semantics. `interactionSvg` draws flat
+task transitions instead of `(session, scenario)` traces ordered by `priorIds`,
+losing choices/thresholds and rendering `KVReplica -> KVReplica` as a self-loop
+rather than leader/follower lifelines. `stateMachineSvg` ignores transition
+`src`/`dst`; `latencyLineSvg` and `outcomePieSvg` hard-code geometry instead of
+reducing paired events or terminal mass. `/diagrams/` is Git-ignored, so README
+links are not durable. Require typed `DesiredOutput` inputs and input-sensitive
+tests for branches, loops, forks and joins; label each result as a requirement
+schema, example trace, observed trace or modeled prediction. A polished view
+must not become a second specification.
 
 ## Grammar-to-wire path and the Paxos example remain incomplete
 
