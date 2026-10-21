@@ -27,33 +27,16 @@ reducer, question, and unit are recorded in
 \label{fig:web-protocol-overview}
 \end{figure}
 
-Read the figure as five transformations:
-
-\begin{enumerate}
-  \item HTTP supplies a method, path, headers, cookies, and body octets.
-  \item The adapter authenticates the session, matches the method and path
-        template, percent-decodes fields, and constructs one named protobuf
-        request value.
-  \item That message may advance only the task grammar that names it. A legal
-        accepted event is wrapped in an \texttt{EventEnvelope} carrying event,
-        predecessor, session, task, time, source, destination, and exactly one
-        \texttt{payload} alternative.
-  \item The selected task produces one of the response alternatives associated
-        with the request. Internal provider messages remain in-process messages;
-        they are not invented HTTP calls merely because the outer request used
-        HTTP.
-  \item The adapter selects an HTTP status and projects the response fields to
-        JSON. Session establishment additionally emits a secure cookie.
-\end{enumerate}
-
-The protobuf value and HTTP request are therefore not the same bytes. Protobuf
-defines the typed event and its stable field tags. HTTP selects how a browser
-presents or receives that value. The current browser adapter uses
-\texttt{application/x-www-form-urlencoded} for implemented POST requests and
-JSON for responses. The project event journal is separately specified as
-length-delimited binary \texttt{EventEnvelope} values. A future binary HTTP
-adapter could use \texttt{application/protobuf} without changing the grammar,
-provided it preserves the same message value and correlation fields.
+The figure summarizes the round trip: authenticate and decode HTTP into a
+grammar-permitted protobuf value, record its \texttt{EventEnvelope}, then
+project the selected response or rejection back to HTTP. Provider messages
+remain in-process, not invented HTTP calls. Protobuf fixes the typed value and
+stable tags; HTTP chooses the browser representation, so their bytes differ.
+The current adapter uses \texttt{application/x-www-form-urlencoded} for POST
+requests and JSON for responses; session establishment also issues a secure
+cookie. The journal stores length-delimited binary \texttt{EventEnvelope}s. A
+future binary HTTP codec may change representation without changing message
+values or correlation fields. Field-level conversion follows.
 
 \subsection{Conservative default HTTP projection}
 
