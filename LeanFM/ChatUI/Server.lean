@@ -508,13 +508,14 @@ def chatLayerContext (root layer : String) : IO (Except String String) := do
   let book ← readOr (root ++ "/book/main.tex") ""
   let requirements ← readOr (root ++ "/spec/Requirements.lean") ""
   let implementation ← readOr (root ++ "/spec/Implementation.lean") ""
+  let canvasContrastHardRule := "Canvas text contrast is mandatory: never draw black text on a black/dark background or white text on a white/light background. Set a contrasting foreground immediately before each fillText call, based on the pixels behind that label in the canvas; recompute the choice each animation frame if its background changes. Keep user-specified text colors only when the user explicitly requests them.\n\n"
   let diagramGuidance := "Diagram input is intentionally permissive. The user may supply prose, simplified interaction pseudocode, Mermaid, PlantUML, or refer to an attached sketch or public-web image. Infer the intended semantics and ask only when a material ambiguity remains. When a diagram is useful, return corrected renderable Mermaid in a fenced mermaid block. When motion or simulation materially answers the request, return an actual triple-backtick leanfm-canvas fence containing a literal accessible canvas element and self-contained inline script with no external resources; never spell out the words fenced leanfm-canvas and never print its source as ordinary chat prose. For canvas animations, default text foregrounds to white or near-white over dark canvas drawing backgrounds and black or near-black over light canvas drawing backgrounds. Choose against the actual background painted in the canvas, not the surrounding page theme; preserve a text color only when the user specifically requests it. Check every label, legend, and annotation for contrast. For MCP, model the Model Context Protocol JSON-RPC lifecycle between host/client and MCP server (initialize, notifications/initialized, capability discovery such as tools/list, and invocation such as tools/call with their results), not MQTT broker traffic. Preserve the user's original as provenance; do not claim that an informal sketch is an accepted derived LeanFM view.\n\n"
   match layer with
-  | "guided" => return .ok (diagramGuidance ++ "Working mode: GUIDED PROJECT CONVERSATION. Begin with the user's informal problem and continuously revise the durable book. Do not front-load an exhaustive questionnaire. Ask focused questions only when the answer changes an observable requirement, proof, derived view, or later implementation decision. When the book is specific enough to identify actors, scenarios, messages, outcomes, failure behavior, and requested measurements, say so and ask the remaining focused questions needed to prepare the observable-requirements acceptance gate. Never accept that gate for the user. Only after explicit requirements acceptance, approach the implementation-specification gate by asking unresolved choices such as programming language, process and deployment model, HTTP or another transport, persistence, concurrency, reliability, and tests. Never silently cross either acceptance gate. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"the conversational response, including at most the focused questions needed now\",\"book_source\":\"the complete revised book/main.tex\"}. Current complete book source:\n\n" ++ truncateText book 70000 ++ "\n\nCurrent project Requirements.lean:\n\n" ++ truncateText requirements 40000 ++ "\n\nCurrent project Implementation.lean:\n\n" ++ truncateText implementation 40000)
-  | "book" => return .ok (diagramGuidance ++ "Working layer: BOOK. The user's ordinary request is an instruction to edit the durable project book, not merely advice about how they could edit it. Revise book/main.tex while preserving valid LaTeX and the user's existing material. Do not present generated requirements or code as accepted merely because they are discussed. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"a concise description of the edit\",\"book_source\":\"the complete revised book/main.tex\"}. Do not wrap the JSON in prose or Markdown. If the user is only asking a question and no source change is appropriate, return a normal prose answer instead. Current complete book source:\n\n" ++ truncateText book 70000)
-  | "requirements" => return .ok (diagramGuidance ++ "Working layer: REQUIREMENTS. Derive observable requirements from the book, preserve unresolved design as unresolved, and prepare the requirements acceptance gate. Current book:\n\n" ++ truncateText book 50000 ++ "\n\nCurrent Requirements.lean:\n\n" ++ truncateText requirements 50000)
-  | "implementation_spec" => return .ok (diagramGuidance ++ "Working layer: IMPLEMENTATION SPECIFICATION. Map accepted requirements to languages, transports, runtime APIs, source files, tests, and explicit implementation issues such as Go services or HTTP projection. Do not implement before the separate implementation-specification acceptance gate. Current Requirements.lean:\n\n" ++ truncateText requirements 50000 ++ "\n\nCurrent Implementation.lean:\n\n" ++ truncateText implementation 50000)
-  | "implementation" => return .ok (diagramGuidance ++ "Working layer: IMPLEMENTATION. Implement only from accepted book, requirements, and implementation-specification revisions; preserve traceability and run checks. Current Implementation.lean:\n\n" ++ truncateText implementation 70000)
+  | "guided" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working mode: GUIDED PROJECT CONVERSATION. Begin with the user's informal problem and continuously revise the durable book. Do not front-load an exhaustive questionnaire. Ask focused questions only when the answer changes an observable requirement, proof, derived view, or later implementation decision. When the book is specific enough to identify actors, scenarios, messages, outcomes, failure behavior, and requested measurements, say so and ask the remaining focused questions needed to prepare the observable-requirements acceptance gate. Never accept that gate for the user. Only after explicit requirements acceptance, approach the implementation-specification gate by asking unresolved choices such as programming language, process and deployment model, HTTP or another transport, persistence, concurrency, reliability, and tests. Never silently cross either acceptance gate. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"the conversational response, including at most the focused questions needed now\",\"book_source\":\"the complete revised book/main.tex\"}. Current complete book source:\n\n" ++ truncateText book 70000 ++ "\n\nCurrent project Requirements.lean:\n\n" ++ truncateText requirements 40000 ++ "\n\nCurrent project Implementation.lean:\n\n" ++ truncateText implementation 40000)
+  | "book" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: BOOK. The user's ordinary request is an instruction to edit the durable project book, not merely advice about how they could edit it. Revise book/main.tex while preserving valid LaTeX and the user's existing material. Do not present generated requirements or code as accepted merely because they are discussed. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"a concise description of the edit\",\"book_source\":\"the complete revised book/main.tex\"}. Do not wrap the JSON in prose or Markdown. If the user is only asking a question and no source change is appropriate, return a normal prose answer instead. Current complete book source:\n\n" ++ truncateText book 70000)
+  | "requirements" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: REQUIREMENTS. Derive observable requirements from the book, preserve unresolved design as unresolved, and prepare the requirements acceptance gate. Current book:\n\n" ++ truncateText book 50000 ++ "\n\nCurrent Requirements.lean:\n\n" ++ truncateText requirements 50000)
+  | "implementation_spec" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: IMPLEMENTATION SPECIFICATION. Map accepted requirements to languages, transports, runtime APIs, source files, tests, and explicit implementation issues such as Go services or HTTP projection. Do not implement before the separate implementation-specification acceptance gate. Current Requirements.lean:\n\n" ++ truncateText requirements 50000 ++ "\n\nCurrent Implementation.lean:\n\n" ++ truncateText implementation 50000)
+  | "implementation" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: IMPLEMENTATION. Implement only from accepted book, requirements, and implementation-specification revisions; preserve traceability and run checks. Current Implementation.lean:\n\n" ++ truncateText implementation 70000)
   | _ => return .error "Unknown chat working layer."
 
 /- Make plain-text underscores safe before the first pdfLaTeX build. The
@@ -529,32 +530,24 @@ def ensureTextUnderscoreSupport (source : String) : String := Id.run do
   return String.intercalate "\n" <| (lines.take (index + 1)) ++ ["\\usepackage{underscore}"] ++ (lines.drop (index + 1))
 
 def buildProjectBook (root : String) : IO (Except String Unit) := do
-  let bookPath := fp (root ++ "/book")
-  let sourcePath := fp (root ++ "/book/main.tex")
-  if !(← sourcePath.pathExists) then return .error "book/main.tex does not exist in this project."
-  let source ← IO.FS.readFile sourcePath
-  let normalized := ensureTextUnderscoreSupport source
-  if normalized != source then writeAtomic (root ++ "/book/main.tex") normalized
-  cleanProjectBookIntermediates root
-  let realBook ← IO.FS.realPath bookPath
-  let testOnlyUnsandboxed := (← IO.getEnv "LEANFM_TEST_UNSANDBOXED_BOOK_BUILD") == some "1" &&
-    realBook.toString.startsWith "/tmp/leanfm-chatui-check."
-  let out ← if testOnlyUnsandboxed then
-      IO.Process.output { cmd := "/usr/bin/make", args := #["-C", realBook.toString] }
-    else
-      IO.Process.output {
-        cmd := "bwrap"
-        args := #["--die-with-parent", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--ro-bind", "/usr", "/usr",
-          "--ro-bind", "/bin", "/bin", "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64",
-          "--ro-bind", "/etc", "/etc", "--ro-bind", "/var/lib/texmf", "/var/lib/texmf", "--proc", "/proc", "--dev", "/dev",
-          "--tmpfs", "/tmp", "--bind", realBook.toString, "/work", "--chdir", "/work",
-          "--setenv", "HOME", "/tmp", "--", "/usr/bin/make"] }
-  if out.exitCode == 0 then return .ok ()
-  let processTail := truncateTailText (out.stdout ++ "\n" ++ out.stderr) 12000
-  let latexLog ← readOr (root ++ "/book/main.log") ""
-  let logTail := if latexLog.isEmpty then "" else
-    "\n\nTail of book/main.log:\n" ++ truncateTailText latexLog 12000
-  return .error ("Book build failed:\n" ++ processTail ++ logTail)
+  try
+    let bookPath := fp (root ++ "/book")
+    let sourcePath := fp (root ++ "/book/main.tex")
+    if !(← sourcePath.pathExists) then return .error "book/main.tex does not exist in this project."
+    let source ← IO.FS.readFile sourcePath
+    let normalized := ensureTextUnderscoreSupport source
+    if normalized != source then writeAtomic (root ++ "/book/main.tex") normalized
+    cleanProjectBookIntermediates root
+    let realBook ← IO.FS.realPath bookPath
+    let out ← IO.Process.output { cmd := "scripts/chatui_command.sh", args := #["build-book", realBook.toString] }
+    if out.exitCode == 0 then return .ok ()
+    let processTail := truncateTailText out.stdout 12000
+    let latexLog ← readOr (root ++ "/book/main.log") ""
+    let logTail := if latexLog.isEmpty then "" else
+      "\n\nTail of book/main.log:\n" ++ truncateTailText latexLog 12000
+    return .error ("Book build failed:\n" ++ processTail ++ logTail)
+  catch error =>
+    return .error ("Book worker failed before returning compiler output: " ++ toString error)
 
 def buildErrorSummary (message : String) : String :=
   let lines := message.splitOn "\n" |>.map (·.trimAscii.toString) |>.filter (!·.isEmpty)

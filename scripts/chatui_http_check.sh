@@ -37,6 +37,18 @@ cleanup() {
 trap cleanup EXIT
 
 cd "$repo_root"
+# A compiler process may emit bytes that Lean's String-based process reader
+# cannot decode. The build boundary must preserve readable text, keep the real
+# nonzero exit status, and not turn that diagnostic into an unhandled HTTP 500.
+mkdir -p "$test_root/book-output-fixture"
+printf 'all:\n\t@printf "before-\\377-after\\n"\n\t@false\n' >"$test_root/book-output-fixture/Makefile"
+set +e
+LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 scripts/chatui_command.sh build-book "$test_root/book-output-fixture" >"$test_root/book-output.txt" 2>&1
+book_output_status=$?
+set -e
+test "$book_output_status" -ne 0
+rg -Fq 'before--after' "$test_root/book-output.txt"
+
 python3 scripts/chatui_provider_stub.py >"$provider_log" 2>&1 &
 provider_pid=$!
 # Exercise the production-relevant relative-root configuration while assertions

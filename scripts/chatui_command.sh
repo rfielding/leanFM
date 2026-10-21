@@ -35,6 +35,19 @@ case "$operation" in
     test "$#" -eq 1
     exec timeout 300 make -C "$1" http-check
     ;;
+  build-book)
+    test "$#" -eq 1
+    book_root="$1"
+    if [[ "${LEANFM_TEST_UNSANDBOXED_BOOK_BUILD:-}" == "1" && "$book_root" == /tmp/leanfm-chatui-check.* ]]; then
+      timeout 300 make -C "$book_root" 2>&1 | iconv -c -f UTF-8 -t UTF-8
+    else
+      timeout 300 bwrap --die-with-parent --unshare-pid --unshare-ipc --unshare-uts \
+        --ro-bind /usr /usr --ro-bind /bin /bin --ro-bind /lib /lib --ro-bind /lib64 /lib64 \
+        --ro-bind /etc /etc --ro-bind /var/lib/texmf /var/lib/texmf --proc /proc --dev /dev \
+        --tmpfs /tmp --bind "$book_root" /work --chdir /work --setenv HOME /tmp -- \
+        /usr/bin/make 2>&1 | iconv -c -f UTF-8 -t UTF-8
+    fi
+    ;;
   check-go)
     test "$#" -eq 1
     go_root="$1"
