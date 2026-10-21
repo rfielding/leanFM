@@ -111,12 +111,6 @@ method:
   accepted output catalog for availability, recovery lag, queue pressure,
   memory headroom, or per-session diagrams.
 
-## Event-only specifications leave hidden state unresolved
-
-Validators do not detect when a declared property depends on hidden state that
-the event stream cannot determine; the book now requires instrumenting it,
-justifying an abstraction, or marking the property undetermined.
-
 ## Grammar, protobuf, and choice do not yet form one checked wire path
 
 `scripts/roundtrip_generated_scenario.py` manually builds one `get_docs`
@@ -142,6 +136,8 @@ Events are timestamped points: paired boundaries give durations, while
 links only to IDs earlier in the supplied list. General trace validation still
 needs to check:
 
+- whether declared properties depend on hidden state the event stream cannot
+  determine; instrument it, justify an abstraction, or mark it undetermined;
 - unambiguous start/terminal pairing across retries and overlapping
   `(session, task)` attempts, rejecting missing, malformed, or multiple start
   backpointers;

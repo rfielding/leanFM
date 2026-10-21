@@ -870,15 +870,10 @@ $\lambda_{o,r}$ be the rate offered to server $r$:
  \lambda_{o,r}=\frac{\lambda_o}{R}\ \text{only under ideal balance}.
 \]}
 
-Handled work must still be measured at each completion boundary; neither formula
-says that the offered work completed.
-
-With an ideally balanced routing policy, the nominal demand on each server is
-therefore $D/R$. Spawning more homogeneous servers lowers nominal average
-per-server demand. That statement alone cannot choose a replica count: every added server
-also adds provisioned hardware cost and, while healthy, service cost. The useful
-graph places $D/R$, observed load for each concrete instance, effective supply,
-and total hourly cost on the same replica-count axis.
+Under ideal balance, nominal per-server demand is $D/R$, but this cannot
+choose a replica count by itself: each added server adds provisioned hardware
+cost and, while healthy, service cost. Compare $D/R$, observed instance loads,
+effective supply, and total hourly cost across replica counts.
 
 \textbf{Executable code and finite-model tests:} \texttt{optimalSupply?} in
 \texttt{LeanFM/Artifacts.lean} searches replica counts $1$ through
@@ -887,21 +882,18 @@ selects the least expected hourly cost. \texttt{LeanFM/ArtifactsTests.lean}
 checks one feasible optimum and one infeasible demand. This bounded function does
 not compute observed routing imbalance, latency, or workload-window results; the
 full supply-planning XY output above remains a target, not generated evidence.
-The average $D/R$ is not a promise of balance. Routing policy matters here:
-shard hashing can create a hot shard even when
-aggregate supply exceeds demand, while sticky routing and round-robin make
-different balance assumptions. Product-specific replication, reserved pricing,
-autoscaling delay, and nonlinear volume tiers require additional declared
-constraints rather than silent arithmetic.
+Routing determines whether $D/R$ is realized: shard hashing can create a hot
+shard despite aggregate spare capacity, while sticky routing and round-robin
+make different balance assumptions. Product replication, reserved pricing,
+autoscaling delay, and nonlinear tiers require explicit constraints.
 
-Server count by itself is not a scalability result. An unbounded thought
-experiment can pair unbounded offered work with unbounded servers, backlog,
-cost, and latency; it says nothing useful about work completed within a finite
-deadline. A valid capacity claim fixes a finite observation window and reports
-offered, admitted, completed, rejected, and still-outstanding work together
-with latency, server count, utilization or imbalance, and cost. ``Handled''
-means completed within the declared outcome and latency boundary, not merely
-accepted somewhere in an arbitrarily large system.
+Server count alone is not a scalability result: unbounded offered work paired
+with unbounded servers, backlog, cost, or latency says nothing about service
+within a finite deadline. A capacity claim fixes the observation window and reports
+offered, admitted, completed, rejected, and outstanding work with latency,
+server count, utilization or imbalance, and cost. ``Handled'' means work is
+measured at completion and completed within the declared outcome and latency
+boundary, not merely accepted.
 
 \section{Specified dwell time}
 
