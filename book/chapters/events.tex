@@ -289,10 +289,8 @@ graph into the specification.
 \section{Time is more than a timestamp}
 
 \index{time}
-As defined above, \texttt{priorIds} records predecessor order while
-\texttt{causeId} records direct causation; typed constraints express durations
-over selected start and finish events. A predecessor link alone does not prove
-causation, so changing timeout policy need not rewrite protocol order.
+Timing constraints pair explicit boundaries; changing a timeout bound changes
+the temporal requirement, not the event-order or causal relations defined above.
 
 For two events from the same \texttt{(session, task)}, elapsed time is defined when
 the first event's \texttt{timeAt} value does not exceed the second's:
