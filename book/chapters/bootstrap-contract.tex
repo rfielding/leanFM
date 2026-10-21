@@ -96,10 +96,25 @@ same value. A separately written diagram is not evidence that it matches the
 requirements.
 
 \section{Acceptance gates}
+\label{sec:acceptance-gates}
 
-Both Preface gates require explicit stakeholder acceptance; a model, successful
-build or attractive diagram cannot substitute. Application source and tests
-follow only after both gates.
+The first gate accepts observable requirements; the second separately accepts
+their realization mapping. Both require explicit stakeholder acceptance, not a
+successful build, model response or attractive diagram. Application source and
+tests follow only after both gates and the security review in
+Chapter~\ref{ch:feature-discipline}.
+
+\texttt{Requirements.lean} defines the contract. Its accepted multi-actor wire
+grammar is the conformance oracle: complete decoded traffic is legal or has a
+counterexample; an incomplete capture cannot establish conformance.
+\texttt{Requirements.proto} fixes byte values without choosing transport.
+\texttt{Implementation.lean} records choices needed to realize accepted
+behavior---for example queues, transports, journals or browser mechanisms---each
+mapped to its requirement. Answers to implementation questions belong there
+when they leave observable behavior unchanged. An answer changing messages,
+fields, ordering or another observable must instead revise Requirements and
+return to the first gate. Remove implementation answers made unnecessary by
+later requirements changes rather than preserving them as requirements.
 
 The bootstrap therefore solves a circularity without weakening the gates. The
 book explains what is being built; the generic distribution makes the LeanFM

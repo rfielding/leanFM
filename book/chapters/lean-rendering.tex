@@ -39,23 +39,17 @@ review, while library proofs and algorithms are reused rather than regenerated.
 
 \section{An exploratory Lean proof fixture}
 
-\texttt{book/logic.lean} explores a regularized assignment for
-$1+2+3+\cdots$. Its theorem states that, for each finite cutoff $n$, the
-triangular prefix $n(n+1)/2$ plus the explicitly defined correction
-\texttt{Tail\_S}(n) equals $-1/12$. This is an identity under that definition,
-not convergence of the ordinary partial sums. The file is an optional
-mathematical example, separate from LeanFM's protocol and trace semantics; it is
-not compiled by \texttt{make book}. In this checkout, running
-\texttt{lake env lean book/logic.lean} stops because Mathlib is not installed,
-so this PDF does not claim that the fixture was checked here.
-A validity objection should identify the circular dependency, unchecked
-assumption, or mismatch between a definition and the intended interpretation;
-kernel acceptance alone proves only the stated theorem from its imports and
-axioms.
-
-The complete source is reproduced below so the mathematical construction can be
-read and assessed without relying on chat history or an external file. Its
-inclusion is not a claim that the proof has been checked in this checkout.
+\texttt{book/logic.lean}, reproduced completely below, explores a regularized
+assignment for $1+2+3+\cdots$. For each finite cutoff $n$, its theorem equates
+the triangular prefix $n(n+1)/2$ plus the defined correction
+\texttt{Tail\_S}(n) with $-1/12$. This identity under that definition does not
+assert convergence of ordinary partial sums. The optional example is separate
+from protocol/trace semantics and excluded from \texttt{make book};
+\texttt{lake env lean book/logic.lean} stops here because Mathlib is absent.
+Its inclusion therefore claims no successful proof check. A validity objection
+should identify a circular dependency, unchecked assumption or interpretation
+mismatch; kernel acceptance establishes only the stated theorem under its
+imports and axioms.
 
 \lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize,breaklines=true]{logic.lean}
 

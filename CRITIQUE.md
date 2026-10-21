@@ -26,9 +26,9 @@ in-project tests, and persist evidence under the root. Screenshots are not a gat
 
 ## Book length and release reproducibility (reviewed 2026-10-20)
 
-At 132 pages, preserve the preface-to-PR narrative and technical qualifications
-while consolidating. `book/main.pdf` drives code generation; verify
-reproducibility, tool/content manifests, and semantic equivalence on rebuild.
+Now 130 pages after consolidation; preserve the preface-to-PR narrative and
+technical qualifications. Verify reproducible releases, tool/content manifests,
+and semantic equivalence: `book/main.pdf` drives code generation.
 
 ## The new visual gallery exposes derivation gaps
 

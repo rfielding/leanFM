@@ -1,23 +1,20 @@
 \chapter{Feature Completion as Positive and Negative Proof}
 \label{ch:feature-discipline}
 
-A feature request is usually phrased positively: show the newest message, list
-the project source, accept a transaction, render a diagram, or produce an MP4.
-That sentence identifies a desirable observation, but it does not yet delimit a
-safe implementation.  The same change can introduce stale state, disclose a
-different user's file, exhaust a queue, weaken authentication, corrupt durable
-data, or report success without producing the requested artifact.  LeanFM
-therefore treats feature completion as a paired argument:
+A request to show a message, list source, accept a transaction, render a diagram
+or produce an MP4 states a desirable observation. The change can also introduce
+stale state, disclosure, resource exhaustion, weaker authentication, corruption
+or success without an artifact. Completion therefore requires a paired argument:
 
 \begin{enumerate}
   \item a \emph{positive invariant} states what the system must do; and
   \item applicable \emph{negative invariants} state what the system must never do.
 \end{enumerate}
 
-The review occurs before implementation is declared complete.  It is
-proportional: changing button spacing does not require a cryptographic protocol
-audit, but exposing a filesystem tree requires an authorization and path-boundary
-analysis.  A material risk with no accepted control blocks completion.
+Review before declaring completion, in proportion to the boundary crossed:
+button spacing rarely needs a cryptographic audit; filesystem access needs
+authorization and path analysis. A material risk without an accepted control
+blocks completion.
 
 \section{The logical shape of a feature}
 
@@ -53,9 +50,8 @@ still match the claim.
 
 \section{Stability review before security review}
 
-Stability asks whether the feature continues to behave coherently when its
-environment changes.  Before editing code, identify the existing invariant and
-inspect at least the applicable dimensions below.
+Before editing code, identify the existing invariant and review the applicable
+ways an environment change could break it:
 
 \begin{description}
   \item[Regression.] Which accepted behavior, file format, route, proof, or UI
@@ -78,16 +74,14 @@ inspect at least the applicable dimensions below.
     representation rather than reinterpreting old bytes silently.
 \end{description}
 
-The result is not a generic checklist pasted into every requirement.  It is a
-small set of concrete invariants tied to the changed boundary.  If none of these
-dimensions is material, record that conclusion briefly and continue.
+Retain concrete invariants at the changed boundary, briefly recording when a
+dimension is non-material.
 
 \section{Security as forbidden observable behavior}
 
-Security requirements are most reviewable when stated as observations the
-system must not permit.  ``Use authentication'' names a mechanism; ``a user
-never reads a project they do not own'' names the protected behavior.  For a
-material feature, the review names four things before selecting a control:
+``A user never reads a project they do not own'' states protected behavior;
+``use authentication'' only names a mechanism. Before selecting a control,
+identify:
 
 \begin{enumerate}
   \item the trust boundary crossed by the feature;
@@ -96,20 +90,17 @@ material feature, the review names four things before selecting a control:
   \item the forbidden observable outcome.
 \end{enumerate}
 
-Typical negative families include unauthorized access, cross-user or
+Applicable forbidden behaviors include unauthorized access, cross-user or
 cross-project disclosure, secret persistence or logging, injection, path or
 symlink escape, replay, request/response confusion, privilege expansion,
-executable media, resource exhaustion, and fail-open behavior.  The invariant
-must be precise enough to test.  ``Be secure'' is not a property; ``a requested
-source path that is absent from the authorized project inventory never returns
-bytes'' is.
+executable media, resource exhaustion and fail-open behavior. State testable
+invariants, such as ``a source path absent from the authorized project inventory
+never returns bytes.''
 
-Every material negative invariant needs both a control and evidence.  The
-control is the implementation rule---for example canonical-path confinement,
-an authenticated project identifier, an allowlisted file inventory, a byte
-limit, or an atomic revision comparison.  Evidence is a negative test or proof
-that actively attempts the forbidden transition.  A control with no adversarial
-test is an assertion about code shape, not yet evidence about behavior.
+Map each material negative invariant to a control---canonical-path confinement,
+authenticated project identity, an allowlisted inventory, a byte limit or an
+atomic revision comparison---and a negative test or proof. A mechanism alone
+does not establish the forbidden transition's absence.
 
 \section{The feature-completion ledger}
 
@@ -136,10 +127,8 @@ explicit completion blocker. \\
 \end{tabular}
 \end{center}
 
-This ledger prevents two symmetric mistakes.  A security-only review can forbid
-everything while never demonstrating that the requested feature works.  A
-happy-path-only implementation can satisfy one demonstration while admitting a
-reachable disclosure or corruption trace.  Completion requires both sides.
+Both sides need evidence: forbidding failures does not demonstrate the requested
+feature, and a successful demonstration does not rule out disclosure or corruption.
 
 \section{Worked example: the project Source view}
 
@@ -164,14 +153,12 @@ listed.  Applicable negative invariants therefore include:
         succeeded.
 \end{itemize}
 
-The controls are an authenticated explicit project identifier, canonical root
-resolution, membership in the exact allowlisted source inventory, a UTF-8 read
-boundary, a finite response limit, and React state owned by the project-keyed
-workspace.  Negative tests request another account's file and a guessed
-\texttt{.git/config}; both must return not-found without disclosing whether the
-underlying file exists.  The positive test creates a project-local source file,
-lists it, opens it, and checks its exact content.  Only the conjunction supports
-the word ``complete.''
+Controls are an authenticated explicit project ID, canonical root resolution,
+exact source-inventory membership, UTF-8 reads, a finite response limit and
+project-keyed React state. Negative tests request another account's file and a
+guessed \texttt{.git/config}; both return not-found without revealing existence.
+The positive test creates, lists and opens a project-local file and checks its
+exact content.
 
 \section{Worked example: chat auto-scroll}
 
@@ -183,25 +170,12 @@ project sidebar, and must reset with the project-keyed chat component.  No new
 authorization boundary is crossed, so a full threat model would be noise; the
 project-isolation and stale-response invariants remain material.
 
-This illustrates proportionality.  The method always asks both questions---what
-must happen, and what must never happen---but the depth of analysis follows the
-boundary crossed by the feature.
-
 \section{When the result is not complete}
 
-A feature remains incomplete when any of the following is true:
-
-\begin{itemize}
-  \item the positive behavior is described but not observable or tested;
-  \item a material forbidden behavior has no durable negative requirement;
-  \item a negative requirement has no implementation control;
-  \item a material control has no negative test or proof;
-  \item a liveness claim omits the fairness or availability assumption it needs;
-  \item validation failed, was skipped, or tested a substitute artifact; or
-  \item residual risk changes stakeholder-visible behavior and has not been
-        accepted at the appropriate requirements or implementation gate.
-\end{itemize}
-
-In those cases LeanFM reports the blocker and returns to the relevant gate.  A
-green build, persuasive diagram, or plausible mechanism cannot substitute for
-the paired positive and negative argument.
+An unobservable or untested positive claim, missing durable negative requirement,
+uncontrolled risk or material control without a negative test or proof leaves
+the ledger incomplete. So does a liveness claim missing its fairness or
+availability assumptions, failed or skipped validation, or a check of a
+substitute artifact. Report the blocker and return to the relevant gate;
+stakeholder-visible residual risk requires acceptance there. A green build or
+persuasive diagram does not fill these gaps.

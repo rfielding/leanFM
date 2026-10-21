@@ -60,23 +60,17 @@ obligation. If it changes none of them, it has not improved the specification.
 
 \section{The server is a staging environment}
 
-The executable \texttt{lake exe leanfm-server} serves the assistant workbench
-on the loopback interface. Every project owns one exclusive root;
-Section~\ref{sec:one-project-directory} gives the hosted layout and
-Chapter~\ref{ch:bootstrap-contract} the portable contract.
-\texttt{Requirements.lean} specifies observable behavior;
-\texttt{Requirements.proto} fixes byte values, not transport.
-\texttt{Implementation.lean} maps them to HTTP, in-process channels, TCP, or
-another adapter; validation, views, metrics, reports, and OpenAPI project the
-same model.
+\texttt{lake exe leanfm-server} serves the workbench on loopback. Every project
+owns one exclusive root (hosted layout: Section~\ref{sec:one-project-directory};
+portable contract: Chapter~\ref{ch:bootstrap-contract}). Project-relative and
+canonical absolute paths are accepted only when their resolved targets remain
+beneath that root; traversal and escaping symlinks fail closed.
 
-The Preface explains the project-copy and deletion rationale. Path checks accept
-project-relative or canonical absolute forms only when the resolved target
-remains beneath the selected root; traversal and escaping symlinks fail closed.
-
-The server may use a language model to propose edits. Compilation and validation
-remain deterministic. The model is not the proof checker, and fluent prose is
-not evidence that an obligation holds.
+The three specifications have the separate roles defined in
+Section~\ref{sec:acceptance-gates}. HTTP, in-process channels, TCP and other
+adapters are implementation choices; validation, views, metrics, reports and
+OpenAPI project the same model. A language model may propose edits, but
+compilation and validation remain deterministic: prose establishes no proof.
 
 \subsection{The code that creates the TCP listener}
 
@@ -177,46 +171,30 @@ and live checker discoverable to an agent client.
 
 \section{A tour of the LeanFM chat}
 
-The Chat phase is the ordinary front door to a project. Select one project in
-the left rail and then select \textbf{Chat}. Each project owns one complete
-mounted workspace containing Project memory, Chat, Book, Grammar, Tasks and
-Source. Switching project or phase changes visibility without destroying the
-inactive workspace, so drafts, selections, scroll positions, queues, timers,
-previews and fetched results remain in place. An active turn continues while
-its project or Chat phase is hidden. Nothing from a previously selected project
-is a fallback. The header identifies the
-provider, model and non-secret key fingerprint that will be billed, while the
-per-turn usage line reports the tokens attributed to that response.  Every
-message has its own visible timestamp.  While a turn is active, an incrementing
-timer distinguishes a slow operation from a stopped browser request, and more
-prompts may be placed in the project-local FIFO without interrupting the active
-one.
+Select a project in the left rail, then \textbf{Chat}. Its mounted workspace
+contains Project memory, Chat, Book, Grammar, Tasks and Source. Switching
+project or phase changes visibility while preserving drafts, selections,
+scroll positions, queues, timers, previews and fetched results. Active work
+continues while hidden. Each message has a timestamp; the header identifies
+the billed provider, model and non-secret key fingerprint, with response token
+usage shown per turn.
 
-Chat is deliberately earlier than Book, Grammar, Tasks and Source.  A
-stakeholder can begin with ordinary language, images, rough pseudocode or a
-question about an unfamiliar protocol.  The response may revise the project
-book, ask one focused blocking question, derive a view from the current
-requirements, or create a scratch visual explanation.  It must not pretend
-that an attractive explanation has passed either acceptance gate.
-
-This is one conversation, not a hidden mode selector.  For every turn the
-server supplies the model with the \emph{selected} project's complete editable
-book and canonical requirements and implementation specifications, followed by
-a bounded recent transcript.  The LeanFM book and a previously selected
-project are never fallback context.  This boundary matters: otherwise a fluent
-answer can describe GoServer while silently editing nothing, or can display
-LeanFM's own book inside GoServer.
+Chat accepts ordinary language, images, rough pseudocode and protocol
+questions before Book, Grammar, Tasks or Source are settled. A response may
+revise the book, ask a focused blocking question, derive a requirements view or
+create a scratch explanation; none accepts a gate. For each turn the model
+receives the selected project's complete editable book and canonical
+requirements and implementation specifications, then a bounded recent
+transcript. Neither LeanFM's own book nor another project supplies fallback
+context. This is one contextual conversation, without a hidden mode selector.
 
 \subsection{Progress, cancellation and the Operational trace}
 
-Long model turns must remain inspectable work, not a blocking chat spinner. A
-project-wide \textbf{Agent running} banner remains visible in every phase. It
-names the model captured for the active prompt, shows elapsed time and the
-latest real stage, and supplies a cooperative \textbf{Cancel} control. The
-client polls status, Project memory, Source and the Operational trace every two
-seconds; a transient polling failure retains the last successful value and is
-retried. Users may therefore inspect a changing book, specification or source
-tree while the agent continues.
+Every phase shows an \textbf{Agent running} banner with the active prompt's
+captured model, incrementing elapsed time, latest real stage and cooperative
+\textbf{Cancel} control. Status, Project memory, Source and the Operational
+trace are polled every two seconds; transient failures retain the last
+successful value and retry. The changing artifacts remain inspectable.
 
 The Operational trace is appended before the next agent step. It records each
 bounded workspace action as started, completed, failed or rejected. A proposed
@@ -294,34 +272,18 @@ $AG\,\neg p$, and \texttt{preparedFor} becomes $EF\,p$. A
 \texttt{where\_} trace predicate is displayed with its stable identifier under
 the invariant $AG\,p$. Each card identifies its requirements origin.
 
-The implementation specification remains separate. Requirements define the
-observable behavior the system must provide. For a wire protocol, the accepted
-grammar is the oracle over messages among all actors: a complete, decoded
-traffic trace should be classifiable as conforming or rejected with a
-counterexample. An incomplete capture is not evidence of conformance.
-
-Implementation records choices needed to realize that accepted behavior in
-code, mapping each choice to the relevant requirement; it does not add
-requirements or change the contract. It may choose a queue, transport, journal
-or browser mechanism. Once requirements are accepted, implementation questions
-ask how to realize them, not what the protocol should be. Record their answers
-in \texttt{Implementation.lean}. If an answer changes messages, fields,
-ordering, or any other observable behavior, it is not merely an implementation
-choice: revise and reaccept Requirements first. Conversely, if a requirements
-change makes an implementation answer unnecessary, remove that answer without
-changing the protocol. This provenance keeps the two acceptance gates
-meaningful.
+The implementation mapping follows Section~\ref{sec:acceptance-gates}: its
+answers realize accepted behavior and cite their requirements. It cannot
+silently introduce a property or change the wire contract.
 
 \subsection{How a chat turn becomes a durable edit}
 \label{subsec:chat-turn-durable-edit}
 
-Ordinary design discussion should normally improve the book.  The provider
-therefore returns a small structured envelope containing a conversational
-reply and, when the turn changes durable understanding, the complete proposed
-\texttt{book/main.tex}.  The server does not trust the claim that this is an
-update.  It enforces the project-root and size boundaries, writes the candidate
-atomically, and builds the project PDF in the isolated book worker.  Only a
-successful build commits the revision and sets \texttt{book\_updated=true}.
+When discussion changes durable understanding, the provider's structured reply
+includes the complete proposed \texttt{book/main.tex}. The server enforces
+root and size boundaries, writes atomically and builds in the isolated book
+worker. Only a successful build commits the revision and sets
+\texttt{book\_updated=true}.
 If compilation fails, the first bounded compiler diagnostic becomes visible
 before repair begins and the exact previous source is restored after every
 candidate. At most three repair requests may run, each with a short deadline.
@@ -344,13 +306,12 @@ says ``implemented,'' or pastes a Go listing into chat, cannot be SUCCESS while
 missing, the valid alternative is a focused selectable question naming that
 blocker---not an invented implementation and not another generic plan.
 
-These positive and negative requirements are paired deliberately.  The
-positive invariant is that a substantive turn can create a validated durable
-artifact.  The negative invariant is that no malformed, oversized,
-cross-project, unbuildable, or merely narrated artifact can be reported as
-committed.  The deterministic HTTP conformance test exercises both a compiled
-book update and an actual \texttt{source/main.go} workspace write, and separately
-checks that an implementation claim with an empty Source phase is rejected.
+This instantiates Chapter~\ref{ch:feature-discipline}: substantive turns can
+create validated artifacts, while malformed, oversized, cross-project,
+unbuildable or merely narrated artifacts cannot be reported as committed. The
+deterministic HTTP test checks a compiled book update, an actual
+\texttt{source/main.go} write and rejection of an implementation claim with
+empty Source.
 
 \subsection{Example: ask to see MCP move}
 

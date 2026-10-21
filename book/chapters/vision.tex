@@ -22,27 +22,18 @@ apply to one artifact.
 
 \section{Behaviour before machinery}
 
-The primary object is a set of permitted, visible histories. An implementation may
-use threads, actors, queues, databases, caches, or continuations. Those decisions
-matter operationally, but they are not automatically part of the contract.
-Promoting all internal state into the model creates a product state space whose
-size grows exponentially with independently varying components. Worse, it makes
-the specification brittle under harmless refactoring.
+The primary object is a set of permitted, visible histories: who communicated
+with whom, which event occurred, what it carried, and which predecessor order it
+extends. Protocol bytes, ordering and persistent disk formats become durable
+compatibility boundaries once another process, customer or stored data set
+depends on them.
 
-Protocols and persistent disk formats tend to live forever. Once another
-process, customer, or stored data set depends on their bytes and ordering, they
-become compatibility boundaries that must survive many implementations. The
-internal structure of software is more chaotic: data structures, control flow,
-threads, caches, and retry machinery are routinely replaced while the external
-contract remains. Modeling every such choice would couple the specification to
-short-lived machinery and introduce many more independently varying states to
-explore. Concentrating first on the durable external boundary therefore both
-protects what is hardest to change and keeps the tractable state space focused
-on behavior that implementations must continue to preserve.
-
-We therefore begin with \emph{behaviour}: who communicated with whom, what kind of
-event occurred, what information it carried, and which predecessor order it extends.
-Internal state enters only when it changes an observable promise.
+Threads, actors, queues, databases, caches, continuations and retry machinery
+are realization choices unless they change that observable contract. Modeling
+every internal choice couples requirements to harmless refactoring and creates
+a product state space that grows exponentially with independently varying
+components. Begin with the durable boundary; introduce internal state only when
+it changes an observable promise.
 
 \section{Comparison with TLA+}
 
