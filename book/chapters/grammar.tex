@@ -124,15 +124,9 @@ authorization-code branch succeeds.}
 \end{figure}
 \clearpage
 
-At the composition level, \texttt{oauth} sequences the request-and-redirect
-interaction with the authorization choice.  It includes the exchange-and-fetch
-interaction only after the granted branch.
-
-This exposes two useful levels without defining two protocols. At the higher
-level, \texttt{oauth} is three production references. Expanding a reference reveals
-its events and nested alternatives. The same productions can be reused in another
-system, placed in parallel with independent interactions, guarded, or repeated.
-Composition operates on their accepted event languages; it is not textual copying.
+Chapter~\ref{ch:oauth-example} gives the complete production definitions,
+nested alternatives and guarded exchange; these terminal-level diagrams isolate
+the granted and denied outcomes for comparison.
 
 \section{Parameters carry information}
 
