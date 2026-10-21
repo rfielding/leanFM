@@ -109,14 +109,12 @@ is a substitute for the other two.
 
 \section{Construction is not a runtime dependency}
 
-Codex is not part of the delivered server. Claude, Gemini, Codex, or a human may
-act as the construction agent that turns this PDF and the generic bootstrap
-into accepted specifications and source. After construction, the user starts
-the LeanFM server, visits its root URL in an ordinary browser, creates or logs
-into an account, supplies a model-provider key, and conducts the requirements
-argument through LeanFM's own ChatGPT-like interface. The running server talks
-to the selected model provider through its documented message protocol; it does
-not require the construction agent, its conversation, or its local tooling.
+The construction agent is not part of the delivered server. After construction,
+the user starts LeanFM, visits its root URL in an ordinary browser, creates or
+logs into an account, supplies a model-provider key, and conducts the
+requirements argument through LeanFM's own ChatGPT-like interface. The server
+talks to the selected model provider through its documented message protocol;
+it does not require the construction agent, its conversation, or local tooling.
 
 Consequently, a reconstruction is not successful merely because it can be
 driven from a coding-agent terminal. It must build a standalone executable,
