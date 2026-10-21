@@ -470,49 +470,38 @@ Generated from \texttt{RuntimeReliabilityDiagram.lean}, with provenance in
 paths, not logical implication or message sequence.
 
 \begin{description}
-  \item[Series adds failure dependencies.] A request needs ingress, a web actor,
-    a router and its selected shard. Adding required stages cannot improve that
-    path's availability; independent stage availabilities multiply. Long series
-    paths therefore tend to reduce reliability even when each stage is reliable.
-  \item[Parallel replicas provide failover.] Proxy and web actors are duplicated
-    in parallel within their series stages. Database shards run as parallel data
-    partitions with separately calculated availability gates; each shard is
-    itself replicated in parallel. ``Parallel shards'' does
-    not mean one shard can serve another shard's missing data.
-    An additional usable alternative can improve
-    a pool's availability. Shared failure domains and increased quorum thresholds
-    mean that additional replicas do not provide an unconditional improvement.
-  \item[Sharding divides offered work.] Additional shards can increase handled
-    load when requests distribute well. Hot keys, shared routing, storage and
-    cross-shard operations can limit the gain. Shards are data partitions, not
-    interchangeable failover copies; replication protects each partition.
-\end{description}
-
-Evaluate these illustrative dependency gates against timestamped observations
-and declared uptime/MTTR assumptions. Kubernetes schedules and restarts actors
-but does not supply the application's quorum or consistency protocol.
-
-\begin{description}
+  \item[Request path.] A write needs ingress, web, router, and its selected
+    shard; a multi-shard operation needs every shard its semantics require.
+    Adding required series stages cannot improve availability; independent
+    stage availabilities multiply. Kubernetes schedules and restarts actors but
+    does not supply the application's quorum or consistency protocol.
+  \item[Replica pools.] Proxy and web actors are parallel alternatives within
+    series stages; each data shard has its own parallel replica gate. A usable
+    alternative may improve pool availability, but shared failure domains and
+    higher quorum thresholds can erase that benefit. Shards are partitions, not
+    interchangeable failover copies.
   \item[Stateless pool.] Zero ready instances makes new requests unavailable.
-    With surviving instances, compare offered work with the pool's sustainable
-    capacity under the declared latency bound. Overload may cause bounded
-    rejection, growing queues, or deadline failures while heartbeats continue.
-    Round-robin request counts need not balance work when requests differ in cost.
+    Otherwise compare offered work with sustainable capacity under the latency
+    bound: overload may trigger rejection, queue growth, or deadline misses even
+    while heartbeats continue. Round-robin request counts need not balance
+    unequal-cost work.
   \item[Replicated shard.] Majority-acknowledged writes require a current primary
-    and a communicating quorum of eligible configured members. Heartbeats
-    received by one external observer do not establish mutual reachability.
-    A restarted member must catch up before it counts as ready.
-  \item[Read operation.] Declare its consistency separately. Loss of write
-    quorum does not automatically forbid local stale reads; neither does a
-    surviving copy establish that a linearizable read is available.
-  \item[Shared dependency.] A failed ingress path or routing service can affect
-    every shard. Metadata-service effects depend on the operation and whether
-    valid routing information is already cached; do not mark every read or write
-    unavailable merely because a metadata update cannot proceed.
+    and a communicating quorum of eligible configured members; one external
+    observer's heartbeats do not establish mutual reachability. A restarted
+    member is not ready until it catches up.
+  \item[Read and shared dependencies.] Declare read consistency separately: a
+    lost write quorum may still permit local stale reads, but a surviving copy does
+    not prove linearizability. Ingress or routing failure can affect all shards;
+    metadata failure depends on the operation and cached routing, so does not
+    necessarily disable every read or write.
+  \item[Sharding.] Additional partitions can increase capacity when work
+    distributes well; hot keys, shared dependencies, and cross-shard operations
+    limit the gain. Replication protects each partition, not other shards.
 \end{description}
 
-A multi-shard operation depends on every shard its semantics require, so
-availability is operation-specific, not a total replica count.
+Evaluate these dependency gates against timestamped observations and declared
+uptime/MTTR assumptions; availability is operation-specific, not a total
+replica count.
 
 Use detector-derived $u_i(t)\in\{0,1\}$ values and declared boundaries to
 combine instances through each operation's series, parallel, or threshold gate.
