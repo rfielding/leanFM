@@ -41,20 +41,13 @@ def requestQuote (customer shop : Actor) : Scenario :=
 
 \subsection{Variables and assignment}
 
-There are two kinds of assignment.
-
-\begin{itemize}
-  \item Ordinary \texttt{let x := expression} evaluates a known Lean expression.
-  \item \texttt{let x <- declare T "x"} introduces a symbolic value of type
-        \texttt{T}. The grammar binds it when generating or matching a trace, and
-        later events may reuse it.
-\end{itemize}
-
-Variables are immutable. A later \texttt{let attempt := attempt + 1} creates a new
-binding rather than mutable hidden state. Information flow is consequently visible
-in the grammar's data dependencies. Equality of two occurrences of
-\texttt{requestId} means they carry the same value, not merely values with the same
-field name.
+Ordinary \texttt{let x := expression} evaluates a known Lean expression;
+\texttt{let x <- declare T "x"} introduces a symbolic value of type
+\texttt{T}, bound by trace generation or matching and reusable in later events.
+Bindings are immutable: a later \texttt{let attempt := attempt + 1} creates a
+new binding rather than mutable hidden state. Data flow is therefore explicit,
+and repeated \texttt{requestId} occurrences denote the same value, not merely
+values with the same field name.
 
 A value received from the environment is bound by matching an observable event:
 
