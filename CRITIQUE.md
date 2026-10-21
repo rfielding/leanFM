@@ -35,28 +35,25 @@ semantic diff after regeneration.
 
 ## The book's language and maturity claims exceed current implementation
 
-Proposed forms (`scenario`, `declare`,
-`from_`, `to_`, `emit`, `receive`, exported bindings, `refineMessage`, role
-projection, symbolic encryption, `composeRoles`) still lack executable Lean
-definitions. Current types are `RequirementSpec`,
+Proposed forms (`scenario`, `declare`, `from_`, `to_`, `emit`, `receive`, exports,
+`refineMessage`, role projection, symbolic encryption, `composeRoles`) lack
+executable Lean definitions. The current API is `RequirementSpec`,
 `TaskRequirement`, and `GrammarExpr`; guards are strings and event values are
-named, not typed-bound. Validation checks grammar/task and message references,
-atom endpoints, and threshold bounds, but cannot compile that DSL, generate or
-recognize traces, or derive participant projections.
+not typed-bound. Validation checks grammar/task/message references, atom
+endpoints, and threshold bounds, but cannot compile the DSL, generate/recognize
+traces, or project participants.
 
-Lean evidence covers only definitions and proofs actually checked in Lean;
-Python, JavaScript, shell, Graphviz, protobuf, and LaTeX outputs are not proved
-by their presence in the same project. `native_decide` checks finite decidable
-propositions, not empirical assumptions or external parsers.
-Compile claimed executable listings in CI, label the rest illustrative, and do
-not let a polished figure or successful build imply stronger evidence.
-The theorem gallery in `LeanFM/Render.lean` also hard-codes cards rather than
-reading elaborated declarations; despite being labeled summaries, they can drift
-or conflate definitions and theorems. `RequiredProof` is an obligation, not a
-proof term, and validation does not check its predicate. The local
-`lake env lean book/logic.lean` fails because Mathlib is unavailable. Generate
-cards from declarations or a typed AST, and link them to source and successful
-builds.
+Lean verifies only elaborated definitions and proofs; Python, JavaScript, shell,
+Graphviz, protobuf, and LaTeX outputs are not proved by co-location.
+`native_decide` covers finite decidable propositions, not empirical assumptions
+or external parsers. Compile claimed executable listings in CI, label examples
+illustrative, and do not infer stronger evidence from a polished figure or green
+build. `LeanFM/Render.lean` hard-codes theorem-gallery cards instead of reading
+declarations, so they can drift or conflate definitions with theorems.
+`RequiredProof` is not a proof term, and its predicate is unchecked;
+`lake env lean book/logic.lean` still fails without Mathlib.
+Generate cards from declarations or a typed AST and link them to source and
+successful builds.
 
 ## The new visual gallery exposes derivation gaps
 

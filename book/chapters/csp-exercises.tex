@@ -333,14 +333,12 @@ checked by searching for a reachable violation:
     \neg\operatorname{permitted}(P,a,\operatorname{disclose}(s))).
 \]}
 
-This functional style is deliberately different from a full epistemic modality
-$K_a\varphi$, which quantifies over every legal history indistinguishable to
-actor $a$. The calculated predicate
-\texttt{knows(a, secret, state)} asks whether a declared deduction closure
-contains one value in one state. It is cheaper, directly executable, and covers
-many protocol secrecy and authorization properties. Use the full epistemic
-relation only when the requirement truly compares indistinguishable histories,
-such as anonymity, uncertainty, or ``Alice knows that Bob knows.''
+This state-local \texttt{knows} predicate is not the full epistemic modality
+$K_a\varphi$ over indistinguishable histories defined in
+Chapter~\ref{ch:ctl}. It tests whether one declared deduction closure contains
+a value, an executable check for many secrecy and authorization claims; use
+$K_a$ when the requirement compares histories, such as anonymity or ``Alice
+knows that Bob knows.''
 
 \section{Otway--Rees: guards are not optional decoration}
 
