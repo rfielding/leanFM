@@ -175,8 +175,8 @@ at weights 3:2, while each received message determines a single server action.
 }
 \end{center}
 
-Only one user-choice pair occurs in a run; probabilities and probability-one
-server edges come from the checked \texttt{Choice} values.
+Weights and probability-one server edges come from the checked
+\texttt{Choice} values.
 
 \begin{center}
 \AccessibleFigure{State diagram read from top to bottom. Start proceeds deterministically to request queued and then menu ready. Menu ready splits left to browse queued with probability three fifths and right to purchase queued with probability two fifths. Both branches then proceed deterministically through a ready state to a terminal state. Browse takes six synthetic milliseconds end to end. Purchase takes nine.}{%
@@ -200,7 +200,7 @@ their durations give
   \mathbb{E}[T]=\frac35(6)+\frac25(9)=\frac{36}{5}\ \mathrm{ms}=7.2\ \mathrm{ms}.
 \]}
 \begin{center}
-\AccessibleFigure{Bar chart of the terminal distribution. Browse has probability three fifths. Purchase has probability two fifths. Together the bars have probability mass one.}{%
+\AccessibleFigure{Bar chart of the terminal distribution. Browse has probability three fifths. Purchase has probability two fifths.}{%
   \input{generated/stochastic-user-outcomes.tex}%
 }
 \end{center}
