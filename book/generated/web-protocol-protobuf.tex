@@ -1,71 +1,71 @@
 \begin{description}[style=nextline,leftmargin=0pt]
-\item[\nolinkurl{LoginSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: username (string); 2: credential (bytes).
-\item[\nolinkurl{LoginAccepted}] LeanFMServer sends to UserBrowser. Tagged fields: 1: user\_id (string); 2: session\_id (string).
-\item[\nolinkurl{LoginRejected}] LeanFMServer sends to UserBrowser. Tagged fields: 1: reason (string).
-\item[\nolinkurl{AccountCreateSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: username (string); 2: login\_credential (bytes); 3: provider (string); 4: api\_key (bytes).
-\item[\nolinkurl{ProviderKeyCheckRequested}] LeanFMServer sends to ModelProvider. Tagged fields: 1: provider (string); 2: verification\_id (string).
-\item[\nolinkurl{ProviderKeyVerified}] ModelProvider sends to LeanFMServer. Tagged fields: 1: verification\_id (string); 2: provider\_account (string).
-\item[\nolinkurl{ProviderKeyRejected}] ModelProvider sends to LeanFMServer. Tagged fields: 1: verification\_id (string); 2: reason (string).
-\item[\nolinkurl{AccountCreated}] LeanFMServer sends to UserBrowser. Tagged fields: 1: user\_id (string); 2: credential\_ref (string).
-\item[\nolinkurl{AccountCreateRejected}] LeanFMServer sends to UserBrowser. Tagged fields: 1: reason (string).
-\item[\nolinkurl{TaskModelRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: task\_id (string); 3: requirements\_revision (string).
-\item[\nolinkurl{TaskModelReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: task\_id (string); 2: interaction\_artifact\_id (string); 3: state\_machine\_artifact\_id (string); 4: message\_sequence\_artifact\_id (string); 5: constraint\_ids (string).
-\item[\nolinkurl{MessageSequenceRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: task\_id (string); 3: session\_id (string).
-\item[\nolinkurl{MessageSequenceReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: task\_id (string); 2: session\_id (string); 3: event\_ids (string).
-\item[\nolinkurl{ProtobufObjectRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: event\_id (string).
-\item[\nolinkurl{ProtobufObjectReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: event\_id (string); 2: protobuf\_type (string); 3: encoded\_object (bytes); 4: redacted\_json (string).
-\item[\nolinkurl{WebResearchRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: request\_id (string); 4: question (string); 5: supplied\_urls (string).
-\item[\nolinkurl{WebResearchDispatched}] LeanFMServer sends to ModelProvider. Tagged fields: 1: request\_id (string); 2: model (string); 3: research\_mode (string).
-\item[\nolinkurl{WebSearchPerformed}] ModelProvider sends to LeanFMServer. Tagged fields: 1: request\_id (string); 2: queries (string).
-\item[\nolinkurl{WebPageOpened}] ModelProvider sends to LeanFMServer. Tagged fields: 1: request\_id (string); 2: url (string); 3: title (string).
-\item[\nolinkurl{WebResearchReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: request\_id (string); 2: parts (bytes); 3: source\_urls (string).
-\item[\nolinkurl{WebResearchFailed}] LeanFMServer sends to UserBrowser. Tagged fields: 1: request\_id (string); 2: reason (string).
-\item[\nolinkurl{MarkerboardAssistRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: artifact\_id (string); 3: base\_revision (uint64); 4: diagram\_kind (string); 5: source (string); 6: instruction (string); 7: mode (string); 8: credential\_ref (string).
-\item[\nolinkurl{MarkerboardSyntaxHelpReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifact\_id (string); 2: base\_revision (uint64); 3: help\_markdown (string).
-\item[\nolinkurl{MarkerboardAssistDispatched}] LeanFMServer sends to ModelProvider. Tagged fields: 1: request\_id (string); 2: artifact\_id (string); 3: base\_revision (uint64); 4: diagram\_kind (string); 5: source (string); 6: instruction (string).
-\item[\nolinkurl{MarkerboardAssistReturned}] ModelProvider sends to LeanFMServer. Tagged fields: 1: request\_id (string); 2: proposed\_source (string); 3: explanation (string); 4: input\_tokens (uint64); 5: output\_tokens (uint64).
-\item[\nolinkurl{MarkerboardPatchProposed}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifact\_id (string); 2: base\_revision (uint64); 3: proposed\_source (string); 4: explanation (string).
-\item[\nolinkurl{MarkerboardPatchAccepted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: artifact\_id (string); 2: base\_revision (uint64); 3: proposed\_source (string).
-\item[\nolinkurl{MarkerboardPatchRejected}] UserBrowser sends to LeanFMServer. Tagged fields: 1: artifact\_id (string); 2: base\_revision (uint64).
-\item[\nolinkurl{MarkerboardDraftUpdated}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifact\_id (string); 2: revision (uint64); 3: source (string).
-\item[\nolinkurl{ProjectListRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: user\_id (string).
-\item[\nolinkurl{ProjectListReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_ids (string).
-\item[\nolinkurl{ProjectCreateRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: display\_name (string).
-\item[\nolinkurl{ProjectCreated}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: display\_name (string).
-\item[\nolinkurl{ProjectOpenRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string).
-\item[\nolinkurl{ProjectOpened}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: current\_requirements\_revision (string).
-\item[\nolinkurl{ProjectDeleteRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: confirmation (string).
-\item[\nolinkurl{ProjectDeleted}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string).
-\item[\nolinkurl{ProblemInquiryPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: question (string).
-\item[\nolinkurl{ProblemStatementSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: statement (string).
-\item[\nolinkurl{AmbiguityQuestionPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: ambiguity\_id (string); 3: question (string); 4: affected\_artifacts (string).
-\item[\nolinkurl{ClarificationSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: ambiguity\_id (string); 3: answer (string).
-\item[\nolinkurl{ProjectBookRevised}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: book\_revision (string); 3: decision\_ids (string); 4: light\_pdf (string); 5: dark\_pdf (string).
-\item[\nolinkurl{RequirementsReviewPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: derived\_artifact\_ids (string); 4: open\_ambiguity\_ids (string).
-\item[\nolinkurl{SpecificationRequirementsAccepted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string).
-\item[\nolinkurl{ImplementationReviewPresented}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: implementation\_revision (string); 4: traceability\_report (string).
-\item[\nolinkurl{SpecificationImplementationAccepted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: implementation\_revision (string).
-\item[\nolinkurl{ImplementationAuthorizationConfirmed}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: requirements\_revision (string); 3: implementation\_revision (string).
-\item[\nolinkurl{ProviderCredentialSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: provider (string); 2: api\_key (bytes); 3: retention (string).
-\item[\nolinkurl{ProviderCredentialAccepted}] LeanFMServer sends to UserBrowser. Tagged fields: 1: credential\_ref (string); 2: billing\_source (string).
-\item[\nolinkurl{ProviderCredentialRejected}] LeanFMServer sends to UserBrowser. Tagged fields: 1: reason (string).
-\item[\nolinkurl{ChatPromptSubmitted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: message\_id (string); 4: parts (bytes); 5: attachment\_ids (string); 6: credential\_ref (string); 7: model (string).
-\item[\nolinkurl{ModelRequestIssued}] LeanFMServer sends to ModelProvider. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: request\_id (string); 4: model (string); 5: research\_mode (string).
-\item[\nolinkurl{ModelResponseReturned}] ModelProvider sends to LeanFMServer. Tagged fields: 1: request\_id (string); 2: parts (bytes); 3: input\_tokens (uint64); 4: cached\_input\_tokens (uint64); 5: output\_tokens (uint64); 6: context\_window\_tokens (uint64).
-\item[\nolinkurl{ChatResponseRendered}] LeanFMServer sends to UserBrowser. Tagged fields: 1: conversation\_id (string); 2: message\_id (string); 3: parts (bytes); 4: artifact\_ids (string); 5: input\_tokens (uint64); 6: cached\_input\_tokens (uint64); 7: output\_tokens (uint64); 8: context\_window\_tokens (uint64); 9: usage\_warning (string); 10: response\_time\_ms (uint64).
-\item[\nolinkurl{ChatTurnFailed}] LeanFMServer sends to UserBrowser. Tagged fields: 1: request\_id (string); 2: reason (string).
-\item[\nolinkurl{ConversationCheckpointRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: through\_message\_id (string).
-\item[\nolinkurl{ConversationCheckpointBlocked}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: checkpoint\_id (string); 4: reason\_code (string); 5: blocking\_artifact\_ids (string).
-\item[\nolinkurl{ConversationCheckpointCommitted}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: through\_message\_id (string); 4: artifact\_revisions (string); 5: manifest\_digest (string).
-\item[\nolinkurl{ConversationHistoryCleared}] LeanFMServer sends to UserBrowser. Tagged fields: 1: project\_id (string); 2: conversation\_id (string); 3: cleared\_through\_message\_id (string); 4: retained\_message\_count (uint64).
-\item[\nolinkurl{MermaidDraftSaved}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: artifact\_id (string); 3: revision (uint64); 4: diagram\_kind (string); 5: source (string).
-\item[\nolinkurl{MermaidPreviewRendered}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifact\_id (string); 2: revision (uint64); 3: svg (bytes).
-\item[\nolinkurl{MediaUploaded}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: artifact\_id (string); 3: media\_type (string); 4: content (bytes).
-\item[\nolinkurl{MediaRendered}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifact\_id (string); 2: media\_type (string); 3: content\_url (string).
-\item[\nolinkurl{ArtifactPromoted}] UserBrowser sends to LeanFMServer. Tagged fields: 1: artifact\_id (string); 2: revision (uint64); 3: target\_status (string).
-\item[\nolinkurl{CandidateRequirementUpdated}] LeanFMServer sends to UserBrowser. Tagged fields: 1: requirements\_revision (string); 2: source\_artifact\_ids (string).
-\item[\nolinkurl{ArtifactListRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: project\_id (string); 2: kind\_filter (string); 3: scenario\_filter (string); 4: status\_filter (string).
-\item[\nolinkurl{ArtifactListReturned}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifacts (bytes).
-\item[\nolinkurl{ArtifactOpenRequested}] UserBrowser sends to LeanFMServer. Tagged fields: 1: artifact\_id (string); 2: revision (uint64).
-\item[\nolinkurl{ArtifactOpened}] LeanFMServer sends to UserBrowser. Tagged fields: 1: artifact\_id (string); 2: revision (uint64); 3: status (string); 4: media\_type (string); 5: content (bytes); 6: provenance (string).
+\item[\nolinkurl{LoginSubmitted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{LoginAccepted}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{LoginRejected}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{AccountCreateSubmitted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProviderKeyCheckRequested}] LeanFMServer sends to ModelProvider.
+\item[\nolinkurl{ProviderKeyVerified}] ModelProvider sends to LeanFMServer.
+\item[\nolinkurl{ProviderKeyRejected}] ModelProvider sends to LeanFMServer.
+\item[\nolinkurl{AccountCreated}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{AccountCreateRejected}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{TaskModelRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{TaskModelReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{MessageSequenceRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{MessageSequenceReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProtobufObjectRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProtobufObjectReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{WebResearchRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{WebResearchDispatched}] LeanFMServer sends to ModelProvider.
+\item[\nolinkurl{WebSearchPerformed}] ModelProvider sends to LeanFMServer.
+\item[\nolinkurl{WebPageOpened}] ModelProvider sends to LeanFMServer.
+\item[\nolinkurl{WebResearchReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{WebResearchFailed}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{MarkerboardAssistRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{MarkerboardSyntaxHelpReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{MarkerboardAssistDispatched}] LeanFMServer sends to ModelProvider.
+\item[\nolinkurl{MarkerboardAssistReturned}] ModelProvider sends to LeanFMServer.
+\item[\nolinkurl{MarkerboardPatchProposed}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{MarkerboardPatchAccepted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{MarkerboardPatchRejected}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{MarkerboardDraftUpdated}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProjectListRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProjectListReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProjectCreateRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProjectCreated}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProjectOpenRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProjectOpened}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProjectDeleteRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProjectDeleted}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProblemInquiryPresented}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProblemStatementSubmitted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{AmbiguityQuestionPresented}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ClarificationSubmitted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProjectBookRevised}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{RequirementsReviewPresented}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{SpecificationRequirementsAccepted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ImplementationReviewPresented}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{SpecificationImplementationAccepted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ImplementationAuthorizationConfirmed}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProviderCredentialSubmitted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ProviderCredentialAccepted}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ProviderCredentialRejected}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ChatPromptSubmitted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ModelRequestIssued}] LeanFMServer sends to ModelProvider.
+\item[\nolinkurl{ModelResponseReturned}] ModelProvider sends to LeanFMServer.
+\item[\nolinkurl{ChatResponseRendered}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ChatTurnFailed}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ConversationCheckpointRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ConversationCheckpointBlocked}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ConversationCheckpointCommitted}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ConversationHistoryCleared}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{MermaidDraftSaved}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{MermaidPreviewRendered}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{MediaUploaded}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{MediaRendered}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ArtifactPromoted}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{CandidateRequirementUpdated}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ArtifactListRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ArtifactListReturned}] LeanFMServer sends to UserBrowser.
+\item[\nolinkurl{ArtifactOpenRequested}] UserBrowser sends to LeanFMServer.
+\item[\nolinkurl{ArtifactOpened}] LeanFMServer sends to UserBrowser.
 \end{description}

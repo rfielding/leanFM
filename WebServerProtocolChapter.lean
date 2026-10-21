@@ -12,10 +12,6 @@ def texEscape (s : String) : String :=
     ("&", "\\&"), ("#", "\\#"), ("{", "\\{"), ("}", "\\}")]
   replacements.foldl (fun out pair => out.replace pair.1 pair.2) s
 
-def scalarName : ProtoScalar → String
-  | .string => "string" | .bytes => "bytes" | .bool => "bool"
-  | .uint32 => "uint32" | .uint64 => "uint64"
-
 partial def grammarLines (indent : String) : GrammarExpr → List String
   | .empty => [indent ++ "empty"]
   | .event atom => [indent ++ atom.src ++ " ! " ++ atom.dst ++ " : " ++ atom.message]
@@ -63,10 +59,8 @@ def acceptedHttpTex : String :=
 
 def protobufTex : String :=
   let rows := Requirements.messages.map fun message =>
-    let fields := message.fields.map fun field => s!"{field.number}: {field.name} ({scalarName field.scalar})"
     "\\item[" ++ codeCell message.name ++ "] " ++ texEscape message.src ++
-      " sends to " ++ texEscape message.dst ++ ". Tagged fields: " ++
-      texEscape (String.intercalate "; " fields) ++ ".\n"
+      " sends to " ++ texEscape message.dst ++ ".\n"
   "\\begin{description}[style=nextline,leftmargin=0pt]\n" ++ String.join rows ++ "\\end{description}\n"
 
 def protobufSchemaTex : String :=

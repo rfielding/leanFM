@@ -161,13 +161,12 @@ concurrency: two users can use different provider credentials because the key,
 session, user, project, conversation, and request identities remain request-local
 instead of being stored in a process-wide environment variable.
 
-\section{Complete protobuf payload vocabulary}
+\section{Accepted message endpoints}
 
-Every accepted event is a length-delimited \texttt{EventEnvelope}. Field 20 and
-above in its \texttt{payload} oneof identify the concrete message. The table
-below is generated from the Lean \texttt{MessageSchema} values; the checked
-\texttt{.proto} file supplies repeated and nested cardinality that the compact
-Lean field summary represents only by its scalar boundary.
+Every accepted event is a length-delimited \texttt{EventEnvelope}; payload tags
+20 and above identify its concrete message. This generated index records each
+message's sender and receiver. The canonical schema that follows defines field
+names, tags, types, and cardinality.
 
 \input{generated/web-protocol-protobuf.tex}
 
