@@ -609,20 +609,13 @@ such.
 \section{A ladder of checks}
 
 No single green check answers every kind of requirement. The workbench should
-present layered evidence:
-
-\begin{enumerate}
-  \item Lean/protobuf checks establish well-formed syntax; structural checks
-        reject missing actors, endpoints, terminals, framing, process coverage
-        or proof obligations.
-  \item Grammar/state-machine checks cover ordering; temporal checks cover
-        safety, reachability and bounded liveness over observable states.
-  \item Probability/dwell reducers predict outcomes; event-stream reducers
-        estimate them. Queue and byte-budget checks model capacity, backpressure,
-        concurrency and memory pressure.
-  \item Generated diagrams, state machines, plots and reports make the typed
-        model reviewable.
-\end{enumerate}
+present layered evidence: Lean/protobuf check well-formed syntax; structural
+validation checks actors, endpoints, terminals, framing, process coverage and
+proof obligations; grammar/state-machine checks cover ordering and temporal
+checks cover safety, reachability and bounded liveness; probability/dwell
+reducers predict outcomes and event-stream reducers estimate them; queue and
+byte-budget checks model capacity, backpressure, concurrency and memory; generated
+diagrams, state machines, plots and reports support review.
 
 Use the evidence labels defined in Chapter~\ref{ch:vision}. Predictions are not
 measurements, incomplete windows censor tasks, frequencies do not prove
