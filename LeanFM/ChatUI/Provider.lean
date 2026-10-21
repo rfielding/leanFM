@@ -12,6 +12,7 @@ structure Completion where
   cachedInputTokens : Nat
   outputTokens : Nat
   totalTokens : Nat
+  failure : Option String := none
 deriving Repr
 
 structure FunctionCall where
@@ -142,6 +143,56 @@ def toolOutputJson (callId output : String) : String :=
   "{\"type\":\"function_call_output\",\"call_id\":\"" ++ jsonEscape callId ++
   "\",\"output\":\"" ++ jsonEscape output ++ "\"}"
 
+-- Provider messages and unknown identifiers may reflect secrets or request content.
+-- Keep only known diagnostic identifiers, never the arbitrary response body.
+def knownErrorIdentifier? (json : Json) (field : String) : Option String := do
+  let value ← jsonStringField? json field
+  guard (["credit_balance_exhausted", "organization_spend_limit_exceeded",
+    "project_spend_limit_exceeded", "organization_usage_limit_exceeded",
+    "insufficient_quota", "slow_down", "rate_limit_exceeded", "rate_limit_error",
+    "invalid_api_key", "authentication_error", "model_not_found",
+    "context_length_exceeded", "invalid_request_error", "server_error",
+    "content_filter"].contains value)
+  pure value
+
+def apiErrorDetail (status : Nat) (body : String) : String :=
+  let error := (Json.parse body).toOption.bind fun json => (json.getObjVal? "error").toOption
+  let errorType := error.bind (knownErrorIdentifier? · "type")
+  let errorCode := error.bind (knownErrorIdentifier? · "code")
+  let identifiers :=
+    (errorType.map (fun value => "type=" ++ value)).toList ++
+    (errorCode.map (fun value => "code=" ++ value)).toList
+  let diagnosis := match errorCode, errorType with
+    | some "credit_balance_exhausted", _ => "API credit balance exhausted; add credits in OpenAI billing."
+    | some "organization_spend_limit_exceeded", _ => "OpenAI organization spend limit reached; review that limit in provider billing."
+    | some "project_spend_limit_exceeded", _ => "OpenAI project spend limit reached; review that project's limit in provider billing."
+    | some "organization_usage_limit_exceeded", _ => "OpenAI organization usage limit reached; review the provider usage limit."
+    | some "insufficient_quota", _ | _, some "insufficient_quota" =>
+        "OpenAI quota exhausted: available credits or an account limit blocked this request. Review provider billing and limits; the API has not supplied a remaining dollar balance."
+    | some "slow_down", _ | some "rate_limit_exceeded", _ | _, some "rate_limit_error" =>
+        "OpenAI rate limit reached; wait before sending another request. This does not establish credit exhaustion."
+    | _, _ => "OpenAI rejected the request; inspect the HTTP status and any reported code."
+  let detail := if identifiers.isEmpty then "" else "; " ++ String.intercalate "; " identifiers
+  "OpenAI request failed (HTTP " ++ toString status ++ detail ++ "). " ++ diagnosis ++
+    " No automatic paid retry was attempted."
+
+/-- A successful HTTP exchange is not necessarily a completed model response.
+    Check before interpreting output or executing any returned tools. -/
+def responseFailure? (json : Json) : Option String :=
+  match jsonStringField? json "status" with
+  | some "completed" => none
+  | some "incomplete" =>
+      let reason := (json.getObjVal? "incomplete_details").toOption.bind
+        (jsonStringField? · "reason")
+      some <| (if reason == some "max_output_tokens" then
+        "openai_output_limit: The model response hit its output or context token limit before completion. This is a per-response limit, not a reported API credit exhaustion."
+      else if reason == some "content_filter" then
+        "openai_content_filter: The provider stopped this response for content filtering."
+      else "openai_response_incomplete: The provider returned an incomplete response.") ++
+        " Partial answer text and tool calls were not applied. Reported usage is retained; no automatic paid retry was attempted."
+  | some "failed" => some ("openai_response_failed: " ++ apiErrorDetail 200 json.compress)
+  | _ => some "openai_response_not_completed: The provider did not return a completed response status. No answer or tool calls were applied and no automatic paid retry was attempted."
+
 partial def completeAgentLoop (key baseUrl model instructions prompt previousId : String)
     (pending : List String) (runTool : ToolRunner) (cancelled : CancelCheck)
     (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
@@ -158,12 +209,11 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
     let (status, body) ← apiCall "POST" (baseUrl ++ "/responses") key payload
     if ← cancelled then return .error "agent_cancelled"
     if status < 200 || status ≥ 300 then
-      let error := (Json.parse body).toOption.bind fun value => (value.getObjVal? "error").toOption
-      let code := error.bind (jsonStringField? · "code")
-      let suffix := code.map (fun value => "; code=" ++ value) |>.getD ""
-      return .error ("OpenAI workspace request failed (HTTP " ++ toString status ++ suffix ++ ").")
+      return .ok { usage with failure := some (apiErrorDetail status body) }
     let some json := (Json.parse body).toOption | return .error "OpenAI returned invalid JSON to the workspace agent."
     let nextUsage := addUsage usage (usageFromJson json)
+    if let some failure := responseFailure? json then
+      return .ok { nextUsage with failure := some failure }
     let calls := functionCalls json
     if calls.isEmpty then
       match responseText? json with
@@ -200,33 +250,15 @@ def completeAgent (key instructions prompt model : String) (runTool : ToolRunner
   completeAgentLoop key baseUrl model instructions prompt "" [] runTool cancelled
     { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
 
--- Return structured provider diagnostics, never the arbitrary response body: provider
--- messages can reflect request data, while error type/code are bounded identifiers.
-def apiErrorDetail (status : Nat) (body : String) : String :=
-  let error := (Json.parse body).toOption.bind fun json => (json.getObjVal? "error").toOption
-  let errorType := error.bind (jsonStringField? · "type")
-  let errorCode := error.bind (jsonStringField? · "code")
-  let identifiers :=
-    (errorType.map (fun value => "type=" ++ value)).toList ++
-    (errorCode.map (fun value => "code=" ++ value)).toList
-  let diagnosis := match errorCode, errorType with
-    | some "credit_balance_exhausted", _ => "API credit balance exhausted; add credits in OpenAI billing."
-    | some "organization_spend_limit_exceeded", _ => "OpenAI organization spend limit reached."
-    | some "project_spend_limit_exceeded", _ => "OpenAI project spend limit reached."
-    | some "organization_usage_limit_exceeded", _ => "OpenAI organization usage limit reached."
-    | some "slow_down", _ => "OpenAI requested slower traffic; wait before retrying."
-    | _, some "rate_limit_error" => "OpenAI rate limit reached; wait before retrying."
-    | _, _ => "OpenAI rejected the request."
-  let detail := if identifiers.isEmpty then "" else "; " ++ String.intercalate "; " identifiers
-  "OpenAI request failed (HTTP " ++ toString status ++ detail ++ "). " ++ diagnosis
-
 def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key instructions prompt model : String) : IO (Except String Completion) := do
   let baseUrl := (← IO.getEnv "LEANFM_OPENAI_BASE_URL").getD "https://api.openai.com/v1"
   let payload := "{\"model\":\"" ++ jsonEscape model ++ "\",\"instructions\":\"" ++ jsonEscape instructions ++ "\",\"input\":\"" ++ jsonEscape prompt ++ "\",\"max_output_tokens\":" ++ toString maxOutputTokens ++ "}"
   try
     let (status, body) ← apiCallWithTimeout timeoutSeconds "POST" (baseUrl ++ "/responses") key payload
     if status < 200 || status ≥ 300 then return .error (apiErrorDetail status body)
-    match (Json.parse body).toOption.bind completionFromJson? with
+    let some json := (Json.parse body).toOption | return .error "OpenAI returned invalid response JSON."
+    if let some failure := responseFailure? json then return .error failure
+    match completionFromJson? json with
     | none => pure (.error "OpenAI returned an invalid response or no output text.")
     | some completion => pure (.ok completion)
   catch error =>

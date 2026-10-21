@@ -29,9 +29,15 @@ def errorAction (status : Nat) : String :=
   else "Retry the operation. If it fails again, copy the diagnostic below to Codex."
 
 def errorResponse (status : Nat) (message : String) : HttpResponse :=
+  let localBudget := message.contains "local session token safety budget is exhausted"
+  let action := if localBudget then
+    "Review provider billing and usage before unlocking another local session. This local token safety limit does not report your OpenAI credit balance."
+    else errorAction status
+  let code := if localBudget then "leanfm_session_token_budget_exhausted"
+    else "leanfm_http_" ++ toString status
   jsonResponse status ("{\"error\":\"" ++ jsonEscape message ++
-    "\",\"action\":\"" ++ jsonEscape (errorAction status) ++
-    "\",\"code\":\"leanfm_http_" ++ toString status ++ "\"}\n")
+    "\",\"action\":\"" ++ jsonEscape action ++
+    "\",\"code\":\"" ++ code ++ "\"}\n")
 
 def requestBody (request : String) : String :=
   match request.splitOn "\r\n\r\n" with | _ :: body :: _ => body | _ => ""
@@ -491,18 +497,64 @@ def workspaceAgentInstructions (root : String) : String :=
 structure BookChatEdit where
   reply : String
   source : String
+  repairedEscapes : Bool := false
+
+/-- Repair only illegal JSON escapes for LaTeX math delimiters. Already escaped
+    backslashes and all other JSON escapes pass through unchanged. -/
+def escapeJsonMathDelimiters (text : String) : String :=
+  let rec go : List Char → List Char → List Char
+    | [], acc => acc.reverse
+    | '\\' :: c :: rest, acc =>
+        if ['(', ')', '[', ']'].contains c then go rest (c :: '\\' :: '\\' :: acc)
+        else go rest (c :: '\\' :: acc)
+    | c :: rest, acc => go rest (c :: acc)
+  String.ofList (go text.toList [])
+
+def looksLikeBookEnvelope (text : String) : Bool :=
+  let text := text.trimAscii.toString
+  let hasSource := text.contains "\"book_source\""
+  let hasReply := text.contains "\"reply\""
+  (hasSource && hasReply) ||
+    ((text.startsWith "{" || text.startsWith "```json" || text.startsWith "```\n") &&
+      (hasSource || hasReply))
+
+def bookEnvelopeJsonText (text : String) : String :=
+  let trimmed := text.trimAscii.toString
+  if trimmed.startsWith "```json" && trimmed.endsWith "```" then
+    ((trimmed.drop 7).dropEnd 3 |>.trimAscii).toString
+  else if trimmed.startsWith "```\n" && trimmed.endsWith "```" then
+    ((trimmed.drop 3).dropEnd 3 |>.trimAscii).toString
+  else trimmed
 
 def bookChatEdit? (text : String) : Option BookChatEdit := do
-  let trimmed := text.trimAscii.toString
-  let jsonText :=
-    if trimmed.startsWith "```json" && trimmed.endsWith "```" then
-      ((trimmed.drop 7).dropEnd 3 |>.trimAscii).toString
-    else trimmed
-  let json ← (Lean.Json.parse jsonText).toOption
+  let jsonText := bookEnvelopeJsonText text
+  let (json, repairedEscapes) ← match Lean.Json.parse jsonText with
+    | .ok json => some (json, false)
+    | .error _ => do
+        let repaired := escapeJsonMathDelimiters jsonText
+        guard (repaired != jsonText)
+        let json ← (Lean.Json.parse repaired).toOption
+        pure (json, true)
   let reply ← Provider.jsonStringField? json "reply"
   let source ← Provider.jsonStringField? json "book_source"
   guard (!reply.trimAscii.isEmpty && !source.trimAscii.isEmpty)
-  pure { reply, source }
+  pure { reply, source, repairedEscapes }
+
+def bookEnvelopeDiagnostic (text : String) : String :=
+  match Lean.Json.parse (escapeJsonMathDelimiters (bookEnvelopeJsonText text)) with
+  | .error message =>
+      -- Lean's JSON parser emits a byte offset and grammar expectation, not an
+      -- excerpt of the untrusted response. Keep that specific failure location.
+      "JSON parser: " ++ truncateText message 200
+  | .ok json =>
+      if (Provider.jsonStringField? json "reply").all (·.trimAscii.isEmpty) then
+        "The reply field must be a nonempty string."
+      else "The book_source field must be a nonempty string."
+
+def bookVisibleText (text : String) : String :=
+  match bookChatEdit? text with
+  | some edit => edit.reply
+  | none => if looksLikeBookEnvelope text then "" else text
 
 def chatLayerContext (root layer : String) : IO (Except String String) := do
   let book ← readOr (root ++ "/book/main.tex") ""
@@ -710,8 +762,24 @@ structure AppliedChatResult where
 
 def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
     (trace : IO.Ref (List String)) : IO AppliedChatResult := do
+  if let some failure := answer.failure then
+    appendProjectDiagnostic root "provider_response_failure" failure
+    appendLiveTrace root trace failure
+    return { text := failure, completion := answer, bookUpdated := false, notice := none }
   let some edit := bookChatEdit? answer.text
-    | return AppliedChatResult.mk answer.text answer false none
+    | do
+      if looksLikeBookEnvelope answer.text then
+        let diagnostic := bookEnvelopeDiagnostic answer.text
+        let failure := "leanfm_malformed_book_reply: The model returned an invalid JSON book reply. " ++ diagnostic ++
+          " The hidden source was not displayed or applied. This is a response-format failure, not a reported credit exhaustion. No automatic paid retry was attempted."
+        appendProjectDiagnostic root "provider_response_format"
+          (diagnostic ++ " response_chars=" ++ toString answer.text.length)
+        appendLiveTrace root trace failure
+        return { text := failure, completion := answer, bookUpdated := false, notice := none }
+      return AppliedChatResult.mk answer.text answer false none
+  if edit.repairedEscapes then
+    appendLiveTrace root trace "Recovered JSON escaping of LaTeX math delimiters deterministically; no paid retry was needed"
+    appendProjectDiagnostic root "book_reply_json_escaping" "Recovered illegal JSON math-delimiter escapes before validating the book candidate"
   if edit.source.length > 2000000 then
     return AppliedChatResult.mk edit.reply answer false
       (some "The proposed book revision exceeded the 2 MB editor limit and was not applied.")
@@ -1293,7 +1361,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       return some (errorResponse 502 message)
                   | .ok initialAnswer =>
                       let mut answer := initialAnswer
-                      let initialVisibleText := (bookChatEdit? answer.text).map (·.reply) |>.getD answer.text
+                      let initialVisibleText := if answer.failure.isSome then "" else bookVisibleText answer.text
                       let missingBeforeRecovery ← missingMediaReferences root initialVisibleText
                       if !missingBeforeRecovery.isEmpty then
                         appendProjectDiagnostic root "missing_project_artifact_reference"
@@ -1313,18 +1381,26 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         | .error recoveryError =>
                             appendLiveTrace root trace ("Missing-artifact recovery did not complete: " ++ recoveryError)
                         | .ok recovered =>
-                            let recoveredVisibleText := (bookChatEdit? recovered.text).map (·.reply) |>.getD recovered.text
-                            answer := addCompletionUsage answer recovered recovered.text
-                            let stillMissing ← missingMediaReferences root recoveredVisibleText
-                            if stillMissing.isEmpty then
-                              appendLiveTrace root trace "Bounded missing-artifact recovery returned only verified project media references"
-                              resolveProjectDiagnostics root "Bounded media-reference recovery verified the corrected project artifact response"
-                                ["missing_project_artifact_reference"]
+                            if let some failure := recovered.failure then
+                              answer := addCompletionUsage answer recovered answer.text
+                              appendLiveTrace root trace ("Missing-artifact recovery failed: " ++ failure)
                             else
-                              appendLiveTrace root trace ("Bounded missing-artifact recovery still references nonexistent media: " ++ String.intercalate ", " stillMissing)
+                              let recoveredVisibleText := bookVisibleText recovered.text
+                              answer := addCompletionUsage answer recovered recovered.text
+                              let stillMissing ← missingMediaReferences root recoveredVisibleText
+                              if stillMissing.isEmpty && !recoveredVisibleText.isEmpty then
+                                appendLiveTrace root trace "Bounded missing-artifact recovery returned only verified project media references"
+                                resolveProjectDiagnostics root "Bounded media-reference recovery verified the corrected project artifact response"
+                                  ["missing_project_artifact_reference"]
+                              else if recoveredVisibleText.isEmpty then
+                                appendLiveTrace root trace "Bounded missing-artifact recovery returned an invalid book envelope"
+                              else
+                                appendLiveTrace root trace ("Bounded missing-artifact recovery still references nonexistent media: " ++ String.intercalate ", " stillMissing)
                       writeChatStatus root "validation" "Validating durable outputs from the model response."
-                      let applied ← if projectId == "leanfm-workspace" || projectId == "go-server" then
-                          pure (AppliedChatResult.mk answer.text answer false none)
+                      let invalidAnswer := answer.failure.isSome ||
+                        (looksLikeBookEnvelope answer.text && (bookChatEdit? answer.text).isNone)
+                      let applied ← if !invalidAnswer && (projectId == "leanfm-workspace" || projectId == "go-server") then
+                          pure (AppliedChatResult.mk (bookVisibleText answer.text) answer false none)
                         else applyBookChatEdit key root selectedModel answer trace
                       clearChatCancellation root
                       answer := applied.completion
@@ -1333,7 +1409,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       | none => pure ()
                       let mp4Requested := prompt.toLower.contains "mp4"
                       let mut activity := (← trace.get).reverse
-                      if mp4Requested && !(activity.any fun item => item.startsWith "Generated " && item.toLower.contains ".mp4") then
+                      if !invalidAnswer && mp4Requested && !(activity.any fun item => item.startsWith "Generated " && item.toLower.contains ".mp4") then
                         match ← referencedAnimationSource? root (prior ++ "\n" ++ prompt) with
                         | none =>
                             trace.modify ("workspace_transcode_mp4 rejected: No project GIF or WebM source was found." :: ·)
@@ -1356,7 +1432,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         appendLiveTrace root trace ("Rejected false project-media reference: " ++ String.intercalate ", " missingMedia)
                         appendProjectDiagnostic root "missing_project_artifact_reference" detail
                       activity := (← trace.get).reverse
-                      let returnedQuestions := applied.text.contains "```leanfm-questions" || applied.text.contains "```leanfm-qustions"
+                      let returnedQuestions := !invalidAnswer &&
+                        (applied.text.contains "```leanfm-questions" || applied.text.contains "```leanfm-qustions")
                       if returnedQuestions then
                         let ids := structuredQuestionIds applied.text
                         let idSummary := if ids.isEmpty then "question_ids=unavailable" else
@@ -1369,9 +1446,10 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                             " parsed=" ++ (if ids.isEmpty then "false" else "true"))
                       let missingRequiredSource := implementationRequested && sourceFiles.isEmpty && !returnedQuestions
                       let warned := returnedQuestions || applied.notice.isSome || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
-                      let status := if missingRequiredArtifact || missingRequiredSource || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"
+                      let status := if invalidAnswer || missingRequiredArtifact || missingRequiredSource || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"
                       if status != "success" then
-                        let reason := if missingRequiredArtifact then "required MP4 artifact missing"
+                        let reason := if invalidAnswer then "provider response or book envelope failed"
+                          else if missingRequiredArtifact then "required MP4 artifact missing"
                           else if missingRequiredSource then "requested implementation source missing"
                           else if !missingMedia.isEmpty then "assistant referenced project media that does not exist"
                           else if returnedQuestions then "agent returned blocking questions"
@@ -1381,7 +1459,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                           ("status=" ++ status ++ " model=" ++ selectedModel ++ " reason=" ++ reason)
                       let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
                       let mp4Failure := activity.find? fun item => item.startsWith "workspace_transcode_mp4 rejected:"
-                      let visibleAnswer := if missingRequiredSource then
+                      let visibleAnswer := if invalidAnswer then applied.text else if missingRequiredSource then
                         "The requested implementation was not produced: no files exist beneath the selected project's source/ directory. LeanFM rejected the prose or pasted-code substitute. Accept the missing specification gate or answer the focused blocking questions, then resend the implementation request."
                         else if missingRequiredArtifact then
                         match mp4Failure with
@@ -1400,7 +1478,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         | none => visibleAnswer
                       let responseText := statusMarker ++ visibleAnswer ++ (if activity.isEmpty then "" else
                         "\n\nOperational trace:\n" ++ String.intercalate "\n" (activity.map ("- " ++ ·)))
-                      writeChatStatus root "complete" (if applied.bookUpdated then "Agent turn completed; the book revision compiled." else "Agent turn completed.")
+                      writeChatStatus root (if invalidAnswer then "failed" else "complete")
+                        (if invalidAnswer then applied.text else if applied.bookUpdated then "Agent turn completed; the book revision compiled." else "Agent turn completed.")
                       let figureLabels ← saveMermaidArtifacts root responseText
                       let responseText := if figureLabels.isEmpty then responseText else
                         responseText ++ "\n\nFigures created: " ++ String.intercalate ", " figureLabels ++ "."

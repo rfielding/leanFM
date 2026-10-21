@@ -4,7 +4,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-test_root="$(mktemp -d /tmp/leanfm-chatui-check.XXXXXX)"
+mkdir -p "$repo_root/.cache"
+test_root="$(mktemp -d "$repo_root/.cache/chatui-check.XXXXXX")"
 server_log="$test_root/server.log"
 provider_log="$test_root/provider.log"
 cookie_a="$test_root/a.cookies"
@@ -167,6 +168,8 @@ curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/memory/requirements"
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/memory")" = 404
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/memory/../../manifest.json")" = 404
 test -d "$test_root/data/accounts/rfielding/projects/$project_a/events"
+python3 scripts/chatui_provider_outcome_test.py "$base_url" "$cookie_a" "$project_a" \
+  "$test_root/data/accounts/rfielding/projects/$project_a"
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MODEL_SELECTION report the selected model' \
   --data-urlencode 'model=test-model-fast' "$base_url/api/projects/$project_a/chat" >"$test_root/model-selection.json"
 rg -q 'selected model: test-model-fast' "$test_root/model-selection.json"

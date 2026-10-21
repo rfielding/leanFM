@@ -4,14 +4,24 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import time
+from threading import Lock
 
 
 class Handler(BaseHTTPRequestHandler):
+    request_count = 0
+    count_lock = Lock()
     def _authorized(self):
         return self.headers.get("Authorization") in {"Bearer test-user-key", "Bearer second-user-key"}
 
     def do_GET(self):
-        if self.path == "/v1/models" and self._authorized():
+        if self.path == "/test/requests" and self._authorized():
+            with self.count_lock:
+                payload = json.dumps({"requests": Handler.request_count}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(payload)
+        elif self.path == "/v1/models" and self._authorized():
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -24,6 +34,8 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         raw_request = self.rfile.read(length)
         if self.path == "/v1/responses" and self._authorized():
+            with self.count_lock:
+                Handler.request_count += 1
             request = json.loads(raw_request or b"{}")
             request_text = json.dumps(request)
             usage = {
@@ -33,7 +45,47 @@ class Handler(BaseHTTPRequestHandler):
                 "total_tokens": 18,
             }
             current_input = request.get("input", "") if isinstance(request.get("input", ""), str) else ""
-            if "Current user message:\nTEST_RETURN_STRUCTURED_QUESTION" in current_input:
+            marker = current_input.rsplit("Current user message:\n", 1)[-1].split(" ", 1)[0].split("\n", 1)[0]
+            response_status = 200
+            error_cases = {
+                "TEST_CREDIT_EXHAUSTED": ("credit_balance_exhausted", "insufficient_quota"),
+                "TEST_PROJECT_SPEND": ("project_spend_limit_exceeded", "insufficient_quota"),
+                "TEST_ORGANIZATION_SPEND": ("organization_spend_limit_exceeded", "insufficient_quota"),
+                "TEST_ORGANIZATION_USAGE": ("organization_usage_limit_exceeded", "insufficient_quota"),
+                "TEST_LEGACY_QUOTA": ("insufficient_quota", "insufficient_quota"),
+                "TEST_RATE_LIMIT": ("rate_limit_exceeded", "rate_limit_error"),
+                "TEST_UNKNOWN_PROVIDER_ERROR": ("sk-HIDDEN_PROVIDER_SECRET", "HIDDEN_PROVIDER_TYPE"),
+            }
+            if marker in error_cases:
+                code, error_type = error_cases[marker]
+                response_status = 429
+                body = {"error": {"code": code, "type": error_type,
+                                  "message": "HIDDEN_PROVIDER_BODY must never reach chat or diagnostics"}}
+            elif marker in {"TEST_INCOMPLETE_TEXT", "TEST_INCOMPLETE_TOOL"}:
+                body = {
+                    "id": "incomplete-response",
+                    "status": "incomplete",
+                    "incomplete_details": {"reason": "max_output_tokens"},
+                    "usage": usage,
+                }
+                if marker == "TEST_INCOMPLETE_TOOL":
+                    body["output"] = [{"type": "function_call", "call_id": "must-not-run",
+                                       "name": "workspace_write", "arguments": json.dumps({
+                                           "path": "source/incomplete-must-not-exist.go",
+                                           "content": "HIDDEN_INCOMPLETE_TOOL"})}]
+                else:
+                    body["output_text"] = json.dumps({"reply": "HIDDEN_INCOMPLETE_REPLY",
+                                                       "book_source": "HIDDEN_INCOMPLETE_BOOK"})
+            elif marker == "TEST_MALFORMED_BOOK_ENVELOPE":
+                body = {"output_text": '{"reply":"Not a successful update","book_source":"HIDDEN_BOOK_SOURCE ```leanfm-questions',
+                        "usage": usage}
+            elif marker == "TEST_RECOVER_JSON_MATH":
+                edit = {"reply": "Updated the book with deterministic JSON recovery.",
+                        "book_source": "\\documentclass{article}\n\\begin{document}\nThe value is \\(x+1\\).\n\\end{document}\n"}
+                # Reproduce the real failure: legal LaTeX, illegal JSON escapes.
+                text = json.dumps(edit).replace(r"\\(", r"\(").replace(r"\\)", r"\)")
+                body = {"output_text": text, "usage": usage}
+            elif "Current user message:\nTEST_RETURN_STRUCTURED_QUESTION" in current_input:
                 body = {
                     "output_text": (
                         "How many MCTS playouts should be used?\n"
@@ -161,8 +213,10 @@ class Handler(BaseHTTPRequestHandler):
                 "output_text": ("alice response: " if self.headers.get("Authorization") == "Bearer test-user-key" else "bob response: ") + "The deterministic provider response includes a diagram.\n```mermaid\nstateDiagram-v2\n  [*] --> specified\n```",
                     "usage": usage,
                 }
+            if response_status == 200:
+                body.setdefault("status", "completed")
             payload = json.dumps(body).encode()
-            self.send_response(200)
+            self.send_response(response_status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()

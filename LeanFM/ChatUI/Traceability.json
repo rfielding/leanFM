@@ -3,6 +3,23 @@
   "mappings": [
     {
       "references": [
+        "property:provider_outcomes_are_distinguishable",
+        "property:book_envelopes_never_leak_into_chat",
+        "property:every_project_error_is_durably_diagnosable",
+        "property:local_token_budget_is_visible_and_enforced"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Provider.lean",
+        "LeanFM/ChatUI/Server.lean"
+      ],
+      "tests": [
+        "LeanFM/ChatUI/ProviderTests.lean",
+        "scripts/chatui_provider_outcome_test.py",
+        "scripts/chatui_http_check.sh"
+      ]
+    },
+    {
+      "references": [
         "task:authenticate_user",
         "task:create_account"
       ],

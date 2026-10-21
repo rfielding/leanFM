@@ -26,7 +26,7 @@ in-project tests, and persist evidence under the root. Screenshots are not a gat
 
 ## Book length and release reproducibility (reviewed 2026-10-20)
 
-Now 130 pages after consolidation; preserve the preface-to-PR narrative and
+Now 131 pages after consolidation; preserve the preface-to-PR narrative and
 technical qualifications. Verify reproducible releases, tool/content manifests,
 and semantic equivalence: `book/main.pdf` drives code generation.
 

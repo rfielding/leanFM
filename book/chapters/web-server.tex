@@ -250,6 +250,16 @@ bounded diagnostic safe to paste to Codex. An unknown proxy response such as
 means the person need not paste anything: LeanFM or Codex can inspect the
 project root, repair the cause and continue the original task.
 
+Provider credit/spend/quota rejections, rate limits, incomplete output and local
+session safety limits receive distinct diagnostics. Response length establishes
+no credit balance. An incomplete Responses result retains reported usage but
+cannot execute returned tools or update the book. A malformed reply envelope
+never exposes its hidden book source as prose: only illegal JSON escapes before
+LaTeX math delimiters are repaired deterministically, followed by ordinary
+validation. Other format failures stop with bounded metadata. None triggers a
+paid retry; arbitrary provider bodies and unknown error identifiers stay out of
+diagnostics.
+
 Repeated failure is bounded at the point of expense. Within an active turn, a
 second tool call with the same name and exact arguments after an error is not
 executed; it terminates that strategy before a third paid attempt. Provider
