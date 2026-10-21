@@ -296,23 +296,18 @@ expiry, and failures as terminal dispositions when they remove work. If
 $\lambda_o>X$, some offered work is rejected, remains queued or in flight, or
 ends in another recorded disposition; admitted work can also outpace completion
 while latency and backlog grow. Window throughput differs from the client- and
-server-task rates above, so choose its event boundary explicitly before fitting
-it against active-client population using the Universal Scalability Law,
+server-task rates above. Fit the Universal Scalability Law against active-client
+population, not offered work rate $\lambda_o$ unless the experiment defines an
+explicit mapping:
 
 \AccessibleEquation{Throughput X at load n equals gamma times n divided by one plus alpha times n minus one plus beta times n times n minus one. n is between one and upper limit N inclusive.}{\[
  X(n)=\frac{\gamma n}{1+\alpha(n-1)+\beta n(n-1)},
  \qquad 1\leq n\leq N.
 \]}
 
-This curve uses population or concurrency $n$ as its independent variable, not
-offered work rate $\lambda_o$ unless the experiment defines an explicit mapping.
-
-Gunther's \emph{Guerrilla Capacity Planning} gives the practical capacity-planning
-setting for this law and develops it as the Universal Law of Computational
-Scaling~\citep{gunther2007guerrilla}. The point is operational, not decorative:
-a requirements argument should expose contention, coherency, saturation, and
-retrograde scaling before the first production deployment supplies those facts
-by falling over.
+Gunther's \emph{Guerrilla Capacity Planning} develops the USL as a practical
+capacity-planning tool for exposing contention, coherency, saturation, and
+retrograde scaling before deployment supplies those facts~\citep{gunther2007guerrilla}.
 
 Retain per observation $n$, the selected throughput and event boundary,
 $\lambda_o$, $\lambda_a$, window throughput $X$, latency, backlog, terminal
