@@ -190,11 +190,10 @@ resource contract per instance, but omit dynamic creation/removal, discovery,
 load balancing, and migration. Results for 20 clients and 2 servers do not
 generalize to other population sizes.
 
-Reliability now distinguishes configured outage probability/MTTR from
-`Unavailable`/`Recovered` event estimates, but assumes complete windows and
-nonoverlapping intervals. It omits duplicate merging, right-censored outages,
-planned maintenance, and correlated pod/node/zone/dependency failures.
-Independent actor percentages can therefore overstate Kubernetes availability.
+`Characterization.lean` names uptime, MTTR, composed-availability, and cascade
+reducers; tests only check their names. Executable handling and tests for
+duplicate/censored intervals, joint failures, and the book's boundary policies
+remain absent.
 
 ## Memory accounting is underspecified
 
