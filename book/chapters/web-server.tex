@@ -526,19 +526,13 @@ single manifest/path contract.
 
 \section{What the Lean artifact must settle}
 
-The Lean artifact is the semantic source for actors, framed messages, process
-projections, grammars, properties, proof obligations, and desired outputs. To
-keep this workflow chapter from restating their definitions, use the canonical
-treatments:
-
-\begin{itemize}
-  \item event fields, correlation, predecessor order, causation, and elapsed
-        time: Chapter~\ref{ch:events};
-  \item legal conversations, actor projections, and bounded queue semantics:
-        Chapter~\ref{ch:grammar};
-  \item choices, dwell, rates, scalability, reliability, and infrastructure
-        cost: Chapter~\ref{ch:authoring-language}.
-\end{itemize}
+The Lean artifacts are the semantic source for actors, framed messages,
+process projections, grammars, properties, proof obligations, and desired
+outputs. Canonical definitions are in Chapter~\ref{ch:events} (event fields,
+correlation, predecessor order, causation, and elapsed time),
+Chapter~\ref{ch:grammar} (legal conversations, actor projections, and bounded
+queue semantics), and Chapter~\ref{ch:authoring-language} (choices, dwell,
+rates, scalability, reliability, and infrastructure cost).
 
 One cross-cutting obligation deserves emphasis: message-count capacity alone
 does not bound memory when payload sizes vary. Derive queued bytes from encoded
