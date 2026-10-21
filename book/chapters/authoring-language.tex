@@ -103,8 +103,8 @@ it must not invent externally visible behaviour forbidden by the requirements.
 
 \section{One concern per scenario}
 
-Scenarios should be small enough to read as stories and independent enough to
-render separately. The quote protocol can be decomposed as follows.
+Keep each scenario an independently rendered story; here the quote outcomes
+split into named branches:
 
 \begin{lstlisting}
 def quoteAccepted (customer shop : Actor) : Scenario :=
@@ -129,10 +129,10 @@ def quoteOutcome (customer shop : Actor) : Scenario :=
     ]
 \end{lstlisting}
 
-\texttt{include} expands text only in the rendered view; semantically it denotes
-a named nonterminal. A future compiler would resolve references, check exports,
-reject cycles, and build the grammar. Tools can retain scenario boundaries for
-navigation, diagrams, tests, and counterexamples.
+\texttt{include} expands text only in the rendered listing and denotes a named
+nonterminal, as in Chapter~\ref{ch:grammar}. A future compiler must resolve
+references, check exports, reject cycles, and build the grammar; retaining
+boundaries supports navigation, diagrams, tests, and counterexamples.
 
 \noindent No quote diagram is generated yet. The event-derived diagram contract
 is in Chapter~\ref{ch:scenarios}; generated interaction examples are in
