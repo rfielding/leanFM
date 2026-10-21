@@ -151,6 +151,10 @@ to maintain them. Its grammar is intended to recognize legal traces and generate
 state machines are projections of visible histories rather than declarations of
 every variable stored by the program.
 
+If a requested property depends on hidden state, instrument an observable event,
+justify an abstraction from the available events, or label the property
+undetermined by the current trace. Grammar conformance alone cannot establish it.
+
 The distinction is methodological, not a claim that TLA+ is unable to express
 queues or traces. This project began with an attempt to extend a TLA+-style model
 with the desired message queues and MDP probabilities. The practical difficulty

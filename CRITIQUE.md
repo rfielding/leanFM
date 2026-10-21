@@ -119,13 +119,9 @@ method:
 
 ## Event-only specifications leave hidden state unresolved
 
-The event-only boundary is practical for production trace conformance but loses
-properties whose truth depends on uninstrumented internal state. In contrast, a
-TLA+-style specification can declare such state explicitly and check invariants
-over it. LeanFM must either add an observable event, accept an abstraction with a
-justification, or admit that the property cannot be determined from the stream.
-Avoiding internal variables reduces modeling friction; it does not make hidden
-state irrelevant.
+Validators do not detect when a declared property depends on hidden state that
+the event stream cannot determine; the book now requires instrumenting it,
+justifying an abstraction, or marking the property undetermined.
 
 ## Grammar, protobuf, and choice do not yet form one checked wire path
 
