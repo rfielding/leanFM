@@ -659,12 +659,14 @@ A dependency edge points from a consumer service or task to the provider gate
 it requires. At each outage boundary, failure propagation repeatedly marks a
 consumer unavailable when one of its series requirements is unavailable or
 when a parallel/threshold requirement has too few surviving providers. The
-fixed point is the cascade for that particular set of failed services. The
-report must retain the initiating outage set, every derived unavailable
-service, the dependency edge that propagated each failure, affected tasks,
-client-visible outcomes, and recovery order. This makes questions such as
+fixed point for an initiating failure set $F$ is $C(F)$, its unavailable-
+operation set and structural blast radius. Retain the propagation paths,
+initiating set $F$, affected shards, request classes, tenants, workload, affected
+tasks, client-visible outcomes, and recovery order. A degraded read path and an
+unavailable write path are distinct outcomes. This makes questions such as
 ``what happens if the database and one authorization replica fail together?''
-answerable without pretending that all outages are independent.
+answerable without pretending that all outages are independent. Minimal cut
+sets identify the smallest initiating sets that disable each operation.
 
 The standard reliability output therefore includes per-instance uptime,
 series/parallel/threshold service uptime, a time-aligned outage chart, and a
@@ -674,15 +676,6 @@ occurred in production; such a replay is a model prediction and must be labeled
 separately from measured uptime.
 
 \paragraph{Calculate impact before estimating its frequency.}
-For a named initiating failure set $F$, let $C(F)$ be the unavailable-operation
-set obtained by repeatedly evaluating the dependency gates until no further
-operation becomes unavailable. Read $C(F)$ as ``the failure closure of F.''
-The closure is the structural blast radius. Retain its propagation paths and
-identify the affected shards, request classes, tenants, and workload. A degraded
-read path and an unavailable write path are different outcomes, not one
-undifferentiated red service box. Minimal cut sets identify the smallest
-initiating sets that disable each operation.
-
 Uptime estimates help assign frequencies or probabilities to these scenarios;
 MTTR estimates help assign recovery durations. Neither marginal uptime nor mean
 repair time determines a cascade by itself. The dependency graph determines
