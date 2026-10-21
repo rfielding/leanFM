@@ -31,28 +31,6 @@ the preface-to-PR narrative or technical qualifications; because `book/main.pdf`
 feeds code generation, verify deterministic rendering, tool-version/content
 manifests, and no semantic diff after regeneration.
 
-## Proposed DSL remains unimplemented
-
-The book labels `scenario`, `declare`, `from_`, `to_`, `emit`, `receive`,
-exports, `refineMessage`, role projection, symbolic `WireTerm`, and
-`composeRoles` as proposed syntax or design exercises. They are absent from the
-executable API (`RequirementSpec`, `TaskRequirement`, `GrammarExpr`). Guards
-remain strings and event values are not typed-bound. Validation checks
-grammar/task/message references, atom endpoints, and threshold bounds, but does
-not compile the proposed DSL, generate or recognize traces, or project
-participants.
-
-Lean verifies only elaborated definitions and proofs; co-located Python,
-JavaScript, shell, Graphviz, protobuf, and LaTeX outputs are not thereby proved.
-`native_decide` covers finite decidable propositions, not empirical assumptions
-or external parsers. CI should compile claimed executable listings, label
-illustrative examples, and avoid treating polished figures or green builds as
-stronger evidence. `LeanFM/Render.lean` hard-codes theorem-gallery cards rather
-than reading declarations, risking drift and conflating definitions with
-theorems. `RequiredProof` is not a proof term and its predicate is unchecked;
-`lake env lean book/logic.lean` still fails without Mathlib. Generate cards from
-declarations or a typed AST, linked to source and successful builds.
-
 ## The new visual gallery exposes derivation gaps
 
 The SVG gallery is not event-derived: `interactionSvg` plots task transitions
@@ -65,34 +43,71 @@ not durable. Require typed `DesiredOutput` inputs, branch/loop/fork/join-sensiti
 tests, and labels distinguishing requirement schema, example trace, observed
 trace, or modeled prediction.
 
-## Grammar-to-wire path and the Paxos example remain incomplete
+## Grammar-to-code and validation claims remain incomplete
 
-The three-replica Paxos app has durable storage, browser UI, recovery/concurrency
-tests and quorum, but lacks end-to-end conformance. Its requirement schema has
-empty payloads; runtime uses a separate generic TCP `Envelope`, not bindings
-generated from it. Requirements define a `ScenarioEvent.priorIds` quorum DAG,
-but runtime `trace.Event` has no predecessors and `node.go` emits only terminal
-`PutSucceeded`/`ListSucceeded`. The sink fills missing IDs/timestamps; events
+The book's proposed `scenario`, `declare`, `from_`, `to_`, `emit`, `receive`,
+exports, `refineMessage`, role projection, symbolic `WireTerm`, and
+`composeRoles` are absent from `RequirementSpec`, `TaskRequirement`, and
+`GrammarExpr`; guards remain strings and event values are not type-bound.
+Validation checks grammar/task/message references, atom endpoints, and
+threshold bounds, but does not compile that DSL, generate or recognize traces,
+or project participants.
+
+The three-replica Paxos app lacks end-to-end conformance: its requirement schema
+has empty payloads, runtime uses a separate generic TCP `Envelope`, and the
+requirements' quorum-DAG `ScenarioEvent.priorIds` has no runtime counterpart
+(`trace.Event` has no predecessors). `node.go` emits only terminal
+`PutSucceeded`/`ListSucceeded`; the sink fills missing IDs/timestamps. Events
 identify endpoints, session and task but have no starts, so write, list,
-concurrent-write and outage/recovery traces cannot be reconstructed. The modeled
-outage/recovery lifecycle is not traced, and prepare is slot-scoped. Protocol tests
-round-trip envelopes and reject truncated protobuf, but do not inject partial
-TCP frames, loss, duplication, delay or reordering. `/metrics` exposes request
-outcomes, commit latency and quorum size, not required availability, recovery
-lag, queue pressure, memory headroom or per-session diagrams.
+concurrent-write, and outage/recovery traces cannot be reconstructed. Outage
+recovery is not traced and prepare is slot-scoped. Protocol tests cover envelope
+round trips and truncated protobuf, not partial TCP frames, loss, duplication,
+delay, or reordering. `/metrics` exposes request outcomes, commit latency, and
+quorum size, but lacks required availability, recovery lag, queue pressure,
+memory headroom, and per-session diagrams.
 
-`scripts/roundtrip_generated_scenario.py` manually builds one `get_docs` scenario
-from `LeanFM/LLMGenerated/Requirements.proto` and checks Python-protobuf equality
-and predecessor IDs; it does not generate or recognize grammar traces. Tests
-still need every `GrammarExpr` constructor and legal/illegal branch (including
-`possibly`), decoded grammar/FSM acceptance, schema evolution, malformed input,
-duplicate IDs, missing/cyclic predecessors and out-of-order events. The target is
-`decode(encode(generate(grammar, choices)))`.
+`scripts/roundtrip_generated_scenario.py` manually builds one `get_docs`
+scenario from `LeanFM/LLMGenerated/Requirements.proto` and checks
+Python-protobuf equality and predecessor IDs; it does not generate or recognize
+grammar traces. Missing coverage includes every `GrammarExpr` constructor and
+legal/illegal branch (including `possibly`), decoded grammar/FSM acceptance,
+schema evolution, malformed input, duplicate IDs, missing/cyclic predecessors,
+and out-of-order events. The target is
+`decode(encode(generate(grammar, choices)))`. The role of
+`LeanFM/PaxosKV/Requirements.proto`'s `ScenarioEvent` (interoperable requirement
+data or implementation choice) and its evolution policy remain undecided;
+`RequirementEnvelope.oneof atom` does not validate branch disjointness, which
+needs disjoint terminal byte languages or explicit metadata.
 
-`LeanFM/PaxosKV/Requirements.proto`'s `ScenarioEvent` role (interoperable
-requirement data or implementation choice) and evolution policy are undecided.
-`RequirementEnvelope.oneof atom` selects a message, but branch disjointness is
-unchecked; require disjoint terminal byte languages or explicit branch metadata.
+Lean verifies elaborated definitions and proof terms, not co-located Python,
+JavaScript, shell, Graphviz, protobuf, or LaTeX outputs. `native_decide` covers
+finite decidable propositions, not empirical assumptions or external parsers.
+`RequiredProof` is not a proof term and its predicate is unchecked;
+`lake env lean book/logic.lean` still fails without Mathlib.
+`LeanFM/Render.lean` hard-codes theorem-gallery cards instead of reading
+declarations, risking drift and conflating definitions with theorems. CI should
+compile claimed executable listings, label illustrative examples, and generate
+cards from declarations or a typed AST linked to source and successful builds.
+
+Structural validation checks typed shape, actor/message coverage, and known
+justification IDs—not intent or generated symbol-to-test behavior. Add stable
+fine-grained IDs, bidirectional coverage, behavioral trace tests, and classify
+handwritten code as requirement-backed or infrastructure. Human review remains
+necessary for assumptions, trust boundaries, failure alternatives, costs,
+probability provenance, and observability; generation must not invent facts.
+The accepted `custom "unassigned" ""` fallback can conceal a missing transport
+mapping. `TransportSpec` checks nonempty method/path and a known response target,
+not that the target is an HTTP request. ChatUI specifies status, content type,
+codecs, one-to-one event `cause_id` closure, and OpenAPI, but validation/tests do
+not prove bindings against runtime handlers. Generic mappings omit
+authentication, deadlines, headers, streaming, retry/idempotency, connection
+reuse, intermediaries, redirects, cancellation, status alternatives, and
+binding-level validation.
+
+Generation varies with model, prompt, tools, and sampling; pin them and review
+diffs and behavior. Named finite metrics do not establish burstiness, tail
+dependence, predecessor order, rare failures, or operational risk; define
+tolerances, sample sizes, seeds, and distributional tests.
 
 ## Event order, time and concurrency need stronger validation
 
@@ -157,32 +172,6 @@ USL curves for supplied parameters; it has no parameter-fitting or fit-uncertain
 estimator. Rates use completed, explicitly paired observations, so omitted,
 unfinished or failed work can bias results. Warm-up, client think time, and
 changing populations also need declared policies.
-
-## Structural validation does not prove intent or generated conformance
-
-Validators check typed structure, actor/message coverage, and known
-justification IDs—not user intent or generated symbol-to-test behavior. Require
-stable fine-grained IDs, bidirectional coverage, behavioral trace tests, and
-classification of handwritten code as requirement-backed or infrastructure.
-Human review remains necessary for assumptions, trust boundaries, failure
-alternatives, costs, probability provenance, and observability; generation must
-not invent facts. The accepted `custom "unassigned" ""` fallback can conceal a
-missing transport mapping.
-
-Generic `TransportSpec` records method/path or a response's named message; its
-validator checks nonempty method/path and any known response target, not that
-the target is an HTTP request. ChatUI specifies status, content type, codecs,
-one-to-one event `cause_id` closure, and an OpenAPI mapping, but validation and
-tests do not prove bindings against runtime handlers. The generic mapping omits
-authentication, deadlines, headers, streaming, retry/idempotency, connection
-reuse, intermediaries, redirects, cancellation, status alternatives, and
-binding-level validation.
-
-Generation from durable artifacts reduces transcript dependence, not variance:
-pin model, prompt, tools, and sampling, then review diffs and behavior.
-Agreement on named finite metrics does not establish burstiness, tail
-dependence, predecessor order, rare failures, or operational risk. Specify
-tolerances, sample sizes, seeds, and distributional tests.
 
 ## Security knowledge is not yet a complete epistemic model
 
