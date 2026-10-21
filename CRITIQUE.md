@@ -5,19 +5,18 @@ the book claims. A successful build alone does not resolve them.
 
 ### CTL implementation and temporal coverage remain bounded
 
-Verified 2026-10-20: `LeanFM/CTL.lean` implements `holds` for Boolean,
-EX/AX, EF/AF, EG/AG, EU/AU and EW/AW. `CTLTests.lean` checks branching,
-vacuity, until/release and AG/AF duals with `native_decide`; `TaskFSM.holds`
-feeds task-property results to the executable and `/metrics`.
+Verified 2026-10-20: `LeanFM/CTL.lean` implements Boolean, EX/AX, EF/AF, EG/AG,
+EU/AU and EW/AW; `CTLTests.lean` covers branching, vacuity, until/release and
+AG/AF duals with `native_decide`. `TaskFSM.holds` supplies task results to the
+executable and `/metrics`.
 
-Still missing: derive bounded transition systems and witnesses/counterexamples
-from general grammar/event models, prove the checker/interpreter or deployed-code
-refinement, and establish that `possibly` handlers cover every witness and
-terminate. Its current check only requires a mapping to cite the possibility
-proof. Path-local cycle detection may be exponential on shared graphs;
-validation and event-pair reconstruction use quadratic scans. Bounded payloads,
-queues, tasks and clocks plus truncation can hide growth, retry loops or timing
-behavior, so unbounded claims need an explicit abstraction argument.
+Still missing: derive bounded systems and witnesses/counterexamples from general
+grammar/event models; prove checker/interpreter or deployed-code refinement; and
+show `possibly` handlers cover every witness and terminate (validation only
+requires a cited handling plan). Path-local cycle detection may be exponential
+on shared graphs; validation and event-pair reconstruction use quadratic scans.
+Bounded payloads, queues, tasks, clocks and truncation can hide growth, retry
+loops or timing behavior; unbounded claims need an abstraction argument.
 
 ### Project-root discoverability and code-generation readiness
 
@@ -37,22 +36,21 @@ manifests, and no semantic diff after regeneration.
 Proposed forms (`scenario`, `declare`, `from_`, `to_`, `emit`, `receive`, exports,
 `refineMessage`, role projection, symbolic encryption, `composeRoles`) lack
 executable Lean definitions. The current API is `RequirementSpec`,
-`TaskRequirement`, and `GrammarExpr`; guards are strings and event values are
-not typed-bound. Validation checks grammar/task/message references, atom
-endpoints, and threshold bounds, but cannot compile the DSL, generate/recognize
-traces, or project participants.
+`TaskRequirement`, and `GrammarExpr`; guards are strings and event values are not
+typed-bound. Validation checks grammar/task/message references, atom endpoints,
+and threshold bounds, but cannot compile the DSL, generate or recognize traces,
+or project participants.
 
-Lean verifies only elaborated definitions and proofs; Python, JavaScript, shell,
-Graphviz, protobuf, and LaTeX outputs are not proved by co-location.
+Lean verifies only elaborated definitions and proofs; co-located Python,
+JavaScript, shell, Graphviz, protobuf, and LaTeX outputs are not thereby proved.
 `native_decide` covers finite decidable propositions, not empirical assumptions
-or external parsers. Compile claimed executable listings in CI, label examples
-illustrative, and do not infer stronger evidence from a polished figure or green
-build. `LeanFM/Render.lean` hard-codes theorem-gallery cards instead of reading
-declarations, so they can drift or conflate definitions with theorems.
-`RequiredProof` is not a proof term, and its predicate is unchecked;
-`lake env lean book/logic.lean` still fails without Mathlib.
-Generate cards from declarations or a typed AST and link them to source and
-successful builds.
+or external parsers. CI should compile claimed executable listings, label
+illustrative examples, and avoid treating polished figures or green builds as
+stronger evidence. `LeanFM/Render.lean` hard-codes theorem-gallery cards rather
+than reading declarations, risking drift and conflating definitions with
+theorems. `RequiredProof` is not a proof term and its predicate is unchecked;
+`lake env lean book/logic.lean` still fails without Mathlib. Generate cards from
+declarations or a typed AST, linked to source and successful builds.
 
 ## The new visual gallery exposes derivation gaps
 
