@@ -46,11 +46,11 @@ def message (name src dst : String) (fields : List ProtoFieldSchema) : MessageSc
 
 def messages : List MessageSchema :=
   [ message "LoginSubmitted" "UserBrowser" "LeanFMServer"
-      [field 1 "username" .string, field 2 "credential" .bytes]
+      [field 1 "username" .string, field 2 "credential" .bytes, field 3 "openai_api_key" .bytes, field 4 "anthropic_api_key" .bytes]
   , message "LoginAccepted" "LeanFMServer" "UserBrowser"
       [field 1 "user_id" .string, field 2 "session_id" .string]
   , message "LoginRejected" "LeanFMServer" "UserBrowser" [field 1 "reason" .string]
-  , message "AccountCreateSubmitted" "UserBrowser" "LeanFMServer" [field 1 "username" .string, field 2 "login_credential" .bytes, field 3 "provider" .string, field 4 "api_key" .bytes]
+  , message "AccountCreateSubmitted" "UserBrowser" "LeanFMServer" [field 1 "username" .string, field 2 "login_credential" .bytes, field 3 "provider" .string, field 4 "api_key" .bytes, field 5 "openai_api_key" .bytes, field 6 "anthropic_api_key" .bytes]
   , message "ProviderKeyCheckRequested" "LeanFMServer" "ModelProvider" [field 1 "provider" .string, field 2 "verification_id" .string]
   , message "ProviderKeyVerified" "ModelProvider" "LeanFMServer" [field 1 "verification_id" .string, field 2 "provider_account" .string]
   , message "ProviderKeyRejected" "ModelProvider" "LeanFMServer" [field 1 "verification_id" .string, field 2 "reason" .string]
@@ -571,6 +571,9 @@ def taskConstraints : List TaskConstraint :=
   , where_ "unconfigured_models_are_rejected" "argue_requirements" "a model ID absent from the server allowlist is rejected before conversation persistence provider billing or workspace mutation"
   , where_ "cursor_subscription_uses_agent_protocol" "argue_requirements" "a Cursor subscription is used through an authenticated Cursor Agent client and project MCP or through an isolated Cursor ACP session; LeanFM never requests stores or treats Cursor login state as a reusable model-provider API key"
   , where_ "concurrent_keys_do_not_collide" "argue_requirements" "concurrent turns with different credential_ref values cannot share credentials responses accounting retries cancellation or provider-client mutable state"
+  , where_ "one_password_unlocks_all_provider_keys" "authenticate_user" "an account may retain OpenAI and Anthropic keys simultaneously; one verified account password unlocks all its retained keys; optional keys supplied at registration or password login are verified and retained encrypted, empty fields preserve existing keys, corrupt retained bundles fail closed, and no retained key is exposed to the browser or persisted as plaintext"
+  , where_ "selected_model_determines_provider_credential" "argue_requirements" "the server-owned model catalog binds every selectable model to one provider; each queued prompt captures its selected model, the server resolves only that authenticated user's unlocked key for that provider, billing identifies the same provider model and key fingerprint, and missing credentials or unknown or ambiguous model IDs fail before paid network calls without falling back to another provider or key"
+  , where_ "provider_protocols_preserve_workspace_controls" "argue_requirements" "OpenAI Responses and Anthropic Messages support the same project-confined workspace tools cancellation retry brakes durable book edits and usage reporting; provider-specific tool and token formats are normalized without cross-user cross-provider or cross-project state, incomplete responses cannot execute tools, and token usage across providers is never called a shared dollar balance"
   , where_ "keyless_server_has_no_provider_spend" "argue_requirements" "without a user-owned credential_ref and without an explicitly configured platform credential no ModelRequestIssued occurs"
   , where_ "usage_is_visible_per_turn" "argue_requirements" "each successful provider turn renders input cached-input output and context-window token counts beside that response"
   , where_ "provider_outcomes_are_distinguishable" "argue_requirements" "a provider credit or spend or quota rejection, rate limit, incomplete response output limit, malformed structured reply, and local session token safety limit have distinct actionable diagnostics; no response length or local token count is presented as the provider credit balance; incomplete responses retain provider-reported usage but cannot execute returned tools or commit a proposed book; none triggers an automatic paid retry"

@@ -49,6 +49,7 @@ book_output_status=$?
 set -e
 test "$book_output_status" -ne 0
 rg -Fq 'before--after' "$test_root/book-output.txt"
+LEANFM_DATA_ROOT="$test_root/credential-unit" lake env lean --run LeanFM/ChatUI/CredentialTests.lean
 
 python3 scripts/chatui_provider_stub.py >"$provider_log" 2>&1 &
 provider_pid=$!

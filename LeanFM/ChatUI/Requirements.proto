@@ -116,7 +116,12 @@ message ChatContentPart {
   string title = 10;
 }
 
-message LoginSubmitted { string username = 1; bytes credential = 2; }
+message LoginSubmitted {
+  string username = 1;
+  bytes credential = 2;
+  bytes openai_api_key = 3;
+  bytes anthropic_api_key = 4;
+}
 message LoginAccepted { string user_id = 1; string session_id = 2; }
 message LoginRejected { string reason = 1; }
 
@@ -136,6 +141,8 @@ message AccountCreateSubmitted {
   bytes login_credential = 2;
   string provider = 3;
   bytes api_key = 4;
+  bytes openai_api_key = 5;
+  bytes anthropic_api_key = 6;
 }
 message ProviderKeyCheckRequested { string provider = 1; string verification_id = 2; }
 message ProviderKeyVerified { string verification_id = 1; string provider_account = 2; }
