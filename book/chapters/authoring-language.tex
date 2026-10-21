@@ -156,16 +156,13 @@ def estimatedCustomerDecision : Scenario :=
     ]
 \end{lstlisting}
 
-Do not add a separate chooser annotation: the terminal's source identifies who
-selected the branch. Deterministic service transitions carry incoming
-probability mass forward. Requirements may begin with \texttt{oneOf}, symbolic
-weights, or ranges; refinement must resolve these claims and preserve every
-abstractly legal branch, including one assigned zero probability by the current
-implementation.
-
-A shared prefix leaves the choice unresolved until the first differing
-byte-level terminal. If complete terminal byte languages overlap, merge the
-branches or add an observable discriminator for downstream actors.
+Branch agency follows the terminal-observation rule in
+Chapter~\ref{ch:grammar}; if terminal byte languages overlap, merge the
+branches or add an observable discriminator. Deterministic service transitions
+carry incoming probability mass forward. Requirements may begin with
+\texttt{oneOf}, symbolic weights, or ranges; refinement must resolve these
+claims and preserve every abstractly legal branch, including one assigned zero
+probability by the current implementation.
 
 \section{Worked MDP: a stochastic user and deterministic server}
 
