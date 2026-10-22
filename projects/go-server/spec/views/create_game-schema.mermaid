@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Client
+    participant GoServer
+    alt choice 1
+    Client->>GoServer: CreateGame
+    alt choice 1
+    GoServer->>Client: ErrorEvent
+    else alternative
+    GoServer->>Client: GameCreated
+    end
+    end

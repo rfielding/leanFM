@@ -1,0 +1,10 @@
+{
+  "revision": "playable-v1",
+  "result": "pass",
+  "checks": [
+    "escapes project root",
+    "must remain beneath",
+    "symlink",
+    "loopback"
+  ]
+}

@@ -9,3 +9,6 @@ book/*.out
 book/*.toc
 *.duckdb
 *.db
+.runtime/
+spec/*.olean
+spec/*.ilean

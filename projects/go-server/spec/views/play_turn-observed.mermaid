@@ -1,0 +1,6 @@
+sequenceDiagram
+    participant Client
+    participant GoServer
+    Client->>GoServer: MakeMove
+    GoServer->>Client: MoveEvent
+    GoServer->>Client: GameState

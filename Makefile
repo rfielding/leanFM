@@ -42,7 +42,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams mdp-example-check paxos-check video-check selfhost-check
+check: build validate diagrams mdp-example-check paxos-check video-check selfhost-check goserver-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -94,6 +94,10 @@ go-toolchain:
 paxos-check:
 	@lake env lean ValidatePaxosKV.lean | rg '^ok: Paxos KV requirements|^ok: generated implementation plan'
 	@go test ./...
+
+.PHONY: goserver-check
+goserver-check: go-toolchain
+	$(MAKE) -C projects/go-server check
 
 paxos-run:
 	@echo 'Run three replicas, then: go run ./cmd/paxos-kv web'

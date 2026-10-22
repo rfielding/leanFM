@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Client
+    participant GoServer
+    alt choice 1
+    Client->>GoServer: ExportGIF
+    alt choice 1
+    GoServer->>Client: ErrorEvent
+    else alternative
+    GoServer->>Client: GIFCreated
+    end
+    end

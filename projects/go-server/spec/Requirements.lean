@@ -1,101 +1,120 @@
-import LeanFM.Artifacts
+import LeanFM.ChatUI.Server
 
 namespace GoServer.Requirements
-open LeanFM
+open LeanFM Lean
 
-def protoSource : String := include_str "Requirements.proto"
-def framing : MessageFraming := { kind := .protobufOneof, dispatchField := some "payload", note := "One observable command or event." }
-def field (number : Nat) (name : String) (scalar : ProtoScalar) : ProtoFieldSchema := { number, name, scalar }
-def message (name src dst : String) (fields : List ProtoFieldSchema) : MessageSchema := { name, src, dst, framing, fields }
+def revision := "playable-v1"
+def protoSource := include_str "Requirements.proto"
+def rulesSource := include_str "working-contract.json"
 
--- Core messages (kept in sync with Requirements.proto)
-def messages : List MessageSchema :=
-  [ message "LoginRequest" "Client" "GoServer" [field 1 "username" .string, field 2 "password" .string]
-  , message "LoginResponse" "GoServer" "Client" [field 1 "account_id" .string, field 2 "token" .string, field 3 "expires_unix" .uint64]
-  , message "Logout" "Client" "GoServer" [field 1 "account_id" .string, field 2 "token" .string]
-  , message "CreateGame" "Client" "GoServer" [field 1 "name" .string, field 2 "board" .string, field 3 "rules" .string, field 4 "max_players" .uint64]
-  , message "GameCreated" "GoServer" "Client" [field 1 "game_id" .string, field 2 "name" .string]
-  , message "JoinGame" "Client" "GoServer" [field 1 "game_id" .string, field 2 "player_name" .string]
-  , message "Joined" "GoServer" "Client" [field 1 "game_id" .string, field 2 "player_id" .string, field 3 "assigned_color" .string]
-  , message "MakeMove" "Client" "GoServer" [field 1 "game_id" .string, field 2 "player_id" .string, field 3 "x" .uint64, field 4 "y" .uint64]
-  , message "Pass" "Client" "GoServer" [field 1 "game_id" .string, field 2 "player_id" .string]
-  , message "Resign" "Client" "GoServer" [field 1 "game_id" .string, field 2 "player_id" .string]
-  , message "MoveEvent" "GoServer" "Client" [field 1 "game_id" .string, field 2 "player_id" .string, field 3 "changes" .bytes]
-  , message "GameState" "GoServer" "Client" [field 1 "game_id" .string, field 2 "players" .bytes, field 3 "board" .bytes, field 4 "to_move_index" .uint64, field 5 "finished" .bool, field 6 "ko_point" .bytes]
-  , message "ErrorEvent" "GoServer" "Client" [field 1 "code" .string, field 2 "message" .string] ]
+-- Compatibility-visible HTTP conversions are REQUIREMENTS, not codegen choices.
+structure HttpContract where
+  task : String
+  requests : List String
+  method : String
+  path : String
+  responses : List String
+  authentication : String
+  requestCodec : String := "application/json; strict UTF-8 JSON; unknown fields rejected; 1 MiB limit"
+  responseCodec : String := "application/json; Response protobuf value, snake_case field names"
+  statuses : List Nat
+deriving Repr
 
--- Requirement states and transitions
+def httpContracts : List HttpContract :=
+  [ { task:="create_game", requests:=["CreateGame"], method:="POST", path:="/api/games", responses:=["GameCreated","ErrorEvent"], authentication:="public; same-origin when Origin is supplied", statuses:=[201,400,403,429,500] }
+  , { task:="join_game", requests:=["JoinGame"], method:="POST", path:="/api/games/{id}/join", responses:=["Joined","ErrorEvent"], authentication:="unguessable invitation id; same-origin", statuses:=[200,400,403,404,409,500] }
+  , { task:="play_turn", requests:=["MakeMove","Pass","Resign"], method:="POST", path:="/api/games/{id}/actions", responses:=["MoveEvent","GameState","ErrorEvent"], authentication:="Authorization: Bearer seat-token; current seat; exact revision; action.kind discriminates move/pass/resign", statuses:=[200,400,401,403,404,409,422,500] }
+  , { task:="inspect_game", requests:=["InspectGame"], method:="GET", path:="/api/games/{id}", responses:=["GameState","ErrorEvent"], authentication:="invitation id grants read-only access", requestCodec:="path id; no request body", statuses:=[200,404,500] }
+  , { task:="inspect_history", requests:=["InspectHistory"], method:="GET", path:="/api/games/{id}/history", responses:=["HistoryReturned","ErrorEvent"], authentication:="invitation id grants read-only access", requestCodec:="path id; no request body", statuses:=[200,404,500] }
+  , { task:="export_gif", requests:=["ExportGIF"], method:="POST", path:="/api/export", responses:=["GIFCreated","ErrorEvent"], authentication:="same-origin; replayed local actions; no arbitrary path input", responseCodec:="image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes", statuses:=[200,400,403,422,429,500] } ]
 
-def state (id label group : String) (terminal : Bool := false) : RequirementState := { id, label, group, markdown := label, terminal }
-def transition (src dst msg : String) : RequirementTransition := { src, dst, message := msg, probabilityNum := 1, probabilityDen := 1, dwellMs := 0 }
-
-def loginTask : TaskRequirement :=
-  { id := "login", title := "Authenticate a client session", actors := ["Client", "GoServer"], initialState := "logged_out"
-  , states := [state "logged_out" "not authenticated" "client", state "authenticating" "auth in progress" "server", state "logged_in" "authenticated session" "terminal" true, state "auth_failed" "authentication failed" "terminal" true]
-  , transitions := [transition "logged_out" "authenticating" "LoginRequest", transition "authenticating" "logged_in" "LoginResponse", transition "authenticating" "auth_failed" "ErrorEvent"] }
-
-def createTask : TaskRequirement :=
-  { id := "create_game", title := "Create an n-player game", actors := ["Client", "GoServer"], initialState := "ready"
-  , states := [state "ready" "creation form ready" "client", state "checking" "parameters under validation" "server", state "created" "game created" "terminal" true, state "rejected" "request rejected visibly" "terminal" true]
-  , transitions := [transition "ready" "checking" "CreateGame", transition "checking" "created" "GameCreated", transition "checking" "rejected" "ErrorEvent"] }
-
-def joinTask : TaskRequirement :=
-  { id := "join_game", title := "Join an open game", actors := ["Client", "GoServer"], initialState := "outside"
-  , states := [state "outside" "outside game" "client", state "assigning" "seat assignment pending" "server", state "joined" "joined with one color" "terminal" true, state "rejected" "join rejected visibly" "terminal" true]
-  , transitions := [transition "outside" "assigning" "JoinGame", transition "assigning" "joined" "Joined", transition "assigning" "rejected" "ErrorEvent"] }
-
-def turnTask : TaskRequirement :=
-  { id := "play_turn", title := "Play, pass, or resign one turn", actors := ["Client", "GoServer"], initialState := "turn"
-  , states := [state "turn" "alive player's turn" "client", state "checking" "action legality under validation" "server", state "applied" "action and captures applied" "server", state "updated" "authoritative state visible" "terminal" true, state "rejected" "illegal action rejected without mutation" "terminal" true]
-  , transitions := [transition "turn" "checking" "MakeMove", transition "turn" "checking" "Pass", transition "turn" "checking" "Resign", transition "checking" "applied" "MoveEvent", transition "applied" "updated" "GameState", transition "checking" "rejected" "ErrorEvent"] }
-
--- Grammars for interaction UI and test harnesses
-
-def atom (task src dst msg : String) : GrammarExpr := .event { task, src, dst, message := msg }
-def response (task success : String) : GrammarExpr := .choice [atom task "GoServer" "Client" success, atom task "GoServer" "Client" "ErrorEvent"]
-def loginGrammar : TaskGrammar := { task := "login", entry := "logged_out", terminals := ["logged_in","auth_failed"], body := atom "login" "Client" "GoServer" "LoginRequest" >>> response "login" "LoginResponse" }
-def createGrammar : TaskGrammar := { task := "create_game", entry := "ready", terminals := ["created", "rejected"], body := atom "create_game" "Client" "GoServer" "CreateGame" >>> response "create_game" "GameCreated" }
-def joinGrammar : TaskGrammar := { task := "join_game", entry := "outside", terminals := ["joined", "rejected"], body := atom "join_game" "Client" "GoServer" "JoinGame" >>> response "join_game" "Joined" }
-def actionBranch (name : String) : GrammarExpr := atom "play_turn" "Client" "GoServer" name >>> (GrammarExpr.choice [atom "play_turn" "GoServer" "Client" "ErrorEvent", atom "play_turn" "GoServer" "Client" "MoveEvent" >>> atom "play_turn" "GoServer" "Client" "GameState"])
-def turnGrammar : TaskGrammar := { task := "play_turn", entry := "turn", terminals := ["updated", "rejected"], body := .choice [actionBranch "MakeMove", actionBranch "Pass", actionBranch "Resign"] }
-
-
-def process (actor task : String) (states sends receives : List String) : RequirementProcess := { actor, task, states, sends, receives }
-def processes : List RequirementProcess :=
-  [ process "Client" "login" ["logged_out","logged_in","auth_failed"] ["LoginRequest"] ["LoginResponse","ErrorEvent"], process "GoServer" "login" ["authenticating","logged_in","auth_failed"] ["LoginResponse","ErrorEvent"] ["LoginRequest"]
-  , process "Client" "create_game" ["ready","created","rejected"] ["CreateGame"] ["GameCreated","ErrorEvent"], process "GoServer" "create_game" ["checking","created","rejected"] ["GameCreated","ErrorEvent"] ["CreateGame"]
-  , process "Client" "join_game" ["outside","joined","rejected"] ["JoinGame"] ["Joined","ErrorEvent"], process "GoServer" "join_game" ["assigning","joined","rejected"] ["Joined","ErrorEvent"] ["JoinGame"]
-  , process "Client" "play_turn" ["turn","updated","rejected"] ["MakeMove","Pass","Resign"] ["MoveEvent","GameState","ErrorEvent"], process "GoServer" "play_turn" ["checking","applied","updated","rejected"] ["MoveEvent","GameState","ErrorEvent"] ["MakeMove","Pass","Resign"] ]
-
-def tasks := [loginTask, createTask, joinTask, turnTask]
-def grammars := [loginGrammar, createGrammar, joinGrammar, turnGrammar]
-
-def outputs : List DesiredOutput := tasks.flatMap fun task =>
-  [{id := "goserver." ++ task.id ++ ".interaction", prompt := "Show " ++ task.title ++ ".", question := "Which actor messages complete this scenario?", kind := .interactionDiagram, eventSource := task.id ++ " events", reducer := "render one session/scenario prior order", unit := "events"},
-   {id := "goserver." ++ task.id ++ ".state", prompt := "Show " ++ task.title ++ " states.", question := "Which residual states are reachable?", kind := .stateMachine, eventSource := task.id ++ " grammar", reducer := "render grammar residuals", unit := "states and transitions"}]
-
-
+def framing : MessageFraming := {kind:=.transportEnvelope,dispatchField:=some "message",note:="Normalized observed event in Response.events; HTTP route and action.kind identify requests. Export has the same events in X-GoServer-Trace, with GIF bytes independently verified. Loopback Host and Origin rejection are pre-protocol admission failures (plain HTTP 403), not accepted task starts."}
+def field (number : Nat) (name : String) (scalar : ProtoScalar) : ProtoFieldSchema := {number,name,scalar}
+def fieldsFor : String → List ProtoFieldSchema
+  | "CreateGame" => [field 1 "size" .uint32,field 2 "players" .uint32,field 3 "max_turns" .uint32,field 4 "name" .string]
+  | "JoinGame" => [field 1 "name" .string]
+  | "MakeMove" | "Pass" | "Resign" => [field 1 "revision" .uint32,field 2 "action" (.message "Action")]
+  | "InspectGame" | "InspectHistory" => [field 1 "id" .string]
+  | "ExportGIF" => [field 1 "size" .uint32,field 2 "players" .uint32,field 3 "max_turns" .uint32,field 4 "actions" (.repeated (.message "Action"))]
+  | "GIFCreated" => [field 1 "project_path" .string,field 2 "final_ply" .uint32]
+  | "ErrorEvent" => [field 4 "error" .string,field 5 "events" (.repeated (.message "TraceEvent"))]
+  | "GameCreated" | "Joined" => [field 1 "game" (.message "Room"),field 2 "token" .string,field 3 "seat" .int32,field 5 "events" (.repeated (.message "TraceEvent"))]
+  | _ => [field 1 "game" (.message "Room"),field 5 "events" (.repeated (.message "TraceEvent"))]
+def message (name src dst : String) : MessageSchema := {name,src,dst,framing,fields:=fieldsFor name}
+def requestNames := ["CreateGame","JoinGame","MakeMove","Pass","Resign","InspectGame","InspectHistory","ExportGIF"]
+def responseNames := ["GameCreated","Joined","MoveEvent","GameState","HistoryReturned","GIFCreated","ErrorEvent"]
+def messages := (requestNames.map (fun n=>message n "Client" "GoServer")) ++ (responseNames.map (fun n=>message n "GoServer" "Client"))
+def state (id : String) (terminal : Bool := false) : RequirementState := {id,label:=id,group:="protocol",markdown:=id,terminal}
+def transition (src dst name : String) : RequirementTransition := {src,dst,message:=name,probabilityNum:=1,probabilityDen:=1,dwellMs:=0}
+def atom (task src dst name : String) : GrammarExpr := .event {task,src,dst,message:=name}
+def tasks : List TaskRequirement := httpContracts.map fun contract=>
+  {id:=contract.task,title:=contract.task,actors:=["Client","GoServer"],initialState:="ready",
+   states:=[state "ready",state "checking",state "applied",state "done" true,state "rejected" true],
+   transitions:=(contract.requests.map (transition "ready" "checking")) ++
+     (if contract.task=="play_turn" then [transition "checking" "applied" "MoveEvent",transition "applied" "done" "GameState"]
+      else [transition "checking" "done" (contract.responses.headD "ErrorEvent")]) ++ [transition "checking" "rejected" "ErrorEvent"]}
+def grammars : List TaskGrammar := httpContracts.map fun contract=>
+  {task:=contract.task,entry:="ready",terminals:=["done","rejected"],body:=
+   .choice (contract.requests.map fun req=>
+     atom contract.task "Client" "GoServer" req >>> GrammarExpr.choice
+       [atom contract.task "GoServer" "Client" "ErrorEvent",
+        if contract.task=="play_turn" then atom contract.task "GoServer" "Client" "MoveEvent" >>> atom contract.task "GoServer" "Client" "GameState"
+        else atom contract.task "GoServer" "Client" (contract.responses.headD "ErrorEvent")])}
+def processes : List RequirementProcess := httpContracts.flatMap fun c=>
+  [{actor:="Client",task:=c.task,states:=["ready","done","rejected"],sends:=c.requests,receives:=c.responses},
+   {actor:="GoServer",task:=c.task,states:=["checking","applied","done","rejected"],sends:=c.responses,receives:=c.requests}]
+def invariants : List (String × String × String) :=
+  [("R1","play_turn","Legal actions produce one immutable state transition; rejected actions leave the board and ledgers unchanged."),
+   ("R2","play_turn","Both runtimes agree on captures, allowed suicide, cumulative losses, signed matrix, and territory-minus-losses scores."),
+   ("R3","play_turn","Only the authenticated current seat at the exact revision can play. Deadline expiry is an explicit automatic Pass, never an invented placement."),
+   ("R4","inspect_history","Review never changes a live network game. Local analysis preserves sibling variations and immutable ancestors."),
+   ("R5","export_gif","GIF frames are Go-rule replays of exactly the selected root-to-node actions; the final frame is that endpoint."),
+   ("R6","create_game","Boards 3..19, players 2..6, at most 512 turns, 2048 local history nodes, 32 rooms, 64 stored exports, 200 export actions, 1 MiB JSON bodies, 60-second turns and bounded cancellable worker search; project state stays under this root. Loopback Host only, same-origin mutation, strict duplicate-free UTF-8 JSON.")]
+def outputs : List DesiredOutput := httpContracts.flatMap fun c=>
+  [{id:="goserver."++c.task++".schema",prompt:="Produce specifications that lead to a working application.",question:="Which requests and outcomes belong to "++c.task++"?",kind:=.interactionDiagram,eventSource:=c.task++" requirement grammar",reducer:="render requirement-schema alternatives, explicitly not an observed trace",unit:="messages per scenario"},
+   {id:="goserver."++c.task++".observed",prompt:="Actually play a game between two users.",question:="Did this actual HTTP exchange follow the declared grammar?",kind:=.interactionDiagram,eventSource:="evidence/playable-v1/browser.json observed_scenarios",reducer:="validate actor/message sequence and cause/prior links, then render this observed exchange",unit:="observed events per request"}]
 def spec : RequirementSpec :=
-  { id := "goserver.observable", title := "KGS-like n-player Go server", actors := ["Client", "GoServer"]
-  , actorPopulations := [{actorSpec := "Client", instancePrefix := "client-", count := 100, routing := .sticky "session_id"}, {actorSpec := "GoServer", instancePrefix := "server-", count := 1, routing := .sticky "game_id"}]
-  , actorResources := [{actor := "Client", inboundCapacity := 64, outboundCapacity := 64, maxInFlight := 8, memoryBudgetBytes := 67108864}, {actor := "GoServer", inboundCapacity := 4096, outboundCapacity := 4096, maxInFlight := 1024, memoryBudgetBytes := 1073741824}]
-  , actorReliability := [{actor := "Client", outageProbability := {numerator := 0, denominator := 1}, meanTimeToRepairMs := 0}, {actor := "GoServer", outageProbability := {numerator := 0, denominator := 1}, meanTimeToRepairMs := 0}]
-  , reliabilityGates := [], actorCosts := [], messages, tasks, grammars, processes
-  , properties :=
-      [{name := "Creation terminates visibly", mode := .eventually, task := "create_game", expression := "GameCreated or ErrorEvent", probability := none},
-       {name := "Joining terminates visibly", mode := .eventually, task := "join_game", expression := "Joined or ErrorEvent", probability := none},
-       {name := "Login terminates visibly", mode := .eventually, task := "login", expression := "LoginResponse or ErrorEvent", probability := none},
-       {name := "Illegal action cannot mutate board", mode := .always, task := "play_turn", expression := "ErrorEvent terminates without MoveEvent", probability := none},
-       {name := "Captures are counted and reflected in GameState", mode := .always, task := "play_turn", expression := "When MoveEvent reports captures, subsequent GameState.players[].captures reflect aggregated counts", probability := none},
-       {name := "Simple ko is represented in GameState", mode := .always, task := "play_turn", expression := "GameState.ko_point identifies the forbidden immediate recapture intersection when simple ko applies and is absent otherwise", probability := none},
-       {name := "Server does not autonomously play for clients", mode := .always, task := "play_turn", expression := "MakeMove messages originate from Client actors only (no server-originated MoveEvent without prior Client MakeMove)", probability := none}]
-  , requiredProofs := [{name := "Every turn terminates visibly", mode := .eventually, task := "play_turn", predicate := "GameState or ErrorEvent", probability := none}]
-  , performance := [], charts := [], desiredOutputs := outputs
-  , markdown := [{id := "candidate", title := "Candidate requirements", body := "This typed grammar is a review draft and does not authorize implementation."}, {id := "ui", title := "UI display preference", body := "SVG images under spec/images/ should be displayed inline in the UI for discussion and review. The board_wall_visual.svg is an example and must be rendered inline so stakeholders can inspect board models and captures without downloading files."}] }
-
+  {id:="goserver.playable-v1",title:="Playable n-player Go experiment",actors:=["Client","GoServer"],
+   actorPopulations:=[{actorSpec:="Client",instancePrefix:="client-",count:=6,routing:=.sticky "seat"},{actorSpec:="GoServer",instancePrefix:="server-",count:=1,routing:=.sticky "game_id"}],
+   actorResources:=[{actor:="Client",inboundCapacity:=8,outboundCapacity:=8,maxInFlight:=1,memoryBudgetBytes:=134217728},{actor:="GoServer",inboundCapacity:=32,outboundCapacity:=32,maxInFlight:=1,memoryBudgetBytes:=536870912}],
+   actorReliability:=[{actor:="Client",outageProbability:={numerator:=0,denominator:=1},meanTimeToRepairMs:=0},{actor:="GoServer",outageProbability:={numerator:=0,denominator:=1},meanTimeToRepairMs:=0}],
+   reliabilityGates:=[],actorCosts:=[],messages,tasks,grammars,processes,
+   properties:=(invariants.map (fun (name,task,expression)=>{name,task,expression,mode:=.always,probability:=none})) ++
+     (httpContracts.map (fun c=>{name:="Visible completion of "++c.task,task:=c.task,expression:="Success or explicit ErrorEvent",mode:=.eventually,probability:=none})),
+   requiredProofs:=[{name:="Action atomicity",task:="play_turn",mode:=.always,predicate:="R1: reject without mutation or commit exactly one validated state",probability:=none}],performance:=[],charts:=[],desiredOutputs:=outputs,
+   markdown:=[{id:="rules",title:="Exact working rules and negative requirements",body:=rulesSource},{id:="status",title:="Evidence boundary",body:="The operator explicitly requested working implementation experiments. The prior draft's unaccepted gates are not fabricated as accepted. Passing structural, differential, protocol and browser tests is empirical evidence, not a proof of deployed-code refinement or optimal MCTS play."}]}
 
 def validationErrors := validateRequirementSpec spec
-def validationReport : String := if validationErrors.isEmpty then "ok: GoServer candidate requirements are well formed\n" else "invalid GoServer candidate requirements\n" ++ joinWithNewline validationErrors ++ "\n"
-#eval IO.print validationReport
 
+-- The ChatUI convenience wrapper closes over ChatUI.spec. Use the reusable
+-- grammar renderer with THIS project's grammar and actors, never that wrapper.
+def interactionMermaid (task : TaskRequirement) : String :=
+  let body := (grammars.find? (·.task==task.id)).map (·.body) |>.getD .empty
+  joinWithNewline (["sequenceDiagram"] ++ task.actors.map (fun actor=>"    participant "++actor) ++
+    LeanFM.ChatUI.Requirements.grammarInteractionLines "Client,GoServer" body)
+
+def main : IO Unit := do
+  let errors := validationErrors ++ validateRequirementProtoFile spec protoSource
+  unless errors.isEmpty do throw (IO.userError (joinWithNewline errors))
+  IO.FS.createDirAll "spec/views"
+  let rows : List Json := (grammars.zip tasks).map fun (pair : TaskGrammar × TaskRequirement) =>
+    let g := pair.1
+    let t := pair.2
+    Json.mkObj
+    [("id",toJson t.id),("task",toJson t.id),("title",toJson t.title),("entry",toJson g.entry),
+     ("terminals",toJson g.terminals),("actors",toJson t.actors),
+     ("states",toJson (t.states.map fun s=>Json.mkObj [("name",toJson s.id),("description",toJson s.label)])),
+     ("transitions",toJson (t.transitions.map fun tr=>let m:=messages.find? (·.name==tr.message); Json.mkObj [("message",toJson tr.message),("source",toJson tr.src),("target",toJson tr.dst),("source_actor",toJson (m.map (·.src) |>.getD "")),("destination_actor",toJson (m.map (·.dst) |>.getD ""))])),
+     ("properties",toJson (spec.properties.filter (·.task==t.id) |>.map fun p=>Json.mkObj [("name",toJson p.name),("mode",toJson (propertyModeName p.mode)),("expression",toJson p.expression),("formula",toJson (LeanFM.ChatUI.Server.propertyCtlFormula p.mode p.expression)),("origin",toJson "Requirements.lean"),("evidence_kind",toJson "test obligation; not a deployed-code proof")])),
+     ("constraints",toJson ([] : List String)),
+     ("grammar",(Json.parse (LeanFM.ChatUI.Server.grammarExprJson g.body)).toOption.getD Json.null),
+     ("interaction_mermaid",toJson (interactionMermaid t)),
+     ("state_mermaid",toJson (LeanFM.ChatUI.Requirements.stateMachineMermaid t))]
+  let bindings:=httpContracts.map fun c=>Json.mkObj [("task",toJson c.task),("requests",toJson c.requests),("method",toJson c.method),("path",toJson c.path),("responses",toJson c.responses),("authentication",toJson c.authentication),("request_codec",toJson c.requestCodec),("response_codec",toJson c.responseCodec),("statuses",toJson c.statuses)]
+  IO.FS.writeFile "spec/tasks.json" ((Json.mkObj [("source",toJson "spec/Requirements.lean"),("revision",toJson revision),("validation",Json.mkObj [("errors",toJson (0:Nat)),("warnings",toJson (0:Nat))]),("tasks",toJson rows),("http",toJson bindings)]).pretty++"\n")
+  for task in tasks do
+    IO.FS.writeFile ("spec/views/"++task.id++"-schema.mermaid") (interactionMermaid task++"\n")
+  IO.println "ok: playable GoServer requirements and requirements-owned HTTP contracts; six task grammars generated"
 end GoServer.Requirements
+
+def main : IO Unit := GoServer.Requirements.main

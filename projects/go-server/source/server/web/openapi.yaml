@@ -1,0 +1,962 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "GoServer playable HTTP contract",
+    "version": "playable-v1"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/games": {
+      "post": {
+        "operationId": "create_game",
+        "x-leanfm-requirement": "spec/Requirements.lean#create_game",
+        "description": "public; same-origin when Origin is supplied. application/json; Response protobuf value, snake_case field names",
+        "responses": {
+          "201": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGame"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{id}/join": {
+      "post": {
+        "operationId": "join_game",
+        "x-leanfm-requirement": "spec/Requirements.lean#join_game",
+        "description": "unguessable invitation id; same-origin. application/json; Response protobuf value, snake_case field names",
+        "responses": {
+          "200": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{48}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinGame"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/games/{id}/actions": {
+      "post": {
+        "operationId": "play_turn",
+        "x-leanfm-requirement": "spec/Requirements.lean#play_turn",
+        "description": "Authorization: Bearer seat-token; current seat; exact revision; action.kind discriminates move/pass/resign. application/json; Response protobuf value, snake_case field names",
+        "responses": {
+          "200": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{48}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MakeMove"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "seatToken": []
+          }
+        ]
+      }
+    },
+    "/api/games/{id}": {
+      "get": {
+        "operationId": "inspect_game",
+        "x-leanfm-requirement": "spec/Requirements.lean#inspect_game",
+        "description": "invitation id grants read-only access. application/json; Response protobuf value, snake_case field names",
+        "responses": {
+          "200": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{48}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/games/{id}/history": {
+      "get": {
+        "operationId": "inspect_history",
+        "x-leanfm-requirement": "spec/Requirements.lean#inspect_history",
+        "description": "invitation id grants read-only access. application/json; Response protobuf value, snake_case field names",
+        "responses": {
+          "200": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Terminal outcome; Host/Origin admission failures are plain HTTP 403",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{48}$"
+            }
+          }
+        ]
+      }
+    },
+    "/api/export": {
+      "post": {
+        "operationId": "export_gif",
+        "x-leanfm-requirement": "spec/Requirements.lean#export_gif",
+        "description": "same-origin; replayed local actions; no arbitrary path input. image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+        "responses": {
+          "200": {
+            "description": "image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+            "content": {
+              "image/gif": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-GoServer-Trace": {
+                "description": "Base64 JSON TraceEvent array, including direct cause/prior links",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-GoServer-Artifact": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-GoServer-Final-Ply": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-GoServer-Trace": {
+                "description": "Base64 JSON TraceEvent array, including direct cause/prior links",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-GoServer-Trace": {
+                "description": "Base64 JSON TraceEvent array, including direct cause/prior links",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-GoServer-Trace": {
+                "description": "Base64 JSON TraceEvent array, including direct cause/prior links",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-GoServer-Trace": {
+                "description": "Base64 JSON TraceEvent array, including direct cause/prior links",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "image/gif on success; X-GoServer-Artifact and X-GoServer-Final-Ply; text/plain error; X-GoServer-Trace is base64 UTF-8 JSON request/terminal Event array on both outcomes",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-GoServer-Trace": {
+                "description": "Base64 JSON TraceEvent array, including direct cause/prior links",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportGIF"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Action": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "point": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Position": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "board": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "losses": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "ledger": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "active": {
+            "type": "array",
+            "items": {
+              "type": "boolean"
+            }
+          },
+          "passes": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "ply": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_turns": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "finished": {
+            "type": "boolean"
+          },
+          "last": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Room": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "position": {
+            "$ref": "#/components/schemas/Position"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Position"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "deadline_ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TraceEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "cause_id": {
+            "type": "string"
+          },
+          "prior_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "session": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "src": {
+            "type": "string"
+          },
+          "dst": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "time_ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Response": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "token": {
+            "type": "string"
+          },
+          "seat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "error": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      },
+      "CreateGame": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_turns": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "JoinGame": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "MakeMove": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          }
+        }
+      },
+      "Pass": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          }
+        }
+      },
+      "Resign": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "action": {
+            "$ref": "#/components/schemas/Action"
+          }
+        }
+      },
+      "InspectGame": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "InspectHistory": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "ExportGIF": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "size": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "players": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_turns": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          }
+        }
+      },
+      "GameCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "token": {
+            "type": "string"
+          },
+          "seat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      },
+      "Joined": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "token": {
+            "type": "string"
+          },
+          "seat": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      },
+      "MoveEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      },
+      "GameState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      },
+      "HistoryReturned": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "game": {
+            "$ref": "#/components/schemas/Room"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      },
+      "GIFCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "project_path": {
+            "type": "string"
+          },
+          "final_ply": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "ErrorEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceEvent"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "seatToken": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

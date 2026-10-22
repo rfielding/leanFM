@@ -171,6 +171,16 @@ the header shows the active provider/model, a one-way key fingerprint, and the
 used and remaining local session-token safety budget. This is deliberately not
 presented as an OpenAI dollar balance: configure a provider-project spend cap as
 the authoritative monetary guardrail.
+
+GoServer now includes a playable four-color board, worker MCTS, branching
+history, real GIF export and authenticated two-player server games. From
+`projects/go-server`, `make run` serves it on loopback port 8082 without any
+model API. `make goserver-check` at this repository root checks its Lean/protobuf
+contract, Go race tests, cross-runtime rules and actual HTTP traces; CI runs it
+too. Its [book](projects/go-server/book/main.pdf) and
+[evidence](projects/go-server/evidence/playable-v1/traceability.json) distinguish
+the working experiment from a formal deployed-code refinement proof.
+
 Use a unique login password; phishing or reuse of that password defeats
 password-derived encryption if an attacker also obtains the credential files.
 Passwords are salted PBKDF2 verifiers. API keys use AES-256-GCM with a separate

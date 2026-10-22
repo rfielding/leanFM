@@ -1,0 +1,524 @@
+{
+  "revision": "playable-v1",
+  "result": "pass",
+  "scenarios": 17,
+  "browser_scenarios": 16,
+  "checks": [
+    "actual HTTP values parse with protoc-generated bindings",
+    "protobuf binary round-trip",
+    "decoded actor/message sequence accepted by Lean-derived grammar",
+    "reversed and truncated traces rejected",
+    "cause/prior/session preserved",
+    "all six task contracts exercised",
+    "GIF file exists and matches response bytes"
+  ],
+  "observed_scenarios": [
+    [
+      {
+        "id": "a56870f5932e2480390c76fd19c50de7769d32619d9e2e4d",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "anonymous",
+        "task": "create_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "CreateGame",
+        "time_ms": 1792710285793
+      },
+      {
+        "id": "fdceea0b71ece3d35babe3b44429560da2b1aa765a316c26",
+        "cause_id": "a56870f5932e2480390c76fd19c50de7769d32619d9e2e4d",
+        "prior_ids": [
+          "a56870f5932e2480390c76fd19c50de7769d32619d9e2e4d"
+        ],
+        "session": "anonymous",
+        "task": "create_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameCreated",
+        "time_ms": 1792710285797
+      }
+    ],
+    [
+      {
+        "id": "05f9b15ac919af0e7d020b7d5fd6b73fe0d8e40732438757",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "join_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "JoinGame",
+        "time_ms": 1792710285798
+      },
+      {
+        "id": "cd56d86750fdb7fa8d3400dd83d4e8f333295bab4a748db0",
+        "cause_id": "05f9b15ac919af0e7d020b7d5fd6b73fe0d8e40732438757",
+        "prior_ids": [
+          "05f9b15ac919af0e7d020b7d5fd6b73fe0d8e40732438757"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "join_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "Joined",
+        "time_ms": 1792710285800
+      }
+    ],
+    [
+      {
+        "id": "6e5d905a774457c22346a2a3bc4b8d5dc2c0d51b4742a38a",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "join_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "JoinGame",
+        "time_ms": 1792710285801
+      },
+      {
+        "id": "fb65254d6db58030f9a156b6dd97d45ba0ea365f7812a643",
+        "cause_id": "6e5d905a774457c22346a2a3bc4b8d5dc2c0d51b4742a38a",
+        "prior_ids": [
+          "6e5d905a774457c22346a2a3bc4b8d5dc2c0d51b4742a38a"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "join_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "ErrorEvent",
+        "time_ms": 1792710285801
+      }
+    ],
+    [
+      {
+        "id": "e4be38170419f4ded2cc1a66f95a4ee829f1144d4cc0ebc7",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "inspect_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectGame",
+        "time_ms": 1792710285801
+      },
+      {
+        "id": "ecaf0b732b8727d4cc9364b400bf6d2d9a9c37bc0401f088",
+        "cause_id": "e4be38170419f4ded2cc1a66f95a4ee829f1144d4cc0ebc7",
+        "prior_ids": [
+          "e4be38170419f4ded2cc1a66f95a4ee829f1144d4cc0ebc7"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "inspect_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792710285801
+      }
+    ],
+    [
+      {
+        "id": "4482fcec8ed9041f2f906ebab722b3558ff91af98cdaa2d2",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "inspect_history",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectHistory",
+        "time_ms": 1792710285802
+      },
+      {
+        "id": "ec72b082c0be320cc3458d3002be37e28594c058054e1316",
+        "cause_id": "4482fcec8ed9041f2f906ebab722b3558ff91af98cdaa2d2",
+        "prior_ids": [
+          "4482fcec8ed9041f2f906ebab722b3558ff91af98cdaa2d2"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "inspect_history",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "HistoryReturned",
+        "time_ms": 1792710285802
+      }
+    ],
+    [
+      {
+        "id": "a9f3afdc7936d86dca8d20c27293f318e2a21ce88c7529fc",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792710285802
+      },
+      {
+        "id": "26254dfcd0ab2e3f0d4e1373c92c5fe127f18966c89415c6",
+        "cause_id": "a9f3afdc7936d86dca8d20c27293f318e2a21ce88c7529fc",
+        "prior_ids": [
+          "a9f3afdc7936d86dca8d20c27293f318e2a21ce88c7529fc"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "ErrorEvent",
+        "time_ms": 1792710285802
+      }
+    ],
+    [
+      {
+        "id": "0cc6d4ff2a8877b2c283910ee7a1df43516fe220e07af81d",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792710285803
+      },
+      {
+        "id": "50beb6b9618cb35f807209d9ef42da94c8e2246899cb6ae3",
+        "cause_id": "0cc6d4ff2a8877b2c283910ee7a1df43516fe220e07af81d",
+        "prior_ids": [
+          "0cc6d4ff2a8877b2c283910ee7a1df43516fe220e07af81d"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792710285805
+      },
+      {
+        "id": "5e8f73b7017b5dbd342c12acae7d1dc71a0bc3c8c93bf0d7",
+        "cause_id": "0cc6d4ff2a8877b2c283910ee7a1df43516fe220e07af81d",
+        "prior_ids": [
+          "50beb6b9618cb35f807209d9ef42da94c8e2246899cb6ae3"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792710285805
+      }
+    ],
+    [
+      {
+        "id": "97632b4c583951567d2cadcda129c324cee6866a77013392",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792710285805
+      },
+      {
+        "id": "d6efc13c35611d20ce474c730cbbe6623a567de1294d2996",
+        "cause_id": "97632b4c583951567d2cadcda129c324cee6866a77013392",
+        "prior_ids": [
+          "97632b4c583951567d2cadcda129c324cee6866a77013392"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "ErrorEvent",
+        "time_ms": 1792710285806
+      }
+    ],
+    [
+      {
+        "id": "b5d4f26231582cff90201f8dee3c618924515a6c3a03978c",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792710285806
+      },
+      {
+        "id": "f38c9e8542efcce53f86a8b4f439b388f7def2eec1f5b172",
+        "cause_id": "b5d4f26231582cff90201f8dee3c618924515a6c3a03978c",
+        "prior_ids": [
+          "b5d4f26231582cff90201f8dee3c618924515a6c3a03978c"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "ErrorEvent",
+        "time_ms": 1792710285806
+      }
+    ],
+    [
+      {
+        "id": "96f3f1b5a5cdf8be471796cca008373709d3a9a447a1e38a",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792710285806
+      },
+      {
+        "id": "adf84ac7382a6c10b45fb8dd34042fa4f14b31506db0a889",
+        "cause_id": "96f3f1b5a5cdf8be471796cca008373709d3a9a447a1e38a",
+        "prior_ids": [
+          "96f3f1b5a5cdf8be471796cca008373709d3a9a447a1e38a"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792710285808
+      },
+      {
+        "id": "cf7bf01d9c7566849cee3fa12ff211b538864738bc5a4376",
+        "cause_id": "96f3f1b5a5cdf8be471796cca008373709d3a9a447a1e38a",
+        "prior_ids": [
+          "adf84ac7382a6c10b45fb8dd34042fa4f14b31506db0a889"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792710285808
+      }
+    ],
+    [
+      {
+        "id": "7ec6c3aafc79039d9612774bbc7b9a6ff2c3091c663d88fa",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "Pass",
+        "time_ms": 1792710285809
+      },
+      {
+        "id": "4220a2058328b25a5afc069b911fd0bd39a13d9fc1f8addf",
+        "cause_id": "7ec6c3aafc79039d9612774bbc7b9a6ff2c3091c663d88fa",
+        "prior_ids": [
+          "7ec6c3aafc79039d9612774bbc7b9a6ff2c3091c663d88fa"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792710285811
+      },
+      {
+        "id": "53ede8cba8623434e97fd598d4192cc31652e424cb466e55",
+        "cause_id": "7ec6c3aafc79039d9612774bbc7b9a6ff2c3091c663d88fa",
+        "prior_ids": [
+          "4220a2058328b25a5afc069b911fd0bd39a13d9fc1f8addf"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792710285811
+      }
+    ],
+    [
+      {
+        "id": "9609dd8d50da97bd36d01a708f70377c222d08652b52ed12",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "Pass",
+        "time_ms": 1792710285812
+      },
+      {
+        "id": "250208a65c53fc7497aa07f9925fa15db571baa27762188b",
+        "cause_id": "9609dd8d50da97bd36d01a708f70377c222d08652b52ed12",
+        "prior_ids": [
+          "9609dd8d50da97bd36d01a708f70377c222d08652b52ed12"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792710285814
+      },
+      {
+        "id": "78e76b4d3b66d3bdeb83b1e8b00720347dae1d15ca23f387",
+        "cause_id": "9609dd8d50da97bd36d01a708f70377c222d08652b52ed12",
+        "prior_ids": [
+          "250208a65c53fc7497aa07f9925fa15db571baa27762188b"
+        ],
+        "session": "cd670097d20d7ade65c446ce735f396992bb4fdee4ed6371",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792710285814
+      }
+    ],
+    [
+      {
+        "id": "cd5171c8e29b4200356ecb4963ff2e25c7a59f4b6a38415f",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "anonymous",
+        "task": "create_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "CreateGame",
+        "time_ms": 1792710285814
+      },
+      {
+        "id": "54de61b3eabb480a95cac0c17ff60f33193ceb3c9f1141b5",
+        "cause_id": "cd5171c8e29b4200356ecb4963ff2e25c7a59f4b6a38415f",
+        "prior_ids": [
+          "cd5171c8e29b4200356ecb4963ff2e25c7a59f4b6a38415f"
+        ],
+        "session": "anonymous",
+        "task": "create_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameCreated",
+        "time_ms": 1792710285816
+      }
+    ],
+    [
+      {
+        "id": "fdb8b81a05dc644960b61d0ec711a2a379d5becf1f24aac3",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "285f7fb171965ef8b0c4d42b87ac69af18254fbefd5d1735",
+        "task": "join_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "JoinGame",
+        "time_ms": 1792710285816
+      },
+      {
+        "id": "0522a1ecbf8cc160d0f5a24de55948387790bd613e84b7c0",
+        "cause_id": "fdb8b81a05dc644960b61d0ec711a2a379d5becf1f24aac3",
+        "prior_ids": [
+          "fdb8b81a05dc644960b61d0ec711a2a379d5becf1f24aac3"
+        ],
+        "session": "285f7fb171965ef8b0c4d42b87ac69af18254fbefd5d1735",
+        "task": "join_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "Joined",
+        "time_ms": 1792710285818
+      }
+    ],
+    [
+      {
+        "id": "471549bd2a9833015c93be04a78e8b790a5e11e9cefdce05",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "285f7fb171965ef8b0c4d42b87ac69af18254fbefd5d1735",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "Resign",
+        "time_ms": 1792710285819
+      },
+      {
+        "id": "05789dc5d100795d55f666467df2d1406d1864c535cdfe9d",
+        "cause_id": "471549bd2a9833015c93be04a78e8b790a5e11e9cefdce05",
+        "prior_ids": [
+          "471549bd2a9833015c93be04a78e8b790a5e11e9cefdce05"
+        ],
+        "session": "285f7fb171965ef8b0c4d42b87ac69af18254fbefd5d1735",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792710285820
+      },
+      {
+        "id": "4408d15b94906e6920cd6f027aab0c250f0e1b763483a4de",
+        "cause_id": "471549bd2a9833015c93be04a78e8b790a5e11e9cefdce05",
+        "prior_ids": [
+          "05789dc5d100795d55f666467df2d1406d1864c535cdfe9d"
+        ],
+        "session": "285f7fb171965ef8b0c4d42b87ac69af18254fbefd5d1735",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792710285820
+      }
+    ],
+    [
+      {
+        "id": "62e58e05c64a91d239bd8a158f556961aeb21782ead13d1e",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "local-export",
+        "task": "export_gif",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "ExportGIF",
+        "time_ms": 1792710285821
+      },
+      {
+        "id": "c281787e2a92e4080346eabccbb4296fbbda306c02713cad",
+        "cause_id": "62e58e05c64a91d239bd8a158f556961aeb21782ead13d1e",
+        "prior_ids": [
+          "62e58e05c64a91d239bd8a158f556961aeb21782ead13d1e"
+        ],
+        "session": "local-export",
+        "task": "export_gif",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GIFCreated",
+        "time_ms": 1792710285824
+      }
+    ],
+    [
+      {
+        "id": "34239c8fc4567b192137fdd504c05e1371a32ab5277d6244",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "local-export",
+        "task": "export_gif",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "ExportGIF",
+        "time_ms": 1792710285825
+      },
+      {
+        "id": "7917eff16f556b296ad04638d4e6e90e09fc647345d04f03",
+        "cause_id": "34239c8fc4567b192137fdd504c05e1371a32ab5277d6244",
+        "prior_ids": [
+          "34239c8fc4567b192137fdd504c05e1371a32ab5277d6244"
+        ],
+        "session": "local-export",
+        "task": "export_gif",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "ErrorEvent",
+        "time_ms": 1792710285825
+      }
+    ]
+  ]
+}

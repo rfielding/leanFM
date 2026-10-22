@@ -1,0 +1,11 @@
+\BeginAccSupp{method=escape,ActualText={Message from Client to GoServer: MakeMove. Message from GoServer to Client: MoveEvent. Message from GoServer to Client: GameState.}}
+\begin{tikzpicture}[x=1cm,y=0.9cm,>=stealth]
+\node (client) at (0,0) {Client};
+\node (server) at (8,0) {GoServer};
+\draw[dashed] (0,-.3) -- (0,-4);
+\draw[dashed] (8,-.3) -- (8,-4);
+\draw[->] (0,-1) -- node[above] {\texttt{MakeMove}} (8,-1);
+\draw[->] (8,-2) -- node[above] {\texttt{MoveEvent}} (0,-2);
+\draw[->] (8,-3) -- node[above] {\texttt{GameState}} (0,-3);
+\end{tikzpicture}
+\EndAccSupp{}

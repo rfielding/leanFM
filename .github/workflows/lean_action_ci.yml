@@ -14,7 +14,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ripgrep texlive-latex-base texlive-latex-recommended
+          sudo apt-get install --yes ripgrep texlive-latex-base texlive-latex-recommended protobuf-compiler
           rg --version
       - uses: actions/setup-python@v6
         with:
@@ -38,3 +38,4 @@ jobs:
       - uses: leanprover/lean-action@v1
       - run: cp book/main-dark.pdf book/main.pdf
       - run: make chatui-check
+      - run: make goserver-check

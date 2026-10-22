@@ -20,9 +20,14 @@ loops or timing behavior; unbounded claims need an abstraction argument.
 
 ### Project-root discoverability and code-generation readiness
 
-Fresh-session readiness is unverified: resume from durable specs, generate an
-application, demonstrate grammar-conforming traces with increasingly realistic
-in-project tests, and persist evidence under the root. Screenshots are not a gate.
+GoServer now has a working implementation experiment under its exclusive root:
+Go/JS differential tests, independently authenticated browser players, GIF replay,
+and actual HTTP/protobuf traces checked against Lean-derived task grammars.
+Its requirements own the HTTP contract. Evidence and limitations are durable in
+`projects/go-server/evidence/playable-v1/`. Still unverified: regenerate it in a
+fresh session from only those artifacts and establish general grammar-to-code
+refinement. The old contradictory drafts have not been retroactively accepted.
+Screenshots are not a gate.
 
 ## Book length and release reproducibility (reviewed 2026-10-20)
 
