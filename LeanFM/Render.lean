@@ -416,6 +416,10 @@ def openApiScalarType : ProtoScalar -> List String
   | ProtoScalar.uint32 => ["type: integer", "format: uint32", "minimum: 0"]
   | ProtoScalar.uint64 => ["type: integer", "format: uint64", "minimum: 0"]
   | ProtoScalar.bytes => ["type: string", "format: byte"]
+  | ProtoScalar.int32 => ["type: integer", "format: int32"]
+  | ProtoScalar.int64 => ["type: integer", "format: int64"]
+  | ProtoScalar.message name => ["$ref: '#/components/schemas/" ++ name ++ "'"]
+  | ProtoScalar.repeated element => ["type: array", "items:"] ++ (openApiScalarType element).map ("  " ++ ·)
 
 def indentLines (pad : String) (lines : List String) : List String :=
   lines.map fun line => pad ++ line

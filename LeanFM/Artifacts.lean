@@ -73,6 +73,10 @@ inductive ProtoScalar where
   | uint32
   | uint64
   | bytes
+  | int32
+  | int64
+  | message (typeName : String)
+  | repeated (element : ProtoScalar)
 deriving DecidableEq, Repr
 
 def ProtoScalar.protoName : ProtoScalar -> String
@@ -81,6 +85,10 @@ def ProtoScalar.protoName : ProtoScalar -> String
   | .uint32 => "uint32"
   | .uint64 => "uint64"
   | .bytes => "bytes"
+  | .int32 => "int32"
+  | .int64 => "int64"
+  | .message name => name
+  | .repeated element => "repeated " ++ element.protoName
 
 inductive FramingKind where
   | protobufMessage
@@ -686,9 +694,22 @@ def transitionUsesInterActorMessage (spec : RequirementSpec) (tr : RequirementTr
 def natStrings (xs : List Nat) : List String :=
   xs.map (fun n => toString n)
 
+def validProtoIdentifier (name : String) : Bool :=
+  let letter := fun c : Char => ('a' ≤ c && c ≤ 'z') || ('A' ≤ c && c ≤ 'Z') || c == '_'
+  match name.toList with
+  | [] => false
+  | first :: rest => letter first && rest.all (fun c => letter c || ('0' ≤ c && c ≤ '9'))
+
+def validProtoType : ProtoScalar → Bool
+  | .message name => (name.splitOn ".").all validProtoIdentifier
+  | .repeated (.repeated _) => false
+  | .repeated element => validProtoType element
+  | _ => true
+
 def validateProtoFieldSchema (messageName : String) (field : ProtoFieldSchema) : List String :=
   (if field.number == 0 then ["message " ++ messageName ++ " has protobuf field " ++ field.name ++ " with tag 0"] else []) ++
-  (if field.name == "" then ["message " ++ messageName ++ " has protobuf field with empty name"] else [])
+  (if field.name == "" then ["message " ++ messageName ++ " has protobuf field with empty name"] else []) ++
+  (if validProtoType field.scalar then [] else ["message " ++ messageName ++ " has invalid protobuf field type: " ++ field.name])
 
 def validateMessageFraming (messageName : String) (framing : MessageFraming) : List String :=
   let dispatchErrors :=

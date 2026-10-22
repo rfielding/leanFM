@@ -2,6 +2,15 @@ import LeanFM.Artifacts
 
 namespace LeanFM
 
+example : (ProtoScalar.repeated (.message "Position")).protoName = "repeated Position" := by native_decide
+example : (ProtoScalar.int32).protoName = "int32" := by native_decide
+example : validProtoType (.repeated (.message "Position")) := by native_decide
+example : !validProtoType (.message "Invalid\nInjected") := by native_decide
+example : !validProtoType (.message "9Invalid") := by native_decide
+example : !validProtoType (.message "bad..Type") := by native_decide
+example : validProtoType (.message "goserver.playable_v1.Position") := by native_decide
+example : !validProtoType (.repeated (.repeated .uint32)) := by native_decide
+
 def validResource : ActorResourceContract :=
   { actor := "A"
   , inboundCapacity := 1
