@@ -48,6 +48,32 @@ class Specification(unittest.TestCase):
         self.assertEqual(catalog["provenance"]["artifacts"]["spec/Requirements.lean"], hashlib.sha256(revised.encode()).hexdigest())
         self.assertEqual(before, [(self.root / p).read_bytes() for p in ["manifest.json", "source/preserved.txt"]])
 
+    def test_full_leanfm_import_compiles_under_the_existing_memory_limit(self):
+        # Reproduce the real project's import surface, not just the small
+        # Artifacts fixture. Do not remove RLIMIT_AS to make startup succeed.
+        (self.root / "spec/Requirements.lean").write_text(REQUIREMENTS.replace(
+            "import LeanFM.Artifacts", "import LeanFM"))
+        self.run_check()
+        report = json.loads((self.root / "reports/specification-check/validation.json").read_text())
+        self.assertEqual(report["status"], "validated")
+        self.assertEqual(report["acceptance"], "unchanged")
+
+    def test_worker_startup_failure_is_distinct_and_preserves_last_good_views(self):
+        self.run_check()
+        before = (self.root / "spec/tasks.json").read_bytes()
+        bin_dir = self.root / "fixture-bin"
+        bin_dir.mkdir()
+        worker = bin_dir / "bwrap"
+        worker.write_text('#!/bin/sh\necho "libc++abi: failed to create thread" >&2\nexit 134\n')
+        worker.chmod(0o700)
+        result = subprocess.run(["python3", str(ROOT / "scripts/chatui_specification.py"), str(self.root), "Fixture.spec"],
+                                cwd=ROOT, env=dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ["PATH"]),
+                                capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 78, result.stdout + result.stderr)
+        self.assertIn("local_checker_unavailable", result.stderr)
+        self.assertIn("exit_code=134", result.stderr)
+        self.assertEqual((self.root / "spec/tasks.json").read_bytes(), before)
+
     def test_compile_proto_and_grammar_failures_preserve_last_good_catalog(self):
         self.run_check()
         before = (self.root / "spec/tasks.json").read_bytes()

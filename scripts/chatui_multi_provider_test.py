@@ -400,6 +400,18 @@ class MultiProvider(unittest.TestCase):
                 self.assertEqual(stats()[counter] - before, 2)
                 self.assertEqual((self.root / "book/main.tex").read_bytes(), source)
 
+    def test_local_checker_failure_stops_both_providers_without_an_extra_paid_round(self):
+        for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
+            with self.subTest(model=model):
+                project = self.alice.project()
+                before = stats()[counter]
+                status, body = self.alice.chat(project, "TEST_SPECIFY_STARTUP_FAILURE", model)
+                self.assertEqual(status, 200)
+                self.assertIn("local_checker_unavailable", body["text"])
+                self.assertIn("stopped before another paid request", body["text"])
+                self.assertEqual(stats()[counter] - before, 5)
+                self.assertFalse((ROOT / "projects" / project / "spec/tasks.json").exists())
+
     def test_paused_turn_continues_but_unfinished_tool_response_does_not_claim_success(self):
         before = stats()
         status, body = self.alice.chat(self.project, "TEST_ANTHROPIC_PAUSE")

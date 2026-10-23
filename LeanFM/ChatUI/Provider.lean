@@ -229,10 +229,18 @@ def workspaceToolsJson : String :=
     "{\"type\":\"function\",\"name\":\"workspace_search\",\"description\":\"Search text below the authorized launch workspace using a literal query.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[\"query\",\"path\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_patch\",\"description\":\"Apply a git-style unified diff with --- a/path, +++ b/path and @@ hunks below the authorized workspace. Hunk counts are recounted locally. Do not use Begin Patch syntax. After any rejection, switch to workspace_read and workspace_write; a second patch attempt stops the turn. Preserve unrelated changes.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"patch\":{\"type\":\"string\"}},\"required\":[\"patch\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_write\",\"description\":\"Create or replace one UTF-8 text file below the authorized launch workspace. Read it first when it exists and preserve unrelated work.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"content\":{\"type\":\"string\"}},\"required\":[\"path\",\"content\"],\"additionalProperties\":false}}",
-    "{\"type\":\"function\",\"name\":\"workspace_check\",\"description\":\"Run one bounded repository check.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\",\"enum\":[\"build\",\"check\",\"book\",\"http-check\",\"go-test\"]}},\"required\":[\"target\"],\"additionalProperties\":false}}",
+    "{\"type\":\"function\",\"name\":\"workspace_check\",\"description\":\"Run an application check explicitly provided by this project. Read its Makefile or go.mod first. Use leanfm_check for LeanFM requirements and implementation specifications; build is not a substitute for that compiler.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\",\"enum\":[\"build\",\"check\",\"book\",\"http-check\",\"go-test\"]}},\"required\":[\"target\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_run_gif_generator\",\"description\":\"Run one self-contained project-local Python/Pillow generator in a filesystem/process sandbox and validate its GIF output. Use this when the user explicitly requests a real animated GIF.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"script_path\":{\"type\":\"string\"},\"output_path\":{\"type\":\"string\"}},\"required\":[\"script_path\",\"output_path\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_transcode_mp4\",\"description\":\"Transcode a project-local animated GIF or WebM into a real broadly compatible H.264 MP4, validate it, and leave it below the project workspace for inline chat rendering. Use this when the user explicitly requests MP4.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"input_path\":{\"type\":\"string\"},\"output_path\":{\"type\":\"string\"}},\"required\":[\"input_path\",\"output_path\"],\"additionalProperties\":false}}"
   ] ++ "]"
+
+/-- Fatal local failures stop both provider protocols before another paid round. -/
+def fatalWorkspaceFailure? (result : String) : Option String :=
+  if result.startsWith "FATAL: repeated_failed_tool_call:" then
+    some "A workspace operation or check failed again without verified recovery. LeanFM stopped before another paid request; exit codes and diagnostics remain in Project memory."
+  else if result.startsWith "FATAL:" then
+    some ("A local workspace operation cannot continue. LeanFM stopped before another paid request; no automatic model repair was attempted. " ++ result)
+  else none
 
 def toolOutputJson (callId output : String) : String :=
   "{\"type\":\"function_call_output\",\"call_id\":\"" ++ jsonEscape callId ++
@@ -329,8 +337,8 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
     for call in calls do
       if ← cancelled then return .error "agent_cancelled"
       let result ← runTool call.name call.arguments
-      if result.startsWith "FATAL: repeated_failed_tool_call:" then
-        return .ok { nextUsage with failure := some "A workspace operation or check failed again without verified recovery. LeanFM stopped before another paid request; exit codes and diagnostics remain in Project memory." }
+      if let some failure := fatalWorkspaceFailure? result then
+        return .ok { nextUsage with failure := some failure }
       outputs := toolOutputJson call.callId result :: outputs
     completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool cancelled hooks nextUsage (remaining - 1) images
   catch error =>
@@ -453,8 +461,8 @@ partial def completeAnthropicLoop (key baseUrl model instructions : String) (mes
     for call in calls do
       if ← cancelled then return .error "agent_cancelled"
       let result ← runTool call.name call.arguments
-      if result.startsWith "FATAL: repeated_failed_tool_call:" then
-        return .ok { nextUsage with failure := some "A workspace operation or check failed again without verified recovery. LeanFM stopped before another paid request; exit codes and diagnostics remain in Project memory." }
+      if let some failure := fatalWorkspaceFailure? result then
+        return .ok { nextUsage with failure := some failure }
       results := results ++ [Json.mkObj [("type", toJson "tool_result"), ("tool_use_id", toJson call.callId),
         ("content", toJson result), ("is_error", toJson (result.startsWith "ERROR:"))]]
     completeAnthropicLoop key baseUrl model instructions

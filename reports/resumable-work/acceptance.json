@@ -1,0 +1,20 @@
+{
+  "requirements_acceptance": {
+    "status": "accepted",
+    "source": "Explicit user answer: Accept resumable-work requirements",
+    "artifact_sha256": {
+      "LeanFM/LLMGenerated/ResumableWork.lean": "88a3d7648f260e4ab5682a8851f6485aa0a3a7e4fd98304f63cba914f76a8cef",
+      "reports/resumable-work/requirements-review.md": "bb7237dcb2a7305879e7673b3d2ea1e64e1c88b8263432279885982806664d3c",
+      "reports/resumable-work/work.interaction.mmd": "b552ee5c5c7920a5f857651361cc1dbba4fa37ff9638d0c7148bcc033a8ccdaf",
+      "reports/resumable-work/work.state.mmd": "21cef6c5545d95774a333f1dc7b3bbdf363136271c5035e5480c13d4a190f35a"
+    }
+  },
+  "implementation_acceptance": {
+    "status": "accepted",
+    "source": "Explicit user answer: Accept implementation; build resumable work",
+    "artifact_sha256": {
+      "LeanFM/LLMGenerated/ResumableWorkImplementation.lean": "fcf8689639c7a1ea8195746023e31ba9e8bb3cae7badae3cf20db457aeec493a",
+      "reports/resumable-work/implementation-review.md": "f9bac81ee9539aeea919326661b564f3e230c205de3caa8d095f903f72e41025"
+    }
+  }
+}

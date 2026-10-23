@@ -12,6 +12,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Commands(unittest.TestCase):
+    def test_unavailable_build_targets_are_rejected_before_make_execution(self):
+        with tempfile.TemporaryDirectory(prefix="command-targets-", dir=ROOT / ".cache") as fixture:
+            root = Path(fixture)
+            for source in [None, "$(shell touch should-not-run)\nbook:\n\t@true\n"]:
+                if source is not None:
+                    (root / "Makefile").write_text(source)
+                result = subprocess.run(["python3", str(ROOT / "scripts/chatui_command_runner.py"), "build", str(root)],
+                                        capture_output=True, text=True, timeout=10)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("leanfm_check", result.stderr)
+                self.assertNotIn("No rule to make target", result.stdout + result.stderr)
+                self.assertFalse((root / "should-not-run").exists())
+
     def test_media_generation_and_conversion_cannot_forge_project_gates(self):
         with tempfile.TemporaryDirectory(prefix="media-isolation-", dir=ROOT / ".cache") as fixture:
             root = Path(fixture)

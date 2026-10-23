@@ -62,19 +62,24 @@
     "browser_report": "reports/chatui/reset-browser.json",
     "source_sha256": {
       "LeanFM/ChatUI/Store.lean": "6649ce96b80cd718c7edd0672e6bd32dff8a3e8e3765c1ad98e857589d0ccc01",
-      "LeanFM/ChatUI/Server.lean": "71400c7d8dbdf107be621e6ac1e0b9aa3ec31044980aa35efe4dcfa3db8b59d1",
-      "ui/src/main.tsx": "f860818cde1c1dd7b3fb7319cf96ed4b7fedae93436ae5c441033a5e8cad1376",
+      "LeanFM/ChatUI/Server.lean": "acfa0088a8b0e37c6c8124361485b335abb5954d7d199fa1ec9d98c8e2a51901",
+      "ui/src/main.tsx": "5ed7da8205625feb1766a60ded032556cdc0a38f02e89ed46a47353b05e327e7",
       "scripts/chatui_project_state.py": "6fd05950afe12435b6d47de2197384c1793db5ac6fd5dd194f9eebd41a1553ef",
       "scripts/reset_leanfm_workspace.py": "cd7992b83c64feafd58a3612a94e2f97fe1dbb827006039019ca15045a8701db",
       "Server.lean": "21fb782d824fbb3222234673783526113d66abde0c5eb3c41c1709605b9147de",
-      "ui/src/api.ts": "c076437384dd3187713371faed916a52efd972163c8dbe5eb14fe42611cffff9",
-      "scripts/chatui_specification.py": "9e16b7154d0ab83e5b349884994a7763e6ccd96f8fddc60d4da2265e65e716fa",
-      "scripts/chatui_command_runner.py": "f1c80b081ce270234cb5dc77c8aba20dbfab2f8971376a115ed28e3893399cb8",
+      "ui/src/api.ts": "5355bbdb8b331560e0a0326ddf19509ab6d934a804fd04c1c046777bdb763ed8",
+      "scripts/chatui_specification.py": "f62d7f8ccd4641814238b5d7760edb265a15d2497f0e602139c9024adb0178fa",
+      "scripts/chatui_command_runner.py": "9aae923631eb07715a5f5723190c55ee03e221aa623a389c25e90f12bea8d162",
       "scripts/chatui_gif.py": "7bebd24a34c3e9161a6c2e99edddc19b2ce01e8c1ed521edcda0e077c8d10f51",
-      "scripts/chatui_mp4.py": "a7576a88ce14ba0a6fa3ab8d8136c72fa8dc1e9c4860f842736207d7789569d3"
+      "scripts/chatui_mp4.py": "a7576a88ce14ba0a6fa3ab8d8136c72fa8dc1e9c4860f842736207d7789569d3",
+      "LeanFM/ChatUI/Provider.lean": "6c496f007f6fd1d2a44d346f85bb0179530cf874051f50be2a6bae402b27605c"
     },
     "live_http_check": "passed: make http-check after restart",
     "service": "http://127.0.0.1:8080",
-    "boundary": "real production UI and compiler; deterministic local providers; no live account calls"
+    "boundary": "real production UI and compiler; deterministic local providers; no live account calls",
+    "follow_up_repairs": [
+      "reports/chatui/model-picker-repair.md",
+      "reports/chatui/specification-workflow/thread-repair.md"
+    ]
   }
 }

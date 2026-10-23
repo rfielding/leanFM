@@ -4,6 +4,11 @@ namespace LeanFM.ChatUI.ProviderTests
 
 open Lean LeanFM.ChatUI.Provider LeanFM.ChatUI.Server
 
+-- Local infrastructure failures cannot consume another paid tool round.
+example : (fatalWorkspaceFailure? "FATAL: local_checker_unavailable: failed to create thread").isSome = true := by native_decide
+example : (fatalWorkspaceFailure? "FATAL: initiating credential session ended").isSome = true := by native_decide
+example : (fatalWorkspaceFailure? "ERROR: unknown identifier; edit the candidate").isNone = true := by native_decide
+
 -- An implementation specification is an artifact layer, not a source request.
 example : requestsImplementationSource "Prepare the implementation specification" = false := by native_decide
 example : requestsImplementationSource "Update spec/Implementation.lean" = false := by native_decide

@@ -38,7 +38,7 @@ def image_reply(content, provider):
 
 PATCH_SCENARIOS = {"TEST_PATCH_RECOUNT", "TEST_PATCH_WRITE_RECOVERY", "TEST_PATCH_RETRY_GUARD",
                    "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS",
-                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK"}
+                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK"}
 
 FAILING_CHECK = "check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n"
 
@@ -83,6 +83,10 @@ def patch_action(marker, step):
                        ("leanfm_check", {"requirement": "Fixture.spec", "implementation": "Fixture.implementation"})]
             return actions[step] if step < len(actions) else None
         source = SPECIFICATION_FIXTURE + ("\ndef broken : Nat := false\n" if marker.endswith("INVALID") else "")
+        if marker.endswith("STARTUP_FAILURE"):
+            # Exercise the unavailable-worker boundary without failing or
+            # changing the real host compiler or process limits.
+            source += '\n#eval (throw (IO.userError "failed to create thread") : IO Unit)\n'
         actions = [("leanfm_reference", {"section": "requirements"}),
                    ("workspace_read", {"path": "spec/Requirements.lean"}),
                    ("workspace_write", {"path": "spec/Requirements.lean", "content": source}),

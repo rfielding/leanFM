@@ -13,6 +13,9 @@ import type {Billing, GrammarExpr, Message, ModelOption, Project, ProjectMemory,
 declare global { interface Window { mermaid?: any } }
 
 type Phase = "chat" | "memory" | "book" | "grammar" | "tasks" | "source";
+type ModelAvailability = "loading" | "locked" | "ready" | "error";
+type AccountSession = {availability: ModelAvailability; username: string | null; billing: Billing | null; error: string};
+const lockedSession: AccountSession = {availability: "locked", username: null, billing: null, error: ""};
 type QuestionOption = {value: string; label: string; recommended?: boolean};
 type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: QuestionOption[]};
 type QueuedPrompt = {id: string; text: string; model: string; credentialIdentity: string; pendingQuestion?: {id: string; promptLength: number; composerTextLength: number}};
@@ -209,14 +212,18 @@ function QuestionForm({questions, answeredIds, disabled, onAnswer}: {questions: 
   return <section className="chat-questions" aria-label="Questions requiring answers">{unanswered.map(question => <fieldset key={question.id}><legend>{question.prompt}</legend>{question.options.map(option => <label key={option.value} className={(selected[question.id] || []).includes(option.value) ? "selected" : ""}><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.value} checked={(selected[question.id] || []).includes(option.value)} onChange={event => { setValidation(""); choose(question, option.value, event.target.checked); }} /> <span>{option.label}{option.recommended && <small>Recommended</small>}</span></label>)}<label className="question-qualification"><span>Qualify this decision or provide a better answer</span><textarea value={qualifications[question.id] || ""} onChange={event => { setValidation(""); setQualifications(current => ({...current, [question.id]: event.target.value})); }} maxLength={4000} rows={3} placeholder="Optional when a choice fits; use this alone when none does." /></label></fieldset>)}{validation && <p className="question-validation" role="alert">{validation}</p>}<button type="button" className="primary" disabled={disabled} onClick={submitAnswers}>Submit answers</button></section>;
 }
 
-function Auth({onReady, account, onCancel}: {onReady: () => void; account?: string; onCancel?: () => void}) {
+function Auth({onReady, account, onCancel, onLogout, loggingOut}: {onReady: () => void; account?: string; onCancel?: () => void; onLogout?: () => void; loggingOut?: boolean}) {
   const [register, setRegister] = useState(false), [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [username, setUsername] = useState(() => account || window.localStorage.getItem("leanfm:last-username") || "");
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(register ? "Verifying your provider keys…" : "Unlocking your provider keys…");
+    event.preventDefault();
+    if (submitting || loggingOut) return;
+    setSubmitting(true); setError(register ? "Verifying your provider keys…" : "Unlocking your provider keys…");
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
     try { await api(register ? "/api/accounts" : "/api/login", formRequest(data)); window.localStorage.setItem("leanfm:last-username", data.username); onReady(); }
     catch (e) { setError((e as Error).message); }
+    finally { setSubmitting(false); }
   }
   return <section className="auth"><div className="auth-card"><h1>{account ? "API keys" : "LeanFM"}</h1><p>Sign in to unlock your encrypted provider API keys. One password unlocks OpenAI and Anthropic together; this is your LeanFM login, not a provider login.</p>
     {!account && <div className="auth-tabs" role="tablist" aria-label="Account access"><button type="button" role="tab" aria-selected={!register} className={!register ? "active" : ""} onClick={() => { setRegister(false); setError(""); }}>Log in</button><button type="button" role="tab" aria-selected={register} className={register ? "active" : ""} onClick={() => { setRegister(true); setError(""); }}>Create account</button></div>}
@@ -224,13 +231,13 @@ function Auth({onReady, account, onCancel}: {onReady: () => void; account?: stri
       <details key={register ? "registration" : "login"} open={register || undefined}><summary>{register ? "Provider API keys" : "Add or replace API keys (optional)"}</summary><label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label></details>
       {!register && <p className="stored-key-note">Already have an account? Use your username and password. Your saved API keys unlock automatically after a server restart.</p>}
       <p>{register ? "Provide at least one key; you can provide both now." : "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."} Keys are encrypted with your password and never returned to the browser. Updating keys signs out earlier sessions.</p>
-      <button className="primary">{register ? "Create account" : account ? "Unlock and save keys" : "Log in"}</button>{onCancel && <button type="button" onClick={onCancel}>Cancel</button>}</form><div className="error" role="alert">{error}</div></div></section>;
+      <button className="primary" disabled={submitting || loggingOut}>{register ? "Create account" : account ? "Unlock and save keys" : "Log in"}</button>{onCancel && <button type="button" onClick={onCancel} disabled={submitting || loggingOut}>Cancel</button>}</form>{onLogout && <button type="button" onClick={onLogout} disabled={loggingOut || submitting}>Log out and sign in again</button>}<div className="error" role="alert">{error}</div></div></section>;
 }
 
-function ProviderKeysDialog({account, onDone, onClose}: {account: string; onDone: () => void; onClose: () => void}) {
+function ProviderKeysDialog({account, onDone, onClose, onLogout, loggingOut}: {account: string; onDone: () => void; onClose: () => void; onLogout: () => void; loggingOut: boolean}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
-  return <dialog ref={ref} className="key-dialog" aria-label="Unlock or update provider keys" onCancel={event => { event.preventDefault(); onClose(); }}><Auth account={account} onReady={onDone} onCancel={onClose} /></dialog>;
+  return <dialog ref={ref} className="key-dialog" aria-label="Unlock or update provider keys" onCancel={event => { event.preventDefault(); onClose(); }}><Auth key={account || "signed-out"} account={account} onReady={onDone} onCancel={onClose} onLogout={onLogout} loggingOut={loggingOut} /></dialog>;
 }
 
 function Mermaid({source, className = "large-diagram"}: {source: string; className?: string}) {
@@ -267,7 +274,7 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 
-function Chat({project, models, modelDetails, defaultModel, credentialIdentity, onModelChange, onWorkspaceChange, onBusyChange}: {project: Project; models: string[]; modelDetails: ModelOption[]; defaultModel: string; credentialIdentity: string; onModelChange: (model: string) => void; onWorkspaceChange: () => void; onBusyChange: (busy: boolean, model?: string) => void}) {
+function Chat({project, models, modelDetails, defaultModel, credentialIdentity, modelAvailability, modelError, onUnlockKeys, onRetryModels, onModelChange, onWorkspaceChange, onBusyChange}: {project: Project; models: string[]; modelDetails: ModelOption[]; defaultModel: string; credentialIdentity: string; modelAvailability: ModelAvailability; modelError: string; onUnlockKeys: () => void; onRetryModels: () => void; onModelChange: (model: string) => void; onWorkspaceChange: () => void; onBusyChange: (busy: boolean, model?: string) => void}) {
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]), [uploading, setUploading] = useState(false), [attachmentError, setAttachmentError] = useState("");
   const attachmentInput = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [queue, setQueue] = useState<QueuedPrompt[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(""), [errorAction, setErrorAction] = useState(""), [errorTrace, setErrorTrace] = useState("");
@@ -286,7 +293,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
     text = text.trim();
     if (!text) return;
     const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    if (!model) return;
+    if (!models.includes(model)) return;
     setQueue(current => [...current, {id, text, model, credentialIdentity, pendingQuestion}]);
     if (clearComposer) setPrompt("");
   }
@@ -306,7 +313,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
   function send(event: FormEvent) {
     event.preventDefault();
     const text = prompt.trim() || (attachments.length ? "Please examine the attached image." : "");
-    if (!text || uploading || !model) return;
+    if (!text || uploading || !models.includes(model)) return;
     const answer = pendingQuestion
       ? `Question ID: ${pendingQuestion.id}\n${pendingQuestion.prompt}\nAnswer: No predefined option selected.\nQualification: ${text}`
       : text;
@@ -334,10 +341,23 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
     finally { setUploading(false); if (attachmentInput.current) attachmentInput.current.value = ""; }
   }
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
+  // Requirement refs: keyless_server_has_no_provider_spend,
+  // one_password_unlocks_all_provider_keys, selected_model_determines_provider_credential.
+  const modelPlaceholder = modelAvailability === "loading" ? "Loading models…" : modelAvailability === "locked" ? "Sign in to load models" : "Models unavailable";
+  const modelAccess = models.length === 0 && <div className="model-access" role={modelAvailability === "error" ? "alert" : "status"}>
+    <p>{modelAvailability === "loading" ? "Loading models for your unlocked API keys…"
+      : modelAvailability === "locked" ? "Your API keys are locked. Sign in with your LeanFM username and password to load models and chat. Saved keys do not need to be entered again."
+      : modelAvailability === "error" ? `Could not load your models. ${modelError}`
+      : "No models are available for your unlocked API keys. Retry loading models or review your provider keys."}</p>
+    {modelAvailability !== "loading" && <div>
+      {modelAvailability !== "locked" && <button type="button" onClick={onRetryModels}>Retry loading models</button>}
+      <button type="button" onClick={onUnlockKeys}>{modelAvailability === "locked" ? "Sign in" : "Review API keys"}</button>
+    </div>}
+  </div>;
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
     <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What problem are you trying to solve?</h2><p>Resume from the durable project files. Your book and specifications live in Project memory, not in chat history. Continue here; LeanFM will use those durable files.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !model || uploading}>Send</button><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
+    <div className="composer-wrap">{modelAccess}{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !models.includes(model) || uploading}>Send</button><label className="model-picker">Model<select value={model} disabled={models.length === 0} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.length === 0 && <option value="">{modelPlaceholder}</option>}{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
 }
 
 function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
@@ -442,9 +462,9 @@ function ProjectMemoryView({project, workspaceRevision, agentBusy}: {project: Pr
   return <section className="pane memory-pane"><header className="memory-header"><div><h1>Project memory</h1><p>Durable state used to resume without conversation history.</p></div><strong>{complete} / 5 substantive layers</strong></header><SpecificationAcceptance project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /><div className="memory-workbench"><nav className="memory-files vertical-tabs">{memory?.files.map(file => <button key={file.id} className={selected === file.id ? "active" : ""} onClick={() => setSelected(file.id)}><span><strong>{file.label}</strong><small>{file.path}</small></span><em className={`memory-status ${file.status}`}>{file.status}</em></button>)}<button className="memory-source-summary" onClick={() => setSelected("source-summary")}><span><strong>Implementation source</strong><small>source/ · {memory?.source_files || 0} files · {memory?.source_bytes || 0} bytes</small></span><em className={`memory-status ${(memory?.source_files || 0) > 0 ? "current" : "missing"}`}>{(memory?.source_files || 0) > 0 ? "current" : "missing"}</em></button></nav><main className="source-view"><header><strong>{selected === "source-summary" ? "source/" : memory?.files.find(file => file.id === selected)?.path}</strong><span>Refreshes after every chat turn</span></header>{error ? <p className="error">{error}</p> : selected === "source-summary" ? <div className="memory-source-help"><h2>{memory?.source_files || 0} implementation files</h2><p>Open the Source phase to inspect generated implementation files. Source appears only after both acceptance gates and the security critique.</p></div> : <pre><code>{source}</code></pre>}</main></div></section>;
 }
 
-function ProjectWorkspace({project, authenticationRevision}: {project: Project; authenticationRevision: number}) {
+function ProjectWorkspace({project, authenticationRevision, session, onUnlockKeys, onLogout, loggingOut, logoutError, onRetryModels}: {project: Project; authenticationRevision: number; session: AccountSession; onUnlockKeys: () => void; onLogout: () => void; loggingOut: boolean; logoutError: string; onRetryModels: () => void}) {
   const [phase, setPhase] = useState<Phase>("chat");
-  const [billing, setBilling] = useState<Billing | null>(null);
+  const {billing, availability: modelAvailability, error: modelError} = session;
   const [selectedModel, setSelectedModel] = useState("");
   const [workspaceRevision, setWorkspaceRevision] = useState(0);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -470,23 +490,17 @@ function ProjectWorkspace({project, authenticationRevision}: {project: Project; 
     const timer = window.setInterval(refresh, 2000);
     return () => { current = false; window.clearInterval(timer); };
   }, [project.project_id, agentBusy]);
-  useEffect(() => {
-    let current = true;
-    const refresh = () => api<{billing: Billing | null}>("/api/me").then(result => { if (current) setBilling(result.billing); }).catch(() => { if (current) setBilling(null); });
-    void refresh();
-    const timer = window.setInterval(refresh, 3000);
-    return () => { current = false; window.clearInterval(timer); };
-  }, [authenticationRevision]);
   const percentRemaining = billing?.token_budget ? Math.round(100 * billing.tokens_remaining / billing.token_budget) : 0;
   const selectedBilling = billing?.model_details?.find(info => info.id === (agentBusy ? agentModel : selectedModel));
   const agentElapsed = `${String(Math.floor(agentSeconds / 60)).padStart(2, "0")}:${String(agentSeconds % 60).padStart(2, "0")}`;
   const agentProgress = cancelRequested ? "Cancellation requested; waiting for the current safe boundary" : agentStatus?.detail || (agentSeconds >= 120 ? "Long-running model or tool work is still active" : agentSeconds >= 30 ? "Model or workspace tools are still working" : "Contacting the model");
   function agentState(busy: boolean, model?: string) { setAgentBusy(busy); if (busy) { setAgentModel(model || ""); setCancelRequested(false); setAgentStatus(null); setLiveTrace([]); } }
   async function cancelAgent() { setCancelRequested(true); try { await api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}); } catch { setCancelRequested(false); } }
-  return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Durable</span><button className={phase === "memory" ? "tab active" : "tab"} onClick={() => setPhase("memory")}>Project memory</button></div><div className="phase-group"><span>Discover</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Specify</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Build</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget across providers, not a provider dollar balance. Provider spend limits remain authoritative."><strong>{selectedBilling?.provider || billing.provider} · key {selectedBilling?.key_fingerprint || billing.key_fingerprint}</strong><span>{selectedBilling?.label || billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce provider spend caps</small></div>}</header>
+  return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Durable</span><button className={phase === "memory" ? "tab active" : "tab"} onClick={() => setPhase("memory")}>Project memory</button></div><div className="phase-group"><span>Discover</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Specify</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Build</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget across providers, not a provider dollar balance. Provider spend limits remain authoritative."><strong>{selectedBilling?.provider || billing.provider} · key {selectedBilling?.key_fingerprint || billing.key_fingerprint}</strong><span>{selectedBilling?.label || billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce provider spend caps</small></div>}<div className="session-controls" aria-label="Account session"><span>{session.username || "Signed out"}</span><button type="button" onClick={onUnlockKeys}>{session.username ? "API keys" : "Sign in"}</button><button type="button" onClick={onLogout} disabled={loggingOut}>{loggingOut ? "Logging out…" : "Log out"}</button></div></header>
+    {logoutError && <p className="error" role="alert">{logoutError}</p>}
     {billing?.model_warnings?.map(warning => <p className="error" role="status" key={warning}>{warning}</p>)}
     {agentBusy && <div className="workspace-agent-progress"><div className="workspace-agent-running" role="status"><span className="agent-running-dot" /><span><strong>Agent running · {agentModel}</strong><small>{agentProgress}. You can inspect any project or phase while it runs.</small></span><time>{agentElapsed}</time><button type="button" onClick={cancelAgent} disabled={cancelRequested}>{cancelRequested ? "Cancel requested…" : "Cancel"}</button></div>{liveTrace.length > 0 && <details className={`live-operational-trace ${liveTrace.some(entry => entry.includes("rejected:") || entry.startsWith("Failed check:")) ? "has-error" : ""}`}><summary>Operational trace · {liveTrace.length} event{liveTrace.length === 1 ? "" : "s"} · latest: {liveTrace[liveTrace.length - 1]}</summary><pre>{liveTrace.map(entry => `- ${entry}`).join("\n")}</pre></details>}</div>}
-    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} credentialIdentity={`${authenticationRevision}:${billing?.model_details?.map(model => model.key_fingerprint).join(",") || "locked"}`} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
+    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} modelAvailability={modelAvailability} modelError={modelError} onUnlockKeys={onUnlockKeys} onRetryModels={onRetryModels} credentialIdentity={`${authenticationRevision}:${billing?.model_details?.map(model => model.key_fingerprint).join(",") || "locked"}`} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
     <div className="phase-panel" hidden={phase !== "memory"}><ProjectMemoryView project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
     <div className="phase-panel" hidden={phase !== "book"}><Book project={project} workspaceRevision={workspaceRevision} /></div>
     <div className="phase-panel" hidden={phase !== "grammar"}><Specification project={project} view="grammar" workspaceRevision={workspaceRevision} /></div>
@@ -496,8 +510,13 @@ function ProjectWorkspace({project, authenticationRevision}: {project: Project; 
 }
 
 function App() {
-  const [user, setUser] = useState<string | null>(null), [checkingSession, setCheckingSession] = useState(true), [projects, setProjects] = useState<Project[]>([]), [selected, setSelected] = useState<string | null>(null), [authVersion, setAuthVersion] = useState(0), [newName, setNewName] = useState("");
-  const [showKeys, setShowKeys] = useState(false);
+  const [session, setSession] = useState<AccountSession>({...lockedSession, availability: "loading"});
+  const [checkingSession, setCheckingSession] = useState(true), [projects, setProjects] = useState<Project[]>([]), [selected, setSelected] = useState<string | null>(null), [authVersion, setAuthVersion] = useState(0), [newName, setNewName] = useState("");
+  const [showKeys, setShowKeys] = useState(false), [loggingOut, setLoggingOut] = useState(false), [logoutError, setLogoutError] = useState("");
+  const [pollSession, setPollSession] = useState(true), [modelRefreshRevision, setModelRefreshRevision] = useState(0);
+  const sessionGeneration = useRef(0);
+  const logoutInFlight = useRef(false);
+  const user = session.username;
   const [fontScale, setFontScale] = useState(() => {
     const stored = Number(window.localStorage.getItem("leanfm:font-scale") || "1");
     return Number.isFinite(stored) ? Math.max(.8, stored) : 1;
@@ -509,21 +528,90 @@ function App() {
   useEffect(() => { setClientDiagnosticProject(selected); }, [selected]);
   async function load() {
     const data = await api<{projects: Project[]}>("/api/projects");
-    const me = await api<{username: string}>("/api/me").catch(() => null);
-    setUser(me?.username || null); setProjects(data.projects || []);
+    setProjects(data.projects || []);
     setSelected(current => data.projects.some(p => p.project_id === current) ? current : data.projects.find(p => !p.read_only)?.project_id || null);
   }
-  useEffect(() => { load().catch(() => {}).finally(() => setCheckingSession(false)); }, [authVersion]);
+  useEffect(() => { load().catch(() => {}).finally(() => setCheckingSession(false)); }, []);
+  // One session snapshot drives the account controls and every project's model
+  // picker. Old requests cannot restore keys after an explicit local lock.
+  // Requirement refs: one_password_unlocks_all_provider_keys,
+  // model_key_is_request_scoped, keyless_server_has_no_provider_spend.
   useEffect(() => {
-    const requireAuthentication = () => { setUser(null); setAuthVersion(value => value + 1); };
-    window.addEventListener("leanfm:authentication-required", requireAuthentication);
-    return () => window.removeEventListener("leanfm:authentication-required", requireAuthentication);
+    if (!pollSession) return;
+    let current = true, refreshing = false;
+    const generation = sessionGeneration.current, controller = new AbortController();
+    async function refresh() {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const result = await api<{username: string; billing: Billing | null}>("/api/me", {}, controller.signal);
+        if (current && generation === sessionGeneration.current) setSession(result.billing
+          ? {availability: "ready", username: result.username, billing: result.billing, error: ""}
+          : lockedSession);
+      } catch (error) {
+        if (current && generation === sessionGeneration.current && !controller.signal.aborted) setSession(
+          error instanceof ApiError && error.status === 401 ? lockedSession
+          : {...lockedSession, availability: "error", error: (error as Error).message});
+      } finally { refreshing = false; }
+    }
+    void refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => { current = false; controller.abort(); window.clearInterval(timer); };
+  }, [authVersion, modelRefreshRevision, pollSession]);
+  const lockLocalSession = useCallback(() => {
+    sessionGeneration.current += 1;
+    setSession(lockedSession); setPollSession(false); setAuthVersion(value => value + 1);
   }, []);
+  useEffect(() => {
+    window.addEventListener("leanfm:authentication-required", lockLocalSession);
+    return () => window.removeEventListener("leanfm:authentication-required", lockLocalSession);
+  }, [lockLocalSession]);
+  function signedIn() {
+    sessionGeneration.current += 1;
+    setSession({...lockedSession, availability: "loading"}); setLogoutError("");
+    setShowKeys(false); setPollSession(true); setAuthVersion(value => value + 1);
+  }
+  function retryModels() {
+    sessionGeneration.current += 1;
+    setSession({...lockedSession, availability: "loading"}); setPollSession(true);
+    setModelRefreshRevision(value => value + 1);
+  }
+  async function logOut() {
+    if (logoutInFlight.current) return;
+    logoutInFlight.current = true;
+    setLoggingOut(true); setLogoutError(""); lockLocalSession();
+    try {
+      try { await api("/api/logout", {method: "POST"}); }
+      catch (error) {
+        if (!(error instanceof ApiError && error.status === 401)) throw error;
+        // An expired or missing session is already locked on the server.
+      }
+      setShowKeys(true);
+    } catch (error) {
+      setLogoutError(`Could not confirm server logout. Retry Log out. ${(error as Error).message}`);
+    } finally { logoutInFlight.current = false; setLoggingOut(false); }
+  }
   if (checkingSession) return <main className="auth"><div className="auth-card"><h1>LeanFM</h1><p>Loading workspace…</p></div></main>;
   const project = projects.find(p => p.project_id === selected);
   async function create(event: FormEvent) { event.preventDefault(); const result = await api<{project_id: string}>("/api/projects", formRequest({display_name: newName})); setNewName(""); await load(); setSelected(result.project_id); }
   async function remove(item: Project) { const confirmation = prompt(`Type ${item.display_name} to permanently delete it:`); if (confirmation === null) return; await api(`/api/projects/${item.project_id}`, {method: "DELETE", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: new URLSearchParams({confirmation}).toString()}); if (selected === item.project_id) setSelected(null); await load(); }
-  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><button type="button" onClick={() => setShowKeys(true)}>{user ? "API keys" : "Unlock API keys"}</button><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div>{user && <button type="button" onClick={() => { void api("/api/logout", {method: "POST"}).then(() => { setUser(null); setAuthVersion(v => v + 1); }); }}>Lock keys</button>}<span>{user || "Keys locked"}</span></div></aside>{projects.map(item => <div className="project-panel" hidden={selected !== item.project_id} key={item.project_id}><ProjectWorkspace project={item} authenticationRevision={authVersion} /></div>)}{!project && <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}{showKeys && <ProviderKeysDialog account={user || ""} onClose={() => setShowKeys(false)} onDone={() => { setShowKeys(false); void load(); }} />}</div>;
+  return <div className="app"><aside className="sidebar">
+    <div className="brand">LeanFM</div>
+    <form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form>
+    <div className="tab-set-label">Projects</div>
+    <div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div>
+    <div className="sidebar-footer">
+      <button type="button" onClick={() => setShowKeys(true)}>{user ? "API keys" : "Sign in"}</button>
+      <button type="button" onClick={() => void logOut()} disabled={loggingOut}>{loggingOut ? "Logging out…" : "Log out"}</button>
+      {logoutError && <p className="error" role="alert">{logoutError}</p>}
+      <div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div>
+      <span>{user || "Keys locked"}</span>
+    </div>
+  </aside>
+    {projects.map(item => <div className="project-panel" hidden={selected !== item.project_id} key={item.project_id}><ProjectWorkspace project={item} authenticationRevision={authVersion} session={session} onUnlockKeys={() => setShowKeys(true)} onLogout={() => void logOut()} loggingOut={loggingOut} logoutError={logoutError} onRetryModels={retryModels} /></div>)}
+    {!project && <main className="main"><div className="session-controls"><button type="button" onClick={() => setShowKeys(true)}>Sign in</button><button type="button" onClick={() => void logOut()} disabled={loggingOut}>Log out</button></div><div className="empty"><h2>Create or select a project</h2></div></main>}
+    {showKeys && <ProviderKeysDialog account={user || ""} onClose={() => setShowKeys(false)} onDone={signedIn} onLogout={() => void logOut()} loggingOut={loggingOut} />}
+  </div>;
 }
 
 createRoot(document.getElementById("root")!).render(<ClientFaultBarrier><App /></ClientFaultBarrier>);

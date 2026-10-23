@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    UserBrowser->>LeanFMServer: WorkSubmitted
+    loop repeat
+    LeanFMServer->>UserBrowser: WorkCheckpointed
+    UserBrowser->>LeanFMServer: WorkContinued
+    end
+    alt choice 1
+    LeanFMServer->>UserBrowser: WorkCompleted
+    else alternative
+    LeanFMServer->>UserBrowser: WorkBlocked
+    else alternative
+    LeanFMServer->>UserBrowser: WorkNeedsDecision
+    else alternative
+    UserBrowser->>LeanFMServer: WorkCancelRequested
+    LeanFMServer->>UserBrowser: WorkCancelled
+    else alternative
+    LeanFMServer->>UserBrowser: WorkCheckpointed
+    UserBrowser->>LeanFMServer: WorkCancelRequested
+    LeanFMServer->>UserBrowser: WorkCancelled
+    end

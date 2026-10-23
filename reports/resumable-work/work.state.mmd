@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> idle
+    idle --> submitted: WorkSubmitted
+    submitted --> checkpointed: WorkCheckpointed
+    checkpointed --> submitted: WorkContinued
+    submitted --> complete: WorkCompleted
+    submitted --> blocked: WorkBlocked
+    submitted --> gate: WorkNeedsDecision
+    submitted --> cancelling: WorkCancelRequested
+    checkpointed --> cancelling: WorkCancelRequested
+    cancelling --> cancelled: WorkCancelled
+    complete --> [*]
+    blocked --> [*]
+    gate --> [*]
+    cancelled --> [*]

@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import resource
+import re
 import subprocess
 import sys
 
@@ -18,6 +19,17 @@ def limits():
 
 def main(operation, root_name):
     root = Path(root_name).resolve(strict=True)
+    if operation in {"build", "check", "http-check"}:
+        makefile = next((root / name for name in ["GNUmakefile", "makefile", "Makefile"] if (root / name).is_file()), None)
+        if makefile is None:
+            raise ValueError("Project has no Makefile and does not provide the '" + operation +
+                             "' check. Use leanfm_check for canonical requirements and implementation specifications; do not substitute an application build.")
+        if makefile.is_symlink() or makefile.stat().st_size > 2_000_000:
+            raise ValueError("Project Makefile must be a bounded ordinary project file")
+        source = makefile.read_text()
+        if not re.search(r"(?m)^(?:[A-Za-z0-9_.-]+[ \t]+)*" + re.escape(operation) + r"(?:[ \t]+[A-Za-z0-9_.-]+)*[ \t]*:(?!=)", source):
+            raise ValueError("Project Makefile does not explicitly declare the '" + operation +
+                             "' target. Use a check provided by this project; use leanfm_check for specifications.")
     cache = root / ".cache"
     if cache.is_symlink():
         raise ValueError("Project cache cannot be a symlink")

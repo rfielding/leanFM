@@ -4,10 +4,67 @@
     "requirements": "LeanFM/LLMGenerated/SharedProjects.lean",
     "implementation": "LeanFM/LLMGenerated/Implementation.lean",
     "acceptance": "reports/shared-projects/acceptance.json",
-    "sources": ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "Server.lean", "ui/src/main.tsx", "scripts/chatui_workspace.py", "scripts/chatui_project_state.py", "scripts/chatui_command_runner.py", "scripts/chatui_gif.py", "scripts/chatui_mp4.py", "scripts/reset_leanfm_workspace.py"],
-    "tests": ["scripts/chatui_shared_projects_test.py", "scripts/chatui_project_state_test.py", "scripts/chatui_workspace_reset_test.py", "scripts/chatui_command_test.py", "scripts/chatui_browser_reset.py"]
+    "sources": [
+      "LeanFM/ChatUI/Store.lean",
+      "LeanFM/ChatUI/Server.lean",
+      "Server.lean",
+      "ui/src/main.tsx",
+      "scripts/chatui_workspace.py",
+      "scripts/chatui_project_state.py",
+      "scripts/chatui_command_runner.py",
+      "scripts/chatui_gif.py",
+      "scripts/chatui_mp4.py",
+      "scripts/reset_leanfm_workspace.py"
+    ],
+    "tests": [
+      "scripts/chatui_shared_projects_test.py",
+      "scripts/chatui_project_state_test.py",
+      "scripts/chatui_workspace_reset_test.py",
+      "scripts/chatui_command_test.py",
+      "scripts/chatui_browser_reset.py"
+    ]
   },
   "mappings": [
+    {
+      "references": [
+        "property:web_ui_replaces_external_coding_session",
+        "property:recoverable_failures_are_fixed_before_return",
+        "property:third_party_commands_cross_one_whitelist",
+        "property:feature_completion_pairs_positive_and_negative_invariants"
+      ],
+      "sources": [
+        "scripts/chatui_specification.py",
+        "scripts/chatui_command_runner.py",
+        "LeanFM/ChatUI/Server.lean",
+        "LeanFM/ChatUI/Provider.lean"
+      ],
+      "tests": [
+        "scripts/chatui_specification_test.py",
+        "scripts/chatui_command_test.py",
+        "LeanFM/ChatUI/ProviderTests.lean",
+        "scripts/chatui_multi_provider_test.py"
+      ],
+      "security_review": "reports/chatui/specification-workflow/thread-repair.md"
+    },
+    {
+      "references": [
+        "property:keyless_server_has_no_provider_spend",
+        "property:one_password_unlocks_all_provider_keys",
+        "property:selected_model_determines_provider_credential",
+        "property:model_key_is_request_scoped",
+        "proof:Keyless launch cannot spend provider funds"
+      ],
+      "sources": [
+        "ui/src/main.tsx",
+        "assets/chatui.css",
+        "ui/src/api.ts"
+      ],
+      "tests": [
+        "scripts/chatui_browser_reset.py",
+        "scripts/chatui_multi_provider_test.py"
+      ],
+      "security_review": "reports/chatui/model-picker-repair.md"
+    },
     {
       "references": [
         "property:web_ui_replaces_external_coding_session",

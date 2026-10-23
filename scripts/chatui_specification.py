@@ -20,6 +20,10 @@ INSTALLATION = Path(__file__).resolve().parents[1]
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*\Z")
 
 
+class CheckerUnavailable(ValueError):
+    """Local worker failure that another paid model round cannot repair."""
+
+
 def confined(root, relative, directory=False):
     path = root
     for part in Path(relative).parts:
@@ -105,7 +109,10 @@ def check(root_name, requirement, implementation="", constraints=""):
                        "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--chdir", "/work",
                        "--clearenv", "--setenv", "HOME", "/tmp", "--setenv", "PATH", "/toolchain/bin:/usr/bin:/bin",
                        "--setenv", "LEAN_PATH", sandbox_scratch + ":/leanfm-lib:/toolchain/lib/lean",
-                       "--", "/toolchain/bin/lean"]
+                       # Lean otherwise sizes its worker pool from host CPUs.
+                       # Thread stacks/allocator arenas can exhaust RLIMIT_AS
+                       # before elaboration even for an empty project module.
+                       "--", "/toolchain/bin/lean", "-j2", "-M2048"]
 
             def run(arguments, name):
                 output_path = scratch / (name + ".log")
@@ -114,12 +121,14 @@ def check(root_name, requirement, implementation="", constraints=""):
                         result = subprocess.run(prefix + arguments, stdout=output, stderr=subprocess.STDOUT,
                                                 timeout=75, preexec_fn=limits)
                     except subprocess.TimeoutExpired:
-                        raise ValueError("specification check exceeded its 75-second deadline") from None
+                        raise CheckerUnavailable("specification check exceeded its 75-second deadline") from None
                 confined(root, str(output_path.relative_to(root)))
                 output = output_path.read_text(errors="replace")
                 with log_path.open("a", encoding="utf-8") as journal:
                     journal.write(name + " exit_code=" + str(result.returncode) + "\n" + output + "\n")
                 if result.returncode:
+                    if "failed to create thread" in output or output.startswith("bwrap:"):
+                        raise CheckerUnavailable(name + " exit_code=" + str(result.returncode) + "\n" + output[-12000:])
                     raise ValueError(name + " exit_code=" + str(result.returncode) + "\n" + output[-12000:])
                 return output
 
@@ -165,6 +174,9 @@ def check(root_name, requirement, implementation="", constraints=""):
 if __name__ == "__main__":
     try:
         check(*sys.argv[1:])
+    except CheckerUnavailable as error:
+        print("ERROR: local_checker_unavailable: " + str(error), file=sys.stderr)
+        sys.exit(78)
     except (ValueError, OSError, subprocess.SubprocessError, json.JSONDecodeError) as error:
         print("ERROR: " + str(error), file=sys.stderr)
         sys.exit(1)
