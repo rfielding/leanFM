@@ -1,15 +1,65 @@
 {
   "requirement": "leanfm.chatui",
+  "accepted_workspace_revision": {
+    "requirements": "LeanFM/LLMGenerated/SharedProjects.lean",
+    "implementation": "LeanFM/LLMGenerated/Implementation.lean",
+    "acceptance": "reports/shared-projects/acceptance.json",
+    "sources": ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "Server.lean", "ui/src/main.tsx", "scripts/chatui_workspace.py", "scripts/chatui_project_state.py", "scripts/chatui_command_runner.py", "scripts/chatui_gif.py", "scripts/chatui_mp4.py", "scripts/reset_leanfm_workspace.py"],
+    "tests": ["scripts/chatui_shared_projects_test.py", "scripts/chatui_project_state_test.py", "scripts/chatui_workspace_reset_test.py", "scripts/chatui_command_test.py", "scripts/chatui_browser_reset.py"]
+  },
   "mappings": [
     {
-      "references": ["property:examples_are_disposable", "property:chat_history_is_not_durable_specification", "property:selected_project_context_drives_chat"],
-      "sources": ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "scripts/chatui_command.sh", "Makefile"],
-      "tests": ["scripts/chatui_reset_test.py", "scripts/chatui_http_check.sh"]
+      "references": [
+        "property:web_ui_replaces_external_coding_session",
+        "property:chat_layers_mutate_only_their_artifacts",
+        "property:selected_project_context_drives_chat",
+        "property:reversible_defaults_prevent_interrogation_loops",
+        "property:diagram_is_task_local",
+        "property:feature_completion_pairs_positive_and_negative_invariants"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Server.lean",
+        "LeanFM/ChatUI/Provider.lean",
+        "scripts/chatui_command.sh",
+        "scripts/chatui_specification.py"
+      ],
+      "tests": [
+        "scripts/chatui_specification_test.py",
+        "scripts/chatui_multi_provider_test.py",
+        "scripts/chatui_browser_reset.py"
+      ],
+      "security_review": "reports/chatui/specification-workflow/security-review.md"
     },
     {
-      "references": ["property:http_dispatch_requires_complete_frame"],
-      "sources": ["Server.lean", "LeanFM/ChatUI/HttpRequest.lean"],
-      "tests": ["LeanFM/ChatUI/HttpRequestTests.lean", "scripts/chatui_multi_provider_test.py"]
+      "references": [
+        "property:examples_are_disposable",
+        "property:chat_history_is_not_durable_specification",
+        "property:selected_project_context_drives_chat"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Store.lean",
+        "LeanFM/ChatUI/Server.lean",
+        "scripts/chatui_command.sh",
+        "Makefile",
+        "scripts/http_smoke.py"
+      ],
+      "tests": [
+        "scripts/chatui_reset_test.py",
+        "scripts/chatui_http_check.sh"
+      ]
+    },
+    {
+      "references": [
+        "property:http_dispatch_requires_complete_frame"
+      ],
+      "sources": [
+        "Server.lean",
+        "LeanFM/ChatUI/HttpRequest.lean"
+      ],
+      "tests": [
+        "LeanFM/ChatUI/HttpRequestTests.lean",
+        "scripts/chatui_multi_provider_test.py"
+      ]
     },
     {
       "references": [
@@ -207,6 +257,44 @@
         "scripts/chatui_multi_provider_test.py",
         "scripts/chatui_provider_stub.py",
         "scripts/chatui_http_check.sh"
+      ]
+    },
+    {
+      "references": [
+        "task:argue_requirements",
+        "task:markerboard",
+        "proof:Multimodal round trip",
+        "proof:Concurrent BYOK isolation",
+        "property:prompts_stack_in_project_order"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Server.lean",
+        "LeanFM/ChatUI/Provider.lean",
+        "ui/src/main.tsx",
+        "scripts/chatui_media.py",
+        "scripts/chatui_command.sh"
+      ],
+      "tests": [
+        "scripts/chatui_media_test.py",
+        "scripts/chatui_multi_provider_test.py",
+        "scripts/chatui_browser_reset.py"
+      ],
+      "security_review": "evidence/chat-images/security.md"
+    },
+    {
+      "references": [
+        "task:inspect_task_model",
+        "property:selected_project_context_drives_chat",
+        "property:diagram_is_task_local"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Requirements.lean",
+        "LeanFM/ChatUI/Server.lean",
+        "ui/src/main.tsx"
+      ],
+      "tests": [
+        "LeanFM/ChatUI/ProviderTests.lean",
+        "scripts/chatui_browser_reset.py"
       ]
     }
   ]

@@ -7,8 +7,16 @@ namespace LeanFM.ChatUI.Store
 
 def fp (s : String) : System.FilePath := System.FilePath.mk s
 
-def dataRoot : IO String := do
-  pure ((← IO.getEnv "LEANFM_DATA_ROOT").getD "data")
+def workspaceRoot : IO String := do
+  if (← IO.getEnv "LEANFM_DATA_ROOT").isSome && (← IO.getEnv "LEANFM_WORKSPACE_ROOT").isNone then
+    throw (IO.userError "LEANFM_DATA_ROOT is obsolete. Use LEANFM_WORKSPACE_ROOT; projects belong in projects/ and encrypted accounts in .leanfm/accounts/.")
+  let root := ((← IO.getEnv "LEANFM_WORKSPACE_ROOT").getD ".")
+  IO.FS.createDirAll (fp root)
+  if ← (fp (root ++ "/data/accounts")).pathExists then
+    throw (IO.userError "Legacy data/accounts storage is present. Stop the service and explicitly migrate or reset it; LeanFM will not silently create a second account namespace.")
+  pure (← IO.FS.realPath (fp root)).toString
+
+def dataRoot : IO String := return (← workspaceRoot) ++ "/.leanfm"
 
 def accountsRoot : IO String := return (← dataRoot) ++ "/accounts"
 
@@ -17,11 +25,13 @@ def safeId (value : String) : Bool :=
     c.isAlphanum || c == '-' || c == '_'
 
 def accountRoot (username : String) : IO String := return (← accountsRoot) ++ "/" ++ username
-def projectsRoot (username : String) : IO String := return (← accountRoot username) ++ "/projects"
+def projectsRoot (_username : String) : IO String := return (← workspaceRoot) ++ "/projects"
 def projectRoot (username projectId : String) : IO String := return (← projectsRoot username) ++ "/" ++ projectId
 
 def ensureDataRoot : IO Unit := do
   IO.FS.createDirAll (fp (← accountsRoot))
+  let out ← IO.Process.output {cmd := "chmod", args := #["700", ← dataRoot, ← accountsRoot]}
+  if out.exitCode != 0 then throw (IO.userError "Cannot protect credential vault permissions")
 
 def readOr (path fallback : String) : IO String := do
   try IO.FS.readFile (fp path) catch _ => pure fallback
@@ -324,7 +334,6 @@ private def createAccountUnlocked (username password provider apiKey : String)
   let root ← accountRoot username
   if ← (fp root).pathExists then return .error "That account already exists."
   IO.FS.createDirAll (fp (root ++ "/credentials"))
-  IO.FS.createDirAll (fp (root ++ "/projects"))
   let encrypted ← encryptCredential username password apiKey
   let verifier ← passwordRecord password
   writeAtomic (root ++ "/password.json") (verifier ++ "\n")
@@ -439,12 +448,18 @@ def repairSelfHostingSpecificationLeak (root name : String) : IO Bool := do
   else pure false
 
 def createProject (username name : String) : IO (Except String String) := do
+  let parent ← projectsRoot username
+  IO.FS.createDirAll (fp parent)
+  if (← IO.FS.realPath (fp parent)).toString != (← workspaceRoot) ++ "/projects" then
+    return .error "Projects directory cannot escape the workspace."
   let projectId ← randomHex 8
   let root ← projectRoot username projectId
+  if ← (fp root).pathExists then return .error "Project identifier collision; no existing directory was changed."
   IO.FS.createDirAll (fp root)
   for dir in ["inputs", "book", "spec", "source", "tests", "artifacts", "renders", "events", "reports", "logs", "cache", "conversations"] do
     IO.FS.createDirAll (fp (root ++ "/" ++ dir))
-  writeAtomic (root ++ "/manifest.json") ("{\"project_id\":\"" ++ projectId ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\"}\n")
+  writeAtomic (root ++ "/manifest.json") ("{\"project_id\":\"" ++ projectId ++ "\",\"display_name\":\"" ++ jsonEscape name ++
+    "\",\"root\":\".\",\"book\":\"book/main.pdf\",\"dark_book\":\"book/main-dark.pdf\",\"book_source\":\"book/main.tex\",\"requirements\":\"spec/Requirements.lean\",\"protobuf\":\"spec/Requirements.proto\",\"implementation\":\"spec/Implementation.lean\",\"tasks\":\"spec/tasks.json\",\"source\":\"source/\",\"evidence\":\"reports/\",\"acceptance\":{\"requirements\":\"not-recorded\",\"implementation\":\"not-recorded\"}}\n")
   provisionProjectBook root name
   let builtBook ← IO.Process.output { cmd := "make", args := #["-C", root ++ "/book"] }
   if builtBook.exitCode != 0 then
@@ -454,25 +469,21 @@ def createProject (username name : String) : IO (Except String String) := do
   pure (.ok projectId)
 
 def projectListJson (username : String) : IO String := do
-  let root ← projectsRoot username
-  let mut items : List String := []
-  for entry in (← entries root) do
-    if safeId entry.fileName then
-      let manifest ← readOr (entry.path.toString ++ "/manifest.json") ""
-      let name := (jsonStringValue? manifest "display_name").getD entry.fileName
-      items := ("{\"project_id\":\"" ++ entry.fileName ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\",\"read_only\":false}") :: items
+  let _ := username
+  let out ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["workspace-list", ← workspaceRoot]}
+  let items := match Lean.Json.parse out.stdout with
+    | .ok value => (value.getArr?.toOption.getD #[]).toList.map Lean.Json.compress
+    | .error _ => []
   let workspace := "{\"project_id\":\"leanfm-workspace\",\"display_name\":\"LeanFM\",\"read_only\":true,\"kind\":\"workspace\"}"
-  let goServer := "{\"project_id\":\"go-server\",\"display_name\":\"GoServer\",\"read_only\":true,\"kind\":\"project\"}"
-  let examples := if ← (fp "projects/go-server/project.json").pathExists then [goServer] else []
-  pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace] ++ examples) ++ "]")
+  pure ("[" ++ String.intercalate "," (items ++ [workspace]) ++ "]")
 
 def deleteProject (username projectId confirmation : String) : IO (Except String Unit) := do
   if !safeId projectId then return .error "Invalid project identifier."
   let parent ← projectsRoot username
   let root ← projectRoot username projectId
-  let manifest ← readOr (root ++ "/manifest.json") ""
+  let manifest ← readOr (root ++ "/manifest.json") (← readOr (root ++ "/project.json") "")
   if manifest.isEmpty then return .error "Project not found."
-  let displayName := (jsonStringValue? manifest "display_name").getD projectId
+  let displayName := (jsonStringValue? manifest "display_name").orElse (fun _ => jsonStringValue? manifest "title") |>.getD projectId
   if confirmation != displayName then return .error "Project name confirmation did not match."
   let realParent ← IO.FS.realPath (fp parent)
   let realRoot ← IO.FS.realPath (fp root)

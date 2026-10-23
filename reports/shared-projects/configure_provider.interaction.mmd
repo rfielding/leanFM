@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    UserBrowser->>LeanFMServer: ProviderCredentialSubmitted
+    alt choice 1
+    LeanFMServer->>UserBrowser: ProviderCredentialAccepted
+    else alternative
+    LeanFMServer->>UserBrowser: ProviderCredentialRejected
+    end

@@ -80,6 +80,7 @@ export async function api<T>(path: string, options: RequestInit = {}, signal?: A
   try {
     response = await fetch(path, {credentials: "same-origin", ...options, signal, headers: {Accept: "application/json", "X-LeanFM-Request-ID": requestId, ...(options.headers || {})}});
   } catch (cause) {
+    if (signal?.aborted || (cause instanceof DOMException && cause.name === "AbortError")) throw cause;
     const message = cause instanceof Error ? cause.message : String(cause);
     const action = navigator.onLine ? "Verify that the LeanFM server is running and reachable, then retry once. If it still fails, copy this diagnostic to Codex." : "Reconnect this device to the network, then retry.";
     const error = new ApiError(`Network request failed: ${message}`, 0, action, {request_id: requestId, started_at: startedAt.toISOString(), finished_at: new Date().toISOString(), elapsed_ms: Math.round(performance.now() - started), method, path, status: 0, browser_online: navigator.onLine, error: message, action, code: "leanfm_network_error"});
@@ -95,7 +96,7 @@ export async function api<T>(path: string, options: RequestInit = {}, signal?: A
     const action = body.action || (response.status >= 500 ? "Retry once. If it fails again, copy this diagnostic to Codex; also check or restart the LeanFM server." : "Correct the request if possible, then retry. If the failure is unclear, copy this diagnostic to Codex.");
     const code = body.code || `unexpected_http_${response.status}`;
     const error = new ApiError(message, response.status, action, {request_id: requestId, started_at: startedAt.toISOString(), finished_at: new Date().toISOString(), elapsed_ms: Math.round(performance.now() - started), method, path, status: response.status, browser_online: navigator.onLine, error: message, action, code, response_excerpt: text.slice(0, 4000)});
-    reportClientError(`Calling LeanFM API: ${method} ${path}`, error, projectFromPath(path));
+    if (!(path === "/api/me" && response.status === 401)) reportClientError(`Calling LeanFM API: ${method} ${path}`, error, projectFromPath(path));
     throw error;
   }
   return body as T;

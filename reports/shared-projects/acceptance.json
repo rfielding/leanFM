@@ -1,0 +1,80 @@
+{
+  "revision": "shared-projects-v2-fresh-start",
+  "confirmed_policy": {
+    "projects_open_without_login": true,
+    "login_required_for_llm_calls": true,
+    "project_ownership": "none",
+    "source": "Explicit stakeholder response: Yes\u2014open projects without login; require login for LLM calls"
+  },
+  "requirements_acceptance": {
+    "status": "accepted",
+    "revision": "shared-projects-v2-fresh-start",
+    "review": "fresh-start-review.md",
+    "source": "Explicit user answer: Accept these requirements",
+    "artifact_sha256": {
+      "LeanFM/LLMGenerated/SharedProjects.lean": "496cbcf641aa3a82ec1648b3969890dd086032c683d86764ed0760c023fc5e97",
+      "LeanFM/ChatUI/Requirements.lean": "f6a7ea3865b190f31aa82f7dd731265eb29e2426f24557d96f2eb48a8f3754ed",
+      "LeanFM/ChatUI/Requirements.proto": "3d42d3af36ef14cee07df897dbf87bcc7835ae711b08af6bf015bac28cc44770",
+      "reports/shared-projects/fresh-start-review.md": "9bf15ec4035cf318df188bd09134331658a5a1ed78b448d0d262edd40177a59a",
+      "reports/shared-projects/tasks.json": "5211e799605b48e9711237087293b5e64f45fa3d04a52a106e5406c49de5a777"
+    }
+  },
+  "implementation_acceptance": {
+    "status": "accepted",
+    "revision": "shared-projects-v2-fresh-start",
+    "review": "implementation-review.md",
+    "source": "Explicit user answer: Accept implementation; proceed with reset and repair",
+    "artifact_sha256": {
+      "LeanFM/LLMGenerated/Implementation.lean": "282296340c0d067a422158a7b65c4458ce3b6a785bb2c2c476bab98c8d6c5f05",
+      "reports/shared-projects/implementation-review.md": "c158be6b3e22d3f54688258dd8239801ead9c945a416a3524fd63c17140392f6",
+      "reports/shared-projects/security-review.md": "1a9c738ba3e3084aa420531958a125271ad62535e0a9c33ca262623c4a4581f2"
+    }
+  },
+  "migration": {
+    "status": "superseded by explicitly accepted project discard; encrypted accounts relocated and verified",
+    "legacy_data_untouched": false,
+    "legacy_data_exists": false
+  },
+  "artifact_sha256": {
+    "LeanFM/LLMGenerated/SharedProjects.lean": "496cbcf641aa3a82ec1648b3969890dd086032c683d86764ed0760c023fc5e97",
+    "LeanFM/LLMGenerated/Requirements.lean": "c21dee21fc5a757bd207438c0f46daeb52b346c1285dd5d7fe2343b6fa933ab7",
+    "LeanFM/ChatUI/Requirements.proto": "3d42d3af36ef14cee07df897dbf87bcc7835ae711b08af6bf015bac28cc44770",
+    "LeanFM/LLMGenerated/Implementation.lean": "282296340c0d067a422158a7b65c4458ce3b6a785bb2c2c476bab98c8d6c5f05",
+    "reports/shared-projects/requirements-review.md": "cefc4cb983eccddd16e6e7576ac6240ab250b7669864f252cc8911b4d0776608",
+    "reports/shared-projects/implementation-review.md": "c158be6b3e22d3f54688258dd8239801ead9c945a416a3524fd63c17140392f6",
+    "reports/shared-projects/tasks.json": "5211e799605b48e9711237087293b5e64f45fa3d04a52a106e5406c49de5a777",
+    "reports/shared-projects/migration-preflight.json": "6c4d103e0ad2b1b370bfece90b6fc25472321b3207599980c06ed17ad005eac1",
+    "book/main.pdf": "4a41ed3b271c465bb154b8173de7c8955e08bdf34854efc30104491f2ed43493",
+    "book/main-dark.pdf": "5fc3bfe83e5abebd1f7534a0765324cc8a83fc45050dc89fa54e78f71e83e175",
+    "reports/shared-projects/security-review.md": "1a9c738ba3e3084aa420531958a125271ad62535e0a9c33ca262623c4a4581f2",
+    "reports/shared-projects/fresh-start-review.md": "9bf15ec4035cf318df188bd09134331658a5a1ed78b448d0d262edd40177a59a"
+  },
+  "supersedes": "shared-projects-v1",
+  "fresh_start": {
+    "status": "complete",
+    "preserve": "LeanFM root and encrypted account records",
+    "requirements_source": "Explicit operator request to discard the broken projects and fix LeanFM itself",
+    "report": "reset-result.json"
+  },
+  "implementation_evidence": {
+    "status": "verified",
+    "report": "implementation-evidence.md",
+    "browser_report": "reports/chatui/reset-browser.json",
+    "source_sha256": {
+      "LeanFM/ChatUI/Store.lean": "6649ce96b80cd718c7edd0672e6bd32dff8a3e8e3765c1ad98e857589d0ccc01",
+      "LeanFM/ChatUI/Server.lean": "71400c7d8dbdf107be621e6ac1e0b9aa3ec31044980aa35efe4dcfa3db8b59d1",
+      "ui/src/main.tsx": "f860818cde1c1dd7b3fb7319cf96ed4b7fedae93436ae5c441033a5e8cad1376",
+      "scripts/chatui_project_state.py": "6fd05950afe12435b6d47de2197384c1793db5ac6fd5dd194f9eebd41a1553ef",
+      "scripts/reset_leanfm_workspace.py": "cd7992b83c64feafd58a3612a94e2f97fe1dbb827006039019ca15045a8701db",
+      "Server.lean": "21fb782d824fbb3222234673783526113d66abde0c5eb3c41c1709605b9147de",
+      "ui/src/api.ts": "c076437384dd3187713371faed916a52efd972163c8dbe5eb14fe42611cffff9",
+      "scripts/chatui_specification.py": "9e16b7154d0ab83e5b349884994a7763e6ccd96f8fddc60d4da2265e65e716fa",
+      "scripts/chatui_command_runner.py": "f1c80b081ce270234cb5dc77c8aba20dbfab2f8971376a115ed28e3893399cb8",
+      "scripts/chatui_gif.py": "7bebd24a34c3e9161a6c2e99edddc19b2ce01e8c1ed521edcda0e077c8d10f51",
+      "scripts/chatui_mp4.py": "a7576a88ce14ba0a6fa3ab8d8136c72fa8dc1e9c4860f842736207d7789569d3"
+    },
+    "live_http_check": "passed: make http-check after restart",
+    "service": "http://127.0.0.1:8080",
+    "boundary": "real production UI and compiler; deterministic local providers; no live account calls"
+  }
+}

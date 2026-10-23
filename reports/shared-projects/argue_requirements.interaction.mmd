@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    participant ModelProvider
+    UserBrowser->>LeanFMServer: ChatPromptSubmitted
+    LeanFMServer->>ModelProvider: ModelRequestIssued
+    alt choice 1
+    ModelProvider->>LeanFMServer: ModelResponseReturned
+    LeanFMServer->>UserBrowser: ChatResponseRendered
+    else alternative
+    LeanFMServer->>UserBrowser: ChatTurnFailed
+    end

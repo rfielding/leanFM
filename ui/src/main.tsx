@@ -8,14 +8,15 @@ import React, {
 import {createRoot} from "react-dom/client";
 import katex from "katex";
 import {ApiError, api, formRequest, reportClientError, setClientDiagnosticProject} from "./api";
-import type {Billing, GrammarExpr, Message, ModelOption, Project, ProjectMemory, Task} from "./types";
+import type {Billing, GrammarExpr, Message, ModelOption, Project, ProjectMemory, SpecificationState, Task} from "./types";
 
 declare global { interface Window { mermaid?: any } }
 
 type Phase = "chat" | "memory" | "book" | "grammar" | "tasks" | "source";
 type QuestionOption = {value: string; label: string; recommended?: boolean};
 type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: QuestionOption[]};
-type QueuedPrompt = {id: string; text: string; model: string; pendingQuestion?: {id: string; promptLength: number; composerTextLength: number}};
+type QueuedPrompt = {id: string; text: string; model: string; credentialIdentity: string; pendingQuestion?: {id: string; promptLength: number; composerTextLength: number}};
+type ImageAttachment = {artifact_id: string; name: string; path: string; media_type: string; frame: string};
 
 type MathFragment = {source: string; display: boolean; raw: string};
 
@@ -112,7 +113,7 @@ function extractResult(text: string): {text: string; status?: "success" | "warn"
 }
 
 function projectImagePaths(text: string, projectId: string): string[] {
-  const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?(spec/images/[A-Za-z0-9._/-]+\\.(?:svg|gif|png|jpe?g))`, "gi");
+  const pattern = new RegExp(`(?:data/accounts/[^\\s]+/projects/${projectId}/)?((?:spec/images|artifacts/attachments)/[A-Za-z0-9._/-]+\\.(?:svg|gif|png|jpe?g))`, "gi");
   return [...text.matchAll(pattern)].map(match => match[1]).filter(path => !path.includes(".."))
     .filter((path, index, paths) => paths.indexOf(path) === index);
 }
@@ -218,9 +219,10 @@ function Auth({onReady, account, onCancel}: {onReady: () => void; account?: stri
     catch (e) { setError((e as Error).message); }
   }
   return <section className="auth"><div className="auth-card"><h1>{account ? "API keys" : "LeanFM"}</h1><p>Sign in to unlock your encrypted provider API keys. One password unlocks OpenAI and Anthropic together; this is your LeanFM login, not a provider login.</p>
-    {!account && <div className="auth-tabs"><button className={!register ? "active" : ""} onClick={() => setRegister(false)}>Log in</button><button className={register ? "active" : ""} onClick={() => setRegister(true)}>Create account</button></div>}
+    {!account && <div className="auth-tabs" role="tablist" aria-label="Account access"><button type="button" role="tab" aria-selected={!register} className={!register ? "active" : ""} onClick={() => { setRegister(false); setError(""); }}>Log in</button><button type="button" role="tab" aria-selected={register} className={register ? "active" : ""} onClick={() => { setRegister(true); setError(""); }}>Create account</button></div>}
     <form onSubmit={submit}><label>Username<input name="username" autoComplete="username" value={username} readOnly={!!account} onChange={event => setUsername(event.target.value)} required /></label><label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : undefined} required /></label>
-      <label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label>
+      <details key={register ? "registration" : "login"} open={register || undefined}><summary>{register ? "Provider API keys" : "Add or replace API keys (optional)"}</summary><label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label></details>
+      {!register && <p className="stored-key-note">Already have an account? Use your username and password. Your saved API keys unlock automatically after a server restart.</p>}
       <p>{register ? "Provide at least one key; you can provide both now." : "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."} Keys are encrypted with your password and never returned to the browser. Updating keys signs out earlier sessions.</p>
       <button className="primary">{register ? "Create account" : account ? "Unlock and save keys" : "Log in"}</button>{onCancel && <button type="button" onClick={onCancel}>Cancel</button>}</form><div className="error" role="alert">{error}</div></div></section>;
 }
@@ -265,7 +267,9 @@ function MessageView({message, projectId, answeredIds, onDelete, onResend, onAns
     <div className="message-actions">{onResend && <button onClick={onResend} disabled={disabled}>Resend</button>}<button onClick={onDelete}>Delete</button></div></article>;
 }
 
-function Chat({project, models, modelDetails, defaultModel, onModelChange, onWorkspaceChange, onBusyChange}: {project: Project; models: string[]; modelDetails: ModelOption[]; defaultModel: string; onModelChange: (model: string) => void; onWorkspaceChange: () => void; onBusyChange: (busy: boolean, model?: string) => void}) {
+function Chat({project, models, modelDetails, defaultModel, credentialIdentity, onModelChange, onWorkspaceChange, onBusyChange}: {project: Project; models: string[]; modelDetails: ModelOption[]; defaultModel: string; credentialIdentity: string; onModelChange: (model: string) => void; onWorkspaceChange: () => void; onBusyChange: (busy: boolean, model?: string) => void}) {
+  const [attachments, setAttachments] = useState<ImageAttachment[]>([]), [uploading, setUploading] = useState(false), [attachmentError, setAttachmentError] = useState("");
+  const attachmentInput = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [queue, setQueue] = useState<QueuedPrompt[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(""), [errorAction, setErrorAction] = useState(""), [errorTrace, setErrorTrace] = useState("");
   const [model, setModel] = useState(defaultModel);
   const conversationEndRef = useRef<HTMLDivElement>(null);
@@ -283,7 +287,7 @@ function Chat({project, models, modelDetails, defaultModel, onModelChange, onWor
     if (!text) return;
     const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     if (!model) return;
-    setQueue(current => [...current, {id, text, model, pendingQuestion}]);
+    setQueue(current => [...current, {id, text, model, credentialIdentity, pendingQuestion}]);
     if (clearComposer) setPrompt("");
   }
   async function run(item: QueuedPrompt) {
@@ -292,23 +296,48 @@ function Chat({project, models, modelDetails, defaultModel, onModelChange, onWor
   useEffect(() => {
     if (busy || queue.length === 0) return;
     const [next, ...remaining] = queue;
+    if (next.credentialIdentity !== credentialIdentity || !models.includes(next.model)) {
+      setError("Queued prompt held because the unlocked credential changed. Remove it and resubmit under the current key.");
+      return;
+    }
     setQueue(remaining);
     void run(next);
-  }, [busy, queue]);
+  }, [busy, queue, credentialIdentity, models]);
   function send(event: FormEvent) {
     event.preventDefault();
-    const text = prompt.trim();
-    if (!text) return;
+    const text = prompt.trim() || (attachments.length ? "Please examine the attached image." : "");
+    if (!text || uploading || !model) return;
     const answer = pendingQuestion
       ? `Question ID: ${pendingQuestion.id}\n${pendingQuestion.prompt}\nAnswer: No predefined option selected.\nQualification: ${text}`
       : text;
-    enqueue(answer, true, pendingQuestion ? {id: pendingQuestion.id, promptLength: pendingQuestion.prompt.length, composerTextLength: text.length} : undefined);
+    const withImages = answer + attachments.map(image => `\n\n![Attached image](${image.path})`).join("");
+    enqueue(withImages, true, pendingQuestion ? {id: pendingQuestion.id, promptLength: pendingQuestion.prompt.length, composerTextLength: text.length} : undefined);
+    setAttachments([]); setAttachmentError("");
+  }
+  async function attach(files: FileList | null) {
+    if (!files?.length || uploading) return;
+    if (attachments.length + files.length > 4) { setAttachmentError("Attach at most four images per message."); return; }
+    setUploading(true); setAttachmentError("");
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.size || file.size > 2 * 1024 * 1024) throw new Error("Each image must be nonempty and at most 2 MiB.");
+        const mediaType = file.type || (file.name.toLowerCase().endsWith(".svg") ? "image/svg+xml" : "");
+        if (!["image/png", "image/jpeg", "image/gif", "image/svg+xml"].includes(mediaType)) throw new Error("Choose a PNG, JPEG, GIF, or static SVG image.");
+        const content = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader(); reader.onerror = () => reject(new Error("Could not read this image."));
+          reader.onload = () => resolve(String(reader.result).split(",", 2)[1]); reader.readAsDataURL(file);
+        });
+        const image = await api<ImageAttachment>(`/api/projects/${project.project_id}/markerboard/media`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({media_type: mediaType, content, filename: file.name})});
+        setAttachments(current => [...current, image]);
+      }
+    } catch (error) { setAttachmentError((error as Error).message); }
+    finally { setUploading(false); if (attachmentInput.current) attachmentInput.current.value = ""; }
   }
   async function remove(id: string) { if (!confirm("Delete this message from the project conversation?")) return; await api(`/api/projects/${project.project_id}/conversation/messages/${encodeURIComponent(id)}`, {method: "DELETE"}); await load(); }
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
-    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>Start or resume this project</h2><p>Your book and specifications live in Project memory, not in chat history. Continue here; LeanFM will use those durable files.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
+    <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What problem are you trying to solve?</h2><p>Resume from the durable project files. Your book and specifications live in Project memory, not in chat history. Continue here; LeanFM will use those durable files.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
+    <div className="composer-wrap">{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !model || uploading}>Send</button><label className="model-picker">Model<select value={model} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
 }
 
 function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
@@ -341,9 +370,9 @@ function GrammarNode({expr}: {expr: GrammarExpr}) {
   return <details className={`grammar-ast-node grammar-${expr.kind}`} open><summary>{expr.kind}{expr.predicate ? ` · ${expr.predicate}` : ""}</summary><div className="grammar-ast-children">{(expr.children || []).map((child, i) => <GrammarNode key={i} expr={child} />)}</div></details>;
 }
 
-function Specification({project, view}: {project: Project; view: "grammar" | "tasks"}) {
+function Specification({project, view, workspaceRevision}: {project: Project; view: "grammar" | "tasks"; workspaceRevision: number}) {
   const [tasks, setTasks] = useState<Task[]>([]), [selected, setSelected] = useState<string>(""), [kind, setKind] = useState("interaction"), [error, setError] = useState("");
-  useEffect(() => { const controller = new AbortController(); api<{tasks: Task[]}>(`/api/projects/${project.project_id}/tasks`, {}, controller.signal).then(d => { setTasks(d.tasks || []); setSelected(d.tasks?.[0]?.id || ""); }).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id]);
+  useEffect(() => { const controller = new AbortController(); api<{tasks: Task[]}>(`/api/projects/${project.project_id}/tasks`, {}, controller.signal).then(d => { setTasks(d.tasks || []); setSelected(current => d.tasks?.some(task => task.id === current) ? current : (d.tasks?.[0]?.id || "")); setError(""); }).catch(e => { if (e.name !== "AbortError") setError(e.message); }); return () => controller.abort(); }, [project.project_id, workspaceRevision]);
   const task = tasks.find(t => t.id === selected);
   if (error) return <div className="empty"><p className="error">{error}</p></div>;
   if (!tasks.length) return <div className="empty"><div><h2>No accepted project {view === "grammar" ? "grammar" : "tasks"} yet</h2><p>Use guided Chat to develop this project's book and requirements.</p></div></div>;
@@ -375,6 +404,25 @@ function Source({project, workspaceRevision, agentBusy}: {project: Project; work
   return <section className="pane source-pane"><nav className="source-files vertical-tabs">{files.map(file => <button key={file} className={selected === file ? "active" : ""} onClick={() => setSelected(file)}>{file}</button>)}</nav><main className="source-view"><header><strong>{selected}</strong></header>{error ? <p className="error">{error}</p> : <pre><code>{source}</code></pre>}</main></section>;
 }
 
+function SpecificationAcceptance({project, workspaceRevision, agentBusy}: {project: Project; workspaceRevision: number; agentBusy: boolean}) {
+  const [state, setState] = useState<SpecificationState | null>(null), [error, setError] = useState("");
+  useEffect(() => {
+    if (project.read_only) return;
+    const controller = new AbortController();
+    const refresh = () => api<SpecificationState>(`/api/projects/${project.project_id}/specification`, {}, controller.signal).then(setState).catch(error => { if (error.name !== "AbortError") setError(error.message); });
+    void refresh();
+    const timer = agentBusy ? window.setInterval(refresh, 2000) : undefined;
+    return () => { controller.abort(); if (timer) window.clearInterval(timer); };
+  }, [project.project_id, project.read_only, workspaceRevision, agentBusy]);
+  async function accept(gate: "requirements" | "implementation") {
+    if (!state) return;
+    try { setError(""); setState(await api<SpecificationState>(`/api/projects/${project.project_id}/specification/${gate}/${state[gate].revision}/accept`, {method: "POST"})); }
+    catch (error) { setError((error as Error).message); }
+  }
+  if (project.read_only) return null;
+  return <section className="specification-review" aria-label="Specification acceptance">{(["requirements", "implementation"] as const).map(gate => <article key={gate}><strong>{gate === "requirements" ? "Requirements" : "Implementation specification"}</strong><span>{state?.[gate].accepted ? "Accepted current revision" : state?.[gate].checked ? "Checked · ready for your review" : "Needs a current canonical check"}</span><button type="button" disabled={!state?.[gate].checked || state[gate].accepted || agentBusy || (gate === "implementation" && !state.requirements.accepted)} onClick={() => void accept(gate)}>{gate === "requirements" ? "Accept requirements" : "Accept implementation specification"}</button></article>)}{error && <p className="error" role="alert">{error}</p>}</section>;
+}
+
 function ProjectMemoryView({project, workspaceRevision, agentBusy}: {project: Project; workspaceRevision: number; agentBusy: boolean}) {
   const [memory, setMemory] = useState<ProjectMemory | null>(null), [selected, setSelected] = useState("book"), [source, setSource] = useState(""), [error, setError] = useState("");
   useEffect(() => {
@@ -391,10 +439,10 @@ function ProjectMemoryView({project, workspaceRevision, agentBusy}: {project: Pr
     return () => controller.abort();
   }, [project.project_id, selected, workspaceRevision]);
   const complete = (memory?.files.filter(file => file.status === "current").length || 0) + ((memory?.source_files || 0) > 0 ? 1 : 0);
-  return <section className="pane memory-pane"><header className="memory-header"><div><h1>Project memory</h1><p>Durable state used to resume without conversation history.</p></div><strong>{complete} / 5 substantive layers</strong></header><div className="memory-workbench"><nav className="memory-files vertical-tabs">{memory?.files.map(file => <button key={file.id} className={selected === file.id ? "active" : ""} onClick={() => setSelected(file.id)}><span><strong>{file.label}</strong><small>{file.path}</small></span><em className={`memory-status ${file.status}`}>{file.status}</em></button>)}<button className="memory-source-summary" onClick={() => setSelected("source-summary")}><span><strong>Implementation source</strong><small>source/ · {memory?.source_files || 0} files · {memory?.source_bytes || 0} bytes</small></span><em className={`memory-status ${(memory?.source_files || 0) > 0 ? "current" : "missing"}`}>{(memory?.source_files || 0) > 0 ? "current" : "missing"}</em></button></nav><main className="source-view"><header><strong>{selected === "source-summary" ? "source/" : memory?.files.find(file => file.id === selected)?.path}</strong><span>Refreshes after every chat turn</span></header>{error ? <p className="error">{error}</p> : selected === "source-summary" ? <div className="memory-source-help"><h2>{memory?.source_files || 0} implementation files</h2><p>Open the Source phase to inspect generated implementation files. Source appears only after both acceptance gates and the security critique.</p></div> : <pre><code>{source}</code></pre>}</main></div></section>;
+  return <section className="pane memory-pane"><header className="memory-header"><div><h1>Project memory</h1><p>Durable state used to resume without conversation history.</p></div><strong>{complete} / 5 substantive layers</strong></header><SpecificationAcceptance project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /><div className="memory-workbench"><nav className="memory-files vertical-tabs">{memory?.files.map(file => <button key={file.id} className={selected === file.id ? "active" : ""} onClick={() => setSelected(file.id)}><span><strong>{file.label}</strong><small>{file.path}</small></span><em className={`memory-status ${file.status}`}>{file.status}</em></button>)}<button className="memory-source-summary" onClick={() => setSelected("source-summary")}><span><strong>Implementation source</strong><small>source/ · {memory?.source_files || 0} files · {memory?.source_bytes || 0} bytes</small></span><em className={`memory-status ${(memory?.source_files || 0) > 0 ? "current" : "missing"}`}>{(memory?.source_files || 0) > 0 ? "current" : "missing"}</em></button></nav><main className="source-view"><header><strong>{selected === "source-summary" ? "source/" : memory?.files.find(file => file.id === selected)?.path}</strong><span>Refreshes after every chat turn</span></header>{error ? <p className="error">{error}</p> : selected === "source-summary" ? <div className="memory-source-help"><h2>{memory?.source_files || 0} implementation files</h2><p>Open the Source phase to inspect generated implementation files. Source appears only after both acceptance gates and the security critique.</p></div> : <pre><code>{source}</code></pre>}</main></div></section>;
 }
 
-function ProjectWorkspace({project}: {project: Project}) {
+function ProjectWorkspace({project, authenticationRevision}: {project: Project; authenticationRevision: number}) {
   const [phase, setPhase] = useState<Phase>("chat");
   const [billing, setBilling] = useState<Billing | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
@@ -424,11 +472,11 @@ function ProjectWorkspace({project}: {project: Project}) {
   }, [project.project_id, agentBusy]);
   useEffect(() => {
     let current = true;
-    const refresh = () => api<{billing: Billing | null}>("/api/me").then(result => { if (current) setBilling(result.billing); }).catch(() => {});
+    const refresh = () => api<{billing: Billing | null}>("/api/me").then(result => { if (current) setBilling(result.billing); }).catch(() => { if (current) setBilling(null); });
     void refresh();
     const timer = window.setInterval(refresh, 3000);
     return () => { current = false; window.clearInterval(timer); };
-  }, []);
+  }, [authenticationRevision]);
   const percentRemaining = billing?.token_budget ? Math.round(100 * billing.tokens_remaining / billing.token_budget) : 0;
   const selectedBilling = billing?.model_details?.find(info => info.id === (agentBusy ? agentModel : selectedModel));
   const agentElapsed = `${String(Math.floor(agentSeconds / 60)).padStart(2, "0")}:${String(agentSeconds % 60).padStart(2, "0")}`;
@@ -438,11 +486,11 @@ function ProjectWorkspace({project}: {project: Project}) {
   return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Durable</span><button className={phase === "memory" ? "tab active" : "tab"} onClick={() => setPhase("memory")}>Project memory</button></div><div className="phase-group"><span>Discover</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Specify</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Build</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget across providers, not a provider dollar balance. Provider spend limits remain authoritative."><strong>{selectedBilling?.provider || billing.provider} · key {selectedBilling?.key_fingerprint || billing.key_fingerprint}</strong><span>{selectedBilling?.label || billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce provider spend caps</small></div>}</header>
     {billing?.model_warnings?.map(warning => <p className="error" role="status" key={warning}>{warning}</p>)}
     {agentBusy && <div className="workspace-agent-progress"><div className="workspace-agent-running" role="status"><span className="agent-running-dot" /><span><strong>Agent running · {agentModel}</strong><small>{agentProgress}. You can inspect any project or phase while it runs.</small></span><time>{agentElapsed}</time><button type="button" onClick={cancelAgent} disabled={cancelRequested}>{cancelRequested ? "Cancel requested…" : "Cancel"}</button></div>{liveTrace.length > 0 && <details className={`live-operational-trace ${liveTrace.some(entry => entry.includes("rejected:") || entry.startsWith("Failed check:")) ? "has-error" : ""}`}><summary>Operational trace · {liveTrace.length} event{liveTrace.length === 1 ? "" : "s"} · latest: {liveTrace[liveTrace.length - 1]}</summary><pre>{liveTrace.map(entry => `- ${entry}`).join("\n")}</pre></details>}</div>}
-    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
+    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} credentialIdentity={`${authenticationRevision}:${billing?.model_details?.map(model => model.key_fingerprint).join(",") || "locked"}`} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
     <div className="phase-panel" hidden={phase !== "memory"}><ProjectMemoryView project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
     <div className="phase-panel" hidden={phase !== "book"}><Book project={project} workspaceRevision={workspaceRevision} /></div>
-    <div className="phase-panel" hidden={phase !== "grammar"}><Specification project={project} view="grammar" /></div>
-    <div className="phase-panel" hidden={phase !== "tasks"}><Specification project={project} view="tasks" /></div>
+    <div className="phase-panel" hidden={phase !== "grammar"}><Specification project={project} view="grammar" workspaceRevision={workspaceRevision} /></div>
+    <div className="phase-panel" hidden={phase !== "tasks"}><Specification project={project} view="tasks" workspaceRevision={workspaceRevision} /></div>
     <div className="phase-panel" hidden={phase !== "source"}><Source project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
   </main>;
 }
@@ -459,19 +507,23 @@ function App() {
     window.localStorage.setItem("leanfm:font-scale", String(fontScale));
   }, [fontScale]);
   useEffect(() => { setClientDiagnosticProject(selected); }, [selected]);
-  async function load() { const me = await api<{username: string}>("/api/me"); const data = await api<{projects: Project[]}>("/api/projects"); setUser(me.username); setProjects(data.projects || []); setSelected(current => (data.projects || []).some(p => p.project_id === current) ? current : (data.projects || []).find(p => !p.read_only)?.project_id || null); }
-  useEffect(() => { setCheckingSession(true); load().catch(() => setUser(null)).finally(() => setCheckingSession(false)); }, [authVersion]);
+  async function load() {
+    const data = await api<{projects: Project[]}>("/api/projects");
+    const me = await api<{username: string}>("/api/me").catch(() => null);
+    setUser(me?.username || null); setProjects(data.projects || []);
+    setSelected(current => data.projects.some(p => p.project_id === current) ? current : data.projects.find(p => !p.read_only)?.project_id || null);
+  }
+  useEffect(() => { load().catch(() => {}).finally(() => setCheckingSession(false)); }, [authVersion]);
   useEffect(() => {
-    const requireAuthentication = () => { setUser(null); setProjects([]); setSelected(null); setCheckingSession(false); };
+    const requireAuthentication = () => { setUser(null); setAuthVersion(value => value + 1); };
     window.addEventListener("leanfm:authentication-required", requireAuthentication);
     return () => window.removeEventListener("leanfm:authentication-required", requireAuthentication);
   }, []);
   if (checkingSession) return <main className="auth"><div className="auth-card"><h1>LeanFM</h1><p>Loading workspace…</p></div></main>;
-  if (!user) return <Auth onReady={() => setAuthVersion(v => v + 1)} />;
   const project = projects.find(p => p.project_id === selected);
   async function create(event: FormEvent) { event.preventDefault(); const result = await api<{project_id: string}>("/api/projects", formRequest({display_name: newName})); setNewName(""); await load(); setSelected(result.project_id); }
   async function remove(item: Project) { const confirmation = prompt(`Type ${item.display_name} to permanently delete it:`); if (confirmation === null) return; await api(`/api/projects/${item.project_id}`, {method: "DELETE", headers: {"Content-Type":"application/x-www-form-urlencoded"}, body: new URLSearchParams({confirmation}).toString()}); if (selected === item.project_id) setSelected(null); await load(); }
-  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><button type="button" onClick={() => setShowKeys(true)}>API keys</button><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div><span>{user}</span></div></aside>{projects.map(item => <div className="project-panel" hidden={selected !== item.project_id} key={`${user}:${item.project_id}`}><ProjectWorkspace project={item} /></div>)}{!project && <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}{showKeys && <ProviderKeysDialog account={user} onClose={() => setShowKeys(false)} onDone={() => { setShowKeys(false); void load(); }} />}</div>;
+  return <div className="app"><aside className="sidebar"><div className="brand">LeanFM</div><form onSubmit={create}><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New project name" required /><button className="new-project">＋ Add project</button></form><div className="tab-set-label">Projects</div><div className="projects vertical-tabs">{projects.map(item => <div className="project-row" key={item.project_id}><button className={`project ${selected === item.project_id ? "active" : ""}`} onClick={() => setSelected(item.project_id)}>{item.display_name}{item.read_only && <span className="project-kind">read-only</span>}</button>{!item.read_only && <button className="project-delete" onClick={() => remove(item)}>Delete</button>}</div>)}</div><div className="sidebar-footer"><button type="button" onClick={() => setShowKeys(true)}>{user ? "API keys" : "Unlock API keys"}</button><div className="font-controls" aria-label="Font zoom"><button type="button" aria-label="Decrease font size" disabled={fontScale <= .8} onClick={() => setFontScale(value => Math.max(.8, Number((value - .1).toFixed(1))))}>−</button><output aria-live="polite">{Math.round(fontScale * 100)}%</output><button type="button" aria-label="Increase font size" onClick={() => setFontScale(value => Number((value + .1).toFixed(1)))}>＋</button></div>{user && <button type="button" onClick={() => { void api("/api/logout", {method: "POST"}).then(() => { setUser(null); setAuthVersion(v => v + 1); }); }}>Lock keys</button>}<span>{user || "Keys locked"}</span></div></aside>{projects.map(item => <div className="project-panel" hidden={selected !== item.project_id} key={item.project_id}><ProjectWorkspace project={item} authenticationRevision={authVersion} /></div>)}{!project && <main className="main"><div className="empty"><h2>Create or select a project</h2></div></main>}{showKeys && <ProviderKeysDialog account={user || ""} onClose={() => setShowKeys(false)} onDone={() => { setShowKeys(false); void load(); }} />}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(<ClientFaultBarrier><App /></ClientFaultBarrier>);

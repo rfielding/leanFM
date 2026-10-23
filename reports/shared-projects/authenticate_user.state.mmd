@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> signed_out
+    signed_out --> checking: LoginSubmitted
+    checking --> authenticated: LoginAccepted
+    checking --> rejected: LoginRejected
+    authenticated --> [*]
+    rejected --> [*]

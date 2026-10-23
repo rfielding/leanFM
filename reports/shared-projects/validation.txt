@@ -1,0 +1,4 @@
+ok: shared-project RequirementSpec is structurally valid
+ok: implementation references resolve to the requirements
+gate status: see acceptance.json; structural validation accepts neither gate
+runtime implementation and reset evidence are recorded separately

@@ -8,6 +8,9 @@ stored_provider_keys_are_encrypted, provider_outcomes_are_distinguishable.
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import base64
+import io
+import random
 import http.cookiejar
 import json
 from pathlib import Path
@@ -18,6 +21,7 @@ import unittest
 import urllib.error
 import urllib.parse
 import urllib.request
+from PIL import Image
 
 
 BASE, DATA = sys.argv[1:3]
@@ -34,9 +38,12 @@ class Client:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.cookies))
 
-    def request(self, path, form=None):
+    def request(self, path, form=None, json_body=None):
         request = urllib.request.Request(BASE + path, data=None if form is None else
                                          urllib.parse.urlencode(form).encode())
+        if json_body is not None:
+            request.data = json.dumps(json_body).encode()
+            request.add_header("Content-Type", "application/json")
         try:
             with self.opener.open(request, timeout=90) as response:
                 return response.status, json.load(response)
@@ -80,7 +87,63 @@ class MultiProvider(unittest.TestCase):
                                     anthropic_api_key="anthropic-second-key")
         cls.project = cls.alice.project()
         cls.other_project = cls.bob.project()
-        cls.root = ROOT / "accounts/multi_primary/projects" / cls.project
+        cls.root = ROOT / "projects" / cls.project
+
+    def test_image_upload_pixels_followup_resend_and_project_isolation(self):
+        project = self.alice.project()
+        path = f"/api/projects/{project}"
+        output = io.BytesIO()
+        Image.new("RGB", (12, 8), "red").save(output, format="PNG")
+        upload = {"media_type": "image/png", "content": base64.b64encode(output.getvalue()).decode(),
+                  "filename": "../../untrusted.png"}
+        before = stats()
+        self.assertEqual(self.bob.request(path + "/markerboard/media", json_body=upload)[0], 201)
+        status, image = self.alice.request(path + "/markerboard/media", json_body=upload)
+        self.assertEqual(status, 201, image)
+        ids = json.dumps([image["artifact_id"]])
+        for model in ["test-model", CLAUDE]:
+            status, answer = self.alice.request(path + "/chat", {"prompt": "TEST_IMAGE_INPUT", "model": model,
+                                                                "attachment_ids": ids})
+            self.assertEqual(status, 200, answer)
+            self.assertIn("Image pixels received: 255,0,0", answer["text"])
+            self.assertIn('"status":"success"', answer["text"])
+        with self.alice.opener.open(BASE + path + "/files/" + image["path"]) as response:
+            self.assertEqual(response.read(), (ROOT / "projects" / project / image["path"]).read_bytes())
+        history = self.alice.request(path + "/conversation")[1]["messages"]
+        user = next(message for message in history if message["role"] == "user")
+        self.assertIn(image["path"], user["text"])
+        self.assertNotIn("data:image", json.dumps(history))
+        # Resend of the persisted message and ordinary follow-up both retain pixels.
+        self.assertIn("255,0,0", self.alice.chat(project, user["text"], "test-model")[1]["text"])
+        self.assertIn("255,0,0", self.alice.chat(project, "TEST_IMAGE_INPUT follow-up", CLAUDE)[1]["text"])
+        other = self.alice.project()
+        count = stats()
+        for bad_ids in [[image["artifact_id"]], ["../secret"], ["a" * 32] * 5]:
+            status, _ = self.alice.request(f"/api/projects/{other}/chat", {
+                "prompt": "TEST_IMAGE_INPUT", "model": "test-model", "attachment_ids": json.dumps(bad_ids)})
+            self.assertEqual(status, 400)
+        self.assertEqual(stats(), count, "invalid/foreign images must fail before provider work")
+        self.assertEqual(self.alice.request(path + "/markerboard/media", json_body={**upload, "media_type": "image/jpeg"})[0], 400)
+        self.assertEqual(stats()["requests"] - before["requests"], 2)
+        self.assertEqual(stats()["anthropic_requests"] - before["anthropic_requests"], 2)
+
+    def test_four_large_images_survive_http_framing_and_provider_encoding(self):
+        project = self.alice.project()
+        output = io.BytesIO()
+        picture = Image.frombytes("RGB", (512, 512), random.Random(23).randbytes(512 * 512 * 3))
+        picture.putpixel((0, 0), (9, 8, 7))
+        picture.save(output, format="PNG")
+        self.assertGreater(len(output.getvalue()), 700000)
+        ids = []
+        for _ in range(4):
+            status, uploaded = self.alice.request(f"/api/projects/{project}/markerboard/media",
+                json_body={"media_type": "image/png", "content": base64.b64encode(output.getvalue()).decode()})
+            self.assertEqual(status, 201, uploaded)
+            ids.append(uploaded["artifact_id"])
+        status, answer = self.alice.request(f"/api/projects/{project}/chat", {
+            "prompt": "TEST_IMAGE_INPUT", "model": "test-model", "attachment_ids": json.dumps(ids)})
+        self.assertEqual(status, 200, answer)
+        self.assertIn("Image pixels received: " + "; ".join(["9,8,7"] * 4), answer["text"])
 
     def test_catalog_identity_and_single_password(self):
         status, body = self.alice.request("/api/me")
@@ -91,7 +154,7 @@ class MultiProvider(unittest.TestCase):
             key = "anthropic-user-key" if model["provider"] == "anthropic" else "test-user-key"
             self.assertEqual(model["key_fingerprint"], fingerprint(key))
         self.assertEqual(billing["model_details"][2]["context_window_tokens"], 200000)
-        account = ROOT / "accounts/multi_primary/credentials"
+        account = ROOT / ".leanfm/accounts/multi_primary/credentials"
         self.assertTrue((account / "providers.json").exists())
         self.assertEqual((account / "providers.json").stat().st_mode & 0o777, 0o600)
         self.assertFalse((account / "default.json").exists())
@@ -107,7 +170,7 @@ class MultiProvider(unittest.TestCase):
                                    ("TEST_RETURN_STRUCTURED_QUESTION", 1)]:
                 with self.subTest(model=model, marker=marker):
                     project = self.alice.project()
-                    root = ROOT / "accounts/multi_primary/projects" / project
+                    root = ROOT / "projects" / project
                     before = stats()[counter]
                     status, body = self.alice.chat(project, marker, model)
                     self.assertEqual(status, 200, body)
@@ -121,6 +184,38 @@ class MultiProvider(unittest.TestCase):
                     if marker == "TEST_DECIDE_DEFAULTS":
                         self.assertIn("Formal acceptance remains pending", (root / "spec/default-decisions.md").read_text())
                     self.assertFalse(any((root / "source").rglob("*.*")), "routine default authority fabricated gate acceptance")
+
+    def test_specification_turn_compiles_real_project_views_and_rejects_unchecked_success(self):
+        for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
+            for marker in ["TEST_SPECIFY_SERVER", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_WITH_BOOK"]:
+                with self.subTest(model=model, marker=marker):
+                    project = self.alice.project()
+                    root = ROOT / "projects" / project
+                    book = (root / "book/main.tex").read_bytes()
+                    manifest = (root / "manifest.json").read_bytes()
+                    catalog_path = root / "spec/tasks.json"
+                    catalog = catalog_path.read_bytes() if catalog_path.exists() else None
+                    before = stats()[counter]
+                    status, body = self.alice.chat(project, marker, model)
+                    self.assertEqual(status, 200, body)
+                    self.assertEqual(stats()[counter] - before, 6, body)
+                    if marker != "TEST_SPECIFY_WITH_BOOK":
+                        self.assertEqual((root / "book/main.tex").read_bytes(), book)
+                    self.assertEqual((root / "manifest.json").read_bytes(), manifest)
+                    self.assertEqual(body["book_updated"], marker == "TEST_SPECIFY_WITH_BOOK")
+                    self.assertFalse(any((root / "source").rglob("*.*")))
+                    if marker.endswith("INVALID"):
+                        self.assertIn('"status":"fail"', body["text"])
+                        self.assertIn("have not passed", body["text"])
+                        self.assertEqual(catalog_path.read_bytes() if catalog_path.exists() else None, catalog)
+                    else:
+                        self.assertIn('"status":"success"', body["text"])
+                        self.assertNotIn("```leanfm-questions", body["text"])
+                        status, tasks = self.alice.request(f"/api/projects/{project}/tasks")
+                        self.assertEqual(status, 200, tasks)
+                        self.assertEqual(tasks["tasks"][0]["id"], "fixture_request")
+                        self.assertIn("Client->>FixtureServer: FixtureRequest", tasks["tasks"][0]["interaction_mermaid"])
+                        self.assertTrue(self.alice.request(f"/api/projects/{project}/specification")[1]["requirements"]["checked"], "book commit left the just-checked specification stale")
 
     def test_routes_concurrently_without_cross_user_or_provider_fallback(self):
         operations = [(self.alice, self.project, "test-model", "OpenAI credential alice"),
@@ -195,7 +290,7 @@ class MultiProvider(unittest.TestCase):
             for marker, rounds in [("TEST_CHECK_RETRY_GUARD", 3), ("TEST_CHECK_FIX", 4)]:
                 with self.subTest(model=model, marker=marker):
                     project = self.alice.project()
-                    root = ROOT / "accounts/multi_primary/projects" / project
+                    root = ROOT / "projects" / project
                     (root / "Makefile").write_text("check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n")
                     before = stats()[counter]
                     status, body = self.alice.chat(project, marker, model)
@@ -214,7 +309,7 @@ class MultiProvider(unittest.TestCase):
 
     def test_failed_book_worker_keeps_stderr_and_exit_status(self):
         project = self.alice.project()
-        root = ROOT / "accounts/multi_primary/projects" / project
+        root = ROOT / "projects" / project
         (root / "book/Makefile").write_text("all:\n\t@echo E_BOOK_WORKER_STDERR >&2\n\t@exit 7\n")
         before = stats()["requests"]
         status, body = self.alice.chat(project, "TEST_UPDATE_BOOK", "test-model")
@@ -283,7 +378,7 @@ class MultiProvider(unittest.TestCase):
                 billing = client.request("/api/me")[1]["billing"]
                 self.assertEqual(billing["tokens_used"], 1000000, "charge reported usage exactly once")
                 self.assertEqual(billing["tokens_remaining"], 0)
-                self.assertEqual((ROOT / "accounts" / username / "projects" / project / "spec/budget-note.txt").read_text(), "Completed before budget stop.\n")
+                self.assertEqual((ROOT / "projects" / project / "spec/budget-note.txt").read_text(), "Completed before budget stop.\n")
                 self.assertEqual(client.chat(project, "must not call provider", model)[0], 409)
                 self.assertEqual(stats()[counter] - before, 1)
 
@@ -378,7 +473,7 @@ class MultiProvider(unittest.TestCase):
             self.assertEqual(new.login("multi_rotation", anthropic_api_key="anthropic-rotated-key")[0], 200)
             self.assertEqual(old.request("/api/me")[0], 401)
             pending.result()
-        root = ROOT / "accounts/multi_rotation/projects" / project
+        root = ROOT / "projects" / project
         self.assertFalse((root / "spec/must-not-exist.txt").exists())
         metadata = new.request("/api/me")[1]["billing"]["model_details"]
         self.assertEqual(next(m for m in metadata if m["id"] == "test-model")["key_fingerprint"], fingerprint("test-user-key"))
@@ -404,7 +499,7 @@ class MultiProvider(unittest.TestCase):
         body = "prompt=TEST_PROVIDER_ROUTE+café&model=anthropic%3Aclaude-test".encode()
 
         def headers(fields):
-            return (f"POST {path} HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\n"
+            return (f"POST {path} HTTP/1.1\r\nHost: localhost:{port}\r\nCookie: {cookie}\r\n"
                     "Content-Type: application/x-www-form-urlencoded\r\n" + fields + "\r\n").encode()
 
         def receive(connection):
@@ -458,7 +553,7 @@ class MultiProvider(unittest.TestCase):
         self.assertEqual(stats(), before, "malformed frames must not reach either provider")
 
     def test_no_plaintext_keys_or_raw_error_body_on_disk(self):
-        for path in (ROOT / "accounts").rglob("*"):
+        for path in (ROOT / ".leanfm/accounts").rglob("*"):
             if path.is_file() and path.suffix in {".json", ".jsonl", ".log", ".b64"}:
                 contents = path.read_bytes()
                 for secret in [b"test-user-key", b"second-user-key", b"anthropic-user-key",

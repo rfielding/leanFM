@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> unconfigured
+    unconfigured --> checking: ProviderCredentialSubmitted
+    checking --> configured: ProviderCredentialAccepted
+    checking --> rejected: ProviderCredentialRejected
+    configured --> [*]
+    rejected --> [*]

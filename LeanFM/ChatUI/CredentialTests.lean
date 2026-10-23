@@ -16,7 +16,7 @@ def failed (result : Except String α) : Bool :=
 
 def main : IO Unit := do
   let root ← dataRoot
-  check (root.contains "/.cache/" && root.endsWith "/credential-unit") "unexpected credential test root"
+  check (root.contains "/.cache/" && root.endsWith "/credential-unit/.leanfm") "unexpected credential test root"
   let .ok _ ← createAccount "multi" "test-password-long" "openai" "openai-unit-key" [("anthropic", "anthropic-unit-key")]
     | throw (IO.userError "multi-provider account creation failed")
   let .ok token ← login "multi" "test-password-long"

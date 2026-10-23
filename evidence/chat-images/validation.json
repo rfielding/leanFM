@@ -1,0 +1,51 @@
+{
+  "prompt": "Attach images to LeanFM chat; restore GoServer interaction diagrams and password login after restart.",
+  "question": "Do the completed mappings preserve owning-project pixels, task grammars, saved encrypted credentials, and bounded request context?",
+  "event_source": "Lean validation, repository checks, isolated HTTP/provider/Chrome traces, and the GoServer generated task catalog",
+  "reducer": "assert native pixels for both providers, browser attach/remove/send/resend and auth-tab behavior, negative image controls, foreign-grammar isolation, and bounded long-caption references",
+  "unit": "check result per declared invariant",
+  "boundary": "repository and disposable local test accounts; no paid provider calls; GoServer generated views validated separately beneath its project root",
+  "checks": [
+    {
+      "command": "make check",
+      "result": "pass",
+      "log": ".cache/chat-images-check.log"
+    },
+    {
+      "command": "make build",
+      "result": "pass",
+      "log": ".cache/chat-images-final-build.log"
+    },
+    {
+      "command": "LEANFM_TEST_BROWSER=1 bash scripts/chatui_http_check.sh",
+      "result": "pass",
+      "log": ".cache/chat-images-http-check.log"
+    },
+    {
+      "command": "python3 scripts/chatui_media_test.py",
+      "result": "pass",
+      "log": ".cache/chat-images-media-check.log"
+    },
+    {
+      "command": "lake env lean LeanFM/ChatUI/ProviderTests.lean",
+      "result": "pass"
+    },
+    {
+      "command": "lake env lean LeanFM/ChatUI/Validate.lean",
+      "result": "pass",
+      "log": ".cache/chat-images-spec-validation.log"
+    },
+    {
+      "command": "make book",
+      "result": "pass",
+      "log": ".cache/chat-images-book.log"
+    },
+    {
+      "command": "git diff --check",
+      "result": "pass"
+    }
+  ],
+  "security_review": "evidence/chat-images/security.md",
+  "browser_evidence": "reports/chatui/reset-browser.json",
+  "provider_boundary": "Local deterministic stubs decode actual image pixels; no claim that a live paid model was tested."
+}

@@ -317,15 +317,30 @@ silently introduce a property or change the wire contract.
 \subsection{How a chat turn becomes a durable edit}
 \label{subsec:chat-turn-durable-edit}
 
-When discussion changes durable understanding, the provider's structured reply
-includes the complete proposed \texttt{book/main.tex}. The server enforces
+Guided chat selects the artifact layer required by the request. Specification
+work uses project-confined workspace tools to update the canonical Lean and
+protobuf files; it is not forced to rewrite the whole book. The
+\texttt{leanfm\_reference} tool returns the same live language and workflow
+references exposed through MCP. The \texttt{leanfm\_check} tool compiles the
+project's named typed requirements and optional implementation mapping,
+validates their structure and protobuf declarations, and regenerates
+\texttt{spec/tasks.json} from that same requirements value. Compiler execution
+has no network, credentials or writable project source: only project-local
+scratch is writable. Failed validation preserves the last valid views. The
+generated catalog retains canonical input digests and reducer provenance;
+neither a check nor a PDF build accepts a stakeholder gate. A turn changing
+canonical specifications cannot report SUCCESS without a successful check of
+its final bytes.
+
+When the turn revises the book, the provider's structured reply includes the
+complete proposed \texttt{book/main.tex}. The server enforces
 root and size boundaries, writes atomically and builds in the isolated book
 worker. Only a successful build commits the revision and sets
 \texttt{book\_updated=true}.
 If compilation fails, the first bounded compiler diagnostic becomes visible
 before repair begins and the exact previous source is restored after every
 candidate. At most three repair requests may run, each with a short deadline.
-Each request receives only the compiler diagnostic and a numbered nine-line
+Each request receives only the compiler diagnostic and a numbered seventeen-line
 source excerpt, asks for one replacement line with at most 2000 output tokens,
 and is rejected if it targets another line or makes no change. A successful
 candidate is rebuilt before commit; exhaustion produces WARN and leaves the
@@ -429,6 +444,24 @@ requirements gate.  If stakeholders instead want to share the exact motion,
 promote the chosen canvas revision to a project-owned GIF or MP4 with fixed
 frame timing and serve that media inline.
 
+Chat's \textbf{Attach image} control accepts PNG, JPEG, GIF and static SVG
+files, shows a removable preview, and retains the selected images with the
+queued prompt and later Resend. The original and a digest manifest remain
+below the owning project's \texttt{artifacts/attachments/} directory. The
+provider receives normalized PNG pixels through its native visual-input
+protocol; a GIF is explicitly represented by its first frame. The current
+implementation bounds each original to 2 MiB and each source to 16 megapixels,
+and sends at most four current or recently referenced images per turn.
+External SVG resources and executable content are rejected. These controls
+realize the existing multimodal requirement; their negative-test mappings are
+recorded in \path{evidence/chat-images/security.md}.
+
+Task interaction renderers must receive the owning specification along with
+the task. Looking up a project's task in LeanFM's host ChatUI grammar yields
+a misleading missing-grammar placeholder even when the project grammar is
+valid. The serializer and renderer now share that explicit specification, and
+regression evidence includes a foreign task whose ID collides with ChatUI.
+
 Every still image displayed in Chat retains a reference that can leave the
 screen. An adjacent keyboard-accessible \textbf{Copy reference} control copies
 a project image as its stable project-relative artifact path. For a public-web
@@ -528,16 +561,61 @@ authentication token is never imported into LeanFM's provider-key store.
 \section{One project, one directory}
 \label{sec:one-project-directory}
 
+\subsection{Accepted shared workspace and fresh start}
+
+The stakeholder accepted the requirements and separate implementation mapping
+for the fresh start on October 23, 2026. Ordinary projects live directly below
+\texttt{projects/<project-id>} and have no user owner. The stakeholder has
+confirmed that the workspace opens before login; login is required for LLM
+calls and API-key management. Shared project contents include their books,
+specifications, source, artifacts and conversations. Password verifiers and
+encrypted API keys belong in the private application vault
+\texttt{.leanfm/accounts/}; they never become project files or model input.
+
+The accepted typed component is
+\path{LeanFM/LLMGenerated/SharedProjects.lean}, exported by the canonical
+requirements and composed into the self-hosting product. The separate realization is in the
+canonical \path{LeanFM/LLMGenerated/Implementation.lean}. Running
+\texttt{lake env lean --run ReviewSharedProjects.lean} validates both candidates
+and derives the review, task views and provenance below
+\path{reports/shared-projects/}. Exact stakeholder decisions are recorded in
+\path{reports/shared-projects/acceptance.json}; a generator cannot accept a gate.
+The explicitly requested reset discarded five ordinary projects and the empty
+legacy scaffold, verified the preserved credential bytes and permissions, and
+removed \texttt{./data}. It preserved LeanFM's own source, book and specifications.
+The reset report is \path{reports/shared-projects/reset-result.json}.
+
+\texttt{LEANFM\_WORKSPACE\_ROOT} selects the exclusive workspace directory and
+defaults to the server's current directory. Ordinary roots are discovered from
+their own validated manifests below \texttt{projects/}, independently of any
+credential account. A project contains its own book, canonical specifications,
+source, tests, media, conversation, evidence and caches. Deleting its root
+removes that project's state. The credential vault is excluded from every
+project capability. Foreign browser origins and unapproved Host values cannot
+mutate the loopback workspace; a conflicting project writer is rejected before
+mutation or provider work. Queued prompts retain their initiating credential
+identity and are held if that identity changes.
+
+Project memory exposes the two independent acceptance controls for the current
+checked revisions. Source writes require both gates in server code; model tools
+cannot write gate records or checker evidence. Current gate state is supplied
+to subsequent model turns, so an accepted decision survives a cleared chat.
+Project-authored checks and media generators execute without network or host
+credentials and have only bounded project-local cache or scratch write access.
+
+\subsection{Credential accounts and project roots}
+
 \index{project!directory boundary}
 The portable root and containment rules are in
 Chapter~\ref{ch:bootstrap-contract}; this section records the hosted-runtime
-mapping. \texttt{LeanFM.ChatUI.Store.createProject} creates account-owned roots
-under \texttt{data/accounts/<user>/projects/<id>}, writes a runtime
+mapping. \texttt{LeanFM.ChatUI.Store.createProject} creates shared roots
+under \texttt{projects/<id>}, writes a runtime
 \texttt{manifest.json}, and provisions the book, \texttt{spec/}, source, tests,
 artifacts, renders, events, reports, logs, cache, and conversations beneath that
-root. The copyable bootstrap template instead uses \texttt{project.json} and
-\texttt{Specification/}; these are distinct template and runtime layouts, not a
-single manifest/path contract.
+root. The manifest records all canonical project-relative paths and its
+acceptance-state path. Portable \texttt{project.json} roots are also discovered
+when their identity and configured paths validate; they are ordinary editable
+projects. The removed examples are not inputs to provisioning or validation.
 
 \section{What the Lean artifact must settle}
 

@@ -5,6 +5,7 @@ export type ModelOption = {id: string; model: string; label: string; provider: s
 export type Billing = {provider: string; credential_ref: string; key_fingerprint: string; model: string; models: string[]; model_details: ModelOption[]; model_warnings: string[]; tokens_used: number; token_budget: number; tokens_remaining: number};
 export type ProjectMemoryFile = {id: string; path: string; label: string; stage: string; bytes: number; status: "missing" | "bootstrap" | "current"};
 export type ProjectMemory = {files: ProjectMemoryFile[]; source_files: number; source_bytes: number};
+export type SpecificationState = {requirements: {revision: string; checked: boolean; accepted: boolean}; implementation: {revision: string; checked: boolean; accepted: boolean}; ready: boolean; blocker: string};
 export type GrammarExpr = {kind: string; message?: string; task?: string; src?: string; dst?: string; predicate?: string; required?: number; children?: GrammarExpr[]};
 export type Task = {
   id: string; title: string; entry: string; terminals: string[]; actors: string[];

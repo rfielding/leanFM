@@ -391,9 +391,8 @@ def projectBookResponse? (path method request : String) : IO (Option Response) :
   match LeanFM.ChatUI.Server.pathSegments path with
   | ["api", "projects", projectId, "book", file] =>
       if method != "GET" || (file != "main.pdf" && file != "main-dark.pdf") then return none
-      match ← LeanFM.ChatUI.Server.sessionUser? request with
-      | none => return some (response 401 "application/json; charset=utf-8" "{\"error\":\"Authentication required.\"}\n")
-      | some username =>
+      let username := (← LeanFM.ChatUI.Server.sessionUser? request).getD ""
+      do
           match ← LeanFM.ChatUI.Server.authorizedProjectRoot? username projectId with
           | none => return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project not found.\"}\n")
           | some root =>
@@ -407,13 +406,14 @@ def projectImageResponse? (path method request : String) : IO (Option Response) 
   match LeanFM.ChatUI.Server.pathSegments path with
   | "api" :: "projects" :: projectId :: "files" :: fileParts =>
       if method != "GET" then return none
-      match ← LeanFM.ChatUI.Server.sessionUser? request with
-      | none => return some (response 401 "application/json; charset=utf-8" "{\"error\":\"Authentication required.\"}\n")
-      | some username =>
+      let username := (← LeanFM.ChatUI.Server.sessionUser? request).getD ""
+      do
           match ← LeanFM.ChatUI.Server.authorizedProjectRoot? username projectId with
           | none => return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project not found.\"}\n")
           | some root =>
               let relative := String.intercalate "/" (fileParts.map LeanFM.ChatUI.Store.urlDecode)
+              if projectId == "leanfm-workspace" && (relative.startsWith "." || relative.startsWith "projects/" || relative.startsWith "data/") then
+                return some (response 404 "application/json; charset=utf-8" "{\"error\":\"Project image not found.\"}\n")
               let lower := relative.toLower
               let contentType? :=
                 if lower.endsWith ".gif" then some "image/gif"
@@ -439,6 +439,8 @@ def projectImageResponse? (path method request : String) : IO (Option Response) 
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   let method := requestMethod request
+  if path != "/health" && !(← LeanFM.ChatUI.Server.admittedWorkspaceRequest method request) then
+    return response 403 "application/json; charset=utf-8" "{\"error\":\"The request Host or Origin is not admitted.\"}\n"
   if path == "/mcp" then
     if method == "POST" then
       let mcpResponse ← LeanFM.MCP.dispatch (requestBody request)
@@ -448,6 +450,8 @@ def responseForRequest (request : String) : IO Response := do
       pure <| response 405 "application/json; charset=utf-8"
         "{\"error\":\"MCP uses POST with a JSON-RPC body\"}\n"
         ["Allow: POST", "MCP-Protocol-Version: " ++ LeanFM.MCP.protocolVersion]
+  else if method == "GET" && (path.startsWith "/tools/" || path == "/renders/" || path == "/metrics" || path == "/openapi.yaml" || path == "/report") then
+    responseBody path request
   else if path == "/tools/leanfm-language/reference" ||
       path == "/tools/leanfm-language/requirements-reference" ||
       path == "/tools/leanfm-language/implementation-reference" ||

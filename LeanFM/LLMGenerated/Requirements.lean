@@ -1,5 +1,6 @@
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
+import LeanFM.LLMGenerated.SharedProjects
 
 namespace LeanFM.LLMGenerated.Requirements
 
@@ -753,6 +754,15 @@ def all : List LeanFM.GeneratedRequirement :=
 /-- Canonical product entry point; workerRequirement remains an example. -/
 def selfHostingRequirement : LeanFM.RequirementSpec :=
   LeanFM.LLMGenerated.SelfHosting.spec
+
+/-- Accepted shared-workspace component; exact stakeholder revisions are recorded
+    in reports/shared-projects/acceptance.json. -/
+def sharedProjectsRequirement : LeanFM.RequirementSpec :=
+  LeanFM.LLMGenerated.SharedProjects.spec
+
+/-- Compatibility name retained for existing review tooling. -/
+def sharedProjectsProposal : LeanFM.RequirementSpec :=
+  sharedProjectsRequirement
 
 def validationReport : String :=
   let errors :=

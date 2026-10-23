@@ -1,4 +1,4 @@
-import LeanFM.ChatUI.Requirements
+import LeanFM.LLMGenerated.SharedProjects
 
 /- Self-hosting consolidation proposal. Structural validation does not prove
    predicates or implement the proposed language/checker extensions. -/
@@ -102,20 +102,20 @@ def outputs : List DesiredOutput :=
 
 /-- Product composition; the Worker example stays separately available. -/
 def spec : RequirementSpec :=
-  { LeanFM.ChatUI.Requirements.spec with
+  { LeanFM.LLMGenerated.SharedProjects.spec with
     id := "leanfm.selfhost", title := "LeanFM Software Engineering self-hosting composition (proposal)"
-    messages := LeanFM.ChatUI.Requirements.spec.messages ++ workflowMessages
-    tasks := LeanFM.ChatUI.Requirements.spec.tasks ++ [workflow]
-    grammars := LeanFM.ChatUI.Requirements.spec.grammars ++ [workflowGrammar]
-    processes := LeanFM.ChatUI.Requirements.spec.processes ++ workflowProcesses
-    properties := LeanFM.ChatUI.Requirements.spec.properties ++
+    messages := LeanFM.LLMGenerated.SharedProjects.spec.messages ++ workflowMessages
+    tasks := LeanFM.LLMGenerated.SharedProjects.spec.tasks ++ [workflow]
+    grammars := LeanFM.LLMGenerated.SharedProjects.spec.grammars ++ [workflowGrammar]
+    processes := LeanFM.LLMGenerated.SharedProjects.spec.processes ++ workflowProcesses
+    properties := LeanFM.LLMGenerated.SharedProjects.spec.properties ++
       [{ name := "Revision-bound workflow terminal result", mode := .eventually,
          task := workflow.id, expression := "done or rejected under declared finite bounds", probability := none }]
-    requiredProofs := LeanFM.ChatUI.Requirements.spec.requiredProofs ++
+    requiredProofs := LeanFM.LLMGenerated.SharedProjects.spec.requiredProofs ++
       [{ name := "No stale acceptance authorizes generation", mode := .never,
          task := workflow.id, predicate := "generation without both current snapshot acceptances", probability := none }]
-    desiredOutputs := LeanFM.ChatUI.Requirements.spec.desiredOutputs ++ outputs
-    markdown := LeanFM.ChatUI.Requirements.spec.markdown ++ clauses.map (fun c =>
+    desiredOutputs := LeanFM.LLMGenerated.SharedProjects.spec.desiredOutputs ++ outputs
+    markdown := LeanFM.LLMGenerated.SharedProjects.spec.markdown ++ clauses.map (fun c =>
       { id := c.id, title := c.area ++ " (" ++ c.status ++ ")", body := c.requirement }) }
 
 def errors : List String :=

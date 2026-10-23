@@ -49,6 +49,13 @@
 
 # Account credentials, password verifiers, sessions, and private project state
 /data/
+/.leanfm/
+/projects/
+/logs/
+
+# Operator-only inventories can include private account/project metadata.
+/reports/shared-projects/migration-preflight.json
+/reports/shared-projects/preflight-verification.json
 /ui/node_modules/
 /ui/dist/
 __pycache__/

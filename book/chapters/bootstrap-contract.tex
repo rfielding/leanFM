@@ -9,11 +9,11 @@ of the product requirements or implementation.
 
 The intended handoff is deliberately simple: send another person the URL of
 this PDF, ask Claude, Gemini, Codex, or another capable construction agent to
-read it, and ask that agent to make the software. The current generic bootstrap
-distribution is published at
-\url{https://github.com/rfielding/leanFM/tree/main/projects/blank-leanfm-webserver}.
-An agent using only the PDF may follow that URL for the language files and
-commands named below. It must not copy the existing LeanFM application source
+read it, and ask that agent to make the software. New ChatUI projects are
+provisioned from built-in book and specification templates; they do not depend
+on an example project directory. The live language-reference tools and
+read-only MCP surface supply the generic authoring types and commands named
+below. An agent must not copy the existing LeanFM application source
 or prior ChatUI specifications as an answer key.
 
 \section{Required project inputs}
@@ -164,6 +164,8 @@ workflow is outside the default product build. JavaScript versions are fixed by
 \item[Python packages --- required.] Python 3.12 or newer with Cryptography
   41--50, Pillow 10--12, and Protobuf 5--6 protects retained keys, performs
   protobuf round trips and reductions, and generates animated GIFs.
+  CairoSVG 2.7--2.x and defusedxml 0.7--0.x normalize static SVG attachments
+  without external resources; Pillow supplies bounded raster decoding.
 \item[Protocol Buffers compiler --- required.] A \texttt{protoc} supporting
   proto3 and Python output generates the temporary byte-round-trip binding.
   Target-language generators are declared separately when needed.

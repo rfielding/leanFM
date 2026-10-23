@@ -53,14 +53,14 @@ book_output_status=$?
 set -e
 test "$book_output_status" -ne 0
 rg -Fq 'before--after' "$test_root/book-output.txt"
-LEANFM_DATA_ROOT="$test_root/credential-unit" lake env lean --run LeanFM/ChatUI/CredentialTests.lean
+LEANFM_WORKSPACE_ROOT="$test_root/credential-unit" lake env lean --run LeanFM/ChatUI/CredentialTests.lean
 
 python3 scripts/chatui_provider_stub.py >"$provider_log" 2>&1 &
 provider_pid=$!
 python3 scripts/chatui_reset_test.py "$test_root"
 # Exercise the production-relevant relative-root configuration while assertions
 # continue to inspect the same canonical temporary directory.
-LEANFM_DATA_ROOT="$data_root_setting" \
+LEANFM_WORKSPACE_ROOT="$data_root_setting" \
 LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
 LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" \
 LEANFM_LLM_MODEL="test-model" \
@@ -104,11 +104,11 @@ rg -q 'composer_question_id: item.pendingQuestion.id' ui/src/main.tsx
 rg -q 'structured_question_composer_submission' LeanFM/ChatUI/Server.lean
 rg -q 'structured_question_asked' LeanFM/ChatUI/Server.lean
 composer_source="$(rg -n 'className="composer"' ui/src/main.tsx)"
-[[ "$composer_source" == *'<textarea'*'<button disabled={!prompt.trim() || !model}>Send</button><label className="model-picker">'* ]]
+[[ "$composer_source" == *'<textarea'*'>Send</button><label className="model-picker">'* ]]
 rg -q 'Long-running model or tool work is still active' <<<"$react_bundle"
 test "$(curl -sS -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
-test "$(curl -sS --data-urlencode 'project_id=leanfm-workspace' --data-urlencode 'description=unauthenticated browser failure' -o "$test_root/unauthenticated-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 401
-rg -q 'Authentication required' "$test_root/unauthenticated-client-error.json"
+test "$(curl -sS --data-urlencode 'project_id=missing' --data-urlencode 'description=unknown project failure' -o "$test_root/unauthenticated-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 404
+rg -q 'Project not found' "$test_root/unauthenticated-client-error.json"
 
 register() {
   local username="$1" cookie="$2" key="$3"
@@ -123,6 +123,7 @@ register() {
 register rfielding "$cookie_a" test-user-key
 register second_user "$cookie_b" second-user-key
 python3 scripts/chatui_multi_provider_test.py "$base_url" "$test_root/data"
+python3 scripts/chatui_shared_projects_test.py "$base_url" "$test_root/data"
 python3 scripts/chatui_session_test.py "$base_url" "$test_root/data"
 
 me_json="$(curl -fsS -b "$cookie_a" $base_url/api/me)"
@@ -138,21 +139,15 @@ projects_json="$(curl -fsS -b "$cookie_a" $base_url/api/projects)"
 login_html="$(curl -fsS $base_url/)"
 rg -q '/assets/chatui-react1.js' <<<"$login_html"
 rg -q '"project_id":"leanfm-workspace".*"read_only":true' <<<"$projects_json"
-if test -f projects/go-server/project.json; then
-  rg -q '"project_id":"go-server".*"display_name":"GoServer".*"read_only":true' <<<"$projects_json"
-  test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 200
-  test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' --data-urlencode 'source=not allowed' "$base_url/api/projects/go-server/book")" = 403
-else
-  ! rg -q '"project_id":"go-server"' <<<"$projects_json"
-  test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 404
-fi
+! rg -q '"project_id":"go-server"' <<<"$projects_json"
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 404
 ! rg -q 'go-server-example|GoServer example' <<<"$projects_json"
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server-example/book")" = 404
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/leanfm-workspace/source/.git/config")" = 404
 
-test -f "$test_root/data/accounts/rfielding/credentials/default.json"
-test ! -e "$test_root/data/accounts/rfielding/credentials/default.b64"
-test ! -d "$test_root/data/accounts/rfielding/sessions"
+test -f "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
+test ! -e "$test_root/data/.leanfm/accounts/rfielding/credentials/default.b64"
+test ! -d "$test_root/data/.leanfm/accounts/rfielding/sessions"
 ! rg -q 'dGVzdC11c2VyLWtleQ==' "$test_root/data"
 ! rg -q 'test-user-key|second-user-key|correct horse battery staple' "$test_root/data"
 
@@ -170,20 +165,20 @@ rg -q '"source":".*/spec/Requirements.lean".*"validation":.*"tasks":' "$test_roo
 curl -fsS -b "$cookie_a" "$base_url/api/projects/leanfm-workspace/tasks" >"$test_root/workspace-tasks.json"
 rg -Fq '"formula":"AG atom(\"' "$test_root/workspace-tasks.json"
 rg -q '"origin":"Requirements.lean (property|where_)"' "$test_root/workspace-tasks.json"
-test -f "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
-test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.lean"
-test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Requirements.proto"
-test -f "$test_root/data/accounts/rfielding/projects/$project_a/spec/Implementation.lean"
+test -f "$test_root/data/projects/$project_a/book/main.pdf"
+test -f "$test_root/data/projects/$project_a/spec/Requirements.lean"
+test -f "$test_root/data/projects/$project_a/spec/Requirements.proto"
+test -f "$test_root/data/projects/$project_a/spec/Implementation.lean"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/memory" >"$test_root/project-memory.json"
 rg -q '"id":"book".*"status":"bootstrap"' "$test_root/project-memory.json"
 rg -q '"id":"requirements".*"status":"bootstrap"' "$test_root/project-memory.json"
 rg -q '"id":"implementation".*"status":"bootstrap"' "$test_root/project-memory.json"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/memory/requirements" | rg -q 'Project-owned observable requirements'
-test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/memory")" = 404
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/memory")" = 200
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/memory/../../manifest.json")" = 404
-test -d "$test_root/data/accounts/rfielding/projects/$project_a/events"
+test -d "$test_root/data/projects/$project_a/events"
 python3 scripts/chatui_provider_outcome_test.py "$base_url" "$cookie_a" "$project_a" \
-  "$test_root/data/accounts/rfielding/projects/$project_a"
+  "$test_root/data/projects/$project_a"
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MODEL_SELECTION report the selected model' \
   --data-urlencode 'model=test-model-fast' "$base_url/api/projects/$project_a/chat" >"$test_root/model-selection.json"
 rg -q 'selected model: test-model-fast' "$test_root/model-selection.json"
@@ -192,12 +187,12 @@ rg -q '"model":"test-model-fast"' <(curl -fsS -b "$cookie_a" "$base_url/api/proj
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_RETURN_STRUCTURED_QUESTION' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/structured-question.json"
 rg -q 'test_spectator_privacy' "$test_root/structured-question.json"
-diagnostic_a="$test_root/data/accounts/rfielding/projects/$project_a/logs/runtime-diagnostics.jsonl"
+diagnostic_a="$test_root/data/projects/$project_a/logs/runtime-diagnostics.jsonl"
 rg -q '"category":"structured_question_asked".*test_spectator_privacy' "$diagnostic_a"
 rg -q 'structured question\(s\): question_ids=test_spectator_privacy' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
 test "$(curl -sS -b "$cookie_b" --data-urlencode 'prompt=unauthorized composer submission' \
   --data-urlencode 'composer_question_id=test_spectator_privacy' -o "$test_root/unauthorized-question-composer.json" -w '%{http_code}' \
-  "$base_url/api/projects/$project_a/chat")" = 404
+  "$base_url/api/projects/missing/chat")" = 404
 ! rg -q 'structured_question_composer_submission' "$diagnostic_a"
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=CONTINUE_WITHOUT_FIXED_COUNT_SECRET_SENTINEL' \
   --data-urlencode 'composer_question_id=test_spectator_privacy' \
@@ -213,28 +208,28 @@ python3 -c 'import json,sys; assert "\"status\":\"success\"" in json.load(open(s
 rg -q '"book_updated":true' "$test_root/missing-image-recovery.json"
 rg -q 'one bounded output-only recovery' "$test_root/missing-image-recovery.json"
 rg -q 'self-contained vector illustration' "$test_root/missing-image-recovery.json"
-rg -q '\\begin\{tikzpicture\}' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
-test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
+rg -q '\\begin\{tikzpicture\}' "$test_root/data/projects/$project_a/book/main.tex"
+test -s "$test_root/data/projects/$project_a/book/main.pdf"
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REPEAT put an image into the PDF' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-repeat.json"
 python3 -c 'import json,sys; assert "\"status\":\"fail\"" in json.load(open(sys.argv[1]))["text"]' "$test_root/missing-image-repeat.json"
 rg -q '"total_tokens":36' "$test_root/missing-image-repeat.json"
 rg -q 'never-created-twice.png' "$test_root/missing-image-repeat.json"
 rg -q 'still references nonexistent media' "$test_root/missing-image-repeat.json"
-test "$(rg -c '"category":"missing_project_artifact_reference"' "$test_root/data/accounts/rfielding/projects/$project_a/logs/runtime-diagnostics.jsonl")" -ge 2
+test "$(rg -c '"category":"missing_project_artifact_reference"' "$test_root/data/projects/$project_a/logs/runtime-diagnostics.jsonl")" -ge 2
 test "$(curl -sS -b "$cookie_a" --data-urlencode 'prompt=TEST_INVALID_MODEL must not persist' --data-urlencode 'model=not-allowed' -o "$test_root/invalid-model.json" -w '%{http_code}' "$base_url/api/projects/$project_a/chat")" = 400
 rg -q 'server-start model snapshot' "$test_root/invalid-model.json"
 ! rg -q 'TEST_INVALID_MODEL' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
-printf '%s\n' 'package main' > "$test_root/data/accounts/rfielding/projects/$project_a/source/main.go"
+printf '%s\n' 'package main' > "$test_root/data/projects/$project_a/source/main.go"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/source" | rg -q '"files":\["main.go"\]'
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/source/main.go" | rg -q '"source":"package main\\n"'
-test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/source/main.go")" = 404
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/source/main.go")" = 200
 
 book_url="$base_url/api/projects/$project_a/book/main.pdf"
-python3 scripts/chatui_pdf_test.py "$test_root/data/accounts/rfielding/projects/$project_a/book"
+python3 scripts/chatui_pdf_test.py "$test_root/data/projects/$project_a/book"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/book/main-dark.pdf" -o "$test_root/served-dark.pdf"
-cmp "$test_root/served-dark.pdf" "$test_root/data/accounts/rfielding/projects/$project_a/book/main-dark.pdf"
-book_size="$(wc -c < "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf")"
+cmp "$test_root/served-dark.pdf" "$test_root/data/projects/$project_a/book/main-dark.pdf"
+book_size="$(wc -c < "$test_root/data/projects/$project_a/book/main.pdf")"
 curl -sS -b "$cookie_a" -H 'Range: bytes=0-15' -D "$test_root/range-closed.headers" -o "$test_root/range-closed.bin" "$book_url"
 rg -qi '^HTTP/1.1 206 Partial Content' "$test_root/range-closed.headers"
 rg -qi "^Content-Range: bytes 0-15/$book_size" "$test_root/range-closed.headers"
@@ -260,8 +255,8 @@ wait "$chat_a_pid" "$chat_b_pid"
 rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tokens":18' "$test_root/chat-a.json"
 rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tokens":18' "$test_root/chat-b.json"
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/artifacts" | rg -q '"kind":"mermaid"'
-test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/conversation")" = 404
-curl -sS -b "$cookie_b" "$base_url/api/projects/$project_a/conversation" >"$test_root/actionable-error.json"
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/conversation")" = 200
+curl -sS -b "$cookie_b" "$base_url/api/projects/missing/conversation" >"$test_root/actionable-error.json"
 rg -q '"error":"Project not found\."' "$test_root/actionable-error.json"
 rg -q '"action":"[^"]' "$test_root/actionable-error.json"
 rg -q '"code":"leanfm_http_404"' "$test_root/actionable-error.json"
@@ -272,19 +267,19 @@ rg -q '"sent_at_ms":[0-9]' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$p
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UPDATE_BOOK update the durable book now' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/book-update.json"
 rg -q '"book_updated":true' "$test_root/book-update.json"
-rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
-test -s "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf"
+rg -q 'Durable chat book update marker' "$test_root/data/projects/$project_a/book/main.tex"
+test -s "$test_root/data/projects/$project_a/book/main.pdf"
 test "$(curl -sS -b "$cookie_a" --data-urlencode 'source=stale editor must not win' --data-urlencode 'source_revision=stale-revision' -o "$test_root/stale-book-save.json" -w '%{http_code}' "$base_url/api/projects/$project_a/book")" = 409
 rg -q 'changed after this editor loaded' "$test_root/stale-book-save.json"
-rg -q 'Durable chat book update marker' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+rg -q 'Durable chat book update marker' "$test_root/data/projects/$project_a/book/main.tex"
 
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_UNDERSCORE_BOOK add a canvas screenshot path' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/underscore-book.json"
 rg -q '"book_updated":true' "$test_root/underscore-book.json"
 rg -q '"total_tokens":18' "$test_root/underscore-book.json"
 rg -q 'Finished book build for the proposed revision' "$test_root/underscore-book.json"
-rg -Fq 'goban_frame_001.png' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
-rg -Fq '\usepackage{underscore}' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
+rg -Fq 'goban_frame_001.png' "$test_root/data/projects/$project_a/book/main.tex"
+rg -Fq '\usepackage{underscore}' "$test_root/data/projects/$project_a/book/main.tex"
 
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPAIR_BOOK show the requested MCP animation while repairing the book' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/book-repair.json" &
@@ -300,18 +295,18 @@ for _ in $(seq 1 30); do
   sleep 0.1
 done
 test "$repair_status_seen" = true
-test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/chat/status")" = 404
+test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/chat/status")" = 200
 wait "$book_repair_pid"
 rg -q '"book_updated":true' "$test_root/book-repair.json"
 rg -q 'Requested MCP animation remains visible after internal repair' "$test_root/book-repair.json"
 ! rg -q 'Internal repair housekeeping' "$test_root/book-repair.json"
-rg -Fq 'A \& B' "$test_root/data/accounts/rfielding/projects/$project_a/book/main.tex"
-diagnostic_a="$test_root/data/accounts/rfielding/projects/$project_a/logs/runtime-diagnostics.jsonl"
+rg -Fq 'A \& B' "$test_root/data/projects/$project_a/book/main.tex"
+diagnostic_a="$test_root/data/projects/$project_a/logs/runtime-diagnostics.jsonl"
 test -f "$diagnostic_a"
-test -f "$test_root/data/accounts/rfielding/projects/$project_a/logs/README.md"
+test -f "$test_root/data/projects/$project_a/logs/README.md"
 rg -q '"category":"resolved"' "$diagnostic_a"
 ! rg -q '"category":"book_compiler"' "$diagnostic_a"
-test ! -e "$test_root/data/accounts/rfielding/projects/$project_a/.leanfm/book-recovery.tex"
+test ! -e "$test_root/data/projects/$project_a/.leanfm/book-recovery.tex"
 
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPEAT_BOOK preserve the exact compiler failure' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/repeated-book-failure.json"
@@ -321,8 +316,9 @@ rg -q 'same compiler failure' "$test_root/repeated-book-failure.json"
 rg -q 'logs/runtime-diagnostics.jsonl' "$test_root/repeated-book-failure.json"
 rg -q 'Stopped book repair because the compiler repeated the same diagnostic class' "$test_root/repeated-book-failure.json"
 rg -q '"category":"book_compiler".*TEST_REPEAT_BOOK' "$diagnostic_a"
-rg -q 'TEST_REPEAT_BOOK' "$test_root/data/accounts/rfielding/projects/$project_a/.leanfm/book-recovery.tex"
+rg -q 'TEST_REPEAT_BOOK' "$test_root/data/projects/$project_a/.leanfm/book-recovery.tex"
 
+python3 scripts/chatui_prepare_test_project.py "$base_url" "$cookie_b" "$project_b" "$test_root/data/projects/$project_b"
 curl -fsS -b "$cookie_b" --data-urlencode 'prompt=TEST_WRITE_SOURCE implement the server now' \
   "$base_url/api/projects/$project_b/chat" >"$test_root/source-write.json" &
 source_write_pid=$!
@@ -337,13 +333,13 @@ for _ in $(seq 1 30); do
 done
 test "$live_trace_seen" = true
 rg -Fq 'Attempting write to source/main.go (text file,' "$test_root/live-trace.json"
-test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/chat/trace")" = 404
+test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/chat/trace")" = 200
 kill -0 "$source_write_pid"
 wait "$source_write_pid"
 rg -q 'status.*success' "$test_root/source-write.json"
-test -f "$test_root/data/accounts/second_user/projects/$project_b/source/main.go"
-rg -q 'func main' "$test_root/data/accounts/second_user/projects/$project_b/source/main.go"
-diagnostic_b="$test_root/data/accounts/second_user/projects/$project_b/logs/runtime-diagnostics.jsonl"
+test -f "$test_root/data/projects/$project_b/source/main.go"
+rg -q 'func main' "$test_root/data/projects/$project_b/source/main.go"
+diagnostic_b="$test_root/data/projects/$project_b/logs/runtime-diagnostics.jsonl"
 test -f "$diagnostic_b"
 rg -q '"category":"resolved".*source/main.go' "$diagnostic_b"
 ! rg -q 'package main' "$diagnostic_b"
@@ -354,10 +350,10 @@ curl -fsS -b "$cookie_b" --data-urlencode "project_id=$project_b" \
   --data-urlencode 'page=/#source' --data-urlencode 'occurred_at=2026-10-19T12:00:00.000Z' \
   "$base_url/api/client-errors" | rg -q '"recorded":true'
 rg -q '"category":"browser_error".*operation=Rendering the Source phase.*TypeError: fixture failure' "$diagnostic_b"
-test "$(curl -sS -b "$cookie_a" --data-urlencode "project_id=$project_b" --data-urlencode 'description=cross project' -o "$test_root/cross-project-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 404
+test "$(curl -sS -b "$cookie_a" --data-urlencode 'project_id=missing' --data-urlencode 'description=cross project' -o "$test_root/cross-project-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 404
 rg -q 'Project not found' "$test_root/cross-project-client-error.json"
 ! rg -q 'cross project' "$diagnostic_b"
-curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["main.go"\]'
+curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["go.mod","main.go","main_test.go"\]'
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/source/does-not-exist.go")" = 404
 rg -q '"category":"http_error".*GET /api/projects/.*status=404' "$diagnostic_b"
 
@@ -366,18 +362,18 @@ curl -fsS -b "$cookie_b" --data-urlencode 'prompt=implement the server now' \
   "$base_url/api/projects/$project_empty/chat" >"$test_root/empty-source-implementation.json"
 rg -q 'status.*fail' "$test_root/empty-source-implementation.json"
 rg -q 'no files exist beneath the selected project.*source/' "$test_root/empty-source-implementation.json"
-rg -q '"category":"chat_result_warning".*requested implementation source missing' "$test_root/data/accounts/second_user/projects/$project_empty/logs/runtime-diagnostics.jsonl"
-test ! -e "$test_root/data/accounts/second_user/projects/$project_empty/source/main.go"
+rg -q '"category":"chat_result_warning".*requested implementation source missing' "$test_root/data/projects/$project_empty/logs/runtime-diagnostics.jsonl"
+test ! -e "$test_root/data/projects/$project_empty/source/main.go"
 
 curl -sS -b "$cookie_a" --data-urlencode 'prompt=TEST_CANCEL_AGENT implement a file that cancellation must prevent' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/cancelled-chat.json" &
 cancelled_chat_pid=$!
 sleep 0.2
-test "$(curl -sS -b "$cookie_b" -X POST -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/chat/cancel")" = 404
+test "$(curl -sS -b "$cookie_b" -X POST -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/chat/cancel")" = 403
 curl -fsS -b "$cookie_a" -X POST "$base_url/api/projects/$project_a/chat/cancel" | rg -q '"cancel_requested":true'
 wait "$cancelled_chat_pid"
 rg -q '"cancelled":true' "$test_root/cancelled-chat.json"
-test ! -e "$test_root/data/accounts/rfielding/projects/$project_a/source/must-not-exist.go"
+test ! -e "$test_root/data/projects/$project_a/source/must-not-exist.go"
 
 echo 'ok: ChatUI bootstrap, durable book/source edits, artifacts, and concurrent session isolation'
 
@@ -388,23 +384,23 @@ login_status() {
 }
 rg -q 'alice response' "$test_root/chat-a.json"
 rg -q 'bob response' "$test_root/chat-b.json"
-cp "$test_root/data/accounts/rfielding/credentials/default.json" "$test_root/original.json"
-cp "$test_root/data/accounts/second_user/credentials/default.json" "$test_root/data/accounts/rfielding/credentials/default.json"
+cp "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json" "$test_root/original.json"
+cp "$test_root/data/.leanfm/accounts/second_user/credentials/default.json" "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
 test "$(login_status 'correct horse battery staple')" = 403
-cp "$test_root/original.json" "$test_root/data/accounts/rfielding/credentials/default.json"
-printf '%s\n' 'dGVzdC11c2VyLWtleQ==' > "$test_root/data/accounts/rfielding/credentials/default.b64"
-printf '%s' '' > "$test_root/data/accounts/rfielding/credentials/default.json"
+cp "$test_root/original.json" "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
+printf '%s\n' 'dGVzdC11c2VyLWtleQ==' > "$test_root/data/.leanfm/accounts/rfielding/credentials/default.b64"
+printf '%s' '' > "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
 test "$(login_status 'correct horse battery staple')" = 403
-rm "$test_root/data/accounts/rfielding/credentials/default.json"
+rm "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
 test "$(login_status wrong-password)" = 403
-test -f "$test_root/data/accounts/rfielding/credentials/default.b64"
+test -f "$test_root/data/.leanfm/accounts/rfielding/credentials/default.b64"
 test "$(login_status 'correct horse battery staple')" = 200
-test ! -f "$test_root/data/accounts/rfielding/credentials/default.b64"
-test -f "$test_root/data/accounts/rfielding/credentials/default.json"
-test "$(stat -c %a "$test_root/data/accounts/rfielding/credentials/default.json")" = 600
+test ! -f "$test_root/data/.leanfm/accounts/rfielding/credentials/default.b64"
+test -f "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
+test "$(stat -c %a "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json")" = 600
 kill "$server_pid"
 wait "$server_pid" || true
-LEANFM_DATA_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
+LEANFM_WORKSPACE_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 for _ in $(seq 1 50); do

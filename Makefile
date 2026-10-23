@@ -77,6 +77,11 @@ kerberos-video:
 chatui-check: build
 	python3 scripts/chatui_crypto_test.py
 	python3 scripts/chatui_patch_test.py
+	python3 scripts/chatui_media_test.py
+	python3 scripts/chatui_specification_test.py
+	python3 scripts/chatui_project_state_test.py
+	python3 scripts/chatui_workspace_reset_test.py
+	python3 scripts/chatui_command_test.py
 	lake env lean LeanFM/ChatUI/ProviderTests.lean
 	lake env lean LeanFM/ChatUI/HttpRequestTests.lean
 	bash scripts/chatui_http_check.sh
@@ -98,10 +103,6 @@ go-toolchain:
 paxos-check:
 	@lake env lean ValidatePaxosKV.lean | rg '^ok: Paxos KV requirements|^ok: generated implementation plan'
 	@go test ./...
-
-.PHONY: goserver-check
-goserver-check: go-toolchain
-	$(MAKE) -C projects/go-server check
 
 .PHONY: chatui-browser-check
 chatui-browser-check: build
@@ -135,22 +136,8 @@ bakery-stats:
 	python3 scripts/reduce_bakery_events.py --tex-output book/generated/bakery-stats.tex
 
 http-check:
-	@curl -fsS "$(BASE_URL)/health"
-	@curl -fsS -X POST "$(BASE_URL)/mcp" -H 'Content-Type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"make-http-check","version":"1"}}}' | rg '"protocolVersion":"2025-06-18"|durable agent context'
-	@curl -fsS "$(BASE_URL)/tools/leanfm-language/requirements-reference" | rg '^# LeanFM requirement language reference'
-	@curl -fsS "$(BASE_URL)/tools/leanfm-language/implementation-reference" | rg '^# LeanFM implementation language reference'
-	@curl -fsS "$(BASE_URL)/tools/requirements/interrogation" | rg '^LeanFM requirements interrogation checklist'
-	@curl -fsS -c "$(COOKIES)" -b "$(COOKIES)" -L -d 'password=$(PASSWORD)' -o "$(ROOT_HTML)" "$(BASE_URL)/login"
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/prompt" | rg 'LeanFM/LLMGenerated/Requirements\.lean|Requirements\.proto|MessageFraming'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/llm-generated/requirements/validate" | rg '^ok: all generated requirements'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/tools/aggregate-graph/validate" | rg '^ok: all generated requirements'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/api/session" | rg 'requirementsLean|requirementsProto'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/api/session/generated/requirements.lean" | rg 'namespace LeanFM\.LLMGenerated\.Requirements'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/api/session/generated/requirements.proto" | rg 'message RequirementEnvelope|oneof atom|message Docs_GetRequest'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/llm-generated/requirements.proto" | rg 'message RequirementEnvelope|oneof atom|message Docs_GetRequest'
-	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/openapi.yaml" | rg 'openapi: 3\.1\.0|x-leanfm-requirement|Docs\.GetRequest'
-	@curl -fsS -b "$(COOKIES)" -o "$(EXAMPLES_HTML)" "$(BASE_URL)/examples"
-	@ROOT_HTML="$(ROOT_HTML)" EXAMPLES_HTML="$(EXAMPLES_HTML)" node -e 'const fs=require("fs"),vm=require("vm"); for (const f of [process.env.ROOT_HTML,process.env.EXAMPLES_HTML]) { const html=fs.readFileSync(f,"utf8"); const re=/<script([^>]*)>([\s\S]*?)<\/script>/gi; let m,n=0; while ((m=re.exec(html))) { if (/type=["'\'']application\/json["'\'']/i.test(m[1])) continue; const code=m[2].trim(); if (code) new vm.Script(code,{filename:f+":inline"+(++n)}); } console.log(f+": ok ("+n+" inline scripts)"); }'
+	python3 scripts/http_smoke.py "$(BASE_URL)"
+	bash scripts/chatui_http_check.sh
 
 proto:
 	@curl -fsS -b "$(COOKIES)" "$(BASE_URL)/llm-generated/requirements.proto"

@@ -23,11 +23,18 @@
     "result": "pass",
     "browser": "Chrome/153.0.8010.36",
     "checks": [
-      "password login",
+      "keyboard login/registration tab switching",
+      "password-only login",
       "no phantom examples",
+      "image choose/remove/send/persist/resend with native provider pixels",
       "empty-chat durable resume through actual React composer",
       "protobuf in Project memory",
       "separate light/dark PDF routes",
+      "create a fresh project in the production UI",
+      "specify server through composer with real Lean compilation",
+      "generated Grammar, interaction, state and CTL views",
+      "independent human acceptance of checked requirements and implementation",
+      "actual source files and sandboxed Go test after both gates",
       "no uncaught browser exceptions"
     ]
   }

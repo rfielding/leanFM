@@ -1,0 +1,24 @@
+{
+  "operation": "explicit-fresh-start",
+  "project_roots": [
+    "data/accounts/rob/projects/c931835956ab201b",
+    "projects/blank-leanfm-webserver",
+    "projects/go-server",
+    "projects/kubernetes-document-site",
+    "projects/world-risk-2026-10-10"
+  ],
+  "accounts_preserved": 1,
+  "empty_scaffolds": [
+    "data/accounts/rfielding/projects/030af6938ed70244/tests",
+    "data/accounts/rfielding/projects/030af6938ed70244/renders",
+    "data/accounts/rfielding/projects/030af6938ed70244/logs",
+    "data/accounts/rfielding/projects/030af6938ed70244/cache",
+    "data/accounts/rfielding/projects/030af6938ed70244/events",
+    "data/accounts/rfielding/projects/030af6938ed70244/source",
+    "data/accounts/rfielding/projects/030af6938ed70244/inputs",
+    "data/accounts/rfielding/projects/030af6938ed70244/artifacts",
+    "data/accounts/rfielding/projects/030af6938ed70244/reports",
+    "data/accounts/rfielding/projects/030af6938ed70244"
+  ],
+  "applied": true
+}

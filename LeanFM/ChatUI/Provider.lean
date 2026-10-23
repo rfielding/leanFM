@@ -15,6 +15,31 @@ structure Completion where
   failure : Option String := none
 deriving Repr
 
+-- Normalized project-owned pixels, never a provider-fetched URL.
+structure ImageInput where
+  data : String
+  mediaType : String := "image/png"
+  label : String := "Attached image"
+
+def imageContent (provider : String) (image : ImageInput) : List Json :=
+  if provider == "anthropic" then
+    [Json.mkObj [("type", toJson "text"), ("text", toJson image.label)],
+     Json.mkObj [("type", toJson "image"), ("source", Json.mkObj [
+       ("type", toJson "base64"), ("media_type", toJson image.mediaType), ("data", toJson image.data)])]]
+  else
+    [Json.mkObj [("type", toJson "input_text"), ("text", toJson image.label)],
+     Json.mkObj [("type", toJson "input_image"),
+       ("image_url", toJson ("data:" ++ image.mediaType ++ ";base64," ++ image.data))]]
+
+def userContent (provider prompt : String) (images : List ImageInput) : Json :=
+  if images.isEmpty then toJson prompt else
+    toJson (Json.mkObj [("type", toJson (if provider == "anthropic" then "text" else "input_text")),
+      ("text", toJson prompt)] :: images.flatMap (imageContent provider))
+
+def openAIInput (prompt : String) (images : List ImageInput) : String :=
+  if images.isEmpty then (toJson prompt).compress else
+    (toJson [Json.mkObj [("role", toJson "user"), ("content", userContent "openai" prompt images)]]).compress
+
 structure ModelInfo where
   id : String
   model : String
@@ -57,9 +82,8 @@ structure AgentHooks where
   onResponse : RoundReport → IO Unit := fun _ => pure ()
 
 def curlConfigEscape (value : String) : String :=
-  String.join <| value.toList.map fun c =>
-    if c == '\\' then "\\\\" else if c == '"' then "\\\""
-    else if c == '\n' then "\\n" else if c == '\r' then "" else c.toString
+  -- Image bodies can be megabytes: avoid allocating a list/string per byte.
+  value.replace "\\" "\\\\" |>.replace "\"" "\\\"" |>.replace "\n" "\\n" |>.replace "\r" ""
 
 def providerTimeoutSeconds : IO Nat := do
   let configured := (← IO.getEnv "LEANFM_PROVIDER_TIMEOUT_SECONDS").bind String.toNat?
@@ -198,6 +222,8 @@ def addUsage (left right : Completion) (text : String := "") : Completion :=
 def workspaceToolsJson : String :=
   "[" ++ String.intercalate "," [
     "{\"type\":\"web_search\"}",
+    "{\"type\":\"function\",\"name\":\"leanfm_reference\",\"description\":\"Read the live LeanFM language or workflow reference. This is read-only and never accepts a gate.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"section\":{\"type\":\"string\",\"enum\":[\"requirements\",\"implementation\",\"interrogation\",\"code-generation\"]}},\"required\":[\"section\"],\"additionalProperties\":false}}",
+    "{\"type\":\"function\",\"name\":\"leanfm_check\",\"description\":\"Compile the selected project's current spec/Requirements.lean, structurally validate its named RequirementSpec, and atomically derive spec/tasks.json for Grammar and Tasks. Read the file to find its actual constant name. Optionally check a typed ImplementationSpec and supply project TaskConstraint list constants. Runs isolated with no network or credentials; never accepts a gate.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"requirement\":{\"type\":\"string\"},\"implementation\":{\"type\":\"string\"},\"constraints\":{\"type\":\"string\"}},\"required\":[\"requirement\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_list\",\"description\":\"List tracked and untracked files below the authorized launch workspace.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_read\",\"description\":\"Read a UTF-8 text file below the authorized launch workspace.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"],\"additionalProperties\":false}}",
     "{\"type\":\"function\",\"name\":\"workspace_search\",\"description\":\"Search text below the authorized launch workspace using a literal query.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},\"path\":{\"type\":\"string\"}},\"required\":[\"query\",\"path\"],\"additionalProperties\":false}}",
@@ -265,11 +291,11 @@ def responseFailure? (json : Json) : Option String :=
 partial def completeAgentLoop (key baseUrl model instructions prompt previousId : String)
     (pending : List String) (runTool : ToolRunner) (cancelled : CancelCheck)
     (hooks : AgentHooks)
-    (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
+    (usage : Completion) (remaining : Nat) (images : List ImageInput := []) : IO (Except String Completion) := do
   if ← cancelled then return .error "agent_cancelled"
   if remaining == 0 then return .ok { usage with failure := some "The workspace agent exceeded its 16-step tool limit; no further request was sent." }
   if let some failure ← hooks.beforeRequest then return .ok { usage with failure := some failure }
-  let input := if previousId.isEmpty then "\"" ++ jsonEscape prompt ++ "\"" else
+  let input := if previousId.isEmpty then openAIInput prompt images else
     "[" ++ String.intercalate "," pending ++ "]"
   let continuation := if previousId.isEmpty then "" else
     ",\"previous_response_id\":\"" ++ jsonEscape previousId ++ "\""
@@ -306,7 +332,7 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
       if result.startsWith "FATAL: repeated_failed_tool_call:" then
         return .ok { nextUsage with failure := some "A workspace operation or check failed again without verified recovery. LeanFM stopped before another paid request; exit codes and diagnostics remain in Project memory." }
       outputs := toolOutputJson call.callId result :: outputs
-    completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool cancelled hooks nextUsage (remaining - 1)
+    completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool cancelled hooks nextUsage (remaining - 1) images
   catch error =>
     let detail := error.toString
     let completedSteps := 16 - remaining
@@ -443,16 +469,16 @@ partial def completeAnthropicLoop (key baseUrl model instructions : String) (mes
 def completeAgent (key instructions prompt model : String) (runTool : ToolRunner)
     (cancelled : CancelCheck := pure false) (provider : String := "openai")
     (maxOutputTokens : Nat := 20000) (webSearch : Bool := false)
-    (hooks : AgentHooks := {}) : IO (Except String Completion) := do
+    (hooks : AgentHooks := {}) (images : List ImageInput := []) : IO (Except String Completion) := do
   let baseUrl ← providerBaseUrl provider
   if provider == "anthropic" then
     return ← completeAnthropicLoop key baseUrl model instructions
-      [Json.mkObj [("role", toJson "user"), ("content", toJson prompt)]]
+      [Json.mkObj [("role", toJson "user"), ("content", userContent "anthropic" prompt images)]]
       maxOutputTokens webSearch runTool cancelled hooks
       { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
   if provider != "openai" then return .error "Unsupported model provider; no request was sent."
   completeAgentLoop key baseUrl model instructions prompt "" [] runTool cancelled hooks
-    { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
+    { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16 images
 
 def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key instructions prompt model : String)
     (provider : String := "openai") (cancelled : CancelCheck := pure false)

@@ -28,7 +28,7 @@ with socket.socket() as allocator:
     allocator.bind(("127.0.0.1", 0))
     port = allocator.getsockname()[1]
 base = "http://127.0.0.1:" + str(port)
-env = dict(os.environ, LEANFM_PORT=str(port), LEANFM_DATA_ROOT="private-data",
+env = dict(os.environ, LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT="private-data",
            LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1", LEANFM_LLM_MODEL="test-model",
            LEANFM_TEST_UNSANDBOXED_BOOK_BUILD="1")
 log = (fixture / "server.log").open("w+")
@@ -74,7 +74,7 @@ try:
     status, created = call("/api/projects", {"display_name": "Resettable project"})
     assert status == 201, created
     project_id = created["project_id"]
-    project = fixture / "private-data/accounts/reset_user/projects" / project_id
+    project = fixture / "private-data/projects" / project_id
     assert (project / "book/main.pdf").read_bytes().startswith(b"%PDF")
     assert (project / "book/main-dark.pdf").read_bytes().startswith(b"%PDF")
     for path, text in {
@@ -86,12 +86,18 @@ try:
     }.items():
         (project / path).write_text(text)
     manifest = json.loads((project / "manifest.json").read_text())
+    for key, value in {"root": ".", "book": "book/main.pdf", "dark_book": "book/main-dark.pdf",
+                       "book_source": "book/main.tex", "requirements": "spec/Requirements.lean",
+                       "protobuf": "spec/Requirements.proto", "implementation": "spec/Implementation.lean",
+                       "tasks": "spec/tasks.json", "source": "source/", "evidence": "reports/"}.items():
+        assert manifest[key] == value, (key, manifest)
+    assert manifest["acceptance"] == {"requirements": "not-recorded", "implementation": "not-recorded"}
     manifest["resume_marker"] = "durable-acceptance-marker"
     manifest["acceptance"] = {"requirements": "not-recorded", "implementation": "not-recorded"}
     (project / "manifest.json").write_text(json.dumps(manifest))
     subprocess.run(["make", "-C", str(project / "book")], cwd=fixture, check=True,
                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
-    foreign = fixture / "private-data/accounts/foreign/projects/private"
+    foreign = fixture / "private-data/.leanfm/accounts/foreign/projects/private"
     foreign.mkdir(parents=True)
     (foreign / "manifest.json").write_text('{"display_name":"FOREIGN_PROJECT_SENTINEL"}')
     (foreign / "Requirements.proto").write_text("FOREIGN_PROJECT_SENTINEL")
@@ -114,7 +120,7 @@ try:
     proto_path.unlink()
     proto_path.symlink_to(foreign / "Requirements.proto")
     status, rejected = call(f"/api/projects/{project_id}/chat", {"prompt": "TEST_DURABLE_RESUME", "model": "test-model"})
-    assert status == 200 and "DurableProtocolMarker" in rejected["text"] and "leaked=[]" in rejected["text"], rejected
+    assert status == 404 and "Project not found" in rejected["error"], rejected
     proto_path.unlink()
     proto_path.write_bytes(saved_proto)
     report = {"result": "pass", "example_directory": "absent", "conversation_reset_cycles": 3,

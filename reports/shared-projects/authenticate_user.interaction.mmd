@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    UserBrowser->>LeanFMServer: LoginSubmitted
+    alt choice 1
+    LeanFMServer->>UserBrowser: LoginAccepted
+    else alternative
+    LeanFMServer->>UserBrowser: LoginRejected
+    end

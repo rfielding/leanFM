@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    alt choice 1
+    UserBrowser->>LeanFMServer: ProjectListRequested
+    LeanFMServer->>UserBrowser: ProjectListReturned
+    else alternative
+    UserBrowser->>LeanFMServer: ProjectCreateRequested
+    LeanFMServer->>UserBrowser: ProjectCreated
+    else alternative
+    UserBrowser->>LeanFMServer: ProjectOpenRequested
+    LeanFMServer->>UserBrowser: ProjectOpened
+    else alternative
+    UserBrowser->>LeanFMServer: ProjectDeleteRequested
+    LeanFMServer->>UserBrowser: ProjectDeleted
+    end

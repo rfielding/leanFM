@@ -17,7 +17,7 @@ def toolDependencyInventory : List ToolDependency :=
   , { id := "gnu-make-bash-coreutils", required := true, workflow := "all Makefile workflows", versionContract := "GNU Make Bash and coreutils including timeout cmp cp tar gzip and sha256sum", purpose := "orchestrate bounded reproducible commands" }
   , { id := "node-npm", required := true, workflow := "ui-build chatui-check", versionContract := "Node >= 22.12 and npm ci from ui/package-lock.json", purpose := "compile and bundle the React TypeScript UI" }
   , { id := "react-ui-packages", required := true, workflow := "ui-build", versionContract := "exact transitive versions locked by ui/package-lock.json", purpose := "provide React ReactDOM TypeScript Vite and KaTeX MathML rendering" }
-  , { id := "python", required := true, workflow := "check chatui-check media", versionContract := "Python >= 3.12 with scripts/chatui_requirements.txt", purpose := "run credential crypto protobuf round trips reducers and sandboxed Pillow GIF generation" }
+  , { id := "python", required := true, workflow := "check chatui-check media", versionContract := "Python >= 3.12 with scripts/chatui_requirements.txt (Pillow, CairoSVG and defusedxml for image attachments)", purpose := "run credential crypto protobuf round trips reducers sandboxed Pillow GIF generation and bounded static image normalization" }
   , { id := "protobuf-compiler", required := true, workflow := "make validate", versionContract := "protoc supporting proto3 and Python output", purpose := "generate the temporary Python binding used for byte round-trip testing" }
   , { id := "graphviz", required := true, workflow := "make diagrams and make check", versionContract := "Graphviz dot with PNG output", purpose := "rasterize generated DOT diagrams" }
   , { id := "tex-live", required := true, workflow := "make book", versionContract := "pdfLaTeX with the packages named in book/main.tex", purpose := "build book/main.pdf and book/main-dark.pdf" }
@@ -854,10 +854,11 @@ def stateMachineMermaid (task : TaskRequirement) : String :=
     task.transitions.map (fun tr => "    " ++ tr.src ++ " --> " ++ tr.dst ++ ": " ++ tr.message) ++
     task.states.filterMap (fun s => if s.terminal then some ("    " ++ s.id ++ " --> [*]") else none)
 
-def interactionActors (task : TaskRequirement) (messageNames : List String) : List String :=
+def interactionActors (task : TaskRequirement) (messageNames : List String)
+    (schemas : List MessageSchema := messages) : List String :=
   task.actors.filter fun actor =>
     messageNames.any fun messageName =>
-      match messages.find? (fun msg => msg.name == messageName) with
+      match schemas.find? (fun msg => msg.name == messageName) with
       | none => false
       | some msg => msg.src == actor || msg.dst == actor
 
@@ -895,10 +896,11 @@ partial def grammarInteractionLines (span : String) : GrammarExpr -> List String
   | .repeat body =>
       ["    loop repeat"] ++ grammarInteractionLines span body ++ ["    end"]
 
-def interactionMermaid (task : TaskRequirement) : String :=
-  let grammar? := spec.grammars.find? (·.task == task.id)
+-- Foreign tasks must use their owning specification, even on an ID collision.
+def interactionMermaid (task : TaskRequirement) (requirements : RequirementSpec := spec) : String :=
+  let grammar? := requirements.grammars.find? (·.task == task.id)
   let messageNames := grammar?.map (fun grammar => (grammarAtoms grammar.body).map (·.message)) |>.getD []
-  let actors := interactionActors task messageNames
+  let actors := interactionActors task messageNames requirements.messages
   joinWithNewline <| ["sequenceDiagram"] ++
     actors.map (fun actor => "    participant " ++ actor) ++
     (grammar?.map (fun grammar => grammarInteractionLines (interactionSpan actors) grammar.body)

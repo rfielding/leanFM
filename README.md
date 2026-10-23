@@ -165,40 +165,61 @@ The Lean HTTP server listens on:
 
 ```text
 http://127.0.0.1:8080
-
-The root URL is the LeanFM ChatUI. On first use, create an account with a
-username, password, and your own OpenAI API key, then create the first project.
-The server needs no `OPENAI_API_KEY`; it will not issue a model request without
-an authenticated user's verified credential. Account data defaults to `data/`
-and can be relocated with `LEANFM_DATA_ROOT`.
 ```
 
-Before pulling this security upgrade into an existing installation, stop the
-server and back up `data/`: Git previously tracked these files, so pulling their
-removal can delete them from the working tree. Restore the backup afterward;
-`data/` is now ignored. Rotate previously exposed provider keys. An old account
-can migrate its credential on password login, but a revoked key remains revoked.
+The root URL is the LeanFM ChatUI. Open or create a project before logging in.
+Projects live in `projects/<project_id>/` and have no account owner. Unlock API
+keys only when sending model prompts. The server needs no `OPENAI_API_KEY` and
+will not issue a model request without the initiating caller's unlocked key.
+`LEANFM_WORKSPACE_ROOT` selects the workspace directory, defaulting to the
+server's current directory. Account records live in its private `.leanfm/accounts/`
+vault. `LEANFM_DATA_ROOT` is obsolete.
+
+After a restart, log in with your existing username and LeanFM password.
+Saved provider keys remain encrypted on disk and unlock with that password;
+the optional key fields are only for adding or replacing keys.
+
+Chat's **Attach image** button accepts PNG, JPEG, GIF, and static SVG files
+(up to four per message, 2 MiB each). Preview or remove them before sending.
+The selected LLM receives image pixels, and Resend retains the images.
+GIF input uses its first frame. Originals and normalized previews stay beneath
+the owning project root.
 
 Credential protection requires `python3 -m pip install -r scripts/chatui_requirements.txt`.
 
-Account state is local by default. `data/` contains salted password verifiers,
-encrypted provider credentials, private conversations, and user-owned projects;
-it is ignored by Git, and CI rejects any tracked path below it. The checked-in
-`projects/blank-leanfm-webserver` and `projects/go-server` examples are sanitized
-project roots and contain no login or API credential material. While logged in,
+The private vault contains salted password verifiers and encrypted provider
+credentials and is ignored by Git. Books, specifications, source, conversations,
+media, evidence and caches stay in their shared project root. While logged in,
 the header shows the active provider/model, a one-way key fingerprint, and the
 used and remaining local session-token safety budget. This is deliberately not
 presented as an OpenAI dollar balance: configure a provider-project spend cap as
 the authoritative monetary guardrail.
 
-`projects/` contains optional, disposable examples, not LeanFM runtime inputs.
-Startup, new-project creation and required checks must work with that directory
-empty or absent; absent examples are not shown as phantom project tabs.
+`projects/` is the ordinary project workspace. Startup and new-project creation
+work with it empty or absent; provisioning uses built-in templates. The approved
+fresh start erased the old examples and experimental projects and removed `data/`
+after verifying unchanged encrypted account records. The reset result and both
+accepted revisions are recorded in `reports/shared-projects/`.
 Conversation files can also be erased between turns: ChatUI resumes from the
 selected project's durable book, requirements, protobuf, implementation mapping,
 manifest and source inventory. Missing acceptance or decisions remain explicit
 gaps, not guesses from another project. `make chatui-check` tests an isolated
 installation without examples and three consecutive conversation resets.
+`make http-check` checks the running public HTTP/MCP surface without a legacy
+password cookie, then exercises account and project operations against an
+isolated server with deterministic provider fixtures. It never needs a live key.
+Guided Chat can edit and check specifications directly without returning a full
+book rewrite on every turn. Its `leanfm_reference` tool reads the live LeanFM
+language references, and `leanfm_check` compiles the selected project's named
+`RequirementSpec`, validates it, and derives the Grammar and Tasks catalog from
+the same value. Optional typed implementation mappings are checked separately.
+Executable Lean runs without network or credentials, with read-only project
+inputs and writable project-local scratch. A failed check preserves prior task
+views; changed canonical specifications cannot report success without a current
+successful check. Neither tool accepts either stakeholder gate. Project memory
+provides the separate requirements and implementation acceptance controls for
+the current checked revisions. The server enforces both before source writes;
+accepted decisions remain available after clearing conversation history.
 `make chatui-browser-check` additionally exercises the actual React login,
 empty-chat continuation, Project memory and both PDF selections in Chrome
 (requires `google-chrome` and Python `websocket-client`). Sanitized evidence is
@@ -211,14 +232,21 @@ password-derived key and account-bound authentication. Server-memory sessions
 expire after eight hours; restart requires login. No password recovery is
 implemented: a password reset must replace the provider key. Legacy Base64 keys
 are encrypted and removed on successful password login. Already exposed keys
-must still be revoked; encryption cannot undo prior exposure. Keep `data/` and
-any alternate `LEANFM_DATA_ROOT` out of version control. Each user supplies their
+must still be revoked; encryption cannot undo prior exposure. Keep the private
+`.leanfm/` vault out of version control. Each user supplies their
 own key; API usage is billed separately from a ChatGPT subscription.
 
 Endpoints:
 
 ```text
 GET /          clean assistant workbench
+GET /api/projects shared project catalog, available before credential login
+POST /api/projects create a self-contained project under projects/<id>
+GET /api/projects/<id>/specification current checked revisions and acceptance state
+POST /api/projects/<id>/specification/requirements/<revision>/accept accept exactly the current checked requirements
+POST /api/projects/<id>/specification/implementation/<revision>/accept accept exactly the checked implementation after requirements acceptance
+POST /api/login unlock the caller's encrypted provider keys
+POST /api/logout lock the caller's keys while preserving the shared workspace
 GET /examples  sample dashboard with charts, graphs, and generated sources
 GET /renders/  built-in canvas diagram renders
 GET /metrics   Prometheus metrics
@@ -236,13 +264,6 @@ GET /tools/llm-generated/requirements/validate canonical LLM-generated requireme
 GET /tools/llm-generated/implementation/validate validates the separate software-generation plan
 GET /tools/generated-artifacts/validate validates requirements and implementation together
 GET /tools/aggregate-graph/validate typed aggregate graph data validation
-GET /api/session current authenticated workspace id and per-session artifact links
-GET /api/session/generated/requirements.lean current session's generated Lean file, falling back to the built-in example
-POST /api/session/generated/requirements.lean replace the current session's generated Lean file
-GET /api/session/generated/requirements.proto current session's generated protobuf file, falling back to the built-in example
-POST /api/session/generated/requirements.proto replace the current session's generated protobuf file
-GET /api/session/generated/implementation.lean current session's implementation specification, falling back to the built-in example
-POST /api/session/generated/implementation.lean replace the current session's implementation specification
 GET /generated/worker.proto protobuf schema generated from requirement messages
 GET /llm-generated/requirements.proto canonical LLM-generated protobuf schema
 GET /lean/get_docs.lean generated Lean view for a conversation

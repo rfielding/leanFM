@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> submitted: ChatPromptSubmitted
+    submitted --> model_pending: ModelRequestIssued
+    model_pending --> model_returned: ModelResponseReturned
+    model_returned --> rendered: ChatResponseRendered
+    model_pending --> failed: ChatTurnFailed
+    rendered --> [*]
+    failed --> [*]

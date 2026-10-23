@@ -3,13 +3,42 @@
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import base64
+import io
 import re
 import time
 from threading import Lock
+from PIL import Image
+from chatui_specification_fixture import REQUIREMENTS as SPECIFICATION_FIXTURE, PROTO as SPECIFICATION_PROTO, IMPLEMENTATION as SPECIFICATION_IMPLEMENTATION
+from chatui_specification_fixture import SERVER_SOURCE, SERVER_TEST
+
+
+def content_text(content):
+    if isinstance(content, str):
+        return content
+    return "\n".join(part.get("text", "") for part in content if part.get("type") in {"text", "input_text"})
+
+
+def image_reply(content, provider):
+    images = [part for part in content if part.get("type") == ("image" if provider == "anthropic" else "input_image")]
+    assert images, "image turn arrived without native image content"
+    colors = []
+    for part in images:
+        if provider == "anthropic":
+            assert part["source"]["type"] == "base64" and part["source"]["media_type"] == "image/png"
+            data = part["source"]["data"]
+        else:
+            assert part["image_url"].startswith("data:image/png;base64,")
+            data = part["image_url"].split(",", 1)[1]
+        with Image.open(io.BytesIO(base64.b64decode(data, validate=True))) as image:
+            assert image.format == "PNG"
+            colors.append(",".join(map(str, image.convert("RGB").getpixel((0, 0)))))
+    return "Image pixels received: " + "; ".join(colors)
 
 
 PATCH_SCENARIOS = {"TEST_PATCH_RECOUNT", "TEST_PATCH_WRITE_RECOVERY", "TEST_PATCH_RETRY_GUARD",
-                   "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS"}
+                   "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS",
+                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK"}
 
 FAILING_CHECK = "check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n"
 
@@ -29,6 +58,8 @@ def verify_decision_contract(instructions, prompt):
         assert obligation in instructions, obligation
     assert "question-triggering instruction" not in instructions
     assert "by asking unresolved choices such as" not in prompt
+    assert "Return ONLY one JSON object with exactly these string fields" not in prompt
+    assert "A full-book JSON rewrite is not required for other turns" in prompt or not isinstance(prompt, str) or "Working mode:" not in prompt
 
 
 def consequential_question():
@@ -45,6 +76,19 @@ def patch_action(marker, step):
     wrong_counts = ("--- a/spec/patch-note.txt\n+++ b/spec/patch-note.txt\n"
                     "@@ -1,90 +1,90 @@\n-before\n+after\n unrelated\n")
     malformed = "*** Begin Patch\n*** Update File: spec/patch-note.txt\n@@\n-before\n+after\n*** End Patch\n"
+    if marker.startswith("TEST_SPECIFY_"):
+        if marker == "TEST_SPECIFY_IMPLEMENTATION":
+            actions = [("workspace_read", {"path": "spec/Implementation.lean"}),
+                       ("workspace_write", {"path": "spec/Implementation.lean", "content": SPECIFICATION_IMPLEMENTATION}),
+                       ("leanfm_check", {"requirement": "Fixture.spec", "implementation": "Fixture.implementation"})]
+            return actions[step] if step < len(actions) else None
+        source = SPECIFICATION_FIXTURE + ("\ndef broken : Nat := false\n" if marker.endswith("INVALID") else "")
+        actions = [("leanfm_reference", {"section": "requirements"}),
+                   ("workspace_read", {"path": "spec/Requirements.lean"}),
+                   ("workspace_write", {"path": "spec/Requirements.lean", "content": source}),
+                   ("workspace_write", {"path": "spec/Requirements.proto", "content": SPECIFICATION_PROTO}),
+                   ("leanfm_check", {"requirement": "Fixture.spec"})]
+        return actions[step] if step < len(actions) else None
     actions = {
         "TEST_PATCH_RECOUNT": [("workspace_patch", {"patch": wrong_counts})],
         "TEST_PATCH_WRITE_RECOVERY": [("workspace_patch", {"patch": malformed}),
@@ -139,7 +183,9 @@ class Handler(BaseHTTPRequestHandler):
                 "output_tokens": 7,
                 "total_tokens": 18,
             }
-            current_input = request.get("input", "") if isinstance(request.get("input", ""), str) else ""
+            initial = request.get("input", "")
+            current_input = initial if isinstance(initial, str) else "\n".join(
+                content_text(item.get("content", [])) for item in initial if item.get("role") == "user")
             marker = current_input.rsplit("Current user message:\n", 1)[-1].split(" ", 1)[0].split("\n", 1)[0]
             response_status = 200
             error_cases = {
@@ -170,6 +216,10 @@ class Handler(BaseHTTPRequestHandler):
                                        "name": name, "arguments": json.dumps(arguments)}]
                 else:
                     body["output_text"] = "Completed patch fixture with preserved unrelated content."
+                    if marker == "TEST_SPECIFY_WITH_BOOK":
+                        body["output_text"] = json.dumps({"reply": "Specification and book updated.", "book_source": "\\documentclass{article}\n\\begin{document}\nCurrent checked server specification.\n\\end{document}\n"})
+            elif marker == "TEST_IMAGE_INPUT":
+                body = {"output_text": image_reply(initial[0]["content"], "openai"), "usage": usage}
             elif marker == "TEST_READY_DEFAULTS":
                 verify_decision_contract(request.get("instructions", ""), current_input)
                 body = {"output_text": "Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.", "usage": usage}
@@ -317,17 +367,26 @@ class Handler(BaseHTTPRequestHandler):
                         "name": "workspace_write",
                         "arguments": json.dumps({
                             "path": "source/main.go",
-                            "content": "package main\n\nfunc main() {}\n",
+                            "content": SERVER_SOURCE,
                         }),
+                    }, {
+                        "type": "function_call", "call_id": "write-source-tests", "name": "workspace_write",
+                        "arguments": json.dumps({"path": "source/main_test.go", "content": SERVER_TEST}),
+                    }, {
+                        "type": "function_call", "call_id": "write-source-module", "name": "workspace_write",
+                        "arguments": json.dumps({"path": "source/go.mod", "content": "module example.com/fixture\n\ngo 1.23\n"}),
                     }],
                     "usage": usage,
                 }
             elif request.get("previous_response_id") == "source-write-response":
                 time.sleep(1)
                 body = {
-                    "output_text": "Created and checked source/main.go.",
+                    "id": "source-checked-response",
+                    "output": [{"type": "function_call", "call_id": "check-source", "name": "workspace_check", "arguments": json.dumps({"target": "go-test"})}],
                     "usage": usage,
                 }
+            elif request.get("previous_response_id") == "source-checked-response":
+                body = {"output_text": "Created and checked source/main.go.", "usage": usage}
             elif "TEST_UPDATE_BOOK" in request_text:
                 edit = {
                     "reply": "Updated the durable project book.",
@@ -358,7 +417,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _anthropic_message(self, request):
         messages = request.get("messages", [])
-        text = str(messages[0].get("content", "")) if messages else ""
+        text = content_text(messages[0].get("content", "")) if messages else ""
         marker = text.rsplit("Current user message:\n", 1)[-1].split(" ", 1)[0].split("\n", 1)[0]
         system = request.get("system", "")
         repair = "You repair exactly one failing line" in system
@@ -373,6 +432,9 @@ class Handler(BaseHTTPRequestHandler):
                  "cache_read_input_tokens": 3, "output_tokens": 5}
         stop = "end_turn"
         text_block = lambda value: {"type": "text", "text": value}
+        if marker == "TEST_IMAGE_INPUT":
+            return self._json(200, {"content": [text_block(image_reply(messages[0]["content"], "anthropic"))],
+                                   "stop_reason": "end_turn", "usage": usage})
         content = [text_block("Anthropic credential " + (
             "alice" if self.headers.get("x-api-key") == "anthropic-user-key" else "bob") +
             " model " + request.get("model", "missing"))]
@@ -391,6 +453,8 @@ class Handler(BaseHTTPRequestHandler):
                     "name": name, "input": arguments}]
             else:
                 content = [text_block("Completed patch fixture with preserved unrelated content.")]
+                if marker == "TEST_SPECIFY_WITH_BOOK":
+                    content = [text_block(json.dumps({"reply": "Specification and book updated.", "book_source": "\\documentclass{article}\n\\begin{document}\nCurrent checked server specification.\n\\end{document}\n"}))]
         if marker == "TEST_ANTHROPIC_BILLING":
             return self._json(402, {"error": {"type": "billing_error",
                                              "message": "HIDDEN_ANTHROPIC_BODY"}})

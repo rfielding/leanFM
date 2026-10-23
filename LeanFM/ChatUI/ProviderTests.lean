@@ -4,6 +4,39 @@ namespace LeanFM.ChatUI.ProviderTests
 
 open Lean LeanFM.ChatUI.Provider LeanFM.ChatUI.Server
 
+-- An implementation specification is an artifact layer, not a source request.
+example : requestsImplementationSource "Prepare the implementation specification" = false := by native_decide
+example : requestsImplementationSource "Update spec/Implementation.lean" = false := by native_decide
+example : requestsImplementationSource "Implement the server now" = true := by native_decide
+
+-- property:selected_project_context_drives_chat; task:inspect_task_model.
+-- An overlapping task ID must never substitute the host application's grammar.
+def foreignTask : LeanFM.TaskRequirement :=
+  { LeanFM.ChatUI.Requirements.chatTask with actors := ["Client", "ForeignServer"] }
+def foreignGrammar : LeanFM.TaskGrammar :=
+  { task := foreignTask.id, entry := "ready", terminals := ["rendered"]
+  , body := .event { task := foreignTask.id, src := "Client", dst := "ForeignServer", message := "ForeignRequest" } }
+def foreignSpec : LeanFM.RequirementSpec :=
+  { LeanFM.ChatUI.Requirements.spec with
+    messages := [LeanFM.ChatUI.Requirements.message "ForeignRequest" "Client" "ForeignServer" []]
+    tasks := [foreignTask]
+    grammars := [foreignGrammar] }
+example : (LeanFM.ChatUI.Requirements.interactionMermaid foreignTask foreignSpec).contains
+    "Client->>ForeignServer: ForeignRequest" = true := by native_decide
+example : (LeanFM.ChatUI.Requirements.interactionMermaid foreignTask foreignSpec).contains
+    "ChatPromptSubmitted" = false := by native_decide
+example : (LeanFM.ChatUI.Requirements.interactionMermaid foreignTask foreignSpec).contains
+    "missing task grammar" = false := by native_decide
+example : (tasksJson "foreign" foreignSpec).contains "login_explains_openai_key_protection" = false := by native_decide
+example : curlConfigEscape "quote=\" slash=\\\n\r" = "quote=\\\" slash=\\\\\\n" := by native_decide
+def longImageCaption : String :=
+  String.ofList (List.replicate 5000 'a') ++ "\n![image](artifacts/attachments/0123456789abcdef0123456789abcdef/image.png)"
+example : (conversationExcerpt longImageCaption).length ≤ 3500 := by native_decide
+example : (attachmentIdsFromText (conversationExcerpt longImageCaption)).contains
+    "0123456789abcdef0123456789abcdef" = true := by native_decide
+example : (conversationExcerpt "text\n\nOperational trace:\nprivate diagnostic").contains
+    "private diagnostic" = false := by native_decide
+
 example : LeanFM.ChatUI.Store.jsonStringValue? "{\"display_name\": \"Resettable project\"}" "display_name" = some "Resettable project" := by native_decide
 example : LeanFM.ChatUI.Store.jsonStringValue? "{\"display_name\": \"A \\\"quote\\\"\"}" "display_name" = some "A \"quote\"" := by native_decide
 example : LeanFM.ChatUI.Store.jsonNatValue? "{\"count\": 12}" "count" = some 12 := by native_decide
