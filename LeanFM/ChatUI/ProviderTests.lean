@@ -31,7 +31,17 @@ example : bookVisibleText "{\"reply\":\"Ready\",\"book_source\":\"hidden" = "" :
 example : bookVisibleText "An ordinary prose response." = "An ordinary prose response." := by native_decide
 example : bookVisibleText validEnvelope = "Ready" := by native_decide
 example : bookVisibleText ("```\n" ++ validEnvelope ++ "\n```") = "Ready" := by native_decide
-example : bookVisibleText ("Provider preface: " ++ validEnvelope) = "" := by native_decide
+example : bookVisibleText ("Provider preface: " ++ validEnvelope) = "Ready" := by native_decide
+example : (bookChatEdit? ("Here is the update:\n```json\n" ++ validEnvelope ++ "\n```\nDone.")).map (·.unwrapped) = some true := by native_decide
+example : (bookChatEdit? ("Update:\n" ++ malformedMathEnvelope)).map (·.source) = some source := by native_decide
+example : bookChatEdit? (validEnvelope ++ "\n" ++ validEnvelope) |>.isNone := by native_decide
+example : bookChatEdit? ("[" ++ validEnvelope ++ "]") |>.isNone := by native_decide
+example : bookChatEdit? ("Update: " ++ validEnvelope ++ "\n{\"unfinished\":") |>.isNone := by native_decide
+example : bookChatEdit? ("Update: {\"reply\":\"private\",\"book_source\":\"hidden") |>.isNone := by native_decide
+example : !(bookReplyShape "HIDDEN_PREFIX").contains "HIDDEN" := by native_decide
+example : !(bookReplyShape validEnvelope).contains "Ready" := by native_decide
+example : (bookReplyShape "HIDDEN_PREFIX").contains "leading_token=other" := by native_decide
+example : roundOutcome (Json.mkObj [("stop_reason", toJson "HIDDEN_PROVIDER_STATUS")]) = "unknown" := by native_decide
 example : (bookEnvelopeDiagnostic "{\"reply\":\"private\",\"book_source\":\"secret").contains "offset" := by native_decide
 example : !(bookEnvelopeDiagnostic "{\"reply\":\"private\",\"book_source\":\"secret").contains "secret" := by native_decide
 example : bookEnvelopeDiagnostic "{\"reply\":123,\"book_source\":\"hidden\"}" =

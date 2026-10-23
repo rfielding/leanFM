@@ -145,6 +145,70 @@ class MultiProvider(unittest.TestCase):
         self.assertIn(r"Repaired A \& B.", (self.root / "book/main.tex").read_text())
         self.assertEqual(stats()["invalid_messages"], 0)
 
+    def test_wrapped_book_is_recovered_locally_and_ambiguous_books_are_rejected(self):
+        before = stats()["anthropic_requests"]
+        used = self.alice.request("/api/me")[1]["billing"]["tokens_used"]
+        status, body = self.alice.chat(self.project, "TEST_ANTHROPIC_WRAPPED_BOOK")
+        self.assertEqual(status, 200)
+        self.assertTrue(body["book_updated"], body["text"])
+        self.assertIn("Recovered one complete book JSON object", body["text"])
+        self.assertEqual(stats()["anthropic_requests"] - before, 1)
+        self.assertEqual(body["usage"]["total_tokens"], 17)
+        self.assertEqual(self.alice.request("/api/me")[1]["billing"]["tokens_used"] - used, 17)
+        self.assertIn("Wrapped book marker", (self.root / "book/main.tex").read_text())
+        source = (self.root / "book/main.tex").read_bytes()
+        before = stats()["anthropic_requests"]
+        _, body = self.alice.chat(self.project, "TEST_ANTHROPIC_AMBIGUOUS_BOOK")
+        self.assertIn("leanfm_malformed_book_reply:", body["text"])
+        self.assertNotIn("HIDDEN_", body["text"])
+        self.assertEqual(stats()["anthropic_requests"] - before, 1)
+        self.assertEqual((self.root / "book/main.tex").read_bytes(), source)
+        journal = (self.root / "logs/runtime-diagnostics.jsonl").read_text()
+        self.assertIn("Provider round 1 (anthropic, claude-test)", journal)
+        self.assertIn("input=12 cached=3 output=5", journal)
+        self.assertIn("leading_token=other unique_complete_object=false", journal)
+        self.assertNotIn("HIDDEN_AMBIGUOUS", journal)
+
+    def test_budget_is_checked_between_paid_rounds_for_both_providers(self):
+        for username, marker, model, counter in [
+            ("round_budget_openai", "TEST_TOOL_BUDGET", "test-model", "requests"),
+            ("round_budget_anthropic", "TEST_ANTHROPIC_TOOL_BUDGET", CLAUDE, "anthropic_requests"),
+        ]:
+            with self.subTest(model=model):
+                client = Client().register(username, openai_api_key="test-user-key", anthropic_api_key="anthropic-user-key")
+                project = client.project()
+                before = stats()[counter]
+                status, body = client.chat(project, marker, model)
+                self.assertEqual(status, 200)
+                self.assertIn("leanfm_session_token_budget_exhausted:", body["text"])
+                self.assertIn('"status":"fail"', body["text"])
+                self.assertEqual(stats()[counter] - before, 1, "must not send a continuation after exhaustion")
+                self.assertEqual(body["usage"]["total_tokens"], 1000000)
+                billing = client.request("/api/me")[1]["billing"]
+                self.assertEqual(billing["tokens_used"], 1000000, "charge reported usage exactly once")
+                self.assertEqual(billing["tokens_remaining"], 0)
+                self.assertEqual((ROOT / "accounts" / username / "projects" / project / "spec/budget-note.txt").read_text(), "Completed before budget stop.\n")
+                self.assertEqual(client.chat(project, "must not call provider", model)[0], 409)
+                self.assertEqual(stats()[counter] - before, 1)
+
+    def test_rejected_repair_and_failed_openai_loop_keep_all_reported_usage(self):
+        for marker, model, counter, expected_tokens, detail in [
+            ("TEST_ANTHROPIC_REJECTED_REPAIR", CLAUDE, "anthropic_requests", 34, "outside the bounded diagnostic neighborhood"),
+            ("TEST_REPEATED_TOOL_FAILURE", "test-model", "requests", 36, "repeated an identical failed workspace operation"),
+        ]:
+            with self.subTest(marker=marker):
+                used = self.alice.request("/api/me")[1]["billing"]["tokens_used"]
+                before = stats()[counter]
+                source = (self.root / "book/main.tex").read_bytes()
+                status, body = self.alice.chat(self.project, marker, model)
+                self.assertEqual(status, 200)
+                self.assertFalse(body["book_updated"])
+                self.assertIn(detail, body["text"])
+                self.assertEqual(body["usage"]["total_tokens"], expected_tokens)
+                self.assertEqual(self.alice.request("/api/me")[1]["billing"]["tokens_used"] - used, expected_tokens)
+                self.assertEqual(stats()[counter] - before, 2)
+                self.assertEqual((self.root / "book/main.tex").read_bytes(), source)
+
     def test_paused_turn_continues_but_unfinished_tool_response_does_not_claim_success(self):
         before = stats()
         status, body = self.alice.chat(self.project, "TEST_ANTHROPIC_PAUSE")

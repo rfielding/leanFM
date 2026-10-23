@@ -254,11 +254,24 @@ Provider credit/spend/quota rejections, rate limits, incomplete output and local
 session safety limits receive distinct diagnostics. Response length establishes
 no credit balance. An incomplete Responses result retains reported usage but
 cannot execute returned tools or update the book. A malformed reply envelope
-never exposes its hidden book source as prose: only illegal JSON escapes before
-LaTeX math delimiters are repaired deterministically, followed by ordinary
-validation. Other format failures stop with bounded metadata. None triggers a
-paid retry; arbitrary provider bodies and unknown error identifiers stay out of
-diagnostics.
+never exposes its hidden book source as prose. One complete, unambiguous JSON
+object surrounded by prose or fences, and illegal JSON escapes before LaTeX
+math delimiters, can be normalized locally before ordinary validation and the
+book build. Arrays, multiple proposed objects and truncated objects are not
+salvaged. Other format failures retain the parser offset, character count,
+leading-token category and complete-object flag, not arbitrary response text.
+None triggers a paid retry.
+
+Every provider round records its input, cached-input, output and cumulative
+usage, request and answer character counts, outcome and tool count before the
+next paid call. The session budget is checked between tool rounds and before
+bounded recovery or repair, not just when a chat turn begins. Reported usage is
+charged once, including failed validation. This is an observed-token brake, not
+a hard monetary cap: an in-flight request can exceed the remaining budget, and
+an unanswered request's usage is unknown. Provider spending controls remain
+necessary. Saved API keys remain password-encrypted on disk across server
+restarts; only unlocked sessions disappear. Blank login key fields preserve
+those saved keys and never display them.
 
 Repeated failure is bounded at the point of expense. Within an active turn, a
 second tool call with the same name and exact arguments after an error is not

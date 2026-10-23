@@ -126,6 +126,15 @@ class Handler(BaseHTTPRequestHandler):
             elif marker == "TEST_MALFORMED_BOOK_ENVELOPE":
                 body = {"output_text": '{"reply":"Not a successful update","book_source":"HIDDEN_BOOK_SOURCE ```leanfm-questions',
                         "usage": usage}
+            elif marker == "TEST_TOOL_BUDGET":
+                body = {"id": "budget-response", "usage": {"input_tokens": 999990,
+                        "output_tokens": 10, "total_tokens": 1000000}, "output": [
+                    {"type": "function_call", "call_id": "budget-write", "name": "workspace_write",
+                     "arguments": json.dumps({"path": "spec/budget-note.txt", "content": "Completed before budget stop.\n"})}]}
+            elif marker == "TEST_REPEATED_TOOL_FAILURE" or request.get("previous_response_id") == "repeat-failed-read":
+                body = {"id": "repeat-failed-read", "usage": usage, "output": [
+                    {"type": "function_call", "call_id": "failed-read", "name": "workspace_read",
+                     "arguments": json.dumps({"path": "spec/never-existed.txt"})}]}
             elif marker == "TEST_RECOVER_JSON_MATH":
                 edit = {"reply": "Updated the book with deterministic JSON recovery.",
                         "book_source": "\\documentclass{article}\n\\begin{document}\nThe value is \\(x+1\\).\n\\end{document}\n"}
@@ -306,6 +315,17 @@ class Handler(BaseHTTPRequestHandler):
                 content = [text_block("Completed paused turn.")]
         if marker == "TEST_ANTHROPIC_UNFINISHED":
             stop, content = "tool_use", [text_block("Not a completed answer.")]
+        if marker == "TEST_ANTHROPIC_WRAPPED_BOOK":
+            envelope = json.dumps({"reply": "Recovered complete book without another request.",
+                "book_source": "\\documentclass{article}\n\\begin{document}\nWrapped book marker.\n\\end{document}\n"})
+            content = [text_block("Here is the updated book:"), text_block("```json\n" + envelope + "\n```"), text_block("Done.")]
+        if marker == "TEST_ANTHROPIC_AMBIGUOUS_BOOK":
+            envelope = json.dumps({"reply": "HIDDEN_AMBIGUOUS_REPLY", "book_source": "HIDDEN_AMBIGUOUS_SOURCE"})
+            content = [text_block("Two alternatives:\n" + envelope + "\n" + envelope)]
+        if marker == "TEST_ANTHROPIC_TOOL_BUDGET":
+            usage = {"input_tokens": 999990, "output_tokens": 10}
+            stop, content = "tool_use", [{"type": "tool_use", "id": "budget-write", "name": "workspace_write",
+                "input": {"path": "spec/budget-note.txt", "content": "Completed before budget stop.\n"}}]
         if marker in {"TEST_ANTHROPIC_TOOL", "TEST_ANTHROPIC_INCOMPLETE", "TEST_ANTHROPIC_CANCEL", "TEST_ANTHROPIC_DUPLICATE"}:
             if len(messages) == 1:
                 if marker == "TEST_ANTHROPIC_CANCEL":
@@ -331,11 +351,12 @@ class Handler(BaseHTTPRequestHandler):
         if marker == "TEST_ANTHROPIC_BOOK":
             content = [text_block(json.dumps({"reply": "Updated the book through Anthropic.",
                 "book_source": "\\documentclass{article}\n\\begin{document}\nAnthropic durable book.\n\\end{document}\n"}))]
-        if marker == "TEST_ANTHROPIC_REPAIR" and not repair:
+        if marker in {"TEST_ANTHROPIC_REPAIR", "TEST_ANTHROPIC_REJECTED_REPAIR"} and not repair:
             content = [text_block(json.dumps({"reply": "Repair this book through the selected provider.",
-                "book_source": "\\documentclass{article}\n\\usepackage{underscore}\n\\begin{document}\nBroken A & B.\n\\end{document}\n"}))]
+                "book_source": "\\documentclass{article}\n\\usepackage{underscore}\n\\begin{document}\nBroken A & B. " + marker + "\n\\end{document}\n"}))]
         if repair:
-            content = [text_block(json.dumps({"line_number": 4, "replacement": "Repaired A \\& B."}))]
+            content = [text_block(json.dumps({"line_number": 10000 if "TEST_ANTHROPIC_REJECTED_REPAIR" in text else 4,
+                                             "replacement": "Repaired A \\& B."}))]
         self._json(200, {"id": "anthropic-response", "type": "message", "role": "assistant",
                          "content": content, "model": request["model"], "stop_reason": stop, "usage": usage})
 

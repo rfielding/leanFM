@@ -527,6 +527,7 @@ structure BookChatEdit where
   reply : String
   source : String
   repairedEscapes : Bool := false
+  unwrapped : Bool := false
 
 /-- Repair only illegal JSON escapes for LaTeX math delimiters. Already escaped
     backslashes and all other JSON escapes pass through unchanged. -/
@@ -555,8 +556,44 @@ def bookEnvelopeJsonText (text : String) : String :=
     ((trimmed.drop 3).dropEnd 3 |>.trimAscii).toString
   else trimmed
 
+/-- Extract one whole top-level object, never a nested fragment, an array member,
+    a truncated object, or a choice between multiple proposed revisions. JSON
+    string escaping, including TeX braces inside strings, is preserved verbatim. -/
+def uniqueBookObject? (text : String) : Option String := Id.run do
+  let mut depth := 0
+  let mut quoted := false
+  let mut escaped := false
+  let mut chars : List Char := []
+  let mut result : Option String := none
+  for c in text.toList do
+    if depth == 0 then
+      if c == '{' then
+        if result.isSome then return none
+        depth := 1
+        chars := [c]
+      else if c == '}' || c == '[' || c == ']' then return none
+    else
+      chars := c :: chars
+      if quoted then
+        if escaped then escaped := false
+        else if c == '\\' then escaped := true
+        else if c == '"' then quoted := false
+      else if c == '"' then quoted := true
+      else if c == '{' then depth := depth + 1
+      else if c == '}' then
+        depth := depth - 1
+        if depth == 0 then result := some (String.ofList chars.reverse)
+  if depth != 0 then return none
+  return result
+
+def bookEnvelopeCandidate (text : String) : String :=
+  let framed := bookEnvelopeJsonText text
+  if (Lean.Json.parse framed).isOk then framed
+  else (uniqueBookObject? framed).getD framed
+
 def bookChatEdit? (text : String) : Option BookChatEdit := do
-  let jsonText := bookEnvelopeJsonText text
+  guard (text.length ≤ 2000000)
+  let jsonText := bookEnvelopeCandidate text
   let (json, repairedEscapes) ← match Lean.Json.parse jsonText with
     | .ok json => some (json, false)
     | .error _ => do
@@ -567,10 +604,20 @@ def bookChatEdit? (text : String) : Option BookChatEdit := do
   let reply ← Provider.jsonStringField? json "reply"
   let source ← Provider.jsonStringField? json "book_source"
   guard (!reply.trimAscii.isEmpty && !source.trimAscii.isEmpty)
-  pure { reply, source, repairedEscapes }
+  pure { reply, source, repairedEscapes, unwrapped := jsonText != bookEnvelopeJsonText text }
+
+def bookReplyShape (text : String) : String :=
+  let leading := match text.trimAscii.toString.toList.head? with
+    | none => "empty"
+    | some '{' => "object"
+    | some '[' => "array"
+    | some '`' => "fence"
+    | some _ => "other"
+  "response_chars=" ++ toString text.length ++ " leading_token=" ++ leading ++
+    " unique_complete_object=" ++ toString (uniqueBookObject? text).isSome
 
 def bookEnvelopeDiagnostic (text : String) : String :=
-  match Lean.Json.parse (escapeJsonMathDelimiters (bookEnvelopeJsonText text)) with
+  match Lean.Json.parse (escapeJsonMathDelimiters (bookEnvelopeCandidate text)) with
   | .error message =>
       -- Lean's JSON parser emits a byte offset and grammar expectation, not an
       -- excerpt of the untrusted response. Keep that specific failure location.
@@ -786,13 +833,13 @@ def replaceBookLine? (candidate : String) (lineNumber : Nat) (replacement : Stri
   pure (String.intercalate "\n" (lines.set (lineNumber - 1) replacement))
 
 def repairBookEdit (key candidate diagnostic model : String) (provider : String := "openai")
-    (cancelled : Provider.CancelCheck := pure false) : IO (Except String (String × Provider.Completion)) := do
+    (cancelled : Provider.CancelCheck := pure false) (hooks : Provider.AgentHooks := {}) : IO (Except String (String × Provider.Completion)) := do
   let some lineNumber := diagnosticLineNumber? diagnostic
     | return .error "The compiler did not identify a source line, so no safe bounded line repair was possible."
   let instructions := "You repair exactly one failing line in the supplied numbered neighborhood of a pdfLaTeX document. The compiler's terminal line may follow the actual malformed construct. Return ONLY JSON with numeric line_number and string replacement. Preserve meaning. Never return the full document. Escape LaTeX prose characters such as &, %, _, #, and $ when they are literal."
   let prompt := "Repair the compiler failure using the numbered excerpt. Return only {\"line_number\":N,\"replacement\":\"complete replacement for that one line\"}.\n\nCompiler diagnostic:\n" ++
     truncateText diagnostic 3000 ++ "\n\nNumbered excerpt:\n" ++ numberedBookExcerpt candidate lineNumber
-  match ← Provider.completeWithInstructionsTimeout (← bookRepairTimeoutSeconds) 2000 key instructions prompt model provider cancelled with
+  match ← Provider.completeWithInstructionsTimeout (← bookRepairTimeoutSeconds) 2000 key instructions prompt model provider cancelled hooks with
   | .error message => return .error message
   | .ok completion =>
       let some json := (Lean.Json.parse completion.text.trimAscii.toString).toOption
@@ -817,7 +864,7 @@ structure AppliedChatResult where
 
 def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
     (trace : IO.Ref (List String)) (provider : String := "openai")
-    (cancelled : Provider.CancelCheck := pure false) : IO AppliedChatResult := do
+    (cancelled : Provider.CancelCheck := pure false) (hooks : Provider.AgentHooks := {}) : IO AppliedChatResult := do
   if ← cancelled then return AppliedChatResult.mk "The turn stopped before a book update because its session ended or cancellation was requested." answer false (some "No book revision was applied.")
   if let some failure := answer.failure then
     appendProjectDiagnostic root "provider_response_failure" failure
@@ -830,10 +877,13 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
         let failure := "leanfm_malformed_book_reply: The model returned an invalid JSON book reply. " ++ diagnostic ++
           " The hidden source was not displayed or applied. This is a response-format failure, not a reported credit exhaustion. No automatic paid retry was attempted."
         appendProjectDiagnostic root "provider_response_format"
-          (diagnostic ++ " response_chars=" ++ toString answer.text.length)
+          (diagnostic ++ " " ++ bookReplyShape answer.text)
         appendLiveTrace root trace failure
         return { text := failure, completion := answer, bookUpdated := false, notice := none }
       return AppliedChatResult.mk answer.text answer false none
+  if edit.unwrapped then
+    appendLiveTrace root trace "Recovered one complete book JSON object from surrounding prose or fences; no paid retry was needed"
+    appendProjectDiagnostic root "book_reply_framing" (bookReplyShape answer.text)
   if edit.repairedEscapes then
     appendLiveTrace root trace "Recovered JSON escaping of LaTeX math delimiters deterministically; no paid retry was needed"
     appendProjectDiagnostic root "book_reply_json_escaping" "Recovered illegal JSON math-delimiter escapes before validating the book candidate"
@@ -899,7 +949,7 @@ def applyBookChatEdit (key root model : String) (answer : Provider.Completion)
         appendLiveTrace root trace ("Started automatic book repair " ++ toString attempt ++ " of 3")
         writeChatStatus root "book-repair" (buildErrorSummary latestDiagnostic ++
           " Requesting bounded automatic repair " ++ toString attempt ++ " of 3.") attempt
-        match ← repairBookEdit key candidate latestDiagnostic model provider cancelled with
+        match ← repairBookEdit key candidate latestDiagnostic model provider cancelled hooks with
         | .error repairError =>
             latestRepairError := some repairError
             appendLiveTrace root trace ("Automatic book repair " ++ toString attempt ++ " failed: " ++ repairError)
@@ -1448,9 +1498,34 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   let cancelled : Provider.CancelCheck := do
                     if ← chatCancellationRequested root then return true
                     return !(← sessionActive? token username)
+                  let reportedUsage ← IO.mkRef
+                    ({ text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } : Provider.Completion)
+                  let hooks : Provider.AgentHooks := {
+                    beforeRequest := do
+                      let some billing ← sessionBilling? token username
+                        | return some "The login session ended; no further provider request was sent."
+                      if billing.tokensUsed >= billing.tokenBudget then
+                        let failure := "leanfm_session_token_budget_exhausted: The local session token safety budget is exhausted. Stopped before another provider request. Earlier completed edits remain in Project memory; this is not a reported provider credit exhaustion."
+                        appendLiveTrace root trace failure
+                        return some failure
+                      return none
+                    onResponse := fun report => do
+                      reportedUsage.modify (fun usage => Provider.addUsage usage report.usage)
+                      recordSessionUsage token username report.usage.totalTokens
+                      let total ← reportedUsage.get
+                      appendLiveTrace root trace ("Provider round " ++ toString report.round ++
+                        " (" ++ modelInfo.provider ++ ", " ++ modelInfo.model ++ "): " ++ report.outcome ++
+                        "; input=" ++ toString report.usage.inputTokens ++
+                        " cached=" ++ toString report.usage.cachedInputTokens ++
+                        " output=" ++ toString report.usage.outputTokens ++
+                        " cumulative_total=" ++ toString total.totalTokens ++
+                        " request_chars=" ++ toString report.requestChars ++
+                        " text_chars=" ++ toString report.textChars ++
+                        " tool_calls=" ++ toString report.toolCalls)
+                  }
                   match ← Provider.completeAgent key (workspaceAgentInstructions root) contextualPrompt modelInfo.model runner
                       (cancelled := cancelled) (provider := modelInfo.provider)
-                      (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) with
+                      (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) (hooks := hooks) with
                   | .error "agent_cancelled" =>
                       clearChatCancellation root
                       writeChatStatus root "cancelled" "Agent turn cancelled at a safe boundary."
@@ -1483,7 +1558,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                           pure ("FATAL: repeated_failed_tool_call:" ++ name)
                         match ← Provider.completeAgent key (workspaceAgentInstructions root) recoveryPrompt modelInfo.model noRepeatTool
                             (cancelled := cancelled) (provider := modelInfo.provider)
-                            (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) with
+                            (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) (hooks := hooks) with
                         | .error recoveryError =>
                             appendLiveTrace root trace ("Missing-artifact recovery did not complete: " ++ recoveryError)
                         | .ok recovered =>
@@ -1507,11 +1582,16 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         (looksLikeBookEnvelope answer.text && (bookChatEdit? answer.text).isNone)
                       let applied ← if !invalidAnswer && (projectId == "leanfm-workspace" || projectId == "go-server") then
                           pure (AppliedChatResult.mk (bookVisibleText answer.text) answer false none)
-                        else applyBookChatEdit key root modelInfo.model answer trace modelInfo.provider cancelled
+                        else applyBookChatEdit key root modelInfo.model answer trace modelInfo.provider cancelled hooks
                       clearChatCancellation root
                       answer := applied.completion
+                      let observed ← reportedUsage.get
+                      -- A rejected repair may have consumed tokens before its
+                      -- line-repair JSON failed validation. Never lose that usage.
+                      if observed.totalTokens > answer.totalTokens then
+                        answer := { observed with text := answer.text, failure := answer.failure }
                       match cookieValue? request "leanfm_session" with
-                      | some token => recordSessionUsage token username answer.totalTokens
+                      | some token => recordSessionUsage token username (answer.totalTokens - observed.totalTokens)
                       | none => pure ()
                       let mp4Requested := prompt.toLower.contains "mp4"
                       let mut activity := (← trace.get).reverse

@@ -41,6 +41,21 @@ deriving Repr
 abbrev ToolRunner := String → String → IO String
 abbrev CancelCheck := IO Bool
 
+/-- Server-owned numeric/allowlisted metadata only; never a provider body,
+    prompt, tool arguments, credential, or arbitrary provider identifier. -/
+structure RoundReport where
+  round : Nat
+  requestChars : Nat
+  usage : Completion
+  cumulative : Completion
+  outcome : String
+  toolCalls : Nat
+  textChars : Nat
+
+structure AgentHooks where
+  beforeRequest : IO (Option String) := pure none
+  onResponse : RoundReport → IO Unit := fun _ => pure ()
+
 def curlConfigEscape (value : String) : String :=
   String.join <| value.toList.map fun c =>
     if c == '\\' then "\\\\" else if c == '"' then "\\\""
@@ -92,6 +107,13 @@ def jsonNatField? (json : Json) (key : String) : Option Nat :=
 
 def jsonArrayField? (json : Json) (key : String) : Option (Array Json) :=
   ((json.getObjVal? key).bind Json.getArr?).toOption
+
+def roundOutcome (json : Json) : String :=
+  let reason := (jsonStringField? json "stop_reason").orElse
+    (fun _ => jsonStringField? json "status") |>.getD "unknown"
+  if ["completed", "incomplete", "failed", "end_turn", "stop_sequence", "tool_use",
+      "pause_turn", "max_tokens", "model_context_window_exceeded", "refusal"].contains reason
+    then reason else "unknown"
 
 def listedModels (key : String) : IO (Except String (List String)) := do
   try
@@ -242,9 +264,11 @@ def responseFailure? (json : Json) : Option String :=
 
 partial def completeAgentLoop (key baseUrl model instructions prompt previousId : String)
     (pending : List String) (runTool : ToolRunner) (cancelled : CancelCheck)
+    (hooks : AgentHooks)
     (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
   if ← cancelled then return .error "agent_cancelled"
-  if remaining == 0 then return .error "The workspace agent exceeded its 16-step tool limit."
+  if remaining == 0 then return .ok { usage with failure := some "The workspace agent exceeded its 16-step tool limit; no further request was sent." }
+  if let some failure ← hooks.beforeRequest then return .ok { usage with failure := some failure }
   let input := if previousId.isEmpty then "\"" ++ jsonEscape prompt ++ "\"" else
     "[" ++ String.intercalate "," pending ++ "]"
   let continuation := if previousId.isEmpty then "" else
@@ -254,42 +278,50 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
     ",\"tools\":" ++ workspaceToolsJson ++ ",\"tool_choice\":\"auto\"}"
   try
     let (status, body) ← apiCall "POST" (baseUrl ++ "/responses") key payload
-    if ← cancelled then return .error "agent_cancelled"
     if status < 200 || status ≥ 300 then
       return .ok { usage with failure := some (apiErrorDetail status body) }
-    let some json := (Json.parse body).toOption | return .error "OpenAI returned invalid JSON to the workspace agent."
+    let some json := (Json.parse body).toOption | return .ok { usage with failure := some "OpenAI returned invalid JSON to the workspace agent." }
     let nextUsage := addUsage usage (usageFromJson json)
+    let calls := functionCalls json
+    hooks.onResponse
+      { round := 17 - remaining
+      , requestChars := payload.length
+      , usage := usageFromJson json
+      , cumulative := nextUsage
+      , outcome := roundOutcome json
+      , toolCalls := calls.length
+      , textChars := ((responseText? json).getD "").length }
+    if ← cancelled then return .error "agent_cancelled"
     if let some failure := responseFailure? json then
       return .ok { nextUsage with failure := some failure }
-    let calls := functionCalls json
     if calls.isEmpty then
       match responseText? json with
       | some text => return .ok { nextUsage with text }
-      | none => return .error "OpenAI returned neither workspace tool calls nor answer text."
-    let some responseId := responseId? json | return .error "OpenAI omitted the response ID needed to continue workspace tools."
+      | none => return .ok { nextUsage with failure := some "OpenAI returned neither workspace tool calls nor answer text." }
+    let some responseId := responseId? json | return .ok { nextUsage with failure := some "OpenAI omitted the response ID needed to continue workspace tools." }
     let mut outputs : List String := []
     for call in calls do
       if ← cancelled then return .error "agent_cancelled"
       let result ← runTool call.name call.arguments
       if result.startsWith "FATAL: repeated_failed_tool_call:" then
-        return .error "The agent repeated an identical failed workspace operation. LeanFM stopped the turn to prevent further token and compute waste. Inspect the live Operational trace, correct the path or operation, and resend; if the path is already inside the selected project, copy the diagnostic to Codex."
+        return .ok { nextUsage with failure := some "The agent repeated an identical failed workspace operation. LeanFM stopped before another paid request; earlier completed edits remain in Project memory." }
       outputs := toolOutputJson call.callId result :: outputs
-    completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool cancelled nextUsage (remaining - 1)
+    completeAgentLoop key baseUrl model instructions prompt responseId outputs.reverse runTool cancelled hooks nextUsage (remaining - 1)
   catch error =>
     let detail := error.toString
     let completedSteps := 16 - remaining
     if detail.contains "provider_timeout:" then
       let timeoutSeconds ← providerTimeoutSeconds
-      pure (.error ("OpenAI workspace-agent request timed out after " ++
+      pure (.ok { usage with failure := some ("OpenAI workspace-agent request timed out after " ++
         toString timeoutSeconds ++
         " seconds; " ++ toString completedSteps ++ " of at most 16 tool steps completed. " ++
-        "The timed-out paid request was not retried automatically."))
+        "The timed-out paid request was not retried automatically; usage of that unanswered request is unknown.") })
     else if detail.contains "provider_transport_exit:" then
-      pure (.error ("OpenAI workspace-agent transport failed before a response was received; " ++
-        toString completedSteps ++ " of at most 16 tool steps completed. The paid request was not retried automatically."))
+      pure (.ok { usage with failure := some ("OpenAI workspace-agent transport failed before a response was received; " ++
+        toString completedSteps ++ " of at most 16 tool steps completed. The paid request was not retried automatically; usage of that unanswered request is unknown.") })
     else
-      pure (.error ("OpenAI workspace-agent failed before a response was received; " ++
-        toString completedSteps ++ " of at most 16 tool steps completed."))
+      pure (.ok { usage with failure := some ("OpenAI workspace-agent failed before a response was received; " ++
+        toString completedSteps ++ " of at most 16 tool steps completed.") })
 
 def anthropicErrorDetail (status : Nat) (body : String) : String :=
   let error := (Json.parse body).toOption.bind fun json => (json.getObjVal? "error").toOption
@@ -352,17 +384,26 @@ def anthropicTools (webSearch : Bool) : Json :=
 
 partial def completeAnthropicLoop (key baseUrl model instructions : String) (messages : List Json)
     (maxOutputTokens : Nat) (webSearch : Bool) (runTool : ToolRunner) (cancelled : CancelCheck)
-    (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
+    (hooks : AgentHooks) (usage : Completion) (remaining : Nat) : IO (Except String Completion) := do
   if ← cancelled then return .error "agent_cancelled"
   if remaining == 0 then return .ok { usage with failure := some "Anthropic workspace agent exceeded its 16-step limit; no further request was sent." }
+  if let some failure ← hooks.beforeRequest then return .ok { usage with failure := some failure }
   let payload := (Json.mkObj [("model", toJson model), ("system", toJson instructions),
     ("max_tokens", toJson maxOutputTokens), ("messages", toJson messages), ("tools", anthropicTools webSearch)]).compress
   try
     let (status, body) ← apiCall "POST" (baseUrl ++ "/messages") key payload "anthropic"
-    if ← cancelled then return .error "agent_cancelled"
     if status < 200 || status ≥ 300 then return .ok { usage with failure := some (anthropicErrorDetail status body) }
     let some json := (Json.parse body).toOption | return .ok { usage with failure := some "Anthropic returned invalid JSON; no tools or answer were applied." }
     let nextUsage := addUsage usage (anthropicUsage json)
+    hooks.onResponse
+      { round := 17 - remaining
+      , requestChars := payload.length
+      , usage := anthropicUsage json
+      , cumulative := nextUsage
+      , outcome := roundOutcome json
+      , toolCalls := (anthropicCalls json).length
+      , textChars := (anthropicText json).length }
+    if ← cancelled then return .error "agent_cancelled"
     if let some failure := anthropicFailure? json then return .ok { nextUsage with failure := some failure }
     let content := (jsonArrayField? json "content").getD #[]
     let assistant := Json.mkObj [("role", toJson "assistant"), ("content", toJson content)]
@@ -373,7 +414,7 @@ partial def completeAnthropicLoop (key baseUrl model instructions : String) (mes
     if calls.isEmpty then
       if jsonStringField? json "stop_reason" == some "pause_turn" then
         return ← completeAnthropicLoop key baseUrl model instructions (messages ++ [assistant])
-          maxOutputTokens webSearch runTool cancelled nextUsage (remaining - 1)
+          maxOutputTokens webSearch runTool cancelled hooks nextUsage (remaining - 1)
       if jsonStringField? json "stop_reason" == some "tool_use" then
         return .ok { nextUsage with failure := some "Anthropic requested tool use without valid client tool calls; no completion was claimed and no automatic paid retry was attempted." }
       let text := anthropicText json
@@ -391,7 +432,7 @@ partial def completeAnthropicLoop (key baseUrl model instructions : String) (mes
         ("content", toJson result), ("is_error", toJson (result.startsWith "ERROR:"))]]
     completeAnthropicLoop key baseUrl model instructions
       (messages ++ [assistant, Json.mkObj [("role", toJson "user"), ("content", toJson results)]])
-      maxOutputTokens webSearch runTool cancelled nextUsage (remaining - 1)
+      maxOutputTokens webSearch runTool cancelled hooks nextUsage (remaining - 1)
   catch error =>
     let timeout := error.toString.contains "provider_timeout:"
     return .ok { usage with failure := some (if timeout then
@@ -400,20 +441,23 @@ partial def completeAnthropicLoop (key baseUrl model instructions : String) (mes
 
 def completeAgent (key instructions prompt model : String) (runTool : ToolRunner)
     (cancelled : CancelCheck := pure false) (provider : String := "openai")
-    (maxOutputTokens : Nat := 20000) (webSearch : Bool := false) : IO (Except String Completion) := do
+    (maxOutputTokens : Nat := 20000) (webSearch : Bool := false)
+    (hooks : AgentHooks := {}) : IO (Except String Completion) := do
   let baseUrl ← providerBaseUrl provider
   if provider == "anthropic" then
     return ← completeAnthropicLoop key baseUrl model instructions
       [Json.mkObj [("role", toJson "user"), ("content", toJson prompt)]]
-      maxOutputTokens webSearch runTool cancelled
+      maxOutputTokens webSearch runTool cancelled hooks
       { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
   if provider != "openai" then return .error "Unsupported model provider; no request was sent."
-  completeAgentLoop key baseUrl model instructions prompt "" [] runTool cancelled
+  completeAgentLoop key baseUrl model instructions prompt "" [] runTool cancelled hooks
     { text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } 16
 
 def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key instructions prompt model : String)
-    (provider : String := "openai") (cancelled : CancelCheck := pure false) : IO (Except String Completion) := do
+    (provider : String := "openai") (cancelled : CancelCheck := pure false)
+    (hooks : AgentHooks := {}) : IO (Except String Completion) := do
   if ← cancelled then return .error "agent_cancelled"
+  if let some failure ← hooks.beforeRequest then return .error failure
   let baseUrl ← providerBaseUrl provider
   let payload := if provider == "anthropic" then
     (Json.mkObj [("model", toJson model), ("system", toJson instructions), ("max_tokens", toJson maxOutputTokens),
@@ -422,10 +466,18 @@ def completeWithInstructionsTimeout (timeoutSeconds maxOutputTokens : Nat) (key 
   try
     let endpoint := if provider == "anthropic" then "/messages" else "/responses"
     let (status, body) ← apiCallWithTimeout timeoutSeconds "POST" (baseUrl ++ endpoint) key payload provider
-    if ← cancelled then return .error "agent_cancelled"
     if status < 200 || status ≥ 300 then
       return .error (if provider == "anthropic" then anthropicErrorDetail status body else apiErrorDetail status body)
     let some json := (Json.parse body).toOption | return .error (providerName provider ++ " returned invalid response JSON.")
+    let usage := if provider == "anthropic" then anthropicUsage json else usageFromJson json
+    hooks.onResponse
+      { round := 1
+      , requestChars := payload.length
+      , usage, cumulative := usage
+      , outcome := "book_repair_" ++ roundOutcome json
+      , toolCalls := 0
+      , textChars := if provider == "anthropic" then (anthropicText json).length else ((responseText? json).getD "").length }
+    if ← cancelled then return .error "agent_cancelled"
     if provider == "anthropic" then
       if let some failure := anthropicFailure? json then return .error failure
       if !( ["end_turn", "stop_sequence"].contains ((jsonStringField? json "stop_reason").getD "")) then
