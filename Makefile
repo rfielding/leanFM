@@ -17,7 +17,7 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build ui-build run serve stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+.PHONY: build ui-build run serve claude stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
 
 build: ui-build
 	lake build leanfm-server
@@ -32,6 +32,9 @@ run:
 
 serve:
 	lake exe leanfm-server
+
+claude:
+	bash scripts/claude.sh
 
 stop:
 	@pid="$$(ss -ltnp 2>/dev/null | rg ':$(PORT)' | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"; \
@@ -73,6 +76,7 @@ kerberos-video:
 
 chatui-check: build
 	python3 scripts/chatui_crypto_test.py
+	python3 scripts/chatui_patch_test.py
 	lake env lean LeanFM/ChatUI/ProviderTests.lean
 	lake env lean LeanFM/ChatUI/HttpRequestTests.lean
 	bash scripts/chatui_http_check.sh

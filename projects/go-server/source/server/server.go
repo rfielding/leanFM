@@ -513,12 +513,19 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	room = n
+	rejectAction := func(status int, message string) {
+		respond(status, Reply{Error: message, Game: public(room, false)}, "ErrorEvent")
+	}
+	if room.Position.Finished {
+		rejectAction(409, "game is complete; no further actions are allowed")
+		return
+	}
 	if body.Revision != room.Revision {
-		fail(409, "stale game revision; refresh before playing")
+		rejectAction(409, "stale game revision; refresh before playing")
 		return
 	}
 	if seat != room.Position.Turn {
-		fail(403, "only the current player may act")
+		rejectAction(403, "only the current player may act")
 		return
 	}
 	position, err := game.Apply(room.Position, body.Action)

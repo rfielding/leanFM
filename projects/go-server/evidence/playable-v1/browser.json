@@ -8,6 +8,9 @@
     "branch preserves siblings",
     "selected-path real GIF",
     "two isolated browser seats",
+    "both second moves accepted",
+    "out-of-turn and finished board clicks send no request",
+    "stale move refreshes once without retry and retains HTTP code and request ID",
     "same authoritative final state",
     "own seat resumes after reload",
     "network history is read-only",
@@ -24,8 +27,40 @@
     "max_turns": 200,
     "board": [
       0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
       0,
       1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      3,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
       0,
       0,
       0,
@@ -100,49 +135,17 @@
       0,
       2,
       0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
       3,
-      0,
       0,
       4,
       0,
       0,
+      0,
+      0,
+      0,
+      0,
+      0,
       2,
-      0,
-      0,
-      0,
-      1,
-      0,
-      3,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
       0
     ],
     "turn": 3,
@@ -179,450 +182,710 @@
     "passes": 0,
     "ply": 7,
     "finished": false,
-    "last": 111
+    "last": 18
   },
-  "gif_bytes": 76368,
+  "gif_bytes": 76567,
   "observed_scenarios": [
     [
       {
-        "id": "26d0aad7c7e0b29c504193cbc9dfb57a0c56cecef15e45a2",
+        "id": "52ce73d0c7cb769b0b04c5b93769eb18cff38a5e42541062",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "join_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "JoinGame",
-        "time_ms": 1792710150993
+        "time_ms": 1792735014405
       },
       {
-        "id": "a47add2d860ea89dd3b51f0c8cf74687882e8f246c595f3a",
-        "cause_id": "26d0aad7c7e0b29c504193cbc9dfb57a0c56cecef15e45a2",
+        "id": "57fea2459c97c4db2359306cadad3aaf351e98204ac83c0a",
+        "cause_id": "52ce73d0c7cb769b0b04c5b93769eb18cff38a5e42541062",
         "prior_ids": [
-          "26d0aad7c7e0b29c504193cbc9dfb57a0c56cecef15e45a2"
+          "52ce73d0c7cb769b0b04c5b93769eb18cff38a5e42541062"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "join_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "Joined",
-        "time_ms": 1792710150997
+        "time_ms": 1792735014409
       }
     ],
     [
       {
-        "id": "5f99c35c933e0043f658bb9e87263ca44bf89ee67e11e446",
+        "id": "8d0fa6e10737def2f1a4d6c8f54426217b6ecf7e4b371e6d",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectHistory",
-        "time_ms": 1792710150999
+        "time_ms": 1792735014413
       },
       {
-        "id": "717888a91b9cadd54ca0b212ecf5701f62181e90b760293b",
-        "cause_id": "5f99c35c933e0043f658bb9e87263ca44bf89ee67e11e446",
+        "id": "00d636cf5aa467378bb5e6e3ebef66eb100c01dee17ffc2a",
+        "cause_id": "8d0fa6e10737def2f1a4d6c8f54426217b6ecf7e4b371e6d",
         "prior_ids": [
-          "5f99c35c933e0043f658bb9e87263ca44bf89ee67e11e446"
+          "8d0fa6e10737def2f1a4d6c8f54426217b6ecf7e4b371e6d"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "GoServer",
         "dst": "Client",
         "message": "HistoryReturned",
-        "time_ms": 1792710150999
+        "time_ms": 1792735014413
       }
     ],
     [
       {
-        "id": "a1a5e2df13d0b658cf3d27ad93e442286e7671f67bb2a538",
+        "id": "9b8700182aa4fc35ce35dfe6b1bc9e525115d5c6e5abeda4",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710151952
+        "time_ms": 1792735015361
       },
       {
-        "id": "f6bb6737bbabef7ea519a6ea3e85e9006502d729235cb840",
-        "cause_id": "a1a5e2df13d0b658cf3d27ad93e442286e7671f67bb2a538",
+        "id": "590a360fff0e20f865d9453b96ffa99405096d004cbac878",
+        "cause_id": "9b8700182aa4fc35ce35dfe6b1bc9e525115d5c6e5abeda4",
         "prior_ids": [
-          "a1a5e2df13d0b658cf3d27ad93e442286e7671f67bb2a538"
+          "9b8700182aa4fc35ce35dfe6b1bc9e525115d5c6e5abeda4"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710151952
+        "time_ms": 1792735015361
       }
     ],
     [
       {
-        "id": "3639ea321593bbf26b797ecc75ceb5ea8fb9f3830235f036",
+        "id": "24f25ea313a793a7e5b054a5f22bc387580134773684cce0",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectHistory",
-        "time_ms": 1792710151954
+        "time_ms": 1792735015364
       },
       {
-        "id": "b3f1ec718ca96782d8e44a490a87aecc1f4191bf29d80a77",
-        "cause_id": "3639ea321593bbf26b797ecc75ceb5ea8fb9f3830235f036",
+        "id": "3db470390583259f67c6b6451822b6aec7cf260a540adee0",
+        "cause_id": "24f25ea313a793a7e5b054a5f22bc387580134773684cce0",
         "prior_ids": [
-          "3639ea321593bbf26b797ecc75ceb5ea8fb9f3830235f036"
+          "24f25ea313a793a7e5b054a5f22bc387580134773684cce0"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "GoServer",
         "dst": "Client",
         "message": "HistoryReturned",
-        "time_ms": 1792710151954
+        "time_ms": 1792735015364
       }
     ],
     [
       {
-        "id": "993d92e33b3ee8f3dadc2b9924680a76178e97f0d779d5eb",
+        "id": "bb1c8c602ed36f4d2b90d7cf41143d73e787f87e240416b2",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "play_turn",
         "src": "Client",
         "dst": "GoServer",
         "message": "MakeMove",
-        "time_ms": 1792710151978
+        "time_ms": 1792735015409
       },
       {
-        "id": "6fdf0b128dbde21f31dbf4c0463321f40be9d6e9f70a73f3",
-        "cause_id": "993d92e33b3ee8f3dadc2b9924680a76178e97f0d779d5eb",
+        "id": "887fe13563068c087f201976027d178be2b6bc2f7567378e",
+        "cause_id": "bb1c8c602ed36f4d2b90d7cf41143d73e787f87e240416b2",
         "prior_ids": [
-          "993d92e33b3ee8f3dadc2b9924680a76178e97f0d779d5eb"
+          "bb1c8c602ed36f4d2b90d7cf41143d73e787f87e240416b2"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "play_turn",
         "src": "GoServer",
         "dst": "Client",
         "message": "MoveEvent",
-        "time_ms": 1792710151982
+        "time_ms": 1792735015415
       },
       {
-        "id": "182614fe5c2792ea89d04cc5c2884ea24b132ab720e8b6d0",
-        "cause_id": "993d92e33b3ee8f3dadc2b9924680a76178e97f0d779d5eb",
+        "id": "16999c501d7294af150439cde0cb274265a9358e4de482fc",
+        "cause_id": "bb1c8c602ed36f4d2b90d7cf41143d73e787f87e240416b2",
         "prior_ids": [
-          "6fdf0b128dbde21f31dbf4c0463321f40be9d6e9f70a73f3"
+          "887fe13563068c087f201976027d178be2b6bc2f7567378e"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "play_turn",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710151982
+        "time_ms": 1792735015415
       }
     ],
     [
       {
-        "id": "54924adb739b362865e1d09fd5fa523de4233e56af929d43",
+        "id": "f01cc33132fdd8c7d8eba2f05bad181dcd4a72f711f8c9f3",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectHistory",
-        "time_ms": 1792710151995
+        "time_ms": 1792735015417
       },
       {
-        "id": "b0d95cc6026cef168b913ea38a65014f4f6dfa6897997d91",
-        "cause_id": "54924adb739b362865e1d09fd5fa523de4233e56af929d43",
+        "id": "bfbd69428739b8ff73230427891ceb99c7598350bb71762e",
+        "cause_id": "f01cc33132fdd8c7d8eba2f05bad181dcd4a72f711f8c9f3",
         "prior_ids": [
-          "54924adb739b362865e1d09fd5fa523de4233e56af929d43"
+          "f01cc33132fdd8c7d8eba2f05bad181dcd4a72f711f8c9f3"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "GoServer",
         "dst": "Client",
         "message": "HistoryReturned",
-        "time_ms": 1792710151995
+        "time_ms": 1792735015417
       }
     ],
     [
       {
-        "id": "3fe44b484880c5f097caf990391d14534d99d5b52d20ad62",
+        "id": "21b2e236e665ca721577c25b944d6d1b94cbeeef447d42d8",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710152952
+        "time_ms": 1792735016361
       },
       {
-        "id": "9ca847e601ba4801d58663e2d6bf03043cad67052799736d",
-        "cause_id": "3fe44b484880c5f097caf990391d14534d99d5b52d20ad62",
+        "id": "a717b98605dca0d5d99cfb0b411f91d270a089a0cba91c10",
+        "cause_id": "21b2e236e665ca721577c25b944d6d1b94cbeeef447d42d8",
         "prior_ids": [
-          "3fe44b484880c5f097caf990391d14534d99d5b52d20ad62"
+          "21b2e236e665ca721577c25b944d6d1b94cbeeef447d42d8"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710152952
+        "time_ms": 1792735016361
       }
     ],
     [
       {
-        "id": "819830611c3c4aa39eb0fe01a6defcb2ac02c6568d1fa971",
+        "id": "8e3b9c92e654d6623ffe4fdc1788f8ef09bbc20f771d3b14",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectHistory",
-        "time_ms": 1792710152953
+        "time_ms": 1792735016363
       },
       {
-        "id": "a39fb5c6f118beb8c85a5159c2d67a8f1efe31a9c2aab749",
-        "cause_id": "819830611c3c4aa39eb0fe01a6defcb2ac02c6568d1fa971",
+        "id": "27b37179fa244e40a2f22e2b9647ef4b8468c7d6008aea33",
+        "cause_id": "8e3b9c92e654d6623ffe4fdc1788f8ef09bbc20f771d3b14",
         "prior_ids": [
-          "819830611c3c4aa39eb0fe01a6defcb2ac02c6568d1fa971"
+          "8e3b9c92e654d6623ffe4fdc1788f8ef09bbc20f771d3b14"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "GoServer",
         "dst": "Client",
         "message": "HistoryReturned",
-        "time_ms": 1792710152953
+        "time_ms": 1792735016363
       }
     ],
     [
       {
-        "id": "9c183939c93db51985bcea9e1759cae298916588c6998329",
+        "id": "a9994df5fc942efec65bc36ec8e052f9944fb4838a66faf4",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792735016420
+      },
+      {
+        "id": "77b44daaa28d40d766c38efc3d82751acc854bbad1d87e1d",
+        "cause_id": "a9994df5fc942efec65bc36ec8e052f9944fb4838a66faf4",
+        "prior_ids": [
+          "a9994df5fc942efec65bc36ec8e052f9944fb4838a66faf4"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792735016423
+      },
+      {
+        "id": "83cfaa13c011084659aec39164aaa31c8df029ff29f90aca",
+        "cause_id": "a9994df5fc942efec65bc36ec8e052f9944fb4838a66faf4",
+        "prior_ids": [
+          "77b44daaa28d40d766c38efc3d82751acc854bbad1d87e1d"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792735016423
+      }
+    ],
+    [
+      {
+        "id": "fdec26153439f0849f283a24a41d11ca8d8fcf3fccf326dc",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectHistory",
+        "time_ms": 1792735016434
+      },
+      {
+        "id": "985f46fb4068cdd6543e2017f7f2a4727930fd3901ac8602",
+        "cause_id": "fdec26153439f0849f283a24a41d11ca8d8fcf3fccf326dc",
+        "prior_ids": [
+          "fdec26153439f0849f283a24a41d11ca8d8fcf3fccf326dc"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "HistoryReturned",
+        "time_ms": 1792735016434
+      }
+    ],
+    [
+      {
+        "id": "ccbbd4cb5c73eb4e32470c436608e95fbeafde92bdcc1abc",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectGame",
+        "time_ms": 1792735017361
+      },
+      {
+        "id": "071ace6f596b9f7b79fd3138b131a12e5397cca395340edb",
+        "cause_id": "ccbbd4cb5c73eb4e32470c436608e95fbeafde92bdcc1abc",
+        "prior_ids": [
+          "ccbbd4cb5c73eb4e32470c436608e95fbeafde92bdcc1abc"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792735017361
+      }
+    ],
+    [
+      {
+        "id": "5f549b2f1ea3094aca69ad87bf6e5a688df36f35ed0dbb73",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectHistory",
+        "time_ms": 1792735017366
+      },
+      {
+        "id": "9409a861f42ec3c9d73742384dfb9d9b34cc0c54d0e6d61c",
+        "cause_id": "5f549b2f1ea3094aca69ad87bf6e5a688df36f35ed0dbb73",
+        "prior_ids": [
+          "5f549b2f1ea3094aca69ad87bf6e5a688df36f35ed0dbb73"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "HistoryReturned",
+        "time_ms": 1792735017366
+      }
+    ],
+    [
+      {
+        "id": "ce0a61c7fbdfbd316f4eb1edc8f6a41313b7c0ac1e8ca878",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "play_turn",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "MakeMove",
+        "time_ms": 1792735017377
+      },
+      {
+        "id": "6e6232368046685f72baded461e1d0b1d74063b72bc540a8",
+        "cause_id": "ce0a61c7fbdfbd316f4eb1edc8f6a41313b7c0ac1e8ca878",
+        "prior_ids": [
+          "ce0a61c7fbdfbd316f4eb1edc8f6a41313b7c0ac1e8ca878"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "MoveEvent",
+        "time_ms": 1792735017382
+      },
+      {
+        "id": "72716c0765e7317223e0a8c8333306e33707333788c2687e",
+        "cause_id": "ce0a61c7fbdfbd316f4eb1edc8f6a41313b7c0ac1e8ca878",
+        "prior_ids": [
+          "6e6232368046685f72baded461e1d0b1d74063b72bc540a8"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "play_turn",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792735017382
+      }
+    ],
+    [
+      {
+        "id": "4983a831114529654493c4e6abbe0658f36e4114b089880c",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectHistory",
+        "time_ms": 1792735017386
+      },
+      {
+        "id": "39f17631a9e576f4c6734cfaeb043ecade48b12ce3143f0e",
+        "cause_id": "4983a831114529654493c4e6abbe0658f36e4114b089880c",
+        "prior_ids": [
+          "4983a831114529654493c4e6abbe0658f36e4114b089880c"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "HistoryReturned",
+        "time_ms": 1792735017386
+      }
+    ],
+    [
+      {
+        "id": "ba6bc05aba6928aca7e21e7f85312bcc2807804ca1cfe28e",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectGame",
+        "time_ms": 1792735018361
+      },
+      {
+        "id": "1441119a21c9fcd01971b6ddb3c543a7dfdd5a784e960873",
+        "cause_id": "ba6bc05aba6928aca7e21e7f85312bcc2807804ca1cfe28e",
+        "prior_ids": [
+          "ba6bc05aba6928aca7e21e7f85312bcc2807804ca1cfe28e"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792735018361
+      }
+    ],
+    [
+      {
+        "id": "d38d0af77bb7c287708cdb16df75fa5a90304b9ecd074061",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectHistory",
+        "time_ms": 1792735018365
+      },
+      {
+        "id": "29bd79506f7ab9d13dfdbc3ca37d54a2302cf569b36f5a68",
+        "cause_id": "d38d0af77bb7c287708cdb16df75fa5a90304b9ecd074061",
+        "prior_ids": [
+          "d38d0af77bb7c287708cdb16df75fa5a90304b9ecd074061"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_history",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "HistoryReturned",
+        "time_ms": 1792735018365
+      }
+    ],
+    [
+      {
+        "id": "fa5e039bd4d7e607b048496d4a876bdb9d79510d09bc6bc3",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "play_turn",
         "src": "Client",
         "dst": "GoServer",
         "message": "Pass",
-        "time_ms": 1792710152981
+        "time_ms": 1792735018388
       },
       {
-        "id": "c8419d8707d0a552481ce5add3f057f95a9fc77e3047f439",
-        "cause_id": "9c183939c93db51985bcea9e1759cae298916588c6998329",
+        "id": "5599bf9ac94c8e30790caa2c1b010c05f772214eecba3411",
+        "cause_id": "fa5e039bd4d7e607b048496d4a876bdb9d79510d09bc6bc3",
         "prior_ids": [
-          "9c183939c93db51985bcea9e1759cae298916588c6998329"
+          "fa5e039bd4d7e607b048496d4a876bdb9d79510d09bc6bc3"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "play_turn",
         "src": "GoServer",
         "dst": "Client",
         "message": "MoveEvent",
-        "time_ms": 1792710152986
+        "time_ms": 1792735018393
       },
       {
-        "id": "8b772fc2ef928e1ea09da45911a87c3b55bd9ed51ac045bf",
-        "cause_id": "9c183939c93db51985bcea9e1759cae298916588c6998329",
+        "id": "57493715f89affd92fd16069ed74bba98028ad4d5130af25",
+        "cause_id": "fa5e039bd4d7e607b048496d4a876bdb9d79510d09bc6bc3",
         "prior_ids": [
-          "c8419d8707d0a552481ce5add3f057f95a9fc77e3047f439"
+          "5599bf9ac94c8e30790caa2c1b010c05f772214eecba3411"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "play_turn",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710152986
+        "time_ms": 1792735018393
       }
     ],
     [
       {
-        "id": "161bb4eb2cf1657a1104578a07b42b747bb2942a264f8e54",
+        "id": "679f0b389548fc6da4275c344896eb3886cdfa0e9893a823",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectHistory",
-        "time_ms": 1792710152987
+        "time_ms": 1792735018397
       },
       {
-        "id": "5dac27dd72390eb8dc980fab632c21deecec44a8a18330ba",
-        "cause_id": "161bb4eb2cf1657a1104578a07b42b747bb2942a264f8e54",
+        "id": "cc0d1db5bc7eb7b24707b8ada67215407a37821b4af44bf8",
+        "cause_id": "679f0b389548fc6da4275c344896eb3886cdfa0e9893a823",
         "prior_ids": [
-          "161bb4eb2cf1657a1104578a07b42b747bb2942a264f8e54"
+          "679f0b389548fc6da4275c344896eb3886cdfa0e9893a823"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "GoServer",
         "dst": "Client",
         "message": "HistoryReturned",
-        "time_ms": 1792710152987
+        "time_ms": 1792735018397
       }
     ],
     [
       {
-        "id": "ef06c179babe22358bd8d9321136af0cdff3263957f257ee",
+        "id": "a655b9bc315d6091f7109d9d7403a6d5342cffc9b8fee2f2",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710153889
+        "time_ms": 1792735019319
       },
       {
-        "id": "3d90bd2d71c0b8f43d474737f11b238e6cd165d2b7793ee7",
-        "cause_id": "ef06c179babe22358bd8d9321136af0cdff3263957f257ee",
+        "id": "af66ba4e6c2a028998f07eb9d072fc2f951e9757c6545d3e",
+        "cause_id": "a655b9bc315d6091f7109d9d7403a6d5342cffc9b8fee2f2",
         "prior_ids": [
-          "ef06c179babe22358bd8d9321136af0cdff3263957f257ee"
+          "a655b9bc315d6091f7109d9d7403a6d5342cffc9b8fee2f2"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710153889
+        "time_ms": 1792735019319
       }
     ],
     [
       {
-        "id": "31e35106ab93ae7c1adef59ca30c082f36229bc1531a8ee0",
+        "id": "9f658f7d4dfcdb4ef71b08ded0e5257fba1bbb5a365f53dc",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectHistory",
-        "time_ms": 1792710153891
+        "time_ms": 1792735019326
       },
       {
-        "id": "f9ec8ef4e5d813821354b696bb4849425cebb11fa396348c",
-        "cause_id": "31e35106ab93ae7c1adef59ca30c082f36229bc1531a8ee0",
+        "id": "6b960dac216d3950b4ef41491e42071bc5efaca0d45fe489",
+        "cause_id": "9f658f7d4dfcdb4ef71b08ded0e5257fba1bbb5a365f53dc",
         "prior_ids": [
-          "31e35106ab93ae7c1adef59ca30c082f36229bc1531a8ee0"
+          "9f658f7d4dfcdb4ef71b08ded0e5257fba1bbb5a365f53dc"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_history",
         "src": "GoServer",
         "dst": "Client",
         "message": "HistoryReturned",
-        "time_ms": 1792710153891
+        "time_ms": 1792735019326
       }
     ],
     [
       {
-        "id": "cdb8f75e9d01b3297a73ae92f6035625b5442f9a1ab8bb63",
+        "id": "8d3b9900b2c074bd9da8cee83c9d6be629060af301743a54",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710153952
+        "time_ms": 1792735019360
       },
       {
-        "id": "c2344b8df36531df5b130efd95e22509bfa77a4f9d8583f6",
-        "cause_id": "cdb8f75e9d01b3297a73ae92f6035625b5442f9a1ab8bb63",
+        "id": "9585adaf33ffcf378c184094dbb0dc41eb01f05b9f82fa2c",
+        "cause_id": "8d3b9900b2c074bd9da8cee83c9d6be629060af301743a54",
         "prior_ids": [
-          "cdb8f75e9d01b3297a73ae92f6035625b5442f9a1ab8bb63"
+          "8d3b9900b2c074bd9da8cee83c9d6be629060af301743a54"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710153952
+        "time_ms": 1792735019361
       }
     ],
     [
       {
-        "id": "2b743fbe6dd6dc8dbc030e87ca6ce57ad79996a80c03e628",
+        "id": "b530cd5b10b95daab9ae140ba9f6d8142cd56d132440d0be",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710154952
+        "time_ms": 1792735020361
       },
       {
-        "id": "938ac6fb9baa4d86320730dfb195bd7055f693bb57eb7c94",
-        "cause_id": "2b743fbe6dd6dc8dbc030e87ca6ce57ad79996a80c03e628",
+        "id": "2f508456062b7cd0e2a51c95cf62e0fe43dcf0cac94e3eef",
+        "cause_id": "b530cd5b10b95daab9ae140ba9f6d8142cd56d132440d0be",
         "prior_ids": [
-          "2b743fbe6dd6dc8dbc030e87ca6ce57ad79996a80c03e628"
+          "b530cd5b10b95daab9ae140ba9f6d8142cd56d132440d0be"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710154952
+        "time_ms": 1792735020361
       }
     ],
     [
       {
-        "id": "eff445c38dc7b2f14d1dac006ee90db1ee4b86229fafa545",
+        "id": "3338c7bd84cdf43623c1e4295460360a3646008c3fb33db5",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710155952
+        "time_ms": 1792735021361
       },
       {
-        "id": "d83425cf7ecf5fd236f13c10163d3275d885a48429e21a65",
-        "cause_id": "eff445c38dc7b2f14d1dac006ee90db1ee4b86229fafa545",
+        "id": "e03175e381186dc118bc2bd914a24ec6fe8a41cf4e2a630d",
+        "cause_id": "3338c7bd84cdf43623c1e4295460360a3646008c3fb33db5",
         "prior_ids": [
-          "eff445c38dc7b2f14d1dac006ee90db1ee4b86229fafa545"
+          "3338c7bd84cdf43623c1e4295460360a3646008c3fb33db5"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710155952
+        "time_ms": 1792735021361
       }
     ],
     [
       {
-        "id": "2278b5e9c7a3840b95244d09084460831241128479593fe9",
+        "id": "5d98df0d3c1c2649a31a6a077f9b915789a5000eeb2bb20c",
         "cause_id": "",
         "prior_ids": [],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "Client",
         "dst": "GoServer",
         "message": "InspectGame",
-        "time_ms": 1792710156952
+        "time_ms": 1792735022361
       },
       {
-        "id": "340eaa146d3aa4db145a5cd92877cc2874d4066ac2ce56c9",
-        "cause_id": "2278b5e9c7a3840b95244d09084460831241128479593fe9",
+        "id": "b34c61f745e29e37c475906088e56b0e56660260cfc00a9b",
+        "cause_id": "5d98df0d3c1c2649a31a6a077f9b915789a5000eeb2bb20c",
         "prior_ids": [
-          "2278b5e9c7a3840b95244d09084460831241128479593fe9"
+          "5d98df0d3c1c2649a31a6a077f9b915789a5000eeb2bb20c"
         ],
-        "session": "d7586066c8c5574d895d77a2072fb3c4c6083abf52203e93",
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
         "task": "inspect_game",
         "src": "GoServer",
         "dst": "Client",
         "message": "GameState",
-        "time_ms": 1792710156952
+        "time_ms": 1792735022361
+      }
+    ],
+    [
+      {
+        "id": "ca4fb39fad47c3ae18903ca684606ea0d9791ca36e2b27a5",
+        "cause_id": "",
+        "prior_ids": [],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_game",
+        "src": "Client",
+        "dst": "GoServer",
+        "message": "InspectGame",
+        "time_ms": 1792735022553
+      },
+      {
+        "id": "29e981066db69f8136a5e1a0732ab9d2250b628ca66e456d",
+        "cause_id": "ca4fb39fad47c3ae18903ca684606ea0d9791ca36e2b27a5",
+        "prior_ids": [
+          "ca4fb39fad47c3ae18903ca684606ea0d9791ca36e2b27a5"
+        ],
+        "session": "335df1da0719385bd5a0dc4c6e19f70fcc25551446d5e1ae",
+        "task": "inspect_game",
+        "src": "GoServer",
+        "dst": "Client",
+        "message": "GameState",
+        "time_ms": 1792735022553
       }
     ]
   ]

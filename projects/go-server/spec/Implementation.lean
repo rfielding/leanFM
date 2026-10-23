@@ -38,6 +38,14 @@ def implementation : ImplementationSpec :=
 -- source/game/game_test.go, source/server/server_test.go, tests/startup_check.py
 -- and tests/browser_check.py. MCTS has at most 1024 tree nodes, 100000 iterations
 -- and 48 rollout steps per iteration; local analysis has at most 2048 nodes.
+-- R1/R3/R6 conformance repair: all browser move entry points share the current
+-- seat/latest/live-game admission check, including canvas and keyboard clicks.
+-- A completed room returns 409 before turn comparison; turn/revision conflicts
+-- include only the public authoritative snapshot. The browser retains the exact
+-- HTTP status and request ID, refreshes history once, and never resends the move.
+-- Older history responses cannot replace a newer revision. Controls are tested
+-- by TestCompletedRoomReportsStateBeforeTurnAndDoesNotMutate and the real
+-- two-browser second-turn, stale-proposal and blocked-input regression checks.
 def errors := validateImplementationSpec spec implementation
 example : errors = [] := by native_decide
 end GoServer.Implementation

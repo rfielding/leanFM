@@ -79,7 +79,7 @@ func TestTwoPlayersCompleteGameAndRestart(t *testing.T) {
 	for i, step := range []struct {
 		token, kind string
 		point       int
-	}{{a.Token, "move", 0}, {b.Token, "move", 1}, {a.Token, "pass", 0}, {b.Token, "pass", 0}} {
+	}{{a.Token, "move", 0}, {b.Token, "move", 1}, {a.Token, "move", 2}, {b.Token, "move", 3}, {a.Token, "pass", 0}, {b.Token, "pass", 0}} {
 		status, reply := act(t, h.URL, id, step.token, i+1, step.kind, step.point)
 		if status != 200 {
 			t.Fatal(status, reply)
@@ -92,7 +92,7 @@ func TestTwoPlayersCompleteGameAndRestart(t *testing.T) {
 		}
 	}
 	_, final := call(t, h.URL, "/api/games/"+id+"/history", "GET", "", nil)
-	if !final.Game.Position.Finished || len(final.Game.History) != 5 || final.Game.Position.Board[0] != 1 || final.Game.Position.Board[1] != 2 {
+	if !final.Game.Position.Finished || len(final.Game.History) != 7 || final.Game.Position.Board[0] != 1 || final.Game.Position.Board[1] != 2 || final.Game.Position.Board[2] != 1 || final.Game.Position.Board[3] != 2 {
 		t.Fatal(final)
 	}
 	restarted, e := New(s.root)
@@ -110,6 +110,35 @@ func TestTwoPlayersCompleteGameAndRestart(t *testing.T) {
 	}
 }
 
+// R1/R3/R6: a completed room is a state conflict for either seat, including
+// after deadline Passes. Preserve a safe current snapshot, never seat verifiers.
+func TestCompletedRoomReportsStateBeforeTurnAndDoesNotMutate(t *testing.T) {
+	s, h := testServer(t)
+	a, b := room(t, h.URL)
+	s.mu.Lock()
+	now := s.Now().Add(121 * time.Second)
+	s.Now = func() time.Time { return now }
+	s.mu.Unlock()
+	_, final := call(t, h.URL, "/api/games/"+a.Game.ID, "GET", "", nil)
+	if !final.Game.Position.Finished || len(final.Game.Actions) != 0 {
+		t.Fatal("expected terminal public position without private history", final)
+	}
+	for _, token := range []string{a.Token, b.Token} {
+		for _, revision := range []int{1, final.Game.Revision} {
+			status, reply := act(t, h.URL, a.Game.ID, token, revision, "move", 4)
+			if status != 409 || !strings.Contains(reply.Error, "game is complete") || reply.Game == nil || !reply.Game.Position.Finished {
+				t.Fatal("completed game misreported as authorization failure", status, reply)
+			}
+			if len(reply.Game.Verifiers) != 0 || len(reply.Game.History) != 0 || reply.Game.Revision != final.Game.Revision || !reflect.DeepEqual(reply.Game.Position, final.Game.Position) {
+				t.Fatal("rejection exposed credentials or changed the board", reply)
+			}
+			if len(reply.Events) != 2 || reply.Events[1].Message != "ErrorEvent" || reply.Events[1].CauseID != reply.Events[0].ID {
+				t.Fatal("failure lost request correlation", reply.Events)
+			}
+		}
+	}
+}
+
 func TestUnauthorizedStaleAndIllegalActionsDoNotMutate(t *testing.T) {
 	_, h := testServer(t)
 	a, b := room(t, h.URL)
@@ -121,6 +150,11 @@ func TestUnauthorizedStaleAndIllegalActionsDoNotMutate(t *testing.T) {
 		status, reply := act(t, h.URL, id, probe.token, probe.revision, "move", probe.point)
 		if status != probe.want || len(reply.Events) != 2 || reply.Events[1].Message != "ErrorEvent" {
 			t.Fatal(status, reply)
+		}
+		if status == 403 || status == 409 {
+			if reply.Game == nil || reply.Game.Revision != 1 || len(reply.Game.Verifiers) != 0 {
+				t.Fatal("turn/revision rejection lost safe authoritative state", reply)
+			}
 		}
 		_, current := call(t, h.URL, "/api/games/"+id, "GET", "", nil)
 		if current.Game.Position.Ply != 0 || current.Game.Revision != 1 {

@@ -28,6 +28,8 @@
 *.swp
 *.swo
 .DS_Store
+/.claude/settings.local.json
+/CLAUDE.local.md
 
 # LaTeX build artifacts
 /book/*.aux

@@ -95,6 +95,14 @@ alone cannot claim an existing seat. Sharing an invitation grants spectator
 read access and permits joining an unoccupied seat. Rooms have no private-data
 or public-production deployment claim; the service binds to loopback only.
 
+All board inputs, including canvas and keyboard clicks, check the latest
+position, current seat and game completion before sending a proposal. A
+completed game is a state conflict, not a wrong-player authorization error.
+If the server rejects a stale proposal, the browser retains the exact HTTP
+status and request ID, refreshes authoritative history once and does not
+resend the move. Tests exercise both players' second moves, wrong-turn and
+finished-board input, and a competing move between display and submission.
+
 \section*{The wire contract is a requirement}
 \file{Requirements.lean} owns six HTTP task contracts: create, join, play,
 inspect state, inspect history and export. Methods, routes, codecs, statuses,

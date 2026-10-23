@@ -146,8 +146,19 @@ If the project has no durable problem statement, begin by asking: "What problem
 are you trying to solve?" Do not begin with framework selection or a proposed
 solution. After the answer, identify concrete ambiguities whose resolution can
 change observable requirements, derived views, proof obligations, or
-implementation choices. Ask focused questions that name the ambiguity and the
-artifact or gate it affects. Each subsequent turn should do at least one of:
+implementation choices. Resolve routine choices using existing conventions and
+reasonable reversible defaults within recorded requirements and authorization.
+Record the decisions; briefly list only those the stakeholder may challenge.
+Ask only about a consequential ambiguity that no authorized default resolves,
+or a missing explicit acceptance gate. Name its concrete effect on scope,
+observable behavior, compatibility, security/privacy, irreversible data or
+material spending and the artifact or gate it affects. Compiler syntax,
+formatting and already-authorized validation are engineering work: inspect the
+logged exit code and diagnostic, narrow and check the correction, and never
+repeat an unchanged failure class or ask the stakeholder to approve that work.
+A readiness review can report ready with zero questions; it must not manufacture
+questions. These defaults neither override a recorded requirement nor accept
+either gate for the stakeholder. Each subsequent turn should do at least one of:
 record a durable decision, update a derived view, ask a blocking ambiguity,
 report deterministic validation, or advance an explicit acceptance gate.
 
@@ -200,8 +211,10 @@ other observable behavior, return to the requirements gate instead. If a later
 requirements change makes an implementation answer unnecessary, remove that
 implementation detail without preserving it as a requirement.
 
-Validate the requirements and implementation independently and together. Ask
-for explicit acceptance of the implementation specification. Before that gate,
+Validate the requirements and implementation independently and together. Use
+recorded choices and reasonable defaults for routine implementation details;
+ask only about consequential unresolved choices. Ask for explicit acceptance
+of the implementation specification. Before that gate,
 do not represent application code as the final implementation.
 
 ## One-shot the actual code

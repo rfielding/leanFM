@@ -111,6 +111,25 @@ LeanFM, and open this project directory in Cursor. The committed
 [`CURSOR.md`](CURSOR.md). Cursor remains the authenticated and billed agent
 client, so its subscription is not entered into LeanFM as a provider API key.
 
+To use Claude Code, start LeanFM with `make serve` in one terminal and run
+`make claude` in another. The root [`CLAUDE.md`](CLAUDE.md) imports the shared
+`AGENTS.md` instructions, and [`.mcp.json`](.mcp.json) connects Claude to the
+existing local MCP endpoint. On first launch, review Claude's project trust and
+LeanFM MCP prompts; `/mcp` shows the connection in an interactive session.
+The MCP tools remain read-only and neither LeanFM acceptance gate is automatic.
+These use Claude's documented [instruction imports](https://code.claude.com/docs/en/memory)
+and [project MCP configuration](https://code.claude.com/docs/en/mcp).
+
+The [launcher](scripts/claude.sh) keeps Claude configuration, session history,
+memory, and temporary files under the ignored `.cache/claude/` directory using
+[`CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_TMPDIR`](https://code.claude.com/docs/en/env-vars).
+It refuses state paths that resolve outside this project. It inherits an
+`ANTHROPIC_API_KEY` already supplied by your shell without copying it into the
+repository. To authenticate a subscription instead, unset that variable and run
+`bash scripts/claude.sh auth login` once. This isolated configuration does not
+reuse your global Claude login. Pass CLI options directly, for example
+`bash scripts/claude.sh --model sonnet` or `bash scripts/claude.sh mcp list`.
+
 This repository is itself a valid, self-contained LeanFM project. Its central
 Codex input is always `book/main.pdf`; `book/main-dark.pdf` is the equivalent
 low-glare rendering. A successful `make book` builds both from the same source.

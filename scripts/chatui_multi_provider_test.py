@@ -101,6 +101,27 @@ class MultiProvider(unittest.TestCase):
         self.assertEqual(fresh.request("/api/me")[1]["billing"]["models"], billing["models"])
         self.assertEqual(stats(), before, "ordinary password login need not reverify provider keys")
 
+    def test_defaults_and_readiness_do_not_force_questions_or_accept_gates(self):
+        for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
+            for marker, rounds in [("TEST_DECIDE_DEFAULTS", 2), ("TEST_READY_DEFAULTS", 1),
+                                   ("TEST_RETURN_STRUCTURED_QUESTION", 1)]:
+                with self.subTest(model=model, marker=marker):
+                    project = self.alice.project()
+                    root = ROOT / "accounts/multi_primary/projects" / project
+                    before = stats()[counter]
+                    status, body = self.alice.chat(project, marker, model)
+                    self.assertEqual(status, 200, body)
+                    self.assertEqual(stats()[counter] - before, rounds)
+                    if marker == "TEST_RETURN_STRUCTURED_QUESTION":
+                        self.assertIn("test_spectator_privacy", body["text"])
+                        self.assertIn('"status":"warn"', body["text"])
+                    else:
+                        self.assertNotIn("```leanfm-questions", body["text"])
+                        self.assertIn('"status":"success"', body["text"])
+                    if marker == "TEST_DECIDE_DEFAULTS":
+                        self.assertIn("Formal acceptance remains pending", (root / "spec/default-decisions.md").read_text())
+                    self.assertFalse(any((root / "source").rglob("*.*")), "routine default authority fabricated gate acceptance")
+
     def test_routes_concurrently_without_cross_user_or_provider_fallback(self):
         operations = [(self.alice, self.project, "test-model", "OpenAI credential alice"),
                       (self.alice, self.project, CLAUDE, "Anthropic credential alice"),
@@ -144,6 +165,81 @@ class MultiProvider(unittest.TestCase):
             self.assertGreater((self.root / "book/main.pdf").stat().st_size, 100)
         self.assertIn(r"Repaired A \& B.", (self.root / "book/main.tex").read_text())
         self.assertEqual(stats()["invalid_messages"], 0)
+
+    def test_patch_counts_recover_locally_and_changed_bad_patches_cannot_loop(self):
+        # property:recoverable_failures_are_fixed_before_return; unchanged
+        # diagnostics cannot buy another round by merely changing patch text.
+        for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
+            for marker, rounds in [("TEST_PATCH_RECOUNT", 2),
+                                   ("TEST_PATCH_WRITE_RECOVERY", 4),
+                                   ("TEST_PATCH_RETRY_GUARD", 2)]:
+                with self.subTest(model=model, marker=marker):
+                    note = self.root / "spec/patch-note.txt"
+                    note.write_text("before\nunrelated\n")
+                    before = stats()[counter]
+                    status, body = self.alice.chat(self.project, marker, model)
+                    self.assertEqual(status, 200, body)
+                    self.assertEqual(stats()[counter] - before, rounds, body["text"])
+                    if marker == "TEST_PATCH_RETRY_GUARD":
+                        self.assertEqual(note.read_text(), "before\nunrelated\n")
+                        self.assertIn('"status":"fail"', body["text"])
+                        self.assertIn("failed again without verified recovery", body["text"])
+                        self.assertNotIn("16-step", body["text"])
+                    else:
+                        self.assertEqual(note.read_text(), "after\nunrelated\n")
+                        expected = "warn" if marker == "TEST_PATCH_WRITE_RECOVERY" else "success"
+                        self.assertIn(f'"status":"{expected}"', body["text"])
+
+    def test_failed_checks_keep_codes_and_require_verified_recovery(self):
+        for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
+            for marker, rounds in [("TEST_CHECK_RETRY_GUARD", 3), ("TEST_CHECK_FIX", 4)]:
+                with self.subTest(model=model, marker=marker):
+                    project = self.alice.project()
+                    root = ROOT / "accounts/multi_primary/projects" / project
+                    (root / "Makefile").write_text("check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n")
+                    before = stats()[counter]
+                    status, body = self.alice.chat(project, marker, model)
+                    self.assertEqual(status, 200, body)
+                    self.assertEqual(stats()[counter] - before, rounds, body["text"])
+                    journal = (root / "logs/runtime-diagnostics.jsonl").read_text()
+                    self.assertIn("exit_code=2", journal)
+                    self.assertIn("E_FIXTURE", journal)
+                    self.assertIn("Error 7", journal)
+                    if marker == "TEST_CHECK_RETRY_GUARD":
+                        self.assertIn('"status":"fail"', body["text"])
+                        self.assertIn("correction reproduced the same failure", journal)
+                    else:
+                        self.assertNotIn('"status":"fail"', body["text"])
+                        self.assertIn("Finished check: check (exit 0)", body["text"])
+
+    def test_failed_book_worker_keeps_stderr_and_exit_status(self):
+        project = self.alice.project()
+        root = ROOT / "accounts/multi_primary/projects" / project
+        (root / "book/Makefile").write_text("all:\n\t@echo E_BOOK_WORKER_STDERR >&2\n\t@exit 7\n")
+        before = stats()["requests"]
+        status, body = self.alice.chat(project, "TEST_UPDATE_BOOK", "test-model")
+        self.assertEqual(status, 200)
+        self.assertEqual(stats()["requests"] - before, 1, "must not attempt blind paid repair")
+        journal = (root / "logs/runtime-diagnostics.jsonl").read_text()
+        self.assertIn("E_BOOK_WORKER_STDERR", journal)
+        self.assertIn("Book build failed: exit_code=2", journal)
+
+    def test_book_palette_normalization_keeps_editor_revision_valid(self):
+        project = self.alice.project()
+        path = f"/api/projects/{project}/book"
+        status, current = self.alice.request(path)
+        self.assertEqual(status, 200)
+        source = "\\documentclass{article}\n\\begin{document}\nReadable book.\n\\end{document}\n"
+        status, saved = self.alice.request(path, {"source": source, "source_revision": current["source_revision"]})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.alice.request(path + "/build", {})[0], 200)
+        status, built = self.alice.request(path)
+        self.assertEqual(status, 200)
+        self.assertEqual(built["source_revision"], saved["source_revision"], "building invalidated the editor's saved revision")
+        status, again = self.alice.request(path, {"source": built["source"].replace("Readable book.", "Readable edited book."), "source_revision": saved["source_revision"]})
+        self.assertEqual(status, 200, again)
+        self.assertEqual(self.alice.request(path + "/build", {})[0], 200)
+        self.assertEqual(self.alice.request(path)[1]["source"].count("\\AtBeginDocument"), 1)
 
     def test_wrapped_book_is_recovered_locally_and_ambiguous_books_are_rejected(self):
         before = stats()["anthropic_requests"]
@@ -194,7 +290,7 @@ class MultiProvider(unittest.TestCase):
     def test_rejected_repair_and_failed_openai_loop_keep_all_reported_usage(self):
         for marker, model, counter, expected_tokens, detail in [
             ("TEST_ANTHROPIC_REJECTED_REPAIR", CLAUDE, "anthropic_requests", 34, "outside the bounded diagnostic neighborhood"),
-            ("TEST_REPEATED_TOOL_FAILURE", "test-model", "requests", 36, "repeated an identical failed workspace operation"),
+            ("TEST_REPEATED_TOOL_FAILURE", "test-model", "requests", 36, "failed again without verified recovery"),
         ]:
             with self.subTest(marker=marker):
                 used = self.alice.request("/api/me")[1]["billing"]["tokens_used"]

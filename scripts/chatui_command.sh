@@ -18,13 +18,10 @@ case "$operation" in
     test "$#" -eq 2
     exec rg -n -F -- "$1" "$2"
     ;;
-  git-apply-check)
+  git-apply-check|git-apply)
     test "$#" -eq 1
-    exec git -C "$1" apply --check --whitespace=nowarn -
-    ;;
-  git-apply)
-    test "$#" -eq 1
-    exec git -C "$1" apply --whitespace=nowarn -
+    installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+    exec python3 "$installation_root/scripts/chatui_patch.py" "$operation" "$1"
     ;;
   check-build|check-check|check-book)
     test "$#" -eq 1

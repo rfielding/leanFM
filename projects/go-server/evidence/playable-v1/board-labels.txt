@@ -1,6 +1,6 @@
 Column 1, row 1: Open
-Column 2, row 1: Open
-Column 3, row 1: Black
+Column 2, row 1: Black
+Column 3, row 1: Open
 Column 4, row 1: Open
 Column 5, row 1: Open
 Column 6, row 1: Open
@@ -9,14 +9,14 @@ Column 8, row 1: Open
 Column 9, row 1: Open
 Column 10, row 1: Open
 Column 11, row 1: Open
-Column 1, row 2: Open
+Column 1, row 2: Black
 Column 2, row 2: Open
 Column 3, row 2: Open
 Column 4, row 2: Open
 Column 5, row 2: Open
 Column 6, row 2: Open
 Column 7, row 2: Open
-Column 8, row 2: Open
+Column 8, row 2: Red, last move
 Column 9, row 2: Open
 Column 10, row 2: Open
 Column 11, row 2: Open
@@ -73,7 +73,7 @@ Column 6, row 7: Open
 Column 7, row 7: Open
 Column 8, row 7: Open
 Column 9, row 7: Open
-Column 10, row 7: White
+Column 10, row 7: Open
 Column 11, row 7: Open
 Column 1, row 8: Open
 Column 2, row 8: Open
@@ -97,19 +97,19 @@ Column 8, row 9: Open
 Column 9, row 9: Open
 Column 10, row 9: Open
 Column 11, row 9: Open
-Column 1, row 10: Red
+Column 1, row 10: Open
 Column 2, row 10: Open
 Column 3, row 10: Open
-Column 4, row 10: Blue
+Column 4, row 10: Open
 Column 5, row 10: Open
 Column 6, row 10: Open
-Column 7, row 10: White
+Column 7, row 10: Open
 Column 8, row 10: Open
-Column 9, row 10: Open
+Column 9, row 10: White
 Column 10, row 10: Open
-Column 11, row 10: Black
+Column 11, row 10: Red
 Column 1, row 11: Open
-Column 2, row 11: Red, last move
+Column 2, row 11: Blue
 Column 3, row 11: Open
 Column 4, row 11: Open
 Column 5, row 11: Open
@@ -117,5 +117,5 @@ Column 6, row 11: Open
 Column 7, row 11: Open
 Column 8, row 11: Open
 Column 9, row 11: Open
-Column 10, row 11: Open
+Column 10, row 11: White
 Column 11, row 11: Open

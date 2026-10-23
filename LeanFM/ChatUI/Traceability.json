@@ -138,6 +138,76 @@
         "scripts/chatui_http_check.sh",
         "scripts/chatui_crypto_test.py"
       ]
+    },
+    {
+      "references": [
+        "property:recoverable_failures_are_fixed_before_return",
+        "property:third_party_commands_cross_one_whitelist",
+        "property:equivalent_project_paths_do_not_false_escape",
+        "proof:No wasteful identical recovery"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Server.lean",
+        "LeanFM/ChatUI/Provider.lean",
+        "scripts/chatui_command.sh",
+        "scripts/chatui_patch.py"
+      ],
+      "tests": [
+        "scripts/chatui_patch_test.py",
+        "scripts/chatui_multi_provider_test.py",
+        "scripts/chatui_provider_stub.py"
+      ]
+    },
+    {
+      "references": [
+        "property:one_password_unlocks_all_provider_keys",
+        "proof:Concurrent BYOK isolation",
+        "proof:Credential ciphertext requires password login"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Store.lean",
+        "LeanFM/ChatUI/Server.lean"
+      ],
+      "tests": [
+        "scripts/chatui_session_test.py",
+        "scripts/chatui_multi_provider_test.py",
+        "scripts/chatui_crypto_test.py"
+      ]
+    },
+    {
+      "references": [
+        "property:book_palette_selection_is_real_and_stable",
+        "property:book_update_status_is_truthful",
+        "property:book_grows_with_durable_decisions"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Server.lean"
+      ],
+      "tests": [
+        "scripts/chatui_pdf_test.py",
+        "scripts/chatui_http_check.sh",
+        "scripts/chatui_multi_provider_test.py"
+      ]
+    },
+    {
+      "references": [
+        "property:questions_reduce_named_ambiguities",
+        "property:reversible_defaults_prevent_interrogation_loops",
+        "property:one_shot_readiness_requests_trigger_questions",
+        "property:answered_questions_are_closed",
+        "proof:No routine clarification detour",
+        "proof:No wasteful identical recovery"
+      ],
+      "sources": [
+        "LeanFM/ChatUI/Provider.lean",
+        "LeanFM/ChatUI/Server.lean",
+        "SKILL.md"
+      ],
+      "tests": [
+        "scripts/chatui_multi_provider_test.py",
+        "scripts/chatui_provider_stub.py",
+        "scripts/chatui_http_check.sh"
+      ]
     }
   ]
 }

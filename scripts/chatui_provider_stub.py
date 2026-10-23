@@ -3,8 +3,65 @@
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import re
 import time
 from threading import Lock
+
+
+PATCH_SCENARIOS = {"TEST_PATCH_RECOUNT", "TEST_PATCH_WRITE_RECOVERY", "TEST_PATCH_RETRY_GUARD",
+                   "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS"}
+
+FAILING_CHECK = "check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n"
+
+
+def fixture_repair_line(prompt):
+    excerpt = prompt.rsplit("Numbered excerpt:\n", 1)[-1]
+    match = re.search(r"(?m)^(\d+): .*A & B", excerpt)
+    assert match, "repair fixture did not receive the failing numbered line"
+    return int(match.group(1))
+
+
+def verify_decision_contract(instructions, prompt):
+    assert instructions.count("CONSEQUENTIAL DECISIONS POLICY") == 1
+    for obligation in ["Zero clarification questions is the normal outcome",
+                       "Never invent acceptance", "Preserve the exact exit code",
+                       "why the recorded decisions or a reversible default cannot resolve it"]:
+        assert obligation in instructions, obligation
+    assert "question-triggering instruction" not in instructions
+    assert "by asking unresolved choices such as" not in prompt
+
+
+def consequential_question():
+    return ('The requested spectator links conflict with the recorded private-room access boundary.\n'
+            '```leanfm-questions\n' + json.dumps({"questions": [{
+                "id": "test_spectator_privacy",
+                "prompt": "May invitation holders view private games, or must existing private access be preserved?",
+                "options": [{"value": "private", "label": "Preserve private access", "recommended": True},
+                            {"value": "invitation", "label": "Allow invitation holders"}]}]}) + '\n```')
+
+
+def patch_action(marker, step):
+    """Exercise the real tool boundary, including changed malformed arguments."""
+    wrong_counts = ("--- a/spec/patch-note.txt\n+++ b/spec/patch-note.txt\n"
+                    "@@ -1,90 +1,90 @@\n-before\n+after\n unrelated\n")
+    malformed = "*** Begin Patch\n*** Update File: spec/patch-note.txt\n@@\n-before\n+after\n*** End Patch\n"
+    actions = {
+        "TEST_PATCH_RECOUNT": [("workspace_patch", {"patch": wrong_counts})],
+        "TEST_PATCH_WRITE_RECOVERY": [("workspace_patch", {"patch": malformed}),
+            ("workspace_read", {"path": "spec/patch-note.txt"}),
+            ("workspace_write", {"path": "spec/patch-note.txt", "content": "after\nunrelated\n"})],
+        "TEST_PATCH_RETRY_GUARD": [("workspace_patch", {"patch": malformed}),
+            ("workspace_patch", {"patch": malformed.replace("+after", "+different")})],
+        "TEST_CHECK_RETRY_GUARD": [("workspace_check", {"target": "check"}),
+            ("workspace_write", {"path": "Makefile", "content": FAILING_CHECK.replace("line 17", "line 18")}),
+            ("workspace_check", {"target": "check"})],
+        "TEST_CHECK_FIX": [("workspace_check", {"target": "check"}),
+            ("workspace_write", {"path": "Makefile", "content": "check:\n\t@echo check-recovered\n"}),
+            ("workspace_check", {"target": "check"})],
+        "TEST_DECIDE_DEFAULTS": [("workspace_write", {"path": "spec/default-decisions.md",
+            "content": "Decisions: follow existing project conventions; use a readable layout and bounded local checks. Formal acceptance remains pending.\n"})],
+    }[marker]
+    return actions[step] if step < len(actions) else None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -94,7 +151,29 @@ class Handler(BaseHTTPRequestHandler):
                 "TEST_RATE_LIMIT": ("rate_limit_exceeded", "rate_limit_error"),
                 "TEST_UNKNOWN_PROVIDER_ERROR": ("sk-HIDDEN_PROVIDER_SECRET", "HIDDEN_PROVIDER_TYPE"),
             }
-            if marker == "TEST_DURABLE_RESUME":
+            previous = request.get("previous_response_id", "")
+            if marker in PATCH_SCENARIOS or previous.startswith("patch-fixture:"):
+                step = 0
+                if previous.startswith("patch-fixture:"):
+                    _, marker, number = previous.split(":")
+                    step = int(number) + 1
+                if marker == "TEST_DECIDE_DEFAULTS":
+                    verify_decision_contract(request.get("instructions", ""), current_input)
+                if marker.startswith("TEST_CHECK_") and step == 1:
+                    output = request["input"][0]["output"]
+                    assert output.startswith("ERROR:") and "exit_code=2" in output and "E_FIXTURE" in output
+                action = patch_action(marker, step)
+                body = {"id": f"patch-fixture:{marker}:{step}", "usage": usage}
+                if action:
+                    name, arguments = action
+                    body["output"] = [{"type": "function_call", "call_id": f"patch-{step}",
+                                       "name": name, "arguments": json.dumps(arguments)}]
+                else:
+                    body["output_text"] = "Completed patch fixture with preserved unrelated content."
+            elif marker == "TEST_READY_DEFAULTS":
+                verify_decision_contract(request.get("instructions", ""), current_input)
+                body = {"output_text": "Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.", "usage": usage}
+            elif marker == "TEST_DURABLE_RESUME":
                 required = ["DURABLE RESUME INPUTS", "durable-book-marker", "durable-requirements-marker",
                             "DurableProtocolMarker", "durable-implementation-marker", "resume_marker.txt",
                             "durable-acceptance-marker"]
@@ -142,15 +221,7 @@ class Handler(BaseHTTPRequestHandler):
                 text = json.dumps(edit).replace(r"\\(", r"\(").replace(r"\\)", r"\)")
                 body = {"output_text": text, "usage": usage}
             elif "Current user message:\nTEST_RETURN_STRUCTURED_QUESTION" in current_input:
-                body = {
-                    "output_text": (
-                        "How many MCTS playouts should be used?\n"
-                        "```leanfm-questions\n"
-                        "{\"questions\":[{\"id\":\"test_mcts_budget\",\"prompt\":\"How many MCTS playouts should be used?\",\"options\":[{\"value\":\"1000\",\"label\":\"1000\"}]}]}\n"
-                        "```"
-                    ),
-                    "usage": usage,
-                }
+                body = {"output_text": consequential_question(), "usage": usage}
             elif "TEST_MISSING_IMAGE_REPEAT" in request_text and "single bounded recovery attempt" in request_text:
                 body = {"output_text": "Image created: [preview](spec/images/never-created-twice.png)", "usage": usage}
             elif "Current user message:\nTEST_MISSING_IMAGE_REPEAT" in current_input:
@@ -182,11 +253,11 @@ class Handler(BaseHTTPRequestHandler):
                     "alice" if self.headers.get("Authorization") == "Bearer test-user-key" else "bob") +
                     " model " + request.get("model", "missing"), "usage": usage}
             elif "You repair exactly one failing line" in request_text and "TEST_REPEAT_BOOK" in request_text:
-                edit = {"line_number": 4, "replacement": "Still broken: C & D. TEST_REPEAT_BOOK"}
+                edit = {"line_number": fixture_repair_line(current_input), "replacement": "Still broken: C & D. TEST_REPEAT_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
             elif "You repair exactly one failing line" in request_text and "TEST_REPAIR_BOOK" in request_text:
                 time.sleep(1)
-                edit = {"line_number": 4, "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
+                edit = {"line_number": fixture_repair_line(current_input), "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
             elif "TEST_CANCEL_AGENT" in request_text:
                 time.sleep(1)
@@ -294,7 +365,8 @@ class Handler(BaseHTTPRequestHandler):
         if (request.get("model") not in {"claude-test", "claude-test-fast"}
                 or "input" in request or "previous_response_id" in request
                 or request.get("max_tokens", 0) > (16384 if request.get("model") == "claude-test" else 4096)
-                or (not repair and not request.get("tools"))):
+                or (not repair and not request.get("tools"))
+                or (not repair and request.get("cache_control") != {"type": "ephemeral"})):
             self._increment("invalid_messages")
             return self._json(400, {"error": {"type": "invalid_request_error", "message": "Invalid Messages protocol"}})
         usage = {"input_tokens": 7, "cache_creation_input_tokens": 2,
@@ -304,6 +376,21 @@ class Handler(BaseHTTPRequestHandler):
         content = [text_block("Anthropic credential " + (
             "alice" if self.headers.get("x-api-key") == "anthropic-user-key" else "bob") +
             " model " + request.get("model", "missing"))]
+        if marker in PATCH_SCENARIOS:
+            step = len(messages) // 2
+            if marker == "TEST_DECIDE_DEFAULTS":
+                verify_decision_contract(system, text)
+            if marker.startswith("TEST_CHECK_") and step == 1:
+                result = messages[-1]["content"][0]
+                assert result["is_error"] is True
+                assert "exit_code=2" in result["content"] and "E_FIXTURE" in result["content"]
+            action = patch_action(marker, step)
+            if action:
+                name, arguments = action
+                stop, content = "tool_use", [{"type": "tool_use", "id": f"patch-{step}",
+                    "name": name, "input": arguments}]
+            else:
+                content = [text_block("Completed patch fixture with preserved unrelated content.")]
         if marker == "TEST_ANTHROPIC_BILLING":
             return self._json(402, {"error": {"type": "billing_error",
                                              "message": "HIDDEN_ANTHROPIC_BODY"}})
@@ -355,8 +442,13 @@ class Handler(BaseHTTPRequestHandler):
             content = [text_block(json.dumps({"reply": "Repair this book through the selected provider.",
                 "book_source": "\\documentclass{article}\n\\usepackage{underscore}\n\\begin{document}\nBroken A & B. " + marker + "\n\\end{document}\n"}))]
         if repair:
-            content = [text_block(json.dumps({"line_number": 10000 if "TEST_ANTHROPIC_REJECTED_REPAIR" in text else 4,
+            content = [text_block(json.dumps({"line_number": 10000 if "TEST_ANTHROPIC_REJECTED_REPAIR" in text else fixture_repair_line(text),
                                              "replacement": "Repaired A \\& B."}))]
+        if marker == "TEST_READY_DEFAULTS":
+            verify_decision_contract(system, text)
+            content = [text_block("Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.")]
+        if marker == "TEST_RETURN_STRUCTURED_QUESTION":
+            content = [text_block(consequential_question())]
         self._json(200, {"id": "anthropic-response", "type": "message", "role": "assistant",
                          "content": content, "model": request["model"], "stop_reason": stop, "usage": usage})
 

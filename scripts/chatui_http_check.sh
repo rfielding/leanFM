@@ -123,6 +123,7 @@ register() {
 register rfielding "$cookie_a" test-user-key
 register second_user "$cookie_b" second-user-key
 python3 scripts/chatui_multi_provider_test.py "$base_url" "$test_root/data"
+python3 scripts/chatui_session_test.py "$base_url" "$test_root/data"
 
 me_json="$(curl -fsS -b "$cookie_a" $base_url/api/me)"
 rg -q '"provider":"openai"' <<<"$me_json"
@@ -190,22 +191,22 @@ rg -q '"model":"test-model-fast"' "$test_root/model-selection.json"
 rg -q '"model":"test-model-fast"' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/conversation")
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_RETURN_STRUCTURED_QUESTION' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/structured-question.json"
-rg -q 'test_mcts_budget' "$test_root/structured-question.json"
+rg -q 'test_spectator_privacy' "$test_root/structured-question.json"
 diagnostic_a="$test_root/data/accounts/rfielding/projects/$project_a/logs/runtime-diagnostics.jsonl"
-rg -q '"category":"structured_question_asked".*test_mcts_budget' "$diagnostic_a"
-rg -q 'structured question\(s\): question_ids=test_mcts_budget' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
+rg -q '"category":"structured_question_asked".*test_spectator_privacy' "$diagnostic_a"
+rg -q 'structured question\(s\): question_ids=test_spectator_privacy' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
 test "$(curl -sS -b "$cookie_b" --data-urlencode 'prompt=unauthorized composer submission' \
-  --data-urlencode 'composer_question_id=test_mcts_budget' -o "$test_root/unauthorized-question-composer.json" -w '%{http_code}' \
+  --data-urlencode 'composer_question_id=test_spectator_privacy' -o "$test_root/unauthorized-question-composer.json" -w '%{http_code}' \
   "$base_url/api/projects/$project_a/chat")" = 404
 ! rg -q 'structured_question_composer_submission' "$diagnostic_a"
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=CONTINUE_WITHOUT_FIXED_COUNT_SECRET_SENTINEL' \
-  --data-urlencode 'composer_question_id=test_mcts_budget' \
+  --data-urlencode 'composer_question_id=test_spectator_privacy' \
   --data-urlencode 'composer_question_prompt_length=41' \
   --data-urlencode 'composer_text_length=43' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/question-composer-bypass.json"
-rg -q '"category":"structured_question_composer_submission".*question_id=test_mcts_budget.*submitted_via_answer_form=false' "$diagnostic_a"
+rg -q '"category":"structured_question_composer_submission".*question_id=test_spectator_privacy.*submitted_via_answer_form=false' "$diagnostic_a"
 ! rg -q 'CONTINUE_WITHOUT_FIXED_COUNT_SECRET_SENTINEL' "$diagnostic_a"
-rg -q 'ordinary_chat_composer question_id=test_mcts_budget' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
+rg -q 'ordinary_chat_composer question_id=test_spectator_privacy' <(curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/trace")
 curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_MISSING_IMAGE_REFERENCE put any image into the PDF' \
   "$base_url/api/projects/$project_a/chat" >"$test_root/missing-image-recovery.json"
 python3 -c 'import json,sys; assert "\"status\":\"success\"" in json.load(open(sys.argv[1]))["text"]' "$test_root/missing-image-recovery.json"
@@ -230,6 +231,9 @@ curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/source/main.go" | rg
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/source/main.go")" = 404
 
 book_url="$base_url/api/projects/$project_a/book/main.pdf"
+python3 scripts/chatui_pdf_test.py "$test_root/data/accounts/rfielding/projects/$project_a/book"
+curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/book/main-dark.pdf" -o "$test_root/served-dark.pdf"
+cmp "$test_root/served-dark.pdf" "$test_root/data/accounts/rfielding/projects/$project_a/book/main-dark.pdf"
 book_size="$(wc -c < "$test_root/data/accounts/rfielding/projects/$project_a/book/main.pdf")"
 curl -sS -b "$cookie_a" -H 'Range: bytes=0-15' -D "$test_root/range-closed.headers" -o "$test_root/range-closed.bin" "$book_url"
 rg -qi '^HTTP/1.1 206 Partial Content' "$test_root/range-closed.headers"

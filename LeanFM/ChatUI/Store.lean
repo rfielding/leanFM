@@ -70,6 +70,20 @@ def cookieValue? (request key : String) : Option String := do
     | name :: values => if name == key then some (String.intercalate "=" values) else none
     | _ => none
 
+-- Keep the released default cookie name, while independent local services
+-- must not overwrite one another's browser session. Cookies have no port scope.
+def sessionCookieName : IO String := do
+  let port := (((← IO.getEnv "LEANFM_PORT").getD "8080").toNat?).getD 8080
+  pure (if port == 8080 then "leanfm_session" else "leanfm_session_" ++ toString port)
+
+def requestSessionToken? (request : String) : IO (Option String) := do
+  pure ((cookieValue? request (← sessionCookieName)).orElse fun _ =>
+    cookieValue? request "leanfm_session")
+
+def sessionCookieHeader (token : String) : IO String := do
+  pure ("Set-Cookie: " ++ (← sessionCookieName) ++ "=" ++ token ++
+    "; Path=/; HttpOnly; SameSite=Strict")
+
 def jsonEscape (s : String) : String :=
   String.join <| s.toList.map fun c =>
     if c == '"' then "\\\"" else if c == '\\' then "\\\\"

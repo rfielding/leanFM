@@ -172,22 +172,70 @@ def main():
             cdp.click(bob, "join")
             cdp.wait(alice, "document.getElementById('network').textContent.includes('2/2 players')")
             cdp.wait(bob, "document.getElementById('network').textContent.includes('2/2 players')")
-            for session, point, ply in [(alice, 0, 1), (bob, 1, 2)]:
+            for session, point, ply in [(alice, 0, 1), (bob, 1, 2), (alice, 2, 3), (bob, 3, 4)]:
                 cdp.evaluate(session, f"document.querySelectorAll('[role=gridcell]')[{point}].focus()")
                 cdp.key(session, "Enter")
                 cdp.wait(alice, f"goServer.state().ply==={ply}")
                 cdp.wait(bob, f"goServer.state().ply==={ply}")
+                if ply == 1:
+                    # R3: a visible board is also read-only between own turns.
+                    before = sum(e.get("method") == "Network.requestWillBeSent" and
+                                 e.get("sessionId") == alice and
+                                 "/actions" in e["params"]["request"]["url"] for e in cdp.events)
+                    cdp.evaluate(alice, "document.querySelectorAll('[role=gridcell]')[4].click()")
+                    assert cdp.evaluate(alice, "document.getElementById('status').textContent.includes('White to move') && document.getElementById('error').hidden")
+                    after = sum(e.get("method") == "Network.requestWillBeSent" and
+                                e.get("sessionId") == alice and
+                                "/actions" in e["params"]["request"]["url"] for e in cdp.events)
+                    assert after == before, "out-of-turn board click sent an unauthorized proposal"
+            assert cdp.evaluate(alice, "goServer.state().board.slice(0,4).join(',')==='1,2,1,2'")
+            # A competing valid move after the displayed snapshot must yield one
+            # conflict, retain its HTTP status/request ID, refresh, and never retry.
+            cdp.evaluate(alice, """(async()=>{
+              const path='/api/games/'+document.getElementById('room').value;
+              const original=window.fetch;
+              const stale=await (await original(path)).json();
+              window.restoreFetch=()=>{window.fetch=original};
+              window.fetch=(url,options)=>url===path&&options?.method==='GET'
+                ?Promise.resolve(new Response(JSON.stringify(stale),{status:200}))
+                :original(url,options);
+              const seat=JSON.parse(sessionStorage.getItem('goserver:'+stale.game.id));
+              const response=await original(path+'/actions',{method:'POST',
+                headers:{'Content-Type':'application/json',Authorization:'Bearer '+seat.token},
+                body:JSON.stringify({revision:stale.game.revision,action:{kind:'move',point:4}})});
+              if(!response.ok)throw Error('fixture competing move failed');
+              document.querySelectorAll('[role=gridcell]')[6].click();
+            })()""")
+            cdp.wait(alice, "goServer.state().ply===5 && document.getElementById('error').textContent.includes('HTTP 409')")
+            assert cdp.evaluate(alice, "document.getElementById('error').textContent.includes('request_id=') && document.querySelector('[role=gridcell]').getAttribute('aria-disabled')==='true'")
+            cdp.evaluate(alice, "window.restoreFetch()")
+            cdp.wait(bob, "goServer.state().ply===5")
+            cdp.evaluate(bob, "document.querySelectorAll('[role=gridcell]')[5].click()")
+            cdp.wait(alice, "goServer.state().ply===6")
+            cdp.wait(bob, "goServer.state().ply===6")
             cdp.click(alice, "back")
             assert cdp.evaluate(alice, "document.getElementById('pass').disabled")
             cdp.click(alice, "live")
             cdp.call("Page.reload", session=alice)
-            cdp.wait(alice, "Boolean(window.goServer) && goServer.state().ply===2 && document.getElementById('network').textContent.includes('You are Black')")
+            cdp.wait(alice, "Boolean(window.goServer) && goServer.state().ply===6 && document.getElementById('network').textContent.includes('You are Black')")
             cdp.click(alice, "pass")
-            cdp.wait(bob, "goServer.state().ply===3")
+            cdp.wait(bob, "goServer.state().ply===7")
             cdp.click(bob, "pass")
             cdp.wait(alice, "goServer.state().finished")
             cdp.wait(bob, "goServer.state().finished")
             assert cdp.evaluate(alice, "JSON.stringify(goServer.state())") == cdp.evaluate(bob, "JSON.stringify(goServer.state())")
+            before = sum(e.get("method") == "Network.requestWillBeSent" and
+                         e.get("sessionId") == alice and
+                         "/actions" in e["params"]["request"]["url"] for e in cdp.events)
+            cdp.evaluate(alice, "document.querySelectorAll('[role=gridcell]')[6].click()")
+            assert cdp.evaluate(alice, "document.getElementById('status').textContent.includes('Game complete') && document.getElementById('error').hidden")
+            after = sum(e.get("method") == "Network.requestWillBeSent" and
+                        e.get("sessionId") == alice and
+                        "/actions" in e["params"]["request"]["url"] for e in cdp.events)
+            assert after == before, "finished board sent another proposal"
+            action_posts = sum(e.get("method") == "Network.requestWillBeSent" and
+                               "/actions" in e["params"]["request"]["url"] for e in cdp.events)
+            assert action_posts == 9, ("action was retried or second turns were lost", action_posts)
             cdp.call("Page.reload", session=alice)
             cdp.wait(alice, "Boolean(window.goServer) && goServer.state().finished && document.getElementById('network').textContent.includes('You are Black')")
             cdp.call("Network.emulateNetworkConditions", {"offline": True, "latency": 0,
@@ -226,7 +274,7 @@ def main():
             assert not failures, failures
             report = {"revision": "playable-v1", "browser": browser["Browser"], "result": "pass",
                       "checks": ["four-player client-side MCTS", "keyboard move", "branch preserves siblings",
-                                 "selected-path real GIF", "two isolated browser seats", "same authoritative final state",
+                                 "selected-path real GIF", "two isolated browser seats", "both second moves accepted", "out-of-turn and finished board clicks send no request", "stale move refreshes once without retry and retains HTTP code and request ID", "same authoritative final state",
                                  "own seat resumes after reload", "network history is read-only", "121 labeled keyboard cells", "GIF final pixels match every selected board point", "review cancels in-flight search", "failed polling pauses without retries and reconnects own seat", "no uncaught browser exceptions"],
                       "selected_gif_ply": selected_ply, "selected_state": selected_state, "gif_bytes": len(exported), "observed_scenarios": traces}
             (EVIDENCE / "browser.json").write_text(json.dumps(report, indent=2) + "\n")
