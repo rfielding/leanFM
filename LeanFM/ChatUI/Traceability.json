@@ -2,6 +2,11 @@
   "requirement": "leanfm.chatui",
   "mappings": [
     {
+      "references": ["property:examples_are_disposable", "property:chat_history_is_not_durable_specification", "property:selected_project_context_drives_chat"],
+      "sources": ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "scripts/chatui_command.sh", "Makefile"],
+      "tests": ["scripts/chatui_reset_test.py", "scripts/chatui_http_check.sh"]
+    },
+    {
       "references": ["property:http_dispatch_requires_complete_frame"],
       "sources": ["Server.lean", "LeanFM/ChatUI/HttpRequest.lean"],
       "tests": ["LeanFM/ChatUI/HttpRequestTests.lean", "scripts/chatui_multi_provider_test.py"]

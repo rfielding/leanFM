@@ -254,8 +254,12 @@ reopened, though a new ambiguity may be asked. Ordinary prompts may proceed
 while clarification is deferred. The Chat chapter specifies these policies.
 
 Each project root contains its complete resumable state; this repository is
-itself one such project. Examples live under \texttt{projects/} (GoServer:
-\texttt{projects/go-server/book/main.pdf}). Bootstrap defines stable paths and
+itself one such project. The optional examples under \texttt{projects/} may be
+deleted without breaking LeanFM startup, project creation or required checks.
+Conversation files are disposable too: each turn loads the selected project's
+book, requirements, protobuf schema, implementation mapping, manifest and source
+inventory. Missing inputs remain explicit gaps, never invented acceptance or
+fallbacks to another project. Bootstrap defines stable paths and
 the two gates: observable requirements, then their implementation mapping.
 Discovery remains iterative; one-pass implementation is ready only when
 generated source passes increasingly realistic in-project tests. This

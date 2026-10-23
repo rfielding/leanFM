@@ -585,10 +585,35 @@ def bookVisibleText (text : String) : String :=
   | some edit => edit.reply
   | none => if looksLikeBookEnvelope text then "" else text
 
+def readProjectCanonical (root relative : String) : IO String := do
+  match ← resolveWorkspacePath root relative with
+  | .error _ => return "[Missing or outside the selected project: " ++ relative ++ "]"
+  | .ok path =>
+      try IO.FS.readFile (fp path)
+      catch error => do
+        appendProjectDiagnostic root "durable_context_read_failed"
+          ("file=" ++ relative ++ " error=" ++ truncateText error.toString 1000)
+        return "[Unreadable durable file: " ++ relative ++ "; diagnostic category=durable_context_read_failed]"
+
+def durableResumeContext (root : String) : IO String := do
+  let manifest ← readProjectCanonical root "manifest.json"
+  let project ← readProjectCanonical root "project.json"
+  let proto ← readProjectCanonical root "spec/Requirements.proto"
+  let realRoot ← IO.FS.realPath (fp root)
+  let inventory ← match ← resolveWorkspacePath realRoot.toString "source" with
+    | .error _ => pure "No in-project implementation source directory is available."
+    | .ok sourceRoot => do
+        let files ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["list-files", sourceRoot]}
+        pure (if files.exitCode == 0 then truncateText files.stdout 8000 else "No implementation source files are recorded.")
+  return "DURABLE RESUME INPUTS. Conversation history is disposable and may be empty. Resume from the selected project's recorded book, requirements, protobuf, implementation mapping and source files; do not ask the user to reconstruct earlier chats. Missing artifacts are explicit gaps, never evidence of acceptance or a reason to substitute another project's files. Read listed source files with workspace_read before changing them. Record any new resolved requirement or implementation decision in the appropriate durable artifact before relying on it in a later turn.\n\nProject manifests (acceptance may be absent; never infer it):\n" ++
+    truncateText (manifest ++ "\n" ++ project) 12000 ++
+    "\n\nCanonical spec/Requirements.proto:\n" ++ truncateText proto 40000 ++
+    "\n\nCurrent implementation source inventory (paths, not source contents):\n" ++ inventory ++ "\n\n"
+
 def chatLayerContext (root layer : String) : IO (Except String String) := do
-  let book ← readOr (root ++ "/book/main.tex") ""
-  let requirements ← readOr (root ++ "/spec/Requirements.lean") ""
-  let implementation ← readOr (root ++ "/spec/Implementation.lean") ""
+  let book ← readProjectCanonical root "book/main.tex"
+  let requirements ← readProjectCanonical root "spec/Requirements.lean"
+  let implementation ← readProjectCanonical root "spec/Implementation.lean"
   let canvasContrastHardRule := "Canvas text contrast is mandatory: never draw black text on a black/dark background or white text on a white/light background. Set a contrasting foreground immediately before each fillText call, based on the pixels behind that label in the canvas; recompute the choice each animation frame if its background changes. Keep user-specified text colors only when the user explicitly requests them.\n\n"
   let diagramGuidance := "Diagram input is intentionally permissive. The user may supply prose, simplified interaction pseudocode, Mermaid, PlantUML, or refer to an attached sketch or public-web image. Infer the intended semantics and ask only when a material ambiguity remains. When a diagram is useful, return corrected renderable Mermaid in a fenced mermaid block. When motion or simulation materially answers the request, return an actual triple-backtick leanfm-canvas fence containing a literal accessible canvas element and self-contained inline script with no external resources; never spell out the words fenced leanfm-canvas and never print its source as ordinary chat prose. For canvas animations, default text foregrounds to white or near-white over dark canvas drawing backgrounds and black or near-black over light canvas drawing backgrounds. Choose against the actual background painted in the canvas, not the surrounding page theme; preserve a text color only when the user specifically requests it. Check every label, legend, and annotation for contrast. For MCP, model the Model Context Protocol JSON-RPC lifecycle between host/client and MCP server (initialize, notifications/initialized, capability discovery such as tools/list, and invocation such as tools/call with their results), not MQTT broker traffic. Preserve the user's original as provenance; do not claim that an informal sketch is an accepted derived LeanFM view.\n\n"
   match layer with
@@ -1397,10 +1422,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                     | .error message => return some (errorResponse 500 message)
                   let diagnosticContext ← recentProjectDiagnostics root
                   let recoveryContext ← bookRecoveryContext root
+                  let durableContext ← durableResumeContext root
                   let contextualPrompt := "Selected LeanFM project root: " ++ root ++
                     "\nAuthorized project workspace: " ++ root ++ "\nImplementation artifacts must be written below source/ and will be displayed from there.\n\n" ++
                     "Implementation-result policy: an explicit implementation request must either write and check the complete implementation beneath the selected project's source/ directory after both acceptance gates and the security critique, or return focused structured leanfm-questions naming the missing gate or material decision. Never claim implementation success while source/ is empty.\n\n" ++
-                    guidedContext ++ "\n\n" ++
+                    durableContext ++ guidedContext ++ "\n\n" ++
                     (if diagnosticContext.isEmpty then "" else
                       "LeanFM private diagnostic memory from recent project failures. Use it to avoid repeating a failed path or strategy; do not quote it unless it changes the user-facing remedy:\n" ++ diagnosticContext ++ "\n\n") ++
                     recoveryContext ++

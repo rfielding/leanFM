@@ -172,14 +172,18 @@ used and remaining local session-token safety budget. This is deliberately not
 presented as an OpenAI dollar balance: configure a provider-project spend cap as
 the authoritative monetary guardrail.
 
-GoServer now includes a playable four-color board, worker MCTS, branching
-history, real GIF export and authenticated two-player server games. From
-`projects/go-server`, `make run` serves it on loopback port 8082 without any
-model API. `make goserver-check` at this repository root checks its Lean/protobuf
-contract, Go race tests, cross-runtime rules and actual HTTP traces; CI runs it
-too. Its [book](projects/go-server/book/main.pdf) and
-[evidence](projects/go-server/evidence/playable-v1/traceability.json) distinguish
-the working experiment from a formal deployed-code refinement proof.
+`projects/` contains optional, disposable examples, not LeanFM runtime inputs.
+Startup, new-project creation and required checks must work with that directory
+empty or absent; absent examples are not shown as phantom project tabs.
+Conversation files can also be erased between turns: ChatUI resumes from the
+selected project's durable book, requirements, protobuf, implementation mapping,
+manifest and source inventory. Missing acceptance or decisions remain explicit
+gaps, not guesses from another project. `make chatui-check` tests an isolated
+installation without examples and three consecutive conversation resets.
+`make chatui-browser-check` additionally exercises the actual React login,
+empty-chat continuation, Project memory and both PDF selections in Chrome
+(requires `google-chrome` and Python `websocket-client`). Sanitized evidence is
+written to `reports/chatui/`; live accounts, chats and keys are never used.
 
 Use a unique login password; phishing or reuse of that password defeats
 password-derived encryption if an attacker also obtains the credential files.

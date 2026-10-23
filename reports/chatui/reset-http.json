@@ -1,0 +1,22 @@
+{
+  "result": "pass",
+  "example_directory": "absent",
+  "conversation_reset_cycles": 3,
+  "checks": [
+    "actual React bundle served",
+    "no phantom example tab or route",
+    "new project with both PDFs",
+    "durable inputs reach provider after each reset",
+    "artifact and acceptance bytes unchanged",
+    "foreign project inaccessible",
+    "symlinked foreign schema excluded from provider context"
+  ],
+  "provenance": {
+    "prompt": "LeanFM must work when examples and conversations are constantly wiped",
+    "question": "Do startup and continuation still use only the owning project's durable files?",
+    "event_source": "isolated LeanFM HTTP runtime and deterministic local provider",
+    "reducer": "assert absent examples, three erased-chat resumes, byte-preserved canonical artifacts and no foreign context",
+    "unit": "three reset cycles",
+    "boundary": "test installation only; no live accounts or projects"
+  }
+}

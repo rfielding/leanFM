@@ -312,9 +312,14 @@ def decisions : List ImplementationDecision :=
       ["scripts/chatui_http_check.sh"]
   , decision "canonical-goserver-project-tab"
       ["task:manage_projects", "property:GoServer is listed once under its canonical identity", "property:The obsolete GoServer example identity is not routable"]
-      ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "projects/go-server/project.json", "projects/go-server/README.md"]
-      "Expose the checked-in projects/go-server workspace once as the read-only project with project_id go-server and display name GoServer. Route that ID to its canonical project root. Do not expose a separate go-server-example identity; reject stale requests under the old identity rather than aliasing it, so it cannot create a second project tab or weaken ownership checks."
+      ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean"]
+      "If projects/go-server/project.json exists, expose that optional example once as the read-only project go-server, display name GoServer. If it is absent, omit it and return 404; never create a phantom tab. Core bootstrap and required checks do not depend on the example tree. The obsolete go-server-example identity remains rejected."
       ["scripts/chatui_http_check.sh verifies one canonical GoServer list entry, old-ID rejection, and read-only write denial"]
+  , decision "disposable-examples-and-conversations"
+      ["property:examples_are_disposable", "property:chat_history_is_not_durable_specification", "property:selected_project_context_drives_chat"]
+      ["LeanFM/ChatUI/Store.lean", "LeanFM/ChatUI/Server.lean", "Makefile"]
+      "Provision from built-in templates, not example directories. On every turn load only the owning project's canonical book, requirements, protobuf values, implementation mapping, manifests and bounded source inventory; recent conversation is supplementary. Missing acceptance remains missing. Test a separate LeanFM runtime with no projects directory, remove its private conversation between turns, and verify repeated continuation preserves artifact bytes and receives the durable inputs without old messages or foreign project data."
+      ["scripts/chatui_reset_test.py", "scripts/chatui_http_check.sh"]
   , decision "login-openai-key-purpose-copy"
       ["task:authenticate_user", "property:login_explains_openai_key_protection", "property:stored_provider_keys_are_encrypted", "proof:Credential ciphertext requires password login"]
       ["ui/src/main.tsx", "LeanFM/ChatUI/Web.lean", "LeanFM/ChatUI/Store.lean"]

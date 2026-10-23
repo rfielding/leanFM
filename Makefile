@@ -42,7 +42,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams mdp-example-check paxos-check video-check selfhost-check goserver-check
+check: build validate diagrams mdp-example-check paxos-check video-check selfhost-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -98,6 +98,10 @@ paxos-check:
 .PHONY: goserver-check
 goserver-check: go-toolchain
 	$(MAKE) -C projects/go-server check
+
+.PHONY: chatui-browser-check
+chatui-browser-check: build
+	LEANFM_TEST_BROWSER=1 bash scripts/chatui_http_check.sh
 
 paxos-run:
 	@echo 'Run three replicas, then: go run ./cmd/paxos-kv web'

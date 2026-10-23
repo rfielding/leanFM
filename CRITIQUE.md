@@ -29,6 +29,14 @@ fresh session from only those artifacts and establish general grammar-to-code
 refinement. The old contradictory drafts have not been retroactively accepted.
 Screenshots are not a gate.
 
+LeanFM itself now has a no-examples reset regression: new-project creation and
+three continuations after physically removing chat files preserve canonical
+artifacts and acceptance bytes, and do not send a foreign symlinked schema to
+the provider. A real React browser test covers login, continuation, Project memory
+and light/dark PDF routes. This verifies context delivery, not that a real model
+faithfully consolidates every decision or that the specified checkpoint/clear
+transaction is implemented.
+
 ## Book length and release reproducibility (reviewed 2026-10-20)
 
 Now 131 pages after consolidation; preserve the preface-to-PR narrative and

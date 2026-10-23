@@ -77,17 +77,12 @@ def jsonEscape (s : String) : String :=
     else if c == '\t' then "\\t" else c.toString
 
 def jsonStringValue? (json key : String) : Option String :=
-  match json.splitOn ("\"" ++ key ++ "\":\"") with
-  | _ :: rest :: _ => some ((rest.splitOn "\"").headD "")
-  | _ => none
+  (Lean.Json.parse json).toOption.bind fun value =>
+    ((value.getObjVal? key).bind Lean.Json.getStr?).toOption
 
 def jsonNatValue? (json key : String) : Option Nat :=
-  match json.splitOn ("\"" ++ key ++ "\":") with
-  | _ :: rest :: _ =>
-      let chars := rest.toList.dropWhile (fun c => c == ' ' || c == '\n' || c == '\r' || c == '\t')
-      let digits := String.ofList (chars.takeWhile Char.isDigit)
-      digits.toNat?
-  | _ => none
+  (Lean.Json.parse json).toOption.bind fun value =>
+    ((value.getObjVal? key).bind Lean.Json.getNat?).toOption
 
 def base64Alphabet : Array Char := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toList.toArray
 
@@ -454,7 +449,8 @@ def projectListJson (username : String) : IO String := do
       items := ("{\"project_id\":\"" ++ entry.fileName ++ "\",\"display_name\":\"" ++ jsonEscape name ++ "\",\"read_only\":false}") :: items
   let workspace := "{\"project_id\":\"leanfm-workspace\",\"display_name\":\"LeanFM\",\"read_only\":true,\"kind\":\"workspace\"}"
   let goServer := "{\"project_id\":\"go-server\",\"display_name\":\"GoServer\",\"read_only\":true,\"kind\":\"project\"}"
-  pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace, goServer]) ++ "]")
+  let examples := if ← (fp "projects/go-server/project.json").pathExists then [goServer] else []
+  pure ("[" ++ String.intercalate "," (items.reverse ++ [workspace] ++ examples) ++ "]")
 
 def deleteProject (username projectId confirmation : String) : IO (Except String Unit) := do
   if !safeId projectId then return .error "Invalid project identifier."

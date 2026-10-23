@@ -94,7 +94,16 @@ class Handler(BaseHTTPRequestHandler):
                 "TEST_RATE_LIMIT": ("rate_limit_exceeded", "rate_limit_error"),
                 "TEST_UNKNOWN_PROVIDER_ERROR": ("sk-HIDDEN_PROVIDER_SECRET", "HIDDEN_PROVIDER_TYPE"),
             }
-            if marker in error_cases:
+            if marker == "TEST_DURABLE_RESUME":
+                required = ["DURABLE RESUME INPUTS", "durable-book-marker", "durable-requirements-marker",
+                            "DurableProtocolMarker", "durable-implementation-marker", "resume_marker.txt",
+                            "durable-acceptance-marker"]
+                forbidden = ["ERASED_CHAT_SENTINEL", "FOREIGN_PROJECT_SENTINEL"]
+                missing = [value for value in required if value not in current_input]
+                leaked = [value for value in forbidden if value in current_input]
+                body = {"output_text": "Durable resume verified without chat history." if not missing and not leaked
+                        else "RESET_CONTEXT_FAILURE: missing=" + repr(missing) + " leaked=" + repr(leaked), "usage": usage}
+            elif marker in error_cases:
                 code, error_type = error_cases[marker]
                 response_status = 429
                 body = {"error": {"code": code, "type": error_type,

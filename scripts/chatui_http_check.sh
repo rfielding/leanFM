@@ -57,6 +57,7 @@ LEANFM_DATA_ROOT="$test_root/credential-unit" lake env lean --run LeanFM/ChatUI/
 
 python3 scripts/chatui_provider_stub.py >"$provider_log" 2>&1 &
 provider_pid=$!
+python3 scripts/chatui_reset_test.py "$test_root"
 # Exercise the production-relevant relative-root configuration while assertions
 # continue to inspect the same canonical temporary directory.
 LEANFM_DATA_ROOT="$data_root_setting" \
@@ -136,11 +137,16 @@ projects_json="$(curl -fsS -b "$cookie_a" $base_url/api/projects)"
 login_html="$(curl -fsS $base_url/)"
 rg -q '/assets/chatui-react1.js' <<<"$login_html"
 rg -q '"project_id":"leanfm-workspace".*"read_only":true' <<<"$projects_json"
-rg -q '"project_id":"go-server".*"display_name":"GoServer".*"read_only":true' <<<"$projects_json"
+if test -f projects/go-server/project.json; then
+  rg -q '"project_id":"go-server".*"display_name":"GoServer".*"read_only":true' <<<"$projects_json"
+  test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 200
+  test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' --data-urlencode 'source=not allowed' "$base_url/api/projects/go-server/book")" = 403
+else
+  ! rg -q '"project_id":"go-server"' <<<"$projects_json"
+  test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 404
+fi
 ! rg -q 'go-server-example|GoServer example' <<<"$projects_json"
-test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server/book")" = 200
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/go-server-example/book")" = 404
-test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' --data-urlencode 'source=not allowed' "$base_url/api/projects/go-server/book")" = 403
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' "$base_url/api/projects/leanfm-workspace/source/.git/config")" = 404
 
 test -f "$test_root/data/accounts/rfielding/credentials/default.json"

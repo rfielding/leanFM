@@ -38,7 +38,9 @@ case "$operation" in
   build-book)
     test "$#" -eq 1
     book_root="$1"
-    if [[ "${LEANFM_TEST_UNSANDBOXED_BOOK_BUILD:-}" == "1" && "$book_root" == /tmp/leanfm-chatui-check.* ]]; then
+    installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+    if [[ "${LEANFM_TEST_UNSANDBOXED_BOOK_BUILD:-}" == "1" &&
+        ( "$book_root" == /tmp/leanfm-chatui-check.* || "$book_root" == "$installation_root"/.cache/chatui-check.* ) ]]; then
       timeout 300 make -C "$book_root" 2>&1 | iconv -c -f UTF-8 -t UTF-8
     else
       timeout 300 bwrap --die-with-parent --unshare-pid --unshare-ipc --unshare-uts \

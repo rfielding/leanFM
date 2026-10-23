@@ -4,6 +4,11 @@ namespace LeanFM.ChatUI.ProviderTests
 
 open Lean LeanFM.ChatUI.Provider LeanFM.ChatUI.Server
 
+example : LeanFM.ChatUI.Store.jsonStringValue? "{\"display_name\": \"Resettable project\"}" "display_name" = some "Resettable project" := by native_decide
+example : LeanFM.ChatUI.Store.jsonStringValue? "{\"display_name\": \"A \\\"quote\\\"\"}" "display_name" = some "A \"quote\"" := by native_decide
+example : LeanFM.ChatUI.Store.jsonNatValue? "{\"count\": 12}" "count" = some 12 := by native_decide
+example : LeanFM.ChatUI.Store.jsonNatValue? "{\"count\": 12bad}" "count" = none := by native_decide
+
 -- Requirement refs: provider_outcomes_are_distinguishable,
 -- book_envelopes_never_leak_into_chat, local_token_budget_is_visible_and_enforced.
 def source : String := "\\documentclass{article}\n\\begin{document}\n\\(x+1\\)\n\\end{document}"

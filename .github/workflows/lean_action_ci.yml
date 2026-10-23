@@ -38,4 +38,3 @@ jobs:
       - uses: leanprover/lean-action@v1
       - run: cp book/main-dark.pdf book/main.pdf
       - run: make chatui-check
-      - run: make goserver-check
