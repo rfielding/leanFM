@@ -54,6 +54,8 @@ def verify_decision_contract(instructions, prompt):
     assert instructions.count("CONSEQUENTIAL DECISIONS POLICY") == 1
     for obligation in ["Zero clarification questions is the normal outcome",
                        "Never invent acceptance", "Preserve the exact exit code",
+                       "The assistant owns the formal language", "major consequence that is hard to reverse",
+                       "not questionnaires to send to the user", "stakeholder need not read Lean",
                        "why the recorded decisions or a reversible default cannot resolve it"]:
         assert obligation in instructions, obligation
     assert "question-triggering instruction" not in instructions

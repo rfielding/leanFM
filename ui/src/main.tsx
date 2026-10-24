@@ -486,22 +486,28 @@ function Source({project, workspaceRevision, agentBusy}: {project: Project; work
   return <section className="pane source-pane"><nav className="source-files vertical-tabs">{files.map(file => <button key={file} className={selected === file ? "active" : ""} onClick={() => setSelected(file)}>{file}</button>)}</nav><main className="source-view"><header><strong>{selected}</strong></header>{error ? <p className="error">{error}</p> : <pre><code>{source}</code></pre>}</main></section>;
 }
 
-function SpecificationAcceptance({project, workspaceRevision, agentBusy}: {project: Project; workspaceRevision: number; agentBusy: boolean}) {
+function SpecificationAcceptance({project, workspaceRevision, agentBusy, compact = false, onAccepted}: {project: Project; workspaceRevision: number; agentBusy: boolean; compact?: boolean; onAccepted?: () => void}) {
   const [state, setState] = useState<SpecificationState | null>(null), [error, setError] = useState("");
   useEffect(() => {
     if (project.read_only) return;
     const controller = new AbortController();
-    const refresh = () => api<SpecificationState>(`/api/projects/${project.project_id}/specification`, {}, controller.signal).then(setState).catch(error => { if (error.name !== "AbortError") setError(error.message); });
+    const refresh = () => api<SpecificationState>(`/api/projects/${project.project_id}/specification`, {}, controller.signal).then(value => { setState(value); setError(""); }).catch(error => { if (error.name !== "AbortError") setError(error.message); });
     void refresh();
     const timer = agentBusy ? window.setInterval(refresh, 2000) : undefined;
     return () => { controller.abort(); if (timer) window.clearInterval(timer); };
   }, [project.project_id, project.read_only, workspaceRevision, agentBusy]);
   async function accept(gate: "requirements" | "implementation") {
     if (!state) return;
-    try { setError(""); setState(await api<SpecificationState>(`/api/projects/${project.project_id}/specification/${gate}/${state[gate].revision}/accept`, {method: "POST"})); }
+    try { setError(""); setState(await api<SpecificationState>(`/api/projects/${project.project_id}/specification/${gate}/${state[gate].revision}/accept`, {method: "POST"})); onAccepted?.(); }
     catch (error) { setError((error as Error).message); }
   }
   if (project.read_only) return null;
+  if (compact) {
+    const gate = state?.requirements.checked && !state.requirements.accepted ? "requirements"
+      : state?.requirements.accepted && state.implementation.checked && !state.implementation.accepted ? "implementation" : null;
+    if (!gate && !error) return null;
+    return <section className="specification-review" aria-label="Approval required">{gate && <article><strong>{gate === "requirements" ? "Requirements ready for approval" : "Implementation ready for approval"}</strong><span>The assistant handles reversible technical choices. Approve the current design when you are ready.</span><button type="button" disabled={agentBusy} onClick={() => void accept(gate)}>{gate === "requirements" ? "Approve requirements" : "Approve implementation"}</button></article>}{error && <p className="error" role="alert">{error}</p>}</section>;
+  }
   return <section className="specification-review" aria-label="Specification acceptance">{(["requirements", "implementation"] as const).map(gate => <article key={gate}><strong>{gate === "requirements" ? "Requirements" : "Implementation specification"}</strong><span>{state?.[gate].accepted ? "Accepted current revision" : state?.[gate].checked ? "Checked · ready for your review" : "Needs a current canonical check"}</span><button type="button" disabled={!state?.[gate].checked || state[gate].accepted || agentBusy || (gate === "implementation" && !state.requirements.accepted)} onClick={() => void accept(gate)}>{gate === "requirements" ? "Accept requirements" : "Accept implementation specification"}</button></article>)}{error && <p className="error" role="alert">{error}</p>}</section>;
 }
 
@@ -562,6 +568,7 @@ function ProjectWorkspace({project, authenticationRevision, session, onUnlockKey
     {logoutError && <p className="error" role="alert">{logoutError}</p>}
     {billing?.model_warnings?.map(warning => <p className="error" role="status" key={warning}>{warning}</p>)}
     {agentBusy && <div className="workspace-agent-progress"><div className="workspace-agent-running" role="status"><span className="agent-running-dot" /><span><strong>Agent running · {agentModel}</strong><small>{agentProgress}. You can inspect any project or phase while it runs.</small></span><time>{agentElapsed}</time><button type="button" onClick={cancelAgent} disabled={cancelRequested}>{cancelRequested ? "Cancel requested…" : "Cancel"}</button></div>{liveTrace.length > 0 && <details className={`live-operational-trace ${liveTrace.some(entry => entry.includes("rejected:") || entry.startsWith("Failed check:")) ? "has-error" : ""}`}><summary>Operational trace · {liveTrace.length} event{liveTrace.length === 1 ? "" : "s"} · latest: {liveTrace[liveTrace.length - 1]}</summary><pre>{liveTrace.map(entry => `- ${entry}`).join("\n")}</pre></details>}</div>}
+    {phase === "chat" && <SpecificationAcceptance project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} compact onAccepted={() => setWorkspaceRevision(value => value + 1)} />}
     <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} modelAvailability={modelAvailability} modelError={modelError} onUnlockKeys={onUnlockKeys} onRetryModels={onRetryModels} credentialIdentity={`${authenticationRevision}:${billing?.model_details?.map(model => model.key_fingerprint).join(",") || "locked"}`} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
     <div className="phase-panel" hidden={phase !== "memory"}><ProjectMemoryView project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
     <div className="phase-panel" hidden={phase !== "book"}><Book project={project} workspaceRevision={workspaceRevision} /></div>
