@@ -8,6 +8,31 @@ open Lean LeanFM.ChatUI.Provider LeanFM.ChatUI.Server
 example : (fatalWorkspaceFailure? "FATAL: local_checker_unavailable: failed to create thread").isSome = true := by native_decide
 example : (fatalWorkspaceFailure? "FATAL: initiating credential session ended").isSome = true := by native_decide
 example : (fatalWorkspaceFailure? "ERROR: unknown identifier; edit the candidate").isNone = true := by native_decide
+example : safeSourceURL "javascript:alert(1)" = false := by native_decide
+example : safeSourceURL "file:///private" = false := by native_decide
+example : safeSourceURL "https://example.com/\nprivate" = false := by native_decide
+example : safeSourceURL "https://example.com/official-docs" = true := by native_decide
+
+-- Unsupported models never receive a hosted tool; supported ones receive it once.
+example : (((Json.parse (openAITools false)).toOption.bind (·.getArr?.toOption)).getD #[]).all
+    (fun tool => jsonStringField? tool "type" == some "function") = true := by native_decide
+example : ((((Json.parse (openAITools true)).toOption.bind (·.getArr?.toOption)).getD #[]).filter
+    (fun tool => jsonStringField? tool "type" == some "web_search")).size = 1 := by native_decide
+
+#eval do
+  let base ← IO.currentDir
+  let root := base.toString ++ "/.cache/mcp-reference-" ++ (← LeanFM.ChatUI.Store.randomHex 8)
+  IO.FS.createDirAll (System.FilePath.mk root)
+  try
+    let trace ← IO.mkRef ([] : List String)
+    let requirements ← runWorkspaceTool root "leanfm_reference" "{\"section\":\"requirements\"}" trace
+    if requirements != LeanFM.leanFMRequirementsReference then throw (IO.userError "MCP requirements reference diverged")
+    let prompt ← runWorkspaceTool root "leanfm_reference" "{\"section\":\"code-generation\"}" trace
+    if prompt != LeanFM.codeGenerationSystemPrompt then throw (IO.userError "MCP generation prompt diverged")
+    if !(← trace.get).any (·.contains "via MCP") then throw (IO.userError "ChatUI did not report MCP-backed guidance")
+    let rejected ← runWorkspaceTool root "leanfm_reference" "{\"section\":\"leanfm://project/specification/Requirements.lean\"}" trace
+    if !rejected.startsWith "ERROR:" then throw (IO.userError "foreign project context was exposed as a language reference")
+  finally IO.FS.removeDirAll (System.FilePath.mk root)
 
 #eval do
   let base ← IO.currentDir

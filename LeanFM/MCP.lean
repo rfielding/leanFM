@@ -61,21 +61,22 @@ def resources : Array Json := #[
 private def alphabet : Array Char :=
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".toList.toArray
 
-private partial def base64Loop : List UInt8 -> List Char
-  | [] => []
-  | [a] => [alphabet[(a.toNat >>> 2)]!, alphabet[((a.toNat &&& 3) <<< 4)]!, '=', '=']
-  | [a, b] =>
-      [alphabet[(a.toNat >>> 2)]!,
-       alphabet[(((a.toNat &&& 3) <<< 4) ||| (b.toNat >>> 4))]!,
-       alphabet[((b.toNat &&& 15) <<< 2)]!, '=']
-  | a :: b :: c :: rest =>
-      alphabet[(a.toNat >>> 2)]! ::
-      alphabet[(((a.toNat &&& 3) <<< 4) ||| (b.toNat >>> 4))]! ::
-      alphabet[(((b.toNat &&& 15) <<< 2) ||| (c.toNat >>> 6))]! ::
-      alphabet[(c.toNat &&& 63)]! :: base64Loop rest
-
 private def base64 (bytes : ByteArray) : String :=
-  String.ofList (base64Loop bytes.toList)
+  Id.run do
+    -- The central PDF is megabytes, so recursion per three bytes overflows
+    -- the server stack. Keep encoding iterative and avoid byte/character lists.
+    let mut encoded := ""
+    let mut index := 0
+    while index < bytes.size do
+      let a := bytes[index]!.toNat
+      let b := if index + 1 < bytes.size then bytes[index + 1]!.toNat else 0
+      let c := if index + 2 < bytes.size then bytes[index + 2]!.toNat else 0
+      encoded := encoded.push alphabet[(a >>> 2)]!
+      encoded := encoded.push alphabet[(((a &&& 3) <<< 4) ||| (b >>> 4))]!
+      encoded := encoded.push (if index + 1 < bytes.size then alphabet[(((b &&& 15) <<< 2) ||| (c >>> 6))]! else '=')
+      encoded := encoded.push (if index + 2 < bytes.size then alphabet[(c &&& 63)]! else '=')
+      index := index + 3
+    return encoded
 
 private def readText (path : String) : IO String := IO.FS.readFile path
 private def readBlob (path : String) : IO String := base64 <$> IO.FS.readBinFile path
@@ -119,7 +120,7 @@ def tools : Array Json := #[
   tool "validate_generated_artifacts" "Validate generated artifacts"
     "Run the deterministic in-memory validations for the canonical requirements and implementation specifications.",
   tool "requirements_interrogation" "Read requirements interrogation"
-    "Return the canonical questions used before observable requirements are accepted.",
+    "Return the internal requirements completeness checklist. The agent resolves reversible defaults; this is not a questionnaire for the user.",
   tool "code_generation_prompt" "Read one-shot implementation prompt"
     "Return the canonical post-acceptance prompt that maps the book and accepted specifications to source changes."
 ]

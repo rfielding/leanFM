@@ -214,7 +214,7 @@ function QuestionForm({questions, answeredIds, disabled, onAnswer}: {questions: 
   return <section className="chat-questions" aria-label="Questions requiring answers">{unanswered.map(question => <fieldset key={question.id}><legend>{question.prompt}</legend>{question.options.map(option => <label key={option.value} className={(selected[question.id] || []).includes(option.value) ? "selected" : ""}><input type={question.multiple ? "checkbox" : "radio"} name={question.id} value={option.value} checked={(selected[question.id] || []).includes(option.value)} onChange={event => { setValidation(""); choose(question, option.value, event.target.checked); }} /> <span>{option.label}{option.recommended && <small>Recommended</small>}</span></label>)}<label className="question-qualification"><span>Qualify this decision or provide a better answer</span><textarea value={qualifications[question.id] || ""} onChange={event => { setValidation(""); setQualifications(current => ({...current, [question.id]: event.target.value})); }} maxLength={4000} rows={3} placeholder="Optional when a choice fits; use this alone when none does." /></label></fieldset>)}{validation && <p className="question-validation" role="alert">{validation}</p>}<button type="button" className="primary" disabled={disabled} onClick={submitAnswers}>Submit answers</button></section>;
 }
 
-function Auth({onReady, account, onCancel, onLogout, loggingOut}: {onReady: () => void; account?: string; onCancel?: () => void; onLogout?: () => void; loggingOut?: boolean}) {
+function Auth({onReady, account, onCancel, onLogout, loggingOut}: {onReady: (sessionPreserved?: boolean) => void; account?: string; onCancel?: () => void; onLogout?: () => void; loggingOut?: boolean}) {
   const [register, setRegister] = useState(false), [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [username, setUsername] = useState(() => account || window.localStorage.getItem("leanfm:last-username") || "");
@@ -223,20 +223,20 @@ function Auth({onReady, account, onCancel, onLogout, loggingOut}: {onReady: () =
     if (submitting || loggingOut) return;
     setSubmitting(true); setError(register ? "Verifying your provider keys…" : "Unlocking your provider keys…");
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
-    try { await api(register ? "/api/accounts" : "/api/login", formRequest(data)); window.localStorage.setItem("leanfm:last-username", data.username); onReady(); }
+    try { const result = await api<{session_preserved?: boolean}>(register ? "/api/accounts" : account ? "/api/provider-keys" : "/api/login", formRequest(data)); window.localStorage.setItem("leanfm:last-username", data.username); onReady(result.session_preserved === true); }
     catch (e) { setError((e as Error).message); }
     finally { setSubmitting(false); }
   }
   return <section className="auth"><div className="auth-card"><h1>{account ? "API keys" : "LeanFM"}</h1><p>Sign in to unlock your encrypted provider API keys. One password unlocks OpenAI and Anthropic together; this is your LeanFM login, not a provider login.</p>
     {!account && <div className="auth-tabs" role="tablist" aria-label="Account access"><button type="button" role="tab" aria-selected={!register} className={!register ? "active" : ""} onClick={() => { setRegister(false); setError(""); }}>Log in</button><button type="button" role="tab" aria-selected={register} className={register ? "active" : ""} onClick={() => { setRegister(true); setError(""); }}>Create account</button></div>}
     <form onSubmit={submit}><label>Username<input name="username" autoComplete="username" value={username} readOnly={!!account} onChange={event => setUsername(event.target.value)} required /></label><label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : undefined} required /></label>
-      <details key={register ? "registration" : "login"} open={register || undefined}><summary>{register ? "Provider API keys" : "Add or replace API keys (optional)"}</summary><label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label></details>
+      <details key={register ? "registration" : "login"} open={register || !!account || undefined}><summary>{register ? "Provider API keys" : "Add or replace API keys (optional)"}</summary><label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label></details>
       {!register && <p className="stored-key-note">Already have an account? Use your username and password. Your saved API keys unlock automatically after a server restart.</p>}
-      <p>{register ? "Provide at least one key; you can provide both now." : "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."} Keys are encrypted with your password and never returned to the browser. Updating keys signs out earlier sessions.</p>
-      <button className="primary" disabled={submitting || loggingOut}>{register ? "Create account" : account ? "Unlock and save keys" : "Log in"}</button>{onCancel && <button type="button" onClick={onCancel} disabled={submitting || loggingOut}>Cancel</button>}</form>{onLogout && <button type="button" onClick={onLogout} disabled={loggingOut || submitting}>Log out and sign in again</button>}<div className="error" role="alert">{error}</div></div></section>;
+      <p>{register ? "Provide at least one key; you can provide both now." : "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."} Keys are encrypted with your password and never returned to the browser. Adding another provider keeps you signed in. Replacing an existing key signs out older sessions.</p>
+      <button className="primary" disabled={submitting || loggingOut}>{register ? "Create account" : account ? "Save API keys" : "Log in"}</button>{onCancel && <button type="button" onClick={onCancel} disabled={submitting || loggingOut}>Cancel</button>}</form>{onLogout && <button type="button" onClick={onLogout} disabled={loggingOut || submitting}>Log out and sign in again</button>}<div className="error" role="alert">{error}</div></div></section>;
 }
 
-function ProviderKeysDialog({account, onDone, onClose, onLogout, loggingOut}: {account: string; onDone: () => void; onClose: () => void; onLogout: () => void; loggingOut: boolean}) {
+function ProviderKeysDialog({account, onDone, onClose, onLogout, loggingOut}: {account: string; onDone: (sessionPreserved?: boolean) => void; onClose: () => void; onLogout: () => void; loggingOut: boolean}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
   return <dialog ref={ref} className="key-dialog" aria-label="Unlock or update provider keys" onCancel={event => { event.preventDefault(); onClose(); }}><Auth key={account || "signed-out"} account={account} onReady={onDone} onCancel={onClose} onLogout={onLogout} loggingOut={loggingOut} /></dialog>;
@@ -283,8 +283,8 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
   const [model, setModel] = useState(defaultModel);
   const [workProgress, setWorkProgress] = useState<WorkCheckpoint | null>(null);
   const [heldWork, setHeldWork] = useState<{item: QueuedPrompt; work: WorkCheckpoint | null} | null>(null);
-  const credentialRef = useRef(credentialIdentity), stopWork = useRef(false), busyRef = useRef(false);
-  credentialRef.current = credentialIdentity; busyRef.current = busy;
+  const credentialRef = useRef<Record<string, string>>({}), stopWork = useRef(false), busyRef = useRef(false);
+  credentialRef.current = Object.fromEntries(modelDetails.map(option => [option.id, `${credentialIdentity}:${option.provider}:${option.key_fingerprint}`])); busyRef.current = busy;
   useEffect(() => {
     const cancel = (event: Event) => { if ((event as CustomEvent<string>).detail === project.project_id) stopWork.current = true; };
     window.addEventListener("leanfm:cancel-work", cancel);
@@ -294,7 +294,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
     if (!models.length || busyRef.current || project.read_only) return;
     void api<WorkStatus>(`/api/projects/${project.project_id}/chat/work/active`).then(status => {
       if (!busyRef.current && status.work && status.request && ["running", "checkpointed"].includes(status.work.state))
-        setHeldWork({work: status.work, item: {id: status.request.id, text: status.request.prompt, model: status.request.model, credentialIdentity: credentialRef.current}});
+        setHeldWork({work: status.work, item: {id: status.request.id, text: status.request.prompt, model: status.request.model, credentialIdentity: credentialRef.current[status.request.model] || ""}});
     }).catch(() => {});
   }, [credentialIdentity, project.project_id]);
 
@@ -313,7 +313,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
     if (!text) return;
     const id = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     if (!models.includes(model)) return;
-    setQueue(current => [...current, {id, text, model, credentialIdentity, pendingQuestion}]);
+    setQueue(current => [...current, {id, text, model, credentialIdentity: credentialRef.current[model] || "", pendingQuestion}]);
     if (clearComposer) setPrompt("");
   }
   async function inspectHeldWork() {
@@ -333,14 +333,14 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
       : {prompt: item.text, model: item.model, work_request_id: item.id, ...(item.pendingQuestion ? {composer_question_id: item.pendingQuestion.id, composer_question_prompt_length: String(item.pendingQuestion.promptLength), composer_text_length: String(item.pendingQuestion.composerTextLength)} : {})};
     try {
       for (;;) {
-        if (credentialRef.current !== item.credentialIdentity) { setHeldWork({item, work}); setError("The credential changed. Explicitly resume this task after signing in."); break; }
+        if ((credentialRef.current[item.model] || "") !== item.credentialIdentity) { setHeldWork({item, work}); setError("The credential changed. Explicitly resume this task after signing in."); break; }
         let result: {work?: WorkCheckpoint};
         try { result = await api(`/api/projects/${project.project_id}/chat`, formRequest(values)); }
         catch (failure) {
           // A status read can prove that a batch finished. Never blindly replay
           // a request whose provider outcome is uncertain.
           const status = await api<WorkStatus>(`/api/projects/${project.project_id}/chat/work/${work?.id || item.id}`).catch(() => null);
-          if (status?.work && status.work.state === "checkpointed" && !status.work.requires_resume && !stopWork.current && credentialRef.current === item.credentialIdentity) result = {work: status.work};
+          if (status?.work && status.work.state === "checkpointed" && !status.work.requires_resume && !stopWork.current && (credentialRef.current[item.model] || "") === item.credentialIdentity) result = {work: status.work};
           else {
             if (status?.work ? ["running", "checkpointed"].includes(status.work.state) : !!work || !(failure instanceof ApiError) || failure.status === 0 || failure.status >= 500) setHeldWork({item, work: status?.work || work});
             throw failure;
@@ -350,7 +350,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
         await load(); onWorkspaceChange();
         if (!work?.continue) break;
         if (stopWork.current) { await load(); break; }
-        if (credentialRef.current !== item.credentialIdentity || work.requires_resume) { setHeldWork({item, work}); break; }
+        if ((credentialRef.current[item.model] || "") !== item.credentialIdentity || work.requires_resume) { setHeldWork({item, work}); break; }
         values = {work_id: work.id, checkpoint_id: work.checkpoint, model: item.model};
         await new Promise(resolve => window.setTimeout(resolve, 0));
       }
@@ -365,7 +365,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
   useEffect(() => {
     if (busy || heldWork || queue.length === 0) return;
     const [next, ...remaining] = queue;
-    if (next.credentialIdentity !== credentialIdentity || !models.includes(next.model)) {
+    if (next.credentialIdentity !== (credentialRef.current[next.model] || "") || !models.includes(next.model)) {
       setError("Queued prompt held because the unlocked credential changed. Remove it and resubmit under the current key.");
       return;
     }
@@ -419,7 +419,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
     <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What problem are you trying to solve?</h2><p>Resume from the durable project files. Your book and specifications live in Project memory, not in chat history. Continue here; LeanFM will use those durable files.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{modelAccess}{busy && workProgress && <p role="status">Batch {workProgress.batch} saved · continuing the same task</p>}{heldWork && <div className="model-access" role="status"><p>Task paused: {heldWork.work?.progress || "Confirm the last batch before continuing."}</p><div><button type="button" onClick={() => void inspectHeldWork()}>Check progress</button>{heldWork.work?.state === "checkpointed" && <><button type="button" disabled={!models.includes(heldWork.item.model)} onClick={() => void run({...heldWork.item, credentialIdentity}, heldWork.work!)}>Resume task</button><button type="button" disabled={!models.includes(heldWork.item.model)} onClick={() => void run({...heldWork.item, credentialIdentity}, heldWork.work!, true)}>Restart from current files</button></>}<button type="button" onClick={() => void api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}).then(() => inspectHeldWork()).catch(error => setError(error.message))}>Cancel task</button></div></div>}{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !models.includes(model) || uploading}>Send</button><label className="model-picker">Model<select value={model} disabled={models.length === 0} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.length === 0 && <option value="">{modelPlaceholder}</option>}{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
+    <div className="composer-wrap">{modelAccess}{busy && workProgress && <p role="status">Batch {workProgress.batch} saved · continuing the same task</p>}{heldWork && <div className="model-access" role="status"><p>Task paused: {heldWork.work?.progress || "Confirm the last batch before continuing."}</p><div><button type="button" onClick={() => void inspectHeldWork()}>Check progress</button>{heldWork.work?.state === "checkpointed" && <><button type="button" disabled={!models.includes(heldWork.item.model)} onClick={() => void run({...heldWork.item, credentialIdentity: credentialRef.current[heldWork.item.model] || ""}, heldWork.work!)}>Resume task</button><button type="button" disabled={!models.includes(heldWork.item.model)} onClick={() => void run({...heldWork.item, credentialIdentity: credentialRef.current[heldWork.item.model] || ""}, heldWork.work!, true)}>Restart from current files</button></>}<button type="button" onClick={() => void api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}).then(() => inspectHeldWork()).catch(error => setError(error.message))}>Cancel task</button></div></div>}{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !models.includes(model) || uploading}>Send</button><label className="model-picker">Model<select value={model} disabled={models.length === 0} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.length === 0 && <option value="">{modelPlaceholder}</option>}{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
 }
 
 function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
@@ -569,7 +569,7 @@ function ProjectWorkspace({project, authenticationRevision, session, onUnlockKey
     {billing?.model_warnings?.map(warning => <p className="error" role="status" key={warning}>{warning}</p>)}
     {agentBusy && <div className="workspace-agent-progress"><div className="workspace-agent-running" role="status"><span className="agent-running-dot" /><span><strong>Agent running · {agentModel}</strong><small>{agentProgress}. You can inspect any project or phase while it runs.</small></span><time>{agentElapsed}</time><button type="button" onClick={cancelAgent} disabled={cancelRequested}>{cancelRequested ? "Cancel requested…" : "Cancel"}</button></div>{liveTrace.length > 0 && <details className={`live-operational-trace ${liveTrace.some(entry => entry.includes("rejected:") || entry.startsWith("Failed check:")) ? "has-error" : ""}`}><summary>Operational trace · {liveTrace.length} event{liveTrace.length === 1 ? "" : "s"} · latest: {liveTrace[liveTrace.length - 1]}</summary><pre>{liveTrace.map(entry => `- ${entry}`).join("\n")}</pre></details>}</div>}
     {phase === "chat" && <SpecificationAcceptance project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} compact onAccepted={() => setWorkspaceRevision(value => value + 1)} />}
-    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} modelAvailability={modelAvailability} modelError={modelError} onUnlockKeys={onUnlockKeys} onRetryModels={onRetryModels} credentialIdentity={`${authenticationRevision}:${billing?.model_details?.map(model => model.key_fingerprint).join(",") || "locked"}`} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
+    <div className="phase-panel" hidden={phase !== "chat"}><Chat project={project} modelAvailability={modelAvailability} modelError={modelError} onUnlockKeys={onUnlockKeys} onRetryModels={onRetryModels} credentialIdentity={`${authenticationRevision}:${session.username || "locked"}`} models={billing?.models || []} modelDetails={billing?.model_details || []} defaultModel={billing?.model || ""} onModelChange={setSelectedModel} onWorkspaceChange={() => setWorkspaceRevision(value => value + 1)} onBusyChange={agentState} /></div>
     <div className="phase-panel" hidden={phase !== "memory"}><ProjectMemoryView project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /></div>
     <div className="phase-panel" hidden={phase !== "book"}><Book project={project} workspaceRevision={workspaceRevision} /></div>
     <div className="phase-panel" hidden={phase !== "grammar"}><Specification project={project} view="grammar" workspaceRevision={workspaceRevision} /></div>
@@ -635,7 +635,12 @@ function App() {
     window.addEventListener("leanfm:authentication-required", lockLocalSession);
     return () => window.removeEventListener("leanfm:authentication-required", lockLocalSession);
   }, [lockLocalSession]);
-  function signedIn() {
+  function signedIn(sessionPreserved = false) {
+    if (sessionPreserved) {
+      setShowKeys(false); setLogoutError(""); setPollSession(true);
+      setModelRefreshRevision(value => value + 1);
+      return;
+    }
     sessionGeneration.current += 1;
     setSession({...lockedSession, availability: "loading"}); setLogoutError("");
     setShowKeys(false); setPollSession(true); setAuthVersion(value => value + 1);

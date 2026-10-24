@@ -30,6 +30,7 @@ with socket.socket() as allocator:
 base = "http://127.0.0.1:" + str(port)
 env = dict(os.environ, LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT="private-data",
            LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1", LEANFM_LLM_MODEL="test-model",
+           LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1",
            LEANFM_TEST_UNSANDBOXED_BOOK_BUILD="1")
 log = (fixture / "server.log").open("w+")
 server = subprocess.Popen([str(ROOT / ".lake/build/bin/leanfm-server")], cwd=fixture, env=env,

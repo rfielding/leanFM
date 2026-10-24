@@ -328,6 +328,35 @@ private def updateCredentialBundleUnlocked (username password : String) (additio
 def updateCredentialBundle (username password : String) (additions : List (String × String)) : IO (Except String Unit) :=
   withCredentialLock (updateCredentialBundleUnlocked username password additions)
 
+/-- Adding a provider preserves the initiating session and its spend/expiry.
+    Replacing a secret retains the existing revoke-before-promotion policy. -/
+def updateSessionCredentialBundle (username token password : String)
+    (additions : List (String × String)) : IO (Except String Bool) :=
+  withCredentialLock do
+    if !(← sessionActive? token username) then return .error "Sign in before updating provider keys."
+    let record ← readOr ((← accountRoot username) ++ "/password.json") ""
+    if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
+    if !validCredentialPairs additions then return .error "Supply at least one valid provider key."
+    try
+      let existing ← unlockCredentialPairs username password
+      let rotation := additions.any fun (provider, key) =>
+        existing.any fun (oldProvider, oldKey) => oldProvider == provider && oldKey != key
+      let replaced := additions.map Prod.fst
+      let merged := existing.filter (fun pair => !replaced.contains pair.1) ++ additions
+      let credentials ← merged.mapM fun (provider, apiKey) => do
+        let fingerprint ← keyFingerprint apiKey
+        pure ({ provider := provider, apiKey := apiKey, fingerprint := fingerprint, credentialRef := (if provider == "openai" then "default" else provider) } : UnlockedCredential)
+      if !(← sessionActive? token username) then return .error "The initiating login ended; no key update was applied."
+      if rotation then unlockedSessions.modify (List.filter (·.username != username))
+      saveCredentialBundle username password merged
+      if rotation then return .ok false
+      if !(← sessionActive? token username) then
+        return .error "The keys were saved, but the initiating login ended. Sign in again to unlock them."
+      unlockedSessions.modify fun sessions => sessions.map fun session =>
+        if session.token == token && session.username == username then {session with credentials} else session
+      return .ok true
+    catch _ => return .error "The encrypted provider keys could not be updated safely."
+
 private def createAccountUnlocked (username password provider apiKey : String)
     (additionalKeys : List (String × String) := []) : IO (Except String String) := do
   if !safeId username then return .error "Username must contain only letters, digits, '-' or '_'."

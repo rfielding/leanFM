@@ -279,6 +279,27 @@ def verify_browser(base, fixture):
         assert light != dark and "/main-dark.pdf?" in dark
         for url in [light, dark]:
             assert evaluate(f"fetch({json.dumps(url)}).then(async r=>r.ok&&(await r.text()).startsWith('%PDF'))")
+        # Adding a provider is an account edit, not another login. Preserve the
+        # session, selected model and draft without submitting any model work.
+        click_text("Chat")
+        type_into(".project-panel:not([hidden]) .composer textarea", "Keep this draft while adding a provider")
+        evaluate("(() => { const s=document.querySelector('.project-panel:not([hidden]) .composer select'); s.value='test-model-fast'; s.dispatchEvent(new Event('change',{bubbles:true})); })()")
+        wait("document.querySelector('.project-panel:not([hidden]) .composer select').value === 'test-model-fast'")
+        cookies_before_add = call("Network.getAllCookies", session=session)["cookies"]
+        chats_before_add = evaluate("window.catalogTest.chats")
+        click_visible(".project-panel:not([hidden]) .session-controls button:first-of-type")
+        wait("Boolean(document.querySelector('.key-dialog input[name=password]'))")
+        assert evaluate("document.querySelector('.key-dialog input[name=username]').readOnly")
+        type_into(".key-dialog input[name=password]", "test-reset-password")
+        type_into(".key-dialog input[name=anthropic_api_key]", "anthropic-user-key")
+        evaluate("document.querySelector('.key-dialog form').requestSubmit()")
+        wait("!document.querySelector('.key-dialog')")
+        wait("[...document.querySelector('.project-panel:not([hidden]) .composer select').options].some(o=>o.value==='anthropic:claude-test')")
+        assert call("Network.getAllCookies", session=session)["cookies"] == cookies_before_add
+        assert evaluate("window.catalogTest.chats") == chats_before_add
+        assert evaluate("document.querySelector('.project-panel:not([hidden]) .composer select').value") == "test-model-fast"
+        assert evaluate("document.querySelector('.project-panel:not([hidden]) .composer textarea').value") == "Keep this draft while adding a provider"
+        assert evaluate("document.querySelector('.project-panel:not([hidden]) .session-controls span').textContent") == "reset_user"
         type_into(".sidebar form input", "Fresh server")
         evaluate("document.querySelector('.sidebar form').requestSubmit()")
         wait("document.querySelector('.project-panel:not([hidden]) .topbar strong')?.textContent === 'Fresh server'")
@@ -342,7 +363,7 @@ def verify_browser(base, fixture):
         exceptions = [e for e in events if e.get("method") == "Runtime.exceptionThrown"]
         assert not exceptions, exceptions
         return {"result": "pass", "browser": version["Browser"], "checks": ["keyboard login/registration tab switching", "password-only login", "visible locked/loading/failed/empty model states", "real mouse logout at narrow width with hidden sidebar and no session", "one shared account and model session across projects", "valid and expired logout open an editable fresh login form", "failed logout stays locally locked and retries without claiming server revocation", "immediate model refresh after unlock with polling paused", "model retry and expired-session recovery preserve drafts without sending chat", "delayed catalog responses cannot overlap or restore a locked session", "queued prompts remain held after unlocking the same key in a new session", "no phantom examples", "image choose/remove/send/persist/resend with native provider pixels",
-                "empty-chat durable resume through actual React composer", "protobuf in Project memory", "separate light/dark PDF routes",
+                "empty-chat durable resume through actual React composer", "add an Anthropic key while preserving login cookie, model, draft and zero chat calls", "protobuf in Project memory", "separate light/dark PDF routes",
                 "create a fresh project in the production UI", "chat builds a PDF before requirements authoring", "two rejected requirements candidates repair inside the original composer turn with real Lean compilation", "twenty-five model rounds complete through four-round client batches", "generated Grammar, interaction, state and CTL views",
                 "native requirements and implementation approvals are available directly in Chat and invoke no provider", "independent human acceptance of checked requirements and implementation", "actual source files and sandboxed Go test after both gates", "no uncaught browser exceptions"]}
     except Exception:

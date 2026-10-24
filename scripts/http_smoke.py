@@ -5,6 +5,7 @@ Requirement refs: selfhost.mcp.readonly, examples_are_disposable,
 web_ui_replaces_external_coding_session, stored_provider_keys_are_encrypted.
 """
 import json
+import base64
 import sys
 import urllib.error
 import urllib.request
@@ -42,5 +43,11 @@ for method in ["initialize", "resources/list", "tools/list"]:
 status, body = request("/mcp", {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
                               "params": {"name": "validate_generated_artifacts", "arguments": {}}})
 assert status == 200 and "ok: all generated requirements" in body and "ok: generated implementation" in body
+status, body = request("/mcp", {"jsonrpc": "2.0", "id": 3, "method": "resources/read",
+                              "params": {"uri": "leanfm://project/book/main.pdf"}})
+assert status == 200
+book = base64.b64decode(json.loads(body)["result"]["contents"][0]["blob"], validate=True)
+assert book.startswith(b"%PDF") and b"%%EOF" in book[-1024:]
+assert request("/health") == (200, "ok\n"), "MCP book read stopped the service"
 assert request("/api/me")[0] == 401, "smoke check unexpectedly inherited an account session"
 print("ok: live health, production ChatUI, live language references and read-only MCP validation; no account credentials used")

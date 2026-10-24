@@ -194,6 +194,23 @@ class MultiProvider(unittest.TestCase):
                         self.assertIn("Formal acceptance remains pending", (root / "spec/default-decisions.md").read_text())
                     self.assertFalse(any((root / "source").rglob("*.*")), "routine default authority fabricated gate acceptance")
 
+    def test_web_research_continues_across_batches_with_citations(self):
+        for model, counter, tokens in [("test-model", "requests", 18), (CLAUDE, "anthropic_requests", 17)]:
+            with self.subTest(model=model):
+                project = self.alice.project()
+                before = stats()[counter]
+                status, body = self.alice.chat_batched(project, "TEST_RESEARCH_AND_CONTINUE", model)
+                self.assertEqual(status, 200, body)
+                self.assertIn('"status":"success"', body["text"])
+                self.assertEqual(stats()[counter] - before, 5)
+                self.assertEqual(body["usage"]["total_tokens"], 5 * tokens)
+                self.assertIn("[1](https://example.com/official-docs)", body["text"])
+                self.assertNotIn("javascript:", body["text"])
+                self.assertNotIn("```leanfm-questions", body["text"])
+                root = ROOT / "projects" / project
+                self.assertIn("reversible implementation default", (root / "spec/researched-default.md").read_text())
+                self.assertFalse(any((root / "source").rglob("*.*")))
+
     def test_specification_turn_compiles_real_project_views_and_rejects_unchecked_success(self):
         for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
             for marker in ["TEST_SPECIFY_SERVER", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_WITH_BOOK"]:
@@ -557,6 +574,51 @@ class MultiProvider(unittest.TestCase):
         self.assertEqual(claude_only.chat(project, "MUST_NOT_PERSIST", "test-model")[0], 400)
         self.assertEqual(stats(), before)
         self.assertIn("Anthropic credential alice", claude_only.chat(project, "TEST_PROVIDER_ROUTE")[1]["text"])
+
+    def test_add_provider_preserves_login_usage_and_existing_credentials(self):
+        client = Client().register("multi_add_provider", openai_api_key="test-user-key")
+        second = Client()
+        self.assertEqual(second.login("multi_add_provider")[0], 200)
+        project = client.project()
+        self.assertEqual(client.chat(project, "TEST_PROVIDER_ROUTE", "test-model")[0], 200)
+        path = f"/api/projects/{project}/chat"
+        status, pending = client.request(path, {"prompt": "TEST_LONG_SPECIFICATION", "model": "test-model", "work_request_id": "provider-add-active-0001"})
+        self.assertEqual(status, 200, pending)
+        self.assertTrue(pending["work"]["continue"])
+        before = client.request("/api/me")[1]
+        cookies = [(cookie.name, cookie.value) for cookie in client.cookies]
+        vault = ROOT / ".leanfm/accounts/multi_add_provider"
+        account = (vault / "account.json").read_bytes()
+        password = (vault / "password.json").read_bytes()
+        calls = stats()
+        self.assertEqual(client.request("/api/provider-keys", {"username": "multi_add_provider", "password": "wrong", "anthropic_api_key": "anthropic-user-key"})[0], 403)
+        self.assertEqual(stats(), calls)
+        self.assertEqual(client.request("/api/provider-keys", {"username": "another_account", "password": PASSWORD, "anthropic_api_key": "anthropic-user-key"})[0], 403)
+        status, result = client.request("/api/provider-keys", {"username": "multi_add_provider", "password": PASSWORD, "anthropic_api_key": "anthropic-user-key"})
+        self.assertEqual(status, 200, result)
+        self.assertTrue(result["session_preserved"])
+        self.assertEqual([(cookie.name, cookie.value) for cookie in client.cookies], cookies)
+        after = client.request("/api/me")[1]
+        self.assertEqual(after["username"], before["username"])
+        for field in ["tokens_used", "token_budget", "key_fingerprint"]:
+            self.assertEqual(after["billing"][field], before["billing"][field])
+        self.assertIn(CLAUDE, after["billing"]["models"])
+        self.assertEqual(second.request("/api/me")[0], 200, "addition revoked an unchanged existing session")
+        self.assertEqual((vault / "account.json").read_bytes(), account)
+        self.assertEqual((vault / "password.json").read_bytes(), password)
+        ciphertext = (vault / "credentials/providers.json").read_bytes()
+        self.assertNotIn(b"anthropic-user-key", ciphertext)
+        self.assertNotIn(b"test-user-key", ciphertext)
+        while pending.get("work", {}).get("continue"):
+            status, pending = client.request(path, {"work_id": pending["work"]["id"], "checkpoint_id": pending["work"]["checkpoint"], "model": "test-model"})
+        self.assertEqual(status, 200, pending)
+        self.assertEqual(pending["work"]["state"], "completed", "adding another provider interrupted existing OpenAI work")
+        self.assertIn("OpenAI credential alice", client.chat(project, "TEST_PROVIDER_ROUTE", "test-model")[1]["text"])
+        self.assertIn("Anthropic credential alice", client.chat(project, "TEST_PROVIDER_ROUTE", CLAUDE)[1]["text"])
+        status, rotated = client.request("/api/provider-keys", {"username": "multi_add_provider", "password": PASSWORD, "anthropic_api_key": "anthropic-rotated-key"})
+        self.assertEqual(status, 200, rotated)
+        self.assertFalse(rotated["session_preserved"])
+        self.assertEqual(second.request("/api/me")[0], 401, "real key rotation retained an old session")
 
     def test_rotation_retains_other_provider_and_cancels_old_agent(self):
         old = Client().register("multi_rotation", openai_api_key="test-user-key", anthropic_api_key="anthropic-user-key")

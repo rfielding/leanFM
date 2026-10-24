@@ -37,6 +37,7 @@
       "no phantom examples",
       "image choose/remove/send/persist/resend with native provider pixels",
       "empty-chat durable resume through actual React composer",
+      "add an Anthropic key while preserving login cookie, model, draft and zero chat calls",
       "protobuf in Project memory",
       "separate light/dark PDF routes",
       "create a fresh project in the production UI",
