@@ -52,6 +52,32 @@ class SharedProjects(unittest.TestCase):
         self.assertEqual(before, {p.name for p in (ROOT / "projects").iterdir()})
         self.assertEqual(stats(), provider_before)
 
+    def test_readable_creation_and_renamed_root_preserve_open_and_confirmed_delete(self):
+        status, created = self.anonymous.request("/api/projects", {"display_name": "Readable GoServer"})
+        self.assertEqual(status, 201, created)
+        project = created["project_id"]
+        self.assertEqual(project, "Readable-GoServer")
+        original = ROOT / "projects" / project
+        manifest = (original / "manifest.json").read_bytes()
+        book = (original / "book/main.pdf").read_bytes()
+        gate_before = self.anonymous.request(f"/api/projects/{project}/specification")[1]
+        renamed = original.with_name("GoServer-readable-moved")
+        original.rename(renamed)
+        self.assertEqual((renamed / "manifest.json").read_bytes(), manifest)
+        for client in [self.anonymous, self.alice, self.bob]:
+            self.assertIn(project, [p["project_id"] for p in client.request("/api/projects")[1]["projects"]])
+            self.assertEqual(client.request(f"/api/projects/{project}/book")[0], 200)
+        self.assertEqual(self.anonymous.request(f"/api/projects/{project}/specification")[1], gate_before)
+        status, other = self.anonymous.request("/api/projects", {"display_name": "Readable GoServer"})
+        self.assertEqual(status, 201, other)
+        self.assertEqual(other["project_id"], "Readable-GoServer-2", "a moved legacy identity must remain reserved")
+        self.assertEqual((renamed / "book/main.pdf").read_bytes(), book)
+        self.assertEqual(self.anonymous.request(f"/api/projects/{project}", {"confirmation": "wrong"}, method="DELETE")[0], 400)
+        self.assertTrue(renamed.exists())
+        self.assertEqual(self.anonymous.request(f"/api/projects/{project}", {"confirmation": "Readable GoServer"}, method="DELETE")[0], 200)
+        self.assertFalse(renamed.exists())
+        self.assertTrue((ROOT / "projects" / other["project_id"] / "book/main.pdf").is_file())
+
     def test_project_writer_and_cancellation_are_bound_to_initiating_session(self):
         project = self.anonymous.project()
         path = f"/api/projects/{project}"

@@ -615,7 +615,7 @@ authentication token is never imported into LeanFM's provider-key store.
 
 The stakeholder accepted the requirements and separate implementation mapping
 for the fresh start on October 23, 2026. Ordinary projects live directly below
-\texttt{projects/<project-id>} and have no user owner. The stakeholder has
+\texttt{projects/<readable-project-name>} and have no user owner. The stakeholder has
 confirmed that the workspace opens before login; login is required for LLM
 calls and API-key management. Shared project contents include their books,
 specifications, source, artifacts and conversations. Password verifiers and
@@ -646,6 +646,14 @@ mutate the loopback workspace; a conflicting project writer is rejected before
 mutation or provider work. Queued prompts retain their initiating credential
 identity and are held if that identity changes.
 
+Directory labels come from project names, such as \texttt{projects/GoServer},
+rather than opaque hashes. Spaces and punctuation become safe separators;
+collisions receive a short numeric suffix. Atomic directory reservation never
+adopts or overwrites an occupied root. The manifest's stable project identifier
+remains independent of the directory label, so relocating an existing root
+preserves its ChatUI URLs, conversation and checked acceptance revisions.
+Discovery rejects duplicate identities instead of choosing an arbitrary root.
+
 Project memory exposes the two independent acceptance controls for the current
 checked revisions. Source writes require both gates in server code; model tools
 cannot write gate records or checker evidence. Current gate state is supplied
@@ -659,7 +667,7 @@ credentials and have only bounded project-local cache or scratch write access.
 The portable root and containment rules are in
 Chapter~\ref{ch:bootstrap-contract}; this section records the hosted-runtime
 mapping. \texttt{LeanFM.ChatUI.Store.createProject} creates shared roots
-under \texttt{projects/<id>}, writes a runtime
+under \texttt{projects/<readable-project-name>}, writes a runtime
 \texttt{manifest.json}, and provisions the book, \texttt{spec/}, source, tests,
 artifacts, renders, events, reports, logs, cache, and conversations beneath that
 root. The manifest records all canonical project-relative paths and its

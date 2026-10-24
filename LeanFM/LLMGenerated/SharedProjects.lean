@@ -23,13 +23,15 @@ def projectTask : TaskRequirement :=
 
 def constraints : List TaskConstraint :=
   [ where_ "shared_projects_have_one_root" "manage_projects"
-      "Every ordinary workspace project resolves to exactly projects/<project_id> below the workspace root; project identity listing opening creation and confirmed deletion never depend on username credential account login status or a data/accounts path."
+      "Every ordinary workspace project resolves by its manifest project_id to exactly one immediate child of projects/ below the workspace root; project identity listing opening creation and confirmed deletion never depend on username credential account login status or a data/accounts path."
   , where_ "login_protects_keys_only" "authenticate_user"
       "Confirmed access policy: the loopback workspace and its shared projects open without login; login unlocks only that caller's retained provider credentials. No login creates a project namespace or changes the shared catalog."
   , where_ "shared_project_reads_and_local_edits_are_keyless" "manage_projects"
       "Listing and opening projects reading their books diagrams source media and shared conversation and making non-provider local project edits require no provider credential; paid chat research AI assistance and provider-backed repairs require the initiating caller's unlocked credential before any provider call or paid-turn persistence."
   , where_ "shared_storage_preserves_project_identity" "manage_projects"
       "Migrating an existing project preserves its project_id canonical specification and acceptance revisions book source PDFs implementation source images artifacts conversation events logs and caches in one shared project root. Existing destination roots and projects with equal display names remain independent and cannot be overwritten or silently merged."
+  , where_ "readable_project_directories_preserve_identity" "manage_projects"
+      "Name new project directories after their display names using bounded safe filesystem labels and a short numeric suffix for collisions. A directory rename preserves the existing manifest project_id, URLs, canonical files, conversation, caches, and checked acceptance revisions. Resolve identity from validated root manifests rather than requiring the directory label to equal project_id. Never overwrite or merge an existing directory, adopt a symlink, choose arbitrarily among duplicate manifest identities, or reuse an identity still held by a renamed root."
   , where_ "credential_vault_is_not_a_project" "configure_provider"
       "Password verifiers and encrypted provider credentials remain outside every shared project root in a private application credential vault. The vault is excluded from project discovery project file reads model workspace tools media routes and version control; login unlocks only the caller's account keys and never another visitor's keys."
   , where_ "migration_never_overwrites_or_loses_state" "manage_projects"
@@ -54,7 +56,7 @@ def replacedConstraints : List String :=
 
 def properties : List RequirementProperty :=
   [ { name := "Shared roots are independent of credential accounts", task := "manage_projects",
-      mode := .always, expression := "the same project_id resolves to the same projects/<project_id> for every visitor and account", probability := none }
+      mode := .always, expression := "the same manifest project_id resolves to the same exclusive named projects/ directory for every visitor and account", probability := none }
   , { name := "Shared projects never disclose credential-vault material", task := "configure_provider",
       mode := .never, expression := "a project listing file media artifact conversation model workspace tool error or trace returns a password verifier encryption key provider API key session bearer or credential ciphertext from the private vault", probability := none }
   , { name := "No migration overwrites a project or drops an encrypted key", task := "manage_projects",
@@ -130,7 +132,7 @@ def spec : RequirementSpec :=
       [ { id := "proposal_status", title := "Acceptance is pending",
           body := "The stakeholder requested shared projects under ./projects with login protecting only API keys. This candidate revises the old account-owned project contract. Neither a successful structural check nor these generated views accepts either gate. The stakeholder separately confirmed opening projects before login, with login required for LLM calls and key management; acceptance of this complete requirements revision and its implementation mapping remains pending." }
       , { id := "shared_roots", title := "Projects have no user owner",
-          body := "Ordinary project roots are workspace/projects/<project_id>. Project contents include shared conversation state, while credentials remain outside project roots. Discover actual manifest-bearing project directories and preserve existing projects; do not merge projects merely because their titles match." }
+          body := "Ordinary project roots are workspace/projects/<readable-project-name>, with manifest project_id preserved independently of the directory label. Project contents include shared conversation state, while credentials remain outside project roots. Discover actual manifest-bearing project directories and preserve existing projects; do not merge projects merely because their titles match." }
       , { id := "credential_separation", title := "Login is credential unlock",
           body := "Credential accounts retain their password-protected encrypted API keys. A shared project cannot choose a credential account. Model requests keep their initiating caller's model credential cancellation and accounting identities, even when another visitor opens the same project." } ] }
 

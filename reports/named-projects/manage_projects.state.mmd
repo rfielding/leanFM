@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> listing: ProjectListRequested
+    listing --> listed: ProjectListReturned
+    ready --> creating: ProjectCreateRequested
+    creating --> created: ProjectCreated
+    ready --> opening: ProjectOpenRequested
+    opening --> opened: ProjectOpened
+    ready --> deleting: ProjectDeleteRequested
+    deleting --> deleted: ProjectDeleted
+    listed --> [*]
+    created --> [*]
+    opened --> [*]
+    deleted --> [*]

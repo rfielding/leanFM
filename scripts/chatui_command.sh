@@ -19,7 +19,7 @@ case "$operation" in
     installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
     exec timeout 15 python3 "$installation_root/scripts/chatui_project_state.py" "${operation#project-}" "$@"
     ;;
-  workspace-list|workspace-resolve)
+  workspace-list|workspace-resolve|workspace-create)
     installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
     exec timeout 10 python3 "$installation_root/scripts/chatui_workspace.py" "${operation#workspace-}" "$@"
     ;;

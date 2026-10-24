@@ -38,9 +38,9 @@ class Client:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.cookies))
 
-    def request(self, path, form=None, json_body=None):
+    def request(self, path, form=None, json_body=None, method=None):
         request = urllib.request.Request(BASE + path, data=None if form is None else
-                                         urllib.parse.urlencode(form).encode())
+                                         urllib.parse.urlencode(form).encode(), method=method)
         if json_body is not None:
             request.data = json.dumps(json_body).encode()
             request.add_header("Content-Type", "application/json")

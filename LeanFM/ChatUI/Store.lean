@@ -26,7 +26,10 @@ def safeId (value : String) : Bool :=
 
 def accountRoot (username : String) : IO String := return (← accountsRoot) ++ "/" ++ username
 def projectsRoot (_username : String) : IO String := return (← workspaceRoot) ++ "/projects"
-def projectRoot (username projectId : String) : IO String := return (← projectsRoot username) ++ "/" ++ projectId
+def projectRoot? (_username projectId : String) : IO (Option String) := do
+  if !safeId projectId then return none
+  let out ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["workspace-resolve", ← workspaceRoot, projectId]}
+  return if out.exitCode == 0 then some out.stdout.trimAscii.toString else none
 
 def ensureDataRoot : IO Unit := do
   IO.FS.createDirAll (fp (← accountsRoot))
@@ -485,10 +488,10 @@ def createProject (username name : String) : IO (Except String String) := do
   IO.FS.createDirAll (fp parent)
   if (← IO.FS.realPath (fp parent)).toString != (← workspaceRoot) ++ "/projects" then
     return .error "Projects directory cannot escape the workspace."
-  let projectId ← randomHex 8
-  let root ← projectRoot username projectId
-  if ← (fp root).pathExists then return .error "Project identifier collision; no existing directory was changed."
-  IO.FS.createDirAll (fp root)
+  let reserved ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["workspace-create", ← workspaceRoot, name]}
+  if reserved.exitCode != 0 then return .error "A readable project directory could not be reserved safely."
+  let some projectId := jsonStringValue? reserved.stdout "project_id" | return .error "Project identity was not returned."
+  let some root := jsonStringValue? reserved.stdout "root" | return .error "Project directory was not returned."
   for dir in ["inputs", "book", "spec", "source", "tests", "artifacts", "renders", "events", "reports", "logs", "cache", "conversations"] do
     IO.FS.createDirAll (fp (root ++ "/" ++ dir))
   writeAtomic (root ++ "/manifest.json") ("{\"project_id\":\"" ++ projectId ++ "\",\"display_name\":\"" ++ jsonEscape name ++
@@ -513,14 +516,14 @@ def projectListJson (username : String) : IO String := do
 def deleteProject (username projectId confirmation : String) : IO (Except String Unit) := do
   if !safeId projectId then return .error "Invalid project identifier."
   let parent ← projectsRoot username
-  let root ← projectRoot username projectId
+  let some root ← projectRoot? username projectId | return .error "Project not found or its identity is ambiguous."
   let manifest ← readOr (root ++ "/manifest.json") (← readOr (root ++ "/project.json") "")
   if manifest.isEmpty then return .error "Project not found."
   let displayName := (jsonStringValue? manifest "display_name").orElse (fun _ => jsonStringValue? manifest "title") |>.getD projectId
   if confirmation != displayName then return .error "Project name confirmation did not match."
   let realParent ← IO.FS.realPath (fp parent)
   let realRoot ← IO.FS.realPath (fp root)
-  if realRoot.toString != realParent.toString ++ "/" ++ projectId then
+  if realRoot.parent != some realParent then
     return .error "Project root did not resolve to the owned projects directory."
   IO.FS.removeDirAll realRoot
   pure (.ok ())

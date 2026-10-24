@@ -156,10 +156,7 @@ def authorizedProjectRoot? (username projectId : String) : IO (Option String) :=
         (← (fp "book/main.tex").pathExists) then
       return some "."
     else return none
-  if !safeId projectId then return none
-  let _ := username
-  let out ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["workspace-resolve", ← workspaceRoot, projectId]}
-  if out.exitCode == 0 then pure (some out.stdout.trimAscii.toString) else pure none
+  projectRoot? username projectId
 
 def pathSegments (path : String) : List String := path.splitOn "/" |>.filter (!·.isEmpty)
 

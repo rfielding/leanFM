@@ -57,6 +57,7 @@ selfhost-check:
 	lake env lean --run ReviewSelfHosting.lean
 	lake env lean --run ReviewResumableWork.lean
 	python3 scripts/chatui_work_state_test.py
+	python3 scripts/chatui_workspace_test.py
 
 video-check:
 	python3 scripts/validate_video_overview.py
@@ -84,6 +85,7 @@ chatui-check: build
 	python3 scripts/chatui_project_state_test.py
 	python3 scripts/chatui_work_state_test.py
 	python3 scripts/chatui_workspace_reset_test.py
+	python3 scripts/chatui_workspace_test.py
 	python3 scripts/chatui_command_test.py
 	lake env lean LeanFM/ChatUI/ProviderTests.lean
 	lake env lean LeanFM/ChatUI/HttpRequestTests.lean
