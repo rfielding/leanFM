@@ -1226,6 +1226,8 @@ def leanFMRequirementsReference : String :=
     , "## RequirementSpec"
     , "Required collections: actors, actorPopulations, actorResources, actorReliability, messages, tasks, grammars, processes, properties, requiredProofs, performance, charts, desiredOutputs, markdown."
     , "Actors, messages, task states, and transitions should be typed locally, then converted at the RequirementSpec boundary."
+    , "A reduced scope still needs a complete behavior model before requirements acceptance. tasks, grammars, processes, properties, requiredProofs and desiredOutputs must not be empty placeholders. Model one small request/result scenario, validate it, then add the next; do not defer the mandatory collections until after acceptance."
+    , "markdown has type List RequirementMarkdown. Each item is a record { id := \"scope\", title := \"Scope\", body := \"Observable behavior\" }; a String is not a RequirementMarkdown."
     , ""
     , "## Observable event atom"
     , "GrammarExpr.event accepts { task, src, dst, message }. MessageSchema supplies src, dst, framing, and numbered protobuf fields."
@@ -1259,7 +1261,9 @@ def leanFMRequirementsReference : String :=
     , "## Separation and validation"
     , "Requirements.lean holds observable behavior and the accepted multi-actor wire grammar is the conformance oracle: complete decoded traces are legal or have a counterexample; incomplete captures cannot establish conformance. Requirements.proto holds byte values. Implementation.lean holds realization choices that answer implementation questions without changing observable behavior, each mapped to the requirement it realizes. If an answer changes messages, fields, order, or other observable behavior, revise Requirements first; when a requirement change makes an implementation choice unnecessary, remove that choice rather than preserving it as a requirement."
     , "Generate all three, then call the generated-requirements and implementation validation tools. Never invent a missing observation needed by a reducer."
-    ]
+    ] ++
+    "\n\n## Complete checked authoring example\nThis example compiles and validates with its protobuf in the repository checks. Replace its names and behavior with your project; do not copy it as evidence of your own scope.\n```lean\n" ++
+    (include_str "ReferenceExamples/Request.lean") ++ "\n```\n"
 
 def leanFMImplementationReference : String :=
   joinWithNewline

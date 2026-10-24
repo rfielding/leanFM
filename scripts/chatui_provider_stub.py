@@ -38,7 +38,7 @@ def image_reply(content, provider):
 
 PATCH_SCENARIOS = {"TEST_PATCH_RECOUNT", "TEST_PATCH_WRITE_RECOVERY", "TEST_PATCH_RETRY_GUARD",
                    "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS",
-                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK"}
+                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_REPAIR", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK"}
 
 FAILING_CHECK = "check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n"
 
@@ -76,6 +76,20 @@ def patch_action(marker, step):
     wrong_counts = ("--- a/spec/patch-note.txt\n+++ b/spec/patch-note.txt\n"
                     "@@ -1,90 +1,90 @@\n-before\n+after\n unrelated\n")
     malformed = "*** Begin Patch\n*** Update File: spec/patch-note.txt\n@@\n-before\n+after\n*** End Patch\n"
+    if marker == "TEST_SPECIFY_REPAIR":
+        bad_markdown = SPECIFICATION_FIXTURE.replace('markdown := []', 'markdown := ["Reduced server"]')
+        incomplete = SPECIFICATION_FIXTURE.replace('def spec :', 'def complete :').replace(
+            'end Fixture', 'def spec : RequirementSpec := {complete with tasks := [], grammars := [], '
+            'processes := [], properties := [], requiredProofs := [], desiredOutputs := []}\nend Fixture')
+        actions = [("leanfm_reference", {"section": "requirements"}),
+                   ("workspace_write", {"path": "spec/Requirements.proto", "content": SPECIFICATION_PROTO}),
+                   ("workspace_write", {"path": "spec/Requirements.lean", "content": bad_markdown}),
+                   ("leanfm_check", {"requirement": "Fixture.spec"}), None,
+                   ("workspace_write", {"path": "spec/Requirements.lean", "content": incomplete}),
+                   ("leanfm_check", {"requirement": "Fixture.spec"}), None,
+                   ("workspace_write", {"path": "spec/Requirements.lean", "content": SPECIFICATION_FIXTURE}),
+                   ("leanfm_check", {"requirement": "Fixture.spec"})]
+        return actions[step] if step < len(actions) else None
     if marker.startswith("TEST_SPECIFY_"):
         if marker == "TEST_SPECIFY_IMPLEMENTATION":
             actions = [("workspace_read", {"path": "spec/Implementation.lean"}),
@@ -110,6 +124,19 @@ def patch_action(marker, step):
             "content": "Decisions: follow existing project conventions; use a readable layout and bounded local checks. Formal acceptance remains pending.\n"})],
     }[marker]
     return actions[step] if step < len(actions) else None
+
+
+def verify_specification_feedback(marker, step, feedback):
+    if marker != "TEST_SPECIFY_REPAIR":
+        return
+    if step in {5, 8}:
+        assert "LeanFM completion validation:" in feedback
+        assert "do not ask the user to approve formalization" in feedback
+        expected = ["Application type mismatch", "RequirementMarkdown"] if step == 5 else [
+            "no task FSMs", "no multiparty grammars", "no communicating sequential processes",
+            "no temporal/property annotations", "no required proof obligations", "no prompt-derived outputs"]
+        for diagnostic in expected:
+            assert diagnostic in feedback, (step, diagnostic, feedback)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -209,6 +236,11 @@ class Handler(BaseHTTPRequestHandler):
                     step = int(number) + 1
                 if marker == "TEST_DECIDE_DEFAULTS":
                     verify_decision_contract(request.get("instructions", ""), current_input)
+                if marker == "TEST_SPECIFY_REPAIR" and step == 0 and "PDF_FIRST" in current_input:
+                    assert "Durable chat book update marker." in current_input
+                verify_specification_feedback(marker, step, current_input)
+                if marker == "TEST_SPECIFY_REPAIR" and step in {5, 8}:
+                    assert request["input"][0]["role"] == "user"
                 if marker.startswith("TEST_CHECK_") and step == 1:
                     output = request["input"][0]["output"]
                     assert output.startswith("ERROR:") and "exit_code=2" in output and "E_FIXTURE" in output
@@ -444,6 +476,7 @@ class Handler(BaseHTTPRequestHandler):
             " model " + request.get("model", "missing"))]
         if marker in PATCH_SCENARIOS:
             step = len(messages) // 2
+            verify_specification_feedback(marker, step, content_text(messages[-1]["content"]))
             if marker == "TEST_DECIDE_DEFAULTS":
                 verify_decision_contract(system, text)
             if marker.startswith("TEST_CHECK_") and step == 1:

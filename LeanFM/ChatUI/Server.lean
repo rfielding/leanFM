@@ -750,7 +750,7 @@ def chatLayerContext (root layer : String) : IO (Except String String) := do
   let canvasContrastHardRule := "Canvas text contrast is mandatory: never draw black text on a black/dark background or white text on a white/light background. Set a contrasting foreground immediately before each fillText call, based on the pixels behind that label in the canvas; recompute the choice each animation frame if its background changes. Keep user-specified text colors only when the user explicitly requests them.\n\n"
   let diagramGuidance := "Diagram input is intentionally permissive. The user may supply prose, simplified interaction pseudocode, Mermaid, PlantUML, or refer to an attached sketch or public-web image. Infer the intended semantics and ask only when a material ambiguity remains. When a diagram is useful, return corrected renderable Mermaid in a fenced mermaid block. When motion or simulation materially answers the request, return an actual triple-backtick leanfm-canvas fence containing a literal accessible canvas element and self-contained inline script with no external resources; never spell out the words fenced leanfm-canvas and never print its source as ordinary chat prose. For canvas animations, default text foregrounds to white or near-white over dark canvas drawing backgrounds and black or near-black over light canvas drawing backgrounds. Choose against the actual background painted in the canvas, not the surrounding page theme; preserve a text color only when the user specifically requests it. Check every label, legend, and annotation for contrast. For MCP, model the Model Context Protocol JSON-RPC lifecycle between host/client and MCP server (initialize, notifications/initialized, capability discovery such as tools/list, and invocation such as tools/call with their results), not MQTT broker traffic. Preserve the user's original as provenance; do not claim that an informal sketch is an accepted derived LeanFM view.\n\n"
   match layer with
-  | "guided" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working mode: GUIDED PROJECT CONVERSATION. Infer the working layer from the current request: book discovery, typed requirements and derived views, implementation mapping, or accepted implementation source. Apply the shared consequential decisions policy: choose and record reasonable defaults, advance the actual artifacts, and ask only for a concrete consequential blocker or missing explicit acceptance gate. Routine file edits, image references, compilation and regeneration are already authorized; do not offer a menu asking permission to perform them. A readiness review may report no blockers and no questions. Never silently cross either acceptance gate. Use leanfm_reference before authoring LeanFM values; use workspace_read/write/patch to update spec/Requirements.lean, spec/Requirements.proto and spec/Implementation.lean as needed, then leanfm_check with the actual RequirementSpec constant to validate and regenerate Grammar and Tasks. Write the actual candidate before checking: reading references or inspecting an empty scaffold is not requirements generation. workspace_check only runs application targets explicitly declared by this project; never substitute build for leanfm_check. If the local compiler is unavailable, stop without unrelated checks or paid retries and retain its exact diagnostic. An implementation mapping must contain a typed ImplementationSpec with requirement justifications; prose comments alone are not a validated mapping. Do not report specification or implementation success merely because a PDF compiled. For specification and source work, call the workspace tools and finish with a concise artifact and validation summary. When this turn actually revises the book, return a JSON object with string fields reply and book_source containing the complete revised book/main.tex; the server builds and commits that book revision. A full-book JSON rewrite is not required for other turns. Preserve the last validated book, and do not write book/main.tex directly through workspace tools. Current complete book source:\n\n" ++ truncateText book 70000 ++ "\n\nCurrent project Requirements.lean:\n\n" ++ truncateText requirements 40000 ++ "\n\nCurrent project Implementation.lean:\n\n" ++ truncateText implementation 40000)
+  | "guided" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working mode: GUIDED PROJECT CONVERSATION. Infer the working layer from the current request: book discovery, typed requirements and derived views, implementation mapping, or accepted implementation source. Apply the shared consequential decisions policy: choose and record reasonable defaults, advance the actual artifacts, and ask only for a concrete consequential blocker or missing explicit acceptance gate. Routine file edits, image references, compilation and regeneration are already authorized; do not offer a menu asking permission to perform them. A readiness review may report no blockers and no questions. Never silently cross either acceptance gate. Use leanfm_reference before authoring LeanFM values; use workspace_read/write/patch to update spec/Requirements.lean, spec/Requirements.proto and spec/Implementation.lean as needed, then leanfm_check with the actual RequirementSpec constant to validate and regenerate Grammar and Tasks. Write the actual candidate before checking: reading references or inspecting an empty scaffold is not requirements generation. A reduced scope still needs task FSMs, grammars, processes, properties, requiredProofs and desiredOutputs before review; never defer these mandatory collections until acceptance. The requirements reference contains a complete compilable example and the typed RequirementMarkdown record shape. Treat a rejected canonical check as engineering work: inspect its exact diagnostic, correct the candidate and recheck in this same turn rather than asking permission to formalize again. workspace_check only runs application targets explicitly declared by this project; never substitute build for leanfm_check. If the local compiler is unavailable, stop without unrelated checks or paid retries and retain its exact diagnostic. An implementation mapping must contain a typed ImplementationSpec with requirement justifications; prose comments alone are not a validated mapping. Do not report specification or implementation success merely because a PDF compiled. For specification and source work, call the workspace tools and finish with a concise artifact and validation summary. When this turn actually revises the book, return a JSON object with string fields reply and book_source containing the complete revised book/main.tex; the server builds and commits that book revision. A full-book JSON rewrite is not required for other turns. Preserve the last validated book, and do not write book/main.tex directly through workspace tools. Current complete book source:\n\n" ++ truncateText book 70000 ++ "\n\nCurrent project Requirements.lean:\n\n" ++ truncateText requirements 40000 ++ "\n\nCurrent project Implementation.lean:\n\n" ++ truncateText implementation 40000)
   | "book" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: BOOK. The user's ordinary request is an instruction to edit the durable project book, not merely advice about how they could edit it. Revise book/main.tex while preserving valid LaTeX and the user's existing material. Do not present generated requirements or code as accepted merely because they are discussed. Return ONLY one JSON object with exactly these string fields: {\"reply\":\"a concise description of the edit\",\"book_source\":\"the complete revised book/main.tex\"}. Do not wrap the JSON in prose or Markdown. If the user is only asking a question and no source change is appropriate, return a normal prose answer instead. Current complete book source:\n\n" ++ truncateText book 70000)
   | "requirements" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: REQUIREMENTS. Derive observable requirements from the book, preserve unresolved design as unresolved, and prepare the requirements acceptance gate. Current book:\n\n" ++ truncateText book 50000 ++ "\n\nCurrent Requirements.lean:\n\n" ++ truncateText requirements 50000)
   | "implementation_spec" => return .ok (canvasContrastHardRule ++ diagramGuidance ++ "Working layer: IMPLEMENTATION SPECIFICATION. Map accepted requirements to languages, transports, runtime APIs, source files, tests, and explicit implementation issues such as Go services or HTTP projection. Do not implement before the separate implementation-specification acceptance gate. Current Requirements.lean:\n\n" ++ truncateText requirements 50000 ++ "\n\nCurrent Implementation.lean:\n\n" ++ truncateText implementation 50000)
@@ -1651,6 +1651,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   let checkedRequirements ← IO.mkRef (none : Option (String × String × String))
                   let checkedImplementation ← IO.mkRef (none : Option String)
                   let lastSpecificationCheck ← IO.mkRef (none : Option String)
+                  let lastSpecificationFailure ← IO.mkRef (none : Option String)
+                  let finishFeedbackCandidates ← IO.mkRef ([] : List UInt64)
                   let failedToolCalls ← IO.mkRef ([] : List String)
                   let workspaceRevision ← IO.mkRef (0 : Nat)
                   let failedCheckDiagnostics ← IO.mkRef ([] : List (String × String))
@@ -1669,8 +1671,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let diagnostic := "workspace_tool_exception: " ++ toString error
                       appendLiveTrace root trace (name ++ " rejected: " ++ diagnostic)
                       pure ("ERROR: " ++ diagnostic)
+                    if result.startsWith "FATAL:" then return result
                     if result.startsWith "ERROR:" then
                       failedToolCalls.modify (fingerprint :: ·)
+                      if name == "leanfm_check" then
+                        lastSpecificationFailure.set (some (String.ofList (result.toList.take 6000)))
                       if name == "workspace_check" then
                         let diagnostic := checkFailureKey result
                         if (← failedCheckDiagnostics.get).contains (arguments, diagnostic) then
@@ -1679,6 +1684,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         failedCheckDiagnostics.modify ((arguments, diagnostic) :: ·)
                     else
                       if name == "leanfm_check" then
+                        lastSpecificationFailure.set none
                         lastSpecificationCheck.set (some arguments)
                         checkedRequirements.set (some (← readProjectCanonical root "spec/Requirements.lean", ← readProjectCanonical root "spec/Requirements.proto", ← readProjectCanonical root "book/main.tex"))
                         if !((toolArgument? arguments "implementation").getD "").isEmpty then
@@ -1705,6 +1711,31 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         appendLiveTrace root trace failure
                         return some failure
                       return none
+                    beforeFinish := fun _ => do
+                      let requirements ← readProjectCanonical root "spec/Requirements.lean"
+                      let proto ← readProjectCanonical root "spec/Requirements.proto"
+                      let implementation ← readProjectCanonical root "spec/Implementation.lean"
+                      let book ← readProjectCanonical root "book/main.tex"
+                      let diagnostic ← lastSpecificationFailure.get
+                      let needsCheck := requirements != requirementsBefore || proto != protoBefore ||
+                        implementation != implementationBefore || diagnostic.isSome
+                      let unchecked := needsCheck &&
+                        ((← checkedRequirements.get) != some (requirements, proto, book) ||
+                          (implementation != implementationBefore && (← checkedImplementation.get) != some implementation))
+                      if !unchecked then return none
+                      -- This hash is only a conservative paid-repair brake, never
+                      -- an acceptance revision or an authorization decision.
+                      let candidate := hash (requirements, proto, implementation, book, diagnostic)
+                      if (← finishFeedbackCandidates.get).contains candidate then
+                        appendLiveTrace root trace "Specification repair stopped: completion repeated the unchanged unchecked candidate"
+                        return some ("FATAL: unchanged_unchecked_specification: The specification edits have not passed their current canonical check. The candidate and diagnostic did not change after repair feedback. No further provider request was sent.\n" ++
+                          diagnostic.getD "No successful check covers this candidate." ++ "\nDetails: reports/specification-check/compiler.log.")
+                      finishFeedbackCandidates.modify (candidate :: ·)
+                      appendLiveTrace root trace "Completion deferred: returning canonical specification diagnostic to the same model turn for repair"
+                      writeChatStatus root "validation" "Returning the specification diagnostic to the model for repair."
+                      return some ("LeanFM completion validation: the current specification is unchecked. Continue the already-authorized engineering work in this same turn; do not ask the user to approve formalization or compiler repair again.\n" ++
+                        diagnostic.getD "The edited canonical requirements/protobuf/implementation have no successful check of their current contents." ++
+                        "\nRead the exact diagnostic and the complete checked example in leanfm_reference requirements. A reduced scope still requires tasks, grammars, processes, properties, requiredProofs and prompt-derived desiredOutputs. markdown is List RequirementMarkdown, with records containing id/title/body. Repair the actual current candidate, then invoke leanfm_check with its actual RequirementSpec and, if changed, typed ImplementationSpec constant. Preserve the requested scope and both human acceptance gates; do not generate implementation source before acceptance. Do not substitute workspace_check build for the canonical specification check.")
                     onResponse := fun report => do
                       reportedUsage.modify (fun usage => Provider.addUsage usage report.usage)
                       recordSessionUsage token username report.usage.totalTokens
@@ -1842,7 +1873,10 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let uncheckedImplementation := implementationBefore != implementationAfter &&
                         (← checkedImplementation.get) != some implementationAfter
                       let uncheckedSpecification := uncheckedRequirements || uncheckedImplementation
-                      let warned := returnedQuestions || applied.notice.isSome || activity.any fun item => (item.splitOn "rejected").length > 1 || (item.splitOn "Failed check:").length > 1
+                      let recoveredSpecification := !uncheckedSpecification && (← lastSpecificationCheck.get).isSome && (← lastSpecificationFailure.get).isNone
+                      let warned := returnedQuestions || applied.notice.isSome || activity.any fun item =>
+                        ((item.splitOn "rejected").length > 1 && !(recoveredSpecification && item.startsWith "leanfm_check rejected:")) ||
+                          (item.splitOn "Failed check:").length > 1
                       let status := if invalidAnswer || missingRequiredArtifact || missingRequiredSource || uncheckedSpecification || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"
                       if status != "success" then
                         let reason := if invalidAnswer then "provider response or book envelope failed"
@@ -1857,8 +1891,11 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                           ("status=" ++ status ++ " model=" ++ selectedModel ++ " reason=" ++ reason)
                       let statusMarker := "```leanfm-result\n{\"status\":\"" ++ status ++ "\"}\n```\n\n"
                       let mp4Failure := activity.find? fun item => item.startsWith "workspace_transcode_mp4 rejected:"
+                      let specificationFailure ← lastSpecificationFailure.get
                       let visibleAnswer := if invalidAnswer then applied.text else if uncheckedSpecification then
-                        "The specification edits have not passed their current canonical check. LeanFM rejected the completion claim and kept the last validated task views. Use leanfm_check with the project's actual RequirementSpec constant and, when changing implementation mappings, its typed ImplementationSpec constant. Compiler details are in the Operational trace and reports/specification-check/compiler.log."
+                        "The specification edits have not passed their current canonical check. LeanFM kept the last validated task views. " ++
+                        specificationFailure.getD "No successful check covers the current candidate." ++
+                        "\n\nDetails: reports/specification-check/compiler.log. Neither acceptance gate was crossed."
                         else if missingRequiredSource then
                         "The requested implementation was not produced: no files exist beneath the selected project's source/ directory. LeanFM rejected the prose or pasted-code substitute. Accept the missing specification gate or answer the focused blocking questions, then resend the implementation request."
                         else if missingRequiredArtifact then

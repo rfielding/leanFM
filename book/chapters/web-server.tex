@@ -332,6 +332,21 @@ neither a check nor a PDF build accepts a stakeholder gate. A turn changing
 canonical specifications cannot report SUCCESS without a successful check of
 its final bytes.
 
+The requirements reference includes a complete compilable request/response
+example with matching protobuf, task states, grammar, processes, properties,
+negative obligations and generated-view provenance. A reduced scope still needs
+these collections. In particular, \texttt{markdown} contains typed
+\texttt{RequirementMarkdown} records, not plain strings.
+If the model tries to finish after an unchecked specification edit, the server
+returns the concrete compiler or structural diagnostic within the same native
+provider conversation. The model can correct the files and recheck without a
+second user message. This continuation retains the original cancellation,
+session, usage accounting and request budget. An unchanged candidate and
+diagnostic stop further paid work; an unavailable compiler stops immediately.
+A repaired current check can report success while retaining earlier failures
+in the operational trace. Neither recovery nor successful validation accepts a
+stakeholder gate.
+
 When the turn revises the book, the provider's structured reply includes the
 complete proposed \texttt{book/main.tex}. The server enforces
 root and size boundaries, writes atomically and builds in the isolated book

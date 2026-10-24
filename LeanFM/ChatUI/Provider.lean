@@ -80,6 +80,9 @@ structure RoundReport where
 structure AgentHooks where
   beforeRequest : IO (Option String) := pure none
   onResponse : RoundReport → IO Unit := fun _ => pure ()
+  /-- Reject a premature completion with server-owned validation feedback.
+      Continuation keeps the original request, cancellation, usage and step budget. -/
+  beforeFinish : String → IO (Option String) := fun _ => pure none
 
 def curlConfigEscape (value : String) : String :=
   -- Image bodies can be megabytes: avoid allocating a list/string per byte.
@@ -236,7 +239,9 @@ def workspaceToolsJson : String :=
 
 /-- Fatal local failures stop both provider protocols before another paid round. -/
 def fatalWorkspaceFailure? (result : String) : Option String :=
-  if result.startsWith "FATAL: repeated_failed_tool_call:" then
+  if result.startsWith "FATAL: unchanged_unchecked_specification:" then
+    some result
+  else if result.startsWith "FATAL: repeated_failed_tool_call:" then
     some "A workspace operation or check failed again without verified recovery. LeanFM stopped before another paid request; exit codes and diagnostics remain in Project memory."
   else if result.startsWith "FATAL:" then
     some ("A local workspace operation cannot continue. LeanFM stopped before another paid request; no automatic model repair was attempted. " ++ result)
@@ -330,7 +335,16 @@ partial def completeAgentLoop (key baseUrl model instructions prompt previousId 
       return .ok { nextUsage with failure := some failure }
     if calls.isEmpty then
       match responseText? json with
-      | some text => return .ok { nextUsage with text }
+      | some text =>
+          if let some feedback ← hooks.beforeFinish text then
+            if let some failure := fatalWorkspaceFailure? feedback then
+              return .ok { nextUsage with failure := some failure }
+            let some responseId := responseId? json
+              | return .ok { nextUsage with failure := some "OpenAI omitted the response ID needed to continue specification repair." }
+            let correction := (Json.mkObj [("role", toJson "user"), ("content", toJson feedback)]).compress
+            return ← completeAgentLoop key baseUrl model instructions prompt responseId [correction]
+              runTool cancelled hooks nextUsage (remaining - 1) images
+          return .ok { nextUsage with text }
       | none => return .ok { nextUsage with failure := some "OpenAI returned neither workspace tool calls nor answer text." }
     let some responseId := responseId? json | return .ok { nextUsage with failure := some "OpenAI omitted the response ID needed to continue workspace tools." }
     let mut outputs : List String := []
@@ -454,6 +468,12 @@ partial def completeAnthropicLoop (key baseUrl model instructions : String) (mes
         return .ok { nextUsage with failure := some "Anthropic requested tool use without valid client tool calls; no completion was claimed and no automatic paid retry was attempted." }
       let text := anthropicText json
       if text.trimAscii.isEmpty then return .ok { nextUsage with failure := some "Anthropic returned no answer text or valid workspace tools; no automatic paid retry was attempted." }
+      if let some feedback ← hooks.beforeFinish text then
+        if let some failure := fatalWorkspaceFailure? feedback then
+          return .ok { nextUsage with failure := some failure }
+        return ← completeAnthropicLoop key baseUrl model instructions
+          (messages ++ [assistant, Json.mkObj [("role", toJson "user"), ("content", toJson feedback)]])
+          maxOutputTokens webSearch runTool cancelled hooks nextUsage (remaining - 1)
       return .ok { nextUsage with text }
     if jsonStringField? json "stop_reason" != some "tool_use" then
       return .ok { nextUsage with failure := some "Anthropic returned tool calls without a tool_use stop reason; they were not executed." }

@@ -32,3 +32,29 @@ Existing authenticated project routing, request-local provider credentials,
 cancellation and repeated-tool-failure brakes remain applicable. Checks establish
 elaboration, structural validation and view provenance, not deployed-code
 refinement or stakeholder acceptance.
+
+## Completion feedback repair
+
+This refinement also realizes the accepted
+`recoverable_failures_are_fixed_before_return` invariant and the negative
+obligations `No routine clarification detour` and `No wasteful identical recovery`.
+After a failed canonical check, plain completion is insufficient: the original
+provider turn receives the bounded exact diagnostic and can correct the candidate.
+The live requirements reference includes a real Lean module that validation
+checks, including typed Markdown records and all mandatory behavior collections.
+
+| Forbidden behavior | Control | Negative evidence |
+| --- | --- | --- |
+| Let a model finish after a recoverable specification error without a correction opportunity | Server-owned `beforeFinish` hook compares canonical inputs against the current successful check and sends the exact bounded diagnostic | `test_specification_diagnostics_repair_within_original_turn`: both providers reproduce the Markdown type error and empty behavior collections, try to finish after each, then repair and generate actual views |
+| Buy repeated paid calls with unchanged failed content or by resetting the original budget | Hash candidate plus diagnostic only as a conservative stop signal; retain original native conversation, request counter, session spend guard and cancellation check | unchanged invalid specification fixture stops after one feedback; native provider fixtures assert exact request counts and cumulative usage |
+| Record server feedback as a new human instruction or human gate acceptance | Internal native continuation only; no conversation append, credentials unchanged, existing project writer and acceptance controller | one user/one assistant conversation record, both gates unaccepted, empty source after requirements recovery |
+| Mark fatal compiler failure as a successful check or continue billing | Runner returns `FATAL` before recording success; both provider loops stop immediately | existing compiler-startup-failure fixture requires no later provider call and retains last-good artifacts |
+| Hide the actual reason when recovery cannot advance | Preserve bounded check diagnostic in final failure plus the project-local full log | invalid candidate fixture asserts exact compiler cause and unchanged catalog |
+| Advertise an invalid or incomplete authoring example | Compile the exact example module; validate requirements and protobuf in `make validate` | `LeanFM/ReferenceExamples/RequestTests.lean` validates the reference and mandatory behavior collections |
+
+The native Responses continuation uses `previous_response_id` and a new input
+message; Anthropic preserves its assistant/user message history. No transport
+failure, incomplete provider response or unavailable worker triggers this repair.
+These local protocol tests establish orchestration and artifact validity, not
+the success rate of any live model. The independently paused resumable-work
+branch remains separate.

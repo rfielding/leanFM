@@ -118,6 +118,8 @@ validate:
 	@lake env lean LeanFM/LLMGenerated/Requirements.lean
 	@lake env lean LeanFM/LLMGenerated/Implementation.lean
 	@lake env lean LeanFM/ArtifactsTests.lean
+	@lake build LeanFM.ReferenceExamples.Request
+	@lake env lean LeanFM/ReferenceExamples/RequestTests.lean
 	@lake env lean LeanFM/ProtocolTests.lean
 	@lake env lean LeanFM/StreamStatsTests.lean
 	@lake env lean LeanFM/PopulationTests.lean

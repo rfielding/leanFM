@@ -198,7 +198,7 @@ class MultiProvider(unittest.TestCase):
                     before = stats()[counter]
                     status, body = self.alice.chat(project, marker, model)
                     self.assertEqual(status, 200, body)
-                    self.assertEqual(stats()[counter] - before, 6, body)
+                    self.assertEqual(stats()[counter] - before, 7 if marker.endswith("INVALID") else 6, body)
                     if marker != "TEST_SPECIFY_WITH_BOOK":
                         self.assertEqual((root / "book/main.tex").read_bytes(), book)
                     self.assertEqual((root / "manifest.json").read_bytes(), manifest)
@@ -207,6 +207,8 @@ class MultiProvider(unittest.TestCase):
                     if marker.endswith("INVALID"):
                         self.assertIn('"status":"fail"', body["text"])
                         self.assertIn("have not passed", body["text"])
+                        self.assertIn("unchanged_unchecked_specification", body["text"])
+                        self.assertIn("Type mismatch", body["text"])
                         self.assertEqual(catalog_path.read_bytes() if catalog_path.exists() else None, catalog)
                     else:
                         self.assertIn('"status":"success"', body["text"])
@@ -216,6 +218,32 @@ class MultiProvider(unittest.TestCase):
                         self.assertEqual(tasks["tasks"][0]["id"], "fixture_request")
                         self.assertIn("Client->>FixtureServer: FixtureRequest", tasks["tasks"][0]["interaction_mermaid"])
                         self.assertTrue(self.alice.request(f"/api/projects/{project}/specification")[1]["requirements"]["checked"], "book commit left the just-checked specification stale")
+
+    def test_specification_diagnostics_repair_within_original_turn(self):
+        # Reproduce both reported GoServer failures, including the model trying
+        # to finish after each failure. Real Lean and view generation run here.
+        for model, counter, tokens in [("test-model", "requests", 18), (CLAUDE, "anthropic_requests", 17)]:
+            with self.subTest(model=model):
+                project = self.alice.project()
+                root = ROOT / "projects" / project
+                before = stats()[counter]
+                status, body = self.alice.chat(project, "TEST_SPECIFY_REPAIR", model)
+                self.assertEqual(status, 200, body)
+                self.assertEqual(stats()[counter] - before, 11, body)
+                self.assertEqual(body["usage"]["total_tokens"], 11 * tokens)
+                self.assertIn('"status":"success"', body["text"])
+                self.assertNotIn("```leanfm-questions", body["text"])
+                messages = self.alice.request(f"/api/projects/{project}/conversation")[1]["messages"]
+                self.assertEqual(sum(message["role"] == "user" for message in messages), 1)
+                self.assertEqual(sum(message["role"] == "assistant" for message in messages), 1)
+                state = self.alice.request(f"/api/projects/{project}/specification")[1]
+                self.assertTrue(state["requirements"]["checked"])
+                self.assertFalse(state["requirements"]["accepted"])
+                self.assertFalse(state["implementation"]["accepted"])
+                self.assertFalse(any((root / "source").rglob("*.*")))
+                tasks = self.alice.request(f"/api/projects/{project}/tasks")[1]["tasks"]
+                self.assertIn("Client->>FixtureServer: FixtureRequest", tasks[0]["interaction_mermaid"])
+                self.assertEqual(body["text"].count("Completion deferred:"), 2)
 
     def test_routes_concurrently_without_cross_user_or_provider_fallback(self):
         operations = [(self.alice, self.project, "test-model", "OpenAI credential alice"),
