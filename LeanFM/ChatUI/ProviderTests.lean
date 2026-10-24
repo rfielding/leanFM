@@ -9,6 +9,17 @@ example : (fatalWorkspaceFailure? "FATAL: local_checker_unavailable: failed to c
 example : (fatalWorkspaceFailure? "FATAL: initiating credential session ended").isSome = true := by native_decide
 example : (fatalWorkspaceFailure? "ERROR: unknown identifier; edit the candidate").isNone = true := by native_decide
 
+#eval do
+  let base ← IO.currentDir
+  let root := base.toString ++ "/.cache/work-path-" ++ (← LeanFM.ChatUI.Store.randomHex 8)
+  IO.FS.createDirAll (System.FilePath.mk (root ++ "/.leanfm/work"))
+  try
+    IO.FS.writeFile (System.FilePath.mk (root ++ "/.leanfm/work/checkpoint.json")) "private checkpoint"
+    let linked ← IO.Process.output {cmd := "ln", args := #["-s", root ++ "/.leanfm/work/checkpoint.json", root ++ "/alias.json"]}
+    if linked.exitCode != 0 then throw (IO.userError "could not create path-isolation fixture")
+    if (← resolveWorkspacePath root "alias.json").isOk then throw (IO.userError "checkpoint alias was readable")
+  finally IO.FS.removeDirAll (System.FilePath.mk root)
+
 -- An implementation specification is an artifact layer, not a source request.
 example : requestsImplementationSource "Prepare the implementation specification" = false := by native_decide
 example : requestsImplementationSource "Update spec/Implementation.lean" = false := by native_decide

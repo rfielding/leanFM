@@ -38,7 +38,7 @@ def image_reply(content, provider):
 
 PATCH_SCENARIOS = {"TEST_PATCH_RECOUNT", "TEST_PATCH_WRITE_RECOVERY", "TEST_PATCH_RETRY_GUARD",
                    "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS",
-                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_REPAIR", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK"}
+                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_REPAIR", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK", "TEST_LONG_SPECIFICATION", "TEST_IMPLEMENTATION_REPAIR_LONG"}
 
 FAILING_CHECK = "check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n"
 
@@ -76,6 +76,21 @@ def patch_action(marker, step):
     wrong_counts = ("--- a/spec/patch-note.txt\n+++ b/spec/patch-note.txt\n"
                     "@@ -1,90 +1,90 @@\n-before\n+after\n unrelated\n")
     malformed = "*** Begin Patch\n*** Update File: spec/patch-note.txt\n@@\n-before\n+after\n*** End Patch\n"
+    if marker == "TEST_IMPLEMENTATION_REPAIR_LONG":
+        bad_wire = SPECIFICATION_IMPLEMENTATION.replace('wireType := message.name', 'wireType := .protobuf')
+        bad_channels = SPECIFICATION_IMPLEMENTATION.replace(', channels := {', ', channels := [{').replace(
+            'Realize bounded fixture channels"}]} }', 'Realize bounded fixture channels"}]}] }')
+        assert bad_wire != SPECIFICATION_IMPLEMENTATION and bad_channels != SPECIFICATION_IMPLEMENTATION
+        actions = [("leanfm_reference", {"section": "implementation"}),
+                   ("workspace_write", {"path": "spec/Implementation.lean", "content": bad_wire}),
+                   ("leanfm_check", {"requirement": "Fixture.spec", "implementation": "Fixture.implementation"}), None,
+                   ("workspace_write", {"path": "spec/Implementation.lean", "content": bad_channels}),
+                   ("leanfm_check", {"requirement": "Fixture.spec", "implementation": "Fixture.implementation"}), None,
+                   ("workspace_read", {"path": "spec/Requirements.lean"})]
+        actions += [("workspace_write", {"path": f"spec/mapping-progress-{i}.txt", "content": f"Mapping piece {i}\n"}) for i in range(20)]
+        actions += [("workspace_write", {"path": "spec/Implementation.lean", "content": SPECIFICATION_IMPLEMENTATION}),
+                    ("leanfm_check", {"requirement": "Fixture.spec", "implementation": "Fixture.implementation"})]
+        return actions[step] if step < len(actions) else None
     if marker == "TEST_SPECIFY_REPAIR":
         bad_markdown = SPECIFICATION_FIXTURE.replace('markdown := []', 'markdown := ["Reduced server"]')
         incomplete = SPECIFICATION_FIXTURE.replace('def spec :', 'def complete :').replace(
@@ -89,6 +104,13 @@ def patch_action(marker, step):
                    ("leanfm_check", {"requirement": "Fixture.spec"}), None,
                    ("workspace_write", {"path": "spec/Requirements.lean", "content": SPECIFICATION_FIXTURE}),
                    ("leanfm_check", {"requirement": "Fixture.spec"})]
+        return actions[step] if step < len(actions) else None
+    if marker == "TEST_LONG_SPECIFICATION":
+        actions = [("workspace_read", {"path": "spec/Requirements.lean"})]
+        actions += [("workspace_write", {"path": f"spec/progress-{index}.txt", "content": f"Completed bounded piece {index}\n"}) for index in range(20)]
+        actions += [("workspace_write", {"path": "spec/Requirements.lean", "content": SPECIFICATION_FIXTURE}),
+                    ("workspace_write", {"path": "spec/Requirements.proto", "content": SPECIFICATION_PROTO}),
+                    ("leanfm_check", {"requirement": "Fixture.spec"})]
         return actions[step] if step < len(actions) else None
     if marker.startswith("TEST_SPECIFY_"):
         if marker == "TEST_SPECIFY_IMPLEMENTATION":
@@ -127,6 +149,12 @@ def patch_action(marker, step):
 
 
 def verify_specification_feedback(marker, step, feedback):
+    if marker == "TEST_IMPLEMENTATION_REPAIR_LONG" and step in {4, 7}:
+        assert "LeanFM completion validation:" in feedback
+        expected = "String.protobuf" if step == 4 else "ChannelCodegen"
+        assert expected in feedback, (step, feedback)
+        assert "implementation for mapping errors" in feedback
+        return
     if marker != "TEST_SPECIFY_REPAIR":
         return
     if step in {5, 8}:
@@ -308,11 +336,11 @@ class Handler(BaseHTTPRequestHandler):
                 body = {"output_text": text, "usage": usage}
             elif "Current user message:\nTEST_RETURN_STRUCTURED_QUESTION" in current_input:
                 body = {"output_text": consequential_question(), "usage": usage}
-            elif "TEST_MISSING_IMAGE_REPEAT" in request_text and "single bounded recovery attempt" in request_text:
+            elif marker == "TEST_MISSING_IMAGE_REPEAT" and "single bounded recovery attempt" in current_input:
                 body = {"output_text": "Image created: [preview](spec/images/never-created-twice.png)", "usage": usage}
             elif "Current user message:\nTEST_MISSING_IMAGE_REPEAT" in current_input:
                 body = {"output_text": "Image created: [preview](spec/images/never-created-twice.png)", "usage": usage}
-            elif "TEST_MISSING_IMAGE_REFERENCE" in request_text and "single bounded recovery attempt" in request_text:
+            elif marker == "TEST_MISSING_IMAGE_REFERENCE" and "single bounded recovery attempt" in current_input:
                 edit = {
                     "reply": "Replaced the nonexistent image link with a self-contained vector illustration in the PDF source.",
                     "book_source": (
@@ -345,7 +373,7 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(1)
                 edit = {"line_number": fixture_repair_line(current_input), "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
-            elif "TEST_CANCEL_AGENT" in request_text:
+            elif marker == "TEST_CANCEL_AGENT":
                 time.sleep(1)
                 body = {
                     "id": "cancelled-source-write-response",
@@ -394,7 +422,7 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                 }
                 body = {"output_text": json.dumps(edit), "usage": usage}
-            elif "TEST_WRITE_SOURCE" in request_text and "previous_response_id" not in request:
+            elif marker == "TEST_WRITE_SOURCE" and "previous_response_id" not in request:
                 body = {
                     "id": "source-write-response",
                     "output": [{
@@ -423,7 +451,7 @@ class Handler(BaseHTTPRequestHandler):
                 }
             elif request.get("previous_response_id") == "source-checked-response":
                 body = {"output_text": "Created and checked source/main.go.", "usage": usage}
-            elif "TEST_UPDATE_BOOK" in request_text:
+            elif marker == "TEST_UPDATE_BOOK":
                 edit = {
                     "reply": "Updated the durable project book.",
                     "book_source": (

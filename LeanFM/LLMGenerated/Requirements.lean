@@ -1,3 +1,4 @@
+import LeanFM.LLMGenerated.ResumableWork
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.LLMGenerated.SharedProjects
@@ -774,3 +775,7 @@ def validationReport : String :=
   | errors => "invalid generated requirements\n" ++ LeanFM.joinWithNewline errors ++ "\n"
 
 end LeanFM.LLMGenerated.Requirements
+
+/-- Accepted client-driven work component; see reports/resumable-work/acceptance.json. -/
+def LeanFM.LLMGenerated.Requirements.resumableWorkRequirement : LeanFM.RequirementSpec :=
+  LeanFM.LLMGenerated.ResumableWork.spec

@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 from chatui_specification import atomic, confined, digest
 
-RESERVED = (".leanfm/acceptance.json", ".leanfm/accepted", "reports/specification-check", "manifest.json", "project.json")
+RESERVED = (".leanfm/acceptance.json", ".leanfm/accepted", ".leanfm/work", "reports/specification-check", "manifest.json", "project.json")
 
 
 def current(root):

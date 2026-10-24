@@ -21,6 +21,8 @@ type ChatQuestion = {id: string; prompt: string; multiple?: boolean; options: Qu
 type QueuedPrompt = {id: string; text: string; model: string; credentialIdentity: string; pendingQuestion?: {id: string; promptLength: number; composerTextLength: number}};
 type ImageAttachment = {artifact_id: string; name: string; path: string; media_type: string; frame: string};
 
+type WorkCheckpoint = {id: string; state: string; checkpoint: string; batch: number; continue: boolean; progress: string; requires_resume: boolean};
+type WorkStatus = {work: WorkCheckpoint | null; request?: {id: string; prompt: string; model: string}; response?: {text?: string}};
 type MathFragment = {source: string; display: boolean; raw: string};
 
 class ClientFaultBarrier extends React.Component<{children: React.ReactNode}, {failed: boolean}> {
@@ -279,6 +281,23 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
   const attachmentInput = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Message[]>([]), [prompt, setPrompt] = useState(""), [queue, setQueue] = useState<QueuedPrompt[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(""), [errorAction, setErrorAction] = useState(""), [errorTrace, setErrorTrace] = useState("");
   const [model, setModel] = useState(defaultModel);
+  const [workProgress, setWorkProgress] = useState<WorkCheckpoint | null>(null);
+  const [heldWork, setHeldWork] = useState<{item: QueuedPrompt; work: WorkCheckpoint | null} | null>(null);
+  const credentialRef = useRef(credentialIdentity), stopWork = useRef(false), busyRef = useRef(false);
+  credentialRef.current = credentialIdentity; busyRef.current = busy;
+  useEffect(() => {
+    const cancel = (event: Event) => { if ((event as CustomEvent<string>).detail === project.project_id) stopWork.current = true; };
+    window.addEventListener("leanfm:cancel-work", cancel);
+    return () => window.removeEventListener("leanfm:cancel-work", cancel);
+  }, [project.project_id]);
+  useEffect(() => {
+    if (!models.length || busyRef.current || project.read_only) return;
+    void api<WorkStatus>(`/api/projects/${project.project_id}/chat/work/active`).then(status => {
+      if (!busyRef.current && status.work && status.request && ["running", "checkpointed"].includes(status.work.state))
+        setHeldWork({work: status.work, item: {id: status.request.id, text: status.request.prompt, model: status.request.model, credentialIdentity: credentialRef.current}});
+    }).catch(() => {});
+  }, [credentialIdentity, project.project_id]);
+
   const conversationEndRef = useRef<HTMLDivElement>(null);
   const answeredIds = new Set(messages.flatMap(message => [...message.text.matchAll(/Question ID:\s*([A-Za-z0-9._-]+)/g)].map(match => match[1])));
   const pendingQuestion = latestUnansweredQuestion(messages, answeredIds);
@@ -297,11 +316,54 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
     setQueue(current => [...current, {id, text, model, credentialIdentity, pendingQuestion}]);
     if (clearComposer) setPrompt("");
   }
-  async function run(item: QueuedPrompt) {
-    setMessages(v => [...v, {message_id: `pending-${item.id}`, role: "user", text: item.text, sent_at_ms: Date.now()}]); setBusy(true); onBusyChange(true, item.model); setError(""); setErrorAction(""); setErrorTrace("");
-    try { await api(`/api/projects/${project.project_id}/chat`, formRequest({prompt: item.text, model: item.model, ...(item.pendingQuestion ? {composer_question_id: item.pendingQuestion.id, composer_question_prompt_length: String(item.pendingQuestion.promptLength), composer_text_length: String(item.pendingQuestion.composerTextLength)} : {})})); await load(); onWorkspaceChange(); } catch (e) { setMessages(v => v.filter(message => message.message_id !== `pending-${item.id}`)); setError((e as Error).message); if (e instanceof ApiError) { setErrorAction(e.action); setErrorTrace("LeanFM error report (safe to paste to Codex)\n" + JSON.stringify({...e.trace, project_id: project.project_id, model: item.model}, null, 2)); } else setErrorAction("Retry once. If it fails again, report this message to Codex."); await load().catch(() => {}); onWorkspaceChange(); } finally { setBusy(false); onBusyChange(false); } }
+  async function inspectHeldWork() {
+    if (!heldWork) return;
+    try {
+      const status = await api<WorkStatus>(`/api/projects/${project.project_id}/chat/work/${heldWork.work?.id || heldWork.item.id}`);
+      if (status.work && ["running", "checkpointed"].includes(status.work.state)) setHeldWork({...heldWork, work: status.work});
+      else { setHeldWork(null); await load(); onWorkspaceChange(); }
+    } catch (error) { setError((error as Error).message); }
+  }
+  async function run(item: QueuedPrompt, resume?: WorkCheckpoint, restart = false) {
+    if (!resume) setMessages(v => [...v, {message_id: `pending-${item.id}`, role: "user", text: item.text, sent_at_ms: Date.now()}]);
+    setBusy(true); busyRef.current = true; stopWork.current = false; onBusyChange(true, item.model);
+    setHeldWork(null); setError(""); setErrorAction(""); setErrorTrace("");
+    let work = resume || null;
+    let values: Record<string, string> = resume ? {work_id: resume.id, checkpoint_id: resume.checkpoint, model: item.model, explicit_resume: "true", restart: String(restart)}
+      : {prompt: item.text, model: item.model, work_request_id: item.id, ...(item.pendingQuestion ? {composer_question_id: item.pendingQuestion.id, composer_question_prompt_length: String(item.pendingQuestion.promptLength), composer_text_length: String(item.pendingQuestion.composerTextLength)} : {})};
+    try {
+      for (;;) {
+        if (credentialRef.current !== item.credentialIdentity) { setHeldWork({item, work}); setError("The credential changed. Explicitly resume this task after signing in."); break; }
+        let result: {work?: WorkCheckpoint};
+        try { result = await api(`/api/projects/${project.project_id}/chat`, formRequest(values)); }
+        catch (failure) {
+          // A status read can prove that a batch finished. Never blindly replay
+          // a request whose provider outcome is uncertain.
+          const status = await api<WorkStatus>(`/api/projects/${project.project_id}/chat/work/${work?.id || item.id}`).catch(() => null);
+          if (status?.work && status.work.state === "checkpointed" && !status.work.requires_resume && !stopWork.current && credentialRef.current === item.credentialIdentity) result = {work: status.work};
+          else {
+            if (status?.work ? ["running", "checkpointed"].includes(status.work.state) : !!work || !(failure instanceof ApiError) || failure.status === 0 || failure.status >= 500) setHeldWork({item, work: status?.work || work});
+            throw failure;
+          }
+        }
+        work = result.work || null; setWorkProgress(work);
+        await load(); onWorkspaceChange();
+        if (!work?.continue) break;
+        if (stopWork.current) { await load(); break; }
+        if (credentialRef.current !== item.credentialIdentity || work.requires_resume) { setHeldWork({item, work}); break; }
+        values = {work_id: work.id, checkpoint_id: work.checkpoint, model: item.model};
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+      }
+    } catch (error) {
+      setMessages(v => v.filter(message => message.message_id !== `pending-${item.id}`));
+      setError((error as Error).message);
+      if (error instanceof ApiError) { setErrorAction(error.action); setErrorTrace("LeanFM error report (safe to paste to Codex)\n" + JSON.stringify({...error.trace, project_id: project.project_id, model: item.model}, null, 2)); }
+      await load().catch(() => {}); onWorkspaceChange();
+    } finally { setBusy(false); busyRef.current = false; onBusyChange(false); }
+  }
+
   useEffect(() => {
-    if (busy || queue.length === 0) return;
+    if (busy || heldWork || queue.length === 0) return;
     const [next, ...remaining] = queue;
     if (next.credentialIdentity !== credentialIdentity || !models.includes(next.model)) {
       setError("Queued prompt held because the unlocked credential changed. Remove it and resubmit under the current key.");
@@ -309,7 +371,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
     }
     setQueue(remaining);
     void run(next);
-  }, [busy, queue, credentialIdentity, models]);
+  }, [busy, heldWork, queue, credentialIdentity, models]);
   function send(event: FormEvent) {
     event.preventDefault();
     const text = prompt.trim() || (attachments.length ? "Please examine the attached image." : "");
@@ -357,7 +419,7 @@ function Chat({project, models, modelDetails, defaultModel, credentialIdentity, 
   if (project.read_only) return <div className="empty"><div><h2>Read-only workspace</h2><p>Select an editable project to chat.</p></div></div>;
   return <section className="pane chat-pane">
     <div className="messages">{messages.length ? messages.map(m => <MessageView key={m.message_id} message={m} projectId={project.project_id} answeredIds={answeredIds} onDelete={() => remove(m.message_id)} onResend={m.role === "user" ? () => enqueue(m.text) : undefined} onAnswer={m.role === "assistant" ? enqueue : undefined} disabled={false} />) : <div className="empty"><div><h2>What problem are you trying to solve?</h2><p>Resume from the durable project files. Your book and specifications live in Project memory, not in chat history. Continue here; LeanFM will use those durable files.</p></div></div>}{error && <div className="request-error"><div className="result-badge fail">FAIL</div><p className="error">{error}</p><p className="error-action"><strong>What to do:</strong> {errorAction}</p>{errorTrace && <details open><summary>Diagnostic for Codex</summary><button onClick={() => navigator.clipboard.writeText(errorTrace)}>Copy diagnostic</button><pre>{errorTrace}</pre></details>}</div>}<div ref={conversationEndRef} aria-hidden="true" /></div>
-    <div className="composer-wrap">{modelAccess}{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !models.includes(model) || uploading}>Send</button><label className="model-picker">Model<select value={model} disabled={models.length === 0} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.length === 0 && <option value="">{modelPlaceholder}</option>}{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
+    <div className="composer-wrap">{modelAccess}{busy && workProgress && <p role="status">Batch {workProgress.batch} saved · continuing the same task</p>}{heldWork && <div className="model-access" role="status"><p>Task paused: {heldWork.work?.progress || "Confirm the last batch before continuing."}</p><div><button type="button" onClick={() => void inspectHeldWork()}>Check progress</button>{heldWork.work?.state === "checkpointed" && <><button type="button" disabled={!models.includes(heldWork.item.model)} onClick={() => void run({...heldWork.item, credentialIdentity}, heldWork.work!)}>Resume task</button><button type="button" disabled={!models.includes(heldWork.item.model)} onClick={() => void run({...heldWork.item, credentialIdentity}, heldWork.work!, true)}>Restart from current files</button></>}<button type="button" onClick={() => void api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}).then(() => inspectHeldWork()).catch(error => setError(error.message))}>Cancel task</button></div></div>}{pendingQuestion && <p className="pending-question-hint">Your next message will answer: “{pendingQuestion.prompt}”</p>}{queue.length > 0 && <div className="prompt-queue" aria-label="Queued prompts"><strong>{queue.length} queued</strong>{queue.map((item, index) => <div key={item.id}><span>{index + 1}. [{item.model}] {item.text}</span><button onClick={() => setQueue(current => current.filter(queued => queued.id !== item.id))} aria-label={`Remove queued prompt ${index + 1}`}>Remove</button></div>)}</div>}<div className="attachment-controls"><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml" multiple hidden aria-label="Choose image attachments" onChange={event => void attach(event.target.files)} /><button type="button" disabled={uploading || attachments.length >= 4} onClick={() => attachmentInput.current?.click()}>Attach image</button><span role="status">{uploading ? "Uploading image…" : "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"}</span></div>{attachmentError && <p className="error" role="alert">{attachmentError}</p>}{attachments.length > 0 && <div className="attachment-previews" aria-label="Attached images">{attachments.map(image => <div className="attachment-preview" key={image.artifact_id}><img src={"/api/projects/" + project.project_id + "/files/" + image.path} alt={"Attachment: " + image.name} /><span>{image.name}{image.frame === "first" ? " · first frame sent to model" : ""}</span><CopyImageReference reference={image.path} /><button type="button" aria-label={"Remove attachment " + image.name} onClick={() => setAttachments(current => current.filter(item => item.artifact_id !== image.artifact_id))}>Remove</button></div>)}</div>}<form className="composer" onSubmit={send}><textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder={busy ? "Stack another prompt…" : "What are you trying to build?"} /><button disabled={(!prompt.trim() && attachments.length === 0) || !models.includes(model) || uploading}>Send</button><label className="model-picker">Model<select value={model} disabled={models.length === 0} onChange={event => setModel(event.target.value)} aria-label="Model for new prompts">{models.length === 0 && <option value="">{modelPlaceholder}</option>}{models.map(option => { const info = modelDetails.find(item => item.id === option); return <option key={option} value={option}>{info ? `${info.provider === "anthropic" ? "Anthropic" : "OpenAI"} · ${info.label}` : option}</option>; })}</select></label></form></div></section>;
 }
 
 function Book({project, workspaceRevision}: {project: Project; workspaceRevision: number}) {
@@ -495,7 +557,7 @@ function ProjectWorkspace({project, authenticationRevision, session, onUnlockKey
   const agentElapsed = `${String(Math.floor(agentSeconds / 60)).padStart(2, "0")}:${String(agentSeconds % 60).padStart(2, "0")}`;
   const agentProgress = cancelRequested ? "Cancellation requested; waiting for the current safe boundary" : agentStatus?.detail || (agentSeconds >= 120 ? "Long-running model or tool work is still active" : agentSeconds >= 30 ? "Model or workspace tools are still working" : "Contacting the model");
   function agentState(busy: boolean, model?: string) { setAgentBusy(busy); if (busy) { setAgentModel(model || ""); setCancelRequested(false); setAgentStatus(null); setLiveTrace([]); } }
-  async function cancelAgent() { setCancelRequested(true); try { await api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}); } catch { setCancelRequested(false); } }
+  async function cancelAgent() { window.dispatchEvent(new CustomEvent("leanfm:cancel-work", {detail: project.project_id})); setCancelRequested(true); try { await api(`/api/projects/${project.project_id}/chat/cancel`, {method: "POST"}); } catch { setCancelRequested(false); } }
   return <main className="main"><header className="topbar"><strong>{project.display_name}</strong><nav className="phase-tabs"><div className="phase-group"><span>Durable</span><button className={phase === "memory" ? "tab active" : "tab"} onClick={() => setPhase("memory")}>Project memory</button></div><div className="phase-group"><span>Discover</span><div><button className={phase === "chat" ? "tab active" : "tab"} onClick={() => setPhase("chat")}>Chat</button><button className={phase === "book" ? "tab active" : "tab"} onClick={() => setPhase("book")}>Book</button></div></div><div className="phase-group"><span>Specify</span><div><button className={phase === "grammar" ? "tab active" : "tab"} onClick={() => setPhase("grammar")}>Grammar</button><button className={phase === "tasks" ? "tab active" : "tab"} onClick={() => setPhase("tasks")}>Tasks</button></div></div><div className="phase-group"><span>Build</span><button className={phase === "source" ? "tab active" : "tab"} onClick={() => setPhase("source")}>Source</button></div></nav>{billing && <div className={`billing-meter ${percentRemaining <= 10 ? "danger" : percentRemaining <= 25 ? "warn" : ""}`} title="This is a local token safety budget across providers, not a provider dollar balance. Provider spend limits remain authoritative."><strong>{selectedBilling?.provider || billing.provider} · key {selectedBilling?.key_fingerprint || billing.key_fingerprint}</strong><span>{selectedBilling?.label || billing.model}</span><span>{billing.tokens_used.toLocaleString()} used · {billing.tokens_remaining.toLocaleString()} remaining</span><small>Local session limit; enforce provider spend caps</small></div>}<div className="session-controls" aria-label="Account session"><span>{session.username || "Signed out"}</span><button type="button" onClick={onUnlockKeys}>{session.username ? "API keys" : "Sign in"}</button><button type="button" onClick={onLogout} disabled={loggingOut}>{loggingOut ? "Logging out…" : "Log out"}</button></div></header>
     {logoutError && <p className="error" role="alert">{logoutError}</p>}
     {billing?.model_warnings?.map(warning => <p className="error" role="status" key={warning}>{warning}</p>)}

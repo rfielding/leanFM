@@ -251,11 +251,15 @@ def recordSessionUsage (token username : String) (tokens : Nat) : IO Unit := do
       { session with tokensUsed := session.tokensUsed + tokens }
     else session
 
-def keyFingerprint (key : String) : IO String := do
-  let out ← IO.Process.output { cmd := "openssl", args := #["dgst", "-sha256"] } (some key)
+def privateIdentityTag (value : String) : IO String := do
+  let out ← IO.Process.output { cmd := "openssl", args := #["dgst", "-sha256"] } (some value)
   if out.exitCode != 0 then throw <| IO.userError "cannot fingerprint provider credential"
   let digest := out.stdout.trimAscii.toString.splitOn " " |>.getLast?.getD ""
-  pure (digest.take 12).toString
+  if digest.length != 64 then throw <| IO.userError "invalid private identity digest"
+  pure digest
+
+def keyFingerprint (key : String) : IO String := do
+  pure ((← privateIdentityTag key).take 12).toString
 
 def supportedProvider (provider : String) : Bool := ["openai", "anthropic"].contains provider
 

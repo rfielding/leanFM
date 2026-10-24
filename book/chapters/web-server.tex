@@ -337,6 +337,11 @@ example with matching protobuf, task states, grammar, processes, properties,
 negative obligations and generated-view provenance. A reduced scope still needs
 these collections. In particular, \texttt{markdown} contains typed
 \texttt{RequirementMarkdown} records, not plain strings.
+The implementation reference likewise includes a compiled mapping for that
+example. \texttt{MessageCodegen.wireType} is a string naming the generated
+protobuf type. \texttt{ImplementationSpec.channels} is one
+\texttt{ChannelCodegen} record with explicit send, receive, drain and close
+semantics; capacities remain in the requirements' actor resource contracts.
 If the model tries to finish after an unchecked specification edit, the server
 returns the concrete compiler or structural diagnostic within the same native
 provider conversation. The model can correct the files and recheck without a
@@ -749,3 +754,19 @@ Use the project-root, derived-view, event-boundary and completion contracts in
 Chapters~\ref{ch:bootstrap-contract}, \ref{ch:scenarios}, \ref{ch:events} and
 \ref{ch:feature-discipline}. Conversation discovers the specification; durable
 artifacts retain it.
+
+\section{Client-driven bounded work}
+The accepted resumable-work component is recorded in
+\path{LeanFM/LLMGenerated/ResumableWork.lean}; its separate implementation mapping
+and acceptance hashes are beside it and in \path{reports/resumable-work/}.
+One user task crosses bounded provider batches through server-issued project
+checkpoints. The client continues the same task, while later prompts wait and
+Cancel stays available. A batch boundary is progress, never a total step limit.
+Checkpoint consumption and cached receipts prevent replay; caller, model,
+credential, token accounting, failure history and both human gates survive the
+boundary. Closing the client starts no further batch. Ambiguous provider
+failures pause for reconciliation rather than an automatic paid retry. Oversized
+provider context restarts from durable project files and verified tool receipts.
+The generated interaction and state views retain their prompt, reducer and
+boundary in the typed component. Tests use local provider fixtures, the real
+compiler and production Chrome; they do not prove generated applications correct.

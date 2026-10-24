@@ -1280,11 +1280,13 @@ def leanFMImplementationReference : String :=
     , ""
     , "## MessageCodegen and transports"
     , "MessageCodegen { message, wireType, transport, justifications }. Provide exactly one binding for every requirement message and no unknown messages."
+    , "wireType : String names the generated payload type, for example wireType := \"ListRooms\". It is NOT a framing enum: neither .protobuf nor .protobufMessage is a String. FramingKind belongs to requirements MessageFraming; transport belongs to TransportSpec."
     , "TransportSpec is httpRequest method path | httpResponse requestMessage | inProcessChannel channelName | tcp endpoint | custom adapter configuration."
     , "HTTP responses name a known request message. HTTP projection is causally closed: every terminal response event sets optional cause_id to the exact compatible request event ID within the same session, task, and correlation boundary, and every projected request is named as the cause of exactly one terminal success or error response. Orphan requests, dangling responses, incompatible or cross-session causes, and duplicate terminal responses are unchecked HTTP calls and fail validation. prior_ids remains exclusively the predecessor relation governing legal interleavings. The adapter follows cause_id rather than adjacency, arrival order, or process-global current-request state. Transport selects how protobuf bytes move; it does not alter the protobuf payload or legal grammar order."
     , "A generator may resolve an otherwise unspecified ordinary HTTP choice with the conservative default projection: pair request and response atoms from the task grammar; encode request and response bodies with the protobuf JSON mapping and application/json; permit path/query fields only when explicitly bounded and URL-safe scalars; otherwise use POST with the encoded protobuf request body. Bytes, repeated fields, nested messages, secrets, and large or unbounded strings never default to URL parameters. Publish the resolved mapping at GET /openapi.yaml and preserve protobuf round-trip equality. An explicit ImplementationSpec transport binding overrides the default."
     , ""
     , "## Channels"
+    , "ImplementationSpec.channels : ChannelCodegen is ONE record, not List ChannelCodegen. Do not write channels := [ ... ]. ChannelCodegen has no name or bufferCapacity fields; capacities belong to requirement actorResources."
     , "ChannelCodegen names sendFunction, receiveFunction, tryReceiveFunction, and closeFunction. Required semantics are blockWithoutMutation for full sends and empty blocking receives, returnNoneKeepRunnable for an open empty tryReceive, rejectWithoutMutation for every send after close, drainThenReturnClosed for receivers, and idempotentWakeWaiters for close. Iteration is complete exactly when the queue is closed and drained."
     , "Implement actor resource contracts with declared positive finite per-instance inbound/outbound capacities, maxInFlight, and memory budgets. Full sends sleep without mutation until a receive creates space; blocking empty receives sleep until a message exists. Preserve multiple simultaneous (session,task) conversations."
     , ""
@@ -1296,7 +1298,9 @@ def leanFMImplementationReference : String :=
     , "Generated emitters and parsers preserve event id, repeated prior links, optional cause_id, session, task, actors, timeAt, and the selected protobuf atom. Any root, intermediate, or terminal event may name one direct cause; cause_id must resolve and remain acyclic, may delimit a nested task, and defines causal containment boxes without changing the prior relation or legal interleavings. HTTP-bound productions additionally name method, path, protobuf request/response types, status alternatives, content type, encoder, and decoder; every HTTP response event has cause_id equal to its request event_id without overloading prior_ids; exact byte fixtures must round-trip and remain legal in the residual grammar."
     , "Test legal trace round-trips and replay, illegal trace rejection, bounded-channel behavior, possible-branch handling plans, and event reducers feeding desired outputs and /metrics."
     , "After construction, call GET /tools/llm-generated/implementation/validate and the combined generated-artifacts validator."
-    ]
+    ] ++
+    "\n\n## Complete checked implementation example\nThis mapping compiles and validates against the complete request/response example in the requirements reference. In a project import its own canonical spec/Requirements.lean and use its RequirementSpec constant. Preserve its actors, message names and requirement IDs; these example choices do not select your project's transport or accept its mapping.\n```lean\n" ++
+    (include_str "ReferenceExamples/RequestImplementation.lean") ++ "\n```\n"
 
 /-- Compatibility document containing both independently addressable references. -/
 def leanFMLanguageReference : String :=

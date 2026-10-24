@@ -1,3 +1,4 @@
+import LeanFM.LLMGenerated.ResumableWorkImplementation
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.ChatUI.Implementation
 
@@ -136,3 +137,7 @@ def sharedProjectsProposalErrors : List String :=
       else some ("unknown proposed requirement reference: " ++ reference)
 
 end LeanFM.LLMGenerated.Implementation
+
+/-- Separately accepted resumable-work mappings, preserved at the canonical entry point. -/
+def LeanFM.LLMGenerated.Implementation.resumableWorkDecisions :=
+  LeanFM.LLMGenerated.ResumableWorkImplementation.decisions

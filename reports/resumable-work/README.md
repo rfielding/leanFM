@@ -6,13 +6,13 @@ retain their pre-acceptance wording so those bytes remain verifiable; the
 acceptance record is authoritative for gate status.
 
 The typed requirements, derived views and separate implementation mapping are
-checked. Runtime implementation is **paused at the user's explicit request** and
-committed as `9230c4b` on `work/resumable-chatui-20261023`. All repository-owned
-work is committed; live projects, encrypted keys, logs and caches remain local.
+checked. Runtime implementation was paused and committed as `9230c4b` on
+`work/resumable-chatui-20261023`. The user's subsequent report of another
+sixteen-step failure resumes that accepted work. It is now integrated with the
+specification completion repair, verified, and running in the local ChatUI.
 
-The runtime branch passes `make check`, `make book`, the production Chrome
-workflow and all 23 multi-provider tests, including tasks beyond sixteen rounds
-and replay call-count checks. One later HTTP shell check remains unresolved;
-the branch's `pause-checkpoint.md` records the observed fixture mismatch and
-resume instructions. The runtime is not merged into this verified main branch
-and has not been deployed. Resume only when the user requests it.
+The historical pause and its then-open HTTP shell check are documented in
+`pause-checkpoint.md`. Current verification, security controls and composition
+evidence are recorded in `integration-evidence.md`. Historical acceptance
+artifacts and their hashes remain unchanged; live projects, encrypted keys,
+logs and caches remain local.

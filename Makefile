@@ -55,6 +55,8 @@ selfhost-check:
 	lake build LeanFM.LLMGenerated.Requirements
 	lake env lean LeanFM/LLMGenerated/SelfHostingTests.lean
 	lake env lean --run ReviewSelfHosting.lean
+	lake env lean --run ReviewResumableWork.lean
+	python3 scripts/chatui_work_state_test.py
 
 video-check:
 	python3 scripts/validate_video_overview.py
@@ -80,6 +82,7 @@ chatui-check: build
 	python3 scripts/chatui_media_test.py
 	python3 scripts/chatui_specification_test.py
 	python3 scripts/chatui_project_state_test.py
+	python3 scripts/chatui_work_state_test.py
 	python3 scripts/chatui_workspace_reset_test.py
 	python3 scripts/chatui_command_test.py
 	lake env lean LeanFM/ChatUI/ProviderTests.lean
@@ -120,6 +123,8 @@ validate:
 	@lake env lean LeanFM/ArtifactsTests.lean
 	@lake build LeanFM.ReferenceExamples.Request
 	@lake env lean LeanFM/ReferenceExamples/RequestTests.lean
+	@lake build LeanFM.ReferenceExamples.RequestImplementation
+	@lake env lean LeanFM/ReferenceExamples/RequestImplementationTests.lean
 	@lake env lean LeanFM/ProtocolTests.lean
 	@lake env lean LeanFM/StreamStatsTests.lean
 	@lake env lean LeanFM/PopulationTests.lean

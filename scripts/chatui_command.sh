@@ -10,6 +10,11 @@ shift || true
 unset LD_LIBRARY_PATH LD_PRELOAD
 
 case "$operation" in
+  work-start|work-claim|work-save|work-status|work-cancel|work-guard)
+    test "$#" -eq 1
+    installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+    exec timeout 15 python3 "$installation_root/scripts/chatui_work_state.py" "${operation#work-}" "$1"
+    ;;
   project-status|project-accept|project-authorize)
     installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
     exec timeout 15 python3 "$installation_root/scripts/chatui_project_state.py" "${operation#project-}" "$@"

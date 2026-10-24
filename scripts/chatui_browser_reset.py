@@ -297,6 +297,9 @@ def verify_browser(base, fixture):
         evaluate("document.querySelector('.project-panel:not([hidden]) .composer button').click()")
         wait("[...document.querySelectorAll('.project-panel:not([hidden]) .message.assistant')].some(m=>m.textContent.includes('Completed patch fixture'))")
         assert evaluate("[...document.querySelectorAll('.project-panel:not([hidden]) .message.assistant')].at(-1).querySelector('.result-badge.success') !== null")
+        type_into(".project-panel:not([hidden]) .composer textarea", "TEST_LONG_SPECIFICATION")
+        evaluate("document.querySelector('.project-panel:not([hidden]) .composer button').click()")
+        wait("[...document.querySelectorAll('.project-panel:not([hidden]) .message.assistant')].filter(m=>m.textContent.includes('Completed patch fixture')).length === 2", seconds=60)
         click_text("Grammar")
         wait("document.querySelector('.project-panel:not([hidden]) .grammar-pane')?.textContent.includes('FixtureRequest')")
         click_text("Tasks")
@@ -312,7 +315,7 @@ def verify_browser(base, fixture):
         click_text("Chat")
         type_into(".project-panel:not([hidden]) .composer textarea", "TEST_SPECIFY_IMPLEMENTATION")
         evaluate("document.querySelector('.project-panel:not([hidden]) .composer button').click()")
-        wait("[...document.querySelectorAll('.project-panel:not([hidden]) .message.assistant')].filter(m=>m.textContent.includes('Completed patch fixture')).length === 2")
+        wait("[...document.querySelectorAll('.project-panel:not([hidden]) .message.assistant')].filter(m=>m.textContent.includes('Completed patch fixture')).length === 3")
         click_text("Project memory")
         wait("[...document.querySelectorAll('.project-panel:not([hidden]) button')].some(b=>b.textContent === 'Accept implementation specification' && !b.disabled)")
         click_text("Accept implementation specification")
@@ -333,7 +336,7 @@ def verify_browser(base, fixture):
         assert not exceptions, exceptions
         return {"result": "pass", "browser": version["Browser"], "checks": ["keyboard login/registration tab switching", "password-only login", "visible locked/loading/failed/empty model states", "real mouse logout at narrow width with hidden sidebar and no session", "one shared account and model session across projects", "valid and expired logout open an editable fresh login form", "failed logout stays locally locked and retries without claiming server revocation", "immediate model refresh after unlock with polling paused", "model retry and expired-session recovery preserve drafts without sending chat", "delayed catalog responses cannot overlap or restore a locked session", "queued prompts remain held after unlocking the same key in a new session", "no phantom examples", "image choose/remove/send/persist/resend with native provider pixels",
                 "empty-chat durable resume through actual React composer", "protobuf in Project memory", "separate light/dark PDF routes",
-                "create a fresh project in the production UI", "chat builds a PDF before requirements authoring", "two rejected requirements candidates repair inside the original composer turn with real Lean compilation", "generated Grammar, interaction, state and CTL views",
+                "create a fresh project in the production UI", "chat builds a PDF before requirements authoring", "two rejected requirements candidates repair inside the original composer turn with real Lean compilation", "twenty-five model rounds complete through four-round client batches", "generated Grammar, interaction, state and CTL views",
                 "independent human acceptance of checked requirements and implementation", "actual source files and sandboxed Go test after both gates", "no uncaught browser exceptions"]}
     except Exception:
         if connection:

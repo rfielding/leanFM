@@ -252,8 +252,12 @@ curl -sS -b "$cookie_b" --data-urlencode 'prompt=keep this separate' \
 chat_b_pid=$!
 wait "$chat_a_pid" "$chat_b_pid"
 
-rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tokens":18' "$test_root/chat-a.json"
-rg -q '"input_tokens":11.*"cached_input_tokens":3.*"output_tokens":7.*"total_tokens":18' "$test_root/chat-b.json"
+python3 - "$test_root/chat-a.json" "$test_root/chat-b.json" <<'PY_USAGE'
+import json, sys
+for path in sys.argv[1:]:
+    usage = json.load(open(path))["usage"]
+    assert [usage[name] for name in ["input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"]] == [11, 3, 7, 18], usage
+PY_USAGE
 curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/artifacts" | rg -q '"kind":"mermaid"'
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_a/conversation")" = 200
 curl -sS -b "$cookie_b" "$base_url/api/projects/missing/conversation" >"$test_root/actionable-error.json"

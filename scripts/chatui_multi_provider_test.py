@@ -66,6 +66,15 @@ class Client:
     def chat(self, project, marker, model=CLAUDE):
         return self.request(f"/api/projects/{project}/chat", {"prompt": marker, "model": model})
 
+    def chat_batched(self, project, marker, model=CLAUDE):
+        path = f"/api/projects/{project}/chat"
+        status, body = self.request(path, {"prompt": marker, "model": model,
+                                          "work_request_id": "batched-request-0001"})
+        while body.get("work", {}).get("continue"):
+            status, body = self.request(path, {"work_id": body["work"]["id"],
+                                              "checkpoint_id": body["work"]["checkpoint"], "model": model})
+        return status, body
+
 
 def stats():
     request = urllib.request.Request("http://127.0.0.1:18080/test/requests",
@@ -227,7 +236,7 @@ class MultiProvider(unittest.TestCase):
                 project = self.alice.project()
                 root = ROOT / "projects" / project
                 before = stats()[counter]
-                status, body = self.alice.chat(project, "TEST_SPECIFY_REPAIR", model)
+                status, body = self.alice.chat_batched(project, "TEST_SPECIFY_REPAIR", model)
                 self.assertEqual(status, 200, body)
                 self.assertEqual(stats()[counter] - before, 11, body)
                 self.assertEqual(body["usage"]["total_tokens"], 11 * tokens)
@@ -244,6 +253,30 @@ class MultiProvider(unittest.TestCase):
                 tasks = self.alice.request(f"/api/projects/{project}/tasks")[1]["tasks"]
                 self.assertIn("Client->>FixtureServer: FixtureRequest", tasks[0]["interaction_mermaid"])
                 self.assertEqual(body["text"].count("Completion deferred:"), 2)
+
+    def test_implementation_type_repairs_survive_batches_beyond_old_cap(self):
+        for model, counter, tokens in [("test-model", "requests", 18), (CLAUDE, "anthropic_requests", 17)]:
+            with self.subTest(model=model):
+                project = self.alice.project()
+                path = f"/api/projects/{project}"
+                self.assertEqual(self.alice.chat(project, "TEST_SPECIFY_SERVER", model)[0], 200)
+                state = self.alice.request(path + "/specification")[1]
+                revision = state["requirements"]["revision"]
+                self.assertEqual(self.alice.request(path + f"/specification/requirements/{revision}/accept", {})[0], 200)
+                before = stats()[counter]
+                status, body = self.alice.chat_batched(project, "TEST_IMPLEMENTATION_REPAIR_LONG", model)
+                self.assertEqual(status, 200, body)
+                self.assertEqual(stats()[counter] - before, 31, body)
+                self.assertEqual(body["usage"]["total_tokens"], 31 * tokens)
+                self.assertIn('"status":"success"', body["text"])
+                self.assertEqual(body["work"]["state"], "completed")
+                self.assertEqual(body["text"].count("Completion deferred:"), 2)
+                state = self.alice.request(path + "/specification")[1]
+                self.assertTrue(state["requirements"]["accepted"])
+                self.assertEqual(state["requirements"]["revision"], revision)
+                self.assertTrue(state["implementation"]["checked"])
+                self.assertFalse(state["implementation"]["accepted"])
+                self.assertFalse(any((ROOT / "projects" / project / "source").rglob("*.*")))
 
     def test_routes_concurrently_without_cross_user_or_provider_fallback(self):
         operations = [(self.alice, self.project, "test-model", "OpenAI credential alice"),
@@ -427,6 +460,33 @@ class MultiProvider(unittest.TestCase):
                 self.assertEqual(self.alice.request("/api/me")[1]["billing"]["tokens_used"] - used, expected_tokens)
                 self.assertEqual(stats()[counter] - before, 2)
                 self.assertEqual((self.root / "book/main.tex").read_bytes(), source)
+
+    def test_client_batches_finish_beyond_the_old_limit_without_replay(self):
+        for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:
+            with self.subTest(model=model):
+                project = self.alice.project()
+                path = f"/api/projects/{project}/chat"
+                before = stats()[counter]
+                status, body = self.alice.request(path, {"prompt": "TEST_LONG_SPECIFICATION", "model": model,
+                                                        "work_request_id": "long-request-0001"})
+                checkpoints = []
+                while body.get("work", {}).get("continue"):
+                    self.assertEqual(status, 200)
+                    checkpoints.append(body["work"]["checkpoint"])
+                    self.assertEqual(stats()[counter] - before, 4 * len(checkpoints))
+                    form = {"work_id": body["work"]["id"], "checkpoint_id": checkpoints[-1], "model": model}
+                    status, body = self.alice.request(path, form)
+                    after = stats()[counter]
+                    replay_status, replay = self.alice.request(path, form)
+                    self.assertEqual(replay_status, 200)
+                    self.assertEqual(replay, body)
+                    self.assertEqual(stats()[counter], after)
+                self.assertEqual(status, 200)
+                self.assertEqual(body["work"]["state"], "completed")
+                self.assertEqual(stats()[counter] - before, 25)
+                messages = self.alice.request(f"/api/projects/{project}/conversation")[1]["messages"]
+                self.assertEqual([m["role"] for m in messages], ["user", "assistant"])
+                self.assertTrue((ROOT / "projects" / project / "spec/tasks.json").is_file())
 
     def test_local_checker_failure_stops_both_providers_without_an_extra_paid_round(self):
         for model, counter in [("test-model", "requests"), (CLAUDE, "anthropic_requests")]:

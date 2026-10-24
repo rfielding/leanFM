@@ -297,6 +297,37 @@ def truncateTailText (value : String) (limit : Nat) : String :=
   if value.length ≤ limit then value
   else "[earlier output truncated]\n" ++ (value.drop (value.length - limit)).toString
 
+def workField (value : Lean.Json) (key : String) : Lean.Json :=
+  (value.getObjVal? key).toOption.getD (Lean.Json.mkObj [])
+
+def workStrings (value : Lean.Json) (key : String) : List String :=
+  ((Provider.jsonArrayField? value key).getD #[]).toList.filterMap (·.getStr?.toOption)
+
+def workBool (value : Lean.Json) (key : String) : Bool :=
+  ((value.getObjVal? key).bind Lean.Json.getBool?).toOption.getD false
+
+def workOperation (root operation : String) (input : Lean.Json) : IO Lean.Json := do
+  try
+    let out ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["work-" ++ operation, root]} (some input.compress)
+    match Lean.Json.parse out.stdout with
+    | .ok result => return result
+    | .error _ => return Lean.Json.mkObj [("error", Lean.toJson "Project work store returned an invalid result."), ("status", Lean.toJson (500 : Nat))]
+  catch _ => return Lean.Json.mkObj [("error", Lean.toJson "Project work store could not start."), ("status", Lean.toJson (500 : Nat))]
+
+def workError? (value : Lean.Json) : Option HttpResponse := do
+  let error ← Provider.jsonStringField? value "error"
+  pure (errorResponse ((Provider.jsonNatField? value "status").getD 409) error)
+
+def usageJson (usage : Provider.Completion) : Lean.Json :=
+  Lean.Json.mkObj [("input_tokens", Lean.toJson usage.inputTokens), ("cached_input_tokens", Lean.toJson usage.cachedInputTokens),
+    ("output_tokens", Lean.toJson usage.outputTokens), ("total_tokens", Lean.toJson usage.totalTokens)]
+
+def usageFromWork (value : Lean.Json) : Provider.Completion :=
+  {text := "", inputTokens := (Provider.jsonNatField? value "input_tokens").getD 0,
+   cachedInputTokens := (Provider.jsonNatField? value "cached_input_tokens").getD 0,
+   outputTokens := (Provider.jsonNatField? value "output_tokens").getD 0,
+   totalTokens := (Provider.jsonNatField? value "total_tokens").getD 0}
+
 def diagnosticLogPath (root : String) : String := root ++ "/logs/runtime-diagnostics.jsonl"
 
 def recentProjectDiagnostics (root : String) : IO String := do
@@ -356,11 +387,14 @@ def underRoot (root candidate : String) : Bool :=
 
 def projectPathIsPublic (selected candidate : String) : IO Bool := do
   let workspace ← workspaceRoot
+  if underRoot (selected ++ "/.leanfm/work") candidate then return false
   if underRoot (workspace ++ "/.leanfm") candidate then return false
   if underRoot selected workspace && underRoot (workspace ++ "/projects") candidate then return false
   return true
 
 def resolveWorkspacePath (root relative : String) (allowMissing : Bool := false) : IO (Except String String) := do
+  if relative == ".leanfm/work" || relative.startsWith ".leanfm/work/" then
+    return .error "Work checkpoints are server-controlled and unavailable to workspace tools."
   if !workspaceRelativePath? relative then return .error "Path must be a non-empty relative path without '.' or '..' segments."
   let canonicalRoot ← IO.FS.realPath (fp root)
   let canonical := canonicalRoot.toString
@@ -602,7 +636,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
 
 def workspaceAgentInstructions (root : String) : String :=
   "Do not rewrite the book merely to log implementation steps or acceptance; source evidence and the protected gate records already persist those facts. " ++
-  "Use the explicit acceptance controls in Project memory for formal gates. Read project specification status when needed; never fabricate acceptance by editing a manifest or a gate file. Source writes are enforced against both current checked gates by the server. Do not reopen a gate already accepted for its current revision. " ++
+  "Use the explicit acceptance controls in Project memory for formal gates. Do not replace those revision-bound controls with a model-authored accept_requirements or accept_implementation question; link the user to Project memory instead. A chat answer cannot manufacture a gate record. Read project specification status when needed; never fabricate acceptance by editing a manifest or a gate file. Source writes are enforced against both current checked gates by the server. Do not reopen a gate already accepted for its current revision. " ++
   "Never claim or link that a project media file was created unless this turn's successful tool output or a workspace read confirms the exact path exists. For a PDF image, prefer a self-contained vector drawing over a guessed external image path. When a referenced path fails existence validation, inspect that exact diagnostic and use one bounded correction without replaying completed mutations; a repeated missing path stops immediately. When a workspace tool returns ERROR or a check fails, inspect that concrete diagnostic, change the input or strategy, exhaust safe reversible alternatives, rerun validation, and continue the original requested task. For every generated or substantially rewritten text file, preserve the last revision that passed its proportional check and work on a project-local scratch candidate. Promote it only after validation. On any validation failure, retain the complete bounded diagnostic, restore the last known-good file, divide the intended delta into small ordered independently checkable pieces, apply and validate one piece at a time, and immediately back out the first failing piece. Never resubmit the complete failing candidate, repeat an unchanged failure class, or spend another model request before narrowing the change or failure location. Running a project-local compiler, test, or named check is already authorized reversible work: run it directly and never ask whether the user wants it run. Do not ask the user to retry an authorized reversible operation and do not repeat the identical failing call. Ask only when recovery needs new authority, a destructive or expensive choice, or an unavailable dependency. " ++
   Provider.hostedChatInstructions ++ " The authenticated user explicitly authorizes you to inspect and edit files only beneath the selected project root " ++ root ++ ". Use the supplied workspace tools to do requested engineering work, not merely describe a plan. All final implementation code, build files, generated language bindings, and implementation tests belong beneath source/. Specification artifacts remain beneath spec/. Never present implementation source as a chat code fence or prose substitute: write each file with workspace_write or workspace_patch, run a proportional check, and reply with a concise artifact summary. Use the hosted web_search tool when the user asks you to search the public internet, and cite the selected source URL. When the user asks to find or show an internet image, show the selected image immediately using Markdown image syntax with a direct HTTPS image URL, followed by its source-page URL; do not ask whether to show, preview, import, encode, or register it. workspace_write creates missing parent directories safely. Read relevant AGENTS.md and SKILL.md files before edits. Preserve unrelated changes. Never try to access a path outside this workspace. A descriptive Lean file containing lists of strings is not a LeanFM grammar: candidate requirements must define and validate a typed RequirementSpec with TaskRequirement and TaskGrammar values, and must derive spec/tasks.json for the Grammar and Tasks UI. Use LeanFM.ChatUI.Server.tasksJson with the current project RequirementSpec and that project's constraints (or an empty list), and pass the same RequirementSpec as the second argument to LeanFM.ChatUI.Requirements.interactionMermaid. Never call the host-default renderer on foreign tasks or copy an old specification into a generator; import the current canonical project specification. A missing-task-grammar placeholder is a failed view, not successful validation. If that grammar is absent or invalid, create or repair it before implementation files. Never implement source, generate language bindings, or cross either acceptance gate unless the durable project state records the user's explicit acceptance. Immediately before any source-generation pass, critique the accepted design for security. Identify trust boundaries protected assets attacker capabilities and abuse cases, then encode applicable security requirements as durable MUST NOT constraints covering authorization tenant and project isolation secrets logs injection path or symlink escape executable content resource exhaustion replay request confusion privilege expansion and fail-open behavior. Map each negative requirement to an implementation control plus a negative test or proof obligation. If a material threat lacks an accepted mitigation, return to the implementation-specification gate instead of generating source or inventing policy. Immediately before recommending or performing a commit, inspect the exact candidate diff and generated artifacts rather than relying on the earlier design critique. Check for secrets, authorization or isolation failures, injection, path or symlink escape, executable content, unbounded or unsafe generated artifacts, replay, request confusion, privilege expansion, and fail-open behavior; state the positive invariant and map each material forbidden behavior to a control and negative test or proof. Never commit or claim commit readiness while a material finding is unresolved. Never imitate generated output: invoke the real generator or report the exact missing executable. When you create or discuss media below the selected project root, cite its project-relative path; the host renders supported image and video paths inline automatically. For an explicit animated GIF request, write a project-local Python/Pillow generator, run workspace_run_gif_generator, cite the resulting .gif path, and do not substitute canvas WebM or another format or ask whether a substitute is acceptable. For an explicit MP4 request, create or locate the project-local GIF or WebM source, run workspace_transcode_mp4, and cite the resulting project-relative .mp4 path so the remote chat renders an inline video. Never substitute WebM GIF canvas HTML a conversion script or file:// instructions for a requested MP4, and never claim MP4 completion until the transcoder has validated the actual file. Do not ask about data URIs, manifests, HTML tags, encodings, or download mechanisms, and do not create alternate compact media unless the user explicitly requests one. The user is operating the served UI remotely: provide authenticated served project artifacts, never directions to open server-local file:// paths. Follow the shared consequential decisions policy. The words do it, generate, proceed, continue, now, show, or accept defaults reinforce the instruction to choose authorized reversible defaults and produce the requested result. They do not accept a missing formal gate or grant new authority. A structured answer includes Question ID and closes that ID and the same semantic question unless explicitly reopened. Do not claim a file changed unless workspace_write or workspace_patch succeeded. Run a proportional named check after edits. Summarize the outcome, changed files, and validation concisely. Tool activity is shown separately, so do not invent or narrate hidden reasoning."
 
@@ -1468,6 +1502,13 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
             | .error message => return some (errorResponse 400 message)
             | .ok _ => return some (jsonResponse 200 ("{\"deleted_project_id\":\"" ++ jsonEscape projectId ++ "\"}\n"))
           match rest, method with
+          | ["chat", "work", workId], "GET" =>
+              let token := (← requestSessionToken? request).getD ""
+              if username.isEmpty || !(← sessionActive? token username) then return some (errorResponse 401 "Sign in to inspect your project work.")
+              let identity := Lean.Json.mkObj [("account", Lean.toJson username), ("owner", Lean.toJson (← privateIdentityTag token))]
+              let result ← workOperation root "status" (Lean.Json.mkObj [("identity", identity), ("work_id", Lean.toJson workId)])
+              if let some error := workError? result then return some error
+              return some (jsonResponse 200 result.compress)
           | ["markerboard", "media"], "POST" =>
               if !(headerValue? request "Content-Type" |>.getD "").startsWith "application/json" then
                 return some (errorResponse 400 "Image uploads require application/json with base64 content.")
@@ -1558,8 +1599,17 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               let callerToken := (← requestSessionToken? request).getD ""
               if callerToken.isEmpty || !(← sessionActive? callerToken username) then
                 return some (errorResponse 401 "Unlock the initiating credential session to cancel its model work.")
-              if !(← projectWriterOwnedBy root callerToken) then
+              let identity := Lean.Json.mkObj [("account", Lean.toJson username), ("owner", Lean.toJson (← privateIdentityTag callerToken))]
+              let workCancellation ← workOperation root "cancel" (Lean.Json.mkObj [("identity", identity)])
+              let ownsWork := (Provider.jsonStringField? (workField workCancellation "work") "id").isSome && (workError? workCancellation).isNone
+              if !ownsWork && !(← projectWriterOwnedBy root callerToken) then
                 return some (errorResponse 403 "Only the initiating credential session can cancel this model turn.")
+              if workBool workCancellation "newly_cancelled" then
+                let response := workField workCancellation "response"
+                let cancelledText := (Provider.jsonStringField? response "text").getD "Task cancelled."
+                writeChatStatus root "cancelled" "Task cancelled between batches."
+                appendConversation root "assistant" cancelledText (some (usageFromWork (workField response "usage"))) 0
+                  ((Provider.jsonStringField? response "model").getD "")
               if !(← chatCancellationRequested root) then
                 IO.FS.createDirAll (fp (root ++ "/.leanfm"))
                 writeAtomic (chatCancellationPath root) "cancel requested\n"
@@ -1581,7 +1631,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   catch _ => return some (errorResponse 415 "Source file is not readable UTF-8 text.")
           | ["chat"], "POST" =>
               if username.isEmpty then return some (errorResponse 401 "Sign in to unlock your provider keys before sending a model prompt.")
-              let submittedPrompt := (formValue? (requestBody request) "prompt").getD ""
+              let requestedWorkId := (formValue? (requestBody request) "work_id").getD ""
+              let submittedPrompt := if requestedWorkId.isEmpty then (formValue? (requestBody request) "prompt").getD "" else "Continue the original requested work"
               let encodedIds := (formValue? (requestBody request) "attachment_ids").getD "[]"
               let .ok idJson := Lean.Json.parse encodedIds | return some (errorResponse 400 "Invalid attachment IDs.")
               let .ok idValues := idJson.getArr? | return some (errorResponse 400 "Attachment IDs must be a list.")
@@ -1610,10 +1661,32 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
               match ← credentialKey username request modelInfo.provider with
               | .error message => return some (errorResponse 409 message)
               | .ok key =>
-                  clearChatCancellation root
-                  writeChatStatus root "model" ("Waiting for " ++ selectedModel ++ " to respond.")
-                  writeLiveTrace root []
-                  let trace ← IO.mkRef ([] : List String)
+                  let identity := Lean.Json.mkObj [("account", Lean.toJson username), ("owner", Lean.toJson (← privateIdentityTag token)),
+                    ("credential", Lean.toJson (← privateIdentityTag key)), ("provider", Lean.toJson modelInfo.provider), ("model", Lean.toJson selectedModel)]
+                  let requestId := (formValue? (requestBody request) "work_request_id").getD ""
+                  let workInput := Lean.Json.mkObj [("identity", identity), ("work_id", Lean.toJson requestedWorkId),
+                    ("request_id", Lean.toJson requestId), ("prompt", Lean.toJson prompt),
+                    ("batch_size", Lean.toJson (if requestId.isEmpty then 16 else 4 : Nat)),
+                    ("checkpoint", Lean.toJson ((formValue? (requestBody request) "checkpoint_id").getD "")),
+                    ("explicit_resume", Lean.toJson ((formValue? (requestBody request) "explicit_resume").getD "" == "true")),
+                    ("restart", Lean.toJson ((formValue? (requestBody request) "restart").getD "" == "true"))]
+                  let workResult ← workOperation root (if requestedWorkId.isEmpty then "start" else "claim") workInput
+                  if let some error := workError? workResult then return some error
+                  if let some cached := (workResult.getObjVal? "cached").toOption then return some (jsonResponse ((Provider.jsonNatField? cached "http_status").getD 200) cached.compress)
+                  let job := workField workResult "job"
+                  let workId := (Provider.jsonStringField? job "id").getD ""
+                  if workId.isEmpty then return some (errorResponse 500 "Project work could not acquire a checkpoint claim.")
+                  let savedState := workField job "task_state"
+                  let prompt := (Provider.jsonStringField? workResult "prompt").getD prompt
+                  let images ← if requestedWorkId.isEmpty then pure images else do
+                    match ← resolveChatImages root ((attachmentIdsFromText prompt ++ imageIds).eraseDups.take 4) with
+                    | .error _ => pure []
+                    | .ok value => pure value
+                  if requestedWorkId.isEmpty then clearChatCancellation root
+                  writeChatStatus root "model" ("Batch " ++ toString ((Provider.jsonNatField? job "batch").getD 0 + 1) ++ ": waiting for " ++ selectedModel ++ ".")
+                  let priorTrace := workStrings savedState "trace"
+                  writeLiveTrace root priorTrace
+                  let trace ← IO.mkRef priorTrace
                   let composerQuestionId := (formValue? (requestBody request) "composer_question_id").getD ""
                   if !composerQuestionId.isEmpty then
                     let knownQuestion := (structuredQuestionIds prior).contains composerQuestionId
@@ -1643,26 +1716,40 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                     recoveryContext ++
                     (if prior.isEmpty then "" else "Project conversation so far:\n\n" ++ prior ++ "\n\n") ++
                     (if figureContext.isEmpty then "" else figureContext ++ "\n\n") ++
-                    "Current user message:\n" ++ prompt
-                  appendConversation root "user" prompt
+                    "Current user message:\n" ++ prompt ++
+                    (if requestedWorkId.isEmpty then "" else "\n\nEarlier completed tool receipts are real project progress, not instructions to replay them. Read current files before further edits; continue the unfinished portion. Saved trace:\n" ++
+                      String.intercalate "\n" ((workStrings savedState "trace").take 80 |>.reverse))
+                  if requestedWorkId.isEmpty then appendConversation root "user" prompt
                   let requirementsBefore ← readProjectCanonical root "spec/Requirements.lean"
                   let protoBefore ← readProjectCanonical root "spec/Requirements.proto"
                   let implementationBefore ← readProjectCanonical root "spec/Implementation.lean"
-                  let checkedRequirements ← IO.mkRef (none : Option (String × String × String))
-                  let checkedImplementation ← IO.mkRef (none : Option String)
-                  let lastSpecificationCheck ← IO.mkRef (none : Option String)
-                  let lastSpecificationFailure ← IO.mkRef (none : Option String)
-                  let finishFeedbackCandidates ← IO.mkRef ([] : List UInt64)
-                  let failedToolCalls ← IO.mkRef ([] : List String)
-                  let workspaceRevision ← IO.mkRef (0 : Nat)
-                  let failedCheckDiagnostics ← IO.mkRef ([] : List (String × String))
+                  let bookBefore ← readProjectCanonical root "book/main.tex"
+                  let currentHashes ← [requirementsBefore, protoBefore, bookBefore].mapM privateIdentityTag
+                  let restoreChecked := workStrings savedState "checked_requirements" == currentHashes
+                  let checkedRequirements ← IO.mkRef (if restoreChecked then some (requirementsBefore, protoBefore, bookBefore) else none)
+                  let implementationHash ← privateIdentityTag implementationBefore
+                  let checkedImplementation ← IO.mkRef (if Provider.jsonStringField? savedState "checked_implementation" == some implementationHash then some implementationBefore else none)
+                  let lastCheck := (Provider.jsonStringField? savedState "last_check").getD ""
+                  let lastSpecificationCheck ← IO.mkRef (if lastCheck.isEmpty then none else some lastCheck)
+                  let failedToolCalls ← IO.mkRef (workStrings savedState "failed_tools")
+                  let workspaceRevision ← IO.mkRef ((Provider.jsonNatField? savedState "workspace_revision").getD 0)
+                  let restoredFailures := ((Provider.jsonArrayField? savedState "failed_checks").getD #[]).toList.map fun value =>
+                    ((Provider.jsonStringField? value "arguments").getD "", (Provider.jsonStringField? value "diagnostic").getD "")
+                  let failedCheckDiagnostics ← IO.mkRef restoredFailures
+                  let previousObservations := workStrings savedState "observations"
+                  let observations ← IO.mkRef previousObservations
+                  let totalRounds ← IO.mkRef ((Provider.jsonNatField? savedState "rounds").getD 0)
+                  let priorUsage := usageFromWork (workField savedState "usage")
+                  let lastFailure := (Provider.jsonStringField? savedState "last_specification_failure").getD ""
+                  let lastSpecificationFailure ← IO.mkRef (if lastFailure.isEmpty then none else some lastFailure)
+                  let finishFeedbackCandidates ← IO.mkRef ((workStrings savedState "finish_feedback_candidates").filterMap fun value => value.toNat?.map UInt64.ofNat)
                   let runner : Provider.ToolRunner := fun name arguments => do
                     if !(← sessionActive? token username) then return "FATAL: initiating credential session ended; no further tool operation is authorized"
                     -- property:recoverable_failures_are_fixed_before_return:
                     -- Different malformed diffs are the same failed strategy.
                     let revision ← workspaceRevision.get
-                    let fingerprint := if name == "workspace_patch" then name else
-                      name ++ "\n" ++ arguments ++ "\nrevision=" ++ toString revision
+                    let fingerprint ← if name == "workspace_patch" then pure name else
+                      privateIdentityTag (name ++ "\n" ++ arguments ++ "\nrevision=" ++ toString revision)
                     if (← failedToolCalls.get).contains fingerprint then
                       appendLiveTrace root trace (name ++ " stopped: rejected workspace operation was not executed again; use a different recovery tool")
                       return "FATAL: repeated_failed_tool_call:" ++ name
@@ -1672,6 +1759,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       appendLiveTrace root trace (name ++ " rejected: " ++ diagnostic)
                       pure ("ERROR: " ++ diagnostic)
                     if result.startsWith "FATAL:" then return result
+                    let observation ← privateIdentityTag (name ++ "\n" ++ arguments ++ "\n" ++ result)
+                    observations.modify fun known => if known.contains observation then known else observation :: known
                     if result.startsWith "ERROR:" then
                       failedToolCalls.modify (fingerprint :: ·)
                       if name == "leanfm_check" then
@@ -1700,8 +1789,7 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                   let cancelled : Provider.CancelCheck := do
                     if ← chatCancellationRequested root then return true
                     return !(← sessionActive? token username)
-                  let reportedUsage ← IO.mkRef
-                    ({ text := "", inputTokens := 0, cachedInputTokens := 0, outputTokens := 0, totalTokens := 0 } : Provider.Completion)
+                  let reportedUsage ← IO.mkRef priorUsage
                   let hooks : Provider.AgentHooks := {
                     beforeRequest := do
                       let some billing ← sessionBilling? token username
@@ -1717,11 +1805,12 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let implementation ← readProjectCanonical root "spec/Implementation.lean"
                       let book ← readProjectCanonical root "book/main.tex"
                       let diagnostic ← lastSpecificationFailure.get
-                      let needsCheck := requirements != requirementsBefore || proto != protoBefore ||
+                      let needsCheck := workBool savedState "spec_changed" || requirements != requirementsBefore || proto != protoBefore ||
                         implementation != implementationBefore || diagnostic.isSome
+                      let implementationChanged := workBool savedState "implementation_changed" || implementation != implementationBefore
                       let unchecked := needsCheck &&
                         ((← checkedRequirements.get) != some (requirements, proto, book) ||
-                          (implementation != implementationBefore && (← checkedImplementation.get) != some implementation))
+                          (implementationChanged && (← checkedImplementation.get) != some implementation))
                       if !unchecked then return none
                       -- This hash is only a conservative paid-repair brake, never
                       -- an acceptance revision or an authorization decision.
@@ -1735,12 +1824,13 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       writeChatStatus root "validation" "Returning the specification diagnostic to the model for repair."
                       return some ("LeanFM completion validation: the current specification is unchecked. Continue the already-authorized engineering work in this same turn; do not ask the user to approve formalization or compiler repair again.\n" ++
                         diagnostic.getD "The edited canonical requirements/protobuf/implementation have no successful check of their current contents." ++
-                        "\nRead the exact diagnostic and the complete checked example in leanfm_reference requirements. A reduced scope still requires tasks, grammars, processes, properties, requiredProofs and prompt-derived desiredOutputs. markdown is List RequirementMarkdown, with records containing id/title/body. Repair the actual current candidate, then invoke leanfm_check with its actual RequirementSpec and, if changed, typed ImplementationSpec constant. Preserve the requested scope and both human acceptance gates; do not generate implementation source before acceptance. Do not substitute workspace_check build for the canonical specification check.")
+                        "\nRead the exact diagnostic and the complete checked example in leanfm_reference: implementation for mapping errors, requirements for behavior errors. ImplementationSpec wireType is a String naming a payload type; channels is one ChannelCodegen record, not a list. A reduced scope still requires tasks, grammars, processes, properties, requiredProofs and prompt-derived desiredOutputs. markdown is List RequirementMarkdown, with records containing id/title/body. Repair the actual current candidate, then invoke leanfm_check with its actual RequirementSpec and, if changed, typed ImplementationSpec constant. Preserve the requested scope and both human acceptance gates; do not generate implementation source before acceptance. Do not substitute workspace_check build for the canonical specification check.")
                     onResponse := fun report => do
+                      totalRounds.modify (· + 1)
                       reportedUsage.modify (fun usage => Provider.addUsage usage report.usage)
                       recordSessionUsage token username report.usage.totalTokens
                       let total ← reportedUsage.get
-                      appendLiveTrace root trace ("Provider round " ++ toString report.round ++
+                      appendLiveTrace root trace ("Provider round " ++ toString (← totalRounds.get) ++
                         " (" ++ modelInfo.provider ++ ", " ++ modelInfo.model ++ "): " ++ report.outcome ++
                         "; input=" ++ toString report.usage.inputTokens ++
                         " cached=" ++ toString report.usage.cachedInputTokens ++
@@ -1750,23 +1840,84 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         " text_chars=" ++ toString report.textChars ++
                         " tool_calls=" ++ toString report.toolCalls)
                   }
+                  let saveWork (state progress : String) (response providerState : Lean.Json) : IO HttpResponse := do
+                    let checked ← checkedRequirements.get
+                    let checkedHashes ← match checked with
+                      | some (r, p, b) => [r, p, b].mapM privateIdentityTag
+                      | none => pure []
+                    let implementationChecked ← checkedImplementation.get
+                    let checkedImplHash ← match implementationChecked with
+                      | some value => privateIdentityTag value
+                      | none => pure ""
+                    let changed := workBool savedState "spec_changed" ||
+                      requirementsBefore != (← readProjectCanonical root "spec/Requirements.lean") ||
+                      protoBefore != (← readProjectCanonical root "spec/Requirements.proto") ||
+                      implementationBefore != (← readProjectCanonical root "spec/Implementation.lean")
+                    let taskState := Lean.Json.mkObj [("trace", Lean.toJson ((← trace.get).take 300)),
+                      ("checked_requirements", Lean.toJson checkedHashes), ("checked_implementation", Lean.toJson checkedImplHash),
+                      ("last_check", Lean.toJson ((← lastSpecificationCheck.get).getD "")),
+                      ("last_specification_failure", Lean.toJson ((← lastSpecificationFailure.get).getD "")),
+                      ("finish_feedback_candidates", Lean.toJson ((← finishFeedbackCandidates.get).map toString)), ("failed_tools", Lean.toJson (← failedToolCalls.get)),
+                      ("failed_checks", Lean.toJson ((← failedCheckDiagnostics.get).map fun (a, d) => Lean.Json.mkObj [("arguments", Lean.toJson a), ("diagnostic", Lean.toJson d)])),
+                      ("workspace_revision", Lean.toJson (← workspaceRevision.get)), ("observations", Lean.toJson (← observations.get)),
+                      ("rounds", Lean.toJson (← totalRounds.get)), ("usage", usageJson (← reportedUsage.get)),
+                      ("spec_changed", Lean.toJson changed),
+                      ("implementation_changed", Lean.toJson (workBool savedState "implementation_changed" || implementationBefore != (← readProjectCanonical root "spec/Implementation.lean"))), ("started_ms", Lean.toJson ((Provider.jsonNatField? savedState "started_ms").getD responseStarted))]
+                    let saved ← workOperation root "save" (Lean.Json.mkObj [("identity", identity), ("work_id", Lean.toJson workId),
+                      ("claim", Lean.toJson ((Provider.jsonStringField? job "claim").getD "")), ("state", Lean.toJson state),
+                      ("progress", Lean.toJson progress), ("response", response), ("provider_state", providerState), ("task_state", taskState),
+                      ("made_progress", Lean.toJson (decide ((← observations.get).length > previousObservations.length)))])
+                    if let some error := workError? saved then return error
+                    let result := workField saved "response"
+                    if state == "checkpointed" && Provider.jsonStringField? (workField saved "work") "state" != some "checkpointed" then
+                      let message := (Provider.jsonStringField? result "text").getD "Work stopped without further progress."
+                      writeChatStatus root "blocked" message
+                      appendConversation root "assistant" message (some (← reportedUsage.get)) 0 selectedModel
+                    return jsonResponse ((Provider.jsonNatField? result "http_status").getD 200) result.compress
+                  let providerState := workField job "provider_state"
+                  let continuation := if (Provider.jsonStringField? providerState "provider").isSome || workBool providerState "restart" then some providerState else none
                   match ← Provider.completeAgent key (workspaceAgentInstructions root) contextualPrompt modelInfo.model runner
                       (cancelled := cancelled) (provider := modelInfo.provider)
-                      (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) (hooks := hooks) (images := images) with
+                      (maxOutputTokens := modelInfo.maxOutputTokens) (webSearch := modelInfo.webSearch) (hooks := hooks) (images := images)
+                      (continuation := continuation) (roundOffset := (Provider.jsonNatField? savedState "rounds").getD 0)
+                      (priorUsage := priorUsage) (resumable := true) (batchSize := (Provider.jsonNatField? job "batch_size").getD 4) with
                   | .error "agent_cancelled" =>
                       clearChatCancellation root
                       writeChatStatus root "cancelled" "Agent turn cancelled at a safe boundary."
                       let responseFinished ← IO.monoMsNow
                       let responseTimeMs := responseFinished - responseStarted
                       let responseText := "```leanfm-result\n{\"status\":\"warn\"}\n```\n\nAgent turn cancelled. Durable edits completed before cancellation remain in Project memory."
-                      appendConversation root "assistant" responseText none responseTimeMs selectedModel
-                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"model\":\"" ++ jsonEscape selectedModel ++ "\",\"cancelled\":true,\"book_updated\":false,\"response_time_ms\":" ++ toString responseTimeMs ++ "}\n"))
+                      appendConversation root "assistant" responseText (some (← reportedUsage.get)) responseTimeMs selectedModel
+                      return some (← saveWork "cancelled" "Cancelled at a safe boundary" (Lean.Json.mkObj [("text", Lean.toJson responseText),
+                        ("model", Lean.toJson selectedModel), ("cancelled", Lean.toJson true), ("book_updated", Lean.toJson false),
+                        ("usage", usageJson (← reportedUsage.get)), ("response_time_ms", Lean.toJson responseTimeMs)]) (Lean.Json.mkObj []))
                   | .error message =>
                       clearChatCancellation root
                       writeChatStatus root "failed" message
                       appendProjectDiagnostic root "terminal_agent_error" message
-                      return some (errorResponse 502 message)
+                      return some (← saveWork "blocked" message (Lean.Json.mkObj [("error", Lean.toJson message),
+                        ("text", Lean.toJson message), ("http_status", Lean.toJson (502 : Nat)), ("usage", usageJson (← reportedUsage.get))]) (Lean.Json.mkObj []))
                   | .ok initialAnswer =>
+                      let intent := prompt.toLower
+                      let wantsRequirements := intent.contains "requirement" && !intent.contains "book" &&
+                        ["generat", "draft", "start", "create", "write", "specify"].any (fun fragment => intent.contains fragment)
+                      let wantsMapping := intent.contains "implementation specification" || intent.contains "implementation mapping"
+                      let asksHuman := initialAnswer.text.contains "```leanfm-questions" || initialAnswer.text.contains "```leanfm-qustions"
+                      let gateResult ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["project-status", root]}
+                      let gates := (Lean.Json.parse gateResult.stdout).toOption.getD (Lean.Json.mkObj [])
+                      let unfinished := (wantsRequirements && !workBool (workField gates "requirements") "checked") ||
+                        (wantsMapping && !workBool (workField gates "implementation") "checked") ||
+                        (requestsImplementationSource prompt && workBool gates "ready" && (← sourceFileNames root projectId).isEmpty)
+                      let checkpoint := if initialAnswer.failure.isNone && !asksHuman && unfinished then
+                          some "{\"restart\":true}"
+                        else initialAnswer.checkpoint
+                      if let some checkpoint := checkpoint then
+                        let frontier := (Lean.Json.parse checkpoint).toOption.getD (Lean.Json.mkObj [("restart", Lean.toJson true)])
+                        let progress := "Batch " ++ toString ((Provider.jsonNatField? job "batch").getD 0 + 1) ++ " saved; continuing the original task."
+                        writeChatStatus root "checkpoint" progress
+                        return some (← saveWork "checkpointed" progress (Lean.Json.mkObj [("text", Lean.toJson progress),
+                          ("model", Lean.toJson selectedModel), ("provider", Lean.toJson modelInfo.provider),
+                          ("book_updated", Lean.toJson false), ("usage", usageJson initialAnswer)]) frontier)
                       let mut answer := initialAnswer
                       let initialVisibleText := if answer.failure.isSome then "" else bookVisibleText answer.text
                       let missingBeforeRecovery ← missingMediaReferences root initialVisibleText
@@ -1867,10 +2018,10 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let protoAfter ← readProjectCanonical root "spec/Requirements.proto"
                       let implementationAfter ← readProjectCanonical root "spec/Implementation.lean"
                       let bookAfter ← readProjectCanonical root "book/main.tex"
-                      let uncheckedRequirements := (requirementsBefore != requirementsAfter || protoBefore != protoAfter || implementationBefore != implementationAfter ||
+                      let uncheckedRequirements := (workBool savedState "spec_changed" || requirementsBefore != requirementsAfter || protoBefore != protoAfter || implementationBefore != implementationAfter ||
                         (applied.bookUpdated && (← lastSpecificationCheck.get).isSome)) &&
                         (← checkedRequirements.get) != some (requirementsAfter, protoAfter, bookAfter)
-                      let uncheckedImplementation := implementationBefore != implementationAfter &&
+                      let uncheckedImplementation := (workBool savedState "implementation_changed" || implementationBefore != implementationAfter) &&
                         (← checkedImplementation.get) != some implementationAfter
                       let uncheckedSpecification := uncheckedRequirements || uncheckedImplementation
                       let recoveredSpecification := !uncheckedSpecification && (← lastSpecificationCheck.get).isSome && (← lastSpecificationFailure.get).isNone
@@ -1926,11 +2077,14 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let fallbackContext ← IO.getEnv "LEANFM_CONTEXT_WINDOW_TOKENS"
                       let context := if modelInfo.contextWindowTokens > 0 then toString modelInfo.contextWindowTokens
                         else fallbackContext.getD "128000"
-                      return some (jsonResponse 200 ("{\"text\":\"" ++ jsonEscape responseText ++ "\",\"model\":\"" ++ jsonEscape selectedModel ++
+                      let responseBody := "{\"text\":\"" ++ jsonEscape responseText ++ "\",\"model\":\"" ++ jsonEscape selectedModel ++
                         "\",\"provider\":\"" ++ jsonEscape modelInfo.provider ++ "\",\"book_updated\":" ++ (if applied.bookUpdated then "true" else "false") ++ ",\"usage\":{\"input_tokens\":" ++
                         toString answer.inputTokens ++ ",\"cached_input_tokens\":" ++ toString answer.cachedInputTokens ++
                         ",\"output_tokens\":" ++ toString answer.outputTokens ++ ",\"total_tokens\":" ++ toString answer.totalTokens ++
-                        ",\"context_window_tokens\":" ++ context ++ "},\"response_time_ms\":" ++ toString responseTimeMs ++ "}\n"))
+                        ",\"context_window_tokens\":" ++ context ++ "},\"response_time_ms\":" ++ toString responseTimeMs ++ "}\n"
+                      let response := (Lean.Json.parse responseBody).toOption.getD (Lean.Json.mkObj [("text", Lean.toJson responseText)])
+                      return some (← saveWork (if returnedQuestions then "gate" else if status == "success" then "completed" else "blocked")
+                        (if returnedQuestions then "Waiting for a human decision" else "Requested batch sequence ended") response (Lean.Json.mkObj []))
           | _, _ => pure ()
   | _ => pure ()
   pure none
@@ -1961,6 +2115,18 @@ def dispatchWorkspaceRequest (username path method request : String) : IO (Optio
     else pure none
   if let some key := writerKey then
     if !(← acquireProjectWriter key ((← requestSessionToken? request).getD "")) then return some (errorResponse 409 "This project already has an active writer. Wait for that operation to finish; this request made no edit or provider call.")
+    if (pathSegments path).length > 2 then
+      let workId := (formValue? (requestBody request) "work_id").getD ""
+      let callerToken := (← requestSessionToken? request).getD ""
+      let ownerTag ← if callerToken.isEmpty then pure "" else privateIdentityTag callerToken
+      let guardIdentity := Lean.Json.mkObj [("account", Lean.toJson username), ("owner", Lean.toJson ownerTag)]
+      let guardResult ← workOperation key "guard" (Lean.Json.mkObj [("work_id", Lean.toJson workId), ("identity", guardIdentity),
+        ("chat", Lean.toJson (path.endsWith "/chat")),
+        ("explicit_resume", Lean.toJson ((formValue? (requestBody request) "explicit_resume").getD "" == "true")),
+        ("request_id", Lean.toJson ((formValue? (requestBody request) "work_request_id").getD ""))])
+      if let some error := workError? guardResult then
+        releaseProjectWriter key
+        return some error
   try handleAuthenticated username path method request
   finally
     if let some key := writerKey then releaseProjectWriter key
