@@ -77,7 +77,9 @@ func fixture(w http.ResponseWriter, r *http.Request) {
 func main() {
     mux := http.NewServeMux()
     mux.HandleFunc("/fixture", fixture)
-    server := &http.Server{Addr: "127.0.0.1:8080", Handler: mux, ReadHeaderTimeout: 5*time.Second, ReadTimeout: 10*time.Second, WriteTimeout: 10*time.Second, IdleTimeout: 30*time.Second, MaxHeaderBytes: 8192}
+    mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
+    mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("Fixture application")) })
+    server := &http.Server{Addr: "127.0.0.1:8081", Handler: mux, ReadHeaderTimeout: 5*time.Second, ReadTimeout: 10*time.Second, WriteTimeout: 10*time.Second, IdleTimeout: 30*time.Second, MaxHeaderBytes: 8192}
     log.Fatal(server.ListenAndServe())
 }
 '''
@@ -107,3 +109,7 @@ func TestCorrelatedResponseAndRejectedRequests(t *testing.T) {
     }
 }
 '''
+
+RUNTIME = '{"version":1,"kind":"http","directory":"source","command":["make","run"],"host":"127.0.0.1","port":8081,"readiness_path":"/health","page_path":"/"}\n'
+RUN_MAKEFILE = 'run:\n\t@mkdir -p ../.cache\n\tgo build -o ../.cache/fixture .\n\t../.cache/fixture\n'
+PROJECT_MEMORY = '# Durable application goal\nDeliver a runnable fixture on port 8081. The original goal and launch failures survive chat deletion.\n'

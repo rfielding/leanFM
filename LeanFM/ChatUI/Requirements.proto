@@ -121,6 +121,8 @@ message LoginSubmitted {
   bytes credential = 2;
   bytes openai_api_key = 3;
   bytes anthropic_api_key = 4;
+  bytes new_password = 5;
+  bytes new_password_confirm = 6;
 }
 message LoginAccepted { string user_id = 1; string session_id = 2; }
 message LoginRejected { string reason = 1; }

@@ -260,3 +260,15 @@ and return to the appropriate specification phase.
 Finish only after running the repository's proportional build, tests, LeanFM
 artifact validation, and generated trace round trips. Report changed source
 files, validation evidence, and any requirement that could not be implemented.
+
+For an application goal, the implementation pass must deliver a working
+`source/Makefile` with `make run`, using a bounded loopback port separate from
+LeanFM. Record its fixed launch contract in `spec/runtime.json` (version 1,
+kind `http`, directory `source`, command `["make", "run"]`, host `127.0.0.1`,
+port, readiness_path and page_path), then use the project-confined runtime
+check to observe actual startup and its page. Preserve the original goal,
+resolved defaults, exact failure remedies, verification and remaining gaps in
+`spec/ProjectMemory.md`, with PR/base-revision context when applicable. These
+records and current source/specifications must suffice after every conversation
+is deleted. A library-only goal remains a library. Launch evidence must identify
+its exact input revision and cannot imply full semantic refinement.

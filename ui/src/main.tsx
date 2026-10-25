@@ -216,7 +216,7 @@ function QuestionForm({questions, answeredIds, disabled, onAnswer}: {questions: 
 
 function Auth({onReady, account, onCancel, onLogout, loggingOut}: {onReady: (sessionPreserved?: boolean) => void; account?: string; onCancel?: () => void; onLogout?: () => void; loggingOut?: boolean}) {
   const [register, setRegister] = useState(false), [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false), [newPassword, setNewPassword] = useState("");
   const [username, setUsername] = useState(() => account || window.localStorage.getItem("leanfm:last-username") || "");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -230,9 +230,10 @@ function Auth({onReady, account, onCancel, onLogout, loggingOut}: {onReady: (ses
   return <section className="auth"><div className="auth-card"><h1>{account ? "API keys" : "LeanFM"}</h1><p>Sign in to unlock your encrypted provider API keys. One password unlocks OpenAI and Anthropic together; this is your LeanFM login, not a provider login.</p>
     {!account && <div className="auth-tabs" role="tablist" aria-label="Account access"><button type="button" role="tab" aria-selected={!register} className={!register ? "active" : ""} onClick={() => { setRegister(false); setError(""); }}>Log in</button><button type="button" role="tab" aria-selected={register} className={register ? "active" : ""} onClick={() => { setRegister(true); setError(""); }}>Create account</button></div>}
     <form onSubmit={submit}><label>Username<input name="username" autoComplete="username" value={username} readOnly={!!account} onChange={event => setUsername(event.target.value)} required /></label><label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : undefined} required /></label>
-      <details key={register ? "registration" : "login"} open={register || !!account || undefined}><summary>{register ? "Provider API keys" : "Add or replace API keys (optional)"}</summary><label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label></details>
+      <details key={register ? "registration" : "login"} open={register || !!account || new URLSearchParams(window.location.search).get("keys") === "1" || undefined}><summary>{register ? "Provider API keys" : "Add or replace API keys (optional)"}</summary><label>OpenAI API key<input name="openai_api_key" type="password" autoComplete="off" maxLength={4096} /></label><label>Anthropic API key<input name="anthropic_api_key" type="password" autoComplete="off" maxLength={4096} /></label></details>
+      {!register && <details><summary>Change password (optional)</summary><label>New password<input name="new_password" type="password" autoComplete="new-password" minLength={8} maxLength={4096} value={newPassword} onChange={event => setNewPassword(event.target.value)} /></label><label>Confirm new password<input name="new_password_confirm" type="password" autoComplete="new-password" minLength={8} maxLength={4096} required={!!newPassword} /></label><p>Your current password unlocks your saved keys. A password change re-encrypts them and signs out older sessions.</p></details>}
       {!register && <p className="stored-key-note">Already have an account? Use your username and password. Your saved API keys unlock automatically after a server restart.</p>}
-      <p>{register ? "Provide at least one key; you can provide both now." : "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."} Keys are encrypted with your password and never returned to the browser. Adding another provider keeps you signed in. Replacing an existing key signs out older sessions.</p>
+      <p>{register ? "For a new account, provide at least one key. For an existing username, its correct password lets you update keys; blanks keep saved keys." : "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."} Keys are encrypted with your password and never returned to the browser. Adding another provider keeps you signed in. Replacing an existing key signs out older sessions.</p>
       <button className="primary" disabled={submitting || loggingOut}>{register ? "Create account" : account ? "Save API keys" : "Log in"}</button>{onCancel && <button type="button" onClick={onCancel} disabled={submitting || loggingOut}>Cancel</button>}</form>{onLogout && <button type="button" onClick={onLogout} disabled={loggingOut || submitting}>Log out and sign in again</button>}<div className="error" role="alert">{error}</div></div></section>;
 }
 
@@ -581,7 +582,7 @@ function ProjectWorkspace({project, authenticationRevision, session, onUnlockKey
 function App() {
   const [session, setSession] = useState<AccountSession>({...lockedSession, availability: "loading"});
   const [checkingSession, setCheckingSession] = useState(true), [projects, setProjects] = useState<Project[]>([]), [selected, setSelected] = useState<string | null>(null), [authVersion, setAuthVersion] = useState(0), [newName, setNewName] = useState("");
-  const [showKeys, setShowKeys] = useState(false), [loggingOut, setLoggingOut] = useState(false), [logoutError, setLogoutError] = useState("");
+  const [showKeys, setShowKeys] = useState(() => new URLSearchParams(window.location.search).get("keys") === "1"), [loggingOut, setLoggingOut] = useState(false), [logoutError, setLogoutError] = useState("");
   const [pollSession, setPollSession] = useState(true), [modelRefreshRevision, setModelRefreshRevision] = useState(0);
   const sessionGeneration = useRef(0);
   const logoutInFlight = useRef(false);

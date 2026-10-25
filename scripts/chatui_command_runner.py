@@ -6,6 +6,9 @@ import resource
 import re
 import subprocess
 import sys
+import json
+from chatui_runtime import contract, revision
+from chatui_specification import atomic, confined
 
 INSTALLATION = Path(__file__).resolve().parents[1]
 
@@ -30,6 +33,10 @@ def main(operation, root_name):
         if not re.search(r"(?m)^(?:[A-Za-z0-9_.-]+[ \t]+)*" + re.escape(operation) + r"(?:[ \t]+[A-Za-z0-9_.-]+)*[ \t]*:(?!=)", source):
             raise ValueError("Project Makefile does not explicitly declare the '" + operation +
                              "' target. Use a check provided by this project; use leanfm_check for specifications.")
+    runtime_revision = None
+    if operation == "runtime":
+        contract(root)
+        runtime_revision = revision(root)
     cache = root / ".cache"
     if cache.is_symlink():
         raise ValueError("Project cache cannot be a symlink")
@@ -51,11 +58,15 @@ def main(operation, root_name):
         if book.is_symlink() or book.resolve().parent != root:
             raise ValueError("Book directory escapes project")
         prefix += ["--bind", str(book), "/work/book"]
+    if operation == "runtime":
+        prefix += ["--ro-bind", str(INSTALLATION / "scripts"), "/runtime"]
     prefix += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
                "--chdir", "/work", "--clearenv", "--setenv", "HOME", "/tmp", "--setenv", "PATH", "/go/bin:/toolchain/bin:/usr/bin:/bin",
                "--setenv", "LEAN_PATH", "/leanfm-lib:/toolchain/lib/lean", "--setenv", "GOCACHE", "/work/.cache/go-build",
                "--setenv", "GOMODCACHE", "/work/.cache/go-mod", "--setenv", "GOTOOLCHAIN", "local", "--setenv", "GOPROXY", "off", "--"]
-    if operation == "go":
+    if operation == "runtime":
+        commands = ["/usr/bin/python3", "/runtime/chatui_runtime.py", "probe", "/work"]
+    elif operation == "go":
         commands = ["/go/bin/go", "-C", "/work/source" if (root / "source/go.mod").is_file() else "/work", "test", "./..."]
     elif operation in {"build", "check", "http-check"}:
         commands = ["/usr/bin/make", "-C", "/work", operation]
@@ -70,7 +81,19 @@ def main(operation, root_name):
         result = subprocess.run(prefix + commands, stdout=log, stderr=subprocess.STDOUT, preexec_fn=limits, timeout=300)
     if output.is_symlink():
         raise ValueError("Check output was replaced by a symlink")
-    print(output.read_text(errors="replace")[-20000:], end="")
+    text = output.read_text(errors="replace")[-20000:]
+    if operation == "runtime":
+        evidence = confined(root, "reports/runtime-check", directory=True)
+        receipt = {"status":"failed", "revision":runtime_revision, "exit_code":result.returncode}
+        if result.returncode == 0:
+            observed = json.loads(text)
+            if observed.get("status") != "validated" or revision(root) != runtime_revision:
+                raise ValueError("Runtime inputs changed during verification or probe failed")
+            receipt.update(observed)
+        else:
+            receipt["diagnostic"] = text[-12000:]
+        atomic(confined(root,"reports/runtime-check/validation.json"),json.dumps(receipt,sort_keys=True)+"\n")
+    print(text, end="")
     return result.returncode
 
 

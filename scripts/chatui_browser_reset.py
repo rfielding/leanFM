@@ -360,12 +360,26 @@ def verify_browser(base, fixture):
         click_text("Project memory")
         screenshot = call("Page.captureScreenshot", {"format": "png"}, session)
         (fixture / "react-reset.png").write_bytes(base64.b64decode(screenshot["data"]))
+        # Direct account-editor link and real password rotation preserve both keys.
+        call("Page.navigate", {"url": base + "/?keys=1"}, session=session)
+        wait("document.querySelector('.key-dialog input[name=username]')?.readOnly === true")
+        assert evaluate("Boolean(document.querySelector('.key-dialog input[name=new_password]'))")
+        cookies_before_password = call("Network.getAllCookies", session=session)["cookies"]
+        type_into(".key-dialog input[name=password]", "test-reset-password")
+        evaluate("document.querySelector('.key-dialog input[name=new_password]').closest('details').open = true")
+        type_into(".key-dialog input[name=new_password]", "browser-updated-password")
+        type_into(".key-dialog input[name=new_password_confirm]", "browser-updated-password")
+        evaluate("document.querySelector('.key-dialog form').requestSubmit()")
+        wait("!document.querySelector('.key-dialog')")
+        wait("document.body.innerText.includes('reset_user')")
+        assert call("Network.getAllCookies", session=session)["cookies"] != cookies_before_password
+        assert evaluate("fetch('/api/me').then(r=>r.json()).then(j=>j.billing.models.includes('test-model')&&j.billing.models.includes('anthropic:claude-test'))")
         exceptions = [e for e in events if e.get("method") == "Runtime.exceptionThrown"]
         assert not exceptions, exceptions
         return {"result": "pass", "browser": version["Browser"], "checks": ["keyboard login/registration tab switching", "password-only login", "visible locked/loading/failed/empty model states", "real mouse logout at narrow width with hidden sidebar and no session", "one shared account and model session across projects", "valid and expired logout open an editable fresh login form", "failed logout stays locally locked and retries without claiming server revocation", "immediate model refresh after unlock with polling paused", "model retry and expired-session recovery preserve drafts without sending chat", "delayed catalog responses cannot overlap or restore a locked session", "queued prompts remain held after unlocking the same key in a new session", "no phantom examples", "image choose/remove/send/persist/resend with native provider pixels",
                 "empty-chat durable resume through actual React composer", "add an Anthropic key while preserving login cookie, model, draft and zero chat calls", "protobuf in Project memory", "separate light/dark PDF routes",
                 "create a fresh project in the production UI", "chat builds a PDF before requirements authoring", "two rejected requirements candidates repair inside the original composer turn with real Lean compilation", "twenty-five model rounds complete through four-round client batches", "generated Grammar, interaction, state and CTL views",
-                "native requirements and implementation approvals are available directly in Chat and invoke no provider", "independent human acceptance of checked requirements and implementation", "actual source files and sandboxed Go test after both gates", "no uncaught browser exceptions"]}
+                "native requirements and implementation approvals are available directly in Chat and invoke no provider", "independent human acceptance of checked requirements and implementation", "actual source files and sandboxed Go test after both gates", "direct key editor and password change retain both providers", "no uncaught browser exceptions"]}
     except Exception:
         if connection:
             try:

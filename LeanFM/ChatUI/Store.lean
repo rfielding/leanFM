@@ -150,6 +150,7 @@ def passwordRecord (password : String) : IO String :=
   runCrypto "hash" ("{\"password_b64\":\"" ++ base64Encode password ++ "\"}")
 
 def verifyPassword (password record : String) : IO Bool := do
+  if password.length > 4096 then return false
   let salt := (jsonStringValue? record "salt_b64").getD ""
   let digest := (jsonStringValue? record "digest_b64").getD ""
   let iterations := (jsonNatValue? record "iterations").getD 0
@@ -176,6 +177,7 @@ structure UnlockedSession where
   tokenBudget : Nat
   expiresAt : Nat
   credentials : List UnlockedCredential := []
+  authenticationRevision : String := ""
 
 initialize unlockedSessions : IO.Ref (List UnlockedSession) ← IO.mkRef []
 
@@ -212,7 +214,22 @@ def unlockCredential (username password : String) : IO String := do
   IO.FS.removeFile legacy
   return key
 
+def credentialAuthenticationRevision (username : String) : IO String := do
+  let body ← readOr ((← accountRoot username) ++ "/credentials/providers.json") ""
+  if body.isEmpty then return ""
+  let .ok bundle := Lean.Json.parse body | return "invalid-bundle"
+  if (bundle.getObjValAs? Nat "version").toOption == some 2 then
+    return ((bundle.getObjValAs? String "session_revision").toOption).getD "invalid-bundle"
+  return ""
+
+def sessionActive? (token username : String) : IO Bool := do
+  let now ← IO.monoMsNow
+  let some session := (← unlockedSessions.get).find? (fun session =>
+    session.token == token && session.username == username && session.expiresAt > now) | return false
+  return session.authenticationRevision == (← credentialAuthenticationRevision username)
+
 def sessionCredentials (token username : String) : IO (List UnlockedCredential) := do
+  if !(← sessionActive? token username) then return []
   let now ← IO.monoMsNow
   return ((← unlockedSessions.get).find? fun session =>
     session.token == token && session.username == username && session.expiresAt > now).map
@@ -225,12 +242,6 @@ def sessionCredential? (token username : String) (provider : String := "openai")
 def sessionCredentialMetadata? (token username provider : String) : IO (Option UnlockedCredential) := do
   return (← sessionCredentials token username).find? (·.provider == provider)
 
-def sessionActive? (token username : String) : IO Bool := do
-  let now ← IO.monoMsNow
-  return (← unlockedSessions.get).any fun session =>
-    if session.token == token && session.username == username && session.expiresAt > now then
-      true else false
-
 structure SessionBilling where
   provider : String
   credentialRef : String
@@ -240,6 +251,7 @@ structure SessionBilling where
 deriving Repr
 
 def sessionBilling? (token username : String) : IO (Option SessionBilling) := do
+  if !(← sessionActive? token username) then return none
   let now ← IO.monoMsNow
   return (← unlockedSessions.get).findSome? fun session =>
     if session.token == token && session.username == username && session.expiresAt > now then
@@ -271,16 +283,41 @@ def validCredentialPairs (pairs : List (String × String)) : Bool :=
     pairs.all (fun (provider, key) => supportedProvider provider && !key.trimAscii.isEmpty &&
       key.length ≤ 4096 && key.toList.all (fun c => c.toNat ≥ 33 && c.toNat ≤ 126))
 
+/-- A password change publishes verifier and re-encrypted credentials together.
+    Legacy accounts retain their separate verifier until their first change. -/
+def accountPasswordRecord (username : String) : IO String := do
+  let root ← accountRoot username
+  let body ← readOr (root ++ "/credentials/providers.json") ""
+  if !body.isEmpty then
+    let .ok bundle := Lean.Json.parse body | return ""
+    if (bundle.getObjValAs? Nat "version").toOption == some 2 then
+      return ((bundle.getObjVal? "password_verifier").toOption.map Lean.Json.compress).getD ""
+  readOr (root ++ "/password.json") ""
+
 /-- Provider labels and their keys are authenticated together inside one AEAD
     ciphertext. Swapping plaintext provider metadata cannot redirect a key. -/
-def saveCredentialBundle (username password : String) (pairs : List (String × String)) : IO Unit := do
+def saveCredentialBundle (username password : String) (pairs : List (String × String))
+    (newVerifier : Option String := none) (rotateSessions : Bool := false) : IO Unit := do
   if !validCredentialPairs pairs then throw (IO.userError "invalid provider credentials")
   let plain := (Lean.Json.mkObj [("version", Lean.toJson (1 : Nat)),
     ("credentials", Lean.toJson (pairs.map fun (provider, key) =>
       Lean.Json.mkObj [("provider", Lean.toJson provider), ("key", Lean.toJson key)]))]).compress
   let encrypted ← encryptCredential username password plain
   let root ← accountRoot username
-  writeAtomic (root ++ "/credentials/providers.json") (encrypted ++ "\n")
+  let previous ← readOr (root ++ "/credentials/providers.json") ""
+  let authenticationRevision ← if rotateSessions then randomHex 32 else credentialAuthenticationRevision username
+  let priorVerifier := (Lean.Json.parse previous).toOption.bind fun value =>
+    if (value.getObjValAs? Nat "version").toOption == some 2 then
+      (value.getObjVal? "password_verifier").toOption.map Lean.Json.compress else none
+  let currentVerifier ← accountPasswordRecord username
+  let body ← match (newVerifier.orElse (fun _ => priorVerifier)).orElse (fun _ => if currentVerifier.isEmpty then none else some currentVerifier) with
+    | none => throw (IO.userError "password verifier is unavailable")
+    | some verifier =>
+        let .ok cipher := Lean.Json.parse encrypted | throw (IO.userError "invalid encrypted bundle")
+        let .ok record := Lean.Json.parse verifier | throw (IO.userError "invalid password verifier")
+        pure (Lean.Json.mkObj [("version", Lean.toJson (2 : Nat)), ("encrypted", cipher),
+          ("password_verifier", record), ("session_revision", Lean.toJson authenticationRevision)]).compress
+  writeAtomic (root ++ "/credentials/providers.json") (body ++ "\n")
   -- Promotion precedes removal: a failed write preserves the legacy credential.
   for name in ["default.json", "default.b64"] do
     let legacy := fp (root ++ "/credentials/" ++ name)
@@ -290,7 +327,13 @@ def unlockCredentialPairs (username password : String) : IO (List (String × Str
   let root ← accountRoot username
   let path := root ++ "/credentials/providers.json"
   if ← (fp path).pathExists then
-    let record ← IO.FS.readFile (fp path)
+    let body ← IO.FS.readFile (fp path)
+    let .ok bundle := Lean.Json.parse body | throw (IO.userError "invalid credential bundle")
+    let record ← if (bundle.getObjValAs? Nat "version").toOption == some 2 then
+        match (bundle.getObjVal? "encrypted").toOption with
+        | some cipher => pure cipher.compress
+        | none => throw (IO.userError "invalid password-change bundle")
+      else pure body
     let encoded ← runCrypto "decrypt" ("{\"username\":\"" ++ jsonEscape username ++
       "\",\"password_b64\":\"" ++ base64Encode password ++ "\",\"record\":" ++ record ++ "}")
     let plain ← base64Decode encoded
@@ -314,8 +357,7 @@ def unlockCredentialPairs (username password : String) : IO (List (String × Str
   return [(provider, ← unlockCredential username password)]
 
 private def updateCredentialBundleUnlocked (username password : String) (additions : List (String × String)) : IO (Except String Unit) := do
-  let root ← accountRoot username
-  let record ← readOr (root ++ "/password.json") ""
+  let record ← accountPasswordRecord username
   if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
   if !validCredentialPairs additions then return .error "Supply a valid key for each selected provider (at most 4096 characters)."
   try
@@ -324,7 +366,7 @@ private def updateCredentialBundleUnlocked (username password : String) (additio
     -- Revoke before promotion, including when obsolete-file cleanup fails after
     -- a successful promotion. A failed update may sign out, never retain old keys.
     unlockedSessions.modify (List.filter (·.username != username))
-    saveCredentialBundle username password (existing.filter (fun pair => !replaced.contains pair.1) ++ additions)
+    saveCredentialBundle username password (existing.filter (fun pair => !replaced.contains pair.1) ++ additions) none true
     return .ok ()
   catch _ => return .error "The encrypted key bundle could not be updated or its obsolete credential files could not be removed."
 
@@ -337,7 +379,7 @@ def updateSessionCredentialBundle (username token password : String)
     (additions : List (String × String)) : IO (Except String Bool) :=
   withCredentialLock do
     if !(← sessionActive? token username) then return .error "Sign in before updating provider keys."
-    let record ← readOr ((← accountRoot username) ++ "/password.json") ""
+    let record ← accountPasswordRecord username
     if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
     if !validCredentialPairs additions then return .error "Supply at least one valid provider key."
     try
@@ -351,7 +393,7 @@ def updateSessionCredentialBundle (username token password : String)
         pure ({ provider := provider, apiKey := apiKey, fingerprint := fingerprint, credentialRef := (if provider == "openai" then "default" else provider) } : UnlockedCredential)
       if !(← sessionActive? token username) then return .error "The initiating login ended; no key update was applied."
       if rotation then unlockedSessions.modify (List.filter (·.username != username))
-      saveCredentialBundle username password merged
+      saveCredentialBundle username password merged none rotation
       if rotation then return .ok false
       if !(← sessionActive? token username) then
         return .error "The keys were saved, but the initiating login ended. Sign in again to unlock them."
@@ -360,15 +402,43 @@ def updateSessionCredentialBundle (username token password : String)
       return .ok true
     catch _ => return .error "The encrypted provider keys could not be updated safely."
 
+/-- Password and optional key changes are authenticated under the same lock.
+    No plaintext password/key or reversible password representation is persisted. -/
+def changeAccountPassword (username password newPassword : String)
+    (additions : List (String × String) := []) (token : String := "") : IO (Except String Unit) :=
+  withCredentialLock do
+    if !token.isEmpty && !(← sessionActive? token username) then return .error "The initiating login ended."
+    if !safeId username || newPassword.length < 8 || newPassword.length > 4096 then
+      return .error "The new password must contain 8 to 4096 characters."
+    let record ← accountPasswordRecord username
+    if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
+    if !additions.isEmpty && !validCredentialPairs additions then return .error "Supply valid provider keys."
+    try
+      let existing ← unlockCredentialPairs username password
+      let replaced := additions.map Prod.fst
+      let pairs := existing.filter (fun pair => !replaced.contains pair.1) ++ additions
+      let verifier ← passwordRecord newPassword
+      if !token.isEmpty && !(← sessionActive? token username) then return .error "The initiating login ended; no password change was applied."
+      unlockedSessions.modify (List.filter (·.username != username))
+      saveCredentialBundle username newPassword pairs (some verifier) true
+      -- The bundle is authoritative. A crash before this compatibility mirror
+      -- cannot split the password verifier from the newly encrypted keys.
+      try writeAtomic ((← accountRoot username) ++ "/password.json") (verifier ++ "\n") catch _ => pure ()
+      return .ok ()
+    catch _ => return .error "The password could not be changed safely; retained encrypted keys require a password login."
+
 private def createAccountUnlocked (username password provider apiKey : String)
     (additionalKeys : List (String × String) := []) : IO (Except String String) := do
   if !safeId username then return .error "Username must contain only letters, digits, '-' or '_'."
-  if password.length < 8 then return .error "Password must contain at least 8 characters."
+  if password.length < 8 || password.length > 4096 then return .error "Password must contain 8 to 4096 characters."
   if !validCredentialPairs ((provider, apiKey) :: additionalKeys) then
     return .error "A valid OpenAI or Anthropic API key is required for each selected provider."
   ensureDataRoot
   let root ← accountRoot username
-  if ← (fp root).pathExists then return .error "That account already exists."
+  if ← (fp root).pathExists then
+    -- Matching credentials authorize an account update, never an account takeover.
+    return ← updateCredentialBundleUnlocked username password ((provider, apiKey) :: additionalKeys) >>= fun result =>
+      pure (result.map (fun _ => "default"))
   IO.FS.createDirAll (fp (root ++ "/credentials"))
   let encrypted ← encryptCredential username password apiKey
   let verifier ← passwordRecord password
@@ -384,8 +454,8 @@ def createAccount (username password provider apiKey : String)
 
 private def loginUnlocked (username password : String) : IO (Except String String) := do
   if !safeId username then return .error "Invalid username or password."
-  let root ← accountRoot username
-  let record ← readOr (root ++ "/password.json") ""
+  let authenticationRevision ← credentialAuthenticationRevision username
+  let record ← accountPasswordRecord username
   if record.isEmpty || !(← verifyPassword password record) then return .error "Invalid username or password."
   let pairs ← try unlockCredentialPairs username password catch _ =>
     return .error "The stored provider keys could not be unlocked."
@@ -399,9 +469,10 @@ private def loginUnlocked (username password : String) : IO (Except String Strin
   let tokenBudget := ((← IO.getEnv "LEANFM_SESSION_TOKEN_BUDGET").bind String.toNat?).getD 1000000
   let token ← randomHex 32
   let now ← IO.monoMsNow
+  if (← credentialAuthenticationRevision username) != authenticationRevision then return .error "The account changed during login; sign in again."
   unlockedSessions.modify fun sessions =>
     { token, username, apiKey := primary.apiKey, provider := primary.provider, credentialRef := primary.credentialRef
-    , credentialFingerprint := primary.fingerprint, tokensUsed := 0, tokenBudget, credentials
+    , credentialFingerprint := primary.fingerprint, tokensUsed := 0, tokenBudget, credentials, authenticationRevision
     , expiresAt := now + 8 * 60 * 60 * 1000 } ::
       ((sessions.filter (fun session => session.expiresAt > now)).take 255)
   pure (.ok token)
@@ -413,8 +484,8 @@ def userForSession? (token : String) : IO (Option String) := do
   if token.length != 64 || !token.toList.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then return none
   let now ← IO.monoMsNow
   unlockedSessions.modify (List.filter (fun session => session.expiresAt > now))
-  return (← unlockedSessions.get).findSome? fun session =>
-    if session.token == token then some session.username else none
+  let some session := (← unlockedSessions.get).find? (fun session => session.token == token) | return none
+  return if ← sessionActive? token session.username then some session.username else none
 
 def latexEscape (value : String) : String :=
   String.join <| value.toList.map fun c =>

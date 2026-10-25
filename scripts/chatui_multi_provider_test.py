@@ -194,6 +194,30 @@ class MultiProvider(unittest.TestCase):
                         self.assertIn("Formal acceptance remains pending", (root / "spec/default-decisions.md").read_text())
                     self.assertFalse(any((root / "source").rglob("*.*")), "routine default authority fabricated gate acceptance")
 
+    def test_runnable_goal_repairs_port_and_survives_deleted_chat(self):
+        from chatui_prepare_test_project import prepare
+        for model in ["test-model", CLAUDE]:
+            with self.subTest(model=model):
+                project=self.alice.project()
+                root=ROOT/"projects"/project
+                def approve(gate, revision):
+                    status, body=self.alice.request(f"/api/projects/{project}/specification/{gate}/{revision}/accept",{})
+                    self.assertEqual(status,200,body)
+                prepare(root,approve)
+                status, body=self.alice.chat_batched(project,"TEST_RUNTIME_APPLICATION implement the app with make run",model)
+                self.assertEqual(status,200,body)
+                self.assertIn('"status":"success"',body["text"])
+                self.assertIn('Completion deferred: checking the actual application launch',body["text"])
+                receipt=json.loads((root/"reports/runtime-check/validation.json").read_text())
+                self.assertEqual(receipt["status"],"validated")
+                self.assertEqual(json.loads((root/"spec/runtime.json").read_text())["port"],8081)
+                for conversation in (root/"conversations").glob("*.jsonl"):
+                    conversation.write_text("")
+                status,resume=self.alice.chat(project,"TEST_RUNTIME_RESUME",model)
+                self.assertEqual(status,200,resume)
+                self.assertIn("Runnable goal and verification survived deleted chat",resume["text"])
+                self.assertNotIn("RUNTIME_CONTEXT_FAILURE",resume["text"])
+
     def test_web_research_continues_across_batches_with_citations(self):
         for model, counter, tokens in [("test-model", "requests", 18), (CLAUDE, "anthropic_requests", 17)]:
             with self.subTest(model=model):
@@ -620,6 +644,41 @@ class MultiProvider(unittest.TestCase):
         self.assertFalse(rotated["session_preserved"])
         self.assertEqual(second.request("/api/me")[0], 401, "real key rotation retained an old session")
 
+    def test_existing_account_update_and_login_password_change_keep_keys(self):
+        client = Client().register("multi_password_update", openai_api_key="test-user-key")
+        project = client.project()
+        account = ROOT / ".leanfm/accounts/multi_password_update"
+        before = stats()
+        self.assertEqual(client.request("/api/accounts", {"username":"multi_password_update", "password":"wrong password", "anthropic_api_key":"anthropic-user-key"})[0],403)
+        self.assertEqual(stats(),before,"wrong-password account update reached a provider")
+        status, body = client.request("/api/accounts", {"username":"multi_password_update", "password":PASSWORD, "anthropic_api_key":"anthropic-user-key"})
+        self.assertEqual(status,201,body)
+        other = Client(); self.assertEqual(other.login("multi_password_update")[0],200)
+        snapshot = (account/"credentials/providers.json").read_bytes()
+        changed_password = "new-login-password-for-unit-test"
+        for fields, expected in [
+            ({"password":"wrong password","new_password":changed_password,"new_password_confirm":changed_password},403),
+            ({"password":PASSWORD,"new_password":"short","new_password_confirm":"short"},400),
+            ({"password":PASSWORD,"new_password":changed_password,"new_password_confirm":"mismatch"},400),
+        ]:
+            status,body=client.request("/api/login",{"username":"multi_password_update",**fields})
+            self.assertEqual(status,expected,body)
+            self.assertEqual((account/"credentials/providers.json").read_bytes(),snapshot)
+        status,body=client.request("/api/login",{"username":"multi_password_update","password":PASSWORD,"new_password":changed_password,"new_password_confirm":changed_password})
+        self.assertEqual(status,200,body)
+        self.assertEqual(other.request("/api/me")[0],401)
+        self.assertEqual(other.login("multi_password_update")[0],403)
+        billing=client.request("/api/me")[1]["billing"]
+        self.assertIn("test-model",billing["models"]); self.assertIn(CLAUDE,billing["models"])
+        newest="newer-login-password-for-unit-test"
+        status,body=client.request("/api/provider-keys",{"username":"multi_password_update","password":changed_password,"new_password":newest,"new_password_confirm":newest})
+        self.assertEqual(status,200,body);self.assertFalse(body["session_preserved"])
+        self.assertEqual(other.request("/api/login",{"username":"multi_password_update","password":changed_password})[0],403)
+        self.assertEqual(other.request("/api/login",{"username":"multi_password_update","password":newest})[0],200)
+        self.assertEqual(other.request(f"/api/projects/{project}/book")[0],200)
+        for secret in [PASSWORD.encode(),changed_password.encode(),newest.encode(),b"test-user-key",b"anthropic-user-key"]:
+            self.assertNotIn(secret,(account/"credentials/providers.json").read_bytes())
+
     def test_rotation_retains_other_provider_and_cancels_old_agent(self):
         old = Client().register("multi_rotation", openai_api_key="test-user-key", anthropic_api_key="anthropic-user-key")
         project = old.project()
@@ -729,6 +788,7 @@ if __name__ == "__main__":
         assert current.login("multi_primary")[0] == 200
         billing = current.request("/api/me")[1]["billing"]
         assert CLAUDE in billing["models"] and "test-model" in billing["models"]
+        assert current.request("/api/login", {"username":"multi_password_update","password":"newer-login-password-for-unit-test"})[0] == 200
         assert stats()["wrong_headers"] == stats()["invalid_messages"] == 0
         print("ok: one password unlocks both provider keys after server restart")
     else:

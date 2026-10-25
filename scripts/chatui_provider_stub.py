@@ -9,7 +9,7 @@ import re
 import time
 from threading import Lock
 from PIL import Image
-from chatui_specification_fixture import REQUIREMENTS as SPECIFICATION_FIXTURE, PROTO as SPECIFICATION_PROTO, IMPLEMENTATION as SPECIFICATION_IMPLEMENTATION
+from chatui_specification_fixture import REQUIREMENTS as SPECIFICATION_FIXTURE, PROTO as SPECIFICATION_PROTO, IMPLEMENTATION as SPECIFICATION_IMPLEMENTATION, RUNTIME, RUN_MAKEFILE, PROJECT_MEMORY
 from chatui_specification_fixture import SERVER_SOURCE, SERVER_TEST
 
 
@@ -38,7 +38,7 @@ def image_reply(content, provider):
 
 PATCH_SCENARIOS = {"TEST_PATCH_RECOUNT", "TEST_PATCH_WRITE_RECOVERY", "TEST_PATCH_RETRY_GUARD",
                    "TEST_CHECK_RETRY_GUARD", "TEST_CHECK_FIX", "TEST_DECIDE_DEFAULTS",
-                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_REPAIR", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK", "TEST_LONG_SPECIFICATION", "TEST_IMPLEMENTATION_REPAIR_LONG", "TEST_RESEARCH_AND_CONTINUE"}
+                   "TEST_SPECIFY_SERVER", "TEST_SPECIFY_STARTUP_FAILURE", "TEST_SPECIFY_INVALID", "TEST_SPECIFY_REPAIR", "TEST_SPECIFY_IMPLEMENTATION", "TEST_SPECIFY_WITH_BOOK", "TEST_LONG_SPECIFICATION", "TEST_IMPLEMENTATION_REPAIR_LONG", "TEST_RESEARCH_AND_CONTINUE", "TEST_RUNTIME_APPLICATION"}
 
 FAILING_CHECK = "check:\n\t@echo 'E_FIXTURE: compile failed at line 17' >&2\n\t@exit 7\n"
 
@@ -80,6 +80,15 @@ def patch_action(marker, step):
     wrong_counts = ("--- a/spec/patch-note.txt\n+++ b/spec/patch-note.txt\n"
                     "@@ -1,90 +1,90 @@\n-before\n+after\n unrelated\n")
     malformed = "*** Begin Patch\n*** Update File: spec/patch-note.txt\n@@\n-before\n+after\n*** End Patch\n"
+    if marker == "TEST_RUNTIME_APPLICATION":
+        actions = [("workspace_write", {"path":"source/main.go", "content":SERVER_SOURCE}),
+                   ("workspace_write", {"path":"source/go.mod", "content":"module example.com/fixture\n\ngo 1.23\n"}),
+                   ("workspace_write", {"path":"source/Makefile", "content":RUN_MAKEFILE}),
+                   ("workspace_write", {"path":"spec/ProjectMemory.md", "content":PROJECT_MEMORY}),
+                   ("workspace_write", {"path":"spec/runtime.json", "content":RUNTIME.replace("8081","8080")}),
+                   None,
+                   ("workspace_write", {"path":"spec/runtime.json", "content":RUNTIME})]
+        return actions[step] if step < len(actions) else None
     if marker == "TEST_RESEARCH_AND_CONTINUE":
         actions = [("workspace_write", {"path": "spec/researched-default.md", "content": "Chosen a reversible implementation default from https://example.com/official-docs; continue the original goal without asking a routine question.\n"})]
         actions += [("workspace_write", {"path": f"spec/research-progress-{i}.txt", "content": f"Verified progress {i}\n"}) for i in range(3)]
@@ -304,6 +313,10 @@ class Handler(BaseHTTPRequestHandler):
             elif marker == "TEST_READY_DEFAULTS":
                 verify_decision_contract(request.get("instructions", ""), current_input)
                 body = {"output_text": "Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.", "usage": usage}
+            elif marker == "TEST_RUNTIME_RESUME":
+                required = ["Durable application goal", "runnable fixture", "readiness_path", '"valid": true', '"status": "validated"']
+                missing = [value for value in required if value not in current_input]
+                body = {"output_text":"Runnable goal and verification survived deleted chat." if not missing else "RUNTIME_CONTEXT_FAILURE: "+repr(missing), "usage":usage}
             elif marker == "TEST_DURABLE_RESUME":
                 required = ["DURABLE RESUME INPUTS", "durable-book-marker", "durable-requirements-marker",
                             "DurableProtocolMarker", "durable-implementation-marker", "resume_marker.txt",
@@ -456,6 +469,15 @@ class Handler(BaseHTTPRequestHandler):
                     }, {
                         "type": "function_call", "call_id": "write-source-module", "name": "workspace_write",
                         "arguments": json.dumps({"path": "source/go.mod", "content": "module example.com/fixture\n\ngo 1.23\n"}),
+                    }, {
+                        "type":"function_call", "call_id":"write-run-makefile", "name":"workspace_write",
+                        "arguments":json.dumps({"path":"source/Makefile","content":RUN_MAKEFILE})
+                    }, {
+                        "type":"function_call", "call_id":"write-runtime-contract", "name":"workspace_write",
+                        "arguments":json.dumps({"path":"spec/runtime.json","content":RUNTIME})
+                    }, {
+                        "type":"function_call", "call_id":"write-project-memory", "name":"workspace_write",
+                        "arguments":json.dumps({"path":"spec/ProjectMemory.md","content":PROJECT_MEMORY})
                     }],
                     "usage": usage,
                 }
@@ -594,6 +616,10 @@ class Handler(BaseHTTPRequestHandler):
         if repair:
             content = [text_block(json.dumps({"line_number": 10000 if "TEST_ANTHROPIC_REJECTED_REPAIR" in text else fixture_repair_line(text),
                                              "replacement": "Repaired A \\& B."}))]
+        if marker == "TEST_RUNTIME_RESUME":
+            required = ["Durable application goal", "runnable fixture", "readiness_path", '"valid": true', '"status": "validated"']
+            missing = [value for value in required if value not in text]
+            content = [text_block("Runnable goal and verification survived deleted chat." if not missing else "RUNTIME_CONTEXT_FAILURE: "+repr(missing))]
         if marker == "TEST_READY_DEFAULTS":
             verify_decision_contract(system, text)
             content = [text_block("Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.")]

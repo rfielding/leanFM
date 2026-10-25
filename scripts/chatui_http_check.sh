@@ -357,7 +357,7 @@ rg -q '"category":"browser_error".*operation=Rendering the Source phase.*TypeErr
 test "$(curl -sS -b "$cookie_a" --data-urlencode 'project_id=missing' --data-urlencode 'description=cross project' -o "$test_root/cross-project-client-error.json" -w '%{http_code}' "$base_url/api/client-errors")" = 404
 rg -q 'Project not found' "$test_root/cross-project-client-error.json"
 ! rg -q 'cross project' "$diagnostic_b"
-curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["go.mod","main.go","main_test.go"\]'
+curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/source" | rg -q '"files":\["Makefile","go.mod","main.go","main_test.go"\]'
 test "$(curl -sS -b "$cookie_b" -o /dev/null -w '%{http_code}' "$base_url/api/projects/$project_b/source/does-not-exist.go")" = 404
 rg -q '"category":"http_error".*GET /api/projects/.*status=404' "$diagnostic_b"
 

@@ -584,6 +584,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
         | "book" => "check-book"
         | "http-check" => "check-http"
         | "go-test" => "check-go"
+        | "run" => "check-runtime"
         | _ => ""
       if operation.isEmpty then return ← fail "Unknown check target."
       record ("Started check: " ++ target)
@@ -765,9 +766,19 @@ def readProjectCanonical (root relative : String) : IO String := do
           ("file=" ++ relative ++ " error=" ++ truncateText error.toString 1000)
         return "[Unreadable durable file: " ++ relative ++ "; diagnostic category=durable_context_read_failed]"
 
+def readProjectOptional (root relative : String) : IO String := do
+  if !(← (fp (root ++ "/" ++ relative)).pathExists) then
+    return "[Not recorded: " ++ relative ++ "]"
+  readProjectCanonical root relative
+
 def durableResumeContext (root : String) : IO String := do
   let manifest ← readProjectCanonical root "manifest.json"
   let project ← readProjectCanonical root "project.json"
+  let memory ← readProjectOptional root "spec/ProjectMemory.md"
+  let runtime ← readProjectOptional root "spec/runtime.json"
+  let runtimeEvidence ← readProjectOptional root "reports/runtime-check/validation.json"
+  let pr ← readProjectOptional root "reports/pr-review.md"
+  let runtimeState ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["runtime-status", root]}
   let proto ← readProjectCanonical root "spec/Requirements.proto"
   let gateStatus ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["project-status", root]}
   let realRoot ← IO.FS.realPath (fp root)
@@ -781,7 +792,16 @@ def durableResumeContext (root : String) : IO String := do
     "\n\nVerified current acceptance status (authoritative over historical manifest placeholders):\n" ++
       (if gateStatus.exitCode == 0 then truncateText gateStatus.stdout 12000 else "No current checked gate status is available; do not infer acceptance.") ++
     "\n\nCanonical spec/Requirements.proto:\n" ++ truncateText proto 40000 ++
+    "\n\nDurable goal, decisions, known failures and PR handoff (never overrides checked specifications or gates):\n" ++ truncateText memory 12000 ++
+    "\n\nApplication launch contract and independently computed current evidence status (stale receipts are not success):\n" ++ truncateText runtime 4000 ++ "\n" ++ truncateText runtimeState.stdout 2000 ++
+    "\n\nLatest launch receipt:\n" ++ truncateText runtimeEvidence 8000 ++
+    "\n\nPR review record, when present:\n" ++ truncateText pr 8000 ++
     "\n\nCurrent implementation source inventory (paths, not source contents):\n" ++ inventory ++ "\n\n"
+
+def runtimeStatus (root : String) : IO Lean.Json := do
+  let out ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["runtime-status", root]}
+  return (Lean.Json.parse out.stdout).toOption.getD (Lean.Json.mkObj [("valid", Lean.toJson false),
+    ("reason", Lean.toJson "Runtime status could not be read; inspect the project-local launch evidence.")])
 
 def chatLayerContext (root layer : String) : IO (Except String String) := do
   let book ← readProjectCanonical root "book/main.tex"
@@ -1356,6 +1376,12 @@ def requestsImplementationSource (prompt : String) : Bool :=
     lower.contains "build the app" || lower.contains "generate go" ||
     lower.contains "create go"
 
+def requestsRunnableApplication (prompt : String) : Bool :=
+  let lower := prompt.toLower
+  let words := (String.ofList (lower.toList.map fun c => if c.isAlphanum then c else ' ')).splitOn " "
+  lower.contains "make run" || lower.contains "runnable" || lower.contains "launch the app" ||
+    (requestsImplementationSource prompt && ["server", "app", "application", "software", "game"].any words.contains)
+
 def saveMermaidArtifacts (root responseText : String) : IO (List String) := do
   let chunks := responseText.splitOn "```mermaid"
   let existing := (← entries (root ++ "/artifacts")).toList.filter fun entry =>
@@ -1408,9 +1434,17 @@ def handlePublic (path method request : String) : IO (Option HttpResponse) := do
     let body := requestBody request
     let username := (formValue? body "username").getD ""
     let password := (formValue? body "password").getD ""
-    if !safeId username || password.length < 8 then return some (errorResponse 400 "Supply a valid username and a password of at least 8 characters.")
+    if !safeId username || password.length < 8 || password.length > 4096 then return some (errorResponse 400 "Supply a valid username and a password of at least 8 characters.")
     let .ok pairs := submittedProviderKeys body | return some (errorResponse 400 "Supply valid OpenAI and/or Anthropic keys.")
-    let (provider, apiKey) :: additionalKeys := pairs | return some (errorResponse 400 "At least one provider API key is required.")
+    let existing ← (fp ((← accountRoot username) ++ "/account.json")).pathExists
+    if existing then
+      let record ← accountPasswordRecord username
+      if record.isEmpty || !(← verifyPassword password record) then return some (errorResponse 403 "Invalid username or password.")
+    let (provider, apiKey) :: additionalKeys := pairs | do
+      if !existing then return some (errorResponse 400 "At least one provider API key is required for a new account.")
+      match ← login username password with
+      | .error message => return some (errorResponse 403 message)
+      | .ok token => return some (jsonResponse 200 ("{\"username\":\"" ++ jsonEscape username ++ "\"}\n") [← sessionCookieHeader token])
     match ← verifySubmittedKeys pairs with
     | .error message => return some (errorResponse 403 message)
     | .ok _ =>
@@ -1426,18 +1460,24 @@ def handlePublic (path method request : String) : IO (Option HttpResponse) := do
     let username := (formValue? body "username").getD ""
     let password := (formValue? body "password").getD ""
     let .ok additions := submittedProviderKeys body | return some (errorResponse 400 "Supply valid OpenAI and/or Anthropic keys.")
-    if !additions.isEmpty then
+    let newPassword := (formValue? body "new_password").getD ""
+    let confirmation := (formValue? body "new_password_confirm").getD ""
+    if !newPassword.isEmpty && (newPassword.length < 8 || newPassword.length > 4096 || newPassword != confirmation) then
+      return some (errorResponse 400 "The new passwords must match and contain 8 to 4096 characters.")
+    if !additions.isEmpty || !newPassword.isEmpty then
       if !safeId username then return some (errorResponse 403 "Invalid username or password.")
-      let record ← readOr ((← accountRoot username) ++ "/password.json") ""
+      let record ← accountPasswordRecord username
       if record.isEmpty || !(← verifyPassword password record) then
         return some (errorResponse 403 "Invalid username or password.")
       match ← verifySubmittedKeys additions with
       | .error message => return some (errorResponse 403 message)
       | .ok _ => pure ()
-      match ← updateCredentialBundle username password additions with
+      let changed ← if newPassword.isEmpty then updateCredentialBundle username password additions
+        else changeAccountPassword username password newPassword additions
+      match changed with
       | .error message => return some (errorResponse 403 message)
       | .ok _ => pure ()
-    match ← login username password with
+    match ← login username (if newPassword.isEmpty then password else newPassword) with
     | .error message => return some (errorResponse 403 message)
     | .ok token => return some (jsonResponse 200 ("{\"username\":\"" ++ jsonEscape username ++ "\"}\n")
         [← sessionCookieHeader token])
@@ -1474,13 +1514,25 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
     let submittedUser := (formValue? body "username").getD username
     if submittedUser != username then return some (errorResponse 403 "Provider keys belong to the current signed-in account.")
     let password := (formValue? body "password").getD ""
-    let record ← readOr ((← accountRoot username) ++ "/password.json") ""
+    let record ← accountPasswordRecord username
     if record.isEmpty || !(← verifyPassword password record) then return some (errorResponse 403 "Invalid username or password.")
     let .ok additions := submittedProviderKeys body | return some (errorResponse 400 "Supply valid provider keys.")
-    if additions.isEmpty then return some (errorResponse 400 "Enter the provider key you want to add or replace.")
+    let newPassword := (formValue? body "new_password").getD ""
+    let confirmation := (formValue? body "new_password_confirm").getD ""
+    if !newPassword.isEmpty && (newPassword.length < 8 || newPassword.length > 4096 || newPassword != confirmation) then
+      return some (errorResponse 400 "The new passwords must match and contain 8 to 4096 characters.")
+    if additions.isEmpty && newPassword.isEmpty then return some (errorResponse 400 "Enter a provider key or a new password.")
     match ← verifySubmittedKeys additions with
     | .error message => return some (errorResponse 403 message)
     | .ok _ => pure ()
+    if !newPassword.isEmpty then
+      if !(← sessionActive? token username) then return some (errorResponse 401 "The initiating login ended.")
+      match ← changeAccountPassword username password newPassword additions token with
+      | .error message => return some (errorResponse 403 message)
+      | .ok _ =>
+          match ← login username newPassword with
+          | .error message => return some (errorResponse 403 message)
+          | .ok newToken => return some (jsonResponse 200 "{\"session_preserved\":false}\n" [← sessionCookieHeader newToken])
     match ← updateSessionCredentialBundle username token password additions with
     | .error message => return some (errorResponse 403 message)
     | .ok true => return some (jsonResponse 200 "{\"session_preserved\":true}\n")
@@ -1839,7 +1891,21 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       let unchecked := needsCheck &&
                         ((← checkedRequirements.get) != some (requirements, proto, book) ||
                           (implementationChanged && (← checkedImplementation.get) != some implementation))
-                      if !unchecked then return none
+                      if !unchecked then
+                        let profile ← readProjectCanonical root "spec/runtime.json"
+                        let continuing := ["continue", "proceed", "pursue", "goal"].any (fun word => prompt.toLower.contains word)
+                        let needsRuntime := requestsRunnableApplication prompt ||
+                          ((Lean.Json.parse profile).isOk && (requestsImplementationSource prompt || continuing || (← workspaceRevision.get) > 0))
+                        if needsRuntime then
+                          let gateResult ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["project-status", root]}
+                          let gates := (Lean.Json.parse gateResult.stdout).toOption.getD (Lean.Json.mkObj [])
+                          if workBool gates "ready" && !(workBool (← runtimeStatus root) "valid") then
+                            appendLiveTrace root trace "Completion deferred: checking the actual application launch before success"
+                            let result ← runner "workspace_check" "{\"target\":\"run\"}"
+                            if result.startsWith "FATAL:" then return some result
+                            if result.startsWith "ERROR:" then
+                              return some ("LeanFM application completion validation: the original goal still needs a working source/ make run on a loopback port separate from LeanFM. Repair the exact diagnostic below, record the goal/defaults in spec/ProjectMemory.md and the fixed launch contract in spec/runtime.json, and continue this same task without asking routine questions. Use workspace_check target run after a changed correction; preserve both checked gates and do not repeat unchanged failures.\n" ++ result)
+                        return none
                       -- This hash is only a conservative paid-repair brake, never
                       -- an acceptance revision or an authorization decision.
                       let candidate := hash (requirements, proto, implementation, book, diagnostic)
@@ -2053,14 +2119,19 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         (← checkedImplementation.get) != some implementationAfter
                       let uncheckedSpecification := uncheckedRequirements || uncheckedImplementation
                       let recoveredSpecification := !uncheckedSpecification && (← lastSpecificationCheck.get).isSome && (← lastSpecificationFailure.get).isNone
+                      let runtimeRequired := !returnedQuestions && (requestsRunnableApplication prompt || activity.any (·.startsWith "Started check: run"))
+                      let runtimeVerified ← if runtimeRequired then pure (workBool (← runtimeStatus root) "valid") else pure false
+                      let missingRequiredRuntime := runtimeRequired && !runtimeVerified
                       let warned := returnedQuestions || applied.notice.isSome || activity.any fun item =>
-                        ((item.splitOn "rejected").length > 1 && !(recoveredSpecification && item.startsWith "leanfm_check rejected:")) ||
-                          (item.splitOn "Failed check:").length > 1
-                      let status := if invalidAnswer || missingRequiredArtifact || missingRequiredSource || uncheckedSpecification || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"
+                        (((item.splitOn "rejected").length > 1 && !(recoveredSpecification && item.startsWith "leanfm_check rejected:")) ||
+                          (item.splitOn "Failed check:").length > 1) &&
+                          !(runtimeVerified && (item.startsWith "Failed check: run" || (item.startsWith "workspace_check rejected:" && item.contains "target=run")))
+                      let status := if invalidAnswer || missingRequiredArtifact || missingRequiredSource || missingRequiredRuntime || uncheckedSpecification || !missingMedia.isEmpty then "fail" else if warned then "warn" else "success"
                       if status != "success" then
                         let reason := if invalidAnswer then "provider response or book envelope failed"
                           else if missingRequiredArtifact then "required MP4 artifact missing"
                           else if missingRequiredSource then "requested implementation source missing"
+                          else if missingRequiredRuntime then "requested application has no current verified make run"
                           else if uncheckedSpecification then "changed specification has no successful current canonical check"
                           else if !missingMedia.isEmpty then "assistant referenced project media that does not exist"
                           else if returnedQuestions then "agent returned blocking questions"
@@ -2077,6 +2148,8 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                         "\n\nDetails: reports/specification-check/compiler.log. Neither acceptance gate was crossed."
                         else if missingRequiredSource then
                         "The requested implementation was not produced: no files exist beneath the selected project's source/ directory. LeanFM rejected the prose or pasted-code substitute. Accept the missing specification gate or answer the focused blocking questions, then resend the implementation request."
+                        else if missingRequiredRuntime then
+                        "The application has no successful launch check for its current source and specification revision. Continue the existing task with spec/runtime.json, spec/ProjectMemory.md and workspace_check target run; the exact failure remains in logs/runtime-diagnostics.jsonl and reports/runtime-check/."
                         else if missingRequiredArtifact then
                         match mp4Failure with
                         | some failure => "The requested MP4 was not produced. " ++ failure

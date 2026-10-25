@@ -344,6 +344,30 @@ current login, usage, expiry and existing provider work. Replacing an existing
 secret retains the session-revocation policy. Blank key fields preserve their
 stored values; account passwords and keys are never returned to the browser.
 
+Application delivery ends with a working \texttt{source/Makefile} launch target,
+not just a set of files. \texttt{make run} uses a bounded loopback port separate
+from LeanFM. The project retains \path{spec/runtime.json} and
+\path{spec/ProjectMemory.md}: the original goal, reversible defaults, known
+failure remedies, remaining gaps and PR base/review context survive erased chat.
+The \texttt{run} workspace check launches the actual command in a private network
+and checks readiness and its application page. It has no host credentials or
+host-network access, writes only project cache, and stops only its own process
+group. The host records protected source-bound evidence; changed source makes
+that evidence stale. A failed launch returns its concrete diagnostic to the
+same client-driven task. Passing the launch check establishes these bounded
+observations, not complete semantic refinement of the accepted specification.
+
+An existing username and its correct password can update retained API keys.
+Login and account settings also offer an optional password change. The current
+password must verify and both new-password fields must match. A single atomic
+credential envelope contains the new verifier and re-encrypted provider bundle,
+so an interrupted write cannot split the two. Old sessions are revoked; a
+credential revision checked at authentication and tool boundaries also rejects
+stale sessions in another service process sharing the vault. Additive provider
+saves preserve that revision. A legacy verifier file remains a compatibility
+mirror; it cannot override the envelope. The \texttt{?keys=1} link opens the
+secure account editor and submits no credential request by itself.
+
 \subsection{How a chat turn becomes a durable edit}
 \label{subsec:chat-turn-durable-edit}
 

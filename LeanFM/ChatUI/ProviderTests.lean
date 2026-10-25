@@ -32,6 +32,11 @@ example : ((((Json.parse (openAITools true)).toOption.bind (·.getArr?.toOption)
     if !(← trace.get).any (·.contains "via MCP") then throw (IO.userError "ChatUI did not report MCP-backed guidance")
     let rejected ← runWorkspaceTool root "leanfm_reference" "{\"section\":\"leanfm://project/specification/Requirements.lean\"}" trace
     if !rejected.startsWith "ERROR:" then throw (IO.userError "foreign project context was exposed as a language reference")
+    let journalBefore ← LeanFM.ChatUI.Store.readOr (diagnosticLogPath root) ""
+    let missing ← readProjectOptional root "spec/ProjectMemory.md"
+    if !missing.startsWith "[Not recorded:" then throw (IO.userError "optional missing handoff was not identified")
+    if (← LeanFM.ChatUI.Store.readOr (diagnosticLogPath root) "") != journalBefore then
+      throw (IO.userError "optional missing handoff displaced real failure diagnostics")
   finally IO.FS.removeDirAll (System.FilePath.mk root)
 
 #eval do
@@ -49,6 +54,11 @@ example : ((((Json.parse (openAITools true)).toOption.bind (·.getArr?.toOption)
 example : requestsImplementationSource "Prepare the implementation specification" = false := by native_decide
 example : requestsImplementationSource "Update spec/Implementation.lean" = false := by native_decide
 example : requestsImplementationSource "Implement the server now" = true := by native_decide
+
+example : requestsRunnableApplication "implement the app" = true := by native_decide
+example : requestsRunnableApplication "make run should launch it" = true := by native_decide
+example : requestsRunnableApplication "implement the mapping" = false := by native_decide
+example : requestsRunnableApplication "implement a library" = false := by native_decide
 
 -- property:selected_project_context_drives_chat; task:inspect_task_model.
 -- An overlapping task ID must never substitute the host application's grammar.

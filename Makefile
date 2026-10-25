@@ -87,6 +87,7 @@ chatui-check: build
 	python3 scripts/chatui_workspace_reset_test.py
 	python3 scripts/chatui_workspace_test.py
 	python3 scripts/chatui_command_test.py
+	python3 scripts/chatui_runtime_test.py
 	lake env lean LeanFM/ChatUI/ProviderTests.lean
 	lake env lean LeanFM/ChatUI/HttpRequestTests.lean
 	bash scripts/chatui_http_check.sh

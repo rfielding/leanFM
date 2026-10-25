@@ -48,6 +48,7 @@
       "native requirements and implementation approvals are available directly in Chat and invoke no provider",
       "independent human acceptance of checked requirements and implementation",
       "actual source files and sandboxed Go test after both gates",
+      "direct key editor and password change retain both providers",
       "no uncaught browser exceptions"
     ]
   }
