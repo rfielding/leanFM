@@ -4,7 +4,7 @@
 \index{vibecoding}
 \index{requirements!durable}
 This chapter documents the staging server that implements the workbench, its
-project isolation, and its interface for the two acceptance gates defined in the
+project isolation, and the three-layer workflow described in the
 Preface. The evidence labels in Chapter~\ref{ch:vision} distinguish its
 executable paths from proposed and future interfaces; each named check retains
 its stated scope.
@@ -122,7 +122,7 @@ lifecycle remains visible.
 Codex can drive the complete bootstrap. Open the LeanFM repository as its
 workspace, or run \texttt{codex} from the repository root. The required book,
 live language references, source tree, and workflow from self-hosting through
-acceptance and generation are defined in Chapter~\ref{ch:bootstrap-contract}.
+review and generation are defined in Chapter~\ref{ch:bootstrap-contract}.
 
 \section{MCP: the agent-facing entrance}
 
@@ -147,17 +147,16 @@ through MCP. Source: \texttt{LeanFM.MCP}; reducer and provenance:
 \end{figure}
 
 The first surface is intentionally read-only. It provides resource and prompt
-discovery, the requirements interrogation, the post-acceptance code-generation
-prompt, and canonical artifact validation. It exposes no arbitrary pathname and
-no tool can accept a requirements or implementation gate. Those are stakeholder
-decisions, not consequences of a successful tool call. MCP transports context
-and evidence; the existing LeanFM workflow controls revision and acceptance.
+discovery, the requirements interrogation, the code-generation prompt, the
+logic tools, and canonical artifact validation. It exposes no arbitrary
+pathname and changes nothing. Review and acceptance stay with the stakeholder
+and happen in git; MCP transports context and evidence.
 
 The bundled server listens only on loopback. A deployment that exposes MCP to a
 network must add authentication and authorization at the transport or reverse
 proxy before treating the resource contents as safe to publish. Statelessness
 does not make project data public, and a future writable MCP surface must bind
-every request to a user, project, revision and accepted snapshot.
+every request to a user, project and revision.
 
 A local Codex client can register the running endpoint and inspect the result:
 
@@ -182,7 +181,7 @@ observer can see---``the server knows the password'', ``the cache is
 consistent''---so the requirement can never be tested against an event trace.
 The \texttt{selfhost.mcp.logic} clauses, implemented by \texttt{LeanFM.Logic}
 and exposed by the MCP endpoint, let the agent ask LeanFM before it commits to
-any of these, instead of finding out at a gate.
+any of these, instead of finding out in review.
 
 The consultation is a separate task in the self-hosting requirements. Its
 grammar is one request answered by exactly one of two outcomes:
@@ -273,7 +272,7 @@ classifier makes the incompleteness explicit instead of letting it pass. An
 atom is computed from the trace by a declared reducer---a balance, a count, the
 set of values an actor could have read. An \emph{implementation-only} atom
 refers to state that no event reveals. The required proof \emph{Hidden
-predicates never pass as observable} keeps the third kind out of acceptance
+predicates never pass as observable} keeps the third kind out of conformance
 tests; the classifier then proposes events, such as a \texttt{CacheAudited} or
 \texttt{KeyRotated} message with the fields that expose the predicate, that
 would move the atom into one of the first two kinds. The requirement is then
@@ -282,7 +281,7 @@ rewritten over those events, and \texttt{check\_ctl} can decide it.
 \subsection{The design loop}
 
 Used together, the tools give an agent a loop that converges on a specification
-the gates can accept:
+a reviewer can accept:
 
 \begin{enumerate}
 \item Classify each sentence of the requirement; turn implementation-only atoms
@@ -295,8 +294,8 @@ into proposed events.
 in the formula, and say which before revising.
 \end{enumerate}
 
-None of these tools accepts a gate. A \texttt{proved} verdict is evidence for
-the stakeholder, who still decides. Malformed or oversized input---an unknown
+A \texttt{proved} verdict is evidence for the stakeholder, who still decides
+what to commit. Malformed or oversized input---an unknown
 operator, a bare \texttt{G} without its path quantifier, a misspelled state or
 message, or a formula beyond 256 nodes---is rejected with the reason rather than
 answered, so a typo is never silently read as \emph{false}.
@@ -328,7 +327,7 @@ usage shown per turn.
 Chat accepts ordinary language, images, rough pseudocode and protocol
 questions before Book, Grammar, Tasks or Source are settled. A response may
 revise the book, ask a focused blocking question, derive a requirements view or
-create a scratch explanation; none accepts a gate. For each turn the model
+create a scratch explanation. For each turn the model
 receives the selected project's complete editable book and canonical
 requirements and implementation specifications, then a bounded recent
 transcript. Neither LeanFM's own book nor another project supplies fallback
@@ -341,7 +340,7 @@ records those decisions. It briefly lists only choices the stakeholder is
 likely to challenge. A question must name a consequential unresolved effect on
 scope, observable behavior, compatibility, security/privacy, irreversible data
 or material spending, and explain why a recorded decision or authorized default
-cannot resolve it. The two explicit acceptance gates remain explicit.
+cannot resolve it. It never asks for an approval: review happens in git.
 
 A readiness review can report ready without inventing questions. Compiler
 syntax, formatting and routine check failures use the bounded diagnostic and
@@ -457,7 +456,7 @@ $AG\,\neg p$, and \texttt{preparedFor} becomes $EF\,p$. A
 the invariant $AG\,p$. Each card identifies its requirements origin.
 
 The implementation mapping follows Section~\ref{sec:acceptance-gates}: its
-answers realize accepted behavior and cite their requirements. It cannot
+answers realize the specified behavior and cite their requirements. It cannot
 silently introduce a property or change the wire contract.
 
 The assistant owns routine formal-language and implementation decisions. The
@@ -528,7 +527,7 @@ validates their structure and protobuf declarations, and regenerates
 has no network, credentials or writable project source: only project-local
 scratch is writable. Failed validation preserves the last valid views. The
 generated catalog retains canonical input digests and reducer provenance;
-neither a check nor a PDF build accepts a stakeholder gate. A turn changing
+neither a check nor a PDF build substitutes for the stakeholder's review. A turn changing
 canonical specifications cannot report SUCCESS without a successful check of
 its final bytes.
 
@@ -549,8 +548,7 @@ second user message. This continuation retains the original cancellation,
 session, usage accounting and request budget. An unchanged candidate and
 diagnostic stop further paid work; an unavailable compiler stops immediately.
 A repaired current check can report success while retaining earlier failures
-in the operational trace. Neither recovery nor successful validation accepts a
-stakeholder gate.
+in the operational trace.
 
 When the turn revises the book, the provider's structured reply includes the
 complete proposed \texttt{book/main.tex}. The server enforces
@@ -569,13 +567,13 @@ ampersands and underscores should be corrected directly when their intended
 prose meaning is unambiguous rather than rediscovered through repeated paid
 model calls.
 
-The same rule becomes stricter at the implementation boundary.  After both
-acceptance gates and the security critique, an implementation request writes
+The same rule becomes stricter at the implementation boundary.  Once the
+specification checks and the security critique is done, an implementation request writes
 real buildable files, generated bindings, and tests beneath the selected
 project's \texttt{source/} directory by using the project-confined workspace
 tools.  The Source phase reads those files directly.  A provider response that
 says ``implemented,'' or pastes a Go listing into chat, cannot be SUCCESS while
-\texttt{source/} is empty.  When a gate or material implementation decision is
+\texttt{source/} is empty.  When a material implementation decision is
 missing, the valid alternative is a focused selectable question naming that
 blocker---not an invented implementation and not another generic plan.
 
@@ -655,12 +653,12 @@ original user request while allowing the corrected renderer and prompt contract
 to try the turn again.
 
 The animation is initially a scratch explanation.  It answers ``what would this
-interaction look like?'' quickly, but it is not yet a generated view of accepted
+interaction look like?'' quickly, but it is not yet a generated view of the
 requirements.  If the discussion changes the project design, retain the
 originating prompt, bind the selected messages to a named scenario, update the
 typed grammar and regenerate the interaction diagram from that specification.
-Only that provenance-bearing derived view can serve as evidence at the
-requirements gate.  If stakeholders instead want to share the exact motion,
+Only that provenance-bearing derived view can serve as evidence when the
+requirements are reviewed.  If stakeholders instead want to share the exact motion,
 promote the chosen canvas revision to a project-owned GIF or MP4 with fixed
 frame timing and serve that media inline.
 
@@ -767,7 +765,7 @@ as a model-provider API key. A project may commit
 references, prompts and validation tools through MCP. Cursor continues to own
 its subscription authentication and billing; LeanFM receives no Cursor login
 secret. The current MCP surface remains read-only, so Cursor edits files using
-its ordinary project tools and cannot accept either gate through MCP.
+its ordinary project tools; the user reviews and commits them with git.
 
 For the inverse arrangement---the LeanFM browser driving a Cursor-backed
 conversation---Cursor CLI exposes the Agent Client Protocol over standard input
@@ -823,13 +821,15 @@ rather than opaque hashes. Spaces and punctuation become safe separators;
 collisions receive a short numeric suffix. Atomic directory reservation never
 adopts or overwrites an occupied root. The manifest's stable project identifier
 remains independent of the directory label, so relocating an existing root
-preserves its ChatUI URLs, conversation and checked acceptance revisions.
+preserves its ChatUI URLs, conversation and checked revisions.
 Discovery rejects duplicate identities instead of choosing an arbitrary root.
 
-Project memory exposes the two independent acceptance controls for the current
-checked revisions. Source writes require both gates in server code; model tools
-cannot write gate records or checker evidence. Current gate state is supplied
-to subsequent model turns, so an accepted decision survives a cleared chat.
+Project memory shows, for the requirements and the implementation mapping,
+whether each passes its canonical check and whether it is committed in git.
+There is no approval control: review and acceptance are git commits, and LeanFM
+blocks no edit, source write or launch on an approval. Model tools cannot write
+checker evidence. The current status is supplied to subsequent model turns, and
+committed decisions survive a cleared chat.
 Project-authored checks and media generators execute without network or host
 credentials and have only bounded project-local cache or scratch write access.
 
@@ -842,8 +842,7 @@ mapping. \texttt{LeanFM.ChatUI.Store.createProject} creates shared roots
 under \texttt{projects/<readable-project-name>}, writes a runtime
 \texttt{manifest.json}, and provisions the book, \texttt{spec/}, source, tests,
 artifacts, renders, events, reports, logs, cache, and conversations beneath that
-root. The manifest records all canonical project-relative paths and its
-acceptance-state path. Portable \texttt{project.json} roots are also discovered
+root. The manifest records all canonical project-relative paths. Portable \texttt{project.json} roots are also discovered
 when their identity and configured paths validate; they are ordinary editable
 projects. The removed examples are not inputs to provisioning or validation.
 
@@ -973,7 +972,7 @@ One user task crosses bounded provider batches through server-issued project
 checkpoints. The client continues the same task, while later prompts wait and
 Cancel stays available. A batch boundary is progress, never a total step limit.
 Checkpoint consumption and cached receipts prevent replay; caller, model,
-credential, token accounting, failure history and both human gates survive the
+credential, token accounting and failure history survive the
 boundary. Closing the client starts no further batch. Ambiguous provider
 failures pause for reconciliation rather than an automatic paid retry. Oversized
 provider context restarts from durable project files and verified tool receipts.

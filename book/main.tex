@@ -258,14 +258,15 @@ says, in a separate implementation mapping, how the code will enforce them.
 Requirements over hidden state that no observer can see are flagged, so they
 can be restated in terms of events that can actually be tested.
 
-\section*{Two gates}
+\section*{Three layers, reviewed in git}
 
-Work passes through two explicit decisions made by a person, never by the
-tool. First you accept the \emph{requirements}: the observable behaviour and
-the views generated from it. Then you accept the \emph{implementation
-mapping}: how each requirement will be realized and tested. After both gates
-the code is written in one pass, and the tests show whether it conforms. A
-passing check is evidence for your decision; it is not the decision.
+Work proceeds in three layers: first the \emph{requirements}, the observable
+behaviour and the views generated from it; then the \emph{implementation
+mapping}, how each requirement will be realized and tested; then the code,
+written in one pass. Each layer is checked by LeanFM before the next is built
+on it. Review is what you already do with git: you read the diff and commit it.
+LeanFM has no approval step of its own and never makes you click to continue.
+A passing check is evidence for your review; it is not the review.
 
 \section*{Nothing lives only in the chat}
 

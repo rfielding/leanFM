@@ -91,10 +91,7 @@ def messages : List MessageSchema :=
   , message "ClarificationSubmitted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "ambiguity_id" .string, field 3 "answer" .string]
   , message "ProjectBookRevised" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "book_revision" .string, field 3 "decision_ids" .string, field 4 "light_pdf" .string, field 5 "dark_pdf" .string]
   , message "RequirementsReviewPresented" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "derived_artifact_ids" .string, field 4 "open_ambiguity_ids" .string]
-  , message "SpecificationRequirementsAccepted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "requirements_revision" .string]
   , message "ImplementationReviewPresented" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "implementation_revision" .string, field 4 "traceability_report" .string]
-  , message "SpecificationImplementationAccepted" "UserBrowser" "LeanFMServer" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "implementation_revision" .string]
-  , message "ImplementationAuthorizationConfirmed" "LeanFMServer" "UserBrowser" [field 1 "project_id" .string, field 2 "requirements_revision" .string, field 3 "implementation_revision" .string]
   , message "ProviderCredentialSubmitted" "UserBrowser" "LeanFMServer" [field 1 "provider" .string, field 2 "api_key" .bytes, field 3 "retention" .string]
   , message "ProviderCredentialAccepted" "LeanFMServer" "UserBrowser" [field 1 "credential_ref" .string, field 2 "billing_source" .string]
   , message "ProviderCredentialRejected" "LeanFMServer" "UserBrowser" [field 1 "reason" .string]
@@ -203,7 +200,7 @@ def credentialTask : TaskRequirement :=
 
 def specificationConversationTask : TaskRequirement :=
   { id := "develop_project_specification"
-  , title := "Turn a fresh project conversation into accepted requirements and implementation"
+  , title := "Turn a fresh project conversation into checked requirements and implementation"
   , actors := ["UserBrowser", "LeanFMServer"]
   , initialState := "project_loaded"
   , states :=
@@ -211,11 +208,8 @@ def specificationConversationTask : TaskRequirement :=
       , state "awaiting_problem" "the user is asked what problem they are trying to solve" "inquiry"
       , state "discovering" "the problem and current durable artifacts are being interrogated" "requirements"
       , state "awaiting_clarification" "one named ambiguity is awaiting a stakeholder answer" "requirements"
-      , state "requirements_review" "validated requirements and derived views await explicit acceptance" "requirements gate"
-      , state "requirements_accepted" "the exact requirements revision is accepted" "implementation"
-      , state "implementation_review" "traceable implementation mapping awaits explicit acceptance" "implementation gate"
-      , state "implementation_accepted" "the exact implementation revision is accepted" "implementation gate"
-      , state "ready_to_implement" "both exact revisions are accepted for one-shot implementation" "terminal" true ]
+      , state "requirements_checked" "requirements and derived views pass the canonical check; the user reviews and commits them in git" "requirements"
+      , state "ready_to_implement" "the traceable implementation mapping also passes its check; no LeanFM approval step exists" "terminal" true ]
   , transitions :=
       [ transition "project_loaded" "awaiting_problem" "ProblemInquiryPresented"
       , transition "awaiting_problem" "discovering" "ProblemStatementSubmitted"
@@ -223,11 +217,8 @@ def specificationConversationTask : TaskRequirement :=
       , transition "discovering" "awaiting_clarification" "AmbiguityQuestionPresented"
       , transition "awaiting_clarification" "discovering" "ClarificationSubmitted"
       , transition "awaiting_clarification" "awaiting_clarification" "ProjectBookRevised"
-      , transition "discovering" "requirements_review" "RequirementsReviewPresented"
-      , transition "requirements_review" "requirements_accepted" "SpecificationRequirementsAccepted"
-      , transition "requirements_accepted" "implementation_review" "ImplementationReviewPresented"
-      , transition "implementation_review" "implementation_accepted" "SpecificationImplementationAccepted"
-      , transition "implementation_accepted" "ready_to_implement" "ImplementationAuthorizationConfirmed" ] }
+      , transition "discovering" "requirements_checked" "RequirementsReviewPresented"
+      , transition "requirements_checked" "ready_to_implement" "ImplementationReviewPresented" ] }
 
 def chatTask : TaskRequirement :=
   { id := "argue_requirements"
@@ -421,10 +412,7 @@ def specificationConversationGrammar : TaskGrammar :=
          atom "develop_project_specification" "UserBrowser" "LeanFMServer" "ClarificationSubmitted") >>>
       GrammarExpr.optional (atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ProjectBookRevised") >>>
       atom "develop_project_specification" "LeanFMServer" "UserBrowser" "RequirementsReviewPresented" >>>
-      atom "develop_project_specification" "UserBrowser" "LeanFMServer" "SpecificationRequirementsAccepted" >>>
-      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ImplementationReviewPresented" >>>
-      atom "develop_project_specification" "UserBrowser" "LeanFMServer" "SpecificationImplementationAccepted" >>>
-      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ImplementationAuthorizationConfirmed" }
+      atom "develop_project_specification" "LeanFMServer" "UserBrowser" "ImplementationReviewPresented" }
 
 def chatGrammar : TaskGrammar :=
   { task := "argue_requirements", entry := "ready", terminals := ["rendered", "failed"]
@@ -565,7 +553,7 @@ def taskConstraints : List TaskConstraint :=
   , where_ "book_grows_with_durable_decisions" "develop_project_specification" "accepted or provisionally retained design reasoning updates editable book source and regenerates book/main.pdf and book/main-dark.pdf under the project root with links to the requirement implementation and evidence revisions it explains"
   , where_ "book_palette_selection_is_real_and_stable" "develop_project_specification" "Build and preview generates both book/main.pdf with a light page and dark text and book/main-dark.pdf with a dark page and light text from the same source; selecting Light PDF or Dark PDF displays that exact artifact and rebuilding preserves the current selection"
   , where_ "stale_book_editors_cannot_overwrite_newer_recovery" "develop_project_specification" "each editable book load returns a source revision and Save or Build and preview supplies that revision; if autonomous chat repair or another editor changed book/main.tex meanwhile the stale write is rejected visibly before mutation instead of resurrecting an older broken candidate"
-  , where_ "acceptance_names_exact_revisions" "develop_project_specification" "SpecificationRequirementsAccepted and SpecificationImplementationAccepted name the exact validated revisions; later changes invalidate the affected acceptance instead of silently inheriting it"
+  , where_ "review_happens_in_git" "develop_project_specification" "RequirementsReviewPresented and ImplementationReviewPresented name the exact checked revisions; the user reviews and accepts changes by committing them in git, and LeanFM records no approval and blocks no edit, source write or launch on one"
   , where_ "chat_is_project_scoped" "argue_requirements" "every turn belongs to exactly one authorized project conversation"
   , where_ "model_key_is_request_scoped" "argue_requirements" "ModelRequestIssued resolves exactly the credential_ref authorized for that turn's authenticated user and never reads or mutates a process-global API key"
   , where_ "model_selection_is_request_scoped" "argue_requirements" "the Chat composer lists only server-configured model IDs; Send Resend and structured answers capture the visible selection into that queued ChatPromptSubmitted, ModelRequestIssued uses exactly that model, and the assistant response durably displays the model that incurred usage"
@@ -662,8 +650,8 @@ def processes : List RequirementProcess :=
   , process "ModelProvider" accountCreationTask ["ProviderKeyVerified", "ProviderKeyRejected"] ["ProviderKeyCheckRequested"]
   , process "UserBrowser" projectTask ["ProjectListRequested", "ProjectCreateRequested", "ProjectOpenRequested", "ProjectDeleteRequested"] ["ProjectListReturned", "ProjectCreated", "ProjectOpened", "ProjectDeleted"]
   , process "LeanFMServer" projectTask ["ProjectListReturned", "ProjectCreated", "ProjectOpened", "ProjectDeleted"] ["ProjectListRequested", "ProjectCreateRequested", "ProjectOpenRequested", "ProjectDeleteRequested"]
-  , process "UserBrowser" specificationConversationTask ["ProblemStatementSubmitted", "ClarificationSubmitted", "SpecificationRequirementsAccepted", "SpecificationImplementationAccepted"] ["ProblemInquiryPresented", "AmbiguityQuestionPresented", "ProjectBookRevised", "RequirementsReviewPresented", "ImplementationReviewPresented", "ImplementationAuthorizationConfirmed"]
-  , process "LeanFMServer" specificationConversationTask ["ProblemInquiryPresented", "AmbiguityQuestionPresented", "ProjectBookRevised", "RequirementsReviewPresented", "ImplementationReviewPresented", "ImplementationAuthorizationConfirmed"] ["ProblemStatementSubmitted", "ClarificationSubmitted", "SpecificationRequirementsAccepted", "SpecificationImplementationAccepted"]
+  , process "UserBrowser" specificationConversationTask ["ProblemStatementSubmitted", "ClarificationSubmitted"] ["ProblemInquiryPresented", "AmbiguityQuestionPresented", "ProjectBookRevised", "RequirementsReviewPresented", "ImplementationReviewPresented"]
+  , process "LeanFMServer" specificationConversationTask ["ProblemInquiryPresented", "AmbiguityQuestionPresented", "ProjectBookRevised", "RequirementsReviewPresented", "ImplementationReviewPresented"] ["ProblemStatementSubmitted", "ClarificationSubmitted"]
   , process "UserBrowser" credentialTask ["ProviderCredentialSubmitted"] ["ProviderCredentialAccepted", "ProviderCredentialRejected"]
   , process "LeanFMServer" credentialTask ["ProviderCredentialAccepted", "ProviderCredentialRejected"] ["ProviderCredentialSubmitted"]
   , process "UserBrowser" chatTask ["ChatPromptSubmitted"] ["ChatResponseRendered", "ChatTurnFailed"]

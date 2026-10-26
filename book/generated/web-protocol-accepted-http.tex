@@ -12,10 +12,8 @@
 \item[POST \nolinkurl{/api/projects}] Request: \nolinkurl{ProjectCreateRequested}. Response: \nolinkurl{ProjectCreated}.
 \item[GET \nolinkurl{/api/projects/{project_id}}] Request: \nolinkurl{ProjectOpenRequested}. Response: \nolinkurl{ProjectOpened}, \nolinkurl{ProblemInquiryPresented}.
 \item[DELETE \nolinkurl{/api/projects/{project_id}}] Request: \nolinkurl{ProjectDeleteRequested}. Response: \nolinkurl{ProjectDeleted}.
-\item[POST \nolinkurl{/api/projects/{project_id}/specification/problem}] Request: \nolinkurl{ProblemStatementSubmitted}. Response: \nolinkurl{AmbiguityQuestionPresented}, \nolinkurl{RequirementsReviewPresented}.
+\item[POST \nolinkurl{/api/projects/{project_id}/specification/problem}] Request: \nolinkurl{ProblemStatementSubmitted}. Response: \nolinkurl{AmbiguityQuestionPresented}, \nolinkurl{RequirementsReviewPresented}, \nolinkurl{ImplementationReviewPresented}.
 \item[POST \nolinkurl{/api/projects/{project_id}/specification/ambiguities/{ambiguity_id}}] Request: \nolinkurl{ClarificationSubmitted}. Response: \nolinkurl{ProjectBookRevised}.
-\item[POST \nolinkurl{/api/projects/{project_id}/specification/requirements/{requirements_revision}/accept}] Request: \nolinkurl{SpecificationRequirementsAccepted}. Response: \nolinkurl{ImplementationReviewPresented}.
-\item[POST \nolinkurl{/api/projects/{project_id}/specification/implementation/{implementation_revision}/accept}] Request: \nolinkurl{SpecificationImplementationAccepted}. Response: \nolinkurl{ImplementationAuthorizationConfirmed}.
 \item[POST \nolinkurl{/api/credentials}] Request: \nolinkurl{ProviderCredentialSubmitted}. Response: \nolinkurl{ProviderCredentialAccepted}, \nolinkurl{ProviderCredentialRejected}.
 \item[POST \nolinkurl{/api/projects/{project_id}/conversations/{conversation_id}/messages}] Request: \nolinkurl{ChatPromptSubmitted}. Response: \nolinkurl{ChatResponseRendered}, \nolinkurl{ChatTurnFailed}.
 \item[POST \nolinkurl{/api/projects/{project_id}/markerboard/mermaid}] Request: \nolinkurl{MermaidDraftSaved}. Response: \nolinkurl{MermaidPreviewRendered}.

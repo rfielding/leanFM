@@ -191,7 +191,7 @@ class MultiProvider(unittest.TestCase):
                         self.assertNotIn("```leanfm-questions", body["text"])
                         self.assertIn('"status":"success"', body["text"])
                     if marker == "TEST_DECIDE_DEFAULTS":
-                        self.assertIn("Formal acceptance remains pending", (root / "spec/default-decisions.md").read_text())
+                        self.assertIn("Review and commit it with git", (root / "spec/default-decisions.md").read_text())
                     self.assertFalse(any((root / "source").rglob("*.*")), "routine default authority fabricated gate acceptance")
 
     def test_runnable_goal_repairs_port_and_survives_deleted_chat(self):
@@ -288,8 +288,6 @@ class MultiProvider(unittest.TestCase):
                 self.assertEqual(sum(message["role"] == "assistant" for message in messages), 1)
                 state = self.alice.request(f"/api/projects/{project}/specification")[1]
                 self.assertTrue(state["requirements"]["checked"])
-                self.assertFalse(state["requirements"]["accepted"])
-                self.assertFalse(state["implementation"]["accepted"])
                 self.assertFalse(any((root / "source").rglob("*.*")))
                 tasks = self.alice.request(f"/api/projects/{project}/tasks")[1]["tasks"]
                 self.assertIn("Client->>FixtureServer: FixtureRequest", tasks[0]["interaction_mermaid"])
@@ -303,7 +301,7 @@ class MultiProvider(unittest.TestCase):
                 self.assertEqual(self.alice.chat(project, "TEST_SPECIFY_SERVER", model)[0], 200)
                 state = self.alice.request(path + "/specification")[1]
                 revision = state["requirements"]["revision"]
-                self.assertEqual(self.alice.request(path + f"/specification/requirements/{revision}/accept", {})[0], 200)
+                self.assertEqual(self.alice.request(path + f"/specification/requirements/{revision}/accept", {})[0], 410)
                 before = stats()[counter]
                 status, body = self.alice.chat_batched(project, "TEST_IMPLEMENTATION_REPAIR_LONG", model)
                 self.assertEqual(status, 200, body)
@@ -313,10 +311,9 @@ class MultiProvider(unittest.TestCase):
                 self.assertEqual(body["work"]["state"], "completed")
                 self.assertEqual(body["text"].count("Completion deferred:"), 2)
                 state = self.alice.request(path + "/specification")[1]
-                self.assertTrue(state["requirements"]["accepted"])
+                self.assertTrue(state["requirements"]["checked"])
                 self.assertEqual(state["requirements"]["revision"], revision)
                 self.assertTrue(state["implementation"]["checked"])
-                self.assertFalse(state["implementation"]["accepted"])
                 self.assertFalse(any((ROOT / "projects" / project / "source").rglob("*.*")))
 
     def test_routes_concurrently_without_cross_user_or_provider_fallback(self):

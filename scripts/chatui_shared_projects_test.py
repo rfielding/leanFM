@@ -101,13 +101,14 @@ class SharedProjects(unittest.TestCase):
             self.assertTrue(answer["cancelled"])
         self.assertEqual(list((ROOT / "projects" / project / "source").iterdir()), [])
 
-    def test_source_cannot_be_generated_before_human_gates(self):
+    def test_source_writes_need_no_approval_record(self):
+        # Review happens in git; LeanFM neither blocks source on an approval nor records one.
         project = self.anonymous.project()
         status, answer = self.alice.chat(project, "TEST_WRITE_SOURCE implement the server now", "test-model")
         self.assertEqual(status, 200, answer)
-        self.assertIn('"status":"fail"', answer["text"])
-        self.assertEqual(list((ROOT / "projects" / project / "source").iterdir()), [])
+        self.assertNotEqual(list((ROOT / "projects" / project / "source").iterdir()), [])
         self.assertFalse((ROOT / "projects" / project / ".leanfm/acceptance.json").exists())
+        self.assertEqual(self.alice.request(f"/api/projects/{project}/specification/requirements/x/accept", {})[0], 410)
 
 
 if __name__ == "__main__":

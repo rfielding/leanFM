@@ -111,6 +111,9 @@ def probe(root):
                     raise ValueError('Application page must be a nonempty bounded HTTP 200 response')
             # A successful application contract must not also bind LeanFM's port.
             for table in ['/proc/net/tcp','/proc/net/tcp6']:
+                # A kernel without IPv6 has no tcp6 table and no IPv6 listeners.
+                if table.endswith('6') and not Path(table).exists():
+                    continue
                 for line in Path(table).read_text().splitlines()[1:]:
                     fields=line.split()
                     if fields[3]=='0A':

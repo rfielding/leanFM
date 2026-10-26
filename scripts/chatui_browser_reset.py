@@ -330,24 +330,15 @@ def verify_browser(base, fixture):
         click_text("Properties · CTL")
         wait("document.querySelector('.project-panel:not([hidden]) .task-clause')?.textContent.includes('Correlated completion')")
         click_text("Chat")
-        wait("[...document.querySelectorAll('.project-panel:not([hidden]) button')].some(b=>b.textContent === 'Approve requirements' && !b.disabled)")
-        approval_chats = evaluate("window.catalogTest.chats")
-        click_text("Approve requirements")
-        wait("!document.querySelector('.project-panel:not([hidden]) [aria-label=\"Approval required\"]')")
-        assert evaluate("window.catalogTest.chats") == approval_chats, "requirements approval called a provider"
+        assert not evaluate("[...document.querySelectorAll('.project-panel:not([hidden]) button')].some(b=>/^(Approve|Accept) /.test(b.textContent))"), "LeanFM shows an approval control"
         click_text("Project memory")
-        wait("document.querySelector('.project-panel:not([hidden]) .specification-review article')?.textContent.includes('Accepted current revision')")
+        wait("document.querySelector('.project-panel:not([hidden]) .specification-review article')?.textContent.includes('Checked')")
         click_text("Chat")
         type_into(".project-panel:not([hidden]) .composer textarea", "TEST_SPECIFY_IMPLEMENTATION")
         evaluate("document.querySelector('.project-panel:not([hidden]) .composer button').click()")
         wait("[...document.querySelectorAll('.project-panel:not([hidden]) .message.assistant')].filter(m=>m.textContent.includes('Completed patch fixture')).length === 3")
-        wait("[...document.querySelectorAll('.project-panel:not([hidden]) button')].some(b=>b.textContent === 'Approve implementation' && !b.disabled)")
-        approval_chats = evaluate("window.catalogTest.chats")
-        click_text("Approve implementation")
-        wait("!document.querySelector('.project-panel:not([hidden]) [aria-label=\"Approval required\"]')")
-        assert evaluate("window.catalogTest.chats") == approval_chats, "implementation approval called a provider"
         click_text("Project memory")
-        wait("[...document.querySelectorAll('.project-panel:not([hidden]) .specification-review article')].every(a=>a.textContent.includes('Accepted current revision'))")
+        wait("[...document.querySelectorAll('.project-panel:not([hidden]) .specification-review article')].every(a=>a.textContent.includes('Checked'))")
         click_text("Chat")
         type_into(".project-panel:not([hidden]) .composer textarea", "TEST_WRITE_SOURCE implement the server now")
         evaluate("document.querySelector('.project-panel:not([hidden]) .composer button').click()")
@@ -379,7 +370,7 @@ def verify_browser(base, fixture):
         return {"result": "pass", "browser": version["Browser"], "checks": ["keyboard login/registration tab switching", "password-only login", "visible locked/loading/failed/empty model states", "real mouse logout at narrow width with hidden sidebar and no session", "one shared account and model session across projects", "valid and expired logout open an editable fresh login form", "failed logout stays locally locked and retries without claiming server revocation", "immediate model refresh after unlock with polling paused", "model retry and expired-session recovery preserve drafts without sending chat", "delayed catalog responses cannot overlap or restore a locked session", "queued prompts remain held after unlocking the same key in a new session", "no phantom examples", "image choose/remove/send/persist/resend with native provider pixels",
                 "empty-chat durable resume through actual React composer", "add an Anthropic key while preserving login cookie, model, draft and zero chat calls", "protobuf in Project memory", "separate light/dark PDF routes",
                 "create a fresh project in the production UI", "chat builds a PDF before requirements authoring", "two rejected requirements candidates repair inside the original composer turn with real Lean compilation", "twenty-five model rounds complete through four-round client batches", "generated Grammar, interaction, state and CTL views",
-                "native requirements and implementation approvals are available directly in Chat and invoke no provider", "independent human acceptance of checked requirements and implementation", "actual source files and sandboxed Go test after both gates", "direct key editor and password change retain both providers", "no uncaught browser exceptions"]}
+                "no approval controls; checked requirements and implementation status shown in Project memory", "actual source files and sandboxed Go test after both specification checks", "direct key editor and password change retain both providers", "no uncaught browser exceptions"]}
     except Exception:
         if connection:
             try:

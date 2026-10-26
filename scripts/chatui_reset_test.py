@@ -92,9 +92,8 @@ try:
                        "protobuf": "spec/Requirements.proto", "implementation": "spec/Implementation.lean",
                        "tasks": "spec/tasks.json", "source": "source/", "evidence": "reports/"}.items():
         assert manifest[key] == value, (key, manifest)
-    assert manifest["acceptance"] == {"requirements": "not-recorded", "implementation": "not-recorded"}
+    assert "acceptance" not in manifest, "new projects record no approvals"
     manifest["resume_marker"] = "durable-acceptance-marker"
-    manifest["acceptance"] = {"requirements": "not-recorded", "implementation": "not-recorded"}
     (project / "manifest.json").write_text(json.dumps(manifest))
     subprocess.run(["make", "-C", str(project / "book")], cwd=fixture, check=True,
                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
@@ -114,7 +113,7 @@ try:
         status, result = call(f"/api/projects/{project_id}/chat", {"prompt": "TEST_DURABLE_RESUME", "model": "test-model"})
         assert status == 200 and "Durable resume verified" in result["text"], result
         after = {p: hashlib.sha256((project / p).read_bytes()).hexdigest() for p in paths}
-        assert before == after, "chat reset mutated durable artifacts or acceptance"
+        assert before == after, "chat reset mutated durable artifacts"
         assert call("/api/projects/private/book")[0] == 404
     proto_path = project / "spec/Requirements.proto"
     saved_proto = proto_path.read_bytes()
@@ -126,7 +125,7 @@ try:
     proto_path.write_bytes(saved_proto)
     report = {"result": "pass", "example_directory": "absent", "conversation_reset_cycles": 3,
               "checks": ["actual React bundle served", "no phantom example tab or route", "new project with both PDFs",
-                         "durable inputs reach provider after each reset", "artifact and acceptance bytes unchanged", "foreign project inaccessible", "symlinked foreign schema excluded from provider context"]}
+                         "durable inputs reach provider after each reset", "artifact bytes unchanged", "foreign project inaccessible", "symlinked foreign schema excluded from provider context"]}
     # Must be the embedded React application, not an independently served demo.
     with urllib.request.urlopen(base + "/") as response:
         assert b"/assets/chatui-react1.js" in response.read()

@@ -20,10 +20,10 @@ def instructions : String :=
   "Before requirements, design, or implementation work, read leanfm://project/book/main.pdf, " ++
   "leanfm://project/specification/Requirements.lean, leanfm://project/specification/Requirements.proto, " ++
   "and leanfm://project/specification/Implementation.lean. Treat the book like a maintained portion " ++
-  "of the system prompt. Preserve two explicit gates: acceptance of observable requirements and their " ++
-  "derived views, then acceptance of the traceable implementation specification. Only after both gates " ++
-  "may the book, specifications, and repository be used to produce a one-shot software PR. The MCP " ++
-  "surface is read-only: it supplies canonical context and deterministic checks; it cannot accept a gate. " ++
+  "of the system prompt. Work in order: observable requirements and their derived views, then the " ++
+  "traceable implementation specification, then source, checking each layer before the next. Review " ++
+  "and acceptance happen in git: LeanFM records no approvals, so do not stop to ask for one. The MCP " ++
+  "surface is read-only: it supplies canonical context and deterministic checks. " ++
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
   "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference."
 
@@ -142,7 +142,7 @@ def tools : Array Json := #[
   tool "requirements_interrogation" "Read requirements interrogation"
     "Return the internal requirements completeness checklist. The agent resolves reversible defaults; this is not a questionnaire for the user.",
   tool "code_generation_prompt" "Read one-shot implementation prompt"
-    "Return the canonical post-acceptance prompt that maps the book and accepted specifications to source changes.",
+    "Return the canonical prompt that maps the book and checked specifications to source changes.",
   tool "explain_formula" "Explain a CTL formula"
     "Read a JSON CTL formula back in English with its negation, mode, unknown atoms and lints (vacuity, AF AG vs AG AF, quantifier mismatch with an optional sentence). Read leanfm://language/logic-reference first."
     (schema [("formula", anyJson "JSON formula"), ("task", anyJson "optional canonical task id or inline draft"),
@@ -191,7 +191,7 @@ def prompts : Array Json := #[
     ("arguments", Json.arr #[])],
   Json.mkObj [("name", "one_shot_implementation"),
     ("title", "Implement an accepted LeanFM specification"),
-    ("description", "Use only after both explicit acceptance gates."),
+    ("description", "Use after the requirements and implementation specification check."),
     ("arguments", Json.arr #[])]
 ]
 

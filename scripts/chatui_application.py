@@ -25,7 +25,6 @@ import time
 from urllib.parse import unquote, urlsplit
 from chatui_specification import atomic, confined
 from chatui_runtime import contract, revision
-from chatui_project_state import current
 
 INSTALLATION = Path(__file__).resolve().parents[1]
 LIMIT = 4 * 1024 * 1024
@@ -257,8 +256,6 @@ def start(root, owner, project):
             return observed
         if previous and alive(previous):
             stop(root,owner)
-        if not current(root)['ready']:
-            raise ValueError('Accept both current checked project specifications before launching')
         profile = contract(root)
         if not profile.get('relative_urls'):
             raise ValueError('Preview needs relative asset/API URLs; verify them and record relative_urls=true in spec/runtime.json')

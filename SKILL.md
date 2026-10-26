@@ -1,6 +1,6 @@
 ---
 name: leanfm
-description: Argue a software design into checked LeanFM requirements and implementation specifications, render prompt-derived diagrams and metrics during the conversation, then implement the accepted specifications in the actual source tree. Use for requirements discovery, architecture disputes, LeanFM artifact generation, or spec-driven implementation.
+description: Argue a software design into checked LeanFM requirements and implementation specifications, render prompt-derived diagrams and metrics during the conversation, then implement the checked specifications in the actual source tree. Use for requirements discovery, architecture disputes, LeanFM artifact generation, or spec-driven implementation.
 ---
 
 # LeanFM requirements-to-code workflow
@@ -25,8 +25,8 @@ Preserve these separate inputs:
   transport;
 - `Implementation.lean`: runtime, transport, file, actor, channel, and message
   mappings justified by requirement IDs;
-- the existing source tree: code to preserve, revise, or replace after the
-  specifications are accepted.
+- the existing source tree: code to preserve, revise, or replace once the
+  specifications check.
 
 ## Keep one project in one directory
 
@@ -130,15 +130,15 @@ and charts that answer an explicit prompt. Numeric event reductions should be
 available at `/metrics`; visual results should be available through `/renders/`
 or another generated artifact named by the requirement.
 
-Continue the argument until the user explicitly accepts the requirements
-specification. Do not interpret silence, a successful build, or an attractive
-diagram as acceptance.
+Continue the argument until the requirements check and say what the user asked
+for. The user reviews and accepts changes by committing them with git; do not
+stop to ask for an approval.
 
 ### Start and resume from the project root
 
 A fresh agent invocation needs only the project-root directory. Load the
 manifest, editable and rendered book, canonical requirements and protobuf,
-canonical implementation mapping, acceptance revisions, source tree, generated
+canonical implementation mapping, git history, source tree, generated
 views and evidence from their stable project-relative paths. Do not require the
 user to paste an earlier transcript or manufacture a bootstrap prompt.
 
@@ -149,18 +149,16 @@ change observable requirements, derived views, proof obligations, or
 implementation choices. Resolve routine choices using existing conventions and
 reasonable reversible defaults within recorded requirements and authorization.
 Record the decisions; briefly list only those the stakeholder may challenge.
-Ask only about a consequential ambiguity that no authorized default resolves,
-or a missing explicit acceptance gate. Name its concrete effect on scope,
+Ask only about a consequential ambiguity that no authorized default resolves. Name its concrete effect on scope,
 observable behavior, compatibility, security/privacy, irreversible data or
 material spending and the artifact or gate it affects. Compiler syntax,
 formatting and already-authorized validation are engineering work: inspect the
 logged exit code and diagnostic, narrow and check the correction, and never
 repeat an unchanged failure class or ask the stakeholder to approve that work.
 A readiness review can report ready with zero questions; it must not manufacture
-questions. These defaults neither override a recorded requirement nor accept
-either gate for the stakeholder. Each subsequent turn should do at least one of:
+questions. These defaults never override a recorded requirement. Each subsequent turn should do at least one of:
 record a durable decision, update a derived view, ask a blocking ambiguity,
-report deterministic validation, or advance an explicit acceptance gate.
+report deterministic validation, or advance to the next layer.
 
 Revise the project book as durable understanding develops. Regenerate
 `book/main.pdf` and `book/main-dark.pdf` from the same editable source and link
@@ -172,8 +170,8 @@ must remain sufficient to resume.
 
 Treat the working book as an intentionally permissive design notebook during
 discovery: it may contain stream-of-consciousness exploration, alternatives,
-and ideas that never become requirements. Before an acceptance gate or a
-one-shot implementation, perform a separate conservative cleanup pass:
+and ideas that never become requirements. Before a commit the user will
+review, or a one-shot implementation, perform a separate conservative cleanup pass:
 
 - classify each normative idea as accepted in `Requirements.lean`, assigned to
   `Implementation.lean`, explicitly deferred, or removed;
@@ -194,7 +192,7 @@ between the central design argument and the accepted typed artifacts explicit.
 
 ## Settle the implementation specification
 
-After requirements acceptance, resolve implementation choices in
+Once the requirements check, resolve implementation choices in
 `Implementation.lean`: target language and files, actor instances and
 homogeneous clusters, routing, bounded queues and memory, concurrency,
 transports, protobuf bindings, failure handling, observability, tests, and
@@ -207,20 +205,20 @@ incomplete capture cannot establish conformance. During implementation, ask
 questions until the accepted behavior can be realized. Store answers that do
 not change observable behavior in `Implementation.lean`, each mapped to the
 requirements it realizes. If an answer changes a message, field, ordering, or
-other observable behavior, return to the requirements gate instead. If a later
+other observable behavior, change the requirements instead. If a later
 requirements change makes an implementation answer unnecessary, remove that
 implementation detail without preserving it as a requirement.
 
 Validate the requirements and implementation independently and together. Use
 recorded choices and reasonable defaults for routine implementation details;
-ask only about consequential unresolved choices. Ask for explicit acceptance
-of the implementation specification. Before that gate,
-do not represent application code as the final implementation.
+ask only about consequential unresolved choices. Until the implementation
+specification checks, do not represent application code as the final
+implementation.
 
 ## One-shot the actual code
 
 Before generating or editing implementation source, perform an explicit
-security critique of the accepted design and implementation mapping. Treat
+security critique of the design and implementation mapping. Treat
 security requirements primarily as forbidden observable behavior: write
 durable `MUST NOT` constraints for unauthorized access, cross-tenant or
 cross-project disclosure, secret persistence or logging, path and symlink
@@ -229,11 +227,11 @@ request confusion, replay, privilege expansion, and fail-open behavior wherever
 they apply. Name trust boundaries, protected assets, attacker capabilities,
 abuse cases, and the intended failure response. Map every applicable negative
 requirement to an implementation control and at least one negative test or proof
-obligation. If a material threat has no accepted mitigation, return to the
-implementation-specification gate; do not generate source and do not silently
-invent policy. A security critique does not itself accept either gate.
+obligation. If a material threat has no mitigation, add one to the
+implementation specification, or ask the user when it is a genuine policy
+choice; do not generate unprotected source and do not silently invent policy.
 
-Once both specifications are explicitly accepted, perform one implementation
+Once both specifications check, perform one implementation
 pass using all of these inputs together:
 
 ```text

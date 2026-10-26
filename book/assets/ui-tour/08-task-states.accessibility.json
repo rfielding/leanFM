@@ -454,13 +454,6 @@
     },
     {
       "role": "button",
-      "name": "Create a named room game or challenge 3 productions · 4 states",
-      "states": {
-        "focusable": true
-      }
-    },
-    {
-      "role": "button",
       "name": "Watch or enter a game chat container 3 productions · 4 states",
       "states": {
         "focusable": true
@@ -476,6 +469,104 @@
     {
       "role": "button",
       "name": "Send game chat 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Create a challenge with board, bot and seat settings 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Plan a seat as bot or open and set its team 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Take an open seat 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Leave a seat before the start 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Start a game; bots fill the remaining seats 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Hand my seat to a bot, or take it back 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Play a stone, pass or resign 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Propose merging two teams 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Accept or decline a merge proposal 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Watch the board, clocks, scores, teams and record 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "A server bot plays one turn 5 productions · 5 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "One turn of a started game 9 productions · 5 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Two teams merge by consent 8 productions · 7 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "A game from challenge to result 13 productions · 5 states",
       "states": {
         "focusable": true
       }
@@ -797,6 +888,266 @@
       "name": " states"
     },
     {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "5"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "5"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "9"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "5"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "8"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "7"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "13"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "5"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
       "role": "StaticText",
       "name": "Create a named chat room"
     },
@@ -990,26 +1341,6 @@
     },
     {
       "role": "StaticText",
-      "name": "Create a named room game or challenge"
-    },
-    {
-      "role": "InlineTextBox",
-      "name": "3"
-    },
-    {
-      "role": "InlineTextBox",
-      "name": " productions · "
-    },
-    {
-      "role": "InlineTextBox",
-      "name": "4"
-    },
-    {
-      "role": "InlineTextBox",
-      "name": " states"
-    },
-    {
-      "role": "StaticText",
       "name": "Watch or enter a game chat container"
     },
     {
@@ -1069,6 +1400,286 @@
       "name": " states"
     },
     {
+      "role": "StaticText",
+      "name": "Create a challenge with board, bot and seat settings"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Plan a seat as bot or open and set its team"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Take an open seat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Leave a seat before the start"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start a game; bots fill the remaining seats"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Hand my seat to a bot, or take it back"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Play a stone, pass or resign"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Propose merging two teams"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Accept or decline a merge proposal"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Watch the board, clocks, scores, teams and record"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "A server bot plays one turn"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "One turn of a started game"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "9"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Two teams merge by consent"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "8"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "7"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "A game from challenge to result"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "13"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
       "role": "InlineTextBox",
       "name": "Create a named chat room"
     },
@@ -1118,11 +1729,11 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Enter a room and inspect "
+      "name": "Enter a room and "
     },
     {
       "role": "InlineTextBox",
-      "name": "its game list"
+      "name": "inspect its game list"
     },
     {
       "role": "InlineTextBox",
@@ -1131,14 +1742,6 @@
     {
       "role": "InlineTextBox",
       "name": "open challenges"
-    },
-    {
-      "role": "InlineTextBox",
-      "name": "Create a named room "
-    },
-    {
-      "role": "InlineTextBox",
-      "name": "game or challenge"
     },
     {
       "role": "InlineTextBox",
@@ -1155,6 +1758,122 @@
     {
       "role": "InlineTextBox",
       "name": "Send game chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create a challenge with "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "board, bot and seat "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "settings"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Plan a seat as bot or "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "open and set its team"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Take an open seat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Leave a seat before the "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "start"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start a game; bots fill "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "the remaining seats"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Hand my seat to a bot, "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "or take it back"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Play a stone, pass or "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "resign"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Propose merging two "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "teams"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Accept or decline a "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "merge proposal"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Watch the board, "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "clocks, scores, teams "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "and record"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A server bot plays one "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "turn"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "One turn of a started "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "game"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Two teams merge by "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "consent"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A game from challenge "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "to result"
     },
     {
       "role": "StaticText",

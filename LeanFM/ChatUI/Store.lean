@@ -512,8 +512,8 @@ def projectBookSource (name : String) : String :=
   "\\section{Problem}\nDescribe the problem, the people or systems affected, and the observable outcome that would make the project useful.\n\n" ++
   "\\section{Scenarios and tasks}\nRecord the named user and system scenarios. As tasks become precise, their generated interaction diagrams and state machines belong here with their provenance.\n\n" ++
   "\\section{Open questions}\nKeep unresolved design questions explicit until the conversation supplies durable answers.\n\n" ++
-  "\\chapter{Requirements argument}\nCapture decisions and alternatives here before promoting observable behavior through the requirements acceptance gate.\n\n" ++
-  "\\chapter{Implementation argument}\nAfter requirements acceptance, record implementation mappings, transports, repository choices, and validation evidence here.\n" ++
+  "\\chapter{Requirements argument}\nCapture decisions and alternatives here before promoting observable behavior into the checked requirements.\n\n" ++
+  "\\chapter{Implementation argument}\nOnce the requirements check, record implementation mappings, transports, repository choices, and validation evidence here.\n" ++
   "\\end{document}\n"
 
 def projectBookMakefile : String :=
@@ -543,7 +543,7 @@ def provisionProjectSpecifications (root name : String) : IO Unit := do
     ("syntax = \"proto3\";\n\npackage project.requirements;\n\n// Generated after this project's observable requirements are identified.\n")
   writeAtomic (root ++ "/spec/Implementation.lean")
     ("/-- Project-owned implementation mapping for " ++ name ++ ".\n" ++
-     "    This remains empty until requirements acceptance. -/\n" ++
+     "    This remains empty until the requirements are written and checked. -/\n" ++
      "namespace Project.Implementation\n\ndef projectName : String := \"" ++ escaped ++ "\"\n\nend Project.Implementation\n")
 
 def repairSelfHostingSpecificationLeak (root name : String) : IO Bool := do
@@ -566,7 +566,7 @@ def createProject (username name : String) : IO (Except String String) := do
   for dir in ["inputs", "book", "spec", "source", "tests", "artifacts", "renders", "events", "reports", "logs", "cache", "conversations"] do
     IO.FS.createDirAll (fp (root ++ "/" ++ dir))
   writeAtomic (root ++ "/manifest.json") ("{\"project_id\":\"" ++ projectId ++ "\",\"display_name\":\"" ++ jsonEscape name ++
-    "\",\"root\":\".\",\"book\":\"book/main.pdf\",\"dark_book\":\"book/main-dark.pdf\",\"book_source\":\"book/main.tex\",\"requirements\":\"spec/Requirements.lean\",\"protobuf\":\"spec/Requirements.proto\",\"implementation\":\"spec/Implementation.lean\",\"tasks\":\"spec/tasks.json\",\"source\":\"source/\",\"evidence\":\"reports/\",\"acceptance\":{\"requirements\":\"not-recorded\",\"implementation\":\"not-recorded\"}}\n")
+    "\",\"root\":\".\",\"book\":\"book/main.pdf\",\"dark_book\":\"book/main-dark.pdf\",\"book_source\":\"book/main.tex\",\"requirements\":\"spec/Requirements.lean\",\"protobuf\":\"spec/Requirements.proto\",\"implementation\":\"spec/Implementation.lean\",\"tasks\":\"spec/tasks.json\",\"source\":\"source/\",\"evidence\":\"reports/\"}\n")
   provisionProjectBook root name
   let builtBook ← IO.Process.output { cmd := "make", args := #["-C", root ++ "/book"] }
   if builtBook.exitCode != 0 then

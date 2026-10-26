@@ -1226,7 +1226,7 @@ def leanFMRequirementsReference : String :=
     , "## RequirementSpec"
     , "Required collections: actors, actorPopulations, actorResources, actorReliability, messages, tasks, grammars, processes, properties, requiredProofs, performance, charts, desiredOutputs, markdown."
     , "Actors, messages, task states, and transitions should be typed locally, then converted at the RequirementSpec boundary."
-    , "A reduced scope still needs a complete behavior model before requirements acceptance. tasks, grammars, processes, properties, requiredProofs and desiredOutputs must not be empty placeholders. Model one small request/result scenario, validate it, then add the next; do not defer the mandatory collections until after acceptance."
+    , "A reduced scope still needs a complete behavior model before the requirements are reviewed. tasks, grammars, processes, properties, requiredProofs and desiredOutputs must not be empty placeholders. Model one small request/result scenario, validate it, then add the next; do not defer the mandatory collections."
     , "markdown has type List RequirementMarkdown. Each item is a record { id := \"scope\", title := \"Scope\", body := \"Observable behavior\" }; a String is not a RequirementMarkdown."
     , ""
     , "## Observable event atom"
@@ -1363,7 +1363,7 @@ def generatedRequirementSystemPrompt : String :=
 def requirementsInterrogationChecklist : String :=
   joinWithNewline
     [ "LeanFM requirements interrogation checklist"
-    , "This is an INTERNAL completeness checklist for the agent, not a questionnaire for the stakeholder. Resolve routine formal-language, implementation and reversible resource choices from the durable context and sensible defaults, record them, and validate them. Ask the stakeholder only about a major consequence that is hard to reverse and has no authorized reasonable default, or a required explicit acceptance gate. Do not invent measured costs, probabilities or performance data; retain unknown observations as unknown. Present approval in plain language about product behavior and material consequences, never as a quiz about Lean types or channel APIs."
+    , "This is an INTERNAL completeness checklist for the agent, not a questionnaire for the stakeholder. Resolve routine formal-language, implementation and reversible resource choices from the durable context and sensible defaults, record them, and validate them. Ask the stakeholder only about a major consequence that is hard to reverse and has no authorized reasonable default. Do not invent measured costs, probabilities or performance data; retain unknown observations as unknown. Present approval in plain language about product behavior and material consequences, never as a quiz about Lean types or channel APIs."
     , "1. What identifies a scenario, session, task, event, and concrete actor instance?"
     , "2. Which event kinds start and end each measurement, and does every end backpoint to its start?"
     , "3. What is the monotonic clock unit and observation window?"

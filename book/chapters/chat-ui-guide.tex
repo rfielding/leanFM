@@ -6,8 +6,8 @@ checked requirements, a separately reviewed implementation mapping, source
 files, and a running application. Work in the selected project's Chat pane;
 use the other panes to inspect what the conversation actually produced. A
 reply, a diagram, and a successful PDF build each answer different questions.
-The two specification acceptance controls record the decisions that authorize
-implementation.
+There is no approval button: you review what LeanFM produced and commit it
+with git, exactly as you would any other change.
 
 This walkthrough uses the production interface with a disposable GoServer
 project and a local test provider. The project contains real checked
@@ -85,7 +85,7 @@ The horizontal navigation groups the work by purpose:
 \item[Book] Read or edit the durable design argument and preview its PDFs.
 \item[Grammar and Tasks] Inspect the current project's generated behavioral
   views rather than relying on an illustration invented in a reply.
-\item[Project memory] Review canonical artifact files and both acceptance gates.
+\item[Project memory] Review canonical artifact files and whether each is checked and committed.
 \item[Source] Inspect the implementation files and tests actually written.
 \end{description}
 The sidebar's text-size controls change the interface scale. Project and phase
@@ -110,7 +110,7 @@ each challenge's conversation.
 Add a concrete failure case when it matters: another room must not receive the
 message; a retry must not create a second challenge; an invalid action must show
 an error. LeanFM uses the project files to resolve ordinary implementation
-details. A consequential ambiguity or a missing acceptance decision can still
+details. A consequential ambiguity can still
 require your answer.
 
 Select the model for the new prompt in \textbf{Model}. The header identifies its
@@ -161,20 +161,18 @@ token charge of its own.
 \UITourFigure{05-chat-response}
   {Review the answer and its evidence before taking the next action.}
   {The actual Chat pane shows the completed local-provider explanation of CreateRoom with its timestamp and usage. User-message Resend and message Delete controls appear beside the messages. The composer and model selector remain visible.}
-  {Capture boundary: after ChatResponseRendered. The fixture reply explains existing checked behavior; it does not accept a gate or generate implementation files.}
+  {Capture boundary: after ChatResponseRendered. The fixture reply explains existing checked behavior; it does not generate implementation files.}
 
 \textbf{Resend} queues the selected user prompt again, retaining its attachment
 references. It can cause a new provider request. Use it after understanding the
 failure or changing the relevant input; it is not a promise that an uncertain
 earlier request had no effect. \textbf{Delete} removes that conversation message.
-It does not undo a committed source change, remove the book, or revoke an
-accepted specification.
+It does not undo a committed source change or remove the book.
 
 When a structured question appears, choose or type an answer in its form and
 submit it. The answer closes the identified question and becomes a later queued
-turn. Formal acceptance is handled by the native revision-bound controls in
-Chat or Project memory. A successful compiler check, a model saying ``done,''
-or a normal follow-up message does not accept a missing gate.
+turn. Acceptance is a git commit: a successful compiler check or a model saying
+``done'' tells you the work is ready to review, not that you have reviewed it.
 
 An error includes a concrete diagnostic and, where available, an expanded
 \textbf{Diagnostic for Codex} with \textbf{Copy diagnostic}. Preserve that
@@ -220,7 +218,7 @@ for a focused behavioral view and Grammar for its structure. Neither pane
 should substitute another project's grammar or a separately drawn persuasive
 picture for the selected project's checked model.
 
-\section{Review both gates, then inspect the implementation}
+\section{Review the specification, then inspect the implementation}
 
 Open \textbf{Project memory} to read the book, requirements, protobuf schema,
 implementation mapping, and implementation-source summary. The status of a file
@@ -229,30 +227,25 @@ presence alone does not establish that its content has passed the current
 canonical check.
 
 \UITourFigure{06-project-memory}
-  {Project memory makes the durable files and acceptance state inspectable.}
-  {The Project memory pane shows canonical artifact tabs and source inventory. Requirements and Implementation specification have distinct review cards. The demonstration project's actual current revisions are already accepted.}
-  {Capture boundary: both recorded specification acceptances loaded. The screenshot does not press either acceptance button.}
+  {Project memory makes the durable files and their check status inspectable.}
+  {The Project memory pane shows canonical artifact tabs and source inventory. Requirements and Implementation specification each show whether they pass the canonical check and whether they are committed.}
+  {Capture boundary: both checked specification revisions loaded.}
 
-The first gate accepts observable requirements and their derived outputs.
-Review the task messages, outcomes, error behavior, boundaries, and generated
-views; then use \textbf{Accept requirements} when the checked revision expresses
-the intended product. The second gate accepts the separate implementation
-specification and its traceability. Review how the chosen runtime, files,
-transports, resource bounds, security controls, and tests realize those
-requirements; then use \textbf{Accept implementation specification}.
-
-The controls enable only for an eligible checked revision. Changing the
-requirements or mapping can make an earlier acceptance stale. Return to the
-appropriate review rather than treating the old approval as authorization for
-different content. Once both current gates are accepted, ask Chat to implement
-the actual source and run its checks. The accepted artifacts and existing
+Review the requirements first: task messages, outcomes, error behavior,
+boundaries, and generated views. Then review the separate implementation
+specification and its traceability: how the chosen runtime, files, transports,
+resource bounds, security controls, and tests realize those requirements. When
+a revision says what you mean, commit it with git; when it does not, say so in
+Chat. Nothing waits for an approval click, so you can ask Chat to implement the
+actual source at any time, and LeanFM will write and check whatever
+specification that needs first. The committed artifacts and existing
 source remain the inputs; deleted conversation history must not become a
 missing design dependency.
 
 \UITourFigure{09-source}
   {Source displays the implementation files actually present in the project.}
   {The real Source pane lists GoServer source and test files and displays the selected file. This is an inspectable source inventory.}
-  {Capture boundary: the accepted implementation's actual source tree opened.}
+  {Capture boundary: the implementation's actual source tree opened.}
 
 Use \textbf{Source} to inspect the changed files and tests. Request edits and
 verification through Chat when needed; the Source pane is an inspection view.
@@ -264,8 +257,8 @@ deferred.
 
 \section{Start, open, and stop the app}
 
-Use \textbf{Start app} in the selected project's application bar after its
-current specifications are accepted and its source is runnable. LeanFM uses
+Use \textbf{Start app} in the selected project's application bar once its
+source is runnable. LeanFM uses
 the fixed application contract, waits for actual readiness and a page response,
 and keeps the owned process running. The bar changes to \textbf{running},
 \textbf{Open app} becomes a link, and Chat receives the same verified launch

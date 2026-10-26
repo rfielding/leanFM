@@ -20,8 +20,8 @@ are you trying to solve?"
 
 The MCP surface is currently read-only. Cursor can read the book, canonical
 specifications, language references, interrogation prompt and validation
-evidence. Cursor edits project files with its normal filesystem tools; LeanFM
-does not accept either specification gate on Cursor's behalf.
+evidence. Cursor edits project files with its normal filesystem tools; the
+user reviews and commits those changes with git.
 
 ## Driving Cursor from the LeanFM browser
 
@@ -42,4 +42,4 @@ as a model-provider API key.
 The adapter must preserve `(user, project, conversation, request)` identity,
 bound its queues, keep ACP processes and sessions isolated, expose usage when
 Cursor reports it, and terminate the child process when its queue is closed and
-drained. File mutations remain subject to the two LeanFM acceptance gates.
+drained. File mutations are reviewed and committed with git.

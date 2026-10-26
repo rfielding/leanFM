@@ -149,15 +149,6 @@
     "modifiers": 0,
     "focused": {
       "role": "BUTTON",
-      "name": "Create a named room game or challenge3 productions · 4 states"
-    }
-  },
-  {
-    "action": "key",
-    "key": "Tab",
-    "modifiers": 0,
-    "focused": {
-      "role": "BUTTON",
       "name": "Watch or enter a game chat container3 productions · 4 states"
     }
   },
@@ -184,8 +175,134 @@
     "key": "Tab",
     "modifiers": 0,
     "focused": {
+      "role": "BUTTON",
+      "name": "Create a challenge with board, bot and seat settings3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Plan a seat as bot or open and set its team3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Take an open seat3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Leave a seat before the start3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Start a game; bots fill the remaining seats3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Hand my seat to a bot, or take it back3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Play a stone, pass or resign3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Propose merging two teams3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Accept or decline a merge proposal3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Watch the board, clocks, scores, teams and record3 productions · 4 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "A server bot plays one turn5 productions · 5 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "One turn of a started game9 productions · 5 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Two teams merge by consent8 productions · 7 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "A game from challenge to result13 productions · 5 states"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
       "role": "MAIN",
-      "name": "Create a named chat roomServerPersonServerPerson#leanfm-react-1792964446557-46154b4e3a0af8{font-fami"
+      "name": "Create a named chat roomServerPersonServerPerson#leanfm-react-1793037302211-26dffda957ad8{font-famil"
     }
   },
   {

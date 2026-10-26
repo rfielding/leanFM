@@ -17,6 +17,9 @@ message EventEnvelope {
   // subtree as nested interaction boundaries.
   optional string cause_id = 8;
 
+  // Former approval messages; review and acceptance now happen in git.
+  reserved 81, 83, 84;
+
   oneof payload {
     LoginSubmitted login_submitted = 20;
     LoginAccepted login_accepted = 21;
@@ -79,10 +82,7 @@ message EventEnvelope {
     ClarificationSubmitted clarification_submitted = 78;
     ProjectBookRevised project_book_revised = 79;
     RequirementsReviewPresented requirements_review_presented = 80;
-    SpecificationRequirementsAccepted specification_requirements_accepted = 81;
     ImplementationReviewPresented implementation_review_presented = 82;
-    SpecificationImplementationAccepted specification_implementation_accepted = 83;
-    ImplementationAuthorizationConfirmed implementation_authorization_confirmed = 84;
     ConversationCheckpointRequested conversation_checkpoint_requested = 85;
     ConversationCheckpointBlocked conversation_checkpoint_blocked = 86;
     ConversationCheckpointCommitted conversation_checkpoint_committed = 87;
@@ -134,10 +134,7 @@ message AmbiguityQuestionPresented { string project_id = 1; string ambiguity_id 
 message ClarificationSubmitted { string project_id = 1; string ambiguity_id = 2; string answer = 3; }
 message ProjectBookRevised { string project_id = 1; string book_revision = 2; repeated string decision_ids = 3; string light_pdf = 4; string dark_pdf = 5; }
 message RequirementsReviewPresented { string project_id = 1; string requirements_revision = 2; repeated string derived_artifact_ids = 3; repeated string open_ambiguity_ids = 4; }
-message SpecificationRequirementsAccepted { string project_id = 1; string requirements_revision = 2; }
 message ImplementationReviewPresented { string project_id = 1; string requirements_revision = 2; string implementation_revision = 3; string traceability_report = 4; }
-message SpecificationImplementationAccepted { string project_id = 1; string requirements_revision = 2; string implementation_revision = 3; }
-message ImplementationAuthorizationConfirmed { string project_id = 1; string requirements_revision = 2; string implementation_revision = 3; }
 
 message AccountCreateSubmitted {
   string username = 1;

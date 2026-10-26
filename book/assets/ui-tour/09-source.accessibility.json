@@ -336,7 +336,7 @@
     },
     {
       "role": "StaticText",
-      "name": "0"
+      "name": "112"
     },
     {
       "role": "StaticText",
@@ -344,7 +344,7 @@
     },
     {
       "role": "StaticText",
-      "name": "1,000"
+      "name": "888"
     },
     {
       "role": "StaticText",
@@ -404,6 +404,20 @@
     },
     {
       "role": "button",
+      "name": "book_tour.py",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "bot.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
       "name": "browser_check.py",
       "states": {
         "focusable": true
@@ -439,6 +453,20 @@
     },
     {
       "role": "button",
+      "name": "cmd/demo/static/engine.js",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "cmd/demo/static/gameview.js",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
       "name": "cmd/demo/static/index.html",
       "states": {
         "focusable": true
@@ -446,7 +474,42 @@
     },
     {
       "role": "button",
+      "name": "cmd/demo/static/search-worker.js",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
       "name": "cmd/demo/static/style.css",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "engine.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "engine_test.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "game.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "game_test.go",
       "states": {
         "focusable": true
       }
@@ -461,6 +524,13 @@
     {
       "role": "button",
       "name": "goserver",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "labparity_test.go",
       "states": {
         "focusable": true
       }
@@ -604,7 +674,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "0"
+      "name": "112"
     },
     {
       "role": "InlineTextBox",
@@ -612,7 +682,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "1,000"
+      "name": "888"
     },
     {
       "role": "InlineTextBox",
@@ -660,6 +730,14 @@
     },
     {
       "role": "StaticText",
+      "name": "book_tour.py"
+    },
+    {
+      "role": "StaticText",
+      "name": "bot.go"
+    },
+    {
+      "role": "StaticText",
       "name": "browser_check.py"
     },
     {
@@ -680,11 +758,39 @@
     },
     {
       "role": "StaticText",
+      "name": "cmd/demo/static/engine.js"
+    },
+    {
+      "role": "StaticText",
+      "name": "cmd/demo/static/gameview.js"
+    },
+    {
+      "role": "StaticText",
       "name": "cmd/demo/static/index.html"
     },
     {
       "role": "StaticText",
+      "name": "cmd/demo/static/search-worker.js"
+    },
+    {
+      "role": "StaticText",
       "name": "cmd/demo/static/style.css"
+    },
+    {
+      "role": "StaticText",
+      "name": "engine.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "engine_test.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "game.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "game_test.go"
     },
     {
       "role": "StaticText",
@@ -693,6 +799,10 @@
     {
       "role": "StaticText",
       "name": "goserver"
+    },
+    {
+      "role": "StaticText",
+      "name": "labparity_test.go"
     },
     {
       "role": "StaticText",
@@ -788,6 +898,14 @@
     },
     {
       "role": "InlineTextBox",
+      "name": "book_tour.py"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "bot.go"
+    },
+    {
+      "role": "InlineTextBox",
       "name": "browser_check.py"
     },
     {
@@ -808,11 +926,39 @@
     },
     {
       "role": "InlineTextBox",
+      "name": "cmd/demo/static/engine.js"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "cmd/demo/static/gameview.js"
+    },
+    {
+      "role": "InlineTextBox",
       "name": "cmd/demo/static/index.html"
     },
     {
       "role": "InlineTextBox",
+      "name": "cmd/demo/static/search-worker.js"
+    },
+    {
+      "role": "InlineTextBox",
       "name": "cmd/demo/static/style.css"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "engine.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "engine_test.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "game.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "game_test.go"
     },
     {
       "role": "InlineTextBox",
@@ -821,6 +967,10 @@
     {
       "role": "InlineTextBox",
       "name": "goserver"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "labparity_test.go"
     },
     {
       "role": "InlineTextBox",

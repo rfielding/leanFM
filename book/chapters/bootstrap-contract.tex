@@ -33,11 +33,11 @@ A copyable project root contains the following stable inputs:
   \item[\texttt{lean-toolchain} and \texttt{lakefile.toml}] The exact compiler
         selection and module roots needed to run the bootstrap locally.
   \item[\texttt{project.json}] Project identity, stable artifact paths,
-        acceptance state and the classification of design versus language
+        and the classification of design versus language
         inputs.
 \end{description}
 
-All project-owned state and acceptance decisions belong below the exclusive
+All project-owned state and decisions belong below the exclusive
 root: inputs, conversations, artifact revisions, source, tests, generated views,
 traces, reports, logs, and project-specific caches. Choose the root before
 session work; temporary files and atomic promotion stay inside it. Reject
@@ -54,7 +54,7 @@ the stakeholder need not paste a transcript or restate a bootstrap procedure.
 If the root has no durable problem statement, LeanFM creates the minimal
 editable book shell and begins with the visible question ``What problem are you
 trying to solve?'' The answer starts requirements discovery. Named ambiguity
-questions, book revisions, validation evidence and the two acceptance decisions
+questions, book revisions and validation evidence
 then accumulate beneath that same root.
 
 \section{Conventional generated interface}
@@ -71,7 +71,7 @@ end LeanFMProject.Requirements
 \end{lstlisting}
 
 The byte vocabulary lives beside it at
-\texttt{Specification/Requirements.proto}. After requirements acceptance, the
+\texttt{Specification/Requirements.proto}. Once the requirements check, the
 separate implementation mapping lives at
 \texttt{Specification/Implementation.lean}. Capitalization is significant
 because these are Lean module paths, not informal filenames.
@@ -95,16 +95,19 @@ elaboration by itself is not LeanFM validation. The renderer also consumes that
 same value. A separately written diagram is not evidence that it matches the
 requirements.
 
-\section{Acceptance gates}
+\section{Three layers, reviewed in git}
 \label{sec:acceptance-gates}
 
-The first gate accepts observable requirements; the second separately accepts
-their realization mapping. Both require explicit stakeholder acceptance, not a
-successful build, model response or attractive diagram. Application source and
-tests follow only after both gates and the security review in
-Chapter~\ref{ch:feature-discipline}.
+Work proceeds in three layers: observable requirements, then their realization
+mapping, then source. Each layer is checked before the next is built on it, and
+application source follows the security review in
+Chapter~\ref{ch:feature-discipline}. Review and acceptance are ordinary git
+commits: the stakeholder reads the diff and commits it. LeanFM records no
+approvals and never makes an edit, a source write or a launch wait for one; its
+project status shows only whether each layer passes its canonical check and
+whether it is committed.
 
-\texttt{Requirements.lean} defines the contract. Its accepted multi-actor wire
+\texttt{Requirements.lean} defines the contract. Its multi-actor wire
 grammar is the conformance oracle: complete decoded traffic is legal or has a
 counterexample; an incomplete capture cannot establish conformance.
 \texttt{Requirements.proto} fixes byte values without choosing transport.
@@ -112,13 +115,12 @@ counterexample; an incomplete capture cannot establish conformance.
 behavior---for example queues, transports, journals or browser mechanisms---each
 mapped to its requirement. Answers to implementation questions belong there
 when they leave observable behavior unchanged. An answer changing messages,
-fields, ordering or another observable must instead revise Requirements and
-return to the first gate. Remove implementation answers made unnecessary by
+fields, ordering or another observable must instead revise Requirements. Remove implementation answers made unnecessary by
 later requirements changes rather than preserving them as requirements.
 
-The bootstrap therefore solves a circularity without weakening the gates. The
+The bootstrap therefore solves a circularity. The
 book explains what is being built; the generic distribution makes the LeanFM
-language executable; accepted project artifacts preserve the decisions. None
+language executable; committed project artifacts preserve the decisions. None
 is a substitute for the other two.
 
 \section{Construction is not a runtime dependency}
@@ -220,6 +222,6 @@ The local commands are authoritative when no server is running. A running
 LeanFM server additionally exposes the requirements and implementation language
 references, the interrogation checklist, and read-only MCP context without
 requiring a user login. These public endpoints contain language documentation,
-not project or account data. Project artifacts, conversations, credentials and
-acceptance mutations remain authenticated and owner-scoped.
+not project or account data. Project artifacts, conversations and credentials
+remain authenticated and owner-scoped.
 

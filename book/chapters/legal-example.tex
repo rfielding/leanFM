@@ -222,7 +222,7 @@ author; each rule's actor, trigger (a state formula that may use
 $\mathit{knows}$), deadline, path condition and reparation; and an optional
 priority between codes. The checker would return a status per rule per history
 with its witness or counterexample trace. Like every LeanFM feature, that form
-goes through the requirements gate and the implementation gate before any
+gets checked requirements and a checked implementation mapping before any
 checker code. Regenerate this chapter's tables and diagram with
 \texttt{lake env lean --run LegalDepositExample.lean}; the provenance record is
 in \path{book/generated/legal-provenance.txt}.

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Deterministic, revision-bound stakeholder gates. No provider calls.
+"""Deterministic project specification status. No provider calls.
+
+Review and acceptance are git commits: LeanFM records no approvals and blocks
+no edit, source write or launch on one. It reports whether the canonical check
+is current and whether the specification files are committed.
 
 Refs: shared_projects_have_one_root, shared_project_writers_do_not_collide,
 shared_project_paths_never_reach_credentials; develop_project_specification.
@@ -7,6 +11,7 @@ shared_project_paths_never_reach_credentials; develop_project_specification.
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 from chatui_specification import atomic, confined, digest
 
@@ -37,17 +42,40 @@ def current(root):
     implementation_hash = digest(implementation_path)
     implementation_checked = checked and bool(report.get("implementation")) and report.get("artifacts", {}).get("spec/Implementation.lean") == implementation_hash
     implementation_revision = hashlib.sha256((requirement_revision + implementation_hash).encode()).hexdigest()
-    gate_path = confined(root, ".leanfm/acceptance.json")
+    git = git_status(root, list(files) + ["spec/Implementation.lean"])
+    return {"requirements": {"revision": requirement_revision, "checked": bool(checked),
+                             "committed": git["committed"](list(files))},
+            "implementation": {"revision": implementation_revision, "checked": bool(implementation_checked),
+                               "committed": git["committed"](["spec/Implementation.lean"])},
+            "ready": True, "files": files, "git": {"repository": git["repository"], "uncommitted": git["uncommitted"]},
+            "blocker": ""}
+
+
+def git_status(root, paths):
+    """Committed means tracked by git with no working-tree or staged change."""
+    # Project files are untrusted: never let repository config run code
+    # (fsmonitor, hooks, external diff or textconv drivers).
+    def run(*arguments):
+        return subprocess.run(["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
+                               "-c", "diff.external=", "-C", str(root), *arguments],
+                              capture_output=True, text=True, timeout=10,
+                              env={"PATH": "/usr/bin:/bin", "GIT_CONFIG_NOSYSTEM": "1", "HOME": "/nonexistent"})
     try:
-        gates = json.loads(gate_path.read_text())
-    except (OSError, ValueError):
-        gates = {}
-    requirements_accepted = checked and gates.get("requirements", {}).get("revision") == requirement_revision
-    implementation_accepted = requirements_accepted and implementation_checked and gates.get("implementation", {}).get("revision") == implementation_revision
-    return {"requirements": {"revision": requirement_revision, "checked": bool(checked), "accepted": bool(requirements_accepted)},
-            "implementation": {"revision": implementation_revision, "checked": bool(implementation_checked), "accepted": bool(implementation_accepted)},
-            "ready": bool(implementation_accepted), "files": files,
-            "blocker": "" if implementation_accepted else "Check the current requirements and accept them, then check and accept the typed implementation mapping."}
+        inside = run("rev-parse", "--is-inside-work-tree")
+    except (OSError, subprocess.TimeoutExpired):
+        inside = None
+    if inside is None or inside.returncode != 0 or inside.stdout.strip() != "true":
+        return {"repository": False, "uncommitted": [], "committed": lambda _: None}
+    if run("check-ignore", "-q", ".").returncode == 0:
+        # e.g. an example project under LeanFM's ignored projects/ directory.
+        return {"repository": False, "uncommitted": [], "committed": lambda _: None}
+    existing = [path for path in paths if (root / path).exists()]
+    tracked = set(run("ls-files", "--", *existing).stdout.split()) if existing else set()
+    changed = run("diff", "--no-ext-diff", "--no-textconv", "--name-only", "--relative", "HEAD", "--", *existing) if existing else None
+    dirty = set(changed.stdout.split()) if changed is not None and changed.returncode == 0 else set(existing)
+    uncommitted = sorted(path for path in existing if path not in tracked or path in dirty)
+    return {"repository": True, "uncommitted": uncommitted,
+            "committed": lambda group: all(path not in uncommitted for path in group if path in existing)}
 
 
 def authorize_path(root, relative):
@@ -55,47 +83,6 @@ def authorize_path(root, relative):
     relative = str(path.relative_to(root))
     if any(relative == reserved or relative.startswith(reserved + "/") for reserved in RESERVED):
         raise ValueError("Acceptance, project identity and checker evidence are controlled by LeanFM, not model tools")
-    if relative == "source" or relative.startswith("source/"):
-        if not current(root)["ready"]:
-            raise ValueError("Source writes require both current checked stakeholder acceptance gates")
-
-
-def accept(root, kind, revision):
-    state = current(root)
-    if kind not in {"requirements", "implementation"}:
-        raise ValueError("Unknown acceptance gate")
-    if not state[kind]["checked"] or state[kind]["revision"] != revision:
-        raise ValueError("The requested revision is stale or has not passed its canonical check")
-    if kind == "implementation" and not state["requirements"]["accepted"]:
-        raise ValueError("Accept the current requirements before the implementation mapping")
-    directory = confined(root, ".leanfm", directory=True)
-    path = confined(root, ".leanfm/acceptance.json")
-    try:
-        gates = json.loads(path.read_text())
-    except (OSError, ValueError):
-        gates = {}
-    unchanged = gates.get(kind, {}).get("revision") == revision
-    if unchanged:
-        return current(root)
-    gates[kind] = {"revision": revision, "source": "explicit stakeholder acceptance", "files": state["files"]}
-    if kind == "requirements" and not unchanged:
-        gates.pop("implementation", None)
-    snapshot = confined(root, ".leanfm/accepted/" + kind + "/" + revision, directory=True)
-    paths = list(state["files"])
-    if kind == "implementation":
-        paths.append("spec/Implementation.lean")
-    for relative in paths:
-        destination = confined(root, str((snapshot / relative).relative_to(root)))
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(confined(root, relative).read_bytes())
-    atomic(path, json.dumps(gates, indent=2) + "\n")
-    manifest_path = confined(root, "manifest.json")
-    if manifest_path.is_file():
-        manifest = json.loads(manifest_path.read_text())
-        manifest["acceptance_file"] = ".leanfm/acceptance.json"
-        manifest["acceptance"] = {name: gates.get(name, {}).get("revision", "not-recorded") for name in ["requirements", "implementation"]}
-        atomic(manifest_path, json.dumps(manifest, indent=2) + "\n")
-    return current(root)
 
 
 def main(operation, root_name, *arguments):
@@ -103,7 +90,7 @@ def main(operation, root_name, *arguments):
     if operation == "status":
         print(json.dumps(current(root)))
     elif operation == "accept":
-        print(json.dumps(accept(root, *arguments)))
+        raise ValueError("LeanFM records no approvals; review and commit the specification with git")
     elif operation == "authorize":
         authorize_path(root, *arguments)
         print("OK")

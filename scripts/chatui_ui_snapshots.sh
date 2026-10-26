@@ -13,7 +13,7 @@ args=(bwrap --die-with-parent --new-session --unshare-all --uid 1000 --gid 1000 
   --tmpfs "$installation_root/projects" --dir "$installation_root/projects/GoServer")
 # Read only the selected fixture's durable inputs. Real conversations and runtime
 # records, all other projects, and the installation account vault are absent.
-for relative in source spec book manifest.json reports/specification-check .leanfm/acceptance.json .leanfm/accepted; do
+for relative in source spec book manifest.json reports/specification-check; do
   args+=(--ro-bind "$installation_root/projects/GoServer/$relative" "$installation_root/projects/GoServer/$relative")
 done
 for private in .ssh .aws .codex .gnupg .config; do

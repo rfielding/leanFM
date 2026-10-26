@@ -487,7 +487,7 @@ function Source({project, workspaceRevision, agentBusy}: {project: Project; work
     return () => controller.abort();
   }, [project.project_id, selected]);
   if (error && !files.length) return <div className="empty"><p className="error">{error}</p></div>;
-  if (!files.length) return <div className="empty"><div><h1>Source</h1><p>No implementation source exists yet. Ask for implementation after accepting both the requirements and implementation specification; LeanFM will ask focused blocking questions if those inputs are incomplete.</p></div></div>;
+  if (!files.length) return <div className="empty"><div><h1>Source</h1><p>No implementation source exists yet. Ask for implementation; LeanFM writes and checks the requirements and implementation specification first, and asks only genuinely blocking questions.</p></div></div>;
   return <section className="pane source-pane"><nav className="source-files vertical-tabs">{files.map(file => <button key={file} className={selected === file ? "active" : ""} onClick={() => setSelected(file)}>{file}</button>)}</nav><main className="source-view"><header><strong>{selected}</strong></header>{error ? <p className="error">{error}</p> : <pre><code>{source}</code></pre>}</main></section>;
 }
 
@@ -501,19 +501,10 @@ function SpecificationAcceptance({project, workspaceRevision, agentBusy, compact
     const timer = agentBusy ? window.setInterval(refresh, 2000) : undefined;
     return () => { controller.abort(); if (timer) window.clearInterval(timer); };
   }, [project.project_id, project.read_only, workspaceRevision, agentBusy]);
-  async function accept(gate: "requirements" | "implementation") {
-    if (!state) return;
-    try { setError(""); setState(await api<SpecificationState>(`/api/projects/${project.project_id}/specification/${gate}/${state[gate].revision}/accept`, {method: "POST"})); onAccepted?.(); }
-    catch (error) { setError((error as Error).message); }
-  }
-  if (project.read_only) return null;
-  if (compact) {
-    const gate = state?.requirements.checked && !state.requirements.accepted ? "requirements"
-      : state?.requirements.accepted && state.implementation.checked && !state.implementation.accepted ? "implementation" : null;
-    if (!gate && !error) return null;
-    return <section className="specification-review" aria-label="Approval required">{gate && <article><strong>{gate === "requirements" ? "Requirements ready for approval" : "Implementation ready for approval"}</strong><span>The assistant handles reversible technical choices. Approve the current design when you are ready.</span><button type="button" disabled={agentBusy} onClick={() => void accept(gate)}>{gate === "requirements" ? "Approve requirements" : "Approve implementation"}</button></article>}{error && <p className="error" role="alert">{error}</p>}</section>;
-  }
-  return <section className="specification-review" aria-label="Specification acceptance">{(["requirements", "implementation"] as const).map(gate => <article key={gate}><strong>{gate === "requirements" ? "Requirements" : "Implementation specification"}</strong><span>{state?.[gate].accepted ? "Accepted current revision" : state?.[gate].checked ? "Checked · ready for your review" : "Needs a current canonical check"}</span><button type="button" disabled={!state?.[gate].checked || state[gate].accepted || agentBusy || (gate === "implementation" && !state.requirements.accepted)} onClick={() => void accept(gate)}>{gate === "requirements" ? "Accept requirements" : "Accept implementation specification"}</button></article>)}{error && <p className="error" role="alert">{error}</p>}</section>;
+  if (project.read_only || compact) return null;
+  const commit = (value: boolean | null | undefined) => value === null || value === undefined ? "not in git" : value ? "committed" : "uncommitted changes";
+  // Status only: review and acceptance are git commits, not LeanFM approvals.
+  return <section className="specification-review" aria-label="Specification status">{(["requirements", "implementation"] as const).map(gate => <article key={gate}><strong>{gate === "requirements" ? "Requirements" : "Implementation specification"}</strong><span>{state?.[gate].checked ? "Checked" : "Needs a current canonical check"} · {commit(state?.[gate].committed)}</span></article>)}{error && <p className="error" role="alert">{error}</p>}</section>;
 }
 
 function ProjectMemoryView({project, workspaceRevision, agentBusy}: {project: Project; workspaceRevision: number; agentBusy: boolean}) {
@@ -532,7 +523,7 @@ function ProjectMemoryView({project, workspaceRevision, agentBusy}: {project: Pr
     return () => controller.abort();
   }, [project.project_id, selected, workspaceRevision]);
   const complete = (memory?.files.filter(file => file.status === "current").length || 0) + ((memory?.source_files || 0) > 0 ? 1 : 0);
-  return <section className="pane memory-pane"><header className="memory-header"><div><h1>Project memory</h1><p>Durable state used to resume without conversation history.</p></div><strong>{complete} / 5 substantive layers</strong></header><SpecificationAcceptance project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /><div className="memory-workbench"><nav className="memory-files vertical-tabs">{memory?.files.map(file => <button key={file.id} className={selected === file.id ? "active" : ""} onClick={() => setSelected(file.id)}><span><strong>{file.label}</strong><small>{file.path}</small></span><em className={`memory-status ${file.status}`}>{file.status}</em></button>)}<button className="memory-source-summary" onClick={() => setSelected("source-summary")}><span><strong>Implementation source</strong><small>source/ · {memory?.source_files || 0} files · {memory?.source_bytes || 0} bytes</small></span><em className={`memory-status ${(memory?.source_files || 0) > 0 ? "current" : "missing"}`}>{(memory?.source_files || 0) > 0 ? "current" : "missing"}</em></button></nav><main className="source-view"><header><strong>{selected === "source-summary" ? "source/" : memory?.files.find(file => file.id === selected)?.path}</strong><span>Refreshes after every chat turn</span></header>{error ? <p className="error">{error}</p> : selected === "source-summary" ? <div className="memory-source-help"><h2>{memory?.source_files || 0} implementation files</h2><p>Open the Source phase to inspect generated implementation files. Source appears only after both acceptance gates and the security critique.</p></div> : <pre><code>{source}</code></pre>}</main></div></section>;
+  return <section className="pane memory-pane"><header className="memory-header"><div><h1>Project memory</h1><p>Durable state used to resume without conversation history.</p></div><strong>{complete} / 5 substantive layers</strong></header><SpecificationAcceptance project={project} workspaceRevision={workspaceRevision} agentBusy={agentBusy} /><div className="memory-workbench"><nav className="memory-files vertical-tabs">{memory?.files.map(file => <button key={file.id} className={selected === file.id ? "active" : ""} onClick={() => setSelected(file.id)}><span><strong>{file.label}</strong><small>{file.path}</small></span><em className={`memory-status ${file.status}`}>{file.status}</em></button>)}<button className="memory-source-summary" onClick={() => setSelected("source-summary")}><span><strong>Implementation source</strong><small>source/ · {memory?.source_files || 0} files · {memory?.source_bytes || 0} bytes</small></span><em className={`memory-status ${(memory?.source_files || 0) > 0 ? "current" : "missing"}`}>{(memory?.source_files || 0) > 0 ? "current" : "missing"}</em></button></nav><main className="source-view"><header><strong>{selected === "source-summary" ? "source/" : memory?.files.find(file => file.id === selected)?.path}</strong><span>Refreshes after every chat turn</span></header>{error ? <p className="error">{error}</p> : selected === "source-summary" ? <div className="memory-source-help"><h2>{memory?.source_files || 0} implementation files</h2><p>Open the Source phase to inspect generated implementation files. Source is written after the specification checks and the security critique.</p></div> : <pre><code>{source}</code></pre>}</main></div></section>;
 }
 
 

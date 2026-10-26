@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trusted fixture setup; the two gate acceptances still use the real HTTP API."""
+"""Trusted fixture setup: write and check a fixture specification. No approvals exist."""
 import http.cookiejar
 import json
 from pathlib import Path
@@ -22,8 +22,6 @@ def prepare(root, post):
     from chatui_project_state import current
     state = current(root)
     assert state["requirements"]["checked"] and state["implementation"]["checked"], state
-    for gate in ["requirements", "implementation"]:
-        post(gate, state[gate]["revision"])
 
 
 if __name__ == "__main__":

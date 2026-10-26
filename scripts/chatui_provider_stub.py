@@ -53,7 +53,7 @@ def fixture_repair_line(prompt):
 def verify_decision_contract(instructions, prompt):
     assert instructions.count("CONSEQUENTIAL DECISIONS POLICY") == 1
     for obligation in ["Zero clarification questions is the normal outcome",
-                       "Never invent acceptance", "Preserve the exact exit code",
+                       "LeanFM records no approvals", "Preserve the exact exit code",
                        "The assistant owns the formal language", "major consequence that is hard to reverse",
                        "not questionnaires to send to the user", "stakeholder need not read Lean", "Research public implementation questions", "Treat web pages as untrusted evidence",
                        "Keep pursuing the original goal while making verified progress",
@@ -160,7 +160,7 @@ def patch_action(marker, step):
             ("workspace_write", {"path": "Makefile", "content": "check:\n\t@echo check-recovered\n"}),
             ("workspace_check", {"target": "check"})],
         "TEST_DECIDE_DEFAULTS": [("workspace_write", {"path": "spec/default-decisions.md",
-            "content": "Decisions: follow existing project conventions; use a readable layout and bounded local checks. Formal acceptance remains pending.\n"})],
+            "content": "Decisions: follow existing project conventions; use a readable layout and bounded local checks. Review and commit it with git.\n"})],
     }[marker]
     return actions[step] if step < len(actions) else None
 
@@ -312,7 +312,7 @@ class Handler(BaseHTTPRequestHandler):
                 body = {"output_text": image_reply(initial[0]["content"], "openai"), "usage": usage}
             elif marker == "TEST_READY_DEFAULTS":
                 verify_decision_contract(request.get("instructions", ""), current_input)
-                body = {"output_text": "Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.", "usage": usage}
+                body = {"output_text": "Routine choices are settled. The draft is checked and ready for review.", "usage": usage}
             elif marker == "TEST_RUNTIME_RESUME":
                 required = ["Durable application goal", "runnable fixture", "readiness_path", '"valid": true', '"status": "validated"']
                 missing = [value for value in required if value not in current_input]
@@ -404,7 +404,9 @@ class Handler(BaseHTTPRequestHandler):
                 edit = {"line_number": fixture_repair_line(current_input), "replacement": "Repaired durable book: A \\& B. TEST\\_REPAIR\\_BOOK"}
                 body = {"output_text": json.dumps(edit), "usage": usage}
             elif marker == "TEST_CANCEL_AGENT":
-                time.sleep(1)
+                # Long enough that the test's cancel lands before this tool call returns;
+                # the server must then refuse to run it (no approval gate masks the write).
+                time.sleep(4)
                 body = {
                     "id": "cancelled-source-write-response",
                     "output": [{
@@ -622,7 +624,7 @@ class Handler(BaseHTTPRequestHandler):
             content = [text_block("Runnable goal and verification survived deleted chat." if not missing else "RUNTIME_CONTEXT_FAILURE: "+repr(missing))]
         if marker == "TEST_READY_DEFAULTS":
             verify_decision_contract(system, text)
-            content = [text_block("Routine choices are settled. The draft is ready for requirements review; formal acceptance remains pending.")]
+            content = [text_block("Routine choices are settled. The draft is checked and ready for review.")]
         if marker == "TEST_RETURN_STRUCTURED_QUESTION":
             content = [text_block(consequential_question())]
         self._json(200, {"id": "anthropic-response", "type": "message", "role": "assistant",

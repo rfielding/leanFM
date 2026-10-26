@@ -50,6 +50,24 @@
     "modifiers": 0,
     "focused": {
       "role": "BUTTON",
+      "name": "book_tour.py"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "bot.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
       "name": "browser_check.py"
     }
   },
@@ -95,6 +113,24 @@
     "modifiers": 0,
     "focused": {
       "role": "BUTTON",
+      "name": "cmd/demo/static/engine.js"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "cmd/demo/static/gameview.js"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
       "name": "cmd/demo/static/index.html"
     }
   },
@@ -104,7 +140,52 @@
     "modifiers": 0,
     "focused": {
       "role": "BUTTON",
+      "name": "cmd/demo/static/search-worker.js"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
       "name": "cmd/demo/static/style.css"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "engine.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "engine_test.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "game.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "game_test.go"
     }
   },
   {
@@ -123,6 +204,15 @@
     "focused": {
       "role": "BUTTON",
       "name": "goserver"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "labparity_test.go"
     }
   },
   {

@@ -118,7 +118,7 @@ To use Claude Code, start LeanFM with `make serve` in one terminal and run
 `AGENTS.md` instructions, and [`.mcp.json`](.mcp.json) connects Claude to the
 existing local MCP endpoint. On first launch, review Claude's project trust and
 LeanFM MCP prompts; `/mcp` shows the connection in an interactive session.
-The MCP tools remain read-only and neither LeanFM acceptance gate is automatic.
+The MCP tools are read-only. Review and acceptance happen in git: LeanFM records no approvals.
 These use Claude's documented [instruction imports](https://code.claude.com/docs/en/memory)
 and [project MCP configuration](https://code.claude.com/docs/en/mcp).
 
@@ -204,7 +204,7 @@ after verifying unchanged encrypted account records. The reset result and both
 accepted revisions are recorded in `reports/shared-projects/`.
 Conversation files can also be erased between turns: ChatUI resumes from the
 selected project's durable book, requirements, protobuf, implementation mapping,
-manifest and source inventory. Missing acceptance or decisions remain explicit
+manifest and source inventory. Missing decisions remain explicit
 gaps, not guesses from another project. `make chatui-check` tests an isolated
 installation without examples and three consecutive conversation resets.
 `make http-check` checks the running public HTTP/MCP surface without a legacy
@@ -218,10 +218,10 @@ the same value. Optional typed implementation mappings are checked separately.
 Executable Lean runs without network or credentials, with read-only project
 inputs and writable project-local scratch. A failed check preserves prior task
 views; changed canonical specifications cannot report success without a current
-successful check. Neither tool accepts either stakeholder gate. Project memory
-provides the separate requirements and implementation acceptance controls for
-the current checked revisions. The server enforces both before source writes;
-accepted decisions remain available after clearing conversation history.
+successful check. Project memory shows whether the requirements and
+implementation specification are checked and committed. LeanFM has no approval
+step: the user reviews and commits changes with git, and recorded decisions
+remain available after clearing conversation history.
 `make chatui-browser-check` additionally exercises the actual React login,
 empty-chat continuation, Project memory and both PDF selections in Chrome
 (requires `google-chrome` and Python `websocket-client`). Sanitized evidence is
@@ -244,9 +244,7 @@ Endpoints:
 GET /          clean assistant workbench
 GET /api/projects shared project catalog, available before credential login
 POST /api/projects create a self-contained project under projects/<id>
-GET /api/projects/<id>/specification current checked revisions and acceptance state
-POST /api/projects/<id>/specification/requirements/<revision>/accept accept exactly the current checked requirements
-POST /api/projects/<id>/specification/implementation/<revision>/accept accept exactly the checked implementation after requirements acceptance
+GET /api/projects/<id>/specification current checked revisions and git commit state
 POST /api/login unlock the caller's encrypted provider keys
 POST /api/logout lock the caller's keys while preserving the shared workspace
 GET /examples  sample dashboard with charts, graphs, and generated sources
@@ -278,8 +276,7 @@ POST /mcp      read-only MCP endpoint for project context, prompts, and validati
 
 The MCP endpoint treats `book/main.pdf` as durable agent context, comparable to
 a maintained section of the system prompt. It exposes only a fixed resource
-allowlist and read-only deterministic tools; it cannot accept a requirements or
-implementation gate and cannot mutate project files. Register a running local
+allowlist and read-only deterministic tools; it cannot mutate project files. Register a running local
 server with Codex:
 
 ```sh

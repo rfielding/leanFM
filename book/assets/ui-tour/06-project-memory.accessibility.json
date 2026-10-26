@@ -446,7 +446,7 @@
     },
     {
       "role": "button",
-      "name": "Implementation source source/ · 18 files · 80165 bytes CURRENT",
+      "name": "Implementation source source/ · 28 files · 276548 bytes CURRENT",
       "states": {
         "focusable": true
       }
@@ -851,7 +851,7 @@
     },
     {
       "role": "StaticText",
-      "name": "18"
+      "name": "28"
     },
     {
       "role": "StaticText",
@@ -859,7 +859,7 @@
     },
     {
       "role": "StaticText",
-      "name": "80165"
+      "name": "276548"
     },
     {
       "role": "StaticText",
@@ -879,7 +879,7 @@
     },
     {
       "role": "StaticText",
-      "name": "\\documentclass[11pt,oneside]{book}\n\\usepackage{underscore}\n\\usepackage[margin=1in]{geometry}\n\\usepackage{xcolor}\n\\usepackage[hidelinks]{hyperref}\n\\ifdefined\\darkmode\\pagecolor[HTML]{091117}\\color[HTML]{F0EDE4}\\fi\n\\title{GoServer}\n\\author{Project team}\n\\date{\\today}\n\\usepackage{graphicx}\n\\usepackage{accsupp}\n\\begin{document}\n\\frontmatter\n\\maketitle\n\\tableofcontents\n\\mainmatter\n\n\\chapter{Project sketch}\nGoServer is a KGS-inspired online Go service focused on multiplayer variants rather than direct competition with established two-player Go servers. The initial release centers on short, four-participant games played on an \\(11\\times 11\\) board.\n\nKGS provides inspiration for the navigation model, but this sketch does not require compatibility with KGS accounts, protocols, clients, or server internals.\n\n\\section{People and systems}\nThe primary participant is a signed-in person who wants to browse chat rooms, find or observe games, play Go, and converse with other participants. A game seat may instead be controlled by a server-supported bot. People and bots are both game participants for the purposes of turn order and team membership.\n\nThe server maintains identities, sessions, rooms, games, board state, clocks, team membership, participant graveyards, and chat history. Connected clients present server-authoritative state and submit participant actions.\n\n\\section{Primary navigation}\nAfter a successful login, a person sees the available chat rooms. Entering a room displays the room conversation and the games associated with that room. Entering a game displays its board, participants, teams, move deadline, current turn, game status, and game-specific chat.\n\nThe intended hierarchy is:\n\\begin{enumerate}\n  \\item authenticate;\n  \\item browse and enter a chat room;\n  \\item inspect the games associated with that room;\n  \\item enter a game as a player or observer; and\n  \\item play or observe while using the game chat.\n\\end{enumerate}\n\nRoom chat and game chat are separate conversations. A message sent to one is not implicitly copied to the other.\n\n\\section{Initial game format}\nThe first supported format has the following fixed profile:\n\\begin{itemize}\n  \\item an \\(11\\times 11\\) Go board;\n  \\item four participant seats;\n  \\item sequential turns;\n  \\item a ten-second deadline for each move;\n  \\item each seat configurable as either a person or a bot; and\n  \\item each participant initially occupying a distinct team.\n\\end{itemize}\n\nThe server is authoritative for legal moves, turn order, deadlines, captures, repetition rules, team membership, graveyard contents, and the final result. Clients must not resolve conflicting game actions locally.\n\nWhen a stone is placed, the server first examines its orthogonally adjacent groups. Every adjacent group that has no remaining liberties is removed before the server evaluates the placed stone for suicide. This ordering permits an otherwise surrounded placement to survive when it first captures neighboring stones and thereby gains liberties.\n\nIf no neighboring group is removed and the placed stone's connected same-owner group has no liberties, the move is a permitted suicide move. The server removes the newly placed stone and its entire connected same-owner group. This permits multiplayer tactics in which a participant removes their own group to help an allied participant form eyes. Every self-removed stone is placed in its owner's graveyard, just like a stone removed by another participant.\n\n\\section{Teams and alliances}\nEvery participant begins the game as the sole member of a separate team. Participants may subsequently join together so that multiple participants belong to one team. A team therefore represents an alliance of one or more seats rather than a single shared seat.\n\nA team merge changes cooperation and scoring without removing a participant's seat or turn. Each participant continues to place stones during that participant's assigned turns. Existing stones remain on the board when teams merge.\n\nFor each participant, the server maintains a graveyard containing that participant's stones that have been removed from play. When, for example, White captures a Black stone, the removed stone is given to the Black participant's graveyard rather than credited to White. A stone removed by its owner's suicide is likewise placed in that owner's graveyard. Removal therefore does not directly award points to another participant.\n\nA team's score is its total territory minus its total losses. Total losses are the number of removed stones in the graveyards of the team's members. Equivalently, if \\(A_T\\) is the territory attributed to team \\(T\\) and \\(G_T\\) is the combined number of stones in its members' graveyards, then\n\\[\n  S_T = A_T - G_T.\n\\]\nThis makes the result express territory gained at the cost of stones lost. The approval, timing, and reversibility of a team merge remain requirements decisions.\n\n\\section{Bots}\nEach of the four seats can be assigned independently to a person or bot. This permits any mixture from four people to four bots. Computer-controlled seats use Monte Carlo tree search executed by the server. Clients do not run the authoritative bot search or submit bot-selected moves on behalf of a bot seat.\n\nA bot is subject to the same legal-move checks and ten-second move deadline as a person. Its server-side search must stop when its turn expires, and a result that arrives after the authoritative deadline must not advance the game. Bot failures must not give the bot permission to bypass the clock, acquire privileges unavailable to its assigned seat, or submit moves after its turn has ended. The implementation must bound and isolate bot computation so that one search cannot exhaust resources needed by unrelated games.\n\n\\section{Chat}\nA participant can converse in a room without entering a game. Every game also has a dedicated chat visible to people who have entered that game, subject to the eventual observer and moderation policy. Bot participation in chat is not required by the initial sketch.\n\n\\section{Representative scenarios}\n\\subsection{Find and enter a game}\nA person logs in, sees the room list, enters a room, and receives the current room conversation and game list. The person selects a game and receives its board, participants, teams, clock state, graveyard counts, and game chat.\n\n\\subsection{Play a timed move}\nWhen a participant's turn begins, the server starts a ten-second deadline. The participant submits a board coordinate. The server accepts the move only if the participant controls the active seat, the turn is still current, the deadline has not expired, and the move is legal. The accepted state is then distributed to everyone viewing the game.\n\n\\subsection{Capture neighboring groups}\nA participant places a stone next to one or more groups that have lost their final liberty. The server removes all such neighboring groups before evaluating whether the newly placed stone's group has liberties. Each removed stone is placed in the graveyard of the participant who owned it. No capture point is awarded to the participant who placed the stone.\n\n\\subsection{Play a suicide move}\nA participant places a stone that does not remove any neighboring group, and the placed stone's connected same-owner group is left without liberties. The server treats the move as a permitted suicide and removes the placed stone together with its entire connected same-owner group. Every self-removed stone is placed in its owner's graveyard and therefore contributes to that owner's losses.\n\n\\subsection{Fill a seat with a bot}\nA game is configured with one or more bot-controlled seats. When a bot-controlled turn begins, the server runs that bot's Monte Carlo tree search within server-controlled execution. The search operates under the same ten-second deadline and move-legality constraints as a human-controlled seat. Only a result selected before the authoritative deadline may be submitted for the current turn.\n\n\\subsection{Form an alliance}\nParticipants who began on separate teams request to become members of the same team. The server applies the selected merge policy, records the resulting membership, and distributes the updated team state to all viewers. Existing stones remain on the board. The resulting team's loss total includes the graveyards of all its members.\n\n\\subsection{Score a team}\nAt the end of a game, the server totals the territory attributed to a team and the removed stones held in its members' graveyards. It subtracts the graveyard total from the territory total and reports the resulting team score. Captures and suicides affect scoring only as losses borne by the owners of the removed stones.\n\n\\subsection{Chat inside a game}\nA person viewing a game sends a message to the game chat. The server associates the message with that game and distributes it to authorized game viewers without adding it to the containing room's chat.\n\n\\chapter{Requirements argument}\n\n\\section{Observable scope}\nThe candidate first-release requirements will cover authentication, room discovery, room entry, room chat, room-associated game discovery, game entry, game chat, four-seat game setup, human and bot seats, server-executed bot search, server-authoritative timed turns, multiplayer Go rules, participant graveyards, team merges, scoring, reconnect behavior, and observable error responses.\n\nAccount registration, moderation administration, persistent ratings, tournaments, KGS protocol compatibility, and sophisticated bot strategy beyond the required server-side Monte Carlo tree search are not yet part of the committed first-release scope.\n\n\\section{Proposed safety and consistency invariants}\nThe requirements should preserve the following positive invariant: every externally visible room, chat, game, move, clock, capture, graveyard, score, and team transition is authorized for the acting identity and derived from one unambiguous server-authoritative state.\n\nCandidate forbidden behaviors include accepting a move from the wrong seat, accepting more than one move for a turn, accepting a move after its deadline, resolving suicide before neighboring captures, removing less or more than the entire connected same-owner group during suicide, crediting a removed stone to another participant, placing a removed stone in the wrong owner's graveyard, allowing a client to manufacture team membership or graveyard contents, accepting a client-supplied move as the output of a server-controlled bot, leaking private session credentials into chat or logs, crossing room or game boundaries through an identifier substitution, letting a bot acquire privileges unavailable to its assigned seat, and allowing one bot search to consume unbounded server resources.\n\nThese statements are design candidates rather than accepted requirements until represented by the typed project specification and explicitly accepted.\n\n\\section{Resolved capture and suicide ordering}\nAfter a stone is placed, adjacent groups without liberties are removed first. Only if no neighboring group is removed does the server evaluate the placement as suicide. Thus a placement that captures a neighboring group can gain the liberties created by that removal and remain on the board.\n\nSuicide is permitted as a multiplayer tactic, including to help an ally form eyes. If the placed stone's connected same-owner group has no liberties, the server removes the placed stone and that entire connected group. All self-removed stones enter their respective owners' graveyards and count as losses in exactly the same way as stones removed by another participant.\n\n\\section{Resolved scoring direction}\nA removed stone is assigned to the graveyard of the participant who owned it. It counts as one loss for that participant and is not a positive capture point for another participant.\n\nA team's final score is its total territory minus the combined number of stones in its members' graveyards. Graveyard ownership remains attached to the participant, allowing team losses to be recomputed from authoritative participant records after a team merge. The typed specification must still define how territory is identified and attributed.\n\n\\section{Resolved bot execution direction}\nComputer-player Monte Carlo tree search runs on the server rather than in a connected client. The authoritative game clock bounds the search, and a late search result cannot advance an expired or superseded turn. The implementation mapping must define resource bounds and execution isolation for simultaneous searches without changing the observable ten-second deadline.\n\n\\section{Recovered ko and repetition behavior}\nThe supplied N-Player Go Lab JavaScript provides concrete provenance for the intended ko behavior. Its user-facing description calls the rule ``simple ko plus positional superko,'' but its state comparison includes both the board and the participant to move. The standard description of the implemented rule is therefore \\emph{situational superko}, not positional superko.\n\nThe candidate first-release baseline is as follows:\n\\begin{itemize}\n  \\item the ko rule is enabled by default for a two-participant game and disabled by default for a game with three or more participants;\n  \\item when enabled, a qualifying single-stone capture establishes a simple-ko restriction that prevents the owner of the captured stone from immediately recapturing at that point on that participant's next turn;\n  \\item after every proposed stone placement, the resulting board together with the next participant to move must differ from every earlier such state on the current game line;\n  \\item passes, deadline expirations, and resignations are not rejected merely because they leave or recreate a repeated state; and\n  \\item independently of repetition, a game is capped at \\(3N^2\\) moves for an \\(N\\times N\\) board.\n\\end{itemize}\n\nThe prototype represents a repetition state with a 32-bit Zobrist board hash combined with a token for the next participant. That representation is useful evidence of semantics but is not sufficient as the sole authoritative equality test because a hash collision could reject a legal position as repeated. The production requirement should demand collision-safe comparison, such as an exact canonical state representation or a digest backed by exact equality when hashes match.\n\nThe repetition check applies to actual game-tree branches and is mirrored inside Monte Carlo tree search: a searched stone placement is skipped when its resulting board-and-next-participant state occurs in the real game history or in the current search path. This search behavior is advisory; the authoritative game transition must independently enforce the same observable rule.\n\n\\section{Open rules decisions}\nThe remaining core multiplayer rules still need durable answers for:\n\\begin{itemize}\n  \\item whether the ko rule is fixed for the first-release four-participant format or configurable when a game is created;\n  \\item whether an expired deadline causes an automatic pass, forfeits the seat, or has another result;\n  \\item how territory is identified and attributed among participants and teams;\n  \\item when team merges are allowed, who must approve them, and whether they are reversible;\n  \\item whether observers may use game chat; and\n  \\item what reconnect grace, if any, exists within a ten-second turn.\n\\end{itemize}\n\n\\chapter{Implementation argument}\nImplementation is blocked until the observable behavior is encoded as a typed LeanFM requirement specification, checked, and explicitly accepted, followed by a checked and explicitly accepted implementation mapping.\n\nOnce those gates are satisfied, the implementation argument must map authentication, authorization, room isolation, game isolation, clocks, turn serialization, legal-move validation, ordered capture and suicide processing, graveyard attribution, collision-safe situational-superko validation, team transitions, server-side Monte Carlo tree search, bot resource isolation, persistence, chat delivery, and scoring attribution to concrete controls and tests. In particular, concurrent move and timeout processing must have a single atomic winner so that a deadline and a move cannot both advance the same turn. A bot result must additionally be bound to its game, seat, turn revision, and deadline so that a delayed or confused result cannot be applied to another turn. A placement, all neighboring removals, any resulting connected-group suicide removal, repetition validation, and all corresponding board, graveyard, and score-relevant changes must be committed as one authoritative transition.\n\n\n\\chapter{Current reduced server-only scope}\nThe operator explicitly selected formalization and checking of the reduced\nbasic-server slice in question \\texttt{basic\\_server\\_requirements\\_gate}.\nThe current requirements cover room discovery and entry, room game/challenge\nlistings, named open challenge creation, watch/join navigation, room chat and\nper-game chat. A game is currently a navigable chat container. Earlier chapters'\nGo boards, move rules, bots, clocks, teams and scoring remain future roadmap\nmaterial and are not obligations of this first server-only requirements gate.\n\nExisting server-issued sessions identify callers. Joining a room or game\nestablishes its chat membership; sender identity and timestamps come from the\nserver. Chat is never implicitly copied across room/game boundaries. The draft\nadds request correlation and explicit rejection branches without choosing an\nimplementation runtime or HTTP transport. Watch/join confers no Go move or seat\nauthority in this slice. Account registration is not added.\n\nProposed reversible bounds are 128 characters for names, 4000 for chat text and\nthe latest 100 chat entries per conversation. The retained 100-person population\nis a capacity forecast, not measured performance. Rejected or overloaded actions\nmust not mutate state or disclose private identities or credentials. Replay and\nconcurrency controls, connection limits, persistence and negative tests must be\nrealized in the separate implementation mapping after requirements acceptance.\n\nCanonical candidates are \\path{spec/Requirements.lean} and\n\\path{spec/Requirements.proto}. Checked task views are generated from that same\nspecification into \\path{spec/tasks.json}; the task catalog contains one\ninteraction diagram and state machine for each scoped operation. No human gate\nis accepted by compilation or by preparing these files.\n\n\n\\chapter{Room creation and working browser revision}\n\\label{ch:rooms-browser}\nThe October 25 request asks for working room creation and room-scoped game\nchallenges, with placeholder links removed. This candidate extends the previous\naccepted seven-task server slice with \\texttt{create\\_room}. A room name is a\ntrimmed, case-sensitive, public display identifier of 1--128 Unicode characters.\nA valid local session may create it; duplicate names and the 16-room bound\nreject without mutation. The creator subsequently enters it with\n\\texttt{EnterRoom}. Challenge results and listings retain their entered name.\nAll state remains in memory and resets on restart. Gameplay remains deferred.\n\nThe positive invariant is that each displayed room, challenge and chat result\ncomes from an authorized server operation in its selected scope. Forbidden\noutcomes include duplicate mutations on retry or concurrent admission, room or\ngame chat disclosure outside membership, executable user text, stale responses\nreplacing another room's content, exposed tokens, and navigation to fabricated\ndestinations. The proposed controls and negative checks are cataloged in\n\\path{reports/rooms-browser-review/review.md}. They are obligations for the\nseparate implementation review, not claims of completed source changes.\n\nThe current typed requirements generate interaction and state-machine views in\n\\path{spec/tasks.json}; extracted views and their exact provenance appear in\n\\path{reports/rooms-browser-review/}. This revision requires explicit\nrequirements acceptance followed by acceptance of its implementation mapping.\nEarlier protected gate snapshots remain evidence only for their earlier input\nrevisions. Billing failure of the attempted Anthropic request did not accept a\ngate or implement this feature.\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateRoom; checking to accepted: RoomCreated; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_room.state.pdf}\n\\EndAccSupp{}\n\\caption{Create a named chat room: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateGame; checking to accepted: GameCreated; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_game.state.pdf}\n\\EndAccSupp{}\n\\caption{Create a named room game or challenge: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\end{document}\n"
+      "name": "\\documentclass[11pt,oneside]{book}\n\\usepackage{underscore}\n\\usepackage[margin=1in]{geometry}\n\\usepackage{xcolor}\n\\usepackage[hidelinks]{hyperref}\n\\ifdefined\\darkmode\\pagecolor[HTML]{091117}\\color[HTML]{F0EDE4}\\fi\n\\title{GoServer}\n\\author{Project team}\n\\date{\\today}\n\\usepackage{graphicx}\n\\usepackage{accsupp}\n\\begin{document}\n\\frontmatter\n\\maketitle\n\\tableofcontents\n\\mainmatter\n\n\\chapter{Project sketch}\nGoServer is a KGS-inspired online Go service focused on multiplayer variants rather than direct competition with established two-player Go servers. The initial release centers on short, four-participant games played on an \\(11\\times 11\\) board.\n\nKGS provides inspiration for the navigation model, but this sketch does not require compatibility with KGS accounts, protocols, clients, or server internals.\n\n\\section{People and systems}\nThe primary participant is a signed-in person who wants to browse chat rooms, find or observe games, play Go, and converse with other participants. A game seat may instead be controlled by a server-supported bot. People and bots are both game participants for the purposes of turn order and team membership.\n\nThe server maintains identities, sessions, rooms, games, board state, clocks, team membership, participant graveyards, and chat history. Connected clients present server-authoritative state and submit participant actions.\n\n\\section{Primary navigation}\nAfter a successful login, a person sees the available chat rooms. Entering a room displays the room conversation and the games associated with that room. Entering a game displays its board, participants, teams, move deadline, current turn, game status, and game-specific chat.\n\nThe intended hierarchy is:\n\\begin{enumerate}\n  \\item authenticate;\n  \\item browse and enter a chat room;\n  \\item inspect the games associated with that room;\n  \\item enter a game as a player or observer; and\n  \\item play or observe while using the game chat.\n\\end{enumerate}\n\nRoom chat and game chat are separate conversations. A message sent to one is not implicitly copied to the other.\n\n\\section{Initial game format}\nThe first supported format has the following fixed profile:\n\\begin{itemize}\n  \\item an \\(11\\times 11\\) Go board;\n  \\item four participant seats;\n  \\item sequential turns;\n  \\item a ten-second deadline for each move;\n  \\item each seat configurable as either a person or a bot; and\n  \\item each participant initially occupying a distinct team.\n\\end{itemize}\n\nThe server is authoritative for legal moves, turn order, deadlines, captures, repetition rules, team membership, graveyard contents, and the final result. Clients must not resolve conflicting game actions locally.\n\nWhen a stone is placed, the server first examines its orthogonally adjacent groups. Every adjacent group that has no remaining liberties is removed before the server evaluates the placed stone for suicide. This ordering permits an otherwise surrounded placement to survive when it first captures neighboring stones and thereby gains liberties.\n\nIf no neighboring group is removed and the placed stone's connected same-owner group has no liberties, the move is a permitted suicide move. The server removes the newly placed stone and its entire connected same-owner group. This permits multiplayer tactics in which a participant removes their own group to help an allied participant form eyes. Every self-removed stone is placed in its owner's graveyard, just like a stone removed by another participant.\n\n\\section{Teams and alliances}\nEvery participant begins the game as the sole member of a separate team. Participants may subsequently join together so that multiple participants belong to one team. A team therefore represents an alliance of one or more seats rather than a single shared seat.\n\nA team merge changes cooperation and scoring without removing a participant's seat or turn. Each participant continues to place stones during that participant's assigned turns. Existing stones remain on the board when teams merge.\n\nFor each participant, the server maintains a graveyard containing that participant's stones that have been removed from play. When, for example, White captures a Black stone, the removed stone is given to the Black participant's graveyard rather than credited to White. A stone removed by its owner's suicide is likewise placed in that owner's graveyard. Removal therefore does not directly award points to another participant.\n\nA team's score is its total territory minus its total losses. Total losses are the number of removed stones in the graveyards of the team's members. Equivalently, if \\(A_T\\) is the territory attributed to team \\(T\\) and \\(G_T\\) is the combined number of stones in its members' graveyards, then\n\\[\n  S_T = A_T - G_T.\n\\]\nThis makes the result express territory gained at the cost of stones lost. The approval, timing, and reversibility of a team merge remain requirements decisions.\n\n\\section{Bots}\nEach of the four seats can be assigned independently to a person or bot. This permits any mixture from four people to four bots. Computer-controlled seats use Monte Carlo tree search executed by the server. Clients do not run the authoritative bot search or submit bot-selected moves on behalf of a bot seat.\n\nA bot is subject to the same legal-move checks and ten-second move deadline as a person. Its server-side search must stop when its turn expires, and a result that arrives after the authoritative deadline must not advance the game. Bot failures must not give the bot permission to bypass the clock, acquire privileges unavailable to its assigned seat, or submit moves after its turn has ended. The implementation must bound and isolate bot computation so that one search cannot exhaust resources needed by unrelated games.\n\n\\section{Chat}\nA participant can converse in a room without entering a game. Every game also has a dedicated chat visible to people who have entered that game, subject to the eventual observer and moderation policy. Bot participation in chat is not required by the initial sketch.\n\n\\section{Representative scenarios}\n\\subsection{Find and enter a game}\nA person logs in, sees the room list, enters a room, and receives the current room conversation and game list. The person selects a game and receives its board, participants, teams, clock state, graveyard counts, and game chat.\n\n\\subsection{Play a timed move}\nWhen a participant's turn begins, the server starts a ten-second deadline. The participant submits a board coordinate. The server accepts the move only if the participant controls the active seat, the turn is still current, the deadline has not expired, and the move is legal. The accepted state is then distributed to everyone viewing the game.\n\n\\subsection{Capture neighboring groups}\nA participant places a stone next to one or more groups that have lost their final liberty. The server removes all such neighboring groups before evaluating whether the newly placed stone's group has liberties. Each removed stone is placed in the graveyard of the participant who owned it. No capture point is awarded to the participant who placed the stone.\n\n\\subsection{Play a suicide move}\nA participant places a stone that does not remove any neighboring group, and the placed stone's connected same-owner group is left without liberties. The server treats the move as a permitted suicide and removes the placed stone together with its entire connected same-owner group. Every self-removed stone is placed in its owner's graveyard and therefore contributes to that owner's losses.\n\n\\subsection{Fill a seat with a bot}\nA game is configured with one or more bot-controlled seats. When a bot-controlled turn begins, the server runs that bot's Monte Carlo tree search within server-controlled execution. The search operates under the same ten-second deadline and move-legality constraints as a human-controlled seat. Only a result selected before the authoritative deadline may be submitted for the current turn.\n\n\\subsection{Form an alliance}\nParticipants who began on separate teams request to become members of the same team. The server applies the selected merge policy, records the resulting membership, and distributes the updated team state to all viewers. Existing stones remain on the board. The resulting team's loss total includes the graveyards of all its members.\n\n\\subsection{Score a team}\nAt the end of a game, the server totals the territory attributed to a team and the removed stones held in its members' graveyards. It subtracts the graveyard total from the territory total and reports the resulting team score. Captures and suicides affect scoring only as losses borne by the owners of the removed stones.\n\n\\subsection{Chat inside a game}\nA person viewing a game sends a message to the game chat. The server associates the message with that game and distributes it to authorized game viewers without adding it to the containing room's chat.\n\n\\chapter{Requirements argument}\n\n\\section{Observable scope}\nThe candidate first-release requirements will cover authentication, room discovery, room entry, room chat, room-associated game discovery, game entry, game chat, four-seat game setup, human and bot seats, server-executed bot search, server-authoritative timed turns, multiplayer Go rules, participant graveyards, team merges, scoring, reconnect behavior, and observable error responses.\n\nAccount registration, moderation administration, persistent ratings, tournaments, KGS protocol compatibility, and sophisticated bot strategy beyond the required server-side Monte Carlo tree search are not yet part of the committed first-release scope.\n\n\\section{Proposed safety and consistency invariants}\nThe requirements should preserve the following positive invariant: every externally visible room, chat, game, move, clock, capture, graveyard, score, and team transition is authorized for the acting identity and derived from one unambiguous server-authoritative state.\n\nCandidate forbidden behaviors include accepting a move from the wrong seat, accepting more than one move for a turn, accepting a move after its deadline, resolving suicide before neighboring captures, removing less or more than the entire connected same-owner group during suicide, crediting a removed stone to another participant, placing a removed stone in the wrong owner's graveyard, allowing a client to manufacture team membership or graveyard contents, accepting a client-supplied move as the output of a server-controlled bot, leaking private session credentials into chat or logs, crossing room or game boundaries through an identifier substitution, letting a bot acquire privileges unavailable to its assigned seat, and allowing one bot search to consume unbounded server resources.\n\nThese statements are design candidates rather than accepted requirements until represented by the typed project specification and explicitly accepted.\n\n\\section{Resolved capture and suicide ordering}\nAfter a stone is placed, adjacent groups without liberties are removed first. Only if no neighboring group is removed does the server evaluate the placement as suicide. Thus a placement that captures a neighboring group can gain the liberties created by that removal and remain on the board.\n\nSuicide is permitted as a multiplayer tactic, including to help an ally form eyes. If the placed stone's connected same-owner group has no liberties, the server removes the placed stone and that entire connected group. All self-removed stones enter their respective owners' graveyards and count as losses in exactly the same way as stones removed by another participant.\n\n\\section{Resolved scoring direction}\nA removed stone is assigned to the graveyard of the participant who owned it. It counts as one loss for that participant and is not a positive capture point for another participant.\n\nA team's final score is its total territory minus the combined number of stones in its members' graveyards. Graveyard ownership remains attached to the participant, allowing team losses to be recomputed from authoritative participant records after a team merge. The typed specification must still define how territory is identified and attributed.\n\n\\section{Resolved bot execution direction}\nComputer-player Monte Carlo tree search runs on the server rather than in a connected client. The authoritative game clock bounds the search, and a late search result cannot advance an expired or superseded turn. The implementation mapping must define resource bounds and execution isolation for simultaneous searches without changing the observable ten-second deadline.\n\n\\section{Recovered ko and repetition behavior}\nThe supplied N-Player Go Lab JavaScript provides concrete provenance for the intended ko behavior. Its user-facing description calls the rule ``simple ko plus positional superko,'' but its state comparison includes both the board and the participant to move. The standard description of the implemented rule is therefore \\emph{situational superko}, not positional superko.\n\nThe candidate first-release baseline is as follows:\n\\begin{itemize}\n  \\item the ko rule is enabled by default for a two-participant game and disabled by default for a game with three or more participants;\n  \\item when enabled, a qualifying single-stone capture establishes a simple-ko restriction that prevents the owner of the captured stone from immediately recapturing at that point on that participant's next turn;\n  \\item after every proposed stone placement, the resulting board together with the next participant to move must differ from every earlier such state on the current game line;\n  \\item passes, deadline expirations, and resignations are not rejected merely because they leave or recreate a repeated state; and\n  \\item independently of repetition, a game is capped at \\(3N^2\\) moves for an \\(N\\times N\\) board.\n\\end{itemize}\n\nThe prototype represents a repetition state with a 32-bit Zobrist board hash combined with a token for the next participant. That representation is useful evidence of semantics but is not sufficient as the sole authoritative equality test because a hash collision could reject a legal position as repeated. The production requirement should demand collision-safe comparison, such as an exact canonical state representation or a digest backed by exact equality when hashes match.\n\nThe repetition check applies to actual game-tree branches and is mirrored inside Monte Carlo tree search: a searched stone placement is skipped when its resulting board-and-next-participant state occurs in the real game history or in the current search path. This search behavior is advisory; the authoritative game transition must independently enforce the same observable rule.\n\n\\section{Open rules decisions}\nThe remaining core multiplayer rules still need durable answers for:\n\\begin{itemize}\n  \\item whether the ko rule is fixed for the first-release four-participant format or configurable when a game is created;\n  \\item whether an expired deadline causes an automatic pass, forfeits the seat, or has another result;\n  \\item how territory is identified and attributed among participants and teams;\n  \\item when team merges are allowed, who must approve them, and whether they are reversible;\n  \\item whether observers may use game chat; and\n  \\item what reconnect grace, if any, exists within a ten-second turn.\n\\end{itemize}\n\n\\chapter{Implementation argument}\nImplementation is blocked until the observable behavior is encoded as a typed LeanFM requirement specification, checked, and explicitly accepted, followed by a checked and explicitly accepted implementation mapping.\n\nOnce those gates are satisfied, the implementation argument must map authentication, authorization, room isolation, game isolation, clocks, turn serialization, legal-move validation, ordered capture and suicide processing, graveyard attribution, collision-safe situational-superko validation, team transitions, server-side Monte Carlo tree search, bot resource isolation, persistence, chat delivery, and scoring attribution to concrete controls and tests. In particular, concurrent move and timeout processing must have a single atomic winner so that a deadline and a move cannot both advance the same turn. A bot result must additionally be bound to its game, seat, turn revision, and deadline so that a delayed or confused result cannot be applied to another turn. A placement, all neighboring removals, any resulting connected-group suicide removal, repetition validation, and all corresponding board, graveyard, and score-relevant changes must be committed as one authoritative transition.\n\n\n\\chapter{Current reduced server-only scope}\nThe operator explicitly selected formalization and checking of the reduced\nbasic-server slice in question \\texttt{basic\\_server\\_requirements\\_gate}.\nThe current requirements cover room discovery and entry, room game/challenge\nlistings, named open challenge creation, watch/join navigation, room chat and\nper-game chat. A game is currently a navigable chat container. Earlier chapters'\nGo boards, move rules, bots, clocks, teams and scoring remain future roadmap\nmaterial and are not obligations of this first server-only requirements gate.\n\nExisting server-issued sessions identify callers. Joining a room or game\nestablishes its chat membership; sender identity and timestamps come from the\nserver. Chat is never implicitly copied across room/game boundaries. The draft\nadds request correlation and explicit rejection branches without choosing an\nimplementation runtime or HTTP transport. Watch/join confers no Go move or seat\nauthority in this slice. Account registration is not added.\n\nProposed reversible bounds are 128 characters for names, 4000 for chat text and\nthe latest 100 chat entries per conversation. The retained 100-person population\nis a capacity forecast, not measured performance. Rejected or overloaded actions\nmust not mutate state or disclose private identities or credentials. Replay and\nconcurrency controls, connection limits, persistence and negative tests must be\nrealized in the separate implementation mapping after requirements acceptance.\n\nCanonical candidates are \\path{spec/Requirements.lean} and\n\\path{spec/Requirements.proto}. Checked task views are generated from that same\nspecification into \\path{spec/tasks.json}; the task catalog contains one\ninteraction diagram and state machine for each scoped operation. No human gate\nis accepted by compilation or by preparing these files.\n\n\n\\chapter{Room creation and working browser revision}\n\\label{ch:rooms-browser}\nThe October 25 request asks for working room creation and room-scoped game\nchallenges, with placeholder links removed. This candidate extends the previous\naccepted seven-task server slice with \\texttt{create\\_room}. A room name is a\ntrimmed, case-sensitive, public display identifier of 1--128 Unicode characters.\nA valid local session may create it; duplicate names and the 16-room bound\nreject without mutation. The creator subsequently enters it with\n\\texttt{EnterRoom}. Challenge results and listings retain their entered name.\nAll state remains in memory and resets on restart. Gameplay remains deferred.\n\nThe positive invariant is that each displayed room, challenge and chat result\ncomes from an authorized server operation in its selected scope. Forbidden\noutcomes include duplicate mutations on retry or concurrent admission, room or\ngame chat disclosure outside membership, executable user text, stale responses\nreplacing another room's content, exposed tokens, and navigation to fabricated\ndestinations. The proposed controls and negative checks are cataloged in\n\\path{reports/rooms-browser-review/review.md}. They are obligations for the\nseparate implementation review, not claims of completed source changes.\n\nThe current typed requirements generate interaction and state-machine views in\n\\path{spec/tasks.json}; extracted views and their exact provenance appear in\n\\path{reports/rooms-browser-review/}. This revision requires explicit\nrequirements acceptance followed by acceptance of its implementation mapping.\nEarlier protected gate snapshots remain evidence only for their earlier input\nrevisions. Billing failure of the attempted Anthropic request did not accept a\ngate or implement this feature.\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateRoom; checking to accepted: RoomCreated; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_room.state.pdf}\n\\EndAccSupp{}\n\\caption{Create a named chat room: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateGame; checking to accepted: GameCreated; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_game.state.pdf}\n\\EndAccSupp{}\n\\caption{Create a named room game or challenge: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\chapter{N-player Go play revision}\n\\label{ch:gameplay}\nThe October 26 request asks to complete the KGS-style server: challenge\ncreation takes the board parameters of the stakeholder's N-Player Go Lab, and\nseats not taken by people are played by Monte Carlo tree search bots running in\nthe server. This candidate extends the twelve-task specification with\n\\texttt{take\\_seat}, \\texttt{start\\_game}, \\texttt{play\\_move} and\n\\texttt{game\\_state}, and changes \\texttt{create\\_game} parameters. It answers\nthe open rules decisions of the requirements argument as follows.\n\n\\begin{itemize}\n  \\item \\textbf{Parameters.} Board 5, 7, 9, 11, 13 or 19 lines (default 11);\n  2--8 seats (default 4); a human move deadline from 5 seconds to 64 minutes\n  (default 10 seconds); a bot search time from 0.25 to 16 seconds (default\n  1 second); and a configurable ko rule: Auto (on for two players, off for\n  three or more), Off, or On.\n  \\item \\textbf{Seats and bots.} Room members who open a challenge may take one\n  empty seat each before the start. Only the creator starts the game; every seat\n  still empty becomes a server bot named \\texttt{bot-}\\emph{seat}. A bot never\n  moves for a person's seat, and a client cannot submit a bot's move.\n  \\item \\textbf{Deadline.} An unanswered turn becomes a \\emph{timeout}: it\n  passes the turn but neither ends nor resets the passing round. A move that\n  arrives after its deadline is rejected and the timeout wins. A full round of\n  timeouts abandons the game, scored as it stands.\n  \\item \\textbf{Territory.} An empty region bordered only by one colour's stones\n  and the Wall belongs to that colour. Score is territory minus losses.\n  \\item \\textbf{Ending.} The game ends when every remaining player has passed\n  since the last stone, after a full round of timeouts, or at \\(3N^2\\) moves.\n  A resigned seat passes automatically and cannot win. The server announces the\n  final scores and winners in the game chat.\n  \\item \\textbf{Ko.} When on, simple ko plus situational superko: a stone may not\n  recreate an earlier board with the same seat to move. The Zobrist key only\n  indexes candidates; equality is decided on the exact board and seat.\n  \\item \\textbf{Deferred.} Team merges, handicaps, ratings, persistence, game\n  record export and reconnect grace beyond reloading the page. Watchers may use\n  game chat.\n\\end{itemize}\n\nThe positive invariants are that every board, clock and score shown comes from\none server-authoritative transition, and that every turn and every game ends.\nForbidden outcomes include a move for another seat or out of turn, two\ntransitions for one turn (move versus deadline versus bot result), a bot\nresult applied after its turn ended, an outsider reading or changing a game,\nand unbounded bot computation. The implementation mapping binds bot results to\nthe game and turn revision, runs searches outside the game lock with a time\nbudget, a node cap and a bounded number of concurrent search slots, and covers\neach forbidden outcome with a race-enabled test.\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: PlayMove; checking to accepted: MovePlayed; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/gameplay-review/play_move.state.pdf}\n\\EndAccSupp{}\n\\caption{Play a stone, pass or resign: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: StartGame; checking to accepted: GameStarted; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/gameplay-review/start_game.state.pdf}\n\\EndAccSupp{}\n\\caption{Start a game; bots fill empty seats: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\chapter{Lab parity revision: seats, teams, history and search}\n\\label{ch:lab-parity}\n\\section{Request}\nOn October 26 the stakeholder asked that the server game behave like the\nN-Player Go Lab, the single-page prototype whose engine the server already\nports. The important behaviours are: choosing which seats are bots and which are\npeople; teams that people can merge; navigating the board history and playing\nout alternatives that are not the actual game; and seeing the Monte Carlo tree\nsearch estimations. The revision is also an exercise of the LeanFM method: book,\ntyped grammar and tasks, two gates, then a one-shot implementation. Everything\nneeded to continue lives in this book, \\path{spec/}, \\path{source/} and\n\\path{reports/}; the chat that produced it is disposable.\n\n\\section{Decisions recorded from the stakeholder}\nFour questions were put to the stakeholder; each answer is now a requirement.\n\\begin{enumerate}\n  \\item \\textbf{Seat control.} The creator plans each seat as \\emph{bot} or\n  \\emph{open} before the start. A person who holds a seat may switch\n  \\emph{autopilot} on (a server bot plays the seat) and off at any time during\n  play; the seat stays theirs.\n  \\item \\textbf{Teams.} The creator may preset teams, as in the Lab roster. During\n  play two teams merge when every person seated in either team accepts; bots go\n  along with their team's people; merges are permanent.\n  \\item \\textbf{Analysis.} Watchers may branch and run local search at any time.\n  Seated people may step through the actual moves during play, and may branch and\n  search once the game has finished.\n  \\item \\textbf{Search visibility.} Each bot move publishes its search summary as\n  soon as it is played.\n\\end{enumerate}\n\n\\section{Derived rules}\n\\begin{itemize}\n  \\item A seat's team defaults to its seat number, so everyone plays alone unless\n  the creator groups seats. Team numbers run from 1 to the seat count.\n  \\item A team with no seated person cannot be party to a merge: nobody could\n  consent for it. A merged team takes the smaller team number.\n  \\item A proposal is withdrawn by any decline, by any change to either team, or\n  by the game finishing. Only one proposal per pair of teams is pending.\n  \\item Team score is the sum of its members' territory minus the sum of their\n  losses. Winners are the team or teams with the highest team score among teams\n  with at least one member who has not resigned. Bots on a team search for the\n  team's combined score (the Lab's team reward).\n  \\item Autopilot moves use the bot deadline and publish search summaries.\n  Switching autopilot off during the seat's own turn discards the pending bot\n  result; the person then has the rest of the human deadline measured from the\n  start of the turn.\n  \\item Each removed stone is recorded against the seat that captured it, giving\n  the Lab's per-capturer \\emph{bowl}; suicide is recorded against the mover.\n  \\item Bot search settings are challenge parameters with the Lab's choices:\n  exploration constant 0.5, 0.7 (default), 1.0 or 1.4; reward \\emph{margin}\n  (default), \\emph{win} or \\emph{rank}; margin softness 2, 4 (default) or 8.\n\\end{itemize}\n\n\\section{What every viewer sees}\nThe browser reproduces the Lab against server state:\n\\begin{itemize}\n  \\item the board with Wall coordinates, territory squares, the last-move marker,\n  ghost markers for next moves, and a search heat overlay;\n  \\item navigation: Home, Back, Forward, End, previous and next variation, by\n  buttons and by the arrow, Home and End keys; a variation tree; next-move chips;\n  \\item a \\emph{Search at this position} panel: candidate moves with visit share\n  and reward for the mover, from the bot's published summary or the viewer's own\n  local search;\n  \\item a per-seat table with Territory, Bowl, Score, Proj.\\ (projected final\n  score) and Outlook (expected reward), and team totals;\n  \\item a clickable projected-score timeline along the viewed line;\n  \\item GIF export of the viewed line; stone, capture and final-ten-seconds sounds\n  with a toggle;\n  \\item live following while the viewer is at the latest move; otherwise a notice\n  that new moves arrived.\n\\end{itemize}\nVariations and local searches run in the viewer's browser with the Lab engine,\nare never sent to the server, and vanish when the page closes. This boundary is\na fairness convention enforced by the provided browser, not a security boundary:\nanyone can copy a public position into another tool.\n\n\\section{Protocol shape}\nNew requests: \\texttt{SetSeatPlan}, \\texttt{LeaveSeat}, \\texttt{SetAutopilot},\n\\texttt{ProposeMerge}, \\texttt{RespondMerge}; \\texttt{CreateGame} gains the bot\nsettings and a seat plan; \\texttt{GetGameState} gains \\texttt{since\\_move} so a\nviewer fetches only new move records. Server-originated events\n(\\texttt{BotMovePlayed}, \\texttt{TurnTimedOut}, \\texttt{AutoPassed},\n\\texttt{TeamsMerged}, \\texttt{MergeWithdrawn}, \\texttt{GameFinished}) reach game\nmembers as entries of \\texttt{GameState}. A third actor, \\texttt{Bot}, is the\nbounded pool of server search workers: the server sends \\texttt{BotTurn} and\naccepts \\texttt{BotMoveChosen} only for the same game, seat and turn revision\nbefore the deadline.\n\nThe grammar composes per-operation tasks into the \\texttt{game\\_lifecycle} task:\ncreate, then any number of seat-plan, take, leave, join, chat and state\noperations, then start, then any number of turns, autopilot switches, merges,\nchats and state reads, then \\texttt{GameFinished}. A \\texttt{turn} is a person's\nmove, a bot turn, a timeout or an automatic pass. Positive obligations: every\nturn ends exactly once; every started game finishes. Negative obligations cover\nmoving for another seat, double-ended turns, stale bot results, merges without\nconsent, analysis leaking into the game, and unbounded bot work.\n\n\\section{Deferred}\nHandicaps, ratings, persistence across restarts, SGF export, push transport\n(the browser polls), reconnect grace beyond reloading the page, and moderation.\n\n\\section{Implementation argument}\nThe separate mapping in \\path{spec/Implementation.lean} binds the \\texttt{Bot}\nactor to a bounded worker pool, extends the Go engine's search to return the\nLab's summary (top candidates by visits; per seat the mean reward and mean final\nscore), keeps team arrays in the authoritative game, and serves the Lab engine\nand search worker as same-origin static files so the browser can branch and\nsearch locally under the existing content security policy (extended only with\nsame-origin workers and \\texttt{blob:}/\\texttt{data:} images for GIF preview).\nEach negative obligation maps to a control and a race-enabled test listed in\n\\path{source/traceability.json}.\n\n\\begin{figure}[ht]\n\\centering\n\\includegraphics[width=\\textwidth]{../reports/lab-parity-review/bot_turn.state.pdf}\n\\caption{A server bot plays one turn: generated from the current typed task. A late result after the timeout loops on \\texttt{timed\\_out} and is discarded.}\n\\end{figure}\n\n\\begin{figure}[ht]\n\\centering\n\\includegraphics[width=\\textwidth]{../reports/lab-parity-review/team_merge.state.pdf}\n\\caption{Two teams merge by consent: generated from the current typed task.}\n\\end{figure}\n\n\\begin{figure}[ht]\n\\centering\n\\includegraphics[width=\\textwidth]{../reports/lab-parity-review/game_lifecycle.state.pdf}\n\\caption{A game from challenge to result: generated from the current typed task.}\n\\end{figure}\n\n\\IfFileExists{tour.tex}{\\input{tour.tex}}{}\n\\end{document}\n"
     },
     {
       "role": "InlineTextBox",
@@ -955,7 +955,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "18"
+      "name": "28"
     },
     {
       "role": "InlineTextBox",
@@ -963,7 +963,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "80165"
+      "name": "276548"
     },
     {
       "role": "InlineTextBox",
@@ -2652,6 +2652,1502 @@
     {
       "role": "InlineTextBox",
       "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{N-player Go play revision}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\label{ch:gameplay}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The October 26 request asks to complete the KGS-style server: challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "creation takes the board parameters of the stakeholder's N-Player Go Lab, and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "seats not taken by people are played by Monte Carlo tree search bots running in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "the server. This candidate extends the twelve-task specification with"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\texttt{take\\_seat}, \\texttt{start\\_game}, \\texttt{play\\_move} and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\texttt{game\\_state}, and changes \\texttt{create\\_game} parameters. It answers"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "the open rules decisions of the requirements argument as follows."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Parameters.} Board 5, 7, 9, 11, 13 or 19 lines (default 11);"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  2--8 seats (default 4); a human move deadline from 5 seconds to 64 minutes"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  (default 10 seconds); a bot search time from 0.25 to 16 seconds (default"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  1 second); and a configurable ko rule: Auto (on for two players, off for"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  three or more), Off, or On."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Seats and bots.} Room members who open a challenge may take one"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  empty seat each before the start. Only the creator starts the game; every seat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  still empty becomes a server bot named \\texttt{bot-}\\emph{seat}. A bot never"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  moves for a person's seat, and a client cannot submit a bot's move."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Deadline.} An unanswered turn becomes a \\emph{timeout}: it"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  passes the turn but neither ends nor resets the passing round. A move that"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  arrives after its deadline is rejected and the timeout wins. A full round of"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  timeouts abandons the game, scored as it stands."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Territory.} An empty region bordered only by one colour's stones"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  and the Wall belongs to that colour. Score is territory minus losses."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Ending.} The game ends when every remaining player has passed"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  since the last stone, after a full round of timeouts, or at \\(3N^2\\) moves."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  A resigned seat passes automatically and cannot win. The server announces the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  final scores and winners in the game chat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Ko.} When on, simple ko plus situational superko: a stone may not"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  recreate an earlier board with the same seat to move. The Zobrist key only"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  indexes candidates; equality is decided on the exact board and seat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Deferred.} Team merges, handicaps, ratings, persistence, game"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  record export and reconnect grace beyond reloading the page. Watchers may use"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  game chat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The positive invariants are that every board, clock and score shown comes from"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "one server-authoritative transition, and that every turn and every game ends."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Forbidden outcomes include a move for another seat or out of turn, two"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "transitions for one turn (move versus deadline versus bot result), a bot"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "result applied after its turn ended, an outsider reading or changing a game,"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "and unbounded bot computation. The implementation mapping binds bot results to"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "the game and turn revision, runs searches outside the game lock with a time"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "budget, a node cap and a bounded number of concurrent search slots, and covers"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "each forbidden outcome with a race-enabled test."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\BeginAccSupp{method=escape,ActualText={ready to checking: PlayMove; checking to accepted: MovePlayed; checking to rejected: RequestRejected}}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/gameplay-review/play_move.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\EndAccSupp{}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{Play a stone, pass or resign: state transitions generated from the current typed task.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\BeginAccSupp{method=escape,ActualText={ready to checking: StartGame; checking to accepted: GameStarted; checking to rejected: RequestRejected}}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/gameplay-review/start_game.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\EndAccSupp{}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{Start a game; bots fill empty seats: state transitions generated from the current typed task.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{Lab parity revision: seats, teams, history and search}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\label{ch:lab-parity}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Request}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "On October 26 the stakeholder asked that the server game behave like the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "N-Player Go Lab, the single-page prototype whose engine the server already"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "ports. The important behaviours are: choosing which seats are bots and which are"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "people; teams that people can merge; navigating the board history and playing"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "out alternatives that are not the actual game; and seeing the Monte Carlo tree"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "search estimations. The revision is also an exercise of the LeanFM method: book,"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "typed grammar and tasks, two gates, then a one-shot implementation. Everything"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "needed to continue lives in this book, \\path{spec/}, \\path{source/} and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\path{reports/}; the chat that produced it is disposable."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Decisions recorded from the stakeholder}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Four questions were put to the stakeholder; each answer is now a requirement."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{enumerate}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Seat control.} The creator plans each seat as \\emph{bot} or"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\emph{open} before the start. A person who holds a seat may switch"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\emph{autopilot} on (a server bot plays the seat) and off at any time during"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  play; the seat stays theirs."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Teams.} The creator may preset teams, as in the Lab roster. During"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  play two teams merge when every person seated in either team accepts; bots go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  along with their team's people; merges are permanent."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Analysis.} Watchers may branch and run local search at any time."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  Seated people may step through the actual moves during play, and may branch and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  search once the game has finished."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item \\textbf{Search visibility.} Each bot move publishes its search summary as"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  soon as it is played."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{enumerate}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Derived rules}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item A seat's team defaults to its seat number, so everyone plays alone unless"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  the creator groups seats. Team numbers run from 1 to the seat count."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item A team with no seated person cannot be party to a merge: nobody could"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  consent for it. A merged team takes the smaller team number."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item A proposal is withdrawn by any decline, by any change to either team, or"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  by the game finishing. Only one proposal per pair of teams is pending."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item Team score is the sum of its members' territory minus the sum of their"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  losses. Winners are the team or teams with the highest team score among teams"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  with at least one member who has not resigned. Bots on a team search for the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  team's combined score (the Lab's team reward)."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item Autopilot moves use the bot deadline and publish search summaries."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  Switching autopilot off during the seat's own turn discards the pending bot"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  result; the person then has the rest of the human deadline measured from the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  start of the turn."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item Each removed stone is recorded against the seat that captured it, giving"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  the Lab's per-capturer \\emph{bowl}; suicide is recorded against the mover."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item Bot search settings are challenge parameters with the Lab's choices:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  exploration constant 0.5, 0.7 (default), 1.0 or 1.4; reward \\emph{margin}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  (default), \\emph{win} or \\emph{rank}; margin softness 2, 4 (default) or 8."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{What every viewer sees}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The browser reproduces the Lab against server state:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item the board with Wall coordinates, territory squares, the last-move marker,"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  ghost markers for next moves, and a search heat overlay;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item navigation: Home, Back, Forward, End, previous and next variation, by"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  buttons and by the arrow, Home and End keys; a variation tree; next-move chips;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item a \\emph{Search at this position} panel: candidate moves with visit share"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  and reward for the mover, from the bot's published summary or the viewer's own"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  local search;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item a per-seat table with Territory, Bowl, Score, Proj.\\ (projected final"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  score) and Outlook (expected reward), and team totals;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item a clickable projected-score timeline along the viewed line;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item GIF export of the viewed line; stone, capture and final-ten-seconds sounds"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  with a toggle;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item live following while the viewer is at the latest move; otherwise a notice"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  that new moves arrived."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Variations and local searches run in the viewer's browser with the Lab engine,"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "are never sent to the server, and vanish when the page closes. This boundary is"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "a fairness convention enforced by the provided browser, not a security boundary:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "anyone can copy a public position into another tool."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Protocol shape}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "New requests: \\texttt{SetSeatPlan}, \\texttt{LeaveSeat}, \\texttt{SetAutopilot},"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\texttt{ProposeMerge}, \\texttt{RespondMerge}; \\texttt{CreateGame} gains the bot"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "settings and a seat plan; \\texttt{GetGameState} gains \\texttt{since\\_move} so a"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "viewer fetches only new move records. Server-originated events"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "(\\texttt{BotMovePlayed}, \\texttt{TurnTimedOut}, \\texttt{AutoPassed},"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\texttt{TeamsMerged}, \\texttt{MergeWithdrawn}, \\texttt{GameFinished}) reach game"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "members as entries of \\texttt{GameState}. A third actor, \\texttt{Bot}, is the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "bounded pool of server search workers: the server sends \\texttt{BotTurn} and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "accepts \\texttt{BotMoveChosen} only for the same game, seat and turn revision"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "before the deadline."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The grammar composes per-operation tasks into the \\texttt{game\\_lifecycle} task:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "create, then any number of seat-plan, take, leave, join, chat and state"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "operations, then start, then any number of turns, autopilot switches, merges,"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "chats and state reads, then \\texttt{GameFinished}. A \\texttt{turn} is a person's"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "move, a bot turn, a timeout or an automatic pass. Positive obligations: every"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "turn ends exactly once; every started game finishes. Negative obligations cover"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "moving for another seat, double-ended turns, stale bot results, merges without"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "consent, analysis leaking into the game, and unbounded bot work."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Deferred}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Handicaps, ratings, persistence across restarts, SGF export, push transport"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "(the browser polls), reconnect grace beyond reloading the page, and moderation."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Implementation argument}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The separate mapping in \\path{spec/Implementation.lean} binds the \\texttt{Bot}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "actor to a bounded worker pool, extends the Go engine's search to return the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Lab's summary (top candidates by visits; per seat the mean reward and mean final"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "score), keeps team arrays in the authoritative game, and serves the Lab engine"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "and search worker as same-origin static files so the browser can branch and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "search locally under the existing content security policy (extended only with"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "same-origin workers and \\texttt{blob:}/\\texttt{data:} images for GIF preview)."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Each negative obligation maps to a control and a race-enabled test listed in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\path{source/traceability.json}."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/lab-parity-review/bot_turn.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{A server bot plays one turn: generated from the current typed task. A late result after the timeout loops on \\texttt{timed\\_out} and is discarded.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/lab-parity-review/team_merge.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{Two teams merge by consent: generated from the current typed task.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/lab-parity-review/game_lifecycle.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{A game from challenge to result: generated from the current typed task.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\IfFileExists{tour.tex}{\\input{tour.tex}}{}"
     },
     {
       "role": "InlineTextBox",

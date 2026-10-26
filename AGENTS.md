@@ -39,12 +39,16 @@ and path-boundary consequences in proportion to the change. Map every material
 negative requirement to an implementation control and negative test or proof;
 do not call the feature complete while a material risk is unmitigated.
 
-There are two explicit acceptance gates:
+Work in three layers, in order, checking each before the next:
 
 1. observable requirements and their derived outputs;
-2. the separate implementation specification and its traceability mappings.
+2. the separate implementation specification and its traceability mappings;
+3. the source, written in one pass from the checked specifications.
 
-After both gates, implement the actual code in one pass. Do not answer with an
+Review and acceptance happen in git: the user reviews diffs and commits them.
+LeanFM records no approvals, and an agent must not stop to ask for one. When
+the user asks for the implementation, write and check whatever specification
+it needs, then implement the actual code in one pass. Do not answer with an
 implementation plan when the user has requested the implementation. Preserve
 conforming existing code, edit the source tree, add or update tests, and run the
 repository checks. Missing or contradictory durable information is a reason to

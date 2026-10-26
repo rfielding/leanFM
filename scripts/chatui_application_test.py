@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Refs: leanfm.application_launch; native launch and malicious-preview isolation.
-Uses a disposable replica of already accepted GoServer inputs and keyless test
+Uses a disposable replica of the checked GoServer inputs and keyless test
 sessions in a separate real Lean server. No live account or provider is used.
 """
 import sys
@@ -43,7 +43,7 @@ def main():
                 self.server.requests_started+=1
                 self.rfile.read(int(self.headers.get('Content-Length','0')))
                 time.sleep(5)
-                self.send_json({'id':'documentation-response','object':'response','status':'completed','model':'documentation-model','output':[{'type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':'A room is created by CreateRoom, followed by RoomCreated or RequestRejected. Open Tasks and choose Create a named chat room, then States to inspect the generated state machine. Requirements and implementation are accepted separately in Project memory. This reply comes from the local documentation fixture.'}]}],'usage':{'input_tokens':80,'output_tokens':32,'total_tokens':112,'input_tokens_details':{'cached_tokens':0}}})
+                self.send_json({'id':'documentation-response','object':'response','status':'completed','model':'documentation-model','output':[{'type':'message','role':'assistant','status':'completed','content':[{'type':'output_text','text':'A room is created by CreateRoom, followed by RoomCreated or RequestRejected. Open Tasks and choose Create a named chat room, then States to inspect the generated state machine. Project memory shows whether the requirements and implementation are checked and committed. This reply comes from the local documentation fixture.'}]}],'usage':{'input_tokens':80,'output_tokens':32,'total_tokens':112,'input_tokens_details':{'cached_tokens':0}}})
         provider=ThreadingHTTPServer(('127.0.0.1',0),DocumentationProvider)
         provider.requests_started=0
         threading.Thread(target=provider.serve_forever,daemon=True).start()
@@ -55,8 +55,6 @@ def main():
         shutil.copytree(original/name,project/name,ignore=shutil.ignore_patterns('__pycache__','*.log','*.aux','*.out','*.toc'))
     shutil.copy2(original/'manifest.json',project/'manifest.json')
     shutil.copytree(original/'reports/specification-check',project/'reports/specification-check')
-    shutil.copytree(original/'.leanfm/accepted',project/'.leanfm/accepted')
-    shutil.copy2(original/'.leanfm/acceptance.json',project/'.leanfm/acceptance.json')
     project_id=json.loads((project/'manifest.json').read_text())['project_id']
     listener=socket.socket(); listener.bind(('127.0.0.1',0)); port=listener.getsockname()[1]; listener.close()
     base='http://127.0.0.1:'+str(port)
@@ -200,7 +198,7 @@ def serveLauncherFixture : IO Unit := do
             tour.capture(ui,'05-chat-response','After ChatResponseRendered','Where are the reply, usage, Resend and Delete controls?')
             tour.activate(ui,'.phase-tabs button','Project memory')
             wait(ui,"!!document.querySelector('.memory-workbench')")
-            tour.capture(ui,'06-project-memory','Both actual accepted specification revisions loaded','Where do I review durable files and the two independent acceptance gates?')
+            tour.capture(ui,'06-project-memory','Both actual checked specification revisions loaded','Where do I review durable files and their check and git status?')
             tour.activate(ui,'.phase-tabs button','Book')
             wait(ui,"!!document.querySelector('#bookSource') && document.querySelector('#bookSource').value.length>100")
             time.sleep(1)
@@ -213,7 +211,7 @@ def serveLauncherFixture : IO Unit := do
             tour.capture(ui,'08-task-states','Current create_room task rendered from its checked typed specification','Where is the generated state machine and how do I switch behavioral views?')
             tour.activate(ui,'.phase-tabs button','Source')
             wait(ui,"!!document.querySelector('.source-view pre')")
-            tour.capture(ui,'09-source','Accepted implementation source inventory opened','How do I inspect the actual source and its tests?')
+            tour.capture(ui,'09-source','Implementation source inventory opened','How do I inspect the actual source and its tests?')
             tour.activate(ui,'.phase-tabs button','Chat')
         launch_provider_count=provider.requests_started if provider else 0
         evaluate(ui,"document.querySelector('.application-controls button').click()")
