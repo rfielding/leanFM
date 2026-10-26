@@ -68,3 +68,23 @@ message WorkflowRejected {
   string request_id = 3;
   string reason = 4;
 }
+// MCP logic consultation (selfhost.mcp.logic.*). input_json and evidence_json are JSON documents
+// interpreted as data only; their grammar is the logic-reference resource.
+message LogicConsultRequested {
+  string tool = 1;
+  string input_json = 2;
+  string request_id = 3;
+}
+message LogicVerdict {
+  string tool = 1;
+  string verdict = 2;
+  string reading = 3;
+  string evidence_json = 4;
+  string bounds = 5;
+  string request_id = 6;
+}
+message LogicInputRejected {
+  string tool = 1;
+  string reason = 2;
+  string request_id = 3;
+}

@@ -2,6 +2,7 @@ import Lean
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.Implementation
+import LeanFM.Logic
 
 namespace LeanFM.MCP
 
@@ -22,7 +23,9 @@ def instructions : String :=
   "of the system prompt. Preserve two explicit gates: acceptance of observable requirements and their " ++
   "derived views, then acceptance of the traceable implementation specification. Only after both gates " ++
   "may the book, specifications, and repository be used to produce a one-shot software PR. The MCP " ++
-  "surface is read-only: it supplies canonical context and deterministic checks; it cannot accept a gate."
+  "surface is read-only: it supplies canonical context and deterministic checks; it cannot accept a gate. " ++
+  "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
+  "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference."
 
 def ok (id result : Json) : Response :=
   { status := 200
@@ -55,7 +58,9 @@ def resources : Array Json := #[
   resource "leanfm://language/requirements-reference" "requirements-reference"
     "LeanFM requirements language reference" "Live constructors and rules; do not guess these from memory." "text/markdown",
   resource "leanfm://language/implementation-reference" "implementation-reference"
-    "LeanFM implementation language reference" "Live implementation and traceability constructors." "text/markdown"
+    "LeanFM implementation language reference" "Live implementation and traceability constructors." "text/markdown",
+  resource "leanfm://language/logic-reference" "logic-reference"
+    "LeanFM logic reference" "JSON formula grammar, operator readings, verdicts, evidence and terminal convention for the logic tools." "text/markdown"
 ]
 
 private def alphabet : Array Char :=
@@ -105,16 +110,31 @@ def resourceContents (uri : String) : IO (Except String Json) := do
       | "leanfm://language/implementation-reference" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", "text/markdown"),
             ("text", LeanFM.leanFMImplementationReference)]
+      | "leanfm://language/logic-reference" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", "text/markdown"),
+            ("text", LeanFM.Logic.reference)]
       | _ => return .error s!"unknown resource URI: {uri}"
     return .ok contents
   catch err => return .error s!"resource unavailable: {err}"
 
-def tool (name title description : String) : Json :=
+def noArguments : Json :=
+  Json.mkObj [("type", "object"), ("properties", Json.mkObj []), ("additionalProperties", false)]
+
+def tool (name title description : String) (inputSchema : Json := noArguments) : Json :=
   Json.mkObj [("name", name), ("title", title), ("description", description),
-    ("inputSchema", Json.mkObj [("type", "object"),
-      ("properties", Json.mkObj []), ("additionalProperties", false)]),
+    ("inputSchema", inputSchema),
     ("annotations", Json.mkObj [("readOnlyHint", true), ("destructiveHint", false),
       ("idempotentHint", true), ("openWorldHint", false)])]
+
+def stringSchema (description : String) : Json :=
+  Json.mkObj [("type", "string"), ("description", description)]
+
+def anyJson (description : String) : Json :=
+  Json.mkObj [("description", description)]
+
+def schema (properties : List (String × Json)) (required : List String) : Json :=
+  Json.mkObj [("type", "object"), ("properties", Json.mkObj properties),
+    ("required", Json.arr (required.map Json.str).toArray), ("additionalProperties", false)]
 
 def tools : Array Json := #[
   tool "validate_generated_artifacts" "Validate generated artifacts"
@@ -122,10 +142,40 @@ def tools : Array Json := #[
   tool "requirements_interrogation" "Read requirements interrogation"
     "Return the internal requirements completeness checklist. The agent resolves reversible defaults; this is not a questionnaire for the user.",
   tool "code_generation_prompt" "Read one-shot implementation prompt"
-    "Return the canonical post-acceptance prompt that maps the book and accepted specifications to source changes."
+    "Return the canonical post-acceptance prompt that maps the book and accepted specifications to source changes.",
+  tool "explain_formula" "Explain a CTL formula"
+    "Read a JSON CTL formula back in English with its negation, mode, unknown atoms and lints (vacuity, AF AG vs AG AF, quantifier mismatch with an optional sentence). Read leanfm://language/logic-reference first."
+    (schema [("formula", anyJson "JSON formula"), ("task", anyJson "optional canonical task id or inline draft"),
+      ("sentence", stringSchema "optional English requirement the formula is meant to state")] ["formula"]),
+  tool "check_ctl" "Check a CTL formula against a task"
+    "Decide a JSON CTL formula over a canonical task or inline draft. Returns proved, disproved, unknown, unsupported or resource-limit with a witness or counterexample path."
+    (schema [("task", anyJson "canonical task id or inline draft {states, initial, terminals, transitions}"),
+      ("formula", anyJson "JSON formula")] ["task", "formula"]),
+  tool "check_trace" "Check an event trace and draw it"
+    "Check event envelopes (id, prevIds, causeIds, task, src, dst, message) for ids, causality, schemas, concurrency and task acceptance; returns a Mermaid sequence diagram and causal graph."
+    (schema [("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("drafts", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])])] ["events"]),
+  tool "classify_requirement" "Classify requirement observability"
+    "Classify each atom of a formula, or each predicate text, as observable, derived or implementation-only, and propose events that would make hidden predicates testable."
+    (schema [("formula", anyJson "JSON formula"), ("predicates", Json.mkObj [("type", "array"), ("items", stringSchema "predicate text")]),
+      ("task", anyJson "optional canonical task id or inline draft")] []),
+  tool "knows" "Derivable knowledge (deferred)"
+    "Accepted but deferred: always answers unsupported."
+    (schema [("events", Json.mkObj [("type", "array")]), ("actor", stringSchema "actor"), ("at", stringSchema "event id")] [])
 ]
 
-def toolResult (name : String) : Except String Json :=
+/-- LogicVerdict or LogicInputRejected, carried as an MCP tool result. -/
+def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
+  let (body, isError) := match outcome with
+    | .ok json => (json, false)
+    | .error reason => (Json.mkObj [("tool", name), ("verdict", "rejected"), ("reason", reason)], true)
+  Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", body.pretty)]]),
+    ("structuredContent", body), ("isError", isError)]
+
+def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except String Json :=
+  match LeanFM.Logic.run name arguments with
+  | some outcome => .ok (logicResult name outcome)
+  | none =>
   match name with
   | "validate_generated_artifacts" => .ok <| textContent
       (LeanFM.LLMGenerated.Requirements.validationReport ++
@@ -187,7 +237,7 @@ def dispatchJson (request : Json) : IO Response := do
   | "tools/call" =>
       match stringField params "name" with
       | .error err => pure <| rpcError id (-32602) err
-      | .ok name => match toolResult name with
+      | .ok name => match toolResult name ((field params "arguments").toOption.getD (Json.mkObj [])) with
         | .ok result => pure <| ok id result
         | .error err => pure <| rpcError id (-32602) err
   | "prompts/list" => pure <| ok id <| Json.mkObj [("prompts", Json.arr prompts)]

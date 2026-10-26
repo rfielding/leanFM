@@ -169,6 +169,152 @@ codex mcp list
 The MCP interface does not replace the book; it makes the book, specifications
 and live checker discoverable to an agent client.
 
+\section{Consulting MCP about logic}
+\label{sec:mcp-logic}
+
+\index{Model Context Protocol!logic consultation}
+An agent that writes LeanFM requirements makes three kinds of logical mistake
+more often than any other. It writes a temporal formula whose reading differs
+from the sentence it was asked to formalize. It invents a sequence of events
+that no grammar accepts, or whose causes run backwards, and then draws a
+sequence diagram from it. And it states a requirement over something no
+observer can see---``the server knows the password'', ``the cache is
+consistent''---so the requirement can never be tested against an event trace.
+The \texttt{selfhost.mcp.logic} clauses, implemented by \texttt{LeanFM.Logic}
+and exposed by the MCP endpoint, let the agent ask LeanFM before it commits to
+any of these, instead of finding out at a gate.
+
+The consultation is a separate task in the self-hosting requirements. Its
+grammar is one request answered by exactly one of two outcomes:
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.85\textwidth}{!}{\input{generated/mcp-logic-interaction.tex}}
+\caption{An agent consults LeanFM about a formula, trace or requirement. Every
+consultation ends in a verdict carrying its evidence or a rejection naming the
+input fault. Source: \texttt{logicGrammar} in the self-hosting requirements;
+provenance: \texttt{book/generated/mcp-logic-interaction-provenance.txt}.}
+\label{fig:mcp-logic-interaction}
+\end{figure}
+
+\subsection{The tools}
+
+\begin{description}
+\item[\texttt{leanfm://language/logic-reference}] A resource stating the JSON
+formula grammar, the meaning of every operator, the terminal-state convention,
+and worked examples. An agent reads it once per session.
+\item[\texttt{explain\_formula}] Returns the formula read back in English, its
+negation and duals, whether it is a state or path formula, typing errors, and
+lints. A vacuous implication, an \texttt{EF} where the sentence said ``always'',
+or a plain implication where \texttt{stronglyImplies} was meant are each
+reported with the suggested alternative.
+\item[\texttt{check\_ctl}] Evaluates a formula against a canonical task or an
+inline draft task. The atoms are the observable ones: \texttt{at(state)},
+\texttt{after(message)} and \texttt{terminal}. The result is one of five
+verdicts and always carries evidence: a witness path for a satisfied
+existential, or a counterexample path for a refuted universal or a violated
+\texttt{never}.
+\item[\texttt{check\_trace}] Accepts event envelopes with their \texttt{id},
+\texttt{prevIds} and \texttt{causeIds}. It checks identifiers, cycles, cause
+ordering, the \texttt{src} and \texttt{dst} declared for each message, and
+grammar acceptance per task. When the trace is admissible it returns the
+generated interaction diagram and causal graph---the agent designs a sequence
+diagram by writing events, not by drawing.
+\item[\texttt{classify\_requirement}] Classifies each atom of a proposed
+requirement as observable, derived, or implementation-only; says which artifact
+should hold it; and, for an implementation-only atom, proposes the events that
+would make it testable.
+\end{description}
+
+Knowledge and permission modalities ($K_a$, $O$, $P$) from
+Chapter~\ref{ch:legal-example} are deferred: \texttt{selfhost.mcp.logic.knows}
+lists them as \texttt{unsupported} so that an agent is told plainly rather than
+given a guessed answer.
+
+\subsection{Formulas as data}
+
+A formula travels as JSON. An agent asking whether every consultation ends
+would send:
+
+\begin{lstlisting}
+{ "task": "mcp_logic_consult",
+  "formula": { "AG": { "implies": [
+      { "after": "LogicConsultRequested" },
+      { "AF": "terminal" } ] } } }
+\end{lstlisting}
+
+The formula is parsed into a closed syntax tree and evaluated by LeanFM. It is
+never compiled, interpreted as Lean, or passed to a shell; the required proof
+\emph{Submitted logic never runs as code} states this as a \texttt{never}
+property, and its control is that the parser has no constructor that names
+code.
+
+\subsection{Five verdicts}
+
+\begin{description}
+\item[\texttt{proved}] The formula holds on every reachable state within the
+stated bounds, with a witness where the formula is existential.
+\item[\texttt{disproved}] A counterexample path is returned.
+\item[\texttt{unknown}] The model is too weak to decide: a derived atom, a
+predicate text, or a message field value, none of which a task's state machine
+carries.
+\item[\texttt{unsupported}] The operator is outside the implemented logic; the
+answer names it.
+\item[\texttt{resource-limit}] Exploration stopped at the state, depth or time
+bound. The required proof \emph{Exhausted search never proves} forbids
+reporting this as \texttt{proved}.
+\end{description}
+
+\subsection{Requirements without observable behavior}
+
+A requirement over hidden state is not wrong, but it is incomplete. The
+classifier makes the incompleteness explicit instead of letting it pass. An
+\emph{observable} atom is decided by the event trace alone. A \emph{derived}
+atom is computed from the trace by a declared reducer---a balance, a count, the
+set of values an actor could have read. An \emph{implementation-only} atom
+refers to state that no event reveals. The required proof \emph{Hidden
+predicates never pass as observable} keeps the third kind out of acceptance
+tests; the classifier then proposes events, such as a \texttt{CacheAudited} or
+\texttt{KeyRotated} message with the fields that expose the predicate, that
+would move the atom into one of the first two kinds. The requirement is then
+rewritten over those events, and \texttt{check\_ctl} can decide it.
+
+\subsection{The design loop}
+
+Used together, the tools give an agent a loop that converges on a specification
+the gates can accept:
+
+\begin{enumerate}
+\item Classify each sentence of the requirement; turn implementation-only atoms
+into proposed events.
+\item Write example traces using those events and check them with
+\texttt{check\_trace}; read the returned interaction diagram.
+\item Formalize each positive and negative property, read it back with
+\texttt{explain\_formula}, and decide it with \texttt{check\_ctl}.
+\item Treat every counterexample as either a defect in the grammar or a defect
+in the formula, and say which before revising.
+\end{enumerate}
+
+None of these tools accepts a gate. A \texttt{proved} verdict is evidence for
+the stakeholder, who still decides. Malformed or oversized input---an unknown
+operator, a bare \texttt{G} without its path quantifier, a misspelled state or
+message, or a formula beyond 256 nodes---is rejected with the reason rather than
+answered, so a typo is never silently read as \emph{false}.
+
+\subsection{Real answers}
+
+The following requests and responses are produced by running
+\texttt{LeanFM.Logic} while the book is built, so they cannot drift from the
+implementation. The bounds block is omitted for space.
+
+\input{generated/mcp-logic-examples.tex}
+
+The counterexample is the shortest path to the forbidden event. The classifier
+refuses to call the cache predicate observable and proposes the event that
+would make it so. The trace is accepted by the task's transitions, and the
+sequence diagram is a projection of the events the agent wrote.
+
+
 \section{A tour of the LeanFM chat}
 
 Select a project in the left rail, then \textbf{Chat}. Its mounted workspace

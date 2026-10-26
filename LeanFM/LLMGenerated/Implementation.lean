@@ -1,6 +1,7 @@
 import LeanFM.LLMGenerated.ApplicationLaunchImplementation
 import LeanFM.LLMGenerated.ResumableWorkImplementation
 import LeanFM.LLMGenerated.Requirements
+import LeanFM.LLMGenerated.McpLogicImplementation
 import LeanFM.ChatUI.Implementation
 
 namespace LeanFM.LLMGenerated.Implementation
@@ -13,7 +14,7 @@ def existingProductImplementation : LeanFM.ImplementationSpec :=
   LeanFM.ChatUI.Implementation.implementation
 
 def selfHostingImplementationStatus : String :=
-  "The read-only MCP context adapter is implemented by LeanFM/MCP.lean and Server.lean, tested by LeanFM/MCPTests.lean, and documented in the book. Remaining selfhost workflow, typed modal/probability formulas, checker evidence, revision acceptance, and demand-driven indexes still require accepted implementation mappings. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
+  "The read-only MCP context adapter is implemented by LeanFM/MCP.lean and Server.lean, tested by LeanFM/MCPTests.lean, and documented in the book. The MCP logic consultation tools (selfhost.mcp.logic.*) are implemented by LeanFM/Logic.lean under the accepted mapping in McpLogicImplementation.lean and tested by LeanFM/LogicTests.lean; knows remains deferred. Remaining selfhost workflow, typed modal/probability formulas, checker evidence, revision acceptance, and demand-driven indexes still require accepted implementation mappings. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
 
 def actorBinding : WorkerActor -> LeanFM.ActorCodegen
   | .Client => { actor := LeanFM.requirementName WorkerActor.Client
@@ -140,6 +141,9 @@ def sharedProjectsProposalErrors : List String :=
 end LeanFM.LLMGenerated.Implementation
 
 /-- Separately accepted resumable-work mappings, preserved at the canonical entry point. -/
+def LeanFM.LLMGenerated.Implementation.mcpLogicDecisions :=
+  LeanFM.LLMGenerated.McpLogicImplementation.decisions
+
 def LeanFM.LLMGenerated.Implementation.resumableWorkDecisions :=
   LeanFM.LLMGenerated.ResumableWorkImplementation.decisions
 

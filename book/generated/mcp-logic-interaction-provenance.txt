@@ -1,0 +1,7 @@
+{ id := "selfhost.mcp.logic.interaction",
+  prompt := "Expose the modal logic to MCP so an agent can consult it to create logic, events and observability correctly.",
+  question := "How does an agent consult LeanFM about a formula, trace or requirement without executing code or changing acceptance?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "LeanFM.LLMGenerated.SelfHosting.logicGrammar",
+  reducer := "flatten seq and label each choice branch onto Agent and LeanFMServer lifelines",
+  unit := "JSON-RPC messages per stateless consultation" }
