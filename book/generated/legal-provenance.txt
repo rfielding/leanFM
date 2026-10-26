@@ -1,0 +1,7 @@
+{ id := "legal.deposit.verdicts",
+  prompt := "Make a legal example, and put it into the book; use it to deal with modalities regarding right and wrong, legal and illegal.",
+  question := "For each admissible history, which statute and moral-code obligations are fulfilled, violated or repaired, and is the history lawful and right?",
+  kind := LeanFM.DerivedOutputKind.scalar,
+  eventSource := "LegalDepositExample.histories: ScenarioEvent-style events with prevIds and causeIds",
+  reducer := "possession knowledge from causal ancestry; deadline obligations from knowledge-triggered starts; contrary-to-duty reparation; per-code verdicts and conflicts",
+  unit := "status per norm per history" }
