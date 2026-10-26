@@ -14,7 +14,8 @@ INSTALLATION = Path(__file__).resolve().parents[1]
 
 
 def limits():
-    resource.setrlimit(resource.RLIMIT_AS, (3 * 1024**3, 3 * 1024**3))
+    # Lean 4.35 reserves ~4.5 GiB of address space (not resident memory) when importing LeanFM.
+    resource.setrlimit(resource.RLIMIT_AS, (6 * 1024**3, 6 * 1024**3))
     resource.setrlimit(resource.RLIMIT_CPU, (120, 120))
     resource.setrlimit(resource.RLIMIT_FSIZE, (32 * 1024**2, 32 * 1024**2))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))

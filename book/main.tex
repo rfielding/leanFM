@@ -235,50 +235,62 @@
 
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
-LeanFM is a software-engineering methodology for arguing requirements into
-existence with an LLM. Stakeholders challenge assumptions, add scenarios and
-constraints, and inspect generated diagrams, traces and measurements. The
-argument produces durable project artifacts rather than relying on chat memory.
 
-The book is the project's durable design argument and LLM context;
-\texttt{book/main-dark.pdf} is its accessible companion. Figures are generated
-from the shared specification. The Bootstrap chapter defines the project-root
-handoff.
+LeanFM is a way of building software by arguing about it first. You describe
+what a system should do in ordinary language; an LLM turns that into precise
+requirements; and LeanFM checks those requirements and shows you what they
+mean---as sequence diagrams, state machines, event traces and counterexamples.
+You push back, the requirements change, and the pictures change with them.
+Only when you are satisfied does any code get written.
 
-A conversation is provisional. The proposed compaction transaction checkpoints
-decisions into durable artifacts and clears only the captured message prefix
-after artifact and view validation and recoverable commit; failure preserves
-prior artifacts and messages. It accepts neither gate. Answers attach to
-identified questions; the same semantic question is not repeated unless
-reopened, though a new ambiguity may be asked. Ordinary prompts may proceed
-while clarification is deferred. The Chat chapter specifies these policies.
+The precise part is Lean. Every requirement is a Lean definition: which actors
+exist, which messages they exchange down to the protobuf bytes, which orders of
+messages are legal, and what must always or never happen. Because these are
+definitions rather than prose, they can be checked, and the diagrams are
+generated from them rather than drawn by hand. When two requirements
+contradict each other---say $A$ must reference $B$, $B$ needs a $C$, and policy
+forbids that $C$---LeanFM finds the contradiction before anyone builds it.
 
-Each project root contains its complete resumable state; this repository is
-itself one such project. The optional examples under \texttt{projects/} may be
-deleted without breaking LeanFM startup, project creation or required checks.
-Conversation files are disposable too: each turn loads the selected project's
-book, requirements, protobuf schema, implementation mapping, manifest and source
-inventory. Missing inputs remain explicit gaps, never invented acceptance or
-fallbacks to another project. Bootstrap defines stable paths and
-the two gates: observable requirements, then their implementation mapping.
-Discovery remains iterative; one-pass implementation is ready only when
-generated source passes increasingly realistic in-project tests. This
-requirements-to-PR workflow remains under development.
+Not everything worth requiring is a message on a wire. Some requirements are
+about values and relationships, such as an identifier that must refer to a
+real object. LeanFM states those as predicates in the requirements and then
+says, in a separate implementation mapping, how the code will enforce them.
+Requirements over hidden state that no observer can see are flagged, so they
+can be restated in terms of events that can actually be tested.
 
-LeanFM centers a shared, executable account of actor communication down to
-protobuf bytes. Parameterized multiparty grammars describe legal sequences;
-generated views and Lean theorems check the model. Not every requirement is an
-observable message: referential integrity and cross-object constraints are
-predicates over decoded values and reachable states. Protobuf can encode an ID,
-but does not enforce its relationship to another object. Requirements.lean states
-and proves such predicates; Implementation.lean maps them to storage, transactions,
-or validation. For example, if $A$ must reference $B$ and $B$ requires a $C$ that
-policy forbids, the requirements are inconsistent and must change before
-implementation.
+\section*{Two gates}
 
-Chapter~\ref{ch:vision} develops this argument into a practical method; the
-remaining chapters present LeanFM's evolving language, tooling, examples, and
-implementation \citep{leanfmrepo}.
+Work passes through two explicit decisions made by a person, never by the
+tool. First you accept the \emph{requirements}: the observable behaviour and
+the views generated from it. Then you accept the \emph{implementation
+mapping}: how each requirement will be realized and tested. After both gates
+the code is written in one pass, and the tests show whether it conforms. A
+passing check is evidence for your decision; it is not the decision.
+
+\section*{Nothing lives only in the chat}
+
+A conversation with an LLM is temporary. Everything that matters is written
+into the project: the book, the requirements, the protobuf schema, the
+implementation mapping and the source. Each project has one directory that
+holds all of its state, so you can delete the conversation, delete a project,
+or start a new session and pick up exactly where the files leave off. This
+repository is itself such a project; the book you are reading is part of its
+specification and is read by the agents that work on it.
+
+\section*{How to read this book}
+
+Chapter~\ref{ch:vision} sets out the method. The chapters that follow build it
+up: events and scenarios, a worked bakery example, the grammar that describes
+legal message orders, and the authoring language. Chapter~\ref{ch:web-server}
+covers the LeanFM server, including the MCP interface that lets an agent
+consult LeanFM's logic directly. Later chapters apply temporal and modal logic
+to security and legal examples, and Chapter~\ref{ch:bootstrap-contract}
+defines exactly how a new project is set up.
+
+LeanFM is a working draft. The method and its tools are still changing, and
+the book records what exists today alongside what is planned; where it makes
+a claim, the evidence labels in Chapter~\ref{ch:vision} say what kind of
+evidence stands behind it---compiled, tested, proposed or planned. The source is public \citep{leanfmrepo}.
 
 \tableofcontents
 

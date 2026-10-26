@@ -150,11 +150,11 @@ workflow is outside the default product build. JavaScript versions are fixed by
 \texttt{lean-toolchain} and the top-level \texttt{Makefile}.
 
 \begin{description}[style=nextline]
-\item[Lean and Lake --- required.] Lean 4.28.0 from
+\item[Lean and Lake --- required.] Lean 4.35.0 from
   \texttt{lean-toolchain} compiles the DSL, validators, renderers, tests, and
   server. Lake resolves modules and drives native linking.
 \item[C toolchain and libc headers --- required.] A compiler and linker
-  supported by Lean 4.28 link the native executables emitted by Lean.
+  supported by Lean 4.35 link the native executables emitted by Lean.
 \item[GNU Make, Bash, and coreutils --- required.] The workflows use
   \texttt{timeout}, \texttt{cmp}, \texttt{cp}, \texttt{tar}, \texttt{gzip},
   and \texttt{sha256sum} for bounded commands and verified tool downloads.

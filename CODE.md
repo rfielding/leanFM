@@ -728,7 +728,7 @@ Lean catches misspelled actor, message, and state references while compiling gen
 
 ## Web Server
 
-`Server.lean` is a small Lean-native HTTP server using `Std.Internal.Async.TCP`.
+`Server.lean` is a small Lean-native HTTP server using `Std.Async.TCP`.
 
 It binds to:
 

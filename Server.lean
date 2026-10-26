@@ -1,16 +1,16 @@
 import LeanFM
 import LeanFM.ChatUI.Server
 import LeanFM.ChatUI.HttpRequest
-import Std.Internal.Async.TCP
-import Std.Internal.Async.Timer
+import Std.Async.TCP
+import Std.Async.Timer
 
 open Std
 open Std.Net
 
 namespace LeanFM.Server
 
-abbrev TcpServer := Std.Internal.IO.Async.TCP.Socket.Server
-abbrev TcpClient := Std.Internal.IO.Async.TCP.Socket.Client
+abbrev TcpServer := Std.Async.TCP.Socket.Server
+abbrev TcpClient := Std.Async.TCP.Socket.Client
 
 def bindAddr (port : UInt16) : SocketAddress :=
   SocketAddress.v4
@@ -536,8 +536,8 @@ def readRequest (client : TcpClient) : IO (Except LeanFM.ChatUI.HttpRequest.Fram
     let now ← IO.monoMsNow
     if now >= deadline then return .error (408, "HTTP request did not complete within 15 seconds.")
     let received ← (do
-      let timer ← Std.Internal.IO.Async.Selector.sleep (Std.Time.Millisecond.Offset.ofNat (deadline - now))
-      Std.Internal.IO.Async.Selectable.one #[
+      let timer ← Std.Async.Selector.sleep (Std.Time.Millisecond.Offset.ofNat (deadline - now))
+      Std.Async.Selectable.one #[
         .case (client.recvSelector 65536) (fun chunk => pure (some chunk)),
         .case timer (fun _ => pure none)]).block
     match received with
@@ -577,7 +577,7 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
 
 def main : IO Unit := do
   let port ← configuredPort
-  let server ← Std.Internal.IO.Async.TCP.Socket.Server.mk
+  let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (bindAddr port)
   server.listen 128
   IO.println s!"LeanFM server listening on http://127.0.0.1:{port}"

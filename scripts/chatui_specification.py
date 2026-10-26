@@ -43,7 +43,8 @@ def digest(path):
 
 
 def limits():
-    resource.setrlimit(resource.RLIMIT_AS, (3 * 1024**3, 3 * 1024**3))
+    # Lean 4.35 reserves ~4.5 GiB of address space (not resident memory) when importing LeanFM.
+    resource.setrlimit(resource.RLIMIT_AS, (6 * 1024**3, 6 * 1024**3))
     resource.setrlimit(resource.RLIMIT_CPU, (60, 60))
     resource.setrlimit(resource.RLIMIT_FSIZE, (8 * 1024**2, 8 * 1024**2))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -115,7 +116,9 @@ def check(root_name, requirement, implementation="", constraints=""):
                        # Lean otherwise sizes its worker pool from host CPUs.
                        # Thread stacks/allocator arenas can exhaust RLIMIT_AS
                        # before elaboration even for an empty project module.
-                       "--", "/toolchain/bin/lean", "-j2", "-M2048"]
+                       # Lean 4.35 reserves 1 GiB of address space per thread
+                       # stack by default; 64 MiB keeps -j2 inside RLIMIT_AS.
+                       "--", "/toolchain/bin/lean", "-j2", "-M2048", "--tstack=65536"]
 
             def run(arguments, name):
                 output_path = scratch / (name + ".log")

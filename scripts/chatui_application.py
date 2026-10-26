@@ -137,7 +137,8 @@ def stop(root, owner, instance=''):
 
 
 def worker_limits():
-    resource.setrlimit(resource.RLIMIT_AS, (3 * 1024**3, 3 * 1024**3))
+    # Lean 4.35 reserves ~4.5 GiB of address space (not resident memory) when importing LeanFM.
+    resource.setrlimit(resource.RLIMIT_AS, (6 * 1024**3, 6 * 1024**3))
     resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
     resource.setrlimit(resource.RLIMIT_FSIZE, (32 * 1024**2, 32 * 1024**2))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))

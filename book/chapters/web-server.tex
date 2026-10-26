@@ -80,12 +80,12 @@ and repeatedly accept clients. This is the relevant executable pattern from
 \texttt{Server.lean}:
 
 \begin{lstlisting}[language=Lean]
-import Std.Internal.Async.TCP
+import Std.Async.TCP
 
 open Std
 open Std.Net
 
-abbrev TcpServer := Std.Internal.IO.Async.TCP.Socket.Server
+abbrev TcpServer := Std.Async.TCP.Socket.Server
 
 def bindAddr : SocketAddress :=
   SocketAddress.v4
@@ -99,7 +99,7 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
   serveLoop server
 
 def main : IO Unit := do
-  let server ← Std.Internal.IO.Async.TCP.Socket.Server.mk
+  let server ← Std.Async.TCP.Socket.Server.mk
   server.bind bindAddr
   server.listen 128
   IO.println "LeanFM server listening on http://127.0.0.1:8080"

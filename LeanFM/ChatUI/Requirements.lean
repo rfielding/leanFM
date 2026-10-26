@@ -12,7 +12,7 @@ structure ToolDependency where
 deriving Repr
 
 def toolDependencyInventory : List ToolDependency :=
-  [ { id := "lean", required := true, workflow := "build check serve", versionContract := "leanprover/lean4:v4.28.0 from lean-toolchain", purpose := "compile the LeanFM DSL validators renderers and server" }
+  [ { id := "lean", required := true, workflow := "build check serve", versionContract := "leanprover/lean4:v4.35.0 from lean-toolchain", purpose := "compile the LeanFM DSL validators renderers and server" }
   , { id := "lake-and-native-toolchain", required := true, workflow := "build check serve", versionContract := "Lake supplied by Lean plus a supported C compiler linker and libc development files", purpose := "resolve Lean modules and link native executables" }
   , { id := "gnu-make-bash-coreutils", required := true, workflow := "all Makefile workflows", versionContract := "GNU Make Bash and coreutils including timeout cmp cp tar gzip and sha256sum", purpose := "orchestrate bounded reproducible commands" }
   , { id := "node-npm", required := true, workflow := "ui-build chatui-check", versionContract := "Node >= 22.12 and npm ci from ui/package-lock.json", purpose := "compile and bundle the React TypeScript UI" }
