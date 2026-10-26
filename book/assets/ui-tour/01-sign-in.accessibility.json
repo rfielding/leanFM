@@ -1,0 +1,311 @@
+{
+  "boundary": "Before LoginSubmitted",
+  "focused": {
+    "role": "tab",
+    "name": "Log in"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "LeanFM",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "dialog",
+      "name": "Unlock or update provider keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "LeanFM"
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "tablist",
+      "name": "Account access"
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Log out and sign in again",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "alert",
+      "name": "",
+      "states": {
+        "live": "assertive"
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "StaticText",
+      "name": "Sign in to unlock your encrypted provider API keys. One password unlocks OpenAI and Anthropic together; this is your LeanFM login, not a provider login."
+    },
+    {
+      "role": "tab",
+      "name": "Log in",
+      "states": {
+        "focusable": true,
+        "focused": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "tab",
+      "name": "Create account",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Log in",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Cancel",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out and sign in again"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Sign in to unlock your encrypted provider API keys. "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "One password unlocks OpenAI and Anthropic "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "together; this is your LeanFM login, not a provider "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "login."
+    },
+    {
+      "role": "StaticText",
+      "name": "Log in"
+    },
+    {
+      "role": "StaticText",
+      "name": "Create account"
+    },
+    {
+      "role": "StaticText",
+      "name": "Username"
+    },
+    {
+      "role": "textbox",
+      "name": "Username",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Password"
+    },
+    {
+      "role": "textbox",
+      "name": "Password",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "DisclosureTriangle",
+      "name": "Add or replace API keys (optional)",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "DisclosureTriangle",
+      "name": "Change password (optional)",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Already have an account? Use your username and password. Your saved API keys unlock automatically after a server restart."
+    },
+    {
+      "role": "StaticText",
+      "name": "Optional: add or replace either key. Leave blank to keep the stored key. Blank fields do not mean your saved keys were lost; your password unlocks them again after a server restart."
+    },
+    {
+      "role": "StaticText",
+      "name": " Keys are encrypted with your password and never returned to the browser. Adding another provider keeps you signed in. Replacing an existing key signs out older sessions."
+    },
+    {
+      "role": "StaticText",
+      "name": "Log in"
+    },
+    {
+      "role": "StaticText",
+      "name": "Cancel"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out and sign in again"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create account"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Username"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Password"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Add or replace API keys (optional)"
+    },
+    {
+      "role": "StaticText",
+      "name": "Change password (optional)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Already have an account? Use your username and "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "password. Your saved API keys unlock automatically "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "after a server restart."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Optional: add or replace either key. Leave blank to "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "keep the stored key. Blank fields do not mean your "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "saved keys were lost; your password unlocks them "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "again after a server restart."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " Keys are encrypted with "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "your password and never returned to the browser. "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Adding another provider keeps you signed in. "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Replacing an existing key signs out older sessions."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Cancel"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Add or replace API keys (optional)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Change password (optional)"
+    }
+  ]
+}

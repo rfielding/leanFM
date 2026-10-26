@@ -161,6 +161,10 @@ workflow is outside the default product build. JavaScript versions are fixed by
 \item[Node and npm --- required.] Node 22.12 or newer and \texttt{npm ci}
   type-check and bundle the React UI. The lockfile fixes React, ReactDOM,
   TypeScript, Vite, KaTeX, and their transitive packages.
+\item[Mermaid renderer --- required for task diagrams.] The existing Mermaid
+  11 renderer is served locally. \path{assets/vendor/mermaid.json} records its
+  resolved version, source, MIT license and SHA-256 digest, so diagrams and
+  screenshot scenarios do not require a CDN connection.
 \item[Python packages --- required.] Python 3.12 or newer with Cryptography
   41--50, Pillow 10--12, and Protobuf 5--6 protects retained keys, performs
   protobuf round trips and reductions, and generates animated GIFs.
@@ -179,8 +183,12 @@ workflow is outside the default product build. JavaScript versions are fixed by
 \item[Go --- required.] Go 1.23.12, whose archive hash is fixed by the Makefile,
   compiles and tests the repository Go/Paxos target.
 \item[Bubblewrap --- required on the Linux server.] \texttt{bwrap} with
-  namespace and bind-mount support runs project-local Python/Pillow GIF
-  generators without network access.
+  user, process, network, and mount namespaces isolates executable Lean checks,
+  project commands, persistent applications, and project-local media generators.
+  Ubuntu/Debian supplies it in the \texttt{bubblewrap} package. Run
+  \texttt{make sandbox-check} before the full suite to verify that the host's
+  namespace policy permits the actual worker. Missing or denied sandbox support
+  fails explicitly; it never authorizes execution outside the sandbox.
 \item[FFmpeg --- required for shareable video.] FFmpeg with \texttt{libx264}
   H.264 and AAC encoders converts GIF/WebM to validated MP4, adds fast-start
   metadata, and muxes optional narration.

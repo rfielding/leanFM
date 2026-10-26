@@ -1,0 +1,91 @@
+syntax = "proto3";
+package project.requirements;
+// Candidate room-creation/browser revision; previous accepted revisions remain protected.
+message ListRooms {
+  string session_id = 1;
+  uint64 request_id = 2;
+}
+message RoomsListed {
+  repeated string room_ids = 1;
+  uint64 request_id = 2;
+}
+message EnterRoom {
+  string session_id = 1;
+  string room_id = 2;
+  uint64 request_id = 3;
+}
+message RoomEntered {
+  string room_id = 1;
+  repeated string game_ids = 2;
+  uint64 request_id = 3;
+}
+message ListGames {
+  string room_id = 1;
+  string session_id = 2;
+  uint64 request_id = 3;
+}
+message GamesListed {
+  repeated GameListed games = 1;
+  uint64 request_id = 2;
+  string room_id = 3;
+}
+message CreateGame {
+  string session_id = 1;
+  string room_id = 2;
+  string game_name = 3;
+  uint64 request_id = 4;
+}
+message GameCreated {
+  string game_id = 1;
+  string room_id = 2;
+  string creator = 3;
+  string status = 4;
+  uint64 request_id = 5;
+  string game_name = 6;
+}
+message JoinGame {
+  string session_id = 1;
+  string game_id = 2;
+  uint64 request_id = 3;
+}
+message GameJoined {
+  string game_id = 1;
+  repeated string participants = 2;
+  uint64 request_id = 3;
+}
+message SendRoomChat {
+  string session_id = 1;
+  string room_id = 2;
+  string body = 3;
+  uint64 request_id = 4;
+}
+message RoomChat {
+  string room_id = 1;
+  string sender = 2;
+  string body = 3;
+  int64 time_ms = 4;
+  uint64 request_id = 5;
+}
+message SendGameChat {
+  string session_id = 1;
+  string game_id = 2;
+  string body = 3;
+  uint64 request_id = 4;
+}
+message GameChat {
+  string game_id = 1;
+  string sender = 2;
+  string body = 3;
+  int64 time_ms = 4;
+  uint64 request_id = 5;
+}
+message RequestRejected {
+  uint64 request_id = 1;
+  string code = 2;
+  string task = 3;
+  string scope_id = 4;
+}
+message GameListed { string game_id = 1; string creator = 2; string status = 3; string game_name = 4; }
+
+message CreateRoom { string session_id = 1; string room_name = 2; uint64 request_id = 3; }
+message RoomCreated { string room_id = 1; uint64 request_id = 2; }

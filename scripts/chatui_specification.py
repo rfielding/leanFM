@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import resource
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,8 @@ def check(root_name, requirement, implementation="", constraints=""):
     for path in inputs:
         if not path.is_file() or path.stat().st_size > 2_000_000:
             raise ValueError("missing or oversized canonical input: " + path.name)
+    if shutil.which("bwrap") is None:
+        raise CheckerUnavailable("Required bwrap executable is missing. Install the bubblewrap package and run make sandbox-check; canonical Lean is never run without isolation.")
     scratch_root = confined(root, ".leanfm/checks", directory=True)
     report_root = confined(root, "reports/specification-check", directory=True)
     catalog_path = confined(root, "spec/tasks.json")

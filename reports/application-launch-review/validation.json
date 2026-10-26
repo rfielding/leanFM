@@ -1,0 +1,14 @@
+{
+  "status": "validated",
+  "acceptance": "pending",
+  "prompt": "I want LeanFM to launch the app being built and post a link; make targets must be supported and uniform for all apps",
+  "question": "Which scoped lifecycle messages and Make contract provide a persistent, verified, browser-reachable app?",
+  "event_source": "LeanFM.LLMGenerated.ApplicationLaunch.requirements",
+  "reducer": "validateRequirementSpec; validateRequirementProtoFile; tasksJson from the same RequirementSpec",
+  "unit": "messages, states and transitions per project lifecycle task",
+  "boundary": "one authenticated project and its owned application instance",
+  "artifacts": {
+    "LeanFM/LLMGenerated/ApplicationLaunch.lean": "c2b6c14a4f3f8b6bdce13f6ed4a2c867bda71ecc84facfa66bf23b4b40304d4f",
+    "LeanFM/LLMGenerated/ApplicationLaunch.proto": "a45a2eae01f14441e7c78fcaffdd6617de51a875c1c6a0674aad91089e87ecd7"
+  }
+}

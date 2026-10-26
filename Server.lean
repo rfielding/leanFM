@@ -439,6 +439,11 @@ def projectImageResponse? (path method request : String) : IO (Option Response) 
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   let method := requestMethod request
+  if path.startsWith "/app-view/" then
+    if !(← LeanFM.ChatUI.Server.admittedWorkspaceRequest "GET" request) then
+      return response 403 "application/json" "{\"error\":\"Unapproved preview host\"}"
+    if let some preview ← LeanFM.ChatUI.Server.applicationPreviewResponse? path method request then
+      return byteResponse preview.status preview.contentType (preview.bodyBytes.getD preview.body.toUTF8) preview.headers
   if path != "/health" && !(← LeanFM.ChatUI.Server.admittedWorkspaceRequest method request) then
     return response 403 "application/json; charset=utf-8" "{\"error\":\"The request Host or Origin is not admitted.\"}\n"
   if path == "/mcp" then
@@ -463,7 +468,7 @@ def responseForRequest (request : String) : IO Response := do
   | some bookResponse => pure bookResponse
   | none => match ← LeanFM.ChatUI.Server.handle? path method request with
   | some chatResponse =>
-      pure <| response chatResponse.status chatResponse.contentType chatResponse.body chatResponse.headers
+      pure <| byteResponse chatResponse.status chatResponse.contentType (chatResponse.bodyBytes.getD chatResponse.body.toUTF8) chatResponse.headers
   | none =>
       if path == "/health" then
         responseBody path request

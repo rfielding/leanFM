@@ -1,0 +1,1216 @@
+{
+  "boundary": "Current create_room task rendered from its checked typed specification",
+  "focused": {
+    "role": "BUTTON",
+    "name": "States · state machine"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "LeanFM",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "complementary",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "GoServer",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "LeanFM read-only",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": "Font zoom"
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "region",
+      "name": "Project application"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "textbox",
+      "name": "New project name",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "＋ Add project",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "StaticText",
+      "name": "read-only"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "button",
+      "name": "Decrease font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "status",
+      "name": "",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "button",
+      "name": "Increase font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": "Account session"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Start app",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Stop app",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "read-only"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "StaticText",
+      "name": "−"
+    },
+    {
+      "role": "StaticText",
+      "name": "100"
+    },
+    {
+      "role": "StaticText",
+      "name": "%"
+    },
+    {
+      "role": "StaticText",
+      "name": "＋"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "DURABLE"
+    },
+    {
+      "role": "button",
+      "name": "Project memory",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "button",
+      "name": "Chat",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Book",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "button",
+      "name": "Grammar",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Tasks",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "BUILD"
+    },
+    {
+      "role": "button",
+      "name": "Source",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "documentation-model"
+    },
+    {
+      "role": "StaticText",
+      "name": "0"
+    },
+    {
+      "role": "StaticText",
+      "name": " used · "
+    },
+    {
+      "role": "StaticText",
+      "name": "1,000"
+    },
+    {
+      "role": "StaticText",
+      "name": " remaining"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "App · "
+    },
+    {
+      "role": "StaticText",
+      "name": "stopped"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Stop app"
+    },
+    {
+      "role": "heading",
+      "name": "Tasks"
+    },
+    {
+      "role": "button",
+      "name": "Productions · interaction",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "States · state machine",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Properties · CTL",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "where_ · CTL guards",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Create a named chat room 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "List the available chat rooms 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Enter a room and inspect its game list 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "List room games and open challenges 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Create a named room game or challenge 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Watch or enter a game chat container 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Send room chat 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Send game chat 3 productions · 4 states",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "heading",
+      "name": "Create a named chat room"
+    },
+    {
+      "role": "graphics-document",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "−"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "100"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "%"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DURABLE"
+    },
+    {
+      "role": "StaticText",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "StaticText",
+      "name": "Chat"
+    },
+    {
+      "role": "StaticText",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "StaticText",
+      "name": "Grammar"
+    },
+    {
+      "role": "StaticText",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "BUILD"
+    },
+    {
+      "role": "StaticText",
+      "name": "Source"
+    },
+    {
+      "role": "StaticText",
+      "name": "openai"
+    },
+    {
+      "role": "StaticText",
+      "name": " · key "
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "documentation-model"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "0"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " used · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "1,000"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " remaining"
+    },
+    {
+      "role": "StaticText",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "App · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "stopped"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start app"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Stop app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Tasks"
+    },
+    {
+      "role": "StaticText",
+      "name": "Productions · interaction"
+    },
+    {
+      "role": "StaticText",
+      "name": "States · state machine"
+    },
+    {
+      "role": "StaticText",
+      "name": "Properties · CTL"
+    },
+    {
+      "role": "StaticText",
+      "name": "where_ · CTL guards"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "3"
+    },
+    {
+      "role": "StaticText",
+      "name": " productions · "
+    },
+    {
+      "role": "StaticText",
+      "name": "4"
+    },
+    {
+      "role": "StaticText",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Create a named chat room"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Grammar"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Source"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "openai"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " · key "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Productions · interaction"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "States · state machine"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Properties · CTL"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "where_ · CTL guards"
+    },
+    {
+      "role": "StaticText",
+      "name": "Create a named chat room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "List the available chat rooms"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Enter a room and inspect its game list"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "List room games and open challenges"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Create a named room game or challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Watch or enter a game chat container"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Send room chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "StaticText",
+      "name": "Send game chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "3"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " productions · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "4"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " states"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create a named chat room"
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create a named chat "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "List the available chat "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "rooms"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Enter a room and inspect "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "its game list"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "List room games and "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "open challenges"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create a named room "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "game or challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Watch or enter a game "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "chat container"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Send room chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Send game chat"
+    },
+    {
+      "role": "StaticText",
+      "name": "CreateRoom"
+    },
+    {
+      "role": "StaticText",
+      "name": "RoomCreated"
+    },
+    {
+      "role": "StaticText",
+      "name": "RequestRejected"
+    },
+    {
+      "role": "StaticText",
+      "name": "ready"
+    },
+    {
+      "role": "StaticText",
+      "name": "checking"
+    },
+    {
+      "role": "StaticText",
+      "name": "accepted"
+    },
+    {
+      "role": "StaticText",
+      "name": "rejected"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CreateRoom"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "RoomCreated"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "RequestRejected"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "ready"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "checking"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "accepted"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "rejected"
+    }
+  ]
+}

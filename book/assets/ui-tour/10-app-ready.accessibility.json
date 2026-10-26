@@ -1,0 +1,1025 @@
+{
+  "boundary": "ApplicationReady; native Open app link posted in chat",
+  "focused": {
+    "role": "BUTTON",
+    "name": "Chat"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "LeanFM",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "complementary",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "GoServer",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "LeanFM read-only",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": "Font zoom"
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "region",
+      "name": "Project application"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "textbox",
+      "name": "New project name",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "＋ Add project",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "StaticText",
+      "name": "read-only"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "button",
+      "name": "Decrease font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "status",
+      "name": "",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "button",
+      "name": "Increase font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": "Account session"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Start app",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Stop app",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "link",
+      "name": "Open app ↗",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "article",
+      "name": ""
+    },
+    {
+      "role": "article",
+      "name": ""
+    },
+    {
+      "role": "article",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "read-only"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "StaticText",
+      "name": "−"
+    },
+    {
+      "role": "StaticText",
+      "name": "100"
+    },
+    {
+      "role": "StaticText",
+      "name": "%"
+    },
+    {
+      "role": "StaticText",
+      "name": "＋"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "DURABLE"
+    },
+    {
+      "role": "button",
+      "name": "Project memory",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "button",
+      "name": "Chat",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Book",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "button",
+      "name": "Grammar",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Tasks",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "BUILD"
+    },
+    {
+      "role": "button",
+      "name": "Source",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "documentation-model"
+    },
+    {
+      "role": "StaticText",
+      "name": "112"
+    },
+    {
+      "role": "StaticText",
+      "name": " used · "
+    },
+    {
+      "role": "StaticText",
+      "name": "888"
+    },
+    {
+      "role": "StaticText",
+      "name": " remaining"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "App · "
+    },
+    {
+      "role": "StaticText",
+      "name": "running"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Stop app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Open app ↗"
+    },
+    {
+      "role": "time",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "time",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "time",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "link",
+      "name": "Open app ↗",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Attach image",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "status",
+      "name": "",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "−"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "100"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "%"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DURABLE"
+    },
+    {
+      "role": "StaticText",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "StaticText",
+      "name": "Chat"
+    },
+    {
+      "role": "StaticText",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "StaticText",
+      "name": "Grammar"
+    },
+    {
+      "role": "StaticText",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "BUILD"
+    },
+    {
+      "role": "StaticText",
+      "name": "Source"
+    },
+    {
+      "role": "StaticText",
+      "name": "openai"
+    },
+    {
+      "role": "StaticText",
+      "name": " · key "
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "documentation-model"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "112"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " used · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "888"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " remaining"
+    },
+    {
+      "role": "StaticText",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "App · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "running"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start app"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Stop app"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open app ↗"
+    },
+    {
+      "role": "StaticText",
+      "name": "Oct 25, 2026, 5:40:47 PM"
+    },
+    {
+      "role": "StaticText",
+      "name": "Which messages create a room, and how can I review their states?"
+    },
+    {
+      "role": "button",
+      "name": "Resend",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Oct 25, 2026, 5:40:52 PM"
+    },
+    {
+      "role": "StaticText",
+      "name": " · documentation-model"
+    },
+    {
+      "role": "StaticText",
+      "name": "SUCCESS"
+    },
+    {
+      "role": "StaticText",
+      "name": "A room is created by CreateRoom, followed by RoomCreated or RequestRejected. Open Tasks and choose Create a named chat room, then States to inspect the generated state machine. Requirements and implementation are accepted separately in Project memory. This reply comes from the local documentation fixture."
+    },
+    {
+      "role": "DisclosureTriangle",
+      "name": "Operational trace",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Response time: "
+    },
+    {
+      "role": "StaticText",
+      "name": "5.5"
+    },
+    {
+      "role": "StaticText",
+      "name": " s"
+    },
+    {
+      "role": "StaticText",
+      "name": "80"
+    },
+    {
+      "role": "StaticText",
+      "name": " input · "
+    },
+    {
+      "role": "StaticText",
+      "name": "0"
+    },
+    {
+      "role": "StaticText",
+      "name": " cached · "
+    },
+    {
+      "role": "StaticText",
+      "name": "32"
+    },
+    {
+      "role": "StaticText",
+      "name": " output · "
+    },
+    {
+      "role": "StaticText",
+      "name": "112"
+    },
+    {
+      "role": "StaticText",
+      "name": " total · billed to your API key"
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Oct 25, 2026, 5:41:00 PM"
+    },
+    {
+      "role": "StaticText",
+      "name": " · leanfm:runtime"
+    },
+    {
+      "role": "StaticText",
+      "name": "Application is running. ."
+    },
+    {
+      "role": "StaticText",
+      "name": "Open app ↗"
+    },
+    {
+      "role": "StaticText",
+      "name": "Response time: "
+    },
+    {
+      "role": "StaticText",
+      "name": "5.8"
+    },
+    {
+      "role": "StaticText",
+      "name": " s"
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Attach image"
+    },
+    {
+      "role": "StaticText",
+      "name": "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"
+    },
+    {
+      "role": "textbox",
+      "name": "Message to the project",
+      "states": {
+        "focusable": true,
+        "multiline": true,
+        "required": false
+      }
+    },
+    {
+      "role": "button",
+      "name": "Send",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Grammar"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Source"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "openai"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " · key "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Oct 25, 2026, 5:40:47 PM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Which messages create a room, and how can I review their states?"
+    },
+    {
+      "role": "StaticText",
+      "name": "Resend"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Oct 25, 2026, 5:40:52 PM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " · documentation-model"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SUCCESS"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A room is created by CreateRoom, followed by RoomCreated or RequestRejected. Open Tasks and choose Create a named chat room, then States to inspect the generated state"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "machine. Requirements and implementation are accepted separately in Project memory. This reply comes from the local documentation fixture."
+    },
+    {
+      "role": "StaticText",
+      "name": "Operational trace"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Response time: "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5.5"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " s"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "80"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " input · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "0"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " cached · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "32"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " output · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "112"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " total · billed to your API key"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Oct 25, 2026, 5:41:00 PM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " · leanfm:runtime"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Application is running. ."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open app ↗"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Response time: "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5.8"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " s"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Attach image"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PNG, JPEG, GIF, SVG · 2 MiB each · up to 4"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Send"
+    },
+    {
+      "role": "StaticText",
+      "name": "Model"
+    },
+    {
+      "role": "combobox",
+      "name": "Model for new prompts",
+      "value": "OpenAI · documentation-model",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Resend"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Operational trace"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Send"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Model"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "option",
+      "name": "OpenAI · documentation-model",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    UserBrowser->>LeanFMServer: ApplicationStartRequested
+    alt choice 1
+    LeanFMServer->>UserBrowser: ApplicationReady
+    else alternative
+    LeanFMServer->>UserBrowser: ApplicationLaunchRejected
+    end

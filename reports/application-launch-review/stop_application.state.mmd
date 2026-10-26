@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: ApplicationStopRequested
+    checking --> ApplicationStopped: ApplicationStopped
+    checking --> ApplicationStopRejected: ApplicationStopRejected
+    ApplicationStopped --> [*]
+    ApplicationStopRejected --> [*]

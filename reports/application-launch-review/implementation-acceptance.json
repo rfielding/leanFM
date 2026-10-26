@@ -1,0 +1,7 @@
+{
+  "source": "Explicit stakeholder answer in this Codex session",
+  "answer": "Accept launcher mapping and implement",
+  "sha256": {
+    "LeanFM/LLMGenerated/ApplicationLaunchImplementation.lean": "b3be2016562b382b8f265c0a57c3adab463356fb445a33b653b31179624c319d"
+  }
+}

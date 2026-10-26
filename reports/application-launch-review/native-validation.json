@@ -1,0 +1,53 @@
+{
+  "status": "passed",
+  "fixture": ".cache/application-check-djll928h",
+  "runtime_revision": "84a1ef8c11d7227a49574acd799b3b2fdec3bd9c4acacc55250f6286e9804854",
+  "fixture_host_port": 46995,
+  "launcher_source_sha256": {
+    "scripts/chatui_application.py": "15bf98e318db64a7e9a5b9d43e1c2960d60eade75d79f14912f1c97c6b359c63",
+    "scripts/chatui_application_test.py": "749770d33a8ef4e670aba2171d65ce3be8a93be38c57c033c03662c263e7af51",
+    "LeanFM/ChatUI/Server.lean": "08557c0001ef67a36d910e9086b35f6f064cafd1137dc7587318f44ff00ebc09",
+    "Server.lean": "1ab4465a5627d0fd416fae4a19ee7bbd0b119de22d32665920e59bfcd92e658c",
+    "ui/src/main.tsx": "ebe1c0c3dd132fd24bbd17738686c95b3c7a29084d860a106a3fc3cbc8637bdb"
+  },
+  "application_source_sha256": {
+    "source/person.go": "2014c0306ef26467c233dc915770ec99b6fb59bb996c038952010dfc83903e14",
+    "source/runtime.py": "27311880a25f401d22ea12697c019f5d24fc8b03d2afab24ee23e60cb56e4705",
+    "source/channel.go": "30723614722df4ca1102786fb09308977202b2fabe6cfa9f412cf8c817f27f7e",
+    "source/main.go": "14a06d032312363f9bc31f572db2edfc05760591cdf5234ac70c129ac6f778b9",
+    "source/goserver": "c4ca08ad7033c84acca6d6527a3fd273ebe137ce9c9e82056fbd607fe223b360",
+    "source/server_test.go": "eccb07642a9510a635d430dc39f8f448244d20e15e01772619bf26113a897965",
+    "source/browser_check.py": "2382615e3a6dae8c816231abc285724463e3aea3f23af8a87b059a3242903ea9",
+    "source/Makefile": "f7f29fef653ea8a2f6dbd2c940b2765f2a1147073cadb2ced59560634febd4c7",
+    "source/accepted_channel_contract_test.go": "e38f8d11b3699430667533895cb81c9b33029fa2d8905f3a4e778d0b3e315023",
+    "source/traceability.json": "3d758f7b0d3b72f4e6281d890aa74a6b6906f091939adb1d3ad38ef99dd085e8",
+    "source/go.mod": "8b5ac1d09e3f7b9f7b857017d4d27ef879c0e249e24be5853ab972bb4046e18a",
+    "source/server.go": "0c6dc027a7359b4125bede768ff35a5f0126dc30f314c2e1f54614518d81b6be",
+    "source/rooms_test.go": "7bd1ee3b71ccbafa1f38c31c46d4816d51719b0ad201097625a3bd91b2b8f90d",
+    "source/cmd/demo/main.go": "406f92dec6e39be79dbccd910fd84904e6f8571f6330542a1ec21baf99faff96",
+    "source/cmd/demo/main_test.go": "0208e1db08750aad2f9b9d44a6b3b0c47771d81454242e1632496b86bd259902",
+    "source/cmd/demo/static/style.css": "9b730390d6dbcae8ea4bd196db41cab0f48a1877750a6e86673e06599c177230",
+    "source/cmd/demo/static/app.js": "24fc5e80aefde071bcc50ec391585a48e64db3581cc96e781ce40a7d36a3e867",
+    "source/cmd/demo/static/index.html": "4b8d63a57a3c9fafa7aaf97af433623c7e830a866c19e56f836c3e0cfed3d936"
+  },
+  "checks": [
+    "native UI start and served Open app link",
+    "launch link posted in chat without provider I/O",
+    "duplicate concurrent start reuses instance",
+    "authentication and runtime owner checks",
+    "forged stop leaves live instance alone",
+    "private filesystem/read-only source/host-network isolation",
+    "engineering cookies and authorization stripped",
+    "opaque browser cookies/storage blocked",
+    "engineering API fetch blocked by preview policy",
+    "relative assets and room/challenge/chat API through served preview",
+    "CORS preflight scoped to capability",
+    "forged capability and traversal denied",
+    "source revision invalidates preview",
+    "idempotent owned stop",
+    "missing uniform target rejected",
+    "aggregate cache admission enforced",
+    "observed lifecycle protobuf byte round trips and causal grammar pairs"
+  ],
+  "screenshot": "reports/application-launch-review/preview.png"
+}

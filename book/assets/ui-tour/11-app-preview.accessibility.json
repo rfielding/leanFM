@@ -1,0 +1,633 @@
+{
+  "boundary": "RoomCreated, GameCreated and GameChat observed through the isolated preview",
+  "focused": {
+    "role": "BODY",
+    "name": "Document"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "GoServer · Rooms and challenges",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "banner",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "contentinfo",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Rooms & challenges"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "status",
+      "name": "",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "complementary",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "complementary",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer · A room for every conversation."
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Rooms & challenges"
+    },
+    {
+      "role": "StaticText",
+      "name": "preview-player"
+    },
+    {
+      "role": "StaticText",
+      "name": "Local preview · rooms and conversations reset when the app restarts. Challenges currently provide a shared conversation; board play comes later."
+    },
+    {
+      "role": "StaticText",
+      "name": "Challenge created in Preview room."
+    },
+    {
+      "role": "heading",
+      "name": "Chat rooms"
+    },
+    {
+      "role": "button",
+      "name": "Refresh",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "navigation",
+      "name": "Chat rooms"
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "Preview room"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "list",
+      "name": "Room conversation",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "Game challenges"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "Preview challenge"
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Close challenge",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "list",
+      "name": "Challenge conversation",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer · A room for every conversation."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "preview-player"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Local preview · rooms and conversations reset when the app restarts. Challenges currently provide a shared conversation; board play comes later."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Challenge created in Preview room."
+    },
+    {
+      "role": "StaticText",
+      "name": "Chat rooms"
+    },
+    {
+      "role": "StaticText",
+      "name": "Refresh"
+    },
+    {
+      "role": "button",
+      "name": "# Preview room",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "# lobby",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "ROOM CONVERSATION"
+    },
+    {
+      "role": "StaticText",
+      "name": "Preview room"
+    },
+    {
+      "role": "StaticText",
+      "name": "Joined"
+    },
+    {
+      "role": "listitem",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Game challenges"
+    },
+    {
+      "role": "StaticText",
+      "name": "1"
+    },
+    {
+      "role": "StaticText",
+      "name": "Open a challenge in the selected room."
+    },
+    {
+      "role": "article",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "CHALLENGE CONVERSATION"
+    },
+    {
+      "role": "StaticText",
+      "name": "Preview challenge"
+    },
+    {
+      "role": "StaticText",
+      "name": "In this challenge: preview-player"
+    },
+    {
+      "role": "StaticText",
+      "name": "Close challenge"
+    },
+    {
+      "role": "listitem",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Chat rooms"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Refresh"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Preview room"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "lobby"
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "textbox",
+      "name": "Create a room",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Create room",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "ROOM CONVERSATION"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Preview room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Joined"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start the conversation in this room."
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "textbox",
+      "name": "Message this room",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Send",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Game challenges"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "1"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open a challenge in the selected room."
+    },
+    {
+      "role": "heading",
+      "name": "Preview challenge"
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Open challenge",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "textbox",
+      "name": "New challenge",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Create challenge",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CHALLENGE CONVERSATION"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Preview challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "In this challenge: preview-player"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Close challenge"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "time",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "textbox",
+      "name": "Message this challenge",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Send",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "#"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "#"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Preview room"
+    },
+    {
+      "role": "StaticText",
+      "name": "#"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "#"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "lobby"
+    },
+    {
+      "role": "StaticText",
+      "name": "Create a room"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Create room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start the conversation in this room."
+    },
+    {
+      "role": "StaticText",
+      "name": "Message this room"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Send"
+    },
+    {
+      "role": "StaticText",
+      "name": "Preview challenge"
+    },
+    {
+      "role": "StaticText",
+      "name": "Created by preview-player · open"
+    },
+    {
+      "role": "StaticText",
+      "name": "Open challenge"
+    },
+    {
+      "role": "StaticText",
+      "name": "New challenge"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Create challenge"
+    },
+    {
+      "role": "StaticText",
+      "name": "preview-player"
+    },
+    {
+      "role": "StaticText",
+      "name": "05:41 PM"
+    },
+    {
+      "role": "StaticText",
+      "name": "hello through the preview"
+    },
+    {
+      "role": "StaticText",
+      "name": "Message this challenge"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Send"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "#"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "#"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create a room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Message this room"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Send"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Preview challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Created by preview-player · open"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "New challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "preview-player"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "05:41 PM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "hello through the preview"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Message this challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Send"
+    }
+  ]
+}

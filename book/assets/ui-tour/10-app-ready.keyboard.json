@@ -1,0 +1,317 @@
+[
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "API keys"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Log out"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Start app"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Makefile"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "accepted_channel_contract_test.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "browser_check.py"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "channel.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "cmd/demo/main.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "cmd/demo/main_test.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "cmd/demo/static/app.js"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "cmd/demo/static/index.html"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "cmd/demo/static/style.css"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "go.mod"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "goserver"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "main.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "person.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "rooms_test.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "runtime.py"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "server.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "server_test.go"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "traceability.json"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "MAIN",
+      "name": "Makefile# Requirement refs: goserver; spec/runtime.json; durable local launch contract.\n.PHONY: buil"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BODY",
+      "name": "Document"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "INPUT",
+      "name": "New project name"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "＋ Add project"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "GoServer"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Delete"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "LeanFMread-only"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "API keys"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Log out"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Decrease font size"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Increase font size"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Project memory"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Chat"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Enter",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Chat"
+    }
+  }
+]

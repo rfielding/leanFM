@@ -14,6 +14,7 @@ structure HttpResponse where
   contentType : String
   body : String
   headers : List String := []
+  bodyBytes : Option ByteArray := none
 
 def jsonResponse (status : Nat) (body : String) (headers : List String := []) : HttpResponse :=
   { status, contentType := "application/json; charset=utf-8", body, headers }
@@ -277,16 +278,31 @@ def resolveChatImages (root : String) (ids : List String) : IO (Except String (L
       if images.length != ids.length then return .error "Not every attached image could be loaded."
       return .ok images
 
+-- Refs: persistent launch results and history-independent project recovery.
+initialize conversationLock : Std.BaseMutex ← Std.BaseMutex.new
+
 def appendConversation (root role text : String) (usage : Option Provider.Completion := none)
     (responseTimeMs : Nat := 0) (model : String := "") : IO Unit := do
-  let path := root ++ "/conversations/main.log"
-  let old ← readOr path ""
-  let messageId ← randomHex 12
-  let usageFields := match usage with
-    | none => "0|0|0|0"
-    | some u => s!"{u.inputTokens}|{u.cachedInputTokens}|{u.outputTokens}|{u.totalTokens}"
-  let sentAtMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
-  writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "|" ++ toString responseTimeMs ++ "|" ++ toString sentAtMs ++ "|" ++ model ++ "\n")
+  conversationLock.lock
+  try
+    let realRoot ← IO.FS.realPath (fp root)
+    let conversationPath := realRoot.toString ++ "/conversations"
+    IO.FS.createDirAll (fp conversationPath)
+    if (← IO.FS.realPath (fp conversationPath)).toString != conversationPath then
+      throw (IO.userError "Conversation directory must remain below its project root")
+    let conversationFile := conversationPath ++ "/main.log"
+    if ← (fp conversationFile).pathExists then
+      if (← IO.FS.realPath (fp conversationFile)).toString != conversationFile then
+        throw (IO.userError "Conversation log cannot be a symlink")
+    let path := root ++ "/conversations/main.log"
+    let old ← readOr path ""
+    let messageId ← randomHex 12
+    let usageFields := match usage with
+      | none => "0|0|0|0"
+      | some u => s!"{u.inputTokens}|{u.cachedInputTokens}|{u.outputTokens}|{u.totalTokens}"
+    let sentAtMs := (← Std.Time.Timestamp.now).toMillisecondsSinceUnixEpoch.val
+    writeAtomic path (old ++ messageId ++ "|" ++ role ++ "|" ++ base64Encode text ++ "|" ++ usageFields ++ "|" ++ toString responseTimeMs ++ "|" ++ toString sentAtMs ++ "|" ++ model ++ "\n")
+  finally conversationLock.unlock
 
 def truncateText (value : String) (limit : Nat) : String :=
   if value.length ≤ limit then value else String.ofList (value.toList.take limit) ++ "\n[truncated]\n"
@@ -584,6 +600,7 @@ def runWorkspaceTool (root name arguments : String) (trace : IO.Ref (List String
         | "book" => "check-book"
         | "http-check" => "check-http"
         | "go-test" => "check-go"
+        | "test" => "check-test"
         | "run" => "check-runtime"
         | _ => ""
       if operation.isEmpty then return ← fail "Unknown check target."
@@ -1287,6 +1304,76 @@ def conversationJson (root : String) (models : List Provider.ModelInfo := []) : 
     lineNumber := lineNumber + 1
   pure ("{\"messages\":[" ++ String.intercalate "," messages.reverse ++ "]}\n")
 
+
+/-- Refs: leanfm.application_launch; no app command runs in the Lean server. -/
+initialize applicationAdmissionLock : Std.BaseMutex ← Std.BaseMutex.new
+initialize applicationCalls : IO.Ref Nat ← IO.mkRef 0
+
+def applicationOperation (operation root : String) (input : Lean.Json) : IO (Except String Lean.Json) := do
+  applicationAdmissionLock.lock
+  let count ← applicationCalls.get
+  if count >= 32 then
+    applicationAdmissionLock.unlock
+    return .error "Application operations are busy; retry after a current operation completes."
+  applicationCalls.set (count+1)
+  applicationAdmissionLock.unlock
+  try
+    let out ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["application-" ++ operation, root]} (some input.compress)
+    let some value := (Lean.Json.parse out.stdout).toOption | return .error "Application worker returned an invalid result."
+    if out.exitCode != 0 then return .error ((Provider.jsonStringField? value "error").getD "Application operation failed.")
+    return .ok value
+  finally
+    applicationAdmissionLock.lock
+    applicationCalls.modify (fun count => count-1)
+    applicationAdmissionLock.unlock
+
+def applicationHex (body : ByteArray) : String :=
+  let digits := "0123456789abcdef".toList.toArray
+  String.ofList (body.toList.flatMap fun byte => [digits[byte.toNat / 16]!, digits[byte.toNat % 16]!])
+
+def applicationBytes (value : String) : Except String ByteArray := do
+  if value.length > 8388608 || value.length % 2 != 0 then throw "Invalid application response size"
+  let chars := value.toList.toArray
+  let mut bytes := ByteArray.empty
+  for i in [:chars.size / 2] do
+    let some high := hexDigit? chars[i*2]! | throw "Invalid application response encoding"
+    let some low := hexDigit? chars[i*2+1]! | throw "Invalid application response encoding"
+    bytes := bytes.push (UInt8.ofNat (high*16+low))
+  return bytes
+
+/-- Opaque preview capabilities authenticate only one app, never engineering APIs. -/
+def applicationPreviewResponse? (path method request : String) : IO (Option HttpResponse) := do
+  match pathSegments path with
+  | "app-view" :: projectId :: instanceId :: capability :: rest =>
+      let some root ← authorizedProjectRoot? "" projectId | return some (errorResponse 404 "Application not found.")
+      if !safeId projectId || !safeId instanceId || capability.length != 64 || !(capability.toList.all fun c => (hexDigit? c).isSome) then
+        return some (errorResponse 403 "Invalid preview capability.")
+      let rawTarget := ((request.splitOn "\r\n").headD "").splitOn " " |>.drop 1 |>.headD ""
+      let query := String.intercalate "?" (rawTarget.splitOn "?" |>.drop 1)
+      let forwarded := "/" ++ String.intercalate "/" rest ++ (if query.isEmpty then "" else "?" ++ query)
+      let input := Lean.Json.mkObj [("instance_id", Lean.toJson instanceId), ("capability", Lean.toJson capability),
+        ("path", Lean.toJson forwarded), ("method", Lean.toJson method),
+        ("content_type", Lean.toJson ((headerValue? request "Content-Type").getD "")),
+        ("body_hex", Lean.toJson (applicationHex (requestBody request).toUTF8))]
+      let cors := ["Access-Control-Allow-Origin: null", "Access-Control-Allow-Methods: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS", "Access-Control-Allow-Headers: Content-Type", "Vary: Origin", "X-Content-Type-Options: nosniff", "Referrer-Policy: no-referrer"]
+      match ← applicationOperation "proxy" root input with
+      | .error error => return some { (errorResponse 403 error) with headers := cors }
+      | .ok result =>
+          let previewPath := "/app-view/" ++ projectId ++ "/" ++ instanceId ++ "/" ++ capability ++ "/"
+          let configuredOrigin := (← IO.getEnv "LEANFM_PUBLIC_ORIGIN").getD ""
+          let origin := if configuredOrigin.isEmpty then "http://" ++ ((headerValue? request "Host").getD "127.0.0.1:8080") else configuredOrigin
+          let scope := origin ++ previewPath
+          let csp := "Content-Security-Policy: sandbox allow-scripts allow-forms; default-src 'none'; script-src " ++ scope ++ "; style-src " ++ scope ++ "; connect-src " ++ scope ++ "; img-src data: " ++ scope ++ "; font-src " ++ scope ++ "; form-action " ++ scope ++ "; base-uri 'none'; frame-ancestors 'self'"
+          let body := (Provider.jsonStringField? result "body_hex").getD ""
+          let .ok bytes := applicationBytes body | return some (errorResponse 502 "Invalid bounded application response.")
+          return some
+            { status := ((result.getObjVal? "status").bind Lean.Json.getNat?).toOption.getD 502
+            , contentType := (Provider.jsonStringField? result "content_type").getD "application/octet-stream"
+            , body := ""
+            , bodyBytes := some bytes
+            , headers := csp :: cors }
+  | _ => return none
+
 def deleteConversationMessage (root messageId : String) : IO Bool := do
   let path := root ++ "/conversations/main.log"
   let body ← readOr path ""
@@ -1423,13 +1510,15 @@ def verifySubmittedKeys (pairs : List (String × String)) : IO (Except String Un
 
 def handlePublic (path method request : String) : IO (Option HttpResponse) := do
   if path == "/" && method == "GET" then
-    return some (HttpResponse.mk 200 "text/html; charset=utf-8" Web.reactPage ["Cache-Control: no-store"])
+    return some (HttpResponse.mk 200 "text/html; charset=utf-8" Web.reactPage ["Cache-Control: no-store"] none)
   if path == "/assets/chatui-react1.css" || path == "/assets/chatui.css" || path == "/assets/chatui-20261016.css" || path == "/assets/chatui-20261016b.css" || path == "/assets/chatui-20261016c.css" || path == "/assets/chatui-20261016d.css" || path == "/assets/chatui-20261016e.css" || path == "/assets/chatui-20261016f.css" || path == "/assets/chatui-20261016g.css" || path == "/assets/chatui-20261017a.css" || path == "/assets/chatui-20261017b.css" || path == "/assets/chatui-20261017c.css" || path == "/assets/chatui-20261017d.css" || path == "/assets/chatui-20261017e.css" || path == "/assets/chatui-20261017f.css" || path == "/assets/chatui-20261017g.css" || path == "/assets/chatui-20261017h.css" || path == "/assets/chatui-20261017i.css" then
-    return some (HttpResponse.mk 200 "text/css; charset=utf-8" Web.css ["Cache-Control: no-store"])
+    return some (HttpResponse.mk 200 "text/css; charset=utf-8" Web.css ["Cache-Control: no-store"] none)
+  if path == "/assets/mermaid.min.js" && method == "GET" then
+    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.mermaidJavascript ["Cache-Control: no-store"] none)
   if path == "/assets/chatui-react1.js" then
-    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.reactJavascript ["Cache-Control: no-store"])
+    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.reactJavascript ["Cache-Control: no-store"] none)
   if path == "/assets/chatui.js" || path == "/assets/chatui-20261016.js" || path == "/assets/chatui-20261016b.js" || path == "/assets/chatui-20261016c.js" || path == "/assets/chatui-20261016d.js" || path == "/assets/chatui-20261016e.js" || path == "/assets/chatui-20261016f.js" || path == "/assets/chatui-20261016g.js" || path == "/assets/chatui-20261017a.js" || path == "/assets/chatui-20261017b.js" || path == "/assets/chatui-20261017c.js" || path == "/assets/chatui-20261017d.js" || path == "/assets/chatui-20261017e.js" || path == "/assets/chatui-20261017f.js" || path == "/assets/chatui-20261017g.js" || path == "/assets/chatui-20261017h.js" || path == "/assets/chatui-20261017i.js" then
-    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.javascript ["Cache-Control: no-store"])
+    return some (HttpResponse.mk 200 "application/javascript; charset=utf-8" Web.javascript ["Cache-Control: no-store"] none)
   if path == "/api/accounts" && method == "POST" then
     let body := requestBody request
     let username := (formValue? body "username").getD ""
@@ -1582,6 +1671,31 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
             | .error message => return some (errorResponse 400 message)
             | .ok _ => return some (jsonResponse 200 ("{\"deleted_project_id\":\"" ++ jsonEscape projectId ++ "\"}\n"))
           match rest, method with
+          | ["application"], "GET" | ["application", "start"], "POST" | ["application", "stop"], "POST" | ["application", "open"], "GET" =>
+              let token := (← requestSessionToken? request).getD ""
+              if username.isEmpty || !(← sessionActive? token username) then return some (errorResponse 401 "Sign in to launch or inspect an application.")
+              let operation := if rest == ["application"] then "status" else rest.getLast!
+              let payload := (Lean.Json.parse (requestBody request)).toOption.getD (Lean.Json.mkObj [])
+              let input := Lean.Json.mkObj [("owner", Lean.toJson username), ("project_id", Lean.toJson projectId),
+                ("instance_id", Lean.toJson ((Provider.jsonStringField? payload "instance_id").getD "")),
+                ("request_id", Lean.toJson ((headerValue? request "X-LeanFM-Request-ID").getD ((Provider.jsonStringField? payload "request_id").getD ""))),
+                ("session_id", Lean.toJson (← privateIdentityTag token))]
+              let operationStarted ← IO.monoMsNow
+              match ← applicationOperation operation root input with
+              | .error error => return some (errorResponse 422 error)
+              | .ok result =>
+                  if operation == "open" then
+                    let previewPath := (Provider.jsonStringField? result "preview_prefix").getD ""
+                    let html := "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Application preview</title></head><body style=\"margin:0\"><iframe title=\"Project application\" sandbox=\"allow-scripts allow-forms\" referrerpolicy=\"no-referrer\" src=\"" ++ previewPath ++ "\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>"
+                    return some
+                      { status := 200
+                      , contentType := "text/html; charset=utf-8"
+                      , body := html
+                      , headers := ["Content-Security-Policy: default-src 'none'; frame-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'self'", "Referrer-Policy: no-referrer", "X-Content-Type-Options: nosniff"] }
+                  if operation == "start" then
+                    let url := (Provider.jsonStringField? result "url").getD ""
+                    appendConversation root "assistant" ("Application is running. [Open app](" ++ url ++ ").") none ((← IO.monoMsNow)-operationStarted) "leanfm:runtime"
+                  return some (jsonResponse 200 (result.compress ++ "\n"))
           | ["chat", "work", workId], "GET" =>
               let token := (← requestSessionToken? request).getD ""
               if username.isEmpty || !(← sessionActive? token username) then return some (errorResponse 401 "Sign in to inspect your project work.")
@@ -1834,7 +1948,14 @@ def handleAuthenticated (username path method request : String) : IO (Option Htt
                       appendLiveTrace root trace (name ++ " stopped: rejected workspace operation was not executed again; use a different recovery tool")
                       return "FATAL: repeated_failed_tool_call:" ++ name
                     writeChatStatus root "tool" ("Running workspace tool: " ++ name ++ ".")
-                    let result ← try runWorkspaceTool root name arguments trace catch error => do
+                    let result ← try
+                      if name == "workspace_launch" then
+                        appendLiveTrace root trace "Starting the accepted project application"
+                        match ← applicationOperation "start" root (Lean.Json.mkObj [("owner", Lean.toJson username), ("project_id", Lean.toJson projectId)]) with
+                        | .error error => pure ("ERROR: " ++ error)
+                        | .ok value => pure value.compress
+                      else runWorkspaceTool root name arguments trace
+                    catch error => do
                       let diagnostic := "workspace_tool_exception: " ++ toString error
                       appendLiveTrace root trace (name ++ " rejected: " ++ diagnostic)
                       pure ("ERROR: " ++ diagnostic)
@@ -2206,7 +2327,7 @@ def admittedWorkspaceRequest (method request : String) : IO Bool := do
   | some origin => return origin == "http://" ++ host || (!configured.isEmpty && origin == configured)
 
 def dispatchWorkspaceRequest (username path method request : String) : IO (Option HttpResponse) := do
-  let mutation := method != "GET" && method != "HEAD" && method != "OPTIONS" && !path.endsWith "/chat/cancel"
+  let mutation := method != "GET" && method != "HEAD" && method != "OPTIONS" && !path.endsWith "/chat/cancel" && !path.contains "/application"
   if mutation && (path == "/api/projects/leanfm-workspace" || path.startsWith "/api/projects/leanfm-workspace/") then
     return some (errorResponse 403 "The self-hosting LeanFM workspace is read-only through the project API.")
   let writerKey ← if mutation then

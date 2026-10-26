@@ -1,3 +1,4 @@
+import LeanFM.LLMGenerated.ApplicationLaunch
 import LeanFM.LLMGenerated.ResumableWork
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
@@ -779,3 +780,7 @@ end LeanFM.LLMGenerated.Requirements
 /-- Accepted client-driven work component; see reports/resumable-work/acceptance.json. -/
 def LeanFM.LLMGenerated.Requirements.resumableWorkRequirement : LeanFM.RequirementSpec :=
   LeanFM.LLMGenerated.ResumableWork.spec
+
+/-- Proposed persistent application launcher; explicit gates remain pending. -/
+def LeanFM.LLMGenerated.Requirements.applicationLaunchProposal : LeanFM.RequirementSpec :=
+  LeanFM.LLMGenerated.ApplicationLaunch.requirements

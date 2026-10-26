@@ -1,0 +1,1058 @@
+{
+  "boundary": "Accepted implementation source inventory opened",
+  "focused": {
+    "role": "BUTTON",
+    "name": "Source"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "LeanFM",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "complementary",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "GoServer",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "LeanFM read-only",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": "Font zoom"
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "region",
+      "name": "Project application"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "textbox",
+      "name": "New project name",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "＋ Add project",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "StaticText",
+      "name": "read-only"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "button",
+      "name": "Decrease font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "status",
+      "name": "",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "button",
+      "name": "Increase font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": "Account session"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Start app",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Stop app",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "read-only"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "StaticText",
+      "name": "−"
+    },
+    {
+      "role": "StaticText",
+      "name": "100"
+    },
+    {
+      "role": "StaticText",
+      "name": "%"
+    },
+    {
+      "role": "StaticText",
+      "name": "＋"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "DURABLE"
+    },
+    {
+      "role": "button",
+      "name": "Project memory",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "button",
+      "name": "Chat",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Book",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "button",
+      "name": "Grammar",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Tasks",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "BUILD"
+    },
+    {
+      "role": "button",
+      "name": "Source",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "documentation-model"
+    },
+    {
+      "role": "StaticText",
+      "name": "0"
+    },
+    {
+      "role": "StaticText",
+      "name": " used · "
+    },
+    {
+      "role": "StaticText",
+      "name": "1,000"
+    },
+    {
+      "role": "StaticText",
+      "name": " remaining"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "App · "
+    },
+    {
+      "role": "StaticText",
+      "name": "stopped"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Stop app"
+    },
+    {
+      "role": "button",
+      "name": "Makefile",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "accepted_channel_contract_test.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "browser_check.py",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "channel.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "cmd/demo/main.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "cmd/demo/main_test.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "cmd/demo/static/app.js",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "cmd/demo/static/index.html",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "cmd/demo/static/style.css",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "go.mod",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "goserver",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "main.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "person.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "rooms_test.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "runtime.py",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "server.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "server_test.go",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "traceability.json",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "−"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "100"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "%"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DURABLE"
+    },
+    {
+      "role": "StaticText",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "StaticText",
+      "name": "Chat"
+    },
+    {
+      "role": "StaticText",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "StaticText",
+      "name": "Grammar"
+    },
+    {
+      "role": "StaticText",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "BUILD"
+    },
+    {
+      "role": "StaticText",
+      "name": "Source"
+    },
+    {
+      "role": "StaticText",
+      "name": "openai"
+    },
+    {
+      "role": "StaticText",
+      "name": " · key "
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "documentation-model"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "0"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " used · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "1,000"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " remaining"
+    },
+    {
+      "role": "StaticText",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "App · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "stopped"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start app"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Stop app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Makefile"
+    },
+    {
+      "role": "StaticText",
+      "name": "accepted_channel_contract_test.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "browser_check.py"
+    },
+    {
+      "role": "StaticText",
+      "name": "channel.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "cmd/demo/main.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "cmd/demo/main_test.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "cmd/demo/static/app.js"
+    },
+    {
+      "role": "StaticText",
+      "name": "cmd/demo/static/index.html"
+    },
+    {
+      "role": "StaticText",
+      "name": "cmd/demo/static/style.css"
+    },
+    {
+      "role": "StaticText",
+      "name": "go.mod"
+    },
+    {
+      "role": "StaticText",
+      "name": "goserver"
+    },
+    {
+      "role": "StaticText",
+      "name": "main.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "person.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "rooms_test.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "runtime.py"
+    },
+    {
+      "role": "StaticText",
+      "name": "server.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "server_test.go"
+    },
+    {
+      "role": "StaticText",
+      "name": "traceability.json"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "code",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Grammar"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Source"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "openai"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " · key "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Makefile"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "accepted_channel_contract_test.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "browser_check.py"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "channel.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "cmd/demo/main.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "cmd/demo/main_test.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "cmd/demo/static/app.js"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "cmd/demo/static/index.html"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "cmd/demo/static/style.css"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "go.mod"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "goserver"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "main.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "person.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "rooms_test.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "runtime.py"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "server.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "server_test.go"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "traceability.json"
+    },
+    {
+      "role": "StaticText",
+      "name": "Makefile"
+    },
+    {
+      "role": "StaticText",
+      "name": "# Requirement refs: goserver; spec/runtime.json; durable local launch contract.\n.PHONY: build run serve stop ruj test check clean\nGO ?= $(if $(wildcard ../../../.toolchains/go/bin/go),$(abspath ../../../.toolchains/go/bin/go),go)\nPORT ?= 8081\nexport GOCACHE := $(abspath ../.cache/go-build)\nexport GOMODCACHE := $(abspath ../.cache/go-mod)\nBINARY := ../.cache/goserver\nbuild:\n\t@mkdir -p ../.cache\n\t$(GO) build -o $(BINARY) ./cmd/demo\nrun: build\n\t@GOSERVER_PORT=$(PORT) python3 $(abspath runtime.py) run\nserve: run\nstop:\n\tpython3 $(abspath runtime.py) stop\nruj: run\ntest:\n\t$(GO) test -race ./...\ncheck: build test\nclean:\n\t$(RM) $(BINARY)\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Makefile"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "# Requirement refs: goserver; spec/runtime.json; durable local launch contract."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": ".PHONY: build run serve stop ruj test check clean"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GO ?= $(if $(wildcard ../../../.toolchains/go/bin/go),$(abspath ../../../.toolchains/go/bin/go),go)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PORT ?= 8081"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "export GOCACHE := $(abspath ../.cache/go-build)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "export GOMODCACHE := $(abspath ../.cache/go-mod)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "BINARY := ../.cache/goserver"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "build:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\t"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "@mkdir -p ../.cache"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\t"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "$(GO) build -o $(BINARY) ./cmd/demo"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "run: build"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\t"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "@GOSERVER_PORT=$(PORT) python3 $(abspath runtime.py) run"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "serve: run"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "stop:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\t"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "python3 $(abspath runtime.py) stop"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "ruj: run"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "test:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\t"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "$(GO) test -race ./..."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "check: build test"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "clean:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\t"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "$(RM) $(BINARY)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    }
+  ]
+}

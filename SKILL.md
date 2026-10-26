@@ -262,7 +262,12 @@ artifact validation, and generated trace round trips. Report changed source
 files, validation evidence, and any requirement that could not be implemented.
 
 For an application goal, the implementation pass must deliver a working
-`source/Makefile` with `make run`, using a bounded loopback port separate from
+`source/Makefile` with uniform `build`, `run`, `stop`, `test`, `check`, `clean`,
+and `serve` targets. Keep `run` in the foreground and `serve` as its alias;
+`stop` affects only the project-owned app. Use relative asset/API URLs and
+record `relative_urls: true` for the isolated preview. Launch with the native
+Start app control or `workspace_launch`, and return the verified served Open app
+link after readiness. The separate terminating smoke test uses `make run`, using a bounded loopback port separate from
 LeanFM. Record its fixed launch contract in `spec/runtime.json` (version 1,
 kind `http`, directory `source`, command `["make", "run"]`, host `127.0.0.1`,
 port, readiness_path and page_path), then use the project-confined runtime

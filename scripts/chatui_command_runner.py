@@ -22,8 +22,10 @@ def limits():
 
 def main(operation, root_name):
     root = Path(root_name).resolve(strict=True)
-    if operation in {"build", "check", "http-check"}:
-        makefile = next((root / name for name in ["GNUmakefile", "makefile", "Makefile"] if (root / name).is_file()), None)
+    application = (root / 'source/Makefile').is_file() and (root / 'spec/runtime.json').is_file()
+    make_root = confined(root, 'source') if application else root
+    if operation in {"build", "check", "http-check", "test"}:
+        makefile = next((make_root / name for name in ["GNUmakefile", "makefile", "Makefile"] if (make_root / name).is_file()), None)
         if makefile is None:
             raise ValueError("Project has no Makefile and does not provide the '" + operation +
                              "' check. Use leanfm_check for canonical requirements and implementation specifications; do not substitute an application build.")
@@ -68,8 +70,8 @@ def main(operation, root_name):
         commands = ["/usr/bin/python3", "/runtime/chatui_runtime.py", "probe", "/work"]
     elif operation == "go":
         commands = ["/go/bin/go", "-C", "/work/source" if (root / "source/go.mod").is_file() else "/work", "test", "./..."]
-    elif operation in {"build", "check", "http-check"}:
-        commands = ["/usr/bin/make", "-C", "/work", operation]
+    elif operation in {"build", "check", "http-check", "test"}:
+        commands = ["/usr/bin/make", "-C", "/work/source" if application else "/work", operation]
     elif operation == "book":
         commands = ["/usr/bin/make", "-C", "/work/book"]
     else:

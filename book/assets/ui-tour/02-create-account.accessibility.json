@@ -1,0 +1,321 @@
+{
+  "boundary": "Before AccountCreateSubmitted",
+  "focused": {
+    "role": "tab",
+    "name": "Create account"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "LeanFM",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "dialog",
+      "name": "Unlock or update provider keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "LeanFM"
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "tablist",
+      "name": "Account access"
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Log out and sign in again",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "alert",
+      "name": "",
+      "states": {
+        "live": "assertive"
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "StaticText",
+      "name": "Sign in to unlock your encrypted provider API keys. One password unlocks OpenAI and Anthropic together; this is your LeanFM login, not a provider login."
+    },
+    {
+      "role": "tab",
+      "name": "Log in",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "tab",
+      "name": "Create account",
+      "states": {
+        "focusable": true,
+        "focused": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Create account",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Cancel",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out and sign in again"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Sign in to unlock your encrypted provider API keys. "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "One password unlocks OpenAI and Anthropic "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "together; this is your LeanFM login, not a provider "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "login."
+    },
+    {
+      "role": "StaticText",
+      "name": "Log in"
+    },
+    {
+      "role": "StaticText",
+      "name": "Create account"
+    },
+    {
+      "role": "StaticText",
+      "name": "Username"
+    },
+    {
+      "role": "textbox",
+      "name": "Username",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Password"
+    },
+    {
+      "role": "textbox",
+      "name": "Password",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "DisclosureTriangle",
+      "name": "Provider API keys",
+      "states": {
+        "focusable": true,
+        "expanded": true
+      }
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "For a new account, provide at least one key. For an existing username, its correct password lets you update keys; blanks keep saved keys."
+    },
+    {
+      "role": "StaticText",
+      "name": " Keys are encrypted with your password and never returned to the browser. Adding another provider keeps you signed in. Replacing an existing key signs out older sessions."
+    },
+    {
+      "role": "StaticText",
+      "name": "Create account"
+    },
+    {
+      "role": "StaticText",
+      "name": "Cancel"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out and sign in again"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create account"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Username"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Password"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Provider API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "OpenAI API key"
+    },
+    {
+      "role": "textbox",
+      "name": "OpenAI API key",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Anthropic API key"
+    },
+    {
+      "role": "textbox",
+      "name": "Anthropic API key",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": false
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "For a new account, provide at least one key. For an "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "existing username, its correct password lets you "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "update keys; blanks keep saved keys."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " Keys are "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "encrypted with your password and never returned to "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "the browser. Adding another provider keeps you "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "signed in. Replacing an existing key signs out older "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "sessions."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Create account"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Cancel"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Provider API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "OpenAI API key"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Anthropic API key"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    }
+  ]
+}

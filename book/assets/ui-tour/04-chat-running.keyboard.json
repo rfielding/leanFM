@@ -1,0 +1,55 @@
+[
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Attach image"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "TEXTAREA",
+      "name": "Message to the project"
+    }
+  },
+  {
+    "action": "key",
+    "key": "a",
+    "modifiers": 2,
+    "focused": {
+      "role": "TEXTAREA",
+      "name": "Message to the project"
+    }
+  },
+  {
+    "action": "type",
+    "public_fixture_text": "Which messages create a room, and how can I review their states?",
+    "focused": {
+      "role": "TEXTAREA",
+      "name": "Message to the project"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Send"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Enter",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Send"
+    }
+  }
+]

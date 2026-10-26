@@ -596,6 +596,9 @@ def deleteProject (username projectId confirmation : String) : IO (Except String
   let realRoot ← IO.FS.realPath (fp root)
   if realRoot.parent != some realParent then
     return .error "Project root did not resolve to the owned projects directory."
+  let stopped ← IO.Process.output {cmd := "scripts/chatui_command.sh", args := #["application-stop", realRoot.toString]}
+    (some (Lean.Json.mkObj [("owner", Lean.toJson username), ("project_id", Lean.toJson projectId)]).compress)
+  if stopped.exitCode != 0 then return .error "Stop the owned application before deleting this project."
   IO.FS.removeDirAll realRoot
   pure (.ok ())
 

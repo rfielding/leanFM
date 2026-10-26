@@ -1,0 +1,7 @@
+sequenceDiagram
+    participant UserBrowser
+    participant LeanFMServer
+    UserBrowser->>LeanFMServer: ApplicationStatusRequested
+    alt choice 1
+    LeanFMServer->>UserBrowser: ApplicationStatusReturned
+    end

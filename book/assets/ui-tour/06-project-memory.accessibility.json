@@ -1,0 +1,2669 @@
+{
+  "boundary": "Both actual accepted specification revisions loaded",
+  "focused": {
+    "role": "BUTTON",
+    "name": "Project memory"
+  },
+  "nodes": [
+    {
+      "role": "RootWebArea",
+      "name": "LeanFM",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "complementary",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "GoServer",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Delete",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "LeanFM read-only",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": "Font zoom"
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "region",
+      "name": "Project application"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "textbox",
+      "name": "New project name",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "＋ Add project",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "Delete"
+    },
+    {
+      "role": "StaticText",
+      "name": "LeanFM"
+    },
+    {
+      "role": "StaticText",
+      "name": "read-only"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "button",
+      "name": "Decrease font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "status",
+      "name": "",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "button",
+      "name": "Increase font size",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": "Account session"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Start app",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Stop app",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "region",
+      "name": "Specification acceptance"
+    },
+    {
+      "role": "navigation",
+      "name": ""
+    },
+    {
+      "role": "main",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PROJECTS"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Delete"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "LeanFM"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "read-only"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "StaticText",
+      "name": "−"
+    },
+    {
+      "role": "StaticText",
+      "name": "100"
+    },
+    {
+      "role": "StaticText",
+      "name": "%"
+    },
+    {
+      "role": "StaticText",
+      "name": "＋"
+    },
+    {
+      "role": "StaticText",
+      "name": "GoServer"
+    },
+    {
+      "role": "StaticText",
+      "name": "DURABLE"
+    },
+    {
+      "role": "button",
+      "name": "Project memory",
+      "states": {
+        "focusable": true,
+        "focused": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "button",
+      "name": "Chat",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Book",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "button",
+      "name": "Grammar",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Tasks",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "BUILD"
+    },
+    {
+      "role": "button",
+      "name": "Source",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "documentation-model"
+    },
+    {
+      "role": "StaticText",
+      "name": "0"
+    },
+    {
+      "role": "StaticText",
+      "name": " used · "
+    },
+    {
+      "role": "StaticText",
+      "name": "1,000"
+    },
+    {
+      "role": "StaticText",
+      "name": " remaining"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "button",
+      "name": "API keys",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Log out",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "App · "
+    },
+    {
+      "role": "StaticText",
+      "name": "stopped"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Stop app"
+    },
+    {
+      "role": "heading",
+      "name": "Project memory"
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "article",
+      "name": ""
+    },
+    {
+      "role": "article",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Book book/main.tex CURRENT",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Requirements spec/Requirements.lean CURRENT",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Message schema spec/Requirements.proto CURRENT",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Implementation specification spec/Implementation.lean CURRENT",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Implementation source source/ · 18 files · 80165 bytes CURRENT",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "sectionheader",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋ Add project"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "−"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "100"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "%"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "＋"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DURABLE"
+    },
+    {
+      "role": "StaticText",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "DISCOVER"
+    },
+    {
+      "role": "StaticText",
+      "name": "Chat"
+    },
+    {
+      "role": "StaticText",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SPECIFY"
+    },
+    {
+      "role": "StaticText",
+      "name": "Grammar"
+    },
+    {
+      "role": "StaticText",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "BUILD"
+    },
+    {
+      "role": "StaticText",
+      "name": "Source"
+    },
+    {
+      "role": "StaticText",
+      "name": "openai"
+    },
+    {
+      "role": "StaticText",
+      "name": " · key "
+    },
+    {
+      "role": "StaticText",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "documentation-model"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "0"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " used · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "1,000"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " remaining"
+    },
+    {
+      "role": "StaticText",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "StaticText",
+      "name": "API keys"
+    },
+    {
+      "role": "StaticText",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "App · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "stopped"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start app"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Stop app"
+    },
+    {
+      "role": "StaticText",
+      "name": "Project memory"
+    },
+    {
+      "role": "StaticText",
+      "name": "Durable state used to resume without conversation history."
+    },
+    {
+      "role": "StaticText",
+      "name": "5"
+    },
+    {
+      "role": "StaticText",
+      "name": " / 5 substantive layers"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Accepted current revision"
+    },
+    {
+      "role": "button",
+      "name": "Accept requirements",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Accepted current revision"
+    },
+    {
+      "role": "button",
+      "name": "Accept implementation specification",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "emphasis",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "emphasis",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "emphasis",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "emphasis",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "emphasis",
+      "name": ""
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Refreshes after every chat turn"
+    },
+    {
+      "role": "code",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Chat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Grammar"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Tasks"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Source"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "openai"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " · key "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "fixture"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Local session limit; enforce provider spend caps"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "API keys"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Log out"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Project memory"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Durable state used to resume without conversation history."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "5"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " / 5 substantive layers"
+    },
+    {
+      "role": "StaticText",
+      "name": "Requirements"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Accepted current revision"
+    },
+    {
+      "role": "StaticText",
+      "name": "Accept requirements"
+    },
+    {
+      "role": "StaticText",
+      "name": "Implementation specification"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Accepted current revision"
+    },
+    {
+      "role": "StaticText",
+      "name": "Accept implementation specification"
+    },
+    {
+      "role": "StaticText",
+      "name": "Book"
+    },
+    {
+      "role": "StaticText",
+      "name": "book/main.tex"
+    },
+    {
+      "role": "StaticText",
+      "name": "CURRENT"
+    },
+    {
+      "role": "StaticText",
+      "name": "Requirements"
+    },
+    {
+      "role": "StaticText",
+      "name": "spec/Requirements.lean"
+    },
+    {
+      "role": "StaticText",
+      "name": "CURRENT"
+    },
+    {
+      "role": "StaticText",
+      "name": "Message schema"
+    },
+    {
+      "role": "StaticText",
+      "name": "spec/Requirements.proto"
+    },
+    {
+      "role": "StaticText",
+      "name": "CURRENT"
+    },
+    {
+      "role": "StaticText",
+      "name": "Implementation specification"
+    },
+    {
+      "role": "StaticText",
+      "name": "spec/Implementation.lean"
+    },
+    {
+      "role": "StaticText",
+      "name": "CURRENT"
+    },
+    {
+      "role": "StaticText",
+      "name": "Implementation source"
+    },
+    {
+      "role": "StaticText",
+      "name": "source/ · "
+    },
+    {
+      "role": "StaticText",
+      "name": "18"
+    },
+    {
+      "role": "StaticText",
+      "name": " files · "
+    },
+    {
+      "role": "StaticText",
+      "name": "80165"
+    },
+    {
+      "role": "StaticText",
+      "name": " bytes"
+    },
+    {
+      "role": "StaticText",
+      "name": "CURRENT"
+    },
+    {
+      "role": "StaticText",
+      "name": "book/main.tex"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Refreshes after every chat turn"
+    },
+    {
+      "role": "StaticText",
+      "name": "\\documentclass[11pt,oneside]{book}\n\\usepackage{underscore}\n\\usepackage[margin=1in]{geometry}\n\\usepackage{xcolor}\n\\usepackage[hidelinks]{hyperref}\n\\ifdefined\\darkmode\\pagecolor[HTML]{091117}\\color[HTML]{F0EDE4}\\fi\n\\title{GoServer}\n\\author{Project team}\n\\date{\\today}\n\\usepackage{graphicx}\n\\usepackage{accsupp}\n\\begin{document}\n\\frontmatter\n\\maketitle\n\\tableofcontents\n\\mainmatter\n\n\\chapter{Project sketch}\nGoServer is a KGS-inspired online Go service focused on multiplayer variants rather than direct competition with established two-player Go servers. The initial release centers on short, four-participant games played on an \\(11\\times 11\\) board.\n\nKGS provides inspiration for the navigation model, but this sketch does not require compatibility with KGS accounts, protocols, clients, or server internals.\n\n\\section{People and systems}\nThe primary participant is a signed-in person who wants to browse chat rooms, find or observe games, play Go, and converse with other participants. A game seat may instead be controlled by a server-supported bot. People and bots are both game participants for the purposes of turn order and team membership.\n\nThe server maintains identities, sessions, rooms, games, board state, clocks, team membership, participant graveyards, and chat history. Connected clients present server-authoritative state and submit participant actions.\n\n\\section{Primary navigation}\nAfter a successful login, a person sees the available chat rooms. Entering a room displays the room conversation and the games associated with that room. Entering a game displays its board, participants, teams, move deadline, current turn, game status, and game-specific chat.\n\nThe intended hierarchy is:\n\\begin{enumerate}\n  \\item authenticate;\n  \\item browse and enter a chat room;\n  \\item inspect the games associated with that room;\n  \\item enter a game as a player or observer; and\n  \\item play or observe while using the game chat.\n\\end{enumerate}\n\nRoom chat and game chat are separate conversations. A message sent to one is not implicitly copied to the other.\n\n\\section{Initial game format}\nThe first supported format has the following fixed profile:\n\\begin{itemize}\n  \\item an \\(11\\times 11\\) Go board;\n  \\item four participant seats;\n  \\item sequential turns;\n  \\item a ten-second deadline for each move;\n  \\item each seat configurable as either a person or a bot; and\n  \\item each participant initially occupying a distinct team.\n\\end{itemize}\n\nThe server is authoritative for legal moves, turn order, deadlines, captures, repetition rules, team membership, graveyard contents, and the final result. Clients must not resolve conflicting game actions locally.\n\nWhen a stone is placed, the server first examines its orthogonally adjacent groups. Every adjacent group that has no remaining liberties is removed before the server evaluates the placed stone for suicide. This ordering permits an otherwise surrounded placement to survive when it first captures neighboring stones and thereby gains liberties.\n\nIf no neighboring group is removed and the placed stone's connected same-owner group has no liberties, the move is a permitted suicide move. The server removes the newly placed stone and its entire connected same-owner group. This permits multiplayer tactics in which a participant removes their own group to help an allied participant form eyes. Every self-removed stone is placed in its owner's graveyard, just like a stone removed by another participant.\n\n\\section{Teams and alliances}\nEvery participant begins the game as the sole member of a separate team. Participants may subsequently join together so that multiple participants belong to one team. A team therefore represents an alliance of one or more seats rather than a single shared seat.\n\nA team merge changes cooperation and scoring without removing a participant's seat or turn. Each participant continues to place stones during that participant's assigned turns. Existing stones remain on the board when teams merge.\n\nFor each participant, the server maintains a graveyard containing that participant's stones that have been removed from play. When, for example, White captures a Black stone, the removed stone is given to the Black participant's graveyard rather than credited to White. A stone removed by its owner's suicide is likewise placed in that owner's graveyard. Removal therefore does not directly award points to another participant.\n\nA team's score is its total territory minus its total losses. Total losses are the number of removed stones in the graveyards of the team's members. Equivalently, if \\(A_T\\) is the territory attributed to team \\(T\\) and \\(G_T\\) is the combined number of stones in its members' graveyards, then\n\\[\n  S_T = A_T - G_T.\n\\]\nThis makes the result express territory gained at the cost of stones lost. The approval, timing, and reversibility of a team merge remain requirements decisions.\n\n\\section{Bots}\nEach of the four seats can be assigned independently to a person or bot. This permits any mixture from four people to four bots. Computer-controlled seats use Monte Carlo tree search executed by the server. Clients do not run the authoritative bot search or submit bot-selected moves on behalf of a bot seat.\n\nA bot is subject to the same legal-move checks and ten-second move deadline as a person. Its server-side search must stop when its turn expires, and a result that arrives after the authoritative deadline must not advance the game. Bot failures must not give the bot permission to bypass the clock, acquire privileges unavailable to its assigned seat, or submit moves after its turn has ended. The implementation must bound and isolate bot computation so that one search cannot exhaust resources needed by unrelated games.\n\n\\section{Chat}\nA participant can converse in a room without entering a game. Every game also has a dedicated chat visible to people who have entered that game, subject to the eventual observer and moderation policy. Bot participation in chat is not required by the initial sketch.\n\n\\section{Representative scenarios}\n\\subsection{Find and enter a game}\nA person logs in, sees the room list, enters a room, and receives the current room conversation and game list. The person selects a game and receives its board, participants, teams, clock state, graveyard counts, and game chat.\n\n\\subsection{Play a timed move}\nWhen a participant's turn begins, the server starts a ten-second deadline. The participant submits a board coordinate. The server accepts the move only if the participant controls the active seat, the turn is still current, the deadline has not expired, and the move is legal. The accepted state is then distributed to everyone viewing the game.\n\n\\subsection{Capture neighboring groups}\nA participant places a stone next to one or more groups that have lost their final liberty. The server removes all such neighboring groups before evaluating whether the newly placed stone's group has liberties. Each removed stone is placed in the graveyard of the participant who owned it. No capture point is awarded to the participant who placed the stone.\n\n\\subsection{Play a suicide move}\nA participant places a stone that does not remove any neighboring group, and the placed stone's connected same-owner group is left without liberties. The server treats the move as a permitted suicide and removes the placed stone together with its entire connected same-owner group. Every self-removed stone is placed in its owner's graveyard and therefore contributes to that owner's losses.\n\n\\subsection{Fill a seat with a bot}\nA game is configured with one or more bot-controlled seats. When a bot-controlled turn begins, the server runs that bot's Monte Carlo tree search within server-controlled execution. The search operates under the same ten-second deadline and move-legality constraints as a human-controlled seat. Only a result selected before the authoritative deadline may be submitted for the current turn.\n\n\\subsection{Form an alliance}\nParticipants who began on separate teams request to become members of the same team. The server applies the selected merge policy, records the resulting membership, and distributes the updated team state to all viewers. Existing stones remain on the board. The resulting team's loss total includes the graveyards of all its members.\n\n\\subsection{Score a team}\nAt the end of a game, the server totals the territory attributed to a team and the removed stones held in its members' graveyards. It subtracts the graveyard total from the territory total and reports the resulting team score. Captures and suicides affect scoring only as losses borne by the owners of the removed stones.\n\n\\subsection{Chat inside a game}\nA person viewing a game sends a message to the game chat. The server associates the message with that game and distributes it to authorized game viewers without adding it to the containing room's chat.\n\n\\chapter{Requirements argument}\n\n\\section{Observable scope}\nThe candidate first-release requirements will cover authentication, room discovery, room entry, room chat, room-associated game discovery, game entry, game chat, four-seat game setup, human and bot seats, server-executed bot search, server-authoritative timed turns, multiplayer Go rules, participant graveyards, team merges, scoring, reconnect behavior, and observable error responses.\n\nAccount registration, moderation administration, persistent ratings, tournaments, KGS protocol compatibility, and sophisticated bot strategy beyond the required server-side Monte Carlo tree search are not yet part of the committed first-release scope.\n\n\\section{Proposed safety and consistency invariants}\nThe requirements should preserve the following positive invariant: every externally visible room, chat, game, move, clock, capture, graveyard, score, and team transition is authorized for the acting identity and derived from one unambiguous server-authoritative state.\n\nCandidate forbidden behaviors include accepting a move from the wrong seat, accepting more than one move for a turn, accepting a move after its deadline, resolving suicide before neighboring captures, removing less or more than the entire connected same-owner group during suicide, crediting a removed stone to another participant, placing a removed stone in the wrong owner's graveyard, allowing a client to manufacture team membership or graveyard contents, accepting a client-supplied move as the output of a server-controlled bot, leaking private session credentials into chat or logs, crossing room or game boundaries through an identifier substitution, letting a bot acquire privileges unavailable to its assigned seat, and allowing one bot search to consume unbounded server resources.\n\nThese statements are design candidates rather than accepted requirements until represented by the typed project specification and explicitly accepted.\n\n\\section{Resolved capture and suicide ordering}\nAfter a stone is placed, adjacent groups without liberties are removed first. Only if no neighboring group is removed does the server evaluate the placement as suicide. Thus a placement that captures a neighboring group can gain the liberties created by that removal and remain on the board.\n\nSuicide is permitted as a multiplayer tactic, including to help an ally form eyes. If the placed stone's connected same-owner group has no liberties, the server removes the placed stone and that entire connected group. All self-removed stones enter their respective owners' graveyards and count as losses in exactly the same way as stones removed by another participant.\n\n\\section{Resolved scoring direction}\nA removed stone is assigned to the graveyard of the participant who owned it. It counts as one loss for that participant and is not a positive capture point for another participant.\n\nA team's final score is its total territory minus the combined number of stones in its members' graveyards. Graveyard ownership remains attached to the participant, allowing team losses to be recomputed from authoritative participant records after a team merge. The typed specification must still define how territory is identified and attributed.\n\n\\section{Resolved bot execution direction}\nComputer-player Monte Carlo tree search runs on the server rather than in a connected client. The authoritative game clock bounds the search, and a late search result cannot advance an expired or superseded turn. The implementation mapping must define resource bounds and execution isolation for simultaneous searches without changing the observable ten-second deadline.\n\n\\section{Recovered ko and repetition behavior}\nThe supplied N-Player Go Lab JavaScript provides concrete provenance for the intended ko behavior. Its user-facing description calls the rule ``simple ko plus positional superko,'' but its state comparison includes both the board and the participant to move. The standard description of the implemented rule is therefore \\emph{situational superko}, not positional superko.\n\nThe candidate first-release baseline is as follows:\n\\begin{itemize}\n  \\item the ko rule is enabled by default for a two-participant game and disabled by default for a game with three or more participants;\n  \\item when enabled, a qualifying single-stone capture establishes a simple-ko restriction that prevents the owner of the captured stone from immediately recapturing at that point on that participant's next turn;\n  \\item after every proposed stone placement, the resulting board together with the next participant to move must differ from every earlier such state on the current game line;\n  \\item passes, deadline expirations, and resignations are not rejected merely because they leave or recreate a repeated state; and\n  \\item independently of repetition, a game is capped at \\(3N^2\\) moves for an \\(N\\times N\\) board.\n\\end{itemize}\n\nThe prototype represents a repetition state with a 32-bit Zobrist board hash combined with a token for the next participant. That representation is useful evidence of semantics but is not sufficient as the sole authoritative equality test because a hash collision could reject a legal position as repeated. The production requirement should demand collision-safe comparison, such as an exact canonical state representation or a digest backed by exact equality when hashes match.\n\nThe repetition check applies to actual game-tree branches and is mirrored inside Monte Carlo tree search: a searched stone placement is skipped when its resulting board-and-next-participant state occurs in the real game history or in the current search path. This search behavior is advisory; the authoritative game transition must independently enforce the same observable rule.\n\n\\section{Open rules decisions}\nThe remaining core multiplayer rules still need durable answers for:\n\\begin{itemize}\n  \\item whether the ko rule is fixed for the first-release four-participant format or configurable when a game is created;\n  \\item whether an expired deadline causes an automatic pass, forfeits the seat, or has another result;\n  \\item how territory is identified and attributed among participants and teams;\n  \\item when team merges are allowed, who must approve them, and whether they are reversible;\n  \\item whether observers may use game chat; and\n  \\item what reconnect grace, if any, exists within a ten-second turn.\n\\end{itemize}\n\n\\chapter{Implementation argument}\nImplementation is blocked until the observable behavior is encoded as a typed LeanFM requirement specification, checked, and explicitly accepted, followed by a checked and explicitly accepted implementation mapping.\n\nOnce those gates are satisfied, the implementation argument must map authentication, authorization, room isolation, game isolation, clocks, turn serialization, legal-move validation, ordered capture and suicide processing, graveyard attribution, collision-safe situational-superko validation, team transitions, server-side Monte Carlo tree search, bot resource isolation, persistence, chat delivery, and scoring attribution to concrete controls and tests. In particular, concurrent move and timeout processing must have a single atomic winner so that a deadline and a move cannot both advance the same turn. A bot result must additionally be bound to its game, seat, turn revision, and deadline so that a delayed or confused result cannot be applied to another turn. A placement, all neighboring removals, any resulting connected-group suicide removal, repetition validation, and all corresponding board, graveyard, and score-relevant changes must be committed as one authoritative transition.\n\n\n\\chapter{Current reduced server-only scope}\nThe operator explicitly selected formalization and checking of the reduced\nbasic-server slice in question \\texttt{basic\\_server\\_requirements\\_gate}.\nThe current requirements cover room discovery and entry, room game/challenge\nlistings, named open challenge creation, watch/join navigation, room chat and\nper-game chat. A game is currently a navigable chat container. Earlier chapters'\nGo boards, move rules, bots, clocks, teams and scoring remain future roadmap\nmaterial and are not obligations of this first server-only requirements gate.\n\nExisting server-issued sessions identify callers. Joining a room or game\nestablishes its chat membership; sender identity and timestamps come from the\nserver. Chat is never implicitly copied across room/game boundaries. The draft\nadds request correlation and explicit rejection branches without choosing an\nimplementation runtime or HTTP transport. Watch/join confers no Go move or seat\nauthority in this slice. Account registration is not added.\n\nProposed reversible bounds are 128 characters for names, 4000 for chat text and\nthe latest 100 chat entries per conversation. The retained 100-person population\nis a capacity forecast, not measured performance. Rejected or overloaded actions\nmust not mutate state or disclose private identities or credentials. Replay and\nconcurrency controls, connection limits, persistence and negative tests must be\nrealized in the separate implementation mapping after requirements acceptance.\n\nCanonical candidates are \\path{spec/Requirements.lean} and\n\\path{spec/Requirements.proto}. Checked task views are generated from that same\nspecification into \\path{spec/tasks.json}; the task catalog contains one\ninteraction diagram and state machine for each scoped operation. No human gate\nis accepted by compilation or by preparing these files.\n\n\n\\chapter{Room creation and working browser revision}\n\\label{ch:rooms-browser}\nThe October 25 request asks for working room creation and room-scoped game\nchallenges, with placeholder links removed. This candidate extends the previous\naccepted seven-task server slice with \\texttt{create\\_room}. A room name is a\ntrimmed, case-sensitive, public display identifier of 1--128 Unicode characters.\nA valid local session may create it; duplicate names and the 16-room bound\nreject without mutation. The creator subsequently enters it with\n\\texttt{EnterRoom}. Challenge results and listings retain their entered name.\nAll state remains in memory and resets on restart. Gameplay remains deferred.\n\nThe positive invariant is that each displayed room, challenge and chat result\ncomes from an authorized server operation in its selected scope. Forbidden\noutcomes include duplicate mutations on retry or concurrent admission, room or\ngame chat disclosure outside membership, executable user text, stale responses\nreplacing another room's content, exposed tokens, and navigation to fabricated\ndestinations. The proposed controls and negative checks are cataloged in\n\\path{reports/rooms-browser-review/review.md}. They are obligations for the\nseparate implementation review, not claims of completed source changes.\n\nThe current typed requirements generate interaction and state-machine views in\n\\path{spec/tasks.json}; extracted views and their exact provenance appear in\n\\path{reports/rooms-browser-review/}. This revision requires explicit\nrequirements acceptance followed by acceptance of its implementation mapping.\nEarlier protected gate snapshots remain evidence only for their earlier input\nrevisions. Billing failure of the attempted Anthropic request did not accept a\ngate or implement this feature.\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateRoom; checking to accepted: RoomCreated; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_room.state.pdf}\n\\EndAccSupp{}\n\\caption{Create a named chat room: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\begin{figure}[ht]\n\\centering\n\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateGame; checking to accepted: GameCreated; checking to rejected: RequestRejected}}\n\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_game.state.pdf}\n\\EndAccSupp{}\n\\caption{Create a named room game or challenge: state transitions generated from the current typed task.}\n\\end{figure}\n\n\\end{document}\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Requirements"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Accept requirements"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Implementation specification"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Accept implementation specification"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Book"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "book/main.tex"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CURRENT"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Requirements"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "spec/Requirements.lean"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CURRENT"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Message schema"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "spec/Requirements.proto"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CURRENT"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Implementation specification"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "spec/Implementation.lean"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CURRENT"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Implementation source"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "source/ · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "18"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " files · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "80165"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " bytes"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CURRENT"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "book/main.tex"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\documentclass[11pt,oneside]{book}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\usepackage{underscore}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\usepackage[margin=1in]{geometry}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\usepackage{xcolor}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\usepackage[hidelinks]{hyperref}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\ifdefined\\darkmode\\pagecolor[HTML]{091117}\\color[HTML]{F0EDE4}\\fi"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\title{GoServer}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\author{Project team}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\date{\\today}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\usepackage{graphicx}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\usepackage{accsupp}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{document}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\frontmatter"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\maketitle"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\tableofcontents"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\mainmatter"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{Project sketch}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "GoServer is a KGS-inspired online Go service focused on multiplayer variants rather than direct competition with established two-player Go servers. The initial release centers on short, four-participant games played on an \\(11\\times 11\\) board."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "KGS provides inspiration for the navigation model, but this sketch does not require compatibility with KGS accounts, protocols, clients, or server internals."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{People and systems}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The primary participant is a signed-in person who wants to browse chat rooms, find or observe games, play Go, and converse with other participants. A game seat may instead be controlled by a server-supported bot. People and bots are both game participants for the purposes of turn order and team membership."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The server maintains identities, sessions, rooms, games, board state, clocks, team membership, participant graveyards, and chat history. Connected clients present server-authoritative state and submit participant actions."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Primary navigation}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "After a successful login, a person sees the available chat rooms. Entering a room displays the room conversation and the games associated with that room. Entering a game displays its board, participants, teams, move deadline, current turn, game status, and game-specific chat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The intended hierarchy is:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{enumerate}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item authenticate;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item browse and enter a chat room;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item inspect the games associated with that room;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item enter a game as a player or observer; and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item play or observe while using the game chat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{enumerate}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Room chat and game chat are separate conversations. A message sent to one is not implicitly copied to the other."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Initial game format}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The first supported format has the following fixed profile:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item an \\(11\\times 11\\) Go board;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item four participant seats;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item sequential turns;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item a ten-second deadline for each move;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item each seat configurable as either a person or a bot; and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item each participant initially occupying a distinct team."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The server is authoritative for legal moves, turn order, deadlines, captures, repetition rules, team membership, graveyard contents, and the final result. Clients must not resolve conflicting game actions locally."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "When a stone is placed, the server first examines its orthogonally adjacent groups. Every adjacent group that has no remaining liberties is removed before the server evaluates the placed stone for suicide. This ordering permits an otherwise surrounded placement to survive when it first captures neighboring stones and thereby gains liberties."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "If no neighboring group is removed and the placed stone's connected same-owner group has no liberties, the move is a permitted suicide move. The server removes the newly placed stone and its entire connected same-owner group. This permits multiplayer tactics in which a participant removes their own group to help an allied participant form eyes. Every self-removed stone is placed in its owner's graveyard, just like a stone removed by another participant."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Teams and alliances}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Every participant begins the game as the sole member of a separate team. Participants may subsequently join together so that multiple participants belong to one team. A team therefore represents an alliance of one or more seats rather than a single shared seat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A team merge changes cooperation and scoring without removing a participant's seat or turn. Each participant continues to place stones during that participant's assigned turns. Existing stones remain on the board when teams merge."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "For each participant, the server maintains a graveyard containing that participant's stones that have been removed from play. When, for example, White captures a Black stone, the removed stone is given to the Black participant's graveyard rather than credited to White. A stone removed by its owner's suicide is likewise placed in that owner's graveyard. Removal therefore does not directly award points to another participant."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A team's score is its total territory minus its total losses. Total losses are the number of removed stones in the graveyards of the team's members. Equivalently, if \\(A_T\\) is the territory attributed to team \\(T\\) and \\(G_T\\) is the combined number of stones in its members' graveyards, then"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\["
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  S_T = A_T - G_T."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "This makes the result express territory gained at the cost of stones lost. The approval, timing, and reversibility of a team merge remain requirements decisions."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Bots}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Each of the four seats can be assigned independently to a person or bot. This permits any mixture from four people to four bots. Computer-controlled seats use Monte Carlo tree search executed by the server. Clients do not run the authoritative bot search or submit bot-selected moves on behalf of a bot seat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A bot is subject to the same legal-move checks and ten-second move deadline as a person. Its server-side search must stop when its turn expires, and a result that arrives after the authoritative deadline must not advance the game. Bot failures must not give the bot permission to bypass the clock, acquire privileges unavailable to its assigned seat, or submit moves after its turn has ended. The implementation must bound and isolate bot computation so that one search cannot exhaust resources needed by unrelated games."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Chat}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A participant can converse in a room without entering a game. Every game also has a dedicated chat visible to people who have entered that game, subject to the eventual observer and moderation policy. Bot participation in chat is not required by the initial sketch."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Representative scenarios}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Find and enter a game}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A person logs in, sees the room list, enters a room, and receives the current room conversation and game list. The person selects a game and receives its board, participants, teams, clock state, graveyard counts, and game chat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Play a timed move}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "When a participant's turn begins, the server starts a ten-second deadline. The participant submits a board coordinate. The server accepts the move only if the participant controls the active seat, the turn is still current, the deadline has not expired, and the move is legal. The accepted state is then distributed to everyone viewing the game."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Capture neighboring groups}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A participant places a stone next to one or more groups that have lost their final liberty. The server removes all such neighboring groups before evaluating whether the newly placed stone's group has liberties. Each removed stone is placed in the graveyard of the participant who owned it. No capture point is awarded to the participant who placed the stone."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Play a suicide move}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A participant places a stone that does not remove any neighboring group, and the placed stone's connected same-owner group is left without liberties. The server treats the move as a permitted suicide and removes the placed stone together with its entire connected same-owner group. Every self-removed stone is placed in its owner's graveyard and therefore contributes to that owner's losses."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Fill a seat with a bot}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A game is configured with one or more bot-controlled seats. When a bot-controlled turn begins, the server runs that bot's Monte Carlo tree search within server-controlled execution. The search operates under the same ten-second deadline and move-legality constraints as a human-controlled seat. Only a result selected before the authoritative deadline may be submitted for the current turn."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Form an alliance}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Participants who began on separate teams request to become members of the same team. The server applies the selected merge policy, records the resulting membership, and distributes the updated team state to all viewers. Existing stones remain on the board. The resulting team's loss total includes the graveyards of all its members."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Score a team}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "At the end of a game, the server totals the territory attributed to a team and the removed stones held in its members' graveyards. It subtracts the graveyard total from the territory total and reports the resulting team score. Captures and suicides affect scoring only as losses borne by the owners of the removed stones."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\subsection{Chat inside a game}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A person viewing a game sends a message to the game chat. The server associates the message with that game and distributes it to authorized game viewers without adding it to the containing room's chat."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{Requirements argument}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Observable scope}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The candidate first-release requirements will cover authentication, room discovery, room entry, room chat, room-associated game discovery, game entry, game chat, four-seat game setup, human and bot seats, server-executed bot search, server-authoritative timed turns, multiplayer Go rules, participant graveyards, team merges, scoring, reconnect behavior, and observable error responses."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Account registration, moderation administration, persistent ratings, tournaments, KGS protocol compatibility, and sophisticated bot strategy beyond the required server-side Monte Carlo tree search are not yet part of the committed first-release scope."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Proposed safety and consistency invariants}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The requirements should preserve the following positive invariant: every externally visible room, chat, game, move, clock, capture, graveyard, score, and team transition is authorized for the acting identity and derived from one unambiguous server-authoritative state."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Candidate forbidden behaviors include accepting a move from the wrong seat, accepting more than one move for a turn, accepting a move after its deadline, resolving suicide before neighboring captures, removing less or more than the entire connected same-owner group during suicide, crediting a removed stone to another participant, placing a removed stone in the wrong owner's graveyard, allowing a client to manufacture team membership or graveyard contents, accepting a client-supplied move as the output of a server-controlled bot, leaking private session credentials into chat or logs, crossing room or game boundaries through an identifier substitution, letting a bot acquire privileges unavailable to its assigned seat, and allowing one bot search to consume unbounded server resources."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "These statements are design candidates rather than accepted requirements until represented by the typed project specification and explicitly accepted."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Resolved capture and suicide ordering}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "After a stone is placed, adjacent groups without liberties are removed first. Only if no neighboring group is removed does the server evaluate the placement as suicide. Thus a placement that captures a neighboring group can gain the liberties created by that removal and remain on the board."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Suicide is permitted as a multiplayer tactic, including to help an ally form eyes. If the placed stone's connected same-owner group has no liberties, the server removes the placed stone and that entire connected group. All self-removed stones enter their respective owners' graveyards and count as losses in exactly the same way as stones removed by another participant."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Resolved scoring direction}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A removed stone is assigned to the graveyard of the participant who owned it. It counts as one loss for that participant and is not a positive capture point for another participant."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A team's final score is its total territory minus the combined number of stones in its members' graveyards. Graveyard ownership remains attached to the participant, allowing team losses to be recomputed from authoritative participant records after a team merge. The typed specification must still define how territory is identified and attributed."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Resolved bot execution direction}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Computer-player Monte Carlo tree search runs on the server rather than in a connected client. The authoritative game clock bounds the search, and a late search result cannot advance an expired or superseded turn. The implementation mapping must define resource bounds and execution isolation for simultaneous searches without changing the observable ten-second deadline."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Recovered ko and repetition behavior}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The supplied N-Player Go Lab JavaScript provides concrete provenance for the intended ko behavior. Its user-facing description calls the rule ``simple ko plus positional superko,'' but its state comparison includes both the board and the participant to move. The standard description of the implemented rule is therefore \\emph{situational superko}, not positional superko."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The candidate first-release baseline is as follows:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item the ko rule is enabled by default for a two-participant game and disabled by default for a game with three or more participants;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item when enabled, a qualifying single-stone capture establishes a simple-ko restriction that prevents the owner of the captured stone from immediately recapturing at that point on that participant's next turn;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item after every proposed stone placement, the resulting board together with the next participant to move must differ from every earlier such state on the current game line;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item passes, deadline expirations, and resignations are not rejected merely because they leave or recreate a repeated state; and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item independently of repetition, a game is capped at \\(3N^2\\) moves for an \\(N\\times N\\) board."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The prototype represents a repetition state with a 32-bit Zobrist board hash combined with a token for the next participant. That representation is useful evidence of semantics but is not sufficient as the sole authoritative equality test because a hash collision could reject a legal position as repeated. The production requirement should demand collision-safe comparison, such as an exact canonical state representation or a digest backed by exact equality when hashes match."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The repetition check applies to actual game-tree branches and is mirrored inside Monte Carlo tree search: a searched stone placement is skipped when its resulting board-and-next-participant state occurs in the real game history or in the current search path. This search behavior is advisory; the authoritative game transition must independently enforce the same observable rule."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\section{Open rules decisions}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The remaining core multiplayer rules still need durable answers for:"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item whether the ko rule is fixed for the first-release four-participant format or configurable when a game is created;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item whether an expired deadline causes an automatic pass, forfeits the seat, or has another result;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item how territory is identified and attributed among participants and teams;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item when team merges are allowed, who must approve them, and whether they are reversible;"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item whether observers may use game chat; and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "  \\item what reconnect grace, if any, exists within a ten-second turn."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{itemize}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{Implementation argument}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Implementation is blocked until the observable behavior is encoded as a typed LeanFM requirement specification, checked, and explicitly accepted, followed by a checked and explicitly accepted implementation mapping."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Once those gates are satisfied, the implementation argument must map authentication, authorization, room isolation, game isolation, clocks, turn serialization, legal-move validation, ordered capture and suicide processing, graveyard attribution, collision-safe situational-superko validation, team transitions, server-side Monte Carlo tree search, bot resource isolation, persistence, chat delivery, and scoring attribution to concrete controls and tests. In particular, concurrent move and timeout processing must have a single atomic winner so that a deadline and a move cannot both advance the same turn. A bot result must additionally be bound to its game, seat, turn revision, and deadline so that a delayed or confused result cannot be applied to another turn. A placement, all neighboring removals, any resulting connected-group suicide removal, repetition validation, and all corresponding board, graveyard, and score-relevant changes must be committed as one authoritative transition."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{Current reduced server-only scope}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The operator explicitly selected formalization and checking of the reduced"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "basic-server slice in question \\texttt{basic\\_server\\_requirements\\_gate}."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The current requirements cover room discovery and entry, room game/challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "listings, named open challenge creation, watch/join navigation, room chat and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "per-game chat. A game is currently a navigable chat container. Earlier chapters'"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Go boards, move rules, bots, clocks, teams and scoring remain future roadmap"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "material and are not obligations of this first server-only requirements gate."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Existing server-issued sessions identify callers. Joining a room or game"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "establishes its chat membership; sender identity and timestamps come from the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "server. Chat is never implicitly copied across room/game boundaries. The draft"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "adds request correlation and explicit rejection branches without choosing an"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "implementation runtime or HTTP transport. Watch/join confers no Go move or seat"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "authority in this slice. Account registration is not added."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Proposed reversible bounds are 128 characters for names, 4000 for chat text and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "the latest 100 chat entries per conversation. The retained 100-person population"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "is a capacity forecast, not measured performance. Rejected or overloaded actions"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "must not mutate state or disclose private identities or credentials. Replay and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "concurrency controls, connection limits, persistence and negative tests must be"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "realized in the separate implementation mapping after requirements acceptance."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Canonical candidates are \\path{spec/Requirements.lean} and"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\path{spec/Requirements.proto}. Checked task views are generated from that same"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "specification into \\path{spec/tasks.json}; the task catalog contains one"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "interaction diagram and state machine for each scoped operation. No human gate"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "is accepted by compilation or by preparing these files."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\chapter{Room creation and working browser revision}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\label{ch:rooms-browser}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The October 25 request asks for working room creation and room-scoped game"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "challenges, with placeholder links removed. This candidate extends the previous"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "accepted seven-task server slice with \\texttt{create\\_room}. A room name is a"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "trimmed, case-sensitive, public display identifier of 1--128 Unicode characters."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "A valid local session may create it; duplicate names and the 16-room bound"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "reject without mutation. The creator subsequently enters it with"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\texttt{EnterRoom}. Challenge results and listings retain their entered name."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "All state remains in memory and resets on restart. Gameplay remains deferred."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The positive invariant is that each displayed room, challenge and chat result"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "comes from an authorized server operation in its selected scope. Forbidden"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "outcomes include duplicate mutations on retry or concurrent admission, room or"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "game chat disclosure outside membership, executable user text, stale responses"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "replacing another room's content, exposed tokens, and navigation to fabricated"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "destinations. The proposed controls and negative checks are cataloged in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\path{reports/rooms-browser-review/review.md}. They are obligations for the"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "separate implementation review, not claims of completed source changes."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "The current typed requirements generate interaction and state-machine views in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\path{spec/tasks.json}; extracted views and their exact provenance appear in"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\path{reports/rooms-browser-review/}. This revision requires explicit"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "requirements acceptance followed by acceptance of its implementation mapping."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Earlier protected gate snapshots remain evidence only for their earlier input"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "revisions. Billing failure of the attempted Anthropic request did not accept a"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "gate or implement this feature."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateRoom; checking to accepted: RoomCreated; checking to rejected: RequestRejected}}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_room.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\EndAccSupp{}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{Create a named chat room: state transitions generated from the current typed task.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\begin{figure}[ht]"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\centering"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\BeginAccSupp{method=escape,ActualText={ready to checking: CreateGame; checking to accepted: GameCreated; checking to rejected: RequestRejected}}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\includegraphics[width=\\textwidth]{../reports/rooms-browser-review/create_game.state.pdf}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\EndAccSupp{}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\caption{Create a named room game or challenge: state transitions generated from the current typed task.}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{figure}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\\end{document}"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "\n"
+    }
+  ]
+}

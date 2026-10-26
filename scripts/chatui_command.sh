@@ -23,6 +23,11 @@ case "$operation" in
     installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
     exec timeout 10 python3 "$installation_root/scripts/chatui_workspace.py" "${operation#workspace-}" "$@"
     ;;
+  application-start|application-status|application-stop|application-open|application-proxy)
+    test "$#" -eq 1
+    installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
+    exec timeout 100 python3 "$installation_root/scripts/chatui_application.py" "${operation#application-}" "$1"
+    ;;
   runtime-status)
     test "$#" -eq 1
     installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
@@ -51,7 +56,7 @@ case "$operation" in
     installation_root="$(dirname "$(dirname "$(readlink -f -- "${BASH_SOURCE[0]}")")")"
     exec python3 "$installation_root/scripts/chatui_patch.py" "$operation" "$1"
     ;;
-  check-build|check-check|check-book|check-http|check-go|check-runtime)
+  check-build|check-check|check-book|check-http|check-go|check-runtime|check-test)
     test "$#" -eq 1
     target="${operation#check-}"
     if [[ "$target" == http ]]; then target=http-check; fi

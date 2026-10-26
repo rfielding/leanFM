@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: ApplicationStartRequested
+    checking --> ApplicationReady: ApplicationReady
+    checking --> ApplicationLaunchRejected: ApplicationLaunchRejected
+    ApplicationReady --> [*]
+    ApplicationLaunchRejected --> [*]

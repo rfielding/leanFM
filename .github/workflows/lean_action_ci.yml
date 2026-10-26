@@ -14,7 +14,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ripgrep texlive-latex-base texlive-latex-recommended protobuf-compiler
+          sudo apt-get install --yes bubblewrap ripgrep texlive-latex-base texlive-latex-recommended protobuf-compiler
           rg --version
       - uses: actions/setup-python@v6
         with:
@@ -35,6 +35,9 @@ jobs:
             echo 'Runtime account data must not be committed.' >&2
             exit 1
           fi
+      - name: Verify required sandbox support
+        run: python3 scripts/chatui_sandbox_check.py
       - uses: leanprover/lean-action@v1
       - run: cp book/main-dark.pdf book/main.pdf
-      - run: make chatui-check
+      - name: Run required ChatUI checks
+        run: make chatui-check

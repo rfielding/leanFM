@@ -1,13 +1,19 @@
+-- Stale idle/terminal status cannot replace progress for the active turn.
+-- Named composer and book source controls support keyboard and accessibility snapshots.
+-- Native app chat links are scoped to the project and report no provider spend.
+-- Refs: leanfm.application_launch; embed native lifecycle controls and preview links.
 namespace LeanFM.ChatUI.Web
 
 def css : String := include_str "../../assets/chatui.css"
 def javascript : String := include_str "../../assets/chatui.js"
+def mermaidJavascript : String := include_str "../../assets/vendor/mermaid.min.js"
+
 def reactJavascript : String := include_str "../../ui/dist/react-app.js"
 
 def reactPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" ++
   "<meta name=\"color-scheme\" content=\"dark only\"><title>LeanFM</title><link rel=\"stylesheet\" href=\"/assets/chatui-react1.css\"></head>" ++
-  "<body><div id=\"root\"></div><script src=\"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js\"></script>" ++
+  "<body><div id=\"root\"></div><script src=\"/assets/mermaid.min.js\"></script>" ++
   "<script src=\"/assets/chatui-react1.js\"></script></body></html>"
 
 def page : String :=
@@ -28,6 +34,6 @@ def page : String :=
   "<form id=\"loginForm\"><label>Username<input name=\"username\" autocomplete=\"username\" required></label><label>Password<input name=\"password\" type=\"password\" autocomplete=\"current-password\" required></label><button class=\"primary\">Log in</button></form>" ++
   "<form id=\"registerForm\" class=\"hidden\"><label>Username<input name=\"username\" autocomplete=\"username\" required></label><label>Password<input name=\"password\" type=\"password\" minlength=\"8\" autocomplete=\"new-password\" required></label><label>Provider<select name=\"provider\"><option value=\"openai\">OpenAI</option></select></label><label>API key<input name=\"api_key\" type=\"password\" autocomplete=\"off\" required></label><button class=\"primary\">Create account</button></form><div id=\"authError\" class=\"error\"></div></div></section>" ++
   "<dialog id=\"projectDialog\"><form id=\"projectForm\" method=\"dialog\"><h2>Create a project</h2><label>Project name<input name=\"display_name\" required autofocus></label><div class=\"error\" id=\"projectError\"></div><button class=\"primary\">Create project</button></form></dialog>" ++
-  "<script src=\"https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js\"></script><script src=\"/assets/chatui-20261017i.js\"></script></body></html>"
+  "<script src=\"/assets/mermaid.min.js\"></script><script src=\"/assets/chatui-20261017i.js\"></script></body></html>"
 
 end LeanFM.ChatUI.Web

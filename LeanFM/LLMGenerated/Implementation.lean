@@ -1,3 +1,4 @@
+import LeanFM.LLMGenerated.ApplicationLaunchImplementation
 import LeanFM.LLMGenerated.ResumableWorkImplementation
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.ChatUI.Implementation
@@ -141,3 +142,7 @@ end LeanFM.LLMGenerated.Implementation
 /-- Separately accepted resumable-work mappings, preserved at the canonical entry point. -/
 def LeanFM.LLMGenerated.Implementation.resumableWorkDecisions :=
   LeanFM.LLMGenerated.ResumableWorkImplementation.decisions
+
+/-- Candidate realization; the separate explicit implementation gate remains pending. -/
+def LeanFM.LLMGenerated.Implementation.applicationLaunchImplementationProposal : LeanFM.ImplementationSpec :=
+  LeanFM.LLMGenerated.ApplicationLaunchImplementation.implementation

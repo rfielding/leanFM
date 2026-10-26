@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import socket
+import sys
 import tempfile
 import unittest
 
@@ -72,6 +73,18 @@ class Specification(unittest.TestCase):
         self.assertEqual(result.returncode, 78, result.stdout + result.stderr)
         self.assertIn("local_checker_unavailable", result.stderr)
         self.assertIn("exit_code=134", result.stderr)
+        self.assertEqual((self.root / "spec/tasks.json").read_bytes(), before)
+
+    def test_missing_bubblewrap_is_actionable_and_preserves_last_good_views(self):
+        self.run_check()
+        before = (self.root / "spec/tasks.json").read_bytes()
+        empty_bin = self.root / "empty-bin"
+        empty_bin.mkdir()
+        result = subprocess.run([sys.executable, str(ROOT / "scripts/chatui_specification.py"), str(self.root), "Fixture.spec"],
+                                cwd=ROOT, env=dict(os.environ, PATH=str(empty_bin)), capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 78, result.stdout + result.stderr)
+        self.assertIn("local_checker_unavailable", result.stderr)
+        self.assertIn("bubblewrap", result.stderr)
         self.assertEqual((self.root / "spec/tasks.json").read_bytes(), before)
 
     def test_compile_proto_and_grammar_failures_preserve_last_good_catalog(self):

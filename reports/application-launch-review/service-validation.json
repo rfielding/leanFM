@@ -1,0 +1,7 @@
+{
+  "status": "running",
+  "pid": 3451492,
+  "url": "http://127.0.0.1:8080/",
+  "health_status": 200,
+  "binary": "/home/rfielding/code/leanFM/.lake/build/bin/leanfm-server"
+}

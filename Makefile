@@ -45,7 +45,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: build validate diagrams mdp-example-check paxos-check video-check selfhost-check
+check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -77,7 +77,7 @@ kerberos-video:
 	$(VIDEO_PYTHON) -m manim -qm --media_dir video/kerberos/media --output_file kerberos.mp4 video/kerberos/scenes.py KerberosVideo
 	ffmpeg -hide_banner -loglevel error -y -i video/kerberos/media/videos/scenes/720p30/kerberos.mp4 -i video/kerberos/narration.wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 160k -shortest video/kerberos/kerberos-narrated.mp4
 
-chatui-check: build
+chatui-check: sandbox-check build
 	python3 scripts/chatui_crypto_test.py
 	python3 scripts/chatui_patch_test.py
 	python3 scripts/chatui_media_test.py
@@ -88,6 +88,9 @@ chatui-check: build
 	python3 scripts/chatui_workspace_test.py
 	python3 scripts/chatui_command_test.py
 	python3 scripts/chatui_runtime_test.py
+	python3 scripts/chatui_application_unit_test.py
+	python3 scripts/check_ui_tour.py
+	lake env lean --run LeanFM/LLMGenerated/ApplicationLaunchTests.lean
 	lake env lean LeanFM/ChatUI/ProviderTests.lean
 	lake env lean LeanFM/ChatUI/HttpRequestTests.lean
 	bash scripts/chatui_http_check.sh
@@ -195,3 +198,16 @@ book-clean:
 
 clean:
 	lake clean
+
+# Persistent lifecycle, browser isolation and observed protobuf trace checks.
+.PHONY: application-check ui-snapshots
+application-check: build
+	python3 scripts/chatui_application_test.py
+ui-snapshots:
+	bash scripts/chatui_ui_snapshots.sh
+
+# These suites share build products; do not clean them under concurrent checks.
+.NOTPARALLEL: check chatui-check
+.PHONY: sandbox-check
+sandbox-check:
+	python3 scripts/chatui_sandbox_check.py

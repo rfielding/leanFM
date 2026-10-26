@@ -1,0 +1,137 @@
+[
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Attach image"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "TEXTAREA",
+      "name": "Message to the project"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "SELECT",
+      "name": "Model for new prompts"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BODY",
+      "name": "Document"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "INPUT",
+      "name": "New project name"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "＋ Add project"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "GoServer"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Delete"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "LeanFMread-only"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "API keys"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Log out"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Decrease font size"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Increase font size"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Project memory"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Enter",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Project memory"
+    }
+  }
+]

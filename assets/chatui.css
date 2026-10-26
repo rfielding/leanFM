@@ -384,3 +384,6 @@ dialog::backdrop { background: #000b; }
   #bookSource, #bookPreview { min-height: 55vh; }
 }
 .specification-review{display:flex;gap:1rem;padding:1rem;border-bottom:1px solid #334155;flex-wrap:wrap}.specification-review article{display:flex;gap:.6rem;align-items:center;flex:1;flex-wrap:wrap}.specification-review span{color:#a9b8ce}.specification-review button{margin-left:auto}
+
+/* Refs: leanfm.application_launch; native verified app lifecycle. */
+.application-controls{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.6rem 1rem;border-bottom:1px solid #3a3a3a;background:#171b18;font-size:.8rem}.application-controls strong{margin-right:.3rem}.application-controls button,.application-controls a{font:inherit;border:1px solid #526653;border-radius:5px;padding:.35rem .65rem;background:#243b2a;color:#f1f6ed;text-decoration:none}.application-controls button:disabled{opacity:.5}.application-controls .error{max-width:65ch;margin:0}

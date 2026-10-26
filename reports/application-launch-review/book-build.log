@@ -1,0 +1,710 @@
+make: Entering directory '/home/rfielding/code/leanFM/book'
+pdflatex -interaction=nonstopmode -halt-on-error main.tex
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./main.tex
+LaTeX2e <2023-11-01> patch level 1
+L3 programming layer <2024-01-22>
+
+(/usr/share/texlive/texmf-dist/tex/latex/latex-lab/documentmetadata-support.ltx
+
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/pdfmanagement-
+testphase.sty (/usr/share/texlive/texmf-dist/tex/latex/tagpdf/tagpdf-base.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/pdfmanagement-
+testphase.ltx)))
+(/usr/share/texlive/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def)
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/l3backend-test
+phase-pdftex.def)
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/pdfmanagement-
+firstaid.sty) (/usr/share/texlive/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2023/05/17 v1.4n Standard LaTeX document class
+(/usr/share/texlive/texmf-dist/tex/latex/base/bk11.clo))
+(/usr/share/texlive/texmf-dist/tex/latex/base/fontenc.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/base/inputenc.sty)
+(/usr/share/texmf/tex/latex/lm/lmodern.sty)
+(/usr/share/texmf/tex/latex/tex-gyre/tgheros.sty
+(/usr/share/texlive/texmf-dist/tex/latex/kvoptions/kvoptions.sty
+(/usr/share/texlive/texmf-dist/tex/latex/graphics/keyval.sty)
+(/usr/share/texlive/texmf-dist/tex/generic/ltxcmds/ltxcmds.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty)))
+(/usr/share/texlive/texmf-dist/tex/latex/geometry/geometry.sty
+(/usr/share/texlive/texmf-dist/tex/generic/iftex/ifvtex.sty
+(/usr/share/texlive/texmf-dist/tex/generic/iftex/iftex.sty)))
+(/usr/share/texlive/texmf-dist/tex/latex/microtype/microtype.sty
+(/usr/share/texlive/texmf-dist/tex/latex/etoolbox/etoolbox.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/microtype/microtype-pdftex.def)
+(/usr/share/texlive/texmf-dist/tex/latex/microtype/microtype.cfg))
+(/usr/share/texlive/texmf-dist/tex/latex/xcolor/xcolor.sty
+(/usr/share/texlive/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/share/texlive/texmf-dist/tex/latex/graphics-def/pdftex.def)
+(/usr/share/texlive/texmf-dist/tex/latex/graphics/mathcolor.ltx))
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/xcolor-patches
+-tmp-ltx.sty) (/usr/share/texlive/texmf-dist/tex/latex/graphics/graphicx.sty
+(/usr/share/texlive/texmf-dist/tex/latex/graphics/graphics.sty
+(/usr/share/texlive/texmf-dist/tex/latex/graphics/trig.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/graphics-cfg/graphics.cfg)))
+(/usr/share/texlive/texmf-dist/tex/latex/tagpdf/tagpdf.sty
+(/usr/share/texlive/texmf-dist/tex/latex/tagpdf/tagpdf-mc-code-generic.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/latex-lab/latex-lab-testphase-new-or-1
+.sty
+Patching header in \@outputpage
+Patching footer in \@outputpage
+Patching \@makecol for tagging
+Patching \@makecol for tagging
+)) (/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+(/usr/share/texlive/texmf-dist/tex/latex/amsmath/amstext.sty
+(/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsgen.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsbsy.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/amsmath/amsopn.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/amsfonts/amssymb.sty
+(/usr/share/texlive/texmf-dist/tex/latex/amsfonts/amsfonts.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/mathtools/mathtools.sty
+(/usr/share/texlive/texmf-dist/tex/latex/tools/calc.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/mathtools/mhsetup.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/booktabs/booktabs.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/tools/longtable.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/enumitem/enumitem.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/listings.sty
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstmisc.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/listings.cfg))
+(/usr/share/texlive/texmf-dist/tex/latex/natbib/natbib.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/imakeidx/imakeidx.sty
+(/usr/share/texlive/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/share/texlive/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/share/texlive/texmf-dist/tex/generic/xkeyval/xkvutils.tex)))
+(/usr/share/texlive/texmf-dist/tex/generic/iftex/ifxetex.sty)
+(/usr/share/texlive/texmf-dist/tex/generic/iftex/ifluatex.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/tools/multicol.sty)
+Patching \page@sofar for tagging
+) (/usr/share/texlive/texmf-dist/tex/latex/pgf/frontendlayer/tikz.sty
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/basiclayer/pgf.sty
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/utilities/pgfrcs.sty
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgfutil-common.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgfutil-latex.def)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgfrcs.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/pgf.revision.tex)))
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/basiclayer/pgfcore.sty
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/systemlayer/pgfsys.sty
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgfsys.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgfkeys.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgfkeyslibraryfiltered
+.code.tex)) (/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgf.cfg)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgfsys-pdftex.def
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgfsys-common-pdf.de
+f)))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgfsyssoftpath.code.
+tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/systemlayer/pgfsysprotocol.code.
+tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcore.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmath.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathutil.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathparser.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.basic.code
+.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.trigonomet
+ric.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.random.cod
+e.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.comparison
+.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.base.code.
+tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.round.code
+.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.misc.code.
+tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.integerari
+thmetics.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathcalc.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmathfloat.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfint.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepoints.code.te
+x)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepathconstruct.
+code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepathusage.code
+.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorescopes.code.te
+x)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoregraphicstate.c
+ode.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoretransformation
+s.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorequick.code.tex
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreobjects.code.t
+ex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepathprocessing
+.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorearrows.code.te
+x)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreshade.code.tex
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreimage.code.tex
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreexternal.code.
+tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorelayers.code.te
+x)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcoretransparency.c
+ode.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepatterns.code.
+tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/basiclayer/pgfcorerdf.code.tex))
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/modules/pgfmoduleshapes.code.tex
+) (/usr/share/texlive/texmf-dist/tex/generic/pgf/modules/pgfmoduleplot.code.tex
+)
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/compatibility/pgfcomp-version-0-65
+.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/compatibility/pgfcomp-version-1-18
+.sty)) (/usr/share/texlive/texmf-dist/tex/latex/pgf/utilities/pgffor.sty
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/utilities/pgfkeys.sty
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgfkeys.code.tex))
+(/usr/share/texlive/texmf-dist/tex/latex/pgf/math/pgfmath.sty
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/math/pgfmath.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/utilities/pgffor.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/tikz.code.tex
+
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/pgflibraryplothandlers
+.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/modules/pgfmodulematrix.code.tex
+)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibrarytopaths.code.tex)))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/pgflibraryarrows.meta.
+code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibraryautomata.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibraryshapes.multipart.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/shapes/pgflibraryshape
+s.multipart.code.tex)))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibrarypositioning.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibraryshapes.geometric.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/shapes/pgflibraryshape
+s.geometric.code.tex))
+(/usr/share/texlive/texmf-dist/tex/latex/pgfplots/pgfplots.sty
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.revision.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotscore.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/sys/pgfplotssysgeneric.code
+.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/libs/pgfplotslibrary.code.t
+ex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/oldpgfcompatib/pgfplotsoldp
+gfsupp_loader.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/pgflibraryfpu.code.tex
+)
+Package pgfplots: loading complementary utilities for your pgf version...
+
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/oldpgfcompatib/pgfplotsoldp
+gfsupp_pgfutil-common-lists.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsutil.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotslists
+tructure.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotslists
+tructureext.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsarray
+.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsmatri
+x.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/numtable/pgfplotstableshare
+d.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsdeque
+.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsbinary.code.te
+x
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsbinary.data.co
+de.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotsutil.verb.code
+.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/libs/pgflibrarypgfplots.sur
+fshading.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/sys/pgflibrarypgfplots.surf
+shading.pgfsys-pdftex.def)))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotscolormap.code.
+tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/util/pgfplotscolor.code.tex
+))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsstackedplots.code.t
+ex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsplothandlers.code.t
+ex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsmeshplothandler.cod
+e.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsmeshplotimage.code.
+tex)))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.scaling.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotscoordprocessing.cod
+e.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code.tex
+) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.markers.code.tex
+) (/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplotsticks.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/pgfplots.paths.code.tex)
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibrarydecorations.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/modules/pgfmoduledecorations.cod
+e.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibrarydecorations.pathmorphing.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/decorations/pgflibrary
+decorations.pathmorphing.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibrarydecorations.pathreplacing.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/decorations/pgflibrary
+decorations.pathreplacing.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgfplots/libs/tikzlibrarypgfplots.co
+ntourlua.code.tex))
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tik
+zlibraryplotmarks.code.tex
+(/usr/share/texlive/texmf-dist/tex/generic/pgf/libraries/pgflibraryplotmarks.co
+de.tex))) (/usr/share/texlive/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/share/texlive/texmf-dist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(/usr/share/texlive/texmf-dist/tex/generic/pdfescape/pdfescape.sty
+(/usr/share/texlive/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty
+(/usr/share/texlive/texmf-dist/tex/generic/infwarerr/infwarerr.sty)))
+(/usr/share/texlive/texmf-dist/tex/latex/hycolor/hycolor.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/auxhook/auxhook.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/share/texlive/texmf-dist/tex/latex/refcount/refcount.sty)
+(/usr/share/texlive/texmf-dist/tex/generic/gettitlestring/gettitlestring.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/share/texlive/texmf-dist/tex/generic/intcalc/intcalc.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/hyperref/puenc.def)
+(/usr/share/texlive/texmf-dist/tex/latex/url/url.sty)
+(/usr/share/texlive/texmf-dist/tex/generic/bitset/bitset.sty
+(/usr/share/texlive/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/base/atbegshi-ltx.sty))
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/hgeneric-testp
+hase.def
+(/usr/share/texlive/texmf-dist/tex/latex/pdfmanagement-testphase/hyperref-color
+schemes.def)) (/usr/share/texlive/texmf-dist/tex/latex/cleveref/cleveref.sty)
+Writing index file main.idx
+(./generated/bakery-stats.tex)
+(/usr/share/texlive/texmf-dist/tex/latex/bookmark/bookmark.sty
+(/usr/share/texlive/texmf-dist/tex/latex/bookmark/bkm-pdftex.def))
+(/usr/share/texmf/tex/latex/tex-gyre/t1qhv.fd) (./main.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+(/usr/share/texlive/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/share/texlive/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
+(/usr/share/texlive/texmf-dist/tex/latex/grfext/grfext.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg))
+Package pgfplots notification 'compat/show suggested version=true': document ha
+s been generated with the most recent feature set (\pgfplotsset{compat=1.18}).
+
+[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texmf/fonts/en
+c/dvips/tex-gyre/q-ec.enc}] (/usr/share/texmf/tex/latex/lm/t1lmtt.fd)
+(/usr/share/texmf/tex/latex/lm/ot1lmr.fd)
+(/usr/share/texlive/texmf-dist/tex/latex/microtype/mt-cmr.cfg)
+(/usr/share/texmf/tex/latex/lm/omllmm.fd)
+(/usr/share/texmf/tex/latex/lm/omslmsy.fd)
+(/usr/share/texmf/tex/latex/lm/omxlmex.fd)
+(/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsa.fd)
+(/usr/share/texlive/texmf-dist/tex/latex/microtype/mt-msa.cfg)
+(/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd)
+(/usr/share/texlive/texmf-dist/tex/latex/microtype/mt-msb.cfg)
+
+LaTeX Warning: Reference `ch:vision' on page i undefined on input line 279.
+
+
+Package natbib Warning: Citation `leanfmrepo' on page i undefined on input line
+ 281.
+
+[1{/usr/share/texmf/fonts/enc/dvips/lm/lm-ec.enc}{/usr/share/texmf/fonts/enc/dv
+ips/lm/lm-mathit.enc}] (./main.toc [2]
+
+LaTeX Font Warning: Font shape `T1/qhv/m/sl' in size <10.95> not available
+(Font)              Font shape `T1/qhv/m/it' tried instead on input line 80.
+
+[3] [4]
+Overfull \hbox (1.21451pt too wide) detected at line 142
+ []\T1/qhv/m/n/10.95 100
+
+Overfull \hbox (1.21451pt too wide) detected at line 143
+ []\T1/qhv/m/n/10.95 101
+
+Overfull \hbox (1.21451pt too wide) detected at line 144
+ []\T1/qhv/m/n/10.95 101
+
+Overfull \hbox (1.21451pt too wide) detected at line 145
+ []\T1/qhv/m/n/10.95 102
+
+Overfull \hbox (1.21451pt too wide) detected at line 146
+ []\T1/qhv/m/n/10.95 103
+
+Overfull \hbox (1.21451pt too wide) detected at line 147
+ []\T1/qhv/m/n/10.95 105
+
+Overfull \hbox (1.21451pt too wide) detected at line 148
+ []\T1/qhv/m/n/10.95 109
+
+Overfull \hbox (1.21451pt too wide) detected at line 149
+ []\T1/qhv/m/n/10.95 112
+
+Overfull \hbox (1.21451pt too wide) detected at line 150
+ []\T1/qhv/m/n/10.95 113
+
+Overfull \hbox (1.21451pt too wide) detected at line 151
+ []\T1/qhv/m/n/10.95 113
+
+Overfull \hbox (1.21451pt too wide) detected at line 152
+ []\T1/qhv/m/n/10.95 113
+
+Overfull \hbox (2.0791pt too wide) detected at line 153
+\T1/qhv/m/n/10.95 14.10 
+
+Overfull \hbox (1.21451pt too wide) detected at line 153
+ []\T1/qhv/m/n/10.95 114
+
+Overfull \hbox (2.0791pt too wide) detected at line 154
+\T1/qhv/m/n/10.95 14.11 
+
+Overfull \hbox (1.21451pt too wide) detected at line 154
+ []\T1/qhv/m/n/10.95 114
+
+Overfull \hbox (2.0791pt too wide) detected at line 155
+\T1/qhv/m/n/10.95 14.12 
+
+Overfull \hbox (1.21451pt too wide) detected at line 155
+ []\T1/qhv/m/n/10.95 115
+
+Overfull \hbox (2.0791pt too wide) detected at line 156
+\T1/qhv/m/n/10.95 14.13 
+
+Overfull \hbox (1.21451pt too wide) detected at line 156
+ []\T1/qhv/m/n/10.95 115
+
+Overfull \hbox (2.0791pt too wide) detected at line 157
+\T1/qhv/m/n/10.95 14.14 
+
+Overfull \hbox (1.21451pt too wide) detected at line 157
+ []\T1/qhv/m/n/10.95 115
+
+Overfull \hbox (2.0791pt too wide) detected at line 158
+\T1/qhv/m/n/10.95 14.15 
+
+Overfull \hbox (1.21451pt too wide) detected at line 158
+ []\T1/qhv/m/n/10.95 116
+
+Overfull \hbox (2.0791pt too wide) detected at line 159
+\T1/qhv/m/n/10.95 14.16 
+
+Overfull \hbox (1.21451pt too wide) detected at line 159
+ []\T1/qhv/m/n/10.95 116
+
+Overfull \hbox (2.0791pt too wide) detected at line 160
+\T1/qhv/m/n/10.95 14.17 
+
+Overfull \hbox (1.21451pt too wide) detected at line 160
+ []\T1/qhv/m/n/10.95 117
+
+Overfull \hbox (2.0791pt too wide) detected at line 161
+\T1/qhv/m/n/10.95 14.18 
+
+Overfull \hbox (1.21451pt too wide) detected at line 161
+ []\T1/qhv/m/n/10.95 117
+
+Overfull \hbox (2.0791pt too wide) detected at line 162
+\T1/qhv/m/n/10.95 14.19 
+
+Overfull \hbox (1.21451pt too wide) detected at line 162
+ []\T1/qhv/m/n/10.95 117
+
+Overfull \hbox (2.0791pt too wide) detected at line 163
+\T1/qhv/m/n/10.95 14.20 
+
+Overfull \hbox (1.21451pt too wide) detected at line 163
+ []\T1/qhv/m/n/10.95 118
+[5]
+Overfull \hbox (1.21451pt too wide) detected at line 165
+ []\T1/qhv/m/n/10.95 119
+
+Overfull \hbox (1.21451pt too wide) detected at line 166
+ []\T1/qhv/m/n/10.95 120
+
+Overfull \hbox (1.21451pt too wide) detected at line 167
+ []\T1/qhv/m/n/10.95 120
+
+Overfull \hbox (1.21451pt too wide) detected at line 168
+ []\T1/qhv/m/n/10.95 120
+
+Overfull \hbox (1.21451pt too wide) detected at line 169
+ []\T1/qhv/m/n/10.95 121
+
+Overfull \hbox (1.21451pt too wide) detected at line 170
+ []\T1/qhv/m/n/10.95 121
+
+Overfull \hbox (1.21451pt too wide) detected at line 171
+ []\T1/qhv/m/n/10.95 123
+) [6] [1] (./chapters/vision.tex
+Chapter 1.
+
+Package natbib Warning: Citation `lamport2002specifying' on page 2 undefined on
+ input line 43.
+
+[2] (./examples/tla/OrderQueue.tla) (./examples/tla/OrderQueue.tla) [3]
+(./generated/tla-state-space.tex) (./examples/tla/MessageFirst.proposed
+[4{/usr/share/texmf/fonts/enc/dvips/lm/lm-rm.enc}])
+
+LaTeX Warning: Reference `ch:grammar' on page 5 undefined on input line 123.
+
+
+Overfull \hbox (0.80894pt too wide) in paragraph at lines 118--126
+[]\T1/qhv/m/n/10.95 (-20) Read \T1/lmtt/m/n/10.95 alice:bob ! placeOrder \T1/qh
+v/m/n/10.95 (-20) as ``Al-ice sends place-Order to Bob,'' and \T1/lmtt/m/n/10.9
+5 bob ? placeOrder
+
+LaTeX Warning: Reference `ch:grammar' on page 5 undefined on input line 140.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 158--159
+[]\T1/qhv/m/n/10.95 (+20) decoded pro-duc-tion event
+[5]
+
+LaTeX Warning: Reference `ch:bootstrap-contract' on page 6 undefined on input l
+ine 170.
+
+
+Package natbib Warning: Citation `richards2017logic' on page 6 undefined on inp
+ut line 193.
+
+
+Package natbib Warning: Citation `gensler2017introduction' on page 6 undefined 
+on input line 196.
+
+
+Package natbib Warning: Citation `ryan2001modelling' on page 6 undefined on inp
+ut line 199.
+
+
+Package natbib Warning: Citation `clarke1986automatic' on page 6 undefined on i
+nput line 204.
+
+[6]) [7] (./chapters/events.tex
+Chapter 2.
+[8] (./generated/nested-race.tex) [9] [10{/usr/share/texmf/fonts/enc/dvips/lm/l
+m-mathsy.enc}] [11] [12] [13{/usr/share/texmf/fonts/enc/dvips/lm/lm-mathex.enc}
+]
+
+LaTeX Warning: Reference `ch:scenarios' on page 14 undefined on input line 398.
+
+
+)
+Overfull \hbox (22.43704pt too wide) in paragraph at lines 402--288
+\T1/qhv/m/n/10.95 (-20) A gen-er-ated sce-nario is not com-plete un-til it can 
+cross the byte bound-ary in both di-rec-tions. \T1/lmtt/m/n/10.95 ScenarioEvent
+
+[14] [15] (./chapters/scenarios.tex
+Chapter 3.
+(/usr/share/texmf/tex/latex/tex-gyre/ts1qhv.fd)
+
+LaTeX Warning: Reference `ch:events' on page 16 undefined on input line 11.
+
+) [16{/usr/share/texmf/fonts/enc/dvips/tex-gyre/q-ts1.enc}] [17]
+(./chapters/bakery-example.tex
+Chapter 4.
+
+Overfull \hbox (47.97617pt too wide) in paragraph at lines 7--14
+\T1/qhv/m/n/10.95 (-20) checked-in stream is a re-pro-ducible syn-thetic pop-u-
+la-tion gen-er-ated by \T1/lmtt/m/n/10.95 scripts/generate_bakery_events.py
+(./generated/bakery-flow.tex) [18]
+Overfull \hbox (4.0613pt too wide) in paragraph at lines 109--110
+ [][] 
+
+Overfull \hbox (1.8792pt too wide) in paragraph at lines 121--122
+ [][] 
+[19] [20] (/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang1.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang2.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang3.sty)
+(./examples/bakery-generated.go)) [21] (./chapters/grammar.tex
+Chapter 5.
+[22] (./generated/oauth-granted-interaction.tex)
+(./generated/oauth-denied-interaction.tex) [23] [24]
+
+LaTeX Warning: Reference `ch:oauth-example' on page 25 undefined on input line 
+127.
+
+[25]) [26] (./chapters/authoring-language.tex
+Chapter 6.
+
+LaTeX Warning: Reference `ch:scenarios' on page 27 undefined on input line 55.
+
+
+LaTeX Warning: Reference `ch:grammar' on page 27 undefined on input line 56.
+
+[27]
+
+LaTeX Warning: Reference `ch:grammar' on page 28 undefined on input line 61.
+
+(./generated/stochastic-user-interaction.tex)
+(./generated/stochastic-user-states.tex) [28]
+(./generated/stochastic-user-outcomes.tex) [29]
+
+LaTeX Warning: Reference `ch:grammar' on page 30 undefined on input line 131.
+
+
+LaTeX Warning: Reference `ch:events' on page 30 undefined on input line 147.
+
+[30]
+
+Package natbib Warning: Citation `gunther2007guerrilla' on page 31 undefined on
+ input line 207.
+
+[31]
+
+LaTeX Warning: Reference `fig:usl-regimes' on page 32 undefined on input line 2
+50.
+
+
+Package natbib Warning: Citation `menasce2004performance' on page 32 undefined 
+on input line 320.
+
+[32]
+
+LaTeX Warning: Reference `ch:grammar' on page 33 undefined on input line 328.
+
+[33] [34]
+Overfull \hbox (26.5498pt too wide) in paragraph at lines 434--444
+[]\T1/qhv/m/n/10.95 (-20) The de-tec-tor may emit de-rived ob-ser-va-tions such
+ as \T1/lmtt/m/n/10.95 AvailabilityLost \T1/qhv/m/n/10.95 (-20) and \T1/lmtt/m/
+n/10.95 AvailabilityRestored\T1/qhv/m/n/10.95 (-20) ,
+(./generated/runtime-actor-network.tex) [35]
+Overfull \hbox (13.55652pt too wide) in paragraph at lines 467--471
+\T1/qhv/b/n/10.95 (-20) Actor topol-ogy for a tar-geted doc-u-ment write. \T1/q
+hv/m/n/10.95 (-20) Gen-er-ated from \T1/lmtt/m/n/10.95 RuntimeReliabilityDiagra
+m.lean\T1/qhv/m/n/10.95 (-20) ,
+[36] [37]
+Overfull \hbox (3.11205pt too wide) in paragraph at lines 591--598
+[]\T1/qhv/m/n/10.95 (-20) The gen-er-ated ar-ti-fact \T1/lmtt/m/n/10.95 paxos-q
+uorum-shutdown-network.svg \T1/qhv/m/n/10.95 (-20) gives a con-crete majority-s
+ervice
+[38] [39]
+
+LaTeX Warning: Reference `ch:events' on page 40 undefined on input line 712.
+
+[40]
+
+LaTeX Warning: Reference `ch:grammar' on page 41 undefined on input line 736.
+
+) [41] (./chapters/web-server.tex
+Chapter 7.
+
+LaTeX Warning: Reference `ch:vision' on page 42 undefined on input line 8.
+
+[42]
+
+LaTeX Warning: Reference `sec:one-project-directory' on page 43 undefined on in
+put line 64.
+
+
+LaTeX Warning: Reference `ch:bootstrap-contract' on page 43 undefined on input 
+line 65.
+
+
+LaTeX Warning: Reference `sec:acceptance-gates' on page 43 undefined on input l
+ine 70.
+
+[43]
+
+LaTeX Warning: Reference `ch:bootstrap-contract' on page 44 undefined on input 
+line 125.
+
+(./generated/mcp-interaction.tex)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang1.sty)
+(/usr/share/texlive/texmf-dist/tex/latex/listings/lstlang1.sty) [44] [45]
+[46] [47]
+
+LaTeX Warning: Reference `sec:acceptance-gates' on page 48 undefined on input l
+ine 313.
+
+[48] [49]
+
+LaTeX Warning: Reference `ch:feature-discipline' on page 50 undefined on input 
+line 436.
+
+
+Overfull \hbox (9.08656pt too wide) in paragraph at lines 450--453
+[]\T1/lmtt/m/n/10.95 i want to understand what MCP looks like. make me an anima
+tion that i
+
+Overfull \hbox (9.08656pt too wide) in paragraph at lines 450--453
+\T1/lmtt/m/n/10.95 can step forwrd or back in, showing messages passing back an
+d forth in
+
+LaTeX Warning: Reference `fig:mcp-interaction' on page 1 undefined on input lin
+e 467.
+
+[50] [51]
+Overfull \hbox (5.31169pt too wide) in paragraph at lines 614--623
+\T1/qhv/m/n/10.95 (-20) API key. A project may com-mit \T1/lmtt/m/n/10.95 .curs
+or/mcp.json \T1/qhv/m/n/10.95 (-20) with the lo-cal URL \T1/lmtt/m/n/10.95 http
+://127.0.0.1:8080/mcp\T1/qhv/m/n/10.95 (-20) .
+[52] [53]
+
+LaTeX Warning: Reference `ch:bootstrap-contract' on page 54 undefined on input 
+line 692.
+
+
+Overfull \hbox (93.25386pt too wide) in paragraph at lines 691--701
+\T1/qhv/m/n/10.95 (-20) map-ping. \T1/lmtt/m/n/10.95 LeanFM.ChatUI.Store.create
+Project \T1/qhv/m/n/10.95 (-20) cre-ates shared roots un-der \T1/lmtt/m/n/10.95
+ projects/<readable-project-name>\T1/qhv/m/n/10.95 (-20) ,
+
+LaTeX Warning: Reference `ch:events' on page 54 undefined on input line 706.
+
+
+LaTeX Warning: Reference `ch:grammar' on page 54 undefined on input line 708.
+
+
+LaTeX Warning: Reference `ch:authoring-language' on page 54 undefined on input 
+line 709.
+
+
+LaTeX Warning: Reference `ch:bootstrap-contract' on page 54 undefined on input 
+line 730.
+
+
+Overfull \hbox (6.45195pt too wide) in paragraph at lines 736--742
+\T1/lmtt/m/n/10.95 outOfBoxArtifacts \T1/qhv/m/n/10.95 (-20) in \T1/lmtt/m/n/10
+.95 LeanFM/Characterization.lean\T1/qhv/m/n/10.95 (-20) ; \T1/lmtt/m/n/10.95 ba
+selineDerivedProperties \T1/qhv/m/n/10.95 (-20) records
+[54]
+
+LaTeX Warning: Reference `ch:events' on page 55 undefined on input line 745.
+
+
+LaTeX Warning: Reference `ch:vision' on page 55 undefined on input line 795.
+
+[55]
+
+LaTeX Warning: Reference `ch:bootstrap-contract' on page 56 undefined on input 
+line 816.
+
+
+LaTeX Warning: Reference `ch:scenarios' on page 56 undefined on input line 816.
+
+
+
+LaTeX Warning: Reference `ch:events' on page 56 undefined on input line 816.
+
+
+LaTeX Warning: Reference `ch:feature-discipline' on page 56 undefined on input 
+line 817.
+
+[56]
+! Undefined control sequence.
+l.863 \BeginAccSupp
+                   {method=escape,ActualText={Action available to authorizat...
+!  ==> Fatal error occurred, no output PDF file produced!
+Transcript written on main.log.
+make: *** [Makefile:10: light] Error 1
+make: Leaving directory '/home/rfielding/code/leanFM/book'

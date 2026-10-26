@@ -1,0 +1,12 @@
+digraph start_application {
+rankdir=LR;
+node [shape=box, fontname="Helvetica", fontsize=10];
+edge [fontname="Helvetica", fontsize=9];
+"ready" [label="Action available"];
+"checking" [label="Authorize project and check actual process state"];
+"ApplicationReady" [label="ApplicationReady"];
+"ApplicationLaunchRejected" [label="ApplicationLaunchRejected"];
+"ready" -> "checking" [label="ApplicationStartRequested"];
+"checking" -> "ApplicationReady" [label="ApplicationReady"];
+"checking" -> "ApplicationLaunchRejected" [label="ApplicationLaunchRejected"];
+}

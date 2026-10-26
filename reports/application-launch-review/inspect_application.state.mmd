@@ -1,0 +1,5 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: ApplicationStatusRequested
+    checking --> ApplicationStatusReturned: ApplicationStatusReturned
+    ApplicationStatusReturned --> [*]

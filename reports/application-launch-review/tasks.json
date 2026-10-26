@@ -1,0 +1,496 @@
+{
+  "source": "LeanFM/LLMGenerated/ApplicationLaunch.lean",
+  "validation": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "tasks": [
+    {
+      "id": "start_application",
+      "title": "Start the selected project and publish a verified live app link",
+      "entry": "ready",
+      "terminals": [
+        "ApplicationReady",
+        "ApplicationLaunchRejected"
+      ],
+      "actors": [
+        "UserBrowser",
+        "LeanFMServer"
+      ],
+      "states": [
+        {
+          "id": "ready",
+          "label": "Action available",
+          "group": "browser",
+          "terminal": false
+        },
+        {
+          "id": "checking",
+          "label": "Authorize project and check actual process state",
+          "group": "server",
+          "terminal": false
+        },
+        {
+          "id": "ApplicationReady",
+          "label": "ApplicationReady",
+          "group": "result",
+          "terminal": true
+        },
+        {
+          "id": "ApplicationLaunchRejected",
+          "label": "ApplicationLaunchRejected",
+          "group": "result",
+          "terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "src": "ready",
+          "dst": "checking",
+          "message": "ApplicationStartRequested",
+          "source_actor": "UserBrowser",
+          "destination_actor": "LeanFMServer",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "src": "checking",
+          "dst": "ApplicationReady",
+          "message": "ApplicationReady",
+          "source_actor": "LeanFMServer",
+          "destination_actor": "UserBrowser",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "instance_id",
+              "type": "string"
+            },
+            {
+              "number": 3,
+              "name": "revision",
+              "type": "string"
+            },
+            {
+              "number": 4,
+              "name": "url",
+              "type": "string"
+            },
+            {
+              "number": 5,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "src": "checking",
+          "dst": "ApplicationLaunchRejected",
+          "message": "ApplicationLaunchRejected",
+          "source_actor": "LeanFMServer",
+          "destination_actor": "UserBrowser",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "reason",
+              "type": "string"
+            },
+            {
+              "number": 3,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "grammar": {
+        "kind": "seq",
+        "children": [
+          {
+            "kind": "event",
+            "task": "start_application",
+            "src": "UserBrowser",
+            "dst": "LeanFMServer",
+            "message": "ApplicationStartRequested"
+          },
+          {
+            "kind": "choice",
+            "children": [
+              {
+                "kind": "event",
+                "task": "start_application",
+                "src": "LeanFMServer",
+                "dst": "UserBrowser",
+                "message": "ApplicationReady"
+              },
+              {
+                "kind": "event",
+                "task": "start_application",
+                "src": "LeanFMServer",
+                "dst": "UserBrowser",
+                "message": "ApplicationLaunchRejected"
+              }
+            ]
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "Every app link names a ready owned live instance",
+          "mode": "always",
+          "expression": "An authenticated project owner may launch a project with both current accepted gates and a valid source/ make run contract; only actual readiness and page success for its live source revision publish an Open app link and a chat launch result; the app remains running after the launch request completes",
+          "formula": "AG atom(\"An authenticated project owner may launch a project with both current accepted gates and a valid source/ make run contract; only actual readiness and page success for its live source revision publish an Open app link and a chat launch result; the app remains running after the launch request completes\")",
+          "origin": "Requirements.lean property"
+        },
+        {
+          "name": "Every application supports the same Make targets",
+          "mode": "always",
+          "expression": "Every generated HTTP app provides source/Makefile with build, run, stop, test, check, clean and serve targets. run is foreground; serve aliases run; stop affects only the project-owned app. LeanFM invokes these fixed targets rather than per-app shell commands and reports missing targets as actionable unsupported-contract failures. make check runs the app's actual proportional verification; no unsupported target is claimed successful.",
+          "formula": "AG atom(\"Every generated HTTP app provides source/Makefile with build, run, stop, test, check, clean and serve targets. run is foreground; serve aliases run; stop affects only the project-owned app. LeanFM invokes these fixed targets rather than per-app shell commands and reports missing targets as actionable unsupported-contract failures. make check runs the app's actual proportional verification; no unsupported target is claimed successful.\")",
+          "origin": "Requirements.lean property"
+        }
+      ],
+      "interaction_mermaid": "sequenceDiagram\n    participant UserBrowser\n    participant LeanFMServer\n    UserBrowser->>LeanFMServer: ApplicationStartRequested\n    alt choice 1\n    LeanFMServer->>UserBrowser: ApplicationReady\n    else alternative\n    LeanFMServer->>UserBrowser: ApplicationLaunchRejected\n    end",
+      "state_mermaid": "stateDiagram-v2\n    [*] --> ready\n    ready --> checking: ApplicationStartRequested\n    checking --> ApplicationReady: ApplicationReady\n    checking --> ApplicationLaunchRejected: ApplicationLaunchRejected\n    ApplicationReady --> [*]\n    ApplicationLaunchRejected --> [*]",
+      "constraints": []
+    },
+    {
+      "id": "inspect_application",
+      "title": "Inspect live application state",
+      "entry": "ready",
+      "terminals": [
+        "ApplicationStatusReturned"
+      ],
+      "actors": [
+        "UserBrowser",
+        "LeanFMServer"
+      ],
+      "states": [
+        {
+          "id": "ready",
+          "label": "Action available",
+          "group": "browser",
+          "terminal": false
+        },
+        {
+          "id": "checking",
+          "label": "Authorize project and check actual process state",
+          "group": "server",
+          "terminal": false
+        },
+        {
+          "id": "ApplicationStatusReturned",
+          "label": "ApplicationStatusReturned",
+          "group": "result",
+          "terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "src": "ready",
+          "dst": "checking",
+          "message": "ApplicationStatusRequested",
+          "source_actor": "UserBrowser",
+          "destination_actor": "LeanFMServer",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "src": "checking",
+          "dst": "ApplicationStatusReturned",
+          "message": "ApplicationStatusReturned",
+          "source_actor": "LeanFMServer",
+          "destination_actor": "UserBrowser",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "instance_id",
+              "type": "string"
+            },
+            {
+              "number": 3,
+              "name": "revision",
+              "type": "string"
+            },
+            {
+              "number": 4,
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "number": 5,
+              "name": "url",
+              "type": "string"
+            },
+            {
+              "number": 6,
+              "name": "reason",
+              "type": "string"
+            },
+            {
+              "number": 7,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "grammar": {
+        "kind": "seq",
+        "children": [
+          {
+            "kind": "event",
+            "task": "inspect_application",
+            "src": "UserBrowser",
+            "dst": "LeanFMServer",
+            "message": "ApplicationStatusRequested"
+          },
+          {
+            "kind": "choice",
+            "children": [
+              {
+                "kind": "event",
+                "task": "inspect_application",
+                "src": "LeanFMServer",
+                "dst": "UserBrowser",
+                "message": "ApplicationStatusReturned"
+              }
+            ]
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "Lifecycle remains explicit and project scoped",
+          "mode": "always",
+          "expression": "The UI reports stopped, starting, running, stale or failed from actual owned-process state; repeated Start returns the existing current instance; a changed source revision is visibly stale and requires restart; browser and chat can request start without a paid model call for the launch itself",
+          "formula": "AG atom(\"The UI reports stopped, starting, running, stale or failed from actual owned-process state; repeated Start returns the existing current instance; a changed source revision is visibly stale and requires restart; browser and chat can request start without a paid model call for the launch itself\")",
+          "origin": "Requirements.lean property"
+        }
+      ],
+      "interaction_mermaid": "sequenceDiagram\n    participant UserBrowser\n    participant LeanFMServer\n    UserBrowser->>LeanFMServer: ApplicationStatusRequested\n    alt choice 1\n    LeanFMServer->>UserBrowser: ApplicationStatusReturned\n    end",
+      "state_mermaid": "stateDiagram-v2\n    [*] --> ready\n    ready --> checking: ApplicationStatusRequested\n    checking --> ApplicationStatusReturned: ApplicationStatusReturned\n    ApplicationStatusReturned --> [*]",
+      "constraints": []
+    },
+    {
+      "id": "stop_application",
+      "title": "Stop only this project's application instance",
+      "entry": "ready",
+      "terminals": [
+        "ApplicationStopped",
+        "ApplicationStopRejected"
+      ],
+      "actors": [
+        "UserBrowser",
+        "LeanFMServer"
+      ],
+      "states": [
+        {
+          "id": "ready",
+          "label": "Action available",
+          "group": "browser",
+          "terminal": false
+        },
+        {
+          "id": "checking",
+          "label": "Authorize project and check actual process state",
+          "group": "server",
+          "terminal": false
+        },
+        {
+          "id": "ApplicationStopped",
+          "label": "ApplicationStopped",
+          "group": "result",
+          "terminal": true
+        },
+        {
+          "id": "ApplicationStopRejected",
+          "label": "ApplicationStopRejected",
+          "group": "result",
+          "terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "src": "ready",
+          "dst": "checking",
+          "message": "ApplicationStopRequested",
+          "source_actor": "UserBrowser",
+          "destination_actor": "LeanFMServer",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "instance_id",
+              "type": "string"
+            },
+            {
+              "number": 3,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "src": "checking",
+          "dst": "ApplicationStopped",
+          "message": "ApplicationStopped",
+          "source_actor": "LeanFMServer",
+          "destination_actor": "UserBrowser",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "instance_id",
+              "type": "string"
+            },
+            {
+              "number": 3,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "src": "checking",
+          "dst": "ApplicationStopRejected",
+          "message": "ApplicationStopRejected",
+          "source_actor": "LeanFMServer",
+          "destination_actor": "UserBrowser",
+          "probability": "1/1",
+          "dwell_ms": 0,
+          "fields": [
+            {
+              "number": 1,
+              "name": "project_id",
+              "type": "string"
+            },
+            {
+              "number": 2,
+              "name": "reason",
+              "type": "string"
+            },
+            {
+              "number": 3,
+              "name": "request_id",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "grammar": {
+        "kind": "seq",
+        "children": [
+          {
+            "kind": "event",
+            "task": "stop_application",
+            "src": "UserBrowser",
+            "dst": "LeanFMServer",
+            "message": "ApplicationStopRequested"
+          },
+          {
+            "kind": "choice",
+            "children": [
+              {
+                "kind": "event",
+                "task": "stop_application",
+                "src": "LeanFMServer",
+                "dst": "UserBrowser",
+                "message": "ApplicationStopped"
+              },
+              {
+                "kind": "event",
+                "task": "stop_application",
+                "src": "LeanFMServer",
+                "dst": "UserBrowser",
+                "message": "ApplicationStopRejected"
+              }
+            ]
+          }
+        ]
+      },
+      "properties": [
+        {
+          "name": "Stopping is scoped and idempotent",
+          "mode": "always",
+          "expression": "Stop closes the named owned instance and removes its ready link; repeated Stop is harmless; project deletion and LeanFM shutdown clean up owned runtime children; one instance exists per project and at most four instances exist per server",
+          "formula": "AG atom(\"Stop closes the named owned instance and removes its ready link; repeated Stop is harmless; project deletion and LeanFM shutdown clean up owned runtime children; one instance exists per project and at most four instances exist per server\")",
+          "origin": "Requirements.lean property"
+        }
+      ],
+      "interaction_mermaid": "sequenceDiagram\n    participant UserBrowser\n    participant LeanFMServer\n    UserBrowser->>LeanFMServer: ApplicationStopRequested\n    alt choice 1\n    LeanFMServer->>UserBrowser: ApplicationStopped\n    else alternative\n    LeanFMServer->>UserBrowser: ApplicationStopRejected\n    end",
+      "state_mermaid": "stateDiagram-v2\n    [*] --> ready\n    ready --> checking: ApplicationStopRequested\n    checking --> ApplicationStopped: ApplicationStopped\n    checking --> ApplicationStopRejected: ApplicationStopRejected\n    ApplicationStopped --> [*]\n    ApplicationStopRejected --> [*]",
+      "constraints": []
+    }
+  ],
+  "provenance": {
+    "status": "validated",
+    "acceptance": "pending",
+    "prompt": "I want LeanFM to launch the app being built and post a link; make targets must be supported and uniform for all apps",
+    "question": "Which scoped lifecycle messages and Make contract provide a persistent, verified, browser-reachable app?",
+    "event_source": "LeanFM.LLMGenerated.ApplicationLaunch.requirements",
+    "reducer": "validateRequirementSpec; validateRequirementProtoFile; tasksJson from the same RequirementSpec",
+    "unit": "messages, states and transitions per project lifecycle task",
+    "boundary": "one authenticated project and its owned application instance",
+    "artifacts": {
+      "LeanFM/LLMGenerated/ApplicationLaunch.lean": "c2b6c14a4f3f8b6bdce13f6ed4a2c867bda71ecc84facfa66bf23b4b40304d4f",
+      "LeanFM/LLMGenerated/ApplicationLaunch.proto": "a45a2eae01f14441e7c78fcaffdd6617de51a875c1c6a0674aad91089e87ecd7"
+    }
+  }
+}

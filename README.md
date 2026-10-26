@@ -97,7 +97,9 @@ Common development commands:
 make go-toolchain # install the checksum-pinned Go toolchain under .toolchains/
 make check       # build, evaluate generated requirement validation, and emit diagrams
 make serve       # run the web server on 127.0.0.1:8080
-make chatui-check # deterministic BYOK ChatUI bootstrap and isolation test
+make chatui-check # required BYOK ChatUI, real compiler and sandbox isolation tests
+make sandbox-check # fail early if Bubblewrap/user namespaces are unavailable
+make ui-snapshots # reproduce the screenshot-backed Chat UI guide with a local provider
 make http-check  # validate live server routes after make serve
 make stop        # stop the process listening on PORT, default 8080
 make book        # build the LaTeX book, bibliography, contents, and index
@@ -448,3 +450,19 @@ throughput: 95/900 ~= 0.10
 ```
 
 The graph deliberately excludes private variables. Internal counters, retries, queues, and timers should only appear if they change an actor's observable state, a globally visible message, a probability, or a dwell time.
+
+### Chat UI sandbox dependency
+
+`make check` includes `make chatui-check`. Both require the Linux `bwrap`
+executable (the `bubblewrap` package on Ubuntu/Debian), with working user, PID
+and network namespaces. CI installs it and runs `make sandbox-check` before
+the long suite. A missing or denied sandbox is an environment failure, not a
+reason to skip isolation tests or run executable Lean on the host. A missing
+worker returns `local_checker_unavailable` and preserves the last checked views.
+
+The detailed Chat UI walkthrough, screenshots, and accessibility/keyboard
+records are in `book/chapters/chat-ui-guide.tex` and `book/assets/ui-tour/`.
+The app bar exposes Start/Restart, Stop, and a verified served Open app link.
+Apps share `source/Makefile` targets `build`, `run`, `stop`, `test`, `check`,
+`clean`, and `serve`; `run` is foreground and `serve` aliases it. Use the
+served preview for remote access; the launch smoke test ends its test process.

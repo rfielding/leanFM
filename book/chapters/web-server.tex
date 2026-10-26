@@ -549,11 +549,12 @@ other JavaScript errors.
 
 \subsection{Screenshot-first documentation}
 
-When the scenario runner is available, replace this procedural tour with a
-named capture of the production React DOM using a deterministic provider. Stop
-at a declared event prefix, such as prompt submission, MCP initialization,
-tool discovery, or Source artifacts. Each caption should name the prompt, what
-to notice, and the claim demonstrated.
+Chapter~\ref{ch:chat-ui-guide} provides the detailed user walkthrough and named
+captures of the production React DOM. Its local deterministic provider and
+isolated scenario runner stop at declared boundaries, including prompt
+submission, response rendering, the accepted specification views, Source,
+and a verified persistent app launch. Each caption identifies the control state
+and the claim demonstrated.
 
 A screenshot is useful evidence only when it is reproducible.  Its manifest
 retains the project and requirements revision, scenario and visible event IDs,
@@ -563,10 +564,11 @@ runs with a disposable account and deterministic data, without a provider key,
 external network or arbitrary target URL.  A missing or stale required capture
 fails the book build instead of silently leaving a blank figure.
 
-Use captures selectively: keep formal definitions, security boundaries and
-qualifications in text when an image cannot express them. Until the runner
-produces these artifacts, this describes the intended replacement, not existing
-screenshots.
+The PNGs, accessibility snapshots, keyboard traces and manifest are retained in
+\path{book/assets/ui-tour/}. \texttt{make ui-snapshots} reproduces them, and the
+book build rejects missing, altered or stale required evidence. Formal
+definitions and security boundaries remain in text where an image cannot
+express them.
 
 \section{Local credentials and visible billing identity}
 
@@ -832,3 +834,36 @@ provider context restarts from durable project files and verified tool receipts.
 The generated interaction and state views retain their prompt, reducer and
 boundary in the typed component. Tests use local provider fixtures, the real
 compiler and production Chrome; they do not prove generated applications correct.
+
+
+\subsection{Persistent application launch}
+The October 25 request is to launch the application being built and post a
+working link. The current \texttt{run} check starts a private smoke test and
+stops it after observing readiness; its receipt is not a persistent preview.
+The accepted \path{LeanFM/LLMGenerated/ApplicationLaunch.lean} defines separate
+start, live-status and stop tasks, exposed by the canonical requirements as
+\texttt{applicationLaunchProposal}. The selected project should show
+Start/Restart, Stop and Open app, and a requested chat launch should return the
+verified browser-reachable link. Only a ready owned instance at the current
+source revision may be described as running. Generated preview code must not
+inherit the engineering UI's credentials or origin authority. The separately
+accepted mapping realizes runtime and preview isolation, finite admission,
+process ownership and cleanup. Exact acceptance records, negative controls,
+and native browser and protobuf validation evidence live in
+\path{reports/application-launch-review/}. Chapter~\ref{ch:chat-ui-guide}
+shows the actual controls and served preview.
+
+Every generated HTTP application exposes the same \texttt{source/Makefile}
+contract: \texttt{build}, \texttt{run}, \texttt{stop}, \texttt{test},
+\texttt{check}, \texttt{clean} and \texttt{serve}. The \texttt{run} target stays
+in the foreground for supervision; \texttt{serve} aliases it. The \texttt{stop}
+target may stop only its owned application. LeanFM invokes these named targets
+uniformly and reports missing targets explicitly; it never substitutes an
+arbitrary per-project shell command or claims an unsupported check passed.
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Action available to authorization and live-process checks: ApplicationStartRequested. Checks to ready: ApplicationReady. Checks to explicit rejection: ApplicationLaunchRejected.}{%
+\includegraphics[width=\textwidth]{generated/application-launch-state.pdf}}
+\caption{Persistent-launch request states generated from the accepted application-launch specification.}
+\end{figure}

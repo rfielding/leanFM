@@ -1,0 +1,217 @@
+python3 scripts/chatui_sandbox_check.py
+ok: required bwrap user/process/network namespace sandbox
+cd ui && npm run check && npm run build && npm run check:bundle
+
+> leanfm-ui@0.1.0 check
+> tsc --noEmit
+
+
+> leanfm-ui@0.1.0 build
+> vite build
+
+vite v6.4.4 building for production...
+transforming...
+✓ 25 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/react-app.js  464.68 kB │ gzip: 141.69 kB
+✓ built in 722ms
+
+> leanfm-ui@0.1.0 check:bundle
+> ! grep -q 'process.env.NODE_ENV' dist/react-app.js
+
+lake build leanfm-server
+✔ [2/68] Built LeanFM.Basic (176ms)
+✔ [3/68] Built LeanFM.Assets (289ms)
+✔ [4/68] Built LeanFM.ChatUI.Web (226ms)
+✔ [5/68] Built LeanFM.ChatUI.HttpRequest (281ms)
+✔ [6/68] Built LeanFM.Basic:c.o (37ms)
+✔ [7/68] Built LeanFM.MDP (391ms)
+✔ [8/68] Built LeanFM.UiModel (341ms)
+✔ [9/68] Built LeanFM.ChatUI.Web:c.o (73ms)
+✔ [10/68] Built LeanFM.CTL (414ms)
+✔ [11/68] Built LeanFM.StaticAssets (143ms)
+✔ [12/68] Built LeanFM.StaticAssets:c.o (48ms)
+✔ [13/68] Built LeanFM.ChatUI.HttpRequest:c.o (188ms)
+✔ [14/68] Built LeanFM.MDPDiagram (208ms)
+✔ [15/68] Built LeanFM.Assets:c.o (212ms)
+✔ [16/68] Built LeanFM.UiModel:c.o (189ms)
+✔ [17/68] Built LeanFM.CTL:c.o (223ms)
+✔ [18/68] Built LeanFM.MDP:c.o (366ms)
+✔ [19/68] Built LeanFM.MDPDiagram:c.o (148ms)
+✔ [20/68] Built LeanFM.Protocol (1.1s)
+✔ [21/68] Built LeanFM.StreamStats (595ms)
+✔ [22/68] Built LeanFM.Characterization (298ms)
+✔ [23/68] Built LeanFM.Artifacts (2.2s)
+✔ [24/68] Built LeanFM.ReliabilityDiagram (203ms)
+✔ [25/68] Built LeanFM.LLMGenerated.ApplicationLaunch (213ms)
+✔ [26/68] Built LeanFM.LLMGenerated.ResumableWork (210ms)
+✔ [27/68] Built LeanFM.Protocol:c.o (1.2s)
+✔ [28/68] Built LeanFM.StreamStats:c.o (604ms)
+✔ [29/68] Built LeanFM.Characterization:c.o (323ms)
+✔ [30/68] Built LeanFM.PaxosKV.Requirements (323ms)
+✔ [31/68] Built LeanFM.ReliabilityDiagram:c.o (84ms)
+✔ [32/68] Built LeanFM.LLMGenerated.ApplicationLaunchImplementation (149ms)
+✔ [33/68] Built LeanFM.LLMGenerated.ResumableWork:c.o (136ms)
+✔ [34/68] Built LeanFM.PaxosKV.Implementation (150ms)
+✔ [35/68] Built LeanFM.LLMGenerated.ApplicationLaunch:c.o (215ms)
+✔ [36/68] Built LeanFM.LLMGenerated.ApplicationLaunchImplementation:c.o (77ms)
+✔ [37/68] Built LeanFM.ChatUI.Requirements (592ms)
+✔ [38/68] Built LeanFM.PaxosKV.Implementation:c.o (74ms)
+✔ [39/68] Built LeanFM.PaxosKV.Requirements:c.o (403ms)
+✔ [40/68] Built LeanFM.LLMGenerated.SharedProjects (175ms)
+✔ [41/68] Built LeanFM.LLMGenerated.SharedProjects:c.o (145ms)
+✔ [42/68] Built LeanFM.LLMGenerated.SelfHosting (256ms)
+✔ [43/68] Built LeanFM.ChatUI.Implementation (341ms)
+✔ [44/68] Built LeanFM.LLMGenerated.ResumableWorkImplementation (146ms)
+✔ [45/68] Built LeanFM.LLMGenerated.ResumableWorkImplementation:c.o (73ms)
+✔ [46/68] Built LeanFM.LLMGenerated.SelfHosting:c.o (270ms)
+✔ [47/68] Built LeanFM.LLMGenerated.Requirements (404ms)
+✔ [48/68] Built LeanFM.ChatUI.Store (819ms)
+✔ [49/68] Built LeanFM.ChatUI.Implementation:c.o (460ms)
+✔ [50/68] Built LeanFM.LLMGenerated.Implementation (185ms)
+✔ [51/68] Built LeanFM.LLMGenerated.Implementation:c.o (153ms)
+✔ [52/68] Built LeanFM.ChatUI.Requirements:c.o (1.6s)
+✔ [53/68] Built LeanFM.LLMGenerated.Requirements:c.o (715ms)
+✔ [54/68] Built LeanFM.Render (868ms)
+✔ [55/68] Built LeanFM.MCP (706ms)
+✔ [56/68] Built LeanFM.ChatUI.Provider (955ms)
+✔ [57/68] Built LeanFM.MCP:c.o (278ms)
+✔ [58/68] Built LeanFM.Artifacts:c.o (2.7s)
+✔ [59/68] Built LeanFM (423ms)
+✔ [60/68] Built LeanFM:c.o (49ms)
+✔ [61/68] Built LeanFM.ChatUI.Store:c.o (1.4s)
+✔ [62/68] Built LeanFM.Render:c.o (1.2s)
+✔ [63/68] Built LeanFM.ChatUI.Provider:c.o (2.7s)
+✔ [64/68] Built LeanFM.ChatUI.Server (15s)
+✔ [65/68] Built Server (902ms)
+✔ [66/68] Built Server:c.o (854ms)
+✔ [67/68] Built LeanFM.ChatUI.Server:c.o (12s)
+✔ [68/68] Built «leanfm-server»:exe (360ms)
+Build completed successfully (68 jobs).
+python3 scripts/chatui_crypto_test.py
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.784s
+
+OK
+python3 scripts/chatui_patch_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.561s
+
+OK
+python3 scripts/chatui_media_test.py
+test_corrupt_mislabeled_oversized_and_disk_bound (__main__.Images.test_corrupt_mislabeled_oversized_and_disk_bound) ... ok
+test_native_pixels_originals_and_immutable_ids (__main__.Images.test_native_pixels_originals_and_immutable_ids) ... ok
+test_safe_svg_raster_and_no_active_or_external_content (__main__.Images.test_safe_svg_raster_and_no_active_or_external_content) ... ok
+test_traversal_foreign_root_symlink_and_integrity_fail_closed (__main__.Images.test_traversal_foreign_root_symlink_and_integrity_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.130s
+
+OK
+python3 scripts/chatui_specification_test.py
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 8.205s
+
+OK
+python3 scripts/chatui_project_state_test.py
+.
+----------------------------------------------------------------------
+Ran 1 test in 1.504s
+
+OK
+python3 scripts/chatui_work_state_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.015s
+
+OK
+python3 scripts/chatui_workspace_reset_test.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.004s
+
+OK
+python3 scripts/chatui_workspace_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.012s
+
+OK
+python3 scripts/chatui_command_test.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.372s
+
+OK
+python3 scripts/chatui_runtime_test.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.820s
+
+OK
+lake env lean LeanFM/ChatUI/ProviderTests.lean
+lake env lean LeanFM/ChatUI/HttpRequestTests.lean
+bash scripts/chatui_http_check.sh
+ok: one password unlocks both providers; no plaintext, cross-account access, corrupt-bundle fallback or stale session after key rotation
+ok: LeanFM without examples; three erased-chat resumes retain book/spec/protobuf/source and isolation
+test_add_provider_preserves_login_usage_and_existing_credentials (__main__.MultiProvider.test_add_provider_preserves_login_usage_and_existing_credentials) ... ok
+test_book_palette_normalization_keeps_editor_revision_valid (__main__.MultiProvider.test_book_palette_normalization_keeps_editor_revision_valid) ... ok
+test_budget_is_checked_between_paid_rounds_for_both_providers (__main__.MultiProvider.test_budget_is_checked_between_paid_rounds_for_both_providers) ... ok
+test_catalog_identity_and_single_password (__main__.MultiProvider.test_catalog_identity_and_single_password) ... ok
+test_client_batches_finish_beyond_the_old_limit_without_replay (__main__.MultiProvider.test_client_batches_finish_beyond_the_old_limit_without_replay) ... ok
+test_concurrent_provider_updates_do_not_lose_keys (__main__.MultiProvider.test_concurrent_provider_updates_do_not_lose_keys) ... ok
+test_defaults_and_readiness_do_not_force_questions_or_accept_gates (__main__.MultiProvider.test_defaults_and_readiness_do_not_force_questions_or_accept_gates) ... ok
+test_existing_account_update_and_login_password_change_keep_keys (__main__.MultiProvider.test_existing_account_update_and_login_password_change_keep_keys) ... ok
+test_failed_book_worker_keeps_stderr_and_exit_status (__main__.MultiProvider.test_failed_book_worker_keeps_stderr_and_exit_status) ... ok
+test_failed_checks_keep_codes_and_require_verified_recovery (__main__.MultiProvider.test_failed_checks_keep_codes_and_require_verified_recovery) ... ok
+test_four_large_images_survive_http_framing_and_provider_encoding (__main__.MultiProvider.test_four_large_images_survive_http_framing_and_provider_encoding) ... ok
+test_image_upload_pixels_followup_resend_and_project_isolation (__main__.MultiProvider.test_image_upload_pixels_followup_resend_and_project_isolation) ... ok
+test_implementation_type_repairs_survive_batches_beyond_old_cap (__main__.MultiProvider.test_implementation_type_repairs_survive_batches_beyond_old_cap) ... ok
+test_incomplete_and_billing_failures_stop_before_mutations_or_retries (__main__.MultiProvider.test_incomplete_and_billing_failures_stop_before_mutations_or_retries) ... ok
+test_local_checker_failure_stops_both_providers_without_an_extra_paid_round (__main__.MultiProvider.test_local_checker_failure_stops_both_providers_without_an_extra_paid_round) ... ok
+test_native_tools_book_and_bounded_repair (__main__.MultiProvider.test_native_tools_book_and_bounded_repair) ... ok
+test_no_plaintext_keys_or_raw_error_body_on_disk (__main__.MultiProvider.test_no_plaintext_keys_or_raw_error_body_on_disk) ... ok
+test_patch_counts_recover_locally_and_changed_bad_patches_cannot_loop (__main__.MultiProvider.test_patch_counts_recover_locally_and_changed_bad_patches_cannot_loop) ... ok
+test_paused_turn_continues_but_unfinished_tool_response_does_not_claim_success (__main__.MultiProvider.test_paused_turn_continues_but_unfinished_tool_response_does_not_claim_success) ... ok
+test_rejected_repair_and_failed_openai_loop_keep_all_reported_usage (__main__.MultiProvider.test_rejected_repair_and_failed_openai_loop_keep_all_reported_usage) ... ok
+test_rotation_retains_other_provider_and_cancels_old_agent (__main__.MultiProvider.test_rotation_retains_other_provider_and_cancels_old_agent) ... ok
+test_routes_concurrently_without_cross_user_or_provider_fallback (__main__.MultiProvider.test_routes_concurrently_without_cross_user_or_provider_fallback) ... ok
+test_runnable_goal_repairs_port_and_survives_deleted_chat (__main__.MultiProvider.test_runnable_goal_repairs_port_and_survives_deleted_chat) ... ok
+test_single_provider_missing_model_and_wrong_password_fail_closed (__main__.MultiProvider.test_single_provider_missing_model_and_wrong_password_fail_closed) ... ok
+test_specification_diagnostics_repair_within_original_turn (__main__.MultiProvider.test_specification_diagnostics_repair_within_original_turn) ... ok
+test_specification_turn_compiles_real_project_views_and_rejects_unchecked_success (__main__.MultiProvider.test_specification_turn_compiles_real_project_views_and_rejects_unchecked_success) ... ok
+test_tcp_framing_waits_for_body_and_utf8_and_rejects_ambiguous_input (__main__.MultiProvider.test_tcp_framing_waits_for_body_and_utf8_and_rejects_ambiguous_input) ... ok
+test_web_research_continues_across_batches_with_citations (__main__.MultiProvider.test_web_research_continues_across_batches_with_citations) ... ok
+test_wrapped_book_is_recovered_locally_and_ambiguous_books_are_rejected (__main__.MultiProvider.test_wrapped_book_is_recovered_locally_and_ambiguous_books_are_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 118.627s
+
+OK
+test_anonymous_projects_and_accounts_share_identity_but_never_keys (__main__.SharedProjects.test_anonymous_projects_and_accounts_share_identity_but_never_keys) ... ok
+test_cross_site_and_rebinding_requests_cannot_mutate_or_bill (__main__.SharedProjects.test_cross_site_and_rebinding_requests_cannot_mutate_or_bill) ... ok
+test_project_writer_and_cancellation_are_bound_to_initiating_session (__main__.SharedProjects.test_project_writer_and_cancellation_are_bound_to_initiating_session) ... ok
+test_readable_creation_and_renamed_root_preserve_open_and_confirmed_delete (__main__.SharedProjects.test_readable_creation_and_renamed_root_preserve_open_and_confirmed_delete) ... ok
+test_source_cannot_be_generated_before_human_gates (__main__.SharedProjects.test_source_cannot_be_generated_before_human_gates) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 9.118s
+
+OK
+ok: independent ports retain their password-unlocked sessions without changing encrypted keys
+......
+----------------------------------------------------------------------
+Ran 6 tests in 4.322s
+
+OK
+ok: rendered light/dark PDF backgrounds and text contrast differ; book text is identical
+ok: ChatUI bootstrap, durable book/source edits, artifacts, and concurrent session isolation
+ok: one password unlocks both provider keys after server restart
+ok: encrypted credentials, account isolation, migration and restart invalidation
+lake build LeanFM.ChatUI.Implementation
+Build completed successfully (5 jobs).
+ok: ChatUI implementation decisions are traceable

@@ -1,0 +1,29 @@
+[
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Chat"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Tab",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Book"
+    }
+  },
+  {
+    "action": "key",
+    "key": "Enter",
+    "modifiers": 0,
+    "focused": {
+      "role": "BUTTON",
+      "name": "Book"
+    }
+  }
+]

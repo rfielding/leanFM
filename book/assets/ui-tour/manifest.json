@@ -1,0 +1,352 @@
+{
+  "version": 1,
+  "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+  "fixture": "Disposable GoServer replica; local deterministic provider; no live account, provider key or external network",
+  "source_sha256": {
+    "ui/src/main.tsx": "ebe1c0c3dd132fd24bbd17738686c95b3c7a29084d860a106a3fc3cbc8637bdb",
+    "assets/chatui.css": "a1ba02caca9e7b43fa0d741a0f32759504b167361238da3cb830c29dcdc1fc3e",
+    "LeanFM/ChatUI/Server.lean": "08557c0001ef67a36d910e9086b35f6f064cafd1137dc7587318f44ff00ebc09",
+    "LeanFM/ChatUI/Store.lean": "a2091d52a32fe2dbd48e8881284f60f5cf1d74dc97cdf5bcb28e77cc28213ab9",
+    "LeanFM/ChatUI/Web.lean": "602024e7c7430ce9d6a23db160547ab7eff99fcf12a3285ef975e57f9dbbfe96",
+    "Server.lean": "1ab4465a5627d0fd416fae4a19ee7bbd0b119de22d32665920e59bfcd92e658c",
+    "scripts/chatui_application_test.py": "749770d33a8ef4e670aba2171d65ce3be8a93be38c57c033c03662c263e7af51",
+    "scripts/chatui_ui_tour.py": "38e1d0833e7447149c5189c1e32e19de7cc9fe93520b4efb267584cb7ed2012a"
+  },
+  "captures": [
+    {
+      "name": "01-sign-in",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "Where do I unlock my saved keys with the LeanFM password?",
+      "boundary": "Before LoginSubmitted",
+      "visible_event_ids": [],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:46.841751+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "01-sign-in.png": "ffaa76aae8564a816c8ff9e08cd57360221bb26d2161a4c34c029d675dece29f",
+        "01-sign-in.accessibility.json": "685885248121db03b2d5ea179f8a21e1f678c109f1353cea43d4ab21697d09a6",
+        "01-sign-in.keyboard.json": "d87764ba740d9da1ffbfdf561d83da7285a03cfb2eb98c8183b81912b61b22f1"
+      }
+    },
+    {
+      "name": "02-create-account",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "Which fields create an account and add provider keys?",
+      "boundary": "Before AccountCreateSubmitted",
+      "visible_event_ids": [],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:46.976285+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "02-create-account.png": "9a02280a29e4a0e008395d3f784f344e95ea7d8deb54ec8fe05be07dce09d11f",
+        "02-create-account.accessibility.json": "7256af6765999876215689dc32721ba91a1a8d6c71276b1ea7e433ab2b3171c7",
+        "02-create-account.keyboard.json": "58c665a0fd44672b109fd74281131c2c31ab2df3ba860aea79342566b146bacf"
+      }
+    },
+    {
+      "name": "03-chat-ready",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "Where are the project selector, model selector and composer?",
+      "boundary": "Project opened; before ChatPromptSubmitted",
+      "visible_event_ids": [],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:47.095081+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "03-chat-ready.png": "4059091375bb7d5dd8c88f6d1388f7e051fa64dfbc4c049b1e64fbbbba93e47b",
+        "03-chat-ready.accessibility.json": "64c364856b99a85e30dce4bab6e58e0507d4846c106b033333038a914beac743",
+        "03-chat-ready.keyboard.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    },
+    {
+      "name": "04-chat-running",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "How do I see the active model, progress, elapsed time and Cancel control?",
+      "boundary": "ChatPromptSubmitted and ModelRequestIssued; before ModelResponseReturned",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:49.427539+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "04-chat-running.png": "e218b7bbe7bcc75bb3e514170a628122ddf57eb11ea44e17902f620048849271",
+        "04-chat-running.accessibility.json": "5bb7c792c27f1f60dd825b72a6e4a4e1e0fde69e80d46b7eae403bc51018031c",
+        "04-chat-running.keyboard.json": "25a70072e15bdfad42e69fa383c49b5c3052fe03a6f2162b34e9286c67793abe"
+      }
+    },
+    {
+      "name": "05-chat-response",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "Where are the reply, usage, Resend and Delete controls?",
+      "boundary": "After ChatResponseRendered",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:53.039033+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "05-chat-response.png": "0416d1442b6275b05829d172d3f3d5512185c19ab68760d9d19b061226d61826",
+        "05-chat-response.accessibility.json": "a779bb7aadc683006110282f94aabc9e3901a4e7ad57a458caa2368bb961eaf6",
+        "05-chat-response.keyboard.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    },
+    {
+      "name": "06-project-memory",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "Where do I review durable files and the two independent acceptance gates?",
+      "boundary": "Both actual accepted specification revisions loaded",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:53.259670+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "06-project-memory.png": "04ab650d2ca9c9119508053a39e3e886d8f664dadb7c539651d35426fcd173a3",
+        "06-project-memory.accessibility.json": "fe218577b297e8686fbfabe2bb7055177191ee8b2672990a56f5d2234725c65c",
+        "06-project-memory.keyboard.json": "69224389367c3867946fbf36e8653d6b202ac0deac1d044538a909d7ea14eb74"
+      }
+    },
+    {
+      "name": "07-book",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "How do I read, edit, build and switch the book PDFs?",
+      "boundary": "Saved book source and its built PDF opened",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:54.489391+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "07-book.png": "56b2d8e7d796f0b2b03a3adb2f7e7b1a229dc72c41b87fddcb32f72768931a14",
+        "07-book.accessibility.json": "1b6fbcffbd7e51500a1aff6402116a99c506a166311b4b4a5b157ef99af64c66",
+        "07-book.keyboard.json": "f1b9213cd154653c408989decde41902681257df5f4445e22606aab7eee2e88a"
+      }
+    },
+    {
+      "name": "08-task-states",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "Where is the generated state machine and how do I switch behavioral views?",
+      "boundary": "Current create_room task rendered from its checked typed specification",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:54.847429+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "08-task-states.png": "20d6689dba1bb3e0cdea97e31e073c032b77c1cfc9559e8d6c298d5a56ee0b95",
+        "08-task-states.accessibility.json": "3603f02165d69584ef760c591c7d22069b20c6b4f0288ee3a71ed7af07543b3c",
+        "08-task-states.keyboard.json": "b1c5d854f7e14b235cee9575ebbb9ecbad255ac9c04e0b0c8c8d6353da356319"
+      }
+    },
+    {
+      "name": "09-source",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "How do I inspect the actual source and its tests?",
+      "boundary": "Accepted implementation source inventory opened",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:40:55.098671+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "09-source.png": "d47ea9b4912732d80df2b56835bb1e04de34d302881ffbd89ccf85db0b047994",
+        "09-source.accessibility.json": "047da2fc53ffff6862bd02bb1dc546ac3f11f005e0899ebc60565c8234f1d2e5",
+        "09-source.keyboard.json": "51b7d885a8ab9211aaca1c3f030267635e80197baa5251cc0c4d81e60e82d103"
+      }
+    },
+    {
+      "name": "10-app-ready",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "How do I start the app and open the verified running preview?",
+      "boundary": "ApplicationReady; native Open app link posted in chat",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727",
+        "2974e70c22669d29aa8fbfc7"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:41:01.256604+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "10-app-ready.png": "720598ebe51b5517c0c5767c2f7083c85a3a237780f94db36360afea726a0b30",
+        "10-app-ready.accessibility.json": "1a584abe99b7f1ff5827213651673de88ac7cc1e2d417f7555d5fa6d538b310d",
+        "10-app-ready.keyboard.json": "f292d935649abaf2167c9a949bfbf543310e589c8519eac9159c05ba84d9c19a"
+      }
+    },
+    {
+      "name": "11-app-preview",
+      "prompt": "Document how to use the LeanFM Chat UI in detail, with screenshots.",
+      "task": "develop_project_specification",
+      "scenario": "chat-ui-user-guide",
+      "question": "What does the built GoServer room and challenge flow look like?",
+      "boundary": "RoomCreated, GameCreated and GameChat observed through the isolated preview",
+      "visible_event_ids": [
+        "9788a7f2218e43c2fd90e5cd",
+        "143cba29adc53859cce63727",
+        "2974e70c22669d29aa8fbfc7",
+        "5a8ba0b8f4ccfff61bd1da96",
+        "6dff643384065c52a73042c5"
+      ],
+      "event_source": "production React DOM, real local provider/chat/lifecycle responses and current project task catalog",
+      "reducer": "Chrome Page.captureScreenshot and Accessibility.getFullAXTree after semantic keyboard actions",
+      "unit": "CSS pixels and accessible roles at the named UI event boundary",
+      "viewport": {
+        "width": 1600,
+        "height": 1000,
+        "scale": 1
+      },
+      "font_scale": 1,
+      "theme": "dark",
+      "browser": "Chrome/153.0.8010.36",
+      "captured_at": "2026-10-25T21:41:05.638297+00:00",
+      "project_id": "e7fdeae8572f7c9f",
+      "requirements_sha256": "8ef6d259101530bcf2e3835572f76acbd799874b35f282851fc9187d07be5fd5",
+      "artifacts": {
+        "11-app-preview.png": "e632136865e39655304d12fefb7bdf4b116b58b5530c52f9229983646616fa1d",
+        "11-app-preview.accessibility.json": "4a8d9b95e28f6ab6ae637c5741038b7ce8756e2fe2f4e66b5348e7246295e17e",
+        "11-app-preview.keyboard.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    }
+  ]
+}

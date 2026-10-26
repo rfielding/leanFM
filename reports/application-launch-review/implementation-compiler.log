@@ -1,0 +1,9 @@
+✖ [5/5] Building LeanFM.LLMGenerated.ApplicationLaunchImplementation (140ms)
+trace: .> LEAN_PATH=/home/rfielding/code/leanFM/.lake/build/lib/lean /home/rfielding/.elan/toolchains/leanprover--lean4---v4.28.0/bin/lean /home/rfielding/code/leanFM/LeanFM/LLMGenerated/ApplicationLaunchImplementation.lean -o /home/rfielding/code/leanFM/.lake/build/lib/lean/LeanFM/LLMGenerated/ApplicationLaunchImplementation.olean -i /home/rfielding/code/leanFM/.lake/build/lib/lean/LeanFM/LLMGenerated/ApplicationLaunchImplementation.ilean -c /home/rfielding/code/leanFM/.lake/build/ir/LeanFM/LLMGenerated/ApplicationLaunchImplementation.c --setup /home/rfielding/code/leanFM/.lake/build/ir/LeanFM/LLMGenerated/ApplicationLaunchImplementation.setup.json --json
+error: LeanFM/LLMGenerated/ApplicationLaunchImplementation.lean:29:207: unexpected identifier; expected '}'
+error: Lean exited with code 1
+Some required targets logged failures:
+- LeanFM.LLMGenerated.ApplicationLaunchImplementation
+error: build failed
+✔ [5/5] Built LeanFM.LLMGenerated.ApplicationLaunchImplementation (146ms)
+Build completed successfully (5 jobs).
