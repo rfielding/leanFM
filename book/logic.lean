@@ -24,19 +24,19 @@ theorem F_eq_Fr (x : ℤ) :
   unfold F Fr
   norm_cast
 
-/- B just needs to work, but this was how we found it.  -/
+/- 1  + -2  +  3  + -4  +  ... -/
+def Sum_B (n : ℕ) : ℚ :=
+  (1 - (2 * (n : ℚ) + 1) * (-1)^n) / 4
+
 def Tail_B (n : ℕ) : ℚ :=
-  ((2 * (n : ℚ) + 1) * (-1)^n) / 4
+  F (-1) - Sum_B n
 
 theorem whyTailB (n : ℕ) :
-    Tail_B 0     = F (-1) ∧
-    Tail_B (n+1) = Tail_B n - ↑(n+1) * ↑(-1)^n := by
-  rw[F]
-  unfold Tail_B
-  norm_num
-  ring
+    Tail_B n     = F (-1) - Sum_B n:= by
+  unfold Tail_B Sum_B F
+  simp
 
-def Sum_B (n : ℕ) : ℚ := F (-1) - Tail_B n
+
 def Bf (n : ℕ) : ℚ := (Sum_B + Tail_B) n
 def B : ℚ := Bf 0
 
@@ -47,9 +47,9 @@ theorem selfSimilarSumS (n : ℕ) :
     (Sum_S  (2*n) - Sum_B  (2*n) = 4*Sum_S  n) :=  by
   rw[Sum_B]
   rw[Sum_S]
-  unfold F Sum_S Tail_B
+  unfold Sum_S
   norm_num
-  linarith
+  ring_nf
 
 def Tail_S (n : ℕ) : ℚ :=
   (4 * Sum_S n - (Sum_S (2*n) + Tail_B (2*n))) / 3 - Sum_S n
@@ -59,26 +59,18 @@ theorem whyTailS (n : ℕ) :
       (4*Sum_S n - (Sum_S (2*n) + Tail_B (2*n)))/3 - Sum_S n := by
   rw[← selfSimilarSumS n]
   rw[Tail_B]
-  unfold Tail_S Sum_S Sum_B Tail_B F
+  unfold Tail_S Sum_S Sum_B Tail_B F Sum_B
   norm_num
   ring_nf
+
 
 def Sf (n : ℕ) : ℚ := Sum_S n + Tail_S n
 def S : ℚ := Sf 0
-
-theorem selfSimilarS (n : ℕ) :
-    (Tail_S (2*n) - Tail_B (2*n) = 4*Tail_S n) ∧
-    (S            - B            = 4*S) := by
-  rw[whyTailS]
-  rw[B]
-  unfold S Sf Tail_S Bf Tail_B Sum_S Sum_B F Tail_B
-  norm_num
-  ring_nf
 
 /-- The final Goal, now explicitly powered by the calculus/geometry proofs -/
 theorem Goal (n : ℕ) :
     -1/12 = n * (n + 1) / 2 + Tail_S n := by
   rw [whyTailS n]
-  unfold Tail_B Sum_S
+  unfold Tail_B Sum_S F Sum_B
   norm_num
   ring_nf
