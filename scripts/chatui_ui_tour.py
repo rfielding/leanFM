@@ -4,6 +4,7 @@ Named real-DOM captures, semantic keyboard navigation and shareable accessibilit
 Only the owning disposable test server is supplied by chatui_application_test.py.
 """
 import base64
+import os
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -11,7 +12,10 @@ import shutil
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'book/assets/ui-tour'
+FINAL=ROOT/'book/assets/ui-tour'
+# Captures are staged and published only when the whole tour succeeds, so a
+# failed run never leaves screenshots that disagree with the manifest.
+OUT=FINAL/'.staging'
 INPUTS=['ui/src/main.tsx','assets/chatui.css','LeanFM/ChatUI/Server.lean','LeanFM/ChatUI/Store.lean','LeanFM/ChatUI/Web.lean','Server.lean','scripts/chatui_application_test.py','scripts/chatui_ui_tour.py']
 PROMPT='Document how to use the LeanFM Chat UI in detail, with screenshots.'
 
@@ -20,6 +24,7 @@ class Tour:
         self.call,self.evaluate,self.wait,self.request=call,evaluate,wait,request
         self.fixture,self.project_id=fixture,project_id
         self.actions=[]; self.captures=[]
+        shutil.rmtree(OUT,ignore_errors=True)
         OUT.mkdir(parents=True,exist_ok=True)
         self.browser=call('Browser.getVersion')['product']
     def viewport(self,session):
@@ -92,4 +97,8 @@ class Tour:
             text=artifact.read_text()
             if 'documentation-placeholder' in text or 'a'*64 in text: raise AssertionError('Fixture credential reached a capture artifact')
         (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2,ensure_ascii=False)+'\n')
+        # Publish: every artifact first, the manifest that vouches for them last.
+        for artifact in sorted(OUT.iterdir(),key=lambda path:path.name=='manifest.json'):
+            os.replace(artifact,FINAL/artifact.name)
+        OUT.rmdir()
         print('ok: '+str(len(self.captures))+' real Chat UI screenshots with accessibility, keyboard and provenance records')

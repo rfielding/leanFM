@@ -622,7 +622,7 @@
     },
     {
       "role": "StaticText",
-      "name": "Oct 26, 2026, 1:55:03 PM"
+      "name": "Oct 27, 2026, 8:16:56 PM"
     },
     {
       "role": "StaticText",
@@ -644,7 +644,7 @@
     },
     {
       "role": "StaticText",
-      "name": "Oct 26, 2026, 1:55:08 PM"
+      "name": "Oct 27, 2026, 8:17:02 PM"
     },
     {
       "role": "StaticText",
@@ -656,7 +656,7 @@
     },
     {
       "role": "StaticText",
-      "name": "A room is created by CreateRoom, followed by RoomCreated or RequestRejected. Open Tasks and choose Create a named chat room, then States to inspect the generated state machine. Requirements and implementation are accepted separately in Project memory. This reply comes from the local documentation fixture."
+      "name": "A room is created by CreateRoom, followed by RoomCreated or RequestRejected. Open Tasks and choose Create a named chat room, then States to inspect the generated state machine. Project memory shows whether the requirements and implementation are checked and committed. This reply comes from the local documentation fixture."
     },
     {
       "role": "DisclosureTriangle",
@@ -719,7 +719,7 @@
     },
     {
       "role": "StaticText",
-      "name": "Oct 26, 2026, 1:55:17 PM"
+      "name": "Oct 27, 2026, 8:17:10 PM"
     },
     {
       "role": "StaticText",
@@ -739,7 +739,7 @@
     },
     {
       "role": "StaticText",
-      "name": "5.7"
+      "name": "5.9"
     },
     {
       "role": "StaticText",
@@ -830,7 +830,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Oct 26, 2026, 1:55:03 PM"
+      "name": "Oct 27, 2026, 8:16:56 PM"
     },
     {
       "role": "InlineTextBox",
@@ -846,7 +846,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Oct 26, 2026, 1:55:08 PM"
+      "name": "Oct 27, 2026, 8:17:02 PM"
     },
     {
       "role": "InlineTextBox",
@@ -866,7 +866,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "machine. Requirements and implementation are accepted separately in Project memory. This reply comes from the local documentation fixture."
+      "name": "machine. Project memory shows whether the requirements and implementation are checked and committed. This reply comes from the local documentation fixture."
     },
     {
       "role": "StaticText",
@@ -922,7 +922,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Oct 26, 2026, 1:55:17 PM"
+      "name": "Oct 27, 2026, 8:17:10 PM"
     },
     {
       "role": "InlineTextBox",
@@ -942,7 +942,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "5.7"
+      "name": "5.9"
     },
     {
       "role": "InlineTextBox",

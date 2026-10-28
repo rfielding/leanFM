@@ -250,7 +250,7 @@ def serveLauncherFixture : IO Unit := do
         if child:
             child_session=call('Target.attachToTarget',{'targetId':child['targetId'],'flatten':True})['sessionId']
             call('Runtime.enable',session=child_session)
-            wait(child_session,"document.title==='GoServer · Rooms and challenges'")
+            wait(child_session,"document.title.startsWith('GoServer')")
         else:
             frame_tree=call('Page.getFrameTree',session=wrapper)['frameTree']
             if not frame_tree.get('childFrames'):
@@ -259,7 +259,7 @@ def serveLauncherFixture : IO Unit := do
                 raise AssertionError('No app frame or isolated iframe target; target types: '+str([t['type'] for t in targets]))
             child_frame=frame_tree['childFrames'][0]['frame']['id']
             world=call('Page.createIsolatedWorld',{'frameId':child_frame,'worldName':'launcher-verification'},wrapper)['executionContextId']
-            observed=call('Runtime.evaluate',{'expression':"document.title==='GoServer · Rooms and challenges'",'contextId':world,'returnByValue':True},wrapper)
+            observed=call('Runtime.evaluate',{'expression':"document.title.startsWith('GoServer')",'contextId':world,'returnByValue':True},wrapper)
             assert observed.get('result',{}).get('value'), 'The actual sandboxed iframe did not render the app'
         app=tab(base+preview)
         wait(app,"typeof openRoom==='function'")

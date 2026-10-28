@@ -75,3 +75,4 @@ __pycache__/
 /video/*-preview.png
 /video/kerberos/*-preview.png
 /book/examples/tla/.tlc/
+/book/assets/ui-tour/.staging/

@@ -1,6 +1,7 @@
 syntax = "proto3";
 package project.requirements;
-// Candidate room-creation/browser revision; previous accepted revisions remain protected.
+// Candidate Lab-parity revision; previous accepted revisions remain protected.
+// Points are 0-based x (column, left to right) and y (row, top to bottom).
 message ListRooms {
   string session_id = 1;
   uint64 request_id = 2;
@@ -28,20 +29,6 @@ message GamesListed {
   repeated GameListed games = 1;
   uint64 request_id = 2;
   string room_id = 3;
-}
-message CreateGame {
-  string session_id = 1;
-  string room_id = 2;
-  string game_name = 3;
-  uint64 request_id = 4;
-}
-message GameCreated {
-  string game_id = 1;
-  string room_id = 2;
-  string creator = 3;
-  string status = 4;
-  uint64 request_id = 5;
-  string game_name = 6;
 }
 message JoinGame {
   string session_id = 1;
@@ -85,7 +72,279 @@ message RequestRejected {
   string task = 3;
   string scope_id = 4;
 }
-message GameListed { string game_id = 1; string creator = 2; string status = 3; string game_name = 4; }
-
 message CreateRoom { string session_id = 1; string room_name = 2; uint64 request_id = 3; }
 message RoomCreated { string room_id = 1; uint64 request_id = 2; }
+message GameListed { string game_id = 1; string creator = 2; string status = 3; string game_name = 4; uint32 board_size = 5; uint32 seats = 6; uint32 seats_filled = 7; }
+message CreateGame {
+  string session_id = 1;
+  string room_id = 2;
+  string game_name = 3;
+  uint32 board_size = 4;
+  uint32 seats = 5;
+  uint64 turn_deadline_ms = 6;
+  int32 ko_rule = 7;
+  uint64 bot_ms = 8;
+  uint32 explore_milli = 9;
+  string reward_mode = 10;
+  uint32 softness = 11;
+  repeated SeatPlan seat_plan = 12;
+  uint64 request_id = 13;
+}
+message GameCreated {
+  string game_id = 1;
+  string room_id = 2;
+  string creator = 3;
+  string status = 4;
+  uint64 request_id = 5;
+  string game_name = 6;
+  uint32 board_size = 7;
+  uint32 seats = 8;
+  uint64 turn_deadline_ms = 9;
+  int32 ko_rule = 10;
+  uint64 bot_ms = 11;
+  uint32 explore_milli = 12;
+  string reward_mode = 13;
+  uint32 softness = 14;
+  repeated SeatPlan seat_plan = 15;
+}
+message SetSeatPlan {
+  string session_id = 1;
+  string game_id = 2;
+  uint32 seat = 3;
+  string controller = 4;
+  uint32 team = 5;
+  uint64 request_id = 6;
+}
+message SeatPlanSet {
+  string game_id = 1;
+  uint32 seat = 2;
+  string controller = 3;
+  uint32 team = 4;
+  uint64 request_id = 5;
+}
+message TakeSeat {
+  string session_id = 1;
+  string game_id = 2;
+  uint32 seat = 3;
+  uint64 request_id = 4;
+}
+message SeatTaken {
+  string game_id = 1;
+  uint32 seat = 2;
+  uint64 request_id = 3;
+}
+message LeaveSeat {
+  string session_id = 1;
+  string game_id = 2;
+  uint64 request_id = 3;
+}
+message SeatLeft {
+  string game_id = 1;
+  uint32 seat = 2;
+  uint64 request_id = 3;
+}
+message StartGame {
+  string session_id = 1;
+  string game_id = 2;
+  uint64 request_id = 3;
+}
+message GameStarted {
+  string game_id = 1;
+  repeated SeatView seats = 2;
+  uint64 request_id = 3;
+}
+message SetAutopilot {
+  string session_id = 1;
+  string game_id = 2;
+  bool on = 3;
+  uint64 request_id = 4;
+}
+message AutopilotSet {
+  string game_id = 1;
+  uint32 seat = 2;
+  bool on = 3;
+  uint64 request_id = 4;
+}
+message PlayMove {
+  string session_id = 1;
+  string game_id = 2;
+  uint32 move_no = 3;
+  string kind = 4;
+  uint32 x = 5;
+  uint32 y = 6;
+  uint64 request_id = 7;
+}
+message MovePlayed {
+  string game_id = 1;
+  uint32 move_no = 2;
+  uint32 seat = 3;
+  string kind = 4;
+  uint32 x = 5;
+  uint32 y = 6;
+  uint32 captured = 7;
+  uint64 request_id = 8;
+  repeated uint32 victims = 9;
+  uint32 suicide = 10;
+}
+message ProposeMerge {
+  string session_id = 1;
+  string game_id = 2;
+  uint32 other_team = 3;
+  uint64 request_id = 4;
+}
+message MergeProposed {
+  string game_id = 1;
+  uint32 proposal_id = 2;
+  uint32 team_a = 3;
+  uint32 team_b = 4;
+  uint64 request_id = 5;
+}
+message RespondMerge {
+  string session_id = 1;
+  string game_id = 2;
+  uint32 proposal_id = 3;
+  bool accept = 4;
+  uint64 request_id = 5;
+}
+message MergeResponded {
+  string game_id = 1;
+  uint32 proposal_id = 2;
+  string status = 3;
+  uint64 request_id = 4;
+}
+message GetGameState {
+  string session_id = 1;
+  string game_id = 2;
+  uint32 since_move = 3;
+  uint64 request_id = 4;
+}
+message GameState {
+  string game_id = 1;
+  string game_name = 2;
+  string status = 3;
+  string creator = 4;
+  uint32 board_size = 5;
+  bool ko_on = 6;
+  uint64 turn_deadline_ms = 7;
+  uint64 bot_ms = 8;
+  uint32 move_no = 9;
+  uint32 to_move = 10;
+  uint64 remaining_ms = 11;
+  repeated int32 cells = 12;
+  repeated int32 owner = 13;
+  repeated SeatView seats = 14;
+  repeated TeamView teams = 15;
+  repeated MergeView proposals = 16;
+  repeated MoveRecord moves = 17;
+  repeated uint32 winners = 18;
+  string end_reason = 19;
+  uint32 explore_milli = 20;
+  string reward_mode = 21;
+  uint32 softness = 22;
+  uint64 request_id = 23;
+}
+message BotTurn {
+  string game_id = 1;
+  uint64 turn_seq = 2;
+  uint32 seat = 3;
+  uint32 move_no = 4;
+  uint64 budget_ms = 5;
+}
+message BotMoveChosen {
+  string game_id = 1;
+  uint64 turn_seq = 2;
+  string kind = 3;
+  uint32 x = 4;
+  uint32 y = 5;
+  SearchSummary search = 6;
+}
+message BotMovePlayed {
+  string game_id = 1;
+  MoveRecord record = 2;
+}
+message TurnTimedOut {
+  string game_id = 1;
+  uint32 move_no = 2;
+  uint32 seat = 3;
+}
+message AutoPassed {
+  string game_id = 1;
+  uint32 move_no = 2;
+  uint32 seat = 3;
+}
+message TeamsMerged {
+  string game_id = 1;
+  uint32 proposal_id = 2;
+  uint32 team = 3;
+  repeated uint32 seats = 4;
+}
+message MergeWithdrawn {
+  string game_id = 1;
+  uint32 proposal_id = 2;
+  string reason = 3;
+}
+message GameFinished {
+  string game_id = 1;
+  repeated uint32 winners = 2;
+  string end_reason = 3;
+}
+message SeatPlan {
+  uint32 seat = 1;
+  string controller = 2;
+  uint32 team = 3;
+}
+message SeatView {
+  uint32 seat = 1;
+  string player = 2;
+  string controller = 3;
+  uint32 team = 4;
+  int32 territory = 5;
+  int32 losses = 6;
+  int32 score = 7;
+  bool resigned = 8;
+  repeated uint32 losses_by = 9;
+}
+message TeamView {
+  uint32 team = 1;
+  repeated uint32 seats = 2;
+  int32 territory = 3;
+  int32 losses = 4;
+  int32 score = 5;
+}
+message MergeView {
+  uint32 proposal_id = 1;
+  uint32 team_a = 2;
+  uint32 team_b = 3;
+  string proposer = 4;
+  repeated string accepted_by = 5;
+  repeated string waiting_for = 6;
+}
+message Candidate {
+  string kind = 1;
+  uint32 x = 2;
+  uint32 y = 3;
+  uint32 visits = 4;
+  int32 reward_permille = 5;
+  repeated int32 outlook_permille = 6;
+  repeated int32 proj_milli = 7;
+}
+message SearchSummary {
+  uint32 playouts = 1;
+  uint32 ms = 2;
+  repeated Candidate candidates = 3;
+  repeated int32 root_proj_milli = 4;
+  repeated int32 root_outlook_permille = 5;
+  bool guard = 6;
+}
+message MoveRecord {
+  uint32 move_no = 1;
+  uint32 seat = 2;
+  string kind = 3;
+  uint32 x = 4;
+  uint32 y = 5;
+  uint32 captured = 6;
+  string source = 7;
+  repeated uint32 victims = 8;
+  uint32 suicide = 9;
+  SearchSummary search = 10;
+}

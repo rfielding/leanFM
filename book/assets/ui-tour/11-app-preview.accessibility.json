@@ -7,7 +7,7 @@
   "nodes": [
     {
       "role": "RootWebArea",
-      "name": "GoServer · Rooms and challenges",
+      "name": "GoServer · N-player Go",
       "states": {
         "focusable": true,
         "focused": true
@@ -31,7 +31,7 @@
     },
     {
       "role": "StaticText",
-      "name": "Rooms & challenges"
+      "name": "N-player Go"
     },
     {
       "role": "generic",
@@ -74,7 +74,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Rooms & challenges"
+      "name": "N-player Go"
     },
     {
       "role": "StaticText",
@@ -82,11 +82,11 @@
     },
     {
       "role": "StaticText",
-      "name": "Local preview · rooms and conversations reset when the app restarts. Challenges currently provide a shared conversation; board play comes later."
+      "name": "Local preview · rooms, challenges and games reset when the app restarts."
     },
     {
       "role": "StaticText",
-      "name": "Challenge created in Preview room."
+      "name": "Challenge created in Preview room. Plan seats as Person or Bot and set teams below; others in the room can open it and sit; press Start when ready."
     },
     {
       "role": "heading",
@@ -139,10 +139,6 @@
       "name": ""
     },
     {
-      "role": "paragraph",
-      "name": ""
-    },
-    {
       "role": "generic",
       "name": ""
     },
@@ -163,6 +159,10 @@
       "name": ""
     },
     {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
       "role": "button",
       "name": "Close challenge",
       "states": {
@@ -170,14 +170,54 @@
       }
     },
     {
-      "role": "list",
-      "name": "Challenge conversation",
+      "role": "Canvas",
+      "name": "Go board"
+    },
+    {
+      "role": "group",
+      "name": "Walk the game tree"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": "Game tree: filled dots are the real game, hollow dots are variations"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": "",
       "states": {
         "live": "polite"
       }
     },
     {
-      "role": "form",
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "group",
       "name": ""
     },
     {
@@ -194,11 +234,11 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Local preview · rooms and conversations reset when the app restarts. Challenges currently provide a shared conversation; board play comes later."
+      "name": "Local preview · rooms, challenges and games reset when the app restarts."
     },
     {
       "role": "InlineTextBox",
-      "name": "Challenge created in Preview room."
+      "name": "Challenge created in Preview room. Plan seats as Person or Bot and set teams below; others in the room can open it and sit; press Start when ready."
     },
     {
       "role": "StaticText",
@@ -255,10 +295,6 @@
       "name": "1"
     },
     {
-      "role": "StaticText",
-      "name": "Open a challenge in the selected room."
-    },
-    {
       "role": "article",
       "name": ""
     },
@@ -268,7 +304,7 @@
     },
     {
       "role": "StaticText",
-      "name": "CHALLENGE CONVERSATION"
+      "name": "CHALLENGE"
     },
     {
       "role": "StaticText",
@@ -283,12 +319,281 @@
       "name": "Close challenge"
     },
     {
-      "role": "listitem",
+      "role": "button",
+      "name": "|◀",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "◀",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "▶",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "▶|",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "▲",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "▼",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Live",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "NEXT"
+    },
+    {
+      "role": "StaticText",
+      "name": "←"
+    },
+    {
+      "role": "StaticText",
+      "name": " "
+    },
+    {
+      "role": "StaticText",
+      "name": "→"
+    },
+    {
+      "role": "StaticText",
+      "name": " step · "
+    },
+    {
+      "role": "StaticText",
+      "name": "↑"
+    },
+    {
+      "role": "StaticText",
+      "name": " "
+    },
+    {
+      "role": "StaticText",
+      "name": "↓"
+    },
+    {
+      "role": "StaticText",
+      "name": " variation · "
+    },
+    {
+      "role": "StaticText",
+      "name": "L"
+    },
+    {
+      "role": "StaticText",
+      "name": " live · "
+    },
+    {
+      "role": "StaticText",
+      "name": "P"
+    },
+    {
+      "role": "StaticText",
+      "name": " pass on your turn · "
+    },
+    {
+      "role": "StaticText",
+      "name": "C"
+    },
+    {
+      "role": "StaticText",
+      "name": " computer move in a variation. Click a point to play on your turn; elsewhere a click starts a variation when analysis is open to you."
+    },
+    {
+      "role": "heading",
+      "name": "POSITION"
+    },
+    {
+      "role": "generic",
       "name": ""
     },
     {
-      "role": "group",
+      "role": "LayoutTable",
       "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "Canvas",
+      "name": "Projected final score per seat along the viewed line; click to jump to a move"
+    },
+    {
+      "role": "heading",
+      "name": "PLAY"
+    },
+    {
+      "role": "button",
+      "name": "Start game (bots fill empty seats)",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Pass",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Resign",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": "Turn clock"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "checkbox",
+      "name": "Territory",
+      "states": {
+        "focusable": true,
+        "checked": "true"
+      }
+    },
+    {
+      "role": "checkbox",
+      "name": "Search heat",
+      "states": {
+        "focusable": true,
+        "checked": "true"
+      }
+    },
+    {
+      "role": "checkbox",
+      "name": "Sound",
+      "states": {
+        "focusable": true,
+        "checked": "true"
+      }
+    },
+    {
+      "role": "heading",
+      "name": "SEARCH AT THIS POSITION"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Computer move",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Analyze here",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Autoplay variation",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "SEATS AND TEAMS"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "CHALLENGE CONVERSATION"
+    },
+    {
+      "role": "list",
+      "name": "Challenge conversation",
+      "states": {
+        "live": "polite"
+      }
+    },
+    {
+      "role": "form",
+      "name": ""
+    },
+    {
+      "role": "heading",
+      "name": "ANIMATED GIF"
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "button",
+      "name": "Make GIF up to this move",
+      "states": {
+        "disabled": true
+      }
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "DisclosureTriangle",
+      "name": "Rules as implemented",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
     },
     {
       "role": "InlineTextBox",
@@ -379,10 +684,6 @@
       "name": "1"
     },
     {
-      "role": "InlineTextBox",
-      "name": "Open a challenge in the selected room."
-    },
-    {
       "role": "heading",
       "name": "Preview challenge"
     },
@@ -411,6 +712,46 @@
       }
     },
     {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "checkbox",
+      "name": "I will play",
+      "states": {
+        "focusable": true,
+        "checked": "true"
+      }
+    },
+    {
       "role": "button",
       "name": "Create challenge",
       "states": {
@@ -419,7 +760,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "CHALLENGE CONVERSATION"
+      "name": "CHALLENGE"
     },
     {
       "role": "InlineTextBox",
@@ -434,36 +775,342 @@
       "name": "Close challenge"
     },
     {
-      "role": "strong",
+      "role": "StaticText",
+      "name": "|◀"
+    },
+    {
+      "role": "StaticText",
+      "name": "◀"
+    },
+    {
+      "role": "StaticText",
+      "name": "▶"
+    },
+    {
+      "role": "StaticText",
+      "name": "▶|"
+    },
+    {
+      "role": "StaticText",
+      "name": "▲"
+    },
+    {
+      "role": "StaticText",
+      "name": "▼"
+    },
+    {
+      "role": "StaticText",
+      "name": "Live"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "NEXT"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "←"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "→"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " step · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "↑"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "↓"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " variation · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "L"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " live · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "P"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " pass on your turn · "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "C"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": " computer move in a variation. Click a point to play on your turn; elsewhere a click starts a "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "variation when analysis is open to you."
+    },
+    {
+      "role": "StaticText",
+      "name": "POSITION"
+    },
+    {
+      "role": "generic",
       "name": ""
     },
     {
-      "role": "time",
+      "role": "generic",
       "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "PLAY"
+    },
+    {
+      "role": "StaticText",
+      "name": "Start game (bots fill empty seats)"
+    },
+    {
+      "role": "StaticText",
+      "name": "Pass"
+    },
+    {
+      "role": "StaticText",
+      "name": "Resign"
+    },
+    {
+      "role": "StaticText",
+      "name": "–:––"
+    },
+    {
+      "role": "StaticText",
+      "name": "Waiting for the creator to start."
+    },
+    {
+      "role": "StaticText",
+      "name": "SEARCH AT THIS POSITION"
+    },
+    {
+      "role": "StaticText",
+      "name": "Move"
+    },
+    {
+      "role": "StaticText",
+      "name": "Visits"
+    },
+    {
+      "role": "StaticText",
+      "name": "Share"
+    },
+    {
+      "role": "StaticText",
+      "name": "Reward"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Computer move"
+    },
+    {
+      "role": "StaticText",
+      "name": "Analyze here"
+    },
+    {
+      "role": "StaticText",
+      "name": "Autoplay variation"
+    },
+    {
+      "role": "StaticText",
+      "name": "SEATS AND TEAMS"
+    },
+    {
+      "role": "StaticText",
+      "name": "Open seat · a bot if still empty at the start"
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 1 controller",
+      "value": "Person",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 1 team",
+      "value": "Team 1",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "button",
+      "name": "Sit here",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Open seat · a bot if still empty at the start"
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 2 controller",
+      "value": "Person",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 2 team",
+      "value": "Team 2",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "button",
+      "name": "Sit here",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Open seat · a bot if still empty at the start"
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 3 controller",
+      "value": "Person",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 3 team",
+      "value": "Team 3",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "button",
+      "name": "Sit here",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Open seat · a bot if still empty at the start"
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 4 controller",
+      "value": "Person",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "combobox",
+      "name": "Seat 4 team",
+      "value": "Team 4",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "button",
+      "name": "Sit here",
+      "states": {
+        "focusable": true
+      }
     },
     {
       "role": "paragraph",
       "name": ""
     },
     {
-      "role": "LabelText",
+      "role": "StaticText",
+      "name": "CHALLENGE CONVERSATION"
+    },
+    {
+      "role": "listitem",
       "name": ""
     },
     {
-      "role": "textbox",
-      "name": "Message this challenge",
+      "role": "group",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "ANIMATED GIF"
+    },
+    {
+      "role": "StaticText",
+      "name": "Frame delay"
+    },
+    {
+      "role": "combobox",
+      "name": "Frame delay",
+      "value": "0.45 s",
       "states": {
         "focusable": true,
-        "multiline": false,
-        "required": true
+        "expanded": false
       }
     },
     {
-      "role": "button",
-      "name": "Send",
+      "role": "StaticText",
+      "name": "Size"
+    },
+    {
+      "role": "combobox",
+      "name": "Size",
+      "value": "480 px",
       "states": {
-        "focusable": true
+        "focusable": true,
+        "expanded": false
       }
+    },
+    {
+      "role": "StaticText",
+      "name": "Make GIF up to this move"
+    },
+    {
+      "role": "StaticText",
+      "name": "Rules as implemented"
     },
     {
       "role": "StaticText",
@@ -523,7 +1170,7 @@
     },
     {
       "role": "StaticText",
-      "name": "Created by preview-player · open"
+      "name": "11×11 · 0/4 seated · by preview-player · open"
     },
     {
       "role": "StaticText",
@@ -539,31 +1186,363 @@
     },
     {
       "role": "StaticText",
+      "name": "Board"
+    },
+    {
+      "role": "combobox",
+      "name": "Board",
+      "value": "11",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Players"
+    },
+    {
+      "role": "combobox",
+      "name": "Players",
+      "value": "4",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Human deadline"
+    },
+    {
+      "role": "combobox",
+      "name": "Human deadline",
+      "value": "10 s",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Bot deadline"
+    },
+    {
+      "role": "combobox",
+      "name": "Bot deadline",
+      "value": "1 s",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Ko rule"
+    },
+    {
+      "role": "combobox",
+      "name": "Ko rule",
+      "value": "Auto (on for 2 players)",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Exploration C"
+    },
+    {
+      "role": "combobox",
+      "name": "Exploration C",
+      "value": "0.7",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Bot reward"
+    },
+    {
+      "role": "combobox",
+      "name": "Bot reward",
+      "value": "Soft margin vs best rival",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
+      "name": "Margin softness"
+    },
+    {
+      "role": "combobox",
+      "name": "Margin softness",
+      "value": "4",
+      "states": {
+        "focusable": true,
+        "expanded": false
+      }
+    },
+    {
+      "role": "StaticText",
       "name": "Create challenge"
     },
     {
-      "role": "StaticText",
-      "name": "preview-player"
+      "role": "InlineTextBox",
+      "name": "|◀"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "◀"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "▶"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "▶|"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "▲"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "▼"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Live"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "POSITION"
     },
     {
       "role": "StaticText",
-      "name": "05:41 PM"
+      "name": "Waiting to start"
     },
     {
       "role": "StaticText",
-      "name": "hello through the preview"
+      "name": "0 of 4 seats planned or taken. Empty open seats become bots at the start."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "PLAY"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Start game (bots fill empty seats)"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Pass"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Resign"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "–:––"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Waiting for the creator to start."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SEARCH AT THIS POSITION"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Move"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Visits"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Share"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Reward"
     },
     {
       "role": "StaticText",
-      "name": "Message this challenge"
+      "name": "Candidates appear here for every bot move, and for your own analysis when it is allowed."
     },
     {
-      "role": "generic",
+      "role": "InlineTextBox",
+      "name": "Computer move"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Analyze here"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Autoplay variation"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "SEATS AND TEAMS"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open seat · a bot if "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "still empty at the start"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "MenuListPopup",
       "name": ""
     },
     {
       "role": "StaticText",
-      "name": "Send"
+      "name": "Sit here"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open seat · a bot if "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "still empty at the start"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Sit here"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open seat · a bot if "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "still empty at the start"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Sit here"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Open seat · a bot if "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "still empty at the start"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Sit here"
+    },
+    {
+      "role": "StaticText",
+      "name": "Teams can merge once the game is playing. Merges are permanent."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "CHALLENGE CONVERSATION"
+    },
+    {
+      "role": "strong",
+      "name": ""
+    },
+    {
+      "role": "time",
+      "name": ""
+    },
+    {
+      "role": "paragraph",
+      "name": ""
+    },
+    {
+      "role": "LabelText",
+      "name": ""
+    },
+    {
+      "role": "textbox",
+      "name": "Message this challenge",
+      "states": {
+        "focusable": true,
+        "multiline": false,
+        "required": true
+      }
+    },
+    {
+      "role": "button",
+      "name": "Send",
+      "states": {
+        "focusable": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "ANIMATED GIF"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Frame delay"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Size"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Make GIF up to this move"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Rules as implemented"
     },
     {
       "role": "InlineTextBox",
@@ -595,7 +1574,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "Created by preview-player · open"
+      "name": "11×11 · 0/4 seated · by preview-player · open"
     },
     {
       "role": "InlineTextBox",
@@ -607,7 +1586,731 @@
     },
     {
       "role": "InlineTextBox",
+      "name": "Board"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Players"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Human deadline"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Bot deadline"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Ko rule"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Exploration C"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Bot reward"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Margin softness"
+    },
+    {
+      "role": "MenuListPopup",
+      "name": ""
+    },
+    {
+      "role": "InlineTextBox",
       "name": "Create challenge"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Waiting to start"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "0 of 4 seats planned or taken. Empty open seats "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "become bots at the start."
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Candidates appear here for every bot move, and for your own "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "analysis when it is allowed."
+    },
+    {
+      "role": "option",
+      "name": "Person",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Bot",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 1",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 2",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 3",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 4",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Sit here"
+    },
+    {
+      "role": "option",
+      "name": "Person",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Bot",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 1",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 2",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 3",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 4",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Sit here"
+    },
+    {
+      "role": "option",
+      "name": "Person",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Bot",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 1",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 2",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 3",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 4",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Sit here"
+    },
+    {
+      "role": "option",
+      "name": "Person",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Bot",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 1",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 2",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 3",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Team 4",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Sit here"
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "Teams can merge once the game is playing. Merges are "
+    },
+    {
+      "role": "InlineTextBox",
+      "name": "permanent."
+    },
+    {
+      "role": "StaticText",
+      "name": "preview-player"
+    },
+    {
+      "role": "StaticText",
+      "name": "08:17 PM"
+    },
+    {
+      "role": "StaticText",
+      "name": "hello through the preview"
+    },
+    {
+      "role": "StaticText",
+      "name": "Message this challenge"
+    },
+    {
+      "role": "generic",
+      "name": ""
+    },
+    {
+      "role": "StaticText",
+      "name": "Send"
+    },
+    {
+      "role": "option",
+      "name": "0.25 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "0.45 s",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "0.7 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "1 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "360 px",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "480 px",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "640 px",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "5",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "7",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "9",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "11",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "13",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "19",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "2",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "3",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "4",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "5",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "6",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "7",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "8",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "10 s",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "15 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "30 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "1 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "2 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "4 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "8 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "16 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "32 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "64 min",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "0.25 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "0.5 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "1 s",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "2 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "4 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "8 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "16 s",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Auto (on for 2 players)",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Simple ko + superko",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Off",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "0.5",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "0.7",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "1.0",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "1.4",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Soft margin vs best rival",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "Win / share win",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "Rank",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "2",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
+    },
+    {
+      "role": "option",
+      "name": "4",
+      "states": {
+        "focusable": true,
+        "selected": true
+      }
+    },
+    {
+      "role": "option",
+      "name": "8",
+      "states": {
+        "focusable": true,
+        "selected": false
+      }
     },
     {
       "role": "InlineTextBox",
@@ -615,7 +2318,7 @@
     },
     {
       "role": "InlineTextBox",
-      "name": "05:41 PM"
+      "name": "08:17 PM"
     },
     {
       "role": "InlineTextBox",

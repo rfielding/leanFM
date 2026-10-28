@@ -17,15 +17,24 @@ COOKIES ?= /tmp/leanfm.cookies
 ROOT_HTML ?= /tmp/leanfm-root.html
 EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
-.PHONY: build ui-build run serve claude stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+.DEFAULT_GOAL := all
+
+.PHONY: all lean build ui-build run serve claude stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+
+# `make` rebuilds everything: the browser bundle, every Lean target, and the book.
+all: build lean book
 
 build: ui-build
+	@python3 scripts/invalidate_include_str.py
 	lake build leanfm-server
+
+# Every Lean library module and executable, not just the server's imports.
+lean: build
+	lake build LeanFM leanfm leanfm-server leanfm-diagrams leanfm-validate
 
 ui-build:
 	@test -d ui/node_modules || (cd ui && npm ci)
 	cd ui && npm run check && npm run build && npm run check:bundle
-	@lake clean
 
 run:
 	lake exe leanfm
@@ -176,7 +185,7 @@ scripts:
 	node scripts/format_assets.js
 	node scripts/embed_static_assets.js
 
-book:
+book: lean
 	lake env lean --run RuntimeReliabilityDiagram.lean
 	lake env lean --run NestedForkJoinExample.lean
 	lake env lean --run StochasticUserMDPExample.lean
