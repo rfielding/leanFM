@@ -60,6 +60,13 @@ its edges. Double borders mark terminal states.}
 \label{fig:overlay-state-machine}
 \end{herefigure}
 
+Keeping probabilities outside the model is a deliberate break with tools such
+as PRISM \citep{kwiatkowska2011prism}, where branch probabilities are part of
+the model itself, and it follows FizzBee \citep{fizzbee}, which leaves the
+specification unchanged and supplies probabilities and costs in a separate
+performance file. The same separation lets one specification be checked under a
+declared overlay and a measured one.
+
 \section{Questions and their generated answers}
 
 \begin{heretable}

@@ -213,6 +213,32 @@ bounded deadlines measured from a knowledge-triggered start, or the
 contrary-to-duty recomputation. The example computes those directly over each
 history.
 
+\section{Computing what is owed: Catala}
+
+The deposit Act mixes two kinds of question. \emph{What} does the law compute
+from the facts---how much is returned, what deductions are allowed, what
+penalty applies? And \emph{when} did duties arise, which deadlines passed, and
+was a violation repaired? This chapter answers only the second kind.
+
+The first kind is the territory of Catala \citep{merigoux2021catala}, a
+programming language for literate law: the statute's own text and its
+formalization sit side by side, and its default logic expresses the ordinary
+legal shape ``the rule is $X$, except when $Y$, except when $Z$'' directly.
+That exception structure is Catala's strength, and it is handled only crudely
+here by a priority between codes. Catala's project also maintains a formally
+specified library of date computations; legal deadlines such as ``within one
+month'' of 31~January, or counts of business days, need exactly that precision
+before a time-bounded verdict such as $AF_{\le 14\,\mathrm{days}}$ can be
+trusted on a real statute.
+
+The two approaches compose rather than compete. Catala computes the amounts and
+statuses the law prescribes; the grammar and CTL of this chapter check, over a
+history of observable events, who owed what by when and what happened when it
+was not done. A verdict remains conditional on its premises: the code that
+governs is chosen, not derived; open-textured terms such as ``reasonable
+effort'' or ``normal wear'' are declared atoms whose values a person supplies;
+and the facts are only as good as the event history.
+
 \section{Status}
 
 \path{LegalDepositExample.lean} is an executable book example, not a general
