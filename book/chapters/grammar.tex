@@ -41,6 +41,14 @@ observable bytes, then at this abstraction they are not distinct choices and
 should be merged. This removes an otherwise ambiguous second account of agency
 from the grammar.
 
+One condition makes this sound: the distinguishing first messages of all
+branches must be sent by the \emph{same} actor. If Alice's message starts one
+branch and Bob's starts the other, nobody can implement the choice locally;
+both may act at once and the system leaves the grammar. This is the
+non-local-choice (realizability) problem of multiparty protocols, and a
+grammar must name one deciding actor per choice and be validated for it.
+LeanFM does not yet perform that validation.
+
 Simple finite conversations can compile to regular languages. Nested request
 structure motivates context-free productions. Correlation, freshness, uniqueness,
 and authorization typically require parameter flow or guarded productions.

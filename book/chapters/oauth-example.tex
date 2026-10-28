@@ -7,6 +7,18 @@ flow. It is not a replacement for the OAuth specification and deliberately begin
 above HTTP and protobuf. Its purpose is to exercise scenario decomposition,
 parameter flow, visible evidence, alternatives, requirements, and rendering.
 
+The \texttt{scenario}, \texttt{declare}, \texttt{from\_}/\texttt{to\_}/\texttt{emit},
+\texttt{weightedOneOf} and theorem listings in this chapter are \emph{proposed
+notation}: they are not compiled, and the definitions they name do not exist in
+the LeanFM library yet. The generated figures are real.
+
+The flow is also deliberately simplified. The authorization request omits
+\texttt{client\_id} and \texttt{response\_type}; the token request carries only
+the code, without \texttt{redirect\_uri}, client authentication or PKCE, all of
+which RFC~6749 and current OAuth security guidance require. The knowledge
+claims below hold for this simplified flow only; a deployable model must add
+those fields and re-check them.
+
 \section{Actors, values, and observable events}
 
 The example has four participants: a person using a browser, an application, an
@@ -439,6 +451,9 @@ theorem oauth_password_knowers
   exact knowledgeClosureOfProtectedField accepted initial honest protection
 \end{lstlisting}
 
+\noindent Proposed notation: neither the theorem nor the library lemma it uses
+exists yet.
+
 The browser itself knows a typed password. A narrower boundary requires a trusted
 credential actor; compromise, logging, a visible key, or failed protection changes
 the result.
@@ -473,9 +488,17 @@ model.
 
 \section{Probabilities and charts}
 
-The authorization service need not be random. The user supplies random input by
-granting or denying consent; the browser, queues, transport, and authorization
-service then react deterministically to the input they receive:
+The authorization service need not be random. The randomness belongs to the
+user, who grants or denies consent; the browser, queues, transport, and
+authorization service then react deterministically. As written above, however,
+the authorization server emits both the grant and the error, so under the
+deciding-actor rule of Chapter~\ref{ch:grammar} it is the server that chooses.
+A faithful model adds an explicit consent event from the browser to the
+authorization server, \texttt{ConsentGiven} or \texttt{ConsentRefused}, whose
+sender makes the user's choice observable. In the current implementation
+branch weights live in a separate overlay (Chapter~\ref{ch:generated-examples}),
+not in the grammar; the proposed \texttt{weightedOneOf} below expresses the same
+numbers inline:
 
 \begin{lstlisting}
 def consentDecision : Scenario :=
@@ -492,10 +515,10 @@ def oauthCharts : List ChartSpec :=
   ]
 \end{lstlisting}
 
-No separate field says that the user ``owns'' this choice. The grant and denial
-branches resolve to different consent-event bytes, and that terminal's source
-identifies the user-facing actor that emitted them. After those bytes select a
-branch, every transition may have probability one and the global model is still
+With that consent event in place, no separate field needs to say that the user
+``owns'' this choice: the grant and denial branches begin with different
+consent-event bytes, sent by the browser on the user's behalf. After those bytes
+select a branch, every transition may have probability one and the global model is still
 probabilistic. The grant branch carries probability mass $0.87$ through the
 outbound queue, transport, the server's inbound queue, and the deterministic
 grant response. The denial branch similarly carries mass $0.13$. Deterministic
@@ -548,7 +571,8 @@ refinement says how mass is distributed over them.
     (token) edge node[right,fill=diagramsurface,inner sep=1pt] {issued} (fetch)
     (fetch) edge node[right,fill=diagramsurface,inner sep=1pt] {resource} (done);
 \end{tikzpicture}
-\caption{OAuth state machine derived from legal grammar continuations.}
+\caption{Illustrative OAuth state machine, drawn by hand. The full machine also
+contains the rejected-authentication branch.}
 \label{fig:oauth-state-machine}
 \end{figure}
 

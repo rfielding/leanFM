@@ -681,6 +681,8 @@ structure Event where
   src : String
   dst : String
   message : String
+  /-- Optional timestamp (ms); when present, no prev/cause edge may run backwards in time. -/
+  timeAt : Option Nat := none
 deriving Repr, Inhabited
 
 def parseEvent (j : Json) : Except String Event := do
@@ -691,7 +693,8 @@ def parseEvent (j : Json) : Except String Event := do
     | some a => strings a ("event." ++ k) bounds.maxEvents
     | none => .ok []
   return { id := ← g "id", prevIds := ← ids "prevIds", causeIds := ← ids "causeIds"
-         , task := ← g "task", src := ← g "src", dst := ← g "dst", message := ← g "message" }
+         , task := ← g "task", src := ← g "src", dst := ← g "dst", message := ← g "message"
+         , timeAt := (j.getObjVal? "timeAt").toOption.bind (·.getNat?.toOption) }
 
 def mermaidName (s : String) : String :=
   String.ofList (s.toList.map fun c => if c.isAlphanum || c == '_' then c else '_')
@@ -727,6 +730,10 @@ def checkTrace (args : Json) : ToolOutcome := do
         | some j =>
           edges := edges ++ [(j, i, kind)]
           if j >= i then issues := issues ++ [s!"{e.id}: {kind} {r} does not precede it in the trace"]
+          match ev[j]!.timeAt, e.timeAt with
+          | some before, some after =>
+            if before > after then issues := issues ++ [s!"{e.id}: {kind} {r} has a later timeAt ({before} > {after})"]
+          | _, _ => pure ()
   -- cycles (Kahn)
   let mut indeg := Array.replicate n 0
   for (_, b, _) in edges do indeg := indeg.modify b (· + 1)

@@ -1,191 +1,107 @@
 # Critique
 
-This document records unresolved gaps where implementation supports less than
-the book claims. A successful build alone does not resolve them.
+Open gaps where the implementation supports less than the book claims. A
+successful build alone does not close one. Reviewed 2026-10-28; items resolved
+since the previous review are listed at the end so they are not reopened.
 
-### CTL implementation and temporal coverage remain bounded
+## Model checking covers task state machines, not whole grammars
 
-Verified 2026-10-20: `LeanFM/CTL.lean` implements Boolean, EX/AX, EF/AF, EG/AG,
-EU/AU and EW/AW; `CTLTests.lean` covers branching, vacuity, until/release and
-AG/AF duals with `native_decide`. `TaskFSM.holds` supplies task results to the
-executable and `/metrics`.
+`LeanFM/Logic.lean` (`check_ctl`) builds a finite Kripke structure from a task's
+typed transitions and returns a witness or counterexample path for every
+verdict, using polynomial fixpoint labelling. It does not yet derive the model
+from a `GrammarExpr`: `parallel`, `thresholdJoin`, `guard` and `ref` are not
+expanded, so a property that depends on interleaving is checked only to the
+extent the task FSM encodes it. `LeanFM/CTL.lean`, still used by `TaskFSM.holds`,
+uses path-local cycle detection that can be exponential on shared graphs.
+Bounded payloads, queues, clocks and truncation can hide growth or retry loops;
+an unbounded claim needs an abstraction argument. There is no proof that the
+checker itself is correct beyond agreement tests with `LeanFM.CTL`.
 
-Still missing: derive bounded systems and witnesses/counterexamples from general
-grammar/event models; prove checker/interpreter or deployed-code refinement; and
-show `possibly` handlers cover every witness and terminate (validation only
-requires a cited handling plan). Path-local cycle detection may be exponential
-on shared graphs; validation and event-pair reconstruction use quadratic scans.
-Bounded payloads, queues, tasks, clocks and truncation can hide growth, retry
-loops or timing behavior; unbounded claims need an abstraction argument.
+## Probability and time overlays carry means, not distributions
 
-### Project-root discoverability and code-generation readiness
+`LeanFM/Overlay.lean` separates declared and measured overlays and labels each
+answer with its overlay, and `measure` reduces branch counts and mean delays
+from recorded sessions. Delays are single values, so deadline answers from a
+measured overlay can be badly wrong: the bakery corpus has a 1163 ms mean sale
+and a model answer of 1 for "sold within 1.2 s", while only 54.5% of recorded
+sales meet it (book chapter 4 reports both). Needed: delay distributions,
+confidence intervals for branch probabilities (only the zero-count
+rule-of-three bound is shown), and exact or numeric solution for tasks with
+unbounded loops (run enumeration rejects cycles). The bakery corpus is
+synthetic; it shows the method, not real operating data.
 
-GoServer now has a working implementation experiment under its exclusive root:
-Go/JS differential tests, independently authenticated browser players, GIF replay,
-and actual HTTP/protobuf traces checked against Lean-derived task grammars.
-Its requirements own the HTTP contract. Evidence and limitations are durable in
-`projects/go-server/evidence/playable-v1/`. Still unverified: regenerate it in a
-fresh session from only those artifacts and establish general grammar-to-code
-refinement. The old contradictory drafts have not been retroactively accepted.
-Screenshots are not a gate.
+## Grammar-to-code refinement is not established
 
-LeanFM itself now has a no-examples reset regression: new-project creation and
-three continuations after physically removing chat files preserve canonical
-artifacts and acceptance bytes, and do not send a foreign symlinked schema to
-the provider. A real React browser test covers login, continuation, Project memory
-and light/dark PDF routes. This verifies context delivery, not that a real model
-faithfully consolidates every decision or that the specified checkpoint/clear
-transaction is implemented.
+Implementation mappings are checked structurally (typed shape, actor/message
+coverage, known requirement IDs), not behaviorally. No pipeline yet generates
+legal and illegal traces from a grammar, round-trips them through protobuf
+(`decode(encode(generate(grammar, choices)))`), and replays them against the
+implementation. `scripts/roundtrip_generated_scenario.py` checks one hand-built
+scenario. `RequirementEnvelope.oneof` does not validate branch disjointness.
+HTTP bindings published to clients should live in Requirements, since methods,
+paths, codecs, status alternatives and authentication affect interoperability;
+`TransportSpec` checks only nonempty method/path and a known response target,
+and the `custom "unassigned"` fallback can hide a missing mapping.
 
-## Book length and release reproducibility (reviewed 2026-10-20)
+The proposed `scenario`/`declare`/`emit`/`receive` DSL, `refineMessage`, role
+projection, `WireTerm` and `composeRoles` described in the book are absent from
+`RequirementSpec`, `TaskRequirement` and `GrammarExpr`; guards are strings.
 
-Now 131 pages after consolidation; preserve the preface-to-PR narrative and
-technical qualifications. Verify reproducible releases, tool/content manifests,
-and semantic equivalence: `book/main.pdf` drives code generation.
+## Event traces: ordering is checked, clocks are not
 
-## The new visual gallery exposes derivation gaps
+`check_trace` now reports duplicate and dangling ids, references to later
+events, cycles, edges whose `timeAt` runs backwards, schema src/dst mismatches,
+concurrency, and per-task acceptance. Still missing: pairing starts and
+terminals across retries and overlapping attempts; clock domain, resolution,
+overflow and cross-actor synchronization; validating `dwellMs` against boundary
+times; and m-of-n tie, winner and cancellation semantics.
 
-The SVG gallery is not event-derived: `interactionSvg` plots task transitions
-in list order rather than `(session, scenario)` traces ordered by `priorIds`,
-omitting choices/thresholds and misrendering `KVReplica -> KVReplica` as a
-self-loop rather than leader/follower lifelines. `stateMachineSvg` draws a linear
-chain without applying transition `src`/`dst`; latency and outcome SVGs use fixed
-geometry, not event reducers. `/diagrams/` is Git-ignored, so README links are
-not durable. Require typed `DesiredOutput` inputs, branch/loop/fork/join-sensitive
-tests, and labels distinguishing requirement schema, example trace, observed
-trace, or modeled prediction.
+## Paxos example lacks end-to-end conformance
 
-## Grammar-to-code and validation claims remain incomplete
+Requirement payloads are empty; the runtime uses a generic TCP `Envelope`;
+quorum-DAG `ScenarioEvent.priorIds` has no runtime counterpart; `node.go` emits
+only terminal events, so write, list and recovery traces cannot be
+reconstructed. Tests cover envelope round trips and truncated protobuf, not
+partial frames, loss, duplication, delay or reordering.
 
-Compatibility follow-up (2026-10-21): move published HTTP bindings from
-Implementation into Requirements, then enforce realization against that wire
-contract. Methods, paths, codecs, headers, status alternatives, authentication,
-correlation and framing affect interoperability; implementation cannot override
-them. Current transport validation does not establish this guarantee.
+## Runtime models are declared, not executed
 
-The proposed `scenario`/`declare`/`from_`/`to_`/`emit`/`receive` DSL,
-exports, `refineMessage`, role projection, `WireTerm`, and `composeRoles` are
-absent from `RequirementSpec`, `TaskRequirement`, and `GrammarExpr`; guards are
-strings and event values untyped. Validation checks references, atom endpoints,
-and threshold bounds, but does not compile the DSL, generate/recognize traces,
-or project participants.
+`ImplementationSpec` names `BoundedMailbox` send/receive/close semantics, but no
+executable mailbox exists in LeanFM, so no Go-channel equivalence is
+established. Waiter sets, wake order, `select`, cancellation and fairness are
+unspecified. Populations are finite instance lists with one resource contract
+each; queue pressure counts messages, not bytes; `Characterization.lean`
+reliability reducers are tested for plan shape, not calculations.
 
-The three-replica Paxos app lacks end-to-end conformance: requirement payloads
-are empty; runtime uses a separate generic TCP `Envelope`; and quorum-DAG
-`ScenarioEvent.priorIds` has no runtime counterpart (`trace.Event` has no
-predecessors). `node.go` emits only terminal `PutSucceeded`/`ListSucceeded`,
-while the sink fills IDs/timestamps. Endpoint/session/task events lack starts,
-so write, list, concurrent-write, and outage/recovery traces are unreconstructable;
-outage recovery is untraced and prepare is slot-scoped. Protocol tests cover
-envelope round trips and truncated protobuf, not partial TCP frames, loss,
-duplication, delay, or reordering. `/metrics` has request outcomes, commit
-latency, and quorum size, but lacks availability, recovery lag, queue pressure,
-memory headroom, and per-session diagrams.
+## Lean checks definitions, not the artifacts around them
 
-`scripts/roundtrip_generated_scenario.py` manually builds one `get_docs`
-scenario from `LeanFM/LLMGenerated/Requirements.proto` and checks
-Python-protobuf equality and predecessor IDs, not grammar trace generation or
-recognition. Tests still need every `GrammarExpr` constructor and legal/illegal
-branch (including `possibly`), decoded grammar/FSM acceptance, schema evolution,
-malformed input, duplicate IDs, missing/cyclic predecessors, and out-of-order
-events. The target is
-`decode(encode(generate(grammar, choices)))`. The role of
-`LeanFM/PaxosKV/Requirements.proto`'s `ScenarioEvent` (interoperable requirement
-data or implementation choice) and its evolution policy remain undecided;
-`RequirementEnvelope.oneof atom` does not validate branch disjointness, which
-needs disjoint terminal byte languages or explicit metadata.
+Lean does not check co-located Python, JavaScript, shell, protobuf or LaTeX.
+`RequiredProof` is a named predicate, not a proof term. `book/logic.lean` needs
+Mathlib and is not compiled by `make`. `LeanFM/Render.lean` hard-codes
+theorem-gallery cards instead of reading declarations. Generated SVGs
+(`interactionSvg`, `stateMachineSvg`) plot task transitions in list order, not
+event-derived traces, and omit choices and thresholds.
 
-Lean verifies definitions and proof terms, not co-located Python, JavaScript,
-shell, Graphviz, protobuf, or LaTeX outputs. `native_decide` covers finite
-decidable propositions, not empirical assumptions or external parsers.
-`RequiredProof` is not a proof term and its predicate is unchecked;
-`lake env lean book/logic.lean` still fails without Mathlib.
-`LeanFM/Render.lean` hard-codes theorem-gallery cards instead of reading
-declarations, risking drift and conflating definitions with theorems. CI should
-compile claimed executable listings, label illustrative examples, and generate
-cards from declarations or a typed AST linked to source and successful builds.
+## Security knowledge is sketched, not implemented
 
-Structural validation checks typed shape, actor/message coverage, and known
-justification IDs—not intent or generated symbol-to-test behavior. Add stable
-fine-grained IDs, bidirectional coverage, behavioral trace tests, and classify
-handwritten code as requirement-backed or infrastructure. Human review must
-still cover assumptions, trust boundaries, failure alternatives, costs,
-probability provenance, and observability; generation must not invent facts.
-The `custom "unassigned" ""` fallback can hide a missing transport mapping;
-`TransportSpec` checks nonempty method/path and a known response target, not an
-HTTP request. ChatUI specifies status, content type, codecs, one-to-one event
-`cause_id` closure, and OpenAPI, but validation/tests do not prove runtime
-bindings. Generic mappings omit authentication, deadlines, headers, streaming, retry/idempotency,
-connection reuse, intermediaries, redirects, cancellation, status alternatives,
-and binding validation.
+The Dolev-Yao `Derives` relation and `knows(actor, value)` over the causal past
+are described in the book but not implemented; the MCP `knows` tool answers
+`unsupported`. Signatures, hashes, randomness, compromise and side channels
+have no rules. A symbolic model is not a computational cryptographic proof.
 
-Generation varies with model, prompt, tools, and sampling; pin them and review
-diffs and behavior. Named finite metrics do not establish burstiness, tail
-dependence, predecessor order, rare failures, or operational risk; define
-tolerances, sample sizes, seeds, and distributional tests.
+## Reproducibility
 
-## Event order, time and concurrency need stronger validation
+Generation varies with model, prompt, tools and sampling. A fresh session has
+not yet regenerated GoServer from only its durable artifacts. Book PDFs are
+committed on every rebuild, which causes binary merge conflicts and large
+pushes; publishing them from releases would keep the repository text-only.
 
-Events are timestamped points: paired boundaries give durations; `priorIds`
-orders events but does not assert causation. Paxos `scenarioOrderWellFormed`
-checks unique IDs, message fields, and links only to earlier serialized IDs.
-General validation must still:
+## Resolved since 2026-10-20 (do not reopen)
 
-- observe hidden state, justify an abstraction, or mark dependent properties
-  undetermined;
-- pair starts and terminals uniquely across retries and overlapping
-  `(session, task)` attempts;
-- validate clock domain, resolution, monotonicity, overflow, and cross-actor
-  synchronization; ensure predecessor IDs exist (or are declared external),
-  the graph is acyclic independent of serialization, and no edge contradicts
-  `timeAt`;
-- check actor/message endpoints against selected terminals, grammar roots and
-  terminals, complete joins, valid $m$-of-$n$ thresholds, and distinct branch IDs.
-
-Validate `dwellMs` against boundary times and define $m$-of-$n$ ties, winner
-selection, and cancellation. Partial-order width (incomparable point events),
-active work (paired starts/completions), and feasible scheduling (including
-actor capacity, queues, and scheduler) are distinct measures.
-
-## Runtime queue, population, reliability, and memory models remain limited
-
-Finite FIFO semantics cover blocking send-on-full and receive-on-empty, not
-waiter sets/wake order, `select`, cancellation/deadlines, fairness/scheduling,
-queue/state atomicity, or duplicate byte ownership. `ImplementationSpec` names
-closed-channel `BoundedMailbox` operations, but no executable mailbox exists;
-it therefore establishes no Go-channel equivalence.
-
-The model expands finite instance IDs, each inheriting one resource contract per
-actor specification. Dynamic lifecycle, discovery, load balancing, and migration
-are absent; the 20-client/2-server sample establishes no other scale.
-
-`queue.pressure` integrates messages, not bytes. Payload-byte sums also omit
-envelopes, allocator/queue storage, decoder state, retained/transport buffers,
-actor state, duplicates, and blocked tasks. A memory budget must define a
-reproducible boundary such as wire bytes, owned heap, or resident memory.
-
-`Characterization.lean` records uptime, MTTR, composed-availability, and cascade
-reducer plans; tests check plan shape/names, not calculations. The book's
-censored-interval, joint-outage, and outage-boundary policies lack reducer tests.
-
-## Probability and statistical evidence need explicit assumptions
-
-Rational probabilities lack an evidence-kind tag, conflating empirical
-frequencies, assumed distributions, unresolved nondeterminism, policies, and
-epistemic uncertainty. The seeded 81,039-line bakery corpus is synthetic; its
-reducer summaries lack confidence intervals, sensitivity/stationarity checks,
-and censored-task treatment.
-
-`StreamStats` computes client-weighted/server-window rates and evaluates supplied
-USL parameters, but fits neither parameters nor fit uncertainty. Its completed,
-paired-only observations can bias estimates when omitted, in-flight, or failed
-work is excluded. Declare warm-up, think-time, and population-change policies.
-
-## Security knowledge is not yet a complete epistemic model
-
-The book sketches, but does not implement, a Dolev–Yao `Derives` relation for
-initial terms, tuples/projection, and perfect encryption/decryption, plus CTL
-checks over its closure. Completeness still needs explicit rules and trust
-boundaries for signatures, hashes, randomness, compromise, browser scripting,
-logs/caches, and side channels. This symbolic model is not a computational
-cryptographic proof.
+- Witnesses and counterexamples: `check_ctl` returns them for every verdict.
+- Stakeholder approval gates: removed; review and acceptance are git commits.
+- Evidence kind for probabilities: overlays are labelled declared or measured.
+- Hidden-state requirements: `classify_requirement` separates observable,
+  derived and implementation-only atoms and proposes events.
+- Lean 4.35 upgrade and `Std.Async` networking.
+- Predecessor existence, acyclicity and timestamp order in `check_trace`.

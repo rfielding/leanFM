@@ -137,16 +137,21 @@ greatest lower bound of descending approximations:
   = \bigcap_{n\ge 0} Y_n.
 \]}
 
-LeanFM implements these choices with cycle-aware searches rather than by
-materializing every approximation set. An unresolved revisit is false for
-\texttt{EF}, \texttt{EU}, \texttt{AF}, and strong \texttt{AU}, selecting the
-least fixed point. A predicate-preserving revisit is true for \texttt{EG} and
+LeanFM has two evaluators. The small recursive one in \texttt{LeanFM.CTL},
+used by task metrics, implements these choices with cycle-aware searches rather
+than by materializing every approximation set. An unresolved revisit is false
+for \texttt{EF}, \texttt{EU}, and strong \texttt{AU}, selecting the least
+fixed point. A predicate-preserving revisit is true for \texttt{EG} and
 weak until, selecting the greatest fixed point. \texttt{AG} is checked as
 $\neg EF\,\neg p$, and \texttt{AF} as $\neg EG\,\neg p$. Thus least upper bound
 and greatest lower bound are paired implementation choices; neither describes
-every CTL operator by itself.
+every CTL operator by itself. The second evaluator, in \texttt{LeanFM.Logic}
+and used by the MCP \texttt{check\_ctl} tool, computes the approximation sets
+directly: it labels every reachable node with the set satisfying each
+subformula by least and greatest fixed-point iteration, and returns a witness
+or counterexample path. Tests check that the two agree.
 
-\subsection{Current asymptotic cost}
+\subsection{Asymptotic cost}
 
 The smaller model boundary is not itself a faster model-checking algorithm.
 Let $V$ be the number of reachable observations, $E$ the successor edges,
@@ -154,7 +159,7 @@ $L$ the number of nodes in the checked CTL formula, and $P$ the number of
 simple paths inspected by a search. The current Lean implementation carries a
 path-local \texttt{List} of visited observations. Membership in that list is
 linear in the current path length, and completed subgraphs are not memoized
-between branches. A single temporal search therefore costs
+between branches. For that evaluator, a single temporal search therefore costs
 $O(E_P+VP)$ time, where $E_P$ counts edge visits across the inspected paths,
 and $O(V+L)$ stack and path memory. $P$ can be exponential---and in dense
 graphs worse than $2^V$---even though the input graph contains only $V$ states.
@@ -167,13 +172,12 @@ different path that reaches it; its cost is governed by paths, not merely by
 states and edges.'' Formula nesting may repeat those searches because
 subformula results are also not cached.
 
-The intended indexed evaluator first assigns stable state identifiers, stores
-predecessor and successor adjacency, and memoizes the set satisfying each
-subformula. Fixed-point worklists then give a target bound of
-$O(L(V+E))$ time and $O(LV+E)$ space for explicit finite CTL checking. That is
-an implementation target, not the complexity of the current code. The target
-must be accompanied by equivalence tests against the small recursive evaluator
-and by measurements on specified graph families.
+The fixed-point evaluator in \texttt{LeanFM.Logic} avoids the path explosion.
+Each fixed point needs at most $V+1$ iterations, each costing $O(V+E)$, so a
+formula of $L$ nodes costs $O(L\,V\,(V+E))$ time; it bounds models at 4096
+nodes. Worklist propagation over predecessor adjacency would reach the
+textbook $O(L(V+E))$; that remains an implementation target, to be accompanied
+by measurements on specified graph families.
 
 No comparison with TLC follows from these bounds. LeanFM often constructs a
 smaller observable-event graph because it deliberately omits irrelevant private
@@ -228,7 +232,7 @@ to $G p$. Under the common model-checking convention that an LTL formula must
 hold on every initial path, $F p$ corresponds to $AF p$ and $G p$ corresponds to
 $AG p$.
 
-Consequently, presenting frequently used $AF$ and $EG$ obligations as $F$ and
+Consequently, presenting frequently used $AF$ and $AG$ obligations as $F$ and
 $G$ is a deliberate interface reduction, not a CTL equivalence on a branching
 model. The durable artifact retains the exact originating CTL formula so the
 checker can still use existential witnesses, negation, and the correct
@@ -375,6 +379,9 @@ A \texttt{possibly} obligation therefore contains three linked artifacts:
   \item generated implementation code whose justification cites that
         possibility requirement.
 \end{enumerate}
+
+\noindent This is the target; today validation checks only that a handling plan
+is cited, not that generated code exists or covers the witness.
 
 For example, ``a bakery delivery may fail'' requires a decodable
 \texttt{DeliveryFailed} message, a legal failure branch, and code that performs

@@ -87,8 +87,9 @@ defined in this order:
   \item Recover the authenticated user from the
         \texttt{leanfm\_session} HttpOnly, SameSite cookie. The cookie is
         transport authorization, not a field silently added to every protobuf
-        message. Its resolved user and session identifiers constrain which
-        project-scoped message may be constructed.
+        message. It authorizes model calls and use of that user's provider
+        keys; it does not decide which project may be read, because projects
+        are shared.
   \item Validate required fields and task \texttt{where\_} constraints. On
         success, assign the envelope metadata and the oneof payload. On failure,
         emit the named rejection alternative when the grammar has one; otherwise
@@ -138,10 +139,9 @@ not be mistaken for user-task protobuf events.
 
 \input{generated/web-protocol-running-http.tex}
 
-Every \texttt{/api/} route except public account creation and login requires a
-valid in-memory session. Project paths additionally resolve the authenticated
-owner's project root. A missing session yields 401; an unknown or unauthorized
-project is deliberately represented as 404. The server binds to loopback by
+Project routes are shared and available before login; an unknown project is
+404. A valid in-memory session is required only for model calls, provider-key
+management and application launch, and a missing session there yields 401. The server binds to loopback by
 default. Network exposure requires an authenticating reverse proxy or an
 equivalent transport boundary.
 
@@ -196,14 +196,16 @@ the typed \texttt{TaskGrammar} values. Pronounce
 composition; \texttt{choose/or} is an explicit alternative;
 \texttt{optional} permits zero or one occurrence; \texttt{fork/join all} waits
 for every branch; and \texttt{race/join first} accepts the first completion and
-cancels the remaining branches. A message not admitted by the selected task's
+cancels the remaining branches. (A threshold join in Chapter~\ref{ch:grammar}
+is a different construct: its unselected branches are not implicitly
+canceled.) A message not admitted by the selected task's
 current residual grammar is illegal even if its protobuf bytes decode.
 
 \input{generated/web-protocol-grammar.tex}
 
 \section{The grammar as an executable canvas}
 
-The complete grammar is one navigable canvas rather than one permanently huge
+\textit{Future interface.} The complete grammar is one navigable canvas rather than one permanently huge
 drawing. A task or production node may be closed to its typed boundary or
 opened to show its interaction messages, residual states, parameters,
 constraints, paired measurements and nested productions. Opening and closing
@@ -212,9 +214,9 @@ obligation.
 
 Each editable parameter has one typed definition and explicit dependency
 edges. Changing a queue capacity, actor population, timeout, probability or
-other parameter marks every transitive dependent stale and regenerates the
-affected productions, reducers, proofs, codecs, charts and views. The canvas
-shows that cascade before the revised artifact can be accepted.
+other parameter would mark every transitive dependent stale and regenerate the
+affected productions, reducers, proofs, codecs, charts and views, showing that
+cascade before the revision is committed. None of this is implemented yet.
 
 A production known to cross HTTP may attach its transport renderer at that
 production. The binding names the method, path template, request and response

@@ -85,9 +85,13 @@ The branch weights are relative integers. Their sum supplies the denominator:
 \AccessibleEquation{Three fifths plus two fifths equals one.}{\[
   \frac{3}{5}+\frac{2}{5}=1.
 \]}
-The checker rejects an empty chance set and every zero-weight branch.
-Normalization divides each positive branch weight by the total weight; it does
-not require floating-point arithmetic.
+This MDP example writes weights inside the model and the MDP checker rejects an
+empty chance set and zero-weight branches, normalizing positive weights by
+their total. That is a separate mechanism from the probability overlays of
+Chapter~\ref{ch:generated-examples}, where the task core carries no numbers,
+weights are exact fractions that must already sum to one, and a branch may be
+given probability zero while staying legal, as the refinement rule above
+requires. New work should prefer overlays.
 
 Assign reward 1 to browsing and reward 8 to purchasing. The terminal paths and
 their durations give
@@ -307,8 +311,8 @@ coherency creates a finite peak and declining throughput beyond capacity.}
 Population capacity is not the only overload boundary. For a fixed deployment
 with sustainable service rate $\mu$, offered load $\lambda$ is at capacity when
 $\lambda=\mu$. Below capacity, a simple queueing illustration has response time
-proportional to $1/(\mu-\lambda)$ and queued work proportional to
-$\lambda/(\mu-\lambda)$. At and above capacity these steady-state quantities
+proportional to $1/(\mu-\lambda)$ and work in the system (waiting plus in
+service) proportional to $\lambda/(\mu-\lambda)$. At and above capacity these steady-state quantities
 are unbounded: completed throughput is capped by $\mu$, while unfinished work,
 latency, queued bytes, and memory pressure accumulate. A finite queue converts
 that growth into blocking or rejection; exhausting the memory budget is a fatal
@@ -638,9 +642,10 @@ chosen weighting is part of the requirement and must be shown in the report.
 Centrality is a prioritization heuristic, not an availability proof: ordinary
 PageRank can miss a low-traffic series dependency, a cut vertex, or the exact
 number of replica failures that crosses a quorum threshold. The denial-of-
-service report therefore places the centrality ranking beside single-node and
+service report should therefore place the centrality ranking beside single-node and
 named multi-node cascade simulations, minimal service cut sets, lost task
-capacity, and client-visible outcomes. This answers both ``which node looks
+capacity, and client-visible outcomes; today only the checklist item and a
+\texttt{Characterization.lean} plan exist. Such a report would answer both ``which node looks
 important?'' and the stronger question ``what actually stops if an attacker
 makes this set unavailable?''
 

@@ -149,6 +149,9 @@ def main : IO Unit := do
   let conc := "{\"events\": [{\"id\": \"a1\", \"task\": \"mcp_logic_consult\", \"src\": \"Agent\", \"dst\": \"LeanFMServer\", \"message\": \"LogicConsultRequested\"}, {\"id\": \"b1\", \"task\": \"other\", \"src\": \"Agent\", \"dst\": \"LeanFMServer\", \"message\": \"LogicConsultRequested\"}], \"drafts\": [{\"id\": \"other\", \"states\": [\"x\", \"y\"], \"initial\": \"x\", \"terminals\": [\"y\"], \"transitions\": [{\"src\": \"x\", \"dst\": \"y\", \"message\": \"LogicConsultRequested\"}]}]}"
   expect "independent requests are concurrent" (match call "check_trace" conc with
     | .ok j => j.getObjValD "concurrentCount" == toJson (1 : Nat) | _ => false)
+  let backwards := "{\"events\": [{\"id\": \"e1\", \"timeAt\": 50, \"task\": \"mcp_logic_consult\", \"src\": \"Agent\", \"dst\": \"LeanFMServer\", \"message\": \"LogicConsultRequested\"}, {\"id\": \"e2\", \"timeAt\": 10, \"causeIds\": [\"e1\"], \"task\": \"mcp_logic_consult\", \"src\": \"LeanFMServer\", \"dst\": \"Agent\", \"message\": \"LogicVerdict\"}]}"
+  expect "an edge that runs backwards in time is reported" (match call "check_trace" backwards with
+    | .ok j => j.compress.contains "later timeAt" | _ => false)
   -- logic-observability
   let cls := match call "classify_requirement" "{\"predicates\": [\"the cache is consistent\", \"LogicVerdict count stays below 10\"], \"task\": \"mcp_logic_consult\"}" with
     | .ok j => j.compress | _ => ""

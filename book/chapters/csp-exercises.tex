@@ -229,7 +229,7 @@ This is the grammar analogue of the CSP/Dolev--Yao attacker: possible hostile
 messages are generated from observable history and constrained by a
 context-sensitive derivability relation.
 
-\section{Knowledge and agreement become theorems}
+\section{Knowledge and agreement would become theorems}
 \label{sec:knowledge-closure}
 
 \index{secrecy}
@@ -244,7 +244,6 @@ theorem yahalom_session_key_knowers
     (accepted : yahalom.Accepts trace)
     (honest : Uncompromised [.alice, .bob, .server]) :
     knowers (sessionKey accepted.kab) trace = [.alice, .bob, .server] := by
-  -- proof uses the fixed symbolic-crypto library
   exact knowledgeClosureFromKeyOwnership accepted honest
 
 theorem yahalom_bob_agrees_with_alice
@@ -256,7 +255,8 @@ theorem yahalom_bob_agrees_with_alice
   exact agreementFromNonceChallenge accepted bobDone
 \end{lstlisting}
 
-The exact proof scripts depend on the library still to be built. The important
+These listings are proposed notation: the symbolic-crypto library and the
+lemmas they name do not exist yet, so nothing here is a checked proof. The important
 design constraint is already visible: theorem statements refer only to accepted
 event traces, knowledge derived from those traces, and explicit compromise
 assumptions.
@@ -398,7 +398,17 @@ receive (encrypt aliceSecretView (tuple [nonce na, nonce "nb"]))
   where_ field "na" == na
 \end{lstlisting}
 
-This demonstrates why ``all behaviour is observable'' must not mean ``all
+This is the textbook warning case. As written, Bob's reply
+$\{n_a, n_b\}_{pk_a}$ does not name Bob, and Lowe's 1995 attack exploits exactly
+that: an intruder $I$ whom Alice contacts honestly can replay her first message
+to Bob as if from Alice, relay Bob's reply back to Alice for decryption, and so
+learn $n_b$ and convince Bob that he is talking to Alice. Lowe's fix adds the
+responder's identity, $\{n_a, n_b, B\}_{pk_a}$, with Alice checking it. A
+LeanFM model of this protocol must generate the attack trace as a
+counterexample to agreement for the original message and find none for the
+fixed one; that is the acceptance test for the intruder grammar.
+
+It also demonstrates why ``all behaviour is observable'' must not mean ``all
 plaintext is public.'' The globally recorded event exposes endpoints, timing,
 kind, and wire bytes. Which symbolic values an actor can recover from those bytes
 is governed by the deduction relation.

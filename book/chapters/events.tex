@@ -25,7 +25,10 @@ abbrev Trace (Actor Session Task Kind Payload : Type) :=
 
 The fields have different jobs. \texttt{id} identifies a visible fact;
 \texttt{priorIds} records zero or more immediate predecessor backpointers;
-\texttt{causeId} optionally identifies the one direct causal event; \texttt{from} and
+\texttt{causeId} optionally identifies the one direct causal event (the MCP
+\texttt{check\_trace} tool spells these \texttt{prevIds} and a list
+\texttt{causeIds}, and the protobuf envelope \texttt{prior\_ids} and
+\texttt{cause\_id}); \texttt{from} and
 \texttt{to} name the parties; \texttt{(session, task)} correlates independently
 progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
@@ -253,7 +256,8 @@ maximum simultaneously active purchases & \BakeryMaxActive \\
 \end{tabular}
 \end{center}
 
-These ratios are suitable probability estimates for this corpus. Regeneration
+The sale and stockout ratios are frequency estimates for this corpus; the
+other rows are counts and maxima, not probabilities. Regeneration
 with a different source stream changes the macros and therefore changes every
 book example that consumes them.
 

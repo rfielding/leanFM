@@ -37,9 +37,10 @@ normally supplies only:
 This boundary matters for automation. Generated Lean remains small enough to
 review, while library proofs and algorithms are reused rather than regenerated.
 
-\section{An exploratory Lean proof fixture}
+\section{An unchecked exploratory fixture}
 
-\texttt{book/logic.lean}, reproduced completely below, explores a regularized
+\texttt{book/logic.lean}, reproduced completely below, is an unchecked side
+experiment, not part of the method. It explores a regularized
 assignment for $1+2+3+\cdots$. For each finite cutoff $n$, its theorem equates
 the triangular prefix $n(n+1)/2$ plus the defined correction
 \texttt{Tail\_S}(n) with $-1/12$. This identity under that definition does not

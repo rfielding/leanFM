@@ -67,7 +67,7 @@ canonical absolute paths are accepted only when their resolved targets remain
 beneath that root; traversal and escaping symlinks fail closed.
 
 The three specifications have the separate roles defined in
-Section~\ref{sec:acceptance-gates}. HTTP, in-process channels, TCP and other
+Section~\ref{sec:three-layers}. HTTP, in-process channels, TCP and other
 adapters are implementation choices; validation, views, metrics, reports and
 OpenAPI project the same model. A language model may propose edits, but
 compilation and validation remain deterministic: prose establishes no proof.
@@ -243,25 +243,26 @@ would send:
 \end{lstlisting}
 
 The formula is parsed into a closed syntax tree and evaluated by LeanFM. It is
-never compiled, interpreted as Lean, or passed to a shell; the required proof
-\emph{Submitted logic never runs as code} states this as a \texttt{never}
-property, and its control is that the parser has no constructor that names
-code.
+never compiled, interpreted as Lean, or passed to a shell. The specification
+records this as the obligation \emph{Submitted logic never runs as code}; it is
+tested rather than proved, and its control is that the parser has no
+constructor that names code.
 
 \subsection{Five verdicts}
 
 \begin{description}
 \item[\texttt{proved}] The formula holds on every reachable state within the
-stated bounds, with a witness where the formula is existential.
+stated bounds, with a witness where the formula is existential. In the terms of
+Chapter~\ref{ch:vision} this is a \emph{finite-model check}, not a Lean proof.
 \item[\texttt{disproved}] A counterexample path is returned.
 \item[\texttt{unknown}] The model is too weak to decide: a derived atom, a
 predicate text, or a message field value, none of which a task's state machine
 carries.
 \item[\texttt{unsupported}] The operator is outside the implemented logic; the
 answer names it.
-\item[\texttt{resource-limit}] Exploration stopped at the state, depth or time
-bound. The required proof \emph{Exhausted search never proves} forbids
-reporting this as \texttt{proved}.
+\item[\texttt{resource-limit}] The reachable model exceeded its node bound
+(4096 nodes). The tested obligation \emph{Exhausted search never proves}
+forbids reporting this as \texttt{proved}.
 \end{description}
 
 \subsection{Requirements without observable behavior}
@@ -271,7 +272,7 @@ classifier makes the incompleteness explicit instead of letting it pass. An
 \emph{observable} atom is decided by the event trace alone. A \emph{derived}
 atom is computed from the trace by a declared reducer---a balance, a count, the
 set of values an actor could have read. An \emph{implementation-only} atom
-refers to state that no event reveals. The required proof \emph{Hidden
+refers to state that no event reveals. The tested obligation \emph{Hidden
 predicates never pass as observable} keeps the third kind out of conformance
 tests; the classifier then proposes events, such as a \texttt{CacheAudited} or
 \texttt{KeyRotated} message with the fields that expose the predicate, that
@@ -455,7 +456,7 @@ $AG\,\neg p$, and \texttt{preparedFor} becomes $EF\,p$. A
 \texttt{where\_} trace predicate is displayed with its stable identifier under
 the invariant $AG\,p$. Each card identifies its requirements origin.
 
-The implementation mapping follows Section~\ref{sec:acceptance-gates}: its
+The implementation mapping follows Section~\ref{sec:three-layers}: its
 answers realize the specified behavior and cite their requirements. It cannot
 silently introduce a property or change the wire contract.
 
@@ -463,10 +464,8 @@ The assistant owns routine formal-language and implementation decisions. The
 interrogation checklist is an internal completeness check, not a questionnaire
 for the stakeholder. Choose, record and validate reversible defaults without
 interrupting the user. A question needs a major consequence that is hard to
-reverse and cannot be resolved within existing authorization. Formal approval
-describes behavior and material consequences in plain language. Chat shows the
-same revision-bound approval controls as Project memory once a candidate is
-checked; pressing one records the human decision without a provider request.
+reverse and cannot be resolved within existing authorization. There is no
+approval step: the stakeholder reviews the resulting diff and commits it.
 Successful intermediate checks are progress toward the original goal. The
 assistant selects the next reasonable reversible step and continues through
 client-driven batches without asking whether to continue. The user can Cancel.
@@ -723,15 +722,13 @@ keys are authenticated together inside a password-encrypted bundle, never
 returned to the browser or stored in plaintext. Existing single-key accounts
 migrate when keys change. Updates revoke older sessions; an already-running
 provider request may finish, but its returned tools cannot run afterward.
-The project list exposes
-the checked-in GoServer project under one canonical \texttt{GoServer} identity,
-not a separate ``GoServer example'' tab.
+An optional local GoServer example, when present under \texttt{projects/}, appears
+under one canonical \texttt{GoServer} identity.
 
 Account records are runtime state, not source. By default the salted password
-verifier, password-encrypted provider keys, private conversations, and session
-state remain beneath the operator's local \texttt{data/} directory. Git ignores
-that directory and continuous integration rejects any tracked file below it.
-Checked-in example projects therefore contain books, specifications, source,
+verifier and password-encrypted provider keys live in the private vault
+\texttt{.leanfm/accounts/}, which Git ignores; sessions are held by the server.
+Example projects contain books, specifications, source,
 tests, and deliberately selected media, but never user logins or credentials.
 
 The model selector combines models discovered for the unlocked providers.
@@ -757,7 +754,7 @@ incurred them.
 
 \section{Cursor as an agent client}
 
-A Cursor subscription connects to LeanFM as an authenticated agent client, not
+A Cursor subscription connects to LeanFM as an agent client, not
 as a model-provider API key. A project may commit
 \texttt{.cursor/mcp.json} with the local URL
 \texttt{http://127.0.0.1:8080/mcp}. Cursor Agent opens the project root, reads
@@ -781,10 +778,10 @@ authentication token is never imported into LeanFM's provider-key store.
 \section{One project, one directory}
 \label{sec:one-project-directory}
 
-\subsection{Accepted shared workspace and fresh start}
+\subsection{Shared workspace and fresh start}
 
-The stakeholder accepted the requirements and separate implementation mapping
-for the fresh start on October 23, 2026. Ordinary projects live directly below
+The requirements and separate implementation mapping for the fresh start were
+reviewed on October 23, 2026. Ordinary projects live directly below
 \texttt{projects/<readable-project-name>} and have no user owner. The stakeholder has
 confirmed that the workspace opens before login; login is required for LLM
 calls and API-key management. Shared project contents include their books,
@@ -792,14 +789,14 @@ specifications, source, artifacts and conversations. Password verifiers and
 encrypted API keys belong in the private application vault
 \texttt{.leanfm/accounts/}; they never become project files or model input.
 
-The accepted typed component is
+The typed component is
 \path{LeanFM/LLMGenerated/SharedProjects.lean}, exported by the canonical
 requirements and composed into the self-hosting product. The separate realization is in the
 canonical \path{LeanFM/LLMGenerated/Implementation.lean}. Running
 \texttt{lake env lean --run ReviewSharedProjects.lean} validates both candidates
 and derives the review, task views and provenance below
-\path{reports/shared-projects/}. Exact stakeholder decisions are recorded in
-\path{reports/shared-projects/acceptance.json}; a generator cannot accept a gate.
+\path{reports/shared-projects/}, where the historical review record
+\path{reports/shared-projects/acceptance.json} also remains.
 The explicitly requested reset discarded five ordinary projects and the empty
 legacy scaffold, verified the preserved credential bytes and permissions, and
 removed \texttt{./data}. It preserved LeanFM's own source, book and specifications.
@@ -942,7 +939,7 @@ diagrams, state machines, plots and reports support review.
 Use the evidence labels defined in Chapter~\ref{ch:vision}. Predictions are not
 measurements, incomplete windows censor tasks, frequencies do not prove
 specified probabilities, and bounded traces do not prove unbounded liveness.
-Reports identify each result as proved, calculated, sampled or assumed.
+Reports label each result with one of those evidence kinds, such as finite-model check, test, generated analysis or Lean proof, and say when a number is assumed.
 
 \section{How to argue well}
 
@@ -956,7 +953,8 @@ The most useful prompts attack boundaries rather than ask for polish:
         downstream completion and latency distributions?''
   \item ``Derive the plot from the event stream, including in-flight tasks.''
   \item ``Show the corresponding protobuf payload and its encoded-size bound.''
-  \item ``Is this result proved, model-checked, simulated, measured, or assumed?''
+  \item ``Which evidence label applies: Lean proof, finite-model check, test,
+        generated analysis, or assumption?''
 \end{itemize}
 
 Use the project-root, derived-view, event-boundary and completion contracts in
@@ -965,9 +963,9 @@ Chapters~\ref{ch:bootstrap-contract}, \ref{ch:scenarios}, \ref{ch:events} and
 artifacts retain it.
 
 \section{Client-driven bounded work}
-The accepted resumable-work component is recorded in
+The resumable-work component is recorded in
 \path{LeanFM/LLMGenerated/ResumableWork.lean}; its separate implementation mapping
-and acceptance hashes are beside it and in \path{reports/resumable-work/}.
+is beside it, and historical review records are in \path{reports/resumable-work/}.
 One user task crosses bounded provider batches through server-issued project
 checkpoints. The client continues the same task, while later prompts wait and
 Cancel stays available. A batch boundary is progress, never a total step limit.
@@ -985,15 +983,15 @@ compiler and production Chrome; they do not prove generated applications correct
 The October 25 request is to launch the application being built and post a
 working link. The current \texttt{run} check starts a private smoke test and
 stops it after observing readiness; its receipt is not a persistent preview.
-The accepted \path{LeanFM/LLMGenerated/ApplicationLaunch.lean} defines separate
+\path{LeanFM/LLMGenerated/ApplicationLaunch.lean} defines separate
 start, live-status and stop tasks, exposed by the canonical requirements as
 \texttt{applicationLaunchProposal}. The selected project should show
 Start/Restart, Stop and Open app, and a requested chat launch should return the
 verified browser-reachable link. Only a ready owned instance at the current
 source revision may be described as running. Generated preview code must not
-inherit the engineering UI's credentials or origin authority. The separately
-accepted mapping realizes runtime and preview isolation, finite admission,
-process ownership and cleanup. Exact acceptance records, negative controls,
+inherit the engineering UI's credentials or origin authority. The separate
+implementation mapping realizes runtime and preview isolation, finite admission,
+process ownership and cleanup. Review records, negative controls,
 and native browser and protobuf validation evidence live in
 \path{reports/application-launch-review/}. Chapter~\ref{ch:chat-ui-guide}
 shows the actual controls and served preview.
