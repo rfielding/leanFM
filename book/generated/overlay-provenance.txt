@@ -1,0 +1,5 @@
+task: bounded_retry (ProbabilityOverlayExample.task)
+overlay: declared-v1 (declared)
+runs: 4 complete runs enumerated exactly; probabilities are exact fractions
+reducers: LeanFM.Overlay.runs, probabilityReaching, probabilityWithin, mostLikely, completionTimes, expectedDuration
+core verdict: LeanFM.Logic.Model.sat (AF terminal) without the overlay

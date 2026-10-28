@@ -10,6 +10,8 @@ import LeanFM.StreamStats
 import LeanFM.Characterization
 import LeanFM.UiModel
 import LeanFM.Artifacts
+import LeanFM.Logic
+import LeanFM.Overlay
 import LeanFM.ReliabilityDiagram
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.Implementation

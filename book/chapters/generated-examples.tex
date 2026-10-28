@@ -1,0 +1,141 @@
+\chapter{Generated Examples and Probability Overlays}
+\makeatletter
+% In-place (non-floating) figures and tables: each example stays beside the
+% question it answers.
+\newenvironment{herefigure}{\par\medskip\noindent\begin{minipage}{\linewidth}\centering\def\@captype{figure}}{\end{minipage}\par\medskip}
+\newenvironment{heretable}{\par\medskip\noindent\begin{minipage}{\linewidth}\centering\def\@captype{table}}{\end{minipage}\par\medskip}
+\makeatother
+\label{ch:generated-examples}
+
+\index{generated examples}
+\index{probability overlay}
+Most specifications explain themselves with hand-written examples: a trace
+someone typed, a sequence diagram someone drew. Those examples drift. This
+chapter takes the opposite approach. Every example below is the answer to a
+question asked of the specification, and every number is computed from it.
+Nothing in the figures was drawn by hand; regenerate them with
+\texttt{lake env lean --run ProbabilityOverlayExample.lean}.
+
+The reading of the temporal operators is generative. If we generate event
+lists from the grammar, then
+\begin{description}
+\item[$EF\,p$] means some generated list contains $p$; the witness is that
+list, and it is the example.
+\item[$AG\,p$] means every generated list satisfies $p$; a counterexample is a
+generated list that does not.
+\item[$AF\,p$] means every generated list eventually reaches $p$; a
+counterexample is a list that loops forever without it.
+\end{description}
+
+\section{The core says what can happen}
+
+A client sends a \texttt{Request}. The server answers with a
+\texttt{Response}, or a \texttt{Timer} fires a \texttt{Timeout} and the client
+retries. After the third timeout the client gives up. Retries are bounded, so
+the task unrolls them into states: one waiting state per attempt.
+
+The core carries no numbers. It says only which messages can follow which, and
+it already answers the qualitative questions: every run ends, and giving up is
+possible.
+
+\section{The overlay says how likely and how long}
+
+A separate table, the \emph{overlay}, annotates each transition with a branch
+probability and a delivery delay. This one is \emph{declared}: it states what
+we expect (a 10\% timeout rate, 40\,ms responses, 200\,ms timeouts). A
+\emph{measured} overlay would have exactly the same shape, reduced from
+recorded traces instead of asserted, and the same questions could be asked of
+either. Keeping the numbers out of the grammar means a project without
+probabilities loses nothing, and declared and measured values can be compared
+on one unchanged specification.
+
+The overlay is validated before use: every transition must be annotated,
+nothing else may be, and the probabilities leaving each state must sum to
+exactly~1. They are exact fractions and are never normalized silently.
+
+\begin{herefigure}
+\AccessibleFigure{State machine of the bounded retry task with the declared overlay on its edges. idle sends Request with certainty after 5 ms to waiting1. Each waiting state receives Response with probability 9/10 after 40 ms and moves to done or receives Timeout with probability 1/10 after 200 ms. The first two timeouts lead to a backoff state that sends Request again after 5 ms. The third timeout leads to gave up.}{\resizebox{!}{.55\textheight}{\input{generated/overlay-state-machine.tex}}}
+\caption{The bounded-retry task (the core) with the declared overlay drawn on
+its edges. Double borders mark terminal states.}
+\label{fig:overlay-state-machine}
+\end{herefigure}
+
+\section{Questions and their generated answers}
+
+\begin{heretable}
+\small
+\begin{tabular}{p{.3\linewidth}p{.3\linewidth}p{.32\linewidth}}
+\textbf{Question} & \textbf{Formula} & \textbf{Answer}\\
+\hline
+\input{generated/overlay-answers.tex}
+\end{tabular}
+\caption{Every answer is computed from the task and the declared overlay. The
+first row uses the core alone.}
+\label{tab:overlay-answers}
+\end{heretable}
+
+The table reads like a service-level review. Success is overwhelmingly likely
+($999/1000$). Ninety-nine percent of runs finish within 300\,ms, and that
+bound is met \emph{exactly}, with no margin. Tightening it to 99.9\% fails, and
+the checker does not just say so: it produces the most likely run that misses
+the deadline.
+
+\subsection{The usual run}
+
+The most likely generated run is the one a newcomer should see first.
+
+\begin{herefigure}
+\AccessibleFigure{Most likely generated run. Message from Client to Server at 5 ms Request. Message from Server to Client at 45 ms Response with probability 9/10.}{\resizebox{.7\textwidth}{!}{\input{generated/overlay-run-usual.tex}}}
+\caption{The most likely run: one request and one response, 45\,ms, probability
+$9/10$.}
+\label{fig:overlay-run-usual}
+\end{herefigure}
+
+\subsection{A precedent: the client gives up}
+
+$EF\,\mathit{gave\_up}$ holds, and its witness is a concrete case. It is rare,
+with probability $1/1000$, but it is possible, and this is what it looks like.
+
+\begin{herefigure}
+\AccessibleFigure{Generated witness for EF gave up. Three rounds of Request from Client to Server each followed by Timeout from Timer to Client with probability 1/10. The final timeout arrives at 615 ms.}{\resizebox{.85\textwidth}{!}{\input{generated/overlay-run-giveup.tex}}}
+\caption{The witness for $EF\,\mathit{gave\_up}$: three timeouts, 615\,ms,
+probability $1/1000$.}
+\label{fig:overlay-run-giveup}
+\end{herefigure}
+
+\subsection{A counterexample: the late success}
+
+The claim $P_{\ge 999/1000}[F_{\le 300\,\mathrm{ms}}\,\mathit{done}]$ fails. Of
+all the runs that miss the deadline, the most likely is not the give-up run
+but a success on the third attempt. That is the run worth fixing first.
+
+\begin{herefigure}
+\AccessibleFigure{Most likely run that misses the 300 ms deadline. Two rounds of Request then Timeout with probability 1/10 each followed by a third Request and a Response with probability 9/10 at 455 ms.}{\resizebox{.85\textwidth}{!}{\input{generated/overlay-run-late.tex}}}
+\caption{The most likely counterexample to the 99.9\% / 300\,ms objective:
+success on the third attempt at 455\,ms, probability $9/1000$.}
+\label{fig:overlay-run-late}
+\end{herefigure}
+
+\section{The distribution behind the numbers}
+
+The completion-time distribution is computed exactly by enumerating the
+generated runs; it is not sampled. The logarithmic scale shows the long tail
+that a mean of 67.71\,ms hides.
+
+\begin{herefigure}
+\AccessibleFigure{Bar chart of completion time for runs that end in done on a logarithmic probability axis. 45 ms has probability 9/10. 250 ms has probability 9/100. 455 ms has probability 9/1000.}{\input{generated/overlay-distribution.tex}}
+\caption{Completion times of successful runs under the declared overlay. The
+remaining $1/1000$ gives up at 615\,ms.}
+\label{fig:overlay-distribution}
+\end{herefigure}
+
+\section{What comes next}
+
+The same functions accept a measured overlay: count how often each branch was
+taken in recorded traces and measure the time between each event and its
+cause. Asking the questions in Table~\ref{tab:overlay-answers} of both overlays
+turns ``we expected a 10\% timeout rate'' into a checked comparison, and the
+branch where they disagree is the one to highlight. Retry loops here are
+unrolled into bounded states; unbounded loops need the linear-equation
+solution of probabilistic model checking rather than run enumeration, and the
+current implementation reports them instead of truncating them.

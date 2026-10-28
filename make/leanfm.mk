@@ -147,6 +147,7 @@ validate:
 	@lake env lean LeanFM/CTLTests.lean
 	@lake env lean --run LeanFM/MCPTests.lean
 	@lake env lean --run LeanFM/LogicTests.lean
+	@lake env lean --run LeanFM/OverlayTests.lean
 	@python3 scripts/roundtrip_generated_scenario.py
 	@python3 scripts/reduce_bakery_events.py --output /tmp/leanfm-bakery-stats.json --tex-output /tmp/leanfm-bakery-stats.tex >/dev/null
 	@cmp examples/bakery-stats.json /tmp/leanfm-bakery-stats.json
@@ -174,6 +175,7 @@ diagrams:
 	lake env lean --run OAuthGrammarExample.lean
 	lake env lean --run MCPInteractionExample.lean
 	lake env lean --run LogicInteractionExample.lean
+	lake env lean --run ProbabilityOverlayExample.lean
 	lake env lean --run WebServerProtocolChapter.lean
 	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
 	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
@@ -193,6 +195,7 @@ book: lean
 	lake env lean --run OAuthGrammarExample.lean
 	lake env lean --run MCPInteractionExample.lean
 	lake env lean --run LogicInteractionExample.lean
+	lake env lean --run ProbabilityOverlayExample.lean
 	lake env lean --run WebServerProtocolChapter.lean
 	python3 scripts/check_listing_unicode.py
 	$(MAKE) -C book
