@@ -37,5 +37,11 @@ def main : IO Unit := do
     expect "P(F<=20ms h) = 1/2 and P(F<=5ms h) = 0" (probabilityWithin rs (· == "h") 20 == Q.norm 1 2 && probabilityWithin rs (· == "h") 5 == Q.zero)
     expect "expected duration is exact (20 ms)" (expectedDuration rs == Q.norm 20 1)
     expect "most likely tie broken by shorter duration" ((mostLikely rs (fun _ => true)).map (·.final) == some "h")
+  let sessions : List (List Observed) := [[{ message := "Heads", atMs := 10 }], [{ message := "Tails", atMs := 5 }], [{ message := "Heads", atMs := 0 }], [{ message := "Bogus", atMs := 0 }]]
+  let (measured, issues) := measure coin "m" sessions
+  expect "measured branch probability counts conforming sessions only (2/3 heads)" ((measured.annotations.find? (·.message == "Heads")).map (·.probability) == some (Q.norm 2 3))
+  expect "a session outside the grammar is reported, not counted" (issues.any (·.contains "Bogus"))
+  expect "measured overlay validates" (validate coin measured).isEmpty
+  expect "empirical deadline fraction over raw sessions" (empiricalWithin [[{ message := "A", atMs := 0 }, { message := "B", atMs := 50 }], [{ message := "A", atMs := 0 }, { message := "B", atMs := 500 }]] "B" 100 == Q.norm 1 2)
   expect "decimal rendering rounds" ((Q.norm 2 3).decimal 3 == "0.667" && (Q.norm 999 1000).decimal 3 == "0.999")
   IO.println "ok: all LeanFM.Overlay tests passed"

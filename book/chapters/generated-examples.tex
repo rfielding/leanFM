@@ -138,11 +138,11 @@ remaining $1/1000$ gives up at 615\,ms.}
 
 \section{What comes next}
 
-The same functions accept a measured overlay: count how often each branch was
-taken in recorded traces and measure the time between each event and its
-cause. Asking the questions in Table~\ref{tab:overlay-answers} of both overlays
-turns ``we expected a 10\% timeout rate'' into a checked comparison, and the
-branch where they disagree is the one to highlight. Retry loops here are
+The same functions accept a measured overlay, reduced from recorded traces by
+counting how often each branch was taken and averaging the delay before each
+message. Chapter~\ref{ch:bakery} does exactly that for 20{,}000 recorded
+sales, compares the result with a declared overlay, and shows why measured
+delays must eventually be distributions rather than means. Retry loops here are
 unrolled into bounded states; unbounded loops need the linear-equation
 solution of probabilistic model checking rather than run enumeration, and the
 current implementation reports them instead of truncating them.

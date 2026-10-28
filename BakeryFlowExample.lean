@@ -1,34 +1,190 @@
+import Lean.Data.Json
 import LeanFM.Artifacts
 import LeanFM.MDPDiagram
+import LeanFM.Logic
+import LeanFM.Overlay
+
+/-! Generates the bakery chapter's figures and answers. Two task cores (stocking
+    and a retail sale), one declared overlay, and measured overlays reduced from
+    `examples/bakery-events.jsonl`. Nothing here is drawn or typed by hand. -/
 
 namespace BakeryFlow
+open Lean
 open LeanFM
+open LeanFM.Logic
+open LeanFM.Overlay
 
-def messages : List MDPDiagram.InteractionMessage :=
-  [ { src := "Scheduler", dst := "Bakery", label := "BakeStarted(batch) before opening" }
-  , { src := "Bakery", dst := "Truck", label := "ShipmentEnqueued(batch, position)" }
-  , { src := "Truck", dst := "Storefront", label := "ShipmentDequeued(batch) FIFO" }
-  , { src := "Customer", dst := "Storefront", label := "PurchaseRequested(product, quantity)" }
-  , { src := "Storefront", dst := "Customer", label := "InventoryReserved(batch allocations)" }
-  , { src := "Customer", dst := "Storefront", label := "PaymentTendered(amount)" }
-  , { src := "Storefront", dst := "Customer", label := "SaleCompleted(bread, amount)" } ]
+def tr (src dst message sender receiver : String) : Transition :=
+  { src, dst, message, sender := some sender, receiver := some receiver }
 
-def output : DesiredOutput :=
-  { id := "bakery.production_transport_retail"
-  , prompt := "Bread is premade in the morning; trucks are queues shipping it to the storefront; customers exchange bread for money at the storefront."
-  , question := "Where are baking, truck queueing, storefront inventory and the customer sale separated?"
-  , kind := .interactionDiagram
-  , eventSource := "the BatchBaked, ShipmentEnqueued, ShipmentDequeued, PurchaseRequested, InventoryReserved, PaymentTendered and SaleCompleted event schemas in scripts/generate_bakery_events.py"
-  , reducer := "project the morning production and FIFO shipment prefix followed by the independent short retail-sale interaction"
-  , unit := "messages, batches, queue positions, bread units and cents; one morning and one representative sale" }
+/-- Morning stocking: one batch from the oven to the shelf. -/
+def stocking : TaskModel :=
+  { id := "stock_storefront", canonical := false, initial := "scheduled"
+  , states := ["scheduled", "baking", "baked", "queued", "stocked"], terminals := ["stocked"]
+  , transitions :=
+      [ tr "scheduled" "baking" "BakeStarted" "Scheduler" "Bakery"
+      , tr "baking" "baked" "BatchBaked" "Bakery" "Truck"
+      , tr "baked" "queued" "ShipmentEnqueued" "Bakery" "Truck"
+      , tr "queued" "stocked" "ShipmentDequeued" "Truck" "Storefront" ] }
 
-def tex : String := MDPDiagram.renderInteractionTeX
-  ["Scheduler", "Bakery", "Truck", "Storefront", "Customer"] messages
+/-- A retail sale: what can happen, with no numbers. -/
+def sale : TaskModel :=
+  { id := "retail_sale", canonical := false, initial := "browsing"
+  , states := ["browsing", "requested", "reserved", "paying", "sold", "turned_away", "declined"]
+  , terminals := ["sold", "turned_away", "declined"]
+  , transitions :=
+      [ tr "browsing" "requested" "PurchaseRequested" "Customer" "Storefront"
+      , tr "requested" "reserved" "InventoryReserved" "Storefront" "Customer"
+      , tr "requested" "turned_away" "OutOfStock" "Storefront" "Customer"
+      , tr "reserved" "paying" "PaymentTendered" "Customer" "Storefront"
+      , tr "paying" "sold" "SaleCompleted" "Storefront" "Customer"
+      , tr "paying" "declined" "PaymentDeclined" "Storefront" "Customer" ] }
+
+def ann (src message : String) (num den delay : Nat) : Annotation :=
+  { src, message, probability := Q.norm num den, delayMs := delay }
+
+/-- What the bakery expects, written down before looking at any data. -/
+def declared : Overlay :=
+  { name := "declared", kind := "declared"
+  , annotations :=
+      [ ann "browsing" "PurchaseRequested" 1 1 0
+      , ann "requested" "InventoryReserved" 97 100 300, ann "requested" "OutOfStock" 3 100 300
+      , ann "reserved" "PaymentTendered" 1 1 600
+      , ann "paying" "SaleCompleted" 99 100 300, ann "paying" "PaymentDeclined" 1 100 300 ] }
+
+def human (ms : Nat) : String :=
+  if ms < 10000 then s!"{ms} ms"
+  else if ms < 60000 then s!"{(ms + 500) / 1000} s"
+  else if ms < 3600000 then s!"{(ms + 30000) / 60000} min"
+  else
+    let minutes := (ms + 30000) / 60000
+    s!"{minutes / 60} h {minutes % 60} min"
+
+def esc (s : String) : String := s.replace "_" "\\_"
+
+def runDiagram (actors : List String) (r : Run) : String :=
+  MDPDiagram.renderInteractionTeX actors <| r.steps.map fun s =>
+    { src := s.transition.sender.getD "?", dst := s.transition.receiver.getD "?"
+    , label := "t=" ++ human s.atMs ++ " " ++ s.transition.message ++
+        (if s.probability == Q.one then "" else " (p=" ++ s.probability.text ++ ")") }
+
+def saleStates : String :=
+  let pos : String → String
+    | "browsing" => "(0,0)" | "requested" => "(0,-1.8)" | "reserved" => "(0,-3.6)" | "paying" => "(0,-5.4)"
+    | "sold" => "(0,-7.2)" | "turned_away" => "(4.6,-1.8)" | _ => "(4.6,-5.4)"
+  let label (t : Transition) : String :=
+    match annotationFor declared t with
+    | some a => t.message ++ "\\\\ " ++ (if a.probability == Q.one then "" else "p=" ++ a.probability.text ++ ", ") ++ human a.delayMs
+    | none => t.message
+  "% Generated by BakeryFlowExample.lean from BakeryFlow.sale and the declared overlay.\n" ++
+  "\\begin{tikzpicture}[>=Stealth,state/.style={draw=diagramink,text=diagramink,fill=diagramsurface,rounded corners,minimum width=2cm,minimum height=7mm,font=\\small},edge/.style={->,draw=leanblue,thick},lbl/.style={font=\\scriptsize,text=diagramink,align=center,fill=pagebackground,inner sep=1pt}]\n" ++
+  String.join (sale.states.map fun s =>
+    "\\node[state" ++ (if sale.terminals.contains s then ",double" else "") ++ "] (" ++ s.replace "_" "" ++ ") at " ++ pos s ++ " {" ++ esc s ++ "};\n") ++
+  String.join (sale.transitions.map fun t =>
+    let side := if t.dst == "turned_away" || t.dst == "declined" then "above" else "left=3pt"
+    "\\draw[edge] (" ++ t.src.replace "_" "" ++ ") -- node[lbl," ++ side ++ "] {" ++ label t ++ "} (" ++ t.dst.replace "_" "" ++ ");\n") ++
+  "\\end{tikzpicture}\n"
+
+/-- Read one task's sessions from the event corpus, ordered by time. -/
+def sessionsOf (lines : Array String) (task : String) : List (List Observed) := Id.run do
+  let mut byId : Std.HashMap String (Array Observed) := {}
+  let mut order : Array String := #[]
+  for line in lines do
+    if let .ok j := Json.parse line then
+      let field := fun (k : String) => (j.getObjValD k).getStr?.toOption.getD ""
+      if field "task" == task then
+        let session := field "session"
+        let time := (j.getObjValD "timeAt").getNat?.toOption.getD 0
+        let e : Observed := { message := field "kind", atMs := time }
+        if !byId.contains session then order := order.push session
+        byId := byId.insert session ((byId.getD session #[]).push e)
+  return order.toList.map fun s => ((byId.getD s #[]).qsort (fun a b => a.atMs < b.atMs)).toList
+
+def row (cells : List String) : String := " & ".intercalate cells ++ " \\\\\n"
 
 def main : IO Unit := do
-  IO.FS.writeFile "book/generated/bakery-flow.tex" tex
-  IO.FS.writeFile "book/generated/bakery-flow-provenance.txt" (reprStr output ++ "\n")
-  IO.println "ok: bakery production, truck FIFO and retail sale diagram generated"
+  let lines := (← IO.FS.lines "examples/bakery-events.jsonl")
+  let saleSessions := sessionsOf lines "retail_sale"
+  let stockSessions := sessionsOf lines "stock_storefront"
+  let (measuredSale, saleIssues) := measure sale "measured (synthetic corpus)" saleSessions
+  let (measuredStock, stockIssues) := measure stocking "measured (synthetic corpus)" stockSessions
+  for issue in saleIssues ++ stockIssues do IO.eprintln ("warning: " ++ issue)
+  let get := fun (r : Except String (List Run)) => match r with
+    | .ok rs => pure rs
+    | .error e => throw (IO.userError e)
+  let declaredRuns ← get (runs sale declared)
+  let measuredRuns ← get (runs sale measuredSale)
+  let stockRuns ← get (runs stocking measuredStock)
+  let some model := buildModel sale | throw (IO.userError "model too large")
+  let ends := Model.get (Model.sat model (.af .terminal)) 0
+  let canTurnAway := Model.get (Model.sat model (.ef (.atState "turned_away"))) 0
+  let isSold := fun (s : String) => s == "sold"
+  let deadline := 1200
+  let n := saleSessions.length
+  let some morning := mostLikely stockRuns (fun _ => true) | throw (IO.userError "no stocking run")
+  let some usual := mostLikely measuredRuns (fun r => r.final == "sold") | throw (IO.userError "no sale run")
+  let some failure := mostLikely declaredRuns (fun r => r.final != "sold") | throw (IO.userError "no failing run")
+  let stockouts := ((counts sale saleSessions).find? (fun (s, m, _, _) => s == "requested" && m == "OutOfStock")).map (·.2.2.1) |>.getD 0
+  let verdict := fun (b : Bool) => if b then "proved" else "disproved"
+  IO.FS.writeFile "book/generated/bakery-flow.tex" (runDiagram ["Scheduler", "Bakery", "Truck", "Storefront"] morning)
+  IO.FS.writeFile "book/generated/bakery-sale-states.tex" saleStates
+  IO.FS.writeFile "book/generated/bakery-run-sale.tex" (runDiagram ["Customer", "Storefront"] usual)
+  IO.FS.writeFile "book/generated/bakery-run-failure.tex" (runDiagram ["Customer", "Storefront"] failure)
+  IO.FS.writeFile "book/generated/bakery-overlays.tex" <|
+    "% Generated by BakeryFlowExample.lean: declared expectations against counts reduced from the corpus.\n" ++
+    String.join ((counts sale saleSessions).map fun (src, msg, k, total) =>
+      let t := (sale.transitions.find? (fun t => t.src == src && t.message == msg)).getD default
+      let d := annotationFor declared t
+      let m := annotationFor measuredSale t
+      row [esc src ++ " $\\to$ \\texttt{" ++ msg ++ "}",
+           (d.map (·.probability.text)).getD "?", (d.map (fun a => human a.delayMs)).getD "?",
+           s!"{k} / {total}", if k == 0 then "---" else (m.map (fun a => human a.delayMs)).getD "?"])
+  let reachDecl := probabilityReaching declaredRuns isSold
+  let reachMeas := probabilityReaching measuredRuns isSold
+  let withinDecl := probabilityWithin declaredRuns isSold deadline
+  let withinMeas := probabilityWithin measuredRuns isSold deadline
+  let withinData := empiricalWithin saleSessions "SaleCompleted" deadline
+  IO.FS.writeFile "book/generated/bakery-answers.tex" <|
+    "% Generated by BakeryFlowExample.lean.\n" ++
+    row ["Does every sale attempt end?", "\\texttt{AF terminal}", verdict ends, "(core, no overlay)"] ++
+    row ["Can a customer be turned away?", "\\texttt{EF turned\\_away}", verdict canTurnAway, "(core, no overlay)"] ++
+    row ["How likely is a sale?", "\\texttt{P=? [F sold]}", reachDecl.text ++ s!" ({reachDecl.decimal 4})", reachMeas.text] ++
+    row ["Sold within 1.2 s?", "\\texttt{P=? [F<=1200ms sold]}", withinDecl.text ++ s!" ({withinDecl.decimal 4})",
+         withinMeas.text ++ s!"; raw data {withinData.decimal 4}"] ++
+    row ["How often out of stock?", "branch \\texttt{OutOfStock}", "3/100",
+         s!"{stockouts} of {n}; 95\\% bound $\\le$ {(Q.norm 3 n).text}"] ++
+    row ["Expected sale duration", "\\texttt{E[duration]}", (expectedDuration declaredRuns).decimal 1 ++ " ms",
+         (expectedDuration measuredRuns).decimal 1 ++ " ms"]
+  -- The raw completion-time histogram: what a mean-delay overlay hides.
+  let durations := saleSessions.filterMap fun s => match s.head?, s.getLast? with
+    | some a, some b => some (b.atMs - a.atMs)
+    | _, _ => none
+  let bin := 100
+  let maxBin := (durations.foldl max 0) / bin
+  let counts := (List.range (maxBin + 1)).map fun i => (i * bin, (durations.filter (fun d => d / bin == i)).length)
+  let meanMs := (expectedDuration measuredRuns).decimal 0
+  let top := (counts.foldl (fun m (_, c) => max m c) 0) * 105 / 100
+  IO.FS.writeFile "book/generated/bakery-durations.tex" <|
+    "% Generated by BakeryFlowExample.lean: completion times of every recorded sale, 100 ms bins.\n" ++
+    "\\begin{tikzpicture}\n\\begin{axis}[ybar,bar width=8pt,width=.95\\linewidth,height=6cm,xlabel={sale duration (ms)},ylabel={sales},ymin=0," ++
+    "xmin=0,xmax=" ++ toString ((maxBin + 1) * bin) ++ ",xtick distance=400,xmajorgrids=false,ymajorgrids=true,scaled ticks=false]\n" ++
+    "\\addplot[fill=leanblue,draw=none] coordinates {" ++
+    String.join (counts.map fun (x, c) => "(" ++ toString (x + bin / 2) ++ "," ++ toString c ++ ")") ++ "};\n" ++
+    "\\draw[very thick,dashed,draw=diagramink] (axis cs:" ++ toString deadline ++ ",0) -- (axis cs:" ++ toString deadline ++ "," ++ toString top ++ ") node[pos=.95,right,font=\\scriptsize,text=diagramink] {1.2 s deadline};\n" ++
+    "\\end{axis}\n\\end{tikzpicture}\n"
+  IO.FS.writeFile "book/generated/bakery-duration-facts.tex" <|
+    "% Generated by BakeryFlowExample.lean.\n" ++
+    "\\newcommand{\\BakeryMeanSaleMs}{" ++ meanMs ++ "}\n" ++
+    "\\newcommand{\\BakeryWithinDeadline}{" ++ withinData.decimal 3 ++ "}\n" ++
+    "\\newcommand{\\BakeryMinSaleMs}{" ++ toString (durations.foldl min (durations.headD 0)) ++ "}\n" ++
+    "\\newcommand{\\BakeryMaxSaleMs}{" ++ toString (durations.foldl max 0) ++ "}\n"
+  IO.FS.writeFile "book/generated/bakery-flow-provenance.txt" <|
+    s!"source: examples/bakery-events.jsonl ({lines.size} events; synthetic corpus from scripts/generate_bakery_events.py)\n" ++
+    s!"retail_sale sessions: {n}; stock_storefront sessions: {stockSessions.length}\n" ++
+    "cores: BakeryFlow.sale, BakeryFlow.stocking (no probabilities or times)\n" ++
+    "overlays: BakeryFlow.declared (stated); measured via LeanFM.Overlay.measure from the corpus\n" ++
+    "reducers: runs, mostLikely, probabilityReaching, probabilityWithin, empiricalWithin, counts, expectedDuration\n"
+  IO.println s!"ok: bakery figures generated from {n} sales and {stockSessions.length} batches; measured P(F<=1200ms sold)={withinMeas.text}, raw {withinData.decimal 4}"
 
 end BakeryFlow
 

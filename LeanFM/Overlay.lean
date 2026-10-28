@@ -156,3 +156,78 @@ def expectedDuration (rs : List Run) : Q :=
   rs.foldl (fun acc r => Q.add acc (Q.mul r.probability ⟨r.durationMs, 1⟩)) Q.zero
 
 end LeanFM.Overlay
+
+/-! ## Measured overlays -/
+
+namespace LeanFM.Overlay
+open LeanFM.Logic
+
+/-- One recorded message of a session, with its time in ms. -/
+structure Observed where
+  message : String
+  atMs : Nat
+deriving Repr, Inhabited
+
+/-- Reduce recorded sessions into a measured overlay of the same shape as a
+    declared one: branch probability = times taken / times its source state
+    was left; delay = mean time since the previous message (rounded). Sessions
+    that leave the task's grammar are reported, not counted. -/
+def measure (t : TaskModel) (name : String) (sessions : List (List Observed)) : Overlay × List String := Id.run do
+  let mut taken : List ((String × String) × Nat) := []
+  let mut delays : List ((String × String) × Nat) := []
+  let mut issues : List String := []
+  let bump := fun (xs : List ((String × String) × Nat)) (k : String × String) (v : Nat) =>
+    match xs.find? (·.1 == k) with
+    | some _ => xs.map fun (k', n) => if k' == k then (k', n + v) else (k', n)
+    | none => (k, v) :: xs
+  for session in sessions do
+    let mut state := t.initial
+    let mut prev := (session.head?.map (·.atMs)).getD 0
+    let mut steps : List ((String × String) × Nat) := []
+    let mut ok := true
+    for e in session do
+      if ok then
+        match t.transitions.find? (fun tr => tr.src == state && tr.message == e.message) with
+        | some tr =>
+          steps := ((state, e.message), e.atMs - prev) :: steps
+          prev := e.atMs
+          state := tr.dst
+        | none =>
+          ok := false
+          if issues.length < 20 then issues := issues ++ [s!"message {e.message} is not allowed in state {state}"]
+    if ok then
+      for (k, d) in steps do
+        taken := bump taken k 1
+        delays := bump delays k d
+  let visits := fun (s : String) => taken.foldl (fun acc ((src, _), n) => if src == s then acc + n else acc) 0
+  let count := fun (k : String × String) => ((taken.find? (·.1 == k)).map (·.2)).getD 0
+  let annotations := t.transitions.map fun tr =>
+    let k := (tr.src, tr.message)
+    let n := count k
+    let total := visits tr.src
+    let delay := if n == 0 then 0 else (((delays.find? (·.1 == k)).map (·.2)).getD 0 + n / 2) / n
+    { src := tr.src, message := tr.message, probability := Q.norm n (if total == 0 then 1 else total), delayMs := delay : Annotation }
+  return ({ name, kind := "measured", annotations }, issues)
+
+/-- Branch counts behind a measured overlay: (src, message, times taken, times src was left). -/
+def counts (t : TaskModel) (sessions : List (List Observed)) : List (String × String × Nat × Nat) :=
+  let walk := sessions.map fun s => Id.run do
+    let mut state := t.initial
+    let mut out : List (String × String) := []
+    for e in s do
+      match t.transitions.find? (fun tr => tr.src == state && tr.message == e.message) with
+      | some tr => out := (state, e.message) :: out; state := tr.dst
+      | none => pure ()
+    return out
+  let all := walk.flatten
+  t.transitions.map fun tr =>
+    (tr.src, tr.message, (all.filter (· == (tr.src, tr.message))).length, (all.filter (·.1 == tr.src)).length)
+
+/-- Fraction of sessions whose `message` occurs within `deadlineMs` of the session start. -/
+def empiricalWithin (sessions : List (List Observed)) (message : String) (deadlineMs : Nat) : Q :=
+  let hits := sessions.filter fun s => match s.head? with
+    | none => false
+    | some first => s.any fun e => e.message == message && e.atMs - first.atMs ≤ deadlineMs
+  Q.norm hits.length (max sessions.length 1)
+
+end LeanFM.Overlay
