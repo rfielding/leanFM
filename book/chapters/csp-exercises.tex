@@ -1,26 +1,36 @@
-\chapter{From CSP Roles to Multiparty Grammars}
+\chapter{Protocol Exercises: Roles, Attackers, and Knowledge}
 \label{ch:csp-exercises}
 
 \index{CSP}
 \index{protocol role}
-This part revisits examples from \citet{ryan2001modelling} and its official Casper
-companion scripts. The goal is not to transliterate CSP operators. It is to use
-well-known security protocols as demanding exercises for the grammar-based method:
-multiple roles, fresh values, encrypted components, an active intruder, calculated
-knowledge sets, agreement, and messages whose legality depends on the preceding trace.
+The author learned from \citet{ryan2001modelling} to treat a security protocol
+as a set of communicating roles plus an active intruder, and to state security
+as properties of every trace that intruder can produce. This chapter keeps that
+idea and none of that book's examples. It works three small invented protocols,
+each chosen to put pressure on one part of the grammar method:
+
+\begin{enumerate}
+  \item an \emph{on-call handoff}, where three separately written roles must
+        compose into one protocol;
+  \item a \emph{sealed-bid auction}, where an attacker who cannot read a bid can
+        still copy it; and
+  \item \emph{speaker pairing}, where a code shown on a screen is visible to some
+        actors and not to others.
+\end{enumerate}
 
 Status: this chapter is a design exercise, not an account of implemented LeanFM
-features. Its `RoleSpec`, `WireTerm`, `composeRoles`, and attacker-deduction
-listings are proposed notation; the current executable model has `GrammarExpr`
-and finite trace/CTL checks, but no role-projection or composition engine,
-symbolic byte algebra, or attacker-knowledge evaluator. The checklist below is
-a set of proposed library requirements, not implemented capabilities.
+features. Its \texttt{RoleSpec}, \texttt{WireTerm}, \texttt{composeRoles}, and
+attacker-deduction listings are proposed notation; the current executable model
+has \texttt{GrammarExpr} and finite trace/CTL checks, but no role-projection or
+composition engine, symbolic byte algebra, or attacker-knowledge evaluator. The
+checklist at the end is a set of proposed library requirements, not implemented
+capabilities.
 
-\section{Can actors really be specified separately?}
+\section{Roles compose by sharing events}
 
-Yes, provided composition is defined as synchronization over the same observable
-events rather than as concatenation of independent scripts. Each actor accepts a
-language over its own projection of the global event alphabet.
+Each actor is specified separately, as a grammar over its own view of the
+global event alphabet. Composition is synchronization on the same observable
+events, not concatenation of independent scripts.
 
 \begin{lstlisting}
 structure RoleSpec where
@@ -33,8 +43,9 @@ def composeRoles (roles : List RoleSpec) : GlobalGrammar :=
     sendReceiveAgree := sameEventId && sameBytes && oppositeEndpoints
 \end{lstlisting}
 
-For a global trace $t$, let $t\!\upharpoonright_a$ retain events sent or received by
-actor $a$. The composition accepts exactly when every local role accepts its view:
+For a global trace $t$, let $t\!\upharpoonright_a$ keep only the events actor
+$a$ sends or receives. The composition accepts a trace exactly when every role
+accepts its own view of it:
 
 \AccessibleEquation{The language accepted by compose roles R one through R n equals the set of traces t such that for every i the projection of t onto alphabet a sub i belongs to the language of role R sub i.}{\[
   L(\operatorname{composeRoles}(R_1,\ldots,R_n))
@@ -44,27 +55,25 @@ actor $a$. The composition accepts exactly when every local role accepts its vie
 Read this as: ``the language $L$ accepted by the composition of roles $R_1$
 through $R_n$ is the set of global traces $t$ such that, for every role index
 $i$, trace $t$ restricted to actor $a_i$ belongs to the language accepted by
-role $R_i$.''  Here $n$ is the number of roles, $i$ is one role's index, the
+role $R_i$.'' Here $n$ is the number of roles, $i$ is one role's index, the
 vertical bar means ``such that,'' and $\upharpoonright$ means ``restricted to.''
 
-One global message is therefore not duplicated into unrelated send and receive
-events. It has a single identity, byte string, sender, and recipient; both endpoint
-grammars constrain it. An unmatched send, an unexpected receive, or disagreement
-about bytes makes the intersection empty at that trace prefix.
+A message is one global event with one identity, one byte string, one sender
+and one recipient. Both endpoint grammars constrain that same event. An
+unmatched send, an unexpected receive, or disagreement about the bytes makes the
+composed language empty from that prefix on, and the checker reports the prefix.
 
-\subsection{Local state without global implementation state}
-
-A role may bind parameters from the events it observes. Those bindings are a
-parser environment for the trace, not a claim about implementation memory. A role
-can say ``the nonce in this reply equals the nonce I previously sent'' without
-specifying a table, variable layout, or retry mechanism.
+A role may bind values from events it has seen and test later events against
+them. Those bindings are a parser environment for the trace, not a claim about
+implementation memory: ``the code in this reply equals the code I sent'' says
+nothing about tables, variables or retries.
 
 \section{A transport-neutral byte algebra}
 
 \index{bytes}
-Security claims need more than message names. They need an algebra that says which
-bytes expose which values. We still need not choose HTTP, protobuf, ASN.1, or a
-particular cipher suite.
+Security claims need to say which bytes expose which values, without choosing
+HTTP, protobuf or a cipher suite. Four symbolic constructors are enough for this
+chapter:
 
 \begin{lstlisting}
 abbrev Bytes := ByteArray
@@ -73,137 +82,208 @@ inductive WireTerm where
   | atom    : Name -> Bytes -> WireTerm
   | tuple   : List WireTerm -> WireTerm
   | encrypt : KeyRef -> WireTerm -> WireTerm
-  | sign    : KeyRef -> WireTerm -> WireTerm
+  | hash    : WireTerm -> WireTerm
 
 structure WireEvent where
-  timeAt : ClockTimestamp
-  id     : EventId
+  timeAt   : ClockTimestamp
+  id       : EventId
   priorIds : List EventId
-  session : SessionId
-  task   : TaskId
-  from   : Actor
-  to     : Actor
-  term   : WireTerm
-  bytes  : Bytes
+  session  : SessionId
+  task     : TaskId
+  from     : Actor
+  to       : Actor
+  channel  : Channel
+  term     : WireTerm
+  bytes    : Bytes
   encodedBy : bytes = encodeCanonical term
 \end{lstlisting}
 
-At this level, encryption is a symbolic constructor with an encoding into bytes.
-The intruder may concatenate, split visible tuples, encrypt with known keys, and
-decrypt only with a derivable inverse key. A concrete refinement must replace this
-idealized algebra with a transport and cryptographic implementation whose security
-assumptions justify the abstraction.
+Encryption and hashing are symbolic constructors with a canonical encoding.
+Anyone may hash a term they know; nobody may invert a hash; decryption needs the
+key. \texttt{channel} records who can observe an event at all, which the
+pairing example needs. A concrete refinement must replace this idealized algebra
+with real transports and cryptography whose assumptions justify it.
 
-\section{Yahalom as three separate actors}
+\section{Example 1: an on-call handoff}
 
-\index{Yahalom protocol}
-Yahalom is an excellent first exercise because an initiator, responder, and trusted
-server exchange fresh nonces and receive a session key. The companion model states
-secrecy for the session key and agreement claims involving the nonces and key.
+\index{on-call handoff}
+A pager service records who is on call for a team. Exactly one engineer is on
+call at any time. Olu is on call and wants to hand off to Ines. The pager must
+not move the duty until Ines has actually accepted it, and Olu must learn that
+the handoff completed. Each person shares a long-term key with the pager:
+$K_O$ for Olu, $K_I$ for Ines.
 
-Let $K_A$ and $K_B$ be long-term keys shared by the server with Alice and Bob,
-$N_A$ and $N_B$ fresh nonces, and $K_{AB}$ the proposed session key. The following
-actor grammars use symbolic wire terms whose canonical encodings are byte strings.
+\begin{enumerate}
+  \item Olu $\to$ Pager: $\{\mathit{Ines}, h\}_{K_O}$, with a fresh handoff id $h$.
+  \item Pager $\to$ Ines: $\{\mathit{Olu}, h, c\}_{K_I}$, with a fresh challenge $c$.
+  \item Ines $\to$ Pager: $\{h, c, \mathit{accept}\}_{K_I}$.
+  \item Pager $\to$ Olu: $\{\mathit{Ines}, h, \mathit{done}\}_{K_O}$.
+\end{enumerate}
 
-\subsection{Alice, the initiator}
-
-\begin{lstlisting}
-def aliceRole (alice bob server : Actor) (ka : SharedKey) : RoleSpec :=
-  role alice "Yahalom initiator" do
-    let na <- fresh Nonce "na"
-
-    from_ alice; to_ bob
-    send (atom "initiator nonce" na.bytes)
-
-    from_ server; to_ alice
-    receive (encrypt ka.ref
-      (tuple [actor bob, sessionKey "kab", nonce na, nonce "nb"]))
-      where_ field "na" == na
-    let kab <- take SessionKey "kab"
-    let nb  <- take Nonce "nb"
-    let ticketForBob <- take WireTerm "ticketForBob"
-
-    from_ alice; to_ bob
-    send ticketForBob
-    send (encrypt kab.ref (nonce nb))
-\end{lstlisting}
-
-Alice's \texttt{where\_} clause is the context-sensitive step: the received nonce
-must equal the value generated earlier. The surface structure is context-free, but
-legality depends on the binding environment accumulated from the prefix.
-
-\subsection{Bob, the responder}
+\subsection{Three roles, written separately}
 
 \begin{lstlisting}
-def bobRole (alice bob server : Actor) (kb : SharedKey) : RoleSpec :=
-  role bob "Yahalom responder" do
-    from_ alice; to_ bob
-    receive (atom "initiator nonce" ?naBytes)
-    let na <- take Nonce "na"
-    let nb <- fresh Nonce "nb"
+def oluRole (olu ines pager : Actor) (ko : SharedKey) : RoleSpec :=
+  role olu "outgoing engineer" do
+    let h <- fresh Nonce "h"
+    from_ olu; to_ pager
+    send (encrypt ko.ref (tuple [actor ines, nonce h]))
+    from_ pager; to_ olu
+    receive (encrypt ko.ref (tuple [actor ines, nonce "h", atom "done"]))
+      where_ field "h" == h
 
-    from_ bob; to_ server
-    send (encrypt kb.ref
-      (tuple [actor alice, nonce na, nonce nb]))
+def inesRole (olu ines pager : Actor) (ki : SharedKey) : RoleSpec :=
+  role ines "incoming engineer" do
+    from_ pager; to_ ines
+    receive (encrypt ki.ref (tuple [actor olu, nonce "h", nonce "c"]))
+    let h <- take Nonce "h"
+    let c <- take Nonce "c"
+    from_ ines; to_ pager
+    send (encrypt ki.ref (tuple [nonce h, nonce c, atom "accept"]))
 
-    from_ alice; to_ bob
-    receive (encrypt kb.ref (tuple [actor alice, sessionKey "kab"]))
-    let kab <- take SessionKey "kab"
-    receive (encrypt kab.ref (nonce nb)) where_ field "nb" == nb
+def pagerRole (olu ines pager : Actor) (ko ki : SharedKey) : RoleSpec :=
+  role pager "pager service" do
+    from_ olu; to_ pager
+    receive (encrypt ko.ref (tuple [actor "next", nonce "h"]))
+      where_ field "next" == ines
+    let h <- take Nonce "h"
+    let c <- fresh Nonce "c"
+    from_ pager; to_ ines
+    send (encrypt ki.ref (tuple [actor olu, nonce h, nonce c]))
+    from_ ines; to_ pager
+    receive (encrypt ki.ref (tuple [nonce "h", nonce "c", atom "accept"]))
+      where_ field "h" == h && field "c" == c
+    from_ pager; to_ olu
+    send (encrypt ko.ref (tuple [actor ines, nonce h, atom "done"]))
 \end{lstlisting}
 
-Bob need not know Alice's local control state. He constrains only the events visible
-at his boundary and the values learned from them.
+The \texttt{where\_} clauses are the context-sensitive part. The message
+sequence is context-free; whether a reply is legal depends on values bound
+earlier in the same trace.
 
-\subsection{The trusted server}
+\subsection{What composition catches}
+
+Suppose a later edit lets the pager send \emph{done} as soon as it has sent the
+offer, before Ines replies. Olu's role still accepts that order: Olu never sees
+messages 2 and 3. Ines's role still accepts it too. Only the composed protocol
+exposes the problem, through the duty properties below:
+
+\AccessibleEquation{It is always true that exactly one engineer is on call.}{\[
+  AG\,\mathit{exactlyOneOnCall}.
+\]}
+
+\AccessibleEquation{On every future Olu stays on call until Ines has accepted handoff h or Olu stays on call forever.}{\[
+  \mathit{onCall}(\mathit{Olu})\ AW\ \mathit{accepted}(\mathit{Ines},h).
+\]}
+
+\AccessibleEquation{It is always true that if Olu is told handoff h is done then Ines previously accepted handoff h.}{\[
+  AG\bigl(\mathit{toldDone}(\mathit{Olu},h) \rightarrow
+    \mathbf{P}\,\mathit{accepted}(\mathit{Ines},h)\bigr).
+\]}
+
+The second formula uses weak until on purpose: Ines may never answer, and then
+Olu simply remains on call. Strong $AU$ would wrongly demand that every handoff
+eventually succeeds. The third is a past claim ($\mathbf{P}$ reads ``previously'').
+With the faulty edit, the checker returns a counterexample trace in which Olu
+is told \emph{done} with no earlier acceptance, drawn both as the global
+interaction diagram and as Olu's local view, in which nothing looks wrong.
+
+The same mechanism catches disagreement about values. If the pager's grammar
+could forward the offer to someone other than the engineer Olu named, the
+\texttt{where\_ field "next" == ines} guard and Ines's projection cannot both
+accept the same event, and the composed language is empty at that prefix.
+
+\section{Example 2: a sealed-bid auction}
+
+\index{sealed-bid auction}
+An auctioneer collects bids in two phases. While bidding is open, each bidder
+sends a \emph{commitment}: the hash of the amount and a fresh random salt. After
+bidding closes, each bidder reveals the amount and salt, and the auctioneer
+accepts a reveal only if it hashes to the commitment. The highest revealed bid
+wins. Ana and Ben bid honestly. Ivo is also a registered bidder; he is the
+attacker, and he sees every message on the network.
 
 \begin{lstlisting}
-def serverRole (alice bob server : Actor)
-    (ka kb : SharedKey) : RoleSpec :=
-  role server "Yahalom key server" do
-    from_ bob; to_ server
-    receive (encrypt kb.ref
-      (tuple [actor alice, nonce "na", nonce "nb"]))
-    let na  <- take Nonce "na"
-    let nb  <- take Nonce "nb"
-    let kab <- fresh SessionKey "kab"
+def bidderRole (b auctioneer : Actor) (amount : Amount) : RoleSpec :=
+  role b "bidder" do
+    let s <- fresh Nonce "salt"
+    from_ b; to_ auctioneer
+    send (tuple [actor b, hash (tuple [value amount, nonce s])])   -- commit
+    from_ auctioneer; to_ b
+    receive (atom "closed")
+    from_ b; to_ auctioneer
+    send (tuple [actor b, value amount, nonce s])                  -- reveal
 
-    let bobTicket := encrypt kb.ref
-      (tuple [actor alice, sessionKey kab])
-    from_ server; to_ alice
-    sendMany
-      [ encrypt ka.ref
-          (tuple [actor bob, sessionKey kab, nonce na, nonce nb])
-      , bobTicket
-      ]
+def auctioneerRole (auctioneer : Actor) (bidders : List Actor) : RoleSpec :=
+  role auctioneer "auctioneer" do
+    let commits <- collectWhileOpen fun b =>
+      receive (tuple [actor b, ?commitment]) where_ b in bidders
+    broadcast (atom "closed")
+    forEach commits fun (b, commitment) =>
+      receive (tuple [actor b, ?amount, ?salt])
+        where_ hash (tuple [amount, salt]) == commitment
+    announce (highestRevealed commits)
 \end{lstlisting}
 
-\subsection{Global assembly and context conditions}
+\subsection{Secrecy holds, and the auction is still broken}
 
-\begin{lstlisting}
-def yahalom : GlobalGrammar :=
-  composeRoles
-    [ aliceRole .alice .bob .server keyAlice
-    , bobRole .alice .bob .server keyBob
-    , serverRole .alice .bob .server keyAlice keyBob
-    , intruderRole .ivo
-    ]
-  |> where_ (distinct [.alice, .bob, .server, .ivo])
-  |> where_ (freshValuesNeverRepeat ["na", "nb", "kab"])
-  |> where_ (longTermKeysKnownOnlyToOwnersAndServer)
-\end{lstlisting}
+Before close, Ivo has seen Ana's commitment but cannot invert the hash, so he
+does not know her amount. That secrecy property holds:
 
-The three honest roles can be authored and checked separately. Composition exposes
-incompatibilities: for example, if Alice expects the server's first encrypted tuple
-to name Bob but the server grammar could name another responder, the shared global
-event cannot satisfy both projections.
+\AccessibleEquation{On every future Ivo does not know Ana's amount until bidding has closed.}{\[
+  \neg\operatorname{knows}(\mathit{Ivo},a_{\mathit{Ana}})\ AU\ \mathit{closed}.
+\]}
 
-\section{The attacker is another grammar plus deduction}
+The auction is still broken. Ivo does not need to know Ana's amount to bid it.
+He copies her commitment and sends it under his own name. That is a legal
+attacker move: he observed the hash term, and resending a known term is always
+derivable. After close he waits for Ana's reveal, which he also observes, and
+sends the same amount and salt under his name. The auctioneer's check passes,
+because the hash really does match. Ivo has tied Ana's bid without ever having
+known it while bidding was open.
+
+The property that fails is about who \emph{formed} each commitment, not about
+who knows what:
+
+\AccessibleEquation{It is always true that if the auctioneer accepts a commitment from bidder b then b previously formed that commitment.}{\[
+  AG\bigl(\operatorname{acceptsCommit}(\mathit{Auctioneer},b,x) \rightarrow
+    \mathbf{P}\,\operatorname{formed}(b,x)\bigr).
+\]}
+
+The checker's search for a violation, $EF(\operatorname{acceptsCommit}(\ldots)
+\land \neg\mathbf{P}\operatorname{formed}(\ldots))$, returns the copy trace above
+as its witness.
+
+\subsection{The fix: bind the bidder into the commitment}
+
+Put the bidder's own name inside the hash:
+$\mathit{hash}(b, \mathit{amount}, s)$, and have the auctioneer recompute the
+hash with the name of the bidder who sent the reveal. Ivo's copied commitment
+was formed with Ana's name. To open it under his own name he would need a salt
+that makes $\mathit{hash}(\mathit{Ivo},\ldots)$ equal $\mathit{hash}(\mathit{Ana},\ldots)$,
+and no rule derives one. Copying is now useless.
+
+This gives the acceptance test for an intruder model. For the original
+commitment, the checker must produce the copy trace as a counterexample. For
+the fixed commitment, it must find none. A model that cannot find the first
+attack is too weak to trust when it finds nothing in the second.
+
+One limit of the symbolic model is visible here. If amounts came from a small
+set, Ivo could hash each candidate and compare, and the salt is what stops
+that. Dolev--Yao deduction has no notion of guessing, so the requirement that
+salts be fresh and unguessable must be written down as an explicit assumption,
+not left implicit.
+
+\section{Knowledge and agreement as theorems}
+\label{sec:knowledge-closure}
 
 \index{intruder model}
-An active network attacker observes public wire events, blocks them, replays known
-bytes, and emits any term derivable from current knowledge. It does not learn the
-plaintext of an encryption merely because its encoded bytes are observable.
+\index{secrecy}
+\index{agreement}
+The attacker is one more role. It observes the events its channels let it see,
+may block or replay them, and may send any term it can derive from what it has
+observed. Seeing ciphertext bytes does not reveal the plaintext, and seeing a
+hash does not reveal its input.
 
 \begin{lstlisting}
 inductive Derives : Knowledge -> WireTerm -> Prop where
@@ -216,220 +296,273 @@ inductive Derives : Knowledge -> WireTerm -> Prop where
               Derives knowledge (.encrypt key body)
   | decrypt : Derives knowledge (.encrypt key body) ->
               Derives knowledge (inverse key) -> Derives knowledge body
+  | hash    : Derives knowledge x -> Derives knowledge (.hash x)
+  -- no rule recovers x from .hash x
 
 def intruderRole (ivo : Actor) : RoleSpec :=
   adversary ivo do
-    observe publicWireEvents
+    observe (channelsVisibleTo ivo)
     mayBlock
     mayReplay
     maySend fun knowledge term => Derives knowledge term
 \end{lstlisting}
 
-This is the grammar analogue of the CSP/Dolev--Yao attacker: possible hostile
-messages are generated from observable history and constrained by a
-context-sensitive derivability relation.
-
-\section{Knowledge and agreement would become theorems}
-\label{sec:knowledge-closure}
-
-\index{secrecy}
-\index{agreement}
-Knowledge is calculated for every actor from every accepted trace, not merely the
-happy-path scenario. A traditional secrecy claim is recovered by comparing that
-set with the actors permitted to know the value. For Yahalom:
+Knowledge is calculated for every actor from every accepted trace, not only the
+intended run. Security claims then become theorems over accepted traces,
+derived knowledge and explicit compromise assumptions. For the fixed auction:
 
 \begin{lstlisting}
-theorem yahalom_session_key_knowers
+theorem auction_bid_sealed_until_close
     (trace : Trace WireEvent)
-    (accepted : yahalom.Accepts trace)
-    (honest : Uncompromised [.alice, .bob, .server]) :
-    knowers (sessionKey accepted.kab) trace = [.alice, .bob, .server] := by
-  exact knowledgeClosureFromKeyOwnership accepted honest
+    (accepted : fixedAuction.Accepts trace)
+    (fresh : SaltsFreshAndUnguessable trace) :
+    forall b x, beforeClose trace x ->
+      not (Derives (knowledgeAt .ivo trace x) (value (amountOf b))) := by
+  exact hashHidesSaltedInput accepted fresh
 
-theorem yahalom_bob_agrees_with_alice
+theorem auction_commitments_not_copyable
     (trace : Trace WireEvent)
-    (accepted : yahalom.Accepts trace)
-    (bobDone : completed trace .bob) :
-    exists run, peer run == .alice &&
-      run.na == bobDone.na && run.nb == bobDone.nb := by
-  exact agreementFromNonceChallenge accepted bobDone
+    (accepted : fixedAuction.Accepts trace) :
+    forall b c, acceptsCommit trace b c -> formedBy trace b c := by
+  exact boundNameDefeatsCopy accepted
 \end{lstlisting}
 
 These listings are proposed notation: the symbolic-crypto library and the
-lemmas they name do not exist yet, so nothing here is a checked proof. The important
-design constraint is already visible: theorem statements refer only to accepted
-event traces, knowledge derived from those traces, and explicit compromise
-assumptions.
+lemmas they name do not exist yet, so nothing here is a checked proof.
 
-\subsection{Put calculated knowledge and policy predicates inside CTL}
+\subsection{Calculated knowledge and policy inside CTL}
 
-For routine protocol documentation, knowledge need not begin as a new modal
-operator. Define ordinary state predicates by reducing the accepted event
-history, then place those predicates inside the existing CTL operators:
+Knowledge and policy need not start as new modal operators. Define state
+predicates by reducing the event history, then use them inside ordinary CTL.
+\texttt{knows} says who can derive a value; \texttt{allows} and
+\texttt{requires} say what a declared policy permits and obliges:
 
 \begin{lstlisting}
 def knows (actor : Actor) (value : Secret) (s : ProtocolState) : Bool :=
   value in knowledgeClosure actor s.events s.compromise
 
-def permitted (policy : Policy) (actor : Actor)
+def allows (policy : Policy) (actor : Actor)
     (action : Action) (s : ProtocolState) : Bool :=
   policy.allows actor action s
 
-def required (policy : Policy) (actor : Actor)
+def requires (policy : Policy) (actor : Actor)
     (action : Action) (s : ProtocolState) : Bool :=
   policy.requires actor action s
 \end{lstlisting}
 
-These are functions that label a state. CTL then says when those labels may or
-must hold. The following formulas are useful documentation because each has a
-direct English pronunciation:
+These functions label a state; CTL says when the labels may or must hold. Each
+formula below reads directly as English:
 
-\AccessibleEquation{It is always true that the attacker does not know the session key.}{
-\[
-  AG\bigl(\neg\operatorname{knows}(\mathit{Attacker},K_{AB})\bigr).
+\AccessibleEquation{On every future the auctioneer does not know any bid amount until bidding has closed.}{\[
+  \neg\operatorname{knows}(\mathit{Auctioneer},a_b)\ AU\ \mathit{closed}.
 \]}
 
-\AccessibleEquation{It is possible that Bob eventually knows the session key.}{
-\[
-  EF\bigl(\operatorname{knows}(\mathit{Bob},K_{AB})\bigr).
+\AccessibleEquation{It is possible that the auctioneer eventually knows every revealed amount.}{\[
+  EF\,\operatorname{knows}(\mathit{Auctioneer},a_b).
 \]}
 
-\AccessibleEquation{It is always true that if Bob accepts the session then Bob knows the session key and knows that the peer identity is Alice.}{
-\[
-  AG\bigl(\operatorname{accepts}(\mathit{Bob}) \rightarrow
-    (\operatorname{knows}(\mathit{Bob},K_{AB}) \land
-     \operatorname{knows}(\mathit{Bob},\operatorname{peer}(\mathit{Alice})))\bigr).
+\AccessibleEquation{It is always true that if an actor knows a handoff challenge then the duty policy allows that actor to possess it.}{\[
+  AG\bigl(\operatorname{knows}(x,c) \rightarrow
+    \operatorname{allows}(\mathit{DutyPolicy},x,\operatorname{possess}(c))\bigr).
 \]}
 
-\AccessibleEquation{It is always true that if an actor knows a secret then policy permits that actor to possess the secret.}{
-\[
-  AG\bigl(\operatorname{knows}(a,s) \rightarrow
-    \operatorname{permitted}(\mathit{DisclosurePolicy},a,
-      \operatorname{possess}(s))\bigr).
+\AccessibleEquation{It is always true that once the pager moves the duty the duty policy requires it to notify the outgoing engineer and every future eventually records that notification.}{\[
+  AG\bigl(\mathit{dutyMoved}(h) \rightarrow
+    (\operatorname{requires}(\mathit{DutyPolicy},\mathit{Pager},
+      \operatorname{notify}(\mathit{Olu},h)) \land AF\,\mathit{toldDone}(\mathit{Olu},h))\bigr).
 \]}
 
-\AccessibleEquation{It is always true that after receiving a valid service ticket policy requires the server to audit it and every future eventually records that audit.}{
-\[
-  AG\bigl(\operatorname{validTicketReceived}(r) \rightarrow
-    (\operatorname{required}(\mathit{AuditPolicy},\mathit{Server},
-      \operatorname{audit}(r)) \land AF\,\operatorname{audited}(r))\bigr).
-\]}
+A universal claim is checked by searching for its violation, and the search
+result is the useful artifact:
 
-\AccessibleEquation{There exists a reachable attack state in which the attacker knows the session key.}{
-\[
-  EF\bigl(\operatorname{knows}(\mathit{Attacker},K_{AB})\bigr).
-\]}
-
-The last formula is the counterexample search for the first. This is often the
-most practical security check: ask the existential engine for a trace that
-derives the forbidden knowledge. Likewise, a universal policy claim should be
-checked by searching for a reachable violation:
-
-\AccessibleEquation{Every disclosure is always permitted exactly when there is no reachable disclosure that is not permitted.}{
-\[
+\AccessibleEquation{Every disclosure is always permitted exactly when there is no reachable disclosure that is not permitted.}{\[
  AG(\operatorname{discloses}(a,s) \rightarrow
-    \operatorname{permitted}(P,a,\operatorname{disclose}(s)))
+    \operatorname{allows}(P,a,\operatorname{disclose}(s)))
  \;\equiv\;
  \neg EF(\operatorname{discloses}(a,s) \land
-    \neg\operatorname{permitted}(P,a,\operatorname{disclose}(s))).
+    \neg\operatorname{allows}(P,a,\operatorname{disclose}(s))).
 \]}
 
 This state-local \texttt{knows} predicate is not the full epistemic modality
 $K_a\varphi$ over indistinguishable histories defined in
 Chapter~\ref{ch:ctl}. It tests whether one declared deduction closure contains
-a value, an executable check for many secrecy and authorization claims; use
-$K_a$ when the requirement compares histories, such as anonymity or ``Alice
-knows that Bob knows.''
+a value, which suffices for many secrecy and authorization claims. Use $K_a$
+when the requirement compares histories, as the next example does.
 
-\section{Otway--Rees: guards are not optional decoration}
+\section{Example 3: pairing a speaker by a code on its screen}
 
-\index{Otway--Rees protocol}
-The Otway--Rees companion model introduces a run marker $M$ and guards that the two
-participants differ. Each participant encrypts its nonce, marker, and actor names
-under its long-term server key. The server returns separate encrypted components.
+\index{device pairing}
+A new speaker shows a six-digit code $d$ on its own display. Its owner types
+the code into a phone, and the phone proves to the speaker that it knows $d$.
+The network is hostile; the display is not on the network.
 
-This example adds three useful \texttt{where\_} obligations:
-
-\begin{lstlisting}
-where_ alice != bob
-where_ response.field "marker" == request.field "marker"
-where_ encryptedPart.names == [alice, bob]
-\end{lstlisting}
-
-The grammar shape remains a small sequence of messages. The accepted language is
-not context-free once equality of an unbounded marker and actor parameters matters.
-Keeping these tests as named guards preserves the readable protocol skeleton while
-making the extra context explicit.
-
-The example also asks whether an observer can distinguish executions after one
-candidate session key is substituted for another. That cannot be answered by a
-single knowledge set: it is a relational property over pairs of trace
-distributions, beyond a single CTL state formula, and should be represented as a
-separate theorem family.
-
-\section{Needham--Schroeder: public-key lookup as behaviour}
-
-\index{Needham--Schroeder protocol}
-The seven-message public-key example makes key discovery observable. Alice requests
-Bob's public key from a server, receives a signed binding, sends an encrypted nonce
-and identity to Bob, and later answers Bob's nonce. Bob performs the symmetric key
-lookup for Alice.
-
-Actor separation is particularly valuable here:
-
-\begin{itemize}
-  \item the key server grammar promises signed actor--public-key bindings;
-  \item Alice's grammar accepts Bob's key only where the signature verifies and the
-        named actor is Bob;
-  \item Bob imposes the corresponding constraint for Alice;
-  \item the nonce-response messages reuse previously bound values;
-  \item the intruder grammar may substitute any derivable public key or replay any
-        signed binding, but cannot manufacture a server signature.
-\end{itemize}
+\begin{enumerate}
+  \item Speaker $\to$ Owner, on channel \emph{display}: $d$.
+  \item Owner $\to$ Phone, on channel \emph{keypad}: $d$.
+  \item Phone $\to$ Speaker, on channel \emph{network}: $p,\ \mathit{hash}(p, d, \mathit{Phone})$, with a fresh nonce $p$.
+  \item Speaker $\to$ Phone, on channel \emph{network}: \emph{paired} or \emph{rejected}.
+\end{enumerate}
 
 \begin{lstlisting}
-receive (sign serverSigningKey (tuple [actor bob, publicKey "pkb"]))
-  where_ verifiesWith serverPublicKey
-  where_ field "actor" == bob
-
-send (encrypt pkb (tuple [nonce na, actor alice]))
-
-receive (encrypt aliceSecretView (tuple [nonce na, nonce "nb"]))
-  where_ field "na" == na
+receive (tuple [nonce "p", ?proof]) on network
+  where_ sender != speaker
+  where_ proof == hash (tuple [nonce p, value shownCode, actor sender])
+  where_ failedAttempts < 3
 \end{lstlisting}
 
-This is the textbook warning case. As written, Bob's reply
-$\{n_a, n_b\}_{pk_a}$ does not name Bob, and Lowe's 1995 attack exploits exactly
-that: an intruder $I$ whom Alice contacts honestly can replay her first message
-to Bob as if from Alice, relay Bob's reply back to Alice for decryption, and so
-learn $n_b$ and convince Bob that he is talking to Alice. Lowe's fix adds the
-responder's identity, $\{n_a, n_b, B\}_{pk_a}$, with Alice checking it. A
-LeanFM model of this protocol must generate the attack trace as a
-counterexample to agreement for the original message and find none for the
-fixed one; that is the acceptance test for the intruder grammar.
+Three things are new compared with the first two examples.
 
-It also demonstrates why ``all behaviour is observable'' must not mean ``all
-plaintext is public.'' The globally recorded event exposes endpoints, timing,
-kind, and wire bytes. Which symbolic values an actor can recover from those bytes
-is governed by the deduction relation.
+\paragraph{Channels decide what each actor observes.} The display and keypad
+events belong to the observations of the speaker, the owner and the phone, not
+to Ivo's. That is what keeps $d$ out of Ivo's knowledge closure, and it is a
+modeling assumption about the room, so it is stated as one. Remove it and the
+checker should immediately find Ivo pairing his own phone.
+
+\paragraph{A counter is context, too.} \texttt{failedAttempts < 3} depends on
+how many earlier proofs failed in this trace. Like the equality guards, it
+keeps the grammar context-free and moves the counting into a named predicate.
+
+\paragraph{Guessing is a probability, not a deduction.} Ivo cannot derive $d$,
+but he can guess it. The symbolic model says $EF\,\mathit{paired}(\mathit{Ivo})$
+is true: some future has a lucky guess. That verdict is correct and useless on
+its own. The requirement is a bound on how likely that future is, carried by a
+probability overlay: with three attempts against $10^6$ codes,
+
+\AccessibleEquation{The probability that Ivo eventually pairs is at most three in one million.}{\[
+  P[F\,\mathit{paired}(\mathit{Ivo})] \le 3/10^6.
+\]}
+
+The next section explains why the number attaches to $E$.
+
+\paragraph{Some claims compare histories.} ``Ivo cannot tell which code was
+shown'' is not true or false of one state. It says that any two histories
+differing only in $d$ look identical to Ivo, which is exactly $K_a$ over
+indistinguishable histories. It belongs in a separate family of relational
+theorems, not in a single CTL state formula.
+
+\section{Where each modality attaches}
+
+\index{probability overlay}
+\index{deadline}
+\index{modality}
+The three examples have used every kind of claim a requirement needs: what can
+or must happen, how likely, by when, who knows, who may, and who must. None of
+them needs a new logic. Each attaches to one place in an ordinary CTL formula.
+A CTL operator is a path quantifier, $A$ or $E$, fused with a temporal operator
+such as $F$, $G$ or $U$. Probability belongs to the quantifier, deadlines
+belong to the temporal operator, and knowledge and policy are predicates on
+states.
+
+\paragraph{The path quantifier $E$ invites ``how likely?''} $E$ says that
+\emph{some} future satisfies the path formula. The natural refinement is to ask
+how much of the future does: replace ``some'' with a probability measured over
+futures. That works the same way whatever follows the $E$:
+
+\AccessibleEquation{E F p becomes the probability of F p. E G p becomes the probability of G p. p E U q becomes the probability of p U q.}{\[
+  EF\,p \;\leadsto\; P[F\,p],\qquad
+  EG\,p \;\leadsto\; P[G\,p],\qquad
+  p\ EU\ q \;\leadsto\; P[p\ U\ q].
+\]}
+
+The number comes from an overlay of branch probabilities, as in the bakery
+chapter, and is reported beside the CTL verdict, never in place of it. The
+overlay cannot make $EF\,p$ false: a future with probability $3/10^6$ is still
+possible, and so still needs the handling that possibility demands. Nor does
+$A$ become ``probability one'': a set of futures can have probability one and
+still leave out a future that $A$ must cover, which is why
+Chapter~\ref{ch:ctl} keeps $A$ and $E$ about legal futures only.
+
+\paragraph{The temporal operator $F$ invites ``by when?''} $F$ says ``at some
+later point'' with no bound. A user waiting on a handoff or an auction result
+needs a bound, so the deadline is written on $F$ (and, the same way, on the
+right-hand side of $U$). It means the same thing under either quantifier:
+$AF_{\le t}\,q$ says every future reaches $q$ within $t$; $EF_{\le t}\,q$ says
+some future does.
+
+A deadline under $A$ is a promise the grammar must be able to keep. Every
+waiting state needs a timeout branch that ends in an explicit outcome. Without
+one, $AF_{\le t}$ fails, because some future waits past $t$. With one, the
+deadline is part of the guaranteed behaviour:
+
+\AccessibleEquation{On every future within fifteen minutes handoff h is either accepted by Ines or has expired.}{\[
+  AF_{\le 15\,\mathrm{min}}\bigl(\mathit{accepted}(\mathit{Ines},h) \lor \mathit{expired}(h)\bigr).
+\]}
+
+\AccessibleEquation{It is always true that once bidding has closed on every future within the reveal window each bidder has either revealed or forfeited.}{\[
+  AG\Bigl(\mathit{closed} \rightarrow
+    AF_{\le T_{\mathit{reveal}}}\bigl(\mathit{revealed}(b) \lor \mathit{forfeited}(b)\bigr)\Bigr).
+\]}
+
+The handoff therefore needs an \emph{Expired} message that the pager sends to
+both engineers when the offer times out, and the auction needs a
+\emph{Forfeited} outcome for a bidder who never reveals. Both are new legal
+branches, so both need decodable messages and code that handles them.
+
+\paragraph{The two annotations compose.} Probability on the quantifier and a
+deadline on $F$ combine into the question stakeholders usually ask: how likely
+is it to happen in time? An owner pairing a speaker within a minute is
+
+\AccessibleEquation{The probability that the phone is paired within sixty seconds.}{\[
+  P[F_{\le 60\,\mathrm{s}}\,\mathit{paired}(\mathit{Phone})],
+\]}
+
+which a measured overlay reports from real pairing attempts. Keep a guaranteed
+deadline ($AF_{\le t}$, enforced by a timeout branch) separate from a usual one
+($P[F_{\le t}]$, measured). The bakery chapter shows why: a declared delay
+promised a 1.2\,s sale while only about half the recorded sales met it.
+
+\paragraph{\texttt{knows}, \texttt{allows} and \texttt{requires} complete the
+set.} The remaining modalities are about actors rather than futures: what an
+actor can derive, what a policy allows it to do, and what a policy requires of
+it. Each is computed from the history up to a state, so each is a state
+predicate, and the temporal operators carry them without change. Secrecy is
+\texttt{knows} under $AU$; authorization is \texttt{knows} implying
+\texttt{allows} under $AG$; an obligation is \texttt{requires} paired with
+$AF_{\le t}$ on the act that discharges it.
+
+\begin{center}
+\begin{tabular}{@{}p{0.2\textwidth}p{0.2\textwidth}p{0.5\textwidth}@{}}
+\toprule
+Question & Attaches to & Example from this chapter \\
+\midrule
+can it happen? must it? & $E$, $A$ & $EF\,\mathit{paired}(\mathit{Ivo})$ \\
+how likely? & $E$ & $P[F\,\mathit{paired}(\mathit{Ivo})] \le 3/10^6$ \\
+by when? & $F$, $U$ & $AF_{\le 15\,\mathrm{min}}(\mathit{accepted} \lor \mathit{expired})$ \\
+who knows? & state: \texttt{knows} & $\neg\operatorname{knows}(\mathit{Ivo},a_{\mathit{Ana}})\ AU\ \mathit{closed}$ \\
+who may? & state: \texttt{allows} & $AG(\operatorname{knows}(x,c)\rightarrow\operatorname{allows}(\mathit{Duty},x,\ldots))$ \\
+who must? & state: \texttt{requires} & $AG(\mathit{dutyMoved}\rightarrow\operatorname{requires}(\ldots)\land AF\,\mathit{toldDone})$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+One claim in the chapter does not fit the table: ``Ivo cannot tell which code
+was shown.'' It compares histories rather than labeling one, so it needs the
+full $K_a$ over indistinguishable histories, as noted in the pairing example.
 
 \section{What these exercises demand from the library}
 
-The three case studies produce a concrete implementation checklist:
+The three examples produce a concrete checklist:
 
 \begin{enumerate}
   \item actor-local grammar definitions and trace projection;
   \item synchronization by common event identity and bytes;
-  \item typed symbolic variables, exports, imports, and prefix-dependent guards;
-  \item a transport-neutral term-to-byte relation;
-  \item explicit initial knowledge and compromise assumptions;
-  \item attacker closure under symbolic construction and decryption;
-  \item per-value knowledge sets, agreement, and relational indistinguishability
-        theorem schemas;
-  \item counterexamples rendered simultaneously as a global interaction diagram
-        and as each actor's local projection.
+  \item typed symbolic variables and prefix-dependent guards, including
+        equalities and counters;
+  \item a transport-neutral term-to-byte relation with encryption and hashing;
+  \item channels, so that each actor's observations are declared;
+  \item explicit initial knowledge, compromise and freshness assumptions;
+  \item attacker closure under construction, decryption and hashing;
+  \item past operators for agreement claims such as
+        ``accepted only if previously formed'';
+  \item probabilities on the $E$ quantifier, from overlays, reported next to
+        CTL verdicts;
+  \item deadlines on $F$ and $U$, with timeout branches wherever $A$ must
+        meet them;
+  \item relational theorem schemas for indistinguishability; and
+  \item counterexamples drawn both as a global interaction diagram and as each
+        actor's local projection.
 \end{enumerate}
 
-These are not security-specific embellishments. They are a rigorous test of whether
-multiparty context-sensitive grammars can remain modular while expressing the
-information flow on which real behavioural claims depend.
+None of this is security decoration. It tests whether separately written,
+context-sensitive role grammars stay modular while still expressing the
+information flow that real behavioural claims depend on.
