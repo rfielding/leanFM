@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kind": "http",
+  "directory": "source",
+  "command": ["make", "run"],
+  "host": "127.0.0.1",
+  "port": 8082,
+  "readiness_path": "/",
+  "page_path": "/",
+  "relative_urls": true
+}

@@ -299,30 +299,13 @@ Run generated requirement validation without starting the server:
 lake exe leanfm-validate
 ```
 
-## Three-replica Paxos key/value example
+## Reference example: PaxosKV
 
-Build and verify the accepted Paxos requirements, implementation mapping,
-protobuf framing, durable recovery, concurrent sessions, and web UI:
-
-```sh
-make paxos-check
-go build -o /tmp/paxos-kv ./cmd/paxos-kv
-```
-
-Start the replicas in separate terminals (use a different durable directory for
-each), then start the web application:
-
-```sh
-PEERS='kv-0=127.0.0.1:9100,kv-1=127.0.0.1:9101,kv-2=127.0.0.1:9102'
-/tmp/paxos-kv replica -id kv-0 -addr 127.0.0.1:9100 -peers "$PEERS" -data ./data/kv-0
-/tmp/paxos-kv replica -id kv-1 -addr 127.0.0.1:9101 -peers "$PEERS" -data ./data/kv-1
-/tmp/paxos-kv replica -id kv-2 -addr 127.0.0.1:9102 -peers "$PEERS" -data ./data/kv-2
-/tmp/paxos-kv web -addr 127.0.0.1:8088 -replicas 127.0.0.1:9100,127.0.0.1:9101,127.0.0.1:9102
-```
-
-Open `http://127.0.0.1:8088/` in two browser sessions. Prometheus metrics are
-at `/metrics`; generated requirement diagrams are `diagrams/paxos-*.dot` and
-`diagrams/paxos-*.png`.
+The complete worked example lives in `projects/PaxosKV/`: a three-replica
+Paxos key/value database with a web page, its own book, typed requirements,
+implementation mapping, derived views, Go source and browser evidence. See
+`projects/PaxosKV/README.md`. From the LeanFM root, `make paxos-check` runs its
+specification check and Go tests.
 
 Generated files:
 

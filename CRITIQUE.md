@@ -58,11 +58,12 @@ times; and m-of-n tie, winner and cancellation semantics.
 
 ## Paxos example lacks end-to-end conformance
 
-Requirement payloads are empty; the runtime uses a generic TCP `Envelope`;
-quorum-DAG `ScenarioEvent.priorIds` has no runtime counterpart; `node.go` emits
-only terminal events, so write, list and recovery traces cannot be
-reconstructed. Tests cover envelope round trips and truncated protobuf, not
-partial frames, loss, duplication, delay or reordering.
+`projects/PaxosKV` now builds, runs (three replicas plus web via `make run`),
+passes the canonical project check and a two-browser check. It still does not
+close the loop from a run back to the checkers: requirement payloads are empty,
+the runtime uses a generic TCP `Envelope`, `node.go` emits only terminal events
+without `priorIds`, and tests do not cover loss, duplication, delay or
+reordering. The project book's "Known gaps" chapter is the work queue.
 
 ## Runtime models are declared, not executed
 

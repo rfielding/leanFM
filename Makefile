@@ -19,7 +19,7 @@ EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
 .DEFAULT_GOAL := all
 
-.PHONY: all lean build ui-build run serve claude stop check chatui-check go-toolchain paxos-check paxos-run http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+.PHONY: all lean build ui-build run serve claude stop check chatui-check go-toolchain paxos-check http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
 
 # `make` rebuilds everything: the browser bundle, every Lean target, and the book.
 all: build lean book
@@ -118,16 +118,13 @@ go-toolchain:
 	  "$(LOCAL_GO)" version; \
 	fi
 
-paxos-check:
-	@lake env lean ValidatePaxosKV.lean | rg '^ok: Paxos KV requirements|^ok: generated implementation plan'
-	@go test ./...
+# The reference example project: spec check plus go vet/test.
+paxos-check: build
+	$(MAKE) -C projects/PaxosKV check
 
 .PHONY: chatui-browser-check
 chatui-browser-check: build
 	LEANFM_TEST_BROWSER=1 bash scripts/chatui_http_check.sh
-
-paxos-run:
-	@echo 'Run three replicas, then: go run ./cmd/paxos-kv web'
 
 validate:
 	@lake exe leanfm | rg 'Per-task FSM CTL checks|CTL from initial observation|AF terminal|AG capacity'
@@ -175,11 +172,6 @@ diagrams:
 	lake env lean --run MCPInteractionExample.lean
 	lake env lean --run LogicInteractionExample.lean
 	lake env lean --run WebServerProtocolChapter.lean
-	@dot -Tpng diagrams/paxos-kv.dot -o diagrams/paxos-kv.png
-	@dot -Tpng diagrams/paxos-quorum-write.dot -o diagrams/paxos-quorum-write.png
-	@dot -Tpng diagrams/paxos-linearizable-list.dot -o diagrams/paxos-linearizable-list.png
-	@dot -Tpng diagrams/paxos-recovery.dot -o diagrams/paxos-recovery.png
-	@dot -Tpng diagrams/paxos-quorum-write-messages.dot -o diagrams/paxos-quorum-write-messages.png
 
 scripts:
 	node scripts/format_assets.js

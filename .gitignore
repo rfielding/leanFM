@@ -50,7 +50,8 @@
 # Account credentials, password verifiers, sessions, and private project state
 /data/
 /.leanfm/
-/projects/
+/projects/*
+!/projects/PaxosKV/
 /logs/
 
 # Operator-only inventories can include private account/project metadata.

@@ -1,0 +1,170 @@
+This chapter maps the requirements to an implementation. It does not
+change their observable meaning.
+
+
+\hypertarget{target-and-processes}{%
+\section{Target and processes}\label{target-and-processes}}
+
+\begin{itemize}
+\tightlist
+\item
+  Target language: Go.
+\item
+  One \texttt{paxos-kv} executable with subcommands \texttt{web} and
+  \texttt{replica}.
+\item
+  One WebApp process and three independently started replica processes.
+\item
+  Replica IDs and addresses are supplied explicitly; membership is fixed
+  at \texttt{kv-0}, \texttt{kv-1}, and \texttt{kv-2}.
+\item
+  Browser traffic uses HTTP. Replica protocol traffic uses
+  length-delimited protobuf messages over TCP connections.
+\end{itemize}
+
+\hypertarget{durable-state}{%
+\section{Durable state}\label{durable-state}}
+
+Each replica owns a separate data directory containing an append-only
+accepted log and a small metadata file for the highest promised ballot.
+Every update is written to a temporary record, flushed with
+\texttt{fsync}, and atomically made visible before
+\texttt{DurableAccepted} is sent. Recovery scans and validates the log,
+truncates only an incomplete final record, and reconstructs accepted
+slots. No process shares a replica data directory.
+
+The leader records commit decisions durably. On startup or leadership
+change it runs Paxos recovery against a quorum before accepting HTTP
+work, choosing the accepted value with the highest ballot for each slot
+and filling any gaps.
+
+\hypertarget{consensus-and-reads}{%
+\section{Consensus and reads}\label{consensus-and-reads}}
+
+\begin{itemize}
+\tightlist
+\item
+  Stable-leader Multi-Paxos assigns monotonically increasing log slots.
+\item
+  Ballots are ordered pairs \texttt{(counter,\ replica\_id)}.
+\item
+  A candidate must receive promises from two replicas before becoming
+  leader.
+\item
+  A value is committed after two distinct replicas have durably accepted
+  the identical \texttt{(ballot,\ slot,\ key,\ value)} tuple.
+\item
+  Repeated messages are idempotent by \texttt{(ballot,\ slot)} and
+  browser \texttt{(session\_id,\ request\_id)}.
+\item
+  The materialized key/value map applies committed slots in increasing
+  order; this implements last-committed-slot-wins.
+\item
+  A list request uses a quorum read barrier and returns one applied
+  committed prefix. A successful PUT waits until its slot is applied,
+  then obtains the listing from a prefix at least that new.
+\end{itemize}
+
+\hypertarget{web-application}{%
+\section{Web application}\label{web-application}}
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{GET\ /} obtains a linearizable listing and renders the form
+  followed by the sorted key/value table.
+\item
+  \texttt{POST\ /put} accepts form fields \texttt{key} and
+  \texttt{value}, validates encoded byte limits, submits the write, and
+  renders the resulting listing.
+\item
+  A secure random cookie supplies \texttt{session\_id}; every request
+  gets a unique \texttt{request\_id}.
+\item
+  HTML is escaped. Request bodies, response bodies, and internal queues
+  are bounded. Two browser sessions may progress concurrently.
+\item
+  Failures return an explicit page and appropriate HTTP status; they
+  never display an uncommitted value as successful.
+\end{itemize}
+
+\hypertarget{resource-choices}{%
+\section{Resource choices}\label{resource-choices}}
+
+\begin{itemize}
+\tightlist
+\item
+  Web request body: 8 KiB maximum.
+\item
+  WebApp: 64 in-flight requests and a bounded 128-item submission queue.
+\item
+  Each replica: bounded 256-message inbound queue and 64 simultaneous
+  peer operations.
+\item
+  Database: 10,000 distinct keys, with limits enforced before proposal.
+\item
+  Timeouts cancel a client attempt but do not erase a value already
+  accepted; retries use the same request ID and discover the committed
+  result.
+\end{itemize}
+
+\hypertarget{observability}{%
+\section{Observability}\label{observability}}
+
+Every protocol transition is meant to emit the LeanFM event envelope with
+event ID, repeated predecessor IDs, browser session, task/request ID,
+concrete source and destination replica IDs, monotonic time, and
+protobuf atom. \texttt{/metrics} exports commit latency, quorum size,
+available replica count, recovery lag, request outcomes, queue depth,
+and memory headroom under the accepted output IDs. Logs include ballot
+and slot but never unescaped HTML.
+
+\hypertarget{generated-source-layout}{%
+\section{Generated source layout}\label{generated-source-layout}}
+
+\begin{verbatim}
+source/Makefile                       build, run, stop, test
+source/runtime.py                     Runtime actor (supervisor)
+source/browser_check.py               two-session browser check
+source/cmd/paxos-kv/main.go           replica and web subcommands
+source/internal/web/app.go            WebApp and Browser bindings
+source/internal/paxos/node.go         KVReplica: Multi-Paxos and recovery
+source/internal/paxos/storage.go      fsynced accepted log
+source/internal/protocol/             wire Envelope (protobuf)
+source/internal/metrics/metrics.go    /metrics
+source/internal/trace/events.go       events/kv-N.jsonl
+source/web/templates/index.html       the page
+source/traceability.json              requirement -> file map
+\end{verbatim}
+
+\hypertarget{conformance-tests}{%
+\section{Conformance tests}\label{conformance-tests}}
+
+\begin{itemize}
+\tightlist
+\item
+  Two browser sessions write different keys concurrently and both
+  listings converge to the same committed map.
+\item
+  Two sessions write one key concurrently; the later committed slot
+  wins.
+\item
+  Every HTTP success has two prior durable acceptances from distinct
+  replicas.
+\item
+  Stop any one replica during writes; the other two continue and the
+  stopped replica catches up after restart.
+\item
+  Stop all replicas after acknowledged writes; restart two and recover
+  every acknowledged value before serving.
+\item
+  Corrupt or truncate the final log record and verify safe recovery
+  without inventing a commit.
+\item
+  Reject oversized, empty-key, and 10,001st-key writes without mutation.
+\item
+  Reject conflicting values for one slot, stale ballots, malformed
+  protobuf, and illegal trace order.
+\item
+  Exercise full queues, timeouts, idempotent retries, and HTML escaping.
+\end{itemize}

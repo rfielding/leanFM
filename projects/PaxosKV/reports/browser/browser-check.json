@@ -1,0 +1,36 @@
+{
+  "prompt": "Access the app concurrently from two browser sessions.",
+  "question": "Do both sessions converge on the same committed map, with the later write to a key winning?",
+  "base_url": "http://127.0.0.1:8082",
+  "session_a": [
+    [
+      "color",
+      "green"
+    ],
+    [
+      "shape",
+      "circle"
+    ]
+  ],
+  "session_b": [
+    [
+      "color",
+      "green"
+    ],
+    [
+      "shape",
+      "circle"
+    ]
+  ],
+  "expected": [
+    [
+      "color",
+      "green"
+    ],
+    [
+      "shape",
+      "circle"
+    ]
+  ],
+  "ok": true
+}

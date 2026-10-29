@@ -1,7 +1,6 @@
 import LeanFM.Protocol
 import LeanFM.UiModel
 import LeanFM.LLMGenerated.Requirements
-import LeanFM.PaxosKV.Requirements
 import LeanFM.StaticAssets
 
 namespace LeanFM
@@ -993,28 +992,18 @@ def taskById! (spec : RequirementSpec) (id : String) : TaskRequirement :=
 
 def renderSvg (name : String) : Option String :=
   let worker := LeanFM.LLMGenerated.Requirements.workerRequirement
-  let paxos := LeanFM.PaxosKV.Requirements.spec
   match name with
   | "get_docs-interaction" => some <| interactionSvg worker (taskById! worker "get_docs")
   | "post_review-interaction" => some <| interactionSvg worker (taskById! worker "post_review")
-  | "paxos-write-interaction" => some <| interactionSvg paxos (taskById! paxos "quorum_write")
-  | "paxos-list-interaction" => some <| interactionSvg paxos (taskById! paxos "linearizable_list")
-  | "paxos-recovery-interaction" => some <| interactionSvg paxos (taskById! paxos "recover_replica")
   | "get_docs-state" => some <| stateMachineSvg worker (taskById! worker "get_docs")
   | "post_review-state" => some <| stateMachineSvg worker (taskById! worker "post_review")
-  | "paxos-write-state" => some <| stateMachineSvg paxos (taskById! paxos "quorum_write")
-  | "paxos-list-state" => some <| stateMachineSvg paxos (taskById! paxos "linearizable_list")
-  | "paxos-recovery-state" => some <| stateMachineSvg paxos (taskById! paxos "recover_replica")
   | "latency-line" => some latencyLineSvg
   | "outcomes-pie" => some outcomePieSvg
-  | "paxos-quorum-shutdown-network" => some <| quorumShutdownNetworkSvg paxos
   | _ => none
 
 def svgArtifactNames : List String :=
-  [ "get_docs-interaction", "post_review-interaction", "paxos-write-interaction"
-  , "paxos-list-interaction", "paxos-recovery-interaction", "get_docs-state"
-  , "post_review-state", "paxos-write-state", "paxos-list-state", "paxos-recovery-state"
-  , "latency-line", "outcomes-pie", "paxos-quorum-shutdown-network" ]
+  [ "get_docs-interaction", "post_review-interaction", "get_docs-state"
+  , "post_review-state", "latency-line", "outcomes-pie" ]
 
 def svgGallery : String :=
   String.join <| svgArtifactNames.map fun name =>
@@ -1046,7 +1035,7 @@ def theoremRenderPage : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM theorem renderings</title><meta name=\"color-scheme\" content=\"dark only\">" ++
   "<style>html,body{background:#111;color:#f8f8f8;font-family:system-ui,sans-serif;line-height:1.45}body{max-width:1100px;margin:2rem auto;padding:0 1rem}a{color:#93c5fd}.theorem{background:#090909;border:1px solid #444;border-left:4px solid #60a5fa;padding:1rem;margin:1rem 0}math{font-size:1.5rem;padding:1rem;overflow:auto}pre{white-space:pre-wrap;background:#171717;padding:.8rem;color:#dbeafe}</style></head><body>" ++
   "<h1>Lean theorem renderings</h1><p>These notation cards are hand-maintained summaries, not generated from Lean elaboration and not proof-status evidence. Consult the linked source and its successful build output.</p><p><a href=\"/renders/\">visual artifact gallery</a> · <a href=\"/lean/logic.lean\">complete Lean source</a></p>" ++
-  logicTheoremCards ++ temporalProofCards "Worker temporal proof obligations" LeanFM.LLMGenerated.Requirements.workerRequirement ++ temporalProofCards "Paxos temporal proof obligations" LeanFM.PaxosKV.Requirements.spec ++ "</body></html>"
+  logicTheoremCards ++ temporalProofCards "Worker temporal proof obligations" LeanFM.LLMGenerated.Requirements.workerRequirement ++ "</body></html>"
 
 def diagramRenderPage (selected : String) : String :=
   "<!doctype html><html><head><meta charset=\"utf-8\"><title>LeanFM Render</title>" ++

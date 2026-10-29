@@ -592,8 +592,8 @@ forecast. Existing \texttt{DesiredOutput} entries establish provenance. This is
 an analysis contract, not a claim that a general Kubernetes deployment or
 forecast engine is implemented.
 
-The generated artifact
-\texttt{paxos-quorum-shutdown-network.svg} gives a concrete majority-service
+The PaxosKV example project's derived view
+\texttt{renders/quorum-shutdown-network.svg} gives a concrete majority-service
 example. A Kubernetes-like runtime manages a parallel pool of three stateless
 web actors; the one-of-three web pool is in series with a two-of-three
 database-replica gate. Each web actor has specified uptime $9999/10000$; each

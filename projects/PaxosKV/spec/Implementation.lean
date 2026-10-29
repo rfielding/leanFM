@@ -1,6 +1,7 @@
-import LeanFM.PaxosKV.Requirements
+import LeanFM.Artifacts
+import spec.Requirements
 
-namespace LeanFM.PaxosKV.Implementation
+namespace Project.Implementation
 
 open LeanFM
 
@@ -8,15 +9,16 @@ def why (id reason : String) : List RequirementJustification := [{ requirementId
 def actor (name typeName file id : String) : ActorCodegen := { actor := name, typeName, sourceFile := file, justifications := why id "Implements the accepted actor role." }
 def tcp (name wire id : String) : MessageCodegen := { message := name, wireType := wire, transport := .tcp "configured three-replica mesh", justifications := why id "Carries the accepted observable message without changing its protobuf value." }
 
-def spec : ImplementationSpec :=
-  { requirementId := Requirements.spec.id
+def implementation : ImplementationSpec :=
+  { requirementId := Project.Requirements.requirements.id
   , target := .go
   , moduleName := "leanfm/paxoskv"
-  , outputDirectory := "."
+  , outputDirectory := "source/"
   , actors :=
-      [ actor "Browser" "HTTP browser session" "internal/web/app.go" "actor:Browser"
-      , actor "WebApp" "web.App" "internal/web/app.go" "actor:WebApp"
-      , actor "KVReplica" "paxos.Node" "internal/paxos/node.go" "actor:KVReplica" ]
+      [ actor "Browser" "HTTP browser session" "source/internal/web/app.go" "actor:Browser"
+      , actor "WebApp" "web.App" "source/internal/web/app.go" "actor:WebApp"
+      , actor "KVReplica" "paxos.Node" "source/internal/paxos/node.go" "actor:KVReplica"
+      , actor "Runtime" "project runtime supervisor" "source/runtime.py" "actor:Runtime" ]
   , messages :=
       [ { message := "PutRequest", wireType := "protocol.Envelope", transport := .httpRequest "POST" "/put", justifications := why "message:PutRequest" "The form submits one bounded key/value request." }
       , tcp "Propose" "protocol.Envelope" "message:Propose"
@@ -50,6 +52,6 @@ def spec : ImplementationSpec :=
       , closeSemantics := .idempotentWakeWaiters
       , justifications := why "resource:KVReplica" "Bounded queues preserve accepted resource limits and leave state unchanged on failed admission." } }
 
-def validationReport : String := implementationValidationReport Requirements.spec spec
+def validationReport : String := implementationValidationReport Project.Requirements.requirements implementation
 
-end LeanFM.PaxosKV.Implementation
+end Project.Implementation

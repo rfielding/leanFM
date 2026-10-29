@@ -1,6 +1,8 @@
 import LeanFM.Artifacts
 
-namespace LeanFM.PaxosKV.Requirements
+open LeanFM
+
+namespace Project.Requirements
 
 def protoSource : String := include_str "Requirements.proto"
 def framing : MessageFraming := { kind := .protobufMessage, dispatchField := some "type", note := "Length-delimited protobuf Envelope atom." }
@@ -112,6 +114,15 @@ def scenarioOrderWellFormed (events : List ScenarioEvent) : Bool :=
 
 example : scenarioOrderWellFormed quorumWriteExample := by native_decide
 
+-- Empty priorIds marks minimal events; several minimal events are valid and
+-- remain unordered rather than acquiring order from their list position.
+example : scenarioOrderWellFormed
+    [ exampleEvent "first-a" [] "browser-a" "web-0" "ListRequest"
+        [("session", "browser-a"), ("request_id", "list-a")]
+    , exampleEvent "first-b" [] "browser-b" "web-0" "ListRequest"
+        [("session", "browser-b"), ("request_id", "list-b")]
+    ] := by native_decide
+
 def state (id label group : String) (terminal : Bool := false) : RequirementState := { id, label, group, markdown := label, terminal }
 def transition (src dst msg : String) (ms : Nat := 1) : RequirementTransition := { src, dst, message := msg, probabilityNum := 1, probabilityDen := 1, dwellMs := ms }
 
@@ -169,7 +180,7 @@ def outputs : List DesiredOutput :=
   , { id := "paxos.dos_criticality", prompt := "Rank denial-of-service targets with PageRank-like dependency centrality.", question := "Which web or replica nodes are structurally important, and which single or multi-node failures actually cross a service cut or quorum threshold?", kind := .function2d, eventSource := "reliability gates, message traffic, named attacker failure sets, and task outcomes", reducer := "compare PageRank-like ranking with minimal cut sets and fixed-point cascade loss; report stopped capacity and client outcomes", unit := "centrality score, services, tasks, work/time, and ratio" }
   , { id := "paxos.outcomes", prompt := "Show request outcomes.", question := "What happened to browser requests?", kind := .scalar, eventSource := "terminal browser events", reducer := "count success, rejection, timeout, and leadership loss", unit := "requests" } ]
 
-def spec : RequirementSpec :=
+def requirements : RequirementSpec :=
   { id := "paxos_kv.visible_behavior", title := "Three-replica Paxos key-value web application", actors := ["Browser", "Runtime", "WebApp", "KVReplica"]
   , actorPopulations := [{actorSpec := "Browser", instancePrefix := "browser-", count := 2, routing := .sticky "session"}, {actorSpec := "Runtime", instancePrefix := "runtime-", count := 1, routing := .roundRobin}, {actorSpec := "WebApp", instancePrefix := "web-", count := 3, routing := .roundRobin}, {actorSpec := "KVReplica", instancePrefix := "kv-", count := 3, routing := .sticky "replica_id"}]
   , actorResources := [{actor := "Browser", inboundCapacity := 8, outboundCapacity := 8, maxInFlight := 2, memoryBudgetBytes := 1048576}, {actor := "Runtime", inboundCapacity := 128, outboundCapacity := 128, maxInFlight := 32, memoryBudgetBytes := 67108864}, {actor := "WebApp", inboundCapacity := 128, outboundCapacity := 128, maxInFlight := 64, memoryBudgetBytes := 67108864}, {actor := "KVReplica", inboundCapacity := 256, outboundCapacity := 256, maxInFlight := 64, memoryBudgetBytes := 134217728}]
@@ -189,6 +200,6 @@ def spec : RequirementSpec :=
   , charts := [{name := "commit latency by concurrency", kind := .xy, source := "paired write events", groupBy := some "max_concurrent_sessions", value := "latency_ms"}, {name := "request outcomes", kind := .pie, source := "terminal browser events", groupBy := some "outcome", value := "count"}], desiredOutputs := outputs
   , markdown := [{id := "durability", title := "Durability boundary", body := "Success follows two fsynced acceptances. Total shutdown causes unavailability, not data loss; quorum recovery runs before service resumes."}, {id := "bounds", title := "Input and capacity bounds", body := "Keys are 1..128 UTF-8 bytes, values at most 4096 UTF-8 bytes, and at most 10000 distinct keys are committed."}] }
 
-def validationReport : String := match validateRequirementSpec spec with | [] => "ok: Paxos KV requirements are well formed\n" | es => "invalid Paxos KV requirements\n" ++ joinWithNewline es ++ "\n"
+def validationReport : String := match validateRequirementSpec requirements with | [] => "ok: Paxos KV requirements are well formed\n" | es => "invalid Paxos KV requirements\n" ++ joinWithNewline es ++ "\n"
 
-end LeanFM.PaxosKV.Requirements
+end Project.Requirements

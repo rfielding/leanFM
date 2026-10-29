@@ -1,0 +1,171 @@
+\hypertarget{boundary-and-assumptions}{%
+\section{Boundary and assumptions}\label{boundary-and-assumptions}}
+
+The Paxos participant is \texttt{KVReplica}, instantiated as one
+homogeneous cluster of exactly three members: \texttt{kv-0},
+\texttt{kv-1}, and \texttt{kv-2}. \texttt{Browser} and \texttt{WebApp}
+are actors but are not Paxos participants. Two independent browser
+sessions may have tasks in flight concurrently.
+
+The confirmed availability premise means that at every modeled instant
+at least two replicas are running, all replicas can reach one another
+while running, and each can reach its durable storage. This gives a live
+majority. Persistence additionally requires an acceptor to fsync its
+accepted ballot, slot, key, and value before sending \texttt{Accepted};
+the web response is not successful until a quorum of two durable
+acceptances exists. A restarted replica recovers its accepted log before
+participating. If all three replicas stop, the service is unavailable
+rather than forgetful: after restart, quorum recovery reconstructs the
+committed log from durable acceptor state before reads or writes resume.
+
+The confirmed conflict rule is last-committed-slot-wins: if the two
+browser sessions write the same key concurrently, the leader assigns
+distinct Paxos log slots and the value in the later committed slot is
+displayed.
+
+\hypertarget{related-grammar-set}{%
+\section{Related grammar set}\label{related-grammar-set}}
+
+\begin{verbatim}
+project paxos_kv ::=
+  repeat(quorum_write || linearizable_list || recover_replica)
+
+quorum_write ::=
+  Browser.Put(key, value, session, request_id) ;
+  WebApp.Propose(key, value, session, request_id) ;
+  Leader.Assign(ballot, slot) ;
+  parallel(
+    Replica.Accept(ballot, slot, key, value) ;
+    Replica.Accept(ballot, slot, key, value) ;
+    Replica.Accept(ballot, slot, key, value)
+  ) ;
+  mOfN(2, Replica.DurableAccepted(ballot, slot)) ;
+  Leader.Commit(ballot, slot, key, value) ;
+  WebApp.PutSucceeded(key, value, slot) ;
+  ref(linearizable_list)
+
+linearizable_list ::=
+  Browser.List(session, request_id) ;
+  WebApp.ReadBarrier(ballot) ;
+  mOfN(2, Replica.ReadBarrierAck(ballot, committed_slot)) ;
+  Leader.Snapshot(committed_slot, entries) ;
+  WebApp.ListSucceeded(committed_slot, entries)
+
+recover_replica ::=
+  Replica.Unavailable(instance) ;
+  Replica.Restarted(instance) ;
+  Replica.RecoverAcceptedLog(instance) ;
+  Replica.CatchUp(committed_slot) ;
+  Replica.Available(instance)
+\end{verbatim}
+
+The notation above is intentionally behavioral. An implementation may
+use a stable Multi-Paxos leader, but leader election and ballot changes
+must remain observable whenever leadership changes.
+
+\hypertarget{two-session-interaction-projection}{%
+\section{Two-session interaction
+projection}\label{two-session-interaction-projection}}
+
+This is the interaction structure to be generated from the grammar. The
+two browser branches are incomparable until the leader assigns slots;
+either may arrive first.
+
+\begin{verbatim}
+Browser A      Browser B        WebApp          KV leader       KV followers
+    | PUT a=1      |               |                 |                 |
+    |------------->|               |                 |                 |
+    |               | PUT b=2      |                 |                 |
+    |               |------------->|                 |                 |
+    |               |               | propose A      |                 |
+    |               |               |--------------->|                 |
+    |               |               | propose B      |                 |
+    |               |               |--------------->|                 |
+    |               |               |          assign slots s,s+1      |
+    |               |               |                 | accept/fsync -->|
+    |               |               |                 |<-- accepted (2) |
+    |               |               |<-- commit A ----|                 |
+    |<-- success + current list ----|                 |                 |
+    |               |               |                 | accept/fsync -->|
+    |               |               |                 |<-- accepted (2) |
+    |               |               |<-- commit B ----|                 |
+    |               |<-- success + current list ------|                 |
+\end{verbatim}
+
+The durable event representation must keep separate
+\texttt{(session,\ scenario)} keys and use \texttt{priorIds} to record
+immediate predecessor order. \texttt{priorIds\ =\ {[}{]}} means that an
+event is a minimal (first) event in the scenario. If several events have
+no predecessor, they are mutually unordered and may proceed in parallel.
+A singleton list is the ordinary prior-event link; a list with several
+IDs is a join. These links are ordering backpointers, not claims of
+causation. Event file line order must not serialize otherwise unordered
+browser requests.
+
+\hypertarget{observable-safety-and-progress-obligations}{%
+\section{Observable safety and progress
+obligations}\label{observable-safety-and-progress-obligations}}
+
+\begin{itemize}
+\tightlist
+\item
+  A successful PUT necessarily has two prior \texttt{DurableAccepted}
+  observations for the same ballot, slot, key, and value.
+\item
+  No two different values are committed for the same log slot.
+\item
+  Every committed slot remains present after any one replica is
+  unavailable.
+\item
+  A list result reflects one committed prefix selected after a quorum
+  read barrier; it does not combine entries from different prefixes.
+\item
+  With two mutually reachable durable replicas and a leader eventually
+  chosen, every accepted browser request eventually succeeds or returns
+  an explicit error.
+\item
+  Replica unavailability, leadership loss, retry, rejection, and
+  recovery are visible outcomes rather than hidden timeouts.
+\item
+  At most three replica instances exist, all implementing the same
+  \texttt{KVReplica} actor specification.
+\end{itemize}
+
+\hypertarget{prompt-derived-outputs}{%
+\section{Prompt-derived outputs}\label{prompt-derived-outputs}}
+
+\begin{description}
+\item[\texttt{paxos.write.interaction}] (interaction diagram) How does a browser write become persistent? \emph{Reducer:} Partition write events by \texttt{(session,request\_id)} and render quorum branches in \texttt{priorIds} order, with typed message fields in each node
+\item[\texttt{paxos.write.state\_machine}] (state machine) Which observable write states and failure exits exist? \emph{Reducer:} Render residuals of \texttt{quorum\_write}
+\item[\texttt{paxos.list.interaction}] (interaction diagram) How is the complete key/value listing made linearizable? \emph{Reducer:} Render list and read-barrier events by \texttt{(session,request\_id)}
+\item[\texttt{paxos.list.state\_machine}] (state machine) Which observable list states and failure exits exist? \emph{Reducer:} Render residuals of \texttt{linearizable\_list}
+\item[\texttt{paxos.concurrent.order}] (prior-pointer graph) Can two browser sessions access the app concurrently? \emph{Reducer:} Render incomparable request branches, slot assignment, quorum joins, and responses
+\item[\texttt{paxos.commit\_latency}] (2D function) How does write latency change with concurrent browser sessions? \emph{Reducer:} Pair PUT start to success/error by prior ID; x=max concurrent sessions, y=latency milliseconds
+\item[\texttt{paxos.quorum\_size}] (scalar and histogram) Did every acknowledged write have a durable majority? \emph{Reducer:} Count distinct accepting replica instances per committed slot
+\item[\texttt{paxos.replica\_availability}] (line) Were at least two replicas available throughout the observation window? \emph{Reducer:} Sweep \texttt{Unavailable}/\texttt{Available} intervals and plot available replica count over monotonic time
+\item[\texttt{paxos.recovery\_lag}] (2D function) How far behind is a restarting replica? \emph{Reducer:} x=time since restart; y=leader committed slot minus replica applied slot
+\item[\texttt{paxos.outcomes}] (pie/histogram) What happened to browser PUT and list requests? \emph{Reducer:} Count success, explicit rejection, timeout/censored, and leadership-loss outcomes
+\end{description}
+
+
+Numeric reductions use these stable output IDs at \texttt{/metrics}.
+Every diagram, state machine, and chart is derived from the accepted
+grammar and events rather than maintained as a second specification.
+
+\hypertarget{web-behavior}{%
+\section{Web behavior}\label{web-behavior}}
+
+The page contains a string \texttt{key} input, a string \texttt{value}
+input, and a submit action. Below the form it renders the linearizable
+listing of all committed key/value pairs. After a successful write the
+initiating session receives a page containing a listing at least as new
+as its committed write. The other browser session observes that write on
+its next list operation; server push is not currently required.
+
+There is no authentication and no delete operation. Keys are nonempty
+UTF-8 strings of at most 128 encoded bytes. Values are UTF-8 strings of
+at most 4096 encoded bytes. The database holds at most 10,000 distinct
+keys and supports at least two browser sessions with requests in flight
+concurrently. Invalid or capacity-exceeding writes return explicit
+errors without changing the committed log. Each successful submission
+returns a listing containing at least that committed write.

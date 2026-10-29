@@ -1,0 +1,13 @@
+{
+  "display_name": "PaxosKV",
+  "root": ".",
+  "book": "book/main.pdf",
+  "dark_book": "book/main-dark.pdf",
+  "book_source": "book/main.tex",
+  "requirements": "spec/Requirements.lean",
+  "protobuf": "spec/Requirements.proto",
+  "implementation": "spec/Implementation.lean",
+  "tasks": "spec/tasks.json",
+  "source": "source/",
+  "evidence": "reports/"
+}
