@@ -1,0 +1,212 @@
+\chapter{Declared Physics: TFTP and the Sorcerer's Apprentice}
+\label{ch:tftp-physics}
+
+\index{TFTP}
+\index{Sorcerer's Apprentice}
+\index{physics of a channel}
+A protocol grammar says which messages may follow which. It does not say what
+happens to a message after it is sent: whether it waits in a queue, how large
+that queue is, whether the network may lose it, deliver it twice, or deliver it
+late. This chapter argues that those facts are part of what a protocol means,
+and that a grammar is not finished until they are declared. The example is the
+Trivial File Transfer Protocol (TFTP) \citep{rfc783,rfc1350} and its best-known
+defect, the \emph{Sorcerer's Apprentice} bug, which RFC~1123 named and fixed
+\citep{rfc1123}.
+
+The same lock-step grammar gets two opposite verdicts. Read as a multiparty
+session type \citep{honda2008multiparty}, the original sender and the fixed
+sender are the same well-formed protocol. With the physics declared, LeanFM
+finds a walk in which one early timer makes every later block travel twice for
+the original sender, and proves that no such walk exists for the fixed one.
+
+Status: the verdicts below are real \texttt{check\_ctl} results. The
+\texttt{from}/\texttt{cause} surface syntax and the \texttt{physics} block are
+proposed notation. Today the product of the roles and their queues is built by
+a small script, \texttt{video/tftp\_model.mjs} in the companion video
+repository, and handed to the checker as an ordinary finite task model.
+
+\section{The grammar}
+
+TFTP moves a file in numbered blocks. The sender sends \texttt{DATA}~$n$; the
+receiver answers \texttt{ACK}~$n$; the sender then sends \texttt{DATA}~$n{+}1$.
+A block shorter than the full size ends the transfer.
+
+\begin{lstlisting}
+protocol Transfer (n : Nat) :=
+  d: DATA(n) from Sender to Receiver;
+  a: ACK(n)  from Receiver to Sender cause d;
+  (Transfer (n+1) | done)
+\end{lstlisting}
+
+Without a timer this is a textbook global type. Each choice has exactly one
+chooser, the sender, and the receiver learns of it from the next message.
+Projection gives each role a local type, and the session-type theory guarantees
+that the projected roles never deadlock and never receive a message they did
+not expect.
+
+A real network loses packets, so the sender also needs a timer: when no
+\texttt{ACK} arrives in time, it sends the same block again. That retransmission
+is the whole engineering content of TFTP, and the session-type reading has no
+place to put it, because it assumes every message sent is eventually received
+exactly once and in order.
+
+\section{The physics}
+
+\index{UDP}
+\index{queue capacity}
+LeanFM states the physics next to the grammar instead of assuming it away.
+
+\begin{lstlisting}
+physics Transfer where
+  channel Sender -> Receiver : udp (capacity := 2)
+  channel Receiver -> Sender : udp (capacity := 2)
+  -- udp: a full buffer drops; queued packets may be
+  --      delivered in any order or dropped
+  timer Sender : mayFireEarly
+  -- a late ACK and a lost ACK look the same to the sender
+\end{lstlisting}
+
+Each direction holds at most two packets. The network may deliver them in
+either order, or drop either one. The sender's timer may fire at any time while
+a block is unacknowledged, because a slow answer cannot be told apart from a
+lost one. The model has three blocks.
+
+The two senders differ in one line, the reaction to an \texttt{ACK} that arrives
+again for a block that was already acknowledged:
+
+\begin{description}[style=nextline]
+  \item[Original (RFC 783).] Every \texttt{ACK}~$n$, even a repeated one, makes
+  the sender send \texttt{DATA}~$n{+}1$.
+  \item[Fixed (RFC 1123).] A repeated \texttt{ACK} is ignored. A block is sent
+  again only when its own timer fires.
+\end{description}
+
+The checked machine is the product of the sender, the receiver, and both
+queues. A state records the sender's current block, the block the receiver
+expects next, and the contents of the two queues. Each sender's product has
+201 reachable states and 891 transitions. Its events are \texttt{timeout},
+\texttt{drop}, \texttt{data} (a new block delivered), \texttt{dup}$k$ (block
+$k$ delivered again, which the receiver acknowledges again), \texttt{ack} (the
+first \texttt{ACK} for the current block), \texttt{dupack} (an \texttt{ACK}
+for an earlier block), and \texttt{done}.
+
+\section{The question}
+
+Suppose the timer fires early exactly once, at the start, so \texttt{DATA}~1 is
+in flight twice. From then on nothing is lost and the timer never fires again.
+Can block~3 still arrive twice? Asked from the state after that first
+\texttt{timeout}, the question is one strong existential until:
+
+\AccessibleEquation{Not the disjunction of timeout and drop holds along some path until dup three.}{\[
+  E\,[\,\lnot(\mathit{timeout} \lor \mathit{drop})\ U\ \mathit{dup}_3\,]
+\]}
+
+Read this as: ``there is a path on which no \texttt{timeout} and no
+\texttt{drop} occurs until block~3 is delivered a second time.'' Here $E$ is
+``on some path,'' $U$ is ``until,'' $\lnot$ is ``not,'' and $\lor$ is ``or.''
+
+For the original sender LeanFM proves it and returns the witness walk in
+\cref{tab:tftp-witness}. The queue columns show the packets waiting after each
+step, read directly from the states on LeanFM's path.
+
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{@{}rlp{0.42\textwidth}ll@{}}
+\toprule
+step & event & meaning & DATA queue & ACK queue \\
+\midrule
+1 & \texttt{timeout} & timer fires early; DATA 1 sent again & 1, 1 & -- \\
+2 & \texttt{data} & DATA 1 delivered & 1 & 1 \\
+3 & \texttt{dup1} & DATA 1 delivered again; ACK 1 sent again & -- & 1, 1 \\
+4 & \texttt{ack} & ACK 1 received; DATA 2 sent & 2 & 1 \\
+5 & \texttt{data} & DATA 2 delivered & -- & 1, 2 \\
+6 & \texttt{dupack} & ACK 1 received again; DATA 2 sent again & 2 & 2 \\
+7 & \texttt{dup2} & DATA 2 delivered again; ACK 2 sent again & -- & 2, 2 \\
+8 & \texttt{ack} & ACK 2 received; DATA 3 sent & 3 & 2 \\
+9 & \texttt{data} & DATA 3 delivered & -- & 2, 3 \\
+10 & \texttt{dupack} & ACK 2 received again; DATA 3 sent again & 3 & 3 \\
+11 & \texttt{dup3} & DATA 3 delivered again; ACK 3 sent again & -- & 3, 3 \\
+\bottomrule
+\end{tabular}
+\caption{LeanFM's witness for the original sender: one early timer, then no
+loss and no further timeouts, and every later block is sent and delivered
+twice.}
+\label{tab:tftp-witness}
+\end{table}
+
+The pattern repeats with period four: a doubled block brings a doubled
+\texttt{ACK}; the first copy sends the next block, and the late second copy
+sends it again. Nothing in the walk is a failure. Every packet arrives. The
+duplication is self-sustaining, which is why the bug was named after the
+brooms that keep multiplying, and why it doubled the traffic of real transfers
+for the rest of their length.
+
+For the fixed sender the same formula is disproved, and the evidence is
+exhaustive: LeanFM evaluated it over all 509 reachable nodes of the checker's
+search and found no such path. The repeated \texttt{ACK}~1 is ignored, the
+extra copy of block~1 is the last extra packet, and the duplication dies out
+on its own.
+
+\section{Liveness needs fairness}
+
+\index{fairness}
+Two more questions are asked of both senders.
+
+\AccessibleEquation{A G E F terminal holds for both senders. A F terminal fails for both senders.}{\[
+  AG\,EF\,\mathit{terminal}\ \text{holds},\qquad
+  AF\,\mathit{terminal}\ \text{fails}.
+\]}
+
+Read this as: ``from every reachable state, some continuation finishes the
+transfer'' is proved, and ``every path finishes the transfer'' is disproved.
+For the second, LeanFM returns a lasso: the timer fires, putting a second copy
+of block~1 into the queue, and then fires again forever. The queue is full, so
+each further copy is dropped, and the network never delivers anything.
+
+No protocol can force a network to deliver. A promise that the transfer
+\emph{will} finish therefore needs an explicit assumption, such as ``a packet
+sent infinitely often is delivered infinitely often.'' That is a fairness
+requirement on the channel, and it belongs in the requirements, stated out
+loud, not hidden in the meaning of an arrow.
+
+\section{What the session-type reading leaves out}
+
+\index{multiparty session type}
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{@{}p{0.22\textwidth}p{0.32\textwidth}p{0.36\textwidth}@{}}
+\toprule
+sender & as a session type & with the physics declared \\
+\midrule
+original (RFC 783) & well-formed lock step & one early timer doubles every later block \\
+fixed (RFC 1123) & the same well-formed lock step & no cascade; checked over all 509 nodes \\
+\bottomrule
+\end{tabular}
+\caption{The same grammar, two meanings.}
+\label{tab:tftp-contrast}
+\end{table}
+
+The grammar did not change between the two rows of
+\cref{tab:tftp-contrast}; only its meaning did. Session-type theory adds
+asynchrony with unbounded, reliable, order-preserving queues
+\citep{honda2008multiparty}. Under those assumptions a retransmission timer is
+unnecessary and the Sorcerer's Apprentice cannot be expressed, let alone
+detected. LeanFM's position follows from the actor view of a protocol:
+
+\begin{itemize}
+  \item Every choice is an internal choice of one actor, made only from that
+        actor's own history: what it sent, and what arrived in its queue
+        (\texttt{prev} and \texttt{cause}).
+  \item Every queue has a declared capacity, and a declared policy for when it
+        is full.
+  \item Every channel declares what the network may do: drop, reorder,
+        duplicate, delay.
+  \item Liveness claims carry their fairness assumptions as named
+        requirements.
+\end{itemize}
+
+UDP protocols are the natural test bed, because they make the physics
+impossible to ignore. TFTP is the smallest one with a famous bug, and the bug
+is invisible until the queues and the early timer are part of the model.
