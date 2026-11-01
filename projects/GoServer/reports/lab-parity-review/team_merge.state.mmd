@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> idle
+    idle --> proposing: ProposeMerge
+    proposing --> pending: MergeProposed
+    proposing --> rejected: RequestRejected
+    pending --> responding: RespondMerge
+    responding --> pending: MergeResponded
+    responding --> pending: RequestRejected
+    pending --> merged: TeamsMerged
+    pending --> withdrawn: MergeWithdrawn
+    merged --> [*]
+    withdrawn --> [*]
+    rejected --> [*]

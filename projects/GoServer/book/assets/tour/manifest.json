@@ -1,0 +1,122 @@
+{
+  "prompt": "In the book, using the LeanFM server, take screenshots that show actual usage scenarios.",
+  "question": "What does a real session look like for players, the creator and a watcher?",
+  "event_source": "the running GoServer application driven by scripted people in headless Chrome",
+  "reducer": "named DevTools screenshots after each scripted step",
+  "unit": "one screenshot per scenario step",
+  "boundary": "local loopback app on port 8095; in-memory state discarded afterwards; no credentials shown",
+  "browser": "Chrome/153.0.8010.12",
+  "created": "2026-10-26T09:30:28+00:00",
+  "inputs": {
+    "source/game.go": "e0efc17bcdc77767aa18e693012efb24733f1aad4a0cece1d36217730d1891fb",
+    "source/engine.go": "db2a6bf1353741e1b4d983fd846b75f9ebeb54dfa96d299fadddde393d611694",
+    "source/bot.go": "7e537d050eaf3f055c54f89a9b6c4f0d10a821800b29c18802e9d9631bf9758f",
+    "source/server.go": "78a6740649e771c194f9bdec793d879875388aeb3ff3f5df0732bb304fabf879",
+    "source/cmd/demo/main.go": "8e0fdf057fd2d6a734dcc03bbef3ac4c4aedecc5e2e14627b6e8e1b9ef9a6a62",
+    "source/cmd/demo/static/index.html": "1d7a0b72050b18b7497715885e336e6f71f5e248cbf276853c16130e9b1639d6",
+    "source/cmd/demo/static/app.js": "4f654c038b9bff4fe82e3f9a4640f5b1efb05e4df46aec4d26cc3206209b4e10",
+    "source/cmd/demo/static/gameview.js": "7d4111a2770a6744d938e9d3c0b946780588c027caabfbc93657150f412044b5",
+    "source/cmd/demo/static/style.css": "2c4dc658d14b9ffa9584c42f1b03facf3cd004454c99a3416e78818eded3fdcb",
+    "source/cmd/demo/static/engine.js": "34b905f09e9640d534a03e4755c372ff76913963e71ab23669cd34005f20b86e",
+    "source/book_tour.py": "7c32d00630498c94fe37989b75a67c6010182fe386863919a1db6e332b23c29e"
+  },
+  "captures": [
+    {
+      "id": "01-welcome",
+      "title": "Welcome",
+      "caption": "A visitor chooses a local display name. Nothing else is needed for the local preview.",
+      "viewer": "alice",
+      "steps": [
+        "open the app"
+      ],
+      "file": "book/assets/tour/01-welcome.png",
+      "sha256": "7ce704faa58fb518b214677c7caa9b331cf041fa84eab13e370e8f2e01cd6cbf"
+    },
+    {
+      "id": "02-create-challenge",
+      "title": "Creating a challenge",
+      "caption": "Alice is in the lobby and fills in a challenge: a 9×9 board, three players, a one-minute human deadline and half a second per bot move. The ko rule stays on Auto, which is off for three players.",
+      "viewer": "alice",
+      "steps": [
+        "sign in as alice",
+        "fill in the New challenge form"
+      ],
+      "file": "book/assets/tour/02-create-challenge.png",
+      "sha256": "38a66b09c2c31403287956d73394a940b261c4b10566f88f1103980194e0f8e0"
+    },
+    {
+      "id": "03-seat-plan",
+      "title": "Planning seats",
+      "caption": "Before the start the creator decides, seat by seat, whether a person or a bot plays and which team the seat is on. Alice took seat 1, bob sat in seat 2, and alice marked seat 3 as a bot.",
+      "viewer": "alice",
+      "steps": [
+        "alice: create the challenge (seated automatically)",
+        "alice: set seat 3 to Bot",
+        "bob: open the challenge, Sit here"
+      ],
+      "file": "book/assets/tour/03-seat-plan.png",
+      "sha256": "41f5f3c36b2bb016a9626e1c9b15d12d11950d48305a34e1bb7e55209893437d"
+    },
+    {
+      "id": "04-bot-search",
+      "title": "Reading the bot’s search",
+      "caption": "Alice steps back one move, to the position where the bot searched for its last move. The panel lists the moves that search weighed, with visit share and expected reward; the blue discs on the board are the same search as a heat map. Proj. and Outlook give every seat’s projected final score and expected reward, and the timeline under them plots the projections move by move.",
+      "viewer": "alice",
+      "steps": [
+        "alice and bob alternate stones by clicking the board; the bot answers each round",
+        "alice: Back one move"
+      ],
+      "file": "book/assets/tour/04-bot-search.png",
+      "sha256": "5948c01e8d38c6f98bf172fae0911c649b0c297db5d1f653e0cd99ecc838feee"
+    },
+    {
+      "id": "05-watcher-variation",
+      "title": "A watcher explores a variation",
+      "caption": "Carol is watching, not playing. She steps back to move 3, tries a different stone (the gold ring marks a variation), and asks for a local search. The analysis runs in her browser only: the dashed branch in the tree never reaches the server, and the live game continues.",
+      "viewer": "carol",
+      "steps": [
+        "carol: open the challenge as a watcher",
+        "carol: Home, then Forward three times",
+        "carol: click an empty point",
+        "carol: Analyze here"
+      ],
+      "file": "book/assets/tour/05-watcher-variation.png",
+      "sha256": "97145d8c2c22c0293c198a847e8b249de7a7f8b945780aa5507e883cefe67333"
+    },
+    {
+      "id": "06-merge-proposal",
+      "title": "Proposing a team merge",
+      "caption": "During play bob proposes merging his team with alice’s. The proposal shows who has accepted and who is still to answer; it takes effect only when every person on both teams accepts, and it is permanent.",
+      "viewer": "alice",
+      "steps": [
+        "bob: Merge my team with Team 1, Propose"
+      ],
+      "file": "book/assets/tour/06-merge-proposal.png",
+      "sha256": "9884664be43b9539a95ef96b84b966c53b7749a94c9d8e7454f693411aeb0817"
+    },
+    {
+      "id": "07-team-and-autopilot",
+      "title": "Playing as a team, on autopilot",
+      "caption": "After the merge the score table shows alice and bob as team 1 with a combined total. Alice then lets a bot play her seat; the seat, team and name stay hers, and the bot’s move publishes its search like any other bot move. She can take the seat back at any time.",
+      "viewer": "alice",
+      "steps": [
+        "alice: Accept merge",
+        "alice: Let a bot play for me"
+      ],
+      "file": "book/assets/tour/07-team-and-autopilot.png",
+      "sha256": "96ab745fe97384f53466ac5a48f72e178e93ee481105494eec17283eeac54c50"
+    },
+    {
+      "id": "08-game-over",
+      "title": "The result",
+      "caption": "When every remaining player has passed in a row the game ends. The server announces team scores and the winners in the game conversation. Everyone, players included, can now branch and analyse any position.",
+      "viewer": "alice",
+      "steps": [
+        "alice and bob pass until the bot also passes"
+      ],
+      "file": "book/assets/tour/08-game-over.png",
+      "sha256": "a7e952591ca01ab4998bd05e8adc737486e8c2996f9718b4b7305ea6e2082296"
+    }
+  ],
+  "note": "Bot moves come from a time-limited search, so stone positions differ between runs; the scenario steps do not."
+}

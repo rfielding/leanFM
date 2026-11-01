@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    alt choice 1
+    Note over Person,Server: production play_move
+    else alternative
+    Note over Person,Server: production bot_turn
+    else alternative
+    Server->>Person: TurnTimedOut
+    else alternative
+    Server->>Person: AutoPassed
+    end

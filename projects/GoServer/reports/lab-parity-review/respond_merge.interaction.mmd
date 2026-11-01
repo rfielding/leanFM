@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    Person->>Server: RespondMerge
+    alt choice 1
+    Server->>Person: MergeResponded
+    else alternative
+    Server->>Person: RequestRejected
+    end

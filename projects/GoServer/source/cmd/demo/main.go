@@ -1,0 +1,257 @@
+// Requirement refs: goserver navigation/chat; spec/runtime.json local launch contract.
+package main
+
+import (
+	"bytes"
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"github.com/leanfm/goserver"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"time"
+	"unicode/utf8"
+)
+
+func portFromEnv() (string, error) {
+	// Support both the conventional PORT env and the project-specific GOSERVER_PORT.
+	// Prefer PORT when set so external runners (and workspace_check) can control it.
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = os.Getenv("GOSERVER_PORT")
+	}
+	if port == "" {
+		port = "8081"
+	}
+	number, err := strconv.Atoi(port)
+	reserved := os.Getenv("LEANFM_PORT")
+	if reserved == "" {
+		reserved = "8080"
+	}
+	reservedNumber, _ := strconv.Atoi(reserved)
+	if err != nil || number < 1 || number > 65535 || number == reservedNumber || number == 8080 {
+		return "", fmt.Errorf("choose a port from 1 to 65535 separate from LeanFM (default GoServer port: 8081)")
+	}
+	return strconv.Itoa(number), nil
+}
+
+func decode(w http.ResponseWriter, r *http.Request, target any) bool {
+	if r.Header.Get("Content-Type") != "application/json" {
+		writeError(w, 415, "application/json required")
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 32768)
+	body, err := io.ReadAll(r.Body)
+	if err != nil || !utf8.Valid(body) {
+		writeError(w, 400, "bounded UTF-8 JSON required")
+		return false
+	}
+	d := json.NewDecoder(bytes.NewReader(body))
+	d.DisallowUnknownFields()
+	if d.Decode(target) != nil || d.Decode(new(any)) != io.EOF {
+		writeError(w, 400, "one bounded JSON request required")
+		return false
+	}
+	return true
+}
+
+func action[T any](s *goserver.ServerCore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var request T
+		if !decode(w, r, &request) {
+			return
+		}
+		writeJSON(w, s.Handle(request))
+	}
+}
+
+func newHandler(s *goserver.ServerCore, port string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			writeError(w, 405, "GET required")
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintln(w, "ok")
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != "GET" {
+			writeError(w, 405, "GET required")
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, demoPage)
+	})
+	mux.HandleFunc("/api/issue_session", func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Identity string `json:"identity"`
+		}
+		if !decode(w, r, &request) {
+			return
+		}
+		token, err := s.IssueSession(request.Identity)
+		if err != nil {
+			writeError(w, 400, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"session": token})
+	})
+	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			writeError(w, 405, "GET required")
+			return
+		}
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		fmt.Fprint(w, browserScript)
+	})
+	// Requirement refs: property:Lab-style viewer; property:Analysis is local. The Lab engine and
+	// search worker run in the viewer's browser for variations and local search.
+	for path, body := range map[string]*string{"/engine.js": &engineScript, "/search-worker.js": &workerScript, "/gameview.js": &gameViewScript} {
+		body := body
+		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != "GET" {
+				writeError(w, 405, "GET required")
+				return
+			}
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			fmt.Fprint(w, *body)
+		})
+	}
+	mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			writeError(w, 405, "GET required")
+			return
+		}
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		fmt.Fprint(w, browserStyle)
+	})
+	mux.HandleFunc("/api/create_room", action[goserver.CreateRoom](s))
+	mux.HandleFunc("/api/room_history", func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			SessionID string `json:"sessionId"`
+			RoomID    string `json:"roomId"`
+		}
+		if !decode(w, r, &request) {
+			return
+		}
+		items, err := s.RoomChatHistory(request.SessionID, request.RoomID)
+		if err != nil {
+			writeError(w, 403, "Enter this room before reading its conversation.")
+			return
+		}
+		writeJSON(w, map[string]any{"roomId": request.RoomID, "items": items})
+	})
+	mux.HandleFunc("/api/game_history", func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			SessionID string `json:"sessionId"`
+			GameID    string `json:"gameId"`
+		}
+		if !decode(w, r, &request) {
+			return
+		}
+		items, participants, err := s.GameChatHistory(request.SessionID, request.GameID)
+		if err != nil {
+			writeError(w, 403, "Open this challenge before reading its conversation.")
+			return
+		}
+		writeJSON(w, map[string]any{"gameId": request.GameID, "items": items, "participants": participants})
+	})
+	mux.HandleFunc("/api/list_rooms", action[goserver.ListRooms](s))
+	mux.HandleFunc("/api/enter_room", action[goserver.EnterRoom](s))
+	mux.HandleFunc("/api/list_games", action[goserver.ListGames](s))
+	mux.HandleFunc("/api/create_game", action[goserver.CreateGame](s))
+	mux.HandleFunc("/api/join_game", action[goserver.JoinGame](s))
+	mux.HandleFunc("/api/send_room_chat", action[goserver.SendRoomChat](s))
+	mux.HandleFunc("/api/send_game_chat", action[goserver.SendGameChat](s))
+	// Requirement refs: grammar:take_seat, grammar:start_game, grammar:play_move, grammar:game_state.
+	mux.HandleFunc("/api/take_seat", action[goserver.TakeSeat](s))
+	mux.HandleFunc("/api/start_game", action[goserver.StartGame](s))
+	mux.HandleFunc("/api/play_move", action[goserver.PlayMove](s))
+	mux.HandleFunc("/api/game_state", action[goserver.GetGameState](s))
+	// Requirement refs: grammar:set_seat_plan, grammar:leave_seat, grammar:set_autopilot, grammar:propose_merge, grammar:respond_merge.
+	mux.HandleFunc("/api/set_seat_plan", action[goserver.SetSeatPlan](s))
+	mux.HandleFunc("/api/leave_seat", action[goserver.LeaveSeat](s))
+	mux.HandleFunc("/api/set_autopilot", action[goserver.SetAutopilot](s))
+	mux.HandleFunc("/api/propose_merge", action[goserver.ProposeMerge](s))
+	mux.HandleFunc("/api/respond_merge", action[goserver.RespondMerge](s))
+	admitted := make(chan struct{}, 32)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' blob: data:; media-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		host, p, err := net.SplitHostPort(r.Host)
+		if err != nil || p != port || (host != "localhost" && (net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback())) {
+			writeError(w, 403, "unapproved host")
+			return
+		}
+		if r.Method != "GET" && r.Method != "HEAD" && (r.Header.Get("Sec-Fetch-Site") == "cross-site" || (r.Header.Get("Origin") != "" && r.Header.Get("Origin") != "http://"+r.Host)) {
+			writeError(w, 403, "unapproved origin")
+			return
+		}
+		if len(r.URL.Path) >= 5 && r.URL.Path[:5] == "/api/" && r.Method != "POST" {
+			writeError(w, 405, "POST required")
+			return
+		}
+		select {
+		case admitted <- struct{}{}:
+			defer func() { <-admitted }()
+		default:
+			writeError(w, 503, "busy")
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
+}
+func main() {
+	port, err := portFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:"+port)
+	if err != nil {
+		log.Fatalf("GoServer cannot start: %v. Select another port with make run PORT=8090; the existing listener was left running.", err)
+	}
+	s := goserver.NewServer()
+	server := &http.Server{Handler: newHandler(s, port), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
+	log.Printf("GoServer ready at http://%s/", listener.Addr())
+	log.Fatal(server.Serve(listener))
+}
+
+// Requirement refs: property:Browser navigation reflects server state.
+//
+//go:embed static/index.html
+var demoPage string
+
+//go:embed static/app.js
+var browserScript string
+
+//go:embed static/style.css
+var browserStyle string
+
+//go:embed static/engine.js
+var engineScript string
+
+//go:embed static/search-worker.js
+var workerScript string
+
+//go:embed static/gameview.js
+var gameViewScript string

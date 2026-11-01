@@ -1,0 +1,13 @@
+digraph behavior {
+rankdir=LR;
+graph [bgcolor="white"];
+node [shape=box, fontname="Helvetica", fontsize=11];
+edge [fontname="Helvetica", fontsize=10];
+"ready" [label="Ready"];
+"checking" [label="Server checks identity, scope and bounds"];
+"accepted" [label="Correlated result", peripheries=2];
+"rejected" [label="Explicit rejection without mutation", peripheries=2];
+"ready" -> "checking" [label="StartGame"];
+"checking" -> "accepted" [label="GameStarted"];
+"checking" -> "rejected" [label="RequestRejected"];
+}

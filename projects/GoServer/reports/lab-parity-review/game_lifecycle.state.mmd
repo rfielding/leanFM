@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> proposed
+    proposed --> open: GameCreated
+    proposed --> rejected: RequestRejected
+    open --> open: SeatPlanSet
+    open --> open: SeatTaken
+    open --> open: SeatLeft
+    open --> playing: GameStarted
+    playing --> playing: MovePlayed
+    playing --> playing: BotMovePlayed
+    playing --> playing: TurnTimedOut
+    playing --> playing: AutoPassed
+    playing --> playing: AutopilotSet
+    playing --> playing: TeamsMerged
+    playing --> finished: GameFinished
+    finished --> [*]
+    rejected --> [*]

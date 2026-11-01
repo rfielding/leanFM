@@ -1,0 +1,331 @@
+{
+  "requirement": "goserver",
+  "scope": "Lab parity revision: seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis",
+  "mappings": [
+    {
+      "requirements": [
+        "grammar:create_room",
+        "property:create_room authorized correlated result",
+        "proof:create_room never crosses authority or scope"
+      ],
+      "files": [
+        "source/server.go",
+        "source/cmd/demo/main.go"
+      ],
+      "symbols": [
+        "CreateRoom",
+        "RoomCreated",
+        "ServerCore.createRoom",
+        "ServerCore.cached"
+      ],
+      "tests": [
+        "TestCreateRoomAuthorizationBoundsAndReplay",
+        "TestConcurrentRoomCreationAndCapacity",
+        "TestReplayRemainsSafeAfterAdmissionLimit",
+        "TestBrowserCreatesRoomsAndReadsOnlyAuthorizedHistory"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:create_game",
+        "grammar:list_games",
+        "property:create_game board parameters"
+      ],
+      "files": [
+        "source/server.go",
+        "source/cmd/demo/static/app.js"
+      ],
+      "symbols": [
+        "GameCreated.GameName",
+        "GameListed.GameName",
+        "ServerCore.createGame",
+        "ServerCore.listGames"
+      ],
+      "tests": [
+        "TestNamedChallengesAndChatHistoryStayInScope",
+        "browser_check.py"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:room_chat",
+        "grammar:game_chat",
+        "proof:Browser never fabricates destinations or crosses scopes"
+      ],
+      "files": [
+        "source/server.go",
+        "source/cmd/demo/main.go",
+        "source/cmd/demo/static/index.html",
+        "source/cmd/demo/static/app.js",
+        "source/cmd/demo/static/style.css"
+      ],
+      "symbols": [
+        "RoomChatHistory",
+        "GameChatHistory",
+        "openRoom",
+        "openGame",
+        "refreshRoom",
+        "refreshGame",
+        "renderChat"
+      ],
+      "tests": [
+        "TestNamedChallengesAndChatHistoryStayInScope",
+        "TestMethodOriginHostAndBodyRejections",
+        "TestPageAssetsAndUnsupportedDestinations",
+        "browser_check.py"
+      ]
+    },
+    {
+      "requirements": [
+        "goserver"
+      ],
+      "files": [
+        "source/channel.go",
+        "source/Makefile",
+        "source/runtime.py",
+        "spec/runtime.json"
+      ],
+      "symbols": [
+        "InprocessChannel.Send",
+        "InprocessChannel.Receive",
+        "InprocessChannel.Close",
+        "runtime.run",
+        "runtime.stop"
+      ],
+      "tests": [
+        "TestAcceptedFullSendWaitsForSpace",
+        "TestChannelBackpressureAndDrain",
+        "TestDefaultPortCannotCollideWithLeanFM",
+        "project-confined runtime verification"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:take_seat",
+        "grammar:start_game",
+        "property:take_seat authorized correlated result",
+        "property:start_game fills seats with bots",
+        "proof:take_seat never crosses authority or scope",
+        "proof:start_game never crosses authority or scope"
+      ],
+      "files": [
+        "source/game.go",
+        "source/cmd/demo/main.go"
+      ],
+      "symbols": [
+        "ServerCore.takeSeat",
+        "ServerCore.startGame",
+        "normalizeGameParams",
+        "koEnabled"
+      ],
+      "tests": [
+        "TestCreateGameValidatesBoardParameters",
+        "TestSeatsStartAndBotsFillEmptySeats",
+        "TestGameplayWireFieldsReachTheCore"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:play_move",
+        "property:play_move rules",
+        "property:turns always end",
+        "property:games always finish",
+        "proof:play_move never crosses authority or scope",
+        "proof:bots never exhaust the server"
+      ],
+      "files": [
+        "source/engine.go",
+        "source/game.go"
+      ],
+      "symbols": [
+        "Work.Play",
+        "Work.Score",
+        "Search",
+        "ServerCore.playMove",
+        "ServerCore.legalLocked",
+        "ServerCore.applyLocked",
+        "ServerCore.beginTurnLocked",
+        "ServerCore.runBot",
+        "ServerCore.timeout",
+        "play.seen",
+        "play.remember"
+      ],
+      "tests": [
+        "TestCaptureCountsVictimLosses",
+        "TestWallBoundsAndSuicideIsLegalButCosts",
+        "TestTerritoryMinusLosses",
+        "TestSimpleKo",
+        "TestPassesEndTheGame",
+        "TestSearchCapturesAtari",
+        "TestMovesAreAuthorizedOrderedAndRuleChecked",
+        "TestDeadlineTimesOutAndAbandonmentEnds",
+        "TestLateMoveLosesToTheDeadline",
+        "TestSituationalSuperkoUsesExactPositions",
+        "TestAllBotGamePlaysToTheEnd",
+        "TestBotNeverMovesForAHuman"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:game_state",
+        "property:game_state reflects the authoritative game",
+        "proof:game_state never crosses authority or scope",
+        "property:Browser navigation reflects server state"
+      ],
+      "files": [
+        "source/game.go",
+        "source/cmd/demo/static/index.html",
+        "source/cmd/demo/static/app.js",
+        "source/cmd/demo/static/style.css"
+      ],
+      "symbols": [
+        "ServerCore.gameState",
+        "refreshState",
+        "renderGame",
+        "drawBoard",
+        "sendMove"
+      ],
+      "tests": [
+        "TestMovesAreAuthorizedOrderedAndRuleChecked",
+        "TestGameplayWireFieldsReachTheCore",
+        "reports/gameplay-review/browser-play.json"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:set_seat_plan",
+        "grammar:leave_seat",
+        "property:set_seat_plan creator controls the plan",
+        "property:leave_seat before start",
+        "proof:set_seat_plan never crosses authority",
+        "proof:leave_seat never crosses authority"
+      ],
+      "files": [
+        "source/game.go"
+      ],
+      "symbols": [
+        "normalizeGameParams",
+        "ServerCore.setSeatPlan",
+        "ServerCore.takeSeat",
+        "ServerCore.leaveSeat",
+        "seat"
+      ],
+      "tests": [
+        "TestSeatPlanIsTheCreatorsBeforeStart",
+        "TestCreateGameSeatPlanAndBotSettings",
+        "TestLabAssetsAndNewRoutes"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:set_autopilot",
+        "property:set_autopilot keeps the seat",
+        "proof:set_autopilot never crosses authority"
+      ],
+      "files": [
+        "source/game.go"
+      ],
+      "symbols": [
+        "ServerCore.setAutopilot",
+        "ServerCore.armTurnLocked",
+        "seat.botControlled"
+      ],
+      "tests": [
+        "TestAutopilotPlaysMySeatAndGivesItBack"
+      ]
+    },
+    {
+      "requirements": [
+        "task:team_merge",
+        "grammar:propose_merge",
+        "grammar:respond_merge",
+        "property:merges need every person's consent",
+        "proof:merges never happen without consent",
+        "output:game.result"
+      ],
+      "files": [
+        "source/game.go"
+      ],
+      "symbols": [
+        "ServerCore.proposeMerge",
+        "ServerCore.respondMerge",
+        "ServerCore.mergeLocked",
+        "ServerCore.withdrawLocked",
+        "winnersOf",
+        "teamViews"
+      ],
+      "tests": [
+        "TestMergesNeedEveryPersonsConsent",
+        "TestTeamChangeAndFinishWithdrawProposals",
+        "TestTeamScoresDecideWinners"
+      ]
+    },
+    {
+      "requirements": [
+        "task:bot_turn",
+        "task:turn",
+        "actor:Bot",
+        "property:bot results are bound to their turn",
+        "property:turns always end",
+        "proof:bots never act outside their turn",
+        "proof:bots never exhaust the server",
+        "proof:turns never end twice"
+      ],
+      "files": [
+        "source/bot.go",
+        "source/engine.go",
+        "source/game.go"
+      ],
+      "symbols": [
+        "BotPool.dispatch",
+        "Search",
+        "Rewards",
+        "ServerCore.applyBotResult",
+        "summarize",
+        "ServerCore.applyLocked"
+      ],
+      "tests": [
+        "TestBotMovesPublishSearchSummariesAndStateIsIncremental",
+        "TestTurnsNeverEndTwice",
+        "TestBotNeverMovesForAHuman",
+        "TestAllBotGamePlaysToTheEnd",
+        "TestSearchCapturesAtari"
+      ]
+    },
+    {
+      "requirements": [
+        "property:Lab-style viewer",
+        "property:Analysis is local",
+        "proof:analysis never leaks into the game",
+        "output:game.score_timeline",
+        "property:game_state reflects the authoritative game"
+      ],
+      "files": [
+        "source/cmd/demo/static/gameview.js",
+        "source/cmd/demo/static/engine.js",
+        "source/cmd/demo/static/search-worker.js",
+        "source/cmd/demo/static/index.html",
+        "source/cmd/demo/static/style.css",
+        "source/cmd/demo/main.go"
+      ],
+      "symbols": [
+        "GameView.open",
+        "syncMoves",
+        "tryPlay",
+        "analysisAllowed",
+        "localSearch",
+        "drawTimeline",
+        "renderTree",
+        "makeGif",
+        "bowls",
+        "mctsView"
+      ],
+      "tests": [
+        "TestLabAssetsAndNewRoutes",
+        "TestBowlRecordsWhoCaptured",
+        "reports/lab-parity-review/browser-run.json"
+      ]
+    }
+  ],
+  "limits": "Handicaps, ratings, persistence, SGF export, push transport and protobuf byte conformance of the JSON harness remain outside this change. Analysis gating is enforced by the provided browser, not by the server."
+}

@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    Person->>Server: ProposeMerge
+    alt choice 1
+    Server->>Person: MergeProposed
+    loop repeat
+    Person->>Server: RespondMerge
+    alt choice 1
+    Server->>Person: MergeResponded
+    else alternative
+    Server->>Person: RequestRejected
+    end
+    end
+    alt choice 1
+    Server->>Person: TeamsMerged
+    else alternative
+    Server->>Person: MergeWithdrawn
+    end
+    else alternative
+    Server->>Person: RequestRejected
+    end

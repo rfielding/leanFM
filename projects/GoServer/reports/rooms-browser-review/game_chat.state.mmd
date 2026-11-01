@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: SendGameChat
+    checking --> accepted: GameChat
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]

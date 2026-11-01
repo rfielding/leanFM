@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "kind": "http",
+  "directory": "source",
+  "command": [
+    "make",
+    "run"
+  ],
+  "host": "127.0.0.1",
+  "port": 8081,
+  "readiness_path": "/health",
+  "page_path": "/",
+  "relative_urls": true
+}

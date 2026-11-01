@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    Person->>Server: CreateRoom
+    alt choice 1
+    Server->>Person: RoomCreated
+    else alternative
+    Server->>Person: RequestRejected
+    end

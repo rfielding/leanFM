@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: ListRooms
+    checking --> accepted: RoomsListed
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]

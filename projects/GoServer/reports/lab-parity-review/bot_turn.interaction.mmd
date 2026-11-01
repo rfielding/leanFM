@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant Server
+    participant Bot
+    participant Person
+    Server->>Bot: BotTurn
+    alt choice 1
+    Bot->>Server: BotMoveChosen
+    Server->>Person: BotMovePlayed
+    else alternative
+    Server->>Person: TurnTimedOut
+    alt choice 1
+    Note over Server,Person: ε (empty production)
+    else alternative
+    Bot->>Server: BotMoveChosen
+    end
+    end

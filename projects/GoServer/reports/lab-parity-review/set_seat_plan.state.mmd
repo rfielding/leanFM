@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: SetSeatPlan
+    checking --> accepted: SeatPlanSet
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]

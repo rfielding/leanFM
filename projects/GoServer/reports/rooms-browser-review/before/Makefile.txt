@@ -1,0 +1,17 @@
+# Requirement refs: goserver; spec/runtime.json; durable local launch contract.
+.PHONY: build run ruj test clean
+GO ?= $(if $(wildcard ../../../.toolchains/go/bin/go),$(abspath ../../../.toolchains/go/bin/go),go)
+PORT ?= 8081
+export GOCACHE := $(abspath ../.cache/go-build)
+export GOMODCACHE := $(abspath ../.cache/go-mod)
+BINARY := ../.cache/goserver
+build:
+	@mkdir -p ../.cache
+	$(GO) build -o $(BINARY) ./cmd/demo
+run: build
+	@GOSERVER_PORT=$(PORT) $(BINARY)
+ruj: run
+test:
+	$(GO) test -race ./...
+clean:
+	$(RM) $(BINARY)

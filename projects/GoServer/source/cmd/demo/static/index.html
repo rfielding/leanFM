@@ -1,0 +1,58 @@
+<!-- Requirement refs: property:Browser navigation reflects server state; proof:Browser never fabricates destinations or crosses scopes;
+     grammar:take_seat, grammar:start_game, grammar:play_move, grammar:game_state. -->
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>GoServer · N-player Go</title><link rel="stylesheet" href="./style.css"><script src="./engine.js" defer></script><script src="./app.js" defer></script><script src="./gameview.js" defer></script></head>
+<body>
+<header class="topbar"><div class="brand"><span class="stone" aria-hidden="true"></span><strong>GoServer</strong><span class="tag">N-player Go</span></div><span id="identity-label">Choose a local name to join</span></header>
+<main>
+<section id="welcome" class="welcome"><div><p class="eyebrow">A PLACE TO MEET AND PLAY</p><h1>Find your room.<br>Make a challenge.</h1><p>Two to eight players on one board. Score is territory minus the stones you lose. Empty seats are played by the server's search bots.</p></div><form id="session-form"><label for="identity">Your local display name</label><input id="identity" name="identity" maxlength="128" required autocomplete="nickname" placeholder="Choose a name"><button type="submit">Enter GoServer</button></form></section>
+<p class="notice">Local preview · rooms, challenges and games reset when the app restarts.</p>
+<div id="feedback" role="status" aria-live="polite"></div>
+<div class="workspace">
+<aside class="panel rooms"><div class="section-heading"><h2>Chat rooms</h2><button id="refresh-rooms" class="subtle" type="button" disabled>Refresh</button></div><nav id="room-list" aria-label="Chat rooms"><p class="empty">Choose your name to see rooms.</p></nav><form id="room-form"><fieldset disabled id="room-fields"><label for="room-name">Create a room</label><input id="room-name" maxlength="128" required placeholder="Room name"><button type="submit">Create room</button></fieldset></form></aside>
+<section class="panel conversation"><div class="section-heading"><div><p class="eyebrow">ROOM CONVERSATION</p><h2 id="room-heading">Select a room</h2></div><span id="room-state" class="tag">Not connected</span></div><ol id="room-chat" class="chat-list" aria-label="Room conversation" aria-live="polite"><li class="empty">Your room conversation will appear here.</li></ol><form id="room-chat-form"><fieldset disabled id="room-chat-fields"><label for="room-message">Message this room</label><div class="composer"><input id="room-message" maxlength="4000" required placeholder="Say hello…" autocomplete="off"><button type="submit">Send</button></div></fieldset></form></section>
+<aside class="panel challenges"><div class="section-heading"><h2>Game challenges</h2><span id="challenge-count" class="tag">0</span></div><div id="challenge-list"><p class="empty">Enter a room to see its challenges.</p></div>
+<form id="challenge-form"><fieldset disabled id="challenge-fields"><label for="challenge-name">New challenge</label><input id="challenge-name" maxlength="128" required placeholder="Give your challenge a name">
+<div class="grid2">
+<label>Board<select id="board-size"><option>5</option><option>7</option><option>9</option><option selected>11</option><option>13</option><option>19</option></select></label>
+<label>Players<select id="seats"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+<label>Human deadline<select id="turn-deadline"><option value="10000" selected>10 s</option><option value="15000">15 s</option><option value="30000">30 s</option><option value="60000">1 min</option><option value="120000">2 min</option><option value="240000">4 min</option><option value="480000">8 min</option><option value="960000">16 min</option><option value="1920000">32 min</option><option value="3840000">64 min</option></select></label>
+<label>Bot deadline<select id="bot-time"><option value="250">0.25 s</option><option value="500">0.5 s</option><option value="1000" selected>1 s</option><option value="2000">2 s</option><option value="4000">4 s</option><option value="8000">8 s</option><option value="16000">16 s</option></select></label>
+<label>Ko rule<select id="ko-rule"><option value="0" selected>Auto (on for 2 players)</option><option value="2">Simple ko + superko</option><option value="1">Off</option></select></label>
+<label>Exploration C<select id="explore"><option value="500">0.5</option><option value="700" selected>0.7</option><option value="1000">1.0</option><option value="1400">1.4</option></select></label>
+<label>Bot reward<select id="reward-mode"><option value="margin" selected>Soft margin vs best rival</option><option value="win">Win / share win</option><option value="rank">Rank</option></select></label>
+<label>Margin softness<select id="softness"><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option></select></label>
+<label class="check"><input id="sit-down" type="checkbox" checked> I will play</label>
+</div>
+<button type="submit">Create challenge</button></fieldset></form></aside>
+<section id="game-panel" class="panel game-panel" hidden>
+<div class="section-heading"><div><p class="eyebrow">CHALLENGE</p><h2 id="game-heading"></h2><p id="game-meta" class="muted"></p><p id="participants" class="muted small"></p></div><button id="close-game" class="subtle" type="button">Close challenge</button></div>
+<div class="lab">
+<div class="boardcol">
+<canvas id="board" aria-label="Go board"></canvas>
+<div class="navbar"><div class="navbtns" role="group" aria-label="Walk the game tree">
+<button class="sq" id="nav-home" type="button" title="Start (Home)">|◀</button><button class="sq" id="nav-back" type="button" title="Back (←)">◀</button><button class="sq" id="nav-fwd" type="button" title="Forward on the chosen line (→)">▶</button><button class="sq" id="nav-end" type="button" title="End of line (End)">▶|</button><button class="sq" id="nav-up" type="button" title="Previous variation (↑)">▲</button><button class="sq" id="nav-down" type="button" title="Next variation (↓)">▼</button><button class="sq live" id="nav-live" type="button" title="Back to the live game (L)">Live</button></div>
+<div class="chips" id="gv-chips"></div></div>
+<div class="treebox" id="gv-tree" aria-label="Game tree: filled dots are the real game, hollow dots are variations"></div>
+<div class="keys"><kbd>←</kbd> <kbd>→</kbd> step · <kbd>↑</kbd> <kbd>↓</kbd> variation · <kbd>L</kbd> live · <kbd>P</kbd> pass on your turn · <kbd>C</kbd> computer move in a variation. Click a point to play on your turn; elsewhere a click starts a variation when analysis is open to you.</div>
+</div>
+<div class="side">
+<section class="box" aria-live="polite"><h3>Position</h3><div class="status" id="gv-status"></div><table id="gv-scores"></table><div class="small muted" id="gv-viewsrc"></div>
+<canvas id="gv-timeline" aria-label="Projected final score per seat along the viewed line; click to jump to a move"></canvas></section>
+<section class="box"><h3>Play</h3>
+<div class="row"><button id="gv-start" type="button" class="primary" hidden>Start game (bots fill empty seats)</button><button id="gv-pass" type="button">Pass</button><button id="gv-resign" type="button">Resign</button><button id="gv-autopilot" type="button" hidden>Let a bot play for me</button></div>
+<div class="bar" aria-hidden="true"><i id="gv-deadbar"></i></div>
+<div class="thinkrow"><div class="clock idle" id="gv-clock" aria-label="Turn clock">–:––</div><div class="small muted" id="gv-think"></div></div>
+<div class="row"><label class="inline"><input type="checkbox" id="opt-terr" checked> Territory</label><label class="inline"><input type="checkbox" id="opt-heat" checked> Search heat</label><label class="inline"><input type="checkbox" id="opt-sound" checked> Sound</label></div></section>
+<section class="box"><h3>Search at this position</h3><div class="cands" id="gv-cands"></div>
+<div class="row"><button id="gv-move" type="button">Computer move</button><button id="gv-analyze" type="button">Analyze here</button><button id="gv-auto" type="button">Autoplay variation</button></div><p class="small muted" id="gv-analysis-note"></p></section>
+<section class="box"><h3>Seats and teams</h3><div class="roster" id="gv-seats"></div><div id="gv-merges"></div></section>
+<section class="box"><h3>Challenge conversation</h3><ol id="game-chat" class="chat-list" aria-label="Challenge conversation" aria-live="polite"></ol>
+<form id="game-chat-form"><fieldset disabled id="game-chat-fields"><label for="game-message">Message this challenge</label><div class="composer"><input id="game-message" maxlength="4000" required placeholder="Discuss your game…" autocomplete="off"><button type="submit">Send</button></div></fieldset></form></section>
+<section class="box"><h3>Animated GIF</h3><div class="grid2"><label>Frame delay<select id="gif-delay"><option value="250">0.25 s</option><option value="450" selected>0.45 s</option><option value="700">0.7 s</option><option value="1000">1 s</option></select></label><label>Size<select id="gif-size"><option value="360">360 px</option><option value="480" selected>480 px</option><option value="640">640 px</option></select></label></div>
+<button id="gv-gif" type="button" disabled>Make GIF up to this move</button><div class="gifout" id="gv-gifout"></div></section>
+</div></div>
+<details class="rules"><summary>Rules as implemented</summary><p>The board is bounded by a Wall. After a stone is placed, every adjacent group of another colour with no liberty is removed and counted as its owner's losses (the bowl shows who captured it). If nothing was captured and the placed group has no liberty, it is removed as suicide and counted as the mover's losses; suicide is legal. Territory is an empty region bordered only by one colour's stones and the Wall. Score = Territory − Losses; a team's score is its members' sum.</p><p>Teams default to one per seat; the creator may group seats before the start, and during play two teams merge permanently when every person on both accepts. The game ends when every remaining player has passed since the last stone, after a full round of timeouts, or after 3·N² moves. An unanswered turn is a timeout. With the ko rule on, simple ko plus situational superko apply; Auto turns it on only for two players. Bots use max<sup>n</sup> Monte Carlo tree search on the server; their search for each move is shown once it is played.</p></details>
+</section>
+</div></main><footer>GoServer · A room for every conversation.</footer>
+</body></html>

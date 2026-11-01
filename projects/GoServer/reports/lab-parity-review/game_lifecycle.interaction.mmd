@@ -1,0 +1,41 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    Note over Person,Server: production create_game
+    loop repeat
+    alt choice 1
+    Note over Person,Server: production set_seat_plan
+    else alternative
+    Note over Person,Server: production take_seat
+    else alternative
+    Note over Person,Server: production leave_seat
+    else alternative
+    Note over Person,Server: production join_game
+    else alternative
+    Note over Person,Server: production game_chat
+    else alternative
+    Note over Person,Server: production game_state
+    end
+    end
+    Note over Person,Server: production start_game
+    loop repeat
+    alt choice 1
+    Note over Person,Server: production turn
+    else alternative
+    Note over Person,Server: production set_autopilot
+    else alternative
+    Note over Person,Server: production team_merge
+    else alternative
+    Note over Person,Server: production game_chat
+    else alternative
+    Note over Person,Server: production game_state
+    end
+    end
+    Server->>Person: GameFinished
+    loop repeat
+    alt choice 1
+    Note over Person,Server: production game_state
+    else alternative
+    Note over Person,Server: production game_chat
+    end
+    end

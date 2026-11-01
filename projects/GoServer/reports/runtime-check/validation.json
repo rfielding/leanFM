@@ -1,0 +1,1 @@
+{"checks": ["make run remains running", "readiness HTTP 200", "application page HTTP 200", "LeanFM port untouched"], "exit_code": 0, "revision": "507dc5f92677ba2fbb846bc4cfe77153afe06d3de92d6484f5c1f1df6809eb5b", "status": "validated", "url": "http://127.0.0.1:8081/"}

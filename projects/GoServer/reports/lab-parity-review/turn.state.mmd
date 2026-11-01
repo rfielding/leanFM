@@ -1,0 +1,12 @@
+stateDiagram-v2
+    [*] --> to_move
+    to_move --> checking: PlayMove
+    checking --> moved: MovePlayed
+    checking --> to_move: RequestRejected
+    to_move --> searching: BotTurn
+    searching --> chosen: BotMoveChosen
+    chosen --> moved: BotMovePlayed
+    searching --> moved: TurnTimedOut
+    to_move --> moved: TurnTimedOut
+    to_move --> moved: AutoPassed
+    moved --> [*]

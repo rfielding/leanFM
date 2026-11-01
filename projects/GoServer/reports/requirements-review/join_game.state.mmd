@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: JoinGame
+    checking --> accepted: GameJoined
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]

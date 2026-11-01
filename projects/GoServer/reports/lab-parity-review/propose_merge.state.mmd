@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: ProposeMerge
+    checking --> accepted: MergeProposed
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]

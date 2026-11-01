@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    Person->>Server: SetAutopilot
+    alt choice 1
+    Server->>Person: AutopilotSet
+    else alternative
+    Server->>Person: RequestRejected
+    end

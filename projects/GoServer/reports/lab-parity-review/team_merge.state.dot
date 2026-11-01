@@ -1,0 +1,21 @@
+digraph behavior {
+rankdir=LR;
+graph [bgcolor="white"];
+node [shape=box, fontname="Helvetica", fontsize=11];
+edge [fontname="Helvetica", fontsize=10];
+"idle" [label="No proposal between these teams"];
+"proposing" [label="Server checks the proposal"];
+"pending" [label="Waiting for every person in both teams"];
+"responding" [label="Server records one response"];
+"merged" [label="Teams merged permanently", peripheries=2];
+"withdrawn" [label="Proposal withdrawn", peripheries=2];
+"rejected" [label="Proposal rejected without mutation", peripheries=2];
+"idle" -> "proposing" [label="ProposeMerge"];
+"proposing" -> "pending" [label="MergeProposed"];
+"proposing" -> "rejected" [label="RequestRejected"];
+"pending" -> "responding" [label="RespondMerge"];
+"responding" -> "pending" [label="MergeResponded"];
+"responding" -> "pending" [label="RequestRejected"];
+"pending" -> "merged" [label="TeamsMerged"];
+"pending" -> "withdrawn" [label="MergeWithdrawn"];
+}

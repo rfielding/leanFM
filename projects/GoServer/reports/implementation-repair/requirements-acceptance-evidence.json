@@ -1,0 +1,12 @@
+{
+  "source": "Explicit stakeholder answer posted in ChatUI and supplied again to Codex",
+  "question_id": "accept_requirements_gate",
+  "answer": "Accept the current reduced server-only requirements (recommended) [accept_requirements]",
+  "revision": "78fcf388e91e1e0e324d341c94bc4ea3833b3979f242e4f89f11865ec048074b",
+  "sha256": {
+    "book/main.tex": "1a87da2978d783fb5e002633b6f6ffcd9856ed885c47c0c76297ca7b63a2d79d",
+    "spec/Requirements.lean": "f5e54e1489e9a1f16e51cbba4569f8763f84fe74008b6747bf97f29d6df0b01e",
+    "spec/Requirements.proto": "3a6434e700f4b50ab48b461d5a7f9f42fa3fdfa903e1c6ec6bd9fd19fca6057c"
+  },
+  "implementation_acceptance": "not granted"
+}

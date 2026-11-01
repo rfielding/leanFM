@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> dispatching
+    dispatching --> searching: BotTurn
+    searching --> chosen: BotMoveChosen
+    chosen --> played: BotMovePlayed
+    searching --> timed_out: TurnTimedOut
+    timed_out --> timed_out: BotMoveChosen
+    played --> [*]
+    timed_out --> [*]

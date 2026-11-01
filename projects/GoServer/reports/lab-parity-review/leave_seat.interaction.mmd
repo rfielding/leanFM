@@ -1,0 +1,9 @@
+sequenceDiagram
+    participant Person
+    participant Server
+    Person->>Server: LeaveSeat
+    alt choice 1
+    Server->>Person: SeatLeft
+    else alternative
+    Server->>Person: RequestRejected
+    end

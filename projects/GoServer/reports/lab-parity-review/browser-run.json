@@ -1,0 +1,8 @@
+{"run":"headless Chromium, three people (alice creator seat 1, bob seat 2, carol watcher), seat 3 planned as bot, 9x9, bot 0.25 s",
+ "checked":["seat plan via the roster select","Sit here","Start","person moves by clicking","bot move published with 8 candidates in Search at this position",
+  "bob (seated, playing) blocked from branching: 'You can step through the game, but variations unlock when it ends.'",
+  "carol (watcher) created a variation at move 1 and a local Computer move; server move count unchanged (variations never sent)",
+  "bob proposed a merge, alice accepted, teams became 1:1+2 3:3 and the table shows team totals",
+  "alice switched autopilot on; the next move's source was autopilot"],
+ "server_after":{"moveNo":4,"sources":"person,person,bot,autopilot","teams":"1:1+2 3:3"},
+ "page_errors":[]}

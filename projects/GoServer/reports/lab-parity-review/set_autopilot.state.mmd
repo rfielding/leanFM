@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: SetAutopilot
+    checking --> accepted: AutopilotSet
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]

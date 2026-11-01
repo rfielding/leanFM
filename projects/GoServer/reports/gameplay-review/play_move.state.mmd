@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> ready
+    ready --> checking: PlayMove
+    checking --> accepted: MovePlayed
+    checking --> rejected: RequestRejected
+    accepted --> [*]
+    rejected --> [*]
