@@ -9,12 +9,11 @@
   "unit": "task grammars",
   "boundary": ".",
   "artifacts": {
-    "spec/Requirements.lean": "6fe05513e31b2ad75a9c4b2bdb0838a95f86c44e9c44d9550a3805561554440e",
+    "spec/Requirements.lean": "9ea4c1b4ecfc57e77bfcdca004a258733696a2b3e6154cf3735ef58d18e73607",
     "spec/Requirements.proto": "d993591b91dac586166791bff86131db79db6fa1fcdef414dcfcf41c455036c1",
-    "book/main.tex": "21dc9ec9bf55a0889c6af853cc696ec4efcc203f5f016de52e5d1e07deea98b1",
-    "spec/Implementation.lean": "4cbba5386eb89e1f66b4ddb143b4794326388d4766d13c61e56c0fdd106f72b6"
+    "book/main.tex": "a27e725ba9dc5919d74875233d7e196be6a35db46a3696fe96adf9d5ea8c2351",
+    "spec/Implementation.lean": "05cb82ea706a3234990601c6db8466aee4b16b401534258da0934b2761fe4250"
   },
   "task_count": 21,
-  "acceptance": "unchanged",
-  "note": "Run by Claude in a cloud workspace with Lean 4.28.0 and the same LeanFM library and driver as scripts/chatui_specification.py, without the bwrap sandbox. Re-run LeanFM's own check to replace this evidence."
+  "acceptance": "unchanged"
 }

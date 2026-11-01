@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: StartGame
-    alt choice 1
-    Server->>Person: GameStarted
-    else alternative
-    Server->>Person: RequestRejected
-    end

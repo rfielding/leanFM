@@ -1,7 +1,0 @@
-stateDiagram-v2
-    [*] --> ready
-    ready --> checking: CreateGame
-    checking --> accepted: GameCreated
-    checking --> rejected: RequestRejected
-    accepted --> [*]
-    rejected --> [*]

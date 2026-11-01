@@ -6,7 +6,7 @@
   "unit": "one screenshot per scenario step",
   "boundary": "local loopback app on port 8095; in-memory state discarded afterwards; no credentials shown",
   "browser": "Chrome/153.0.8010.12",
-  "created": "2026-10-26T09:30:28+00:00",
+  "created": "2026-11-01T05:44:34+00:00",
   "inputs": {
     "source/game.go": "e0efc17bcdc77767aa18e693012efb24733f1aad4a0cece1d36217730d1891fb",
     "source/engine.go": "db2a6bf1353741e1b4d983fd846b75f9ebeb54dfa96d299fadddde393d611694",
@@ -18,7 +18,7 @@
     "source/cmd/demo/static/gameview.js": "7d4111a2770a6744d938e9d3c0b946780588c027caabfbc93657150f412044b5",
     "source/cmd/demo/static/style.css": "2c4dc658d14b9ffa9584c42f1b03facf3cd004454c99a3416e78818eded3fdcb",
     "source/cmd/demo/static/engine.js": "34b905f09e9640d534a03e4755c372ff76913963e71ab23669cd34005f20b86e",
-    "source/book_tour.py": "7c32d00630498c94fe37989b75a67c6010182fe386863919a1db6e332b23c29e"
+    "source/book_tour.py": "1c311e4785f4340c7e437c7d4c6e9e233245248bac7bb856d9c67c2bb0f1c32d"
   },
   "captures": [
     {
@@ -42,7 +42,7 @@
         "fill in the New challenge form"
       ],
       "file": "book/assets/tour/02-create-challenge.png",
-      "sha256": "38a66b09c2c31403287956d73394a940b261c4b10566f88f1103980194e0f8e0"
+      "sha256": "ce434a0cbe44f76fc983e631388ac39e97e7eef235a263801bde0c96c36b40b2"
     },
     {
       "id": "03-seat-plan",
@@ -67,7 +67,7 @@
         "alice: Back one move"
       ],
       "file": "book/assets/tour/04-bot-search.png",
-      "sha256": "5948c01e8d38c6f98bf172fae0911c649b0c297db5d1f653e0cd99ecc838feee"
+      "sha256": "005cbb8cb75bedb47275decf646aef023ac2c8aecb9488f356707881a47cd8a9"
     },
     {
       "id": "05-watcher-variation",
@@ -81,7 +81,7 @@
         "carol: Analyze here"
       ],
       "file": "book/assets/tour/05-watcher-variation.png",
-      "sha256": "97145d8c2c22c0293c198a847e8b249de7a7f8b945780aa5507e883cefe67333"
+      "sha256": "74b8e8adbe2d8b0d77265fd9ce25db5ed61bcdafc8f2a51262c4176ebd7486fd"
     },
     {
       "id": "06-merge-proposal",
@@ -92,7 +92,7 @@
         "bob: Merge my team with Team 1, Propose"
       ],
       "file": "book/assets/tour/06-merge-proposal.png",
-      "sha256": "9884664be43b9539a95ef96b84b966c53b7749a94c9d8e7454f693411aeb0817"
+      "sha256": "ea5e179f94af6b6f13f111134352582c02014dcba42f7ce564ebfa48337c4cee"
     },
     {
       "id": "07-team-and-autopilot",
@@ -104,7 +104,7 @@
         "alice: Let a bot play for me"
       ],
       "file": "book/assets/tour/07-team-and-autopilot.png",
-      "sha256": "96ab745fe97384f53466ac5a48f72e178e93ee481105494eec17283eeac54c50"
+      "sha256": "157e006fad294671babc8d7d9976ddeeac074a9b3cab9027bd85fc1d7dac49b6"
     },
     {
       "id": "08-game-over",
@@ -115,7 +115,7 @@
         "alice and bob pass until the bot also passes"
       ],
       "file": "book/assets/tour/08-game-over.png",
-      "sha256": "a7e952591ca01ab4998bd05e8adc737486e8c2996f9718b4b7305ea6e2082296"
+      "sha256": "6b18175a898ff9be7a584f71824a8024b951d17724c90d5e9db3508ed5303aef"
     }
   ],
   "note": "Bot moves come from a time-limited search, so stone positions differ between runs; the scenario steps do not."

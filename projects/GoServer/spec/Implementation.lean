@@ -4,12 +4,12 @@ open LeanFM
 
 namespace Project.Implementation
 
-/- Implementation mapping for the reduced server-only "goserver" RequirementSpec.
-   This mapping targets a Go implementation that will generate initial in-memory
-   server code for rooms, room-associated games/challenges, watch/join navigation,
-   and isolated per-room/per-game chat. Each mapping entry cites the requirement
-   ID for traceability. This file is authored after the requirements gate was
-   accepted by the stakeholder and is intended for the leanfm_check validator.
+/- Implementation mapping for the "goserver" RequirementSpec: an in-memory Go
+   server (source/) for rooms, room challenges, watch/join, isolated room and game
+   chat, and N-player Go with server-side bots, autopilot, teams and merges, plus
+   the Lab-style browser. Each mapping entry cites the requirement ID it realizes;
+   source/traceability.json maps the same requirements to symbols and tests.
+   Checked by `make spec-check`; review happens in git.
 -/
 
 def implementation : ImplementationSpec :=
@@ -148,7 +148,7 @@ def implementation : ImplementationSpec :=
   }
 
 
-/-- Candidate realization choices; each is traceable and does not accept a gate. -/
+/-- Realization choices for rooms, challenges and the browser; each cites its requirement. -/
 def roomsBrowserDecisions : List RequirementJustification :=
   [ {requirementId := "grammar:create_room", reason := "source/server.go adds CreateRoom/RoomCreated to Handle; trim the supplied name, validate UTF-8 and the rune limit, authenticate, check duplicate names and MaxRooms atomically inside the existing cached operation. Keep the old provisioning helper for compatibility but route browser mutations only through the typed operation."}
   , {requirementId := "property:create_room authorized correlated result", reason := "Retain every accepted mutation result for a session; once its finite 128-result admission budget is exhausted, reject new mutations as busy without eviction or mutation. Existing duplicates still return their original result. This closes the old sliding-window replay hole while keeping 100 sessions, 16 rooms and a global 64-challenge bound."}
@@ -160,7 +160,7 @@ def roomsBrowserDecisions : List RequirementJustification :=
   , {requirementId := "proof:create_room never crosses authority or scope", reason := "Add race-enabled core and HTTP tests for unauthorized/empty/oversized names, duplicate/concurrent rooms, request conflicts, replay after admission exhaustion, room/game membership and retained history isolation. Exercise the actual browser, including markup text and delayed old-scope responses. Retain a requirement-to-symbol/test manifest and actual startup evidence."}
   ]
 
-/-- Candidate realization choices for N-player Go play; each is traceable and does not accept a gate. -/
+/-- Realization choices for N-player Go play; each cites its requirement. -/
 def gameplayDecisions : List RequirementJustification :=
   [ {requirementId := "property:play_move rules", reason := "source/engine.go ports the stakeholder's N-Player Go Lab engine: a (N+2)^2 cell array with a Wall border, flood-fill liberties, capture into the owner's losses, legal suicide into the mover's losses, territory by single-colour bordered empty regions, simple ko plus situational superko (board plus seat to move) indexed by 64-bit Zobrist keys and confirmed by exact position comparison, timeouts, resignation, abandonment and the 3*N*N cap."}
   , {requirementId := "grammar:play_move", reason := "ServerCore.playMove authenticates through the existing cached replay wrapper, checks game membership, that the caller holds the seat to move and is not a bot, that move_no equals the current move number, then that the human deadline has not passed (if it has, the timeout is applied and the move rejected), then legality and superko against the game's exact position history, under the server lock."}
@@ -172,7 +172,7 @@ def gameplayDecisions : List RequirementJustification :=
   , {requirementId := "proof:play_move never crosses authority or scope", reason := "Race-enabled tests cover out-of-turn, outsider, stale, off-board, occupied, replayed and post-finish moves, seat and start authority, deadline timeouts and abandonment, an all-bot game to completion, and a bot never moving for a person; a headless-browser run exercises two people and a bot in one game."}
   ]
 
-/-- Candidate realization choices for the Lab parity revision; traceable, no gate accepted. -/
+/-- Realization choices for seats, teams, history and search; each cites its requirement. -/
 def labParityDecisions : List RequirementJustification :=
   [ {requirementId := "property:set_seat_plan creator controls the plan", reason := "game.seatPlan holds controller (bot|open) and team per seat; SetSeatPlan, TakeSeat and LeaveSeat mutate it only in status open under the server lock via the cached replay wrapper. CreateGame validates an optional seat_plan (seat 1..N once each, controller bot|open, team 1..N)."}
   , {requirementId := "property:set_autopilot keeps the seat", reason := "seat.autopilot flag; beginTurnLocked dispatches a bot for bot seats and autopilot seats. Turning autopilot off during the seat's own turn increments turnSeq (discarding the pending result) and rearms the human timer with the deadline measured from turnStart; turning it on during the seat's own turn dispatches a bot immediately."}

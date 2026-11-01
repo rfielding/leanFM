@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: TakeSeat
-    alt choice 1
-    Server->>Person: SeatTaken
-    else alternative
-    Server->>Person: RequestRejected
-    end

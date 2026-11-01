@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: SendRoomChat
-    alt choice 1
-    Server->>Person: RoomChat
-    else alternative
-    Server->>Person: RequestRejected
-    end

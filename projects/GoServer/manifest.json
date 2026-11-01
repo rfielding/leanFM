@@ -10,10 +10,5 @@
   "implementation": "spec/Implementation.lean",
   "tasks": "spec/tasks.json",
   "source": "source/",
-  "evidence": "reports/",
-  "acceptance": {
-    "requirements": "27b383046dcee63b8160a105585635d685ed9f1a39ae3ba2c2eef068f16e66fa",
-    "implementation": "3aa505bd10f2f86c0e2f216e009ef7a54676285141168ded4f5040f411bab13e"
-  },
-  "acceptance_file": ".leanfm/acceptance.json"
+  "evidence": "reports/"
 }

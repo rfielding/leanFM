@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: SetSeatPlan
-    alt choice 1
-    Server->>Person: SeatPlanSet
-    else alternative
-    Server->>Person: RequestRejected
-    end

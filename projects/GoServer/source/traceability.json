@@ -1,6 +1,6 @@
 {
   "requirement": "goserver",
-  "scope": "Lab parity revision: seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis",
+  "scope": "Rooms, challenges and chat; N-player Go with seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis",
   "mappings": [
     {
       "requirements": [
@@ -188,7 +188,7 @@
       "tests": [
         "TestMovesAreAuthorizedOrderedAndRuleChecked",
         "TestGameplayWireFieldsReachTheCore",
-        "reports/gameplay-review/browser-play.json"
+        "source/book_tour.py (book/assets/tour/manifest.json)"
       ]
     },
     {
@@ -323,7 +323,7 @@
       "tests": [
         "TestLabAssetsAndNewRoutes",
         "TestBowlRecordsWhoCaptured",
-        "reports/lab-parity-review/browser-run.json"
+        "source/book_tour.py (book/assets/tour/manifest.json)"
       ]
     }
   ],

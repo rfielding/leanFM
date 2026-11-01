@@ -2,9 +2,10 @@ import LeanFM.Artifacts
 
 open LeanFM
 namespace Project.Requirements
-/- Candidate Lab-parity revision: seat control, teams and merges, bot search
-   summaries, history and analysis. Authorized to formalize/check; neither
-   human acceptance gate is crossed by this file. -/
+/- Observable requirements for GoServer: rooms, challenges and chat, and
+   N-player Go with seat control, teams and merges, bot search summaries,
+   history and local analysis. Checked by `make spec-check`; the book
+   (book/main.tex) argues each decision; review happens in git. -/
 def framing : MessageFraming := {kind := .protobufMessage, dispatchField := none, note := "One bounded protobuf message atom; request_id correlates each terminal result with its request in the same session and task. Server-originated game events (BotMovePlayed, TurnTimedOut, AutoPassed, TeamsMerged, MergeWithdrawn, GameFinished) are delivered to game members as MoveRecord, TeamView, MergeView and status entries of GameState"}
 def messages : List MessageSchema := [
   {name := "CreateRoom", src := "Person", dst := "Server", framing, fields := [{number := 1, name := "session_id", scalar := .string}, {number := 2, name := "room_name", scalar := .string}, {number := 3, name := "request_id", scalar := .uint64}]}
@@ -242,6 +243,6 @@ def requirements : RequirementSpec :=
       {id := "identity", title := "Identity and navigation boundaries", body := "Use an existing server-issued authenticated session; this slice does not add account registration or provider API credentials. EnterRoom authorizes room membership; JoinGame authorizes game chat membership within that room. Creator and sender are server-derived identities, never trusted request fields. Watch/join both enter a chat container and grant no gameplay authority."},
       {id := "bounds", title := "Bounded observable inputs and overload", body := "Room names trim surrounding whitespace, are unique case-sensitive display identifiers and are never interpreted as paths or markup. At most 16 rooms exist including the lobby, and at most 64 challenges exist per room. All state is in memory and resets on restart. Names are nonempty UTF-8 up to 128 characters; chat bodies are nonempty UTF-8 up to 4000 characters; each room/game retains its latest 100 chat entries. The 100 Person instances are a first-slice capacity forecast, not measured throughput. Full queues reject with a busy result without mutation; the separate implementation mapping must bound connections and enforce the actor resource contracts."},
       {id := "correlation", title := "Correlation, replay and failure", body := "Request IDs are unique per authenticated session and task. Each request produces exactly one success or RequestRejected with the same request_id. Duplicate mutation IDs return the prior result, and conflicting reuse with another body is rejected. Structured game listings retain their GameListed record fields. Scenario trace envelopes must retain event identity, session/task and cause_id independently of prior ordering; HTTP conversion, runtime and storage choices await the separate mapping."},
-      {id := "validation", title := "Meaning of this check", body := "This revision is proposed for requirements acceptance; previous protected acceptance snapshots are retained and do not accept these changes. The checker establishes Lean elaboration, protobuf agreement, structural completeness and current-spec diagram provenance. It does not prove that the deployed server satisfies the temporal, isolation, concurrency, resource or security obligations; those are mapped to controls and negative tests by the separate implementation specification."}
+      {id := "validation", title := "Meaning of this check", body := "The checker establishes Lean elaboration, protobuf agreement, structural completeness and current-spec diagram provenance. It does not prove that the deployed server satisfies the temporal, isolation, concurrency, resource or security obligations; those are mapped to controls and negative tests by the separate implementation specification."}
     ] }
 end Project.Requirements

@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: ProposeMerge
-    alt choice 1
-    Server->>Person: MergeProposed
-    else alternative
-    Server->>Person: RequestRejected
-    end

@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: PlayMove
-    alt choice 1
-    Server->>Person: MovePlayed
-    else alternative
-    Server->>Person: RequestRejected
-    end

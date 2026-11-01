@@ -1,9 +1,0 @@
-sequenceDiagram
-    participant Person
-    participant Server
-    Person->>Server: ListRooms
-    alt choice 1
-    Server->>Person: RoomsListed
-    else alternative
-    Server->>Person: RequestRejected
-    end

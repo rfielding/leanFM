@@ -1,7 +1,0 @@
-stateDiagram-v2
-    [*] --> ready
-    ready --> checking: LeaveSeat
-    checking --> accepted: SeatLeft
-    checking --> rejected: RequestRejected
-    accepted --> [*]
-    rejected --> [*]

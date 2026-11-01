@@ -14,7 +14,7 @@ import urllib.request
 import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT = ROOT / 'reports/rooms-browser-review'
+REPORT = ROOT / 'reports/browser'
 PROFILE = ROOT / '.cache/rooms-browser-profile'
 BASE = 'http://127.0.0.1:8081'
 
@@ -35,7 +35,7 @@ def main():
             except OSError: time.sleep(.1)
         else: raise AssertionError('App did not become ready')
         (PROFILE/'DevToolsActivePort').unlink(missing_ok=True)
-        chrome = subprocess.Popen(['google-chrome','--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--disable-background-networking','--no-first-run','--remote-debugging-address=127.0.0.1','--remote-debugging-port=0','--remote-allow-origins=http://127.0.0.1','--user-data-dir='+str(PROFILE),'--crash-dumps-dir='+str(PROFILE/'crashes'),'about:blank'], stdout=chrome_log, stderr=subprocess.STDOUT)
+        chrome = subprocess.Popen([os.environ.get('CHROME', 'google-chrome'),'--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--disable-background-networking','--no-first-run','--remote-debugging-address=127.0.0.1','--remote-debugging-port=0','--remote-allow-origins=http://127.0.0.1','--user-data-dir='+str(PROFILE),'--crash-dumps-dir='+str(PROFILE/'crashes'),'about:blank'], stdout=chrome_log, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 15
         while not (PROFILE/'DevToolsActivePort').exists() and time.monotonic() < deadline:
             if chrome.poll() is not None: raise AssertionError('Chrome exited')
@@ -122,7 +122,7 @@ def main():
         (REPORT/'browser.png').write_bytes(base64.b64decode(shot['data']))
         assert not errors, errors
         source_hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'source').rglob('*') if p.is_file()}
-        report={'status':'passed','checks':['real make run readiness','named room creation','named challenge creation/open','two-user room and game chat','membership rejection before room entry','literal markup rendering','no displayed session token or placeholder link','delayed old-scope response rejected','no uncaught browser errors'],'source_sha256':source_hashes,'screenshot':'reports/rooms-browser-review/browser.png'}
+        report={'status':'passed','checks':['real make run readiness','named room creation','named challenge creation/open','two-user room and game chat','membership rejection before room entry','literal markup rendering','no displayed session token or placeholder link','delayed old-scope response rejected','no uncaught browser errors'],'source_sha256':source_hashes,'screenshot':'reports/browser/browser.png'}
         (REPORT/'browser-validation.json').write_text(json.dumps(report,indent=2)+'\n')
         print('ok: real Chrome room/challenge/chat flow, isolation, literal text and stale-response checks')
     finally:

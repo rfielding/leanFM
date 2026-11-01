@@ -1,31 +1,24 @@
 # GoServer agent instructions
 
-This directory is the exclusive project root. Read SKILL.md, manifest.json,
-book/main.pdf, book/main-dark.pdf, spec/Requirements.lean,
-spec/Requirements.proto, spec/Implementation.lean, spec/ProjectMemory.md and
-spec/runtime.json before implementation. Read existing source and review
-reports. Conversation history is disposable and must never be required to
-reconstruct goals, decisions, known failures or a PR.
+This directory is the exclusive project root. Read `book/main.pdf` (or
+`book/main.tex`), `spec/Requirements.lean`, `spec/Requirements.proto`,
+`spec/Implementation.lean` and the existing `source/` before changing
+anything. Chat history is disposable; the book and spec are the record.
+Keep `manifest.json`'s `project_id`: LeanFM uses it to discover the project.
 
-Preserve the manifest identity and both protected revision-bound gates. The
-current slice is rooms, chat and N-player Go with selectable bots, autopilot,
-teams and merges, bot search summaries, history, variations and local analysis
-(book chapter "Lab parity revision"). The N-Player Go Lab engine in
-source/cmd/demo/static/engine.js is the rules reference; source/engine.go ports it.
-Use live LeanFM MCP language references for the formal language, then compile
-this project's actual Project.Requirements.requirements and
-Project.Implementation.implementation. Host self-validation is not evidence
-for this project. Keep all project inputs, code, cache and evidence here.
+The N-Player Go Lab engine in `source/cmd/demo/static/engine.js` is the rules
+reference; `source/engine.go` ports it.
 
-Application source, tests and its Makefile belong in source/. make run must
-launch an actual loopback app on 8081, independently of LeanFM on 8080.
-Choose sensible reversible defaults and run authorized checks without quizzing
-the user about syntax or implementation machinery. Preserve security and
-negative requirements. Keep exact failures and verified remedies in durable
-reports and project memory. A passing startup check does not establish full
-semantic refinement or close a recorded counterexample.
+Work in the LeanFM order: book, then requirements, then implementation
+mapping, then source. Before a feature, state its positive invariant and its
+negative requirements, and map each material negative requirement to a control
+and a negative test in `source/traceability.json`. After a change run
+`make spec-check`, `make views`, `make app-check`, `make browser-check`, and
+`make tour` when the UI changed, then `make book`. Keep all project state
+(cache, reports, renders) under this directory; `make run` serves on 8081,
+never LeanFM's 8080.
 
-For PRs, obtain the real base from this repository's Git history, inspect the
-actual patch, trace changes/tests to accepted requirements and report checks
-and remaining gaps. Do not claim a remote PR or push exists without one.
-Never commit conversations, sessions, provider keys, passwords or build caches.
+Review and acceptance happen in git. The "Known gaps" chapter of the book is
+the work queue: when an item is closed, remove it there and add the evidence
+under `reports/`. Never commit conversations, sessions, provider keys,
+passwords or build caches.

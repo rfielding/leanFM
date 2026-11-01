@@ -1,5 +1,5 @@
 # Requirement refs: goserver; spec/runtime.json; durable local launch contract.
-.PHONY: build run serve stop ruj test check clean
+.PHONY: build run serve stop test check book-tour clean
 GO ?= $(if $(wildcard ../../../.toolchains/go/bin/go),$(abspath ../../../.toolchains/go/bin/go),go)
 PORT ?= 8081
 export GOCACHE := $(abspath ../.cache/go-build)
@@ -13,9 +13,10 @@ run: build
 serve: run
 stop:
 	python3 $(abspath runtime.py) stop
-ruj: run
 test:
 	$(GO) test -race ./...
 check: build test
+book-tour: build
+	python3 book_tour.py
 clean:
 	$(RM) $(BINARY)
