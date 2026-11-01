@@ -54,14 +54,24 @@ From the project root:
   scenarios of Chapter~\ref{ch:usage} and refreshes their screenshots.
   \item \texttt{make book} rebuilds this book in light and dark copies.
 \end{itemize}
-All state lives in memory and resets on restart.
+All state lives in memory and resets on restart. Building needs Go and Node.js
+with npm: the browser app is a React project in \path{source/web} that
+\texttt{make run} builds first (the first build runs \texttt{npm ci}).
 
 % ---------------------------------------------------------------------------
 \chapter{Rooms, challenges and chat}
 \section{Navigation}
-After choosing a name a person sees the rooms (the lobby always exists) and can
-create a room. Entering a room shows its conversation and its challenges.
-Opening a challenge shows its seats, its board once started, and its own chat.
+After choosing a name a person is in the lobby. Every room they have open is a
+tab along the top, and a final \emph{+ Rooms} tab lists all rooms and creates
+new ones. Inside a room, the first tab is its Lobby: the room conversation, its
+challenges and the form for a new challenge. Opening a challenge adds a tab for
+that game, so several games can be open at once, in one room or in several. A
+game's tab shows its seats, its board once started, and its own chat. Tabs stay
+alive in the background, keeping each game's variations and analysis; a room tab
+counts unread messages, and a game tab is marked when a move or a merge answer
+is waiting for the viewer. Open tabs come back after reloading the page. Each tab
+shows only results requested for its own room or game, so a slow response can
+never appear in another tab.
 Room chat and game chat are separate conversations: nothing posted in one is
 copied to the other, and only members of a room or game receive its chat.
 Watching or joining a game enters its chat; neither grants any move authority.
@@ -70,6 +80,9 @@ Watching or joining a game enters its chat; neither grants any move authority.
 The server issues the session; creator and sender are always derived from it,
 never taken from request fields. There is no account registration in this local
 build: the display name identifies a person for the life of the server.
+Sessions live in memory, so restarting the server forgets them; a page
+that still holds a forgotten session returns to the name form, prefilled with
+the previous name, and says why.
 
 \section{Bounds}
 Names are 1--128 Unicode characters, trimmed; room names are unique and
@@ -121,7 +134,7 @@ and seat, so a hash collision can never reject a legal move. Passes, timeouts
 and resignations are never rejected for repeating a position.
 
 \section{Clocks and ending}
-A person's turn has a deadline (5 seconds to 64 minutes, default 10 seconds); a
+A person's turn has a deadline (5 seconds to 64 minutes, default one minute); a
 bot's search has its own budget (0.25 to 16 seconds, default 1 second). An
 unanswered turn becomes a \emph{timeout}: it passes the turn but neither ends
 nor resets a round of passes. A move arriving after its deadline is rejected
@@ -181,6 +194,16 @@ The browser reproduces the Lab against server state:
 \begin{itemize}
   \item the board with Wall coordinates, territory squares, the last-move
   marker, ghost markers for next moves and a search heat overlay;
+  \item a translucent stone in the mover's colour under the pointer wherever a
+  click would place a stone (the viewer's own live turn, or a variation where
+  analysis is open to them); over an occupied or forbidden point, or out of
+  turn, there is no preview and the pointer shows that a click would be refused;
+  \item player colours drawn as stones on a small wood tile, so a black stone
+  never reads as a hollow white ring on the dark page;
+  \item an always-visible play bar (whose turn it is, the clock, Pass, Resign,
+  autopilot) above tabs for Scores, Search, Seats, Chat and GIF; the Chat tab
+  counts unread messages and the Seats tab flags a merge awaiting the viewer's
+  answer;
   \item navigation with Home, Back, Forward, End and previous/next variation,
   by buttons and by the arrow, Home and End keys; a variation tree and next-move
   chips;
@@ -201,7 +224,10 @@ game, and vanish when the page closes. Watchers may branch and search at any
 time; a person seated in a game in play may browse the actual moves, and may
 branch and search once the game has finished. That last rule is a fairness
 convention of the provided browser, not a security boundary: a public position
-can always be copied into another tool. The page is dark-only.
+can always be copied into another tool. The page is dark-only, and its text
+is always light on a dark background: highlighted buttons and tags use yellow
+text and a yellow border on a dark fill, never dark text on yellow, so a
+browser's dark-mode extension cannot turn them into white on yellow.
 
 % ---------------------------------------------------------------------------
 \chapter{Requirements}
@@ -258,6 +284,10 @@ test; \path{source/traceability.json} lists them in full.
   replacing another scope, exposed tokens}: text-only DOM rendering,
   selection-generation guards, strict bounded JSON, Host and Origin checks
   (\texttt{TestMethodOriginHostAndBodyRejections}, \texttt{browser\_check.py}).
+  \item \textbf{A pointer preview that promises a refused move, or talks to
+  the server}: the preview is gated by the same predicates as a click and drawn
+  only on the canvas (\texttt{TestViewerTabsAndPointerPreview}; the usage tour
+  hovers an empty and an occupied point in Chrome).
   \item \textbf{A game that never ends}: passes, the timeout round and the
   \(3N^2\) cap (\texttt{TestPassesEndTheGame},
   \texttt{TestDeadlineTimesOutAndAbandonmentEnds}).
@@ -276,8 +306,17 @@ memory behind per-game locks; \path{source/engine.go} ports the Lab's rules and
 max-n Monte Carlo search, extended to return the Lab's search summary;
 \path{source/bot.go} is the bounded worker pool that realizes the \texttt{Bot}
 actor; \path{source/channel.go} is the bounded queue whose full sends block
-until space frees, as the requirements' channel semantics demand. The browser
-(\path{source/cmd/demo/static/}) serves the Lab engine and search worker as
+until space frees, as the requirements' channel semantics demand.
+
+The browser app is React and TypeScript in \path{source/web}, so its parts can be
+rearranged as components: \path{App.tsx} holds the room tabs, \path{Room.tsx} a
+room's Lobby and game tabs, \path{Game.tsx} one game (board column, play bar and
+side tabs), \path{Board.tsx} and \path{Panels.tsx} the pieces, and
+\path{game/game.ts} the controller for one open game (the Lab game tree, server
+sync, local search). Vite builds it into \path{source/cmd/demo/static/app/},
+which the Go demo embeds. The Lab rules engine, \path{static/engine.js}, loads
+first as a plain script and stays the single rules reference for the browser
+and for \path{source/engine.go}. The demo serves the engine and search worker as
 same-origin files, so viewers can branch and search locally under a content
 security policy that adds only same-origin workers and
 \texttt{blob:}/\texttt{data:} images for GIF preview.

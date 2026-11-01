@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package project.requirements;
+
+// Basic server-only message atoms for rooms, games, and chat used by the reduced requirements.
+
+message ListRooms {
+  string session_id = 1;
+}
+
+message RoomsListed {
+  repeated string room_ids = 1;
+}
+
+message EnterRoom {
+  string session_id = 1;
+  string room_id = 2;
+}
+
+message RoomEntered {
+  string room_id = 1;
+  repeated string game_ids = 2;
+}
+
+message CreateGame {
+  string session_id = 1;
+  string room_id = 2;
+  string game_name = 3;
+}
+
+message GameListed {
+  string game_id = 1;
+  string creator = 2;
+  string status = 3; // e.g., "open", "in_progress", "finished"
+}
+
+message ListGames {
+  string room_id = 1;
+}
+
+message GamesListed {
+  repeated GameListed games = 1;
+}
+
+message JoinGame {
+  string session_id = 1;
+  string game_id = 2;
+}
+
+message GameJoined {
+  string game_id = 1;
+  repeated string participants = 2;
+}
+
+message SendGameChat {
+  string session_id = 1;
+  string game_id = 2;
+  string body = 3;
+}
+
+message GameChat {
+  string game_id = 1;
+  string sender = 2;
+  string body = 3;
+  int64 time_ms = 4;
+}

@@ -32,9 +32,11 @@ BASE = f'http://127.0.0.1:{PORT}/'
 CHROME = os.environ.get('CHROME', 'google-chrome')
 PROMPT = 'In the book, using the LeanFM server, take screenshots that show actual usage scenarios.'
 INPUTS = ['source/game.go', 'source/engine.go', 'source/bot.go', 'source/server.go', 'source/cmd/demo/main.go',
-          'source/cmd/demo/static/index.html', 'source/cmd/demo/static/app.js', 'source/cmd/demo/static/gameview.js',
-          'source/cmd/demo/static/style.css', 'source/cmd/demo/static/engine.js', 'source/book_tour.py']
+          'source/cmd/demo/static/index.html', 'source/web/src/ui/App.tsx', 'source/web/src/ui/Room.tsx', 'source/web/src/ui/Game.tsx',
+          'source/web/src/ui/Panels.tsx', 'source/web/src/ui/Board.tsx', 'source/web/src/game/game.ts', 'source/web/src/styles.css', 'source/cmd/demo/static/engine.js', 'source/book_tour.py']
 WIDTH, HEIGHT = 1500, 1150
+A = '.room-panel:not([hidden])'           # the room tab being shown
+G = A + ' .game-panel:not([hidden])'  # the game tab being shown in it
 
 
 class Browser:
@@ -98,7 +100,7 @@ class Person:
         browser.call('Emulation.setDeviceMetricsOverride', {'width': WIDTH, 'height': HEIGHT, 'deviceScaleFactor': 1, 'mobile': False}, self.s)
         browser.call('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-color-scheme', 'value': 'dark'}, {'name': 'prefers-reduced-motion', 'value': 'reduce'}]}, self.s)
         browser.call('Page.navigate', {'url': BASE}, self.s)
-        self.wait("typeof openRoom==='function' && typeof GameView==='object'")
+        self.wait("!!document.querySelector('.session-form')")
 
     def js(self, expr):
         r = self.b.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True, 'returnByValue': True}, self.s)
@@ -124,13 +126,42 @@ class Person:
         self.js(f"Array.from(document.querySelectorAll({json.dumps(sel)})).find(e=>e.textContent.includes({json.dumps(text)})).click()")
 
     def select(self, sel, value):
-        self.js(f"(()=>{{const e=document.querySelector({json.dumps(sel)});e.value={json.dumps(value)};e.dispatchEvent(new Event('change',{{bubbles:true}}));}})()")
+        # React tracks values it set itself; use the native setter so the change event counts.
+        self.js(f"(()=>{{const e=document.querySelector({json.dumps(sel)});Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(e,{json.dumps(value)});e.dispatchEvent(new Event('change',{{bubbles:true}}));}})()")
+
+    def board_point(self, x, y):
+        self.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board').scrollIntoView({block:'center'})")
+        time.sleep(.15)
+        r = self.js("(()=>{const r=document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board').getBoundingClientRect();return [r.left,r.top,r.width]})()")
+        n = self.js("GameViewDebug.size()")
+        cell = r[2] / (n + 2)
+        return r[0] + cell * 1.5 + x * cell, r[1] + cell * 1.5 + y * cell
+
+    def board_hover(self, x, y):
+        """Move the mouse over board point (x, y) without clicking."""
+        px, py = self.board_point(x, y)
+        self.b.call('Input.dispatchMouseEvent', {'type': 'mouseMoved', 'x': px, 'y': py, 'button': 'none'}, self.s)
+        time.sleep(.1)
+
+    def board_pixel(self, x, y):
+        """RGBA of the board canvas at the centre of point (x, y)."""
+        return self.js(f"(()=>{{const c=document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board'),n=GameViewDebug.size(),cell=c.width/(n+2);"
+                       f"return Array.from(c.getContext('2d').getImageData(Math.round(cell*1.5+{x}*cell),Math.round(cell*1.5+{y}*cell),1,1).data)}})()")
+
+    def press(self, key):
+        """A real key press, as from the keyboard (CDP key events, not a synthetic DOM event)."""
+        for t in ('keyDown', 'keyUp'):
+            self.b.call('Input.dispatchKeyEvent', {'type': t, 'key': key, 'text': key if t == 'keyDown' else '', 'code': 'Key' + key.upper(), 'windowsVirtualKeyCode': ord(key.upper())}, self.s)
+
+    def tab(self, name):
+        self.click(G + ' [role=tab][data-panel="' + name + '"]')
+        self.wait(f"!!document.querySelector('{G} .tabpanel[data-panel=\"{name}\"]')")
 
     def board_click(self, x, y):
         """Click the board point (x, y) with real mouse events, as a person would."""
-        self.js("document.getElementById('board').scrollIntoView({block:'center'})")
+        self.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board').scrollIntoView({block:'center'})")
         time.sleep(.15)
-        r = self.js("(()=>{const r=document.getElementById('board').getBoundingClientRect();return [r.left,r.top,r.width]})()")
+        r = self.js("(()=>{const r=document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board').getBoundingClientRect();return [r.left,r.top,r.width]})()")
         n = self.js("GameViewDebug.size()")
         cell = r[2] / (n + 2)
         px, py = r[0] + cell * 1.5 + x * cell, r[1] + cell * 1.5 + y * cell
@@ -178,91 +209,135 @@ def main():
             print('captured', cid)
 
         def sign_in(p):
-            p.js(f"document.getElementById('identity').value={json.dumps(p.name)};document.getElementById('session-form').requestSubmit()")
-            p.wait("document.getElementById('room-state').textContent==='Joined'")
+            p.js(f"document.querySelector('.identity').value={json.dumps(p.name)};document.querySelector('.session-form').requestSubmit()")
+            p.wait("(document.querySelector('.room-panel[data-room=\\'lobby\\'] .room-state')||{}).textContent==='Joined'")
 
         alice = Person(browser, 'alice')
         capture(alice, '01-welcome', 'Welcome', 'A visitor chooses a local display name. Nothing else is needed for the local preview.',
                 ['open the app'], clip={'x': 0, 'y': 0, 'width': WIDTH, 'height': 520})
         sign_in(alice)
-        alice.js("document.getElementById('challenge-name').value='Evening three-way'")
-        for sel, v in [('#board-size', '9'), ('#seats', '3'), ('#turn-deadline', '60000'), ('#bot-time', '500')]:
+        alice.js("document.querySelector('.room-panel:not([hidden]) .challenge-form input[name=name]').value='Evening three-way'")
+        for sel, v in [('.room-panel:not([hidden]) select[name=board]', '9'), ('.room-panel:not([hidden]) select[name=seats]', '3'), ('.room-panel:not([hidden]) select[name=deadline]', '60000'), ('.room-panel:not([hidden]) select[name=bot]', '500')]:
             alice.select(sel, v)
         capture(alice, '02-create-challenge', 'Creating a challenge',
                 'Alice is in the lobby and fills in a challenge: a 9×9 board, three players, a one-minute human deadline and half a second per bot move. The ko rule stays on Auto, which is off for three players.',
                 ['sign in as alice', 'fill in the New challenge form'], clip={'x': 0, 'y': 60, 'width': WIDTH, 'height': 1000})
-        alice.js("document.getElementById('challenge-form').requestSubmit()")
-        alice.wait("!!document.getElementById('plan-ctl-3')")
-        alice.select('#plan-ctl-3', 'bot')
-        alice.wait("document.querySelector('#gv-seats').textContent.includes('Bot')")
+        alice.js("document.querySelector('.room-panel:not([hidden]) .challenge-form').requestSubmit()")
+        alice.wait("!!document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .rrow[data-seat=\"3\"] .plan-ctl')")
+        alice.select('.room-panel:not([hidden]) .game-panel:not([hidden]) .rrow[data-seat="3"] .plan-ctl', 'bot')
+        alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .roster')||{textContent:''}).textContent.includes('Bot')")
         bob, carol = Person(browser, 'bob'), Person(browser, 'carol')
         for p in (bob, carol):
             sign_in(p)
-            p.wait("!!document.querySelector('.challenge-card button')")
-            p.click('.challenge-card button')
-            p.wait("!!document.getElementById('gv-seats').children.length")
-        bob.wait("Array.from(document.querySelectorAll('#gv-seats button')).some(b=>b.textContent==='Sit here')")
-        bob.click_text('#gv-seats button', 'Sit here')
-        alice.wait("document.querySelector('#gv-seats').textContent.includes('bob')")
+            p.wait("!!document.querySelector('.room-panel:not([hidden]) .challenge-card button')")
+            p.click('.room-panel:not([hidden]) .challenge-card button')
+            p.wait("!!(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .roster')||{children:[]}).children.length")
+        bob.wait("Array.from(document.querySelectorAll('.room-panel:not([hidden]) .game-panel:not([hidden]) .roster button')).some(b=>b.textContent==='Sit here')")
+        bob.click_text('.room-panel:not([hidden]) .game-panel:not([hidden]) .roster button', 'Sit here')
+        alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .roster')||{textContent:''}).textContent.includes('bob')")
         capture(alice, '03-seat-plan', 'Planning seats',
                 'Before the start the creator decides, seat by seat, whether a person or a bot plays and which team the seat is on. Alice took seat 1, bob sat in seat 2, and alice marked seat 3 as a bot.',
-                ['alice: create the challenge (seated automatically)', 'alice: set seat 3 to Bot', 'bob: open the challenge, Sit here'], scroll_to='#game-panel')
-        alice.click('#gv-start')
+                ['alice: create the challenge (seated automatically)', 'alice: set seat 3 to Bot', 'bob: open the challenge, Sit here'], scroll_to=G)
+        alice.click(G + ' .gv-start')
         moves = [('alice', 4, 4), ('bob', 2, 6), ('alice', 6, 2), ('bob', 6, 6)]
         people = {'alice': alice, 'bob': bob}
         for who, x, y in moves:
             p = people[who]
-            p.wait("document.getElementById('gv-status').textContent.includes('your move')", 30)
+            p.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .status')||{textContent:''}).textContent.includes('your move')", 30)
             p.board_click(x, y)
-            p.wait("!document.getElementById('gv-status').textContent.includes('your move')", 10)
+            p.wait("!(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .status')||{textContent:''}).textContent.includes('your move')", 10)
         alice.wait("GameViewDebug.liveMove()>=6", 30)
-        alice.wait("document.getElementById('gv-status').textContent.includes('your move')", 30)
-        alice.js("document.getElementById('nav-back').click()")
+        alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .status')||{textContent:''}).textContent.includes('your move')", 30)
+        # the pointer preview: a translucent stone where a click would play, nothing over an occupied point
+        pts = [(x, y) for y in range(9) for x in range(9)]
+        empty = next(q for q in pts if alice.js(f'GameViewDebug.point({q[0]},{q[1]})') == 0 and abs(q[0]-4) + abs(q[1]-4) <= 3)
+        taken = next(q for q in pts if alice.js(f'GameViewDebug.point({q[0]},{q[1]})') > 0)
+        before = alice.board_pixel(*empty)
+        alice.board_hover(*empty)
+        after = alice.board_pixel(*empty)
+        if before == after or alice.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board').style.cursor") != 'pointer':
+            raise RuntimeError('no stone preview under the pointer on an empty point during my turn')
+        capture(alice, '04a-aim', 'Aiming a stone',
+                'On her turn alice moves the pointer over the board: a translucent stone in her colour shows exactly where a click will play. Over an occupied point, a point the ko rule forbids, or when it is not her turn, there is no preview and the pointer shows that a click would be refused. Above the tabs, the play bar keeps whose turn it is and the clock in view.',
+                ['alice: move the pointer over an empty point on her turn'], scroll_to=G)
+        before = alice.board_pixel(*taken)
+        alice.board_hover(*taken)
+        if alice.board_pixel(*taken) != before or alice.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) canvas.board').style.cursor") != 'not-allowed':
+            raise RuntimeError('a stone preview appeared over an occupied point')
+        alice.tab('search')
+        alice.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .nav-back').click()")
         capture(alice, '04-bot-search', 'Reading the bot\u2019s search',
                 'Alice steps back one move, to the position where the bot searched for its last move. The panel lists the moves that search weighed, with visit share and expected reward; the blue discs on the board are the same search as a heat map. Proj. and Outlook give every seat\u2019s projected final score and expected reward, and the timeline under them plots the projections move by move.',
-                ['alice and bob alternate stones by clicking the board; the bot answers each round', 'alice: Back one move'], scroll_to='#game-panel')
-        alice.click('#nav-live')
+                ['alice and bob alternate stones by clicking the board; the bot answers each round', 'alice: Back one move'], scroll_to=G)
+        alice.click(G + ' .nav-live')
         carol.wait("GameViewDebug.liveMove()>=6", 20)
-        carol.js("document.getElementById('nav-home').click()")
+        carol.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .nav-home').click()")
         for _ in range(3):
-            carol.js("document.getElementById('nav-fwd').click()")
+            carol.js("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .nav-fwd').click()")
         carol.board_click(7, 1)
-        carol.click('#gv-analyze')
-        carol.wait("document.getElementById('gv-think').textContent.includes('Your local search')")
+        carol.tab('search')
+        carol.click(G + ' .gv-analyze')
+        carol.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .gv-think')||{textContent:''}).textContent.includes('Your local search')")
         time.sleep(.35)
         capture(carol, '05-watcher-variation', 'A watcher explores a variation',
                 'Carol is watching, not playing. She steps back to move 3, tries a different stone (the gold ring marks a variation), and asks for a local search. The analysis runs in her browser only: the dashed branch in the tree never reaches the server, and the live game continues.',
-                ['carol: open the challenge as a watcher', 'carol: Home, then Forward three times', 'carol: click an empty point', 'carol: Analyze here'], scroll_to='#game-panel')
-        carol.wait("!document.getElementById('gv-think').textContent.includes('Your local search')", 20)
-        carol.click('#nav-live')
-        bob.wait("!!document.querySelector('#gv-merges button')")
-        bob.click_text('#gv-merges button', 'Propose')
-        alice.wait("Array.from(document.querySelectorAll('#gv-merges button')).some(b=>b.textContent==='Accept merge')")
+                ['carol: open the challenge as a watcher', 'carol: Home, then Forward three times', 'carol: click an empty point', 'carol: Analyze here'], scroll_to=G)
+        carol.wait("!(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .gv-think')||{textContent:''}).textContent.includes('Your local search')", 20)
+        carol.click(G + ' .nav-live')
+        bob.wait("!!document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .merges button')")
+        bob.click_text('.room-panel:not([hidden]) .game-panel:not([hidden]) .merges button', 'Propose')
+        alice.wait("!!document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) [role=tab][data-panel=\"seats\"] .badge')")  # the Seats tab flags a merge awaiting her answer
+        alice.tab('seats')
+        alice.wait("Array.from(document.querySelectorAll('.room-panel:not([hidden]) .game-panel:not([hidden]) .merges button')).some(b=>b.textContent==='Accept merge')")
         capture(alice, '06-merge-proposal', 'Proposing a team merge',
-                'During play bob proposes merging his team with alice\u2019s. The proposal shows who has accepted and who is still to answer; it takes effect only when every person on both teams accepts, and it is permanent.',
-                ['bob: Merge my team with Team 1, Propose'], scroll_to='#gv-seats')
-        alice.click_text('#gv-merges button', 'Accept merge')
-        alice.wait("document.getElementById('gv-scores').textContent.includes('Team totals')")
-        alice.click('#gv-autopilot')
-        alice.wait("document.getElementById('gv-autopilot').textContent.includes('Take my seat back')")
+                'During play bob proposes merging his team with alice\u2019s. The Seats tab flags a proposal waiting for her answer; there the proposal shows who has accepted and who is still to answer; it takes effect only when every person on both teams accepts, and it is permanent.',
+                ['bob: Merge my team with Team 1, Propose'], scroll_to='.room-panel:not([hidden]) .game-panel:not([hidden]) .roster')
+        alice.click_text('.room-panel:not([hidden]) .game-panel:not([hidden]) .merges button', 'Accept merge')
+        alice.tab('scores')
+        alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .scores')||{textContent:''}).textContent.includes('Team totals')")
+        alice.click(G + ' .gv-autopilot')
+        alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .gv-autopilot')||{textContent:''}).textContent.includes('Take my seat back')")
         alice.wait("GameViewDebug.lastSource()==='autopilot'", 30)
         capture(alice, '07-team-and-autopilot', 'Playing as a team, on autopilot',
                 'After the merge the score table shows alice and bob as team 1 with a combined total. Alice then lets a bot play her seat; the seat, team and name stay hers, and the bot\u2019s move publishes its search like any other bot move. She can take the seat back at any time.',
-                ['alice: Accept merge', 'alice: Let a bot play for me'], scroll_to='#game-panel')
-        alice.click('#gv-autopilot')
-        alice.wait("document.getElementById('gv-autopilot').textContent.includes('Let a bot play')")
+                ['alice: Accept merge', 'alice: Let a bot play for me'], scroll_to=G)
+        alice.click(G + ' .gv-autopilot')
+        alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .gv-autopilot')||{textContent:''}).textContent.includes('Let a bot play')")
+        MY_TURN = "(document.querySelector('" + G + " .status')||{textContent:''}).textContent.includes('your move') && !document.querySelector('" + G + " .gv-pass').disabled"
+        pressed_once = False
         for _ in range(700):  # people pass; the bot plays until it is content to pass too
             if alice.js("GameViewDebug.status()") == 'finished':
                 break
             for p in (alice, bob):
-                if p.js("document.getElementById('gv-status').textContent.includes('your move') && !document.getElementById('gv-pass').disabled"):
-                    p.click('#gv-pass')
+                if p.js(MY_TURN):
+                    if p is alice:  # alice passes with the P key while a tab button has focus
+                        alice.js("document.querySelector('" + G + " [role=tab][aria-selected=true]').focus()")
+                        alice.press('p')
+                        if not pressed_once:
+                            alice.wait("!(" + MY_TURN + ")", 8)
+                            pressed_once = True
+                    else:
+                        p.click(G + ' .gv-pass')
             time.sleep(.4)
         alice.wait("GameViewDebug.status()==='finished'", 60)
-        alice.wait("document.getElementById('game-chat').textContent.includes('Game over')", 10)
+        alice.wait("!!document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) [role=tab][data-panel=\"chat\"] .badge')", 10)  # unread announcement on the Chat tab
+        alice.tab('chat')
+        alice.wait("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .game-chat').textContent.includes('Game over')", 10)
         capture(alice, '08-game-over', 'The result',
-                'When every remaining player has passed in a row the game ends. The server announces team scores and the winners in the game conversation. Everyone, players included, can now branch and analyse any position.',
-                ['alice and bob pass until the bot also passes'], scroll_to='#game-panel')
+                'When every remaining player has passed in a row the game ends. The Chat tab lights up with an unread count; the server announces team scores and the winners in the game conversation. Everyone, players included, can now branch and analyse any position.',
+                ['alice passes with the P key, bob with the Pass button, until the bot also passes'], scroll_to=G)
+        # rooms and games are tabs: open a second room, then come back to the game's room
+        alice.click('[role=tab][data-room="__rooms"]')
+        alice.wait("!!document.querySelector('.room-form')")
+        alice.js("document.querySelector('.room-name').value='Post-game';document.querySelector('.room-form').requestSubmit()")
+        alice.wait("(document.querySelector('.room-panel[data-room=\\'Post-game\\'] .room-state')||{}).textContent==='Joined'")
+        alice.click('[role=tab][data-room="lobby"]')
+        alice.wait("!!document.querySelector('" + G + "')")
+        alice.js("window.scrollTo(0,0)")
+        time.sleep(.3)
+        capture(alice, '09-tabs', 'Rooms and games as tabs',
+                'Every room alice has open is a tab along the top, with + Rooms for finding and creating rooms; inside a room, the Lobby (its conversation and challenge list) comes first and every open game has its own tab. Tabs stay alive in the background: a game keeps its variations and analysis, and a tab shows a badge when a move or a merge waits for her or messages arrive. Responses only ever land in the tab that asked for them.',
+                ['alice: + Rooms, create Post-game', 'alice: back to the lobby room tab'], clip={'x': 0, 'y': 0, 'width': WIDTH, 'height': 560})
         errors = browser.errors
         if errors:
             raise RuntimeError('browser errors: ' + '; '.join(errors))

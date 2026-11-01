@@ -7,7 +7,9 @@ anything. Chat history is disposable; the book and spec are the record.
 Keep `manifest.json`'s `project_id`: LeanFM uses it to discover the project.
 
 The N-Player Go Lab engine in `source/cmd/demo/static/engine.js` is the rules
-reference; `source/engine.go` ports it.
+reference; `source/engine.go` ports it. The browser app is React + TypeScript in
+`source/web` (built into `source/cmd/demo/static/app/`, which is not tracked);
+keep UI pieces as components so they are easy to move around.
 
 Work in the LeanFM order: book, then requirements, then implementation
 mapping, then source. Before a feature, state its positive invariant and its

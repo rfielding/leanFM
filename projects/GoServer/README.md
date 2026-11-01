@@ -30,3 +30,9 @@ The book's "Known gaps" chapter is the work queue. Review happens in git.
 
 In LeanFM's chat UI, select GoServer and use **Start app**, then **Open app**;
 `spec/runtime.json` is the launch contract.
+
+Building needs Go and Node.js with npm. The browser app is React + TypeScript in
+`source/web` (components in `source/web/src/ui`, the per-game controller in
+`source/web/src/game/game.ts`); `make run` builds it with Vite into
+`source/cmd/demo/static/app/`, which the Go binary embeds. Rooms are tabs; inside
+a room the Lobby and every open game are tabs.

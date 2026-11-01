@@ -1,6 +1,6 @@
 {
   "requirement": "goserver",
-  "scope": "Rooms, challenges and chat; N-player Go with seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis",
+  "scope": "Rooms, challenges and chat as tabs in a React browser app; N-player Go with seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis",
   "mappings": [
     {
       "requirements": [
@@ -33,7 +33,9 @@
       ],
       "files": [
         "source/server.go",
-        "source/cmd/demo/static/app.js"
+        "source/web/src/api.ts",
+        "source/web/src/ui/App.tsx",
+        "source/web/src/ui/Room.tsx"
       ],
       "symbols": [
         "GameCreated.GameName",
@@ -56,8 +58,10 @@
         "source/server.go",
         "source/cmd/demo/main.go",
         "source/cmd/demo/static/index.html",
-        "source/cmd/demo/static/app.js",
-        "source/cmd/demo/static/style.css"
+        "source/web/src/api.ts",
+        "source/web/src/ui/App.tsx",
+        "source/web/src/ui/Room.tsx",
+        "source/web/src/styles.css"
       ],
       "symbols": [
         "RoomChatHistory",
@@ -66,9 +70,14 @@
         "openGame",
         "refreshRoom",
         "refreshGame",
-        "renderChat"
+        "renderChat",
+        "sessionLost",
+        "App/Rooms (room tabs)",
+        "RoomView (game tabs)",
+        "GameCtl.refresh scope guard"
       ],
       "tests": [
+        "TestSessionRecoveryAndLightOnDark",
         "TestNamedChallengesAndChatHistoryStayInScope",
         "TestMethodOriginHostAndBodyRejections",
         "TestPageAssetsAndUnsupportedDestinations",
@@ -175,15 +184,13 @@
       "files": [
         "source/game.go",
         "source/cmd/demo/static/index.html",
-        "source/cmd/demo/static/app.js",
-        "source/cmd/demo/static/style.css"
+        "source/web/src/api.ts",
+        "source/web/src/ui/App.tsx",
+        "source/web/src/ui/Room.tsx",
+        "source/web/src/styles.css"
       ],
       "symbols": [
-        "ServerCore.gameState",
-        "refreshState",
-        "renderGame",
-        "drawBoard",
-        "sendMove"
+        "ServerCore.gameState"
       ],
       "tests": [
         "TestMovesAreAuthorizedOrderedAndRuleChecked",
@@ -298,14 +305,18 @@
         "property:Analysis is local",
         "proof:analysis never leaks into the game",
         "output:game.score_timeline",
-        "property:game_state reflects the authoritative game"
+        "property:game_state reflects the authoritative game",
+        "proof:pointer preview never misleads"
       ],
       "files": [
-        "source/cmd/demo/static/gameview.js",
+        "source/web/src/game/game.ts",
+        "source/web/src/ui/Game.tsx",
+        "source/web/src/ui/Panels.tsx",
+        "source/web/src/ui/Board.tsx",
         "source/cmd/demo/static/engine.js",
         "source/cmd/demo/static/search-worker.js",
         "source/cmd/demo/static/index.html",
-        "source/cmd/demo/static/style.css",
+        "source/web/src/styles.css",
         "source/cmd/demo/main.go"
       ],
       "symbols": [
@@ -318,10 +329,16 @@
         "renderTree",
         "makeGif",
         "bowls",
-        "mctsView"
+        "mctsView",
+        "canPlaceAt",
+        "pointAt",
+        "showTab",
+        "updateBadges",
+        "swatch"
       ],
       "tests": [
         "TestLabAssetsAndNewRoutes",
+        "TestRoomAndGameTabsAndPointerPreview",
         "TestBowlRecordsWhoCaptured",
         "source/book_tour.py (book/assets/tour/manifest.json)"
       ]

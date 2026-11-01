@@ -1,0 +1,13 @@
+{
+  "status": "verified",
+  "from": "projects/e7fdeae8572f7c9f",
+  "to": "projects/GoServer",
+  "project_id": "e7fdeae8572f7c9f",
+  "entries_unchanged": 2219,
+  "file_bytes_and_modes_unchanged": true,
+  "checked_acceptance_unchanged": true,
+  "identity_resolves_new_root": true,
+  "evidence_excluded_from_inventory": "reports/root-rename",
+  "live_old_id_url_works": true,
+  "live_checked_acceptance_unchanged": true
+}

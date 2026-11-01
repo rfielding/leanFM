@@ -105,7 +105,8 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 		}
 		writeJSON(w, map[string]string{"session": token})
 	})
-	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
+	// The React app (source/web) is built into static/app/ by `make build`.
+	mux.HandleFunc("/app/app.js", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			writeError(w, 405, "GET required")
 			return
@@ -115,7 +116,7 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 	})
 	// Requirement refs: property:Lab-style viewer; property:Analysis is local. The Lab engine and
 	// search worker run in the viewer's browser for variations and local search.
-	for path, body := range map[string]*string{"/engine.js": &engineScript, "/search-worker.js": &workerScript, "/gameview.js": &gameViewScript} {
+	for path, body := range map[string]*string{"/engine.js": &engineScript, "/search-worker.js": &workerScript} {
 		body := body
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != "GET" {
@@ -126,7 +127,7 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 			fmt.Fprint(w, *body)
 		})
 	}
-	mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/app/app.css", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			writeError(w, 405, "GET required")
 			return
@@ -241,10 +242,10 @@ func main() {
 //go:embed static/index.html
 var demoPage string
 
-//go:embed static/app.js
+//go:embed static/app/app.js
 var browserScript string
 
-//go:embed static/style.css
+//go:embed static/app/app.css
 var browserStyle string
 
 //go:embed static/engine.js
@@ -252,6 +253,3 @@ var engineScript string
 
 //go:embed static/search-worker.js
 var workerScript string
-
-//go:embed static/gameview.js
-var gameViewScript string

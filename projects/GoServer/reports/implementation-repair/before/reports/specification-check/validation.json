@@ -1,0 +1,18 @@
+{
+  "status": "validated",
+  "requirement": "Project.Requirements.requirements",
+  "implementation": null,
+  "prompt": "Make the selected project's current specification usable in ChatUI",
+  "question": "Does the canonical typed specification validate and yield its own task views?",
+  "event_source": "spec/Requirements.lean and spec/Requirements.proto",
+  "reducer": "validateRequirementSpec; optional validateImplementationSpec; tasksJson using the same RequirementSpec",
+  "unit": "task grammars",
+  "boundary": ".",
+  "artifacts": {
+    "spec/Requirements.lean": "f5e54e1489e9a1f16e51cbba4569f8763f84fe74008b6747bf97f29d6df0b01e",
+    "spec/Requirements.proto": "3a6434e700f4b50ab48b461d5a7f9f42fa3fdfa903e1c6ec6bd9fd19fca6057c",
+    "book/main.tex": "1a87da2978d783fb5e002633b6f6ffcd9856ed885c47c0c76297ca7b63a2d79d"
+  },
+  "task_count": 7,
+  "acceptance": "unchanged"
+}

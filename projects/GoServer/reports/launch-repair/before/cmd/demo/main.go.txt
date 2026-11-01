@@ -1,0 +1,145 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+
+	"github.com/leanfm/goserver"
+)
+
+func main() {
+	s := goserver.NewServer()
+	// extra room for demo
+	_ = s.AddRoom("room1")
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, demoPage)
+	})
+
+	mux.HandleFunc("/api/issue_session", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Identity string `json:"identity"` }
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest); return
+		}
+		token, err := s.IssueSession(req.Identity)
+		if err != nil { http.Error(w, err.Error(), http.StatusBadRequest); return }
+		writeJSON(w, map[string]string{"session": token})
+	})
+
+	// Generic JSON proxy endpoints that accept the same shapes used by the in-memory API.
+	mux.HandleFunc("/api/list_rooms", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.ListRooms
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	mux.HandleFunc("/api/enter_room", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.EnterRoom
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	mux.HandleFunc("/api/list_games", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.ListGames
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	mux.HandleFunc("/api/create_game", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.CreateGame
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	mux.HandleFunc("/api/join_game", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.JoinGame
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	mux.HandleFunc("/api/send_room_chat", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.SendRoomChat
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	mux.HandleFunc("/api/send_game_chat", func(w http.ResponseWriter, r *http.Request) {
+		var req goserver.SendGameChat
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", http.StatusBadRequest); return }
+		res := s.Handle(req)
+		writeJSON(w, res)
+	})
+
+	addr := ":8080"
+	log.Printf("demo HTTP server listening on http://localhost%s/", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	enc := json.NewEncoder(w); enc.SetIndent("", "  ")
+	_ = enc.Encode(v)
+}
+
+var demoPage = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GoServer demo</title>
+  <style>body{font-family:sans-serif;margin:20px;} pre{background:#f6f6f6;padding:10px;border-radius:4px}</style>
+</head>
+<body>
+  <h1>GoServer demo</h1>
+  <p>Use the controls below to exercise the in-memory server. Click "Issue session" and use the returned session token in subsequent requests.</p>
+
+  <div>
+    <label>Identity: <input id="identity" value="alice"></label>
+    <button onclick="issue()">Issue session</button>
+    <span id="session"></span>
+  </div>
+
+  <hr>
+
+  <div>
+    <button onclick="listRooms()">List rooms</button>
+    <button onclick="enterRoom()">Enter lobby</button>
+    <button onclick="createGame()">Create demo-game in lobby</button>
+    <button onclick="listGames()">List games in lobby</button>
+    <button onclick="joinFirstGame()">Join first listed game</button>
+    <button onclick="sendRoomChat()">Send room chat</button>
+    <button onclick="sendGameChat()">Send game chat to joined</button>
+  </div>
+
+  <h3>Output</h3>
+  <pre id="out"></pre>
+
+<script>
+let session = null
+let lastGameId = null
+function out(v){ document.getElementById('out').textContent = JSON.stringify(v, null, 2) }
+async function issue(){
+  const id = document.getElementById('identity').value
+  const r = await fetch('/api/issue_session', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({identity:id})})
+  const j = await r.json(); session = j.session; document.getElementById('session').textContent = ' session='+session; out(j)
+}
+async function listRooms(){ const r=await fetch('/api/list_rooms',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, request_id: Date.now()})}); out(await r.json()) }
+async function enterRoom(){ const r=await fetch('/api/enter_room',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, room_id:'lobby', request_id: Date.now()})}); out(await r.json()) }
+async function createGame(){ const r=await fetch('/api/create_game',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, room_id:'lobby', game_name:'demo-game', request_id: Date.now()})}); out(await r.json()) }
+async function listGames(){ const r=await fetch('/api/list_games',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, room_id:'lobby', request_id: Date.now()})}); const j=await r.json(); out(j); if(j.games && j.games.length) lastGameId = j.games[0].game_id }
+async function joinFirstGame(){ if(!lastGameId){ out({error:'no known game id; run listGames first'}) ; return } const r=await fetch('/api/join_game',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, game_id:lastGameId, request_id: Date.now()})}); out(await r.json()) }
+async function sendRoomChat(){ const r=await fetch('/api/send_room_chat',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, room_id:'lobby', body:'hello from web', request_id: Date.now()})}); out(await r.json()) }
+async function sendGameChat(){ if(!lastGameId){ out({error:'no known game id; run listGames first'}) ; return } const r=await fetch('/api/send_game_chat',{method:'POST',headers:{'content-type':'application/json'},body: JSON.stringify({session_id:session, game_id:lastGameId, body:'hello game from web', request_id: Date.now()})}); out(await r.json()) }
+</script>
+</body>
+</html>`

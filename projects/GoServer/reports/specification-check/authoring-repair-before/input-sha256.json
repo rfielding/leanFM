@@ -1,0 +1,9 @@
+{
+  "spec/Requirements.lean": "29288b0a9e3688402b19c8dcef77bbfc1cbe40b8601fa82459249c45696e5cb7",
+  "spec/Requirements.proto": "5c01f95f7f775b9ab6a342668f098ec37ae46332c9d93415fe965a1df096e843",
+  "book/main.tex": "3b9dd1ef61d380268b781730026270f317d08962a6149b6c28335b29a6793e8a",
+  "book/main.pdf": "4d099b43bda6c3273f1035b3d424c235e7f6fc0b490829de3d249e794a0430e4",
+  "book/main-dark.pdf": "3731fd514e8e950d928178d7c6067212a5908eff99a22b296564fb24b22c67c9",
+  "spec/Implementation.lean": "b5478048d4ac937bb5d2d337e95e47209b646dd048578cc521e6b694fe497e2d",
+  "manifest.json": "e705fac8cd06cf2c1d0d340e1c8523ca38bd88ae5b00d81bdecdab12f52ee408"
+}

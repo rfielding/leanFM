@@ -8,6 +8,8 @@ import (
 	"github.com/leanfm/goserver"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -123,7 +125,7 @@ func TestBrowserCreatesRoomsAndReadsOnlyAuthorizedHistory(t *testing.T) {
 }
 func TestPageAssetsAndUnsupportedDestinations(t *testing.T) {
 	h := newHandler(goserver.NewServer(), "8081")
-	for _, path := range []string{"/", "/app.js", "/style.css"} {
+	for _, path := range []string{"/", "/app/app.js", "/app/app.css"} {
 		request := httptest.NewRequest("GET", "http://127.0.0.1:8081"+path, nil)
 		recorder := httptest.NewRecorder()
 		h.ServeHTTP(recorder, request)
@@ -179,7 +181,7 @@ func TestLabAssetsAndNewRoutes(t *testing.T) {
 	core := goserver.NewServer()
 	defer core.Close()
 	h := newHandler(core, "8081")
-	for _, path := range []string{"/engine.js", "/search-worker.js", "/gameview.js"} {
+	for _, path := range []string{"/engine.js", "/search-worker.js", "/app/app.js"} {
 		r := httptest.NewRequest("GET", "http://127.0.0.1:8081"+path, nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
@@ -211,5 +213,93 @@ func TestLabAssetsAndNewRoutes(t *testing.T) {
 	}
 	if got := call(t, h, "/api/leave_seat", map[string]any{"sessionId": token, "gameId": id, "requestId": 10}); got["code"] != "not_open" {
 		t.Fatal(got)
+	}
+}
+
+// webSource reads the React app's TypeScript source (web/src), which the served bundle is built from.
+func webSource(t *testing.T, name string) string {
+	b, err := os.ReadFile(filepath.Join("..", "..", "web", "src", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// The page is the React app: one tab per open room, and inside a room a Lobby tab plus one tab
+// per open game; the game view keeps a play bar outside its side tabs; the pointer preview is
+// gated by the same rules as a click and never talks to the server. book_tour.py and
+// browser_check.py check the behaviour in Chrome.
+func TestRoomAndGameTabsAndPointerPreview(t *testing.T) {
+	core := goserver.NewServer()
+	defer core.Close()
+	h := newHandler(core, "8081")
+	r := httptest.NewRequest("GET", "http://127.0.0.1:8081/", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	page := w.Body.String()
+	if !strings.Contains(page, `<div id="root"></div>`) || !strings.Contains(page, `src="./app/app.js"`) || strings.Index(page, `src="./engine.js"`) > strings.Index(page, `src="./app/app.js"`) {
+		t.Fatal("the page must load the rules engine, then the React app")
+	}
+	app, room, game, panels, ctl := webSource(t, "ui/App.tsx"), webSource(t, "ui/Room.tsx"), webSource(t, "ui/Game.tsx"), webSource(t, "ui/Panels.tsx"), webSource(t, "game/game.ts")
+	if !strings.Contains(app, `label="Rooms" className="room-tabs"`) || !strings.Contains(room, `className="game-tabs"`) || !strings.Contains(room, "id: LOBBY, label: 'Lobby'") {
+		t.Fatal("room tabs and per-room game tabs are missing")
+	}
+	// responses are applied only to the room or game that asked
+	for _, guard := range []string{"r.roomId === roomId", "r.gameId !== gameId"} {
+		if !strings.Contains(room+game, guard) {
+			t.Fatalf("missing scope guard %q", guard)
+		}
+	}
+	if !strings.Contains(ctl, "st.gameId !== this.gameId") {
+		t.Fatal("game state is not scoped to its own game")
+	}
+	bar := panels[strings.Index(panels, "export function PlayBar"):strings.Index(panels, "function Timeline")]
+	for _, part := range []string{"<Status", "gv-pass", "gv-resign", "gv-autopilot", "clock"} {
+		if !strings.Contains(bar, part) {
+			t.Fatalf("%s is not in the always-visible play bar", part)
+		}
+	}
+	if !strings.Contains(game, `className="side-tabs"`) {
+		t.Fatal("game side panels are not tabbed")
+	}
+	gate := ctl[strings.Index(ctl, "canPlaceAt(node: any, m: number)"):strings.Index(ctl, "setHover(")]
+	for _, rule := range []string{"cells[m] !== 0", "isTerminal(", "myLiveTurn()", "analysisAllowed()", "isLegal("} {
+		if !strings.Contains(gate, rule) {
+			t.Fatalf("pointer preview gate lacks %q", rule)
+		}
+	}
+	board := webSource(t, "ui/Board.tsx")
+	move := board[strings.Index(board, "onPointerMove"):]
+	move = move[:strings.Index(move, "\n")]
+	if strings.Contains(move, "api(") || strings.Contains(move, "fetch(") {
+		t.Fatal("the pointer preview must not talk to the server")
+	}
+}
+
+// After a restart the server forgets sessions; the page must fall back to the name form rather
+// than strand the person. Text stays light on dark so dark-mode extensions cannot make it
+// unreadable, and player colours are drawn on canvases, which those extensions leave alone.
+func TestSessionRecoveryAndLightOnDark(t *testing.T) {
+	core := goserver.NewServer()
+	defer core.Close()
+	h := newHandler(core, "8081")
+	if got := call(t, h, "/api/list_rooms", map[string]any{"sessionId": "forgotten-by-a-restart", "requestId": 1}); got["code"] != "unauthorized" {
+		t.Fatalf("a stale session must be rejected as unauthorized, got %v", got)
+	}
+	api, css, common := webSource(t, "api.ts"), webSource(t, "styles.css"), webSource(t, "ui/common.tsx")
+	if !strings.Contains(api, "result.code === 'unauthorized' && auth.session) sessionLost()") || !strings.Contains(api, "goserver:lastName") {
+		t.Fatal("the app does not recover from a forgotten session")
+	}
+	if strings.Contains(css, "color:var(--accent-ink)") {
+		t.Fatal("dark text on the accent fill is unreadable under dark-mode extensions")
+	}
+	if !strings.Contains(common, "drawSwatch(") || !strings.Contains(common, "<canvas") {
+		t.Fatal("player colours must be drawn on a canvas")
+	}
+	r := httptest.NewRequest("GET", "http://127.0.0.1:8081/", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if !strings.Contains(w.Body.String(), `name="darkreader-lock"`) {
+		t.Fatal("page does not opt out of Dark Reader")
 	}
 }

@@ -28,7 +28,7 @@ const (
 
 	DefaultBoardSize      = 11
 	DefaultSeats          = 4
-	DefaultTurnDeadlineMS = 10000
+	DefaultTurnDeadlineMS = 60000
 	DefaultBotMS          = 1000
 	DefaultExploreMilli   = 700
 	DefaultRewardMode     = "margin"

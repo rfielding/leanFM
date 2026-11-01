@@ -25,7 +25,8 @@ const GameView = (() => {
     for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
     return e;
   }
-  function swatch(i) { return el('span', {class:'sw', style:{background:PLAYERS[i].fill, boxShadow:'0 0 0 2px ' + PLAYERS[i].rim}}); }
+  // A stone on a wood tile, as on the board: on the dark page a bare black disc read as a hollow white ring.
+  function swatch(i) { return el('span', {class:'sw-tile', title:PLAYERS[i].name, role:'img', 'aria-label':PLAYERS[i].name}, el('span', {class:'sw', style:{background:PLAYERS[i].fill, boxShadow:'0 0 0 1.5px ' + PLAYERS[i].rim}})); }
 
   // ---------- state ----------
   let gameId = '', epoch = 0, gs = null, records = [], G = null, K = 0, root = null, cur = null, live = null, byId = new Map(), nextNode = 1;
@@ -96,6 +97,7 @@ const GameView = (() => {
       const prevStatus = gs && gs.status; gs = st; ensureTree(); if (root) syncMoves(st.moves || []);
       gs.stateAt = performance.now();
       if (prevStatus !== gs.status && gs.status === 'finished') beep(523, 300);
+      if (!prevStatus && gs.status === 'open') showTab('seats'); // before the start the seat plan is what matters
       render();
     } catch (error) { feedback(error.message, true); }
     finally { busy = false; }
@@ -198,11 +200,30 @@ const GameView = (() => {
     if (!cssSize) return;
     if (!root) { cctx.fillStyle = C.wall; cctx.fillRect(0, 0, cssSize, cssSize); cctx.fillStyle = C.wallInk; cctx.font = '700 20px Verdana, sans-serif'; cctx.textAlign = 'center'; cctx.fillText(gs ? 'The board appears when the game starts.' : '', cssSize / 2, cssSize / 2); return; }
     drawBoard(cctx, cssSize, cur, {territory:$('opt-terr').checked, heat:heatFor(cur), last:true, markers:true});
+    const can = hoverPt >= 0 && canPlaceAt(cur, hoverPt);
+    cv.style.cursor = hoverPt < 0 ? '' : can ? 'pointer' : 'not-allowed';
+    if (can) { // the stone a click would place: the mover's colour, translucent, drawn only here and never sent anywhere
+      const gm = geomOf(cssSize), p = xy(hoverPt, gm), P = PLAYERS[cur.state.toMove], r = gm.cell * .46;
+      cctx.globalAlpha = .55; cctx.beginPath(); cctx.arc(p[0], p[1], r, 0, 7); cctx.fillStyle = P.fill; cctx.fill();
+      cctx.lineWidth = Math.max(1.5, gm.cell * .06); cctx.strokeStyle = P.rim; cctx.stroke(); cctx.globalAlpha = 1;
+    }
   }
-  cv.addEventListener('click', e => {
-    if (!root) return; const rc = cv.getBoundingClientRect(), gm = geomOf(rc.width);
+  // Would a click at m place a stone here? The live position on my own turn, or a variation where analysis is open to me.
+  function canPlaceAt(node, m) {
+    if (!root || !node || node.state.cells[m] !== 0 || isTerminal(G, node.state)) return false;
+    if (node === live && myLiveTurn()) return isLegal(G, node.state, m);
+    return analysisAllowed() && isLegal(G, node.state, m);
+  }
+  let hoverPt = -1;
+  function pointAt(e) {
+    const rc = cv.getBoundingClientRect(), gm = geomOf(rc.width);
     const x = Math.round((e.clientX - rc.left - gm.off) / gm.cell), y = Math.round((e.clientY - rc.top - gm.off) / gm.cell);
-    if (x < 0 || y < 0 || x >= G.N || y >= G.N) return; const m = (y + 1) * G.W + x + 1;
+    return x < 0 || y < 0 || x >= G.N || y >= G.N ? -1 : (y + 1) * G.W + x + 1;
+  }
+  cv.addEventListener('pointermove', e => { if (!root || e.pointerType === 'touch') return; const m = pointAt(e); if (m !== hoverPt) { hoverPt = m; drawMain(); } });
+  cv.addEventListener('pointerleave', () => { if (hoverPt !== -1) { hoverPt = -1; drawMain(); } });
+  cv.addEventListener('click', e => {
+    if (!root) return; const m = pointAt(e); if (m < 0) return;
     const ex = cur.children.find(c => c.move === m); if (ex && !(cur === live && myLiveTurn())) { cur.main = cur.children.indexOf(ex); go(ex); return; }
     tryPlay(cur, m);
   });
@@ -291,7 +312,7 @@ const GameView = (() => {
     }
     for (const pr of (gs.proposals || [])) {
       const mine = pr.waitingFor.includes(identity);
-      mb.append(el('div', {class:'proposal'}, el('div', {text:'Team ' + pr.teamA + ' + Team ' + pr.teamB + ', proposed by ' + pr.proposer}), el('div', {class:'small muted', text:'Accepted: ' + (pr.acceptedBy.join(', ') || 'nobody') + ' · waiting for: ' + (pr.waitingFor.join(', ') || 'nobody')}),
+      mb.append(el('div', {class:mine ? 'proposal mine' : 'proposal'}, el('div', {text:'Team ' + pr.teamA + ' + Team ' + pr.teamB + ', proposed by ' + pr.proposer}), el('div', {class:'small muted', text:'Accepted: ' + (pr.acceptedBy.join(', ') || 'nobody') + ' · waiting for: ' + (pr.waitingFor.join(', ') || 'nobody')}),
         mine ? el('div', {class:'row'}, el('button', {type:'button', text:'Accept merge', onclick:() => void act('respond_merge', {proposalId:pr.proposalId, accept:true})}), el('button', {type:'button', text:'Decline', onclick:() => void act('respond_merge', {proposalId:pr.proposalId, accept:false})})) : null));
     }
     if (!mb.children.length) mb.append(el('p', {class:'small muted', text:gs.status === 'playing' ? (me ? 'No pending merges.' : 'Seated people can propose merging teams; every person on both teams must accept.') : 'Teams can merge once the game is playing. Merges are permanent.'}));
@@ -452,14 +473,41 @@ const GameView = (() => {
   $('opt-terr').onchange = drawMain; $('opt-heat').onchange = () => { drawMain(); renderCands(); };
   $('gv-gif').onclick = () => void makeGif();
   document.addEventListener('keydown', e => {
-    if (!gameId || !root) return; const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return; const k = e.key;
+    if (!gameId || !root) return; const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || e.target.getAttribute('role') === 'tab') return; const k = e.key;
     if (k === 'ArrowLeft') { back(); e.preventDefault(); } else if (k === 'ArrowRight') { fwd(); e.preventDefault(); } else if (k === 'ArrowUp') { sib(-1); e.preventDefault(); } else if (k === 'ArrowDown') { sib(1); e.preventDefault(); }
     else if (k === 'Home') { home(); e.preventDefault(); } else if (k === 'End') { end(); e.preventDefault(); } else if (k === 'l' || k === 'L') toLive();
     else if ((k === 'c' || k === 'C') && analysisAllowed()) localSearch(cur, true); else if ((k === 'p' || k === 'P') && myLiveTurn() && cur === live) void serverMove('pass', -1);
   });
 
+  // ---------- side-panel tabs (the play bar above them stays visible) ----------
+  const TABS = ['scores', 'search', 'seats', 'chat', 'gif'];
+  let tab = 'scores', chatSeen = 0;
+  try { const t = localStorage.getItem('goserver.tab'); if (TABS.includes(t)) tab = t; } catch (e) {}
+  function showTab(name) {
+    tab = name;
+    TABS.forEach(t => { const b = $('tab-' + t), panel = $('panel-' + t), on = t === name; b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; panel.hidden = !on; });
+    try { localStorage.setItem('goserver.tab', name); } catch (e) {}
+    if (name === 'scores') drawTimeline();
+    if (name === 'chat') chatSeen = $('game-chat').querySelectorAll('.chat-item').length;
+    updateBadges();
+  }
+  function updateBadges() {
+    const n = $('game-chat').querySelectorAll('.chat-item').length; if (n < chatSeen || tab === 'chat') chatSeen = n;
+    const unread = n - chatSeen; $('badge-chat').textContent = unread ? String(unread) : ''; $('badge-chat').hidden = !unread;
+    const pending = tab !== 'seats' && !!$('gv-merges').querySelector('.proposal.mine'); /* a merge waits for my answer */ $('badge-seats').hidden = !pending;
+  }
+  TABS.forEach(t => { $('tab-' + t).addEventListener('click', () => showTab(t)); });
+  $('gv-tabs').addEventListener('keydown', e => { // arrow keys move between tabs while a tab has focus
+    const i = TABS.indexOf(tab); let j = -1;
+    if (e.key === 'ArrowRight') j = (i + 1) % TABS.length; else if (e.key === 'ArrowLeft') j = (i + TABS.length - 1) % TABS.length;
+    if (j < 0) return; e.preventDefault(); e.stopPropagation(); showTab(TABS[j]); $('tab-' + TABS[j]).focus();
+  });
+  new MutationObserver(updateBadges).observe($('game-chat'), {childList:true});
+  new MutationObserver(updateBadges).observe($('gv-merges'), {childList:true, subtree:true});
+  showTab(tab);
+
   // Read-only probes for the scripted book tour (source/book_tour.py); they change nothing.
-  window.GameViewDebug = {size:() => (G ? G.N : 9), liveMove:() => records.length, lastSource:() => (records.length ? records[records.length - 1].source : ''), status:() => (gs ? gs.status : '')};
+  window.GameViewDebug = {point:(x, y) => (live ? live.state.cells[ptOf(x, y)] : -1), tab:() => tab, showTab:(t) => showTab(t), size:() => (G ? G.N : 9), liveMove:() => records.length, lastSource:() => (records.length ? records[records.length - 1].source : ''), status:() => (gs ? gs.status : '')};
   return {
     open(id) { if (gameId === id) return; reset(); gameId = id; epoch++; render(); void refresh().then(schedule); },
     close() { reset(); gameId = ''; epoch++; clearTimeout(pollTimer); render(); },
