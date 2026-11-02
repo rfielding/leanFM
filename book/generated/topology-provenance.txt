@@ -1,0 +1,7 @@
+{ id := "topology.tree",
+  prompt := "Implicit tree naming that constrains what can talk to what at a high level; collapsed interaction diagrams.",
+  question := "Which interfaces may each actor reach, which conditions does each channel surface, and what does one scenario look like when the tree is collapsed to islands?",
+  kind := LeanFM.DerivedOutputKind.interactionDiagram,
+  eventSource := "the tree, channels and scenario declared in TopologyExample.lean",
+  reducer := "name nodes by path; check scope reachability; inherit conditions down the interface hierarchy and add placement conditions; subtract handled conditions; collapse scenario endpoints to a tree depth, drop messages inside one node, pair each crossing message with the request it returns through its cause chain, and fold each node's crossings into a production",
+  unit := "interfaces, channels and scenario messages" }

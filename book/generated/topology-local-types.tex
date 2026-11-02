@@ -1,0 +1,16 @@
+\begin{lstlisting}[language={}]
+outside ::=
+  call us: POST /orders returns 201 Created
+
+us ::=
+  on outside: POST /orders {
+    send us+eu: debit(account)
+    call eu: ship(order) returns shipped
+  } return 201 Created
+
+us+eu ::=
+  on us: debit(account)
+
+eu ::=
+  on us: ship(order) return shipped
+\end{lstlisting}

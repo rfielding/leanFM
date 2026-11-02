@@ -169,6 +169,7 @@ diagrams:
 	lake env lean --run StochasticUserMDPExample.lean
 	lake env lean --run BakeryFlowExample.lean
 	lake env lean --run OAuthGrammarExample.lean
+	lake env lean --run TopologyExample.lean
 	lake env lean --run MCPInteractionExample.lean
 	lake env lean --run LogicInteractionExample.lean
 	lake env lean --run WebServerProtocolChapter.lean
@@ -183,6 +184,7 @@ book: lean
 	lake env lean --run StochasticUserMDPExample.lean
 	lake env lean --run BakeryFlowExample.lean
 	lake env lean --run OAuthGrammarExample.lean
+	lake env lean --run TopologyExample.lean
 	lake env lean --run MCPInteractionExample.lean
 	lake env lean --run LogicInteractionExample.lean
 	lake env lean --run WebServerProtocolChapter.lean

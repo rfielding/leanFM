@@ -122,8 +122,8 @@ systems fail.
 \toprule
 Concern & Standard asynchronous session types & LeanFM \\
 \midrule
-Queue size & unbounded & declared capacity, and what happens when full: block, drop newest, or drop oldest \\
-Delivery & exactly once, in order per pair of roles & declared per channel: may drop, duplicate, reorder, or delay \\
+Queue size & unbounded & declared capacity, and what happens when full: block, reject, drop newest, or drop oldest \\
+Delivery & exactly once, in order per pair of roles & declared per channel: ordering, sharding, loss and duplication \\
 Time & absent & timers that may fire early; deadlines on responses \\
 Failure & absent in the core theory; extensions add crash-stop roles \citep{barwell2022crash} & declared: lost messages, restarted roles, expired sessions \\
 Choice & one chooser per branch & the same, and the chooser may act only on its own history \\
@@ -147,29 +147,282 @@ with a witness or a counterexample.
 \section{Every boundary is a channel}
 
 \index{API boundary}
-\index{channel kind}
-A channel is any path a message can take between two roles. Its \emph{kind}
-names the physics it brings. These kinds are \textbf{proposed notation}; the
-TFTP chapter builds its UDP channels by hand today.
+\index{channel declaration}
+A channel is any path a message can take between two roles. Every channel
+declares its physics along six axes. These declarations are \textbf{proposed
+notation}; the TFTP chapter builds its UDP channels by hand today.
 
 \begin{center}
 \small
-\begin{tabular}{@{}p{.2\textwidth}p{.7\textwidth}@{}}
+\begin{tabular}{@{}p{.17\textwidth}p{.3\textwidth}p{.43\textwidth}@{}}
 \toprule
-Kind & Declared physics \\
+Axis & Values & What it adds to the checked product \\
 \midrule
-\texttt{call/ret} & an in-process call: no loss, the return is caused by the call, the caller waits \\
-\texttt{queue} & a bounded in-process queue, such as a Go channel: capacity, and blocking when full \\
-\texttt{udp} & bounded buffers that may drop, duplicate or reorder; no notion of a reply \\
-\texttt{http} & request and response; the response is caused by the request; it may never come, so the caller has a deadline, and a retried request can arrive twice \\
-\texttt{tls http} & \texttt{http} whose endpoints are authenticated; the peer's identity becomes an observable field \\
-\texttt{kafka} & a durable, retained topic delivered at least once; a replay after rebalance is a duplicate \\
-\texttt{websocket} & an ordered stream that can close at any message, after which both sides see the session end \\
+capacity & a positive number of messages & a send to a full channel takes the \emph{when full} policy \\
+when full & block, reject, drop newest, drop oldest & block: the sender waits; reject: the sender receives an observable refusal (an HTTP 503 or 429); the drops lose a message silently \\
+ordering & FIFO, per key, none & which queued message may be delivered next \\
+sharding & none, or a key field and a partition count & the channel becomes several queues; ordering holds within one partition only \\
+loss & never, may drop & a transition that removes a queued message \\
+duplication & never, may duplicate & a transition that delivers a message and leaves a copy queued \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-With channel kinds, inter-API design is the same activity as network-protocol
+Most channels are one of a few familiar kinds, so LeanFM names them as presets.
+A declaration starts from a preset and overrides only what differs, as in
+\texttt{udp (capacity := 2)}.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{.13\textwidth}p{.16\textwidth}p{.6\textwidth}@{}}
+\toprule
+Preset & Typical use & Physics \\
+\midrule
+\texttt{reliable} & internal APIs, in-process calls, Go channels & FIFO, never lost, never duplicated, blocks when full \\
+\texttt{http} & calls between services & each request and its response may be lost, so the caller has a deadline; a retried request may arrive twice; concurrent requests have no order; a busy server rejects \\
+\texttt{udp} & datagrams & no order, may drop, may duplicate, drops the newest message when full \\
+\texttt{stream} & TCP, TLS, websockets & FIFO and never lost while open; it may close after any message, and both sides observe the close as the end of the session \\
+\texttt{kafka} & event topics & sharded by a key field; FIFO within a partition; never lost within retention; delivered at least once, so may duplicate; the producer blocks when full \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Physics never appears inside the global type. The type is written once, as if
+every channel were \texttt{reliable}, and stays as readable as the Purchase
+protocol above; the declarations sit beside it, one line per channel, and
+\texttt{reliable} is the default for a channel nobody declares. A lossy channel
+costs lines in the type only where the protocol must answer it: a timer and a
+resend for \texttt{udp}, a deadline and a retry for \texttt{http}. Declaring
+everything \texttt{udp} would not make the type harder to read, but it would
+make the protocol wrong until those recovery lines were written, and the
+checker would say so. Declare each channel as what it is: most internal
+boundaries are \texttt{reliable}, and the few that cross a network are where
+the physics, and the bugs, live.
+
+\texttt{tls} is a modifier, not a preset: \texttt{tls http} or \texttt{tls
+stream} adds an authenticated peer identity as an observable field of every
+message, and changes nothing else.
+
+\index{sharding}
+Sharding deserves its own rule. A sharded channel is several queues, and a
+message goes to the partition chosen by hashing its key field; order holds only
+between messages with the same key. A session therefore keeps its order across
+a sharded channel only if every message of the session carries the same key,
+such as the session identifier or an account number fixed at the start. LeanFM
+can check this from the declarations alone: a global type that relies on two of
+its messages arriving in order, over a channel sharded by a field that differs
+between them, is rejected before any state is explored.
+
+\subsection{Masked and surfaced failures}
+
+\index{failure!masked}
+\index{failure!surfaced}
+A lower layer can hide a failure from the layer above by retrying, and then the
+failure is not gone: it has become latency. TCP retransmits lost segments and
+reorders nothing, so a protocol over a \texttt{stream} sees no loss, only delay,
+until the delay is long enough that the connection closes. UDP hides nothing,
+so a protocol over a \texttt{datagram} must handle loss, reordering and
+duplicates itself, as TFTP does. Kafka hides loss inside its retention window
+and surfaces duplicates instead. Every interface kind therefore says two things:
+which conditions it \emph{surfaces}, which the protocol must handle, and which
+it \emph{masks} as latency, which the protocol's deadlines must allow for.
+
+\subsection{A hierarchy of interfaces}
+
+\index{interface}
+\index{interface!hierarchy}
+An actor does not have one physics; it has interfaces, and each interface has a
+kind. Kinds form a hierarchy: a kind inherits every condition its parent
+surfaces, and adds or removes a few. The table is
+a \textbf{generated analysis} from \path{TopologyExample.lean}:
+
+\begin{center}
+\small
+\input{generated/topology-hierarchy.tex}
+\end{center}
+
+\texttt{ingressHttps} is \texttt{ingressHttp} with TLS: it removes
+\texttt{readable}, because a hostile network can no longer read the bytes, and
+keeps \texttt{hostile}, because anyone can still send them.
+
+\subsection{The deployment is a tree}
+
+\index{island}
+\index{topology}
+\index{naming!implicit}
+The interface kind gives the conditions of the protocol stack. Where the two
+ends run adds the conditions of the network between them, and decides whether
+they may talk at all. LeanFM describes a deployment as one tree: islands that
+may be partitioned from each other, datacenters and machines inside them,
+groups for replicated and sharded roles, actors, and under each actor its
+interfaces grouped by \emph{scope}. A node's name is its path, so nothing is
+named twice (\textbf{proposed notation}; \texttt{TopologyExample.lean} holds
+the same tree as Lean values):
+
+\begin{lstlisting}[language={}]
+world {
+  outside { browser }
+  us {
+    datacenter dc1 {
+      machine m1 { alice { ingress { https }  internal { api } } }
+      replicated x3 by raft { ledger { internal { api } } }
+    }
+  }
+  eu {
+    datacenter dc1 {
+      machine m1 { bob { ingress { http }  peering { api } } }
+      machine m2 { charles { ingress { https }  internal { api } }
+                   audit   { local { syslog } } }
+    }
+  }
+  sharded by account across { us, eu } { accounts { peering { topic } } }
+}
+\end{lstlisting}
+
+The implicit name of an interface keeps the island, the actor, the scope and the
+interface, and leaves the containers between them out:
+\texttt{us.alice.ingress.https}, \texttt{eu.audit.local.syslog}. Moving
+\texttt{alice} to another machine in \texttt{us} does not rename her.
+
+\paragraph{Scopes constrain who may talk.} Before any physics, the tree says
+which channels may exist. A scope is a promise about callers:
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+scope & may be called from \\
+\midrule
+\texttt{ingress} & anyone, including outside \\
+\texttt{peering} & any island, not outside \\
+\texttt{internal} & the same island \\
+\texttt{local} & the same machine \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Collapsing the tree to its top level gives the whole deployment's permission
+structure on one page. Each cell lists the scopes in the column's subtree that
+some actor in the row's subtree may reach. The table is computed from the
+actors and interfaces actually in the tree, not from the rule above:
+
+\begin{center}
+\small
+\input{generated/topology-reach.tex}
+\end{center}
+
+\paragraph{Placement adds the network.} A channel whose ends are in different
+islands may be \texttt{partition}ed: for a while, nothing is delivered in either
+direction. An end outside every island makes the channel \texttt{hostile}. A
+channel into a replicated group may be rejected (no leader, no quorum), and the
+consensus protocol inside the group is hidden. A channel into a sharded group
+keeps order only per key.
+
+The requirements say which conditions each channel's protocol handles. The
+generated graph places every interface in the tree and draws each channel from
+its sending actor to the receiving interface. A channel is red when its scope
+forbids it, or when it surfaces a condition its protocol does not handle.
+
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{The deployment tree. Browser is outside. Island us holds datacenter dc1 with machine m1 holding actor alice with interfaces us.alice.ingress.https and us.alice.internal.api; and a raft group of three holding actor ledger with us.ledger.internal.api. Island eu holds datacenter dc1 with machine m1 holding actor bob with eu.bob.ingress.http and eu.bob.peering.api; and machine m2 holding actor charles with eu.charles.ingress.https and eu.charles.internal.api and actor audit with eu.audit.local.syslog. A group sharded by account across us and eu holds actor accounts with us+eu.accounts.peering.topic. Eight numbered channels connect them; channels 2 and 5 and 8 are red.}{%
+\resizebox{.82\textwidth}{!}{\input{generated/topology-graph.tex}}}
+\caption{The deployment tree, with every interface under its actor and every
+channel numbered as in \cref{tab:topology-channels}. Generated by
+\texttt{TopologyExample.lean}.}
+\label{fig:topology-graph}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\small
+\input{generated/topology-channels.tex}
+\caption{Each channel's reachability and the conditions it surfaces, against
+what its protocol handles.}
+\label{tab:topology-channels}
+\end{table}
+
+Three channels are findings, one of each kind. Channel~8, from
+\texttt{charles} in \texttt{eu} to \texttt{us.alice.internal.api}, is not
+allowed to exist: \texttt{internal} means the same island. Either
+\texttt{alice} exports that API under \texttt{peering}, or \texttt{charles} goes
+through her ingress. Channel~5, from \texttt{alice} to
+\texttt{eu.bob.peering.api}, is allowed but crosses islands and may be
+partitioned, which nothing in its protocol answers. Channel~2 is plain
+\texttt{http} from outside, which a hostile network can read; either the
+protocol carries nothing that matters and says so by handling
+\texttt{readable}, or the interface should be \texttt{https}.
+
+\subsection{Collapsed interaction diagrams}
+
+\index{interaction diagram!collapsed}
+\index{hiding}
+The tree also gives every interaction diagram a zoom level. Collapsing a
+subtree into one lifeline hides every message whose two ends are inside it,
+which is exactly how a requirement hides implementation: what is not crossing
+the boundary is not stated. This is the key to navigating a global type too
+large to read whole: start at the top of the tree and open one node at a time.
+
+The \texttt{cause} pointers decide how the remaining arrows are drawn. A
+message that crosses from $X$ to $Y$ is the \emph{return} of the nearest
+unanswered request from $Y$ to $X$ in its cause chain, however many hidden
+messages lie between them; otherwise it is a request. Requests are solid,
+returns dashed, and the callee's lifeline carries a bar from each call to its
+return. Here is one order at the level of actors:
+
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{Order scenario at actor level. browser calls alice: POST /orders. alice calls ledger: reserve item; ledger returns reserved. alice sends accounts: debit account with no return. alice calls bob: ship order; bob returns shipped. alice returns 201 Created to browser.}{%
+\resizebox{\textwidth}{!}{\input{generated/topology-collapsed-actors.tex}}}
+\caption{One order at the level of actors.}
+\label{fig:topology-actors}
+\end{figure}
+
+and then with the tree collapsed to its top level. The reservation with the
+ledger vanishes, because both ends are in \texttt{us}; the return
+\texttt{201 Created} is still paired with \texttt{POST /orders}, through a cause
+chain that passes through the hidden reservation and through \texttt{eu}. What
+remains is what one island promises another:
+
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{Order scenario collapsed to islands. outside calls us: POST /orders. us sends us+eu: debit account with no return. us calls eu: ship order; eu returns shipped. us returns 201 Created to outside.}{%
+\resizebox{.85\textwidth}{!}{\input{generated/topology-collapsed-islands.tex}}}
+\caption{The same order with the tree collapsed to islands: five of its seven
+messages cross a boundary at this level.}
+\label{fig:topology-islands}
+\end{figure}
+
+\paragraph{A local type is a production.} Projecting the global type onto one
+node of the tree gives that node's local type, and it is an ordinary production
+of the grammar. It is cut off exactly where the node's tasks leave its
+boundary: a call to another node is one terminal, \texttt{call eu: ship(order)
+returns shipped}, and whatever \texttt{eu} does to produce \texttt{shipped} is
+\texttt{eu}'s own production. Folding the crossings of the scenario above, with
+the tree cut at its top level:
+
+\input{generated/topology-local-types.tex}
+
+Each production can be read as if it were the top-level protocol, which is what
+lets requirements be stacked: \texttt{us} is specified against the promises of
+\texttt{eu} and \texttt{us+eu}, not against their insides. Opening a node
+replaces its one production by the productions of its children, and the
+children's crossings must fold back into the parent's.
+
+The collapsed diagram is also the high-level requirement. A team can agree on
+the islands view first, with its scopes and its partition handling, and refine
+each island later; a refinement is acceptable when collapsing it again gives
+back the agreed view.
+
+The placement is an implementation decision, so the tree's containers belong
+in \texttt{Implementation.lean}, while the scopes and what each channel's
+protocol handles are requirements. Moving \texttt{bob} into \texttt{us} would
+remove the partition from channel~5, and moving \texttt{ledger} out of
+\texttt{us} would make channel~4 unreachable. Either is a checked change: the
+views are regenerated, and the move is acceptable only if no channel turns red.
+Regenerate with \texttt{lake env lean --run TopologyExample.lean}.
+
+With channel declarations, inter-API design is the same activity as network-protocol
 design. A browser call that passes a reverse proxy and reaches a service is a
 three-role session:
 
@@ -188,6 +441,68 @@ requirement leaves an implementation free; it is not a separate refinement step.
 The negative requirements follow the same rule. ``A request without a client
 certificate never reaches \texttt{Users}'' is a statement about observable
 messages on two channels, and can be checked and tested as one.
+
+\subsection{Cut and un-cut: what HTTP allows}
+
+\index{cut}
+\index{HTTP!call discipline}
+A global type may say that a reply comes from someone other than the role that
+was asked:
+
+\begin{lstlisting}[language={}]
+fq: X() from A to B;
+fr: Y() from C to A   cause fq;
+\end{lstlisting}
+
+Over HTTP this cannot happen. A response travels back on the connection its
+request came in on, so \texttt{C} cannot answer a request that \texttt{A} sent
+to \texttt{B}. The \texttt{http} channel kind therefore adds a rule: every
+message is either a request to an interface of its receiver, or the response
+to a pending request that its receiver sent to its sender. A protocol that
+breaks the rule has to be \emph{un-cut}, the way a proof with a cut is expanded
+into one without it: the missing calls and returns are written out.
+
+\begin{lstlisting}[language={}]
+fq:  X()  from A to B;
+fbc: X'() from B to C   cause fq;
+fcb: Y'() from C to B   cause fbc;
+fr:  Y()  from B to A   cause fcb;
+\end{lstlisting}
+
+Collapse \texttt{B} and \texttt{C} into one lifeline, as in
+\cref{fig:topology-islands}, and the un-cut form becomes \texttt{A} to
+\texttt{BC}, \texttt{BC} to \texttt{A}: an ordinary call and its return. So
+does the cut form. A cut is a statement made at a coarser zoom level than the
+names in it suggest, and it is sound exactly when the roles it jumps between
+sit inside one node of the tree that the caller sees as a single HTTP server.
+\texttt{Purchase} at the start of this chapter is cut twice: \texttt{paid}
+answers the client's payment to the shop, and \texttt{shipped} answers a
+request the client never made, because \texttt{quote} already answered
+\texttt{order}. Un-cut for HTTP, with the client as the only role that starts
+calls to the shop:
+
+\begin{lstlisting}[language={}]
+o: http POST /orders {item}          from Client to Shop;
+choice at Shop {
+  q: http 200 {quote}                from Shop to Client  cause o;
+  p: http POST /payments {quote}     from Client to Bank  cause q;
+  r: http 201 {receipt}              from Bank to Client  cause p;
+  c: http POST /orders/{id} {receipt} from Client to Shop cause r;
+  v: http POST /receipts/verify      from Shop to Bank    cause c;
+  w: http 200 {paid}                 from Bank to Shop    cause v;
+     http 200 {shipped}              from Shop to Client  cause w;
+} or {
+     http 409 {soldOut}              from Shop to Client  cause o;
+}
+\end{lstlisting}
+
+Every \texttt{cause} now names a message its sender received, and every response
+goes back to the role that asked. The other un-cut is a callback: the bank
+calls an interface of the shop, which needs the shop to expose one that the
+bank's island may reach (\cref{tab:topology-channels}). Which one to use is a
+design decision; LeanFM's job is to reject the cut form on an \texttt{http}
+channel and to show both. That check is a \textbf{future interface}; the rule
+above is its definition.
 
 \section{Choice is always internal}
 

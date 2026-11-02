@@ -204,15 +204,65 @@ be declared beside the protocol, as the \emph{physics} of each channel
 
 \begin{lstlisting}[language={}]
 physics Transfer where
-  channel Sender -> Receiver : udp (capacity := 2)
-  channel Receiver -> Sender : udp (capacity := 2)
+  channel Sender -> Receiver : udp (capacity := 2, duplication := never)
+  channel Receiver -> Sender : udp (capacity := 2, duplication := never)
   timer Sender : mayFireEarly
 \end{lstlisting}
 
+Like the grammar, the declaration is ordinary Lean data. The six axes of
+Chapter~\ref{ch:vision} are six fields, and a preset is a value of the
+structure that a declaration updates:
+
+\begin{lstlisting}
+inductive WhenFull  | block | reject | dropNewest | dropOldest
+inductive Ordering  | fifo | none
+inductive Loss      | never | mayDrop
+inductive Duplication | never | mayDuplicate
+
+structure Sharding (Msg : Type) where
+  key        : Msg -> String     -- a field of the message
+  partitions : Nat
+
+structure Channel (Msg : Type) where
+  capacity    : Nat
+  whenFull    : WhenFull
+  ordering    : Ordering         -- within one partition
+  sharding    : Option (Sharding Msg)
+  loss        : Loss
+  duplication : Duplication
+  capacityPos : 0 < capacity
+
+def udp (n : Nat) (h : 0 < n) : Channel Msg :=
+  { capacity := n, capacityPos := h, whenFull := .dropNewest,
+    ordering := .none, sharding := none,
+    loss := .mayDrop, duplication := .mayDuplicate }
+\end{lstlisting}
+
+Per-key ordering is not a separate value: it is \texttt{fifo} ordering on a
+sharded channel, where each partition is its own FIFO queue.
+
 The checked system is then the product of the roles' local types and their
-channels. A channel contributes its own transitions: delivering one queued
-message, dropping one, delivering one again, or refusing a send when full.
+channels. Each field contributes, or removes, transitions of the product:
+
+\begin{itemize}
+  \item \texttt{capacity} and \texttt{whenFull}: a send to a full queue blocks
+        the sender, delivers a refusal message back to it, or discards a
+        message;
+  \item \texttt{ordering}: under \texttt{fifo} only the head of a queue may be
+        delivered; under \texttt{none} any queued message may be;
+  \item \texttt{sharding}: the channel is \texttt{partitions} queues, each with
+        the declared capacity, and a send goes to the queue its key selects;
+        for checking, keys are abstracted to as many distinct values as the
+        protocol's messages can tell apart;
+  \item \texttt{loss}: a transition that removes any queued message;
+  \item \texttt{duplication}: a transition that delivers a queued message and
+        leaves it queued.
+\end{itemize}
+
 A timer contributes a transition that may fire whenever its role is waiting.
+Every one of these is a choice the checker explores, so each \texttt{may}
+multiplies the state space; the presets keep a declaration honest without
+making it long.
 Chapter~\ref{ch:tftp-physics} builds this product for TFTP and shows a global
 type that is well formed in the classic sense, and whose original
 implementation duplicates every block once a single timer fires early.

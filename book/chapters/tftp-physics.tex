@@ -59,8 +59,8 @@ LeanFM states the physics next to the grammar instead of assuming it away.
 
 \begin{lstlisting}
 physics Transfer where
-  channel Sender -> Receiver : udp (capacity := 2)
-  channel Receiver -> Sender : udp (capacity := 2)
+  channel Sender -> Receiver : udp (capacity := 2, duplication := never)
+  channel Receiver -> Sender : udp (capacity := 2, duplication := never)
   -- udp: a full buffer drops; queued packets may be
   --      delivered in any order or dropped
   timer Sender : mayFireEarly
@@ -70,7 +70,9 @@ physics Transfer where
 Each direction holds at most two packets. The network may deliver them in
 either order, or drop either one. The sender's timer may fire at any time while
 a block is unacknowledged, because a slow answer cannot be told apart from a
-lost one. The model has three blocks.
+lost one. The network is declared never to duplicate a packet: the bug needs no
+help from it, and every duplicate below is made by the sender. The model has
+three blocks.
 
 The two senders differ in one line, the reaction to an \texttt{ACK} that arrives
 again for a block that was already acknowledged:
