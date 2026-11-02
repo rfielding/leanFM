@@ -11,6 +11,12 @@ or success without an artifact. Completion therefore requires a paired argument:
   \item applicable \emph{negative invariants} state what the system must never do.
 \end{enumerate}
 
+For a feature that crosses a boundary, both kinds of statement are about the
+conversation: the positive invariant is a property of the global type, and the
+negative ones usually name a message that must never be sent, or never
+accepted, under the declared physics of a channel (a replayed request, a
+response to the wrong session, a call that arrives after its deadline).
+
 Review before declaring completion, in proportion to the boundary crossed:
 button spacing rarely needs a cryptographic audit; filesystem access needs
 authorization and path analysis. A material risk without a mapped and tested

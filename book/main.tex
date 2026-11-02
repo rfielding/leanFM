@@ -296,7 +296,9 @@
   \node[anchor=north west,text width=.82\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.75cm]current page.north west)
     {\color{leangold}\fontsize{27}{31}\selectfont\bfseries
-      L\(\boldsymbol{\exists\forall}\)NFM Software Engineering};
+      L\(\boldsymbol{\exists\forall}\)NFM Software Engineering\\[.4em]
+     \fontsize{15}{19}\selectfont\mdseries
+      Session types with bounded queues and unreliable messages};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and ChatGPT\\[.35em]
@@ -310,8 +312,21 @@
 
 Every specification effort tries to turn what people said into an explicit
 record of what was understood. LeanFM does this for one subject, the
-\emph{behavior} of software: who sends what to whom, in what order, within what
-time and with what probability, and what must always or never happen. Its
+\emph{behavior} of software at its boundaries: who sends what to whom, in what
+order, within what time and with what probability, and what must always or
+never happen.
+
+The record LeanFM keeps is a \emph{multiparty session type}: one global
+description of a conversation between roles, from which each role's own
+obligations are derived. Session types come from programming-language research,
+where they guarantee that the parties to a conversation never send a message
+the other cannot handle and never wait for one that will not come. LeanFM uses
+them as a software engineering method, for messages between network nodes and
+for calls between APIs alike, and adds what the classic theory leaves out:
+every queue has a declared size, and every channel declares how it fails.
+Messages are lost, duplicated, reordered and late; timers fire early; a
+retried request arrives twice. Those facts are part of what a protocol means,
+and LeanFM checks the protocol together with them. Its
 distinguishing feature is that the record is not passive. It answers questions
 with generated examples and counterexamples, so misunderstandings surface while
 the specification is being written rather than after the code ships.
@@ -323,7 +338,7 @@ mean---as sequence diagrams, state machines, event traces and counterexamples.
 You push back, the requirements change, and the pictures change with them.
 Only when you are satisfied does any code get written.
 
-The precise part is Lean. Every requirement is a Lean definition: which actors
+The precise part is Lean. Every requirement is a Lean definition: which roles
 exist, which messages they exchange down to the protobuf bytes, which orders of
 messages are legal, and what must always or never happen. Because these are
 definitions rather than prose, they can be checked, and the diagrams are
@@ -360,9 +375,12 @@ specification and is read by the agents that work on it.
 
 \section*{How to read this book}
 
-Chapter~\ref{ch:vision} sets out the method. The chapters that follow build it
-up: events and scenarios, a worked bakery example, the grammar that describes
-legal message orders, and the authoring language. Chapter~\ref{ch:web-server}
+Chapter~\ref{ch:vision} sets out the method: session types, what they assume
+about channels, and what LeanFM declares instead. The chapters that follow build
+it up: events and scenarios as recorded runs of a session, a worked bakery
+example, global types written as grammars, the TFTP example in which declaring
+the physics turns a perfect session type into a famous bug, and the authoring
+language. Chapter~\ref{ch:web-server}
 covers the LeanFM server, including the MCP interface that lets an agent
 consult LeanFM's logic directly. Later chapters apply temporal and modal logic
 to security and legal examples, and Chapter~\ref{ch:bootstrap-contract}
@@ -376,18 +394,18 @@ evidence stands behind it---compiled, tested, proposed or planned. The source is
 \tableofcontents
 
 \mainmatter
-\part{The Grammar-Based Method}
+\part{Session Types as a Software Engineering Method}
 \include{chapters/vision}
 \include{chapters/events}
 \include{chapters/scenarios}
 \include{chapters/bakery-example}
 \include{chapters/grammar}
+\include{chapters/tftp-physics}
 \include{chapters/authoring-language}
 \include{chapters/web-server}
 \include{chapters/chat-ui-guide}
 \include{chapters/oauth-example}
 \include{chapters/temporal-logic}
-\include{chapters/tftp-physics}
 \include{chapters/legal-example}
 \include{chapters/generated-examples}
 \include{chapters/feature-discipline}

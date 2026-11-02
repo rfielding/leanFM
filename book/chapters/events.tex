@@ -1,10 +1,15 @@
-\chapter{Histories Made of Events}
+\chapter{Session Histories Made of Events}
 \label{ch:events}
 
 \index{event}
 \index{trace}
-Every execution is represented by an event sequence. A deliberately small common
-envelope makes histories comparable across protocols:
+\index{session type!run of}
+A global type says which conversations are legal. An \emph{event} is one message
+of one actual conversation: a single instance of a session, recorded as it
+happened. Every execution is represented by a list of such events, and checking
+an implementation means checking that list against the global type and its
+declared physics. A deliberately small common envelope makes histories
+comparable across protocols:
 
 \begin{lstlisting}
 structure Event (Actor Session Task Kind Payload : Type) where
@@ -29,8 +34,9 @@ The fields have different jobs. \texttt{id} identifies a visible fact;
 \texttt{check\_trace} tool spells these \texttt{prevIds} and a list
 \texttt{causeIds}, and the protobuf envelope \texttt{prior\_ids} and
 \texttt{cause\_id}); \texttt{from} and
-\texttt{to} name the parties; \texttt{(session, task)} correlates independently
-progressing conversations; and \texttt{kind} supplies a stable discriminator.
+\texttt{to} name the sending and receiving roles; \texttt{session} names the
+instance of the global type, and \texttt{(session, task)} correlates
+independently progressing conversations; and \texttt{kind} supplies a stable discriminator.
 The payload is protocol-specific and carries the parameters that flow from one
 production to the next. \texttt{timeAt} is sampled from the model's shared monotonic
 clock. Its differences measure elapsed time; it is not a civil-time date and its
@@ -56,6 +62,12 @@ terminal events may point to the event whose work they finish. Following the
 reverse \texttt{causeId} relation produces a causal subtree. A renderer places
 that subtree inside a labeled box, recursively, so nested work remains visible
 without pretending that concurrent causal children have a fixed order.
+
+The two pointers are also what makes a choice checkable. A role may decide
+only from its own history, so an event's \texttt{causeId} should name an event
+its sender sent or received. An event that points across to a message its
+sender never saw records a decision nobody could have made
+(Chapter~\ref{ch:vision}).
 
 For a request/response production, the response's
 \texttt{causeId} is the request's \texttt{id}; read it as ``this response

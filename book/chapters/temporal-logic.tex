@@ -5,7 +5,12 @@
 \index{temporal logic}
 \index{LTL}
 \index{modal logic}
-A grammar generates a branching transition system. CTL speaks directly about
+A well-formed global type already guarantees safety, fidelity and progress for
+roles that follow their local types, under the assumptions of its channels.
+Everything else a stakeholder wants to know is a question about the system's
+futures: can the transfer always still finish, must it, can this message ever
+precede that one? The global type, together with the declared physics of its
+channels, generates a branching transition system. CTL speaks directly about
 that branching, but its vocabulary becomes clearer when placed between basic
 modal logic and linear temporal logic. Path quantifiers distinguish \emph{there
 exists a future} from \emph{every future}, while temporal operators distinguish

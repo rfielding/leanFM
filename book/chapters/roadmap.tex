@@ -24,11 +24,22 @@ traceability remain prerequisites for a complete one-shot specification.
 
 \section{Proof obligations}
 
-The initial metatheory should make the following questions precise:
+The initial metatheory is session-type metatheory with the channel physics
+added. It should make the following questions precise:
 
 \begin{itemize}
-  \item Does a projected local behaviour faithfully implement its part of the
-        global grammar?
+  \item Which global types are well formed: every choice directed by one role,
+        and every role that must learn a branch either told by a message or
+        released by a declared timer?
+  \item Does projection to local types preserve the global type, so that roles
+        following their local types over the declared channels produce only
+        runs of the global type (session fidelity)?
+  \item Which channel physics preserve communication safety and progress, and
+        which (loss, duplication, early timers) require the protocol itself to
+        recover, as TFTP's retransmission does?
+  \item Does a recorded production event stream conform to the global type, and
+        does each event's \texttt{causeId} stay within its sender's own
+        history?
   \item Under what finiteness restrictions is CTL checking decidable and executable?
   \item Which guards can be compiled into finite monitor state?
   \item When does modular composition preserve an established temporal property?

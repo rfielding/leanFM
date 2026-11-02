@@ -1,17 +1,40 @@
-\chapter{Formal Methods as the Default Path}
+\chapter{Session Types as a Software Engineering Method}
 \label{ch:vision}
 
+\index{session type}
+\index{session type!multiparty}
 \index{formal methods}
-Formal methods are usually presented as an extra stage: first build a system, then
-translate a simplified version into a model, and finally ask a specialist tool a
-few questions. That workflow taxes correctness. The model drifts, the difficult
-translation is postponed, and proofs concern yesterday's architecture.
+LeanFM is a session-type method for engineering software. A \emph{multiparty
+session type} is a global description of a conversation: which roles take part,
+which messages pass between them, in what order, and where the conversation
+branches \citep{honda2008multiparty}. From that one global description each
+role's \emph{local type} is derived by projection, and a role built to its local
+type cannot send a message nobody expects, or wait forever for one that nobody
+will send. That is exactly the contract a team needs at every boundary between
+two pieces of software that it does not want to read each other's code.
 
-Our design target is the reverse: the shortest path to a running service passes
-through an executable behavioural specification. The specification is intended
-to supply message types, scenario tests, model-checking input, documentation, and
-the service skeleton. This is the target workflow, not a claim that every
-generator is already implemented.
+Session types grew up as a type discipline for programming languages
+\citep{honda1993types,honda1998language}. LeanFM uses the same idea one level
+up, as the requirements. The global type is what the stakeholders argue about;
+the local types are what each implementer owes; recorded production events are
+checked against both. Formal methods are then not an extra stage after the code:
+the shortest path to a running service passes through the checked conversation.
+
+LeanFM departs from the textbook theory in one deliberate way: \emph{its channels
+have physics}. Standard asynchronous session types assume that every message
+eventually arrives, exactly once, in order, through a queue that never fills.
+Real channels are bounded. UDP drops and reorders. An HTTP call times out and is
+retried, so the server sees it twice. A Kafka consumer replays a batch after a
+rebalance. A timer cannot tell a slow answer from a lost one. LeanFM makes the
+capacity and failure behaviour of every channel part of the requirement, and
+checks the protocol together with it. Chapter~\ref{ch:tftp-physics} shows the
+consequence on a real protocol: the same grammar is a perfect session type, and
+one of its two implementations has a famous bug that appears only once the
+physics is declared.
+
+The same method covers two kinds of boundary that are usually designed with
+different tools: messages between network nodes, and calls between APIs. Both
+are channels between roles; they differ only in their declared physics.
 
 \noindent\textbf{Evidence labels used throughout:} proposed notation (uncompiled);
 executable code (builds or runs, not proof); finite-model check (exhaustive only
@@ -20,24 +43,195 @@ inputs and reducer); Lean proof (kernel-checked under stated assumptions); futur
 interface (planned, unavailable). Labels scope evidence, not rank it; several may
 apply to one artifact.
 
-\section{Behaviour before machinery}
+\section{Session types in one page}
 
-The primary object is a set of permitted, visible histories: who communicated
-with whom, which event occurred, what it carried, and which predecessor order it
-extends. Protocol bytes, ordering and persistent disk formats become durable
+\index{global type}
+\index{local type}
+\index{projection}
+A global type is written once, from the point of view of nobody in particular.
+This is a purchase between three roles, in the Scribble style of
+\citet{yoshida2013scribble}. It is \textbf{proposed notation}: LeanFM stores
+conversations today as \texttt{GrammarExpr} values (Chapter~\ref{ch:grammar}).
+
+\begin{lstlisting}[language={}]
+global protocol Purchase(role Client, role Shop, role Bank) {
+  o: order(item)    from Client to Shop;
+  choice at Shop {
+    q: quote(price)   from Shop to Client   cause o;
+    p: pay(price)     from Client to Bank   cause q;
+       paid()         from Bank to Shop     cause p;
+       shipped(item)  from Shop to Client;
+  } or {
+       soldOut()      from Shop to Client   cause o;
+  }
+}
+\end{lstlisting}
+
+Each line is one message: a label with its payload, a sender, a receiver, and
+optionally the earlier message that caused it. \texttt{choice at Shop} says that
+the shop alone decides which branch happens. Projection keeps, for one role, the
+lines that role sends or receives:
+
+\begin{lstlisting}[language={}]
+local protocol Purchase at Shop {
+  order(item) from Client;
+  choice {
+    quote(price) to Client;  paid() from Bank;  shipped(item) to Client;
+  } or {
+    soldOut() to Client;
+  }
+}
+\end{lstlisting}
+
+The theory then asks two questions of the global type, and LeanFM asks the same
+two.
+
+\begin{description}[style=nextline]
+  \item[One chooser per choice.] The first message of every branch must be sent
+  by the same role. If Client could start one branch while Shop starts another,
+  both could act at once and the run would leave the protocol. This is the
+  realizability (non-local choice) condition.
+  \item[Everyone who must know, learns.] A role whose later behaviour differs
+  between branches must be told which branch was taken, by some message it
+  receives. \texttt{Purchase} fails this test: in the \texttt{soldOut} branch
+  the bank is never told anything, so its local type cannot say whether to wait
+  for \texttt{pay} or to finish.
+\end{description}
+
+Classic session types reject \texttt{Purchase} and ask for an extra message.
+Real banks do something else: they keep waiting on a queue that carries many
+sessions, and a session that never produces \texttt{pay} simply expires. That
+expiry is a timer, and a timer is physics. LeanFM accepts the protocol only when
+the bank's channel declares it, and then checks what the expiry can cause.
+
+When the global type passes, the theory guarantees three things for roles that
+follow their local types: \emph{communication safety} (no message arrives that
+the receiver cannot handle), \emph{session fidelity} (the run follows the global
+type), and \emph{progress} (no role waits forever on a well-formed session).
+Each guarantee holds \emph{under the theory's assumptions about channels}. The
+next section lists those assumptions, because they are exactly where real
+systems fail.
+
+\section{What the theory assumes, and what LeanFM declares}
+
+\index{physics of a channel}
+\index{queue capacity}
+\begin{center}
+\small
+\begin{tabular}{@{}p{.2\textwidth}p{.33\textwidth}p{.37\textwidth}@{}}
+\toprule
+Concern & Standard asynchronous session types & LeanFM \\
+\midrule
+Queue size & unbounded & declared capacity, and what happens when full: block, drop newest, or drop oldest \\
+Delivery & exactly once, in order per pair of roles & declared per channel: may drop, duplicate, reorder, or delay \\
+Time & absent & timers that may fire early; deadlines on responses \\
+Failure & absent in the core theory; extensions add crash-stop roles \citep{barwell2022crash} & declared: lost messages, restarted roles, expired sessions \\
+Choice & one chooser per branch & the same, and the chooser may act only on its own history \\
+Properties & safety, fidelity, progress by construction & those, plus CTL questions over the product of roles and channels, with fairness stated as a requirement \\
+Evidence & a program that type-checks & also conformance of recorded production event streams \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\index{communicating finite-state machines}
+Bounded queues are not only more realistic; they are what makes exhaustive
+checking possible. Roles that exchange messages through unbounded FIFO queues
+are communicating finite-state machines, and for those most verification
+questions are undecidable \citep{brand1983communicating}. Session types avoid
+the problem by restricting the shape of the protocol; the correspondence is
+made precise by \citet{denielou2012communicating}. LeanFM takes the other exit:
+it bounds the queues. The product of finite roles and finite queues is a finite
+transition system, and every CTL question asked of it is answered exhaustively,
+with a witness or a counterexample.
+
+\section{Every boundary is a channel}
+
+\index{API boundary}
+\index{channel kind}
+A channel is any path a message can take between two roles. Its \emph{kind}
+names the physics it brings. These kinds are \textbf{proposed notation}; the
+TFTP chapter builds its UDP channels by hand today.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{.2\textwidth}p{.7\textwidth}@{}}
+\toprule
+Kind & Declared physics \\
+\midrule
+\texttt{call/ret} & an in-process call: no loss, the return is caused by the call, the caller waits \\
+\texttt{queue} & a bounded in-process queue, such as a Go channel: capacity, and blocking when full \\
+\texttt{udp} & bounded buffers that may drop, duplicate or reorder; no notion of a reply \\
+\texttt{http} & request and response; the response is caused by the request; it may never come, so the caller has a deadline, and a retried request can arrive twice \\
+\texttt{tls http} & \texttt{http} whose endpoints are authenticated; the peer's identity becomes an observable field \\
+\texttt{kafka} & a durable, retained topic delivered at least once; a replay after rebalance is a duplicate \\
+\texttt{websocket} & an ordered stream that can close at any message, after which both sides see the session end \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+With channel kinds, inter-API design is the same activity as network-protocol
+design. A browser call that passes a reverse proxy and reaches a service is a
+three-role session:
+
+\begin{lstlisting}[language={}]
+q: tls http GET /users/{id}       from Browser to Proxy;
+r: http GET /users/{id}           from Proxy to Users   cause q
+     where header USER_DN = peer.dn(q);
+s: http 200 {user}                from Users to Proxy   cause r;
+   http 200 {user}                from Proxy to Browser cause s;
+\end{lstlisting}
+
+The requirement names only what crosses a boundary: the request, the header the
+proxy adds, the response. Whether \texttt{Users} answers from a cache, a
+database or a replica is hidden by not being written down. Hiding is how a
+requirement leaves an implementation free; it is not a separate refinement step.
+The negative requirements follow the same rule. ``A request without a client
+certificate never reaches \texttt{Users}'' is a statement about observable
+messages on two channels, and can be checked and tested as one.
+
+\section{Choice is always internal}
+
+\index{internal choice}
+\index{realizability}
+Inside the product, every role is an actor reading its own queue. Session-type
+theory distinguishes \emph{internal} choice (a role selects which label to send)
+from \emph{external} choice (a role offers to receive any of several labels). In
+the actor view only the first is a decision: an external choice is just this
+role's queue delivering whatever another role decided. So every choice in a
+LeanFM protocol is made by exactly one role, from exactly what that role can
+know: the messages it has sent and the messages that have arrived in its queue.
+
+LeanFM makes that history explicit. Every recorded event carries
+\texttt{priorIds}, the earlier events it follows, and \texttt{causeId}, the one
+event that made it happen (Chapter~\ref{ch:events}). The realizability rule is
+then a rule about pointers: \emph{a role's event may cause-point only to events
+that role sent or received.} A protocol in which a role reacts to something it
+never saw cannot be implemented by anyone, and is rejected. LeanFM does not yet
+perform this validation (a \textbf{future interface}); the rule is how the
+validation is defined.
+
+\section{The requirement is the global type}
+
+The primary object is the set of permitted, visible histories: who communicated
+with whom, which message, what it carried, and which earlier messages it
+follows. Message bytes, their order, and persistent disk formats become durable
 compatibility boundaries once another process, customer or stored data set
 depends on them.
 
-Threads, actors, queues, databases, caches, continuations and retry machinery
-are realization choices unless they change that observable contract. Modeling
-every internal choice couples requirements to harmless refactoring and creates
-a product state space that grows exponentially with independently varying
-components. Begin with the durable boundary; introduce internal state only when
-it changes an observable promise.
+Threads, actors, databases, caches, continuations and retry machinery inside a
+role are realization choices unless they change the observable conversation.
+Modelling every internal choice couples requirements to harmless refactoring
+and creates a product state space that grows exponentially with independently
+varying components. The channels between roles are different: their capacity
+and failure behaviour \emph{are} observable, because they decide which
+histories can occur. So LeanFM requires the boundary and its physics, and
+leaves the inside of each role alone until it changes an observable promise.
 
 \section{Comparison with TLA+}
 
-LeanFM is not an extension of TLA+ and does not try to replace it. TLA+ commonly
+TLA+ is the specification language most engineers meet first, so the contrast is
+worth making precisely. LeanFM is not an extension of TLA+ and does not try to
+replace it. TLA+ commonly
 describes a system with variables, an initial-state predicate, a next-state
 relation, and temporal formulas over the resulting state behaviors
 \citep{lamport2002specifying}. A message queue can be represented as a sequence-
@@ -133,10 +327,11 @@ routing, failure and scheduling rules; it does not eliminate their state space.
 
 \subsection{Requirements at the message boundary}
 
-LeanFM starts from decoded production events: correlate messages and classify
-their order as conforming or a counterexample without pretending to observe
-private variables. Its grammar is intended to describe legal traces and generate
-scenarios; state machines project visible histories. The executable grammar
+LeanFM starts from the conversation: a global type over decoded production
+events, whose messages are correlated and whose order is classified as
+conforming or a counterexample without pretending to observe private variables.
+The global type describes legal traces and generates scenarios; state machines
+are projections of visible histories. The executable grammar
 limits are documented in Chapter~\ref{ch:grammar}. A property dependent on
 hidden state needs an observable event or justified abstraction; otherwise its
 status is indeterminate.
@@ -151,13 +346,13 @@ The trade is deliberate:
 \begin{center}
 \begin{tabular}{@{}p{.25\textwidth}p{.32\textwidth}p{.32\textwidth}@{}}
 \toprule
-Question & TLA+-style state specification & LeanFM event-language specification \\
+Question & TLA+-style state specification & LeanFM session specification \\
 \midrule
-Primary behavior & sequence of states & sequence or partial-order graph of events \\
-Queue representation & usually an explicit variable & observable enqueue, send, receive, blocking, and capacity facts \\
+Primary behavior & sequence of states & a global type, and its runs as partial-order graphs of events \\
+Queue representation & usually an explicit variable & a channel with declared capacity and failure behaviour \\
 Conformance input & modeled states or action correspondence & decoded production event stream \\
 Hidden variables & available when declared & omitted unless they affect an observable contract \\
-Generation & behaviors satisfying the state relation & words/traces generated by the grammar \\
+Generation & behaviors satisfying the state relation & runs generated by the global type and its channel physics \\
 Probabilities & require an additional probabilistic interpretation or tool & declared and measured overlays over the same core \\
 Main risk & state model may drift from instrumentation & event model may omit a hidden cause needed for a property \\
 \bottomrule
@@ -176,30 +371,37 @@ During discovery, the book may contain alternatives that are not accepted.
 Before a specification is committed and again before implementation, classify every
 normative idea as a requirement, implementation decision, deferred item, or
 material to remove. Preserve technical claims and qualifications; replace prose
-that mainly enumerates actors, messages, states, ordering, dependencies, or
+that mainly enumerates roles, messages, states, ordering, dependencies, or
 quantities with a generated view from typed artifacts and a short
 interpretation. Each view retains its prompt, question, event source, reducer,
 unit, and boundary. An idea's survival in the book does not make it binding;
 only committed, checked artifacts do.
 
-\section{Three ingredients}
+\section{Four ingredients}
 
-The method combines three traditions.
+The method combines four traditions.
 
 \begin{enumerate}[label=\arabic*.]
-  \item Language theory gives compact generative descriptions of legal histories.
-        Regular and context-free grammars provide the approachable starting point.
-        Dana Richards and Henry Hamburger, the author's college professors, are
-        cited in \citet{richards2017logic} as the source from which the author
-        learned these methods, not as their originators. For the underlying habits of
-        symbolization, validity, proof, quantification, and modal reasoning, we also
-        draw on the accessible progression of \citet{gensler2017introduction}.
+  \item Session types give the backbone: one global description of a
+        conversation, projected to the local obligations of each role, with
+        well-formedness conditions that rule out unimplementable choices
+        \citep{honda1998language,honda2008multiparty,yoshida2013scribble}.
+  \item Language theory gives compact generative descriptions of legal histories:
+        a global type is a grammar whose terminals are messages, and its
+        sequence, choice, parallel composition and recursion are the grammar's
+        productions. Dana Richards and Henry Hamburger, the author's college
+        professors, are cited in \citet{richards2017logic} as the source from
+        which the author learned these methods, not as their originators. For the
+        underlying habits of symbolization, validity, proof, quantification, and
+        modal reasoning, we also draw on the accessible progression of
+        \citet{gensler2017introduction}.
   \item Protocol analysis contributes explicit participants, adversarial choices,
-        trace semantics, and tool-supported checking. The CSP treatment of
-        \citet{ryan2001modelling}, including Steve Schneider, is cited as the source
-        from which the author learned this treatment.
-  \item Temporal logic turns expectations into queries over the generated
-        transition system. CTL is central because it distinguishes claims about
+        trace semantics, and tool-supported checking. An attacker is one more
+        role, or a channel whose physics an adversary controls. The CSP treatment
+        of \citet{ryan2001modelling}, including Steve Schneider, is cited as the
+        source from which the author learned this treatment.
+  \item Temporal logic turns expectations into queries over the product of
+        roles and channels. CTL is central because it distinguishes claims about
         some possible future from claims about every possible future
         \citep{clarke1986automatic}.
 \end{enumerate}
@@ -209,9 +411,9 @@ The method combines three traditions.
 Each abstraction in this book should answer a practical question:
 
 \begin{quote}
-Can a developer state a meaningful behaviour once, compose it with other
-behaviours, check its consequences, and keep it stable while implementation details
-change?
+Can a developer state a conversation once, with the physics of its channels,
+compose it with other conversations, check its consequences, and keep it stable
+while the implementation of each role changes?
 \end{quote}
 
 If an abstraction does not improve that workflow, it does not belong in the core

@@ -2,8 +2,10 @@
 \label{ch:scenarios}
 
 A scenario is LeanFM's named, bounded stream of timestamped events for one
-interaction or execution trace (for example, a quote request, OAuth exchange,
-or 9×9 game).
+run of a session (for example, a quote request, OAuth exchange, or 9×9 game).
+The global type says which runs are legal; a scenario is one of them, either
+generated from the type or recorded from production, and it is the concrete
+thing people point at while arguing about the type.
 
 \section{Event envelope and scenario grouping}
 The shared envelope and semantics of \texttt{id}, \texttt{priorIds},

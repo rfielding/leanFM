@@ -14,8 +14,8 @@ the named Lean source.
 \section{Proposed scenario notation}
 
 \index{alphabet!vague}
-A scenario is a named grammar fragment whose terminals are observable message
-events. This proposed syntax uses \texttt{from\_} and \texttt{to\_} (avoiding
+A scenario is a named fragment of a global type: a grammar whose terminals are
+observable messages, each with a sending and a receiving role. This proposed syntax uses \texttt{from\_} and \texttt{to\_} (avoiding
 Lean's \texttt{from} syntax) to set the endpoints copied into each event; an
 \texttt{emit} without both endpoints is invalid. Ordinary \texttt{let x := e}
 evaluates a Lean expression, while \texttt{let x <- declare T "x"} introduces

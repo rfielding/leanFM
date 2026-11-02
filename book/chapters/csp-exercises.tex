@@ -28,6 +28,15 @@ capabilities.
 
 \section{Roles compose by sharing events}
 
+\index{projection}
+This is the session-type picture seen from the other side. Projection derives
+each role's local type from one global type; here each role is written first,
+and the global protocol is whatever their composition admits. The attacker is
+the case session types usually leave out: a role that controls the channels,
+and can read, drop, replay or forge what passes through them. In the vocabulary
+of Chapter~\ref{ch:vision}, the attacker is the most hostile physics a channel
+can declare.
+
 Each actor is specified separately, as a grammar over its own view of the
 global event alphabet. Composition is synchronization on the same observable
 events, not concatenation of independent scripts.

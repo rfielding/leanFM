@@ -6,6 +6,12 @@ This chapter is a behavioural sketch inspired by the OAuth authorization-code
 flow. It is not a replacement for the OAuth specification and deliberately begins
 above HTTP and protobuf. Its purpose is to exercise scenario decomposition,
 parameter flow, visible evidence, alternatives, requirements, and rendering.
+In session-type terms it is a global type with five roles, a choice directed
+by the authorization service (grant or deny), and parameters such as
+\texttt{state} and the authorization code that must flow from one message to a
+later one. Its channels are HTTP calls and browser redirects; their physics
+(a redirect that is never followed, a callback replayed by an attacker) is
+where the security requirements live.
 
 The \texttt{scenario}, \texttt{declare}, \texttt{from\_}/\texttt{to\_}/\texttt{emit},
 \texttt{weightedOneOf} and theorem listings in this chapter are \emph{proposed

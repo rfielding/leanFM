@@ -1,10 +1,16 @@
-\chapter{A Multiparty Grammar of Behaviour}
+\chapter{Global Types as Grammars}
 \label{ch:grammar}
 
 \index{grammar!multiparty}
 \index{grammar!context-free}
-A protocol is a language whose terminal symbols are visible events. A production
-describes a legal continuation. \textbf{Proposed notation:} the \texttt{Grammar}
+\index{global type}
+A global session type is a grammar. Its terminal symbols are messages, each with
+a sender and a receiver; its productions are the type's sequence, choice,
+parallel composition and recursion; the language it generates is the set of
+legal conversations. LeanFM writes global types this way so that
+requirements can be stacked: every production can be read as if it were the
+top-level protocol, and a larger protocol is built by referring to smaller
+ones. \textbf{Proposed notation:} the \texttt{Grammar}
 algebra and BNF below are not an executable API. Durable artifacts use
 \texttt{GrammarExpr} (
 \texttt{event}, \texttt{seq}, \texttt{choice}, \texttt{parallel},
@@ -26,13 +32,16 @@ inductive Grammar (Event : Type) where
   | where_ : (List Event -> Bool) -> Grammar Event -> Grammar Event
 \end{lstlisting}
 
-\texttt{seq} preserves time order. \texttt{choice} exposes alternatives rather
+Each constructor is a session-type operator. \texttt{event} is one message
+from a sender to a receiver. \texttt{seq} preserves time order. \texttt{choice} exposes alternatives rather
 than burying them in control flow. \texttt{par} admits interleavings while
 preserving the internal order of each side. A \texttt{where\_} clause checks a
 fact accumulated from the prior trace and provides the escape from context-free
 structure when genuine context sensitivity is needed.
 
-A choice does not need a separate annotation naming who makes it. Each branch
+\index{choice!directed}
+A choice does not need a separate annotation naming who makes it, as Scribble's
+\texttt{choice at} does. Each branch
 eventually resolves to terminal events, and each terminal resolves to framed
 bytes with a source and destination. The first observed terminal that
 distinguishes two branches identifies both the selected branch and the actor
@@ -45,9 +54,13 @@ One condition makes this sound: the distinguishing first messages of all
 branches must be sent by the \emph{same} actor. If Alice's message starts one
 branch and Bob's starts the other, nobody can implement the choice locally;
 both may act at once and the system leaves the grammar. This is the
-non-local-choice (realizability) problem of multiparty protocols, and a
-grammar must name one deciding actor per choice and be validated for it.
-LeanFM does not yet perform that validation.
+non-local-choice (realizability) problem of multiparty protocols. In
+session-type terms the choice must be \emph{directed}: an internal choice of
+one role, observed by the others as an external choice on their queues. A
+second condition goes with it: every role whose later behaviour differs between
+branches must receive a message that tells it which branch was taken, or must
+have a declared timer that ends its part of the session
+(Chapter~\ref{ch:vision}). LeanFM does not yet perform either validation.
 
 Simple finite conversations can compile to regular languages. Nested request
 structure motivates context-free productions. Correlation, freshness, uniqueness,
@@ -153,23 +166,73 @@ relationship that distinguishes a matching callback from an unrelated one. Lean'
 types, constructors, and ordinary function parameters are the surface language;
 the fixed library supplies grammar composition and semantics.
 
-\section{Composition without omniscience}
+\section{Projection: from the global type to each role}
 
+\index{projection}
+\index{local type}
 A participant's implementation need not know the global execution state. The
-global grammar states the contract, while projection derives each participant's
-view. Composition should preserve independently specified modules and make shared
-events explicit. Proving useful projection and composition theorems is a core
-research obligation, not an implementation footnote.
+global type states the contract, and projection derives each role's
+\emph{local type}: the same grammar with every message the role neither sends
+nor receives erased, and every remaining message rewritten as a send
+(\texttt{!}) or a receive (\texttt{?}). For the granted OAuth branch of
+\cref{fig:oauth-grammar-granted}, the resource server's local type is two lines
+long:
 
-\section{Actors multiplex bounded conversations}
+\begin{lstlisting}[language={}]
+Resource ::= ? Application : resourceRequest(token) ;
+             ! Application : resourceReturned(resource)
+\end{lstlisting}
 
-An actor has separate positive finite-capacity inbound and outbound message queues. Queue
+The resource server never learns how the token was obtained, and its
+implementation should not depend on it. Projection is defined only for a
+well-formed global type: where a choice is erased, the branches a role still
+sees must be the same, or must start with different messages that role
+receives. Composition should preserve independently specified modules and make
+shared messages explicit. Proving that projection and composition preserve the
+global type's properties is a core research obligation, not an implementation
+footnote; LeanFM does not yet compute projections (a \textbf{future
+interface}).
+
+\section{Declared physics}
+
+\index{physics of a channel}
+\index{channel kind}
+A global type says which message may follow which. It does not say what
+happens to a message between its send and its receive. LeanFM requires that to
+be declared beside the protocol, as the \emph{physics} of each channel
+(\textbf{proposed notation}):
+
+\begin{lstlisting}[language={}]
+physics Transfer where
+  channel Sender -> Receiver : udp (capacity := 2)
+  channel Receiver -> Sender : udp (capacity := 2)
+  timer Sender : mayFireEarly
+\end{lstlisting}
+
+The checked system is then the product of the roles' local types and their
+channels. A channel contributes its own transitions: delivering one queued
+message, dropping one, delivering one again, or refusing a send when full.
+A timer contributes a transition that may fire whenever its role is waiting.
+Chapter~\ref{ch:tftp-physics} builds this product for TFTP and shows a global
+type that is well formed in the classic sense, and whose original
+implementation duplicates every block once a single timer fires early.
+
+The rest of this chapter defines the default physics, the one that LeanFM's
+actor runtime assumes when nothing more is declared: bounded, reliable,
+blocking queues.
+
+\section{Local types run on actors with bounded queues}
+
+\index{session identifier}
+Each role is played by an actor, and one actor may take part in many sessions
+at once. An actor has separate positive finite-capacity inbound and outbound message queues. Queue
 capacity is part of the observable execution model: producing a message may block
 when the outbound queue is full, and transport may block when the destination's
 inbound queue is full. Sending is therefore distinct from delivery and from the
 destination actor consuming the message.
 
-Messages carry a session identifier as well as a task identifier. Their pair is
+Messages carry a session identifier, naming the instance of the global type
+they belong to, as well as a task identifier. Their pair is
 the correlation key for actor-local work:
 
 \begin{lstlisting}
