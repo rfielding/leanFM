@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant kv0
+    participant replicas
+    participant kv1
+    participant learner
+    participant web
+    participant kv2
+    kv0->>replicas: e1 Accept1A
+    kv1->>learner: e2 Accepted1
+    learner->>web: e3 ChosenA
+    kv2->>replicas: e4 Prepare2
+    kv0->>kv2: e5 Promise0
+    kv2->>replicas: e6 Accept2B
+    kv0->>learner: e7 Accepted0
+    learner->>web: e8 ChosenB

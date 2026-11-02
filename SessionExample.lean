@@ -1,0 +1,247 @@
+import LeanFM.Session
+
+/-!
+# Session types in LeanFM: worked examples
+
+Every protocol in the book's session-types chapter, as a Lean module. `#guard` lines are checks
+that run when the file is elaborated: `lake env lean SessionExample.lean`.
+
+The three design rules show up as follows.
+
+* Pay only for what you use: `Purchase` imports nothing but the core and the syntax; physics,
+  topology and the HTTP discipline are separate modules, consulted only by the examples that need
+  them.
+* The default case is simple: a protocol with no physics is checked as if every channel were
+  `reliable`; a channel declaration names only what differs from a preset.
+* Exceptions live in libraries: presets, interface kinds and conditions are ordinary values, so a
+  vendor library can add a `grpc` kind or a `quorumLost` condition without changing LeanFM.
+-/
+
+namespace SessionExample
+open LeanFM.Session
+
+/-! ## Roles and vocabulary -/
+
+inductive Role | client | shop | bank | sender | receiver | primary | r1 | r2 | r3
+  deriving DecidableEq, Repr, Inhabited
+
+instance : ToString Role := ⟨fun
+  | .client => "Client" | .shop => "Shop" | .bank => "Bank" | .sender => "Sender"
+  | .receiver => "Receiver" | .primary => "Primary" | .r1 => "R1" | .r2 => "R2" | .r3 => "R3"⟩
+
+-- Message labels are structures; `TypeName` lets guards read decoded payloads.
+structure Order    where item : String  deriving TypeName
+structure Quote    where price : Nat    deriving TypeName
+structure Pay      where amount : Nat   deriving TypeName
+structure Paid     where                deriving TypeName
+structure Shipped  where                deriving TypeName
+structure SoldOut  where                deriving TypeName
+structure Receipt  where amount : Nat   deriving TypeName
+structure Confirm  where amount : Nat   deriving TypeName
+structure Verify   where amount : Nat   deriving TypeName
+
+/-! ## The default case: a global type and nothing else -/
+
+/-- The book's Purchase. The bank is never told about the `SoldOut` branch, and need not be: its
+part of the session starts when `Pay` arrives, as a thread forked for that session, so a branch
+that never contacts it asks nothing of it. -/
+protocol Purchase (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  choice at Shop {
+    q: Quote from Shop to Client cause o;
+    p: Pay   from Client to Bank cause q where p.amount = q.price;
+       Paid  from Bank to Shop cause p;
+       Shipped from Shop to Client;
+  } or {
+       SoldOut from Shop to Client cause o;
+  }
+}
+
+def roles3 : List Role := [.client, .shop, .bank]
+def purchase : Global Role := Purchase .client .shop .bank
+
+#guard purchase.issues roles3 == []
+
+structure Hold where amount : Nat deriving TypeName
+structure Release where deriving TypeName
+
+/-- Once the bank has taken part, it must be told. Here the client places a hold first, so the
+bank's session has started, and the `SoldOut` branch leaves it holding money forever. -/
+protocol PurchaseWithHold (Client, Shop, Bank) {
+  h: Hold from Client to Bank;
+  o: Order from Client to Shop;
+  choice at Shop {
+    q: Quote from Shop to Client cause o;
+    p: Pay   from Client to Bank cause q;
+  } or {
+       SoldOut from Shop to Client cause o;
+  }
+}
+
+#guard (PurchaseWithHold Role.client Role.shop Role.bank).issues roles3 == ["Bank cannot tell which branch Shop chose"]
+
+-- Projection gives each role its local type; the shop's is a production of its own.
+#guard (purchase.project Role.shop |>.toOption |>.isSome)
+
+-- The guard is typed Lean over decoded payloads: 10 = 10 holds, 10 = 12 does not.
+def payGuard : Guard := Id.run do
+  match purchase with
+  | .msg _ (.choice _ ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨"", fun _ => none⟩
+  | _ => ⟨"", fun _ => none⟩
+
+#guard payGuard.text == "p.amount = q.price"
+#guard payGuard.eval [("q", Dynamic.mk (Quote.mk 10)), ("p", Dynamic.mk (Pay.mk 10))] == some true
+#guard payGuard.eval [("q", Dynamic.mk (Quote.mk 10)), ("p", Dynamic.mk (Pay.mk 12))] == some false
+
+/-! ## HTTP: cut and un-cut (pay for the HTTP module only here) -/
+
+def allHttp (_ _ : Role) : Bool := true
+/-- Who may start a call to whom: the client calls the shop and the bank, the shop calls the bank. -/
+def mayCall : Role → Role → Bool
+  | .client, .shop | .client, .bank | .shop, .bank => true
+  | _, _ => false
+
+#guard purchase.httpCuts allHttp mayCall ==
+  [ "Paid answers p, which Client sent to Bank, but goes to Shop"
+  , "Shipped is a request from Shop to Client, which Shop may not call" ]
+
+/-- The same purchase un-cut for HTTP: every response goes back to the role that asked. -/
+protocol PurchaseHttp (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  choice at Shop {
+    q: Quote   from Shop to Client cause o;
+    p: Pay     from Client to Bank cause q where p.amount = q.price;
+    r: Receipt from Bank to Client cause p;
+    c: Confirm from Client to Shop cause r where c.amount = r.amount;
+    v: Verify  from Shop to Bank cause c;
+    w: Paid    from Bank to Shop cause v;
+       Shipped from Shop to Client cause w;
+  } or {
+       SoldOut from Shop to Client cause o;
+  }
+}
+
+def purchaseHttp : Global Role := PurchaseHttp .client .shop .bank
+#guard purchaseHttp.httpCuts allHttp mayCall == []
+#guard purchaseHttp.causeIssues == []
+
+/-! ## Physics: TFTP over UDP (pay for the physics module only here) -/
+
+structure Data    where n : Nat deriving TypeName
+structure Ack     where n : Nat deriving TypeName
+structure LastAck where n : Nat deriving TypeName
+structure Timeout where         deriving TypeName
+
+/-- A first attempt puts the sender's timer in the global type, as a branch beside the
+acknowledgement. Both rules reject it: the sender does not decide whether an `Ack` arrives, and the
+receiver cannot observe the sender's timer, so it cannot tell which branch was taken. -/
+protocol TransferWithTimer (Sender, Receiver) {
+  rec Block {
+    d: Data from Sender to Receiver;
+    choice at Sender {
+      Timeout at Sender;
+      continue Block;
+    } or {
+      Ack from Receiver to Sender cause d;
+      continue Block;
+    }
+  }
+}
+
+#guard (TransferWithTimer Role.sender Role.receiver).issues [.sender, .receiver] ==
+  [ "choice at Sender: a branch starts with Ack, which Sender does not decide"
+  , "Receiver cannot tell which branch Sender chose" ]
+
+/-- The lock step itself. The receiver decides between `Ack` and `LastAck`. Loss, reordering and
+the sender's retransmission timer are physics, declared below, not branches of the type. -/
+protocol Transfer (Sender, Receiver) {
+  rec Block {
+    d: Data from Sender to Receiver;
+    choice at Receiver {
+      Ack from Receiver to Sender cause d;
+      continue Block;
+    } or {
+      LastAck from Receiver to Sender cause d;
+    }
+  }
+}
+
+def transfer : Global Role := Transfer .sender .receiver
+#guard transfer.issues [.sender, .receiver] == []
+
+/-- The channels, from presets. Only the differences are written. -/
+def tftpPhysics : Physics Role :=
+  { channels := [ (.sender, .receiver, { udp 2 with duplication := false })
+                , (.receiver, .sender, { udp 2 with duplication := false }) ]
+    timers := [{ role := .sender }] }
+
+/-- Requirements: what each channel's protocol handles, two properties, and the assumption the
+liveness property needs. -/
+def tftp : Spec Role :=
+  { global := transfer, roles := [.sender, .receiver], physics := tftpPhysics
+    handles := [ (.sender, .receiver, [.loss, .reorder])
+               , (.receiver, .sender, [.loss]) ]
+    properties := [ .AG (.EF .terminal), .AF .terminal
+                  , .someUntil (.not (sent% Timeout)) (sent% LastAck) ]
+    assumptions := [.fairDelivery .sender .receiver, .fairDelivery .receiver .sender] }
+
+-- The ACK channel can reorder, and the protocol does not say it handles that: one finding.
+#guard tftp.issues == ["channel Receiver -> Sender surfaces reorder, which its protocol does not handle"]
+
+-- With no physics at all, the same protocol has nothing to handle: the default is reliable.
+#guard ({ global := transfer, roles := [.sender, .receiver] } : Spec Role).issues == []
+
+/-! ## Stacking and joins -/
+
+structure Write where key : String deriving TypeName
+structure Stored where              deriving TypeName
+structure Done   where              deriving TypeName
+
+/-- Write to three replicas; continue after any two acknowledge. -/
+protocol Replicate (P, A, B, C) {
+  join 2 of {
+    wa: Write from P to A; Stored from A to P cause wa;
+  } and {
+    wb: Write from P to B; Stored from B to P cause wb;
+  } and {
+    wc: Write from P to C; Stored from C to P cause wc;
+  }
+}
+
+/-- A production that includes another, each written as if it were the whole protocol. -/
+protocol ReplicatedOrder (Client, Primary, A, B, C) {
+  o: Order from Client to Primary;
+  include Replicate Primary A B C;
+  Done from Primary to Client cause o;
+}
+
+def replicatedOrder : Global Role := ReplicatedOrder .client .primary .r1 .r2 .r3
+#guard replicatedOrder.issues [.client, .primary, .r1, .r2, .r3] == []
+#guard replicatedOrder.labels.length == 8
+
+/-! ## The deployment tree (pay for the topology module only here) -/
+
+open Node in
+def deployment : Topology Role :=
+  { world := [
+      outside [ .actor .client [] ],
+      island "us" [ datacenter "dc1" [
+        machine "m1" [ .actor .shop [ ingress "https" .ingressHttps, internal "api" .api ] ],
+        replicated "ledger" [ .actor .bank [ internal "api" .api ] ] ] ] ] }
+
+#guard (deployment.find "us.Shop.ingress.https").isSome
+#guard ((deployment.find "us.Bank.internal.api").map (deployment.reachable .client ·)) == some false
+#guard ((deployment.find "us.Bank.internal.api").map (fun p => (deployment.channel .shop p).conditions.map (·.name)))
+        == some ["duplicate", "reject", "close", "timeout"]
+
+-- A library adds an interface kind by refining an existing one; nothing in LeanFM changes.
+def grpc : IfaceKind := IfaceKind.http.refine "grpc" (adds := [⟨"deadline exceeded"⟩])
+#guard grpc.lineage == ["stream", "http"]
+
+/-! ## Bridge to the existing artifact format -/
+
+#guard match purchase.toGrammarExpr "purchase" with
+  | .seq (.event a) _ => a.message == "Order" && a.src == "Client"
+  | _ => false
+
+end SessionExample

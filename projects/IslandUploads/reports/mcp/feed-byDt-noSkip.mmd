@@ -1,0 +1,10 @@
+sequenceDiagram
+    participant shard_a
+    participant browser
+    participant observer
+    shard_a->>shard_a: e1 BeginA1
+    shard_a->>shard_a: e2 BeginA2
+    shard_a->>shard_a: e3 CommitA2
+    shard_a->>browser: e4 FeedPage
+    shard_a->>shard_a: e5 CommitA1
+    observer->>observer: e6 Missed

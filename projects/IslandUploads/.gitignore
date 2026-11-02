@@ -1,0 +1,10 @@
+.cache/
+.leanfm/
+events/
+renders/
+book/*.aux
+book/*.log
+book/*.out
+book/*.toc
+reports/specification-check/compiler.log
+book/main.pdf

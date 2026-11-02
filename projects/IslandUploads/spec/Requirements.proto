@@ -1,0 +1,81 @@
+syntax = "proto3";
+package leanfm.islanduploads;
+
+// Every message occurrence travels in an ordering envelope. prior_ids are immediate predecessors
+// (order at one actor or task); cause_id names the one event that caused this one, for example
+// the HTTP request a response answers.
+message ScenarioEvent {
+  string id = 1;
+  repeated string prior_ids = 2;
+  string cause_id = 3;
+  string session = 4;
+  string task = 5;
+  string src = 6;
+  string dst = 7;
+  uint64 time_at = 8;
+  string message_type = 9;
+  bytes message_payload = 10;
+}
+
+// One version of one file. Fields 1-9 are replicated and never change after the record is
+// written. visible_dt is local to the shard that serves it, assigned when its write or import is
+// committed. In a RecordsResponse it is the sender's value: the receiver uses it only to move its
+// cursor into the sender's feed and assigns its own when the import commits.
+message Record {
+  uint64 id = 1;            // creation time of version one, ns at its origin
+  uint64 dt = 2;            // time of this version, ns at its origin
+  string shard = 3;         // origin shard of this version
+  repeated uint64 prev_dts = 4; // versions this one was based on; empty for version one
+  uint64 parent_id = 5;     // containing folder; 0 for the root
+  string name = 6;
+  uint64 size = 7;
+  bytes blob_sha256 = 8;
+  bool deleted = 9;
+  uint64 visible_dt = 15;   // local only
+}
+
+// How far up one shard's feed replication has reached: in an IHaveRequest, the visible_dt of that
+// peer up to which the caller has imported everything; in an IHaveResponse, how far the peer's
+// feed now reaches. For example {a: 50, b: 99} answered by {a: 250, b: 355}.
+message Mark {
+  string peer = 1;
+  uint64 visible_dt = 2;
+}
+
+message UploadStart { string request_id = 1; uint64 parent_id = 2; string name = 3; uint64 size = 4; bytes blob_sha256 = 5; uint64 id = 6; repeated uint64 prev_dts = 7; }
+message UploadStarted { string request_id = 1; string upload_id = 2; uint64 offset = 3; }
+message UploadPart { string upload_id = 1; uint64 offset = 2; bytes content = 3; }
+message UploadPartAck { string upload_id = 1; uint64 offset = 2; }
+message UploadFinish { string upload_id = 1; }
+message UploadResponse { string request_id = 1; Record record = 2; }
+message UploadRejected { string upload_id = 1; uint32 status = 2; uint64 offset = 3; string reason = 4; }
+message UpdateRequest { string request_id = 1; uint64 id = 2; repeated uint64 prev_dts = 3; string name = 4; bool deleted = 5; }
+message UpdateResponse { string request_id = 1; Record record = 2; }
+message UpdateRejected { string request_id = 1; string reason = 2; }
+message FeedRequest { uint64 after_visible_dt = 1; uint32 limit = 2; }
+// Eval(jwt, rego) for one record and one caller, for example
+// {read: true, write: false, banner: "SECRET//SQUIRREL", bg: "red", fg: "white"}.
+// read = false: the file is answered as missing. rank orders banners; the page shows the greatest.
+message Decision { bool read = 1; bool write = 2; string banner = 3; string bg = 4; string fg = 5; uint32 rank = 6; }
+message FeedResponse { repeated Record records = 1; uint64 last_visible_dt = 2; bool more = 3; repeated Decision decisions = 4; Decision page_banner = 5; }
+message RangeNotSatisfiable { uint64 id = 1; uint64 dt = 2; uint64 total_size = 3; }
+message AccessDenied { uint32 status = 1; string reason = 2; }
+message HistoryRequest { uint64 id = 1; }
+message HistoryResponse { uint64 id = 1; repeated Record records = 2; Decision decision = 3; }
+message DownloadRequest { uint64 id = 1; uint64 dt = 2; uint64 range_start = 3; uint64 range_end = 4; }  // 0, 0: the whole blob
+message DownloadResponse { uint64 id = 1; uint64 dt = 2; bytes content = 3; Decision decision = 4; uint64 range_start = 5; uint64 total_size = 6; }
+message IHaveRequest { string shard = 1; repeated Mark marks = 2; }
+message IHaveResponse { string shard = 1; repeated Mark marks = 2; }
+// The peer leaves out records whose origin is the caller.
+message RecordsRequest { string shard = 1; uint64 after_visible_dt = 2; uint32 limit = 3; }
+message RecordsResponse { string shard = 1; repeated Record records = 2; uint64 last_visible_dt = 3; bool more = 4; }
+message BlobRequest { bytes blob_sha256 = 1; bool urgent = 2; uint64 offset = 3; uint64 length = 4; }
+message BlobResponse { bytes blob_sha256 = 1; bytes content = 2; uint64 offset = 3; uint64 total_size = 4; }
+message BlobMissing { bytes blob_sha256 = 1; }
+message PeerTimedOut { string peer = 1; string call = 2; }
+// One output file of a job: stored as a new file whose parent is the source, named
+// <source name>-<name>, for example plans.pdf-english.txt.
+message Output { string name = 1; bytes content = 2; }
+message JobRequest { uint64 id = 1; uint64 dt = 2; string job = 3; bytes blob_sha256 = 4; }
+message JobResult { uint64 id = 1; uint64 dt = 2; string job = 3; repeated Output outputs = 4; }
+message JobFailed { uint64 id = 1; uint64 dt = 2; string job = 3; string reason = 4; }

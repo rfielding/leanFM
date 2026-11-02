@@ -1,0 +1,10 @@
+sequenceDiagram
+    participant shard_a
+    participant shard_b
+    shard_a->>shard_a: e1 CommitA1
+    shard_a->>shard_a: e2 CommitA2
+    shard_a->>shard_a: e3 CommitA3
+    shard_a->>shard_b: e4 PullAtoB
+    shard_b->>shard_b: e5 ImportA3to0
+    shard_b->>shard_b: e6 ImportA2to0
+    shard_b->>shard_b: e7 ImportA1to3

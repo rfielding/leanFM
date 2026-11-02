@@ -93,16 +93,24 @@ two.
   realizability (non-local choice) condition.
   \item[Everyone who must know, learns.] A role whose later behaviour differs
   between branches must be told which branch was taken, by some message it
-  receives. \texttt{Purchase} fails this test: in the \texttt{soldOut} branch
-  the bank is never told anything, so its local type cannot say whether to wait
-  for \texttt{pay} or to finish.
+  receives. In the \texttt{soldOut} branch of \texttt{Purchase} the bank is never
+  told anything.
 \end{description}
 
-Classic session types reject \texttt{Purchase} and ask for an extra message.
-Real banks do something else: they keep waiting on a queue that carries many
-sessions, and a session that never produces \texttt{pay} simply expires. That
-expiry is a timer, and a timer is physics. LeanFM accepts the protocol only when
-the bank's channel declares it, and then checks what the expiry can cause.
+Classic projection rejects \texttt{Purchase} for that, and asks for an extra
+message to the bank. LeanFM accepts it, for a reason that comes from how servers
+are built: a role whose part in the session has not yet started owes nothing to a
+branch that never contacts it. The bank's part starts when \texttt{pay} arrives,
+as a thread forked for that session; in the \texttt{soldOut} branch that thread
+simply never exists. Each such thread ingests only the messages its session
+expects and sends only the ones it owes, so checking it on its own is exact,
+not an approximation.
+
+The rule still bites a role that has already taken part. If the client first
+placed a hold with the bank and the shop then sold out, the bank's session would
+be open with money held and nobody to tell it to release: LeanFM reports
+``Bank cannot tell which branch Shop chose''. Both cases are checked in
+\texttt{SessionExample.lean}.
 
 When the global type passes, the theory guarantees three things for roles that
 follow their local types: \emph{communication safety} (no message arrives that

@@ -8,7 +8,7 @@
 \usepackage[hidelinks]{hyperref}
 \providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 \ifdefined\darkmode\pagecolor[HTML]{091117}\color[HTML]{F0EDE4}\fi
-\graphicspath{{../renders/}{../reports/browser/}}
+\graphicspath{{../renders/}{../reports/browser/}{../reports/mcp/}}
 \title{PaxosKV\\[1ex]\large A complete LeanFM worked example}
 \author{Project team}
 \date{\today}
@@ -102,6 +102,9 @@ records the rows each session saw.
 the same committed map; the later slot for \texttt{color} wins.}
 \end{figure}
 
+\chapter{Two islands over UDP}
+\input{islands.tex}
+
 \chapter{Known gaps}
 This example runs end to end, but it does not yet close the loop from a
 running system back to the checker. These are the open items, in the order
@@ -119,6 +122,13 @@ they should be fixed:
 \item The requirements declare three \texttt{WebApp} instances; the runtime
   starts one.
 \item Go tests cover envelope round trips and truncated frames, not message
-  loss, duplication, delay or reordering.
+  loss, duplication, delay or reordering. The two-island chapter checks these
+  for one slot in a model; the Go replicas still talk over one TCP-style
+  transport and are not exercised under UDP loss.
+\item The model in \texttt{spec/PaxosUdp.lean} encodes the replicas' rules by
+  hand; it is not yet derived from the session type in
+  \texttt{spec/Session.lean}. It is shaped to fit the MCP server's bounds (64
+  KiB of arguments, 4096 nodes): one slot, two ballots, no duplicate delivery,
+  and loss only in the leader-only slice.
 \end{enumerate}
 \end{document}

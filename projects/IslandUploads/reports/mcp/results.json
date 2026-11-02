@@ -1,0 +1,1005 @@
+{
+ "classify": {
+  "atoms": [
+   {
+    "advice": "move it to Implementation.lean as an internal invariant, or restate it over an event that exposes it",
+    "atom": "visible_dt is assigned in the order records become readable",
+    "class": "implementation-only",
+    "proposedEvent": {
+     "fields": [
+      "subject",
+      "holds",
+      "observed_at"
+     ],
+     "from": "the actor that owns this state",
+     "message": "VisibledtAssignedOrderObserved",
+     "to": "an observer that can check it"
+    },
+    "reason": "no declared message or state reveals this; no event trace can test it",
+    "restated": {
+     "AG": {
+      "implies": [
+       {
+        "after": "VisibledtAssignedOrderObserved"
+       },
+       {
+        "field": {
+         "message": "VisibledtAssignedOrderObserved",
+         "name": "holds",
+         "value": "true"
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "advice": "move it to Implementation.lean as an internal invariant, or restate it over an event that exposes it",
+    "atom": "a shard lets a caller read a file while it holds a concurrent version of the governing policy that denies that caller",
+    "class": "implementation-only",
+    "proposedEvent": {
+     "fields": [
+      "subject",
+      "holds",
+      "observed_at"
+     ],
+     "from": "the actor that owns this state",
+     "message": "ShardLetsCallerObserved",
+     "to": "an observer that can check it"
+    },
+    "reason": "no declared message or state reveals this; no event trace can test it",
+    "restated": {
+     "AG": {
+      "implies": [
+       {
+        "after": "ShardLetsCallerObserved"
+       },
+       {
+        "field": {
+         "message": "ShardLetsCallerObserved",
+         "name": "holds",
+         "value": "true"
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "atom": "LeakA and LeakB never happen",
+    "class": "derived",
+    "needs": "a reducer declaration over LeakA, LeakB (state it in Requirements.lean as a derived predicate), then use {\"derived\": name}",
+    "reason": "the text refers to declared events or states, but a predicate over them is computed, not observed"
+   }
+  ],
+  "bounds": {
+   "maxArgumentBytes": 65536,
+   "maxConcurrentPairs": 64,
+   "maxDepth": 64,
+   "maxDraftStates": 8192,
+   "maxDraftTransitions": 16384,
+   "maxEvents": 512,
+   "maxFormulaNodes": 256,
+   "maxModelNodes": 4096,
+   "maxPredicates": 64,
+   "maxString": 256
+  },
+  "reading": "some atoms are implementation-only; restate them over proposed events before the requirements gate",
+  "tool": "classify_requirement",
+  "verdict": "classified"
+ },
+ "ctl": {
+  "feed-byDt.noSkip": {
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "BeginA1",
+      "state": "s1"
+     },
+     {
+      "message": "BeginA2",
+      "state": "s3"
+     },
+     {
+      "message": "CommitA2",
+      "state": "sa"
+     },
+     {
+      "message": "FeedPage",
+      "state": "sp"
+     },
+     {
+      "message": "CommitA1",
+      "state": "s1g"
+     },
+     {
+      "message": "Missed",
+      "state": "s2p"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "feed-visibleAtBegin.noSkip": {
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "BeginA1",
+      "state": "s1"
+     },
+     {
+      "message": "BeginA2",
+      "state": "s3"
+     },
+     {
+      "message": "CommitA2",
+      "state": "sa"
+     },
+     {
+      "message": "FeedPage",
+      "state": "sp"
+     },
+     {
+      "message": "CommitA1",
+      "state": "s1g"
+     },
+     {
+      "message": "Missed",
+      "state": "s2p"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "feed-visibleAtCommit.noSkip": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 76 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "lanes-contiguous.converge": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 59 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "lanes-contiguous.reverseJump": {
+   "evidence": {
+    "kind": "witness",
+    "note": "joined from nested EF witnesses",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "CommitA1",
+      "state": "s1"
+     },
+     {
+      "message": "CommitA2",
+      "state": "s2"
+     },
+     {
+      "message": "CommitA3",
+      "state": "s4"
+     },
+     {
+      "message": "PullAtoB",
+      "state": "s8"
+     },
+     {
+      "message": "ImportA3to0",
+      "state": "sg"
+     },
+     {
+      "message": "ImportA2to0",
+      "state": "so"
+     },
+     {
+      "message": "ImportA1to3",
+      "state": "ss"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "lanes-max.converge": {
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "CommitA1",
+      "state": "s1"
+     },
+     {
+      "message": "CommitA2",
+      "state": "s2"
+     },
+     {
+      "message": "PullAtoB",
+      "state": "s5"
+     },
+     {
+      "message": "ImportA2to2",
+      "state": "sb"
+     },
+     {
+      "message": "RestartB",
+      "state": "sk"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "policy-allHeads.noLeak": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 137 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "policy-allHeads.readDuringPartition": {
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "ReadB",
+      "state": "s0"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "policy-latestWins.noLeak": {
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "TightenOnA",
+      "state": "s1"
+     },
+     {
+      "message": "EditOnB",
+      "state": "s4"
+     },
+     {
+      "message": "PullAtoB",
+      "state": "s9"
+     },
+     {
+      "message": "LeakB",
+      "state": "s9"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "repl-cursor.converge": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 1108 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "repl-ordered.converge": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 291 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "repl-ordered.mustConverge": {
+   "evidence": {
+    "kind": "counterexample",
+    "loopsBackTo": 7,
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "BeginA1",
+      "state": "s1"
+     },
+     {
+      "message": "BeginA2",
+      "state": "s4"
+     },
+     {
+      "message": "BeginB1",
+      "state": "sa"
+     },
+     {
+      "message": "CommitA1",
+      "state": "sk"
+     },
+     {
+      "message": "CommitA2",
+      "state": "sx"
+     },
+     {
+      "message": "CommitB1",
+      "state": "s1c"
+     },
+     {
+      "message": "PullAtoB",
+      "state": "s1q"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "repl-ordered.writeInPartition": {
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Partition",
+      "state": "s3"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "repl-unordered.converge": {
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "BeginA1",
+      "state": "s1"
+     },
+     {
+      "message": "BeginA2",
+      "state": "s4"
+     },
+     {
+      "message": "CommitA2",
+      "state": "sc"
+     },
+     {
+      "message": "PullAtoB",
+      "state": "ss"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "retry-hold.xStarts": {
+   "evidence": {
+    "kind": "counterexample",
+    "loopsBackTo": 3,
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "StartF1",
+      "state": "s1"
+     },
+     {
+      "message": "StartF2",
+      "state": "s4"
+     },
+     {
+      "message": "RetryF1",
+      "state": "s4"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "retry-yield.xFinishes": {
+   "evidence": {
+    "kind": "counterexample",
+    "loopsBackTo": 6,
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "StartF1",
+      "state": "s1"
+     },
+     {
+      "message": "StartF2",
+      "state": "s4"
+     },
+     {
+      "message": "FailF1",
+      "state": "s7"
+     },
+     {
+      "message": "StartX",
+      "state": "sd"
+     },
+     {
+      "message": "FailF2",
+      "state": "sg"
+     },
+     {
+      "message": "BackoffF1",
+      "state": "sb"
+     },
+     {
+      "message": "StartF1",
+      "state": "se"
+     },
+     {
+      "message": "FailF1",
+      "state": "sg"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "retry-yield.xStarts": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 41 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "sched-reserved.smallFirst": {
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 66 reachable nodes"
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "sched-shared.smallFirst": {
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "StartB1",
+      "state": "s1"
+     },
+     {
+      "message": "StartB2",
+      "state": "s5"
+     },
+     {
+      "message": "DoneB1",
+      "state": "sb"
+     }
+    ]
+   },
+   "isError": false,
+   "reason": null,
+   "verdict": "disproved"
+  }
+ },
+ "explain": {
+  "converge": {
+   "lints": [],
+   "reading": "on every path, always (it is possible that eventually Synced was just delivered)",
+   "say": "from every state the shards can still converge"
+  },
+  "mustConverge": {
+   "lints": [],
+   "reading": "on every path, eventually Synced was just delivered",
+   "say": "the shards must converge"
+  },
+  "noLeak": {
+   "lints": [],
+   "reading": "on every path, never (LeakA was just delivered or LeakB was just delivered)",
+   "say": "no read is allowed that a held concurrent policy denies"
+  },
+  "noSkip": {
+   "lints": [],
+   "reading": "on every path, never Missed was just delivered",
+   "say": "the feed never skips a readable record"
+  },
+  "readDuringPartition": {
+   "lints": [],
+   "reading": "it is possible that eventually ReadB was just delivered",
+   "say": "eu can read under the policy it holds"
+  },
+  "reverseJump": {
+   "lints": [],
+   "reading": "it is possible that eventually (ImportA3to0 was just delivered and (it is possible that eventually (ImportA2to0 was just delivered and (it is possible that eventually ImportA1to3 was just delivered))))",
+   "say": "imports finish in reverse order: the cursor stays at 0, then the last to finish moves it to 3"
+  },
+  "smallFirst": {
+   "lints": [],
+   "reading": "on every path, (it is not the case that (DoneB1 was just delivered or DoneB2 was just delivered or DoneB3 was just delivered)) holds until StartS was just delivered (and StartS was just delivered does happen)",
+   "say": "a small import starts before any large one finishes"
+  },
+  "writeInPartition": {
+   "lints": [],
+   "reading": "it is possible that eventually (Partition was just delivered and (on some path, (it is not the case that Heal was just delivered) holds until CommitA1 was just delivered (and CommitA1 was just delivered does happen)))",
+   "say": "a write commits while the islands are apart"
+  },
+  "xFinishes": {
+   "lints": [],
+   "reading": "on every path, eventually DoneX was just delivered",
+   "say": "it also finishes, without assuming fair delivery"
+  },
+  "xStarts": {
+   "lints": [],
+   "reading": "on every path, eventually StartX was just delivered",
+   "say": "an import that can succeed gets a lane while others keep failing"
+  }
+ },
+ "server": {
+  "name": "leanfm",
+  "version": "0.1.0"
+ },
+ "tools": [
+  "validate_generated_artifacts",
+  "requirements_interrogation",
+  "code_generation_prompt",
+  "explain_formula",
+  "check_ctl",
+  "check_trace",
+  "classify_requirement",
+  "knows"
+ ],
+ "traces": {
+  "feed-byDt.noSkip": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "s2p"
+     ],
+     "task": "feed-byDt"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: BeginA1\"]\n    e1[\"e2: BeginA2\"]\n    e2[\"e3: CommitA2\"]\n    e3[\"e4: FeedPage\"]\n    e4[\"e5: CommitA1\"]\n    e5[\"e6: Missed\"]\n    e0 --> e1\n    e1 --> e2\n    e1 -.-> e2\n    e2 --> e3\n    e3 --> e4\n    e0 -.-> e4",
+   "concurrent": [
+    [
+     "e1",
+     "e6"
+    ],
+    [
+     "e2",
+     "e6"
+    ],
+    [
+     "e3",
+     "e6"
+    ],
+    [
+     "e4",
+     "e6"
+    ],
+    [
+     "e5",
+     "e6"
+    ]
+   ],
+   "concurrentCount": 5,
+   "issues": [],
+   "reading": "6 events over 1 task(s); 5 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant shard_a\n    participant browser\n    participant observer\n    shard_a->>shard_a: e1 BeginA1\n    shard_a->>shard_a: e2 BeginA2\n    shard_a->>shard_a: e3 CommitA2\n    shard_a->>browser: e4 FeedPage\n    shard_a->>shard_a: e5 CommitA1\n    observer->>observer: e6 Missed",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "feed-visibleAtBegin.noSkip": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "s2p"
+     ],
+     "task": "feed-visibleAtBegin"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: BeginA1\"]\n    e1[\"e2: BeginA2\"]\n    e2[\"e3: CommitA2\"]\n    e3[\"e4: FeedPage\"]\n    e4[\"e5: CommitA1\"]\n    e5[\"e6: Missed\"]\n    e0 --> e1\n    e1 --> e2\n    e1 -.-> e2\n    e2 --> e3\n    e3 --> e4\n    e0 -.-> e4",
+   "concurrent": [
+    [
+     "e1",
+     "e6"
+    ],
+    [
+     "e2",
+     "e6"
+    ],
+    [
+     "e3",
+     "e6"
+    ],
+    [
+     "e4",
+     "e6"
+    ],
+    [
+     "e5",
+     "e6"
+    ]
+   ],
+   "concurrentCount": 5,
+   "issues": [],
+   "reading": "6 events over 1 task(s); 5 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant shard_a\n    participant browser\n    participant observer\n    shard_a->>shard_a: e1 BeginA1\n    shard_a->>shard_a: e2 BeginA2\n    shard_a->>shard_a: e3 CommitA2\n    shard_a->>browser: e4 FeedPage\n    shard_a->>shard_a: e5 CommitA1\n    observer->>observer: e6 Missed",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "lanes-contiguous.reverseJump": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "ss"
+     ],
+     "task": "lanes-contiguous"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: CommitA1\"]\n    e1[\"e2: CommitA2\"]\n    e2[\"e3: CommitA3\"]\n    e3[\"e4: PullAtoB\"]\n    e4[\"e5: ImportA3to0\"]\n    e5[\"e6: ImportA2to0\"]\n    e6[\"e7: ImportA1to3\"]\n    e0 --> e1\n    e1 --> e2\n    e2 --> e3\n    e4 --> e5\n    e5 --> e6",
+   "concurrent": [
+    [
+     "e1",
+     "e5"
+    ],
+    [
+     "e1",
+     "e6"
+    ],
+    [
+     "e1",
+     "e7"
+    ],
+    [
+     "e2",
+     "e5"
+    ],
+    [
+     "e2",
+     "e6"
+    ],
+    [
+     "e2",
+     "e7"
+    ],
+    [
+     "e3",
+     "e5"
+    ],
+    [
+     "e3",
+     "e6"
+    ],
+    [
+     "e3",
+     "e7"
+    ],
+    [
+     "e4",
+     "e5"
+    ],
+    [
+     "e4",
+     "e6"
+    ],
+    [
+     "e4",
+     "e7"
+    ]
+   ],
+   "concurrentCount": 12,
+   "issues": [],
+   "reading": "7 events over 1 task(s); 12 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant shard_a\n    participant shard_b\n    shard_a->>shard_a: e1 CommitA1\n    shard_a->>shard_a: e2 CommitA2\n    shard_a->>shard_a: e3 CommitA3\n    shard_a->>shard_b: e4 PullAtoB\n    shard_b->>shard_b: e5 ImportA3to0\n    shard_b->>shard_b: e6 ImportA2to0\n    shard_b->>shard_b: e7 ImportA1to3",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "lanes-max.converge": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "sk"
+     ],
+     "task": "lanes-max"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: CommitA1\"]\n    e1[\"e2: CommitA2\"]\n    e2[\"e3: PullAtoB\"]\n    e3[\"e4: ImportA2to2\"]\n    e4[\"e5: RestartB\"]\n    e0 --> e1\n    e1 --> e2\n    e3 --> e4",
+   "concurrent": [
+    [
+     "e1",
+     "e4"
+    ],
+    [
+     "e1",
+     "e5"
+    ],
+    [
+     "e2",
+     "e4"
+    ],
+    [
+     "e2",
+     "e5"
+    ],
+    [
+     "e3",
+     "e4"
+    ],
+    [
+     "e3",
+     "e5"
+    ]
+   ],
+   "concurrentCount": 6,
+   "issues": [],
+   "reading": "5 events over 1 task(s); 6 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant shard_a\n    participant shard_b\n    shard_a->>shard_a: e1 CommitA1\n    shard_a->>shard_a: e2 CommitA2\n    shard_a->>shard_b: e3 PullAtoB\n    shard_b->>shard_b: e4 ImportA2to2\n    shard_b->>shard_b: e5 RestartB",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "policy-latestWins.noLeak": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "s9"
+     ],
+     "task": "policy-latestWins"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: TightenOnA\"]\n    e1[\"e2: EditOnB\"]\n    e2[\"e3: PullAtoB\"]\n    e3[\"e4: LeakB\"]\n    e0 --> e2\n    e1 --> e3",
+   "concurrent": [
+    [
+     "e1",
+     "e2"
+    ],
+    [
+     "e1",
+     "e4"
+    ],
+    [
+     "e2",
+     "e3"
+    ],
+    [
+     "e3",
+     "e4"
+    ]
+   ],
+   "concurrentCount": 4,
+   "issues": [],
+   "reading": "4 events over 1 task(s); 4 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant shard_a\n    participant shard_b\n    participant reader\n    shard_a->>shard_a: e1 TightenOnA\n    shard_b->>shard_b: e2 EditOnB\n    shard_a->>shard_b: e3 PullAtoB\n    shard_b->>reader: e4 LeakB",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "repl-unordered.converge": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "ss"
+     ],
+     "task": "repl-unordered"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: BeginA1\"]\n    e1[\"e2: BeginA2\"]\n    e2[\"e3: CommitA2\"]\n    e3[\"e4: PullAtoB\"]\n    e0 --> e1\n    e1 --> e2\n    e1 -.-> e2\n    e2 --> e3",
+   "concurrent": [],
+   "concurrentCount": 0,
+   "issues": [],
+   "reading": "4 events over 1 task(s); 0 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant shard_a\n    participant shard_b\n    shard_a->>shard_a: e1 BeginA1\n    shard_a->>shard_a: e2 BeginA2\n    shard_a->>shard_a: e3 CommitA2\n    shard_a->>shard_b: e4 PullAtoB",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "retry-hold.xStarts": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "s4"
+     ],
+     "task": "retry-hold"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: StartF1\"]\n    e1[\"e2: StartF2\"]\n    e2[\"e3: RetryF1\"]\n    e0 --> e1\n    e1 --> e2",
+   "concurrent": [],
+   "concurrentCount": 0,
+   "issues": [],
+   "reading": "3 events over 1 task(s); 0 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant lanes\n    lanes->>lanes: e1 StartF1\n    lanes->>lanes: e2 StartF2\n    lanes->>lanes: e3 RetryF1",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  },
+  "sched-shared.smallFirst": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "sb"
+     ],
+     "task": "sched-shared"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: StartB1\"]\n    e1[\"e2: StartB2\"]\n    e2[\"e3: DoneB1\"]\n    e0 --> e1\n    e1 --> e2",
+   "concurrent": [],
+   "concurrentCount": 0,
+   "issues": [],
+   "reading": "3 events over 1 task(s); 0 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant lanes\n    lanes->>lanes: e1 StartB1\n    lanes->>lanes: e2 StartB2\n    lanes->>lanes: e3 DoneB1",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  }
+ }
+}

@@ -1,0 +1,333 @@
+\chapter{Open questions before one-shotting}
+The specification checks, and its risky parts are checked by the server. What
+follows is everything not yet in a Lean file: questions the source would
+otherwise answer by guessing, requirements agreed but not yet written, and the
+limits of the tools. Each item moves out of this chapter when it is realized.
+
+The questions are grouped by what they hold up. The first group decides security
+and must be settled before any source is written; the others shape features
+that could ship later.
+
+\section{Security: settle before the source}
+\begin{enumerate}
+\item \textbf{Keeping apps read-only.} An app runs in its viewer's browser, so
+  whatever lets it read could let it write. The proposal: serve uploaded content
+  from its own origin, whose session can only read, under a Content Security
+  Policy that lets it reach nothing but this server; writes need credentials that
+  origin never holds. Is that enough, or should each folder's apps get an origin
+  of their own, so one app cannot read what another folder's app was shown?
+\item \textbf{Who may write a policy?} Anyone who may write a folder can create
+  \texttt{plans.doc--policy.rego} next to someone else's \texttt{plans.doc} and,
+  being the last level of the walk, it overwrites what it likes. Creating or
+  editing a \texttt{--policy.rego} should need \texttt{write} under the policy it
+  would replace, and perhaps a separate decision: should \texttt{Eval} return
+  \texttt{admin} beside \texttt{list}, \texttt{read} and \texttt{write}?
+\item \textbf{May a lower level loosen?} \texttt{list} may not, because names are
+  content. May \texttt{read}, below a folder the caller may list? May
+  \texttt{write}? May a lower banner replace a higher one, or is the banner the
+  greatest rank on the path?
+\item \textbf{The root.} The walk starts at \texttt{/files} (and at
+  \texttt{/apis}). What do their policies say, and who may write them? With no
+  policy found at all, the answer is deny.
+\item \textbf{A policy change reaches back in time.} A subscriber's cursor moves
+  past records it may not read. If a later version of their policy lets the caller
+  in, those records are already behind the cursor and are never sent; if it shuts
+  the caller out, files already shown stay on screen. The new policy version is a
+  record in the feed, but the subscriber may not be allowed to read it, so it
+  cannot be the cue. The shard has to act: when a policy version commits, it
+  evaluates the files below it again and sends the changed decisions as fresh
+  events, appearing and withdrawing files. How is that bounded when the policy
+  governs a large tree?
+\item \textbf{Records relayed from an untrusted origin.} A peer's feed carries
+  records it imported from third shards. If a shard trusts the peer but not the
+  third shard, does it drop those records? A policy file from an origin it does
+  not trust must not govern anything there. And so that a relay cannot forge an
+  origin, should each record be signed by its origin shard?
+\item \textbf{Attributes beyond the token.} APIs look users up by id, because not
+  every permission is in the token. Where does that directory live, and what
+  happens during a partition? If two shards hold different directory data, one
+  token gets different answers on each, so the directory needs the same treatment
+  as the records: replicated, and its answers as of the same records.
+\item \textbf{Paths.} Is everything under \texttt{/files/} or \texttt{/apis/}? The
+  upload endpoints (\texttt{POST /uploads}, \texttt{PUT /uploads/\{id\}}) sit
+  outside both today; should an upload be a \texttt{PUT} to the file's own path
+  under \texttt{/files/}, in parts?
+  Names must not contain \texttt{/}, must not be \texttt{.} or \texttt{..}, and a
+  name ending in \texttt{--policy.rego} is always a policy. The proposal for
+  symlinks and relative paths, which seat folders tend to raise: none in the
+  store; paths are canonical and \texttt{..} is refused, because a second name for
+  a file would let a link grant access; ``my files'' across the seats a person
+  fills is a view the UI builds from the seats in their token.
+\item \textbf{Mounting.} A mount is an internal HTTP address that
+  \texttt{ingressHttps} forwards to. How is it declared: a file in the tree, such
+  as \texttt{/apis/db/.--mount.json}, written under the policy at that path, so
+  mounts replicate like everything else? Does each island run its own copy of a
+  service, or forward across islands? And how many requests may one mount have in
+  flight, so that one slow service cannot take every connection the door has,
+  the way a failing import could once take every lane?
+\item \textbf{The cursor can reveal hidden activity.} When a page holds only
+  records the caller may not read, the cursor still moves, which tells the caller
+  that something they cannot see was written. Is that acceptable, or should the
+  cursor advance only on a schedule, whatever was written?
+\end{enumerate}
+
+\section{Policy}
+\begin{enumerate}
+\item \textbf{What does \texttt{Eval} see?} Does each level's policy get the table
+  from above as input, so it can decide relative to it (``as my parent, but not
+  for contractors'')?
+\item \textbf{Which entries are supplied?} Banner and colours are; what else
+  (retention, content type, job list, allowed models)?
+\item \textbf{Concurrent versions of one level's policy} are combined entry by
+  entry: \texttt{list}, \texttt{read} and \texttt{write} by and, the banner by
+  greatest rank. What about other entries?
+\item \textbf{One rank for heterogeneous files.} A listing may show a medical
+  record beside a national marking, and its page banner is the greatest rank among
+  them. That needs every policy's rank on one scale. Who defines the scale: the
+  root policy, or a supplied entry every policy must use? And what does the page
+  banner say when the greatest rank belongs to a file of a different kind than
+  the rest?
+\item \textbf{Token age per tree.} Should a policy be able to supply a maximum
+  token age, so a sensitive folder demands a token issued within the hour while
+  the rest accept a day's?
+\item \textbf{Tightening across a partition.} Should some classifications make
+  policy changes wait for a quorum, so that a partitioned island cannot honour a
+  policy that was tightened elsewhere?
+\item \textbf{Break glass.} Medical systems let a clinician open a record they
+  are not normally allowed to, in an emergency, on condition that it is recorded
+  and reviewed. Is that a \texttt{read} granted with an audit record, and what
+  does the banner say?
+\item \textbf{Erasure.} GDPR gives a person the right to have their data erased,
+  and this design never loses a version and replicates it everywhere. Erasing
+  needs a tombstone that every shard honours by deleting the blobs of the named
+  versions. Is that in scope?
+\end{enumerate}
+
+\section{Replication and storage}
+\begin{enumerate}
+\item \textbf{The same path written on both islands.} During a partition two
+  people can upload \texttt{plans.doc} into one folder, one on each island. They
+  get different \texttt{id}s, so after repair one path names two files. Is the
+  later one renamed, are both shown, or does one become a version of the other?
+  Folders, including a seat's home folder made the first time its token is seen,
+  have the same problem, and one proposed answer: derive a folder's \texttt{id}
+  from its path, so that \texttt{mkdir -p} on both islands makes the same folder,
+  and two first policies become concurrent versions of one policy, which both
+  must allow, and so fail safe.
+\item \textbf{Clocks.} \texttt{dt} is nanoseconds at the origin, and the latest
+  version is the greatest \texttt{(dt, shard)}, so an island whose clock runs fast
+  wins every concurrent edit. Is that acceptable, or should \texttt{dt} be a
+  hybrid logical clock that never runs behind anything its shard has seen?
+\item \textbf{Space.} Nothing is ever lost, so superseded and deleted versions keep
+  their blobs. Is anything ever reclaimed, and under whose policy?
+\item \textbf{Volume.} Many cameras, all day: a record is visible only once its
+  blob is here, so every shard that replicates a camera folder holds all of its
+  video. Should a folder's policy be able to keep its raw video at its origin
+  while the derived text replicates, with the video fetched by range on demand?
+  That relaxes ``a visible record has its blob'' for those folders.
+\item \textbf{A new shard.} Its cursors start at zero, and it pulls every peer's
+  whole feed; the waiting bound of 100000 records throttles that. Should a new
+  shard start from a copy instead?
+\item \textbf{A seat's home shard.} Does a seat write only on its home shard,
+  which would make concurrent edits of its files rare, or anywhere?
+\item \textbf{Retried uploads.} How long is \texttt{request\_id} remembered, and
+  is a retried upload on the other island a second file (as specified) or the
+  same one?
+\end{enumerate}
+
+\section{Content, jobs and feeds}
+\begin{enumerate}
+\item \textbf{Uploading a folder.} With \texttt{curl}, one file at a time in
+  parts, or a tar that the shard unpacks, each entry passing the same checks?
+\item \textbf{The job chain.} Which jobs run on which kinds of file, and may a
+  derived file trigger further jobs (\texttt{x.mp4--audio.wav--lyrics.vtt})?
+  Jobs run only where the blob was created, so the chain runs once.
+\item \textbf{Where jobs run.} LLM jobs want GPUs, which may be one big machine
+  per island. May a worker sit on another machine in the island, and how does it
+  reach the blob and return its outputs?
+\item \textbf{Which models may see a file?} A folder's policy could supply the
+  models, or model origins, that jobs may run on its files (an earlier map system
+  had a rule against Chinese models); a job whose model is not allowed does not run. Per
+  file, per job, or both?
+\item \textbf{New questions of old footage.} After an event, people want new jobs
+  run over weeks of video. Can jobs be requested again later, over a range of old
+  files, and bounded so they do not starve the live cameras?
+\item \textbf{Annotations more sensitive than their source.} An annotation that
+  names a suspect gets the video's permissions by default; its own
+  \texttt{--policy.rego} can narrow them. Should some jobs write their outputs
+  with a narrower policy from the start?
+\item \textbf{Cameras never finish.} A file exists only when it is complete, and a
+  camera's stream never is. Does a camera upload a segment a minute, each its own
+  file, with a wall-clock start in a clock the cameras agree on?
+\item \textbf{Moving objects.} A track that reports every second is a new version
+  every second. Is a track a file whose versions are its positions, or a series of
+  segment files? Either way the map needs the latest position of thousands of
+  objects at once.
+\item \textbf{Feeds that cost money.} Every paid external feed needs a budget it
+  cannot exceed: a cap on requests or spend per period, after which it stops and
+  says so. Who sets it, per feed or per island?
+\end{enumerate}
+
+\section{Search and speed}
+\begin{enumerate}
+\item \textbf{Search is a service.} Indexed things live in a database behind an
+  API, so search is mounted under \texttt{/apis/}, filled by subscribing to the
+  shard's feed. A hit's name needs \texttt{list}; its snippet and position (seconds
+  into a video) need \texttt{read}; a count of hidden hits must not show. Which
+  engine: Elasticsearch, as the original should have used, or something embedded?
+\item \textbf{How fast is a query?} A listing, a feed page, a search: what is the
+  target for the first result, under what load? An earlier map system's ten
+  seconds is the number to beat by a wide margin.
+\end{enumerate}
+
+\section{Subscribers}
+A UI subscribes to a shard's feed exactly as a peer does. There is one feed: the
+records readable on that shard, in the order they became readable, read from a
+cursor in that shard's clock. A peer is the subscriber whose token can read
+everything; a browser is one whose token reads less. Replication is invisible to
+the UI, because an import is one more event in the feed. Two things follow for
+free:
+\begin{itemize}\tightlist
+\item \textbf{Failover is a second cursor.} A browser keeps a cursor per shard,
+  \texttt{\{a: 50, b: 99\}}, exactly as a shard keeps one per peer. Moving to the
+  other island resumes from that island's cursor, and a record seen on both is
+  dropped by its \texttt{(id, dt)}.
+\item \textbf{Order is the same function.} Events arrive in commit order, so a
+  concurrent version can arrive after a newer one. The UI keeps the greatest
+  \texttt{(dt, shard)} per \texttt{id}, the same function every shard computes.
+\end{itemize}
+What comes only from a token that cannot read everything (a policy change
+reaching back in time, and a cursor that reveals hidden activity) is in the
+security questions above.
+
+\section{Agreed, not yet in Lean}
+\begin{itemize}\tightlist
+\item \textbf{The tree and its policies.} Content at ordinary URLs under
+  \texttt{/files/<org>/<seat>}; metadata built as a table from the root down, each
+  folder's \texttt{.--policy.rego} and then the file's
+  \texttt{<name>--policy.rego} overwriting the entries they set; a seat's home
+  folder and its policy made on the first verified token. Writing into an empty
+  folder may supply its \texttt{.--policy.rego} first; otherwise the folder gets
+  its parent's. Writing a file creates the missing folders on its path, like
+  \texttt{mkdir -p}, if the walk to the nearest existing folder allows it. The
+  specification still uses \texttt{plans.pdf.rego} and
+  \texttt{/files/\{id\}/\{dt\}/content}.
+\item \textbf{\texttt{list} beside \texttt{read} and \texttt{write}.} 404 without
+  \texttt{list}, 403 with \texttt{list} but not \texttt{read}; \texttt{list}
+  narrows down the path and \texttt{read} implies it. The \texttt{Decision}
+  message in \texttt{Requirements.proto} has no \texttt{list} yet, and
+  \texttt{AccessDenied} in \texttt{Session.lean} (\texttt{Download},
+  \texttt{Forward}, \texttt{Socket}) allows only 401 and 404, not 403.
+\item \textbf{Names are content.} A name the caller may not list never reaches
+  them, and every channel that could carry one needs a negative requirement and a
+  test:
+  \begin{itemize}\tightlist
+  \item listings, feed pages, history and search results;
+  \item a 404 body or header that echoes the requested path;
+  \item server and access logs, which must record ids rather than paths, or be
+    protected at the level of what they record;
+  \item the \texttt{Referer} header a viewer frame sends, and browser history:
+    content pages are served with \texttt{Referrer-Policy: no-referrer};
+  \item metadata and job outputs, whose names embed their source's name: by
+    default they share its permissions, and a policy may not loosen that;
+  \item the paths of folders between the root and a readable file.
+  \end{itemize}
+  A caller who already knows a hidden path learns nothing from asking for it: the
+  answer is the same as for a path that never existed.
+\item \textbf{No classification system in the source.} The server never names a
+  marking, a rank or a rule; they all come from policy files. Tests: the same
+  binary serves a NATO-marked tree and a GDPR tree, each with the right banners
+  and decisions, and the source contains no marking strings.
+\item \textbf{Trust is chosen per shard.} Each shard picks its peers and its token
+  issuers. The properties ``Converge after repair'' and ``Same view everywhere
+  after replication'' in \texttt{Requirements.lean} still speak of every shard;
+  they must be restated per token: any two shards that accept the token, and hold
+  the same records, give it the same answers; and the shards that accept a token
+  converge with each other after repair.
+\item \textbf{The door.} \texttt{ingressHttps} serves \texttt{/files/} and forwards
+  \texttt{/apis/} mounts to internal services. Its protocols, \texttt{Forward} and
+  \texttt{Socket}, are in \texttt{Session.lean} and checked; its negative
+  requirements are not yet: no service is reachable except through it; no request
+  reaches a service without a verified token and an allowing walk; no identity
+  header from a client reaches a service; every request is counted per mount.
+\item \textbf{Apps read, APIs write.} An uploaded app is read-only to its users.
+  Every API that writes identifies the user and checks their permissions on every
+  call, with negative requirements and tests like the core: no call without a
+  verified identity; no write the policy at its path does not allow; no input
+  reaching a query, a shell or a path unescaped; no answer that names what the
+  caller may not list; every write recorded with who made it.
+\item \textbf{Two halves, one pattern.} \texttt{/files/} for data and apps,
+  \texttt{/apis/} for services users mount. An API serves its data as a feed read
+  by cursors, with no state per user, like the record feed.
+\item \textbf{One feed for browsers and peers.} \texttt{FeedRequest} and
+  \texttt{RecordsRequest} become one message: records past a cursor, in the
+  shard's \texttt{visible\_dt} order, filtered by the caller's token. The two
+  tasks, and their properties, are still separate in \texttt{Requirements.lean}.
+\item \textbf{Content brings its viewer.} The shard serves uploaded HTML, scripts
+  and styles as a web site, so a folder can be an app; deep links such as
+  \texttt{?ts=40} are the viewer's own convention.
+\item \textbf{Derived files are named \texttt{source--x}.} With two dashes they are
+  metadata about their source and share its permissions by the naming convention.
+  \texttt{Requirements.lean} still names them with one dash.
+\item \textbf{Every derived thing answers ``what is this?''.} A report entry, a
+  map object or a search hit links back, through its name, to the raw file it
+  came from, which the caller may open only if they may read it.
+\item \textbf{Replay costs no blob.} A resent record already held, by its
+  \texttt{(id, dt)}, causes no \texttt{BlobRequest}. It is in
+  \texttt{Implementation.lean}, but not yet a requirement a test can check.
+\item \textbf{Seeking is fast everywhere.} The first byte of any range arrives
+  within a fixed time, whatever its offset in the file: the 9000 MB video that
+  seeked instantly. It is not yet a performance requirement.
+\item \textbf{Simulated sources for stress tests.} Like the fake airport that made
+  planes fly around an earlier map: simulated cameras, feeds and tracks, at
+  rates set by the test, drive the performance requirements (uploads per second,
+  the latest positions of thousands of tracks, the first byte of a search) on both
+  islands, through a partition and its repair.
+\end{itemize}
+
+\section{Limits of the tools}
+\begin{itemize}\tightlist
+\item The models in \texttt{Islands.lean} are written by hand; they are not yet
+  derived from the session types.
+\item The MCP server refuses arguments over 64 KiB (\texttt{maxArgumentBytes} in
+  LeanFM's \texttt{Logic.lean}; HTTP itself allows 8 MiB) and models over 4096
+  nodes. Every model here is scaled down to fit: two shards, two or three
+  records, two lanes. \texttt{repl-cursor} is 61 KB. A larger bound with a time
+  budget would let the models grow.
+\item A nested \texttt{EF} witness stops at its first conjunct.
+  \texttt{mcp\_islands.py} joins the rest by asking again from where it stopped.
+\item Liveness holds only under fair delivery. The server shows the lassos where
+  it fails, and the requirements state the assumption instead of hiding it.
+\end{itemize}
+
+\appendix
+\chapter{The project Makefile}
+The project needs this file at \texttt{projects/IslandUploads/Makefile}, and
+\texttt{book/Makefile} is a copy of PaxosKV's. Copying from a PDF turns tabs into
+spaces, so recipe lines are written with \texttt{>} and the last line turns
+them into tabs. From the LeanFM root:
+\begin{Verbatim}[fontsize=\small]
+cp projects/PaxosKV/book/Makefile projects/IslandUploads/book/Makefile
+cat > projects/IslandUploads/Makefile <<'MAKEFILE'
+LEANFM := $(abspath ../..)
+.PHONY: all check spec-check session models mcp book clean
+all: check book
+spec-check:
+> cd $(LEANFM) && python3 scripts/chatui_specification.py $(CURDIR) \
+    Project.Requirements.requirements Project.Implementation.implementation
+session:
+> cd $(LEANFM) && lake build LeanFM.Session && \
+    lake env lean $(CURDIR)/spec/Session.lean
+models:
+> cd $(LEANFM) && lake env lean --run $(CURDIR)/spec/Islands.lean
+mcp: models
+> python3 scripts/mcp_islands.py
+> python3 scripts/mcp_report.py
+check: spec-check session
+book:
+> $(MAKE) -C book
+clean:
+> $(MAKE) -C book clean
+MAKEFILE
+perl -pi -e 's/^> /\t/' projects/IslandUploads/Makefile
+\end{Verbatim}

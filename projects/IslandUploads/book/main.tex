@@ -1,0 +1,616 @@
+\documentclass[11pt,oneside]{book}
+\usepackage{underscore}
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{longtable,booktabs,array}
+\usepackage{fancyvrb}
+\usepackage{upquote}
+\usepackage{amsmath}
+\usepackage[hidelinks]{hyperref}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\ifdefined\darkmode\pagecolor[HTML]{091117}\color[HTML]{F0EDE4}\fi
+\graphicspath{{../reports/mcp/}}
+\newcommand{\Figure}[3]{\begin{figure}[htbp]\centering
+\ifdefined\darkmode\includegraphics[width=#2\textwidth,height=0.42\textheight,keepaspectratio]{#1-dark.png}%
+\else\includegraphics[width=#2\textwidth,height=0.42\textheight,keepaspectratio]{#1.png}\fi
+\caption{#3}\end{figure}}
+\title{IslandUploads\\[1ex]\large Persistent data sites on HTTP, across partitionable islands}
+\author{Project team}
+\date{\today}
+\begin{document}
+\frontmatter
+\maketitle
+\tableofcontents
+\mainmatter
+
+\chapter{What this project is}
+\section{The idea}
+HTTP is well specified for reading. \texttt{GET}, ranges, caching, content types
+and redirects work the same everywhere, and every browser and every tool agrees
+on them. Writing is another matter:
+\begin{itemize}\tightlist
+\item nobody agrees on a permission system;
+\item there is little agreement on how uploads should work, and many options;
+\item authentication and authorization are a similar wild west.
+\end{itemize}
+Settle those, and you have persistent data sites to build on: something like a
+global SharePoint, built on standards. WebDAV was meant to be that, but its
+permission system was left unspecified; an attempt to build on Google's Go
+library for it failed for exactly that reason, and for lack of good hooks.
+
+This project settles them. Writes are uploads in parts that resume; permissions
+are policies in the tree, evaluated from a verified token; identity is a set of
+seats, signed by issuers each site chooses to trust. Then a reverse proxy makes
+everything else usable from the files:
+\begin{description}\tightlist
+\item[\texttt{/files/}] data, and the apps that go with it. Static files are
+  especially good for big data: videos, map layers. Replication helps with
+  migration as much as with partitions.
+\item[\texttt{/apis/}] services, preferably every service there is, so that apps
+  point to them from static HTML. Whatever is about finding incrementally added
+  bits, the indexed things, generally lives in a database behind an API.
+\end{description}
+
+\section{The design in brief}
+This project restates, as a checked specification, the design of a file server
+that was once written by hand (\texttt{github.com/rfielding/microcms}, with
+per-file \texttt{--policy.rego} policies and AI-derived files), extended to
+shards on islands that may be partitioned.
+
+
+People upload files on different islands. Every page shows its classification
+banner at the top and the bottom, and every file its own label. On every shard
+that lets them in, people see the same files, the same latest versions and the
+same banners, once replication has caught up.
+
+That simple surface rests on a design that never waits for another island. The
+islands may be cut apart for a day, as when an anchor drags a cable across the
+Mediterranean; both sides keep accepting uploads and edits, and the shards
+reconcile when the link returns. Nothing is overwritten and nothing is lost.
+
+\begin{description}\tightlist
+\item[Immutable records.] A record is identified by \texttt{(id, dt)},
+  nanoseconds at the shard that wrote it. An edit is a new record with the same
+  \texttt{id}, a later \texttt{dt}, and \texttt{prev\_dts}: the versions it was
+  based on. Two versions are concurrent when neither is reachable from the other.
+\item[Latest is a function.] The latest version of a file is the one with the
+  greatest \texttt{(dt, shard)}. Every shard holding the same records computes the
+  same answer, and every superseded version stays readable as history.
+\item[Local visibility.] \texttt{visible\_dt} is the moment a record became
+  readable on one shard. It is assigned on write and on import, never replicated,
+  and a browser pages through a shard by it.
+\item[Anti-entropy.] Each shard keeps a cursor per peer: how far up that peer's
+  \texttt{visible\_dt} feed it has fully imported. A shard that
+  replicates from \texttt{a} and \texttt{b} keeps \texttt{\{a: 50, b: 99\}}, each
+  value in that peer's own clock. It tells \texttt{a} ``I have up to 50''; \texttt{a}
+  answers that its feed now reaches 250, and the caller pulls 51 to 250 in
+  \texttt{a}'s order. Records the peer imported from a third shard come
+  along. A record arriving twice is stored once.
+\item[Content in parts.] An upload starts empty, is appended to in parts small
+  enough for any proxy, and is finished; the file exists only once its size and
+  sha256 check out. A rejected part names the offset the shard holds, and the
+  browser resends from there. Downloads and copies between shards use byte ranges,
+  so a copy cut off by a partition resumes where it stopped.
+\item[Import lanes.] A record from a peer becomes visible only once its blob has
+  been pulled, by ranges, and verified, the way an upload is finished; that is when
+  its \texttt{visible\_dt} is assigned. Imports run in 128 lanes per shard and
+  finish in any order; pulled records wait on disk for a lane and may lie far
+  behind the cursor. Large blobs (over 64 MiB) take at most 96 lanes, so a short file always
+  opens one. A download that fails gives up its lane, backs off, and later
+  seeks to the offset it holds and continues by range. The cursor is kept in the peer's clock and moves only
+  over a run of finished imports, while each import gets this shard's own
+  \texttt{visible\_dt} as it commits,
+  so a shard turned off mid-replication misses nothing: delivery is at least once,
+  a file may be sent again, and a repeat changes nothing. A visible
+  record always has its blob, so a download never waits on another island.
+\item[Jobs make files.] When a blob is created on a shard, that shard runs its
+  jobs: \texttt{plans.pdf--image-001.jpg}, \texttt{plans.pdf--english.txt},
+  \texttt{plans.pdf--celebrities.json}. Outputs are ordinary files named after
+  their source, so they have its permissions, and replicate like any other.
+\item[Policy.] Walking from the root to the file, each level's policy
+  overwrites entries of a table that ends as a decision such as
+  \texttt{\{list: true, read: true, write: false, banner: "SECRET//SQUIRREL",
+  bg: "red", fg: "white", rank: 3\}}; \texttt{list}, \texttt{read} and \texttt{write} are
+  calculated by \texttt{Eval} from the caller's token. \texttt{list} decides
+  whether the caller can even tell the file exists, \texttt{read} whether they may
+  open it, \texttt{write} whether they may add a version; the banner is what they
+  see. Job outputs answer to their source's policy.
+\end{description}
+
+\section{What it is for}
+It is a content management system you can use with \texttt{curl}. Upload a
+folder into \texttt{/files/yeehaw/rjf}:
+\begin{Verbatim}[fontsize=\small]
+./concert/dimmuborgir.mp4
+./concert/index.html
+./concert/dimmuborgir.mp4--lyrics.vtt
+\end{Verbatim}
+The video is raw content; \texttt{index.html} is the viewer that goes with it; the
+\texttt{.vtt} is metadata about the video, timed text, named after it so it
+shares its permissions. Every uploaded file goes through a chain of AI jobs that
+make derived files out of raw ones: transcripts, extracted text, labels,
+translations. All text is indexed for search. Searching for ``darkness'' finds
+the video, with the sentence around the word and how many seconds into the file
+it is, and links to \texttt{/files/yeehaw/rjf/concert/?ts=40}: the viewer, at
+forty seconds.
+
+Content brings its own viewer. Map layers come with the map viewer that shows
+them; a dataset comes with the React app that explores it. The tree has two
+halves: \texttt{/files/} holds data and the apps that go with it, and
+\texttt{/apis/} holds services. Structured data is reached through a service,
+such as \texttt{GET /apis/.../db} with a JSON body, answering the same policies as
+files at that path. Users do this themselves: they write a custom app and upload
+it, or mount an API into the tree.
+
+Mounting is what the \texttt{ingressHttps} interface is for. It is the one door
+from outside. It serves \texttt{/files/} itself and forwards each request under
+a mount in \texttt{/apis/} to an internal HTTP service, so the APIs in the
+backend mix with the apps and files in the frontend under one origin. A service
+lives in the island's internal scope, where nothing outside can reach it except
+through the door. At the door the token is verified and the walk is run for the
+request's path; the service receives the request with the caller's verified
+identity attached, and with any identity the caller tried to attach removed. The
+door is also where every request is counted: errors, latency and load, per
+mount.
+
+An API is fast for many users at once the same way the record feed is: it serves
+its data as a feed, and each user reads it from their own cursor. The server
+keeps no state per user and answers every page the same way, so a thousand maps
+following the same tracks cost a thousand cheap page reads, not a thousand
+sessions. One idea runs through the whole system: records, replication, the UI
+and the APIs are all cursors over feeds.
+
+The alternative was lived, too: one giant Python application, changed constantly
+to impress whoever was at the last meeting. Here the platform stays small and
+stable, and the apps that change with every meeting are the users' own files.
+
+The aim is tons of React apps and tons of services, which people assemble from
+whatever they have access to. An app is just files. It runs as its viewer and
+is read-only to them: it sees exactly what its viewer may see, and changes
+nothing. Writes go through the upload endpoints and through APIs, which identify
+the user and check their permissions on every call, often looking up more than
+the token carries; the APIs are where security has to be airtight. That is what
+lets apps be written in a restricted environment, against data the developers may
+see, without a development team cleared for everything: the same app, uploaded
+into a classified tree, shows each viewer what that viewer is cleared for.
+
+What a viewer of that demo is really thinking is security cameras. Upload the
+footage of many cameras and let the AI jobs write timed text over it: ``a bomb
+goes off here'', ``a man places something here, the day before''. A search then
+runs across every camera and every day at once, and each hit opens the right
+video at the right second. Immutable records with their sha256 suit evidence:
+nothing is overwritten, and every version of every annotation stays in history.
+
+The same shape served a map. An earlier system, on one machine with two
+H200 GPUs, followed the war in Ukraine: feeds of COTS objects moving about, feeds
+of fixed objects everywhere, and news services that an LLM turned into reports
+of things to read and things to put on the map, each with its links. Here every
+feed is uploads, the LLM's reports and map layers are derived files, and the map
+is an uploaded viewer. Because a derived file is named after its source, every
+object on the map can answer ``what is this?'': clicking a tank rolling down
+Pennsylvania Avenue leads back to the feed entry, or the news item, that put it
+there.
+
+That system also showed what this one must not repeat. It had no permission
+system at all. A query took ten seconds. And there was no way to forbid its
+developers from using public LLMs to write code, only a rule against Chinese
+models. Here permissions are the foundation; queries must be fast (a target is
+an open question); and since developers will use whatever tools they like, the
+design assumes it: apps are written outside, against data their writers may
+see, and only the policies decide what an app shows.
+
+\section{The tree}
+Files live in a tree with ordinary URLs, so the server hosts content directly:
+\texttt{GET /files/centcom/j2-analyst/plans.doc} returns the file, ranges and all.
+The first two levels are an organisation and a seat, such as
+\texttt{/files/centcom/j2-analyst}: seats are roles that people fill (below).
+
+Folders are made the way \texttt{mkdir -p /files/pacom/billg/mswin} makes them:
+writing \texttt{/files/pacom/billg/mswin/setup.exe} creates every missing folder on
+the way, if the walk to the nearest existing folder gives the caller
+\texttt{write}. A new folder with no policy of its own simply adds no level to
+the walk, so its parent's table governs it, and later changes above reach it.
+If a folder's \texttt{id} is derived from its path, \texttt{mkdir -p} is
+idempotent: run on both islands while they are apart, it makes the same folders,
+and they merge after repair.
+
+Whoever writes into an empty folder may supply its policy first: its
+\texttt{.--policy.rego} is then the folder's first file, written under the policy
+the walk finds above it. If they do not, the folder gets its parent's policy, by
+the same walk.
+
+The first time a verified token says its
+bearer fills a seat, say \texttt{j2-analyst} of \texttt{centcom}, the shard
+creates \texttt{/files/centcom/j2-analyst/} and, as its first file, a
+\texttt{.--policy.rego} that lets whoever fills that seat write. From then on the
+seat manages its folder's policy, whoever is sitting in it.
+
+\section{Policy}
+A file's metadata is a table built by walking down the tree. It starts empty
+at the root, and at each level on the way to the file the entries that level sets
+overwrite the ones from above. For \texttt{/files/centcom/j2-analyst/plans.doc}
+the levels are
+\begin{enumerate}\tightlist
+\item \texttt{/files/.--policy.rego}, then \texttt{/files/centcom/.--policy.rego},
+  then \texttt{/files/centcom/j2-analyst/.--policy.rego}: each folder's policy,
+  where it has one;
+\item \texttt{/files/centcom/j2-analyst/plans.doc--policy.rego}, the file's own
+  policy, last.
+\end{enumerate}
+An entry is either supplied, written into the policy as it stands (a banner, its
+colours), or calculated by \texttt{Eval} from the caller's verified token
+(\texttt{list}, \texttt{read}, \texttt{write}). A level that says nothing about an entry leaves
+it as it came from above, so a folder can change its banner and keep its parent's
+rule for who reads. The table is computed from the root on every request, so a
+change to a folder's policy reaches everything below it at once.
+
+Naming conventions settle the questions that usually start arguments here,
+such as whether directories are classified, or whether they are created
+implicitly. The defaults are:
+\begin{description}\tightlist
+\item[Folders are implicit.] Writing a file makes its folders, like
+  \texttt{mkdir -p}.
+\item[Classify a folder or a file.] A folder is classified by its
+  \texttt{.--policy.rego}, which also governs the folder's own entry; a file by
+  its \texttt{name--policy.rego}. Neither is required.
+\item[Metadata about a file is named after it.] A file named
+  \texttt{plans.doc--}\textit{something} is about \texttt{plans.doc}, and by
+  default has the same permissions: its walk passes through
+  \texttt{plans.doc}'s table before its own. So whoever may read
+  \texttt{plans.doc} may by default read \texttt{plans.doc--policy.rego}.
+\item[Restricting metadata is more of the same.]
+  \texttt{plans.doc--policy.rego--policy.rego} can keep readers of
+  \texttt{plans.doc} from looking at its policy.
+\end{description}
+The shard runs every walk with its own authority. A caller who may not read a
+policy still gets its result: whether they may list, read and write the file, and the
+banner to show. A policy the caller may not list is answered like any missing
+file.
+
+\paragraph{Names are content.} A file's name can say as much as the file: a name
+that states an accusation about a named person tells everyone who sees it what the
+file holds, without opening it. So a name is governed by the same table as the
+content, and the permission that governs it is \texttt{list}: whether the
+caller may see that the file exists. Folders are the same: a folder's name, such
+as a seat's home folder, is governed by the folder's own table. Since a path is a
+chain of names, whoever may not list a folder may not learn the name of anything
+below it. Hence \texttt{list} only narrows on the way down: a lower level can take
+it away, never give it back. \texttt{read} implies \texttt{list}, since nobody
+opens what they cannot see. Other entries are overwritten, for now: whether
+\texttt{read}, \texttt{write} or the banner may loosen on the way down is an
+open question in the last chapter.
+
+\texttt{list} without \texttt{read} is how people ask for access. The caller sees
+the name, its banner and that it is closed to them, and asks out of band: the
+system shows what exists and does not run the asking. A request for its content
+is refused with 403. Without \texttt{list}, the answer is 404, the
+same as for a path that never existed.
+
+Clicking a file in the UI opens it in a viewer frame, a JPEG for instance,
+bannered top and bottom with \texttt{SECRET//SQUIRREL} from that file's table.
+The listing around it carries the page banner, the greatest rank among the files
+shown.
+
+\paragraph{One flexible system.} There is one classification system, flexible
+enough that the files it protects are heterogeneous. Medical records, GDPR
+personal data, foreign military releasability and national classifications have
+little in common: different markings, different rules, different reasons to open
+or close a file. Each is written as policy in the same tree and computed by the
+same walk, so one server holds them all side by side. The server interprets only
+a small core of the table (\texttt{list}, \texttt{read}, \texttt{write}, the
+banner, its colours and its rank); everything else a policy computes is carried
+through for the UI and for the policy below it.
+
+The reason is a lesson. A product tied to one marking system, NATO's, had to be
+demonstrated to an audience in Amsterdam whose cases were GDPR, and the app had
+to be rewritten to accommodate them. Here no marking, rank table or rule lives in
+the source. A demo for a different audience is a different tree of policies,
+served by the same binary.
+
+\section{People and trust}
+\paragraph{Roles are seats.} Files belong to roles, not to people. A role is a
+seat, and a person is placed in it; the token says which seats its bearer fills,
+and policies grant \texttt{list}, \texttt{read} and \texttt{write} to seats. The
+org chart is implicit in how roles are created: a boss's seat and a security
+officer's seat are granted access by the policies above the seats they oversee,
+so somebody can always still get to things. When people rotate out and move on,
+the identity provider empties their seat and fills it with someone else; the
+files never had a person's address as their owner, so nothing is orphaned, and
+nobody needs a full-time job of offboarding to make sure information is not lost.
+
+How quickly someone loses a seat is how long their token lives: ``how immediately
+do people get fired?'' Shards verify tokens on their own, partitioned or not, so
+nothing reaches back to cancel one; it expires. A few hours suits some uses, and
+a tree can demand fresher tokens than another (an open question below).
+
+\paragraph{Whom to trust.} Tokens come from issuers, and different people trust
+different ones: one deployment trusts the USA and the EU, another China and
+Russia, another the USA, Canada and a local 7-Eleven. That is no stranger than a
+browser trusting many countries' certificate authorities, including countries that
+do not trust each other. A store clerk who checks a driver's licence can issue a
+token that says only ``over 21, resident of Virginia'', with no card number, and
+any site that trusts that store can sell and ship age-restricted goods on it.
+Here, a policy sees the issuer beside the claims, so a folder can believe one
+issuer about age and another about clearance.
+
+The same freedom applies to shards. Not every shard merges every other: each
+picks the peers it replicates from and the token issuers it trusts, and that
+choice is local, not replicated. The replication graph is whatever those choices
+make it. ``The same view everywhere'' is a promise to a user, not to the whole
+world: every shard that trusts the user's token enough to let them in at all
+shows them the same thing, once those shards hold the same records. A shard that
+does not trust their issuer is not one of their shards. The shards a user can
+use must therefore replicate with each other.
+
+This is how separate file systems merge. Nothing on disk names a numeric user:
+ownership and access are claims in a signed token, evaluated by the policy found
+in the tree. A UID differs on every machine and ties a disk to a login; a path
+like \texttt{/files/centcom/j2-analyst} means the same thing on every shard, so two
+trees from two islands combine into one without remapping anyone.
+
+\section{Reproducing everything}
+From the LeanFM root, with the server running (\texttt{make serve}):
+\begin{Verbatim}
+python3 scripts/chatui_specification.py $PWD/projects/IslandUploads \
+  Project.Requirements.requirements Project.Implementation.implementation
+lake build LeanFM.Session
+lake env lean projects/IslandUploads/spec/Session.lean        # session checks
+lake env lean --run projects/IslandUploads/spec/Islands.lean  # models
+cd projects/IslandUploads
+python3 scripts/mcp_islands.py && python3 scripts/mcp_report.py
+make -C book
+\end{Verbatim}
+
+\input{history.tex}
+
+\chapter{Requirements}
+\texttt{spec/Requirements.lean} and \texttt{spec/Requirements.proto} are the
+contract; this chapter reads them as they are today. Where the design in the
+first chapter has moved on (\texttt{list}, the tree walk, seats, the door), the
+last chapter lists what has yet to reach them. Four roles take part: \texttt{Browser},
+\texttt{Shard}, \texttt{Peer} (the same shard process, answering another shard)
+and \texttt{Worker} (the shard's job runner).
+
+\section{Tasks}
+\begin{description}\tightlist
+\item[\texttt{upload}] start, parts, finish, answered by the shard alone; new
+  content for an existing file is an upload naming the file and the versions it is
+  based on. \texttt{request\_id} makes a retried start idempotent.
+\item[\texttt{update}] a version without new content (rename, delete); never
+  refused because its base is not the latest, only when the shard does not hold
+  the base at all.
+\item[\texttt{feed}] the next page after the browser's last \texttt{visible\_dt},
+  filtered by policy, each record with its decision and the page with its banner.
+\item[\texttt{history}] every version of one file.
+\item[\texttt{download}] checked against policy and served from the local blob:
+  200 for the whole file, 206 for any range, which browsers send on their own
+  when a video seeks, and 416 for a range outside the file.
+\item[\texttt{replicate}] one \texttt{IHave} exchange, then pages of the peer's
+  feed past the caller's cursor, in the peer's \texttt{visible\_dt} order.
+\item[\texttt{import}] a record's blob pulled by ranges in a lane, resuming after
+  a timeout; the record becomes visible at the end.
+\item[\texttt{derive}] a job on a blob created here; its outputs become files.
+\end{description}
+
+\section{What must always, and never, happen}
+\begin{itemize}\tightlist
+\item Writes never wait for another island; a file exists only when complete;
+  parts and copies resume from the offset already held; ranges are exact.
+\item Records never change between shards; every superseded version stays in history.
+\item Cursors are prefixes: a shard holds every record of a peer's feed up to its cursor for that peer.
+\item The feed never skips a record it can show; every shown file carries its
+  label; the page banner is the most restrictive label shown, at top and bottom.
+\item Two shards holding the same records give the same token the same page.
+\item Nothing is shown that policy denies, and a file the caller may not read is
+  answered exactly as a missing one; writes need \texttt{write}; job outputs are
+  governed by their source; unverifiable tokens are denied; concurrent policy
+  versions are combined, not overwritten.
+\item A visible record has its blob; imports are bounded; cursors advance only
+  over finished imports; jobs run only where the blob was created.
+\item Possibly: the islands are apart for a day. Handling: keep writing on both
+  sides, retry anti-entropy on its timer, records first, then blobs.
+\end{itemize}
+
+\chapter{Session types}
+\texttt{spec/Session.lean} writes the tasks as global types with the
+\texttt{LeanFM.Session} library. Four of them:
+
+\input{../reports/mcp/session-excerpt.tex}
+
+Its \texttt{\#guard} lines check, whenever the file is elaborated:
+\begin{itemize}\tightlist
+\item every protocol is well formed, and every role can tell which branch it is in;
+\item every message on an HTTP channel is a request its sender may make, or the
+  response to a pending request, going back to the role that asked: no cuts;
+\item every channel's conditions (timeouts, retried requests, rejection, closes)
+  are handled;
+\item browsers reach shards only through ingress, shards each other through
+  peering, and a worker only from its own machine;
+\item the shard-to-shard channel between \texttt{us} and \texttt{eu} also
+  surfaces \texttt{partition}, which the protocols do not handle: the design
+  handles it instead, and the next chapter checks how.
+\end{itemize}
+
+Two choices in these types are worth a word. In \texttt{Forward} (below) the
+host is contacted in one branch only; it need not be told about the others,
+because its part of the session starts with the request it receives, as a thread
+forked for that session. And anti-entropy is not one long session but one per page: the peer
+answers each \texttt{RecordsRequest} on its own, and whether to ask again is the
+puller's decision. A peer that had to know when the puller stopped would be a
+protocol bug; the checker reported exactly that for a first draft that wrapped
+the pages in a loop.
+
+\section{The door}
+A browser never reaches a mounted service itself. \texttt{GET /apis/\$x/\$task}
+goes to the shard's \texttt{ingressHttps}, which verifies the token, runs the walk
+for the path, and forwards \texttt{GET /\$task} to the host mounted at
+\texttt{\$x}; the answer goes back the way it came, as the reverse proxy in
+microCMS did. A websocket opens the same way and then carries frames both ways,
+each direction until its own end closes it. Big responses stream: one response
+whose body arrives over time, on a channel whose \texttt{close} is handled.
+
+\input{../reports/mcp/session-door.tex}
+
+\texttt{Session.lean} checks both. The forwarded call passes the HTTP discipline:
+every message is a request its sender may make (browser to door, door to host) or
+the answer to one, going back to whoever asked. The host is in the island's
+internal scope: the door reaches it, a browser and the other island cannot. And
+the checks bite: a variant in which the host answers the browser directly is
+reported as a cut, since the browser never called the host; and the websocket
+fails the HTTP check, which is why, after its upgrade, it is checked as a stream.
+
+Big deployments of the same shape run on Kubernetes: the door is an ingress
+controller, a mount is a service, and the internal scope is the cluster network.
+
+\chapter{Across a partition}
+\texttt{spec/Islands.lean} builds seven small models of shards, lanes, feeds and
+policies, each in variants, and \texttt{scripts/mcp\_islands.py} asks the LeanFM MCP
+server about them. Every answer is in \texttt{reports/mcp/results.json}.
+
+\input{../reports/mcp/verdicts.tex}
+
+\section{Replication follows the peer's feed}
+The first model pulls by a mark per origin: everything of that origin with a
+\texttt{dt} above the mark. With one writer per shard, records of an origin become
+readable in \texttt{dt} order, and from every state the shards can still converge
+(over all 291 nodes). Allow two concurrent writers and the server finds the hole
+in four steps: \texttt{a2} is committed before \texttt{a1}, \texttt{b} pulls and
+moves its mark past \texttt{a2}, and \texttt{a1} is never pulled.
+
+\Figure{repl-unordered-converge}{0.8}{Marks by \texttt{dt} with commit order broken:
+\texttt{b}'s mark passes \texttt{a1} before \texttt{a1} is readable. Drawn by
+\texttt{check\_trace} from the server's counterexample.}
+
+The design does not ask origins to commit in \texttt{dt} order. A shard asks
+``how far up are you?'' in the peer's own feed: its cursor is a position in the
+order the peer made records readable, which is \texttt{visible\_dt}, assigned
+at commit. A record committed late lands at the end of that feed, past every
+cursor already given out, so nobody's cursor can skip it. With the same two
+concurrent writers, and the cursor in place of the mark, the server proves that
+from every state the shards can still converge (over all 1108 nodes). This is
+the feed result below, applied between shards instead of to a browser.
+
+Writes do commit during a partition (the witness starts with \texttt{Partition}).
+Convergence must still be helped along: without fairness the server returns a
+lasso in which \texttt{b} keeps pulling and \texttt{a} never does.
+
+\section{Lanes need a contiguous cursor}
+The cursor is kept in the peer's clock, not ours. Each import is given this
+shard's own \texttt{visible\_dt} when it commits, and that says nothing about how
+far up the peer's feed we are, so the cursor cannot be read back from local
+records. It is the committed offset of a Kafka consumer: a separate value per
+peer, moved by the imports, in the same commit as the import that moves it.
+
+Import lanes finish out of order. If the cursor moves to the highest position
+imported, a restart that loses the queue loses a record for good: \texttt{a2}
+finishes first, the cursor jumps to 2 past \texttt{a1}, the restart drops
+\texttt{a1}, and the next pull starts after \texttt{a2}.
+
+\Figure{lanes-max-converge}{0.5}{Cursor at the highest import:
+\texttt{ImportA2to2}, then \texttt{RestartB}, and \texttt{a1} is never pulled
+again. Each import is labelled with the cursor after its commit.}
+
+The fix is to remember which pulled records are still in flight and move the
+cursor only to the highest peer value below which every one has finished. If a
+page's imports finish in reverse order, nothing moves while they do; when the
+last one, the lowest, finishes, the cursor jumps straight to the top of the page.
+The server proves that this converges from every state (over all 59 nodes, three
+records), and finds the reverse-order run itself.
+
+\Figure{lanes-contiguous-reverseJump}{0.5}{A contiguous cursor, imports finishing
+in reverse order: \texttt{ImportA3to0} and \texttt{ImportA2to0} leave it at 0, and
+\texttt{ImportA1to3} moves it to 3.}
+
+Turn a machine off anywhere in this and the next round asks again from the
+cursor. Records above it that had already finished are resent; each is already
+held by its \texttt{(id, dt)} and is dropped without pulling its blob again. At
+worst a file in flight is copied twice.
+
+\section{Short files always open a lane}
+With every lane open to every import, large files can fill them all, and a small
+file waits for one of them to finish. Keeping a share of the lanes for small
+files means a small import starts before any large one finishes (scaled down to
+two lanes, one of them reserved, over all 66 nodes).
+
+\Figure{sched-shared-smallFirst}{0.4}{Shared lanes: two large imports take both
+lanes, and one finishes before the small file starts.}
+
+\section{A failing download yields its lane}
+A blob that keeps failing to download would hold its lane for as long as it
+retries, and two such blobs hold both lanes of the scaled-down model: an import
+that would succeed never starts. If a failed attempt gives up its lane and waits
+out a backoff, that import always gets a lane (over all 41 nodes).
+
+\Figure{retry-hold-xStarts}{0.4}{Retrying in place: \texttt{F1} and \texttt{F2}
+keep failing in the two lanes, and \texttt{X} never starts.}
+
+Getting a lane is all that yielding can promise. Whether \texttt{X} then finishes
+depends on the network delivering its bytes, and the server shows a run in which
+it never does while the failing imports cycle. That is the fair-delivery
+assumption again, stated as a requirement rather than hidden.
+
+\section{The feed needs the same order}
+Paging by \texttt{dt} misses records, and so does paging by a
+\texttt{visible\_dt} taken when a write begins: a later write commits first, the
+browser's cursor passes the earlier one, which then becomes readable behind it.
+Assigning \texttt{visible\_dt} when a write commits, through one writer, is
+proved complete.
+
+\Figure{feed-visibleAtBegin-noSkip}{0.6}{\texttt{visible\_dt} assigned at begin:
+\texttt{A2} commits first, the page moves the cursor past \texttt{A1}, and
+\texttt{A1} is missed.}
+
+All three holes have one cause: a cursor or a mark moved past something not
+yet readable. The controls are the single writer queue (records become readable
+in the order others page by, browsers and peers alike) and the contiguous cursor; their negative tests are
+these counterexamples.
+
+\section{Concurrent policy edits}
+\texttt{us} tightens \texttt{plans.pdf.rego} while \texttt{eu} edits it later
+without seeing the tightening. If the latest \texttt{dt} wins, the edit on
+\texttt{eu} reopens the file once the two are combined:
+
+\Figure{policy-latestWins-noLeak}{0.7}{Latest wins: \texttt{b} holds the
+tightening and the later edit, and lets the reader in.}
+
+Requiring every concurrent version to allow, until a version based on all of them
+is written, is proved leak-free. One thing remains, by design: during the
+partition, \texttt{eu} enforces the policy it holds. A shard cannot enforce a
+tightening it has not received. If that is unacceptable for some classification,
+changes to its policy must wait for a quorum, which is a different requirement.
+
+\section{What cannot be observed}
+\input{../reports/mcp/classify.tex}
+
+The first two must be restated over events before they can be tested; the third
+is how this chapter states them.
+
+\chapter{Implementation}
+\texttt{spec/Implementation.lean} maps every role and message:
+\begin{itemize}\tightlist
+\item one Go binary, \texttt{islandd}, per shard; records in SQLite with the
+  original collection's indexes: \texttt{(dt)}, \texttt{(parent\_id, id, dt)},
+  \texttt{(id, dt)}, \texttt{(shard, dt)}, \texttt{(visible\_dt)};
+\item one writer goroutine per shard assigns \texttt{visible\_dt} and commits in
+  the same step: the control for both commit-order holes;
+\item strictly increasing nanosecond timestamps per process;
+\item uploads as \texttt{POST /uploads}, \texttt{PUT /uploads/\{id\}} with an
+  \texttt{Upload-Offset} header, \texttt{POST /uploads/\{id\}/finish}; parts are
+  appended to a file and fsynced, and the file is renamed into place only after
+  its sha256 checks; downloads and peer copies answer \texttt{Range} with 206;
+\item encryption at rest is the volume's (LUKS or the cloud disk's), not the
+  application's, so a range stays a plain file read;
+\item anti-entropy every 5 seconds per peer, while the import queue has room;
+  128 lane goroutines pull blobs by ranges into part files, verify, rename, and
+  hand the record to the writer; each peer's cursor, in that peer's clock, moves in the commit that finishes a contiguous run of imports;
+\item downloads through \texttt{net/http} \texttt{ServeContent}: 200, 206,
+  \texttt{If-Range}, \texttt{HEAD} and 416, with the stored content type;
+\item JWTs verified before any read or write; policies evaluated by embedded OPA
+  with network and file builtins disabled, a 50 ms budget, errors denying;
+\item jobs as configured commands, two workers per shard, outputs written back as
+  files.
+\end{itemize}
+
+\input{open.tex}
+\end{document}

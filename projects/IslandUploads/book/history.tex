@@ -1,0 +1,211 @@
+\chapter{How the design was reached}
+This book is where the design lives until it is written in Lean. The owner of
+the original system describes it as he built it. The description is written as
+requirements and small models, and the LeanFM MCP server checks the models. Every
+hole it finds is either a mistake in the transcription or a real choice in the
+design. Corrections go back into the specification, and the questions nobody can
+answer yet are kept in the last chapter. The source is written in one pass once
+the security questions there are settled; the others shape features that can
+ship later.
+
+Each entry below says where it lives now. Once something is in a Lean file, that
+file is the record and this book only explains it.
+
+\section{Corrections that changed the specification}
+Each entry was caught in conversation and corrected the design. Each says
+where it lives: in a Lean file, or in this book only, until it is realized.
+\begin{enumerate}\tightlist
+\item \textbf{\texttt{visible\_dt} is local.} ``visibleDt means nothing to us. That
+  was just a field attached to the record to determine the order in which the
+  current shard will read it.'' It is not replicated; an import gets the importing
+  shard's own value. (\texttt{Requirements.proto}, field 15.)
+\item \textbf{It is assigned at commit.} ``That is when visibleDt is assigned, when
+  it is committed and processed.'' Assigned at begin, the feed skips records, and
+  the server shows how. (\texttt{Implementation.lean}, the writer.)
+\item \textbf{Jobs run where the blob was created,} and everything they produce is
+  a file: \texttt{plans.pdf-english.txt} (now \texttt{plans.pdf--english.txt},
+  below). Imports never run jobs.
+  (\texttt{Requirements.lean}, proof ``Jobs never run on imports''.)
+\item \textbf{Policy returns read and write.} \texttt{Eval(jwt, rego)} decides
+  ``whether they can even tell if the file exists''. A file the caller may not
+  read is answered exactly as a missing one. (\texttt{Requirements.lean}.
+  Superseded below: existence is governed by \texttt{list}, and only a caller
+  who may not list a file gets the missing-file answer.)
+\item \textbf{The window is concurrency, not distance.} 128 lanes means 128
+  imports at once, finishing ``in some random order''; a failing file may sit far
+  behind the cursor. (\texttt{Requirements.lean}, ``Imports are bounded''.)
+\item \textbf{Imports are downloads.} A record from a peer is pulled with its blob
+  by ranges, resumed by seeking, and exists only when the blob is complete.
+  (\texttt{Requirements.lean}, task \texttt{import}.)
+\item \textbf{Replication is ``how far up are you''.} ``You tell me how far up you
+  are on replication, and I give you everything you have not seen.'' Marks per
+  origin by \texttt{dt} became a cursor per peer in that peer's feed.
+  (\texttt{Requirements.lean}; model \texttt{repl-cursor}.)
+\item \textbf{Two clocks.} ``peer.visibleDt is not our.visibleDt.'' The cursor
+  is kept in the peer's clock, in its own table, and moves like a Kafka consumer's
+  committed offset: imports finishing out of order hold it still, and the one that
+  completes the run moves it to the top of the finished, contiguous run.
+  (\texttt{Implementation.lean}; model \texttt{lanes-contiguous}.)
+\item \textbf{Policies are found by walking the tree.} A file's own
+  \texttt{plans.doc--policy.rego}, else its folder's \texttt{.--policy.rego}, else
+  the parent's, up to the root. Files have ordinary URLs under
+  \texttt{/files/<org>/<user>}, and a user's home folder and its policy are made
+  the first time their token is seen. (Superseded below: the walk builds a table
+  rather than stopping at the nearest policy, and home folders belong to seats.
+  \texttt{Requirements.lean} still names \texttt{plans.pdf.rego} and serves content
+  by \texttt{id} and \texttt{dt}.)
+\item \textbf{A folder's policy comes first, or its parent's.} ``If you write into
+  an empty directory, supply a policy first! Or else, it gets its parent.'' Folders
+  are made like \texttt{mkdir -p}: writing a file creates the missing folders on
+  its path. (Book only.)
+\item \textbf{Policy is a table built from the root down.} ``A hashtable that is
+  populated from the root, with entries overwritten as you go down the tree to the
+  file.'' Not the nearest policy alone: each level overwrites only the entries it
+  sets, supplied ones like the banner and calculated ones like \texttt{read} and
+  \texttt{write}. ``You might have access to a file, but not the policy about it'': the
+  shard runs the walk with its own authority and the caller sees only the result.
+  (Book only: \texttt{Requirements.lean} still has one \texttt{.rego} per file or
+  folder.)
+\item \textbf{Naming conventions instead of arguments.} ``Should directories be
+  classified? Are directories implicitly created? We want sensible defaults, where
+  you may put a classification over a directory or on an individual file, and use
+  naming conventions to get out of these weird pickles.'' Folders are implicit; a
+  folder or a file may carry a policy; \texttt{name--}\textit{x} is metadata about
+  \texttt{name} with its permissions by default, and
+  \texttt{name--policy.rego--policy.rego} restricts who sees the policy. (Book
+  only.)
+\item \textbf{Names are content.} From an example file whose name alone accused a
+  named person of a crime: ``I wonder what is in it?'' A name is governed like
+  the content, so no channel may carry a name its reader may not see, and the
+  permission over names narrows down the path. (That permission became
+  \texttt{list} in the next entry. Book only.)
+\item \textbf{\texttt{list} is its own permission.} ``Another permission: List,
+  which can be granted so that you can see that a file exists, and ask for
+  permission. Different classification systems (medical, GDPR, foreign military)
+  can be wildly different.'' And: ``It is one flexible classification system,
+  such that the files protected are heterogeneous.'' The lesson behind it: a
+  product tied to NATO markings had to be rewritten to demonstrate GDPR cases to
+  an audience in Amsterdam. The name is governed by \texttt{list}, the content by
+  \texttt{read}; the server interprets only a core of the table. (Book only.)
+\item \textbf{Roles are seats.} ``Roles are like seats, into which butts are
+  placed. Better to assign files to a role, that a person fills. That way, when
+  people rotate out and move on, you don't need a full-time offboarding guy to
+  make sure information is not lost.'' Asking for access is out of band; the org
+  chart is implicit in how roles are created, and the token setup ensures that a
+  boss or a security officer can still get to things. Home folders are seats too;
+  token life is ``how immediately do people get fired?'', a few hours for some
+  uses. (Book only.)
+\item \textbf{Many issuers.} ``Imagine that you trust JWT CAs: USA, EU. Somebody
+  else trusts CN, RU. Someone else trusts US, CA, 711.'' A token from a local store
+  that checked a driver's licence can say ``over 21, Virginia'' and nothing more.
+  ``You will not necessarily merge every shard. But you are certainly free to pick
+  shards and JWT signers that you trust.'' And: ``The shards you have should be the
+  same everywhere, given that the shard trusts your cert enough to use the system
+  at all.'' (Book only.)
+\item \textbf{The point: a CMS you use with \texttt{curl}.} ``Subject all uploaded
+  files to an AI chain that makes derived files out of raw files. If you want to
+  upload map layers, upload the viewer that goes around it. The idea is tons of
+  React apps, tons of services. People assemble apps out of everything they have
+  access to, and the app development can be done in the restricted environment,
+  without necessarily needing a dev team that is cleared for anything.'' Search
+  hits carry their context and their position, such as forty seconds into a
+  video. And what the audience really thinks: ``upload a whole bunch of security
+  cameras; let AIs put vtt on it''. (Book only.)
+\item \textbf{Apps read, APIs write.} ``Usually app viewers are read-only to its
+  users. APIs use the user's id to look up what their permissions actually are,
+  not necessarily all in the JWT. The APIs need to be pretty airtight on
+  security.'' (Book only.)
+\item \textbf{A map, too.} An earlier map system: feeds of moving and fixed objects,
+  news turned by an LLM into reports with links and things on the map, and a
+  ``what is this?'' on every object. And its lessons: ``no permission system;
+  10 s query latency; no way to tell people `no public LLMs to code'; but we did
+  have a `no Chinese models' rule.'' Twitter feeds were a source too, and trying
+  that API for a month cost \$2000 by surprise: an external feed needs a hard
+  budget. A process that pretended to be an airport, feeding out track updates to
+  make planes fly around, stress-tested the map. (Book only.)
+\item \textbf{Cursors over API feeds.} ``Put stuff behind APIs, like /apis/, and
+  /files/: the apps, and the data plus apps. Allow users to do some of this stuff
+  themselves. Fast APIs meant supporting multiple users using cursors over data
+  feeds coming out of the APIs. Instead, we had a giant Python app that was
+  constantly updated to impress whoever it was we last had a meeting with.''
+  (Book only.)
+\item \textbf{The door forwards.} ``That is what the ingressHttps is for: it
+  forwards requests to internal http, to mix and match the APIs in the backend
+  with the mounted React apps and files in the frontend.'' Its global type: browser
+  to door \texttt{GET /apis/\$x/\$task}, door to \texttt{host[\$x]} \texttt{GET
+  /\$task}, like the reverse proxy in microCMS; with big streams and websockets.
+  (Protocols in \texttt{Session.lean}: \texttt{Forward}, \texttt{Socket}; its
+  negative requirements are book only.)
+\end{enumerate}
+
+\section{Decisions and their reasons}
+\begin{longtable}{>{\raggedright}p{0.24\textwidth}>{\raggedright}p{0.44\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}}
+\toprule
+Decision & Why & Lives in\\
+\midrule
+\endhead
+Writes never wait for another island & Islands get cut apart for a day: ``somebody
+always dragged an anchor across the Mediterranean.'' A file server that stops
+taking uploads is worse than one that reconciles later. & Requirements; model
+\texttt{repl-ordered} (writes commit while apart)\\
+\addlinespace
+Records are immutable: \texttt{(id, dt)} with \texttt{prev\_dts} & The original
+MongoDB design. Concurrent versions are kept, never overwritten, so nothing is lost
+in a merge. & Requirements; proto\\
+\addlinespace
+Latest is the greatest \texttt{(dt, shard)} & A function of the records held, so
+every shard holding the same records shows the same file. & Requirements\\
+\addlinespace
+Mutable fields are local & ``Immutable with exceptions to keep the schema
+simple'': one record type, with \texttt{visible\_dt} ignored when imported. &
+Proto\\
+\addlinespace
+A cursor per peer, in the peer's feed & A late commit lands at the end of the
+peer's feed, past every cursor already given out. No origin needs to commit in
+\texttt{dt} order, and records from a third shard are relayed. & Requirements;
+\texttt{repl-cursor} proved\\
+\addlinespace
+Delivery at least once & Exactly once needs coordination the islands cannot
+afford. ``It's ok if we get a bunch of files that exist and are the right size; we
+just have to cursor over them.'' & Requirements; Implementation\\
+\addlinespace
+Blob before record & ``Pull the blob in a task that makes the record exist.'' A
+visible record always has its blob, so a download never waits on another island.
+After an outage the network may be ``going crazy catching up'', so pulls are
+bounded rather than greedy. & Requirements\\
+\addlinespace
+128 lanes, 32 kept for small files & Bounded concurrency handles ``incredible
+bursts'', and a short file always opens a lane. & Requirements;
+\texttt{sched-reserved} proved\\
+\addlinespace
+A failing import yields its lane & Otherwise ``it would effectively monopolize one
+lane as long as it tries''. & Requirements; \texttt{retry-yield} proved\\
+\addlinespace
+Uploads in parts & Proxies have body-size limits: ``make a zero length file, then
+keep appending to it with different http calls, then tell it you are done.'' &
+Requirements; Implementation\\
+\addlinespace
+Ranges are mandatory & ``Even if you do not ask for a range, sometimes the browser
+will offer a range.'' Seeking in a 9000 MB video was instant because of it. &
+Requirements; Implementation (\texttt{ServeContent})\\
+\addlinespace
+Encryption is the volume's & The original wrote seekable ciphertext by hand:
+``unimaginable pain; I do not need to do that again.'' With LUKS or the cloud
+disk, a range stays a plain file read. & Implementation\\
+\addlinespace
+Pure-Go SQLite & The original's Postgres cgo driver ``made build times impossibly
+long''. \texttt{modernc.org/sqlite} keeps the original indexes. &
+Implementation\\
+\addlinespace
+Policy as \texttt{Eval(jwt, rego)} & No marking system is built in, so a
+GDPR demo needs no rewrite of a NATO product. The banner is computed per caller:
+\texttt{\{list, read, write, banner, bg, fg, rank\}}. The page shows the greatest rank
+at top and bottom. & Requirements; proto\\
+\addlinespace
+Concurrent policies must all allow & With latest-wins, a later edit on the other
+island undoes a tightening. & Requirements; \texttt{policy-allHeads} proved\\
+\addlinespace
+One session per page & A peer that must know when the puller stops is a protocol
+bug; each page is answered on its own. & \texttt{Session.lean}\\
+\bottomrule
+\end{longtable}

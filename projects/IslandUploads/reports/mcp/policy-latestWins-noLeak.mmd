@@ -1,0 +1,8 @@
+sequenceDiagram
+    participant shard_a
+    participant shard_b
+    participant reader
+    shard_a->>shard_a: e1 TightenOnA
+    shard_b->>shard_b: e2 EditOnB
+    shard_a->>shard_b: e3 PullAtoB
+    shard_b->>reader: e4 LeakB

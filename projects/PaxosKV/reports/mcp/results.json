@@ -1,0 +1,585 @@
+{
+ "classify": {
+  "atoms": [
+   {
+    "advice": "move it to Implementation.lean as an internal invariant, or restate it over an event that exposes it",
+    "atom": "the replicas in us and eu agree on the chosen value",
+    "class": "implementation-only",
+    "proposedEvent": {
+     "fields": [
+      "subject",
+      "holds",
+      "observed_at"
+     ],
+     "from": "the actor that owns this state",
+     "message": "ReplicasUsEuObserved",
+     "to": "an observer that can check it"
+    },
+    "reason": "no declared message or state reveals this; no event trace can test it",
+    "restated": {
+     "AG": {
+      "implies": [
+       {
+        "after": "ReplicasUsEuObserved"
+       },
+       {
+        "field": {
+         "message": "ReplicasUsEuObserved",
+         "name": "holds",
+         "value": "true"
+        }
+       }
+      ]
+     }
+    }
+   },
+   {
+    "atom": "ChosenA and ChosenB are never both delivered",
+    "class": "derived",
+    "needs": "a reducer declaration over ChosenA, ChosenB (state it in Requirements.lean as a derived predicate), then use {\"derived\": name}",
+    "reason": "the text refers to declared events or states, but a predicate over them is computed, not observed"
+   },
+   {
+    "advice": "move it to Implementation.lean as an internal invariant, or restate it over an event that exposes it",
+    "atom": "kv2 has promised ballot 2",
+    "class": "implementation-only",
+    "proposedEvent": {
+     "fields": [
+      "subject",
+      "holds",
+      "observed_at"
+     ],
+     "from": "the actor that owns this state",
+     "message": "Kv2PromisedBallotObserved",
+     "to": "an observer that can check it"
+    },
+    "reason": "no declared message or state reveals this; no event trace can test it",
+    "restated": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Kv2PromisedBallotObserved"
+       },
+       {
+        "field": {
+         "message": "Kv2PromisedBallotObserved",
+         "name": "holds",
+         "value": "true"
+        }
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "bounds": {
+   "maxArgumentBytes": 65536,
+   "maxConcurrentPairs": 64,
+   "maxDepth": 64,
+   "maxDraftStates": 8192,
+   "maxDraftTransitions": 16384,
+   "maxEvents": 512,
+   "maxFormulaNodes": 256,
+   "maxModelNodes": 4096,
+   "maxPredicates": 64,
+   "maxString": 256
+  },
+  "reading": "some atoms are implementation-only; restate them over proposed events before the requirements gate",
+  "tool": "classify_requirement",
+  "verdict": "classified"
+ },
+ "classifyAgreement": {
+  "atoms": [
+   {
+    "atom": "after ChosenA",
+    "class": "observable",
+    "reason": "a delivered message"
+   },
+   {
+    "atom": "after ChosenB",
+    "class": "observable",
+    "reason": "a delivered message"
+   }
+  ],
+  "bounds": {
+   "maxArgumentBytes": 65536,
+   "maxConcurrentPairs": 64,
+   "maxDepth": 64,
+   "maxDraftStates": 8192,
+   "maxDraftTransitions": 16384,
+   "maxEvents": 512,
+   "maxFormulaNodes": 256,
+   "maxModelNodes": 4096,
+   "maxPredicates": 64,
+   "maxString": 256
+  },
+  "reading": "every atom is observable; check_ctl or check_trace can decide it",
+  "tool": "classify_requirement",
+  "verdict": "classified"
+ },
+ "ctl": {
+  "broken.agreement": {
+   "deadlocks": 21,
+   "evidence": {
+    "kind": "counterexample",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Accept1A",
+      "state": "s1"
+     },
+     {
+      "message": "Accepted1",
+      "state": "s4"
+     },
+     {
+      "message": "ChosenA",
+      "state": "sd"
+     }
+    ]
+   },
+   "isError": false,
+   "reachableNodes": 1266,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "broken.conflict": {
+   "continuation": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "sd"
+     },
+     {
+      "message": "Prepare2",
+      "state": "sn"
+     },
+     {
+      "message": "Promise0",
+      "state": "s1d"
+     },
+     {
+      "message": "Accept2B",
+      "state": "s2r"
+     },
+     {
+      "message": "Accepted0",
+      "state": "s50"
+     },
+     {
+      "message": "ChosenB",
+      "state": "s87"
+     }
+    ]
+   },
+   "deadlocks": 21,
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Accept1A",
+      "state": "s1"
+     },
+     {
+      "message": "Accepted1",
+      "state": "s4"
+     },
+     {
+      "message": "ChosenA",
+      "state": "sd"
+     }
+    ]
+   },
+   "isError": false,
+   "path": [
+    {
+     "message": null,
+     "state": "s0"
+    },
+    {
+     "message": "Accept1A",
+     "state": "s1"
+    },
+    {
+     "message": "Accepted1",
+     "state": "s4"
+    },
+    {
+     "message": "ChosenA",
+     "state": "sd"
+    },
+    {
+     "message": "Prepare2",
+     "state": "sn"
+    },
+    {
+     "message": "Promise0",
+     "state": "s1d"
+    },
+    {
+     "message": "Accept2B",
+     "state": "s2r"
+    },
+    {
+     "message": "Accepted0",
+     "state": "s50"
+    },
+    {
+     "message": "ChosenB",
+     "state": "s87"
+    }
+   ],
+   "reachableNodes": 1266,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "correct.agreement": {
+   "deadlocks": 15,
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 1114 reachable nodes"
+   },
+   "isError": false,
+   "reachableNodes": 1114,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "correct.canDecide": {
+   "deadlocks": 15,
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 1114 reachable nodes"
+   },
+   "isError": false,
+   "reachableNodes": 1114,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "correct.conflict": {
+   "deadlocks": 15,
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 1114 reachable nodes"
+   },
+   "isError": false,
+   "reachableNodes": 1114,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "correct.mustDecide": {
+   "deadlocks": 15,
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 1114 reachable nodes"
+   },
+   "isError": false,
+   "reachableNodes": 1114,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "correct.possiblyA": {
+   "deadlocks": 15,
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Accept1A",
+      "state": "s1"
+     },
+     {
+      "message": "Accepted1",
+      "state": "s4"
+     },
+     {
+      "message": "ChosenA",
+      "state": "sd"
+     }
+    ]
+   },
+   "isError": false,
+   "reachableNodes": 1114,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "correct.possiblyB": {
+   "deadlocks": 15,
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Prepare2",
+      "state": "s2"
+     },
+     {
+      "message": "Promise0",
+      "state": "s6"
+     },
+     {
+      "message": "Accept2B",
+      "state": "sh"
+     },
+     {
+      "message": "Accepted0",
+      "state": "s13"
+     },
+     {
+      "message": "ChosenB",
+      "state": "s2c"
+     }
+    ]
+   },
+   "isError": false,
+   "reachableNodes": 1114,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "lossy.mustDecide": {
+   "deadlocks": 4,
+   "evidence": {
+    "kind": "counterexample",
+    "loopsBackTo": 3,
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Accept1A",
+      "state": "s1"
+     },
+     {
+      "message": "Lost",
+      "state": "s4"
+     },
+     {
+      "message": "Lost",
+      "state": "sb"
+     }
+    ]
+   },
+   "isError": false,
+   "reachableNodes": 22,
+   "reason": null,
+   "verdict": "disproved"
+  },
+  "lossy.possiblyA": {
+   "deadlocks": 4,
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Accept1A",
+      "state": "s1"
+     },
+     {
+      "message": "Accepted1",
+      "state": "s2"
+     },
+     {
+      "message": "ChosenA",
+      "state": "s8"
+     }
+    ]
+   },
+   "isError": false,
+   "reachableNodes": 22,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "partitioned.canDecide": {
+   "deadlocks": 1,
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 11 reachable nodes"
+   },
+   "isError": false,
+   "reachableNodes": 11,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "partitioned.possiblyA": {
+   "deadlocks": 1,
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "Accept1A",
+      "state": "s1"
+     },
+     {
+      "message": "Accepted1",
+      "state": "s4"
+     },
+     {
+      "message": "ChosenA",
+      "state": "s6"
+     }
+    ]
+   },
+   "isError": false,
+   "reachableNodes": 11,
+   "reason": null,
+   "verdict": "proved"
+  },
+  "partitioned.possiblyB": {
+   "deadlocks": 1,
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 11 reachable nodes"
+   },
+   "isError": false,
+   "reachableNodes": 11,
+   "reason": null,
+   "verdict": "disproved"
+  }
+ },
+ "explain": {
+  "agreement": {
+   "lints": [],
+   "mode": "compound",
+   "reading": "(ChosenA was just delivered can happen, and on every path, whenever ChosenA was just delivered then (on every path, always (it is not the case that ChosenB was just delivered))) and (ChosenB was just delivered can happen, and on every path, whenever ChosenB was just delivered then (on every path, always (it is not the case that ChosenA was just delivered)))",
+   "say": "no two different values are both chosen"
+  },
+  "canDecide": {
+   "lints": [],
+   "mode": "compound",
+   "reading": "on every path, (it is possible that eventually (ChosenA was just delivered or ChosenB was just delivered)) holds unless (ChosenA was just delivered or ChosenB was just delivered) ((ChosenA was just delivered or ChosenB was just delivered) need not happen)",
+   "say": "until a value is chosen, one can still be chosen"
+  },
+  "conflict": {
+   "lints": [],
+   "mode": "possibly",
+   "reading": "it is possible that eventually (ChosenA was just delivered and (it is possible that eventually ChosenB was just delivered))",
+   "say": "A is chosen, and later B"
+  },
+  "mustDecide": {
+   "lints": [],
+   "mode": "eventually",
+   "reading": "on every path, eventually (ChosenA was just delivered or ChosenB was just delivered)",
+   "say": "a value must be chosen"
+  },
+  "possiblyA": {
+   "lints": [],
+   "mode": "possibly",
+   "reading": "it is possible that eventually ChosenA was just delivered",
+   "say": "A can be chosen"
+  },
+  "possiblyB": {
+   "lints": [],
+   "mode": "possibly",
+   "reading": "it is possible that eventually ChosenB was just delivered",
+   "say": "B can be chosen"
+  }
+ },
+ "logicReferenceBytes": 3157,
+ "server": {
+  "name": "leanfm",
+  "version": "0.1.0"
+ },
+ "tools": [
+  "validate_generated_artifacts",
+  "requirements_interrogation",
+  "code_generation_prompt",
+  "explain_formula",
+  "check_ctl",
+  "check_trace",
+  "classify_requirement",
+  "knows"
+ ],
+ "traces": {
+  "broken.conflict": {
+   "acceptance": [
+    {
+     "accepted": true,
+     "reachedTerminal": false,
+     "states": [
+      "s87"
+     ],
+     "task": "paxos_udp_broken"
+    }
+   ],
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256
+   },
+   "causalGraph": "flowchart TD\n    e0[\"e1: Accept1A\"]\n    e1[\"e2: Accepted1\"]\n    e2[\"e3: ChosenA\"]\n    e3[\"e4: Prepare2\"]\n    e4[\"e5: Promise0\"]\n    e5[\"e6: Accept2B\"]\n    e6[\"e7: Accepted0\"]\n    e7[\"e8: ChosenB\"]\n    e0 -.-> e1\n    e1 -.-> e2\n    e0 --> e4\n    e3 -.-> e4\n    e3 --> e5\n    e4 -.-> e5\n    e4 --> e6\n    e5 -.-> e6\n    e2 --> e7\n    e6 -.-> e7",
+   "concurrent": [
+    [
+     "e1",
+     "e4"
+    ],
+    [
+     "e2",
+     "e4"
+    ],
+    [
+     "e2",
+     "e5"
+    ],
+    [
+     "e2",
+     "e6"
+    ],
+    [
+     "e2",
+     "e7"
+    ],
+    [
+     "e3",
+     "e4"
+    ],
+    [
+     "e3",
+     "e5"
+    ],
+    [
+     "e3",
+     "e6"
+    ],
+    [
+     "e3",
+     "e7"
+    ]
+   ],
+   "concurrentCount": 9,
+   "issues": [],
+   "reading": "8 events over 1 task(s); 9 concurrent pair(s)",
+   "sequenceDiagram": "sequenceDiagram\n    participant kv0\n    participant replicas\n    participant kv1\n    participant learner\n    participant web\n    participant kv2\n    kv0->>replicas: e1 Accept1A\n    kv1->>learner: e2 Accepted1\n    learner->>web: e3 ChosenA\n    kv2->>replicas: e4 Prepare2\n    kv0->>kv2: e5 Promise0\n    kv2->>replicas: e6 Accept2B\n    kv0->>learner: e7 Accepted0\n    learner->>web: e8 ChosenB",
+   "tool": "check_trace",
+   "verdict": "admissible"
+  }
+ },
+ "validate": "ok: all generated requirements are well-formed typed Lean values\nok: generated implementation plan covers the requirement\n"
+}
