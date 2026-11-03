@@ -1,0 +1,18 @@
+\begin{lstlisting}[language={}]
+protocol Replicate (P, A, B, C) {
+  join 2 of {
+    wa: Write from P to A; Stored from A to P cause wa;
+  } and {
+    wb: Write from P to B; Stored from B to P cause wb;
+  } and {
+    wc: Write from P to C; Stored from C to P cause wc;
+  }
+}
+
+/-- A production that includes another, each written as if it were the whole protocol. -/
+protocol ReplicatedOrder (Client, Primary, A, B, C) {
+  o: Order from Client to Primary;
+  include Replicate Primary A B C;
+  Done from Primary to Client cause o;
+}
+\end{lstlisting}

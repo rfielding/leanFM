@@ -50,38 +50,23 @@ apply to one artifact.
 \index{projection}
 A global type is written once, from the point of view of nobody in particular.
 This is a purchase between three roles, in the Scribble style of
-\citet{yoshida2013scribble}. It is \textbf{proposed notation}: LeanFM stores
-conversations today as \texttt{GrammarExpr} values (Chapter~\ref{ch:grammar}).
+\citet{yoshida2013scribble}, written in LeanFM's session-type syntax. It is an
+ordinary Lean module: \texttt{protocol} comes from the \texttt{LeanFM.Session}
+library, and the listing is taken from \texttt{SessionExample.lean}, where it is
+checked every time the file is elaborated (Chapter~\ref{ch:grammar} gives the
+whole syntax).
 
-\begin{lstlisting}[language={}]
-global protocol Purchase(role Client, role Shop, role Bank) {
-  o: order(item)    from Client to Shop;
-  choice at Shop {
-    q: quote(price)   from Shop to Client   cause o;
-    p: pay(price)     from Client to Bank   cause q;
-       paid()         from Bank to Shop     cause p;
-       shipped(item)  from Shop to Client;
-  } or {
-       soldOut()      from Shop to Client   cause o;
-  }
-}
-\end{lstlisting}
+\input{generated/session-purchase.tex}
 
-Each line is one message: a label with its payload, a sender, a receiver, and
-optionally the earlier message that caused it. \texttt{choice at Shop} says that
-the shop alone decides which branch happens. Projection keeps, for one role, the
-lines that role sends or receives:
+Each line is one message: a label, a sender, a receiver, and optionally the
+earlier message that caused it. A label is the name of a Lean structure, so the
+message's payload is that structure's fields: \texttt{Order} has an
+\texttt{item}, \texttt{Pay} an \texttt{amount}, and \texttt{where p.amount =
+q.price} is type-checked Lean. \texttt{choice at Shop} says that the shop alone
+decides which branch happens. Projection keeps, for one role, the lines that role
+sends or receives. LeanFM computes it; this is the shop's:
 
-\begin{lstlisting}[language={}]
-local protocol Purchase at Shop {
-  order(item) from Client;
-  choice {
-    quote(price) to Client;  paid() from Bank;  shipped(item) to Client;
-  } or {
-    soldOut() to Client;
-  }
-}
-\end{lstlisting}
+\input{generated/session-purchase-shop.tex}
 
 The theory then asks two questions of the global type, and LeanFM asks the same
 two.
@@ -104,13 +89,22 @@ branch that never contacts it. The bank's part starts when \texttt{pay} arrives,
 as a thread forked for that session; in the \texttt{soldOut} branch that thread
 simply never exists. Each such thread ingests only the messages its session
 expects and sends only the ones it owes, so checking it on its own is exact,
-not an approximation.
+not an approximation. The bank's projection shows it: the sold-out branch is
+empty.
+
+\input{generated/session-purchase-locals.tex}
 
 The rule still bites a role that has already taken part. If the client first
 placed a hold with the bank and the shop then sold out, the bank's session would
-be open with money held and nobody to tell it to release: LeanFM reports
-``Bank cannot tell which branch Shop chose''. Both cases are checked in
-\texttt{SessionExample.lean}.
+be open with money held and nobody to tell it to release:
+
+\input{generated/session-hold.tex}
+
+LeanFM reports:
+
+\input{generated/session-hold-issues.tex}
+
+Both cases are checked in \texttt{SessionExample.lean}.
 
 When the global type passes, the theory guarantees three things for roles that
 follow their local types: \emph{communication safety} (no message arrives that

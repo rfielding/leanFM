@@ -1,0 +1,10 @@
+\begin{lstlisting}[language={}]
+receive Order from Client;
+select {
+  send Quote to Client;
+  receive Paid from Bank;
+  send Shipped to Client;
+} or {
+  send SoldOut to Client;
+}
+\end{lstlisting}

@@ -1,0 +1,18 @@
+\begin{lstlisting}[language={}]
+protocol Transfer (Sender, Receiver) {
+  rec Block {
+    d: Data from Sender to Receiver;
+    choice at Receiver {
+      Ack from Receiver to Sender cause d;
+      continue Block;
+    } or {
+      LastAck from Receiver to Sender cause d;
+    }
+  }
+}
+
+def tftpPhysics : Physics Role :=
+  { channels := [ (.sender, .receiver, { udp 2 with duplication := false })
+                , (.receiver, .sender, { udp 2 with duplication := false }) ]
+    timers := [{ role := .sender }] }
+\end{lstlisting}

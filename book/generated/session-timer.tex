@@ -1,0 +1,14 @@
+\begin{lstlisting}[language={}]
+protocol TransferWithTimer (Sender, Receiver) {
+  rec Block {
+    d: Data from Sender to Receiver;
+    choice at Sender {
+      Timeout at Sender;
+      continue Block;
+    } or {
+      Ack from Receiver to Sender cause d;
+      continue Block;
+    }
+  }
+}
+\end{lstlisting}

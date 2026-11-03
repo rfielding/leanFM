@@ -82,6 +82,31 @@ inductive Local (R : Type) where
   deriving Repr, BEq, Inhabited
 
 
+namespace Local
+
+/-- A local type as indented lines, in the protocol syntax's words: `send`, `receive`, `select`
+(this role chooses) and `offer` (another role chose, and what arrives says which). -/
+partial def lines {R : Type} [ToString R] (ind : String := "") : Local R → List String
+  | .send to l k => s!"{ind}send {l} to {to};" :: lines ind k
+  | .recv fr l k => s!"{ind}receive {l} from {fr};" :: lines ind k
+  | .act l k => s!"{ind}{l};" :: lines ind k
+  | .select bs => block ind "select" bs
+  | .offer bs => block ind "offer" bs
+  | .par bs k => block ind "par" bs ++ lines ind k
+  | .loop n b => (s!"{ind}rec {n} " ++ "{") :: lines (ind ++ "  ") b ++ [ind ++ "}"]
+  | .var n => [s!"{ind}continue {n};"]
+  | .done => []
+where
+  block (ind word : String) (bs : List (Local R)) : List String :=
+    match bs.map (lines (ind ++ "  ")) with
+    | [] => []
+    | b :: rest =>
+      ((s!"{ind}{word} " ++ "{") :: b) ++ rest.flatMap (fun r => (ind ++ "} or {") :: r) ++ [ind ++ "}"]
+
+def render {R : Type} [ToString R] (l : Local R) : String := "\n".intercalate (lines "" l)
+
+end Local
+
 namespace Global
 
 variable {R : Type}

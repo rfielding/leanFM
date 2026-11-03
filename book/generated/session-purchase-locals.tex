@@ -1,0 +1,32 @@
+\noindent\textbf{Client}
+\begin{lstlisting}[language={}]
+send Order to Shop;
+offer {
+  receive Quote from Shop;
+  send Pay to Bank;
+  receive Shipped from Shop;
+} or {
+  receive SoldOut from Shop;
+}
+\end{lstlisting}
+
+\noindent\textbf{Shop}
+\begin{lstlisting}[language={}]
+receive Order from Client;
+select {
+  send Quote to Client;
+  receive Paid from Bank;
+  send Shipped to Client;
+} or {
+  send SoldOut to Client;
+}
+\end{lstlisting}
+
+\noindent\textbf{Bank}
+\begin{lstlisting}[language={}]
+offer {
+  receive Pay from Client;
+  send Paid to Shop;
+} or {
+}
+\end{lstlisting}

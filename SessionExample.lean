@@ -45,6 +45,7 @@ structure Verify   where amount : Nat   deriving TypeName
 /-- The book's Purchase. The bank is never told about the `SoldOut` branch, and need not be: its
 part of the session starts when `Pay` arrives, as a thread forked for that session, so a branch
 that never contacts it asks nothing of it. -/
+--@begin Purchase
 protocol Purchase (Client, Shop, Bank) {
   o: Order from Client to Shop;
   choice at Shop {
@@ -56,6 +57,7 @@ protocol Purchase (Client, Shop, Bank) {
        SoldOut from Shop to Client cause o;
   }
 }
+--@end Purchase
 
 def roles3 : List Role := [.client, .shop, .bank]
 def purchase : Global Role := Purchase .client .shop .bank
@@ -67,6 +69,7 @@ structure Release where deriving TypeName
 
 /-- Once the bank has taken part, it must be told. Here the client places a hold first, so the
 bank's session has started, and the `SoldOut` branch leaves it holding money forever. -/
+--@begin PurchaseWithHold
 protocol PurchaseWithHold (Client, Shop, Bank) {
   h: Hold from Client to Bank;
   o: Order from Client to Shop;
@@ -77,6 +80,7 @@ protocol PurchaseWithHold (Client, Shop, Bank) {
        SoldOut from Shop to Client cause o;
   }
 }
+--@end PurchaseWithHold
 
 #guard (PurchaseWithHold Role.client Role.shop Role.bank).issues roles3 == ["Bank cannot tell which branch Shop chose"]
 
@@ -135,6 +139,7 @@ structure Timeout where         deriving TypeName
 /-- A first attempt puts the sender's timer in the global type, as a branch beside the
 acknowledgement. Both rules reject it: the sender does not decide whether an `Ack` arrives, and the
 receiver cannot observe the sender's timer, so it cannot tell which branch was taken. -/
+--@begin TransferWithTimer
 protocol TransferWithTimer (Sender, Receiver) {
   rec Block {
     d: Data from Sender to Receiver;
@@ -147,6 +152,7 @@ protocol TransferWithTimer (Sender, Receiver) {
     }
   }
 }
+--@end TransferWithTimer
 
 #guard (TransferWithTimer Role.sender Role.receiver).issues [.sender, .receiver] ==
   [ "choice at Sender: a branch starts with Ack, which Sender does not decide"
@@ -154,6 +160,7 @@ protocol TransferWithTimer (Sender, Receiver) {
 
 /-- The lock step itself. The receiver decides between `Ack` and `LastAck`. Loss, reordering and
 the sender's retransmission timer are physics, declared below, not branches of the type. -/
+--@begin Transfer
 protocol Transfer (Sender, Receiver) {
   rec Block {
     d: Data from Sender to Receiver;
@@ -165,15 +172,18 @@ protocol Transfer (Sender, Receiver) {
     }
   }
 }
+--@end Transfer
 
 def transfer : Global Role := Transfer .sender .receiver
 #guard transfer.issues [.sender, .receiver] == []
 
 /-- The channels, from presets. Only the differences are written. -/
+--@begin tftpPhysics
 def tftpPhysics : Physics Role :=
   { channels := [ (.sender, .receiver, { udp 2 with duplication := false })
                 , (.receiver, .sender, { udp 2 with duplication := false }) ]
     timers := [{ role := .sender }] }
+--@end tftpPhysics
 
 /-- Requirements: what each channel's protocol handles, two properties, and the assumption the
 liveness property needs. -/
@@ -198,6 +208,7 @@ structure Stored where              deriving TypeName
 structure Done   where              deriving TypeName
 
 /-- Write to three replicas; continue after any two acknowledge. -/
+--@begin Replicate
 protocol Replicate (P, A, B, C) {
   join 2 of {
     wa: Write from P to A; Stored from A to P cause wa;
@@ -214,6 +225,7 @@ protocol ReplicatedOrder (Client, Primary, A, B, C) {
   include Replicate Primary A B C;
   Done from Primary to Client cause o;
 }
+--@end Replicate
 
 def replicatedOrder : Global Role := ReplicatedOrder .client .primary .r1 .r2 .r3
 #guard replicatedOrder.issues [.client, .primary, .r1, .r2, .r3] == []
@@ -244,4 +256,49 @@ def grpc : IfaceKind := IfaceKind.http.refine "grpc" (adds := [⟨"deadline exce
   | .seq (.event a) _ => a.message == "Order" && a.src == "Client"
   | _ => false
 
+/-! ## Listings for the book
+
+`lake env lean --run SessionExample.lean` writes the chapters' listings from this file and from the
+checker, so the book shows exactly what is checked: protocol source between `--@begin`/`--@end`
+markers, every role's projection, and the checker's findings. -/
+
+def block (src name : String) : String :=
+  match (src.splitOn s!"--@begin {name}\n")[1]? with
+  | some rest => ((rest.splitOn s!"--@end {name}").headD "").trimAsciiEnd.toString
+  | none => panic! s!"no block {name}"
+
+def listing (body : String) : String :=
+  "\\begin{lstlisting}[language={}]\n" ++ body ++ "\n\\end{lstlisting}\n"
+
+def localsTeX (g : Global Role) (roles : List Role) : String :=
+  "\n".intercalate (roles.map fun r =>
+    match g.project r with
+    | .ok l => "\\noindent\\textbf{" ++ toString r ++ "}\n" ++ listing (l.render)
+    | .error e => "\\noindent\\textbf{" ++ toString r ++ "}: rejected, ``" ++ e ++ "''\n")
+
+def issuesTeX (xs : List String) : String :=
+  if xs.isEmpty then listing "(no issues)" else listing ("\n".intercalate xs)
+
+def main : IO Unit := do
+  let src ← IO.FS.readFile "SessionExample.lean"
+  let out := "book/generated/"
+  IO.FS.writeFile (out ++ "session-purchase.tex") (listing (block src "Purchase"))
+  IO.FS.writeFile (out ++ "session-purchase-locals.tex") (localsTeX purchase roles3)
+  IO.FS.writeFile (out ++ "session-purchase-shop.tex")
+    (listing ((purchase.project Role.shop).toOption.map Local.render |>.getD ""))
+  IO.FS.writeFile (out ++ "session-hold.tex") (listing (block src "PurchaseWithHold"))
+  IO.FS.writeFile (out ++ "session-hold-issues.tex")
+    (issuesTeX ((PurchaseWithHold Role.client Role.shop Role.bank).issues roles3))
+  IO.FS.writeFile (out ++ "session-timer.tex") (listing (block src "TransferWithTimer"))
+  IO.FS.writeFile (out ++ "session-timer-issues.tex")
+    (issuesTeX ((TransferWithTimer Role.sender Role.receiver).issues [.sender, .receiver]))
+  IO.FS.writeFile (out ++ "session-transfer.tex")
+    (listing (block src "Transfer" ++ "\n\n" ++ block src "tftpPhysics"))
+  IO.FS.writeFile (out ++ "session-tftp-issues.tex") (issuesTeX tftp.issues)
+  IO.FS.writeFile (out ++ "session-replicate.tex") (listing (block src "Replicate"))
+  IO.FS.writeFile (out ++ "session-provenance.txt")
+    s!"generated by lake env lean --run SessionExample.lean\npurchase issues: {purchase.issues roles3}\n"
+
 end SessionExample
+
+def main : IO Unit := SessionExample.main

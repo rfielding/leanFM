@@ -1,0 +1,13 @@
+\begin{lstlisting}[language={}]
+protocol Purchase (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  choice at Shop {
+    q: Quote from Shop to Client cause o;
+    p: Pay   from Client to Bank cause q where p.amount = q.price;
+       Paid  from Bank to Shop cause p;
+       Shipped from Shop to Client;
+  } or {
+       SoldOut from Shop to Client cause o;
+  }
+}
+\end{lstlisting}

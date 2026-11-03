@@ -20,11 +20,12 @@ sender are the same well-formed protocol. With the physics declared, LeanFM
 finds a walk in which one early timer makes every later block travel twice for
 the original sender, and proves that no such walk exists for the fixed one.
 
-Status: the verdicts below are real \texttt{check\_ctl} results. The
-\texttt{from}/\texttt{cause} surface syntax and the \texttt{physics} block are
-proposed notation. Today the product of the roles and their queues is built by
-a small script, \texttt{video/tftp\_model.mjs} in the companion video
-repository, and handed to the checker as an ordinary finite task model.
+Status: the verdicts below are real \texttt{check\_ctl} results. The protocol
+and its physics are checked Lean, in \texttt{SessionExample.lean}. The product of
+the roles and their queues, which the verdicts are about, is still built by a
+small script, \texttt{video/tftp\_model.mjs} in the companion video repository,
+and handed to the checker as an ordinary finite task model; deriving it from the
+Lean declarations is future work.
 
 \section{The grammar}
 
@@ -32,15 +33,14 @@ TFTP moves a file in numbered blocks. The sender sends \texttt{DATA}~$n$; the
 receiver answers \texttt{ACK}~$n$; the sender then sends \texttt{DATA}~$n{+}1$.
 A block shorter than the full size ends the transfer.
 
-\begin{lstlisting}
-protocol Transfer (n : Nat) :=
-  d: DATA(n) from Sender to Receiver;
-  a: ACK(n)  from Receiver to Sender cause d;
-  (Transfer (n+1) | done)
-\end{lstlisting}
+In LeanFM's session-type syntax, with the physics beside it:
+
+\input{generated/session-transfer.tex}
 
 Without a timer this is a textbook global type. Each choice has exactly one
-chooser, the sender, and the receiver learns of it from the next message.
+chooser, the receiver, which answers \texttt{Ack} for a full block and
+\texttt{LastAck} for a short one, and the sender learns which from what
+arrives.
 Projection gives each role a local type, and the session-type theory guarantees
 that the projected roles never deadlock and never receive a message they did
 not expect.
@@ -55,17 +55,11 @@ exactly once and in order.
 
 \index{UDP}
 \index{queue capacity}
-LeanFM states the physics next to the grammar instead of assuming it away.
-
-\begin{lstlisting}
-physics Transfer where
-  channel Sender -> Receiver : udp (capacity := 2, duplication := never)
-  channel Receiver -> Sender : udp (capacity := 2, duplication := never)
-  -- udp: a full buffer drops; queued packets may be
-  --      delivered in any order or dropped
-  timer Sender : mayFireEarly
-  -- a late ACK and a lost ACK look the same to the sender
-\end{lstlisting}
+LeanFM states the physics next to the protocol instead of assuming it away:
+\texttt{tftpPhysics} above. Each channel is the \texttt{udp} preset with one
+difference written out. On \texttt{udp} a full buffer drops, and queued packets
+may be delivered in any order or dropped. The timer may fire early, because a
+late \texttt{Ack} and a lost one look the same to the sender.
 
 Each direction holds at most two packets. The network may deliver them in
 either order, or drop either one. The sender's timer may fire at any time while
