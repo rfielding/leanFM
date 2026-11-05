@@ -247,6 +247,55 @@ def main : IO Unit := do
     (at2 (json% {EF: {knows: {actor: "Mallory", term: {atom: "s"}}}}) == "rejected")
   expect "knows atom: canonical tasks declare no knowledge"
     (verdictOf (call "check_ctl" "{\"task\": \"mcp_logic_consult\", \"formula\": {\"EF\": {\"knows\": {\"actor\": \"Agent\", \"term\": {\"atom\": \"x\"}}}}}") == "rejected")
+  -- logic-protocol: Needham-Schroeder declared as data, the attacker generated
+  let v := fun (x : String) => json% {var: $(x)}
+  let encP := fun (k b : Json) => json% {enc: {key: $(k), body: $(b)}}
+  let nsRoles := fun (lowe : Bool) =>
+    let reply := if lowe then json% {tuple: [$(v "m"), $(at_ "nb"), $(at_ "B")]} else json% {tuple: [$(v "m"), $(at_ "nb")]}
+    let expect2 := if lowe then json% {tuple: [$(at_ "na"), $(v "n"), $(v "peer")]} else json% {tuple: [$(at_ "na"), $(v "n")]}
+    json% [
+      {name: "Alice", steps: [
+        {choose: {var: "peer", values: [$(at_ "B"), $(at_ "I")]}},
+        {claim: {name: "running", args: [$(at_ "A"), $(v "peer")]}},
+        {send: {to: $(v "peer"), message: $(encP (json% {pk: $(v "peer")}) (json% {tuple: [$(at_ "na"), $(at_ "A")]}))}},
+        {recv: $(encP (pkT "A") expect2)},
+        {send: {to: $(v "peer"), message: $(encP (json% {pk: $(v "peer")}) (v "n"))}},
+        {claim: {name: "finished", args: [$(at_ "A"), $(v "peer")]}}]},
+      {name: "Bob", steps: [
+        {recv: $(encP (pkT "B") (json% {tuple: [$(v "m"), $(v "x")]}))},
+        {send: {to: $(v "x"), message: $(encP (json% {pk: $(v "x")}) reply)}},
+        {recv: $(encP (pkT "B") (at_ "nb"))},
+        {claim: {name: "commit", args: [$(at_ "B"), $(v "x")]}}]}]
+  let nsArgs := fun (lowe : Bool) (f : Json) => Json.mkObj
+    [ ("roles", nsRoles lowe)
+    , ("attacker", json% {name: "Ivo", knows: [$(at_ "A"), $(at_ "B"), $(at_ "I"), $(pkT "A"), $(pkT "B"), $(pkT "I"), {sk: "I"}, $(at_ "ni")]})
+    , ("domain", json% [$(at_ "na"), $(at_ "nb"), $(at_ "ni")])
+    , ("domains", json% {x: [$(at_ "A"), $(at_ "B"), $(at_ "I")]})
+    , ("formula", f) ]
+  let secrecy := json% {never: {and: [{claimed: "commit(B, A)"}, {knows: {actor: "Ivo", term: {atom: "nb"}}}]}}
+  let agreement := json% {never: {and: [{claimed: "commit(B, A)"}, {not: {claimed: "running(A, B)"}}]}}
+  let proto := fun (lowe : Bool) (f : Json) => (run "check_protocol" (nsArgs lowe f)).getD (.error "no tool")
+  let attack := proto false secrecy
+  expect "check_protocol: the 1978 protocol leaks Bob's nonce" (verdictOf attack == "disproved")
+  expect "check_protocol: the attack is Lowe's, through Ivo" (match attack with
+    | .ok j => let w := (j.getObjValD "wire").compress
+               w.contains "{\"from\":\"Alice\",\"term\":\"{na, A}pk(I)\",\"to\":\"Ivo\"}" &&
+               w.contains "{\"from\":\"Ivo\",\"term\":\"{na, A}pk(B)\",\"to\":\"Bob\"}" &&
+               w.contains "{\"from\":\"Alice\",\"term\":\"{nb}pk(I)\",\"to\":\"Ivo\"}"
+    | _ => false)
+  expect "check_protocol: authentication fails in 1978" (verdictOf (proto false agreement) == "disproved")
+  expect "check_protocol: Lowe's fix keeps the nonce secret" (verdictOf (proto true secrecy) == "proved")
+  expect "check_protocol: Lowe's fix keeps agreement" (verdictOf (proto true agreement) == "proved")
+  expect "check_protocol: an honest run can still complete"
+    (verdictOf (proto true (json% {EF: {and: [{claimed: "commit(B, A)"}, {claimed: "finished(A, B)"}]}})) == "proved")
+  expect "check_protocol: sending an unbound variable is rejected"
+    (reasonOf ((run "check_protocol" (Json.mkObj [("roles", json% [{name: "R", steps: [{send: {to: {atom: "S"}, message: {var: "y"}}}]}]),
+      ("attacker", json% {name: "Ivo"}), ("formula", json% true)])).getD (.error "")) |>.contains "sends y before anything binds it")
+  expect "check_protocol: the attacker cannot be an honest role"
+    (verdictOf ((run "check_protocol" (Json.mkObj [("roles", json% [{name: "Ivo", steps: []}]),
+      ("attacker", json% {name: "Ivo"}), ("formula", json% true)])).getD (.error "")) == "rejected")
+  expect "check_protocol: a claim no role makes is an unknown name"
+    (verdictOf (proto false (json% {EF: {claimed: "commit(B, Z)"}})) == "rejected")
   expect "knows: a dangling reference is rejected" (verdictOf (ask [ev "e1" "A" "Ivo" ["e0"] (at_ "x")] "e1" none) == "rejected")
   expect "oversized arguments rejected"
     (verdictOf ((run "explain_formula" (Json.mkObj [("formula", Json.str (String.ofList (List.replicate 70000 'x')))])).getD (.error "")) == "rejected")

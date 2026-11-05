@@ -244,6 +244,17 @@ would make it testable.
   make it know anything. The decision is the one in
   \texttt{LeanFM.Session.Knowledge}, proved sound
   (Section~\ref{sec:knowledge-closure}).
+  \item[\texttt{check\_protocol}] takes a security protocol as data: each honest
+  role a short script of choices, sends, receives and claims over message
+  patterns, an attacker with what it knows at the start, and one formula. Every
+  channel belongs to the attacker: what an honest role sends, the attacker
+  learns; what an honest role receives is any message of the expected shape the
+  attacker can build. The state space is generated from that declaration and
+  decided by \texttt{check\_ctl}, where \texttt{claimed} atoms (``Bob has
+  committed to Alice'') sit beside \texttt{knows} atoms, and the answer lists
+  the messages that crossed the wire on the returned path. Needham--Schroeder
+  declared this way gives back Lowe's attack (Section~\ref{sec:needham-schroeder}).
+  Each role runs once, and the answer says so.
 \end{description}
 
 The modal operators themselves ($K_a$ over indistinguishable histories, $O$,

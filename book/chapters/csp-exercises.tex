@@ -597,8 +597,9 @@ Bob has committed to a run with Alice and Ivo can derive Bob's nonce;
 \texttt{Impersonation} when Bob has committed to Alice although Alice never
 claimed to be running with Bob. \texttt{check\_ctl} decides \texttt{never} of
 each, and that an honest run can complete. The last row asks secrecy again with
-a \texttt{knows} atom instead of a flag, checked at the moment Bob commits, and
-gets the same verdicts:
+a \texttt{knows} atom and a \texttt{claimed} atom instead of a flag, and gets
+the same verdicts. The same declaration, written as JSON, is what the MCP tool
+\texttt{check\_protocol} takes, so an agent can ask it without writing Lean:
 
 \begin{center}
 \input{generated/ns-verdicts.tex}

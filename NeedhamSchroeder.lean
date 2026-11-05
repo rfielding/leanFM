@@ -1,5 +1,6 @@
 import LeanFM.Session
 import LeanFM.Session.Attack
+import LeanFM.Logic
 import LeanFM.MDPDiagram
 
 /-!
@@ -99,11 +100,11 @@ def formulas : List (String × String × Json) :=
   , ("canComplete", "Alice and Bob can complete an honest run",
       Json.mkObj [("EF", Json.mkObj [("after", "HonestRun")])]) ]
 
-/-- The secrecy requirement again, without a flag: once Bob has committed to Alice, Ivo never
-knows Bob's nonce. -/
+/-- The secrecy requirement again, without a flag: never is Bob committed to Alice while Ivo knows
+Bob's nonce. -/
 def secrecyByKnows : Json :=
   Json.mkObj [("never", Json.mkObj [("and", Json.arr #[
-    Json.mkObj [("after", "Bob claims commit(B, A)")],
+    Json.mkObj [("claimed", "commit(B, A)")],
     Json.mkObj [("knows", Json.mkObj [("actor", "Ivo"), ("term", termJson nb)])]])])]
 
 def original := (declared .original).explore
@@ -180,7 +181,7 @@ def writeBook : IO Unit := do
     "\\begin{tabular}{p{0.52\\textwidth}ll}\n\\toprule\n" ++
     s!"LeanFM \\texttt\{check\\_ctl} & 1978 ({original.states.size} states) & Lowe ({lowe.states.size} states) \\\\\n\\midrule\n" ++
     "\n".intercalate ((formulas.map fun (_, r, f) => row r f) ++
-      [row "the same secrecy, as \\texttt{never (after commit(B, A) and knows(Ivo, nb))}" secrecyByKnows]) ++
+      [row "the same secrecy, as \\texttt{never (claimed commit(B, A) and knows(Ivo, nb))}" secrecyByKnows]) ++
     "\n\\bottomrule\n\\end{tabular}\n"
 
 end NeedhamSchroeder

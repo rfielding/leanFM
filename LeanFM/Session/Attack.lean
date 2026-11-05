@@ -1,5 +1,5 @@
 import LeanFM.Session.Knowledge
-import LeanFM.Logic
+import Lean.Data.Json
 
 /-!
 # The attacker as a declaration
@@ -13,9 +13,10 @@ Dolev–Yao channel, declared once for every channel of the protocol.
 `Protocol.explore` generates the state space from the declaration: each thread's position and
 bindings, the attacker's knowledge (kept broken apart and in one order), the claims made so far,
 and the flags already tripped. Flags are requirements as state predicates over that world; a flag
-trips once, as an event, when its predicate first holds. `Protocol.check` hands the generated model
-to LeanFM's `check_ctl`, with every transition's term and the attacker's knowledge declared, so a
-formula may also use `knows` atoms directly.
+trips once, as an event, when its predicate first holds. `Protocol.draft` writes the generated model
+as a `check_ctl` draft, with every transition's term, every claim, and the attacker's knowledge
+declared, so a formula may also use `knows` and `claimed` atoms directly; `Protocol.check`, in
+`LeanFM.Logic`, asks it.
 
 Bounded on purpose: each thread runs once, a received pattern's unbound variables range over a
 declared finite domain (names and nonces), and a variable binds an atom, never a whole ciphertext.
@@ -115,6 +116,8 @@ structure Move where
   label : String
   next : World
   wire : Option (String × String × Msg) := none
+  /-- the claim this move makes, as `commit(B, A)` -/
+  claim : Option String := none
 
 def assignments (domain : List Msg) : List String → List Env
   | [] => [[]]
@@ -156,8 +159,10 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
           | none => none
     | some (.claim name args) =>
         match args.mapM (·.inst t.env) with
-        | some vs => [{ label := s!"{role.name} claims {name}({", ".intercalate (vs.map agentName)})",
-                        next := { w with threads := setT { t with pc := t.pc + 1 }, claims := (name, vs) :: w.claims } }]
+        | some vs =>
+          let c := s!"{name}({", ".intercalate (vs.map agentName)})"
+          [{ label := s!"{role.name} claims {c}", claim := some c,
+             next := { w with threads := setT { t with pc := t.pc + 1 }, claims := (name, vs) :: w.claims } }]
         | none => []
   let flags := p.flags.filterMap fun f =>
     if f.holds w && !w.tripped.contains f.name then
@@ -168,12 +173,15 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
 structure Model where
   states : Array World
   edges : List (Nat × Nat × Move)
+  /-- the exploration stopped at its state limit: verdicts over this model prove nothing -/
+  truncated : Bool := false
 
 /-- Breadth-first over the declared protocol; stops adding states at `limit`. -/
 def Protocol.explore (p : Protocol) (limit : Nat := 4096) : Model := Id.run do
   let init : World := { threads := p.roles.map (fun _ => {}), attacker := canon (analz p.attackerKnows) }
   let mut states : Array World := #[init]
   let mut edges : List (Nat × Nat × Move) := []
+  let mut truncated := false
   let mut i := 0
   while i < states.size do
     for mv in p.moves states[i]! do
@@ -183,8 +191,9 @@ def Protocol.explore (p : Protocol) (limit : Nat := 4096) : Model := Id.run do
         if states.size < limit then
           states := states.push mv.next
           edges := (i, states.size - 1, mv) :: edges
+        else truncated := true
     i := i + 1
-  return { states, edges := edges.reverse }
+  return { states, edges := edges.reverse, truncated }
 
 def termJson : Msg → Json
   | .atom n => Json.mkObj [("atom", n)]
@@ -204,9 +213,10 @@ def Protocol.draft (p : Protocol) (m : Model) (id : String) : Json :=
   let terminals := (List.range m.states.size).filter (fun i => !outs.contains i)
   let tr := fun ((a, b, mv) : Nat × Nat × Move) =>
     Json.mkObj ([("src", Json.str (name a)), ("dst", Json.str (name b)), ("message", Json.str mv.label)] ++
-      match mv.wire with
+      (match mv.wire with
       | some (f, t, term) => [("from", Json.str f), ("to", Json.str t), ("term", termJson term)]
-      | none => [])
+      | none => []) ++
+      (match mv.claim with | some c => [("claim", Json.str c)] | none => []))
   Json.mkObj
     [ ("id", Json.str id)
     , ("states", Json.arr (((List.range m.states.size).map (Json.str ∘ name)) ++ [Json.str "flags"]).toArray)
@@ -216,12 +226,6 @@ def Protocol.draft (p : Protocol) (m : Model) (id : String) : Json :=
         Json.mkObj [("src", "flags"), ("dst", "flags"), ("message", Json.str f.name)])).toArray)
     , ("knowledge", Json.mkObj [(p.attacker, Json.mkObj
         [("initial", Json.arr (p.attackerKnows.map termJson).toArray), ("seesAll", Json.bool true)])]) ]
-
-/-- Ask `check_ctl` a formula over the generated model. -/
-def Protocol.check (p : Protocol) (m : Model) (id : String) (formula : Json) : Json :=
-  match LeanFM.Logic.checkCtl (Json.mkObj [("task", p.draft m id), ("formula", formula)]) with
-  | .ok j => j
-  | .error e => Json.mkObj [("verdict", "error"), ("reason", e)]
 
 def verdict (j : Json) : String := (j.getObjValD "verdict").getStr?.toOption.getD "?"
 

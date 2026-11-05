@@ -42,3 +42,7 @@ def main : IO Unit := do
   let known ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"knows\",\"arguments\":{\"actor\":\"Ivo\",\"at\":\"e1\",\"initial\":[{\"sk\":\"I\"}],\"query\":{\"atom\":\"nb\"},\"events\":[{\"id\":\"e1\",\"src\":\"Alice\",\"dst\":\"Ivo\",\"term\":{\"enc\":{\"key\":{\"pk\":\"I\"},\"body\":{\"atom\":\"nb\"}}}}]}}}"
   assertContains "MCP knows decides a query" known.body "\"verdict\":\"proved\""
   assertContains "MCP knows returns the derivation" known.body "\"kind\":\"derivation\""
+  assertContains "MCP lists check_protocol" toolsListed.body "\"name\":\"check_protocol\""
+  let proto ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"check_protocol\",\"arguments\":{\"roles\":[{\"name\":\"Alice\",\"steps\":[{\"send\":{\"to\":{\"atom\":\"Bob\"},\"message\":{\"atom\":\"secret\"}}}]}],\"attacker\":{\"name\":\"Ivo\"},\"formula\":{\"never\":{\"knows\":{\"actor\":\"Ivo\",\"term\":{\"atom\":\"secret\"}}}}}}}"
+  assertContains "MCP check_protocol finds a plaintext leak" proto.body "\"verdict\":\"disproved\""
+  assertContains "MCP check_protocol shows the wire" proto.body "\"wire\""

@@ -159,6 +159,13 @@ def tools : Array Json := #[
     "Classify each atom of a formula, or each predicate text, as observable, derived or implementation-only, and propose events that would make hidden predicates testable."
     (schema [("formula", anyJson "JSON formula"), ("predicates", Json.mkObj [("type", "array"), ("items", stringSchema "predicate text")]),
       ("task", anyJson "optional canonical task id or inline draft")] []),
+  tool "check_protocol" "Find attacks on a security protocol"
+    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path as {from, to, term}. Bounded: each role runs once."
+    (schema [("roles", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("attacker", anyJson "{name, knows: [terms]}"),
+      ("domain", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("domains", anyJson "variable name to an array of terms"),
+      ("formula", anyJson "JSON formula")] ["roles", "attacker", "formula"]),
   tool "knows" "What an actor can derive"
     "Given event envelopes (id, prevIds, causeIds, src, dst, term), an actor and an event id, take apart every message the actor sent or received in that event's causal past (pairs split; ciphertexts opened with keys it can build) and return the pieces it holds, each with the event that gave it. With a query term, answer proved with the derivation or disproved. Terms: {atom|key|pk|sk: name}, {pair: [a, b]}, {tuple: [a, b, ...]}, {enc: {key, body}}, {hash: t}."
     (schema [("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),

@@ -2,6 +2,7 @@ import Lean.Data.Json
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.Session.Knowledge
+import LeanFM.Session.Attack
 
 /-!
 # LeanFM logic consultation (selfhost.mcp.logic.*)
@@ -64,6 +65,8 @@ inductive Formula where
   | unsupported (operator : String)
   /-- `actor` can derive `term` from the messages it has seen on the path to this state -/
   | knows (actor : String) (term : LeanFM.Session.Knowledge.Msg)
+  /-- some role has made this claim, such as `commit(B, A)`, on the path to this state -/
+  | claimed (claim : String)
   | not (f : Formula)
   | and (fs : List Formula)
   | or (fs : List Formula)
@@ -100,7 +103,8 @@ partial def toJson : Formula → Json
   | predicate t => Json.mkObj [("predicate", t)]
   | derived n => Json.mkObj [("derived", n)]
   | unsupported op => Json.mkObj [(op, Json.null)]
-  | knows a t => Json.mkObj [("knows", Json.mkObj [("actor", Json.str a), ("term", Json.str t.render)])]
+  | knows a t => Json.mkObj [("knows", Json.mkObj [("actor", Json.str a), ("term", LeanFM.Session.Attack.termJson t)])]
+  | claimed c => Json.mkObj [("claimed", Json.str c)]
   | not f => Json.mkObj [("not", toJson f)]
   | and fs => Json.mkObj [("and", Json.arr (fs.map toJson).toArray)]
   | or fs => Json.mkObj [("or", Json.arr (fs.map toJson).toArray)]
@@ -119,7 +123,7 @@ partial def toJson : Formula → Json
   | aw a b => Json.mkObj [("AW", Json.arr #[toJson a, toJson b])]
 
 def isAtomic : Formula → Bool
-  | tt | ff | atState _ | after _ | terminal | field .. | predicate _ | derived _ | unsupported _ | knows .. => true
+  | tt | ff | atState _ | after _ | terminal | field .. | predicate _ | derived _ | unsupported _ | knows .. | claimed _ => true
   | _ => false
 
 mutual
@@ -134,6 +138,7 @@ partial def reading : Formula → String
   | derived n => "the derived predicate " ++ n ++ " holds"
   | unsupported op => "the " ++ op ++ " modality holds (not supported by these tools yet)"
   | knows a t => a ++ " can derive " ++ t.render
+  | claimed c => "the claim " ++ c ++ " has been made"
   | not f => "it is not the case that " ++ paren f
   | and fs => " and ".intercalate (fs.map paren)
   | or fs => " or ".intercalate (fs.map paren)
@@ -304,6 +309,7 @@ partial def parseFormula (j : Json) (depth : Nat := 0) : Except String Formula :
       | "after" => atomStr .after
       | "predicate" => atomStr .predicate
       | "derived" => atomStr .derived
+      | "claimed" => atomStr .claimed
       | "knows" =>
         let actor ← match (arg.getObjVal? "actor").toOption.bind str? with
           | some a => checkString "knows.actor" a
@@ -351,6 +357,8 @@ structure Transition where
   receiver : Option String := none
   /-- the message as a symbolic term, for knowledge atoms -/
   term : Option LeanFM.Session.Knowledge.Msg := none
+  /-- a claim this transition makes, for `claimed` atoms -/
+  claim : Option String := none
 deriving Repr, Inhabited
 
 structure TaskModel where
@@ -403,8 +411,11 @@ def parseDraft (j : Json) : Except String TaskModel := do
         let term ← match (t.getObjVal? "term").toOption with
           | some tj => some <$> boundedTerm tj
           | none => pure none
+        let claim ← match opt "claim" with
+          | some c => some <$> checkString "transition.claim" c
+          | none => pure none
         let tr : Transition := { src := ← g "src", dst := ← g "dst", message := ← g "message"
-                               , sender := opt "from", receiver := opt "to", term }
+                               , sender := opt "from", receiver := opt "to", term, claim }
         return tr
     | some _ => throw "transitions is an array"
     | none => pure []
@@ -443,6 +454,8 @@ def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
     | .atState s => if t.states.contains s then none else some ("unknown state " ++ s)
     | .after m => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .field m _ _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
+    | .claimed c => if t.transitions.any (·.claim == some c) then none
+        else some ("no transition of task " ++ t.id ++ " makes the claim " ++ c)
     | .knows a _ => if t.knowers.any (·.1 == a) then none
         else some ("actor " ++ a ++ " has no declared knowledge in task " ++ t.id ++ "; add it to the draft's knowledge field")
     | _ => none).eraseDups
@@ -455,6 +468,8 @@ structure Node where
   /-- each declared knower's knowledge, taken apart and kept in one order, so that nodes reached
   with different knowledge stay different -/
   knowledge : List (List LeanFM.Session.Knowledge.Msg) := []
+  /-- the claims made on the path here, in one order -/
+  claims : List String := []
 deriving Repr, BEq, Inhabited
 
 def canonTerms (K : List LeanFM.Session.Knowledge.Msg) : List LeanFM.Session.Knowledge.Msg :=
@@ -499,7 +514,10 @@ def buildModel (t : TaskModel) : Option Model := Id.run do
       next := #[i]
     else
       for tr in outs do
-        let m : Node := { state := tr.dst, message := some tr.message, knowledge := t.learnOn tr n.knowledge }
+        let claims := match tr.claim with
+          | some c => if n.claims.contains c then n.claims else (c :: n.claims).mergeSort (· ≤ ·)
+          | none => n.claims
+        let m : Node := { state := tr.dst, message := some tr.message, knowledge := t.learnOn tr n.knowledge, claims }
         match nodeIndex nodes m with
         | some j => if !next.contains j then next := next.push j
         | none =>
@@ -543,6 +561,7 @@ partial def sat (m : Model) : Formula → Array Bool
   | .atState s => m.nodes.map (·.state == s)
   | .after msg => m.nodes.map (·.message == some msg)
   | .terminal => m.nodes.map (fun n => m.task.terminals.contains n.state)
+  | .claimed c => m.nodes.map (·.claims.contains c)
   | .knows a v =>
     match m.task.knowers.findIdx? (·.1 == a) with
     | some k => m.nodes.map fun n => LeanFM.Session.Knowledge.knows (n.knowledge[k]?.getD []) v
@@ -664,7 +683,8 @@ def nodeJson (m : Model) (i : Nat) : Json :=
   let base := [("state", Json.str n.state), ("message", match n.message with | some s => Json.str s | none => Json.null)]
   let held := (m.task.knowers.zip n.knowledge).map fun ((actor, _, _), K) =>
     (actor, Json.arr (K.map (Json.str ·.render)).toArray)
-  Json.mkObj (if held.isEmpty then base else base ++ [("holds", Json.mkObj held)])
+  let base := if held.isEmpty then base else base ++ [("holds", Json.mkObj held)]
+  Json.mkObj (if n.claims.isEmpty then base else base ++ [("claims", Json.arr (n.claims.map Json.str).toArray)])
 
 def evidenceJson (m : Model) (e : Evidence) : Json :=
   Json.mkObj <|
@@ -992,6 +1012,10 @@ def classifyAtom (task : Option TaskModel) : Formula → Json
   | .derived n => Json.mkObj [("atom", "derived " ++ n), ("class", "derived"),
       ("needs", "a declared reducer, policy or knowledge rule named " ++ n ++ " in Requirements.lean")]
   | .predicate t => classifyText task t
+  | .claimed c =>
+    let ok := task.map (·.transitions.any (·.claim == some c)) |>.getD true
+    Json.mkObj [("atom", "claimed " ++ c), ("class", if ok then "observable" else "unknown name"),
+      ("reason", if ok then "a claim made by a transition on the path" else "no transition of the task makes this claim")]
   | .knows a v =>
     let declared := task.map (·.knowers.any (·.1 == a)) |>.getD false
     Json.mkObj [("atom", a ++ " knows " ++ v.render), ("class", if declared then "observable" else "derived"),
@@ -1177,6 +1201,190 @@ def knows (args : Json) : ToolOutcome := do
         [("query", Json.str v.render), ("evidence", Json.mkObj [("kind", "exhaustive"),
           ("note", s!"no derivation from the {held.length} pieces held once analysis reached its fixpoint")])]
 
+/-! ## check_protocol (decision logic-protocol)
+
+A security protocol declared as data: honest roles as scripts over message patterns, an attacker
+who is the network, and one formula. The state space is generated by `LeanFM.Session.Attack` and
+decided by `check_ctl`, so the answer has the same verdicts and evidence, plus the messages that
+crossed the wire on the returned path. -/
+
+section ProtocolTool
+open LeanFM.Session.Knowledge LeanFM.Session.Attack
+
+/-- A pattern: a term, `{"var": x}`, or a constructor over patterns. `pk` and `sk` take a name or a
+pattern for one. -/
+partial def parsePat (depth : Nat) (j : Json) : Except String Pat := do
+  if depth > bounds.maxDepth then throw s!"a pattern is nested deeper than {bounds.maxDepth}"
+  let sub := parsePat (depth + 1)
+  match j with
+  | .obj kvs =>
+    match kvs.toList with
+    | [("var", v)] => match str? v with
+      | some x => return .var (← checkString "var" x)
+      | none => throw "var takes a variable name"
+    | [("pk", v)] => match str? v with
+      | some n => return .lit (.pk (← checkString "pk" n))
+      | none => return .pk (← sub v)
+    | [("sk", v)] => match str? v with
+      | some n => return .lit (.sk (← checkString "sk" n))
+      | none => return .sk (← sub v)
+    | [("pair", v)] => match v with
+      | .arr #[a, b] => return .pair (← sub a) (← sub b)
+      | _ => throw "pair takes exactly two patterns"
+    | [("tuple", v)] => match v with
+      | .arr items =>
+        if items.size < 2 then throw "tuple takes two or more patterns"
+        return Pat.tuple (← items.toList.mapM sub)
+      | _ => throw "tuple takes an array of patterns"
+    | [("enc", v)] =>
+      let key ← match (v.getObjVal? "key").toOption with | some k => sub k | none => throw "enc needs a key"
+      let body ← match (v.getObjVal? "body").toOption with | some b => sub b | none => throw "enc needs a body"
+      return .enc key body
+    | [("hash", v)] => return .hash (← sub v)
+    | _ => return .lit (← parseTerm depth j)
+  | _ => throw "a pattern is an object such as {\"var\": \"x\"} or {\"atom\": \"na\"}"
+
+def patNodes : Pat → Nat
+  | .pair a b | .enc a b => 1 + patNodes a + patNodes b
+  | .hash b | .pk b | .sk b => 1 + patNodes b
+  | .lit m => m.size
+  | .var _ => 1
+
+def boundedPat (j : Json) : Except String Pat := do
+  let p ← parsePat 0 j
+  if patNodes p > bounds.maxFormulaNodes then throw s!"a pattern has {patNodes p} nodes; the bound is {bounds.maxFormulaNodes}"
+  return p
+
+def maxRoles : Nat := 8
+def maxSteps : Nat := 32
+
+def parseStep (role : String) (i : Nat) (j : Json) : Except String Step := do
+  let here := s!"{role}, step {i + 1}"
+  match j with
+  | .obj kvs =>
+    match kvs.toList with
+    | [("choose", v)] =>
+      let x ← match (v.getObjVal? "var").toOption.bind str? with
+        | some x => checkString "choose.var" x
+        | none => throw s!"{here}: choose needs a var"
+      let values ← match (v.getObjVal? "values").toOption with
+        | some (.arr items) =>
+          if items.isEmpty || items.size > bounds.maxPredicates then throw s!"{here}: choose takes 1 to {bounds.maxPredicates} values"
+          items.toList.mapM boundedTerm
+        | _ => throw s!"{here}: choose needs an array of values"
+      return .choose x values
+    | [("send", v)] =>
+      let to ← match (v.getObjVal? "to").toOption with | some t => boundedPat t | none => throw s!"{here}: send needs to"
+      let msg ← match (v.getObjVal? "message").toOption with | some m => boundedPat m | none => throw s!"{here}: send needs a message"
+      return .send to msg
+    | [("recv", v)] => return .recv (← boundedPat v)
+    | [("claim", v)] =>
+      let name ← match (v.getObjVal? "name").toOption.bind str? with
+        | some n => checkString "claim.name" n
+        | none => throw s!"{here}: claim needs a name"
+      let args ← match (v.getObjVal? "args").toOption with
+        | some (.arr items) =>
+          if items.size > bounds.maxPredicates then throw s!"{here}: too many claim arguments"
+          items.toList.mapM boundedPat
+        | none => pure []
+        | _ => throw s!"{here}: claim args is an array of patterns"
+      return .claim name args
+    | _ => throw s!"{here}: a step is one of choose, send, recv or claim"
+  | _ => throw s!"{here}: a step is an object"
+
+/-- A send or a claim may use only variables an earlier choose or recv of the same role bound. -/
+def checkBindings (r : Role) : Except String Unit := do
+  let mut bound : List String := []
+  for (st, i) in r.steps.zipIdx do
+    match st with
+    | .choose x _ => bound := x :: bound
+    | .recv p => bound := p.vars ++ bound
+    | .send to p =>
+      for x in to.vars ++ p.vars do
+        unless bound.contains x do throw s!"{r.name}, step {i + 1}: sends {x} before anything binds it"
+    | .claim _ args =>
+      for x in args.flatMap Pat.vars do
+        unless bound.contains x do throw s!"{r.name}, step {i + 1}: claims with {x} before anything binds it"
+
+def parseProtocol (args : Json) : Except String Protocol := do
+  let field := fun (k : String) => (args.getObjVal? k).toOption
+  let roles ← match field "roles" with
+    | some (.arr items) =>
+      if items.isEmpty || items.size > maxRoles then throw s!"check_protocol takes 1 to {maxRoles} roles"
+      items.toList.mapM fun rj => do
+        let name ← match (rj.getObjVal? "name").toOption.bind str? with
+          | some n => checkString "role.name" n
+          | none => throw "each role needs a name"
+        let steps ← match (rj.getObjVal? "steps").toOption with
+          | some (.arr ss) =>
+            if ss.size > maxSteps then throw s!"{name} has {ss.size} steps; the bound is {maxSteps}"
+            ss.toList.zipIdx.mapM fun (sj, i) => parseStep name i sj
+          | _ => throw s!"{name} needs an array of steps"
+        let r : Role := { name, steps }
+        checkBindings r
+        return r
+    | _ => throw "check_protocol needs an array of roles"
+  let names := roles.map (·.name)
+  if names.eraseDups.length != names.length then throw "role names must be unique"
+  let (attacker, attackerKnows) ← match field "attacker" with
+    | some aj => do
+      let n ← match (aj.getObjVal? "name").toOption.bind str? with
+        | some n => checkString "attacker.name" n
+        | none => throw "the attacker needs a name"
+      if names.contains n then throw "the attacker is not one of the honest roles"
+      let ks ← match (aj.getObjVal? "knows").toOption with
+        | some (.arr items) =>
+          if items.size > bounds.maxPredicates then throw s!"the attacker's initial knowledge has {items.size} terms; the bound is {bounds.maxPredicates}"
+          items.toList.mapM boundedTerm
+        | none => pure []
+        | _ => throw "attacker.knows is an array of terms"
+      pure (n, ks)
+    | none => throw "check_protocol needs an attacker {name, knows}"
+  let terms := fun (what : String) (j : Json) => match j with
+    | .arr items =>
+      if items.size > bounds.maxPredicates then .error s!"{what} has {items.size} values; the bound is {bounds.maxPredicates}"
+      else items.toList.mapM boundedTerm
+    | _ => .error s!"{what} is an array of terms"
+  let domain ← match field "domain" with | some j => terms "domain" j | none => pure []
+  let domains ← match field "domains" with
+    | some (.obj kvs) => kvs.toList.mapM fun (x, j) => do return (x, ← terms s!"domains.{x}" j)
+    | some _ => throw "domains maps variable names to arrays of terms"
+    | none => pure []
+  return { attacker, attackerKnows, domain, domains, roles, flags := [] }
+
+end ProtocolTool
+
+/-- Ask `check_ctl` a formula over a generated protocol model. -/
+def _root_.LeanFM.Session.Attack.Protocol.check (p : LeanFM.Session.Attack.Protocol)
+    (m : LeanFM.Session.Attack.Model) (id : String) (formula : Json) : Json :=
+  match checkCtl (Json.mkObj [("task", p.draft m id), ("formula", formula)]) with
+  | .ok j => j
+  | .error e => Json.mkObj [("verdict", "error"), ("reason", e)]
+
+def checkProtocol (args : Json) : ToolOutcome := do
+  let p ← parseProtocol args
+  let f ← match (args.getObjVal? "formula").toOption with
+    | some fj => parseBounded fj
+    | none => throw "check_protocol needs a formula"
+  let m := p.explore bounds.maxModelNodes
+  let size : List (String × Json) := [("states", toJson m.states.size), ("transitions", toJson m.edges.length)]
+  if m.truncated then
+    return verdictJson "check_protocol" "resource-limit" f.reading <| size ++
+      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the generated model exceeds {bounds.maxModelNodes} states; nothing was proved")])]
+  let r ← checkCtl (Json.mkObj [("task", p.draft m "protocol"), ("formula", f.toJson)])
+  let path := match (r.getObjValD "evidence").getObjValD "path" with
+    | .arr ps => ps.toList.filterMap fun s => (s.getObjValD "message").getStr?.toOption
+    | _ => []
+  let wire := (p.replayWire path).map fun (a, b, t) =>
+    Json.mkObj [("from", Json.str a), ("to", Json.str b), ("term", Json.str t.render)]
+  let keep := ["verdict", "reading", "mode", "evidence", "deadlocks"]
+  let body := match r with
+    | .obj kvs => kvs.toList.filter (fun (k, _) => keep.contains k)
+    | _ => []
+  return Json.mkObj ([("tool", Json.str "check_protocol"), ("bounds", boundsJson)] ++ body ++ size ++
+    [("wire", Json.arr wire.toArray),
+     ("note", Json.str "bounded: each role runs once; variables bind values from the declared domains; every channel is the attacker's")])
+
 /-! ## Reference -/
 
 def reference : String := String.intercalate "\n"
@@ -1194,6 +1402,7 @@ def reference : String := String.intercalate "\n"
   , "| `\"terminal\"` | the task has ended (observable) |"
   , "| `{\"field\": {\"message\": \"M\", \"name\": \"f\", \"value\": \"v\"}}` | last message M had f = v (observable in traces; not in task models) |"
   , "| `{\"derived\": \"name\"}` | a declared reducer, policy or knowledge predicate |"
+  , "| `{\"claimed\": \"commit(B, A)\"}` | some transition on the path made this claim (drafts with claims, and check_protocol) |"
   , "| `{\"knows\": {\"actor\": \"Ivo\", \"term\": t}}` | the actor can derive term t from what reached it on the path (observable when the draft declares the actor's knowledge; terms as in the knows tool) |"
   , "| `{\"predicate\": \"text\"}` | free text: never observable; classify it first |"
   , "| `{\"not\": f}`, `{\"and\": [..]}`, `{\"or\": [..]}`, `{\"implies\": [a, b]}` | Boolean |"
@@ -1213,6 +1422,14 @@ def reference : String := String.intercalate "\n"
   , "Terms: `{\"atom\": n}`, `{\"key\": n}`, `{\"pk\": a}`, `{\"sk\": a}`, `{\"pair\": [x, y]}`, `{\"tuple\": [x, y, ...]}`, `{\"enc\": {\"key\": k, \"body\": b}}`, `{\"hash\": x}`."
   , ""
   , "Only events in the causal past of at count. Pairs split; a ciphertext opens with the private key for pk, the public key for sk (a signature), the key itself otherwise; nothing recovers a hash input. Without a query the verdict is derived and holds lists every piece with the event that gave it; with one, proved carries the derivation and disproved an exhaustive note."
+  , ""
+  , "## check_protocol"
+  , ""
+  , "Arguments: roles ([{name, steps}]), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula."
+  , ""
+  , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
+  , ""
+  , "Every channel is the attacker's: honest sends go to the attacker, honest receives accept any matching message the attacker can build. The formula may use claimed and knows atoms. Bounded: each role runs once; variables bind values from the domains; a model over 4096 states answers resource-limit."
   , ""
   , "## Requirement modes"
   , ""
@@ -1257,7 +1474,7 @@ def reference : String := String.intercalate "\n"
 
 /-! ## Dispatch -/
 
-def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows"]
+def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows", "check_protocol"]
 
 def run (name : String) (args : Json) : Option ToolOutcome :=
   if args.compress.length > bounds.maxArgumentBytes then
@@ -1268,6 +1485,7 @@ def run (name : String) (args : Json) : Option ToolOutcome :=
     | "check_trace" => some (checkTrace args)
     | "classify_requirement" => some (classifyRequirement args)
     | "knows" => some (knows args)
+    | "check_protocol" => some (checkProtocol args)
     | _ => none
 
 end LeanFM.Logic
