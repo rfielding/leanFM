@@ -53,7 +53,9 @@ def examples : List (String × String × String) :=
   , ("A requirement over hidden state", "classify_requirement",
      "{\"predicates\": [\"the cache is consistent\"], \"task\": \"mcp_logic_consult\"}")
   , ("Designing a sequence diagram by writing events", "check_trace",
-     "{\"events\": [{\"id\": \"e1\", \"task\": \"mcp_logic_consult\", \"src\": \"Agent\", \"dst\": \"LeanFMServer\", \"message\": \"LogicConsultRequested\"}, {\"id\": \"e2\", \"prevIds\": [\"e1\"], \"causeIds\": [\"e1\"], \"task\": \"mcp_logic_consult\", \"src\": \"LeanFMServer\", \"dst\": \"Agent\", \"message\": \"LogicVerdict\"}]}") ]
+     "{\"events\": [{\"id\": \"e1\", \"task\": \"mcp_logic_consult\", \"src\": \"Agent\", \"dst\": \"LeanFMServer\", \"message\": \"LogicConsultRequested\"}, {\"id\": \"e2\", \"prevIds\": [\"e1\"], \"causeIds\": [\"e1\"], \"task\": \"mcp_logic_consult\", \"src\": \"LeanFMServer\", \"dst\": \"Agent\", \"message\": \"LogicVerdict\"}]}")
+  , ("Who can derive what", "knows",
+     "{\"actor\": \"Ivo\", \"at\": \"e2\", \"initial\": [{\"sk\": \"I\"}], \"query\": {\"atom\": \"nb\"},\n \"events\": [{\"id\": \"e1\", \"src\": \"Bob\", \"dst\": \"Ivo\", \"term\": {\"enc\": {\"key\": {\"pk\": \"A\"}, \"body\": {\"tuple\": [{\"atom\": \"na\"}, {\"atom\": \"nb\"}]}}}},\n  {\"id\": \"e2\", \"causeIds\": [\"e1\"], \"src\": \"Alice\", \"dst\": \"Ivo\", \"term\": {\"enc\": {\"key\": {\"pk\": \"I\"}, \"body\": {\"atom\": \"nb\"}}}}]}") ]
 
 def main : IO Unit := do
   IO.FS.writeFile "book/generated/mcp-logic-examples.tex" <|

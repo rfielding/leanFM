@@ -1,5 +1,6 @@
 import LeanFM.Logic
 import LeanFM.CTL
+import Lean.Data.Json.Elab
 
 /-! Conformance tests for LeanFM.Logic (decisions logic-* in McpLogicImplementation). -/
 
@@ -161,7 +162,92 @@ def main : IO Unit := do
   let mixed := match call "classify_requirement" "{\"formula\": {\"AG\": {\"implies\": [{\"after\": \"LogicVerdict\"}, {\"predicate\": \"evidence is complete\"}]}}, \"task\": \"mcp_logic_consult\"}" with
     | .ok j => j.compress | _ => ""
   expect "formula atoms classified separately" (mixed.contains "\"class\":\"observable\"" && mixed.contains "implementation-only")
-  expect "knows answers unsupported" (verdictOf (call "knows" "{}") == "unsupported")
+  -- logic-knows: Lowe's attack on Needham-Schroeder, as the network (Ivo) sees it
+  let pkT := fun (a : String) => json% {pk: $(a)}
+  let at_ := fun (n : String) => json% {atom: $(n)}
+  let enc := fun (k b : Json) => json% {enc: {key: $(k), body: $(b)}}
+  let ev := fun (id src dst : String) (causes : List String) (t : Json) =>
+    json% {id: $(id), src: $(src), dst: $(dst), causeIds: $(causes), term: $(t)}
+  let lowe := [
+    ev "e1" "Alice" "Ivo" [] (enc (pkT "I") (json% {tuple: [$(at_ "na"), $(at_ "A")]})),
+    ev "e2" "Ivo" "Bob" ["e1"] (enc (pkT "B") (json% {tuple: [$(at_ "na"), $(at_ "A")]})),
+    ev "e3" "Bob" "Ivo" ["e2"] (enc (pkT "A") (json% {tuple: [$(at_ "na"), $(at_ "nb")]})),
+    ev "e4" "Ivo" "Alice" ["e3"] (enc (pkT "A") (json% {tuple: [$(at_ "na"), $(at_ "nb")]})),
+    ev "e5" "Alice" "Ivo" ["e4"] (enc (pkT "I") (at_ "nb")),
+    ev "e6" "Ivo" "Bob" ["e5"] (enc (pkT "B") (at_ "nb")) ]
+  let ivo := [json% {sk: "I"}, pkT "A", pkT "B", pkT "I", at_ "ni"]
+  let ask := fun (evs : List Json) (atEv : String) (q : Option Json) =>
+    let base := [("events", Json.arr evs.toArray), ("actor", Json.str "Ivo"), ("at", Json.str atEv),
+      ("initial", Json.arr ivo.toArray)]
+    (run "knows" (Json.mkObj (base ++ (match q with | some j => [("query", j)] | none => [])))).getD (.error "no tool")
+  expect "knows: before Alice answers, Ivo cannot derive nb" (verdictOf (ask lowe "e3" (some (at_ "nb"))) == "disproved")
+  let leaked := ask lowe "e5" (some (at_ "nb"))
+  expect "knows: after Alice answers, Ivo can derive nb" (verdictOf leaked == "proved")
+  expect "knows: the derivation names the delivering event and the key used" (match leaked with
+    | .ok j => let d := ((j.getObjValD "evidence").getObjValD "derivation").compress
+               d.contains "\"held\":\"e5\"" && d.contains "opened {nb}pk(I) with sk(I)"
+    | _ => false)
+  expect "knows: Ivo learns na from Alice's first message" (match ask lowe "e5" none with
+    | .ok j => verdictOf (.ok j) == "derived" && (j.getObjValD "holds").compress.contains "{\"from\":\"e1\",\"how\":\"first part of na, A\",\"term\":\"na\"}"
+    | _ => false)
+  -- an event outside the causal past never contributes; the same event inside it does
+  let leak := ev "z" "Mallory" "Ivo" [] (json% {sk: "A"})
+  expect "knows: a concurrent leak of sk(A) does not count" (verdictOf (ask (leak :: lowe) "e3" (some (at_ "nb"))) == "disproved")
+  let linked := leak :: lowe.map (fun e => if (e.getObjValD "id") == Json.str "e3" then e.setObjVal! "causeIds" (json% ["e2", "z"]) else e)
+  expect "knows: the same leak in the causal past opens Bob's reply" (verdictOf (ask linked "e3" (some (at_ "nb"))) == "proved")
+  let one := fun (t q : Json) (init : List Json) =>
+    (run "knows" (Json.mkObj [("events", Json.arr #[ev "m" "Bob" "Ivo" [] t]), ("actor", Json.str "Ivo"),
+      ("at", Json.str "m"), ("initial", Json.arr init.toArray), ("query", q)])).getD (.error "no tool")
+  expect "knows: a signature opens with the public key" (verdictOf (one (enc (json% {sk: "B"}) (at_ "m")) (at_ "m") [pkT "B"]) == "proved")
+  expect "knows: a public-key ciphertext stays closed without the private key" (verdictOf (one (enc (pkT "B") (at_ "m")) (at_ "m") [pkT "B"]) == "disproved")
+  expect "knows: a hash is never inverted" (verdictOf (one (json% {hash: $(at_ "pw")}) (at_ "pw") []) == "disproved")
+  expect "knows: a hash can be recomputed from its input" (verdictOf (one (at_ "pw") (json% {hash: $(at_ "pw")}) []) == "proved")
+  expect "knows: a malformed term is rejected" (verdictOf (one (json% {atom: 3}) (at_ "m") []) == "rejected")
+  expect "knows: a term with two constructors is rejected" (verdictOf (one (json% {atom: "a", key: "k"}) (at_ "m") []) == "rejected")
+  expect "knows: an unknown event is rejected" (verdictOf (ask lowe "e9" none) == "rejected")
+  -- logic-knows-atom: knowledge as a state label inside check_ctl
+  let nsDraft := fun (lowe : Bool) =>
+    let m2 := if lowe then json% {tuple: [$(at_ "na"), $(at_ "nb"), $(at_ "B")]} else json% {tuple: [$(at_ "na"), $(at_ "nb")]}
+    let tr := fun (src dst msg frm to_ : String) (t : Json) =>
+      json% {src: $(src), dst: $(dst), message: $(msg), «from»: $(frm), to: $(to_), term: $(t)}
+    -- Alice talks to Ivo; Ivo replays her message to Bob. With Lowe's fix Alice refuses Bob's
+    -- reply, because it names Bob and she chose Ivo.
+    let toAlice := if lowe then [tr "s3" "refused" "AliceRefuses" "Alice" "Alice" (at_ "refused"),
+        -- Bob's last step is still declared; nothing reaches it
+        tr "s4" "done" "BobFinishes" "Ivo" "Bob" (enc (pkT "B") (at_ "nb"))]
+      else [tr "s3" "s4" "AliceAnswers" "Alice" "Ivo" (enc (pkT "I") (at_ "nb")),
+            tr "s4" "done" "BobFinishes" "Ivo" "Bob" (enc (pkT "B") (at_ "nb"))]
+    json% {id: "ns", states: ["s0", "s1", "s2", "s3", "s4", "done", "refused"], initial: "s0",
+           terminals: ["done", "refused"],
+           transitions: $([tr "s0" "s1" "AliceToIvo" "Alice" "Ivo" (enc (pkT "I") (json% {tuple: [$(at_ "na"), $(at_ "A")]})),
+                           tr "s1" "s2" "IvoAsAlice" "Ivo" "Bob" (enc (pkT "B") (json% {tuple: [$(at_ "na"), $(at_ "A")]})),
+                           tr "s2" "s3" "BobReplies" "Bob" "Alice" (enc (pkT "A") m2)] ++ toAlice),
+           knowledge: {Net: {initial: $(ivo), seesAll: true}}}
+  let breach := json% {never: {and: [{after: "BobFinishes"}, {knows: {actor: "Net", term: {atom: "nb"}}}]}}
+  let nsRes := call "check_ctl" ((Json.mkObj [("task", nsDraft false), ("formula", breach)]).compress)
+  expect "knows atom: the 1978 protocol leaks Bob's nonce" (verdictOf nsRes == "disproved")
+  expect "knows atom: the counterexample shows the network holding nb" (match nsRes with
+    | .ok j => ((lastStep (.ok j)).getObjValD "holds").compress.contains "\"nb\"" | _ => false)
+  expect "knows atom: with Lowe's fix the leak is gone"
+    (verdictOf (call "check_ctl" ((Json.mkObj [("task", nsDraft true), ("formula", breach)]).compress)) == "proved")
+  -- one state, two histories: reached with and without a leak, it is two nodes of the model
+  let fork := json% {id: "fork", states: ["s0", "s1", "s2"], initial: "s0", terminals: ["s2"],
+    transitions: [{src: "s0", dst: "s1", message: "Leak", «from»: "X", to: "Eve", term: {key: "k"}},
+                  {src: "s0", dst: "s1", message: "Quiet", «from»: "X", to: "Y", term: {key: "k"}},
+                  {src: "s1", dst: "s2", message: "Sealed", «from»: "X", to: "Eve", term: {enc: {key: {key: "k"}, body: {atom: "s"}}}}],
+    knowledge: {Eve: {initial: []}}}
+  let at2 := fun (f : Json) => verdictOf (call "check_ctl" ((Json.mkObj [("task", fork), ("formula", f)]).compress))
+  expect "knows atom: some history reaches the end knowing s"
+    (at2 (json% {EF: {and: [{"at": "s2"}, {knows: {actor: "Eve", term: {atom: "s"}}}]}}) == "proved")
+  expect "knows atom: another reaches it without knowing s"
+    (at2 (json% {EF: {and: [{"at": "s2"}, {not: {knows: {actor: "Eve", term: {atom: "s"}}}}]}}) == "proved")
+  expect "knows atom: so it is not true on every path"
+    (at2 (json% {AG: {implies: [{"at": "s2"}, {knows: {actor: "Eve", term: {atom: "s"}}}]}}) == "disproved")
+  expect "knows atom: an undeclared actor is rejected"
+    (at2 (json% {EF: {knows: {actor: "Mallory", term: {atom: "s"}}}}) == "rejected")
+  expect "knows atom: canonical tasks declare no knowledge"
+    (verdictOf (call "check_ctl" "{\"task\": \"mcp_logic_consult\", \"formula\": {\"EF\": {\"knows\": {\"actor\": \"Agent\", \"term\": {\"atom\": \"x\"}}}}}") == "rejected")
+  expect "knows: a dangling reference is rejected" (verdictOf (ask [ev "e1" "A" "Ivo" ["e0"] (at_ "x")] "e1" none) == "rejected")
   expect "oversized arguments rejected"
     (verdictOf ((run "explain_formula" (Json.mkObj [("formula", Json.str (String.ofList (List.replicate 70000 'x')))])).getD (.error "")) == "rejected")
   IO.println "ok: all LeanFM.Logic tests passed"

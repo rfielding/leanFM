@@ -2,7 +2,7 @@
 protocol TransferWithTimer (Sender, Receiver) {
   rec Block {
     d: Data from Sender to Receiver;
-    choice at Sender {
+    choice {
       Timeout at Sender;
       continue Block;
     } or {

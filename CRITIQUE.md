@@ -85,10 +85,22 @@ event-derived traces, and omit choices and thresholds.
 
 ## Security knowledge is sketched, not implemented
 
-The Dolev-Yao `Derives` relation and `knows(actor, value)` over the causal past
-are described in the book but not implemented; the MCP `knows` tool answers
-`unsupported`. Signatures, hashes, randomness, compromise and side channels
-have no rules. A symbolic model is not a computational cryptographic proof.
+The Dolev-Yao `Derives` relation now exists (`LeanFM.Session.Knowledge`), with
+pairing, projection, encryption, decryption, signatures opened by public keys
+and one-way hashes; its decision is proved sound, but completeness (that it
+misses nothing an attacker could derive) is only tested, and secrecy verdicts
+lean on it. The MCP `knows` tool decides `knows(actor, value)` over the causal
+past of an event in a trace, and `check_ctl` decides it as a state atom in a
+draft whose transitions carry terms. In Lean, `LeanFM.Session.Attack` generates
+the attacker from a declaration (roles as scripts over message patterns, every
+channel Dolev-Yao), and Needham-Schroeder is declared that way; the model is
+bounded to one run per role, with variables binding names and nonces from a
+declared domain, never whole ciphertexts. Over MCP, a `check_ctl` draft still
+lists the injections it considers, and the declaration format is not exposed
+as a tool. Inside a CTL formula, `K_a` over indistinguishable histories is
+still unsupported. Randomness,
+compromise and side channels have no rules. A symbolic model is not a
+computational cryptographic proof.
 
 ## Reproducibility
 

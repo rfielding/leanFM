@@ -94,3 +94,48 @@ sequenceDiagram
     LeanFMServer->>Agent: e2 LogicVerdict
 \end{lstlisting}
 
+\medskip\noindent\textbf{Who can derive what (\texttt{knows})}\par\nopagebreak
+\begin{lstlisting}[language={},breaklines=true]
+{"query": {"atom": "nb"},
+ "initial": [{"sk": "I"}],
+ "events":
+ [{"term":
+   {"enc":
+    {"key": {"pk": "A"},
+     "body": {"tuple": [{"atom": "na"}, {"atom": "nb"}]}}},
+   "src": "Bob",
+   "id": "e1",
+   "dst": "Ivo"},
+  {"term": {"enc": {"key": {"pk": "I"}, "body": {"atom": "nb"}}},
+   "src": "Alice",
+   "id": "e2",
+   "dst": "Ivo",
+   "causeIds": ["e1"]}],
+ "at": "e2",
+ "actor": "Ivo"}
+\end{lstlisting}
+\noindent returns
+\begin{lstlisting}[language={},breaklines=true]
+{"visible": ["e1", "e2"],
+ "verdict": "proved",
+ "tool": "knows",
+ "reading": "Ivo can derive nb at e2",
+ "query": "nb",
+ "holds":
+ [{"term": "sk(I)", "how": "known at the start", "from": "initial"},
+  {"term": "{na, nb}pk(A)",
+   "how": "delivered in e1 (Bob to Ivo)",
+   "from": "e1"},
+  {"term": "{nb}pk(I)",
+   "how": "delivered in e2 (Alice to Ivo)",
+   "from": "e2"},
+  {"term": "nb", "how": "opened {nb}pk(I) with sk(I)", "from": "e2"}],
+ "evidence":
+ {"kind": "derivation",
+  "derivation":
+  {"term": "nb", "how": "opened {nb}pk(I) with sk(I)", "held": "e2"}},
+ "causalPast": ["e1", "e2"],
+ "at": "e2",
+ "actor": "Ivo"}
+\end{lstlisting}
+

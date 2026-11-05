@@ -89,12 +89,12 @@ structure CloseDown      where deriving TypeName
 A rejected part names the offset the shard holds, and the browser resends from there. -/
 protocol Upload (Browser, Shard) {
   u: UploadStart from Browser to Shard;
-  choice at Shard {
+  choice {
     o: UploadStarted from Shard to Browser cause u where o.requestId = u.requestId ∧ o.offset = 0;
     rec Parts {
-      choice at Browser {
+      choice {
         p: UploadPart from Browser to Shard;
-        choice at Shard {
+        choice {
           a: UploadPartAck from Shard to Browser cause p where a.offset > p.offset;
           continue Parts;
         } or {
@@ -103,7 +103,7 @@ protocol Upload (Browser, Shard) {
         }
       } or {
         f: UploadFinish from Browser to Shard;
-        choice at Shard {
+        choice {
           r: UploadResponse from Shard to Browser cause f where r.requestId = u.requestId;
         } or {
           UploadRejected from Shard to Browser cause f;
@@ -117,7 +117,7 @@ protocol Upload (Browser, Shard) {
 
 protocol Update (Browser, Shard) {
   u: UpdateRequest from Browser to Shard;
-  choice at Shard {
+  choice {
     r: UpdateResponse from Shard to Browser cause u where r.prevDts = u.prevDts ∧ r.id = u.id;
   } or {
     UpdateRejected from Shard to Browser cause u;
@@ -127,7 +127,7 @@ protocol Update (Browser, Shard) {
 /-- One page of the local feed; the browser sends the next request from the page's cursor. -/
 protocol Feed (Browser, Shard) {
   f: FeedRequest from Browser to Shard;
-  choice at Shard {
+  choice {
     p: FeedResponse from Shard to Browser cause f where p.lastVisibleDt ≥ f.afterVisibleDt;
   } or {
     a: AccessDenied from Shard to Browser cause f where a.status = 401;
@@ -138,7 +138,7 @@ protocol Feed (Browser, Shard) {
 always has its blob here. -/
 protocol Download (Browser, Shard) {
   d: DownloadRequest from Browser to Shard;
-  choice at Shard {
+  choice {
     a: AccessDenied from Shard to Browser cause d where a.status = 401 ∨ a.status = 404;
   } or {
     DownloadResponse from Shard to Browser cause d;
@@ -167,7 +167,7 @@ protocol PullPage (Shard, Peer) {
 lane decides whether to ask for the next one, and the record becomes visible only after the last. -/
 protocol ImportRange (Shard, Peer) {
   b: BlobRequest from Shard to Peer where b.urgent = false;
-  choice at Peer {
+  choice {
     BlobResponse from Peer to Shard cause b;
   } or {
     BlobMissing from Peer to Shard cause b;
@@ -177,7 +177,7 @@ protocol ImportRange (Shard, Peer) {
 /-- A blob created on this shard gets its jobs; the outputs come back as new files. -/
 protocol Derive (Shard, Worker) {
   j: JobRequest from Shard to Worker;
-  choice at Worker {
+  choice {
     r: JobResult from Worker to Shard cause j where r.job = j.job;
   } or {
     JobFailed from Worker to Shard cause j;
@@ -191,7 +191,7 @@ that does not answer is the channel's timeout (physics), answered by the door wi
 A big response is still one response whose body streams; its channel's `close` is handled. -/
 protocol Forward (Browser, Door, Host) {
   r: ApiRequest from Browser to Door;
-  choice at Door {
+  choice {
     f: ApiForward from Door to Host cause r where f.task = r.task;
     a: ApiReply from Host to Door cause f;
     p: ApiResponse from Door to Browser cause r where p.status = a.status;
@@ -204,13 +204,13 @@ protocol Forward (Browser, Door, Host) {
 independent: either end sends frames until it closes its direction. -/
 protocol Socket (Browser, Door, Host) {
   u: WsUpgrade from Browser to Door;
-  choice at Door {
+  choice {
     g: WsUpgrade from Door to Host cause u where g.mount = u.mount;
     a: WsAccepted from Host to Door cause g;
     WsAccepted from Door to Browser cause u;
     par {
       rec Up {
-        choice at Browser {
+        choice {
           FrameUp from Browser to Door;
           FrameUp from Door to Host;
           continue Up;
@@ -221,7 +221,7 @@ protocol Socket (Browser, Door, Host) {
       }
     } and {
       rec Down {
-        choice at Host {
+        choice {
           FrameDown from Host to Door;
           FrameDown from Door to Browser;
           continue Down;

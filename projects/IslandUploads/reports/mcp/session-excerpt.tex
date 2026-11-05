@@ -2,12 +2,12 @@
 \begin{Verbatim}[fontsize=\small]
 protocol Upload (Browser, Shard) {
   u: UploadStart from Browser to Shard;
-  choice at Shard {
+  choice {
     o: UploadStarted from Shard to Browser cause u where o.requestId = u.requestId /\ o.offset = 0;
     rec Parts {
-      choice at Browser {
+      choice {
         p: UploadPart from Browser to Shard;
-        choice at Shard {
+        choice {
           a: UploadPartAck from Shard to Browser cause p where a.offset > p.offset;
           continue Parts;
         } or {
@@ -16,7 +16,7 @@ protocol Upload (Browser, Shard) {
         }
       } or {
         f: UploadFinish from Browser to Shard;
-        choice at Shard {
+        choice {
           r: UploadResponse from Shard to Browser cause f where r.requestId = u.requestId;
         } or {
           UploadRejected from Shard to Browser cause f;
@@ -30,7 +30,7 @@ protocol Upload (Browser, Shard) {
 
 protocol Download (Browser, Shard) {
   d: DownloadRequest from Browser to Shard;
-  choice at Shard {
+  choice {
     a: AccessDenied from Shard to Browser cause d where a.status = 401 \/ a.status = 404;
   } or {
     DownloadResponse from Shard to Browser cause d;

@@ -62,8 +62,8 @@ Each line is one message: a label, a sender, a receiver, and optionally the
 earlier message that caused it. A label is the name of a Lean structure, so the
 message's payload is that structure's fields: \texttt{Order} has an
 \texttt{item}, \texttt{Pay} an \texttt{amount}, and \texttt{where p.amount =
-q.price} is type-checked Lean. \texttt{choice at Shop} says that the shop alone
-decides which branch happens. Projection keeps, for one role, the lines that role
+q.price} is type-checked Lean. \texttt{choice} says that exactly one branch
+happens; the shop decides which, because the shop starts both. Projection keeps, for one role, the lines that role
 sends or receives. LeanFM computes it; this is the shop's:
 
 \input{generated/session-purchase-shop.tex}
@@ -72,8 +72,8 @@ The theory then asks two questions of the global type, and LeanFM asks the same
 two.
 
 \begin{description}[style=nextline]
-  \item[One chooser per choice.] The first message of every branch must be sent
-  by the same role. If Client could start one branch while Shop starts another,
+  \item[One chooser per choice.] Every branch must be started by the same role,
+  and that role is the one that decides. If Client could start one branch while Shop starts another,
   both could act at once and the run would leave the protocol. This is the
   realizability (non-local choice) condition.
   \item[Everyone who must know, learns.] A role whose later behaviour differs
@@ -485,7 +485,7 @@ calls to the shop:
 
 \begin{lstlisting}[language={}]
 o: http POST /orders {item}          from Client to Shop;
-choice at Shop {
+choice {
   q: http 200 {quote}                from Shop to Client  cause o;
   p: http POST /payments {quote}     from Client to Bank  cause q;
   r: http 201 {receipt}              from Bank to Client  cause p;

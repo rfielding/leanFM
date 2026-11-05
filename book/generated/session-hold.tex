@@ -2,7 +2,7 @@
 protocol PurchaseWithHold (Client, Shop, Bank) {
   h: Hold from Client to Bank;
   o: Order from Client to Shop;
-  choice at Shop {
+  choice {
     q: Quote from Shop to Client cause o;
     p: Pay   from Client to Bank cause q;
   } or {

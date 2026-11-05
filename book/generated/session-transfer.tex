@@ -2,7 +2,7 @@
 protocol Transfer (Sender, Receiver) {
   rec Block {
     d: Data from Sender to Receiver;
-    choice at Receiver {
+    choice {
       Ack from Receiver to Sender cause d;
       continue Block;
     } or {

@@ -14,10 +14,11 @@ namespace LeanFM.Session.Global
 
 variable {R : Type} [DecidableEq R] [ToString R]
 
-/-- Cuts on HTTP channels. `isHttp a b` says whether the channel from `a` to `b` is HTTP, and
-`mayCall a b` whether `a` may start a request to `b` (in a deployment, whether `b` exposes an
-interface that `a` can reach). -/
-def httpCuts (g : Global R) (isHttp : R → R → Bool) (mayCall : R → R → Bool) : List String :=
+/-- Cuts when some responses are streams. `streams a b` says that a response from `b` to `a` may
+be a stream (server-sent events, chunked transfer): any number of messages travel back on the
+connection the request came in on, so answering a request does not close it. -/
+def httpCutsStreaming (g : Global R) (isHttp : R → R → Bool) (mayCall : R → R → Bool)
+    (streams : R → R → Bool) : List String :=
   (runs g).flatMap (fun run =>
     let msgs := run.filterMap (fun s => match s with | .msg i => some i | .act _ _ => none)
     let byId (id : String) := msgs.find? (·.id == some id)
@@ -34,7 +35,8 @@ def httpCuts (g : Global R) (isHttp : R → R → Bool) (mayCall : R → R → B
       -- a response: the nearest pending request in the cause chain made by the receiver of this
       -- message to its sender
       match inChain.find? (fun (_, caller, callee) => callee == i.src && caller == i.dst) with
-      | some (p, _, _) => (pending.filter (·.1 != p), cuts)
+      | some (p, caller, callee) =>
+        (if streams caller callee then pending else pending.filter (·.1 != p), cuts)
       | none =>
         let cuts :=
           if mayCall i.src i.dst then cuts
@@ -43,5 +45,11 @@ def httpCuts (g : Global R) (isHttp : R → R → Bool) (mayCall : R → R → B
             | none => cuts ++ [s!"{i.label} is a request from {i.src} to {i.dst}, which {i.src} may not call"]
         (pending ++ [((i.id.getD i.label), i.src, i.dst)], cuts)
     (msgs.foldl step ([], [])).2) |>.eraseDups
+
+/-- Cuts on HTTP channels. `isHttp a b` says whether the channel from `a` to `b` is HTTP, and
+`mayCall a b` whether `a` may start a request to `b` (in a deployment, whether `b` exposes an
+interface that `a` can reach). -/
+def httpCuts (g : Global R) (isHttp : R → R → Bool) (mayCall : R → R → Bool) : List String :=
+  httpCutsStreaming g isHttp mayCall (fun _ _ => false)
 
 end LeanFM.Session.Global

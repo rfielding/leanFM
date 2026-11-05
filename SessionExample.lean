@@ -48,7 +48,7 @@ that never contacts it asks nothing of it. -/
 --@begin Purchase
 protocol Purchase (Client, Shop, Bank) {
   o: Order from Client to Shop;
-  choice at Shop {
+  choice {
     q: Quote from Shop to Client cause o;
     p: Pay   from Client to Bank cause q where p.amount = q.price;
        Paid  from Bank to Shop cause p;
@@ -73,7 +73,7 @@ bank's session has started, and the `SoldOut` branch leaves it holding money for
 protocol PurchaseWithHold (Client, Shop, Bank) {
   h: Hold from Client to Bank;
   o: Order from Client to Shop;
-  choice at Shop {
+  choice {
     q: Quote from Shop to Client cause o;
     p: Pay   from Client to Bank cause q;
   } or {
@@ -90,7 +90,7 @@ protocol PurchaseWithHold (Client, Shop, Bank) {
 -- The guard is typed Lean over decoded payloads: 10 = 10 holds, 10 = 12 does not.
 def payGuard : Guard := Id.run do
   match purchase with
-  | .msg _ (.choice _ ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨"", fun _ => none⟩
+  | .msg _ (.choice ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨"", fun _ => none⟩
   | _ => ⟨"", fun _ => none⟩
 
 #guard payGuard.text == "p.amount = q.price"
@@ -112,7 +112,7 @@ def mayCall : Role → Role → Bool
 /-- The same purchase un-cut for HTTP: every response goes back to the role that asked. -/
 protocol PurchaseHttp (Client, Shop, Bank) {
   o: Order from Client to Shop;
-  choice at Shop {
+  choice {
     q: Quote   from Shop to Client cause o;
     p: Pay     from Client to Bank cause q where p.amount = q.price;
     r: Receipt from Bank to Client cause p;
@@ -137,13 +137,13 @@ structure LastAck where n : Nat deriving TypeName
 structure Timeout where         deriving TypeName
 
 /-- A first attempt puts the sender's timer in the global type, as a branch beside the
-acknowledgement. Both rules reject it: the sender does not decide whether an `Ack` arrives, and the
-receiver cannot observe the sender's timer, so it cannot tell which branch was taken. -/
+acknowledgement. No single role decides that choice: the sender's timer starts one branch and the
+receiver's `Ack` the other, and both can happen at once. The checker reports the race. -/
 --@begin TransferWithTimer
 protocol TransferWithTimer (Sender, Receiver) {
   rec Block {
     d: Data from Sender to Receiver;
-    choice at Sender {
+    choice {
       Timeout at Sender;
       continue Block;
     } or {
@@ -155,8 +155,7 @@ protocol TransferWithTimer (Sender, Receiver) {
 --@end TransferWithTimer
 
 #guard (TransferWithTimer Role.sender Role.receiver).issues [.sender, .receiver] ==
-  [ "choice at Sender: a branch starts with Ack, which Sender does not decide"
-  , "Receiver cannot tell which branch Sender chose" ]
+  [ "no single role decides a choice, so it is a race: Sender starts Timeout; Receiver starts Ack" ]
 
 /-- The lock step itself. The receiver decides between `Ack` and `LastAck`. Loss, reordering and
 the sender's retransmission timer are physics, declared below, not branches of the type. -/
@@ -164,7 +163,7 @@ the sender's retransmission timer are physics, declared below, not branches of t
 protocol Transfer (Sender, Receiver) {
   rec Block {
     d: Data from Sender to Receiver;
-    choice at Receiver {
+    choice {
       Ack from Receiver to Sender cause d;
       continue Block;
     } or {

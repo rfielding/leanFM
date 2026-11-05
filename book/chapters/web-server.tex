@@ -213,7 +213,14 @@ inline draft task. The atoms are the observable ones: \texttt{at(state)},
 \texttt{after(message)} and \texttt{terminal}. The result is one of five
 verdicts and always carries evidence: a witness path for a satisfied
 existential, or a counterexample path for a refuted universal or a violated
-\texttt{never}.
+\texttt{never}. A draft may also give its transitions symbolic terms and
+declare what some actors know at the start, and whether an actor sees every
+channel. Then \texttt{knows(actor, term)} is an atom too: a state of the model
+is the task state together with what each declared actor holds, so two paths
+that reach one state knowing different things stay apart, and a requirement
+such as ``never (Bob has finished with Alice and the network knows Bob's
+nonce)'' is checked directly, its counterexample listing what each actor holds
+at every step.
 \item[\texttt{check\_trace}] Accepts event envelopes with their \texttt{id},
 \texttt{prevIds} and \texttt{causeIds}. It checks identifiers, cycles, cause
 ordering, the \texttt{src} and \texttt{dst} declared for each message, and
@@ -226,10 +233,23 @@ should hold it; and, for an implementation-only atom, proposes the events that
 would make it testable.
 \end{description}
 
-Knowledge and permission modalities ($K_a$, $O$, $P$) from
-Chapter~\ref{ch:legal-example} are deferred: \texttt{selfhost.mcp.logic.knows}
-lists them as \texttt{unsupported} so that an agent is told plainly rather than
-given a guessed answer.
+\begin{description}[style=nextline]
+  \item[\texttt{knows}] takes event envelopes whose payloads are symbolic terms
+  (atoms, keys, key pairs, pairs, encryption and hashes), an actor and an event,
+  and returns what that actor can derive at that event: every message it sent or
+  received in the event's causal past, taken apart until nothing new appears,
+  each piece with the event that first gave it. With a query term it answers
+  \texttt{proved} with the derivation, or \texttt{disproved}. Events outside the
+  causal past never count, so a leak that has not reached the actor yet does not
+  make it know anything. The decision is the one in
+  \texttt{LeanFM.Session.Knowledge}, proved sound
+  (Section~\ref{sec:knowledge-closure}).
+\end{description}
+
+The modal operators themselves ($K_a$ over indistinguishable histories, $O$,
+$P$) are still reported as \texttt{unsupported} inside a CTL formula, so that an
+agent is told plainly rather than given a guessed answer; \texttt{knows} decides
+the state predicate the security examples need.
 
 \subsection{Formulas as data}
 

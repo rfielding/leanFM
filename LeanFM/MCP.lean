@@ -148,8 +148,8 @@ def tools : Array Json := #[
     (schema [("formula", anyJson "JSON formula"), ("task", anyJson "optional canonical task id or inline draft"),
       ("sentence", stringSchema "optional English requirement the formula is meant to state")] ["formula"]),
   tool "check_ctl" "Check a CTL formula against a task"
-    "Decide a JSON CTL formula over a canonical task or inline draft. Returns proved, disproved, unknown, unsupported or resource-limit with a witness or counterexample path."
-    (schema [("task", anyJson "canonical task id or inline draft {states, initial, terminals, transitions}"),
+    "Decide a JSON CTL formula over a canonical task or inline draft. Returns proved, disproved, unknown, unsupported or resource-limit with a witness or counterexample path. A draft may give transitions symbolic terms and declare actors' knowledge; then {knows: {actor, term}} is an atom, decided from what reached the actor on each path."
+    (schema [("task", anyJson "canonical task id or inline draft {states, initial, terminals, transitions[{src, dst, message, from?, to?, term?}], knowledge?}"),
       ("formula", anyJson "JSON formula")] ["task", "formula"]),
   tool "check_trace" "Check an event trace and draw it"
     "Check event envelopes (id, prevIds, causeIds, task, src, dst, message) for ids, causality, schemas, concurrency and task acceptance; returns a Mermaid sequence diagram and causal graph."
@@ -159,9 +159,14 @@ def tools : Array Json := #[
     "Classify each atom of a formula, or each predicate text, as observable, derived or implementation-only, and propose events that would make hidden predicates testable."
     (schema [("formula", anyJson "JSON formula"), ("predicates", Json.mkObj [("type", "array"), ("items", stringSchema "predicate text")]),
       ("task", anyJson "optional canonical task id or inline draft")] []),
-  tool "knows" "Derivable knowledge (deferred)"
-    "Accepted but deferred: always answers unsupported."
-    (schema [("events", Json.mkObj [("type", "array")]), ("actor", stringSchema "actor"), ("at", stringSchema "event id")] [])
+  tool "knows" "What an actor can derive"
+    "Given event envelopes (id, prevIds, causeIds, src, dst, term), an actor and an event id, take apart every message the actor sent or received in that event's causal past (pairs split; ciphertexts opened with keys it can build) and return the pieces it holds, each with the event that gave it. With a query term, answer proved with the derivation or disproved. Terms: {atom|key|pk|sk: name}, {pair: [a, b]}, {tuple: [a, b, ...]}, {enc: {key, body}}, {hash: t}."
+    (schema [("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("actor", stringSchema "actor"), ("at", stringSchema "event id to ask at"),
+      ("initial", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("query", anyJson "optional term to decide"),
+      ("seesAll", Json.mkObj [("type", "boolean"), ("description", Json.str "the actor sees every channel (a network attacker)")])]
+      ["events", "actor", "at"])
 ]
 
 /-- LogicVerdict or LogicInputRejected, carried as an MCP tool result. -/

@@ -2,7 +2,7 @@
 \begin{Verbatim}[fontsize=\small]
 protocol Forward (Browser, Door, Host) {
   r: ApiRequest from Browser to Door;
-  choice at Door {
+  choice {
     f: ApiForward from Door to Host cause r where f.task = r.task;
     a: ApiReply from Host to Door cause f;
     p: ApiResponse from Door to Browser cause r where p.status = a.status;
@@ -13,13 +13,13 @@ protocol Forward (Browser, Door, Host) {
 
 protocol Socket (Browser, Door, Host) {
   u: WsUpgrade from Browser to Door;
-  choice at Door {
+  choice {
     g: WsUpgrade from Door to Host cause u where g.mount = u.mount;
     a: WsAccepted from Host to Door cause g;
     WsAccepted from Door to Browser cause u;
     par {
       rec Up {
-        choice at Browser {
+        choice {
           FrameUp from Browser to Door;
           FrameUp from Door to Host;
           continue Up;
@@ -30,7 +30,7 @@ protocol Socket (Browser, Door, Host) {
       }
     } and {
       rec Down {
-        choice at Host {
+        choice {
           FrameDown from Host to Door;
           FrameDown from Door to Browser;
           continue Down;

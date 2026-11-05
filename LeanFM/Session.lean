@@ -4,6 +4,7 @@ import LeanFM.Session.Topology
 import LeanFM.Session.Http
 import LeanFM.Session.Spec
 import LeanFM.Session.Syntax
+import LeanFM.Session.Knowledge
 
 /-!
 # Session types for LeanFM

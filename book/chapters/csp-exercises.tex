@@ -336,8 +336,24 @@ theorem auction_commitments_not_copyable
   exact boundNameDefeatsCopy accepted
 \end{lstlisting}
 
-These listings are proposed notation: the symbolic-crypto library and the
-lemmas they name do not exist yet, so nothing here is a checked proof.
+The two theorems are still proposed notation: the lemmas they name do not
+exist yet. The deduction rules do. \texttt{LeanFM.Session.Knowledge} defines
+them as \texttt{Derives}, with messages built from atoms, symmetric keys, key
+pairs, pairs, encryption and hashes; a ciphertext under a private key is a
+signature, opened with the public key. It also decides them for one value at a
+time: \texttt{analz} takes what an actor has seen apart until nothing new
+appears, and \texttt{synth} asks whether the value can be built from the pieces.
+Enumerating everything an actor could build would never end; breaking down and
+then checking one value does. The library proves the decision sound:
+
+\begin{lstlisting}
+theorem knows_sound {K : List Msg} {v : Msg}
+    (h : knows K v = true) : Derives K v
+\end{lstlisting}
+
+So when the checker says the attacker knows a value, a derivation exists.
+Completeness, that \texttt{knows} misses nothing \texttt{Derives} allows, is
+tested on examples but not yet proved, and secrecy verdicts lean on it.
 
 \subsection{Calculated knowledge and policy inside CTL}
 
@@ -548,6 +564,75 @@ One claim in the chapter does not fit the table: ``Ivo cannot tell which code
 was shown.'' It compares histories rather than labeling one, so it needs the
 full $K_a$ over indistinguishable histories, as noted in the pairing example.
 
+\section{Needham--Schroeder, checked}
+\label{sec:needham-schroeder}
+
+\index{Needham--Schroeder}
+\index{Lowe's attack}
+The public-key protocol of Needham and Schroeder (1978) has three messages:
+
+\input{generated/ns-protocol.tex}
+
+Alice runs it once, with a peer she chooses: Bob, or Ivo. Bob answers once,
+whoever claims to be calling. Ivo is a legitimate user with his own key pair, so
+Alice may well choose him; he is also the network, seeing every message and
+sending anything he can derive.
+
+Nobody builds the state space. Each honest role is declared as a short script
+over message patterns: a choice, sends, receives and claims. A variable in a
+received pattern binds whatever the message carries there.
+
+\input{generated/ns-roles.tex}
+
+\texttt{LeanFM.Session.Attack} generates the model from that declaration. Every
+message an honest role sends goes to the network, which is Ivo; every message an
+honest role receives is one Ivo can build that has the shape the role expects.
+That is the Dolev--Yao channel, declared once rather than written into each
+role. A state of the model is each role's position and bindings, Ivo's
+knowledge, kept taken apart so that \texttt{knows} is an ordinary label of the
+state, and the claims made so far.
+
+Requirements become flags that events trip. \texttt{SecrecyBreach} trips when
+Bob has committed to a run with Alice and Ivo can derive Bob's nonce;
+\texttt{Impersonation} when Bob has committed to Alice although Alice never
+claimed to be running with Bob. \texttt{check\_ctl} decides \texttt{never} of
+each, and that an honest run can complete. The last row asks secrecy again with
+a \texttt{knows} atom instead of a flag, checked at the moment Bob commits, and
+gets the same verdicts:
+
+\begin{center}
+\input{generated/ns-verdicts.tex}
+\end{center}
+
+For the 1978 protocol the counterexample to secrecy is the attack Lowe found in
+1995, in the checker's own words:
+
+\input{generated/ns-attack.tex}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{generated/ns-attack-diagram.tex}}
+\caption{Lowe's attack as it crosses the wire: the checker's walk replayed through the
+generated model, which draws every message through Ivo, because Ivo is the network. The label
+marks where his knowledge first contains Bob's nonce.}
+\label{fig:lowe-attack}
+\end{figure}
+
+Alice talks to Ivo, as she meant to. Ivo re-encrypts her first message for Bob,
+who answers ``Alice'' with his nonce under Alice's key. Ivo cannot read that
+answer, but he does not need to: he forwards it, and Alice, who believes it is
+Ivo's reply, decrypts it and sends Bob's nonce back to Ivo under Ivo's key. Ivo
+now knows the nonce, and returns it to Bob, who finishes believing he talked to
+Alice. Lowe's fix adds Bob's name to the second message, and Alice checks it is
+the peer she chose. With it both properties hold on every reachable state.
+
+The model is bounded, and the bounds are where attacks could still hide: each
+role runs once, a variable binds a name or a nonce from a declared domain, never
+a whole ciphertext, and Ivo's domain is the names and nonces of this run.
+Lowe's attack needs nothing more, which is why it appears; an attack that needs
+two runs of Bob, or Ivo forwarding a sealed blob he cannot read, needs larger
+bounds.
+
 \section{What these exercises demand from the library}
 
 The three examples produce a concrete checklist:
@@ -560,7 +645,8 @@ The three examples produce a concrete checklist:
   \item a transport-neutral term-to-byte relation with encryption and hashing;
   \item channels, so that each actor's observations are declared;
   \item explicit initial knowledge, compromise and freshness assumptions;
-  \item attacker closure under construction, decryption and hashing;
+  \item attacker closure under construction, decryption and hashing (now in
+        \texttt{LeanFM.Session.Knowledge}, with its decision proved sound);
   \item past operators for agreement claims such as
         ``accepted only if previously formed'';
   \item probabilities on the $E$ quantifier, from overlays, reported next to

@@ -20,4 +20,5 @@ example : ["selfhost.mcp.logic.reference", "selfhost.mcp.logic.explain", "selfho
 example : logicTask.transitions.any (fun t => t.message == "LogicInputRejected" && t.dst == "rejected") = true := by native_decide
 example : (spec.requiredProofs.map (·.name)).contains "Submitted logic never runs as code" = true := by native_decide
 example : LeanFM.LLMGenerated.McpLogicImplementation.errors = [] := by native_decide
-example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 6 := by native_decide
+-- every logic clause is implemented, knows included
+example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 7 := by native_decide

@@ -51,8 +51,9 @@ names its roles and lists statements:
   messages in scope, the guarded one included. It is type-checked when the
   protocol is written and evaluated over decoded payloads when a trace is
   checked.
-  \item[\texttt{choice at Shop \{ \ldots \} or \{ \ldots \}}] Exactly one branch
-  happens, and the shop decides which.
+  \item[\texttt{choice \{ \ldots \} or \{ \ldots \}}] Exactly one branch
+  happens. Who decides is not written: it is the role that starts every branch,
+  here the shop.
   \item[\texttt{Timeout at Sender;}] An event at one role only, such as its timer
   firing; nobody else observes it.
   \item[\texttt{rec Block \{ \ldots\ continue Block; \}}] A named block that
@@ -76,7 +77,8 @@ one constructor of the global type:
 inductive Global (R : Type) where
   | msg    (i : Interaction R) (k : Global R)        -- one message, then k
   | act    (role : R) (label : String) (k : Global R) -- an event at one role
-  | choice (role : R) (branches : List (Global R))   -- role decides
+  | choice (branches : List (Global R))              -- one role decides
+  | sessions (body : Global R) (k : Global R)         -- any number of copies
   | par    (branches : List (Global R)) (k : Global R)
   | join   (need : Nat) (branches : List (Global R)) (k : Global R)
   | loop   (name : String) (body : Global R)
@@ -85,12 +87,15 @@ inductive Global (R : Type) where
 \end{lstlisting}
 
 \index{choice!directed}
-\texttt{choice at} names the role that decides, as in Scribble, and the checker
-does not take the name on trust: every branch must begin with a message that role
-sends, or with an event at that role alone, and the branches must begin
-differently. If Alice's message started one branch and Bob's the other, nobody
-could implement the choice locally; both could act at once and the system would
-leave the protocol. This is the non-local-choice (realizability) problem of
+A choice does not name the role that decides. Scribble writes \texttt{choice at
+Shop}, but the name can only be right one way: the decider is the role that
+starts every branch, by sending its first message or by an event at that role
+alone. So LeanFM reads it off the branches instead, and there is one way to write
+a choice. An empty branch, \texttt{or \{ \}}, is that role choosing to do
+nothing. The branches must begin differently. If Alice's message started one
+branch and Bob's the other, no role would decide; both could act at once and the
+system would leave the protocol, and the checker reports the race, naming who
+starts what. This is the non-local-choice (realizability) problem of
 multiparty protocols. In session-type terms the choice must be \emph{directed}:
 an internal choice of one role, observed by the others as an external choice on
 their queues.
@@ -100,14 +105,14 @@ branches must receive a message that tells it which branch was taken. Projection
 checks it (below), with one relaxation that matches how servers are built: a role
 whose part of the session has not started yet owes nothing to a branch that never
 contacts it. A first attempt at TFTP that puts the sender's timer beside the
-acknowledgement as a choice fails both conditions:
+acknowledgement as a choice has no decider at all:
 
 \input{generated/session-timer.tex}
 
 \input{generated/session-timer-issues.tex}
 
-The sender does not decide whether an \texttt{Ack} arrives, and the receiver
-cannot observe the sender's timer. The fix, in Chapter~\ref{ch:tftp-physics},
+The sender's timer starts one branch and the receiver's \texttt{Ack} the
+other, and nothing stops both from happening at once. The fix, in Chapter~\ref{ch:tftp-physics},
 moves the timer out of the type and into the channel's physics.
 
 Simple finite conversations can compile to regular languages. Nested request
@@ -125,18 +130,21 @@ The syntax, independently of Lean's own grammar:
 <stmt>      ::= [<id> ":"] <Msg> "from" <Role> "to" <Role>
                   ["cause" <id>] ["where" <term>] ";"
               | <Event> "at" <Role> ";"
-              | "choice" "at" <Role> "{" <stmt>* "}"
+              | "choice" "{" <stmt>* "}"
                   ("or" "{" <stmt>* "}")*
               | "par" "{" <stmt>* "}" ("and" "{" <stmt>* "}")*
               | "join" <natural> "of" "{" <stmt>* "}"
                   ("and" "{" <stmt>* "}")*
               | "rec" <Name> "{" <stmt>* "}"
               | "continue" <Name> ";"
+              | "sessions" "{" <stmt>* "}"
               | "include" <term> ";"
 \end{lstlisting}
 
 Sequence is one statement after another; an empty branch, \texttt{or \{ \}}, is
-the empty conversation. \texttt{<Msg>} and \texttt{<Event>} name Lean types;
+the empty conversation. \texttt{sessions} runs any number of independent copies of
+its body beside what follows, each a session of its own, as a server runs one
+handler per request. \texttt{<Msg>} and \texttt{<Event>} name Lean types;
 \texttt{<term>} is a Lean expression: a \texttt{Bool} for \texttt{where}, a
 protocol applied to roles for \texttt{include}. Guards over the payloads of named
 messages supply the context-sensitive correlation that plain context-free syntax

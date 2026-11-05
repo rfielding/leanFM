@@ -39,5 +39,6 @@ def main : IO Unit := do
   let bad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"check_ctl\",\"arguments\":{\"task\":\"mcp_logic_consult\",\"formula\":{\"G\":\"terminal\"}}}}"
   assertContains "MCP rejects malformed logic as a tool error" bad.body "\"isError\":true"
   assertContains "MCP rejection names the typing error" bad.body "AG (on every path)"
-  let deferred ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"knows\",\"arguments\":{}}}"
-  assertContains "MCP knows is honestly unsupported" deferred.body "\"verdict\":\"unsupported\""
+  let known ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"knows\",\"arguments\":{\"actor\":\"Ivo\",\"at\":\"e1\",\"initial\":[{\"sk\":\"I\"}],\"query\":{\"atom\":\"nb\"},\"events\":[{\"id\":\"e1\",\"src\":\"Alice\",\"dst\":\"Ivo\",\"term\":{\"enc\":{\"key\":{\"pk\":\"I\"},\"body\":{\"atom\":\"nb\"}}}}]}}}"
+  assertContains "MCP knows decides a query" known.body "\"verdict\":\"proved\""
+  assertContains "MCP knows returns the derivation" known.body "\"kind\":\"derivation\""

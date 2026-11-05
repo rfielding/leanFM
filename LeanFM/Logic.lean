@@ -1,6 +1,7 @@
 import Lean.Data.Json
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
+import LeanFM.Session.Knowledge
 
 /-!
 # LeanFM logic consultation (selfhost.mcp.logic.*)
@@ -61,6 +62,8 @@ inductive Formula where
   | predicate (text : String)
   | derived (name : String)
   | unsupported (operator : String)
+  /-- `actor` can derive `term` from the messages it has seen on the path to this state -/
+  | knows (actor : String) (term : LeanFM.Session.Knowledge.Msg)
   | not (f : Formula)
   | and (fs : List Formula)
   | or (fs : List Formula)
@@ -97,6 +100,7 @@ partial def toJson : Formula → Json
   | predicate t => Json.mkObj [("predicate", t)]
   | derived n => Json.mkObj [("derived", n)]
   | unsupported op => Json.mkObj [(op, Json.null)]
+  | knows a t => Json.mkObj [("knows", Json.mkObj [("actor", Json.str a), ("term", Json.str t.render)])]
   | not f => Json.mkObj [("not", toJson f)]
   | and fs => Json.mkObj [("and", Json.arr (fs.map toJson).toArray)]
   | or fs => Json.mkObj [("or", Json.arr (fs.map toJson).toArray)]
@@ -115,7 +119,7 @@ partial def toJson : Formula → Json
   | aw a b => Json.mkObj [("AW", Json.arr #[toJson a, toJson b])]
 
 def isAtomic : Formula → Bool
-  | tt | ff | atState _ | after _ | terminal | field .. | predicate _ | derived _ | unsupported _ => true
+  | tt | ff | atState _ | after _ | terminal | field .. | predicate _ | derived _ | unsupported _ | knows .. => true
   | _ => false
 
 mutual
@@ -129,6 +133,7 @@ partial def reading : Formula → String
   | predicate t => "\"" ++ t ++ "\" holds (a predicate text, not an observable event)"
   | derived n => "the derived predicate " ++ n ++ " holds"
   | unsupported op => "the " ++ op ++ " modality holds (not supported by these tools yet)"
+  | knows a t => a ++ " can derive " ++ t.render
   | not f => "it is not the case that " ++ paren f
   | and fs => " and ".intercalate (fs.map paren)
   | or fs => " or ".intercalate (fs.map paren)
@@ -206,6 +211,55 @@ def checkString (what s : String) : Except String String :=
   else if s.isEmpty then .error s!"{what} is empty"
   else .ok s
 
+/-! ### Symbolic terms (decision logic-knows) -/
+
+section Terms
+open LeanFM.Session.Knowledge
+
+/-- A term from JSON: one key per object, within the formula bounds. -/
+partial def parseTerm (depth : Nat) (j : Json) : Except String Msg := do
+  if depth > bounds.maxDepth then throw s!"a term is nested deeper than {bounds.maxDepth}"
+  match j with
+  | .obj kvs =>
+    match kvs.toList with
+    | [(k, v)] =>
+      let name := fun (what : String) => match str? v with
+        | some n => checkString what n
+        | none => .error s!"{what} names are strings"
+      match k with
+      | "atom" => return .atom (← name "atom")
+      | "key" => return .key (← name "key")
+      | "pk" => return .pk (← name "pk")
+      | "sk" => return .sk (← name "sk")
+      | "hash" => return .hash (← parseTerm (depth + 1) v)
+      | "pair" => match v with
+        | .arr #[a, b] => return .pair (← parseTerm (depth + 1) a) (← parseTerm (depth + 1) b)
+        | _ => throw "pair takes exactly two terms"
+      | "tuple" => match v with
+        | .arr items =>
+          if items.size < 2 then throw "tuple takes two or more terms"
+          let ts ← items.toList.mapM (parseTerm (depth + 1))
+          return (ts.dropLast.foldr (fun t acc => Msg.pair t acc) ts.getLast!)
+        | _ => throw "tuple takes an array of terms"
+      | "enc" =>
+        let key ← match (v.getObjVal? "key").toOption with
+          | some kj => parseTerm (depth + 1) kj
+          | none => throw "enc needs a key"
+        let body ← match (v.getObjVal? "body").toOption with
+          | some bj => parseTerm (depth + 1) bj
+          | none => throw "enc needs a body"
+        return .enc key body
+      | other => throw s!"unknown term constructor {other.take 40}; use atom, key, pk, sk, pair, tuple, enc or hash"
+    | _ => throw "a term is an object with exactly one key"
+  | _ => throw "a term is an object such as {\"atom\": \"na\"}"
+
+def boundedTerm (j : Json) : Except String Msg := do
+  let t ← parseTerm 0 j
+  if t.size > bounds.maxFormulaNodes then throw s!"a term has {t.size} nodes; the bound is {bounds.maxFormulaNodes}"
+  return t
+
+end Terms
+
 def pathOperatorHint (op : String) : Option String :=
   match op with
   | "F" | "eventually" | "<>" => some "F is a path operator; quantify it: AF (on every path) or EF (on some path)"
@@ -216,7 +270,7 @@ def pathOperatorHint (op : String) : Option String :=
   | _ => none
 
 def unsupportedOperators : List String :=
-  ["K", "knows", "O", "obliged", "obligatory", "P", "permitted", "B", "believes", "Pr", "probability", "C", "common"]
+  ["K", "O", "obliged", "obligatory", "P", "permitted", "B", "believes", "Pr", "probability", "C", "common"]
 
 partial def parseFormula (j : Json) (depth : Nat := 0) : Except String Formula := do
   if depth > bounds.maxDepth then throw s!"formula nesting exceeds depth {bounds.maxDepth}"
@@ -250,6 +304,14 @@ partial def parseFormula (j : Json) (depth : Nat := 0) : Except String Formula :
       | "after" => atomStr .after
       | "predicate" => atomStr .predicate
       | "derived" => atomStr .derived
+      | "knows" =>
+        let actor ← match (arg.getObjVal? "actor").toOption.bind str? with
+          | some a => checkString "knows.actor" a
+          | none => throw "knows needs a string actor"
+        let term ← match (arg.getObjVal? "term").toOption with
+          | some t => boundedTerm t
+          | none => throw "knows needs a term"
+        return .knows actor term
       | "field" =>
         let get := fun (k : String) => match (arg.getObjVal? k).toOption.bind str? with
           | some v => checkString ("field." ++ k) v
@@ -287,6 +349,8 @@ structure Transition where
   message : String
   sender : Option String := none
   receiver : Option String := none
+  /-- the message as a symbolic term, for knowledge atoms -/
+  term : Option LeanFM.Session.Knowledge.Msg := none
 deriving Repr, Inhabited
 
 structure TaskModel where
@@ -296,6 +360,9 @@ structure TaskModel where
   terminals : List String
   transitions : List Transition
   canonical : Bool
+  /-- actors whose knowledge the model tracks: name, initial terms, and whether they see every
+  channel (a network attacker) rather than only transitions they send or receive -/
+  knowers : List (String × List LeanFM.Session.Knowledge.Msg × Bool) := []
 deriving Repr, Inhabited
 
 def canonicalTasks : List TaskRequirement := LeanFM.LLMGenerated.SelfHosting.spec.tasks
@@ -333,15 +400,33 @@ def parseDraft (j : Json) : Except String TaskModel := do
           | some v => checkString ("transition." ++ k) v
           | none => .error s!"each transition needs a string {k}"
         let opt := fun (k : String) => (t.getObjVal? k).toOption.bind str?
+        let term ← match (t.getObjVal? "term").toOption with
+          | some tj => some <$> boundedTerm tj
+          | none => pure none
         let tr : Transition := { src := ← g "src", dst := ← g "dst", message := ← g "message"
-                               , sender := opt "from", receiver := opt "to" }
+                               , sender := opt "from", receiver := opt "to", term }
         return tr
     | some _ => throw "transitions is an array"
     | none => pure []
   let unknown := ([initial] ++ terminals ++ transitions.flatMap (fun t => [t.src, t.dst])).filter (!states.contains ·)
   if let some s := unknown.head? then throw s!"draft refers to undeclared state \"{s}\""
+  let knowers ← match field "knowledge" with
+    | some (.obj kvs) =>
+      if kvs.size > bounds.maxPredicates then throw s!"knowledge declares {kvs.size} actors; the bound is {bounds.maxPredicates}"
+      kvs.toList.mapM fun (actor, decl) => do
+        let actor ← checkString "knowledge actor" actor
+        let initial ← match (decl.getObjVal? "initial").toOption with
+          | some (.arr items) =>
+            if items.size > bounds.maxPredicates then throw s!"{actor}'s initial knowledge has {items.size} terms; the bound is {bounds.maxPredicates}"
+            items.toList.mapM boundedTerm
+          | some _ => throw "initial is an array of terms"
+          | none => pure []
+        let seesAll := match (decl.getObjVal? "seesAll").toOption with | some (.bool b) => b | _ => false
+        return (actor, initial, seesAll)
+    | some _ => throw "knowledge maps each actor to {initial, seesAll}"
+    | none => pure []
   let id := ((field "id").bind str?).getD "draft"
-  return { id, states, initial, terminals, transitions, canonical := false }
+  return { id, states, initial, terminals, transitions, canonical := false, knowers }
 
 def resolveTask (j : Json) : Except String TaskModel :=
   match j with
@@ -358,6 +443,8 @@ def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
     | .atState s => if t.states.contains s then none else some ("unknown state " ++ s)
     | .after m => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .field m _ _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
+    | .knows a _ => if t.knowers.any (·.1 == a) then none
+        else some ("actor " ++ a ++ " has no declared knowledge in task " ++ t.id ++ "; add it to the draft's knowledge field")
     | _ => none).eraseDups
 
 /-! ## Kripke structure -/
@@ -365,7 +452,23 @@ def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
 structure Node where
   state : String
   message : Option String
+  /-- each declared knower's knowledge, taken apart and kept in one order, so that nodes reached
+  with different knowledge stay different -/
+  knowledge : List (List LeanFM.Session.Knowledge.Msg) := []
 deriving Repr, BEq, Inhabited
+
+def canonTerms (K : List LeanFM.Session.Knowledge.Msg) : List LeanFM.Session.Knowledge.Msg :=
+  K.mergeSort (fun x y => decide (x.render ≤ y.render))
+
+/-- What each knower holds after a transition: a term reaches an actor that sends or receives it,
+or that sees every channel. -/
+def TaskModel.learnOn (t : TaskModel) (tr : Transition) (ks : List (List LeanFM.Session.Knowledge.Msg)) :
+    List (List LeanFM.Session.Knowledge.Msg) :=
+  (t.knowers.zip ks).map fun ((actor, _, seesAll), K) =>
+    match tr.term with
+    | some m => if seesAll || tr.sender == some actor || tr.receiver == some actor
+        then canonTerms (LeanFM.Session.Knowledge.learn K m) else K
+    | none => K
 
 structure Model where
   task : TaskModel
@@ -378,7 +481,8 @@ def nodeIndex (nodes : Array Node) (n : Node) : Option Nat := nodes.findIdx? (·
 
 /-- Breadth-first construction; `none` when the node bound is exceeded. -/
 def buildModel (t : TaskModel) : Option Model := Id.run do
-  let mut nodes : Array Node := #[{ state := t.initial, message := none }]
+  let start := t.knowers.map fun (_, init, _) => canonTerms (LeanFM.Session.Knowledge.analz init)
+  let mut nodes : Array Node := #[{ state := t.initial, message := none, knowledge := start }]
   let mut succ : Array (Array Nat) := #[]
   let mut deadlocks : List String := []
   let mut i := 0
@@ -395,7 +499,7 @@ def buildModel (t : TaskModel) : Option Model := Id.run do
       next := #[i]
     else
       for tr in outs do
-        let m : Node := { state := tr.dst, message := some tr.message }
+        let m : Node := { state := tr.dst, message := some tr.message, knowledge := t.learnOn tr n.knowledge }
         match nodeIndex nodes m with
         | some j => if !next.contains j then next := next.push j
         | none =>
@@ -439,6 +543,10 @@ partial def sat (m : Model) : Formula → Array Bool
   | .atState s => m.nodes.map (·.state == s)
   | .after msg => m.nodes.map (·.message == some msg)
   | .terminal => m.nodes.map (fun n => m.task.terminals.contains n.state)
+  | .knows a v =>
+    match m.task.knowers.findIdx? (·.1 == a) with
+    | some k => m.nodes.map fun n => LeanFM.Session.Knowledge.knows (n.knowledge[k]?.getD []) v
+    | none => m.all false
   | .not f => (sat m f).map (!·)
   | .and fs => fs.foldl (fun acc f => (acc.zip (sat m f)).map fun (a, b) => a && b) (m.all true)
   | .or fs => fs.foldl (fun acc f => (acc.zip (sat m f)).map fun (a, b) => a || b) (m.all false)
@@ -553,7 +661,10 @@ partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option
 
 def nodeJson (m : Model) (i : Nat) : Json :=
   let n := m.nodes[i]!
-  Json.mkObj [("state", n.state), ("message", match n.message with | some s => Json.str s | none => Json.null)]
+  let base := [("state", Json.str n.state), ("message", match n.message with | some s => Json.str s | none => Json.null)]
+  let held := (m.task.knowers.zip n.knowledge).map fun ((actor, _, _), K) =>
+    (actor, Json.arr (K.map (Json.str ·.render)).toArray)
+  Json.mkObj (if held.isEmpty then base else base ++ [("holds", Json.mkObj held)])
 
 def evidenceJson (m : Model) (e : Evidence) : Json :=
   Json.mkObj <|
@@ -881,11 +992,17 @@ def classifyAtom (task : Option TaskModel) : Formula → Json
   | .derived n => Json.mkObj [("atom", "derived " ++ n), ("class", "derived"),
       ("needs", "a declared reducer, policy or knowledge rule named " ++ n ++ " in Requirements.lean")]
   | .predicate t => classifyText task t
+  | .knows a v =>
+    let declared := task.map (·.knowers.any (·.1 == a)) |>.getD false
+    Json.mkObj [("atom", a ++ " knows " ++ v.render), ("class", if declared then "observable" else "derived"),
+      ("reason", if declared then "computed from the terms delivered to " ++ a ++ " on the path, by the declared derivation rules"
+        else "needs terms on the task's transitions and " ++ a ++ "'s initial knowledge in the draft's knowledge field")]
   | .unsupported op =>
-    let kind := if ["K", "knows", "B", "believes", "C", "common"].contains op then "knowledge derived from the causal past"
+    let kind := if ["K", "B", "believes", "C", "common"].contains op then "knowledge over indistinguishable histories"
       else if ["Pr", "probability"].contains op then "a probability over declared branch weights"
       else "an obligation or permission over a declared normative code"
-    Json.mkObj [("atom", op), ("class", "derived"), ("needs", kind ++ "; the knows tool is deferred")]
+    let tool := if ["K", "B", "believes", "C", "common"].contains op then "; for what an actor can derive, use the knows atom or the knows tool" else ""
+    Json.mkObj [("atom", op), ("class", "derived"), ("needs", kind ++ tool)]
   | f => Json.mkObj [("atom", f.reading), ("class", "observable")]
 
 def classifyRequirement (args : Json) : ToolOutcome := do
@@ -907,11 +1024,158 @@ def classifyRequirement (args : Json) : ToolOutcome := do
     else "some atoms are derived; declare their reducers before the requirements gate"
   return verdictJson "classify_requirement" "classified" summary [("atoms", Json.arr items.toArray)]
 
-def knows (_ : Json) : ToolOutcome :=
-  return verdictJson "knows" "unsupported"
-    "derivable knowledge from the causal past"
-    [("evidence", Json.mkObj [("kind", "none"),
-      ("note", "selfhost.mcp.logic.knows is accepted but deferred to a later revision")])]
+/-! ## knows (decision logic-knows)
+
+What an actor can derive from the messages it has seen by an event. Terms are symbolic
+(`LeanFM.Session.Knowledge.Msg`); the decision is `Knowledge.synth` over the pieces the actor
+holds, proved sound by `Knowledge.knows_sound`. Every held piece carries the event that first gave
+it, so an answer says not only that a value leaked but where. -/
+
+section Knows
+open LeanFM.Session.Knowledge
+
+structure KEvent where
+  id : String
+  prevIds : List String
+  causeIds : List String
+  src : String
+  dst : String
+  term : Msg
+
+def parseKEvent (j : Json) : Except String KEvent := do
+  let g := fun (k : String) => match (j.getObjVal? k).toOption.bind str? with
+    | some v => checkString ("event." ++ k) v
+    | none => .error s!"each event needs a string {k}"
+  let ids := fun (k : String) => match (j.getObjVal? k).toOption with
+    | some a => strings a ("event." ++ k) bounds.maxEvents
+    | none => .ok []
+  let term ← match (j.getObjVal? "term").toOption with
+    | some t => boundedTerm t
+    | none => throw "each event needs a term"
+  return { id := ← g "id", prevIds := ← ids "prevIds", causeIds := ← ids "causeIds",
+           src := ← g "src", dst := ← g "dst", term }
+
+/-- A piece the actor holds, the event that first gave it, and how it was obtained. -/
+structure Held where
+  term : Msg
+  source : String
+  how : String
+
+def Held.json (h : Held) : Json :=
+  Json.mkObj [("term", Json.str h.term.render), ("from", Json.str h.source), ("how", Json.str h.how)]
+
+/-- The parts one held piece gives up, with how. -/
+def partsWhy (S : List Msg) (h : Held) : List Held :=
+  match h.term with
+  | .pair a b =>
+    [⟨a, h.source, s!"first part of {h.term.render}"⟩, ⟨b, h.source, s!"second part of {h.term.render}"⟩]
+  | .enc k b =>
+    if synth S k.inverse then [⟨b, h.source, s!"opened {h.term.render} with {k.inverse.render}"⟩] else []
+  | _ => []
+
+/-- Take everything apart until a round adds nothing. Each round adds at least one subterm of a
+starting term, so their total size bounds the rounds. -/
+def analyseHeld (start : List Held) : List Held := Id.run do
+  let mut held : List Held := []
+  for h in start do
+    unless held.any (·.term == h.term) do held := held ++ [h]
+  let fuel := start.foldl (fun n h => n + h.term.size) 1
+  for _ in [0:fuel] do
+    let S := held.map (·.term)
+    let mut added := false
+    for h in held do
+      for p in partsWhy S h do
+        unless held.any (·.term == p.term) do
+          held := held ++ [p]; added := true
+    if !added then break
+  return held
+
+/-- Why `v` can be built from the held pieces, as a tree; `none` when it cannot. Mirrors `synth`. -/
+partial def derivation (held : List Held) : Msg → Option Json
+  | v =>
+    match held.find? (·.term == v) with
+    | some h => some (Json.mkObj [("term", Json.str v.render), ("held", Json.str h.source), ("how", Json.str h.how)])
+    | none =>
+      let node := fun (op : String) (subs : List (Option Json)) =>
+        if subs.all Option.isSome then
+          some (Json.mkObj [("term", Json.str v.render), ("built", Json.str op),
+            ("from", Json.arr (subs.filterMap id).toArray)])
+        else none
+      match v with
+      | .pair a b => node "pair" [derivation held a, derivation held b]
+      | .enc k b => node "encrypt" [derivation held k, derivation held b]
+      | .hash b => node "hash" [derivation held b]
+      | _ => none
+
+end Knows
+
+def knows (args : Json) : ToolOutcome := do
+  let field := fun (k : String) => (args.getObjVal? k).toOption
+  let events ← match field "events" with
+    | some (.arr items) =>
+      if items.size > bounds.maxEvents then throw s!"trace has {items.size} events; the bound is {bounds.maxEvents}"
+      items.toList.mapM parseKEvent
+    | _ => throw "knows needs an events array"
+  let actor ← match (field "actor").bind str? with
+    | some a => checkString "actor" a
+    | none => throw "knows needs a string actor"
+  let atId ← match (field "at").bind str? with
+    | some a => checkString "at" a
+    | none => throw "knows needs the id of the event to ask at"
+  let initial ← match field "initial" with
+    | some (.arr items) =>
+      if items.size > bounds.maxPredicates then throw s!"initial has {items.size} terms; the bound is {bounds.maxPredicates}"
+      items.toList.mapM boundedTerm
+    | some _ => throw "initial is an array of terms"
+    | none => pure []
+  let query ← match field "query" with
+    | some q => some <$> boundedTerm q
+    | none => pure none
+  let seesAll := match field "seesAll" with | some (.bool b) => b | _ => false
+  -- ids are unique, references resolve, the asked-at event exists
+  let ids := events.map (·.id)
+  if ids.eraseDups.length != ids.length then throw "event ids must be unique"
+  for e in events do
+    for r in e.prevIds ++ e.causeIds do
+      unless ids.contains r do throw s!"event {e.id} refers to unknown event {r}"
+  unless ids.contains atId do throw s!"no event has id {atId}"
+  -- the causal past of the asked-at event: everything reachable backwards through prev and cause
+  let past := Id.run do
+    let mut seen : List String := [atId]
+    let mut frontier : List String := [atId]
+    for _ in [0:events.length + 1] do
+      let next := frontier.flatMap fun i =>
+        match events.find? (·.id == i) with
+        | some e => (e.prevIds ++ e.causeIds).filter (fun r => !seen.contains r)
+        | none => []
+      if next.isEmpty then break
+      seen := seen ++ next.eraseDups
+      frontier := next.eraseDups
+    return seen
+  let visible := events.filter fun e => past.contains e.id && (seesAll || e.src == actor || e.dst == actor)
+  let start := initial.map (fun t => (⟨t, "initial", "known at the start"⟩ : Held)) ++
+    visible.map (fun e => (⟨e.term, e.id, s!"delivered in {e.id} ({e.src} to {e.dst})"⟩ : Held))
+  let held := analyseHeld start
+  let common : List (String × Json) :=
+    [ ("actor", Json.str actor), ("at", Json.str atId)
+    , ("causalPast", Json.arr ((events.filter (past.contains ·.id)).map (Json.str ·.id)).toArray)
+    , ("visible", Json.arr (visible.map (Json.str ·.id)).toArray)
+    , ("holds", Json.arr (held.map Held.json).toArray) ]
+  match query with
+  | none =>
+    return verdictJson "knows" "derived" s!"what {actor} holds at {atId}" <| common ++
+      [("evidence", Json.mkObj [("kind", "analysis"),
+        ("note", s!"{held.length} pieces from {visible.length} visible events and {initial.length} initial terms, taken apart until nothing new appeared")])]
+  | some v =>
+    let reading := fun (yes : Bool) => s!"{actor} {if yes then "can" else "cannot"} derive {v.render} at {atId}"
+    match derivation held v with
+    | some tree =>
+      return verdictJson "knows" "proved" (reading true) <| common ++
+        [("query", Json.str v.render), ("evidence", Json.mkObj [("kind", "derivation"), ("derivation", tree)])]
+    | none =>
+      return verdictJson "knows" "disproved" (reading false) <| common ++
+        [("query", Json.str v.render), ("evidence", Json.mkObj [("kind", "exhaustive"),
+          ("note", s!"no derivation from the {held.length} pieces held once analysis reached its fixpoint")])]
 
 /-! ## Reference -/
 
@@ -930,6 +1194,7 @@ def reference : String := String.intercalate "\n"
   , "| `\"terminal\"` | the task has ended (observable) |"
   , "| `{\"field\": {\"message\": \"M\", \"name\": \"f\", \"value\": \"v\"}}` | last message M had f = v (observable in traces; not in task models) |"
   , "| `{\"derived\": \"name\"}` | a declared reducer, policy or knowledge predicate |"
+  , "| `{\"knows\": {\"actor\": \"Ivo\", \"term\": t}}` | the actor can derive term t from what reached it on the path (observable when the draft declares the actor's knowledge; terms as in the knows tool) |"
   , "| `{\"predicate\": \"text\"}` | free text: never observable; classify it first |"
   , "| `{\"not\": f}`, `{\"and\": [..]}`, `{\"or\": [..]}`, `{\"implies\": [a, b]}` | Boolean |"
   , "| `{\"stronglyImplies\": [a, b]}` | EF a and AG(a -> b): non-vacuous always |"
@@ -939,7 +1204,15 @@ def reference : String := String.intercalate "\n"
   , "| `{\"AW\": [a, b]}` `{\"EW\": [a, b]}` | a unless b, b need not happen |"
   , ""
   , "Bare F, G, X, U and W are typing errors: quantify them with A (every path) or E (some path)."
-  , "K, O, P, B and Pr are parsed and reported as unsupported."
+  , "K, O, P, B and Pr are parsed and reported as unsupported inside formulas; the knows tool decides what an actor can derive at an event of a trace."
+  , ""
+  , "## knows"
+  , ""
+  , "Arguments: events (envelopes {id, prevIds, causeIds, src, dst, term}), actor, at (an event id), initial (terms the actor starts with), query (optional term), seesAll (optional: the actor sees every channel)."
+  , ""
+  , "Terms: `{\"atom\": n}`, `{\"key\": n}`, `{\"pk\": a}`, `{\"sk\": a}`, `{\"pair\": [x, y]}`, `{\"tuple\": [x, y, ...]}`, `{\"enc\": {\"key\": k, \"body\": b}}`, `{\"hash\": x}`."
+  , ""
+  , "Only events in the causal past of at count. Pairs split; a ciphertext opens with the private key for pk, the public key for sk (a signature), the key itself otherwise; nothing recovers a hash input. Without a query the verdict is derived and holds lists every piece with the event that gave it; with one, proved carries the derivation and disproved an exhaustive note."
   , ""
   , "## Requirement modes"
   , ""
@@ -948,7 +1221,9 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## Tasks"
   , ""
-  , "A task is a canonical id string, or a draft: `{\"id\", \"states\": [..], \"initial\", \"terminals\": [..], \"transitions\": [{\"src\", \"dst\", \"message\", \"from\"?, \"to\"?}]}`."
+  , "A task is a canonical id string, or a draft: `{\"id\", \"states\": [..], \"initial\", \"terminals\": [..], \"transitions\": [{\"src\", \"dst\", \"message\", \"from\"?, \"to\"?, \"term\"?}], \"knowledge\"?: {actor: {\"initial\": [terms], \"seesAll\": bool}}}`."
+  , ""
+  , "With knowledge declared, a state of the model is a task state together with what each declared actor holds; a transition's term reaches its from and to actors and every actor that sees all channels."
   , ""
   , "## Terminal convention"
   , ""

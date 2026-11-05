@@ -10,7 +10,7 @@ Scribble-style statements that elaborate to ordinary `Global` values:
 ```
 protocol Purchase (Client, Shop, Bank) {
   o: Order from Client to Shop;
-  choice at Shop {
+  choice {
     q: Quote from Shop to Client cause o;
     p: Pay   from Client to Bank cause q where p.amount = q.price;
     ...
@@ -26,7 +26,10 @@ protocol Purchase (Client, Shop, Bank) {
 * `where e` is a Lean `Bool`-valued condition over the payloads of named earlier messages; it is
   type-checked when the protocol is written and evaluated over decoded payloads at check time.
 * `Timeout at Sender;` is an event at one role only.
-* `choice at R { } or { }`, `par { } and { }`, `join 2 of { } and { }`, `rec B { ... continue B; }`.
+* `choice { } or { }`: exactly one branch happens. The role that decides is not written: it is
+  the one role that starts every branch, and the checker names it or reports the race.
+* `par { } and { }`, `join 2 of { } and { }`, `rec B { ... continue B; }`.
+* `sessions { ... }`: any number of concurrent instances, each a session of its own.
 * `include P A B;` stacks another protocol, written as if it were the whole thing.
 
 The words are non-reserved, so importing this module takes no identifiers away from Lean code.
@@ -40,10 +43,11 @@ syntax sess_binder := ident " : " ident
 
 syntax (atomic(ident " : "))? ident &" from " ident &" to " ident (&" cause " ident)? (" where " term)? ";" : sess_stmt
 syntax ident " at " ident ";" : sess_stmt
-syntax &"choice " " at " ident " { " sess_stmt* " }" (&" or " " { " sess_stmt* " }")* : sess_stmt
+syntax &"choice " " { " sess_stmt* " }" (&" or " " { " sess_stmt* " }")* : sess_stmt
 syntax &"par " " { " sess_stmt* " }" (&" and " " { " sess_stmt* " }")* : sess_stmt
 syntax &"join " num &" of " " { " sess_stmt* " }" (&" and " " { " sess_stmt* " }")* : sess_stmt
 syntax &"rec " ident " { " sess_stmt* " }" : sess_stmt
+syntax &"sessions " " { " sess_stmt* " }" : sess_stmt
 syntax " continue " ident ";" : sess_stmt
 syntax &"include " term ";" : sess_stmt
 
@@ -90,9 +94,9 @@ macro_rules
   | `(sess% [$bs,*] { $l:ident at $r:ident ; $rest* }) =>
     `(LeanFM.Session.Global.act $r ((fun (_ : Option $l) => $(str l.getId)) none) (sess% [$bs,*] { $rest* }))
 
-  | `(sess% [$bs,*] { choice at $r:ident { $s0* } $[or { $ss* }]* $rest* }) => do
+  | `(sess% [$bs,*] { choice { $s0* } $[or { $ss* }]* $rest* }) => do
     let branches ← (#[s0] ++ ss).mapM fun s => `(sess% [$bs,*] { $s* })
-    `(LeanFM.Session.Global.andThen (LeanFM.Session.Global.choice $r [$branches,*]) (sess% [$bs,*] { $rest* }))
+    `(LeanFM.Session.Global.andThen (LeanFM.Session.Global.choice [$branches,*]) (sess% [$bs,*] { $rest* }))
 
   | `(sess% [$bs,*] { par { $s0* } $[and { $ss* }]* $rest* }) => do
     let branches ← (#[s0] ++ ss).mapM fun s => `(sess% [$bs,*] { $s* })
@@ -106,11 +110,19 @@ macro_rules
     `(LeanFM.Session.Global.andThen (LeanFM.Session.Global.loop $(str n.getId) (sess% [$bs,*] { $body* }))
         (sess% [$bs,*] { $rest* }))
 
+  | `(sess% [$bs,*] { sessions { $body* } $rest* }) =>
+    `(LeanFM.Session.Global.sessions (sess% [$bs,*] { $body* }) (sess% [$bs,*] { $rest* }))
+
   | `(sess% [$bs,*] { continue $n:ident ; $_rest* }) =>
     `(LeanFM.Session.Global.var $(str n.getId))
 
-  | `(sess% [$bs,*] { include $t:term ; $rest* }) =>
-    `(LeanFM.Session.Global.andThen $t (sess% [$bs,*] { $rest* }))
+  | `(sess% [$bs,*] { include $t:term ; $rest* }) => do
+    -- the included protocol becomes a named box: the name of the protocol it applies
+    let name := match t with
+      | `($f:ident $_*) => f.getId.toString
+      | `($f:ident) => f.getId.toString
+      | _ => "include"
+    `(LeanFM.Session.Global.box $(Lean.quote name) $t (sess% [$bs,*] { $rest* }))
 
 /-- `protocol Name (Role, ...) { statements }` defines `Name : (roles) → Global R` for any role
 type `R`, so the same protocol can be instantiated and stacked with different roles. -/
