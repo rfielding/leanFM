@@ -6,97 +6,82 @@
 \index{formal methods}
 LeanFM is a session-type method for engineering software. A \emph{multiparty
 session type} is a global description of a conversation: which roles take part,
-which messages pass between them, in what order, and where the conversation
-branches \citep{honda2008multiparty}. From that one global description each
-role's \emph{local type} is derived by projection, and a role built to its local
-type cannot send a message nobody expects, or wait forever for one that nobody
-will send. That is exactly the contract a team needs at every boundary between
-two pieces of software that it does not want to read each other's code.
+which messages pass between them, in what order, and where it branches
+\citep{honda2008multiparty}. Each role's \emph{local type} is derived from it by
+projection, and a role built to its local type cannot send a message nobody
+expects, or wait forever for one nobody will send. That is the contract a team
+needs at every boundary where it does not want to read the other side's code.
 
-Session types grew up as a type discipline for programming languages
-\citep{honda1993types,honda1998language}. LeanFM uses the same idea one level
-up, as the requirements. The global type is what the stakeholders argue about;
-the local types are what each implementer owes; recorded production events are
-checked against both. Formal methods are then not an extra stage after the code:
-the shortest path to a running service passes through the checked conversation.
+Session types began as a type discipline for programming languages
+\citep{honda1993types,honda1998language}. LeanFM uses them one level up, as the
+requirements: the global type is what stakeholders argue about, the local types
+are what each implementer owes, and recorded production events are checked
+against both.
 
 LeanFM departs from the textbook theory in one deliberate way: \emph{its channels
-have physics}. Standard asynchronous session types assume that every message
-eventually arrives, exactly once, in order, through a queue that never fills.
-Real channels are bounded. UDP drops and reorders. An HTTP call times out and is
-retried, so the server sees it twice. A Kafka consumer replays a batch after a
-rebalance. A timer cannot tell a slow answer from a lost one. LeanFM makes the
-capacity and failure behaviour of every channel part of the requirement, and
-checks the protocol together with it. Chapter~\ref{ch:tftp-physics} shows the
-consequence on a real protocol: the same grammar is a perfect session type, and
-one of its two implementations has a famous bug that appears only once the
-physics is declared.
-
-The same method covers two kinds of boundary that are usually designed with
-different tools: messages between network nodes, and calls between APIs. Both
-are channels between roles; they differ only in their declared physics.
+have physics}. Standard asynchronous session types assume every message arrives
+exactly once, in order, through a queue that never fills. Real channels are
+bounded; UDP drops and reorders; a timed-out HTTP call is retried and seen
+twice; a Kafka consumer replays a batch after a rebalance; a timer cannot tell a
+slow answer from a lost one. LeanFM makes each channel's capacity and failure
+behaviour part of the requirement and checks the protocol together with it.
+Chapter~\ref{ch:tftp-physics} shows the consequence: a grammar that is a perfect
+session type, and an implementation with a famous bug that appears only once the
+physics is declared. Messages between network nodes and calls between APIs are
+handled the same way; they are channels that differ only in their physics.
 
 \noindent\textbf{Evidence labels used throughout:} proposed notation (uncompiled);
 executable code (builds or runs, not proof); finite-model check (exhaustive only
 within declared bounds); test (named finite cases); generated analysis (named
 inputs and reducer); Lean proof (kernel-checked under stated assumptions); future
-interface (planned, unavailable). Labels scope evidence, not rank it; several may
-apply to one artifact.
+interface (planned, unavailable). Labels scope evidence; several may apply to one
+artifact.
 
 \section{Session types in one page}
 
 \index{global type}
 \index{local type}
 \index{projection}
-A global type is written once, from the point of view of nobody in particular.
-This is a purchase between three roles, in the Scribble style of
-\citet{yoshida2013scribble}, written in LeanFM's session-type syntax. It is an
-ordinary Lean module: \texttt{protocol} comes from the \texttt{LeanFM.Session}
-library, and the listing is taken from \texttt{SessionExample.lean}, where it is
-checked every time the file is elaborated (Chapter~\ref{ch:grammar} gives the
-whole syntax).
+A global type is written once, from nobody's point of view. This purchase between
+three roles is in the Scribble style of \citet{yoshida2013scribble}, written in
+LeanFM's syntax. It is an ordinary Lean module, taken from
+\texttt{SessionExample.lean} and checked every time the file is elaborated
+(Chapter~\ref{ch:grammar} gives the whole syntax).
 
 \input{generated/session-purchase.tex}
 
 Each line is one message: a label, a sender, a receiver, and optionally the
-earlier message that caused it. A label is the name of a Lean structure, so the
-message's payload is that structure's fields: \texttt{Order} has an
-\texttt{item}, \texttt{Pay} an \texttt{amount}, and \texttt{where p.amount =
-q.price} is type-checked Lean. \texttt{choice} says that exactly one branch
-happens; the shop decides which, because the shop starts both. Projection keeps, for one role, the lines that role
-sends or receives. LeanFM computes it; this is the shop's:
+earlier message that caused it. A label names a Lean structure, so the payload is
+its fields, and \texttt{where p.amount = q.price} is type-checked Lean.
+\texttt{choice} says exactly one branch happens; the shop decides, because it
+starts both. Projection keeps the lines a role sends or receives. The shop's:
 
 \input{generated/session-purchase-shop.tex}
 
-The theory then asks two questions of the global type, and LeanFM asks the same
-two.
+The theory asks two questions of a global type, and so does LeanFM.
 
 \begin{description}[style=nextline]
   \item[One chooser per choice.] Every branch must be started by the same role,
-  and that role is the one that decides. If Client could start one branch while Shop starts another,
-  both could act at once and the run would leave the protocol. This is the
+  which is the one that decides. If Client could start one branch while Shop
+  starts another, both could act at once and leave the protocol. This is the
   realizability (non-local choice) condition.
   \item[Everyone who must know, learns.] A role whose later behaviour differs
-  between branches must be told which branch was taken, by some message it
-  receives. In the \texttt{soldOut} branch of \texttt{Purchase} the bank is never
-  told anything.
+  between branches must be told which branch was taken. In the \texttt{soldOut}
+  branch of \texttt{Purchase} the bank is never told anything.
 \end{description}
 
-Classic projection rejects \texttt{Purchase} for that, and asks for an extra
-message to the bank. LeanFM accepts it, for a reason that comes from how servers
-are built: a role whose part in the session has not yet started owes nothing to a
-branch that never contacts it. The bank's part starts when \texttt{pay} arrives,
-as a thread forked for that session; in the \texttt{soldOut} branch that thread
-simply never exists. Each such thread ingests only the messages its session
-expects and sends only the ones it owes, so checking it on its own is exact,
-not an approximation. The bank's projection shows it: the sold-out branch is
-empty.
+Classic projection rejects \texttt{Purchase} for that. LeanFM accepts it, for a
+reason that comes from how servers are built: a role whose part in the session
+has not started owes nothing to a branch that never contacts it. The bank's part
+starts when \texttt{pay} arrives, as a thread forked for that session; in the
+\texttt{soldOut} branch that thread never exists, so checking it on its own is
+exact. The bank's projection shows the empty branch:
 
 \input{generated/session-purchase-locals.tex}
 
 The rule still bites a role that has already taken part. If the client first
-placed a hold with the bank and the shop then sold out, the bank's session would
-be open with money held and nobody to tell it to release:
+placed a hold with the bank and the shop then sold out, the bank would be left
+holding money with nobody to tell it to release:
 
 \input{generated/session-hold.tex}
 
@@ -104,15 +89,11 @@ LeanFM reports:
 
 \input{generated/session-hold-issues.tex}
 
-Both cases are checked in \texttt{SessionExample.lean}.
-
-When the global type passes, the theory guarantees three things for roles that
-follow their local types: \emph{communication safety} (no message arrives that
-the receiver cannot handle), \emph{session fidelity} (the run follows the global
-type), and \emph{progress} (no role waits forever on a well-formed session).
-Each guarantee holds \emph{under the theory's assumptions about channels}. The
-next section lists those assumptions, because they are exactly where real
-systems fail.
+When the global type passes, roles that follow their local types get
+\emph{communication safety} (no message arrives that the receiver cannot
+handle), \emph{session fidelity} (the run follows the global type) and
+\emph{progress} (no role waits forever). Each holds \emph{under the theory's
+assumptions about channels}, which are exactly where real systems fail.
 
 \section{What the theory assumes, and what LeanFM declares}
 
@@ -136,23 +117,21 @@ Evidence & a program that type-checks & also conformance of recorded production 
 \end{center}
 
 \index{communicating finite-state machines}
-Bounded queues are not only more realistic; they are what makes exhaustive
-checking possible. Roles that exchange messages through unbounded FIFO queues
-are communicating finite-state machines, and for those most verification
-questions are undecidable \citep{brand1983communicating}. Session types avoid
-the problem by restricting the shape of the protocol; the correspondence is
-made precise by \citet{denielou2012communicating}. LeanFM takes the other exit:
-it bounds the queues. The product of finite roles and finite queues is a finite
-transition system, and every CTL question asked of it is answered exhaustively,
-with a witness or a counterexample.
+Bounded queues are also what makes exhaustive checking possible. Roles exchanging
+messages through unbounded FIFO queues are communicating finite-state machines,
+for which most verification questions are undecidable
+\citep{brand1983communicating}. Session types avoid this by restricting the
+protocol's shape \citep{denielou2012communicating}; LeanFM instead bounds the
+queues. Finite roles and finite queues give a finite transition system, so every
+CTL question is answered exhaustively, with a witness or a counterexample.
 
 \section{Every boundary is a channel}
 
 \index{API boundary}
 \index{channel declaration}
-A channel is any path a message can take between two roles. Every channel
-declares its physics along six axes. These declarations are \textbf{proposed
-notation}; the TFTP chapter builds its UDP channels by hand today.
+A channel is any path a message can take between two roles. It declares its
+physics along six axes (\textbf{proposed notation}; the TFTP chapter builds its
+UDP channels by hand today).
 
 \begin{center}
 \small
@@ -170,9 +149,8 @@ duplication & never, may duplicate & a transition that delivers a message and le
 \end{tabular}
 \end{center}
 
-Most channels are one of a few familiar kinds, so LeanFM names them as presets.
-A declaration starts from a preset and overrides only what differs, as in
-\texttt{udp (capacity := 2)}.
+Most channels are one of a few familiar kinds, named as presets. A declaration
+starts from one and overrides what differs, as in \texttt{udp (capacity := 2)}.
 
 \begin{center}
 \small
@@ -189,54 +167,47 @@ Preset & Typical use & Physics \\
 \end{tabular}
 \end{center}
 
-Physics never appears inside the global type. The type is written once, as if
-every channel were \texttt{reliable}, and stays as readable as the Purchase
-protocol above; the declarations sit beside it, one line per channel, and
-\texttt{reliable} is the default for a channel nobody declares. A lossy channel
-costs lines in the type only where the protocol must answer it: a timer and a
-resend for \texttt{udp}, a deadline and a retry for \texttt{http}. Declaring
-everything \texttt{udp} would not make the type harder to read, but it would
-make the protocol wrong until those recovery lines were written, and the
-checker would say so. Declare each channel as what it is: most internal
-boundaries are \texttt{reliable}, and the few that cross a network are where
-the physics, and the bugs, live.
+Physics never appears inside the global type. The type is written as if every
+channel were \texttt{reliable} (the default for an undeclared channel), with the
+declarations beside it, one line per channel. A lossy channel costs lines in the
+type only where the protocol must answer it: a timer and a resend for
+\texttt{udp}, a deadline and a retry for \texttt{http}. Declaring a channel
+\texttt{udp} without those lines makes the protocol wrong, and the checker says
+so. Most internal boundaries are \texttt{reliable}; the few that cross a network
+are where the physics, and the bugs, live.
 
 \texttt{tls} is a modifier, not a preset: \texttt{tls http} or \texttt{tls
-stream} adds an authenticated peer identity as an observable field of every
-message, and changes nothing else.
+stream} adds an authenticated peer identity to every message and changes nothing
+else.
 
 \index{sharding}
-Sharding deserves its own rule. A sharded channel is several queues, and a
-message goes to the partition chosen by hashing its key field; order holds only
-between messages with the same key. A session therefore keeps its order across
-a sharded channel only if every message of the session carries the same key,
-such as the session identifier or an account number fixed at the start. LeanFM
-can check this from the declarations alone: a global type that relies on two of
-its messages arriving in order, over a channel sharded by a field that differs
-between them, is rejected before any state is explored.
+A sharded channel is several queues; a message goes to the partition chosen by
+hashing its key field, and order holds only between messages with the same key.
+A session keeps its order across a sharded channel only if all its messages carry
+the same key, such as the session identifier. LeanFM can check this from the
+declarations alone: a global type that relies on two messages arriving in order,
+over a channel sharded by a field that differs between them, is rejected before
+any state is explored.
 
 \subsection{Masked and surfaced failures}
 
 \index{failure!masked}
 \index{failure!surfaced}
-A lower layer can hide a failure from the layer above by retrying, and then the
-failure is not gone: it has become latency. TCP retransmits lost segments and
-reorders nothing, so a protocol over a \texttt{stream} sees no loss, only delay,
-until the delay is long enough that the connection closes. UDP hides nothing,
-so a protocol over a \texttt{datagram} must handle loss, reordering and
-duplicates itself, as TFTP does. Kafka hides loss inside its retention window
-and surfaces duplicates instead. Every interface kind therefore says two things:
-which conditions it \emph{surfaces}, which the protocol must handle, and which
-it \emph{masks} as latency, which the protocol's deadlines must allow for.
+A lower layer can hide a failure by retrying, and the failure becomes latency.
+TCP retransmits, so a protocol over a \texttt{stream} sees no loss, only delay,
+until the connection closes. UDP hides nothing, so a protocol over it handles
+loss, reordering and duplicates itself, as TFTP does. Kafka hides loss inside
+its retention window and surfaces duplicates instead. Every interface kind says
+which conditions it \emph{surfaces}, which the protocol must handle, and which it
+\emph{masks} as latency, which the protocol's deadlines must allow for.
 
 \subsection{A hierarchy of interfaces}
 
 \index{interface}
 \index{interface!hierarchy}
-An actor does not have one physics; it has interfaces, and each interface has a
-kind. Kinds form a hierarchy: a kind inherits every condition its parent
-surfaces, and adds or removes a few. The table is
-a \textbf{generated analysis} from \path{TopologyExample.lean}:
+An actor has interfaces, and each interface has a kind. A kind inherits every
+condition its parent surfaces and adds or removes a few. The table is a
+\textbf{generated analysis} from \path{TopologyExample.lean}:
 
 \begin{center}
 \small
@@ -252,14 +223,13 @@ keeps \texttt{hostile}, because anyone can still send them.
 \index{island}
 \index{topology}
 \index{naming!implicit}
-The interface kind gives the conditions of the protocol stack. Where the two
-ends run adds the conditions of the network between them, and decides whether
-they may talk at all. LeanFM describes a deployment as one tree: islands that
-may be partitioned from each other, datacenters and machines inside them,
-groups for replicated and sharded roles, actors, and under each actor its
-interfaces grouped by \emph{scope}. A node's name is its path, so nothing is
-named twice (\textbf{proposed notation}; \texttt{TopologyExample.lean} holds
-the same tree as Lean values):
+Where the two ends of a channel run adds the conditions of the network between
+them and decides whether they may talk at all. LeanFM describes a deployment as
+one tree: islands that may be partitioned from each other, datacenters and
+machines inside them, groups for replicated and sharded roles, actors, and under
+each actor its interfaces grouped by \emph{scope}. A node's name is its path
+(\textbf{proposed notation}; \texttt{TopologyExample.lean} holds the same tree
+as Lean values):
 
 \begin{lstlisting}[language={}]
 world {
@@ -282,12 +252,11 @@ world {
 \end{lstlisting}
 
 The implicit name of an interface keeps the island, the actor, the scope and the
-interface, and leaves the containers between them out:
+interface, and leaves out the containers between them:
 \texttt{us.alice.ingress.https}, \texttt{eu.audit.local.syslog}. Moving
 \texttt{alice} to another machine in \texttt{us} does not rename her.
 
-\paragraph{Scopes constrain who may talk.} Before any physics, the tree says
-which channels may exist. A scope is a promise about callers:
+\paragraph{Scopes constrain who may talk.} A scope is a promise about callers:
 
 \begin{center}
 \small
@@ -303,27 +272,25 @@ scope & may be called from \\
 \end{tabular}
 \end{center}
 
-Collapsing the tree to its top level gives the whole deployment's permission
-structure on one page. Each cell lists the scopes in the column's subtree that
-some actor in the row's subtree may reach. The table is computed from the
-actors and interfaces actually in the tree, not from the rule above:
+Collapsing the tree to its top level gives the deployment's permission structure
+on one page. Each cell lists the scopes in the column's subtree that some actor
+in the row's subtree may reach, computed from the actors and interfaces actually
+in the tree:
 
 \begin{center}
 \small
 \input{generated/topology-reach.tex}
 \end{center}
 
-\paragraph{Placement adds the network.} A channel whose ends are in different
-islands may be \texttt{partition}ed: for a while, nothing is delivered in either
-direction. An end outside every island makes the channel \texttt{hostile}. A
-channel into a replicated group may be rejected (no leader, no quorum), and the
-consensus protocol inside the group is hidden. A channel into a sharded group
-keeps order only per key.
+\paragraph{Placement adds the network.} A channel between islands may be
+\texttt{partition}ed: for a while, nothing is delivered either way. An end
+outside every island makes the channel \texttt{hostile}. A channel into a
+replicated group may be rejected (no leader, no quorum), with the consensus
+inside hidden. A channel into a sharded group keeps order only per key.
 
-The requirements say which conditions each channel's protocol handles. The
-generated graph places every interface in the tree and draws each channel from
-its sending actor to the receiving interface. A channel is red when its scope
-forbids it, or when it surfaces a condition its protocol does not handle.
+The generated graph places every interface in the tree and draws each channel
+from its sending actor to the receiving interface. A channel is red when its
+scope forbids it, or when it surfaces a condition its protocol does not handle.
 
 \begin{figure}[htbp]
 \centering
@@ -344,33 +311,30 @@ what its protocol handles.}
 \label{tab:topology-channels}
 \end{table}
 
-Three channels are findings, one of each kind. Channel~8, from
-\texttt{charles} in \texttt{eu} to \texttt{us.alice.internal.api}, is not
-allowed to exist: \texttt{internal} means the same island. Either
-\texttt{alice} exports that API under \texttt{peering}, or \texttt{charles} goes
-through her ingress. Channel~5, from \texttt{alice} to
-\texttt{eu.bob.peering.api}, is allowed but crosses islands and may be
-partitioned, which nothing in its protocol answers. Channel~2 is plain
-\texttt{http} from outside, which a hostile network can read; either the
-protocol carries nothing that matters and says so by handling
-\texttt{readable}, or the interface should be \texttt{https}.
+Three channels are findings, one of each kind. Channel~8, from \texttt{charles}
+in \texttt{eu} to \texttt{us.alice.internal.api}, may not exist:
+\texttt{internal} means the same island, so either \texttt{alice} exports that
+API under \texttt{peering} or \texttt{charles} goes through her ingress.
+Channel~5, from \texttt{alice} to \texttt{eu.bob.peering.api}, crosses islands
+and may be partitioned, which its protocol does not answer. Channel~2 is plain
+\texttt{http} from outside, readable by a hostile network: either the protocol
+says nothing there matters by handling \texttt{readable}, or the interface should
+be \texttt{https}.
 
 \subsection{Collapsed interaction diagrams}
 
 \index{interaction diagram!collapsed}
 \index{hiding}
-The tree also gives every interaction diagram a zoom level. Collapsing a
-subtree into one lifeline hides every message whose two ends are inside it,
-which is exactly how a requirement hides implementation: what is not crossing
-the boundary is not stated. This is the key to navigating a global type too
-large to read whole: start at the top of the tree and open one node at a time.
+The tree also gives every interaction diagram a zoom level. Collapsing a subtree
+into one lifeline hides every message with both ends inside it, which is how a
+requirement hides implementation. A global type too large to read whole is read
+from the top of the tree, opening one node at a time.
 
-The \texttt{cause} pointers decide how the remaining arrows are drawn. A
-message that crosses from $X$ to $Y$ is the \emph{return} of the nearest
-unanswered request from $Y$ to $X$ in its cause chain, however many hidden
-messages lie between them; otherwise it is a request. Requests are solid,
-returns dashed, and the callee's lifeline carries a bar from each call to its
-return. Here is one order at the level of actors:
+The \texttt{cause} pointers decide how the remaining arrows are drawn. A message
+from $X$ to $Y$ is the \emph{return} of the nearest unanswered request from $Y$
+to $X$ in its cause chain, however many hidden messages lie between; otherwise
+it is a request. Requests are solid, returns dashed, and the callee's lifeline
+carries a bar from each call to its return. One order, at the level of actors:
 
 \begin{figure}[htbp]
 \centering
@@ -380,11 +344,10 @@ return. Here is one order at the level of actors:
 \label{fig:topology-actors}
 \end{figure}
 
-and then with the tree collapsed to its top level. The reservation with the
-ledger vanishes, because both ends are in \texttt{us}; the return
-\texttt{201 Created} is still paired with \texttt{POST /orders}, through a cause
-chain that passes through the hidden reservation and through \texttt{eu}. What
-remains is what one island promises another:
+and collapsed to the top level. The reservation vanishes, because both ends are
+in \texttt{us}; \texttt{201 Created} is still paired with \texttt{POST /orders},
+through a cause chain that passes through the hidden reservation and through
+\texttt{eu}. What remains is what one island promises another:
 
 \begin{figure}[htbp]
 \centering
@@ -396,37 +359,30 @@ messages cross a boundary at this level.}
 \end{figure}
 
 \paragraph{A local type is a production.} Projecting the global type onto one
-node of the tree gives that node's local type, and it is an ordinary production
-of the grammar. It is cut off exactly where the node's tasks leave its
-boundary: a call to another node is one terminal, \texttt{call eu: ship(order)
-returns shipped}, and whatever \texttt{eu} does to produce \texttt{shipped} is
-\texttt{eu}'s own production. Folding the crossings of the scenario above, with
-the tree cut at its top level:
+node of the tree gives that node's local type, an ordinary production of the
+grammar, cut off where the node's tasks leave its boundary: a call to another
+node is one terminal, \texttt{call eu: ship(order) returns shipped}, and how
+\texttt{eu} produces \texttt{shipped} is \texttt{eu}'s own production. Folding
+the crossings above, with the tree cut at its top level:
 
 \input{generated/topology-local-types.tex}
 
-Each production can be read as if it were the top-level protocol, which is what
-lets requirements be stacked: \texttt{us} is specified against the promises of
-\texttt{eu} and \texttt{us+eu}, not against their insides. Opening a node
-replaces its one production by the productions of its children, and the
-children's crossings must fold back into the parent's.
+Each production can be read as a top-level protocol, so requirements stack:
+\texttt{us} is specified against the promises of \texttt{eu} and
+\texttt{us+eu}, not their insides. Opening a node replaces its production by its
+children's, whose crossings must fold back into the parent's. A team can agree
+on the islands view first and refine each island later; a refinement is
+acceptable when collapsing it again gives back the agreed view.
 
-The collapsed diagram is also the high-level requirement. A team can agree on
-the islands view first, with its scopes and its partition handling, and refine
-each island later; a refinement is acceptable when collapsing it again gives
-back the agreed view.
+Placement is an implementation decision, so the tree's containers belong in
+\texttt{Implementation.lean}; the scopes and what each channel's protocol handles
+are requirements. Moving \texttt{bob} into \texttt{us} would remove the partition
+from channel~5; moving \texttt{ledger} out of \texttt{us} would make channel~4
+unreachable. Either is a checked change, acceptable only if no channel turns red
+after \texttt{lake env lean --run TopologyExample.lean}.
 
-The placement is an implementation decision, so the tree's containers belong
-in \texttt{Implementation.lean}, while the scopes and what each channel's
-protocol handles are requirements. Moving \texttt{bob} into \texttt{us} would
-remove the partition from channel~5, and moving \texttt{ledger} out of
-\texttt{us} would make channel~4 unreachable. Either is a checked change: the
-views are regenerated, and the move is acceptable only if no channel turns red.
-Regenerate with \texttt{lake env lean --run TopologyExample.lean}.
-
-With channel declarations, inter-API design is the same activity as network-protocol
-design. A browser call that passes a reverse proxy and reaches a service is a
-three-role session:
+With channel declarations, inter-API design is network-protocol design. A browser
+call that passes a reverse proxy to a service is a three-role session:
 
 \begin{lstlisting}[language={}]
 q: tls http GET /users/{id}       from Browser to Proxy;
@@ -436,13 +392,11 @@ s: http 200 {user}                from Users to Proxy   cause r;
    http 200 {user}                from Proxy to Browser cause s;
 \end{lstlisting}
 
-The requirement names only what crosses a boundary: the request, the header the
-proxy adds, the response. Whether \texttt{Users} answers from a cache, a
-database or a replica is hidden by not being written down. Hiding is how a
-requirement leaves an implementation free; it is not a separate refinement step.
-The negative requirements follow the same rule. ``A request without a client
+The requirement names only what crosses a boundary. Whether \texttt{Users}
+answers from a cache, a database or a replica is left free by not being written
+down. Negative requirements follow the same rule: ``a request without a client
 certificate never reaches \texttt{Users}'' is a statement about observable
-messages on two channels, and can be checked and tested as one.
+messages on two channels, checked and tested as one.
 
 \subsection{Cut and un-cut: what HTTP allows}
 
@@ -456,13 +410,12 @@ fq: X() from A to B;
 fr: Y() from C to A   cause fq;
 \end{lstlisting}
 
-Over HTTP this cannot happen. A response travels back on the connection its
-request came in on, so \texttt{C} cannot answer a request that \texttt{A} sent
-to \texttt{B}. The \texttt{http} channel kind therefore adds a rule: every
-message is either a request to an interface of its receiver, or the response
-to a pending request that its receiver sent to its sender. A protocol that
-breaks the rule has to be \emph{un-cut}, the way a proof with a cut is expanded
-into one without it: the missing calls and returns are written out.
+Over HTTP this cannot happen: a response travels back on its request's
+connection. The \texttt{http} channel kind therefore adds a rule: every message
+is either a request to an interface of its receiver, or the response to a pending
+request its receiver sent to its sender. A protocol that breaks the rule must be
+\emph{un-cut}, as a proof with a cut is expanded into one without: the missing
+calls and returns are written out.
 
 \begin{lstlisting}[language={}]
 fq:  X()  from A to B;
@@ -472,16 +425,13 @@ fr:  Y()  from B to A   cause fcb;
 \end{lstlisting}
 
 Collapse \texttt{B} and \texttt{C} into one lifeline, as in
-\cref{fig:topology-islands}, and the un-cut form becomes \texttt{A} to
-\texttt{BC}, \texttt{BC} to \texttt{A}: an ordinary call and its return. So
-does the cut form. A cut is a statement made at a coarser zoom level than the
-names in it suggest, and it is sound exactly when the roles it jumps between
-sit inside one node of the tree that the caller sees as a single HTTP server.
-\texttt{Purchase} at the start of this chapter is cut twice: \texttt{paid}
-answers the client's payment to the shop, and \texttt{shipped} answers a
-request the client never made, because \texttt{quote} already answered
-\texttt{order}. Un-cut for HTTP, with the client as the only role that starts
-calls to the shop:
+\cref{fig:topology-islands}, and both forms become an ordinary call and return
+between \texttt{A} and \texttt{BC}. A cut is a statement made at a coarser zoom
+level than its names suggest, sound exactly when the roles it jumps between sit
+inside one node that the caller sees as a single HTTP server. \texttt{Purchase}
+is cut twice: \texttt{paid} answers the client's payment to the shop, and
+\texttt{shipped} answers a request the client never made. Un-cut for HTTP, with
+the client as the only role that calls the shop:
 
 \begin{lstlisting}[language={}]
 o: http POST /orders {item}          from Client to Shop;
@@ -499,166 +449,117 @@ choice {
 \end{lstlisting}
 
 Every \texttt{cause} now names a message its sender received, and every response
-goes back to the role that asked. The other un-cut is a callback: the bank
-calls an interface of the shop, which needs the shop to expose one that the
-bank's island may reach (\cref{tab:topology-channels}). Which one to use is a
-design decision; LeanFM's job is to reject the cut form on an \texttt{http}
-channel and to show both. That check is a \textbf{future interface}; the rule
-above is its definition.
+goes back to the role that asked. The other un-cut is a callback, which needs the
+shop to expose an interface the bank's island may reach
+(\cref{tab:topology-channels}). Choosing is a design decision; LeanFM's job is to
+reject the cut form on an \texttt{http} channel and show both (a \textbf{future
+interface}; the rule above is its definition).
 
 \section{Choice is always internal}
 
 \index{internal choice}
 \index{realizability}
-Inside the product, every role is an actor reading its own queue. Session-type
-theory distinguishes \emph{internal} choice (a role selects which label to send)
-from \emph{external} choice (a role offers to receive any of several labels). In
-the actor view only the first is a decision: an external choice is just this
-role's queue delivering whatever another role decided. So every choice in a
-LeanFM protocol is made by exactly one role, from exactly what that role can
-know: the messages it has sent and the messages that have arrived in its queue.
+Session-type theory distinguishes \emph{internal} choice (a role selects which
+label to send) from \emph{external} choice (a role offers to receive any of
+several). Among actors reading their own queues only the first is a decision: an
+external choice is the queue delivering what another role decided. So every
+choice is made by one role, from what it can know: the messages it has sent and
+received.
 
-LeanFM makes that history explicit. Every recorded event carries
-\texttt{priorIds}, the earlier events it follows, and \texttt{causeId}, the one
-event that made it happen (Chapter~\ref{ch:events}). The realizability rule is
-then a rule about pointers: \emph{a role's event may cause-point only to events
-that role sent or received.} A protocol in which a role reacts to something it
-never saw cannot be implemented by anyone, and is rejected. LeanFM does not yet
-perform this validation (a \textbf{future interface}); the rule is how the
-validation is defined.
+Every recorded event carries \texttt{priorIds}, the earlier events it follows,
+and \texttt{causeId}, the one event that made it happen (Chapter~\ref{ch:events}).
+Realizability is then a rule about pointers: \emph{a role's event may
+cause-point only to events that role sent or received.} A protocol in which a
+role reacts to something it never saw cannot be implemented, and is rejected (a
+\textbf{future interface}; the rule defines the validation).
 
 \section{The requirement is the global type}
 
-The primary object is the set of permitted, visible histories: who communicated
-with whom, which message, what it carried, and which earlier messages it
-follows. Message bytes, their order, and persistent disk formats become durable
-compatibility boundaries once another process, customer or stored data set
-depends on them.
-
-Threads, actors, databases, caches, continuations and retry machinery inside a
-role are realization choices unless they change the observable conversation.
-Modelling every internal choice couples requirements to harmless refactoring
-and creates a product state space that grows exponentially with independently
-varying components. The channels between roles are different: their capacity
-and failure behaviour \emph{are} observable, because they decide which
-histories can occur. So LeanFM requires the boundary and its physics, and
-leaves the inside of each role alone until it changes an observable promise.
+The requirement is the set of permitted, visible histories: who communicated with
+whom, which message, what it carried, and which earlier messages it follows.
+Message bytes and persistent formats become compatibility boundaries once another
+process, customer or stored data set depends on them. Threads, actors, caches and
+retry machinery inside a role are realization choices unless they change the
+observable conversation; modelling them couples requirements to harmless
+refactoring and multiplies the state space. Channel capacity and failure
+behaviour, by contrast, \emph{are} observable, because they decide which
+histories can occur.
 
 \section{Comparison with TLA+}
 
-TLA+ is the specification language most engineers meet first, so the contrast is
-worth making precisely. LeanFM is not an extension of TLA+ and does not try to
-replace it. TLA+ commonly
-describes a system with variables, an initial-state predicate, a next-state
-relation, and temporal formulas over the resulting state behaviors
-\citep{lamport2002specifying}. A message queue can be represented as a sequence-
-valued variable, and an action can append to or remove from that sequence. This
-is expressive and makes internal state transitions available to invariants and
-model checking.
+TLA+ is the specification language most engineers meet first. LeanFM neither
+extends nor replaces it. A TLA+ specification commonly has variables, an
+initial-state predicate, a next-state relation, and temporal formulas over the
+resulting behaviours \citep{lamport2002specifying}; a message queue is a
+sequence-valued variable that actions append to and remove from.
 
 \subsection{An executable queue model}
 
-This TLA+ module sends an order to Bob's inbox, then lets Bob consume it and
-change his control state:
+This module sends an order to Bob's inbox, then lets Bob consume it and change
+his control state:
 
 \lstinputlisting[language={},firstline=1,lastline=30,basicstyle=\ttfamily\footnotesize]{examples/tla/OrderQueue.tla}
 
-The excerpt above defines actions but does not yet connect them to a behavior.
-That connection appears later in the same module:
+The behaviour is defined later in the same module:
 
 \lstinputlisting[language={},firstline=55,lastline=58,basicstyle=\ttfamily\footnotesize]{examples/tla/OrderQueue.tla}
 
-TLA+ does not call \texttt{Send} or \texttt{Receive} like procedures.
 \texttt{Next} is a relation between the current variables and their primed next
-values.  Its disjunction says that one step may be a \texttt{Send} for some
-client, server and order; a \texttt{Receive} or \texttt{Finish} for some server;
-a \texttt{ReadReply} for some client; a cache step; or a clock step.  A candidate
-action whose guards are false is disabled.  TLC explores every enabled choice.
-
-Read \verb|Spec == Init /\ [][Next]_vars| as: ``the first state satisfies
-\texttt{Init}; thereafter, every state transition satisfies \texttt{Next} or
-leaves every variable in \texttt{vars} unchanged.''  The configuration closes
-the final loop with \texttt{SPECIFICATION Spec}; it tells TLC which temporal
-formula to explore.
-
-Read \texttt{inbox'} as ``the next value of inbox,'' \texttt{@} as ``the old
-value at this selected entry,'' and \texttt{UNCHANGED} as ``these variables
-retain their values.'' \texttt{Append} adds a message; \texttt{Head} selects the
-first message; \texttt{Tail} removes it. Alice's send updates Bob's inbox, not
-Bob's private control state. Bob's receive performs the latter transition.
-The configuration instantiates \texttt{Clients = \{"alice"\}} and
-\texttt{Servers = \{"bob"\}}; functions indexed by those sets hold instance state.
-The full module commits the order, sends a reply, and checks that no reply
-precedes placement. No eventual-reply property is checked.
+values: one step is a \texttt{Send}, \texttt{Receive}, \texttt{Finish},
+\texttt{ReadReply}, cache step or clock step, and an action whose guards are false
+is disabled. \verb|Spec == Init /\ [][Next]_vars| reads: the first state
+satisfies \texttt{Init}, and every later step satisfies \texttt{Next} or leaves
+\texttt{vars} unchanged. \texttt{inbox'} is the next value of \texttt{inbox};
+\texttt{Append}, \texttt{Head} and \texttt{Tail} add, select and remove a message.
+Alice's send updates Bob's inbox, not his control state; Bob's receive does that.
+The full module commits the order, replies, and checks that no reply precedes
+placement.
 
 \subsection{The cost of irrelevant state}
 
-The module includes optional cache-bit toggles and a clock increment that
-cannot affect an order message. TLC nevertheless distinguishes their values:
+The module also has cache-bit toggles and a clock that cannot affect an order.
+TLC distinguishes their values anyway:
 
 \begin{center}
 \input{generated/tla-state-space.tex}
 \end{center}
 
-These exhaustive finite-model safety-check counts come from TLC 1.7.4 via
-\texttt{make tla-check}; evidence and provenance are in
+The counts come from TLC 1.7.4 via \texttt{make tla-check}, with provenance in
 \texttt{book/generated/tla-state-space.json}. With $S$ protocol states, $b$
-independent Boolean cache bits and a counter ranging from zero through $k$, the
-example has
+independent cache bits and a counter from zero to $k$, the model has
 \AccessibleEquation{S times two to the power b times the quantity k plus one.}{\[
 S\,2^b(k+1)
 \]}
-states. Read: ``S times two to the b times k plus one.'' S is the protocol state
-count, b the cache-bit count and k the counter bound. Each irrelevant bit doubles
-this model's state count. \texttt{ClockBound = -1} allows ticks 0, 1, 2 and onward:
-infinitely many states with the same order behavior. Exhaustive explicit-state
-search cannot finish that variant. Unbounded queues or retained histories can
-also make a model infinite.
-
-This is checker state growth, not measured application memory. More states
-usually require more exploration time and storage; the table gives no fixed
-bytes-per-state or timing law. TLA+ supports abstraction, hiding and refinement.
-The lesson is to omit irrelevant state, not to blame the language for its inclusion.
+states: each irrelevant bit doubles it, and an unbounded clock
+(\texttt{ClockBound = -1}) makes it infinite, so exhaustive search cannot finish.
+This is checker state, not application memory. TLA+ supports abstraction, hiding
+and refinement; the lesson is to omit irrelevant state, not that the language
+forces it in.
 
 \subsection{Proposed message-first notation}
 
-This is invented TLA+-inspired syntax, not standard TLA+ or a compiled LeanFM feature:
+This is invented TLA+-inspired syntax, neither standard TLA+ nor a compiled
+LeanFM feature:
 
 \lstinputlisting[language={},basicstyle=\ttfamily\footnotesize]{examples/tla/MessageFirst.proposed}
 
-Read \texttt{alice:bob ! placeOrder} as ``Alice sends placeOrder to Bob,'' and
-\texttt{bob ? placeOrder} as ``Bob receives placeOrder.'' Bob consumes the
-request \texttt{placeOrder}; Alice consumes the reply \texttt{placedOrder}.
-The proposal treats inboxes as first-class actor-owned queue state, not arbitrary
-private variables. Blocking and capacity semantics are specified in
-Chapter~\ref{ch:grammar}; this proposed syntax does not implement them. The
-handler's commit precondition is an observable obligation, not a database
-algorithm.
-
-Actor classes describe behavior; instances have distinct identities, queues and
-local state. WebServer instances share a class, not an inbox. DocumentStore
-shards partition ownership by key; replicas protect each shard, and a quorum
-controls write acknowledgment. These deployment roles are placeholders, not
-classes implemented by the order module. First-class syntax still needs capacity,
-routing, failure and scheduling rules; it does not eliminate their state space.
+\texttt{alice:bob ! placeOrder} reads ``Alice sends placeOrder to Bob'' and
+\texttt{bob ? placeOrder} ``Bob receives placeOrder''. Inboxes are first-class
+actor-owned queues, not arbitrary private variables. Instances of an actor class
+have their own identities, queues and state; shards partition ownership by key,
+and replicas with a quorum protect each shard. Such syntax still needs capacity,
+routing, failure and scheduling rules (Chapter~\ref{ch:grammar}); it does not
+remove their state space.
 
 \subsection{Requirements at the message boundary}
 
 LeanFM starts from the conversation: a global type over decoded production
-events, whose messages are correlated and whose order is classified as
-conforming or a counterexample without pretending to observe private variables.
-The global type describes legal traces and generates scenarios; state machines
-are projections of visible histories. The executable grammar
-limits are documented in Chapter~\ref{ch:grammar}. A property dependent on
-hidden state needs an observable event or justified abstraction; otherwise its
-status is indeterminate.
-
-This is a workflow choice, not a claim that TLA+ cannot express queues or traces.
-Our initial TLA+-style attempt required modeling internal state before an
-ordinary observed scenario could be recorded, so LeanFM makes production-visible
-messages the starting point.
-
-The trade is deliberate:
+events, whose order is classified as conforming or a counterexample without
+pretending to observe private variables. A property that depends on hidden state
+needs an observable event or a justified abstraction; otherwise its status is
+indeterminate. This is a workflow choice, not a claim that TLA+ cannot express
+queues: our first TLA+-style attempt had to model internal state before an
+ordinary observed scenario could be recorded.
 
 \begin{center}
 \begin{tabular}{@{}p{.25\textwidth}p{.32\textwidth}p{.32\textwidth}@{}}
@@ -676,56 +577,45 @@ Main risk & state model may drift from instrumentation & event model may omit a 
 \end{tabular}
 \end{center}
 
-This boundary separates the durable specifications:
-\texttt{Requirements.lean} defines observable behavior, while
-\texttt{Implementation.lean} maps it to generation and runtime choices. Existing
-source does not redefine requirements; Chapter~\ref{ch:bootstrap-contract}
-defines the project-root handoff.
+\texttt{Requirements.lean} defines observable behavior; \texttt{Implementation.lean}
+maps it to generation and runtime choices; existing source does not redefine
+requirements (Chapter~\ref{ch:bootstrap-contract}).
 
 \section{Discovery first, consolidation before commitment}
 
-During discovery, the book may contain alternatives that are not accepted.
-Before a specification is committed and again before implementation, classify every
-normative idea as a requirement, implementation decision, deferred item, or
-material to remove. Preserve technical claims and qualifications; replace prose
-that mainly enumerates roles, messages, states, ordering, dependencies, or
-quantities with a generated view from typed artifacts and a short
-interpretation. Each view retains its prompt, question, event source, reducer,
-unit, and boundary. An idea's survival in the book does not make it binding;
-only committed, checked artifacts do.
+During discovery the book may hold alternatives that are not accepted. Before a
+specification is committed, and again before implementation, classify every
+normative idea as a requirement, an implementation decision, a deferred item, or
+material to remove. Replace prose that mainly enumerates roles, messages, states,
+ordering or quantities with a generated view and a short interpretation; each
+view keeps its prompt, question, event source, reducer, unit and boundary. Only
+committed, checked artifacts are binding.
 
 \section{Four ingredients}
 
-The method combines four traditions.
-
 \begin{enumerate}[label=\arabic*.]
   \item Session types give the backbone: one global description of a
-        conversation, projected to the local obligations of each role, with
-        well-formedness conditions that rule out unimplementable choices
+        conversation, projected to each role's obligations, with well-formedness
+        conditions that rule out unimplementable choices
         \citep{honda1998language,honda2008multiparty,yoshida2013scribble}.
-  \item Language theory gives compact generative descriptions of legal histories:
-        a global type is a grammar whose terminals are messages, and its
-        sequence, choice, parallel composition and recursion are the grammar's
-        productions. Dana Richards and Henry Hamburger, the author's college
-        professors, are cited in \citet{richards2017logic} as the source from
-        which the author learned these methods, not as their originators. For the
-        underlying habits of symbolization, validity, proof, quantification, and
-        modal reasoning, we also draw on the accessible progression of
+  \item Language theory gives compact generative descriptions of legal
+        histories: a global type is a grammar whose terminals are messages.
+        Dana Richards and Henry Hamburger, the author's college professors, are
+        cited in \citet{richards2017logic} as where the author learned these
+        methods, not as their originators; for symbolization, validity, proof,
+        quantification and modal reasoning we also draw on
         \citet{gensler2017introduction}.
-  \item Protocol analysis contributes explicit participants, adversarial choices,
-        trace semantics, and tool-supported checking. An attacker is one more
-        role, or a channel whose physics an adversary controls. The CSP treatment
-        of \citet{ryan2001modelling}, including Steve Schneider, is cited as the
-        source from which the author learned this treatment.
-  \item Temporal logic turns expectations into queries over the product of
-        roles and channels. CTL is central because it distinguishes claims about
-        some possible future from claims about every possible future
-        \citep{clarke1986automatic}.
+  \item Protocol analysis contributes explicit participants, adversarial
+        choices, trace semantics and tool-supported checking. An attacker is one
+        more role, or a channel an adversary controls. The CSP treatment of
+        \citet{ryan2001modelling}, including Steve Schneider, is cited as where
+        the author learned it.
+  \item Temporal logic turns expectations into queries over the product of roles
+        and channels. CTL is central because it distinguishes claims about some
+        possible future from claims about every one \citep{clarke1986automatic}.
 \end{enumerate}
 
 \section{A test for every abstraction}
-
-Each abstraction in this book should answer a practical question:
 
 \begin{quote}
 Can a developer state a conversation once, with the physics of its channels,
@@ -733,5 +623,5 @@ compose it with other conversations, check its consequences, and keep it stable
 while the implementation of each role changes?
 \end{quote}
 
-If an abstraction does not improve that workflow, it does not belong in the core
+An abstraction that does not improve that workflow does not belong in the core
 library.

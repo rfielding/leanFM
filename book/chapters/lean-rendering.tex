@@ -2,19 +2,14 @@
 \label{ch:lean}
 
 \index{Lean}
-The user-facing notation for global types, local types and channel physics
-should render to a conservative subset of Lean. There is
-no second opaque specification file: domain declarations are Lean definitions,
-expected behaviours are Lean values, and requirements are Lean propositions or
-checked queries. Rendering the proposed scenario DSL into Lean is a
-\textbf{future interface}; its listings are \textbf{proposed notation}. Current
-\textbf{executable code} is the typed LeanFM API, and a \textbf{Lean proof} claim
-applies only when its theorem and proof are checked in the declared build.
-
-Throughout this book, every displayed mathematical formula is accompanied by a
-literal English reading that accounts for each operator, index, bound, and new
-glyph.  The reading is part of the notation discipline: it must map back to the
-symbols one-to-one rather than merely paraphrase the formula's intent.
+The notation for global types, local types and channel physics renders to a
+conservative subset of Lean, with no second opaque specification file: domain
+declarations are Lean definitions, behaviours Lean values, and requirements Lean
+propositions or checked queries. Rendering the proposed scenario DSL into Lean is a
+\textbf{future interface}; the typed LeanFM API is the current
+\textbf{executable code}, and a \textbf{Lean proof} claim applies only to a theorem
+checked in the declared build. Every displayed formula carries an English reading,
+in its accessible text, that accounts for each operator, index and bound.
 
 \begin{lstlisting}
 def checkout : Grammar CheckoutEvent :=
@@ -25,8 +20,7 @@ def eventuallyAnswered : CTL Observation :=
     (CTL.af (CTL.or requestAccepted requestRejected)))
 \end{lstlisting}
 
-Most semantic machinery should be imported from a fixed library. A system author
-normally supplies only:
+Semantic machinery comes from a fixed library; an author supplies only:
 
 \begin{itemize}
   \item typed actors, identifiers, event kinds, and payloads;
@@ -35,23 +29,17 @@ normally supplies only:
   \item named temporal requirements and proofs or decidable checks.
 \end{itemize}
 
-This boundary matters for automation. Generated Lean remains small enough to
-review, while library proofs and algorithms are reused rather than regenerated.
+so generated Lean stays small enough to review, and library proofs and algorithms
+are reused, not regenerated.
 
 \section{An unchecked exploratory fixture}
 
-\texttt{book/logic.lean}, reproduced completely below, is an unchecked side
-experiment, not part of the method. It explores a regularized
-assignment for $1+2+3+\cdots$. For each finite cutoff $n$, its theorem equates
-the triangular prefix $n(n+1)/2$ plus the defined correction
-\texttt{Tail\_S}(n) with $-1/12$. This identity under that definition does not
-assert convergence of ordinary partial sums. The optional example is separate
-from protocol/trace semantics and excluded from \texttt{make book};
-\texttt{lake env lean book/logic.lean} stops here because Mathlib is absent.
-Its inclusion therefore claims no successful proof check. A validity objection
-should identify a circular dependency, unchecked assumption or interpretation
-mismatch; kernel acceptance establishes only the stated theorem under its
-imports and axioms.
+\texttt{book/logic.lean}, below, is an unchecked side experiment, not part of the
+method. It explores a regularized assignment for $1+2+3+\cdots$: for each cutoff
+$n$, the triangular prefix $n(n+1)/2$ plus a defined correction
+\texttt{Tail\_S}(n) equals $-1/12$, which asserts nothing about convergence of the
+partial sums. It needs Mathlib, which this build lacks, so it claims no checked
+proof.
 
 \lstinputlisting[language=Lean,basicstyle=\ttfamily\scriptsize,breaklines=true]{logic.lean}
 
@@ -68,17 +56,10 @@ declared initial state:
  AG\bigl((a\land b\land\cdots\land w)
        \to(x\lor\cdots\lor z)\bigr).
 \]}
-Read: ``at every reachable state, if a and b and so on through w all hold,
-then x or so on through z holds.'' A means every continuation; G means every
-position along it, including the current state. This is entailment within the
-declared runtime model, not a redefinition of general entailment across every
-possible model. The model and initial state must accompany the judgment.
-The $\land$ symbols collect premises with ``and''; the $\lor$ symbols collect
-alternative conclusions with ``or.'' The conclusion need not be the same in every state.
-
-For code, represent the left side as a list of premises and the right side as
-a list of conclusions. A counterexample is a reachable state where every premise
-is true and every conclusion is false:
+This is entailment within the declared model and initial state, not general
+entailment over all models, and the conclusion that holds may differ between
+states. In code, a counterexample is a reachable state where every premise is true
+and every conclusion false:
 \begin{lstlisting}
 counterexample(state, premises, conclusions) :=
   premises.all(p => evaluate(p, state)) &&
@@ -88,27 +69,14 @@ entails(successors, initialState, premises, conclusions) :=
   !anyReachable(successors, initialState,
     state => counterexample(state, premises, conclusions))
 \end{lstlisting}
-The evaluator and successor relation come from the declared model. A sampled
-trace checks only that sample, not all reachable states.
-
-The same counterexample condition can be constructed symbolically:
+A sampled trace checks only that sample. Symbolically:
 \AccessibleEquation{Not E F of a and b and so on through w and not x and the remaining negated conclusions through not z. In words: there is no reachable counterexample where every premise holds and every conclusion fails.}{\[
  \neg EF(a\land b\land\cdots\land w\land\neg x\land\cdots\land\neg z).
 \]}
-Read: ``there is no reachable state with a and b and so on through w, and
-not x and so on through not z.'' This is exactly the AG implication above,
-using $AG\,p=\neg EF\,\neg p$, read ``always p is no reachable not-p.''
-
-With a single conclusion, the analogy is the Prolog rule
-\texttt{x :- a, b, ..., w}: x follows when all its premises hold. The displayed
-disjunctive conclusion is more general than an ordinary single-head Prolog
-rule; $\vDash$ does not specify Prolog's execution or search order.
-The compact notation $\Gamma\vDash p$, read ``Gamma semantically entails p,''
-collects the premises into a context $\Gamma$ and names the conclusion $p$.
-The distinction remains: $\Gamma\vdash p$, read ``Gamma derives p,'' asserts a
-derivation. Our runtime judgment checks that no reachable state makes all the
-premises true and p false. General semantic entailment uses all models of the
-assumptions instead; it must not be confused with this explicitly scoped CTL test.
+which is the $AG$ implication by $AG\,p=\neg EF\,\neg p$. With one conclusion it is
+the Prolog rule \texttt{x :- a, b, ..., w}, without Prolog's search order.
+$\Gamma\vDash p$ collects the premises into $\Gamma$; $\Gamma\vdash p$, by
+contrast, asserts a derivation.
 
 For the proof-theoretic background behind derivations, natural deduction,
 sequent calculus, normalization, and cut elimination, see Mancosu, Galvan, and
@@ -116,10 +84,8 @@ Zach's \emph{An Introduction to Proof Theory} \citep{mancosu2021proof}.
 
 \section{From specification to service}
 
-Lean can host executable code, including a small web server. That makes the formal
-artifact part of the running project rather than a document beside it. The design
-target is for typed definitions to drive validation endpoints, test-trace
-generation, protocol schemas, visualisations, and runtime monitors; current
-coverage is partial, as Chapter~\ref{ch:web-protocol} records. Extraction and
-integration choices must preserve the distinction between a checked behavioural
-model and an unverified infrastructure layer.
+Lean hosts executable code, including LeanFM's own web server, so the formal
+artifact is part of the running project. The target is for typed definitions to
+drive validation endpoints, trace generation, schemas, views and runtime monitors;
+coverage is partial (Chapter~\ref{ch:web-protocol}), and a checked behavioural
+model stays distinct from unverified infrastructure.

@@ -4,10 +4,10 @@
 \index{CSP}
 \index{protocol role}
 The author learned from \citet{ryan2001modelling} to treat a security protocol
-as a set of communicating roles plus an active intruder, and to state security
-as properties of every trace that intruder can produce. This chapter keeps that
-idea and none of that book's examples. It works three small invented protocols,
-each chosen to put pressure on one part of the grammar method:
+as communicating roles plus an active intruder, and security as properties of
+every trace that intruder can produce. This chapter keeps that idea and none of
+that book's examples. Three small invented protocols each press on one part of
+the method:
 
 \begin{enumerate}
   \item an \emph{on-call handoff}, where three separately written roles must
@@ -18,28 +18,23 @@ each chosen to put pressure on one part of the grammar method:
         actors and not to others.
 \end{enumerate}
 
-Status: this chapter is a design exercise, not an account of implemented LeanFM
-features. Its \texttt{RoleSpec}, \texttt{WireTerm}, \texttt{composeRoles}, and
-attacker-deduction listings are proposed notation; the current executable model
-has \texttt{GrammarExpr} and finite trace/CTL checks, but no role-projection or
-composition engine, symbolic byte algebra, or attacker-knowledge evaluator. The
-checklist at the end is a set of proposed library requirements, not implemented
-capabilities.
+Status: the three examples are a design exercise. Their \texttt{RoleSpec},
+\texttt{WireTerm} and \texttt{composeRoles} listings are proposed notation, and
+there is no role-composition engine yet. The attacker's deduction rules are
+implemented (\texttt{LeanFM.Session.Knowledge}), and so is a checker that
+generates the attacker from a declaration (\texttt{LeanFM.Session.Attack}),
+which Section~\ref{sec:needham-schroeder} uses on a real protocol.
 
 \section{Roles compose by sharing events}
 
 \index{projection}
-This is the session-type picture seen from the other side. Projection derives
-each role's local type from one global type; here each role is written first,
-and the global protocol is whatever their composition admits. The attacker is
-the case session types usually leave out: a role that controls the channels,
-and can read, drop, replay or forge what passes through them. In the vocabulary
-of Chapter~\ref{ch:vision}, the attacker is the most hostile physics a channel
-can declare.
-
-Each actor is specified separately, as a grammar over its own view of the
-global event alphabet. Composition is synchronization on the same observable
-events, not concatenation of independent scripts.
+This is the session-type picture seen from the other side: each role is written
+first, as a grammar over its own view of the events, and the global protocol is
+whatever their composition admits. Composition synchronizes on shared events; it
+does not concatenate scripts. The attacker is the role session types usually
+leave out: one that controls the channels and can read, drop, replay or forge
+what passes through them, the most hostile physics a channel can declare
+(Chapter~\ref{ch:vision}).
 
 \begin{lstlisting}
 structure RoleSpec where
@@ -61,21 +56,12 @@ accepts its own view of it:
   = \{t \mid \forall i,\; t\!\upharpoonright_{a_i} \in L(R_i)\}.
 \]}
 
-Read this as: ``the language $L$ accepted by the composition of roles $R_1$
-through $R_n$ is the set of global traces $t$ such that, for every role index
-$i$, trace $t$ restricted to actor $a_i$ belongs to the language accepted by
-role $R_i$.'' Here $n$ is the number of roles, $i$ is one role's index, the
-vertical bar means ``such that,'' and $\upharpoonright$ means ``restricted to.''
-
-A message is one global event with one identity, one byte string, one sender
-and one recipient. Both endpoint grammars constrain that same event. An
-unmatched send, an unexpected receive, or disagreement about the bytes makes the
-composed language empty from that prefix on, and the checker reports the prefix.
-
-A role may bind values from events it has seen and test later events against
-them. Those bindings are a parser environment for the trace, not a claim about
-implementation memory: ``the code in this reply equals the code I sent'' says
-nothing about tables, variables or retries.
+A message is one global event with one identity, one byte string, one sender and
+one recipient, and both endpoint grammars constrain it. An unmatched send, an
+unexpected receive, or disagreement about the bytes empties the composed language
+from that prefix on, and the checker reports the prefix. A role may bind values
+from events it has seen and test later events against them; the bindings are a
+parser environment for the trace, not a claim about implementation memory.
 
 \section{A transport-neutral byte algebra}
 
@@ -107,11 +93,10 @@ structure WireEvent where
   encodedBy : bytes = encodeCanonical term
 \end{lstlisting}
 
-Encryption and hashing are symbolic constructors with a canonical encoding.
 Anyone may hash a term they know; nobody may invert a hash; decryption needs the
-key. \texttt{channel} records who can observe an event at all, which the
-pairing example needs. A concrete refinement must replace this idealized algebra
-with real transports and cryptography whose assumptions justify it.
+key. \texttt{channel} records who can observe an event at all, which the pairing
+example needs. A concrete refinement replaces this idealized algebra with real
+transports and cryptography whose assumptions justify it.
 
 \section{Example 1: an on-call handoff}
 
@@ -166,9 +151,9 @@ def pagerRole (olu ines pager : Actor) (ko ki : SharedKey) : RoleSpec :=
     send (encrypt ko.ref (tuple [actor ines, nonce h, atom "done"]))
 \end{lstlisting}
 
-The \texttt{where\_} clauses are the context-sensitive part. The message
-sequence is context-free; whether a reply is legal depends on values bound
-earlier in the same trace.
+The \texttt{where\_} clauses are the context-sensitive part: the message
+sequence is context-free, but whether a reply is legal depends on values bound
+earlier in the trace.
 
 \subsection{What composition catches}
 
@@ -272,16 +257,14 @@ was formed with Ana's name. To open it under his own name he would need a salt
 that makes $\mathit{hash}(\mathit{Ivo},\ldots)$ equal $\mathit{hash}(\mathit{Ana},\ldots)$,
 and no rule derives one. Copying is now useless.
 
-This gives the acceptance test for an intruder model. For the original
-commitment, the checker must produce the copy trace as a counterexample. For
-the fixed commitment, it must find none. A model that cannot find the first
-attack is too weak to trust when it finds nothing in the second.
+This is the acceptance test for an intruder model: it must find the copy trace
+for the original commitment and none for the fixed one. A model that cannot find
+the first attack is too weak to trust when it finds nothing in the second.
 
-One limit of the symbolic model is visible here. If amounts came from a small
-set, Ivo could hash each candidate and compare, and the salt is what stops
-that. Dolev--Yao deduction has no notion of guessing, so the requirement that
-salts be fresh and unguessable must be written down as an explicit assumption,
-not left implicit.
+The symbolic model has a visible limit here. If amounts came from a small set, Ivo
+could hash each candidate and compare; the salt stops that. Dolev--Yao deduction
+has no notion of guessing, so ``salts are fresh and unguessable'' must be written
+down as an assumption.
 
 \section{Knowledge and agreement as theorems}
 \label{sec:knowledge-closure}
@@ -290,9 +273,7 @@ not left implicit.
 \index{secrecy}
 \index{agreement}
 The attacker is one more role. It observes the events its channels let it see,
-may block or replay them, and may send any term it can derive from what it has
-observed. Seeing ciphertext bytes does not reveal the plaintext, and seeing a
-hash does not reveal its input.
+may block or replay them, and may send any term it can derive from them.
 
 \begin{lstlisting}
 inductive Derives : Knowledge -> WireTerm -> Prop where
@@ -317,8 +298,8 @@ def intruderRole (ivo : Actor) : RoleSpec :=
 \end{lstlisting}
 
 Knowledge is calculated for every actor from every accepted trace, not only the
-intended run. Security claims then become theorems over accepted traces,
-derived knowledge and explicit compromise assumptions. For the fixed auction:
+intended run, so security claims become theorems over accepted traces, derived
+knowledge and explicit compromise assumptions. For the fixed auction:
 
 \begin{lstlisting}
 theorem auction_bid_sealed_until_close
@@ -338,13 +319,12 @@ theorem auction_commitments_not_copyable
 
 The two theorems are still proposed notation: the lemmas they name do not
 exist yet. The deduction rules do. \texttt{LeanFM.Session.Knowledge} defines
-them as \texttt{Derives}, with messages built from atoms, symmetric keys, key
-pairs, pairs, encryption and hashes; a ciphertext under a private key is a
-signature, opened with the public key. It also decides them for one value at a
-time: \texttt{analz} takes what an actor has seen apart until nothing new
-appears, and \texttt{synth} asks whether the value can be built from the pieces.
-Enumerating everything an actor could build would never end; breaking down and
-then checking one value does. The library proves the decision sound:
+them as \texttt{Derives}, over atoms, symmetric keys, key pairs, pairs,
+encryption and hashes; a ciphertext under a private key is a signature, opened
+with the public key. It decides them one value at a time: \texttt{analz} takes
+what an actor has seen apart until nothing new appears, and \texttt{synth} asks
+whether the value can be built from the pieces. (Enumerating everything an actor
+could build would never end.) The decision is proved sound:
 
 \begin{lstlisting}
 theorem knows_sound {K : List Msg} {v : Msg}
@@ -375,8 +355,7 @@ def requires (policy : Policy) (actor : Actor)
   policy.requires actor action s
 \end{lstlisting}
 
-These functions label a state; CTL says when the labels may or must hold. Each
-formula below reads directly as English:
+These functions label a state; CTL says when the labels may or must hold:
 
 \AccessibleEquation{On every future the auctioneer does not know any bid amount until bidding has closed.}{\[
   \neg\operatorname{knows}(\mathit{Auctioneer},a_b)\ AU\ \mathit{closed}.
@@ -408,11 +387,11 @@ result is the useful artifact:
     \neg\operatorname{allows}(P,a,\operatorname{disclose}(s))).
 \]}
 
-This state-local \texttt{knows} predicate is not the full epistemic modality
-$K_a\varphi$ over indistinguishable histories defined in
-Chapter~\ref{ch:ctl}. It tests whether one declared deduction closure contains
-a value, which suffices for many secrecy and authorization claims. Use $K_a$
-when the requirement compares histories, as the next example does.
+This state-local \texttt{knows} is not the epistemic modality $K_a\varphi$ over
+indistinguishable histories of Chapter~\ref{ch:ctl}. It tests whether one
+deduction closure contains a value, which suffices for most secrecy and
+authorization claims; $K_a$ is for requirements that compare histories, as the
+next example shows.
 
 \section{Example 3: pairing a speaker by a code on its screen}
 
@@ -460,28 +439,25 @@ probability overlay: with three attempts against $10^6$ codes,
 The next section explains why the number attaches to $E$.
 
 \paragraph{Some claims compare histories.} ``Ivo cannot tell which code was
-shown'' is not true or false of one state. It says that any two histories
-differing only in $d$ look identical to Ivo, which is exactly $K_a$ over
-indistinguishable histories. It belongs in a separate family of relational
-theorems, not in a single CTL state formula.
+shown'' is not true or false of one state: it says any two histories differing
+only in $d$ look identical to Ivo. That is $K_a$ over indistinguishable
+histories, a relational theorem rather than a CTL state formula, and the one
+claim in this chapter that the table below does not cover.
 
 \section{Where each modality attaches}
 
 \index{probability overlay}
 \index{deadline}
 \index{modality}
-The three examples have used every kind of claim a requirement needs: what can
-or must happen, how likely, by when, who knows, who may, and who must. None of
-them needs a new logic. Each attaches to one place in an ordinary CTL formula.
-A CTL operator is a path quantifier, $A$ or $E$, fused with a temporal operator
-such as $F$, $G$ or $U$. Probability belongs to the quantifier, deadlines
-belong to the temporal operator, and knowledge and policy are predicates on
-states.
+The examples have used every kind of claim a requirement needs: what can or must
+happen, how likely, by when, who knows, who may, and who must. None needs a new
+logic. A CTL operator is a path quantifier, $A$ or $E$, fused with a temporal
+operator such as $F$, $G$ or $U$: probability belongs to the quantifier, deadlines
+to the temporal operator, and knowledge and policy are predicates on states.
 
 \paragraph{The path quantifier $E$ invites ``how likely?''} $E$ says that
-\emph{some} future satisfies the path formula. The natural refinement is to ask
-how much of the future does: replace ``some'' with a probability measured over
-futures. That works the same way whatever follows the $E$:
+\emph{some} future satisfies the path formula; the refinement replaces ``some''
+with a probability over futures, whatever follows the $E$:
 
 \AccessibleEquation{E F p becomes the probability of F p. E G p becomes the probability of G p. p E U q becomes the probability of p U q.}{\[
   EF\,p \;\leadsto\; P[F\,p],\qquad
@@ -497,17 +473,12 @@ $A$ become ``probability one'': a set of futures can have probability one and
 still leave out a future that $A$ must cover, which is why
 Chapter~\ref{ch:ctl} keeps $A$ and $E$ about legal futures only.
 
-\paragraph{The temporal operator $F$ invites ``by when?''} $F$ says ``at some
-later point'' with no bound. A user waiting on a handoff or an auction result
-needs a bound, so the deadline is written on $F$ (and, the same way, on the
-right-hand side of $U$). It means the same thing under either quantifier:
-$AF_{\le t}\,q$ says every future reaches $q$ within $t$; $EF_{\le t}\,q$ says
-some future does.
-
-A deadline under $A$ is a promise the grammar must be able to keep. Every
-waiting state needs a timeout branch that ends in an explicit outcome. Without
-one, $AF_{\le t}$ fails, because some future waits past $t$. With one, the
-deadline is part of the guaranteed behaviour:
+\paragraph{The temporal operator $F$ invites ``by when?''} $F$ has no bound, and a
+user waiting on a handoff needs one, so the deadline is written on $F$ (and on
+the right of $U$): $AF_{\le t}\,q$ says every future reaches $q$ within $t$,
+$EF_{\le t}\,q$ that some future does. A deadline under $A$ is a promise the
+grammar must keep: every waiting state needs a timeout branch ending in an
+explicit outcome, or some future waits past $t$.
 
 \AccessibleEquation{On every future within fifteen minutes handoff h is either accepted by Ines or has expired.}{\[
   AF_{\le 15\,\mathrm{min}}\bigl(\mathit{accepted}(\mathit{Ines},h) \lor \mathit{expired}(h)\bigr).
@@ -518,10 +489,9 @@ deadline is part of the guaranteed behaviour:
     AF_{\le T_{\mathit{reveal}}}\bigl(\mathit{revealed}(b) \lor \mathit{forfeited}(b)\bigr)\Bigr).
 \]}
 
-The handoff therefore needs an \emph{Expired} message that the pager sends to
-both engineers when the offer times out, and the auction needs a
-\emph{Forfeited} outcome for a bidder who never reveals. Both are new legal
-branches, so both need decodable messages and code that handles them.
+So the handoff needs an \emph{Expired} message to both engineers when the offer
+times out, and the auction a \emph{Forfeited} outcome for a bidder who never
+reveals: new legal branches, with decodable messages and code that handles them.
 
 \paragraph{The two annotations compose.} Probability on the quantifier and a
 deadline on $F$ combine into the question stakeholders usually ask: how likely
@@ -537,10 +507,8 @@ deadline ($AF_{\le t}$, enforced by a timeout branch) separate from a usual one
 promised a 1.2\,s sale while only about half the recorded sales met it.
 
 \paragraph{\texttt{knows}, \texttt{allows} and \texttt{requires} complete the
-set.} The remaining modalities are about actors rather than futures: what an
-actor can derive, what a policy allows it to do, and what a policy requires of
-it. Each is computed from the history up to a state, so each is a state
-predicate, and the temporal operators carry them without change. Secrecy is
+set.} These are about actors rather than futures, and each is computed from the
+history up to a state, so the temporal operators carry them unchanged. Secrecy is
 \texttt{knows} under $AU$; authorization is \texttt{knows} implying
 \texttt{allows} under $AG$; an obligation is \texttt{requires} paired with
 $AF_{\le t}$ on the act that discharges it.
@@ -560,10 +528,6 @@ who must? & state: \texttt{requires} & $AG(\mathit{dutyMoved}\rightarrow\operato
 \end{tabular}
 \end{center}
 
-One claim in the chapter does not fit the table: ``Ivo cannot tell which code
-was shown.'' It compares histories rather than labeling one, so it needs the
-full $K_a$ over indistinguishable histories, as noted in the pairing example.
-
 \section{Needham--Schroeder, checked}
 \label{sec:needham-schroeder}
 
@@ -578,35 +542,33 @@ whoever claims to be calling. Ivo is a legitimate user with his own key pair, so
 Alice may well choose him; he is also the network, seeing every message and
 sending anything he can derive.
 
-Nobody builds the state space. Each honest role is declared as a short script
-over message patterns: a choice, sends, receives and claims. A variable in a
-received pattern binds whatever the message carries there.
+Nobody builds the state space. Each honest role is a short script over message
+patterns: a choice, sends, receives and claims; a variable in a received pattern
+binds whatever the message carries there.
 
 \input{generated/ns-roles.tex}
 
-\texttt{LeanFM.Session.Attack} generates the model from that declaration. Every
-message an honest role sends goes to the network, which is Ivo; every message an
-honest role receives is one Ivo can build that has the shape the role expects.
-That is the Dolev--Yao channel, declared once rather than written into each
-role. A state of the model is each role's position and bindings, Ivo's
-knowledge, kept taken apart so that \texttt{knows} is an ordinary label of the
-state, and the claims made so far.
+\texttt{LeanFM.Session.Attack} generates the model. Every message an honest role
+sends goes to the network, which is Ivo; every message it receives is one Ivo can
+build in the expected shape. That is the Dolev--Yao channel, declared once rather
+than written into each role. A state is each role's position and bindings, Ivo's
+knowledge (kept taken apart, so \texttt{knows} is an ordinary label), and the
+claims made so far.
 
-Requirements become flags that events trip. \texttt{SecrecyBreach} trips when
-Bob has committed to a run with Alice and Ivo can derive Bob's nonce;
-\texttt{Impersonation} when Bob has committed to Alice although Alice never
-claimed to be running with Bob. \texttt{check\_ctl} decides \texttt{never} of
-each, and that an honest run can complete. The last row asks secrecy again with
-a \texttt{knows} atom and a \texttt{claimed} atom instead of a flag, and gets
-the same verdicts. The same declaration, written as JSON, is what the MCP tool
-\texttt{check\_protocol} takes, so an agent can ask it without writing Lean:
+Requirements become flags that events trip. \texttt{SecrecyBreach} trips when Bob
+has committed to Alice and Ivo can derive Bob's nonce; \texttt{Impersonation}
+when Bob has committed to Alice although Alice never claimed to be running with
+Bob. \texttt{check\_ctl} decides \texttt{never} of each, and that an honest run
+can complete. The last row asks secrecy with \texttt{knows} and \texttt{claimed}
+atoms instead of a flag and gets the same verdicts. The same declaration, as JSON,
+is what the MCP tool \texttt{check\_protocol} takes:
 
 \begin{center}
 \input{generated/ns-verdicts.tex}
 \end{center}
 
-For the 1978 protocol the counterexample to secrecy is the attack Lowe found in
-1995, in the checker's own words:
+For the 1978 protocol the counterexample is the attack Lowe found in 1995, in the
+checker's own words:
 
 \input{generated/ns-attack.tex}
 
@@ -628,28 +590,25 @@ Alice. Lowe's fix adds Bob's name to the second message, and Alice checks it is
 the peer she chose. With it both properties hold on every reachable state.
 
 The model is bounded, and the bounds are where attacks could still hide: each
-session runs once, a variable binds a name or a nonce from a declared domain,
-never a whole ciphertext, and Ivo's domain is the names and nonces of this run.
-Lowe's attack needs one session of each role, which is why it appears with
-them. Ivo forwarding a sealed blob he cannot read still needs a larger bound.
-An attack that needs a second run of Bob needs only a second session, which a
-declaration can ask for.
+session runs once, and a variable binds a name or nonce from a declared domain,
+never a whole ciphertext, so Ivo forwarding a sealed blob he cannot read is out
+of reach. Lowe's attack needs one session of each role; an attack needing a
+second run of Bob needs a second session, which a declaration can ask for.
 
 \subsection{Two sessions: reflection}
 \label{sec:reflection}
 
 Some attacks play one session of a role against another. The standard example is
-a challenge--response that shares one key, \texttt{kAB}, between Alice and Bob.
-Alice challenges with a fresh nonce; Bob answers it under the key and adds his
-own challenge; Alice answers his. The flag \texttt{named} adds a fix, used
-below:
+a challenge--response with one key, \texttt{kAB}, shared by Alice and Bob. Alice
+challenges with a fresh nonce; Bob answers it under the key and adds his own
+challenge; Alice answers his. The flag \texttt{named} adds a fix:
 
 \input{generated/ns-reflection-roles.tex}
 
-A \texttt{fresh} step makes a value that no other session has and the attacker
-does not know: \texttt{nb} in Bob's first session, \texttt{nb\#2} in his
-second, which is named \texttt{Bob\#2}. The requirement is agreement again:
-Bob never commits to Alice unless Alice started a run with him.
+A \texttt{fresh} step makes a value no other session has and the attacker does not
+know: \texttt{nb} in Bob's first session, \texttt{nb\#2} in his second,
+\texttt{Bob\#2}. The requirement is agreement: Bob never commits to Alice unless
+Alice started a run with him.
 
 \begin{center}
 \input{generated/ns-reflection-verdicts.tex}
@@ -669,31 +628,27 @@ appears; the label marks where Ivo first holds the answer he could not compute.}
 \label{fig:reflection-attack}
 \end{figure}
 
-Ivo opens a session with Bob as Alice and gets Bob's challenge \texttt{nb}. He
-opens a second session and offers \texttt{nb} as the challenge there. Bob's
-second session encrypts it, as it should, and Ivo returns that answer to the
-first session, which commits to Alice. Nothing was decrypted; the key was used
-as an oracle. The usual fixes put the direction or the sender's name inside the
-encryption, or use a separate key in each direction. With \texttt{named}, each
-answer carries the name of the party who made it: Bob's second session now
-produces \texttt{\{nb, B\}kAB}, and his first session waits for
-\texttt{\{nb, A\}kAB}, which only Alice makes. The third column of the table
-checks that fix with the same two sessions: agreement holds and an honest run
-still completes.
+Ivo opens a session with Bob as Alice and gets Bob's challenge \texttt{nb}, then
+offers \texttt{nb} as the challenge in a second session. Bob's second session
+encrypts it, as it should, and Ivo hands that answer to the first, which commits
+to Alice. Nothing was decrypted; the key was used as an oracle. The usual fixes
+put the sender's name or the direction inside the encryption, or use a key per
+direction. With \texttt{named}, Bob's second session produces
+\texttt{\{nb, B\}kAB} while his first waits for \texttt{\{nb, A\}kAB}, which
+only Alice makes; the table's third column checks the fix with the same two
+sessions.
 
 \subsection{A defender on the wire}
 \label{sec:defender}
 
-So far the network has belonged to the attacker alone. A real path often has a
-defender on it too: an intrusion-prevention system, a filtering proxy, a gateway
-that intercepts TLS. A declaration may put one in front of named roles. Every
-message delivered to them passes through it first, and it drops what matches a
-drop pattern, rewrites what matches a rewrite rule, and forwards the rest. What
-it can match is what it can see, which is \texttt{knows} again from the
-defender's side. It looks inside a ciphertext only when it can build the
-opening key. A blob it cannot open matches nothing, not even a copy of itself,
-because real encryption is randomised. Here Bob accepts whatever reaches him,
-and Guard drops \texttt{bad}:
+A real path often has a defender on it too: an intrusion-prevention system, a
+filtering proxy, a gateway that intercepts TLS. A declaration may put one in front
+of named roles; every message delivered to them passes through it, and it drops
+what matches a drop pattern, rewrites what matches a rewrite rule, and forwards
+the rest. It matches only what it can see, which is \texttt{knows} from the
+defender's side: it looks inside a ciphertext only when it can build the opening
+key, and a blob it cannot open matches nothing, since real encryption is
+randomised. Here Bob accepts whatever reaches him, and Guard drops \texttt{bad}:
 
 \input{generated/ns-defender.tex}
 
@@ -701,41 +656,35 @@ and Guard drops \texttt{bad}:
 \input{generated/ns-defender-verdicts.tex}
 \end{center}
 
-The filter stops a plaintext \texttt{bad} and lets \texttt{good} through.
-Sealed for Bob, \texttt{bad} goes straight past it: the counterexample shows
-Guard itself delivering \texttt{\{bad\}pk(B)}. Give Guard Bob's private key, as an
-intercepting gateway has, and it sees inside and drops it again. The table is
-the whole argument for and against interception in four rows.
+Sealed for Bob, \texttt{bad} goes straight past the filter: the counterexample
+shows Guard itself delivering \texttt{\{bad\}pk(B)}. Give Guard Bob's private key,
+as an intercepting gateway has, and it drops it again. The table is the argument
+for and against interception in four rows.
 
 \subsection{Reassembly}
 \label{sec:reassembly}
 
 Signature matching has a subtler gap. A defender scanning a TCP stream for
-\texttt{EVIL} has to put the stream back together the way the host behind it
-will, and the attacker controls segmentation. It can send any byte range, in
-any order, and send the same range again with different bytes. When two
-segments overlap, one implementation keeps the bytes that arrived first and
-another keeps the bytes that arrived last, and operating systems have differed
-in exactly this. \texttt{check\_reassembly} models each position of the stream
-as empty, the signature's byte, or some other byte (written \texttt{.}). It
-applies every segment to the defender's copy and the host's copy with their own
-policies, and resets the stream when a blocking defender matches. The search
-covers every segmentation, of any length:
+\texttt{EVIL} must reassemble it as the host behind it will, and the attacker
+controls segmentation: any byte range, in any order, repeated with different
+bytes. Where segments overlap, one implementation keeps the first bytes and
+another the last, and operating systems have differed in exactly this.
+\texttt{check\_reassembly} models each stream position as empty, the signature's
+byte, or another byte (written \texttt{.}), applies every segment to the
+defender's and the host's copies with their own policies, and resets the stream
+when a blocking defender matches. The search covers every segmentation:
 
 \begin{center}
 \input{generated/ns-reassembly.tex}
 \end{center}
 
-When the policies differ, two segments are enough. A first-wins defender is fed
-a decoy byte at offset 0, then the whole signature over it. It keeps the decoy
-and sees \texttt{.VIL}, while a last-wins host sees \texttt{EVIL}. The other
-mismatch is the mirror image. When the policies agree, no segmentation
-separates the two copies, and the property is proved over every reachable
-state. The same disagreement is what makes a host fingerprintable: send
-overlapping segments and see which bytes it acts on. Normalising the stream
-before scanning, as later intrusion-prevention systems did, is the fix: the
-defender forwards the bytes it scanned, so the host has no overlap left to
-resolve differently.
+When the policies differ, two segments are enough: a first-wins defender fed a
+decoy byte at offset 0 and then the whole signature keeps the decoy and sees
+\texttt{.VIL}, while a last-wins host sees \texttt{EVIL}. When they agree, no
+segmentation separates the copies. The same disagreement makes a host
+fingerprintable: send overlapping segments and see which bytes it acts on. The fix,
+as later intrusion-prevention systems did, is to normalize: the defender forwards
+the bytes it scanned, leaving the host no overlap to resolve differently.
 
 \section{What these exercises demand from the library}
 
@@ -749,8 +698,10 @@ The three examples produce a concrete checklist:
   \item a transport-neutral term-to-byte relation with encryption and hashing;
   \item channels, so that each actor's observations are declared;
   \item explicit initial knowledge, compromise and freshness assumptions;
-  \item attacker closure under construction, decryption and hashing (now in
-        \texttt{LeanFM.Session.Knowledge}, with its decision proved sound);
+  \item attacker closure under construction, decryption and hashing (done:
+        \texttt{LeanFM.Session.Knowledge}, decision proved sound), and an
+        attacker generated from role declarations (done:
+        \texttt{LeanFM.Session.Attack});
   \item past operators for agreement claims such as
         ``accepted only if previously formed'';
   \item probabilities on the $E$ quantifier, from overlays, reported next to

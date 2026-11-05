@@ -2,20 +2,16 @@
 \label{ch:chat-ui-guide}
 
 LeanFM's Chat UI takes a project from a problem statement to a maintained book,
-checked requirements, a separately reviewed implementation mapping, source
-files, and a running application. Work in the selected project's Chat pane;
-use the other panes to inspect what the conversation actually produced. A
-reply, a diagram, and a successful PDF build each answer different questions.
-There is no approval button: you review what LeanFM produced and commit it
-with git, exactly as you would any other change.
+checked requirements, an implementation mapping, source files and a running
+application. Work in Chat; use the other panes to inspect what the conversation
+actually produced. There is no approval button: you review the result and commit
+it with git.
 
-This walkthrough uses the production interface with a disposable GoServer
-project and a local test provider. The project contains real checked
-specifications and runnable code. The displayed model name and token readings
-are fixture data, not provider recommendations, prices, or performance results.
-The screenshots contain no live account credentials or private conversations.
-Their keyboard traces, accessibility snapshots, input revisions, and capture
-boundaries are retained beside the images in \path{book/assets/ui-tour/}.
+This walkthrough uses the production interface with a disposable GoServer project
+(real checked specifications and runnable code) and a local test provider, so the
+model name and token readings are fixture data. The screenshots hold no live
+credentials; their keyboard traces, accessibility snapshots and capture boundaries
+are kept in \path{book/assets/ui-tour/}.
 
 \newcommand{\UITourFigure}[4]{%
   \begin{figure}[htbp]
@@ -28,34 +24,25 @@ boundaries are retained beside the images in \path{book/assets/ui-tour/}.
 
 \section{Open the service and unlock your account}
 
-Start LeanFM with \texttt{make serve} from its repository root, then open
-\url{http://127.0.0.1:8080/}. Use the served LeanFM address when your browser is
-on another machine. The application being developed has a separate runtime;
-opening the LeanFM page does not itself start that application.
+Start LeanFM with \texttt{make serve} from the repository root and open
+\url{http://127.0.0.1:8080/} (or the served address from another machine). The
+application you are building runs separately.
 
-Select \textbf{Sign in} in the account controls. For an existing account, enter
-your LeanFM username and password. This is the password that unlocks your
-locally retained, encrypted provider keys. It is not your OpenAI or Anthropic
-account password. After a LeanFM restart, sign in again to unlock the saved
-keys; empty optional key fields do not mean those keys have disappeared.
+\textbf{Sign in} with your LeanFM username and password, which unlocks your
+encrypted provider keys; it is not your OpenAI or Anthropic password. After a
+restart, sign in again; empty key fields do not mean the saved keys are gone.
 
 \UITourFigure{01-sign-in}
   {Sign in unlocks the keys already retained for the LeanFM account.}
   {The actual LeanFM sign-in dialog shows username and password fields. Optional provider-key inputs and a password-change section precede the Log in button.}
   {Capture boundary: before LoginSubmitted. Both credential fields are empty.}
 
-If you have no LeanFM account, choose \textbf{Create account}. Supply a username,
-a password of at least eight characters, and at least one provider API key.
-The form accepts OpenAI and Anthropic keys together. Put keys in these password
-fields, never in a chat message, screenshot, source file, or project book.
-Registration verifies the supplied provider keys before retaining them.
-
-Once signed in, \textbf{API keys} opens the account's key editor. Re-enter the
-LeanFM password to add or replace a key. Blank fields preserve retained keys.
-Adding a second provider makes its models available without requiring a new
-project. Replacing a key can invalidate older unlocked sessions. The optional
-password-change fields require the current password and matching new values;
-the service re-encrypts the retained keys and ends older sessions.
+\textbf{Create account} takes a username, a password of at least eight
+characters, and at least one provider key (OpenAI, Anthropic, or both), which is
+verified before it is kept. Put keys only in these fields, never in a chat,
+screenshot, source file or book. Once signed in, \textbf{API keys} adds or
+replaces a key after you re-enter your password; blank fields keep stored keys,
+and the optional password change re-encrypts them and ends older sessions.
 
 \UITourFigure{02-create-account}
   {The registration tab accepts one or both provider keys.}
@@ -64,19 +51,12 @@ the service re-encrypts the retained keys and ends older sessions.
 
 \section{Choose the project before writing the prompt}
 
-The left sidebar selects a project. Enter a descriptive name in \textbf{New
-project name}, then choose \textbf{Add project} to create a separate directory
-with its own identity, initial book, and specification paths.
-Select the project and confirm its name in the workspace
-header before sending a prompt. GoServer is an example project when present;
-it is not a required dependency of creating another project.
-
-The project owns its book, specifications, source, tests, generated views,
-conversation, and evidence. Changing the selected tab changes the project
-boundary. An active agent turn can continue while you inspect another project;
-return to its tab to see its result. Delete a project only after checking the
-name and the confirmation: deletion removes that project's complete directory
-and stops its owned application.
+The sidebar selects a project; \textbf{New project name} and \textbf{Add project}
+create one, with its own directory, book and specification paths. Confirm the
+name in the header before sending a prompt. A project owns its book,
+specifications, source, tests, views, conversation and evidence. A running turn
+continues while you look at another project. Deleting a project removes its whole
+directory and stops its application.
 
 The horizontal navigation groups the work by purpose:
 \begin{description}[style=nextline]
@@ -88,11 +68,9 @@ The horizontal navigation groups the work by purpose:
 \item[Project memory] Review canonical artifact files and whether each is checked and committed.
 \item[Source] Inspect the implementation files and tests actually written.
 \end{description}
-The sidebar's text-size controls change the interface scale. Project and phase
-navigation preserve the mounted workspace state, including drafts and scroll
-positions. Use \texttt{Tab} and \texttt{Shift+Tab} to move through controls and
-\texttt{Enter} or \texttt{Space} to activate a focused button. A focused input
-accepts ordinary typing; the multiline Chat composer has a separate Send button.
+The sidebar's text-size controls scale the interface, and navigation keeps drafts
+and scroll positions. \texttt{Tab}, \texttt{Shift+Tab}, \texttt{Enter} and
+\texttt{Space} work everywhere; the multiline composer has its own Send button.
 
 \UITourFigure{03-chat-ready}
   {Start in the selected project's Chat pane.}
@@ -107,190 +85,132 @@ People should be able to create named chat rooms, open a room, and post named
 game challenges inside that room. Keep each room's conversation separate from
 each challenge's conversation.
 \end{quote}
-Add a concrete failure case when it matters: another room must not receive the
-message; a retry must not create a second challenge; an invalid action must show
-an error. LeanFM uses the project files to resolve ordinary implementation
-details. A consequential ambiguity can still
-require your answer.
+Add a failure case when it matters: another room must not receive the message; a
+retry must not create a second challenge. LeanFM resolves ordinary details from
+the project files; a consequential ambiguity may still need your answer.
 
-Select the model for the new prompt in \textbf{Model}. The header identifies its
-provider and a fingerprint of the credential that will be used. The selection
-is captured when a prompt enters the queue; changing the selector later does
-not change a prompt already queued. LeanFM does not silently replace an
-unavailable provider or key with another one.
-
-Write in the composer and activate \textbf{Send}. You may keep typing and send
-another prompt while the first is active. The visible queue runs in order, one
-prompt at a time, so a later prompt receives the results of earlier work. Use a
-queued item's \textbf{Remove} button to discard it before execution. Sending an
-extra prompt does not interrupt the active one.
-
-\textbf{Attach image} accepts PNG, JPEG, GIF, and static SVG, up to 2 MiB per
-original and four selected attachments. A preview appears before submission;
-remove an attachment there if it is unintended. GIF input is represented to
-the model by its first frame. You can also submit an image without text.
-\textbf{Copy reference} on a displayed image retains its stable reference for
-a later prompt; copying the reference does not copy a credential or image bytes.
+\textbf{Model} picks the model for the next prompt; the header shows its provider
+and key fingerprint. The choice is captured when the prompt is queued, and an
+unavailable provider is never silently replaced. You may keep sending prompts
+while one runs: the visible queue runs them in order, each seeing earlier
+results, and \textbf{Remove} discards one before it starts. \textbf{Attach image}
+takes PNG, JPEG, GIF (first frame) and static SVG, up to 2~MiB and four images,
+with a preview; \textbf{Copy reference} on a displayed image copies a stable
+reference for a later prompt.
 
 \UITourFigure{04-chat-running}
   {The active turn remains visible while the agent works.}
   {A real submitted fixture prompt appears in Chat. The Agent running banner names the captured model and shows elapsed time and the current stage. Cancel and the composer remain available.}
   {Capture boundary: ChatPromptSubmitted and ModelRequestIssued, before ModelResponseReturned. The local test provider deliberately holds the response for this capture.}
 
-The running banner shows the selected model, elapsed time, and latest known
-stage. Expand \textbf{Operational trace} to inspect real tool destinations,
-checks, and failures. You may switch to Book, Tasks, Project memory, or Source
-while the turn continues. The live trace is more useful than inferring progress
-from the clock alone.
-
-\textbf{Cancel} requests cancellation at a safe boundary. A provider request or
-tool already in progress can finish; cancellation prevents subsequent work
-after the server observes it. Wait for the active request to return before
-assuming the task has stopped. A saved multi-batch task can expose
-\textbf{Check progress}, \textbf{Resume task}, or \textbf{Restart from current
-files}; these controls distinguish continuation from a fresh attempt.
+Expand \textbf{Operational trace} for real tool destinations, checks and
+failures; it says more than the clock. \textbf{Cancel} stops work at the next safe
+boundary, so a request already in flight may still finish. A saved multi-batch
+task offers \textbf{Check progress}, \textbf{Resume task} and \textbf{Restart from
+current files}.
 
 \section{Read the result before retrying}
 
-A completed assistant message retains its time, model, response duration, and
-reported usage when applicable. The header's remaining-token figure is a local
-session safety allowance. It is not the provider's monetary credit balance.
-A native application launch uses the runtime controls and reports no provider
-token charge of its own.
+A completed message keeps its time, model, duration and usage. The header's
+remaining-token figure is a local safety allowance, not a provider credit balance.
 
 \UITourFigure{05-chat-response}
   {Review the answer and its evidence before taking the next action.}
   {The actual Chat pane shows the completed local-provider explanation of CreateRoom with its timestamp and usage. User-message Resend and message Delete controls appear beside the messages. The composer and model selector remain visible.}
   {Capture boundary: after ChatResponseRendered. The fixture reply explains existing checked behavior; it does not generate implementation files.}
 
-\textbf{Resend} queues the selected user prompt again, retaining its attachment
-references. It can cause a new provider request. Use it after understanding the
-failure or changing the relevant input; it is not a promise that an uncertain
-earlier request had no effect. \textbf{Delete} removes that conversation message.
-It does not undo a committed source change or remove the book.
+\textbf{Resend} queues a prompt again with its attachments, which may cost a new
+request; use it once you understand the failure. \textbf{Delete} removes a message
+but undoes no file change. A structured question is answered in its form, which
+queues the answer as a turn. A passing check, or a model saying ``done'', means
+ready to review; acceptance is your commit.
 
-When a structured question appears, choose or type an answer in its form and
-submit it. The answer closes the identified question and becomes a later queued
-turn. Acceptance is a git commit: a successful compiler check or a model saying
-``done'' tells you the work is ready to review, not that you have reviewed it.
-
-An error includes a concrete diagnostic and, where available, an expanded
-\textbf{Diagnostic for Codex} with \textbf{Copy diagnostic}. Preserve that
-diagnostic when reporting a problem. For a provider low-credit rejection, fix
-that provider's billing condition or explicitly choose an available model and
-credential before resending. LeanFM does not make an automatic paid retry for
-that rejection. A local token-limit error, rate limit, incomplete response,
-compiler failure, and network failure need different remedies; the operational
-trace identifies which boundary failed.
+An error carries a diagnostic, and often \textbf{Diagnostic for Codex} with
+\textbf{Copy diagnostic}; keep it when reporting a problem. A provider credit
+rejection is never retried automatically: fix billing or pick another model first.
+Token limits, rate limits, incomplete responses, compiler and network failures
+need different remedies, and the trace says which boundary failed.
 
 \section{Keep the book and inspect the generated behavior}
 
-Open \textbf{Book} to see the editable source beside its rendered PDF.
-\textbf{Save source} saves the text; \textbf{Build \& preview} saves and builds
-the reading copies. The status line distinguishes a saved source from a built
-PDF. \textbf{Light PDF} and \textbf{Dark PDF} select equivalent renderings of
-the same source. \textbf{Maximize PDF} expands the reading pane, and
-\textbf{Restore split} returns to source and preview. The divider resizes the
-two panes.
+\textbf{Book} shows the editable source beside its PDF. \textbf{Save source}
+saves; \textbf{Build \& preview} also builds, and the status line says which
+happened. \textbf{Light PDF} and \textbf{Dark PDF} render the same source;
+\textbf{Maximize PDF} and \textbf{Restore split} change the layout.
 
 \UITourFigure{07-book}
   {The Book pane keeps editable source and the rendered reading copy together.}
   {The actual GoServer book editor shows saved LaTeX source. Save source and Build and preview controls appear above the editor. Light and Dark PDF selectors appear above the PDF preview pane.}
   {Capture boundary: saved source and an existing built PDF opened. This capture does not edit the book or accept a changed revision.}
 
-The book records decisions and their explanation. \textbf{Tasks} opens the
-views derived from the current typed specification. Select a task in the left
-task list, then choose \textbf{Productions}, \textbf{States},
-\textbf{Properties}, or \textbf{where\_}. Productions shows its request and
-result alternatives; States shows its task state machine. Properties and
-where\_ display the temporal requirements and contextual constraints. A blank
-task set or missing grammar is a specification gap, not evidence that the
-behavior exists.
+\textbf{Tasks} shows views derived from the typed specification: pick a task, then
+\textbf{Productions} (request and result alternatives), \textbf{States} (its state
+machine), \textbf{Properties} or \textbf{where\_} (temporal requirements and
+contextual constraints). A blank task set is a specification gap, not evidence.
 
 \UITourFigure{08-task-states}
   {The room-creation state machine comes from the checked project specification.}
   {The Tasks pane selects Create a named chat room and the States tab. The generated diagram shows the request followed by server checks. Alternatives lead to RoomCreated success or an explicit RequestRejected result.}
   {Capture boundary: the current create\_room task rendered from its checked typed value. The companion requirement and task-catalog snapshots are retained with the capture.}
 
-\textbf{Grammar} provides the nested production structure. Expand the relevant
-production when you need to inspect composition and alternatives. Use Tasks
-for a focused behavioral view and Grammar for its structure. Neither pane
-should substitute another project's grammar or a separately drawn persuasive
-picture for the selected project's checked model.
+\textbf{Grammar} shows the nested production structure, for composition and
+alternatives.
 
 \section{Review the specification, then inspect the implementation}
 
-Open \textbf{Project memory} to read the book, requirements, protobuf schema,
-implementation mapping, and implementation-source summary. Each file shows
-whether it is absent, still bootstrap material, or current, and the review
-cards above them show whether the requirements and implementation mapping pass
-the canonical check and are committed in git. A file's presence alone does not
-establish that its content has passed the check.
+\textbf{Project memory} shows the book, requirements, protobuf schema,
+implementation mapping and source summary, each marked absent, bootstrap or
+current, with cards saying whether the requirements and mapping pass their check
+and are committed. A file's presence proves nothing about its content.
 
 \UITourFigure{06-project-memory}
   {Project memory makes the durable files and their check status inspectable.}
   {The Project memory pane shows canonical artifact tabs and source inventory. Requirements and Implementation specification each show whether they pass the canonical check and whether they are committed.}
   {Capture boundary: both checked specification revisions loaded.}
 
-Review the requirements first: task messages, outcomes, error behavior,
-boundaries, and generated views. Then review the separate implementation
-specification and its traceability: how the chosen runtime, files, transports,
-resource bounds, security controls, and tests realize those requirements. When
-a revision says what you mean, commit it with git; when it does not, say so in
-Chat. Nothing waits for an approval click, so you can ask Chat to implement the
-actual source at any time, and LeanFM will write and check whatever
-specification that needs first. The committed artifacts and existing
-source remain the inputs; deleted conversation history must not become a
-missing design dependency.
+Review the requirements first (messages, outcomes, errors, boundaries, views),
+then the implementation mapping and how its runtime, files, transports, bounds,
+security controls and tests realize them. Commit what says what you mean; say so
+in Chat when it does not. You can ask for the implementation at any time, and
+LeanFM writes and checks whatever specification it needs first. The committed
+artifacts and source are the inputs, so deleting conversation history loses no
+design.
 
 \UITourFigure{09-source}
   {Source displays the implementation files actually present in the project.}
   {The real Source pane lists GoServer source and test files and displays the selected file. This is an inspectable source inventory.}
   {Capture boundary: the implementation's actual source tree opened.}
 
-Use \textbf{Source} to inspect the changed files and tests. Request edits and
-verification through Chat when needed; the Source pane is an inspection view.
-Read the reported checks and their limitations. A successful startup confirms
-that the app can start and answer its probes; it does not prove every game rule
-or security property. GoServer's present slice provides rooms, named challenges,
-and separate conversations. Playable boards and the larger Go rules remain
-deferred.
+\textbf{Source} is for inspection; ask Chat for edits. A successful startup shows
+the app starts and answers its probes, not that every rule or security property
+holds.
 
 \section{Start, open, and stop the app}
 
-Use \textbf{Start app} in the selected project's application bar once its
-source is runnable. LeanFM uses
-the fixed application contract, waits for actual readiness and a page response,
-and keeps the owned process running. The bar changes to \textbf{running},
-\textbf{Open app} becomes a link, and Chat receives the same verified launch
-link. These native controls do not require a model request to perform the
-launch.
+\textbf{Start app} runs the project through its fixed application contract, waits
+for readiness and a page response, and keeps the process running; the bar shows
+\textbf{running}, and \textbf{Open app} becomes a link, also posted in Chat. No
+model request is involved.
 
 \UITourFigure{10-app-ready}
   {A verified running instance produces Open app in both the bar and Chat.}
   {The actual project workspace shows App running with Start app and Stop app controls and a served Open app link. A native runtime chat message also provides a clickable Open app link.}
   {Capture boundary: ApplicationReady after real startup and page probes. The link names the served preview, not a private loopback endpoint.}
 
-\textbf{Open app} opens the served preview. The app runs inside its own
-filesystem, process, network, and browser-authority boundary. For a remote
-LeanFM browser, use this link rather than guessing a server-local port. Apps
-need relative or explicitly prefix-compatible asset and API URLs for the
-preview; the runtime reports an unsupported contract instead of publishing a
-link that cannot work.
+The preview runs inside its own filesystem, process, network and browser-authority
+boundary; from a remote browser, use the link rather than guessing a port. Apps
+need relative or prefix-compatible URLs, and an incompatible app is reported
+rather than given a broken link.
 
 \UITourFigure{11-app-preview}
   {The running GoServer preview supports real room and challenge operations.}
   {The actual isolated GoServer browser shows a created room and a named challenge. Separate room and challenge conversation areas include a message delivered through the preview API.}
   {Capture boundary: RoomCreated, GameCreated, and GameChat observed through the real preview route. The app remains a local in-memory inspection slice.}
 
-If source changes, the runtime becomes \textbf{stale}. Use \textbf{Restart app}
-to run the new revision. Repeated Start on a current running revision reuses its
-instance. \textbf{Stop app} ends only the selected project's owned instance and
-removes its ready link. Other projects and unrelated processes are left alone.
-The separate terminating launch check is validation evidence; its old receipt
-is not a persistent Open app link.
-
-All HTTP applications expose the same targets from \texttt{source/}:
+Changed source makes the runtime \textbf{stale}; \textbf{Restart app} runs the new
+revision, and Start on a current one reuses it. \textbf{Stop app} ends only this
+project's instance. Every HTTP application exposes the same targets in
+\texttt{source/}:
 \begin{center}
 \begin{tabular}{ll}
 \toprule
@@ -306,25 +226,18 @@ Target & Purpose \\
 \bottomrule
 \end{tabular}
 \end{center}
-Missing targets, invalid launch profiles, capacity limits, and failed readiness
-produce explicit errors. Review the app status and diagnostic before retrying;
-an occupied listener is not stopped to make room for the new app.
+Missing targets, invalid profiles, capacity limits and failed readiness give
+explicit errors, and an occupied port is never freed by stopping someone else's
+listener.
 
 \section{Reproduce and review the screenshots}
 
-Run \texttt{make ui-snapshots} from the LeanFM repository after building the
-current server and UI. The runner uses the real production bundle, a disposable
-project replica, an isolated network, and a deterministic local provider. It
-drives named controls by keyboard and records the focused control, accessible
-roles and states, visible message IDs, viewport, browser version, source
-digests, and exact capture boundary. No live provider key or production
-conversation is required. The GoServer example is needed to regenerate this
-particular tour; the checked-in capture inputs and images allow the book to
-build independently of that optional project directory.
-
-Each image has a neighboring \texttt{.accessibility.json} and
-\texttt{.keyboard.json} file. \path{book/assets/ui-tour/manifest.json} binds them
-to the prompt and source revisions. The book's preflight check rejects missing,
-altered, or stale required captures. Alternative text in both PDF editions
-describes the control state, so a screenshot is never the only account of the
-interaction.
+\texttt{make ui-snapshots} regenerates the tour from the production bundle, a
+disposable project replica, an isolated network and a deterministic provider,
+driving named controls by keyboard and recording focus, accessible roles, message
+IDs, viewport, browser version, digests and capture boundary. Regenerating needs
+the GoServer example; building the book does not. Each image has
+\texttt{.accessibility.json} and \texttt{.keyboard.json} companions, bound to
+their revisions by \path{book/assets/ui-tour/manifest.json}, and the book build
+rejects missing, altered or stale captures. Alternative text in both PDF editions
+describes each control state.

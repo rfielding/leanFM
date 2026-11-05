@@ -7,26 +7,22 @@
 A global session type is a grammar. Its terminal symbols are messages, each with
 a sender and a receiver; its productions are the type's sequence, choice,
 parallel composition and recursion; the language it generates is the set of
-legal conversations. LeanFM writes global types this way so that
-requirements can be stacked: every protocol can be read as if it were the
-top-level one, and a larger protocol is built by including smaller ones.
+legal conversations. Requirements therefore stack: every protocol reads as if it
+were the top-level one, and a larger one includes smaller ones.
 
-Global types are written in Lean, with the \texttt{protocol} syntax of the
-\texttt{LeanFM.Session} library. A protocol elaborates to an ordinary Lean value
-of type \texttt{Global R}, for any type \texttt{R} of roles, and the library
-checks it: who decides each choice, what each cause may point to, and each role's
-projection. \texttt{SessionExample.lean} holds every protocol in this chapter and
-runs those checks whenever it is elaborated. For durable artifacts a protocol
-translates to the older \texttt{GrammarExpr} form (\texttt{event}, \texttt{seq},
-\texttt{choice}, \texttt{parallel}, \texttt{thresholdJoin}, \texttt{repeat}),
-which the rest of LeanFM's validation consumes. The queue rules later in this
-chapter are model semantics, not a proof of equivalence to a Go runtime.
+Global types are written in Lean with the \texttt{protocol} syntax of
+\texttt{LeanFM.Session}. A protocol elaborates to a value of type
+\texttt{Global R} for any role type \texttt{R}, and the library checks who decides
+each choice, what each cause may point to, and each role's projection.
+\texttt{SessionExample.lean} holds every protocol in this chapter and runs those
+checks whenever it is elaborated. For durable artifacts a protocol translates to
+the older \texttt{GrammarExpr} form that the rest of LeanFM's validation consumes.
+The queue rules at the end are model semantics, not a proof about a Go runtime.
 
 \section{The protocol syntax}
 
 \index{protocol syntax}
-The vocabulary comes first. Every message is a Lean structure, and its fields are
-its payload:
+Every message is a Lean structure whose fields are its payload:
 
 \begin{lstlisting}
 structure Order    where item : String  deriving TypeName
@@ -67,11 +63,10 @@ names its roles and lists statements:
   of the branches, then the rest of the protocol.
 \end{description}
 
-The words are not reserved, so importing the library takes no identifiers away
-from Lean code. \texttt{protocol Purchase (Client, Shop, Bank)} defines
-\texttt{Purchase : R → R → R → Global R}, so the same protocol is instantiated,
-and included, with whatever roles a larger one has. Each statement elaborates to
-one constructor of the global type:
+The words are not reserved, so the library takes no identifiers from Lean code.
+\texttt{protocol Purchase (Client, Shop, Bank)} defines
+\texttt{Purchase : R → R → R → Global R}, so it can be instantiated and included
+with a larger protocol's roles. Each statement elaborates to one constructor:
 
 \begin{lstlisting}
 inductive Global (R : Type) where
@@ -87,37 +82,27 @@ inductive Global (R : Type) where
 \end{lstlisting}
 
 \index{choice!directed}
-A choice does not name the role that decides. Scribble writes \texttt{choice at
-Shop}, but the name can only be right one way: the decider is the role that
-starts every branch, by sending its first message or by an event at that role
-alone. So LeanFM reads it off the branches instead, and there is one way to write
-a choice. An empty branch, \texttt{or \{ \}}, is that role choosing to do
-nothing. The branches must begin differently. If Alice's message started one
-branch and Bob's the other, no role would decide; both could act at once and the
-system would leave the protocol, and the checker reports the race, naming who
-starts what. This is the non-local-choice (realizability) problem of
-multiparty protocols. In session-type terms the choice must be \emph{directed}:
-an internal choice of one role, observed by the others as an external choice on
-their queues.
-
-A second condition goes with it: every role whose later behaviour differs between
-branches must receive a message that tells it which branch was taken. Projection
-checks it (below), with one relaxation that matches how servers are built: a role
-whose part of the session has not started yet owes nothing to a branch that never
-contacts it. A first attempt at TFTP that puts the sender's timer beside the
+A choice does not name its decider. Scribble writes \texttt{choice at Shop}, but
+the name can only be right one way: the decider is the role that starts every
+branch, by sending its first message or by an event at that role alone. LeanFM
+reads it off the branches, so there is one way to write a choice, and an empty
+branch, \texttt{or \{ \}}, is that role choosing to do nothing. If Alice's message
+started one branch and Bob's the other, both could act at once; the checker
+reports the race, naming who starts what. This is the non-local-choice
+(realizability) problem: the choice must be \emph{directed}, internal to one role
+and external to the others. The second condition, that every role whose behaviour
+differs between branches is told which was taken, is checked by projection
+(below). A first attempt at TFTP that puts the sender's timer beside the
 acknowledgement as a choice has no decider at all:
 
 \input{generated/session-timer.tex}
 
 \input{generated/session-timer-issues.tex}
 
-The sender's timer starts one branch and the receiver's \texttt{Ack} the
-other, and nothing stops both from happening at once. The fix, in Chapter~\ref{ch:tftp-physics},
-moves the timer out of the type and into the channel's physics.
-
-Simple finite conversations can compile to regular languages. Nested request
-structure motivates context-free productions. Correlation, freshness, uniqueness,
-and authorization typically require parameter flow or guarded productions.
+The fix, in Chapter~\ref{ch:tftp-physics}, moves the timer out of the type and
+into the channel's physics. Simple finite conversations are regular languages;
+nested requests need context-free productions; correlation, freshness, uniqueness
+and authorization need parameter flow or guards.
 
 \section{A BNF for composable interactions}
 
@@ -141,34 +126,24 @@ The syntax, independently of Lean's own grammar:
               | "include" <term> ";"
 \end{lstlisting}
 
-Sequence is one statement after another; an empty branch, \texttt{or \{ \}}, is
-the empty conversation. \texttt{sessions} runs any number of independent copies of
-its body beside what follows, each a session of its own, as a server runs one
-handler per request. \texttt{<Msg>} and \texttt{<Event>} name Lean types;
-\texttt{<term>} is a Lean expression: a \texttt{Bool} for \texttt{where}, a
-protocol applied to roles for \texttt{include}. Guards over the payloads of named
-messages supply the context-sensitive correlation that plain context-free syntax
-does not express by itself.
+Sequence is one statement after another. \texttt{sessions} runs any number of
+independent copies of its body beside what follows, as a server runs one handler
+per request. \texttt{<Msg>} and \texttt{<Event>} name Lean types; \texttt{<term>}
+is a Lean \texttt{Bool} for \texttt{where} and a protocol applied to roles for
+\texttt{include}. Guards over named payloads supply the context-sensitive
+correlation context-free syntax lacks.
 
-A threshold join is explicit rather than inferred from the number of observed
-predecessors. Here a primary writes to three replicas and answers its client after
-any two have stored the write, and the first protocol is included in the second,
-each written as if it were the whole thing:
+A threshold join is declared, not inferred from observed predecessors. A primary
+writes to three replicas and answers its client after any two have stored the
+write; the first protocol is included in the second:
 
 \input{generated/session-replicate.tex}
 
-The continuation becomes enabled after any two of the three branches complete.
-Its first emitted event records \texttt{joinRequired=2},
-\texttt{joinTotal=3}, and exactly two selected branch-terminal IDs. Those IDs
-also occur in the event's ordinary \texttt{prior} list, which may contain other
-backpointers such as the task start. The threshold declaration says why two
-predecessors suffice; the selected IDs say which two satisfied this instance.
-Unselected branches are not implicitly canceled and may still emit events.
-Cancellation, if required, must be an explicit message or production.
-
-The OAuth example decomposes into independently readable interactions.  These
-generated views show the two complete branches without making a message arrow
-look like logical implication:
+The continuation's first event records \texttt{joinRequired=2},
+\texttt{joinTotal=3} and the two branch-terminal IDs that satisfied it, which also
+appear in its \texttt{prior} list. Unselected branches are not canceled and may
+still emit events; cancellation must be an explicit message. The OAuth example's
+two outcomes, as generated views:
 
 \begin{figure}[htbp]
 \centering
@@ -188,9 +163,7 @@ authorization-code branch succeeds.}
 \end{figure}
 \clearpage
 
-Chapter~\ref{ch:oauth-example} gives the complete production definitions,
-nested alternatives and guarded exchange; these terminal-level diagrams isolate
-the granted and denied outcomes for comparison.
+Chapter~\ref{ch:oauth-example} gives the full productions and guarded exchange.
 
 \section{Parameters carry information}
 
@@ -204,57 +177,47 @@ a: Authorize from Browser to Provider where a.state = r.state;
 c: Callback  from Provider to Server cause a where c.state = r.state;
 \end{lstlisting}
 
-The repeated \texttt{state} is not decorative. It states the information-flow
-relationship that distinguishes a matching callback from an unrelated one. Lean's
-types, structures and ordinary expressions are the surface language; the library
-supplies composition, the checks, and the semantics.
+The repeated \texttt{state} states the information flow that distinguishes a
+matching callback from an unrelated one.
 
 \section{Projection: from the global type to each role}
 
 \index{projection}
 \index{local type}
-A participant's implementation need not know the global execution state. The
-global type states the contract, and projection derives each role's
-\emph{local type}: the same protocol with every message the role neither sends
-nor receives erased, and every remaining message rewritten as a send or a
-receive. A choice the role makes becomes a \texttt{select}; a choice another
-role makes becomes an \texttt{offer}, resolved by what arrives. LeanFM computes
-it (\texttt{Global.project}); for \texttt{Purchase}:
+Projection derives each role's \emph{local type}: the protocol with every message
+the role neither sends nor receives erased, and the rest rewritten as sends and
+receives. A choice the role makes becomes a \texttt{select}; another role's becomes
+an \texttt{offer}, resolved by what arrives. \texttt{Global.project} for
+\texttt{Purchase}:
 
 \input{generated/session-purchase-locals.tex}
 
-The bank never learns why it was not paid, and its implementation should not
-depend on it. Projection is defined only for a well-formed global type: where a
-choice is erased, the branches a role still sees must be the same, or must start
-with different messages that role receives, or the role's part must not have
-started yet, which is the bank's empty \texttt{or \{ \}}. Otherwise projection
-fails with the reason, as it did for the hold placed before the choice and for
-the timer above. A local type is a production of its own: it is the thread an
-actor runs for one session. Proving that projection and composition preserve the
-global type's properties remains a research obligation; what LeanFM checks today
-is that every projection exists.
+The bank never learns why it was not paid, and should not depend on it. Where a
+choice is erased, the branches a role still sees must be the same, or start with
+different messages it receives, or the role's part must not have started yet (the
+bank's empty \texttt{or \{ \}}); otherwise projection fails with the reason, as
+for the hold and the timer above. A local type is the thread an actor runs for one
+session. LeanFM checks that every projection exists; that projection and
+composition preserve the global type's properties is not yet proved.
 
 \section{Declared physics}
 
 \index{physics of a channel}
 \index{channel kind}
-A global type says which message may follow which. It does not say what
-happens to a message between its send and its receive. LeanFM requires that to
-be declared beside the protocol, as the \emph{physics} of each channel. In
-\texttt{LeanFM.Session.Physics} a channel is a structure whose defaults are the
-reliable channel, so a declaration names only what differs from a preset:
+What happens to a message between send and receive is declared beside the
+protocol as the \emph{physics} of each channel. In
+\texttt{LeanFM.Session.Physics} a channel's defaults are the reliable channel, so a
+declaration names only what differs:
 
 \input{generated/session-transfer.tex}
 
-The checker then compares what each channel surfaces with what the protocol says
-it handles. For TFTP the acknowledgement channel can reorder, and the
-requirements do not say that is handled:
+The checker compares what each channel surfaces with what the protocol handles.
+TFTP's acknowledgement channel can reorder, and the requirements do not say so:
 
 \input{generated/session-tftp-issues.tex}
 
-Like the protocol, the declaration is ordinary Lean data. The six axes of
-Chapter~\ref{ch:vision} are its fields, and a preset is a value of the structure
-that a declaration updates. This is \texttt{LeanFM.Session.Physics}, abridged:
+The six axes of Chapter~\ref{ch:vision} are the structure's fields, and a preset
+is a value a declaration updates. Abridged:
 
 \begin{lstlisting}
 inductive WhenFull   | block | reject | dropNewest | dropOldest
@@ -280,11 +243,9 @@ def udp (capacity : Nat := 2) : Channel :=
     loss := true, duplication := true }
 \end{lstlisting}
 
-Per-key ordering is not a separate value: it is \texttt{fifo} ordering on a
-sharded channel, where each partition is its own FIFO queue.
-
-The checked system is then the product of the roles' local types and their
-channels. Each field contributes, or removes, transitions of the product:
+Per-key ordering is \texttt{fifo} on a sharded channel. The checked system is the
+product of the local types and their channels, and each field adds or removes
+transitions:
 
 \begin{itemize}
   \item \texttt{capacity} and \texttt{whenFull}: a send to a full queue blocks
@@ -301,31 +262,20 @@ channels. Each field contributes, or removes, transitions of the product:
         leaves it queued.
 \end{itemize}
 
-A timer contributes a transition that may fire whenever its role is waiting.
-Every one of these is a choice the checker explores, so each \texttt{may}
-multiplies the state space; the presets keep a declaration honest without
-making it long.
-Chapter~\ref{ch:tftp-physics} builds this product for TFTP and shows a global
-type that is well formed in the classic sense, and whose original
-implementation duplicates every block once a single timer fires early.
-
-The rest of this chapter defines the default physics, the one that LeanFM's
-actor runtime assumes when nothing more is declared: bounded, reliable,
-blocking queues.
+A timer may fire whenever its role is waiting. Each \texttt{may} multiplies the
+state space the checker explores. Chapter~\ref{ch:tftp-physics} builds this
+product for TFTP: a classically well-formed type whose original implementation
+duplicates every block once one timer fires early. The rest of this chapter
+defines the default physics: bounded, reliable, blocking queues.
 
 \section{Local types run on actors with bounded queues}
 
 \index{session identifier}
-Each role is played by an actor, and one actor may take part in many sessions
-at once. An actor has separate positive finite-capacity inbound and outbound message queues. Queue
-capacity is part of the observable execution model: producing a message may block
-when the outbound queue is full, and transport may block when the destination's
-inbound queue is full. Sending is therefore distinct from delivery and from the
-destination actor consuming the message.
-
-Messages carry a session identifier, naming the instance of the global type
-they belong to, as well as a task identifier. Their pair is
-the correlation key for actor-local work:
+Each role is played by an actor, which may take part in many sessions at once and
+has finite inbound and outbound queues. Producing a message may block on a full
+outbound queue and transport on a full inbound one, so sending, delivery and
+consumption are distinct. Messages carry a session identifier (the instance of the
+global type) and a task identifier, whose pair keys actor-local work:
 
 \begin{lstlisting}
 structure WorkKey where
@@ -342,14 +292,10 @@ structure ActorRuntime where
   outboundBounded  : outbound.length <= outboundCapacity
 \end{lstlisting}
 
-An actor may have zero or many distinct \texttt{WorkKey}s in flight. Consuming an
-inbound envelope selects or creates the residual associated with that envelope's
-\texttt{(session, task)} pair; it does not replace one actor-wide ``current task.''
-Messages from different keys may interleave while the grammar preserves the order
-required within each conversation.
-
-The queues have Go-channel-like operational semantics. Capacity is enforced when
-an operation is attempted, not checked only after constructing a new state:
+Consuming an envelope selects or creates the residual for its
+\texttt{(session, task)} pair; there is no actor-wide ``current task'', and keys
+interleave while each conversation keeps its order. The queues behave like Go
+channels, with capacity enforced when an operation is attempted:
 
 \begin{lstlisting}
 send(channel, message) =
@@ -368,13 +314,9 @@ tryReceive(channel) =
   else none
 \end{lstlisting}
 
-A blocked operation makes no progress and leaves the channel unchanged. A
-blocking actor may run again when the required space or data becomes available.
-\texttt{tryReceive} is a different operation: \texttt{none} reports that the
-channel is empty now and lets the actor continue. It does not put the actor to
-sleep, and it must not be confused with receiving a valid optional payload.
-
-The resulting transitions are explicit:
+A blocked operation leaves the channel unchanged until space or data appears.
+\texttt{tryReceive} returning \texttt{none} means empty now, lets the actor
+continue, and is not an optional payload. The transitions:
 
 \begin{itemize}
   \item an actor step appends a produced envelope to its outbound queue;
@@ -389,7 +331,7 @@ The resulting transitions are explicit:
         \texttt{tryReceive} returns \texttt{none} and permits later work.
 \end{itemize}
 
-Queue order and predecessor order are not identical. FIFO determines which queued
-envelope is available next, while \texttt{priorIds} records the event-order graph,
-including forks and joins across actors. Incomparable branches may commute; the
-pointer relation does not itself claim that one event caused another.
+Queue order is not predecessor order: FIFO decides which envelope is available
+next, while \texttt{priorIds} records the event graph, forks and joins included.
+Incomparable branches may commute, and a predecessor pointer does not claim
+causation.

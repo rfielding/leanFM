@@ -5,20 +5,14 @@
 \index{temporal logic}
 \index{LTL}
 \index{modal logic}
-A well-formed global type already guarantees safety, fidelity and progress for
-roles that follow their local types, under the assumptions of its channels.
-Everything else a stakeholder wants to know is a question about the system's
-futures: can the transfer always still finish, must it, can this message ever
-precede that one? The global type, together with the declared physics of its
-channels, generates a branching transition system. CTL speaks directly about
-that branching, but its vocabulary becomes clearer when placed between basic
-modal logic and linear temporal logic. Path quantifiers distinguish \emph{there
-exists a future} from \emph{every future}, while temporal operators distinguish
-the next state, eventuality, invariance, and until.
-
-The author's modal-logic background used here was learned mostly from
-\citet{kroger2008temporal}. This citation identifies the source of that education;
-it is not a claim that the authors originated modal or temporal logic.
+A well-formed global type already guarantees safety, fidelity and progress under
+its channels' assumptions. Everything else a stakeholder wants to know is a
+question about futures: can the transfer always still finish, must it, can this
+message ever precede that one? The global type and its channel physics generate a
+branching transition system, and CTL speaks directly about that branching: path
+quantifiers distinguish \emph{some future} from \emph{every future}, temporal
+operators the next state, eventuality, invariance and until. The author learned
+the modal logic used here mostly from \citet{kroger2008temporal}.
 
 \section{Basic modal logic}
 
@@ -32,37 +26,26 @@ adds an accessibility relation $R$ between worlds and two operators:
     \text{$p$ holds at some $v$ such that $wRv$}.
 \end{align*}}
 
-Thus $\Box p$ and $\Diamond p$ read as ``necessarily $p$'' and ``possibly $p$.''
-Under classical negation they are dual: $\Diamond p \equiv \neg\Box\neg p$.
-The symbols do not fix the meaning of accessibility. Depending on the model, an
-accessible world may be a next computation state, a world compatible with an
-actor's knowledge, a normatively permitted world, or something else.
-
-The basic normal modal logic K allows arbitrary Kripke frames. Additional frame
-conditions validate additional principles: reflexivity, transitivity, symmetry,
-and the Euclidean condition lead to familiar stronger systems. Those principles
-must not be imported merely because the English word ``necessarily'' sounds
-strong. LeanFM uses a directed computation-successor relation and does not
-silently treat it as reflexive, symmetric, or epistemic.
+$\Box p$ and $\Diamond p$ read ``necessarily $p$'' and ``possibly $p$'', and are
+dual: $\Diamond p \equiv \neg\Box\neg p$. The symbols do not fix what accessibility
+means: a next computation state, a world compatible with an actor's knowledge, a
+permitted world. The basic logic K allows any frame; reflexivity, transitivity,
+symmetry and the Euclidean condition give stronger systems, whose principles must
+not be imported because ``necessarily'' sounds strong. LeanFM's relation is a
+directed computation successor, not reflexive, symmetric or epistemic.
 
 \section{LTL: time along one path}
 
-Linear Temporal Logic (LTL) describes one linear path with operators including
-$X$ (next), $F$ (eventually), $G$ (always), and $U$ (until). Thus $F p$ says that
-$p$ occurs at some suffix of the selected path, while $G p$ says that $p$ holds
-at every suffix of that path.
+Linear Temporal Logic (LTL) describes one path with $X$ (next), $F$
+(eventually), $G$ (always) and $U$ (until): $F p$ says $p$ holds at some suffix of
+the path, $G p$ at every suffix. Its operators answer \emph{where along this
+path}, not whether one branch or every branch is meant; the common convention that
+every initial path must satisfy the formula is outside the syntax. ``Some legal
+execution eventually recovers'' and ``every one does'' are different claims that
+share the words ``eventually recovery''.
 
-LTL's temporal words answer \emph{where along this path}; they do not themselves
-choose between one possible branch and every branch of a transition system. A
-model-checking convention often asks whether every initial path satisfies an LTL
-formula. That outer convention should not be confused with a path quantifier in
-the LTL syntax. For example, asking whether some legal execution eventually
-reaches recovery and asking whether all legal executions eventually reach
-recovery require different branching claims even though both contain the words
-``eventually recovery.''
-
-LeanFM does not currently implement LTL. It uses CTL because the requirements
-deliberately combine two independent axes:
+LeanFM does not implement LTL. It uses CTL because requirements combine two
+independent axes:
 
 \begin{itemize}
   \item \emph{always} or \emph{eventually} says where along forward time a
@@ -71,28 +54,18 @@ deliberately combine two independent axes:
         permitted forward continuation or may hold on at least one.
 \end{itemize}
 
-This choice arose from trying to combine temporal logic with alethic logic while
-investigating whether all the familiar modal families could be combined. The
-construction retained by LeanFM is specifically \emph{temporally alethic}:
-possible means possible now or at some point along a legal future. Ordinary
-language uses ``always'' both for universal modality and for temporal persistence.
-CTL keeps those coordinates visible long enough to prevent the ambiguity from
-disappearing inside an English gloss.
+The construction is \emph{temporally alethic}: possible means possible now or at
+some point along a legal future. English uses ``always'' for both universal
+modality and temporal persistence; CTL keeps the two coordinates apart.
 
 \section{CTL: path modality combined with time}
 
-CTL pairs a path quantifier with each temporal operator. $E$ is existential:
-there is at least one permitted continuation. $A$ is universal: every permitted
-continuation satisfies the temporal condition. In the vocabulary of modal
-logic, $E$ supplies temporal possibility and $A$ supplies temporal necessity.
-
-``Necessary'' and ``possible'' are future-relative readings: they quantify over
-legal computations from the current observation, not timeless logical worlds.
-The temporal operators and path quantifiers do different work: $F$ versus $G$
-means eventuality versus invariance along a continuation; $E$ versus $A$ means
-some versus all permitted continuations.
-
-The four core combinations and their checking dualities are:
+CTL pairs a path quantifier with each temporal operator: $E$, some permitted
+continuation (temporal possibility), or $A$, every one (temporal necessity). They
+quantify over legal computations from the current observation, not timeless
+worlds. $F$ versus $G$ is eventuality versus invariance along a continuation; $E$
+versus $A$ is some versus all continuations. The four core combinations and their
+dualities:
 
 \AccessibleEquation{E F p means possibly eventually p. A F p is equivalent to not E G not p. E G p means p always on some future. A G p is equivalent to not E F not p.}{\begin{align*}
  EF\,p &: \text{possibly eventually $p$}, &
@@ -101,11 +74,9 @@ The four core combinations and their checking dualities are:
  AG\,p &\equiv \neg EF\,\neg p : \text{$p$ holds on every future at every position}.
 \end{align*}}
 
-These are exact CTL dualities. $A$ ranges over all legal futures, while $G$
-ranges over all positions along one future; their English glosses must keep
-those scopes distinct. The identities support counterexample checking: test
-$AG\,p$ by searching for $EF\,\neg p$, and test $AF\,p$ by searching for
-$EG\,\neg p$. A witness refutes the universal property; absence of one
+$A$ ranges over futures and $G$ over positions along one. The dualities drive
+counterexample search: $AG\,p$ is tested by searching for $EF\,\neg p$, $AF\,p$ by
+searching for $EG\,\neg p$. A witness refutes the universal property; its absence
 establishes it only within the finite checked model.
 
 \subsection{Least upper bounds and greatest lower bounds}
@@ -128,13 +99,10 @@ The same construction gives existential until:
   = \mu Z.\bigl(Q\cup(P\cap\operatorname{Pre}_{\exists}(Z))\bigr).
 \]}
 
-$AF$ and strong $AU$ are also least fixed points, using universal predecessor. A
-cycle that never reaches the target therefore adds nothing to the least
-solution.
-
-Invariance and weak until make the dual choice. They begin with all candidate
-states and remove unsupported states, producing the greatest fixed point---the
-greatest lower bound of descending approximations:
+$AF$ and strong $AU$ are least fixed points too, with the universal predecessor, so
+a cycle that never reaches the target adds nothing. Invariance and weak until make
+the dual choice: start from all candidate states and remove unsupported ones,
+giving the greatest fixed point:
 
 \AccessibleEquation{The states satisfying E G p are the greatest fixed point of Z equal P intersect existential predecessor of Z. This fixed point is the intersection or greatest lower bound of descending approximations.}{\[
   \operatorname{Sat}(EG\,p)
@@ -142,60 +110,35 @@ greatest lower bound of descending approximations:
   = \bigcap_{n\ge 0} Y_n.
 \]}
 
-LeanFM has two evaluators. The small recursive one in \texttt{LeanFM.CTL},
-used by task metrics, implements these choices with cycle-aware searches rather
-than by materializing every approximation set. An unresolved revisit is false
-for \texttt{EF}, \texttt{EU}, and strong \texttt{AU}, selecting the least
-fixed point. A predicate-preserving revisit is true for \texttt{EG} and
-weak until, selecting the greatest fixed point. \texttt{AG} is checked as
-$\neg EF\,\neg p$, and \texttt{AF} as $\neg EG\,\neg p$. Thus least upper bound
-and greatest lower bound are paired implementation choices; neither describes
-every CTL operator by itself. The second evaluator, in \texttt{LeanFM.Logic}
-and used by the MCP \texttt{check\_ctl} tool, computes the approximation sets
-directly: it labels every reachable node with the set satisfying each
-subformula by least and greatest fixed-point iteration, and returns a witness
-or counterexample path. Tests check that the two agree.
+LeanFM has two evaluators, and tests check that they agree. The recursive one in
+\texttt{LeanFM.CTL}, used by task metrics, searches with cycle awareness: an
+unresolved revisit is false for \texttt{EF}, \texttt{EU} and strong \texttt{AU}
+(least fixed point) and a predicate-preserving revisit true for \texttt{EG} and
+weak until (greatest), with \texttt{AG} as $\neg EF\,\neg p$ and \texttt{AF} as
+$\neg EG\,\neg p$. The one in \texttt{LeanFM.Logic}, behind the MCP
+\texttt{check\_ctl} tool, labels every reachable node with the set satisfying each
+subformula by fixed-point iteration, and returns a witness or counterexample
+path.
 
 \subsection{Asymptotic cost}
 
-The smaller model boundary is not itself a faster model-checking algorithm.
-Let $V$ be the number of reachable observations, $E$ the successor edges,
-$L$ the number of nodes in the checked CTL formula, and $P$ the number of
-simple paths inspected by a search. The current Lean implementation carries a
-path-local \texttt{List} of visited observations. Membership in that list is
-linear in the current path length, and completed subgraphs are not memoized
-between branches. For that evaluator, a single temporal search therefore costs
-$O(E_P+VP)$ time, where $E_P$ counts edge visits across the inspected paths,
-and $O(V+L)$ stack and path memory. $P$ can be exponential---and in dense
-graphs worse than $2^V$---even though the input graph contains only $V$ states.
-On an acyclic tree, where each state has one path from the root, the list
-membership overhead alone is bounded by $O(V^2)$ and is often smaller for a
-shallow tree.
+Let $V$ be the reachable observations, $E$ the edges, $L$ the formula's nodes and
+$P$ the simple paths a search inspects. The recursive evaluator keeps a path-local
+list of visited states and memoizes nothing, so one temporal search costs
+$O(E_P+VP)$ time ($E_P$ edge visits over those paths) and $O(V+L)$ memory: it may
+revisit a state once per path reaching it, and $P$ can exceed $2^V$ in a dense
+graph. The fixed-point evaluator avoids this: each fixed point takes at most $V+1$
+iterations of $O(V+E)$, so a formula costs $O(L\,V\,(V+E))$, within its bound of
+4096 nodes. Worklist propagation would reach the textbook $O(L(V+E))$; that is a
+target.
 
-Read this as: ``the present checker may revisit the same state once for every
-different path that reaches it; its cost is governed by paths, not merely by
-states and edges.'' Formula nesting may repeat those searches because
-subformula results are also not cached.
+None of this compares LeanFM with TLC. LeanFM often builds a smaller graph by
+omitting private variables, but a well-abstracted TLA+ model may omit them too, and
+a speed claim would need the same protocol, properties, bounds, hardware and
+settings. The book claims only a different modeling boundary.
 
-The fixed-point evaluator in \texttt{LeanFM.Logic} avoids the path explosion.
-Each fixed point needs at most $V+1$ iterations, each costing $O(V+E)$, so a
-formula of $L$ nodes costs $O(L\,V\,(V+E))$ time; it bounds models at 4096
-nodes. Worklist propagation over predecessor adjacency would reach the
-textbook $O(L(V+E))$; that remains an implementation target, to be accompanied
-by measurements on specified graph families.
-
-No comparison with TLC follows from these bounds. LeanFM often constructs a
-smaller observable-event graph because it deliberately omits irrelevant private
-variables; a carefully abstracted TLA+ model may omit them too. A claim that
-LeanFM is faster than TLA+ requires the same protocol, properties, finite
-bounds, hardware, checker settings, and reported state/edge counts. Until that
-experiment exists, the book claims only a different modeling boundary, not a
-performance victory.
-
-An observation is immutable once recorded. A value changes only by moving
-forward to a successor observation; it is never updated retroactively inside the
-current state. This does not mean that values are monotone---a queue may grow and
-later shrink---but every change occurs on a forward transition.
+An observation is immutable once recorded: values change only on a forward
+transition to a successor, though they need not be monotone.
 
 \begin{center}
 \begin{tabular}{@{}lll@{}}
@@ -216,32 +159,21 @@ $(p\ EW\ q)$ & some path: $p$ until $q$, or $p$ forever & possible weak until \\
 \end{tabular}
 \end{center}
 
-For example, $AF\,p$ is not merely ``eventually $p$'' and $EF\,p$ is not a
-weaker spelling of the same linear claim. The first requires $p$ on every legal
-future generated from the current trace prefix; the second needs one legal
-future as a witness. Branching is part of the requirement.
-
-Strict CTL requires every temporal operator to be governed by $A$ or $E$. CTL*
-is a more general branching-time language in which state formulas and path
-formulas can be nested more freely; LeanFM does not implement CTL*. This matters
-when translating prose: not every arbitrary alternation of ``on all paths'' and
-``eventually'' is a formula of the small CTL datatype used here.
+$AF\,p$ requires $p$ on every legal future from the current prefix; $EF\,p$ needs
+one future as a witness. Branching is part of the requirement. Every temporal
+operator in CTL is governed by $A$ or $E$; CTL*, which nests state and path
+formulas freely, is not implemented, so not every English alternation of ``on all
+paths'' and ``eventually'' is a formula here.
 
 \section{Projecting to LTL-style F and G}
 
-Requirements often want the simpler LTL surface forms $F p$ and $G p$. LeanFM
-may display or accept those forms only with an explicit path-policy boundary.
-On a selected linear execution, the branching coordinate has already been fixed,
-so $AF p$ and $EF p$ both project to $F p$, while $AG p$ and $EG p$ both project
-to $G p$. Under the common model-checking convention that an LTL formula must
-hold on every initial path, $F p$ corresponds to $AF p$ and $G p$ corresponds to
-$AG p$.
-
-Consequently, presenting frequently used $AF$ and $AG$ obligations as $F$ and
-$G$ is a deliberate interface reduction, not a CTL equivalence on a branching
-model. The durable artifact retains the exact originating CTL formula so the
-checker can still use existential witnesses, negation, and the correct
-counterexample search.
+Requirements often want the simpler forms $F p$ and $G p$, which LeanFM shows only
+with an explicit path policy. On one selected execution, $AF p$ and $EF p$ both
+project to $F p$ and $AG p$ and $EG p$ to $G p$; under the convention that every
+initial path must satisfy the formula, $F p$ is $AF p$ and $G p$ is $AG p$.
+Displaying $AF$ and $AG$ as $F$ and $G$ is an interface reduction, not an
+equivalence: the artifact keeps the exact CTL, so the checker can still use
+witnesses, negation and the right counterexample search.
 
 \section{Persistence and recurrence}
 
@@ -249,47 +181,28 @@ Nested CTL operators express two common requirements:
 \AccessibleEquation{A F A G p: on every future it eventually becomes true that p remains true forever. A G A F p: on every future p occurs again eventually.}{\[
  AF\,AG\,p, \qquad AG\,AF\,p.
 \]}
-Read the first, symbol by symbol: ``On every path, eventually reach a state
-from which, on every path, $p$ always holds.'' This is eventual permanent safety:
-for example, eventually finish key rotation and never again accept the old key.
-Read the second: ``On every path, at every state, on every path from that state,
-eventually $p$ holds.'' This is universal recurrence, often pronounced ``always
-eventually $p$'': for example, service keeps returning to a ready state.
-
-For witness searches their duals are:
+The first is eventual permanent safety: every path reaches a state from which
+every path keeps $p$ (finish key rotation and never accept the old key again). The
+second is universal recurrence, ``always eventually $p$'' (service keeps returning
+to ready). For witness searches their duals are:
 \AccessibleEquation{Not A F A G p is equivalent to E G E F not p. Not A G A F p is equivalent to E F E G not p.}{\[
  \neg(AF\,AG\,p)\equiv EG\,EF\,\neg p,\qquad
  \neg(AG\,AF\,p)\equiv EF\,EG\,\neg p.
 \]}
-Read: ``Failure of eventual permanent safety means some path always retains
-some future reaching not-$p$. Failure of universal recurrence means some future
-reaches a state with some path on which not-$p$ holds forever.''
-
-The corresponding existential forms are $EF\,EG\,p$ and $EG\,EF\,p$.
-Read: ``Some path eventually reaches a state with some path keeping $p$ forever,''
-and ``some path always visits states from which some path eventually reaches
-$p$.'' In the second formula those eventual witnesses may leave the outer path;
-it does not require infinitely many occurrences of $p$ on that same path.
-
-These forms cover useful LTL-style persistence and recurrence, not all LTL.
-Under universal LTL path semantics, $G F p$ corresponds to $AG AF p$ on the
-usual total transition model. But $AF AG p$ is stronger than pathwise $F G p$:
-it requires eventually reaching a state where \emph{all} continuations stay
-safe, not merely a separate stabilization point on each path. Terminal states
-require the same explicit continuation convention used by the core checker.
+The existential forms are $EF\,EG\,p$ and $EG\,EF\,p$; in the second, the eventual
+witnesses may leave the outer path, so it does not require infinitely many $p$ on
+that path. These cover useful persistence and recurrence, not all LTL: $G F p$
+corresponds to $AG\,AF\,p$ on a total transition model, but $AF\,AG\,p$ is
+stronger than pathwise $F G p$, since it needs a state where \emph{all}
+continuations stay safe. Terminal states follow the checker's continuation
+convention.
 
 \section{Knowledge, obligation, and permission}
 
-General modal logic need not have only one accessibility relation. A multimodal
-model can use $\Box_t/\Diamond_t$ for temporal reachability,
-$K_a/\widehat K_a$ for what actor $a$ knows or considers possible, and a
-different pair for permission or obligation. Dynamic logic can index modalities
-by programs. Tense logics can add past-directed relations. These systems share
-the Kripke-style idea of evaluating modal formulas through accessibility, but
-their modalities are not interchangeable.
-
-LeanFM's CTL $A$ and $E$ range only over legal forward computations generated by
-the current model. They do not mean:
+A multimodal model can have several accessibility relations: temporal reachability,
+$K_a/\widehat K_a$ for what actor $a$ knows or considers possible, another pair for
+permission and obligation. They are not interchangeable. LeanFM's $A$ and $E$
+range only over legal forward computations of the current model. They do not mean:
 
 \begin{itemize}
   \item probability one versus positive probability;
@@ -298,10 +211,10 @@ the current model. They do not mean:
   \item physically necessary versus logically possible.
 \end{itemize}
 
-Knowledge and policy relations are documented modelling techniques, not built-in
-operators. Projects may define them explicitly using the relations below.
-The Kerberos video~\citep{leanfmKerberosVideo} illustrates their use; it does not
-verify the protocol.
+Knowledge and policy are modelling techniques a project defines with the relations
+below, not built-in operators (Chapter~\ref{ch:csp-exercises} decides the
+state-local \texttt{knows} predicate). The Kerberos video~\citep{leanfmKerberosVideo}
+illustrates them; it does not verify the protocol.
 
 For knowledge, let $W$ be the declared set of legal histories and
 $\operatorname{obs}_a(h)$ actor $a$'s local observation of history $h$:
@@ -310,17 +223,13 @@ $\operatorname{obs}_a(h)$ actor $a$'s local observation of history $h$:
  \forall h'\in W.\;
  (\operatorname{obs}_a(h)=\operatorname{obs}_a(h')\Rightarrow\varphi(h')).
 \]}
-Read: ``Actor $a$ knows $\varphi$ at history $h$ if and only if, for every
-history $h'$ in $W$, if $a$ observes the same thing in $h$ and $h'$, then
-$\varphi$ holds at $h'$.'' Observations must declare visible messages, private
-keys, clock information, and retained memory. With the current history included
-in $W$, knowledge is factive: what is known is true in that model. Belief needs
-a different relation; it must not inherit this guarantee accidentally.
+Observations declare visible messages, private keys, clock information and
+retained memory. With the current history in $W$, knowledge is factive; belief needs
+a different relation and must not inherit that guarantee.
 \AccessibleEquation{It is epistemically possible for actor a that phi if and only if actor a does not know not phi.}{\[
  \widehat K_a\varphi \equiv \neg K_a\neg\varphi.
 \]}
-Read: ``$a$ considers $\varphi$ possible exactly when $a$ does not know that
-$\varphi$ is false.'' This is epistemic possibility, not temporal reachability.
+This is epistemic possibility, not temporal reachability.
 
 For policy, let $\operatorname{Ideal}_a(h)$ be the declared policy-compliant
 futures from $h$, and let $\psi$ be a condition on a whole future path:
@@ -329,54 +238,31 @@ futures from $h$, and let $\psi$ be a condition on a whole future path:
  \qquad
  P_a\psi(h)\iff\exists\pi\in\operatorname{Ideal}_a(h).\;\psi(\pi).
 \]}
-Read: ``$a$ is required to satisfy $\psi$ at $h$ exactly when every ideal future
-$\pi$ satisfies $\psi$; $a$ is permitted to satisfy $\psi$ exactly when some
-ideal future satisfies $\psi$.'' Require a nonempty set of ideal futures:
-contradictory policies must be reported, not certified by vacuous quantification.
-Actual legal executions may violate policy; detecting that violation is part of
-the analysis. These are obligations under a named policy, not judgments of
-morality.
+The set of ideal futures must be nonempty, so contradictory policies are reported
+rather than certified vacuously. Legal executions may violate policy, and detecting
+that is part of the analysis; these are obligations under a named policy, not moral
+judgments.
 \AccessibleEquation{Actor a is permitted to ensure psi if and only if actor a is not obligated to ensure not psi.}{\[
  P_a\psi\equiv\neg O_a\neg\psi.
 \]}
-Read: ``$\psi$ is permitted exactly when its negation is not required.'' This
-duality applies only when both operators use the same declared policy relation.
-For example:
+when both use the same policy relation. For example:
 \AccessibleEquation{Actor a is obligated eventually to audit record r at history h if and only if for every path pi ideal for actor a at h there exists a nonnegative index i such that audit of r holds at state pi sub i.}{\[
  O_a F\,\operatorname{audit}(r)(h)\iff
  \forall\pi\in\operatorname{Ideal}_a(h).\;\exists i\geq0.\;
  \operatorname{audit}(r,\pi_i).
 \]}
-Read: ``$a$ must eventually audit request $r$ at $h$ exactly when, for every
-ideal future $\pi$, there is a position $i$, zero or later, where $r$ is audited.''
-Here $F$ is a path operator; a project implementation must distinguish state
-formulas from path conditions.
-
-Temporal, epistemic, and policy quantification can then be combined without
-confusing their domains. A legal future may be possible, unknown to Alice, and
-forbidden by policy at the same time. Probability, belief, strategic ability,
-and program-indexed modalities remain separate design work; adding named
-relations does not implement every modal logic.
-
-Past predicates remain useful for security: a ticket must have been issued
-before it is accepted. Compile bounded past conditions into forward monitor
-state where an equivalence can be established. Evaluate ``previously issued''
-before updating the monitor with the current event. On concurrent histories,
-declare whether ``before'' means causal ancestry or a chosen linearization;
-screen order is not evidence. Unbounded past logic is not thereby implemented.
-
-Symbolic uncompromised-key assumptions do not establish computational
-cryptographic security. General knowledge and policy checking is deferred.
+Here $F$ is a path operator, kept distinct from state formulas. Temporal, epistemic
+and policy quantification then combine without confusing their domains: a legal
+future may be possible, unknown to Alice, and forbidden by policy at once.
+Probability, belief, strategic ability and program-indexed modalities remain
+separate work, and symbolic uncompromised-key assumptions do not establish
+computational cryptographic security.
 
 \section{Possibility means preparedness}
 
-There is a practical consequence to treating possibility as a first-class
-temporal mode. When a requirement declares $EF\,p$---``maybe possible
-$p$''---it does more than acknowledge that a model checker can find an accidental
-path to $p$. It says that $p$ is a supported future for which the system must
-prepare.
-
-A \texttt{possibly} obligation therefore contains three linked artifacts:
+A requirement that declares $EF\,p$ does more than admit that a checker can find a
+path to $p$: it says $p$ is a supported future the system must prepare for. A
+\texttt{possibly} obligation therefore links three artifacts:
 
 \begin{enumerate}
   \item a legal grammar branch and witness trace reaching the condition;
@@ -393,31 +279,20 @@ For example, ``a bakery delivery may fail'' requires a decodable
 the specified refund or notification behavior. Removing every failure branch
 does not implement reliability; it makes the real failure trace out-of-spec.
 
-Possibility is distinct from probability. A possible condition may have a small
-estimated probability, an expected distribution, or no known probability at
-all. Conversely, assigning positive probability to a condition makes its branch
-possible. The handling obligation comes from supported possibility, not from
-whether the estimated percentage crosses a threshold.
-
-The separate operational obligation applies to $EG\,p$---``$p$ always in some
-cases.'' It identifies at least one future on which $p$ persists. The system must
-pay attention to the conditions that keep that future viable: monitor them,
-expose their loss, and, where required, control choices that would destroy the
-invariant path. $EG\,p$ alone does not promise that every execution preserves
-$p$; that stronger claim is $AG\,p$.
+Possibility is not probability: a possible condition may be rare or of unknown
+likelihood, and the handling obligation comes from its being supported, not from a
+percentage crossing a threshold. $EG\,p$ carries a different obligation: some
+future keeps $p$, so the system monitors the conditions that keep that future
+viable, exposes their loss, and controls choices that would destroy it. That every
+execution keeps $p$ is the stronger $AG\,p$.
 
 \section{Strong implication and the Chewbacca argument}
 
-The name ``Chewbacca defense'' is a cultural reference to the \emph{South Park}
-episode ``Chef Aid,'' whose courtroom parody uses an irrelevant claim about
-Chewbacca to distract from the conclusion at issue. The reference supplies a
-memorable example of non sequitur; it is not a technical term originating in
-modal or temporal logic.
-
-Material implication is weak in the precise sense that
-$p\mathbin{\to}q$ is true whenever $p$ is false. That is useful inside a state,
-but it permits a vacuous global claim when no reachable state ever satisfies the
-antecedent. LeanFM names the non-vacuous temporal combination
+The ``Chewbacca defense'', from the \emph{South Park} episode ``Chef Aid'', is a
+courtroom parody that uses an irrelevant claim to distract from the conclusion: a
+memorable non sequitur. Material implication $p\mathbin{\to}q$ is true whenever $p$
+is false, which permits a vacuous global claim when no reachable state satisfies
+$p$. LeanFM names the non-vacuous combination
 
 \AccessibleEquation{p strongly implies q is defined as E F p and A G of p implies q. In words: p is reachable and whenever p holds q also holds.}{\[
   p\mathbin{\Rightarrow_s}q
@@ -425,25 +300,19 @@ antecedent. LeanFM names the non-vacuous temporal combination
   EF\,p \;\land\; AG(p\mathbin{\to}q).
 \]}
 
-The first conjunct requires a legal future witnessing $p$. The second requires
-that, necessarily always, every reachable occurrence of $p$ also satisfies $q$.
-Together they imply $EF\,q$: the $p$ witness cannot avoid $q$.
-
-The deliberately absurd test uses
+It requires a legal future witnessing $p$ and that every reachable $p$ also
+satisfies $q$, so together they imply $EF\,q$. The absurd test:
 
 \AccessibleEquation{p is defined as Chewbacca lives on Endor. q is defined as you must acquit.}{\begin{align*}
   p &= \text{``Chewbacca lives on Endor''},\\
   q &= \text{``you must acquit''}.
 \end{align*}}
 
-A Chewbacca argument cannot obtain $q$ merely by mentioning $p$. To enter the
-requirements as strong implication, the model must admit a reachable $p$ witness
-and establish $AG(p\to q)$ over every permitted continuation. If the observable
-grammar supplies no relation between residence and acquittal, that second
-obligation has no justification and is rejected. Logic cannot determine the
-meaning or relevance of arbitrary English propositions by itself; the useful
-point is that neither a missing antecedent nor a single rhetorical occurrence of
-it can make the formal implication pass vacuously.
+Mentioning $p$ does not obtain $q$: the model must reach a $p$ witness and
+establish $AG(p\to q)$ on every continuation, and if the grammar relates residence
+to nothing, that obligation fails. Logic cannot judge the relevance of English
+propositions, but neither a missing antecedent nor one rhetorical occurrence of it
+can make the implication pass vacuously.
 
 In Lean the definition is direct:
 
@@ -452,10 +321,9 @@ def stronglyImplies (p q : CTL S) : CTL S :=
   CTL.and (CTL.ef p) (CTL.ag (CTL.implies p q))
 \end{lstlisting}
 
-The path quantifier is part of the until operator. We write \texttt{AU} and
-\texttt{EU} as binary algebraic operators, not an outer \texttt{A} or \texttt{E}
-wrapped around a bracketed until formula. Consequently a subexpression never
-changes meaning merely because another expression surrounds it:
+The path quantifier is part of the until operator: \texttt{AU} and \texttt{EU} are
+binary operators, not an outer \texttt{A} or \texttt{E} around a bracketed until, so
+a subexpression never changes meaning because of what surrounds it:
 
 \begin{lstlisting}
 def boundedUntilTerminal : CTL Observation :=
@@ -467,29 +335,20 @@ def someAuthorizedContinuation : CTL Observation :=
 
 \section{Weak until: AW and EW}
 
-Strong until requires the right operand eventually to occur. Weak until permits
-it never to occur, provided the left operand continues to hold. Thus
+Strong until requires the right operand to occur; weak until allows it never to,
+provided the left operand keeps holding:
 
 \AccessibleEquation{p A W q means: on every future p holds until q or p remains forever. p E W q means: on some future p holds until q or p remains forever.}{\begin{align*}
   p\ AW\ q &: \text{on every future, $p$ holds until $q$, or $p$ remains forever},\\
   p\ EW\ q &: \text{on some future, $p$ holds until $q$, or $p$ remains forever}.
 \end{align*}}
 
-Read the first line as: ``on every future, $p$ holds until $q$, or if $q$ never
-occurs, $p$ remains forever.''  Read the second with ``on some future.''  $AW$
-and $EW$ are the universal-path and existential-path weak-until operators.
-
-The boundary state satisfying $q$ need not also satisfy $p$; $p$ is required
-only before $q$. On a future where $q$ never occurs, every state must satisfy
-$p$. This makes weak until useful for requirements such as ``necessarily remain
-available until shutdown, while shutdown is permitted but not required.''
-
-For existential paths, $p\ EW\ q$ is equivalent to
-$(p\ EU\ q)\lor EG\,p$. The analogous-looking
-$(p\ AU\ q)\lor AG\,p$ is \emph{not} a correct definition of $AW$ on a branching
-system. Some futures may reach $q$ while other futures preserve $p$ forever;
-neither global disjunct need hold even though every individual future satisfies
-weak until. LeanFM therefore implements \texttt{AW} directly.
+The state satisfying $q$ need not satisfy $p$. Weak until fits ``remain available
+until shutdown, which is permitted but not required''. $p\ EW\ q$ equals
+$(p\ EU\ q)\lor EG\,p$, but $(p\ AU\ q)\lor AG\,p$ is \emph{not} $AW$ on a
+branching system: some futures may reach $q$ while others keep $p$ forever, so
+neither disjunct holds although every future satisfies weak until. LeanFM
+implements \texttt{AW} directly.
 
 \begin{lstlisting}
 def serviceMayRunUntilShutdown : CTL Observation :=
@@ -499,35 +358,23 @@ def someWorkerCanRemainReady : CTL Observation :=
   atom ready EW atom retired
 \end{lstlisting}
 
-This convention also makes tree structure explicit. In
-\texttt{r \&\& (p AU q)}, the right operand is the complete \texttt{AU} expression;
-there is no context-sensitive reinterpretation of \texttt{[p U q]}.
-
-For a request event carrying identifier $r$, an expected response property might
-say that on every continuation a matching success or failure eventually occurs.
-Authentication might say that every successful use of a session has an earlier
-issuance event with the same session identifier.
+In \texttt{r \&\& (p AU q)} the right operand is the whole \texttt{AU} expression.
 
 \section{Past claims}
 
 \index{past-time logic}
-CTL is future-facing at the current state, but security and protocol claims often
-refer to evidence in the past: ``this capability was previously issued'' or ``this
-response matches an earlier request.'' Since states are trace prefixes, past facts
-can initially be expressed as predicates over the accumulated trace. This gives a
-clear baseline without prematurely committing the surface language to a particular
-past-time temporal logic.
-
-There is still an open design question. Explicit past operators may make properties
-more readable and allow better checking algorithms. The project should compare
-trace predicates, CTL with past operators, and compilation of finite-history
-monitors into state. The criterion is maintainability of specifications as the
-event schema evolves.
+CTL looks forward, but security claims often cite the past: ``this capability was
+previously issued'', ``this response matches an earlier request''. Since states
+are trace prefixes, past facts are predicates over the accumulated trace. Bounded
+past conditions can be compiled into forward monitor state, evaluated before the
+monitor takes the current event; on concurrent histories, ``before'' must be
+declared as causal ancestry or a chosen linearization, never screen order. Whether
+explicit past operators read and check better than trace predicates or monitors is
+open, judged by how specifications survive changes to the event schema.
 
 \section{Fairness and time bounds}
 
-$AF$ does not by itself distinguish a participant that is perpetually denied a
-turn from one that violates the protocol. Fairness assumptions must therefore be
-named, scoped, and visible in theorem statements. Similarly, ``eventually'' is not
-``within 200 milliseconds.'' Quantitative bounds belong in an explicit timed layer
-rather than being smuggled into timestamps and informal prose.
+$AF$ alone does not distinguish a participant perpetually denied a turn from one
+that violates the protocol, so fairness assumptions are named, scoped and visible
+in theorem statements. ``Eventually'' is not ``within 200 milliseconds'': time
+bounds belong in an explicit timed layer, not in timestamps and prose.

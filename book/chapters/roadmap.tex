@@ -8,19 +8,15 @@ the labels defined in Chapter~\ref{ch:vision}; proposed backlog items are
 
 \section*{Self-hosting consolidation}
 
-The canonical requirements entry point now composes the existing LeanFM ChatUI
-specification with a proposed revision-bound requirements-to-PR workflow. The
-Worker protocol remains an example, not a specification of the whole product.
-\texttt{make selfhost-check} validates the typed composition and regenerates
-\texttt{SELF\_HOSTING\_REVIEW.md}, including its interaction diagram and state
-machine. A component registry and fresh-session handoff preserve decisions
-without requiring conversation history.
-
-The consolidation proposes checker outcomes, check invalidation, probability
-interpretations and PR evidence. Earlier proposals also cover modal indexes;
-built-in knowledge and policy checking is now deferred. These records are not
-implemented features or proofs. Error protocols, formula semantics and complete
-traceability remain prerequisites for a complete one-shot specification.
+The canonical requirements compose the ChatUI specification with a proposed
+revision-bound requirements-to-PR workflow. \texttt{make selfhost-check} validates
+the composition and regenerates \texttt{SELF\_HOSTING\_REVIEW.md} with its
+interaction diagram and state machine, and a component registry preserves
+decisions across fresh sessions. Knowledge is now decided (the \texttt{knows} tool
+and atom, \texttt{check\_protocol}); policy checking remains deferred, as do
+check invalidation, probability interpretations and PR evidence. Error protocols,
+formula semantics and complete traceability remain prerequisites for a one-shot
+specification.
 
 \section{Proof obligations}
 

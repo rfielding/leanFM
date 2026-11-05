@@ -3,34 +3,24 @@
 
 \index{OAuth}
 This chapter is a behavioural sketch inspired by the OAuth authorization-code
-flow. It is not a replacement for the OAuth specification and deliberately begins
-above HTTP and protobuf. Its purpose is to exercise scenario decomposition,
-parameter flow, visible evidence, alternatives, requirements, and rendering.
-In session-type terms it is a global type with five roles, a choice directed
-by the authorization service (grant or deny), and parameters such as
-\texttt{state} and the authorization code that must flow from one message to a
-later one. Its channels are HTTP calls and browser redirects; their physics
-(a redirect that is never followed, a callback replayed by an attacker) is
-where the security requirements live.
+flow, starting above HTTP and protobuf, to exercise scenario decomposition,
+parameter flow, alternatives, requirements and rendering. In session-type terms it
+is a global type with five roles, a grant-or-deny choice by the authorization
+service, and parameters such as \texttt{state} and the code that flow from one
+message to a later one. Its channels are HTTP calls and browser redirects, whose
+physics (a redirect never followed, a callback replayed by an attacker) is where
+the security requirements live.
 
-The \texttt{scenario}, \texttt{declare}, \texttt{from\_}/\texttt{to\_}/\texttt{emit},
-\texttt{weightedOneOf} and theorem listings in this chapter are \emph{proposed
-notation}: they are not compiled, and the definitions they name do not exist in
-the LeanFM library yet. The generated figures are real.
-
-The flow is also deliberately simplified. The authorization request omits
-\texttt{client\_id} and \texttt{response\_type}; the token request carries only
-the code, without \texttt{redirect\_uri}, client authentication or PKCE, all of
-which RFC~6749 and current OAuth security guidance require. The knowledge
-claims below hold for this simplified flow only; a deployable model must add
-those fields and re-check them.
+The listings are \emph{proposed notation}, not compiled; the generated figures are
+real. The flow is simplified: the authorization request omits \texttt{client\_id}
+and \texttt{response\_type}, and the token request carries only the code, without
+\texttt{redirect\_uri}, client authentication or PKCE, all required by RFC~6749
+and current guidance. The knowledge claims hold for this simplified flow only.
 
 \section{Actors, values, and observable events}
 
-The example has four participants: a person using a browser, an application, an
-authorization service, and a resource service. The browser is modelled separately
-from the person because redirects are observable messages between software
-participants.
+The person is modelled separately from the browser, because redirects are
+observable messages between software participants.
 
 \begin{lstlisting}
 inductive Actor where
@@ -45,8 +35,8 @@ opaque Password    : Type
 opaque Bytes       : Type
 \end{lstlisting}
 
-Every terminal elaborates to the common event envelope. For example, the vague
-message ``authorization redirected'' becomes conceptually:
+Every terminal elaborates to the common event envelope; ``authorization
+redirected'', for example, becomes:
 
 \begin{lstlisting}
 { timeAt := t2, id := e2, priorIds := [e1]
@@ -59,10 +49,9 @@ message ``authorization redirected'' becomes conceptually:
 
 \subsection*{Authentication detail used by Production 2}
 
-Before the redirect returns, the authorization service may authenticate the person.
-OAuth does not prescribe the authentication mechanism; we include a password branch
-to exercise knowledge flow without pretending that the password is an OAuth protocol
-parameter.
+OAuth does not prescribe how the authorization service authenticates the person; a
+password branch exercises knowledge flow without pretending the password is an
+OAuth parameter.
 
 \begin{lstlisting}
 def authenticateAtAuthorizationServer (password : Password) : Scenario :=
@@ -81,12 +70,9 @@ def authenticateAtAuthorizationServer (password : Password) : Scenario :=
       ]
 \end{lstlisting}
 
-The wire bytes are specified even though the transport is not. The abstract
-\texttt{protectFor} constructor promises confidentiality to the named endpoint. A
-later refinement may realize that promise with TLS, message-level encryption, or a
-local trusted channel. Merely placing the password inside a field would not support
-the intended knowledge set: without protection, a network observer would also
-derive the password from the bytes.
+\texttt{protectFor} promises confidentiality to the named endpoint, realized later
+by TLS, message-level encryption or a trusted local channel. Without it, a network
+observer would derive the password from the bytes.
 
 \section{Production 1: application request and redirect}
 
@@ -110,9 +96,8 @@ def applicationRequestAndRedirect (resource : Resource) : Scenario :=
     export "resource" resource
 \end{lstlisting}
 
-This production treats the application request and its redirect as one named
-unit. It establishes the correlation value \texttt{state} and exports it to the
-next production. Nothing here says how the application stores it.
+The production establishes the correlation value \texttt{state} and exports it;
+nothing says how the application stores it.
 
 \section{Production 2: authorize, then grant or deny}
 
@@ -162,12 +147,9 @@ def authorizeAndDecide (password : Password) : Scenario :=
       ]
 \end{lstlisting}
 
-The authorization request and its two possible continuations form one production.
-At a more abstract rendering level, the entire production can be shown as one
-node; expanding it reveals authentication and the explicitly bracketed choice.
-The abstract contract makes both decisions possible. A product model may later
-attach an estimated or measured probability distribution without changing the set
-of legal traces.
+Collapsed, the production is one node; expanded, it shows authentication and the
+choice. A probability distribution may be attached later without changing the
+legal traces.
 
 \section{Scenario 3: exchange the code and use the token}
 
@@ -202,9 +184,8 @@ def exchangeAndFetch : Scenario :=
     emit "application response" [field "profile" profile]
 \end{lstlisting}
 
-The token itself is visible only at the endpoints where the abstract protocol says
-it is transmitted. The grammar makes no claim about the authorization server's
-database schema or the application's session representation.
+The token is visible only where the protocol transmits it; the grammar says nothing
+about the server's database or the application's sessions.
 
 \section{Reading the scenarios together}
 
@@ -220,44 +201,30 @@ def oauthSystem (resource : Resource) (password : Password) : SystemSpec :=
   |> requireAll oauthRequirements
 \end{lstlisting}
 
-The two named productions provide the first abstraction level. A renderer may
-collapse either production to a single node or expand it to its messages and
-nested alternatives. The \texttt{after} line is a guarded nonterminal reference;
-the denial branch ends without exchanging a code.
+The \texttt{after} line is a guarded nonterminal reference: the denial branch ends
+without exchanging a code.
 
 \section{The parallel protobuf alphabet}
 
-The scenario and its wire alphabet are maintained side by side. The scenario says
-which messages may occur, in what predecessor-order structure, and with which parameter
-relationships. The protobuf file assigns field numbers and concrete wire types to
-those same message atoms:
+The scenario says which messages may occur, in what order, with which parameter
+relationships; the protobuf file assigns field numbers and wire types to the same
+messages:
 
 \lstinputlisting[language={},basicstyle=\ttfamily\scriptsize]{examples/oauth.proto}
 
-Each emitted scenario message maps to exactly one member of
-\texttt{EventEnvelope.payload}. The envelope carries the event identity, repeated
-\texttt{prior\_ids}, \texttt{(session\_id, task\_id)} correlation key, monotonic
-clock tick, and endpoints outside the payload. The payload carries only the fields
-specific to that message.
-
-Protobuf alone does not specify the protocol order, queue behavior, probability,
-or dwell time; those remain in the scenario. Conversely, the scenario does not
-invent byte tags. Validation checks that every scenario terminal has one protobuf
-variant, that its endpoints agree with the scenario, and that every referenced
-field has the expected protobuf type.
-
-The schema determines valid protobuf encodings, but protobuf does not generally
-promise one canonical byte sequence. When byte-for-byte comparison is required,
-the refinement also fixes deterministic serialization and length-delimited message
-framing. An instantiated envelope can then be serialized and displayed as the
-actual bytes sent between the named actors.
+Each scenario message maps to one member of \texttt{EventEnvelope.payload}; the
+envelope carries identity, \texttt{prior\_ids}, the \texttt{(session\_id,
+task\_id)} key, a clock tick and the endpoints. Order, queues, probability and
+dwell stay in the scenario; byte tags stay in the schema. Validation checks that
+every terminal has one variant with matching endpoints and field types. Protobuf
+does not promise one canonical byte sequence, so byte-for-byte comparison also
+fixes deterministic serialization and length-delimited framing.
 
 \section{Generate one legal trace and its artifacts}
 
-We can now run the specification in one direction. Grammar generation chooses
-productions and concrete field values; everything after that is a deterministic
-projection or reduction of the resulting events. For this run choose the
-authentication-accepted and authorization-granted alternatives and instantiate
+Generation chooses productions and field values; everything after is a
+deterministic projection of the resulting events. Choose the accepted and granted
+alternatives and instantiate
 
 \begin{lstlisting}[language={}]
 session = "s1"             task = "oauth"
@@ -281,9 +248,8 @@ oauth
    authorizationGranted ; exchangeAndFetch
 \end{lstlisting}
 
-Because \texttt{authorizationGranted} was selected, the \texttt{after} guard
-admits \texttt{exchangeAndFetch}. Selecting the denial alternative would disable
-that production. Expanding every remaining nonterminal yields this terminal word:
+The grant admits \texttt{exchangeAndFetch}; denial would disable it. Expanding the
+remaining nonterminals gives this terminal word:
 
 \begin{figure}[htbp]
 \centering
@@ -294,35 +260,27 @@ messages on arrows; no actor-to-actor arrow is written as implication-like text.
 \label{fig:oauth-accepted-terminal-word}
 \end{figure}
 
-The choice has now disappeared into ordinary terminals. Event \texttt{e5}'s
-payload bytes select the accepted authentication result. Event \texttt{e6}'s
-\texttt{authorizationCodeReturned} oneof tag, source, and bytes distinguish the
-grant branch from the error-returned branch. No independent ``chooser'' value is
-needed.
+The choice has disappeared into ordinary terminals: \texttt{e5}'s bytes select
+the accepted authentication, and \texttt{e6}'s oneof tag, source and bytes
+distinguish grant from error. No separate ``chooser'' value is needed.
 
 \subsection{Envelope stream and concrete bytes}
 
-Assign monotonically increasing clock ticks and event identifiers. This example
-has a linear predecessor chain, so \texttt{priorIds(e1)} is empty and
-\texttt{priorIds(e$n$)} is \texttt{[e$n-1$]}. A fork or join would make these
-lists non-linear without changing the procedure. Deterministic protobuf
-serialization is the intended encoding; the companion fixture records one
-concrete stream:
+Clock ticks and identifiers increase; the chain is linear, so
+\texttt{priorIds(e$n$)} is \texttt{[e$n-1$]} (a fork or join would change the
+lists, not the procedure). One envelope from the companion fixture:
 
 \lstinputlisting[language={},basicstyle=\ttfamily\tiny,
   breaklines=true,firstline=3,lastline=3]{examples/oauth-granted.bytes}
 
-The companion fixture \texttt{examples/oauth-granted.bytes} retains all twelve
-envelopes (440 encoded bytes total; largest envelope 46 bytes). The excerpt above
-shows one complete envelope. The repository does not currently include a
-generator or round-trip check for this particular fixture, so it is a concrete
-example rather than evidence that serialization was reproduced or verified.
+\texttt{examples/oauth-granted.bytes} holds all twelve (440 bytes; largest 46).
+There is no generator or round-trip check for this fixture, so it is an example,
+not evidence of reproduced serialization.
 
 \subsection{Event graph with stored backpointers}
 
-Parsing each envelope selects a payload alternative, checks its declared
-\texttt{src}/\texttt{dst}, and consumes one grammar terminal.  For this selected
-trace, the useful concrete view is the event graph itself:
+Parsing each envelope selects a payload alternative, checks its
+\texttt{src}/\texttt{dst}, and consumes one terminal. The event graph:
 
 \begin{figure}[htbp]
 \centering
@@ -333,36 +291,23 @@ trace, the useful concrete view is the event graph itself:
 \label{fig:oauth-accepted-prior-graph}
 \end{figure}
 
-This graph is one selected path.  The full residual state machine is derived
-from every legal grammar residual and also contains the rejected-authentication
-and denied-authorization branches; it should be rendered as a separate graph
-when those alternatives are under discussion.
+This is one path; the residual state machine, derived from every legal residual,
+also has the rejected and denied branches.
 
 \subsection{Actor projections}
 
-Project each terminal onto its sender and receiver, preserving order and erasing
-the rest. For example, Resource receives \texttt{e10} and sends \texttt{e11}; the
-other local scripts follow the same endpoint filter. The example generator emits
-the shared interaction and predecessor diagrams, not replay scripts. The global
-word remains authoritative for cross-component order and parameter equality; a
-local projection does not reveal erased events.
+Projection keeps each actor's terminals in order: Resource receives \texttt{e10}
+and sends \texttt{e11}. The global word stays authoritative for cross-component
+order and parameter equality, which a projection cannot show.
 
 \subsection{Event order, queues, and memory}
 
-The \texttt{priorIds} fields generate a twelve-node order graph with edges
-$e_i\to e_{i+1}$. The interaction diagram is the same graph laid out by actor;
-the state-machine path lays it out by grammar residual. Neither is independently
-authored.
-
-The message word does not uniquely determine a transport schedule. For a concrete
-queue artifact, choose the canonical schedule that performs, for each event,
-\texttt{produce; transport; receive} before generating the next event. With
-positive inbound and outbound capacities, each queue peaks at one message. The
-queued-byte peak for an actor is the largest encoded envelope waiting at that
-actor in this schedule, and the global queued-byte peak is 46. A different legal
-interleaving may have a larger peak and must be explored when checking the
-universal memory-budget property. The selected schedule is a witness, not the
-capacity proof.
+The interaction diagram and the state-machine path are the same order graph laid
+out by actor and by residual; neither is drawn independently. The word does not fix
+a transport schedule; the canonical one runs \texttt{produce; transport; receive}
+per event, so every queue peaks at one message and the global queued-byte peak is
+46. Another interleaving may peak higher, so this schedule is a witness, not the
+memory-budget proof.
 
 \subsection{Measurements, plots, and verdicts}
 
@@ -375,18 +320,12 @@ From the clocks and correlation key, the generated task attempt is
   outcome = succeeded, latency = 23 ticks }
 \end{lstlisting}
 
-It contributes one point \texttt{(maxConcurrency=1, latency=23)} to the latency
-XY plot, a cumulative-byte series ending at \texttt{(clock=23, bytes=440)}, and
-one successful slice to the outcome chart. It does \emph{not} establish a 100
-percent success probability. The grammar-level weight predicts 0.87 mass on the
-grant branch; estimating that probability requires many generated or observed
-sessions, including incomplete ones.
-
-Trace-local monitors accept the matching \texttt{state=x7}, the code flow
-\texttt{01 02}, and the fact that no exchange follows denial. CTL obligations
-such as ``every decision reaches the application'' are not proved by this trace;
-the checker must examine every reachable grammar residual. The complete artifact
-pipeline is thus
+It contributes a latency point \texttt{(maxConcurrency=1, latency=23)}, a byte
+series ending at \texttt{(clock=23, bytes=440)} and a success to the outcome
+chart, but no success probability: estimating the grant's 0.87 needs many
+sessions, including incomplete ones. Trace monitors accept \texttt{state=x7}, the
+code \texttt{01 02}, and no exchange after denial; CTL obligations need every
+reachable residual. The pipeline:
 
 \begin{lstlisting}[language={}]
 grammar + field values
@@ -400,8 +339,8 @@ grammar + field values
   -> replay fixture + trace-local property verdicts
 \end{lstlisting}
 
-Every arrow is reproducible. Only the initial branch and value generation, and
-the separately stated transport schedule, add choices.
+Only branch and value generation, and the transport schedule, add choices; every
+other arrow is reproducible.
 
 \section{Interaction diagrams by scenario}
 
@@ -460,9 +399,8 @@ theorem oauth_password_knowers
 \noindent Proposed notation: neither the theorem nor the library lemma it uses
 exists yet.
 
-The browser itself knows a typed password. A narrower boundary requires a trusted
-credential actor; compromise, logging, a visible key, or failed protection changes
-the result.
+The browser knows a typed password; a narrower boundary needs a trusted credential
+actor, and compromise, logging or failed protection change the result.
 
 \subsection{Byte-level refinement without choosing a transport}
 
@@ -483,28 +421,19 @@ refineMessage "token requested" where
   bytes := encodeCanonical term
 \end{lstlisting}
 
-This fixes framing, tags, and value relationships at an abstract byte-algebra level.
-A subsequent HTTP mapping might put those bytes into form fields; a protobuf mapping
-might use numbered fields. Either concrete alphabet must prove that decoding and
-re-encoding preserve the abstract terminal and its parameter bindings.
-
-The use of \texttt{previously} is deliberately a trace predicate in this first
-version. It can later receive dedicated past-time syntax without changing the event
-model.
+An HTTP mapping might put these bytes in form fields, a protobuf mapping in
+numbered fields; either must prove that decoding and re-encoding preserve the
+terminal and its bindings. \texttt{previously} is a trace predicate for now.
 
 \section{Probabilities and charts}
 
-The authorization service need not be random. The randomness belongs to the
-user, who grants or denies consent; the browser, queues, transport, and
-authorization service then react deterministically. As written above, however,
-the authorization server emits both the grant and the error, so under the
-deciding-actor rule of Chapter~\ref{ch:grammar} it is the server that chooses.
-A faithful model adds an explicit consent event from the browser to the
-authorization server, \texttt{ConsentGiven} or \texttt{ConsentRefused}, whose
-sender makes the user's choice observable. In the current implementation
-branch weights live in a separate overlay (Chapter~\ref{ch:generated-examples}),
-not in the grammar; the proposed \texttt{weightedOneOf} below expresses the same
-numbers inline:
+The randomness belongs to the user, who grants or denies consent; everything else
+reacts deterministically. As written, though, the server emits both grant and
+error, so by the deciding-actor rule of Chapter~\ref{ch:grammar} the server
+chooses. A faithful model adds a consent event from the browser,
+\texttt{ConsentGiven} or \texttt{ConsentRefused}, making the user's choice
+observable. Weights live in an overlay (Chapter~\ref{ch:generated-examples});
+the proposed \texttt{weightedOneOf} writes them inline:
 
 \begin{lstlisting}
 def consentDecision : Scenario :=
@@ -521,14 +450,10 @@ def oauthCharts : List ChartSpec :=
   ]
 \end{lstlisting}
 
-With that consent event in place, no separate field needs to say that the user
-``owns'' this choice: the grant and denial branches begin with different
-consent-event bytes, sent by the browser on the user's behalf. After those bytes
-select a branch, every transition may have probability one and the global model is still
-probabilistic. The grant branch carries probability mass $0.87$ through the
-outbound queue, transport, the server's inbound queue, and the deterministic
-grant response. The denial branch similarly carries mass $0.13$. Deterministic
-processing transports probability mass; it does not remove it.
+The branches then begin with different consent bytes, and every later transition
+may have probability one: the grant branch carries mass $0.87$ through queues,
+transport and the deterministic response. Deterministic processing transports
+probability mass; it does not remove it.
 
 For the simplified path with no loss or timeout,
 \AccessibleEquation{The probability of a grant callback equals zero point eight seven times one times one times one and equals zero point eight seven. The probability of a denial callback equals zero point one three.}{\[
@@ -536,23 +461,13 @@ For the simplified path with no loss or timeout,
   \qquad
   P(\text{denial callback}) = 0.13.
 \]}
-Here $P$ denotes probability; each factor of one is a deterministic enqueue,
-transport, or server step. Dwell affects latency, not probability mass.
-
-Unassigned scheduling choices (such as which enabled actor runs next) are
-nondeterministic, while consent and measured outcomes supply probabilities. The
-composed system is an MDP: analysis fixes or quantifies over a scheduling policy
-before propagating consent mass (see Chapter~\ref{ch:authoring-language}).
-
-For several sessions in flight, the MDP state contains every actor's bounded
-queues and its per-\texttt{(session, task)} residuals. One user's random event can
-change later queue pressure and scheduling possibilities for other sessions, so
-the probabilistic state is the composed system state rather than a special marker
-attached only to the user actor.
-
-The percentages remain model inputs or measurements, not truths inferred from the
-grammar. The grammar defines which behaviours are possible; the probabilistic
-refinement says how mass is distributed over them.
+Each factor of one is a deterministic step; dwell affects latency, not mass.
+Scheduling (which enabled actor runs next) remains nondeterministic, so the composed
+system is an MDP, analysed under a fixed or quantified policy
+(Chapter~\ref{ch:authoring-language}). With several sessions in flight, its state
+holds every actor's queues and per-\texttt{(session, task)} residuals, since one
+user's choice changes queue pressure for others. The percentages are inputs or
+measurements; the grammar says only what is possible.
 
 \section{Residual state machine}
 
@@ -582,7 +497,5 @@ contains the rejected-authentication branch.}
 \label{fig:oauth-state-machine}
 \end{figure}
 
-This automaton is intentionally behavioural. It does not contain browser cookies,
-database rows, server threads, or cryptographic library state. Those details may be
-essential to an implementation proof, but they are refinements of this contract,
-not the contract itself.
+The automaton is behavioural: cookies, database rows, threads and cryptographic
+state are refinements of this contract, not part of it.

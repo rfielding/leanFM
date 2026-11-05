@@ -2,19 +2,16 @@
 \label{ch:bootstrap-contract}
 
 This chapter defines the minimum machine-readable context that makes a LeanFM
-project self-hosting. It belongs in the machine reference because an agent must
-apply it before it can turn the rest of the book into checked artifacts. The
-bootstrap defines the language and its tools; it must not contain a hidden copy
-of the product requirements or implementation.
+project self-hosting, which an agent applies before turning the rest of the book
+into checked artifacts. The bootstrap defines the language and its tools, never a
+hidden copy of the product's requirements or implementation.
 
-The intended handoff is deliberately simple: send another person the URL of
-this PDF, ask Claude, Gemini, Codex, or another capable construction agent to
-read it, and ask that agent to make the software. New ChatUI projects are
-provisioned from built-in book and specification templates; they do not depend
-on an example project directory. The live language-reference tools and
-read-only MCP surface supply the generic authoring types and commands named
-below. An agent must not copy the existing LeanFM application source
-or prior ChatUI specifications as an answer key.
+The intended handoff is simple: send someone this PDF's URL and ask Claude,
+Gemini, Codex or another capable agent to read it and make the software. New
+projects start from built-in templates, not an example directory; the live
+references and read-only MCP surface supply the authoring types and commands
+below. An agent must not copy LeanFM's own source or prior specifications as an
+answer key.
 
 \section{Required project inputs}
 
@@ -40,25 +37,18 @@ A copyable project root contains the following stable inputs:
         inputs.
 \end{description}
 
-All project-owned state and decisions belong below the exclusive
-root: inputs, conversations, artifact revisions, source, tests, generated views,
-traces, reports, logs, and project-specific caches. Choose the root before
-session work; temporary files and atomic promotion stay inside it. Reject
-configured outputs and symlinks that escape. Export declared artifacts
-explicitly; import by copying into the root or recording an immutable,
-content-addressed dependency. Shared tools and caches may live outside only
-without project-owned state. A global index must be reconstructible from
-manifests, and deleting one root must remove all its state without an external
-search.
+All project-owned state lives below the exclusive root: inputs, conversations,
+revisions, source, tests, views, traces, reports, logs and caches, with temporary
+files and atomic promotion inside it. Outputs and symlinks that escape are
+rejected; imports are copied in or recorded as immutable content-addressed
+dependencies, and shared tools and caches outside may hold no project state. A
+global index is reconstructible from manifests, and deleting a root removes all its
+state.
 
-The project root is also the complete input to a fresh agent conversation. The
-agent discovers the stable paths from the manifest and repository instructions;
-the stakeholder need not paste a transcript or restate a bootstrap procedure.
-If the root has no durable problem statement, LeanFM creates the minimal
-editable book shell and begins with the visible question ``What problem are you
-trying to solve?'' The answer starts requirements discovery. Named ambiguity
-questions, book revisions and validation evidence
-then accumulate beneath that same root.
+The root is also the complete input to a fresh agent conversation: the agent finds
+the paths from the manifest and repository instructions, with no transcript to
+paste. A root with no problem statement gets a minimal book shell and the question
+``What problem are you trying to solve?'', which starts requirements discovery.
 
 \section{Conventional generated interface}
 
@@ -74,11 +64,10 @@ def all : List LeanFM.GeneratedRequirement := [.requirement spec]
 end LeanFMProject.Requirements
 \end{lstlisting}
 
-The byte vocabulary lives beside it at
-\texttt{spec/Requirements.proto}. Once the requirements check, the
-separate implementation mapping lives at
-\texttt{spec/Implementation.lean}. Capitalization is significant
-because these are Lean module paths, not informal filenames.
+The byte vocabulary is \texttt{spec/Requirements.proto} and, once the
+requirements check, the implementation mapping is
+\texttt{spec/Implementation.lean}. Capitalization matters: these are Lean module
+paths.
 
 \section{Required commands and order}
 
@@ -96,68 +85,50 @@ make render          # derive interaction and residual-state review views
 make check           # validate, then render
 \end{lstlisting}
 
-An agent runs \texttt{reference} and \texttt{interrogation} before authoring.
-It must not infer constructors from prose or invent a smaller Lean lookalike.
-The validator consumes the exported \texttt{RequirementSpec}; successful Lean
-elaboration by itself is not LeanFM validation. The renderer also consumes that
-same value. A separately written diagram is not evidence that it matches the
-requirements.
+An agent runs \texttt{reference} and \texttt{interrogation} before authoring, and
+never infers constructors from prose or invents a lookalike. The validator and the
+renderer both consume the exported \texttt{RequirementSpec}: elaboration alone is
+not validation, and a separately drawn diagram is not evidence.
 
 \section{Three layers, reviewed in git}
 \label{sec:three-layers}
 
-Work proceeds in three layers: observable requirements, then their realization
-mapping, then source. Each layer is checked before the next is built on it, and
-application source follows the security review in
-Chapter~\ref{ch:feature-discipline}. Review and acceptance are ordinary git
-commits: the stakeholder reads the diff and commits it. LeanFM records no
-approvals and never makes an edit, a source write or a launch wait for one; its
-project status shows only whether each layer passes its canonical check and
-whether it is committed.
+Work proceeds in three layers, each checked before the next: observable
+requirements, their realization mapping, then source, which follows the security
+review of Chapter~\ref{ch:feature-discipline}. Review and acceptance are git
+commits. LeanFM records no approvals and makes nothing wait for one; its status
+shows only whether each layer passes its check and is committed.
 
-\texttt{Requirements.lean} defines the contract. Its multi-actor wire
-grammar is the conformance oracle: complete decoded traffic is legal or has a
-counterexample; an incomplete capture cannot establish conformance.
-\texttt{Requirements.proto} fixes byte values without choosing transport.
-\texttt{Implementation.lean} records choices needed to realize accepted
-behavior---for example queues, transports, journals or browser mechanisms---each
-mapped to its requirement. Answers to implementation questions belong there
-when they leave observable behavior unchanged. An answer changing messages,
-fields, ordering or another observable must instead revise Requirements. Remove implementation answers made unnecessary by
-later requirements changes rather than preserving them as requirements.
-
-The bootstrap therefore solves a circularity. The
-book explains what is being built; the generic distribution makes the LeanFM
-language executable; committed project artifacts preserve the decisions. None
-is a substitute for the other two.
+\texttt{Requirements.lean} is the contract: its multi-actor wire grammar is the
+conformance oracle, under which complete decoded traffic is legal or has a
+counterexample (an incomplete capture establishes nothing).
+\texttt{Requirements.proto} fixes bytes without choosing a transport.
+\texttt{Implementation.lean} records the choices that realize accepted behavior
+(queues, transports, journals, browser mechanisms), each mapped to its
+requirement. An answer that changes nothing observable belongs there; one that
+changes messages, fields or ordering revises the requirements; an answer made moot
+by a later requirement is removed. The book explains what is built, the generic
+distribution makes the language executable, and committed artifacts keep the
+decisions; none substitutes for another.
 
 \section{Construction is not a runtime dependency}
 
-The construction agent is not part of the delivered server. After construction,
-the user starts LeanFM, visits its root URL in an ordinary browser, creates or
-logs into an account, supplies a model-provider key, and conducts the
-requirements argument through LeanFM's own ChatGPT-like interface. The server
-talks to the selected model provider through its documented message protocol;
-it does not require the construction agent, its conversation, or local tooling.
-
-Consequently, a reconstruction is not successful merely because it can be
-driven from a coding-agent terminal. It must build a standalone executable,
-serve the complete browser workflow, start without a platform API key, isolate
-concurrent users and their credentials, and pass its conformance tests without
-Codex being present.
+The construction agent is not part of the delivered server. The user starts
+LeanFM, opens it in a browser, signs in, supplies a provider key, and argues
+requirements through LeanFM's own chat, which talks to the provider directly. A
+reconstruction succeeds only if it builds a standalone executable, serves the whole
+browser workflow, starts without a platform key, isolates concurrent users and
+their credentials, and passes its conformance tests with no coding agent present.
 
 \section{Build, runtime, and publication dependency inventory}
 \label{sec:dependency-inventory}
 
-The repository does not treat one developer's workstation as an implicit build
-input. The machine-readable \texttt{toolDependencyInventory} in
-\texttt{LeanFM/ChatUI/Requirements.lean} is normative; this section is its
-human review view. ``Required'' means that the default check, server, book, or
-stakeholder-media path invokes the dependency. ``Optional'' means the named
-workflow is outside the default product build. JavaScript versions are fixed by
-\texttt{ui/package-lock.json}, Python ranges by
-\texttt{scripts/chatui\_requirements.txt}, and Lean and Go by
-\texttt{lean-toolchain} and the top-level \texttt{Makefile}.
+One developer's workstation is not an implicit build input. The normative list is
+\texttt{toolDependencyInventory} in \texttt{LeanFM/ChatUI/Requirements.lean}; this
+is its review view. ``Required'' means the default check, server, book or media
+path uses it. Versions are fixed by \texttt{ui/package-lock.json},
+\texttt{scripts/chatui\_requirements.txt}, \texttt{lean-toolchain} and the
+\texttt{Makefile}.
 
 \begin{description}[style=nextline]
 \item[Lean and Lake --- required.] Lean 4.35.0 from
@@ -179,7 +150,9 @@ workflow is outside the default product build. JavaScript versions are fixed by
   41--50, Pillow 10--12, and Protobuf 5--6 protects retained keys, performs
   protobuf round trips and reductions, and generates animated GIFs.
   CairoSVG 2.7--2.x and defusedxml 0.7--0.x normalize static SVG attachments
-  without external resources; Pillow supplies bounded raster decoding.
+  without external resources; Pillow supplies bounded raster decoding. Sandboxed
+  media generators run the system \texttt{/usr/bin/python3}, so Pillow must be
+  installed for it too (Debian and Ubuntu: \texttt{python3-pil}).
 \item[Protocol Buffers compiler --- required.] A \texttt{protoc} supporting
   proto3 and Python output generates the temporary byte-round-trip binding.
   Target-language generators are declared separately when needed.
@@ -190,15 +163,16 @@ workflow is outside the default product build. JavaScript versions are fixed by
   TeX Gyre Heros, geometry, microtype, xcolor, graphicx, tagpdf, AMS math,
   mathtools, booktabs, longtable, enumitem, listings, natbib, imakeidx, TikZ,
   pgfplots, hyperref, and cleveref.
-\item[Go --- required.] Go 1.23.12, whose archive hash is fixed by the Makefile,
-  compiles and tests the Go example projects, such as \texttt{projects/PaxosKV}.
+\item[Go --- required.] Go 1.23.12, installed under \texttt{.toolchains/} by
+  \texttt{make go-toolchain} with its archive hash checked, compiles and tests the
+  Go projects and generated applications.
 \item[Bubblewrap --- required on the Linux server.] \texttt{bwrap} with
   user, process, network, and mount namespaces isolates executable Lean checks,
   project commands, persistent applications, and project-local media generators.
-  Ubuntu/Debian supplies it in the \texttt{bubblewrap} package. Run
-  \texttt{make sandbox-check} before the full suite to verify that the host's
-  namespace policy permits the actual worker. Missing or denied sandbox support
-  fails explicitly; it never authorizes execution outside the sandbox.
+  Ubuntu/Debian supplies it in the \texttt{bubblewrap} package; Ubuntu~24.04
+  also needs \texttt{kernel.apparmor\_restrict\_unprivileged\_userns=0}.
+  \texttt{make sandbox-check} verifies the host before the full suite; missing or
+  denied support fails explicitly and never allows unsandboxed execution.
 \item[FFmpeg --- required for shareable video.] FFmpeg with \texttt{libx264}
   H.264 and AAC encoders converts GIF/WebM to validated MP4, adds fast-start
   metadata, and muxes optional narration.
@@ -214,22 +188,16 @@ workflow is outside the default product build. JavaScript versions are fixed by
   runtime, native library, and version bound before source generation.
 \end{description}
 
-An agent can reconcile this declaration with the current host and report each
-item as satisfied, missing, incompatible, or optional. Installing or upgrading
-host software remains an explicit bounded action; inspection alone never
-silently mutates the machine. DuckDB is not currently invoked by a checked
-LeanFM target and is therefore not a build dependency. If a DuckDB-backed
-reducer is accepted, its CLI or library, binding, storage format, and version
-contract must first enter this inventory and the implementation mapping. The
-same rule prevents a locally installed compiler or media program from silently
-becoming part of the product contract.
+An agent can reconcile this list with the host, reporting each item satisfied,
+missing, incompatible or optional; installing software is an explicit action, never
+a side effect of inspection. A tool enters the product contract only through this
+inventory and the implementation mapping (DuckDB, for instance, is not used and so
+is not listed).
 
 \section{Local and server-hosted references}
 
-The local commands are authoritative when no server is running. A running
-LeanFM server additionally exposes the requirements and implementation language
-references, the interrogation checklist, and read-only MCP context without
-requiring a user login. These public endpoints contain language documentation,
-not project or account data. Projects are shared; credentials stay private to
-their account, and model calls require that account's session.
+The local commands are authoritative when no server runs. A running server also
+exposes the language references, the interrogation checklist and read-only MCP
+context without login; these hold language documentation, not project or account
+data.
 

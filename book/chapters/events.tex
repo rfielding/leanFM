@@ -5,11 +5,9 @@
 \index{trace}
 \index{session type!run of}
 A global type says which conversations are legal. An \emph{event} is one message
-of one actual conversation: a single instance of a session, recorded as it
-happened. Every execution is represented by a list of such events, and checking
-an implementation means checking that list against the global type and its
-declared physics. A deliberately small common envelope makes histories
-comparable across protocols:
+of one actual session, recorded as it happened; checking an implementation means
+checking its list of events against the global type and its physics. A small
+common envelope makes histories comparable across protocols:
 
 \begin{lstlisting}
 structure Event (Actor Session Task Kind Payload : Type) where
@@ -28,58 +26,37 @@ abbrev Trace (Actor Session Task Kind Payload : Type) :=
   List (Event Actor Session Task Kind Payload)
 \end{lstlisting}
 
-The fields have different jobs. \texttt{id} identifies a visible fact;
-\texttt{priorIds} records zero or more immediate predecessor backpointers;
-\texttt{causeId} optionally identifies the one direct causal event (the MCP
-\texttt{check\_trace} tool spells these \texttt{prevIds} and a list
-\texttt{causeIds}, and the protobuf envelope \texttt{prior\_ids} and
-\texttt{cause\_id}); \texttt{from} and
-\texttt{to} name the sending and receiving roles; \texttt{session} names the
-instance of the global type, and \texttt{(session, task)} correlates
-independently progressing conversations; and \texttt{kind} supplies a stable discriminator.
-The payload is protocol-specific and carries the parameters that flow from one
-production to the next. \texttt{timeAt} is sampled from the model's shared monotonic
-clock. Its differences measure elapsed time; it is not a civil-time date and its
-origin is immaterial.
+\texttt{id} identifies a visible fact. \texttt{priorIds} lists immediate
+predecessors, and \texttt{causeId} optionally names the one event that directly
+caused this one (MCP's \texttt{check\_trace} spells them \texttt{prevIds} and
+\texttt{causeIds}, protobuf \texttt{prior\_ids} and \texttt{cause\_id}).
+\texttt{from} and \texttt{to} are the roles; \texttt{session} names the instance
+of the global type, and \texttt{(session, task)} correlates independently
+progressing conversations; \texttt{kind} is a stable discriminator; the payload
+carries the parameters that flow between productions. \texttt{timeAt} comes from
+a shared monotonic clock whose differences measure elapsed time; its origin does
+not matter.
 
-The predecessor links form a directed acyclic graph rather than a singly linked list.
-An initial event has no prior identifiers. A fork is represented by several later
-events that each name the same prior event. A join is represented by one event
-whose \texttt{priorIds} names every branch on which it depends. An end event of
-any kind may also name its corresponding start event. That backpointer makes
-elapsed time simply \texttt{end.timeAt - start.timeAt}, even when several
-attempts with the same \texttt{(session, task)} overlap. A backpointer to an
-already-ancestral start is a redundant ordering edge, but it is useful
-correlation data and does not alter the partial order. The edge says ``ordered
-after,'' not ``caused by.'' A causal interpretation requires a separate grammar
-or domain assertion.
+Predecessor links form a directed acyclic graph. A fork is several events naming
+the same predecessor; a join is one event naming every branch it depends on. An
+end event may also name its start, which makes elapsed time
+\texttt{end.timeAt - start.timeAt} even when attempts with the same
+\texttt{(session, task)} overlap; such an edge may be redundant for ordering but is
+useful correlation. A predecessor edge means ``ordered after'', not ``caused by''.
 
-Causality uses a different backpointer. An event's optional \texttt{causeId}
-names the event that directly caused it and does not add or remove permitted
-interleavings. It is not restricted to terminal events. A task-start event may
-cause intermediate messages; those messages may cause nested task starts; and
-terminal events may point to the event whose work they finish. Following the
-reverse \texttt{causeId} relation produces a causal subtree. A renderer places
-that subtree inside a labeled box, recursively, so nested work remains visible
-without pretending that concurrent causal children have a fixed order.
+\texttt{causeId} is the causal pointer, and it adds or removes no interleavings. A
+task start may cause messages, which may cause nested task starts, and a terminal
+points to the event whose work it finishes. The reverse relation gives causal
+subtrees, which a renderer draws as nested labeled boxes without pretending that
+concurrent children are ordered. The pointer also makes choices checkable: a role
+decides only from its own history, so \texttt{causeId} must name an event its
+sender sent or received (Chapter~\ref{ch:vision}). A response's \texttt{causeId}
+is its request's \texttt{id}, which stays unambiguous with many requests in flight
+because it follows identity, not adjacency.
 
-The two pointers are also what makes a choice checkable. A role may decide
-only from its own history, so an event's \texttt{causeId} should name an event
-its sender sent or received. An event that points across to a message its
-sender never saw records a decision nobody could have made
-(Chapter~\ref{ch:vision}).
-
-For a request/response production, the response's
-\texttt{causeId} is the request's \texttt{id}; read it as ``this response
-answers this request.'' The rule remains unambiguous when many requests are in
-flight because correlation follows event identity rather than adjacency or
-arrival order. \texttt{priorIds} remains exclusively the partial-order relation.
-
-For an $m$-of-$n$ join, the event additionally records $m$, $n$, and the exact
-$m$ branch-terminal IDs that satisfied the threshold. The selected IDs must be
-distinct members of \texttt{priorIds}. Merely seeing two predecessors is not
-enough to distinguish a two-of-three threshold from an ordinary two-branch
-all-of join.
+An $m$-of-$n$ join also records $m$, $n$ and the $m$ distinct branch-terminal IDs,
+members of \texttt{priorIds}, that satisfied it; two predecessors alone cannot
+distinguish two-of-three from an ordinary two-branch join.
 
 \section{Compute everything from a fork/join event list}
 
@@ -100,20 +77,16 @@ three jobs. The outer reply records \texttt{[e0,e8,e6]}: task start, chosen resu
 and completed audit. Reply time is 12 synthetic milliseconds; cleanup ends at
 18. These times illustrate ordering, not measured search performance.
 
-For a general $n$-of-$m$ join, choose $n$ distinct qualifying terminals from $m$
-declared branches. Selection is atomic, so racing results cannot select two
-winners for a 1-of-$m$ task. ``First'' means the coordinator's observed order,
-with a declared tie rule, not unsynchronized worker clocks. A cancellation request
-is not a cancellation acknowledgment; late results must not replace the chosen
-result. The requirement must say whether a reply waits for losing-task cleanup.
-Here it does not. Selected-ID and threshold metadata belongs in the join event,
-not inferred from the picture's number of incoming arrows.
+Selection is atomic, so racing results cannot give a 1-of-$m$ task two winners.
+``First'' is the coordinator's observed order with a declared tie rule, not worker
+clocks. A cancellation request is not an acknowledgment, late results never
+replace the chosen one, and the requirement says whether the reply waits for
+cleanup (here it does not).
 
 \subsection{Durations from boundary events}
 
-Each event is one observation at one instant. Starting and completing are
-different messages, so an event does not contain an interval. Durations are
-derived by selecting the two boundary events and subtracting their timestamps.
+An event is one observation at one instant; a duration comes from two boundary
+events.
 
 \begin{lstlisting}
 structure AnalysisEvent where
@@ -124,10 +97,8 @@ structure AnalysisEvent where
   reveals  : List ValueRef
 \end{lstlisting}
 
-Consider the first retail purchase in \texttt{examples/bakery-events.jsonl}.
-Its bread was baked and shipped before the storefront opened.  The purchase
-itself reserves that inventory, tenders payment, and completes in about a
-second:
+The first retail purchase in \texttt{examples/bakery-events.jsonl} reserves bread
+baked that morning, tenders payment, and completes in about a second:
 
 \begin{center}
 \small
@@ -167,10 +138,8 @@ the inventory allocation even though $e_1$ is already an ancestor through $e_2$.
 \label{fig:bakery-prior-graph}
 \end{figure}
 
-The list order is one serialization convenient for storage. Event order is the
-transitive closure of \texttt{priorIds}. This sale is sequential; baking and
-shipping belong to the morning production stream, not to the customer purchase.
-The following quantities are folds or graph queries over this one list:
+List order is a storage convenience; event order is the transitive closure of
+\texttt{priorIds}. These quantities are folds over the list:
 
 \AccessibleEquation{Reservation time from e zero to e one equals 352 milliseconds. Payment time from e one to e two equals 661 milliseconds. Purchase latency from e zero to e three equals 1257 milliseconds. Wire bytes equal 248.}{\begin{align*}
   \operatorname{reservationTime}(e_0,e_1) &= 28860343-28859991 = 352\text{ ms},\\
@@ -179,28 +148,19 @@ The following quantities are folds or graph queries over this one list:
   \operatorname{wireBytes} &= 59+62+55+72 = 248.
 \end{align*}}
 
-The subscripted arguments identify each duration's exact start and end events.
-
-Two events are concurrent in this order when neither is an ancestor of the other:
+Two events are concurrent when neither is an ancestor of the other:
 
 \begin{lstlisting}
 def concurrent (events : List AnalysisEvent) (a b : EventId) : Bool :=
   !reachable events a b && !reachable events b a
 \end{lstlisting}
 
-The maximum concurrency permitted by the trace is the width of this partial
-order: the size of its largest antichain. This purchase is a chain, so its width
-is one. Other purchases and the morning production and transport streams may
-still be concurrent. Incomparable events may commute in a linear serialization,
-provided each event still appears after all of its named predecessors. A timestamped point event has no active interval;
-runtime concurrency requires separate start and completion messages. This is stronger than counting
-adjacent list elements and different from measuring average runtime concurrency.
-
-Start and completion boundaries make nested concurrent work especially readable
-as an order graph. In the following trace, the request forks into two task
-attempts. Each completion points back to its own start, and the response joins
-the two completions. The shaded columns are visual grouping only; the arrows are
-still exactly the stored predecessor pointers.
+The trace's maximum concurrency is the partial order's width, its largest
+antichain; this purchase is a chain, of width one. Incomparable events may appear
+in either order in a serialization. Runtime concurrency, unlike order width, needs
+separate start and completion events. In the next trace a request forks into two
+task attempts whose completions point back to their starts and are joined by the
+response; the shading is grouping only.
 
 \begin{figure}[htbp]
 \centering
@@ -234,25 +194,17 @@ first in a linear serialization without changing the graph.}
 \label{fig:concurrent-task-boundaries}
 \end{figure}
 
-Timestamps and predecessor links also give elapsed time along a selected path:
+Elapsed time along a path:
 
 \begin{lstlisting}
 edgeTime(prior, event) := event.timeAt - prior.timeAt
 elapsed(started, completed) := completed.timeAt - started.timeAt
 \end{lstlisting}
 
-The retail critical path is $e_0,e_1,e_2,e_3$, with elapsed time 1257 ms.
-The direct $e_3\to e_1$ correlation edge is redundant for reachability and does
-not change that duration.
-Queue occupancy, queued
-bytes, active \texttt{(session,task)} keys, and memory pressure are computed by
-adding enqueue/dequeue events to the same alphabet and folding them in clock
-order.
-
-The entire checked-in corpus contains \BakeryOrders{} orders and
-\BakeryEvents{} events. Streaming that file produces the following model inputs;
-the numbers in this table are generated LaTeX macros, not independently typed
-constants:
+The retail critical path $e_0,e_1,e_2,e_3$ takes 1257~ms. Queue occupancy, queued
+bytes, active keys and memory pressure come from adding enqueue and dequeue events
+and folding in clock order. The whole corpus has \BakeryOrders{} orders and
+\BakeryEvents{} events; streaming it gives these values, generated as macros:
 
 \begin{center}
 \begin{tabular}{@{}lr@{}}
@@ -268,13 +220,9 @@ maximum simultaneously active purchases & \BakeryMaxActive \\
 \end{tabular}
 \end{center}
 
-The sale and stockout ratios are frequency estimates for this corpus; the
-other rows are counts and maxima, not probabilities. Regeneration
-with a different source stream changes the macros and therefore changes every
-book example that consumes them.
-
-Knowledge is another event reduction. For a value $v$, calculate the actors that
-can derive it from initial knowledge and the bytes visible to them:
+The ratios are frequencies for this corpus; the other rows are counts and maxima.
+Knowledge is another reduction: the actors that can derive a value from their
+initial knowledge and the bytes they see.
 
 \begin{lstlisting}
 def knowers (actors : List Actor) (v : ValueRef)
@@ -283,33 +231,23 @@ def knowers (actors : List Actor) (v : ValueRef)
     Derives (knowledgeFrom actor events) v
 \end{lstlisting}
 
-Encryption, signing, projection, key possession, and compromise contribute rules
-to \texttt{Derives}. The primary result is the set \texttt{knowers v events}.
-``Only these actors know $v$'' is a comparison between that computed set and an
-allowed set, not a separate primitive called secrecy.
+``Only these actors know $v$'' compares that set with an allowed one; secrecy is
+not a separate primitive (Section~\ref{sec:knowledge-closure}).
 
 \section{Derived state}
 
-A current session, an authenticated principal, or an outstanding request can often
-be computed by folding the trace. Such a fact need not also exist as primitive
-model state. This discipline has two benefits: evidence for a fact remains visible,
-and the state representation does not multiply independently of the history that
-justifies it.
-
-Some implementations necessarily maintain private state. The model includes it
-only when two executions with the same visible trace may make different future
-behaviour legal. Even then, the first remedy is to expose the relevant distinction
-as an event or a grammar parameter rather than copying an implementation object
-graph into the specification.
+A current session, an authenticated principal or an outstanding request is
+computed by folding the trace, so its evidence stays visible. Private state enters
+the model only when two executions with the same visible trace may legally diverge,
+and even then the first remedy is to expose the distinction as an event or
+parameter.
 
 \section{Time is more than a timestamp}
 
 \index{time}
-Timing constraints pair explicit boundaries; changing a timeout bound changes
-the temporal requirement, not the event-order or causal relations defined above.
-
-For two events from the same \texttt{(session, task)}, elapsed time is defined when
-the first event's \texttt{timeAt} value does not exceed the second's:
+Timing constraints pair explicit boundaries; changing a timeout changes the
+requirement, not the order or causal relations. Elapsed time between two events of
+one \texttt{(session, task)}:
 
 \begin{lstlisting}
 def elapsed (start finish : Event) : Option Duration :=
@@ -320,55 +258,36 @@ def elapsed (start finish : Event) : Option Duration :=
   else none
 \end{lstlisting}
 
-Latency queries name their boundary event kinds and use the terminal's
-\texttt{priorIds} backpointer to select the start. Matching
-\texttt{(session, task)} values alone cannot disambiguate overlapping attempts,
-so reducers never pair by adjacency. Completion, failure, cancellation, timeout,
-and other declared terminals use the same explicit pairing for elapsed time,
-byte deltas, and other measurements.
-
-This pairing is how a view may elide detail without becoming hand-waving. A
-collapsed production retains its boundary event IDs, complete predecessor
-links, parameter assignment, aggregate deltas, and validation status. Opening
-it reveals the intervening events. Closing it again changes only presentation,
-not the history or the evidence supporting the displayed duration, bytes, or
-outcome.
+Latency queries name their boundary kinds and select the start through the
+terminal's backpointer, since \texttt{(session, task)} alone cannot separate
+overlapping attempts; reducers never pair by adjacency. Every declared terminal
+uses the same pairing. A collapsed production keeps its boundary IDs, links,
+parameters, aggregate deltas and validation status, so opening and closing it
+changes presentation only.
 
 \section{Estimating completion from an event stream}
 
-The same boundary-event model can consume observed events. The
-\texttt{LeanFM.StreamStats} implementation reconstructs attempts from stored
-terminal-to-start predecessor links and computes completion, conditional-success,
-and completed-latency statistics.
-
-For an observation window containing $M$ starts, $C$ matched terminal events,
-$S$ successful terminals, and completed latencies $L_1,\ldots,L_C$, the basic
-estimates are
+\texttt{LeanFM.StreamStats} reconstructs attempts from observed terminal-to-start
+links. For a window with $M$ starts, $C$ matched terminals, $S$ successes and
+completed latencies $L_1,\ldots,L_C$:
 \AccessibleEquation{Estimated completion probability equals completed count C divided by started count M. Estimated probability of success given completion equals success count S divided by completed count C. Estimated expected latency given completion equals the sum of completed latencies L sub i divided by C.}{\[
   \widehat P(\text{complete}) = \frac{C}{M}, \qquad
   \widehat P(\text{success}\mid\text{complete}) = \frac{S}{C}, \qquad
   \widehat E[L\mid\text{complete}] = \frac{\sum_i L_i}{C}.
 \]}
 
-The vertical bar means ``given''; hats mark estimates from the observation
-window. Attempts without a terminal event remain \emph{in flight}. They
-contribute to the number started and to queue/load measurements, but not to
-completed-task latency or to the conditional-success denominator. Calling them
-failures would bias both probability and latency whenever the observation
-window ends before they do.
-
-The reducer can group these sufficient statistics by task, actor, time bucket,
-maximum concurrency, or queue occupancy and feed them to charts. Specified
-probabilities and dwell times are predictions; stream-derived estimates are
+Attempts without a terminal are \emph{in flight}: they count as started and load
+the queues, but are not failures, which would bias both estimates whenever the
+window closes first. The statistics group by task, actor, time bucket, concurrency
+or queue occupancy. Specified probabilities and dwell are predictions; these are
 measurements to compare with them.
 
 \section{Charts as declarative trace reductions}
 
 \index{chart specification}
-The proposed chart declaration names an observable event source, a grouping or
-\(x\) expression, and an aggregate or \(y\) expression. It describes the
-reduction, not rendering code; this syntax is illustrative, not an implemented
-renderer.
+A proposed chart declaration (illustrative, not implemented) names an event
+source, a grouping or \(x\) expression, and an aggregate or \(y\) expression: a
+reduction, not rendering code.
 
 \begin{lstlisting}
 def outcomeShare : ChartSpec :=
@@ -404,23 +323,16 @@ def propagatedGrantProbability : ChartSpec :=
     y terminalGrantProbability
 \end{lstlisting}
 
-An XY plot preserves two numeric axes. It differs from a time series, whose
-\(x\)-axis is specifically an event clock, and from a categorical chart,
-whose \(x\) values are labels. The first two examples reduce each completed
-model run to one point. The third sweeps a model parameter and checks that
-deterministic downstream processing transports the user's probability mass.
-
-Apply the provenance and implementation-status rule in
-Section~\ref{ch:scenarios} to each generated chart.
+An XY plot has two numeric axes; a time series's \(x\) is the event clock, a
+categorical chart's are labels. The last example sweeps a parameter to check that
+deterministic processing transports the user's probability mass. Each generated
+chart follows the provenance rule of Chapter~\ref{ch:scenarios}.
 
 \section{Round trip through bytes}
 
-A generated scenario is not complete until it can cross the byte boundary in
-both directions. \texttt{ScenarioEvent} in \texttt{Requirements.proto} carries
-the event identity, complete \texttt{prior} list, correlation key, actors,
-\texttt{timeAt}, and the selected protobuf atom. Encoding a \texttt{Scenario}
-therefore produces bytes for both its ordering envelope and payload. Decoding those
-bytes must reconstruct the same ordered event list. The executable round-trip
-check compares the decoded protobuf value with the generated value and separately
-checks the reconstructed \texttt{prior} graph; loss of a fork or join fails the
-build.
+A generated scenario must cross the byte boundary both ways.
+\texttt{ScenarioEvent} in \texttt{Requirements.proto} carries identity, the
+\texttt{prior} list, correlation key, actors, \texttt{timeAt} and the payload
+atom. The round-trip check decodes the bytes, compares the value with the generated
+one, and checks the reconstructed \texttt{prior} graph; losing a fork or join
+fails the build.

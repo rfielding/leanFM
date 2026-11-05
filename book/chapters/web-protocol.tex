@@ -3,18 +3,14 @@
 
 \index{HTTP!protobuf adapter}
 \index{protocol!LeanFM web server}
-This chapter is the protocol reference for the LeanFM web server. It is
-primarily machine-oriented context for an implementation agent and may be read
-as a maintained portion of the system prompt. The normative behavioral
-source is \nolinkurl{LeanFM/ChatUI/Requirements.lean}; the byte vocabulary is
-\nolinkurl{LeanFM/ChatUI/Requirements.proto}; and transport selection is
-\nolinkurl{LeanFM/ChatUI/Implementation.lean}. The tables and grammars below are
-generated from those files. They are not a second, hand-maintained API design.
-
-Two versions of the protocol must not be confused. The \emph{accepted protocol}
-is the complete typed grammar and intended HTTP mapping. The \emph{running
-adapter} is the subset currently dispatched by \texttt{LeanFM/ChatUI/Server.lean}.
-A route in the accepted table is not a claim that its handler already exists.
+This is the protocol reference for the LeanFM web server, written mainly for an
+implementation agent. The behavior is defined by
+\nolinkurl{LeanFM/ChatUI/Requirements.lean}, the bytes by
+\nolinkurl{LeanFM/ChatUI/Requirements.proto}, and the transports by
+\nolinkurl{LeanFM/ChatUI/Implementation.lean}; the tables and grammars below are
+generated from them. The \emph{accepted protocol} is the complete grammar and
+intended HTTP mapping; the \emph{running adapter} is the subset
+\texttt{LeanFM/ChatUI/Server.lean} dispatches today.
 
 \section{One exchange across four representations}
 
@@ -27,47 +23,25 @@ reducer, question, and unit are recorded in
 \label{fig:web-protocol-overview}
 \end{figure}
 
-The figure summarizes the round trip: authenticate and decode HTTP into a
-grammar-permitted protobuf value, record its \texttt{EventEnvelope}, then
-project the selected response or rejection back to HTTP. Provider messages
-remain in-process, not invented HTTP calls. Protobuf fixes the typed value and
-stable tags; HTTP chooses the browser representation, so their bytes differ.
-The current adapter uses \texttt{application/x-www-form-urlencoded} for POST
-requests and JSON for responses; session establishment also issues a secure
-cookie. The journal stores length-delimited binary \texttt{EventEnvelope}s. A
-future binary HTTP codec may change representation without changing message
-values or correlation fields. Field-level conversion follows.
+HTTP is decoded into a grammar-permitted protobuf value, recorded as an
+\texttt{EventEnvelope}, and the response or rejection is projected back. Provider
+messages stay in-process. Protobuf fixes values and tags; HTTP chooses the browser
+representation (today, form-encoded POST bodies and JSON responses, with a secure
+session cookie), and the journal stores length-delimited binary envelopes.
 
 \subsection{Conservative default HTTP projection}
 
-LeanFM can generate an HTTP projection and its OpenAPI description when
-\texttt{Implementation.lean} does not provide an explicit binding. The task
-grammar supplies request/response pairing: an initiating browser-to-server
-message is the request, its correlated finite server-to-browser alternatives
-are responses, and their protobuf schemas supply the operation schemas. An
-explicit implementation binding always overrides the default.
-
-The default is deliberately conservative. A field may appear in a path or
-query only when the implementation explicitly classifies it as a bounded,
-URL-safe scalar selector. Bytes, repeated fields, nested messages, secrets,
-large or unbounded strings, and any request whose arguments would be unnatural
-as a URL use \texttt{POST}; the protobuf value is carried in the request body.
-This prevents a convenient generator from leaking credentials, exceeding
-practical URL limits, or inventing ambiguous encodings. Generated encoders and
-decoders must preserve the protobuf value exactly.
-
-Unless an explicit transport binding selects another codec, the default body
-encoder and decoder use the protobuf JSON mapping with
-\texttt{Content-Type: application/json}. This default is part of the generated
-adapter contract, not a change to the protobuf value. The server publishes the
-resolved OpenAPI document at \texttt{GET /openapi.yaml}; this is the default
-discovery endpoint for generated HTTP operations and schemas.
-
-The generated OpenAPI operation records the resolved method and path, body
-content type, request schema, every grammar-permitted response schema and
-status, authentication requirement, correlation fields, and LeanFM requirement
-identifier. OpenAPI documents the transport projection; the protobuf and task
-grammar remain the definitions of values and legal ordering.
+Without an explicit binding in \texttt{Implementation.lean}, LeanFM generates an
+HTTP projection and its OpenAPI description: an initiating browser-to-server
+message is the request, its correlated server-to-browser alternatives are the
+responses, and their protobuf schemas the operation schemas. The default is
+conservative. Only a field the implementation classifies as a bounded, URL-safe
+scalar may go in a path or query; bytes, repeated or nested fields, secrets and
+unbounded strings go in a \texttt{POST} body, encoded with the protobuf JSON
+mapping as \texttt{application/json}, so a generator cannot leak credentials into
+URLs. \texttt{GET /openapi.yaml} publishes the result: method, path, content type,
+request schema, every permitted response and status, authentication, correlation
+fields and requirement identifier. The protobuf and grammar remain the definitions.
 
 \section{The conversion, field by field}
 
@@ -97,147 +71,92 @@ defined in this order:
         occurred.
 \end{enumerate}
 
-For a response binding \texttt{httpResponse(RequestName)}, conversion reverses
-the projection. The request name selects the finite legal response set. Scalar
-fields become JSON strings, booleans, or numbers; repeated fields become JSON
-arrays; nested messages become objects; and \texttt{bytes} become an explicitly
-identified download or Base64 field rather than accidental UTF-8. Secrets are
-redacted before JSON rendering. Success commonly uses 200, creation uses 201,
-authentication failure uses 401 or 403, invalid input uses 400, missing owned
-objects use 404, revision or credential conflicts use 409, and provider failure
-uses 502. The named response message, not the status alone, determines the
-grammar transition.
+A response binding \texttt{httpResponse(RequestName)} reverses this over the
+request's finite response set: scalars become JSON values, repeated fields arrays,
+nested messages objects, \texttt{bytes} an explicit download or Base64 field, and
+secrets are redacted. Statuses follow convention (200, 201, 400, 401/403, 404,
+409, 502), but the named response message, not the status, decides the grammar
+transition.
 
-Before projection, request and response are independent framed events. In that
-limited structural sense the stream resembles a multiplexed protocol such as
-HTTP/2: several exchanges may be in flight and correlation is explicit. This is
-not a claim that the event bytes are HTTP/2 frames. Every response envelope must
-set \texttt{cause\_id} to the exact request event identifier within the same
-session and task. The HTTP adapter follows that causal backpointer to recover the
-exchange and emit the response on the connection that carried the request. It
-never pairs by adjacency, arrival order, or a process-global ``current request.''
-The separate \texttt{prior\_ids} list constrains legal interleavings and is not
-used as a substitute for causal correlation.
-
-HTTP projection is valid only for a causally closed exchange. Every projected
-request must be named by exactly one terminal response's \texttt{cause\_id}, and
-every projected response must name one compatible request in the same session
-and task. Failure is still a response event: it carries an HTTP error status and
-points to the request. An orphan request, a response with no cause, an
-incompatible or cross-session cause, or two terminal responses for one request
-is an unchecked HTTP call and fails validation rather than becoming an
-underspecified adapter behavior. Protocols that deliberately permit interim or
-streaming responses must model those nonterminal messages explicitly and still
-identify one terminal response.
+Several exchanges may be in flight, so every response envelope sets
+\texttt{cause\_id} to its request's event identifier in the same session and
+task, and the adapter follows it to answer on the request's connection, never by
+adjacency, arrival order or a global ``current request''. A projection is valid
+only for a causally closed exchange: each request named by exactly one terminal
+response, a failure being a response too. An orphan request, a causeless or
+cross-session response, or two terminal responses fail validation; interim or
+streaming responses are modeled explicitly, with one terminal.
 
 \section{The running adapter}
 
-The following table is the implemented ChatUI subset. Static assets,
-diagnostic reports, generated source downloads, MCP, and health checks are
-document resources or tool protocols outside the ChatUI task grammar; they must
-not be mistaken for user-task protobuf events.
+The implemented subset (static assets, diagnostics, downloads, MCP and health
+checks are outside the task grammar):
 
 \input{generated/web-protocol-running-http.tex}
 
-Project routes are shared and available before login; an unknown project is
-404. A valid in-memory session is required only for model calls, provider-key
-management and application launch, and a missing session there yields 401. The server binds to loopback by
-default. Network exposure requires an authenticating reverse proxy or an
-equivalent transport boundary.
+Project routes are shared and need no login; an unknown project is 404. Model
+calls, key management and application launch need a session, or return 401. The
+server binds to loopback; exposing it needs an authenticating proxy.
 
 \section{The accepted HTTP projection}
 
-This is the complete intended browser mapping from the accepted implementation
-specification. Rows absent from the running-adapter table remain implementation
-obligations.
+Rows missing from the running table are still to be implemented.
 
 \input{generated/web-protocol-accepted-http.tex}
 
-Messages between \texttt{LeanFMServer} and \texttt{ModelProvider} map to the
-bounded in-process channels \texttt{provider.requests} and
-\texttt{provider.results}. They retain their protobuf message identities and
-request identifiers even though they do not cross HTTP. This is important for
-concurrency: two users can use different provider credentials because the key,
-session, user, project, conversation, and request identities remain request-local
-instead of being stored in a process-wide environment variable.
+Server-to-provider messages use the bounded in-process channels
+\texttt{provider.requests} and \texttt{provider.results}, keeping their message and
+request identities. Because key, session, user, project, conversation and request
+stay request-local rather than in a process-wide variable, two users can use
+different credentials at once.
 
 \section{Accepted message endpoints}
 
-Every accepted event is a length-delimited \texttt{EventEnvelope}; payload tags
-20 and above identify its concrete message. This generated index records each
-message's sender and receiver. The canonical schema that follows defines field
-names, tags, types, and cardinality.
+Every event is a length-delimited \texttt{EventEnvelope}; payload tags 20 and up
+identify the message. Senders and receivers:
 
 \input{generated/web-protocol-protobuf.tex}
 
 \subsection{Canonical byte schema}
 
-The following complete schema is normative. It fixes envelope and payload tag
-numbers, repeated and nested cardinality, enum values, and field names. A
-reconstruction must reproduce these values rather than assigning tags in book
-order or replacing nested messages with opaque bytes.
+This schema is normative: a reconstruction reproduces its tags, cardinalities,
+enum values and names exactly.
 
 \input{generated/web-protocol-schema.tex}
 
-Envelope metadata remain distinct. \texttt{prior\_ids} stores immutable
-predecessor links; any \texttt{map[Event][]Event} successor index is derived,
-not serialized as mutable truth. \texttt{session\_id} separates concurrent
-conversations, \texttt{task\_id} selects the grammar, and
-\texttt{src}/\texttt{dst} must match the message schema. As defined above,
-\texttt{cause\_id} is a separate acyclic direct-cause relation usable by roots,
-intermediate messages, nested task boundaries, and terminals. Its tree groups
-renderer boxes without ordering concurrent children.
+\texttt{prior\_ids} are immutable predecessor links (any successor index is
+derived); \texttt{session\_id} separates conversations, \texttt{task\_id} selects
+the grammar, \texttt{src}/\texttt{dst} must match the schema, and \texttt{cause\_id}
+is the acyclic direct-cause relation of Chapter~\ref{ch:events}.
 
 \section{Complete LeanFM task grammar}
 
-The following is the whole accepted ChatUI conversation grammar, rendered from
-the typed \texttt{TaskGrammar} values. Pronounce
-\texttt{A ! B : Message} as ``A sends Message to B.'' \texttt{then} is ordered
-composition; \texttt{choose/or} is an explicit alternative;
-\texttt{optional} permits zero or one occurrence; \texttt{fork/join all} waits
-for every branch; and \texttt{race/join first} accepts the first completion and
-cancels the remaining branches. (A threshold join in Chapter~\ref{ch:grammar}
-is a different construct: its unselected branches are not implicitly
-canceled.) A message not admitted by the selected task's
-current residual grammar is illegal even if its protobuf bytes decode.
+The whole ChatUI grammar, rendered from its typed values. \texttt{A ! B : Message}
+reads ``A sends Message to B''; \texttt{then} sequences; \texttt{choose/or}
+alternates; \texttt{optional} allows zero or one; \texttt{fork/join all} waits for
+every branch; \texttt{race/join first} takes the first and cancels the rest (unlike
+the threshold join of Chapter~\ref{ch:grammar}). A message the current residual
+does not admit is illegal even if its bytes decode.
 
 \input{generated/web-protocol-grammar.tex}
 
 \section{The grammar as an executable canvas}
 
-\textit{Future interface.} The complete grammar is one navigable canvas rather than one permanently huge
-drawing. A task or production node may be closed to its typed boundary or
-opened to show its interaction messages, residual states, parameters,
-constraints, paired measurements and nested productions. Opening and closing
-is presentation state only. It never changes the grammar or conceals a failing
-obligation.
-
-Each editable parameter has one typed definition and explicit dependency
-edges. Changing a queue capacity, actor population, timeout, probability or
-other parameter would mark every transitive dependent stale and regenerate the
-affected productions, reducers, proofs, codecs, charts and views, showing that
-cascade before the revision is committed. None of this is implemented yet.
-
-A production known to cross HTTP may attach its transport renderer at that
-production. The binding names the method, path template, request and response
-protobuf types, status alternatives, content type, byte encoder and byte
-decoder. Generated fixtures emit the exact request and response bytes and read
-them back. Conformance requires decoded emitted values to equal their originals
-and their message atoms to be accepted by the selected residual grammar. Thus
-the high-level canvas can be progressively opened all the way down to bytes
-without confusing transport with the message value.
+\textit{Future interface.} The grammar becomes one navigable canvas: a production
+closes to its typed boundary or opens to its messages, states, parameters,
+constraints, measurements and nested productions, as presentation only. Changing a
+typed parameter (a capacity, population, timeout, probability) would mark every
+dependent stale and regenerate the affected productions, reducers, proofs, codecs
+and views before the revision is committed. A production that crosses HTTP attaches
+its binding there (method, path, protobuf types, statuses, content type, codec),
+with fixtures that emit and decode the exact bytes, so the canvas opens all the way
+down to bytes.
 
 \section{What is checked, and what remains}
 
-Lean elaboration checks the actors, message schemas, task states, transitions,
-grammars, constraints, desired-output provenance, and implementation mappings.
-The chapter generator rejects an accepted HTTP request with no named response
-mapping and rejects incomplete running-route records. The ordinary repository
-checks also validate the protobuf source against the typed requirements.
-
-This does not yet prove that every accepted route has a handler: the running
-table makes that gap explicit. Nor does the current server yet append every
-browser exchange to the specified binary event journal. Completing those
-handlers and the schema-specific codec remains implementation work. Until then,
-the accepted grammar is the protocol contract, the running table is the honest
-conformance statement, and neither may be substituted for the other.
+Lean elaboration checks actors, schemas, states, transitions, grammars,
+constraints, output provenance and mappings; the generator rejects a request with
+no named response and incomplete route records; and the repository checks validate
+the protobuf against the requirements. Not every accepted route has a handler yet,
+and the server does not yet journal every exchange. The accepted grammar is the
+contract and the running table the honest conformance statement.

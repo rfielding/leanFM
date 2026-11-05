@@ -310,86 +310,62 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-Every specification effort tries to turn what people said into an explicit
-record of what was understood. LeanFM does this for one subject, the
-\emph{behavior} of software at its boundaries: who sends what to whom, in what
-order, within what time and with what probability, and what must always or
-never happen.
-
-The record LeanFM keeps is a \emph{multiparty session type}: one global
-description of a conversation between roles, from which each role's own
-obligations are derived. Session types come from programming-language research,
-where they guarantee that the parties to a conversation never send a message
-the other cannot handle and never wait for one that will not come. LeanFM uses
-them as a software engineering method, for messages between network nodes and
-for calls between APIs alike, and adds what the classic theory leaves out:
-every queue has a declared size, and every channel declares how it fails.
-Messages are lost, duplicated, reordered and late; timers fire early; a
-retried request arrives twice. Those facts are part of what a protocol means,
-and LeanFM checks the protocol together with them. Its
-distinguishing feature is that the record is not passive. It answers questions
-with generated examples and counterexamples, so misunderstandings surface while
-the specification is being written rather than after the code ships.
-
 LeanFM is a way of building software by arguing about it first. You describe
 what a system should do in ordinary language; an LLM turns that into precise
-requirements; and LeanFM checks those requirements and shows you what they
-mean---as sequence diagrams, state machines, event traces and counterexamples.
-You push back, the requirements change, and the pictures change with them.
-Only when you are satisfied does any code get written.
+requirements; and LeanFM checks them and shows what they mean, as sequence
+diagrams, state machines, event traces and counterexamples. You push back, the
+requirements change, the pictures change with them, and only then is code written.
 
-The precise part is Lean. Every requirement is a Lean definition: which roles
-exist, which messages they exchange down to the protobuf bytes, which orders of
-messages are legal, and what must always or never happen. Because these are
-definitions rather than prose, they can be checked, and the diagrams are
-generated from them rather than drawn by hand. When two requirements
-contradict each other---say $A$ must reference $B$, $B$ needs a $C$, and policy
-forbids that $C$---LeanFM finds the contradiction before anyone builds it.
+Its subject is the \emph{behavior} of software at its boundaries: who sends what to
+whom, in what order, within what time and with what probability, and what must
+always or never happen. The record it keeps is a \emph{multiparty session type},
+one global description of a conversation from which each role's obligations are
+derived. Session types come from programming-language research, where they
+guarantee that no party sends a message the other cannot handle or waits for one
+that will never come. LeanFM uses them for messages between network nodes and calls
+between APIs alike, and adds what the classic theory leaves out: every queue has a
+declared size, and every channel declares how it fails. Messages are lost,
+duplicated, reordered and late; timers fire early; a retried request arrives twice.
+LeanFM checks the protocol together with those facts.
 
-Not everything worth requiring is a message on a wire. Some requirements are
-about values and relationships, such as an identifier that must refer to a
-real object. LeanFM states those as predicates in the requirements and then
-says, in a separate implementation mapping, how the code will enforce them.
-Requirements over hidden state that no observer can see are flagged, so they
-can be restated in terms of events that can actually be tested.
+The precise part is Lean. Every requirement is a Lean definition: the roles, the
+messages down to their protobuf bytes, the legal orders, and what must always or
+never happen. Definitions can be checked, so diagrams are generated rather than
+drawn, and a contradiction (say $A$ must reference $B$, $B$ needs a $C$, and policy
+forbids that $C$) is found before anyone builds it. Requirements about values, such
+as an identifier that must refer to a real object, are predicates whose enforcement
+the implementation mapping describes; requirements over state no observer can see
+are flagged, so they can be restated over events that can be tested.
 
 \section*{Three layers, reviewed in git}
 
-Work proceeds in three layers: first the \emph{requirements}, the observable
-behaviour and the views generated from it; then the \emph{implementation
-mapping}, how each requirement will be realized and tested; then the code,
-written in one pass. Each layer is checked by LeanFM before the next is built
-on it. Review is what you already do with git: you read the diff and commit it.
-LeanFM has no approval step of its own and never makes you click to continue.
-A passing check is evidence for your review; it is not the review.
+Work proceeds in three layers, each checked before the next: the
+\emph{requirements} (observable behaviour and its generated views), the
+\emph{implementation mapping} (how each requirement is realized and tested), and the
+code, written in one pass. Review is what you already do with git: read the diff
+and commit it. A passing check is evidence for that review, not the review itself.
 
 \section*{Nothing lives only in the chat}
 
-A conversation with an LLM is temporary. Everything that matters is written
-into the project: the book, the requirements, the protobuf schema, the
-implementation mapping and the source. Each project has one directory that
-holds all of its state, so you can delete the conversation, delete a project,
-or start a new session and pick up exactly where the files leave off. This
-repository is itself such a project; the book you are reading is part of its
-specification and is read by the agents that work on it.
+A conversation with an LLM is temporary. Everything that matters is written into
+the project's one directory: the book, requirements, protobuf schema,
+implementation mapping and source. Delete the conversation or start a new session
+and work resumes from the files. This repository is such a project, and this book
+is part of its specification, read by the agents that work on it.
 
 \section*{How to read this book}
 
-Chapter~\ref{ch:vision} sets out the method: session types, what they assume
-about channels, and what LeanFM declares instead. The chapters that follow build
-it up: events and scenarios as recorded runs of a session, a worked bakery
-example, global types written as grammars, the TFTP example in which declaring
-the physics turns a perfect session type into a famous bug, and the authoring
-language. Chapter~\ref{ch:web-server}
-covers the LeanFM server, including the MCP interface that lets an agent
-consult LeanFM's logic directly. Later chapters apply temporal and modal logic
-to security and legal examples, and Chapter~\ref{ch:bootstrap-contract}
-defines exactly how a new project is set up.
+Chapter~\ref{ch:vision} sets out the method. Then come events and scenarios as
+recorded runs, a worked bakery example, global types as grammars, TFTP (where
+declaring the physics turns a perfect session type into a famous bug) and the
+authoring language. Chapter~\ref{ch:web-server} covers the server and the MCP
+interface through which an agent consults LeanFM's logic. Later chapters apply
+temporal and modal logic to security and legal examples, and
+Chapter~\ref{ch:bootstrap-contract} defines how a new project is set up.
 
-LeanFM is a working draft. The method and its tools are still changing, and
-the book records what exists today alongside what is planned; where it makes
-a claim, the evidence labels in Chapter~\ref{ch:vision} say what kind of
-evidence stands behind it---compiled, tested, proposed or planned. The source is public \citep{leanfmrepo}.
+LeanFM is a working draft. The book records what exists alongside what is planned,
+and the evidence labels of Chapter~\ref{ch:vision} say what stands behind each
+claim. The source is public \citep{leanfmrepo}.
 
 \tableofcontents
 

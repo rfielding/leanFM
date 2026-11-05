@@ -11,16 +11,12 @@ or success without an artifact. Completion therefore requires a paired argument:
   \item applicable \emph{negative invariants} state what the system must never do.
 \end{enumerate}
 
-For a feature that crosses a boundary, both kinds of statement are about the
-conversation: the positive invariant is a property of the global type, and the
-negative ones usually name a message that must never be sent, or never
-accepted, under the declared physics of a channel (a replayed request, a
-response to the wrong session, a call that arrives after its deadline).
-
-Review before declaring completion, in proportion to the boundary crossed:
-button spacing rarely needs a cryptographic audit; filesystem access needs
-authorization and path analysis. A material risk without a mapped and tested
-control blocks completion.
+For a feature that crosses a boundary, the positive invariant is a property of
+the global type, and the negative ones usually name a message that must never be
+sent or accepted under a channel's physics: a replayed request, a response to the
+wrong session, a call after its deadline. Review is proportional: button spacing
+needs no cryptographic audit, filesystem access needs authorization and path
+analysis, and a material risk without a mapped, tested control blocks completion.
 
 \section{The logical shape of a feature}
 
@@ -34,25 +30,18 @@ that feature.  A common safety-shaped completion condition is
   \bigwedge_{i=1}^{n} AG\,\neg bad_{f,i}.
 \]}
 
-The first conjunct is positive: the requested behavior remains true throughout
-every permitted execution.  Each remaining conjunct is negative: no permitted
-execution reaches a forbidden observation.  The equivalent counterexample form
+The first conjunct is positive; each other is negative: no permitted execution
+reaches a forbidden observation. The counterexample form
 
 \AccessibleEquation{A forbidden outcome is absent exactly when there does not exist a future that eventually reaches it.}{\[
   AG\,\neg bad \;\equiv\; \neg EF\,bad
 \]}
 
-is operationally useful.  A negative test tries to construct the $EF\,bad$
-witness: another user's project path, a stale response after a project switch,
-an oversized upload, a duplicate response, or a secret in a log.  Finding such
-a witness refutes the claimed completion.
-
-Not every feature is purely invariant.  ``A submitted request eventually gets a
-terminal response'' is a liveness obligation such as
-$AG(submitted\rightarrow AF(complete\lor failed))$.  A feature review must not
-replace liveness with safety or hide fairness and availability assumptions.
-Positive and negative requirements classify intent; the temporal operator must
-still match the claim.
+is what a negative test does: it tries to build the $EF\,bad$ witness (another
+user's project path, a stale response after a project switch, an oversized upload,
+a secret in a log), and finding one refutes completion. Some features are liveness
+obligations, such as $AG(submitted\rightarrow AF(complete\lor failed))$; review
+must not swap liveness for safety or hide fairness and availability assumptions.
 
 \section{Stability review before security review}
 
@@ -80,14 +69,13 @@ ways an environment change could break it:
     representation rather than reinterpreting old bytes silently.
 \end{description}
 
-Retain concrete invariants at the changed boundary, briefly recording when a
+Record the concrete invariants at the changed boundary, and say briefly when a
 dimension is non-material.
 
 \section{Security as forbidden observable behavior}
 
-``A user never reads a project they do not own'' states protected behavior;
-``use authentication'' only names a mechanism. Before selecting a control,
-identify:
+``A user never reads a project they do not own'' states protected behavior; ``use
+authentication'' names a mechanism. Before choosing a control, identify:
 
 \begin{enumerate}
   \item the trust boundary crossed by the feature;
@@ -96,17 +84,13 @@ identify:
   \item the forbidden observable outcome.
 \end{enumerate}
 
-Applicable forbidden behaviors include unauthorized access, cross-user or
-cross-project disclosure, secret persistence or logging, injection, path or
-symlink escape, replay, request/response confusion, privilege expansion,
-executable media, resource exhaustion and fail-open behavior. State testable
-invariants, such as ``a source path absent from the authorized project inventory
-never returns bytes.''
-
-Map each material negative invariant to a control---canonical-path confinement,
-authenticated project identity, an allowlisted inventory, a byte limit or an
-atomic revision comparison---and a negative test or proof. A mechanism alone
-does not establish the forbidden transition's absence.
+Forbidden behaviors include unauthorized access, cross-user or cross-project
+disclosure, secret persistence or logging, injection, path or symlink escape,
+replay, request/response confusion, privilege expansion, executable media, resource
+exhaustion and failing open. State them testably (``a source path absent from the
+authorized inventory never returns bytes''), and map each material one to a control
+(path confinement, authenticated identity, an allowlist, a byte limit, an atomic
+revision check) and a negative test or proof; a mechanism alone proves nothing.
 
 \section{The feature-completion ledger}
 
@@ -133,21 +117,17 @@ explicit completion blocker. \\
 \end{tabular}
 \end{center}
 
-Both sides need evidence: forbidding failures does not demonstrate the requested
-feature, and a successful demonstration does not rule out disclosure or corruption.
+Both sides need evidence: ruling out failures does not demonstrate the feature, and
+a demonstration does not rule out disclosure or corruption.
 
 \section{Worked example: the project Source view}
 
-Consider the request ``show implementation files in the Source tab.''  The
-positive claim is that selecting an authorized project lists its implementation
-files and selecting one readable UTF-8 file displays its content.  Project
-switching clears the old selection, so a late response cannot repopulate the new
-project with stale content.
-
-The feature crosses a filesystem boundary.  Project source, ignored account
-records, repository metadata, and provider credentials are protected assets.  A
-user can choose a URL path and can guess names that the visible tree never
-listed.  Applicable negative invariants therefore include:
+``Show implementation files in the Source tab.'' Positive: selecting an authorized
+project lists its files, and selecting a readable UTF-8 file shows it; switching
+projects clears the selection, so a late response cannot show stale content. The
+feature crosses a filesystem boundary, protecting source, account records,
+repository metadata and credentials from a user who can choose URL paths and guess
+names. Negative invariants:
 
 \begin{itemize}
   \item a user never reads another user's project source;
@@ -168,21 +148,17 @@ exact content.
 
 \section{Worked example: chat auto-scroll}
 
-Even a small convenience has stability boundaries.  The positive invariant is
-that initial conversation load and every newly rendered user, assistant, or
-failure message reveal the bottom of the chat message pane.  The implementation
-must scroll that pane rather than the entire page, must not move the independent
-project sidebar, and must reset with the project-keyed chat component.  No new
-authorization boundary is crossed, so a full threat model would be noise; the
-project-isolation and stale-response invariants remain material.
+Even a small convenience has stability boundaries. Positive: loading a
+conversation and every new message reveal the bottom of the chat pane, scrolling
+that pane, not the page or the sidebar, and resetting with the project-keyed
+component. No authorization boundary is crossed, so a threat model would be noise,
+but project isolation and stale responses still matter.
 
 \section{When the result is not complete}
 
-An unobservable or untested positive claim, missing durable negative requirement,
-uncontrolled risk or material control without a negative test or proof leaves
-the ledger incomplete. So does a liveness claim missing its fairness or
-availability assumptions, failed or skipped validation, or a check of a
-substitute artifact. Report the blocker and return to the relevant layer;
-a stakeholder-visible residual risk must be stated where the stakeholder will
-review it before committing. A green build or
-persuasive diagram does not fill these gaps.
+The ledger is incomplete with an untested positive claim, a missing negative
+requirement, an uncontrolled risk, a control without a negative test or proof, a
+liveness claim without its fairness assumptions, skipped validation, or a check of a
+substitute artifact. Report the blocker and return to the relevant layer, stating
+any residual risk where the stakeholder will see it before committing. A green build
+or a persuasive diagram does not fill these gaps.
