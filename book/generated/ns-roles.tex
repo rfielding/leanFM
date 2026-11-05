@@ -1,0 +1,30 @@
+\begin{lstlisting}[language={}]
+def alice (v : Variant) : Role := { name := "Alice", steps :=
+  [ .choose "peer" [.atom "B", .atom "I"]
+  , .claim "running" [name "A", .var "peer"]
+  , .send (.var "peer") (.enc (.pk (.var "peer")) (.tuple [.lit na, name "A"]))
+  , .recv (.enc (.pk (name "A")) (match v with
+      | .original => .tuple [.lit na, .var "n"]
+      | .lowe => .tuple [.lit na, .var "n", .var "peer"]))
+  , .send (.var "peer") (.enc (.pk (.var "peer")) (.var "n"))
+  , .claim "finished" [name "A", .var "peer"] ] }
+
+def bob (v : Variant) : Role := { name := "Bob", steps :=
+  [ .recv (.enc (.pk (name "B")) (.tuple [.var "m", .var "x"]))
+  , .send (.var "x") (.enc (.pk (.var "x")) (match v with
+      | .original => .tuple [.var "m", .lit nb]
+      | .lowe => .tuple [.var "m", .lit nb, name "B"]))
+  , .recv (.enc (.pk (name "B")) (.lit nb))
+  , .claim "commit" [name "B", .var "x"] ] }
+
+def declared (v : Variant) : Protocol :=
+  { attacker := "Ivo"
+  , attackerKnows := [.atom "A", .atom "B", .atom "I", .pk "A", .pk "B", .pk "I", .sk "I", ni]
+  , domain := [na, nb, ni]
+  , domains := [("x", [.atom "A", .atom "B", .atom "I"])]
+  , roles := [alice v, bob v]
+  , flags :=
+    [ ⟨"SecrecyBreach", fun w => w.claimed "commit" [.atom "B", .atom "A"] && w.knows nb⟩
+    , ⟨"Impersonation", fun w => w.claimed "commit" [.atom "B", .atom "A"] && !w.claimed "running" [.atom "A", .atom "B"]⟩
+    , ⟨"HonestRun", fun w => w.claimed "commit" [.atom "B", .atom "A"] && w.claimed "finished" [.atom "A", .atom "B"]⟩ ] }
+\end{lstlisting}

@@ -1,0 +1,7 @@
+\begin{lstlisting}[language={}]
+protocol NS (A, B) {
+  m1: Msg1 from A to B;
+  m2: Msg2 from B to A cause m1 where m2.na = m1.na;
+  m3: Msg3 from A to B cause m2;
+}
+\end{lstlisting}

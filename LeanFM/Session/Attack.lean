@@ -1,0 +1,246 @@
+import LeanFM.Session.Knowledge
+import LeanFM.Logic
+
+/-!
+# The attacker as a declaration
+
+A security protocol is declared, not modelled by hand: each honest role is a short script of
+choices, sends, receives and claims over message patterns, and the attacker is the network. Every
+message an honest role sends goes to the attacker; every message an honest role receives is one
+the attacker can build (`Knowledge.knows`) that matches the pattern it expects. That is the
+Dolev–Yao channel, declared once for every channel of the protocol.
+
+`Protocol.explore` generates the state space from the declaration: each thread's position and
+bindings, the attacker's knowledge (kept broken apart and in one order), the claims made so far,
+and the flags already tripped. Flags are requirements as state predicates over that world; a flag
+trips once, as an event, when its predicate first holds. `Protocol.check` hands the generated model
+to LeanFM's `check_ctl`, with every transition's term and the attacker's knowledge declared, so a
+formula may also use `knows` atoms directly.
+
+Bounded on purpose: each thread runs once, a received pattern's unbound variables range over a
+declared finite domain (names and nonces), and a variable binds an atom, never a whole ciphertext.
+Those bounds are where attacks on more sessions or on forwarded blobs would be missed.
+-/
+
+namespace LeanFM.Session.Attack
+open LeanFM.Session.Knowledge Lean
+
+/-- A message pattern: a message with variables. `pk x` and `sk x` take an agent's name. -/
+inductive Pat where
+  | lit (m : Msg)
+  | var (x : String)
+  | pair (a b : Pat)
+  | enc (key body : Pat)
+  | hash (body : Pat)
+  | pk (agent : Pat)
+  | sk (agent : Pat)
+  deriving Repr, Inhabited
+
+/-- `[a, b, c]` as nested pairs, the way the literature writes tuples. -/
+def Pat.tuple : List Pat → Pat
+  | [] => .lit (.atom "")
+  | [p] => p
+  | p :: ps => .pair p (Pat.tuple ps)
+
+abbrev Env := List (String × Msg)
+
+def Pat.vars : Pat → List String
+  | .lit _ => []
+  | .var x => [x]
+  | .pair a b | .enc a b => a.vars ++ b.vars
+  | .hash b | .pk b | .sk b => b.vars
+
+/-- The message a pattern stands for under some bindings; `none` while a variable is unbound. -/
+def Pat.inst (env : Env) : Pat → Option Msg
+  | .lit m => some m
+  | .var x => env.lookup x
+  | .pair a b => do pure (.pair (← a.inst env) (← b.inst env))
+  | .enc k b => do pure (.enc (← k.inst env) (← b.inst env))
+  | .hash b => do pure (.hash (← b.inst env))
+  | .pk a => do match ← a.inst env with | .atom n => pure (.pk n) | _ => none
+  | .sk a => do match ← a.inst env with | .atom n => pure (.sk n) | _ => none
+
+inductive Step where
+  /-- bind `x` to one of `values`: the role's own choice, such as whom to talk to -/
+  | choose (x : String) (values : List Msg)
+  /-- send to the intended recipient; it goes to the network, which is the attacker -/
+  | send (to : Pat) (p : Pat)
+  /-- receive any message the attacker can build that matches `p`, binding its free variables -/
+  | recv (p : Pat)
+  /-- a claim the role makes, such as "I have finished a run with X" -/
+  | claim (name : String) (args : List Pat)
+  deriving Repr, Inhabited
+
+structure Role where
+  name : String
+  steps : List Step
+  deriving Repr, Inhabited
+
+structure Thread where
+  pc : Nat := 0
+  env : Env := []
+  deriving DecidableEq, Repr, Inhabited
+
+structure World where
+  threads : List Thread
+  attacker : List Msg
+  claims : List (String × List Msg) := []
+  tripped : List String := []
+  deriving DecidableEq, Repr, Inhabited
+
+def World.knows (w : World) (m : Msg) : Bool := Knowledge.knows w.attacker m
+def World.claimed (w : World) (name : String) (args : List Msg) : Bool := w.claims.contains (name, args)
+
+/-- A requirement as a state predicate; it trips once, as the event `name`, when it first holds. -/
+structure Flag where
+  name : String
+  holds : World → Bool
+
+structure Protocol where
+  attacker : String
+  /-- what the attacker knows before the run: names, public keys, its own keys and nonces -/
+  attackerKnows : List Msg
+  /-- the values an unbound variable of a received pattern may take -/
+  domain : List Msg
+  /-- narrower domains for named variables, such as agents or nonces -/
+  domains : List (String × List Msg) := []
+  roles : List Role
+  flags : List Flag
+
+def canon (K : List Msg) : List Msg := K.mergeSort (fun x y => decide (x.render ≤ y.render))
+
+/-- One transition: the event that names it, the world after it, and the message it put on the
+wire as (from, to, term), if any. -/
+structure Move where
+  label : String
+  next : World
+  wire : Option (String × String × Msg) := none
+
+def assignments (domain : List Msg) : List String → List Env
+  | [] => [[]]
+  | x :: xs => (assignments domain xs).flatMap fun env => domain.map fun v => (x, v) :: env
+
+def assignments' (p : Protocol) : List String → List Env
+  | [] => [[]]
+  | x :: xs => (assignments' p xs).flatMap fun env =>
+      ((p.domains.lookup x).getD p.domain).map fun v => (x, v) :: env
+
+def agentName : Msg → String
+  | .atom n => n
+  | m => m.render
+
+def Protocol.moves (p : Protocol) (w : World) : List Move :=
+  let stepMoves := (p.roles.zip (List.range p.roles.length)).flatMap fun (role, i) =>
+    let t := w.threads[i]!
+    let setT := fun (t' : Thread) => w.threads.set i t'
+    match role.steps[t.pc]? with
+    | none => []
+    | some (.choose x values) => values.map fun v =>
+        { label := s!"{role.name} chooses {x} = {v}", next := { w with threads := setT { pc := t.pc + 1, env := (x, v) :: t.env } } }
+    | some (.send to pat) =>
+        match pat.inst t.env, to.inst t.env with
+        | some m, some dst =>
+          [{ label := s!"{role.name} → {agentName dst}: {m}",
+             next := { w with threads := setT { t with pc := t.pc + 1 }, attacker := canon (learn w.attacker m) },
+             wire := some (role.name, p.attacker, m) }]
+        | _, _ => []
+    | some (.recv pat) =>
+        let free := (pat.vars.filter (fun x => (t.env.lookup x).isNone)).eraseDups
+        (assignments' p free).filterMap fun binding =>
+          let env := binding ++ t.env
+          match pat.inst env with
+          | some m => if w.knows m then
+              some { label := s!"{role.name} ⇐ {m}", next := { w with threads := setT { pc := t.pc + 1, env } },
+                     wire := some (p.attacker, role.name, m) }
+            else none
+          | none => none
+    | some (.claim name args) =>
+        match args.mapM (·.inst t.env) with
+        | some vs => [{ label := s!"{role.name} claims {name}({", ".intercalate (vs.map agentName)})",
+                        next := { w with threads := setT { t with pc := t.pc + 1 }, claims := (name, vs) :: w.claims } }]
+        | none => []
+  let flags := p.flags.filterMap fun f =>
+    if f.holds w && !w.tripped.contains f.name then
+      some { label := f.name, next := { w with tripped := f.name :: w.tripped } }
+    else none
+  stepMoves ++ flags
+
+structure Model where
+  states : Array World
+  edges : List (Nat × Nat × Move)
+
+/-- Breadth-first over the declared protocol; stops adding states at `limit`. -/
+def Protocol.explore (p : Protocol) (limit : Nat := 4096) : Model := Id.run do
+  let init : World := { threads := p.roles.map (fun _ => {}), attacker := canon (analz p.attackerKnows) }
+  let mut states : Array World := #[init]
+  let mut edges : List (Nat × Nat × Move) := []
+  let mut i := 0
+  while i < states.size do
+    for mv in p.moves states[i]! do
+      match states.findIdx? (· == mv.next) with
+      | some j => edges := (i, j, mv) :: edges
+      | none =>
+        if states.size < limit then
+          states := states.push mv.next
+          edges := (i, states.size - 1, mv) :: edges
+    i := i + 1
+  return { states, edges := edges.reverse }
+
+def termJson : Msg → Json
+  | .atom n => Json.mkObj [("atom", n)]
+  | .key n => Json.mkObj [("key", n)]
+  | .pk a => Json.mkObj [("pk", a)]
+  | .sk a => Json.mkObj [("sk", a)]
+  | .pair a b => Json.mkObj [("pair", Json.arr #[termJson a, termJson b])]
+  | .enc k b => Json.mkObj [("enc", Json.mkObj [("key", termJson k), ("body", termJson b)])]
+  | .hash b => Json.mkObj [("hash", termJson b)]
+
+/-- The generated model as a `check_ctl` draft: every message transition carries its term, the
+attacker sees every channel, and every flag is declared on an unreachable extra state so a formula
+may name a flag that never trips. -/
+def Protocol.draft (p : Protocol) (m : Model) (id : String) : Json :=
+  let name := fun (i : Nat) => s!"s{i}"
+  let outs := m.edges.map (·.1)
+  let terminals := (List.range m.states.size).filter (fun i => !outs.contains i)
+  let tr := fun ((a, b, mv) : Nat × Nat × Move) =>
+    Json.mkObj ([("src", Json.str (name a)), ("dst", Json.str (name b)), ("message", Json.str mv.label)] ++
+      match mv.wire with
+      | some (f, t, term) => [("from", Json.str f), ("to", Json.str t), ("term", termJson term)]
+      | none => [])
+  Json.mkObj
+    [ ("id", Json.str id)
+    , ("states", Json.arr (((List.range m.states.size).map (Json.str ∘ name)) ++ [Json.str "flags"]).toArray)
+    , ("initial", "s0")
+    , ("terminals", Json.arr (terminals.map (Json.str ∘ name)).toArray)
+    , ("transitions", Json.arr ((m.edges.map tr) ++ p.flags.map (fun f =>
+        Json.mkObj [("src", "flags"), ("dst", "flags"), ("message", Json.str f.name)])).toArray)
+    , ("knowledge", Json.mkObj [(p.attacker, Json.mkObj
+        [("initial", Json.arr (p.attackerKnows.map termJson).toArray), ("seesAll", Json.bool true)])]) ]
+
+/-- Ask `check_ctl` a formula over the generated model. -/
+def Protocol.check (p : Protocol) (m : Model) (id : String) (formula : Json) : Json :=
+  match LeanFM.Logic.checkCtl (Json.mkObj [("task", p.draft m id), ("formula", formula)]) with
+  | .ok j => j
+  | .error e => Json.mkObj [("verdict", "error"), ("reason", e)]
+
+def verdict (j : Json) : String := (j.getObjValD "verdict").getStr?.toOption.getD "?"
+
+/-- The events of a returned path, in order. -/
+def walk (j : Json) : List String :=
+  match (j.getObjValD "evidence").getObjValD "path" with
+  | .arr ps => ps.toList.filterMap fun s => (s.getObjValD "message").getStr?.toOption
+  | _ => []
+
+/-- What crossed the wire along a returned path, replayed through the model. -/
+def Protocol.replayWire (p : Protocol) (path : List String) : List (String × String × Msg) := Id.run do
+  let mut w : World := { threads := p.roles.map (fun _ => {}), attacker := canon (analz p.attackerKnows) }
+  let mut out := []
+  for label in path do
+    match (p.moves w).find? (·.label == label) with
+    | some mv =>
+      if let some hop := mv.wire then out := out ++ [hop]
+      w := mv.next
+    | none => pure ()
+  return out
+
+end LeanFM.Session.Attack
