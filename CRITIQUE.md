@@ -97,7 +97,12 @@ channel Dolev-Yao), and Needham-Schroeder is declared that way; the model is
 bounded to a declared number of sessions per role (at most four, eight threads
 in all), each run once, with fresh values per session and variables binding
 names and nonces from a declared domain, never whole ciphertexts. Two sessions
-find reflection; attacks needing unboundedly many sessions are out of reach. Over MCP, `check_protocol` takes the same
+find reflection; attacks needing unboundedly many sessions are out of reach. A
+declared defender may stand in front of named roles; it filters only what its
+keys let it see, and its drop and rewrite rules are patterns, not programs.
+`check_reassembly` covers every segmentation of a stream up to four bytes long
+against first-wins and last-wins overlap policies; real stacks have more
+policies (per-OS rules, TTL and checksum tricks) than these two. Over MCP, `check_protocol` takes the same
 declaration as JSON, with claims and knowledge as formula atoms instead of Lean
 flags; a hand-written `check_ctl` draft still lists its own injections. Inside a CTL formula, `K_a` over indistinguishable histories is
 still unsupported. Randomness,

@@ -257,7 +257,15 @@ would make it testable.
   \emph{via}; a delivery names the attacker it came from. Needham--Schroeder
   declared this way gives back Lowe's attack (Section~\ref{sec:needham-schroeder}).
   Each role may run several sessions at once, each with its own fresh values,
-  and each session runs once; the answer says so.
+  and each session runs once; the answer says so. An optional defender stands
+  in front of named roles, dropping or rewriting what it can see, and seeing
+  inside a ciphertext only with a key it holds
+  (Section~\ref{sec:defender}).
+  \item[\texttt{check\_reassembly}] asks whether a defender scanning a stream
+  for a signature and the host behind it can be made to disagree. The attacker
+  chooses every segment, and each side keeps either the first or the last bytes
+  of an overlap. The answer is a verdict over every segmentation and, for an
+  evasion, the segments that make it (Section~\ref{sec:reassembly}).
 \end{description}
 
 The modal operators themselves ($K_a$ over indistinguishable histories, $O$,

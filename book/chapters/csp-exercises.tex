@@ -681,6 +681,62 @@ produces \texttt{\{nb, B\}kAB}, and his first session waits for
 checks that fix with the same two sessions: agreement holds and an honest run
 still completes.
 
+\subsection{A defender on the wire}
+\label{sec:defender}
+
+So far the network has belonged to the attacker alone. A real path often has a
+defender on it too: an intrusion-prevention system, a filtering proxy, a gateway
+that intercepts TLS. A declaration may put one in front of named roles. Every
+message delivered to them passes through it first, and it drops what matches a
+drop pattern, rewrites what matches a rewrite rule, and forwards the rest. What
+it can match is what it can see, which is \texttt{knows} again from the
+defender's side. It looks inside a ciphertext only when it can build the
+opening key. A blob it cannot open matches nothing, not even a copy of itself,
+because real encryption is randomised. Here Bob accepts whatever reaches him,
+and Guard drops \texttt{bad}:
+
+\input{generated/ns-defender.tex}
+
+\begin{center}
+\input{generated/ns-defender-verdicts.tex}
+\end{center}
+
+The filter stops a plaintext \texttt{bad} and lets \texttt{good} through.
+Sealed for Bob, \texttt{bad} goes straight past it: the counterexample shows
+Guard itself delivering \texttt{\{bad\}pk(B)}. Give Guard Bob's private key, as an
+intercepting gateway has, and it sees inside and drops it again. The table is
+the whole argument for and against interception in four rows.
+
+\subsection{Reassembly}
+\label{sec:reassembly}
+
+Signature matching has a subtler gap. A defender scanning a TCP stream for
+\texttt{EVIL} has to put the stream back together the way the host behind it
+will, and the attacker controls segmentation. It can send any byte range, in
+any order, and send the same range again with different bytes. When two
+segments overlap, one implementation keeps the bytes that arrived first and
+another keeps the bytes that arrived last, and operating systems have differed
+in exactly this. \texttt{check\_reassembly} models each position of the stream
+as empty, the signature's byte, or some other byte (written \texttt{.}). It
+applies every segment to the defender's copy and the host's copy with their own
+policies, and resets the stream when a blocking defender matches. The search
+covers every segmentation, of any length:
+
+\begin{center}
+\input{generated/ns-reassembly.tex}
+\end{center}
+
+When the policies differ, two segments are enough. A first-wins defender is fed
+a decoy byte at offset 0, then the whole signature over it. It keeps the decoy
+and sees \texttt{.VIL}, while a last-wins host sees \texttt{EVIL}. The other
+mismatch is the mirror image. When the policies agree, no segmentation
+separates the two copies, and the property is proved over every reachable
+state. The same disagreement is what makes a host fingerprintable: send
+overlapping segments and see which bytes it acts on. Normalising the stream
+before scanning, as later intrusion-prevention systems did, is the fix: the
+defender forwards the bytes it scanned, so the host has no overlap left to
+resolve differently.
+
 \section{What these exercises demand from the library}
 
 The three examples produce a concrete checklist:

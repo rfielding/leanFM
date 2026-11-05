@@ -203,6 +203,61 @@ def reportReflection : IO Unit := do
       IO.println s!"  {key}: {verdict r}"
       for step in walk r do IO.println s!"      {step}"
 
+/-! ## A defender on the wire
+
+Bob accepts whatever reaches him. A defender, Guard, stands in front of him and drops `bad`. What
+it can stop depends on what it can see: a plaintext `bad`, yes; `bad` sealed for Bob, only when it
+holds Bob's key, as an intercepting gateway does. Declared as the JSON `check_protocol` takes. -/
+
+--@begin Defender
+def guarded (bobReceives : Json) (defender : Option Json) (formula : Json) : Json :=
+  let base := json% {
+    roles: [{name: "Bob", steps: [
+      {recv: $(bobReceives)},
+      {claim: {name: "accept", args: [{atom: "B"}, {var: "x"}]}}]}],
+    attacker: {name: "Ivo", knows: [{atom: "B"}, {atom: "good"}, {atom: "bad"}, {pk: "B"}]},
+    domain: [{atom: "good"}, {atom: "bad"}],
+    formula: $(formula) }
+  match defender with
+  | some d => base.setObjVal! "defender" d
+  | none => base
+
+def plain := json% {var: "x"}
+def sealedForBob := json% {enc: {key: {pk: "B"}, body: {var: "x"}}}
+def filter := json% {name: "Guard", protects: ["Bob"], drop: [{atom: "bad"}]}
+def intercepting := json% {name: "Guard", protects: ["Bob"], knows: [{sk: "B"}], drop: [{atom: "bad"}]}
+--@end Defender
+
+def neverBad := json% {never: {claimed: "accept(B, bad)"}}
+def goodArrives := json% {EF: {claimed: "accept(B, good)"}}
+
+def tool (name : String) (args : Json) : Json :=
+  match LeanFM.Logic.run name args with
+  | some (.ok j) => j
+  | some (.error e) => Json.mkObj [("verdict", "rejected"), ("reason", Json.str e)]
+  | none => Json.mkObj [("verdict", "no tool")]
+
+def defenderCases : List (String × Json × Option Json) :=
+  [ ("no defender, plaintext", plain, none)
+  , ("filter, plaintext", plain, some filter)
+  , ("filter, sealed for Bob", sealedForBob, some filter)
+  , ("intercepting filter (holds sk(B)), sealed for Bob", sealedForBob, some intercepting) ]
+
+#guard defenderCases.map (fun (_, r, d) => verdict (tool "check_protocol" (guarded r d neverBad))) ==
+  ["disproved", "proved", "disproved", "proved"]
+#guard defenderCases.all (fun (_, r, d) => verdict (tool "check_protocol" (guarded r d goodArrives)) == "proved")
+
+/-! ## Reassembly
+
+The defender scans the stream Bob reads for the signature EVIL, but the attacker cuts the stream
+into segments, and when two segments overlap, the defender and the host may keep different bytes. -/
+
+def reassemblyCases : List (String × String) :=
+  [("first", "last"), ("last", "first"), ("first", "first"), ("last", "last")]
+
+def reassembly (box host : String) : Json :=
+  tool "check_reassembly" (Json.mkObj [("box", Json.str box), ("host", Json.str host)])
+
 /-! ## For the book -/
 
 def tex (t : String) : String := ((t.replace "{" "\\{").replace "}" "\\}").replace "#" "\\#"
@@ -245,6 +300,26 @@ def writeBook : IO Unit := do
   IO.FS.writeFile (out ++ "ns-attack-diagram.tex")
     (LeanFM.MDPDiagram.renderInteractionTeX ["Alice", "Ivo", "Bob"] (diagram (declared .original) nb attack))
   IO.FS.writeFile (out ++ "ns-reflection-roles.tex") (listing (block src "Reflection"))
+  IO.FS.writeFile (out ++ "ns-defender.tex") (listing (block src "Defender"))
+  let tt := fun (t : String) => "\\texttt{" ++ tex t ++ "}"
+  IO.FS.writeFile (out ++ "ns-defender-verdicts.tex") <|
+    "\\begin{tabular}{p{0.46\\textwidth}ll}\n\\toprule\n" ++
+    "Bob receives, through & Bob never accepts bad & good still arrives \\\\\n\\midrule\n" ++
+    "\n".intercalate (defenderCases.map fun (n, r, d) =>
+      s!"{n} & {verdict (tool "check_protocol" (guarded r d neverBad))} & {verdict (tool "check_protocol" (guarded r d goodArrives))} \\\\") ++
+    "\n\\bottomrule\n\\end{tabular}\n"
+  let segText := fun (j : Json) => match j.getObjValD "segments" with
+    | .arr ss => if ss.isEmpty then "---" else ", then ".intercalate (ss.toList.map fun (sg : Json) =>
+        s!"{tt ((sg.getObjValD "data").getStr?.toOption.getD "?")} at {(sg.getObjValD "offset").getStr?.toOption.getD "?"}")
+    | _ => "---"
+  let rows ← reassemblyCases.mapM fun (b, h) => do
+    let r := reassembly b h
+    IO.println s!"reassembly {b}/{h}: {verdict r}"
+    pure s!"{b} & {h} & {verdict r} & {segText r} \\\\"
+  IO.FS.writeFile (out ++ "ns-reassembly.tex") <|
+    "\\begin{tabular}{llll}\n\\toprule\n" ++
+    "defender keeps & host keeps & never delivered & evasion \\\\\n\\midrule\n" ++
+    "\n".intercalate rows ++ "\n\\bottomrule\n\\end{tabular}\n"
   let reflected := walk (askReflection 2 impersonation)
   IO.FS.writeFile (out ++ "ns-reflection.tex")
     (listing ("\n".intercalate (reflected.zipIdx.map fun (l, i) => s!"{i + 1}. {l}")))

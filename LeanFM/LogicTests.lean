@@ -366,6 +366,72 @@ def main : IO Unit := do
   rejects "check_protocol: sending a fresh variable before making it is rejected"
     (reflArgs (Json.mkObj [("name", "Bob"), ("steps", json% [{send: {to: {atom: "A"}, message: {var: "nb"}}}, {fresh: "nb"}])]) (json% true))
     "sends nb before anything binds it"
+  -- A defender on the path: what it can see decides what it can stop.
+  let guarded := fun (bobRecv : Json) (defender : Json) (f : Json) =>
+    let a := json% {
+      roles: [{name: "Bob", steps: [{recv: $(bobRecv)}, {claim: {name: "accept", args: [{atom: "B"}, {var: "x"}]}}]}],
+      attacker: {name: "Ivo", knows: [{atom: "B"}, {atom: "good"}, {atom: "bad"}, {pk: "B"}]},
+      domain: [{atom: "good"}, {atom: "bad"}],
+      formula: $(f) }
+    (run "check_protocol" (if defender.isNull then a else a.setObjVal! "defender" defender)).getD (.error "no tool")
+  let neverBad := json% {never: {claimed: "accept(B, bad)"}}
+  let goodGets := json% {EF: {claimed: "accept(B, good)"}}
+  let plain := json% {var: "x"}
+  let sealed := json% {enc: {key: {pk: "B"}, body: {var: "x"}}}
+  let ips := json% {name: "Guard", protects: ["Bob"], drop: [{atom: "bad"}]}
+  let tls := json% {name: "Guard", protects: ["Bob"], knows: [{sk: "B"}], drop: [{atom: "bad"}]}
+  let scrub := json% {name: "Guard", protects: ["Bob"], rewrite: [{"match": {atom: "bad"}, replace: {atom: "good"}}]}
+  expect "check_protocol: with no defender, Bob accepts bad" (verdictOf (guarded plain Json.null neverBad) == "disproved")
+  expect "check_protocol: a defender that drops bad stops it in plaintext" (verdictOf (guarded plain ips neverBad) == "proved")
+  expect "check_protocol: the defender still lets good through" (verdictOf (guarded plain ips goodGets) == "proved")
+  let evaded := guarded sealed ips neverBad
+  expect "check_protocol: bad sealed for Bob goes past a defender without the key" (verdictOf evaded == "disproved")
+  expect "check_protocol: the evasion is delivered by the defender, sealed" (match evaded with
+    | .ok j => (j.getObjValD "wire").compress.contains "{\"event\":\"recv\",\"from\":\"Guard\",\"term\":\"{bad}pk(B)\",\"to\":\"Bob\"}"
+    | _ => false)
+  expect "check_protocol: a defender holding Bob's key sees inside and drops it" (verdictOf (guarded sealed tls neverBad) == "proved")
+  expect "check_protocol: and still delivers sealed good" (verdictOf (guarded sealed tls goodGets) == "proved")
+  expect "check_protocol: a rewriting defender turns bad into good" (verdictOf (guarded plain scrub neverBad) == "proved")
+  let scrubOnly := json% {
+    roles: [{name: "Bob", steps: [{recv: {var: "x"}}, {claim: {name: "accept", args: [{atom: "B"}, {var: "x"}]}}]}],
+    attacker: {name: "Ivo", knows: [{atom: "bad"}]}, domain: [{atom: "good"}, {atom: "bad"}],
+    defender: $(scrub), formula: {EF: {claimed: "accept(B, good)"}}}
+  expect "check_protocol: the rewrite shows in the evidence" (match (run "check_protocol" scrubOnly).getD (.error "") with
+    | .ok j => (j.getObjValD "evidence").compress.contains "Bob ⇐ good (Guard rewrote bad)"
+    | _ => false)
+  expect "check_protocol: the defender's link is not the attacker's" (match guarded sealed tls goodGets with
+    | .ok j => (j.getObjValD "note").compress.contains "except Guard's links to the roles it protects"
+    | _ => false)
+  let withDefender := fun (d : Json) => (json% {
+      roles: [{name: "Bob", steps: [{recv: {var: "x"}}]}], attacker: {name: "Ivo"}, domain: [{atom: "a"}], formula: true}).setObjVal! "defender" d
+  rejects "check_protocol: a defender protecting an undeclared role is rejected"
+    (withDefender (json% {name: "Guard", protects: ["Carol"]})) "not a declared role"
+  rejects "check_protocol: a defender named like the attacker is rejected"
+    (withDefender (json% {name: "Ivo", protects: ["Bob"]})) "neither an honest role nor the attacker"
+  rejects "check_protocol: a rewrite inventing a variable is rejected"
+    (withDefender (json% {name: "Guard", protects: ["Bob"], rewrite: [{"match": {atom: "a"}, replace: {var: "y"}}]})) "its match does not bind"
+  -- Stream reassembly: the defender and the host must agree on overlaps, or segmentation evades.
+  let reasm := fun (a : Json) => (run "check_reassembly" a).getD (.error "no tool")
+  let segsOf := fun (r : ToolOutcome) => match r with | .ok j => (j.getObjValD "segments").compress | _ => ""
+  let firstLast := reasm (json% {})
+  expect "check_reassembly: first-wins defender, last-wins host: evaded" (verdictOf firstLast == "disproved")
+  expect "check_reassembly: the evasion writes a decoy byte, then the signature over it"
+    (segsOf firstLast == "[{\"data\":\".\",\"offset\":\"0\"},{\"data\":\"EVIL\",\"offset\":\"0\"}]")
+  let lastFirst := reasm (json% {box: "last", host: "first"})
+  expect "check_reassembly: last-wins defender, first-wins host: evaded" (verdictOf lastFirst == "disproved")
+  expect "check_reassembly: that evasion sends the signature's first byte, then a decoy over it"
+    (segsOf lastFirst == "[{\"data\":\"E\",\"offset\":\"0\"},{\"data\":\".VIL\",\"offset\":\"0\"}]")
+  expect "check_reassembly: the same policy on both sides cannot be evaded (first)" (verdictOf (reasm (json% {box: "first", host: "first"})) == "proved")
+  expect "check_reassembly: the same policy on both sides cannot be evaded (last)" (verdictOf (reasm (json% {box: "last", host: "last"})) == "proved")
+  expect "check_reassembly: a matched policy still lets the signature through to be caught"
+    (verdictOf (reasm (json% {box: "first", host: "first", formula: {EF: {claimed: "alerted(EVIL)"}}})) == "proved")
+  expect "check_reassembly: a passive defender is evaded the same way, without an alert" (verdictOf (reasm (json% {mode: "passive"})) == "disproved")
+  let rReject := fun (label : String) (a : Json) (needle : String) =>
+    expect label (match run "check_reassembly" a with | some (.error e) => e.contains needle | _ => false)
+  rReject "check_reassembly: a long signature is rejected" (json% {signature: "LONGER"}) "1 to 4 characters"
+  rReject "check_reassembly: a signature with the decoy mark is rejected" (json% {signature: "A.B"}) "may not contain ."
+  rReject "check_reassembly: an unknown policy is rejected" (json% {box: "middle"}) "\"first\""
+  rReject "check_reassembly: an unknown mode is rejected" (json% {mode: "loud"}) "blocking"
   expect "knows: a dangling reference is rejected" (verdictOf (ask [ev "e1" "A" "Ivo" ["e0"] (at_ "x")] "e1" none) == "rejected")
   expect "oversized arguments rejected"
     (verdictOf ((run "explain_formula" (Json.mkObj [("formula", Json.str (String.ofList (List.replicate 70000 'x')))])).getD (.error "")) == "rejected")

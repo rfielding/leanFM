@@ -35,9 +35,24 @@ jobs:
             echo 'Runtime account data must not be committed.' >&2
             exit 1
           fi
+      # Ubuntu 24.04 lets an unprivileged process create a user namespace but gives it no
+      # capabilities inside, so bwrap cannot bring up loopback ("Failed RTM_NEWADDR"). This
+      # throwaway runner allows them; the sandbox itself still drops every capability.
+      - name: Allow unprivileged user namespaces for bwrap
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Verify required sandbox support
         run: python3 scripts/chatui_sandbox_check.py
       - uses: leanprover/lean-action@v1
+      - name: Install the project-local Go toolchain (checksum verified)
+        run: make go-toolchain
       - run: cp book/main-dark.pdf book/main.pdf
       - name: Run required ChatUI checks
         run: make chatui-check
+      - name: Run validation, logic and MCP checks
+        run: make validate
+      - name: Run self-hosting checks
+        run: make selfhost-check
+      - name: Check generated protocol outputs are current
+        run: |
+          lake env lean --run NeedhamSchroeder.lean
+          git diff --exit-code -- book/generated SELF_HOSTING_REVIEW.md

@@ -3,6 +3,7 @@ import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.Session.Knowledge
 import LeanFM.Session.Attack
+import LeanFM.Session.Reassembly
 
 /-!
 # LeanFM logic consultation (selfhost.mcp.logic.*)
@@ -1376,7 +1377,36 @@ def parseProtocol (args : Json) : Except String Protocol := do
       throw s!"fresh {x} makes {v.render}, which the attacker already knows; a fresh value is new to everyone"
   let domain := coverFresh roles domain
   let domains := domains.map fun (x, vs) => (x, coverFresh roles vs)
-  return { attacker, attackerKnows, domain, domains, roles, flags := [] }
+  let defender ← match field "defender" with
+    | none => pure none
+    | some dj => do
+      let n ← match (dj.getObjVal? "name").toOption.bind str? with
+        | some n => checkString "defender.name" n
+        | none => throw "the defender needs a name"
+      if declaredNames.contains n || n == attacker then throw "the defender is neither an honest role nor the attacker"
+      let protects ← match (dj.getObjVal? "protects").toOption with
+        | some (.arr items) =>
+          if items.isEmpty then throw "defender.protects names at least one role"
+          items.toList.mapM fun j => match str? j with
+            | some r => if declaredNames.contains r then pure r else throw s!"the defender protects {r}, which is not a declared role"
+            | none => throw "defender.protects is an array of role names"
+        | _ => throw "the defender needs protects: an array of role names"
+      let items := fun (k : String) => match (dj.getObjVal? k).toOption with
+        | none => pure []
+        | some (.arr xs) =>
+          if xs.size > bounds.maxPredicates then .error s!"defender.{k} has {xs.size} entries; the bound is {bounds.maxPredicates}"
+          else pure xs.toList
+        | some _ => .error s!"defender.{k} is an array"
+      let knows ← (← items "knows").mapM boundedTerm
+      let drop ← (← items "drop").mapM boundedPat
+      let rewrite ← (← items "rewrite").mapM fun rj => do
+        let pat ← match (rj.getObjVal? "match").toOption with | some j => boundedPat j | none => throw "a rewrite needs match"
+        let replace ← match (rj.getObjVal? "replace").toOption with | some j => boundedPat j | none => throw "a rewrite needs replace"
+        for x in replace.vars do
+          unless pat.vars.contains x do throw s!"a rewrite's replacement uses {x}, which its match does not bind"
+        return ({ pat, replace } : Rewrite)
+      pure (some ({ name := n, protects, knows, drop, rewrite } : Inline))
+  return { attacker, attackerKnows, domain, domains, roles, flags := [], defender }
 
 end ProtocolTool
 
@@ -1408,7 +1438,64 @@ def checkProtocol (args : Json) : ToolOutcome := do
     | _ => []
   return Json.mkObj ([("tool", Json.str "check_protocol"), ("bounds", boundsJson)] ++ body ++ size ++
     [("wire", Json.arr wire.toArray),
-     ("note", Json.str "bounded: each session runs once, with the declared number of sessions per role; variables bind values from the declared domains; every channel is the attacker's")])
+     ("note", Json.str ("bounded: each session runs once, with the declared number of sessions per role; variables bind values from the declared domains; every channel is the attacker's" ++
+        (match p.defender with
+         | some g => s!", except {g.name}'s links to the roles it protects; {g.name} sees inside a ciphertext only with a key it holds"
+         | none => "")))])
+
+/-! ## check_reassembly (decision logic-reassembly)
+
+A defender and the host behind it reassemble the same attacker-segmented stream, each with its own
+overlap policy. The model is `LeanFM.Session.Reassembly`; `check_ctl` decides the formula over it. -/
+
+def maxSignature : Nat := 4
+
+def parsePolicy (what : String) : Option Json → Except String LeanFM.Session.Reassembly.Policy
+  | none => throw s!"internal: no default for {what}"
+  | some (.str "first") => pure .first
+  | some (.str "last") => pure .last
+  | some _ => throw s!"{what} is \"first\" (old bytes win an overlap) or \"last\" (new bytes win)"
+
+def checkReassembly (args : Json) : ToolOutcome := do
+  let field := fun (k : String) => (args.getObjVal? k).toOption
+  let signature ← match field "signature" with
+    | none => pure "EVIL"
+    | some (.str sig) =>
+      if sig.isEmpty || sig.length > maxSignature then throw s!"the signature is 1 to {maxSignature} characters"
+      if sig.contains '.' then throw "the signature may not contain . (it marks a byte that is not the signature's)"
+      checkString "signature" sig
+    | some _ => throw "signature is a string"
+  let box ← parsePolicy "box" (some ((field "box").getD (Json.str "first")))
+  let host ← parsePolicy "host" (some ((field "host").getD (Json.str "last")))
+  let blocking ← match field "mode" with
+    | none | some (.str "blocking") => pure true
+    | some (.str "passive") => pure false
+    | some _ => throw "mode is \"blocking\" (an IPS resets the stream on a match) or \"passive\" (an IDS alerts)"
+  let c : LeanFM.Session.Reassembly.Config := { signature, box, host, blocking }
+  let fj := (field "formula").getD c.defaultFormula
+  let f ← parseBounded fj
+  let m := c.explore bounds.maxModelNodes
+  let size : List (String × Json) := [("states", toJson m.states.size), ("transitions", toJson m.edges.length)]
+  if m.truncated then
+    return verdictJson "check_reassembly" "resource-limit" f.reading <| size ++
+      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the model exceeds {bounds.maxModelNodes} states; nothing was proved")])]
+  let r ← checkCtl (Json.mkObj [("task", c.draft m), ("formula", f.toJson)])
+  let path : List String := match (r.getObjValD "evidence").getObjValD "path" with
+    | .arr ps => ps.toList.filterMap fun (s : Json) => (s.getObjValD "message").getStr?.toOption
+    | _ => []
+  let segments := (path.filter (fun (l : String) => l.startsWith "segment" && !l.endsWith "(host)")).map fun (l : String) =>
+    match (l.drop "segment @".length).toString.splitOn ": " with
+    | [off, data] => Json.mkObj [("offset", Json.str off), ("data", Json.str data)]
+    | _ => Json.str l
+  let keep := ["verdict", "reading", "mode", "evidence", "deadlocks"]
+  let body := match r with
+    | .obj kvs => kvs.toList.filter (fun (k, _) => keep.contains k)
+    | _ => []
+  return Json.mkObj ([("tool", Json.str "check_reassembly"), ("bounds", boundsJson)] ++ body ++ size ++
+    [("segments", Json.arr segments.toArray),
+     ("defender", Json.mkObj [("policy", Json.str box.name), ("mode", Json.str (if blocking then "blocking" else "passive"))]),
+     ("host", Json.mkObj [("policy", Json.str host.name)]),
+     ("note", Json.str s!"every segmentation of a {signature.length}-byte stream: any offset and length, each byte the signature's or another, sent any number of times; '.' is a byte that is not the signature's")])
 
 /-! ## Reference -/
 
@@ -1454,7 +1541,13 @@ def reference : String := String.intercalate "\n"
   , ""
   , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`, `{\"fresh\": x}` (binds x to a value new in this session: x in the first, x#2 in the second; no two roles make the same fresh variable, and the attacker may not already know it). A domain that holds a fresh value also holds its copies in other sessions. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
   , ""
-  , "Every channel is the attacker's: honest sends go to the attacker, honest receives accept any matching message the attacker can build. The formula may use claimed and knows atoms. Bounded: each session runs once, with as many sessions as declared; variables bind values from the domains; a model over 4096 states answers resource-limit."
+  , "Every channel is the attacker's: honest sends go to the attacker, honest receives accept any matching message the attacker can build. An optional defender ({name, protects, knows, drop, rewrite: [{match, replace}]}) stands between the attacker and the roles it protects: it drops a message when a drop pattern matches any part it can see, opening ciphertexts only with keys it can build from its knows, rewrites a whole message that matches a rewrite (the replacement uses only variables its match binds), and otherwise forwards it; the link from the defender to a protected role is not the attacker's. The formula may use claimed and knows atoms. Bounded: each session runs once, with as many sessions as declared; variables bind values from the domains; a model over 4096 states answers resource-limit."
+  , ""
+  , "## check_reassembly"
+  , ""
+  , "Arguments, all optional: signature (1 to 4 characters, default EVIL), box and host (first or last: which bytes win an overlap; defaults first and last), mode (blocking or passive), formula."
+  , ""
+  , "The attacker sends any segments of the stream, any number of times; each byte is the signature's or another, shown as . in the answer. The claims alerted(sig) and delivered(sig) mark the defender's copy and the host's copy first holding the signature. The search covers every segmentation; the answer lists the segments of an evasion."
   , ""
   , "## Requirement modes"
   , ""
@@ -1499,7 +1592,7 @@ def reference : String := String.intercalate "\n"
 
 /-! ## Dispatch -/
 
-def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows", "check_protocol"]
+def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows", "check_protocol", "check_reassembly"]
 
 def run (name : String) (args : Json) : Option ToolOutcome :=
   if args.compress.length > bounds.maxArgumentBytes then
@@ -1511,6 +1604,7 @@ def run (name : String) (args : Json) : Option ToolOutcome :=
     | "classify_requirement" => some (classifyRequirement args)
     | "knows" => some (knows args)
     | "check_protocol" => some (checkProtocol args)
+    | "check_reassembly" => some (checkReassembly args)
     | _ => none
 
 end LeanFM.Logic

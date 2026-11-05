@@ -7,7 +7,7 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 24 := by native_decide
+example : clauses.length = 25 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.context" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.lazy" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.probability" = true := by native_decide
@@ -15,10 +15,10 @@ example : workflow.transitions.any (fun t => t.message == "WorkflowRejected" && 
 example : LeanFM.LLMGenerated.Requirements.all.length = 2 := by native_decide
 example : (successfulBranchAtoms workflowGrammar.body).length = 10 := by native_decide
 example : ["selfhost.mcp.logic.reference", "selfhost.mcp.logic.explain", "selfhost.mcp.logic.ctl", "selfhost.mcp.logic.trace",
-    "selfhost.mcp.logic.observability", "selfhost.mcp.logic.knows", "selfhost.mcp.logic.protocol", "selfhost.mcp.logic.safety"].all
+    "selfhost.mcp.logic.observability", "selfhost.mcp.logic.knows", "selfhost.mcp.logic.protocol", "selfhost.mcp.logic.reassembly", "selfhost.mcp.logic.safety"].all
     (fun id => (clauses.map (·.id)).contains id) = true := by native_decide
 example : logicTask.transitions.any (fun t => t.message == "LogicInputRejected" && t.dst == "rejected") = true := by native_decide
 example : (spec.requiredProofs.map (·.name)).contains "Submitted logic never runs as code" = true := by native_decide
 example : LeanFM.LLMGenerated.McpLogicImplementation.errors = [] := by native_decide
--- every logic clause is implemented, knows and protocol included
-example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 8 := by native_decide
+-- every logic clause is implemented, knows, protocol and reassembly included
+example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 9 := by native_decide

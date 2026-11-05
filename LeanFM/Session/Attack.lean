@@ -23,6 +23,13 @@ own bindings, named `Alice`, `Alice#2`, …. A `fresh` step makes a value no oth
 the attacker starts with has: `na` in the first session, `na#2` in the second. Attacks that play one
 session of a role against another, such as reflection, need this.
 
+An inline defender (`Inline`) may sit between the network and some roles: every message the
+attacker delivers to a protected role passes through it first. It drops what matches a drop
+pattern and rewrites what matches a rewrite rule, but it matches only what it can see: it opens a
+ciphertext only with a key it can build from its own knowledge, and otherwise compares the whole
+blob. That is the defender's version of `knows`: an encrypted payload goes past a filter that does
+not hold the key. Without an `Inline`, every channel is the attacker's, as before.
+
 Bounded on purpose: each thread runs once, the number of sessions is declared, a received pattern's
 unbound variables range over a declared finite domain (names and nonces; a domain that holds a
 fresh value also holds its copies in the other sessions), and a variable binds an atom, never a
@@ -121,6 +128,70 @@ structure World where
 def World.knows (w : World) (m : Msg) : Bool := Knowledge.knows w.attacker m
 def World.claimed (w : World) (name : String) (args : List Msg) : Bool := w.claims.contains (name, args)
 
+/-- A rewrite rule of an inline defender: what it matches, and what it puts in its place. -/
+structure Rewrite where
+  pat : Pat
+  replace : Pat
+  deriving Repr, Inhabited
+
+/-- A defender on the path to some roles: an IPS, a filtering proxy, an intercepting gateway. -/
+structure Inline where
+  name : String
+  /-- the declared roles it protects; their later sessions (`Bob#2`) are protected too -/
+  protects : List String
+  /-- its keys: what it can open and read -/
+  knows : List Msg := []
+  drop : List Pat := []
+  rewrite : List Rewrite := []
+  deriving Repr, Inhabited
+
+def Inline.guards (g : Inline) (thread : String) : Bool :=
+  g.protects.any fun r => thread == r || thread.startsWith (r ++ "#")
+
+/-- Match a pattern against a message, extending the bindings. -/
+def Pat.matchMsg (env : Env) : Pat → Msg → Option Env
+  | .lit l, m => if l == m then some env else none
+  | .var x, m => match env.lookup x with
+    | some v => if v == m then some env else none
+    | none => some ((x, m) :: env)
+  | .pair a b, .pair x y => do b.matchMsg (← a.matchMsg env x) y
+  | .enc k b, .enc k' b' => do b.matchMsg (← k.matchMsg env k') b'
+  | .hash b, .hash b' => b.matchMsg env b'
+  | .pk a, .pk n => a.matchMsg env (.atom n)
+  | .sk a, .sk n => a.matchMsg env (.atom n)
+  | _, _ => none
+
+/-- Match as an observer holding `S` sees it: it looks inside a ciphertext only when it can build
+the opening key, and otherwise sees nothing it can match; a hash it can only compare whole with a
+pattern that has no variables, since hashing is deterministic. -/
+def Pat.matchSeen (S : List Msg) (env : Env) : Pat → Msg → Option Env
+  | .pair a b, .pair x y => do Pat.matchSeen S (← Pat.matchSeen S env a x) b y
+  | .enc k b, .enc k' b' =>
+    -- encryption is randomised in practice, so a blob it cannot open matches nothing, not even itself
+    if synth S k'.inverse then do Pat.matchSeen S (← k.matchMsg env k') b b' else none
+  | .hash b, .hash b' =>
+    if b.vars.isEmpty && b.inst [] == some b' then some env else none
+  | .enc .., _ | .hash .., _ | .pair .., _ => none
+  | p, m => p.matchMsg env m
+
+/-- The pieces of a message an observer holding `S` can look at: the message, the halves of every
+pair, and the body of every ciphertext it can open. -/
+def visibleParts (S : List Msg) : Msg → List Msg
+  | m@(.pair a b) => m :: (visibleParts S a ++ visibleParts S b)
+  | m@(.enc k b) => if synth S k.inverse then m :: visibleParts S b else [m]
+  | m => [m]
+
+/-- What the defender does with a message: it drops it when a drop pattern matches any piece it can
+look at, like a signature scan; it rewrites the whole message when a rewrite rule matches it.
+`none` drops it; otherwise the message it forwards,
+and the original when it rewrote it. -/
+def Inline.pass (g : Inline) (m : Msg) : Option (Msg × Option Msg) :=
+  let S := analz g.knows
+  if g.drop.any (fun p => (visibleParts S m).any fun v => (p.matchSeen S [] v).isSome) then none
+  else match g.rewrite.findSome? (fun r => (r.pat.matchSeen S [] m).bind r.replace.inst) with
+    | some m' => some (m', some m)
+    | none => some (m, none)
+
 /-- A requirement as a state predicate; it trips once, as the event `name`, when it first holds. -/
 structure Flag where
   name : String
@@ -136,6 +207,8 @@ structure Protocol where
   domains : List (String × List Msg) := []
   roles : List Role
   flags : List Flag
+  /-- a defender between the network and some roles; none means every channel is the attacker's -/
+  defender : Option Inline := none
 
 def canon (K : List Msg) : List Msg := K.mergeSort (fun x y => decide (x.render ≤ y.render))
 
@@ -171,6 +244,19 @@ def agentName : Msg → String
   | .atom n => n
   | m => m.render
 
+/-- A receive straight from the network: any message of the expected shape the attacker can build. -/
+def Protocol.unguardedRecv (p : Protocol) (w : World) (role : Role) (t : Thread)
+    (setT : Thread → List Thread) (pat : Pat) : List Move :=
+  let free := (pat.vars.filter (fun x => (t.env.lookup x).isNone)).eraseDups
+  (assignments' p free).filterMap fun binding =>
+    let env := binding ++ t.env
+    match pat.inst env with
+    | some m => if w.knows m then
+        some { label := s!"{role.name} ⇐ {m}", next := { w with threads := setT { pc := t.pc + 1, env } },
+               wire := some { event := "recv", src := p.attacker, dst := role.name, term := m } }
+      else none
+    | none => none
+
 def Protocol.moves (p : Protocol) (w : World) : List Move :=
   let stepMoves := (p.roles.zip (List.range p.roles.length)).flatMap fun (role, i) =>
     let t := w.threads[i]!
@@ -187,15 +273,29 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
              wire := some { event := "send", src := role.name, dst := p.attacker, addressee := some (agentName dst), term := m } }]
         | _, _ => []
     | some (.recv pat) =>
-        let free := (pat.vars.filter (fun x => (t.env.lookup x).isNone)).eraseDups
-        (assignments' p free).filterMap fun binding =>
-          let env := binding ++ t.env
-          match pat.inst env with
-          | some m => if w.knows m then
-              some { label := s!"{role.name} ⇐ {m}", next := { w with threads := setT { pc := t.pc + 1, env } },
-                     wire := some { event := "recv", src := p.attacker, dst := role.name, term := m } }
-            else none
-          | none => none
+      match p.defender with
+      | some (g : Inline) =>
+        if g.guards role.name then
+          -- what the attacker could try: anything of the expected shape, and anything a rewrite turns into it
+          let shapes : List Pat := pat :: g.rewrite.map (·.pat)
+          let tries := (shapes.flatMap fun (sp : Pat) =>
+            let free := (sp.vars.filter (fun x => (t.env.lookup x).isNone)).eraseDups
+            (assignments' p free).filterMap fun b => sp.inst (b ++ t.env)).eraseDups
+          tries.filterMap fun m =>
+            if !w.knows m then none else
+            match g.pass m with
+            | none => none
+            | some (m', orig) =>
+              match pat.matchMsg t.env m' with
+              | none => none
+              | some env =>
+                let how := match orig with
+                  | some o => s!" ({g.name} rewrote {o})"
+                  | none => s!" via {g.name}"
+                some { label := s!"{role.name} ⇐ {m'}{how}", next := { w with threads := setT { pc := t.pc + 1, env } },
+                       wire := some { event := "recv", src := g.name, dst := role.name, term := m' } }
+        else p.unguardedRecv w role t setT pat
+      | none => p.unguardedRecv w role t setT pat
     | some (.fresh x) =>
         let v := Msg.atom (freshName x role.session)
         [{ label := s!"{role.name} makes {v}", next := { w with threads := setT { pc := t.pc + 1, env := (x, v) :: t.env } } }]
@@ -246,6 +346,29 @@ def termJson : Msg → Json
   | .enc k b => Json.mkObj [("enc", Json.mkObj [("key", termJson k), ("body", termJson b)])]
   | .hash b => Json.mkObj [("hash", termJson b)]
 
+/-- Every claim some thread could make: each claim step's arguments over the values its variables
+could take (choices, fresh values, receive domains), at most 256 per step. The draft declares them
+on an unreachable state, so a formula may name a claim that never happens, and a claim no thread
+could make stays an unknown name. -/
+def Protocol.possibleClaims (p : Protocol) : List String := Id.run do
+  let mut out : List String := []
+  for r in p.roles do
+    let candidates := fun (x : String) => r.steps.flatMap fun
+      | .choose y vs => if y == x then vs else []
+      | .fresh y => if y == x then [Msg.atom (freshName y r.session)] else []
+      | .recv pat => if pat.vars.contains x then (p.domains.lookup x).getD p.domain else []
+      | _ => []
+    for st in r.steps do
+      if let .claim name args := st then
+        let vars := (args.flatMap Pat.vars).eraseDups
+        let envs := vars.foldl (fun (envs : List Env) x =>
+          (envs.flatMap fun e => (candidates x).eraseDups.map fun v => (x, v) :: e).take 256) [[]]
+        for e in envs do
+          if let some vs := args.mapM (·.inst e) then
+            let c := s!"{name}({", ".intercalate (vs.map agentName)})"
+            unless out.contains c do out := out ++ [c]
+  return out
+
 /-- The generated model as a `check_ctl` draft: every message transition carries its term, the
 attacker sees every channel, and every flag is declared on an unreachable extra state so a formula
 may name a flag that never trips. -/
@@ -256,7 +379,10 @@ def Protocol.draft (p : Protocol) (m : Model) (id : String) : Json :=
   let tr := fun ((a, b, mv) : Nat × Nat × Move) =>
     Json.mkObj ([("src", Json.str (name a)), ("dst", Json.str (name b)), ("message", Json.str mv.label)] ++
       (match mv.wire with
-      | some h => [("from", Json.str h.src), ("to", Json.str h.dst), ("term", termJson h.term)]
+      | some h =>
+        -- the defender's link to the role it protects is not the attacker's: no term, so nothing is learnt
+        if (match p.defender with | some g => g.name == h.src | none => false) then [("from", Json.str h.src), ("to", Json.str h.dst)]
+        else [("from", Json.str h.src), ("to", Json.str h.dst), ("term", termJson h.term)]
       | none => []) ++
       (match mv.claim with | some c => [("claim", Json.str c)] | none => []))
   Json.mkObj
@@ -265,7 +391,9 @@ def Protocol.draft (p : Protocol) (m : Model) (id : String) : Json :=
     , ("initial", "s0")
     , ("terminals", Json.arr (terminals.map (Json.str ∘ name)).toArray)
     , ("transitions", Json.arr ((m.edges.map tr) ++ p.flags.map (fun f =>
-        Json.mkObj [("src", "flags"), ("dst", "flags"), ("message", Json.str f.name)])).toArray)
+        Json.mkObj [("src", "flags"), ("dst", "flags"), ("message", Json.str f.name)]) ++
+        p.possibleClaims.map (fun c =>
+        Json.mkObj [("src", "flags"), ("dst", "flags"), ("message", Json.str s!"possible {c}"), ("claim", Json.str c)])).toArray)
     , ("knowledge", Json.mkObj [(p.attacker, Json.mkObj
         [("initial", Json.arr (p.attackerKnows.map termJson).toArray), ("seesAll", Json.bool true)])]) ]
 

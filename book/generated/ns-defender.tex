@@ -1,0 +1,18 @@
+\begin{lstlisting}[language={}]
+def guarded (bobReceives : Json) (defender : Option Json) (formula : Json) : Json :=
+  let base := json% {
+    roles: [{name: "Bob", steps: [
+      {recv: $(bobReceives)},
+      {claim: {name: "accept", args: [{atom: "B"}, {var: "x"}]}}]}],
+    attacker: {name: "Ivo", knows: [{atom: "B"}, {atom: "good"}, {atom: "bad"}, {pk: "B"}]},
+    domain: [{atom: "good"}, {atom: "bad"}],
+    formula: $(formula) }
+  match defender with
+  | some d => base.setObjVal! "defender" d
+  | none => base
+
+def plain := json% {var: "x"}
+def sealedForBob := json% {enc: {key: {pk: "B"}, body: {var: "x"}}}
+def filter := json% {name: "Guard", protects: ["Bob"], drop: [{atom: "bad"}]}
+def intercepting := json% {name: "Guard", protects: ["Bob"], knows: [{sk: "B"}], drop: [{atom: "bad"}]}
+\end{lstlisting}
