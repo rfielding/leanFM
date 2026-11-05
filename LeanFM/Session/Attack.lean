@@ -110,12 +110,22 @@ structure Protocol where
 
 def canon (K : List Msg) : List Msg := K.mergeSort (fun x y => decide (x.render ≤ y.render))
 
+/-- A message on the wire. `src` and `dst` are who physically handed it over and took it, so one of
+them is always the attacker, who is the network; `addressee` is whom an honest sender addressed. -/
+structure Hop where
+  /-- `send` (an honest role hands a message to the network) or `recv` (the network delivers one) -/
+  event : String
+  src : String
+  dst : String
+  addressee : Option String := none
+  term : Msg
+
 /-- One transition: the event that names it, the world after it, and the message it put on the
-wire as (from, to, term), if any. -/
+wire, if any. -/
 structure Move where
   label : String
   next : World
-  wire : Option (String × String × Msg) := none
+  wire : Option Hop := none
   /-- the claim this move makes, as `commit(B, A)` -/
   claim : Option String := none
 
@@ -145,7 +155,7 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
         | some m, some dst =>
           [{ label := s!"{role.name} → {agentName dst}: {m}",
              next := { w with threads := setT { t with pc := t.pc + 1 }, attacker := canon (learn w.attacker m) },
-             wire := some (role.name, p.attacker, m) }]
+             wire := some { event := "send", src := role.name, dst := p.attacker, addressee := some (agentName dst), term := m } }]
         | _, _ => []
     | some (.recv pat) =>
         let free := (pat.vars.filter (fun x => (t.env.lookup x).isNone)).eraseDups
@@ -154,7 +164,7 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
           match pat.inst env with
           | some m => if w.knows m then
               some { label := s!"{role.name} ⇐ {m}", next := { w with threads := setT { pc := t.pc + 1, env } },
-                     wire := some (p.attacker, role.name, m) }
+                     wire := some { event := "recv", src := p.attacker, dst := role.name, term := m } }
             else none
           | none => none
     | some (.claim name args) =>
@@ -214,7 +224,7 @@ def Protocol.draft (p : Protocol) (m : Model) (id : String) : Json :=
   let tr := fun ((a, b, mv) : Nat × Nat × Move) =>
     Json.mkObj ([("src", Json.str (name a)), ("dst", Json.str (name b)), ("message", Json.str mv.label)] ++
       (match mv.wire with
-      | some (f, t, term) => [("from", Json.str f), ("to", Json.str t), ("term", termJson term)]
+      | some h => [("from", Json.str h.src), ("to", Json.str h.dst), ("term", termJson h.term)]
       | none => []) ++
       (match mv.claim with | some c => [("claim", Json.str c)] | none => []))
   Json.mkObj
@@ -236,7 +246,7 @@ def walk (j : Json) : List String :=
   | _ => []
 
 /-- What crossed the wire along a returned path, replayed through the model. -/
-def Protocol.replayWire (p : Protocol) (path : List String) : List (String × String × Msg) := Id.run do
+def Protocol.replayWire (p : Protocol) (path : List String) : List Hop := Id.run do
   let mut w : World := { threads := p.roles.map (fun _ => {}), attacker := canon (analz p.attackerKnows) }
   let mut out := []
   for label in path do
@@ -246,5 +256,19 @@ def Protocol.replayWire (p : Protocol) (path : List String) : List (String × St
       w := mv.next
     | none => pure ()
   return out
+
+end LeanFM.Session.Attack
+
+namespace LeanFM.Session.Attack
+open Lean
+
+/-- A hop as people read it: a send names its sender, the addressee, and the attacker it went via;
+a delivery names the attacker it came from and the role that took it. -/
+def Hop.toJson (h : Hop) : Json :=
+  match h.event, h.addressee with
+  | "send", some a => Json.mkObj [("event", "send"), ("from", Json.str h.src), ("to", Json.str a),
+      ("via", Json.str h.dst), ("term", Json.str h.term.render)]
+  | e, _ => Json.mkObj [("event", Json.str e), ("from", Json.str h.src), ("to", Json.str h.dst),
+      ("term", Json.str h.term.render)]
 
 end LeanFM.Session.Attack

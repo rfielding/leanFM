@@ -146,7 +146,7 @@ def diagram (path : List String) : List LeanFM.MDPDiagram.InteractionMessage := 
   for label in path do
     match (p.moves w).find? (·.label == label) with
     | some mv =>
-      if let some (src, dst, m) := mv.wire then
+      if let some { src, dst, term := m, .. } := mv.wire then
         let note := if !known && mv.next.knows nb then "; now Ivo knows nb" else ""
         if note != "" then known := true
         out := out ++ [{ src, dst, label := tex (toString m) ++ note }]

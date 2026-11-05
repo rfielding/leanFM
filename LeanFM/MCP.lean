@@ -160,7 +160,7 @@ def tools : Array Json := #[
     (schema [("formula", anyJson "JSON formula"), ("predicates", Json.mkObj [("type", "array"), ("items", stringSchema "predicate text")]),
       ("task", anyJson "optional canonical task id or inline draft")] []),
   tool "check_protocol" "Find attacks on a security protocol"
-    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path as {from, to, term}. Bounded: each role runs once."
+    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path: {event: send, from, to, via, term} for an honest send (to is its addressee, via the attacker) and {event: recv, from, to, term} for a delivery. Bounded: each role runs once."
     (schema [("roles", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("attacker", anyJson "{name, knows: [terms]}"),
       ("domain", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
@@ -176,12 +176,26 @@ def tools : Array Json := #[
       ["events", "actor", "at"])
 ]
 
-/-- LogicVerdict or LogicInputRejected, carried as an MCP tool result. -/
+/-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
+`logicSummaryLimit` characters. The full answer is only in structuredContent. -/
+def logicSummaryLimit : Nat := 400
+
+def logicSummary (name : String) (body : Json) : String :=
+  let field (k : String) : Option String := (body.getObjValAs? String k).toOption
+  let tail := match field "reason", field "reading" with
+    | some r, _ => s!": {r}"
+    | none, some r => s!": {r}"
+    | none, none => ""
+  let line := s!"{name} {(field "verdict").getD "answered"}{tail}"
+  if line.length ≤ logicSummaryLimit then line else (line.take (logicSummaryLimit - 1)).toString ++ "…"
+
+/-- LogicVerdict or LogicInputRejected, carried as an MCP tool result: a one-line text summary for
+people and the whole answer once, as structuredContent. -/
 def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
   let (body, isError) := match outcome with
     | .ok json => (json, false)
     | .error reason => (Json.mkObj [("tool", name), ("verdict", "rejected"), ("reason", reason)], true)
-  Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", body.pretty)]]),
+  Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", logicSummary name body)]]),
     ("structuredContent", body), ("isError", isError)]
 
 def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except String Json :=

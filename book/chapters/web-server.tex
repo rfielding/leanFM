@@ -252,7 +252,9 @@ would make it testable.
   attacker can build. The state space is generated from that declaration and
   decided by \texttt{check\_ctl}, where \texttt{claimed} atoms (``Bob has
   committed to Alice'') sit beside \texttt{knows} atoms, and the answer lists
-  the messages that crossed the wire on the returned path. Needham--Schroeder
+  the messages that crossed the wire on the returned path, in the evidence's own
+  terms: a send names its sender, its addressee and the attacker it went
+  \emph{via}; a delivery names the attacker it came from. Needham--Schroeder
   declared this way gives back Lowe's attack (Section~\ref{sec:needham-schroeder}).
   Each role runs once, and the answer says so.
 \end{description}

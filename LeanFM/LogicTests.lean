@@ -279,9 +279,23 @@ def main : IO Unit := do
   expect "check_protocol: the 1978 protocol leaks Bob's nonce" (verdictOf attack == "disproved")
   expect "check_protocol: the attack is Lowe's, through Ivo" (match attack with
     | .ok j => let w := (j.getObjValD "wire").compress
-               w.contains "{\"from\":\"Alice\",\"term\":\"{na, A}pk(I)\",\"to\":\"Ivo\"}" &&
-               w.contains "{\"from\":\"Ivo\",\"term\":\"{na, A}pk(B)\",\"to\":\"Bob\"}" &&
-               w.contains "{\"from\":\"Alice\",\"term\":\"{nb}pk(I)\",\"to\":\"Ivo\"}"
+               w.contains "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"{na, A}pk(I)\",\"to\":\"I\",\"via\":\"Ivo\"}" &&
+               w.contains "{\"event\":\"recv\",\"from\":\"Ivo\",\"term\":\"{na, A}pk(B)\",\"to\":\"Bob\"}" &&
+               w.contains "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"{nb}pk(I)\",\"to\":\"I\",\"via\":\"Ivo\"}"
+    | _ => false)
+  expect "check_protocol: every wire hop agrees with its evidence event" (match attack with
+    | .ok j =>
+      let events := match (j.getObjValD "evidence").getObjValD "path" with
+        | .arr ps => ps.toList.filterMap fun (s : Json) => (s.getObjValD "message").getStr?.toOption
+        | _ => []
+      let hops := match j.getObjValD "wire" with | .arr hs => hs.toList | _ => []
+      let str := fun (h : Json) (k : String) => ((h.getObjValD k).getStr?.toOption).getD "?"
+      let said := hops.map fun h => if str h "event" == "send"
+        then s!"{str h "from"} → {str h "to"}: {str h "term"}" else s!"{str h "to"} ⇐ {str h "term"}"
+      -- the hops, read back as events, are exactly the message events of the path, in order
+      !hops.isEmpty && said == events.filter (fun e => e.contains '→' || e.contains '⇐') &&
+      -- a send is never addressed to the network itself
+      hops.all fun h => str h "event" != "send" || (str h "via" == "Ivo" && str h "to" != "Ivo")
     | _ => false)
   expect "check_protocol: authentication fails in 1978" (verdictOf (proto false agreement) == "disproved")
   expect "check_protocol: Lowe's fix keeps the nonce secret" (verdictOf (proto true secrecy) == "proved")

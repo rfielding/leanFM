@@ -1375,8 +1375,7 @@ def checkProtocol (args : Json) : ToolOutcome := do
   let path := match (r.getObjValD "evidence").getObjValD "path" with
     | .arr ps => ps.toList.filterMap fun s => (s.getObjValD "message").getStr?.toOption
     | _ => []
-  let wire := (p.replayWire path).map fun (a, b, t) =>
-    Json.mkObj [("from", Json.str a), ("to", Json.str b), ("term", Json.str t.render)]
+  let wire := (p.replayWire path).map LeanFM.Session.Attack.Hop.toJson
   let keep := ["verdict", "reading", "mode", "evidence", "deadlocks"]
   let body := match r with
     | .obj kvs => kvs.toList.filter (fun (k, _) => keep.contains k)

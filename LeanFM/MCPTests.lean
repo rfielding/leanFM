@@ -45,4 +45,21 @@ def main : IO Unit := do
   assertContains "MCP lists check_protocol" toolsListed.body "\"name\":\"check_protocol\""
   let proto ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"check_protocol\",\"arguments\":{\"roles\":[{\"name\":\"Alice\",\"steps\":[{\"send\":{\"to\":{\"atom\":\"Bob\"},\"message\":{\"atom\":\"secret\"}}}]}],\"attacker\":{\"name\":\"Ivo\"},\"formula\":{\"never\":{\"knows\":{\"actor\":\"Ivo\",\"term\":{\"atom\":\"secret\"}}}}}}}"
   assertContains "MCP check_protocol finds a plaintext leak" proto.body "\"verdict\":\"disproved\""
-  assertContains "MCP check_protocol shows the wire" proto.body "\"wire\""
+  assertContains "MCP check_protocol shows the send to its addressee, via the attacker" proto.body "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"secret\",\"to\":\"Bob\",\"via\":\"Ivo\"}"
+  -- The answer appears once, as structuredContent; the text block is a one-line summary, not a copy.
+  let summaryOf (label body : String) : IO String := do
+    let json ← IO.ofExcept (Json.parse body)
+    let block ← IO.ofExcept ((json.getObjValD "result").getObjValD "content" |>.getArrVal? 0)
+    let text ← IO.ofExcept (block.getObjValAs? String "text")
+    let structured := json.getObjValD "result" |>.getObjValD "structuredContent"
+    if structured.isNull then throw <| IO.userError s!"{label}: no structuredContent"
+    if text.contains '\n' || text.contains '{' || text.length > LeanFM.MCP.logicSummaryLimit then
+      throw <| IO.userError s!"{label}: text block is not a one-line summary: {text}"
+    IO.println s!"ok: {label}"
+    return text
+  let protoText ← summaryOf "MCP check_protocol text is a summary, not a second copy" proto.body
+  assertContains "MCP check_protocol summary gives verdict and reading" protoText "check_protocol disproved: on every path, never Ivo can derive secret"
+  let badText ← summaryOf "MCP rejection text is a summary" bad.body
+  assertContains "MCP rejection summary gives the reason" badText "rejected: "
+  let ctlText ← summaryOf "MCP check_ctl text is a summary" ctl.body
+  assertContains "MCP check_ctl summary gives the verdict" ctlText "check_ctl disproved"
