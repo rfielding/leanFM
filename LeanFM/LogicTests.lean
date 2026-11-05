@@ -310,6 +310,62 @@ def main : IO Unit := do
       ("attacker", json% {name: "Ivo"}), ("formula", json% true)])).getD (.error "")) == "rejected")
   expect "check_protocol: a claim no role makes is an unknown name"
     (verdictOf (proto false (json% {EF: {claimed: "commit(B, Z)"}})) == "rejected")
+  -- Sessions: a challenge-response protocol with one shared key falls to reflection, which needs
+  -- a second session of Bob to answer his own challenge.
+  let reflArgs := fun (bob : Json) (f : Json) => json% {
+    roles: [
+      {name: "Alice", steps: [
+        {fresh: "na"},
+        {claim: {name: "running", args: [{atom: "A"}, {atom: "B"}]}},
+        {send: {to: {atom: "B"}, message: {var: "na"}}},
+        {recv: {pair: [{enc: {key: {key: "kAB"}, body: {var: "na"}}}, {var: "m"}]}},
+        {send: {to: {atom: "B"}, message: {enc: {key: {key: "kAB"}, body: {var: "m"}}}}},
+        {claim: {name: "finished", args: [{atom: "A"}, {atom: "B"}]}}]},
+      $(bob)],
+    attacker: {name: "Ivo", knows: [{atom: "A"}, {atom: "B"}, {atom: "ni"}]},
+    domain: [{atom: "na"}, {atom: "nb"}, {atom: "ni"}],
+    formula: $(f) }
+  let bobSteps := json% [
+    {recv: {var: "c"}},
+    {fresh: "nb"},
+    {send: {to: {atom: "A"}, message: {pair: [{enc: {key: {key: "kAB"}, body: {var: "c"}}}, {var: "nb"}]}}},
+    {recv: {enc: {key: {key: "kAB"}, body: {var: "nb"}}}},
+    {claim: {name: "commit", args: [{atom: "B"}, {atom: "A"}]}}]
+  let bobWith := fun (n : Nat) => Json.mkObj [("name", "Bob"), ("sessions", toJson n), ("steps", bobSteps)]
+  let impersonation := json% {never: {and: [{claimed: "commit(B, A)"}, {not: {claimed: "running(A, B)"}}]}}
+  let refl := fun (n : Nat) (f : Json) => (run "check_protocol" (reflArgs (bobWith n) f)).getD (.error "no tool")
+  expect "check_protocol: with one session of Bob, reflection is impossible" (verdictOf (refl 1 impersonation) == "proved")
+  let reflected := refl 2 impersonation
+  expect "check_protocol: with two sessions of Bob, Ivo impersonates Alice" (verdictOf reflected == "disproved")
+  expect "check_protocol: Bob's second session answers his first session's challenge" (match reflected with
+    | .ok j => let w := (j.getObjValD "wire").compress
+               w.contains "{\"event\":\"recv\",\"from\":\"Ivo\",\"term\":\"nb\",\"to\":\"Bob#2\"}" &&
+               w.contains "{\"event\":\"send\",\"from\":\"Bob#2\",\"term\":\"{nb}kAB, nb#2\",\"to\":\"A\",\"via\":\"Ivo\"}" &&
+               w.contains "{\"event\":\"recv\",\"from\":\"Ivo\",\"term\":\"{nb}kAB\",\"to\":\"Bob\"}" &&
+               !w.contains "\"from\":\"Alice\""
+    | _ => false)
+  expect "check_protocol: an honest run still completes with two sessions"
+    (verdictOf (refl 2 (json% {EF: {and: [{claimed: "commit(B, A)"}, {claimed: "finished(A, B)"}]}})) == "proved")
+  let rejects := fun (label : String) (args : Json) (needle : String) =>
+    expect label (match run "check_protocol" args with
+      | some (.error e) => e.contains needle
+      | _ => false)
+  rejects "check_protocol: more sessions than the bound are rejected"
+    (reflArgs (bobWith 5) (json% true)) "sessions is 1 to 4"
+  rejects "check_protocol: sessions adding up past the thread bound are rejected"
+    (reflArgs (Json.mkObj [("name", "Bob"), ("sessions", toJson (4 : Nat)), ("steps", bobSteps)]) (json% true) |>.setObjVal! "roles"
+      (json% [{name: "P", sessions: 4, steps: []}, {name: "Q", sessions: 4, steps: []}, {name: "R", steps: []}]))
+    "add up to 9 threads"
+  rejects "check_protocol: a role name with # is rejected, since sessions use it"
+    (reflArgs (Json.mkObj [("name", "Bob#2"), ("steps", bobSteps)]) (json% true)) "may not contain #"
+  rejects "check_protocol: two roles making the same fresh variable are rejected"
+    (reflArgs (Json.mkObj [("name", "Bob"), ("steps", json% [{fresh: "na"}])]) (json% true)) "made by one step of one role"
+  rejects "check_protocol: a fresh value the attacker already knows is rejected"
+    ((reflArgs (bobWith 1) (json% true)).setObjVal! "attacker" (json% {name: "Ivo", knows: [{atom: "nb"}]}))
+    "which the attacker already knows"
+  rejects "check_protocol: sending a fresh variable before making it is rejected"
+    (reflArgs (Json.mkObj [("name", "Bob"), ("steps", json% [{send: {to: {atom: "A"}, message: {var: "nb"}}}, {fresh: "nb"}])]) (json% true))
+    "sends nb before anything binds it"
   expect "knows: a dangling reference is rejected" (verdictOf (ask [ev "e1" "A" "Ivo" ["e0"] (at_ "x")] "e1" none) == "rejected")
   expect "oversized arguments rejected"
     (verdictOf ((run "explain_formula" (Json.mkObj [("formula", Json.str (String.ofList (List.replicate 70000 'x')))])).getD (.error "")) == "rejected")

@@ -133,13 +133,82 @@ def report : IO Unit := do
       IO.println s!"  {key}: {verdict r}  ({reading})"
       for step in walk r do IO.println s!"      {step}"
 
+/-! ## Two sessions: reflection
+
+A challenge–response with one shared key, `kAB`. Alice challenges with `na`; Bob answers with
+`{na}kAB` and his own challenge `nb`; Alice answers `{nb}kAB`. With one session of Bob it is safe.
+With two, Ivo needs no key: he hands Bob's own challenge to Bob's second session, which encrypts it
+for him. -/
+
+def kAB : Pat := .lit (.key "kAB")
+
+--@begin Reflection
+/-- With `named`, each answer carries the name of the party who made it. -/
+def answer (named : Bool) (x : String) (who : String) : Pat :=
+  .enc kAB (if named then .pair (.var x) (name who) else .var x)
+
+def challenger (named : Bool := false) : Role := { name := "Alice", steps :=
+  [ .fresh "na"
+  , .claim "running" [name "A", name "B"]
+  , .send (name "B") (.var "na")
+  , .recv (.pair (answer named "na" "B") (.var "m"))
+  , .send (name "B") (answer named "m" "A")
+  , .claim "finished" [name "A", name "B"] ] }
+
+def responder (named : Bool := false) : Role := { name := "Bob", steps :=
+  [ .recv (.var "c")
+  , .fresh "nb"
+  , .send (name "A") (.pair (answer named "c" "B") (.var "nb"))
+  , .recv (answer named "nb" "A")
+  , .claim "commit" [name "B", name "A"] ] }
+
+def reflection (bobSessions : Nat) (named : Bool := false) : Protocol :=
+  let roles := (challenger named).sessions 1 ++ (responder named).sessions bobSessions
+  { attacker := "Ivo"
+  , attackerKnows := [.atom "A", .atom "B", ni]
+  , domain := coverFresh roles [na, nb, ni]
+  , roles
+  , flags := [] }
+--@end Reflection
+
+/-- Bob commits to Alice though Alice never started a run with him. -/
+def impersonation : Json := Json.mkObj [("never", Json.mkObj [("and", Json.arr #[
+  Json.mkObj [("claimed", "commit(B, A)")],
+  Json.mkObj [("not", Json.mkObj [("claimed", "running(A, B)")])]])])]
+
+def reflectionCompletes : Json := Json.mkObj [("EF", Json.mkObj [("and", Json.arr #[
+  Json.mkObj [("claimed", "commit(B, A)")], Json.mkObj [("claimed", "finished(A, B)")]])])]
+
+def oneBob := (reflection 1).explore
+def twoBobs := (reflection 2).explore
+def askReflection (n : Nat) (f : Json) : Json :=
+  (reflection n).check (if n == 1 then oneBob else twoBobs) s!"reflection{n}" f
+
+#guard verdict (askReflection 1 impersonation) == "proved"
+#guard verdict (askReflection 2 impersonation) == "disproved"
+#guard verdict (askReflection 2 reflectionCompletes) == "proved"
+
+-- The fix: each answer names who made it, so Bob's own answer is not the one he waits for.
+def twoBobsNamed := (reflection 2 true).explore
+def askNamed (f : Json) : Json := (reflection 2 true).check twoBobsNamed "reflection-named" f
+#guard verdict (askNamed impersonation) == "proved"
+#guard verdict (askNamed reflectionCompletes) == "proved"
+
+def reportReflection : IO Unit := do
+  for n in [1, 2] do
+    let m := if n == 1 then oneBob else twoBobs
+    IO.println s!"Reflection with {n} session(s) of Bob: {m.states.size} states"
+    for (key, f) in [("impersonation", impersonation), ("canComplete", reflectionCompletes)] do
+      let r := askReflection n f
+      IO.println s!"  {key}: {verdict r}"
+      for step in walk r do IO.println s!"      {step}"
+
 /-! ## For the book -/
 
-def tex (t : String) : String := (t.replace "{" "\\{").replace "}" "\\}"
+def tex (t : String) : String := ((t.replace "{" "\\{").replace "}" "\\}").replace "#" "\\#"
 
-/-- The wire along a returned walk, through Ivo, marking where he first can derive Bob's nonce. -/
-def diagram (path : List String) : List LeanFM.MDPDiagram.InteractionMessage := Id.run do
-  let p := declared .original
+/-- The wire along a returned walk, through Ivo, marking where he first can derive `watch`. -/
+def diagram (p : Protocol) (watch : Msg) (path : List String) : List LeanFM.MDPDiagram.InteractionMessage := Id.run do
   let mut w : World := { threads := p.roles.map (fun _ => {}), attacker := canon (analz p.attackerKnows) }
   let mut out : List LeanFM.MDPDiagram.InteractionMessage := []
   let mut known := false
@@ -147,9 +216,9 @@ def diagram (path : List String) : List LeanFM.MDPDiagram.InteractionMessage := 
     match (p.moves w).find? (·.label == label) with
     | some mv =>
       if let some { src, dst, term := m, .. } := mv.wire then
-        let note := if !known && mv.next.knows nb then "; now Ivo knows nb" else ""
+        let note := if !known && mv.next.knows watch then s!"; now Ivo knows {watch}" else ""
         if note != "" then known := true
-        out := out ++ [{ src, dst, label := tex (toString m) ++ note }]
+        out := out ++ [{ src := tex src, dst := tex dst, label := tex (toString m ++ note) }]
       w := mv.next
     | none => pure ()
   return out
@@ -174,7 +243,21 @@ def writeBook : IO Unit := do
   let numbered := (attack.zipIdx.map fun (l, i) => s!"{i + 1}. {l}")
   IO.FS.writeFile (out ++ "ns-attack.tex") (listing ("\n".intercalate numbered))
   IO.FS.writeFile (out ++ "ns-attack-diagram.tex")
-    (LeanFM.MDPDiagram.renderInteractionTeX ["Alice", "Ivo", "Bob"] (diagram attack))
+    (LeanFM.MDPDiagram.renderInteractionTeX ["Alice", "Ivo", "Bob"] (diagram (declared .original) nb attack))
+  IO.FS.writeFile (out ++ "ns-reflection-roles.tex") (listing (block src "Reflection"))
+  let reflected := walk (askReflection 2 impersonation)
+  IO.FS.writeFile (out ++ "ns-reflection.tex")
+    (listing ("\n".intercalate (reflected.zipIdx.map fun (l, i) => s!"{i + 1}. {l}")))
+  IO.FS.writeFile (out ++ "ns-reflection-diagram.tex")
+    (LeanFM.MDPDiagram.renderInteractionTeX (["Bob", "Ivo", "Bob#2"].map tex)
+      (diagram (reflection 2) (.enc (.key "kAB") nb) reflected))
+  IO.FS.writeFile (out ++ "ns-reflection-verdicts.tex") <|
+    "\\begin{tabular}{p{0.40\\textwidth}lll}\n\\toprule\n" ++
+    s!"LeanFM \\texttt\{check\\_ctl} & one Bob ({oneBob.states.size}) & two Bobs ({twoBobs.states.size}) & two Bobs, names inside ({twoBobsNamed.states.size}) \\\\\n\\midrule\n" ++
+    "\n".intercalate ([("Bob never commits to Alice unless Alice ran with Bob", impersonation),
+      ("Alice and Bob can complete an honest run", reflectionCompletes)].map fun (r, f) =>
+        s!"{r} & {verdict (askReflection 1 f)} & {verdict (askReflection 2 f)} & {verdict (askNamed f)} \\\\") ++
+    "\n\\bottomrule\n\\end{tabular}\n"
   let row := fun (reading : String) (f : Json) =>
     s!"{reading} & {verdict (ask .original f)} & {verdict (ask .lowe f)} \\\\"
   IO.FS.writeFile (out ++ "ns-verdicts.tex") <|
@@ -188,4 +271,5 @@ end NeedhamSchroeder
 
 def main : IO Unit := do
   NeedhamSchroeder.report
+  NeedhamSchroeder.reportReflection
   NeedhamSchroeder.writeBook

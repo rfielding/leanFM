@@ -256,7 +256,8 @@ would make it testable.
   terms: a send names its sender, its addressee and the attacker it went
   \emph{via}; a delivery names the attacker it came from. Needham--Schroeder
   declared this way gives back Lowe's attack (Section~\ref{sec:needham-schroeder}).
-  Each role runs once, and the answer says so.
+  Each role may run several sessions at once, each with its own fresh values,
+  and each session runs once; the answer says so.
 \end{description}
 
 The modal operators themselves ($K_a$ over indistinguishable histories, $O$,

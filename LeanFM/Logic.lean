@@ -1256,6 +1256,8 @@ def boundedPat (j : Json) : Except String Pat := do
   return p
 
 def maxRoles : Nat := 8
+/-- sessions of one role; every session is a thread, and all threads together stay within `maxRoles` -/
+def maxSessions : Nat := 4
 def maxSteps : Nat := 32
 
 def parseStep (role : String) (i : Nat) (j : Json) : Except String Step := do
@@ -1289,15 +1291,21 @@ def parseStep (role : String) (i : Nat) (j : Json) : Except String Step := do
         | none => pure []
         | _ => throw s!"{here}: claim args is an array of patterns"
       return .claim name args
-    | _ => throw s!"{here}: a step is one of choose, send, recv or claim"
+    | [("fresh", v)] => match v with
+      | .str x =>
+        let x ← checkString "fresh" x
+        if x.contains '#' then throw s!"{here}: a fresh variable's name may not contain #"
+        return .fresh x
+      | _ => throw s!"{here}: fresh takes a variable name"
+    | _ => throw s!"{here}: a step is one of choose, fresh, send, recv or claim"
   | _ => throw s!"{here}: a step is an object"
 
-/-- A send or a claim may use only variables an earlier choose or recv of the same role bound. -/
+/-- A send or a claim may use only variables an earlier choose, fresh or recv of the same role bound. -/
 def checkBindings (r : Role) : Except String Unit := do
   let mut bound : List String := []
   for (st, i) in r.steps.zipIdx do
     match st with
-    | .choose x _ => bound := x :: bound
+    | .choose x _ | .fresh x => bound := x :: bound
     | .recv p => bound := p.vars ++ bound
     | .send to p =>
       for x in to.vars ++ p.vars do
@@ -1320,12 +1328,25 @@ def parseProtocol (args : Json) : Except String Protocol := do
             if ss.size > maxSteps then throw s!"{name} has {ss.size} steps; the bound is {maxSteps}"
             ss.toList.zipIdx.mapM fun (sj, i) => parseStep name i sj
           | _ => throw s!"{name} needs an array of steps"
+        if name.contains '#' then throw s!"role {name}: a role's name may not contain #; later sessions are named {name}#2, …"
+        let sessions ← match (rj.getObjVal? "sessions").toOption with
+          | none => pure 1
+          | some j => match j.getNat? with
+            | .ok n => if n < 1 || n > maxSessions then throw s!"{name}: sessions is 1 to {maxSessions}" else pure n
+            | .error _ => throw s!"{name}: sessions is a whole number"
         let r : Role := { name, steps }
         checkBindings r
-        return r
+        return (r, sessions)
     | _ => throw "check_protocol needs an array of roles"
+  let declaredNames := roles.map (·.1.name)
+  if declaredNames.eraseDups.length != declaredNames.length then throw "role names must be unique"
+  let freshVars := roles.flatMap (·.1.freshVars)
+  if freshVars.eraseDups.length != freshVars.length then
+    throw "each fresh variable is made by one step of one role, so its values in different sessions stay distinct"
+  let threadCount := (roles.map (·.2)).foldl (· + ·) 0
+  if threadCount > maxRoles then throw s!"the roles' sessions add up to {threadCount} threads; the bound is {maxRoles}"
+  let roles := roles.flatMap fun (r, n) => r.sessions n
   let names := roles.map (·.name)
-  if names.eraseDups.length != names.length then throw "role names must be unique"
   let (attacker, attackerKnows) ← match field "attacker" with
     | some aj => do
       let n ← match (aj.getObjVal? "name").toOption.bind str? with
@@ -1350,6 +1371,11 @@ def parseProtocol (args : Json) : Except String Protocol := do
     | some (.obj kvs) => kvs.toList.mapM fun (x, j) => do return (x, ← terms s!"domains.{x}" j)
     | some _ => throw "domains maps variable names to arrays of terms"
     | none => pure []
+  for (x, v) in freshValues roles do
+    if LeanFM.Session.Knowledge.knows attackerKnows v then
+      throw s!"fresh {x} makes {v.render}, which the attacker already knows; a fresh value is new to everyone"
+  let domain := coverFresh roles domain
+  let domains := domains.map fun (x, vs) => (x, coverFresh roles vs)
   return { attacker, attackerKnows, domain, domains, roles, flags := [] }
 
 end ProtocolTool
@@ -1382,7 +1408,7 @@ def checkProtocol (args : Json) : ToolOutcome := do
     | _ => []
   return Json.mkObj ([("tool", Json.str "check_protocol"), ("bounds", boundsJson)] ++ body ++ size ++
     [("wire", Json.arr wire.toArray),
-     ("note", Json.str "bounded: each role runs once; variables bind values from the declared domains; every channel is the attacker's")])
+     ("note", Json.str "bounded: each session runs once, with the declared number of sessions per role; variables bind values from the declared domains; every channel is the attacker's")])
 
 /-! ## Reference -/
 
@@ -1424,11 +1450,11 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## check_protocol"
   , ""
-  , "Arguments: roles ([{name, steps}]), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula."
+  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, …; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula."
   , ""
-  , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
+  , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`, `{\"fresh\": x}` (binds x to a value new in this session: x in the first, x#2 in the second; no two roles make the same fresh variable, and the attacker may not already know it). A domain that holds a fresh value also holds its copies in other sessions. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
   , ""
-  , "Every channel is the attacker's: honest sends go to the attacker, honest receives accept any matching message the attacker can build. The formula may use claimed and knows atoms. Bounded: each role runs once; variables bind values from the domains; a model over 4096 states answers resource-limit."
+  , "Every channel is the attacker's: honest sends go to the attacker, honest receives accept any matching message the attacker can build. The formula may use claimed and knows atoms. Bounded: each session runs once, with as many sessions as declared; variables bind values from the domains; a model over 4096 states answers resource-limit."
   , ""
   , "## Requirement modes"
   , ""

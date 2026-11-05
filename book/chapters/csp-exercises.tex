@@ -628,11 +628,58 @@ Alice. Lowe's fix adds Bob's name to the second message, and Alice checks it is
 the peer she chose. With it both properties hold on every reachable state.
 
 The model is bounded, and the bounds are where attacks could still hide: each
-role runs once, a variable binds a name or a nonce from a declared domain, never
-a whole ciphertext, and Ivo's domain is the names and nonces of this run.
-Lowe's attack needs nothing more, which is why it appears; an attack that needs
-two runs of Bob, or Ivo forwarding a sealed blob he cannot read, needs larger
-bounds.
+session runs once, a variable binds a name or a nonce from a declared domain,
+never a whole ciphertext, and Ivo's domain is the names and nonces of this run.
+Lowe's attack needs one session of each role, which is why it appears with
+them. Ivo forwarding a sealed blob he cannot read still needs a larger bound.
+An attack that needs a second run of Bob needs only a second session, which a
+declaration can ask for.
+
+\subsection{Two sessions: reflection}
+\label{sec:reflection}
+
+Some attacks play one session of a role against another. The standard example is
+a challenge--response that shares one key, \texttt{kAB}, between Alice and Bob.
+Alice challenges with a fresh nonce; Bob answers it under the key and adds his
+own challenge; Alice answers his. The flag \texttt{named} adds a fix, used
+below:
+
+\input{generated/ns-reflection-roles.tex}
+
+A \texttt{fresh} step makes a value that no other session has and the attacker
+does not know: \texttt{nb} in Bob's first session, \texttt{nb\#2} in his
+second, which is named \texttt{Bob\#2}. The requirement is agreement again:
+Bob never commits to Alice unless Alice started a run with him.
+
+\begin{center}
+\input{generated/ns-reflection-verdicts.tex}
+\end{center}
+
+With one session of Bob the property holds: the only party that encrypts under
+\texttt{kAB} on demand is Bob, and he does it before he has made the nonce that
+would need answering. With two sessions Ivo needs no key at all:
+
+\input{generated/ns-reflection.tex}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{generated/ns-reflection-diagram.tex}}
+\caption{Reflection: Bob's own second session answers the challenge of his first. Alice never
+appears; the label marks where Ivo first holds the answer he could not compute.}
+\label{fig:reflection-attack}
+\end{figure}
+
+Ivo opens a session with Bob as Alice and gets Bob's challenge \texttt{nb}. He
+opens a second session and offers \texttt{nb} as the challenge there. Bob's
+second session encrypts it, as it should, and Ivo returns that answer to the
+first session, which commits to Alice. Nothing was decrypted; the key was used
+as an oracle. The usual fixes put the direction or the sender's name inside the
+encryption, or use a separate key in each direction. With \texttt{named}, each
+answer carries the name of the party who made it: Bob's second session now
+produces \texttt{\{nb, B\}kAB}, and his first session waits for
+\texttt{\{nb, A\}kAB}, which only Alice makes. The third column of the table
+checks that fix with the same two sessions: agreement holds and an honest run
+still completes.
 
 \section{What these exercises demand from the library}
 

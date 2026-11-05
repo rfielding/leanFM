@@ -94,8 +94,10 @@ past of an event in a trace, and `check_ctl` decides it as a state atom in a
 draft whose transitions carry terms. In Lean, `LeanFM.Session.Attack` generates
 the attacker from a declaration (roles as scripts over message patterns, every
 channel Dolev-Yao), and Needham-Schroeder is declared that way; the model is
-bounded to one run per role, with variables binding names and nonces from a
-declared domain, never whole ciphertexts. Over MCP, `check_protocol` takes the same
+bounded to a declared number of sessions per role (at most four, eight threads
+in all), each run once, with fresh values per session and variables binding
+names and nonces from a declared domain, never whole ciphertexts. Two sessions
+find reflection; attacks needing unboundedly many sessions are out of reach. Over MCP, `check_protocol` takes the same
 declaration as JSON, with claims and knowledge as formula atoms instead of Lean
 flags; a hand-written `check_ctl` draft still lists its own injections. Inside a CTL formula, `K_a` over indistinguishable histories is
 still unsupported. Randomness,

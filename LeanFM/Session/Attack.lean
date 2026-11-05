@@ -18,9 +18,16 @@ as a `check_ctl` draft, with every transition's term, every claim, and the attac
 declared, so a formula may also use `knows` and `claimed` atoms directly; `Protocol.check`, in
 `LeanFM.Logic`, asks it.
 
-Bounded on purpose: each thread runs once, a received pattern's unbound variables range over a
-declared finite domain (names and nonces), and a variable binds an atom, never a whole ciphertext.
-Those bounds are where attacks on more sessions or on forwarded blobs would be missed.
+Sessions: a role may run several sessions at once (`Role.sessions`), each its own thread with its
+own bindings, named `Alice`, `Alice#2`, …. A `fresh` step makes a value no other session and nothing
+the attacker starts with has: `na` in the first session, `na#2` in the second. Attacks that play one
+session of a role against another, such as reflection, need this.
+
+Bounded on purpose: each thread runs once, the number of sessions is declared, a received pattern's
+unbound variables range over a declared finite domain (names and nonces; a domain that holds a
+fresh value also holds its copies in the other sessions), and a variable binds an atom, never a
+whole ciphertext. Those bounds are where attacks on more sessions or on forwarded blobs would be
+missed.
 -/
 
 namespace LeanFM.Session.Attack
@@ -70,12 +77,34 @@ inductive Step where
   | recv (p : Pat)
   /-- a claim the role makes, such as "I have finished a run with X" -/
   | claim (name : String) (args : List Pat)
+  /-- bind `x` to a value made new in this session: `x` in the first session, `x#k` in the k-th -/
+  | fresh (x : String)
   deriving Repr, Inhabited
 
 structure Role where
   name : String
   steps : List Step
+  /-- which session of the declared role this thread runs, from 1 -/
+  session : Nat := 1
   deriving Repr, Inhabited
+
+/-- The value `fresh x` makes in session `k`. -/
+def freshName (x : String) (k : Nat) : String := if k ≤ 1 then x else s!"{x}#{k}"
+
+/-- `n` sessions of a role, as threads named `Alice`, `Alice#2`, …. -/
+def Role.sessions (r : Role) (n : Nat) : List Role :=
+  (List.range n).map fun k => { r with name := freshName r.name (k + 1), session := k + 1 }
+
+def Role.freshVars (r : Role) : List String :=
+  r.steps.filterMap fun | .fresh x => some x | _ => none
+
+/-- Every fresh value the threads make, with the base name it copies. -/
+def freshValues (threads : List Role) : List (String × Msg) :=
+  threads.flatMap fun r => r.freshVars.map fun x => (x, .atom (freshName x r.session))
+
+/-- Widen a domain so a value made fresh in one session is also there in the others. -/
+def coverFresh (threads : List Role) (domain : List Msg) : List Msg :=
+  domain ++ ((freshValues threads).filter fun (x, v) => domain.contains (.atom x) && !domain.contains v).map (·.2)
 
 structure Thread where
   pc : Nat := 0
@@ -167,6 +196,9 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
                      wire := some { event := "recv", src := p.attacker, dst := role.name, term := m } }
             else none
           | none => none
+    | some (.fresh x) =>
+        let v := Msg.atom (freshName x role.session)
+        [{ label := s!"{role.name} makes {v}", next := { w with threads := setT { pc := t.pc + 1, env := (x, v) :: t.env } } }]
     | some (.claim name args) =>
         match args.mapM (·.inst t.env) with
         | some vs =>

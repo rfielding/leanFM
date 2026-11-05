@@ -1,0 +1,28 @@
+\begin{lstlisting}[language={}]
+/-- With `named`, each answer carries the name of the party who made it. -/
+def answer (named : Bool) (x : String) (who : String) : Pat :=
+  .enc kAB (if named then .pair (.var x) (name who) else .var x)
+
+def challenger (named : Bool := false) : Role := { name := "Alice", steps :=
+  [ .fresh "na"
+  , .claim "running" [name "A", name "B"]
+  , .send (name "B") (.var "na")
+  , .recv (.pair (answer named "na" "B") (.var "m"))
+  , .send (name "B") (answer named "m" "A")
+  , .claim "finished" [name "A", name "B"] ] }
+
+def responder (named : Bool := false) : Role := { name := "Bob", steps :=
+  [ .recv (.var "c")
+  , .fresh "nb"
+  , .send (name "A") (.pair (answer named "c" "B") (.var "nb"))
+  , .recv (answer named "nb" "A")
+  , .claim "commit" [name "B", name "A"] ] }
+
+def reflection (bobSessions : Nat) (named : Bool := false) : Protocol :=
+  let roles := (challenger named).sessions 1 ++ (responder named).sessions bobSessions
+  { attacker := "Ivo"
+  , attackerKnows := [.atom "A", .atom "B", ni]
+  , domain := coverFresh roles [na, nb, ni]
+  , roles
+  , flags := [] }
+\end{lstlisting}
