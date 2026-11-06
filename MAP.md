@@ -309,11 +309,9 @@ These are things that look wrong or stale. None of them has been changed.
    `*-provenance.txt` files are not read either, but they are meant to be.
 6. **`book/main.pdf` is listed in `.gitignore` but tracked.** Git still tracks it
    because it was added before the rule, so the rule only confuses.
-7. **`README.md` line 4 is `=======`**, which looks like a leftover merge marker.
-   (Markdown happens to render it as a heading underline.)
-8. **Several root documents predate the current design**; see "Root documents".
+7. **Several root documents predate the current design**; see "Root documents".
    `MULTIMODAL_LOGIC.md` now contradicts the code, since knowledge is decided.
-9. **The root mixes four kinds of file.** Only the four executable roots must be
+8. **The root mixes four kinds of file.** Only the four executable roots must be
    there. A possible layout:
 
    ```text
