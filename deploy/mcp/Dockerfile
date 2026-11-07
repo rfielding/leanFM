@@ -23,7 +23,9 @@ COPY --from=build /src/.lake/build/bin/leanfm-mcp /app/leanfm-mcp
 # Files served as MCP resources, read relative to the working directory.
 COPY book/main.pdf book/main-dark.pdf /app/book/
 COPY LeanFM/LLMGenerated/Requirements.lean LeanFM/LLMGenerated/Requirements.proto \
-     LeanFM/LLMGenerated/Implementation.lean /app/LeanFM/LLMGenerated/
+     LeanFM/LLMGenerated/Implementation.lean LeanFM/LLMGenerated/SelfHosting.lean \
+     LeanFM/LLMGenerated/McpLogicImplementation.lean LeanFM/LLMGenerated/SessionImplementation.lean \
+     /app/LeanFM/LLMGenerated/
 USER leanfm
 ENV LEANFM_MCP_BIND=0.0.0.0 \
     LEANFM_MCP_PORT=8090

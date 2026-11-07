@@ -6,6 +6,7 @@ import LeanFM.Session.Spec
 import LeanFM.Session.Syntax
 import LeanFM.Session.Knowledge
 import LeanFM.Session.ProjectionTests
+import LeanFM.Session.SessionTests
 
 /-!
 # Session types for LeanFM

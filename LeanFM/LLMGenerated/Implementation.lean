@@ -2,6 +2,7 @@ import LeanFM.LLMGenerated.ApplicationLaunchImplementation
 import LeanFM.LLMGenerated.ResumableWorkImplementation
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.McpLogicImplementation
+import LeanFM.LLMGenerated.SessionImplementation
 import LeanFM.ChatUI.Implementation
 
 namespace LeanFM.LLMGenerated.Implementation
@@ -14,7 +15,7 @@ def existingProductImplementation : LeanFM.ImplementationSpec :=
   LeanFM.ChatUI.Implementation.implementation
 
 def selfHostingImplementationStatus : String :=
-  "The read-only MCP context adapter is implemented by LeanFM/MCP.lean and Server.lean, tested by LeanFM/MCPTests.lean, and documented in the book. The MCP logic consultation tools (selfhost.mcp.logic.*) are implemented by LeanFM/Logic.lean under the accepted mapping in McpLogicImplementation.lean and tested by LeanFM/LogicTests.lean, knows included. Remaining selfhost workflow, typed modal/probability formulas, checker evidence, revision acceptance, and demand-driven indexes still require accepted implementation mappings. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
+  "LeanFM's own requirements are the clauses of LeanFM/LLMGenerated/SelfHosting.lean (selfHostingRequirement); workerRequirement in Requirements.lean is a preserved example. Implemented and mapped: the MCP context, read-only, transport and hosting clauses (LeanFM/MCP.lean, LeanFM/MCPHost.lean, McpServer.lean, Server.lean; tests LeanFM/MCPTests.lean); the MCP logic tools and their view (selfhost.mcp.logic.*, mapping McpLogicImplementation.lean; tests LeanFM/LogicTests.lean and LeanFM/MCPTests.lean); the session-type library (selfhost.session.*, mapping SessionImplementation.lean; tests LeanFM/Session/SessionTests.lean and ProjectionTests.lean, built with the library). Still without accepted mappings: the selfhost workflow, typed modal and probability formulas beyond the logic tools, revision acceptance and demand-driven indexes; and LeanFM/Protocol.lean, CTL.lean, Overlay.lean, MDP.lean and StreamStats.lean have no requirement clauses yet. Existing ChatUI mappings are not a claim of complete self-hosting conformance."
 
 def actorBinding : WorkerActor -> LeanFM.ActorCodegen
   | .Client => { actor := LeanFM.requirementName WorkerActor.Client

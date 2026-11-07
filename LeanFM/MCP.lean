@@ -19,7 +19,8 @@ def protocolVersion := "2025-06-18"
 def instructions : String :=
   "LeanFM's book is durable agent context, not optional human documentation. " ++
   "Before requirements, design, or implementation work, read leanfm://project/book/main.pdf, " ++
-  "leanfm://project/specification/Requirements.lean, leanfm://project/specification/Requirements.proto, " ++
+  "leanfm://project/specification/SelfHosting.lean (LeanFM's own requirements), " ++
+  "leanfm://project/specification/Requirements.lean (the registry), leanfm://project/specification/Requirements.proto, " ++
   "and leanfm://project/specification/Implementation.lean. Treat the book like a maintained portion " ++
   "of the system prompt. Work in order: observable requirements and their derived views, then the " ++
   "traceable implementation specification, then source, checking each layer before the next. Review " ++
@@ -51,7 +52,13 @@ def resources : Array Json := #[
   resource "leanfm://project/book/main-dark.pdf" "book-dark" "LeanFM Software Engineering (dark)"
     "Accessible dark rendering of the same central project book." "application/pdf",
   resource "leanfm://project/specification/Requirements.lean" "requirements"
-    "Canonical requirements" "Accepted observable requirements and derived-output declarations." "text/plain",
+    "Requirements registry" "The component registry: selfHostingRequirement (LeanFM itself, from SelfHosting.lean), the accepted components, and the preserved Worker example." "text/plain",
+  resource "leanfm://project/specification/SelfHosting.lean" "self-hosting-requirements"
+    "LeanFM's own requirements" "Every clause LeanFM is held to: MCP context, transport and hosting, the logic tools and their view, the session-type library, and the proposed workflow." "text/plain",
+  resource "leanfm://project/specification/McpLogicImplementation.lean" "mcp-logic-implementation"
+    "MCP and logic implementation mapping" "How each MCP, hosting and logic clause is implemented and tested." "text/plain",
+  resource "leanfm://project/specification/SessionImplementation.lean" "session-implementation"
+    "Session-type library implementation mapping" "How each selfhost.session clause is implemented and tested." "text/plain",
   resource "leanfm://project/specification/Requirements.proto" "requirements-proto"
     "Canonical protobuf schema" "Byte-level message schema paired with the requirements." "text/x-protobuf",
   resource "leanfm://project/specification/Implementation.lean" "implementation"
@@ -101,6 +108,15 @@ def resourceContents (uri : String) : IO (Except String Json) := do
       | "leanfm://project/specification/Requirements.lean" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", "text/plain"),
             ("text", ← readText "LeanFM/LLMGenerated/Requirements.lean")]
+      | "leanfm://project/specification/SelfHosting.lean" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", "text/plain"),
+            ("text", ← readText "LeanFM/LLMGenerated/SelfHosting.lean")]
+      | "leanfm://project/specification/McpLogicImplementation.lean" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", "text/plain"),
+            ("text", ← readText "LeanFM/LLMGenerated/McpLogicImplementation.lean")]
+      | "leanfm://project/specification/SessionImplementation.lean" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", "text/plain"),
+            ("text", ← readText "LeanFM/LLMGenerated/SessionImplementation.lean")]
       | "leanfm://project/specification/Requirements.proto" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", "text/x-protobuf"),
             ("text", ← readText "LeanFM/LLMGenerated/Requirements.proto")]

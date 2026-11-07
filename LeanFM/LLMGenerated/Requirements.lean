@@ -4,6 +4,15 @@ import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.LLMGenerated.SharedProjects
 
+/-! # The requirements registry
+
+LeanFM's own requirements are `selfHostingRequirement`, the clauses of
+`LeanFM/LLMGenerated/SelfHosting.lean`: MCP, hosting, the logic tools and their view, the
+session-type library, and the proposed workflow. Their implementation mappings are
+`McpLogicImplementation.lean` and `SessionImplementation.lean`; the chat UI's are in
+`LeanFM/ChatUI/`. The Worker types below, `workerRequirement` and `Requirements.proto` are a
+preserved example of the requirements language, not a description of LeanFM. -/
+
 namespace LeanFM.LLMGenerated.Requirements
 
 def generatedRequirementsProto : String :=

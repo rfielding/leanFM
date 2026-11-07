@@ -184,3 +184,10 @@ def main : IO Unit := do
   IO.println "ok: MCP host never allows every origin or credentials, and never caches"
   let line := logLine (post [("Authorization", "Bearer s3cret")] (body := "{\"secret\":1}") (peer := "203.0.113.9")) goodTok 5
   expect "MCP host log line holds no body, token or client address" (!line.contains "s3cret" && !line.contains "secret" && !line.contains "203.0.113.9")
+  -- LeanFM's own requirements and mappings are readable resources
+  for uri in ["leanfm://project/specification/SelfHosting.lean", "leanfm://project/specification/McpLogicImplementation.lean",
+      "leanfm://project/specification/SessionImplementation.lean"] do
+    let r ← dispatch ("{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"resources/read\",\"params\":{\"uri\":\"" ++ uri ++ "\"}}")
+    assertContains s!"MCP lists {uri}" listed.body uri
+    assertContains s!"MCP reads {uri}" r.body "\"contents\""
+  assertContains "MCP instructions point at LeanFM's own requirements" initialized.body "SelfHosting.lean"

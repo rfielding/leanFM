@@ -10,10 +10,21 @@ This repository is itself a valid LeanFM project. `book/main.pdf` always exists
 and is a central input to Codex, not merely a publication output.
 `book/main-dark.pdf` is the equivalent accessible reading copy generated from
 the same source.
-Use it together with the live LeanFM language references, the accepted
-`LeanFM/LLMGenerated/Requirements.lean`, `Requirements.proto`,
-`Implementation.lean`, and the existing source tree. Keep these canonical
-self-hosting specifications together at that stable project-relative location.
+Use it together with the live LeanFM language references, the canonical
+specifications in `LeanFM/LLMGenerated/`, and the existing source tree:
+
+- `SelfHosting.lean`: LeanFM's own requirements, one clause per behavior
+  (MCP, hosting, the logic tools and their view, the session-type library, and
+  the proposed workflow). Start here to learn what LeanFM is held to.
+- `McpLogicImplementation.lean` and `SessionImplementation.lean`: how each of
+  those clauses is implemented and tested.
+- `Requirements.lean`: the registry (`selfHostingRequirement` and the accepted
+  components); its Worker types and `Requirements.proto` are a preserved example
+  of the requirements language, not a description of LeanFM.
+- `Implementation.lean`: the implementation registry and its status summary.
+
+Keep these canonical self-hosting specifications together at that stable
+project-relative location.
 
 Every new project has one exclusive project-root directory. Put every
 project-owned input, book snapshot, specification, source file, test, generated

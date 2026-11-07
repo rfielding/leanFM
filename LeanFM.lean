@@ -18,3 +18,5 @@ import LeanFM.LLMGenerated.Implementation
 import LeanFM.StaticAssets
 import LeanFM.Render
 import LeanFM.MCP
+-- the session-type library and its tests (clauses selfhost.session.*)
+import LeanFM.Session
