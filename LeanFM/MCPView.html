@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeanFM verdict</title>
+<style>
+  :root, :root[data-theme="dark"] {
+    --bg: #0b0f14; --panel: #16202b; --edge: #263445; --fg: #eceae6; --dim: #8a96a3;
+    --good: #4ade80; --bad: #f87171; --warn: #f59e0b; --new: #fbbf24; --line: #60a5fa; --via: #c4b5fd;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --panel: #f4f5f7; --edge: #d5dae1; --fg: #1d2430; --dim: #5d6876;
+    --good: #15803d; --bad: #b91c1c; --warn: #b45309; --new: #a16207; --line: #1d4ed8; --via: #6d28d9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { padding: 14px 16px 16px; }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+  .tool { font-weight: 600; }
+  .badge { border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: 13px; }
+  .proved { color: var(--good); } .disproved { color: var(--bad); } .other { color: var(--warn); }
+  .reading { margin: 6px 0 2px; }
+  .meta { color: var(--dim); font-size: 12.5px; margin: 2px 0 10px; }
+  .panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 10px 12px; margin-top: 10px; }
+  .controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  button { background: var(--panel); color: var(--fg); border: 1px solid var(--edge); border-radius: 6px;
+    padding: 3px 10px; font: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--line); outline-offset: 1px; }
+  input[type=range] { flex: 1; accent-color: var(--line); }
+  .stepinfo { color: var(--dim); font-size: 12.5px; min-width: 6em; text-align: right; }
+  .step { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 13px; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--dim); font-weight: 600; letter-spacing: .02em; }
+  ul { margin: 0; padding-left: 0; list-style: none; }
+  li { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 12.5px; padding: 1px 0; }
+  li.new { color: var(--new); font-weight: 600; }
+  li.secret, td.secret { color: var(--bad); font-weight: 700; }
+  .more { color: var(--dim); font-style: italic; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  td, th { text-align: left; padding: 2px 8px 2px 0; vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; }
+  td.mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  svg { width: 100%; height: auto; display: block; }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<main id="app"><p class="meta" id="status">Waiting for a LeanFM result…</p></main>
+<script>
+"use strict";
+// LeanFM logic view: an MCP Apps view (protocol 2026-01-26). Tool data is only ever placed with
+// textContent or as SVG geometry; this document makes no network requests.
+const MAX_STEPS = 64, MAX_ITEMS = 256;
+const app = document.getElementById("app");
+let toolArgs = null, current = null, stepIndex = 0;
+
+// ---- JSON-RPC over postMessage --------------------------------------------------------------
+let nextId = 1;
+const pending = new Map();
+function send(msg) { window.parent.postMessage(msg, "*"); }
+function rpc(method, params, timeoutMs) {
+  const id = nextId++;
+  send({ jsonrpc: "2.0", id, method, params });
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error("timeout")); } }, timeoutMs);
+  });
+}
+function notify(method, params) { send({ jsonrpc: "2.0", method, params }); }
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent) return;
+  let msg = event.data;
+  if (typeof msg === "string") { try { msg = JSON.parse(msg); } catch (_) { return; } }
+  if (!msg || msg.jsonrpc !== "2.0") return;
+  if (msg.method === undefined && msg.id !== undefined) {
+    const p = pending.get(msg.id);
+    if (p) { pending.delete(msg.id); msg.error ? p.reject(msg.error) : p.resolve(msg.result); }
+    return;
+  }
+  const params = msg.params || {};
+  switch (msg.method) {
+    case "ui/notifications/tool-input": toolArgs = params.arguments || null; break;
+    case "ui/notifications/tool-result": show(params); break;
+    case "ui/notifications/host-context-changed": theme(params); break;
+    case "ui/notifications/tool-cancelled": status("The tool call was cancelled."); break;
+    default:
+      if (msg.id !== undefined) send({ jsonrpc: "2.0", id: msg.id, result: {} });
+  }
+});
+
+function theme(ctx) {
+  if (ctx && (ctx.theme === "light" || ctx.theme === "dark")) document.documentElement.dataset.theme = ctx.theme;
+}
+
+async function connect() {
+  let delay = 400; const started = Date.now();
+  while (Date.now() - started < 30000) {
+    try {
+      const result = await rpc("ui/initialize", {
+        appInfo: { name: "leanfm-logic-view", version: "1.0.0" },
+        appCapabilities: { availableDisplayModes: ["inline"] },
+        protocolVersion: "2026-01-26" }, delay);
+      theme(result && result.hostContext);
+      notify("ui/notifications/initialized", {});
+      return;
+    } catch (_) { delay = Math.min(delay * 2, 5000); }
+  }
+  status("Could not connect to the host.", true);
+}
+
+let lastHeight = 0;
+function reportSize() {
+  // the content's own height: documentElement.scrollHeight never drops below the frame, so a view could not shrink
+  const height = Math.ceil(app.getBoundingClientRect().bottom);
+  if (height !== lastHeight) {
+    lastHeight = height;
+    notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height });
+  }
+}
+if (typeof ResizeObserver === "function") new ResizeObserver(reportSize).observe(document.body);
+
+// ---- DOM helpers: text only ----------------------------------------------------------------
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs, text) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) node.setAttribute(k, String(attrs[k]));
+  if (text !== undefined) node.textContent = String(text);
+  return node;
+}
+function status(text, bad) {
+  app.replaceChildren(el("p", bad ? "err" : "meta", text));
+  reportSize();
+}
+function list(items, mark) {
+  const ul = el("ul");
+  items.slice(0, MAX_ITEMS).forEach((t) => ul.appendChild(el("li", mark ? mark(t) : "", t)));
+  if (items.length > MAX_ITEMS) ul.appendChild(el("li", "more", `and ${items.length - MAX_ITEMS} more`));
+  return ul;
+}
+
+// ---- rendering -----------------------------------------------------------------------------
+function show(result) {
+  let body = result && result.structuredContent;
+  if (!body && result && Array.isArray(result.content)) {
+    const text = result.content.filter((c) => c && c.type === "text").map((c) => c.text).join("\n");
+    body = { reading: text };
+  }
+  if (!body || typeof body !== "object") { status("The result has no content to show.", true); return; }
+  current = body;
+  const path = (body.evidence && Array.isArray(body.evidence.path)) ? body.evidence.path : [];
+  stepIndex = Math.max(0, Math.min(path.length, MAX_STEPS) - 1);
+  render();
+}
+
+function verdictClass(v) { return v === "proved" ? "proved" : v === "disproved" ? "disproved" : "other"; }
+
+function secretTerms() {
+  const found = [];
+  const walk = (f) => {
+    if (!f || typeof f !== "object") return;
+    if (f.knows && typeof f.knows === "object" && f.knows.term !== undefined) found.push(termText(f.knows.term));
+    for (const k in f) if (typeof f[k] === "object") walk(f[k]);
+  };
+  if (toolArgs) { walk(toolArgs.formula); if (toolArgs.query) found.push(termText(toolArgs.query)); }
+  return found;
+}
+function termText(t) {
+  if (typeof t === "string") return t;
+  if (!t || typeof t !== "object") return String(t);
+  for (const k of ["atom", "key", "var"]) if (typeof t[k] === "string") return t[k];
+  if (t.pk !== undefined) return `pk(${termText(t.pk)})`;
+  if (t.sk !== undefined) return `sk(${termText(t.sk)})`;
+  if (Array.isArray(t.pair)) return t.pair.map(termText).join(", ");
+  if (Array.isArray(t.tuple)) return t.tuple.map(termText).join(", ");
+  if (t.hash !== undefined) return `h(${termText(t.hash)})`;
+  if (t.enc) return `{${termText(t.enc.body)}}${termText(t.enc.key)}`;
+  return JSON.stringify(t);
+}
+
+function render() {
+  const b = current;
+  const root = document.createDocumentFragment();
+  const head = el("div", "head");
+  head.appendChild(el("span", "tool", b.tool || "LeanFM"));
+  if (b.verdict) head.appendChild(el("span", "badge " + verdictClass(b.verdict), b.verdict));
+  root.appendChild(head);
+  if (b.reading) root.appendChild(el("p", "reading", b.reading));
+  const facts = [];
+  if (typeof b.states === "number") facts.push(`${b.states} states`);
+  if (typeof b.transitions === "number") facts.push(`${b.transitions} transitions`);
+  if (b.evidence && b.evidence.kind) facts.push(b.evidence.kind);
+  if (b.note) facts.push(b.note);
+  if (b.reason) facts.push(b.reason);
+  if (facts.length) root.appendChild(el("p", "meta", facts.join(" · ")));
+
+  const path = (b.evidence && Array.isArray(b.evidence.path)) ? b.evidence.path : [];
+  const wire = Array.isArray(b.wire) ? b.wire : [];
+  if (path.length) {
+    const shown = path.slice(0, MAX_STEPS);
+    if (wire.length) root.appendChild(sequence(wire.slice(0, MAX_STEPS), hopsUpTo(shown, stepIndex)));
+    root.appendChild(stepper(shown, path.length));
+    root.appendChild(stepPanel(shown));
+  }
+  if (Array.isArray(b.holds)) root.appendChild(holdsTable(b.holds));
+  if (b.evidence && b.evidence.derivation) {
+    const p = el("div", "panel");
+    p.appendChild(el("h3", "", "derivation"));
+    p.appendChild(derivation(b.evidence.derivation));
+    root.appendChild(p);
+  }
+  if (Array.isArray(b.segments) && b.segments.length) root.appendChild(segments(b.segments));
+  app.replaceChildren(root);
+  reportSize();
+}
+
+function isHop(step) { return typeof step.message === "string" && (step.message.includes("→") || step.message.includes("⇐")); }
+function hopsUpTo(steps, i) { let n = 0; for (let k = 0; k <= i && k < steps.length; k++) if (isHop(steps[k])) n++; return n; }
+
+function sequence(hops, drawn) {
+  const actors = [];
+  const add = (a) => { if (a && !actors.includes(a)) actors.push(a); };
+  const attackers = new Set();
+  hops.forEach((h) => { if (h.event === "send" && h.via) attackers.add(h.via); if (h.event === "recv" && h.from) attackers.add(h.from); });
+  hops.forEach((h) => { if (!attackers.has(h.from)) add(h.from); });
+  const honest = actors.splice(0);
+  const half = Math.ceil(honest.length / 2);
+  honest.slice(0, half).forEach(add); attackers.forEach(add); honest.slice(half).forEach(add);
+  // a send's addressee is a name inside the protocol, shown as "(for …)", not a lifeline
+  hops.forEach((h) => { add(h.from); add(h.via); if (h.event !== "send") add(h.to); });
+  const colW = 170, rowH = 40, top = 44, width = Math.max(520, colW * actors.length);
+  const x = (a) => colW / 2 + actors.indexOf(a) * colW + (width - colW * actors.length) / 2;
+  const height = top + rowH * hops.length + 20;
+  const svg = sv("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "messages on the wire" });
+  svg.style.maxWidth = `${width}px`;
+  const defs = sv("defs", {});
+  for (const [id, color] of [["arrow", "var(--line)"], ["arrowDim", "var(--edge)"]]) {
+    const m = sv("marker", { id, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+    m.appendChild(sv("path", { d: "M0 0L10 5L0 10z", fill: color }));
+    defs.appendChild(m);
+  }
+  svg.appendChild(defs);
+  actors.forEach((a) => {
+    const cx = x(a);
+    svg.appendChild(sv("rect", { x: cx - 60, y: 6, width: 120, height: 26, rx: 6, fill: "var(--panel)",
+      stroke: attackers.has(a) ? "var(--via)" : "var(--edge)", "stroke-width": 1.5 }));
+    svg.appendChild(sv("text", { x: cx, y: 24, "text-anchor": "middle", fill: "var(--fg)", "font-size": 13, "font-weight": 600 }, a));
+    svg.appendChild(sv("line", { x1: cx, y1: 32, x2: cx, y2: height - 8, stroke: "var(--edge)", "stroke-dasharray": "4 4" }));
+  });
+  hops.forEach((h, i) => {
+    const src = h.from, dst = h.event === "send" && h.via ? h.via : h.to;
+    if (!actors.includes(src) || !actors.includes(dst)) return;
+    const y = top + rowH * i + 24, on = i < drawn, x1 = x(src), x2 = x(dst);
+    const dir = x2 >= x1 ? 1 : -1;
+    svg.appendChild(sv("line", { x1: x1 + 4 * dir, y1: y, x2: x2 - 4 * dir, y2: y,
+      stroke: on ? "var(--line)" : "var(--edge)", "stroke-width": on ? 2 : 1.2,
+      "marker-end": on ? "url(#arrow)" : "url(#arrowDim)" }));
+    const label = h.event === "send" && h.to && h.to !== dst ? `${termText(h.term)}  (for ${h.to})` : termText(h.term);
+    svg.appendChild(sv("text", { x: (x1 + x2) / 2, y: y - 6, "text-anchor": "middle", "font-size": 12,
+      "font-family": "ui-monospace, Menlo, monospace", fill: on ? "var(--fg)" : "var(--dim)" }, label));
+  });
+  const wrap = el("div", "panel");
+  wrap.appendChild(svg);
+  return wrap;
+}
+
+function stepper(steps, total) {
+  const row = el("div", "controls");
+  const prev = el("button", "", "◀"), next = el("button", "", "▶");
+  prev.setAttribute("aria-label", "previous step"); next.setAttribute("aria-label", "next step");
+  const range = document.createElement("input");
+  range.type = "range"; range.min = "0"; range.max = String(steps.length - 1); range.value = String(stepIndex);
+  range.setAttribute("aria-label", "step");
+  const info = el("span", "stepinfo", `step ${stepIndex + 1} of ${steps.length}` + (total > steps.length ? ` (${total - steps.length} more not drawn)` : ""));
+  const go = (i) => { stepIndex = Math.max(0, Math.min(steps.length - 1, i)); render(); };
+  prev.addEventListener("click", () => go(stepIndex - 1));
+  next.addEventListener("click", () => go(stepIndex + 1));
+  range.addEventListener("input", () => go(Number(range.value)));
+  row.append(prev, range, next, info);
+  return row;
+}
+
+function stepPanel(steps) {
+  const s = steps[stepIndex] || {};
+  const before = stepIndex > 0 ? steps[stepIndex - 1] : null;
+  const panel = el("div", "panel");
+  panel.appendChild(el("div", "step", `${s.state || ""}${s.message ? "  ·  " + s.message : "  ·  start"}`));
+  const cols = el("div", "cols");
+  const secrets = secretTerms();
+  if (s.holds && typeof s.holds === "object") {
+    for (const actor of Object.keys(s.holds)) {
+      const items = Array.isArray(s.holds[actor]) ? s.holds[actor].map(String) : [];
+      const old = new Set(before && before.holds && Array.isArray(before.holds[actor]) ? before.holds[actor].map(String) : []);
+      const box = el("div");
+      box.appendChild(el("h3", "", `${actor} holds (${items.length})`));
+      box.appendChild(list(items, (t) => secrets.includes(t) ? "secret" : (before && !old.has(t) ? "new" : "")));
+      cols.appendChild(box);
+    }
+  }
+  if (Array.isArray(s.claims)) {
+    const box = el("div");
+    box.appendChild(el("h3", "", "claims made"));
+    box.appendChild(s.claims.length ? list(s.claims.map(String)) : el("div", "more", "none yet"));
+    cols.appendChild(box);
+  }
+  if (cols.childNodes.length) panel.appendChild(cols);
+  return panel;
+}
+
+function holdsTable(holds) {
+  const panel = el("div", "panel");
+  panel.appendChild(el("h3", "", `held pieces (${holds.length})`));
+  const table = el("table");
+  const hr = el("tr"); ["piece", "from", "how"].forEach((h) => hr.appendChild(el("th", "", h)));
+  table.appendChild(hr);
+  const secrets = secretTerms();
+  holds.slice(0, MAX_ITEMS).forEach((h) => {
+    const tr = el("tr");
+    const term = el("td", "mono" + (secrets.includes(String(h.term)) ? " secret" : ""), h.term);
+    tr.append(term, el("td", "mono", h.from), el("td", "", h.how));
+    table.appendChild(tr);
+  });
+  panel.appendChild(table);
+  if (holds.length > MAX_ITEMS) panel.appendChild(el("div", "more", `and ${holds.length - MAX_ITEMS} more`));
+  return panel;
+}
+
+function derivation(d) {
+  const ul = el("ul");
+  const line = (node, depth) => {
+    if (!node || depth > 32 || ul.childNodes.length >= MAX_ITEMS) return;
+    const text = [node.term, node.how, node.held ? `held: ${node.held}` : ""].filter(Boolean).join("  ·  ");
+    const li = el("li", "", text);
+    li.style.paddingLeft = `${depth * 16}px`;
+    ul.appendChild(li);
+    (Array.isArray(node.from) ? node.from : []).forEach((c) => line(c, depth + 1));
+  };
+  line(d, 0);
+  return ul;
+}
+
+function segments(segs) {
+  const panel = el("div", "panel");
+  panel.appendChild(el("h3", "", "segments the attacker sends, in order"));
+  const table = el("table");
+  const hr = el("tr"); ["#", "offset", "bytes"].forEach((h) => hr.appendChild(el("th", "", h)));
+  table.appendChild(hr);
+  segs.slice(0, MAX_STEPS).forEach((s, i) => {
+    const tr = el("tr");
+    tr.append(el("td", "", i + 1), el("td", "mono", s.offset), el("td", "mono", s.data));
+    table.appendChild(tr);
+  });
+  panel.appendChild(table);
+  return panel;
+}
+
+connect();
+</script>
+</body>
+</html>

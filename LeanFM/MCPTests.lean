@@ -67,3 +67,43 @@ def main : IO Unit := do
   assertContains "MCP rejection summary gives the reason" badText "rejected: "
   let ctlText ← summaryOf "MCP check_ctl text is a summary" ctl.body
   assertContains "MCP check_ctl summary gives the verdict" ctlText "check_ctl disproved"
+  -- The MCP Apps view (clause selfhost.mcp.logic.view).
+  let toolsJson ← IO.ofExcept (Json.parse toolsListed.body)
+  let listedTools ← IO.ofExcept ((toolsJson.getObjValD "result").getObjValD "tools" |>.getArr?)
+  for t in listedTools do
+    let name ← IO.ofExcept (t.getObjValAs? String "name")
+    let uri := ((t.getObjValD "_meta").getObjValD "ui").getObjValAs? String "resourceUri" |>.toOption
+    let wants := logicViewTools.contains name
+    if wants && uri != some logicViewUri then throw <| IO.userError s!"MCP view: {name} lacks the view"
+    if !wants && uri.isSome then throw <| IO.userError s!"MCP view: {name} should not declare a view"
+  IO.println "ok: MCP view is declared on exactly the logic tools it draws"
+  assertContains "MCP lists the view resource" listed.body logicViewUri
+  assertContains "MCP lists the view with the MCP Apps MIME type" listed.body "\"mimeType\":\"text/html;profile=mcp-app\""
+  let view ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"resources/read\",\"params\":{\"uri\":\"ui://leanfm/logic-view\"}}"
+  let viewJson ← IO.ofExcept (Json.parse view.body)
+  let viewItem ← IO.ofExcept ((viewJson.getObjValD "result").getObjValD "contents" |>.getArrVal? 0)
+  let html ← IO.ofExcept (viewItem.getObjValAs? String "text")
+  if html != logicViewHtml then throw <| IO.userError "MCP view: resources/read does not return the compiled view"
+  let mime ← IO.ofExcept (viewItem.getObjValAs? String "mimeType")
+  if mime != logicViewMimeType then throw <| IO.userError s!"MCP view: wrong MIME type {mime}"
+  let csp := ((viewItem.getObjValD "_meta").getObjValD "ui").getObjValD "csp"
+  for key in ["connectDomains", "resourceDomains", "frameDomains", "baseUriDomains"] do
+    if csp.getObjValD key != Json.arr #[] then throw <| IO.userError s!"MCP view: {key} is not empty"
+  IO.println "ok: MCP reads the view with its MIME type and no CSP domains"
+  -- Negative requirements: no network, no data as HTML or code, no paths.
+  let withoutNamespace := html.replace "http://www.w3.org/2000/svg" ""
+  for needle in ["http://", "https://", "src=", "href=", "fetch(", "XMLHttpRequest", "WebSocket", "EventSource",
+      "import(", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",
+      "/home/", "/Users/", "leanfm://"] do
+    if withoutNamespace.contains needle then throw <| IO.userError s!"MCP view: forbidden text {needle}"
+  IO.println "ok: MCP view has no network access, no HTML or code from data, and no paths"
+  assertContains "MCP view speaks the MCP Apps handshake" html "\"ui/initialize\""
+  assertContains "MCP view announces it is ready" html "\"ui/notifications/initialized\""
+  assertContains "MCP view renders tool results" html "\"ui/notifications/tool-result\""
+  assertContains "MCP view reports its size" html "\"ui/notifications/size-changed\""
+  assertContains "MCP view bounds the drawing" html "MAX_STEPS = 64, MAX_ITEMS = 256"
+  let unknownUi ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":21,\"method\":\"resources/read\",\"params\":{\"uri\":\"ui://leanfm/other\"}}"
+  assertContains "MCP rejects an undeclared ui:// URI" unknownUi.body "unknown resource URI"
+  -- Hosts without the extension still get one summary line and the structured answer.
+  let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
+  assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"

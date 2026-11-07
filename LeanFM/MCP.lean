@@ -3,6 +3,7 @@ import LeanFM.Artifacts
 import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.Implementation
 import LeanFM.Logic
+import LeanFM.MCPView
 
 namespace LeanFM.MCP
 
@@ -60,7 +61,9 @@ def resources : Array Json := #[
   resource "leanfm://language/implementation-reference" "implementation-reference"
     "LeanFM implementation language reference" "Live implementation and traceability constructors." "text/markdown",
   resource "leanfm://language/logic-reference" "logic-reference"
-    "LeanFM logic reference" "JSON formula grammar, operator readings, verdicts, evidence and terminal convention for the logic tools." "text/markdown"
+    "LeanFM logic reference" "JSON formula grammar, operator readings, verdicts, evidence and terminal convention for the logic tools." "text/markdown",
+  resource logicViewUri "logic-view" "LeanFM logic view"
+    "Interactive view of check_protocol, check_ctl, check_reassembly and knows results (MCP Apps)." logicViewMimeType
 ]
 
 private def alphabet : Array Char :=
@@ -113,6 +116,9 @@ def resourceContents (uri : String) : IO (Except String Json) := do
       | "leanfm://language/logic-reference" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", "text/markdown"),
             ("text", LeanFM.Logic.reference)]
+      | "ui://leanfm/logic-view" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", logicViewMimeType),
+            ("text", logicViewHtml), ("_meta", logicViewResourceMeta)]
       | _ => return .error s!"unknown resource URI: {uri}"
     return .ok contents
   catch err => return .error s!"resource unavailable: {err}"
@@ -136,7 +142,7 @@ def schema (properties : List (String × Json)) (required : List String) : Json 
   Json.mkObj [("type", "object"), ("properties", Json.mkObj properties),
     ("required", Json.arr (required.map Json.str).toArray), ("additionalProperties", false)]
 
-def tools : Array Json := #[
+def toolDefinitions : Array Json := #[
   tool "validate_generated_artifacts" "Validate generated artifacts"
     "Run the deterministic in-memory validations for the canonical requirements and implementation specifications.",
   tool "requirements_interrogation" "Read requirements interrogation"
@@ -183,6 +189,9 @@ def tools : Array Json := #[
       ("seesAll", Json.mkObj [("type", "boolean"), ("description", Json.str "the actor sees every channel (a network attacker)")])]
       ["events", "actor", "at"])
 ]
+
+/-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
+def tools : Array Json := toolDefinitions.map withLogicView
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
 `logicSummaryLimit` characters. The full answer is only in structuredContent. -/

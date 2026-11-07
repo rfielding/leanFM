@@ -298,9 +298,11 @@ def mergeBranches [DecidableEq R] [ToString R] (r c : R) (started : Bool) (ps : 
       | .var _ => !started
       | _ => false
     let absent := alts.filter isAbsent
-    -- A role that has not started does nothing until something reaches it. It needs no message
-    -- now, only that whatever reaches it first tells the branches apart.
-    if !started then
+    -- Whatever reaches the role first must tell the branches apart, looking inside `par`: a
+    -- branch that runs concurrent work the role is not part of, or that starts with a `par`,
+    -- is told apart by the first messages the role can receive in it. A role that has not
+    -- started may also be absent from some branches; one that has started may not.
+    if !started || absent.isEmpty then
       let live := (alts.filter (!isAbsent ·)).eraseDups
       let firsts := live.map Local.firstReceives
       if firsts.all (fun f => match f with | some (_ :: _) => true | _ => false) then
