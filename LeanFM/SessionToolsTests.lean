@@ -334,6 +334,10 @@ def lendingArgs (log : String) : Json := (leanArgs lendingProtocol).setObjVal! "
 #guard (field (skeleton (leanArgs lendingProtocol)) "code").getStr?.toOption ==
   some (include_str "../examples/vibecode/lending/lending_protocol.py")
 
+-- and the TypeScript module, which the example type-checks (npm run check)
+#guard (field (skeleton ((leanArgs lendingProtocol).setObjVal! "language" (Json.str "typescript"))) "code").getStr?.toOption ==
+  some (include_str "../examples/vibecode/lending/lending_protocol.ts")
+
 /-! ## session_skeleton -/
 
 def skel (t : String) : Except String Json := skeleton (leanArgs t)
@@ -358,11 +362,28 @@ def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).get
 -- two messages alike with different ids or causes: the cause is passed, not guessed
 #guard (code "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
   "def send_reply(self, cause=None, body=None):"
+-- TypeScript: the same states, so a step a state does not allow is a missing method, a type error
+def tsCode (t : String) : String :=
+  ((field (skeleton ((leanArgs t).setObjVal! "language" (Json.str "typescript"))) "code").getStr?.toOption).getD ""
+def tsClass (t c : String) : String := (((tsCode t).splitOn s!"export class {c} extends State \{")[1]?.getD "").splitOn "\n}\n" |>.head!
+#guard (tsClass lendingProtocol "DeskS2").contains "  sendLent(body?: unknown): DeskS3 {"
+#guard (tsClass lendingProtocol "DeskS2").contains "  sendHold(body?: unknown): DeskS5 {"
+-- the lending bug cannot be written: an approved hold's state has no sendLent
+#guard (tsClass lendingProtocol "DeskS6").contains "sendWaitlisted" && !(tsClass lendingProtocol "DeskS6").contains "sendLent"
+-- states with the same methods are still different types, and receive narrows by label
+#guard (tsClass lendingProtocol "DeskS6").contains "  readonly state = \"DeskS6\" as const;"
+#guard (tsClass lendingProtocol "MemberS2").contains "receive(msg: Message): { label: \"Lent\"; msg: Message; next: MemberS3 } | { label: \"Waitlisted\"; msg: Message; next: End }"
+#guard (tsCode "protocol R (P, A, B, C) { join 2 of { wa: W from P to A; S from A to P cause wa; } and { wb: W from P to B; S from B to P cause wb; } and { wc: W from P to C; S from C to P cause wc; } Done at P; }").contains
+  "return new Fork([new PS1(ep), new PS3(ep), new PS5(ep)] as [PS1, PS3, PS5], () => new PS7(ep), 2);"
+#guard (tsCode "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
+  "sendReply(cause?: string, body?: unknown): "
+#guard reason (skeleton ((leanArgs "protocol C (C, S) { q: Q from C to S; choice { SoldOut from S to C cause q; } or { soldOut from S to C cause q; } }").setObjVal! "language" (Json.str "typescript"))) ==
+  "S: two methods of S1 would both be called sendSoldOut"
 -- negative: two methods with one Python name, an unknown language
 #guard reason (skel "protocol C (C, S) { q: Q from C to S; choice { SoldOut from S to C cause q; } or { Sold_out from S to C cause q; } }") ==
   "S: two methods of S1 would both be called send_sold_out"
 #guard reason (skeleton ((leanArgs lendingProtocol).setObjVal! "language" (Json.str "cobol"))) ==
-  "language cobol is not supported; use python"
+  "language cobol is not supported; use python or typescript"
 -- negative: names reach the code only as identifiers and escaped literals, so a quote or a newline
 -- in a «name» cannot end a string or start a statement
 def hostile : String := "protocol I («a\"b», «x)\\nimport os») {\n  «Go\"\"\"!» from «a\"b» to «x)\\nimport os»;\n}"
@@ -373,5 +394,8 @@ def hostile : String := "protocol I («a\"b», «x)\\nimport os») {\n  «Go\"\"
 #guard !((code hostile).splitOn "\n").any fun l => (l.dropWhile (· == ' ')).startsWith "import os"
 #guard (code hostile).contains "class a_bS0(State):"
 #guard (code hostile).contains "ep.send(\"x)\\\\nimport os\", \"Go\\\"\\\"\\\"!\""
+
+#guard !((tsCode hostile).splitOn "\n").any fun l => (l.dropWhile (· == ' ')).startsWith "import os"
+#guard (tsCode hostile).contains "ep.send(\"x)\\\\nimport os\", \"Go\\\"\\\"\\\"!\""
 
 end LeanFM.SessionToolsTests

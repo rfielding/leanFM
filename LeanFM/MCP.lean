@@ -241,9 +241,9 @@ def toolDefinitions : Array Json := #[
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"]),
   tool "session_skeleton" "Generate code to implement a session type"
-    "Write a self-contained Python module from a protocol: every role's typestate as classes, one per state. A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
+    "Write a self-contained Python or TypeScript module from a protocol: every role's typestate as classes, one per state (in TypeScript a step the state does not allow does not type-check). A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
-      ("language", stringSchema "python (the only one so far)")] [])
+      ("language", stringSchema "python (default) or typescript")] [])
 ]
 
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
@@ -270,7 +270,9 @@ def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
     | .error reason => (Json.mkObj [("tool", name), ("verdict", "rejected"), ("reason", reason)], true)
   -- generated code is the answer itself, so it goes in the text a model reads, not only in structuredContent
   let text := match body.getObjValAs? String "code" with
-    | .ok code => logicSummary name body ++ "\n\n```python\n" ++ code ++ "```"
+    | .ok code =>
+      let fence := (body.getObjValAs? String "language").toOption.getD "python"
+      logicSummary name body ++ "\n\n```" ++ fence ++ "\n" ++ code ++ "```"
     | .error _ => logicSummary name body
   Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]),
     ("structuredContent", body), ("isError", isError)]

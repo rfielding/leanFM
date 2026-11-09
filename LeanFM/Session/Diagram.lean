@@ -95,7 +95,10 @@ def svg (t : DiagramTheme) : Shape → String
       s!"<path{clsAttr c} d=\"{d}\" fill=\"{t.ink fill}\" stroke=\"{t.ink stroke}\"" ++
       (if arrow then s!" stroke-width=\"{arrowWidth}\"" else "") ++ dashAttr dash ++ headAttr arrow ++ "/>"
   | .text c x y anchor fill size bold content =>
+      -- a halo in the background colour, so a lifeline or frame edge never cuts through letters
+      -- (text inside a filled box, a role's name or an action, needs none)
       s!"<text x=\"{x}\" y=\"{y}\" text-anchor=\"{anchor}\" fill=\"{t.ink fill}\" font-size=\"{size}\"" ++
+      (if c == "boxed" then "" else s!" stroke=\"{t.bg}\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\"") ++
       (if bold then " font-weight=\"bold\"" else "") ++ clsAttr c ++ s!">{diagramEscape content}</text>"
 
 end Shape
@@ -235,7 +238,7 @@ def act [DecidableEq R] (roles : List R) (r : R) (label : String) : M R Unit := 
   let x := xOf roles r
   let w := 16 + 7 * label.length
   emit (.rect "act" (x - w / 2) y w 24 10 .actFill .arrow)
-  emit (text x (y + 16) label)
+  emit (text x (y + 16) label (cls := "boxed"))
   adv 26
 
 partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
@@ -315,8 +318,8 @@ def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : Lis
     let x := Diagram.xOf roles r
     let name := toString r
     let w := 24 + 8 * name.length
-    [ Shape.rect "role" (x - w / 2) 20 w 28 4 .actFill .fg, Diagram.text x 39 name
-    , Shape.rect "role" (x - w / 2) bottom w 28 4 .actFill .fg, Diagram.text x (bottom + 19) name
+    [ Shape.rect "role" (x - w / 2) 20 w 28 4 .actFill .fg, Diagram.text x 39 name (cls := "boxed")
+    , Shape.rect "role" (x - w / 2) bottom w 28 4 .actFill .fg, Diagram.text x (bottom + 19) name (cls := "boxed")
     , Shape.line "lifeline" x 48 x bottom .line "" "4 4" false ]
   let bars := st.bars.filterMap fun (_, r, inset, top, bot) =>
     if bot ≤ top then none else

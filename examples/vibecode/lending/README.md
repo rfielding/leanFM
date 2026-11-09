@@ -44,6 +44,21 @@ The whole loop, small enough to read in one sitting:
            state = state.send_hold({"book": book})
    ```
 
+   The same states in TypeScript (`"language": "typescript"`) are
+   [`lending_protocol.ts`](lending_protocol.ts), where the compiler does the refusing: a step a state
+   does not allow is a missing method, and `receive` returns a union tagged by label, so
+   `switch (r.label)` narrows `r.next` to the right state. [`typestate_errors.ts`](typestate_errors.ts)
+   lists forbidden steps, each marked `// @ts-expect-error`, so the check fails if any of them
+   compiles. The lending bug is one of them:
+
+   ```
+   typestate_errors.ts(15,10): error TS2339: Property 'sendLent' does not exist on type 'DeskS6'.
+   ```
+
+   ```sh
+   npm install && npm run check     # tsc --strict over both files
+   ```
+
 5. **Conformance.** `session_conform` checks the log against the protocol:
 
    ```sh
@@ -67,7 +82,8 @@ result shows in the session view under "Where the run breaks the protocol".
 
 `LeanFM/SessionToolsTests.lean` checks both logs, the generated module and the picture against the
 current protocol, so `lake build` fails if they drift apart; `python3 -m unittest -v test_lending`
-checks the generated states' refusals and that the logs are what `lending.py` writes. After changing
+checks the generated states' refusals and that the logs are what `lending.py` writes; `npm run check`
+type-checks the TypeScript states and the forbidden steps. After changing
 the protocol, regenerate the module (session_skeleton), then the logs:
 
 ```sh

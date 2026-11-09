@@ -11,6 +11,7 @@ import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
+import LeanFM.Session.SkeletonTs
 import LeanFM.Session.ProjectionTests
 import LeanFM.Session.SessionTests
 

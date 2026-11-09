@@ -167,8 +167,9 @@ protocol in an editor that LeanFM rechecks as you type:
 the generated sequence diagram, each role's typestate API, the calls with routes and status
 codes, and the event stream as an animation where clicking an event traces its `prior` and
 `cause` (simple by default; More detail shows every route, status and prior link).
-`session_skeleton` writes each role's typestate as Python classes whose methods are exactly what
-each state allows, so an implementation adds only its decisions and transport.
+`session_skeleton` writes each role's typestate as Python or TypeScript classes whose methods are
+exactly what each state allows, so an implementation adds only its decisions and transport; in
+TypeScript a step the protocol forbids does not compile.
 `session_conform` checks a log of a running implementation (`{id, session, from, to, label,
 cause}` per message) against the protocol and says where a session first breaks it. The logic tools (`check_ctl`, `check_protocol`, `knows`, ...) render in their own view.
 

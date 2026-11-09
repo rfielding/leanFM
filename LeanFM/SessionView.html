@@ -187,6 +187,8 @@ function diagram(model) {
     } else if (s.k === "text") {
       const a = Object.assign({}, cls, { x: num(s.x), y: num(s.y), "text-anchor": ["start", "middle", "end"].includes(s.anchor) ? s.anchor : "middle",
         fill: ink(s.fill), "font-size": num(s.size) || 12 });
+      // a halo in the background colour keeps lines from cutting through letters; boxed text needs none
+      if (s.cls !== "boxed") Object.assign(a, { stroke: "var(--ink-bg)", "stroke-width": 4, "stroke-linejoin": "round", "paint-order": "stroke" });
       if (s.bold === true) a["font-weight"] = "bold";
       svg.appendChild(sv("text", a, typeof s.text === "string" ? s.text : ""));
     }

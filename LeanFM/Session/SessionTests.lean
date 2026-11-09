@@ -370,6 +370,9 @@ def clearOfFrames (m : DiagramModel) : Bool :=
 -- messages are thicker than frames, and arrowheads keep one size whatever the stroke
 #guard checkoutSvg.contains "stroke-width=\"2.5\""
 #guard checkoutSvg.contains "markerUnits=\"userSpaceOnUse\""
+-- text outside boxes has a background halo; a role's name in its box does not
+#guard checkoutSvg.contains "font-size=\"11\" stroke=\"#111111\" stroke-width=\"4\""
+#guard checkoutSvg.contains "font-size=\"12\" class=\"boxed\">Client</text>"
 #guard occurs checkoutSvg "o: Order · POST /orders<" == 1
 #guard occurs checkoutSvg "q: Quote · 201<" == 1
 #guard occurs checkoutSvg "Refused · 402<" == 1

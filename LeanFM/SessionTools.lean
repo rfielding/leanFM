@@ -7,6 +7,7 @@ import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
+import LeanFM.Session.SkeletonTs
 
 /-!
 # Session-type tools for MCP agents (clauses selfhost.mcp.session.tools, selfhost.mcp.session.view)
@@ -495,12 +496,15 @@ def conform (args : Json) : Except String Json := do
 def skeleton (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let language := (args.getObjValAs? String "language").toOption.getD "python"
-  if language != "python" then throw s!"language {language} is not supported; use python"
-  let code ← p.global.pythonSkeleton p.name p.roles
+  let code ← match language with
+    | "python" => p.global.pythonSkeleton p.name p.roles
+    | "typescript" => p.global.typescriptSkeleton p.name p.roles
+    | other => throw s!"language {other} is not supported; use python or typescript"
   let starts := ", ".intercalate (p.roles.map Skeleton.snake)
+  let what := if language == "python" then "a Python" else "a TypeScript"
   return fit <| Json.mkObj
     [ ("tool", "session_skeleton"), ("verdict", "generated")
-    , ("reading", s!"{p.name}: a Python module with each role's typestate as classes; start functions {starts}")
+    , ("reading", s!"{p.name}: {what} module with each role's typestate as classes; start functions {starts}")
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("language", language), ("code", code), ("lean", p.lean) ]
 
@@ -544,8 +548,10 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   choices, the cause the protocol names, and an end the protocol allows (unless allowIncomplete).
   session_simulate's events are accepted as they are.
 
-- `session_skeleton {lean, language?}`: a self-contained Python module with every role's typestate
-  as classes, one per state. A method sends only what its state allows, fills in the cause the
+- `session_skeleton {lean, language?}`: a self-contained Python (the default) or TypeScript
+  (`\"language\": \"typescript\"`) module with every role's typestate as classes, one per state. In
+  TypeScript a step the state does not allow does not type-check, and `receive` returns a union
+  tagged by `label` that narrows `next`. A method sends only what its state allows, fills in the cause the
   protocol names, logs the event in session_conform's format and returns the next state; `receive`
   accepts only what the state allows; a state used twice raises. Write only the decisions (which
   branch, what each message carries) and the transport: a function that delivers a message.

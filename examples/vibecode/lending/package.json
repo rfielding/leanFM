@@ -1,0 +1,12 @@
+{
+  "name": "leanfm-lending-example",
+  "private": true,
+  "type": "module",
+  "description": "Type-checks the TypeScript typestate classes LeanFM generated from Lending.protocol, and that the steps the protocol forbids do not compile.",
+  "scripts": {
+    "check": "tsc -p ."
+  },
+  "devDependencies": {
+    "typescript": "5.6.3"
+  }
+}

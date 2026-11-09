@@ -129,6 +129,9 @@ def main : IO Unit := do
   let skelText ← IO.ofExcept (((skelJson.getObjValD "result").getObjValD "content" |>.getArrVal? 0) >>= (·.getObjValAs? String "text"))
   assertContains "MCP session_skeleton puts the code in the text a model reads" skelText "```python"
   assertContains "MCP session_skeleton writes each state as a class" skelText "class BS1(State):"
+  let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
+  assertContains "MCP session_skeleton writes TypeScript in a typescript fence" skelTs.body "```typescript"
+  assertContains "MCP session_skeleton TypeScript states extend State" skelTs.body "export class BS1 extends State"
   let skelBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":38,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { }\",\"language\":\"rust\"}}}"
   assertContains "MCP session_skeleton rejects an unknown language" skelBad.body "language rust is not supported"
   let sim ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"tools/call\",\"params\":{\"name\":\"session_simulate\",\"arguments\":{\"seed\":5,\"instances\":3,\"protocol\":{\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\"}]}}}}"

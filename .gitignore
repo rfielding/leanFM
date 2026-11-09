@@ -77,3 +77,6 @@ __pycache__/
 /video/kerberos/*-preview.png
 /book/examples/tla/.tlc/
 /book/assets/ui-tour/.staging/
+
+# dependencies of examples (npm install recreates them)
+/examples/**/node_modules/
