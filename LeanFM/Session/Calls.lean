@@ -120,16 +120,36 @@ def Global.callsText [DecidableEq R] [ToString R] (g : Global R) : String :=
 
 /-! ## Typestate -/
 
+/-- What one alternative of a receive offers: a message, nothing (the role takes no part in that
+branch), or a branch the role enters some other way. -/
+inductive OfferAlt (R : Type) where
+  | recv (fromRole : R) (label : String) (next : String)
+  | nothing
+  | other (next : String)
+  deriving Repr, Inhabited
+
+/-- One method of a typestate state; `next` names the state it returns. -/
+inductive Method (R : Type) where
+  | send (to : R) (label : String) (next : String)
+  | recv (fromRole : R) (label : String) (next : String)
+  | act (label : String) (next : String)
+  | offer (alts : List (OfferAlt R))
+  | fork (branches : List String) (next : String)
+  | serve (body : String) (next : String)
+  | cont (next : String)
+  | stop
+  deriving Repr, Inhabited
+
 namespace Typestate
 
-structure St where
+structure St (R : Type) where
   n : Nat := 0
-  lines : List (Nat × String) := []
+  methods : List (Nat × Method R) := []
 
-abbrev M := StateM St
+abbrev M (R : Type) := StateM (St R)
 
-def fresh : M Nat := modifyGet fun s => (s.n, { s with n := s.n + 1 })
-def line (i : Nat) (t : String) : M Unit := modify fun s => { s with lines := s.lines ++ [(i, t)] }
+def fresh : M R Nat := modifyGet fun s => (s.n, { s with n := s.n + 1 })
+def method (i : Nat) (m : Method R) : M R Unit := modify fun s => { s with methods := s.methods ++ [(i, m)] }
 def nm (i : Nat) : String := s!"S{i}"
 
 /-- `a` then `b`: `b` replaces every place `a` ends. -/
@@ -155,11 +175,9 @@ partial def norm : Local R → Local R
     | live => .par live k
   | l => l
 
-variable [ToString R]
-
 mutual
 /-- The state a local type starts in. -/
-partial def ts (env : List (String × String)) (l : Local R) : M String :=
+partial def ts (env : List (String × String)) (l : Local R) : M R String :=
   match norm l with
   | .done => pure "End"
   | .var n => pure ((env.lookup n).getD s!"?{n}")
@@ -173,46 +191,61 @@ partial def ts (env : List (String × String)) (l : Local R) : M String :=
       pure (nm i)
 
 /-- The methods of state `i` that `l` gives it. -/
-partial def edges (env : List (String × String)) (i : Nat) (l : Local R) : M Unit :=
+partial def edges (env : List (String × String)) (i : Nat) (l : Local R) : M R Unit :=
   match norm l with
-  | .send to l k => do
-      let k' ← ts env k
-      line i s!"{nm i}.send{l}(m : {l}) : {k'}    -- to {to}"
-  | .recv fr l k => do
-      let k' ← ts env k
-      line i s!"{nm i}.receive() : {l} × {k'}    -- from {fr}"
-  | .act l k => do
-      let k' ← ts env k
-      line i s!"{nm i}.{l}() : {k'}"
+  | .send to l k => do method i (.send to l (← ts env k))
+  | .recv fr l k => do method i (.recv fr l (← ts env k))
+  | .act l k => do method i (.act l (← ts env k))
   | .select bs => do
       for b in bs do edges env i b
   | .offer bs => do
       let alts ← bs.mapM fun b => match norm b with
-        | .recv fr l k => do return s!"{l} × {← ts env k} (from {fr})"
-        | .done => pure "nothing × End"
-        | b => do return s!"_ × {← ts env b}"
-      line i s!"{nm i}.receive() : {" | ".intercalate alts}"
+        | .recv fr l k => do return OfferAlt.recv fr l (← ts env k)
+        | .done => pure OfferAlt.nothing
+        | b => do return OfferAlt.other (← ts env b)
+      method i (.offer alts)
   | .par bs k => do
       let subs ← bs.mapM (ts env)
-      let k' ← ts env k
-      line i s!"{nm i}.fork() : ({" ∥ ".intercalate subs}) then {k'}"
+      method i (.fork subs (← ts env k))
   | .loop n b => edges ((n, nm i) :: env) i b
   | .sessions b k => do
       let b' ← ts env b
-      let k' ← ts env k
-      line i s!"{nm i}.serve() : many {b'} then {k'}"
-  | .var n => line i s!"{nm i}.continue() : {(env.lookup n).getD s!"?{n}"}"
-  | .done => line i s!"{nm i}.stop() : End"
+      method i (.serve b' (← ts env k))
+  | .var n => method i (.cont ((env.lookup n).getD s!"?{n}"))
+  | .done => method i .stop
 end
 
+variable [ToString R]
+
+/-- A method as a line of the typestate API. -/
+def Method.line (i : Nat) : Method R → String
+  | .send to l k => s!"{nm i}.send{l}(m : {l}) : {k}    -- to {to}"
+  | .recv fr l k => s!"{nm i}.receive() : {l} × {k}    -- from {fr}"
+  | .act l k => s!"{nm i}.{l}() : {k}"
+  | .offer alts =>
+    let a := alts.map fun
+      | .recv fr l k => s!"{l} × {k} (from {fr})"
+      | .nothing => "nothing × End"
+      | .other k => s!"_ × {k}"
+    s!"{nm i}.receive() : {" | ".intercalate a}"
+  | .fork subs k => s!"{nm i}.fork() : ({" ∥ ".intercalate subs}) then {k}"
+  | .serve b k => s!"{nm i}.serve() : many {b} then {k}"
+  | .cont k => s!"{nm i}.continue() : {k}"
+  | .stop => s!"{nm i}.stop() : End"
+
 end Typestate
+
+/-- One role's projection as a typestate machine: its start state and every state's methods, in
+state order. -/
+def Local.machine (l : Local R) : String × List (Nat × Method R) :=
+  let (start, st) := (Typestate.ts [] l).run {}
+  (start, st.methods.mergeSort (fun a b => a.1 ≤ b.1))
 
 /-- One role's projection as a typestate API: the role starts in `S0`, each method consumes its
 state and returns the next, and `End` has no methods. -/
 def Local.typestate [ToString R] (l : Local R) : String :=
-  let (start, st) := (Typestate.ts [] l).run {}
-  let sorted := st.lines.mergeSort (fun a b => a.1 ≤ b.1)
-  "\n".intercalate (s!"start : {start}" :: sorted.map (·.2))
+  let (start, ms) := l.machine
+  "\n".intercalate (s!"start : {start}" :: ms.map fun (i, m) => Typestate.Method.line i m)
 
 /-- Every listed role's typestate API, or why its projection failed. -/
 def Global.typestates [DecidableEq R] [ToString R] (g : Global R) (roles : List R) :

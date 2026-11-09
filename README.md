@@ -159,7 +159,7 @@ osascript -e 'quit app "Claude"'; sleep 2; open -a Claude
 
 Then design with session types in the conversation, for example: "Use LeanFM to design a
 library-lending service as a session type, check it, and animate a stream of 20 borrowers."
-`session_check`, `session_diagram`, `session_simulate` and `session_conform` take the protocol as LeanFM protocol
+`session_check`, `session_diagram`, `session_simulate`, `session_conform` and `session_skeleton` take the protocol as LeanFM protocol
 text (`protocol Name (Roles) { ... }`, the same syntax as `LeanFM/Session/Syntax.lean`), read by a
 parser for that grammar alone, so nothing submitted is elaborated or run; the
 `leanfm://language/session-reference` resource documents it. Their results render inline, with the
@@ -167,8 +167,14 @@ protocol in an editor that LeanFM rechecks as you type:
 the generated sequence diagram, each role's typestate API, the calls with routes and status
 codes, and the event stream as an animation where clicking an event traces its `prior` and
 `cause` (simple by default; More detail shows every route, status and prior link).
+`session_skeleton` writes each role's typestate as Python classes whose methods are exactly what
+each state allows, so an implementation adds only its decisions and transport.
 `session_conform` checks a log of a running implementation (`{id, session, from, to, label,
 cause}` per message) against the protocol and says where a session first breaks it. The logic tools (`check_ctl`, `check_protocol`, `knows`, ...) render in their own view.
+
+For the whole loop on one small service (a protocol, the code generated from its typestates, an
+implementation on that code, and `session_conform` catching a plausible bug in its log), see
+[`examples/vibecode/lending`](examples/vibecode/lending/README.md).
 
 The [launcher](scripts/claude.sh) keeps Claude configuration, session history,
 memory, and temporary files under the ignored `.cache/claude/` directory using

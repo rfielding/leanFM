@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_simulate", "session_conform"] do
+  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -123,6 +123,14 @@ def main : IO Unit := do
   assertContains "MCP session_check summary gives the reading" sessText "session_check ok: Ping: no issues"
   let sessBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"roles\":[\"A\"],\"steps\":[{\"exec\":\"x\"}]}}}}"
   assertContains "MCP session_check rejects an unknown step as a tool error" sessBad.body "\"isError\":true"
+  let skel ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":37,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\"}}}"
+  -- unlike the other tools, the text is not a one-line summary: the generated code is the answer
+  let skelJson ← IO.ofExcept (Json.parse skel.body)
+  let skelText ← IO.ofExcept (((skelJson.getObjValD "result").getObjValD "content" |>.getArrVal? 0) >>= (·.getObjValAs? String "text"))
+  assertContains "MCP session_skeleton puts the code in the text a model reads" skelText "```python"
+  assertContains "MCP session_skeleton writes each state as a class" skelText "class BS1(State):"
+  let skelBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":38,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { }\",\"language\":\"rust\"}}}"
+  assertContains "MCP session_skeleton rejects an unknown language" skelBad.body "language rust is not supported"
   let sim ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"tools/call\",\"params\":{\"name\":\"session_simulate\",\"arguments\":{\"seed\":5,\"instances\":3,\"protocol\":{\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\"}]}}}}"
   assertContains "MCP session_simulate runs concurrent copies" sim.body "6 events from 3 sessions"
   assertContains "MCP lists the session view" listed.body sessionViewUri

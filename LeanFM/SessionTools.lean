@@ -6,6 +6,7 @@ import LeanFM.Session.Calls
 import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Conform
+import LeanFM.Session.Skeleton
 
 /-!
 # Session-type tools for MCP agents (clauses selfhost.mcp.session.tools, selfhost.mcp.session.view)
@@ -491,7 +492,19 @@ def conform (args : Json) : Except String Json := do
          ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
     , ("diagram", diagramJson p) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform"]
+def skeleton (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let language := (args.getObjValAs? String "language").toOption.getD "python"
+  if language != "python" then throw s!"language {language} is not supported; use python"
+  let code ← p.global.pythonSkeleton p.name p.roles
+  let starts := ", ".intercalate (p.roles.map Skeleton.snake)
+  return fit <| Json.mkObj
+    [ ("tool", "session_skeleton"), ("verdict", "generated")
+    , ("reading", s!"{p.name}: a Python module with each role's typestate as classes; start functions {starts}")
+    , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
+    , ("language", language), ("code", code), ("lean", p.lean) ]
+
+def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -499,6 +512,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_diagram" => some (diagram args)
   | "session_simulate" => some (simulate args)
   | "session_conform" => some (conform args)
+  | "session_skeleton" => some (skeleton args)
   | _ => none
 
 /-! ## Reference -/
@@ -530,6 +544,12 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   choices, the cause the protocol names, and an end the protocol allows (unless allowIncomplete).
   session_simulate's events are accepted as they are.
 
+- `session_skeleton {lean, language?}`: a self-contained Python module with every role's typestate
+  as classes, one per state. A method sends only what its state allows, fills in the cause the
+  protocol names, logs the event in session_conform's format and returns the next state; `receive`
+  accepts only what the state allows; a state used twice raises. Write only the decisions (which
+  branch, what each message carries) and the transport: a function that delivers a message.
+
 Every answer echoes the text as `lean`; the view shows it in an editor and rechecks as you type.
 
 ## Building software from a protocol
@@ -537,9 +557,12 @@ Every answer echoes the text as `lean`; the view shows it in an editor and reche
 1. Write the protocol and run session_check until it has no issues; with `mayCall` for HTTP.
 2. Show it: the diagram, each role's typestate (its API: one state per point in the conversation),
    and session_simulate's stream.
-3. Implement each role from its typestate: a handler per state, sending only what that state allows.
+3. Generate the roles' states with session_skeleton and implement each role on them: per session,
+   keep the state the last method returned and decide what to do next; the generated methods send
+   only what each state allows, fill in causes and log every message. (In another language, write a
+   handler per typestate state the same way.)
 4. Log every message as an event with the protocol's label, the session it belongs to and the
-   event that caused it.
+   event that caused it (the generated module does this; give it a log function).
 5. Run it, and check the log with session_conform; fix the code (or, if the protocol was wrong, the
    protocol) until every session conforms.
 

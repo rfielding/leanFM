@@ -10,6 +10,7 @@ import LeanFM.Session.Calls
 import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Conform
+import LeanFM.Session.Skeleton
 import LeanFM.Session.ProjectionTests
 import LeanFM.Session.SessionTests
 
@@ -28,6 +29,7 @@ Pull in only what you use:
 * `LeanFM.Session.Events`   event streams generated from a global type
 * `LeanFM.Session.Text`     protocol text read without elaborating it (for MCP clients)
 * `LeanFM.Session.Conform`  checking a logged run against the protocol
+* `LeanFM.Session.Skeleton` each role's typestate as code to implement
 * `LeanFM.Session.Spec`     properties, assumptions and handled conditions
 
 This module brings in all of them.

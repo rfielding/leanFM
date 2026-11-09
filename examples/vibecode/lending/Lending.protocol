@@ -1,0 +1,20 @@
+/-- Borrowing a book. Each member's visit is one session; many run at once. -/
+protocol Lending (Member, Desk, Librarian) {
+  sessions {
+    b: Borrow from Member to Desk route "POST /loans";
+    choice {
+      l: Lent from Desk to Member cause b status 201;
+      r: Return from Member to Desk route "POST /returns";
+         Returned from Desk to Member cause r status 200;
+    } or {
+      h: Hold from Desk to Librarian cause b route "POST /holds";
+      choice {
+        Approved from Librarian to Desk cause h status 200;
+        Waitlisted from Desk to Member cause b status 202;
+      } or {
+        Denied from Librarian to Desk cause h status 403;
+        Refused from Desk to Member cause b status 409;
+      }
+    }
+  }
+}

@@ -31,7 +31,7 @@ def instructions : String :=
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
   "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference. " ++
   "For interactions between roles (services, clients, actors, APIs), design a session type and check it with " ++
-  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, writing the protocol in " ++
+  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, generate code to implement it with session_skeleton, writing the protocol in " ++
   "LeanFM protocol syntax as the lean argument (leanfm://language/session-reference). Show people the diagrams and streams these tools " ++
   "generate rather than drawing interaction diagrams by hand."
 
@@ -239,7 +239,11 @@ def toolDefinitions : Array Json := #[
     "Check events a running program logged ({id, session, from, to, label, cause}, or {id, session, at, label, act: true} for an event; session_simulate's events also work) against the protocol: in every session each event must be allowed at that point, carry the cause the protocol names, and the session must end where the protocol can end (unless allowIncomplete). Returns conforms or violates with the first problem per session and what the protocol allowed instead."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
-      ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"])
+      ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"]),
+  tool "session_skeleton" "Generate code to implement a session type"
+    "Write a self-contained Python module from a protocol: every role's typestate as classes, one per state. A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("language", stringSchema "python (the only one so far)")] [])
 ]
 
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
@@ -264,7 +268,11 @@ def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
   let (body, isError) := match outcome with
     | .ok json => (json, false)
     | .error reason => (Json.mkObj [("tool", name), ("verdict", "rejected"), ("reason", reason)], true)
-  Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", logicSummary name body)]]),
+  -- generated code is the answer itself, so it goes in the text a model reads, not only in structuredContent
+  let text := match body.getObjValAs? String "code" with
+    | .ok code => logicSummary name body ++ "\n\n```python\n" ++ code ++ "```"
+    | .error _ => logicSummary name body
+  Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]),
     ("structuredContent", body), ("isError", isError)]
 
 def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except String Json :=
@@ -291,9 +299,11 @@ def sessionDesignPrompt : String :=
   "Fix every issue it reports, and explain each fix in one line. For HTTP services pass mayCall.\n" ++
   "3. Show me the result: the view draws the diagram, each role's typestate API and the calls; I can edit " ++
   "the protocol there and LeanFM rechecks it. Then call session_simulate so I can watch many sessions run.\n" ++
-  "4. When I agree with the protocol, implement each role from its typestate: one handler per state, " ++
-  "sending only what that state allows. Log every message as JSON {id, session, from, to, label, cause} with " ++
-  "the protocol's labels, and every event as {id, session, at, label, act: true}.\n" ++
+  "4. When I agree with the protocol, call session_skeleton for a Python module with each role's typestate " ++
+  "as classes, and implement each role with it: its methods send only what each state allows, fill in causes " ++
+  "and log every message in session_conform's format, so the code adds only the decisions and the transport. " ++
+  "In another language, write a handler per state the same way and log every message as JSON " ++
+  "{id, session, from, to, label, cause}, and every event as {id, session, at, label, act: true}.\n" ++
   "5. When I paste a log from running it, call session_conform with the protocol and the events, and fix the " ++
   "code until every session conforms. If the protocol itself was wrong, change the protocol first and " ++
   "recheck it.\n\n" ++

@@ -346,6 +346,25 @@ def checkout : Global Role := Checkout .client .shop .bank
 -- the diagram shows routes and statuses, and each call as an activation bar on the callee; a
 -- response in another branch gets a bar of its own from where that branch begins
 def checkoutSvg := checkout.diagram roles3
+
+-- an arrow never runs along a frame's edge or a divider: frames and dividers open below the arrow
+-- before them, so where a message sits stays clear (checked on every protocol with frames here)
+def clearOfFrames (m : DiagramModel) : Bool :=
+  let arrows := m.shapes.toList.filterMap fun
+    | .line c _ y1 _ _ _ _ _ _ => if c.startsWith "msg" then some y1 else none
+    | _ => none
+  let edges := m.shapes.toList.flatMap fun
+    | .rect c _ y _ h _ _ _ => if c.startsWith "frame" then [y, y + h] else []
+    | .line "" _ y1 _ y2 .frame _ _ _ => if y1 == y2 then [y1] else []
+    | _ => []
+  arrows.all fun y => edges.all fun e => (if y ≥ e then y - e else e - y) ≥ 6
+#guard clearOfFrames (purchase.diagramModel roles3 "")
+#guard clearOfFrames (checkout.diagramModel roles3 "")
+#guard clearOfFrames (transfer.diagramModel [.sender, .receiver] "")
+#guard clearOfFrames (replicatedOrder.diagramModel [.client, .primary, .r1, .r2, .r3] "")
+-- messages are thicker than frames, and arrowheads keep one size whatever the stroke
+#guard checkoutSvg.contains "stroke-width=\"2.5\""
+#guard checkoutSvg.contains "markerUnits=\"userSpaceOnUse\""
 #guard occurs checkoutSvg "o: Order · POST /orders<" == 1
 #guard occurs checkoutSvg "q: Quote · 201<" == 1
 #guard occurs checkoutSvg "Refused · 402<" == 1

@@ -308,4 +308,64 @@ def badLog : String := r#"[
 #guard (reason (conform (conformArgs (parse! r#"[{"id": "e1", "from": "Client", "to": "Shop"}]"#)))).contains "has no label"
 #guard (reason (conform (conformArgs (Json.str "nope")))).contains "events must be an array"
 
+/-! ## The worked example: examples/vibecode/lending
+
+A protocol, the module session_skeleton generates from it (lending_protocol.py), a service built on
+that module (lending.py), and two logs it wrote: the correct Desk conforms; the Desk with the bug
+(it lends a returned copy on an approved hold, going around its typestate to do it) runs without
+error on its own, and session_conform names the event where it breaks the protocol. Regenerate
+with session_skeleton, then `python3 lending.py > log.json` and `--bug > bug-log.json`. -/
+
+def lendingProtocol : String := include_str "../examples/vibecode/lending/Lending.protocol"
+def lendingArgs (log : String) : Json := (leanArgs lendingProtocol).setObjVal! "events" (parse! log)
+#guard verdict (check (leanArgs lendingProtocol)) == "ok"
+-- the README's picture is the generated diagram of the current protocol, not a drawing
+#guard (field (diagram ((leanArgs lendingProtocol).setObjVal! "theme" (Json.str "dark"))) "svg").getStr?.toOption ==
+  some (include_str "../examples/vibecode/lending/Lending.svg")
+#guard verdict (conform (lendingArgs (include_str "../examples/vibecode/lending/log.json"))) == "conforms"
+#guard ((field (conform (lendingArgs (include_str "../examples/vibecode/lending/log.json"))) "reading").getStr?.toOption.getD "").contains
+  "80 events in 20 sessions follow the protocol"
+#guard verdict (conform (lendingArgs (include_str "../examples/vibecode/lending/bug-log.json"))) == "violates"
+#guard strs (field (conform (lendingArgs (include_str "../examples/vibecode/lending/bug-log.json"))) "issues") ==
+  [ "session 5, event 5.Desk.2: Lent from Desk to Member is not allowed here; the protocol allows Waitlisted from Desk to Member"
+  , "session 12, event 12.Desk.2: Lent from Desk to Member is not allowed here; the protocol allows Waitlisted from Desk to Member" ]
+
+-- the checked-in module is what session_skeleton generates from the current protocol
+#guard (field (skeleton (leanArgs lendingProtocol)) "code").getStr?.toOption ==
+  some (include_str "../examples/vibecode/lending/lending_protocol.py")
+
+/-! ## session_skeleton -/
+
+def skel (t : String) : Except String Json := skeleton (leanArgs t)
+def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).getD ""
+-- each state's methods are exactly the typestate's
+#guard (code lendingProtocol).contains "class DeskS2(State):\n    \"\"\"Desk at S2: send_lent → DeskS3; send_hold → DeskS5.\"\"\""
+-- a send fills in the protocol's ids: Lent is l, caused by b
+#guard (code lendingProtocol).contains "ep.send(\"Member\", \"Lent\", \"l\", \"b\", body)"
+-- a role that only serves sessions starts each one in the body's first state
+#guard (code lendingProtocol).contains "def desk(session, transport, log=None, new_id=None):\n    \"\"\"Desk's start state in a new session.\"\"\"\n    return DeskS1("
+-- an empty branch for this role is skip; loops come back; par and join fork
+#guard (code lendingProtocol).contains "    def skip(self):"
+#guard (code "protocol T (S, R) { rec B { d: Data from S to R; choice { Ack from R to S cause d; continue B; } or { Done from R to S cause d; } } }").contains "return msg, SS0(ep)"
+#guard (code "protocol F (H, A, B) { par { x: Ping from H to A; Pong from A to H cause x; } and { y: Ping from H to B; Pong from B to H cause y; } Bye at H; }").contains
+  "return Fork([HS1(ep), HS3(ep)], lambda: HS5(ep))"
+-- two messages alike with different ids or causes: the cause is passed, not guessed
+#guard (code "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
+  "def send_reply(self, cause=None, body=None):"
+-- negative: two methods with one Python name, an unknown language
+#guard reason (skel "protocol C (C, S) { q: Q from C to S; choice { SoldOut from S to C cause q; } or { Sold_out from S to C cause q; } }") ==
+  "S: two methods of S1 would both be called send_sold_out"
+#guard reason (skeleton ((leanArgs lendingProtocol).setObjVal! "language" (Json.str "cobol"))) ==
+  "language cobol is not supported; use python"
+-- negative: names reach the code only as identifiers and escaped literals, so a quote or a newline
+-- in a «name» cannot end a string or start a statement
+def hostile : String := "protocol I («a\"b», «x)\\nimport os») {\n  «Go\"\"\"!» from «a\"b» to «x)\\nimport os»;\n}"
+-- a real line break inside «» never reaches the generator: the parser refuses it
+#guard reason (skel "protocol I («x)\nimport os», B) { }") == "line 1, column 13: «name» is never closed"
+#guard verdict (skel hostile) == "generated"
+#guard !((code hostile).splitOn "\n").any (·.startsWith "import os")
+#guard !((code hostile).splitOn "\n").any fun l => (l.dropWhile (· == ' ')).startsWith "import os"
+#guard (code hostile).contains "class a_bS0(State):"
+#guard (code hostile).contains "ep.send(\"x)\\\\nimport os\", \"Go\\\"\\\"\\\"!\""
+
 end LeanFM.SessionToolsTests

@@ -76,6 +76,10 @@ inductive Shape where
 
 namespace Shape
 
+/-- Messages are drawn thicker than frames, lifelines and dividers, so an arrow stays legible
+where it passes a frame's edge. -/
+def arrowWidth : String := "2.5"
+
 private def clsAttr (c : String) : String := if c == "" then "" else s!" class=\"{c}\""
 private def dashAttr (d : String) : String := if d == "" then "" else s!" stroke-dasharray=\"{d}\""
 private def headAttr (a : Bool) : String := if a then " marker-end=\"url(#head)\"" else ""
@@ -88,7 +92,8 @@ def svg (t : DiagramTheme) : Shape → String
       s!"<line{clsAttr c} x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" stroke=\"{t.ink stroke}\"" ++
       (if width == "" then "" else s!" stroke-width=\"{width}\"") ++ dashAttr dash ++ headAttr arrow ++ "/>"
   | .path c d fill stroke dash arrow =>
-      s!"<path{clsAttr c} d=\"{d}\" fill=\"{t.ink fill}\" stroke=\"{t.ink stroke}\"" ++ dashAttr dash ++ headAttr arrow ++ "/>"
+      s!"<path{clsAttr c} d=\"{d}\" fill=\"{t.ink fill}\" stroke=\"{t.ink stroke}\"" ++
+      (if arrow then s!" stroke-width=\"{arrowWidth}\"" else "") ++ dashAttr dash ++ headAttr arrow ++ "/>"
   | .text c x y anchor fill size bold content =>
       s!"<text x=\"{x}\" y=\"{y}\" text-anchor=\"{anchor}\" fill=\"{t.ink fill}\" font-size=\"{size}\"" ++
       (if bold then " font-weight=\"bold\"" else "") ++ clsAttr c ++ s!">{diagramEscape content}</text>"
@@ -131,7 +136,9 @@ def edges (n d : Nat) : Nat × Nat :=
 
 /-- The frame's pentagon tab and caption; returns nothing, draws at the current y. -/
 def frameTop (n d : Nat) (op caption : String) : M R Nat := do
-  if (← get).fresh then adv 22
+  -- below a frame's tab, room for the next tab; below an arrow, room so the frame's top edge
+  -- never runs along the arrow
+  if (← get).fresh then adv 22 else adv 14
   let y ← getY
   let (x0, _) := edges n d
   let w := 10 + 8 * op.length
@@ -144,14 +151,14 @@ def frameTop (n d : Nat) (op caption : String) : M R Nat := do
   return y
 
 def frameBottom (n d top : Nat) (kind : String) : M R Unit := do
-  adv 8
+  adv 12
   let y ← getY
   let (x0, x1) := edges n d
   emit (.rect s!"frame {kind}" x0 top (x1 - x0) (y - top) 0 .none .frame)
   adv 10
 
 def divider (n d : Nat) (caption : String) : M R Unit := do
-  adv 4
+  adv 12
   let y ← getY
   let (x0, x1) := edges n d
   emit (.line "" x0 y x1 y .frame "" "6 4" false)
@@ -193,7 +200,7 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
     emit (.path cls s!"M{x1} {y - 8} h40 v16 h-40" .none .arrow dash true)
     emit (text (x1 + 46) (y + 4) label "start")
   else
-    emit (.line cls x1 y x2 y .arrow "1.5" dash true)
+    emit (.line cls x1 y x2 y .arrow Shape.arrowWidth dash true)
     emit (text ((x1 + x2) / 2) (y - 6) label)
   -- a where clause goes under the arrow, so a long one cannot push the label off its arrow
   if let some g := i.guard then
@@ -314,7 +321,7 @@ def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : Lis
 /-- The model written out as SVG text in a theme. -/
 def DiagramModel.svg (m : DiagramModel) (t : DiagramTheme := .dark) : String :=
   s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{m.width}\" height=\"{m.height}\" viewBox=\"0 0 {m.width} {m.height}\" font-family=\"ui-sans-serif, system-ui, sans-serif\">" ++
-  s!"<defs><marker id=\"head\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerWidth=\"8\" markerHeight=\"8\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"{t.arrow}\"/></marker></defs>" ++
+  s!"<defs><marker id=\"head\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerUnits=\"userSpaceOnUse\" markerWidth=\"12\" markerHeight=\"12\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"{t.arrow}\"/></marker></defs>" ++
   s!"<rect width=\"100%\" height=\"100%\" fill=\"{t.bg}\"/>" ++
   String.join (m.shapes.toList.map (Shape.svg t)) ++ "</svg>"
 
