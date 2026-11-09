@@ -22,3 +22,5 @@ import LeanFM.MCP
 import LeanFM.Session
 -- the philosophy calculator example and its tests
 import LeanFM.Philosophy.ExistenceTests
+-- the MCP session tools and their tests (clauses selfhost.mcp.session.*)
+import LeanFM.SessionToolsTests

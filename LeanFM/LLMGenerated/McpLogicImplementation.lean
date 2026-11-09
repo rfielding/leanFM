@@ -80,6 +80,16 @@ def decisions : List ImplementationDecision :=
       ["book/chapters/web-server.tex", "book/generated/mcp-logic-examples.tex", "LogicInteractionExample.lean"]
       "Generate real tool answers (one counterexample, one classification, one trace diagram) into the book from the implemented functions so section 7.5 shows actual output rather than prose claims."
       ["make book succeeds; generated example text matches LeanFM.Logic output"]
+  , decision "session-tools"
+      ["clause:selfhost.mcp.session.tools"]
+      ["LeanFM/SessionTools.lean", "LeanFM/MCP.lean"]
+      "LeanFM.SessionTools.parseProtocol reads {name?, roles, steps} with a StateT step counter over Except: each step must have exactly one kind key and only that kind's keys; strings are non-empty, at most 200 characters and free of control characters; roles are distinct and at most 12; a msg becomes an Interaction (its where text a Guard whose eval is constantly none), event becomes act, choice and rec continue with Global.andThen, par, join, sessions and include (box) carry their continuation, continue must name an enclosing rec and end its branch; errors name the step path such as steps[1].choice[0].steps[2]. check runs Global.issues, Global.project with Local.render and Local.typestate per role, Global.calls and callsText, Global.diagramModel (as shape JSON) and, with mayCall, Global.httpCuts with every channel HTTP. diagram adds DiagramModel.svg in the requested theme. simulate wraps a protocol without a sessions block in sessions and runs Global.simulate with bounded seed, instances, spread, loops and maxEvents. fit keeps the compressed answer under 90,000 characters by setting svg and then diagram to null and halving the events, listing what it left out. MCP.toolResult tries SessionTools.run before the logic tools and wraps the answer with logicResult (one-line summary, structuredContent); the reference is the resource leanfm://language/session-reference, and the server instructions point to it."
+      ["LeanFM/SessionToolsTests.lean: PlaceOrder in JSON checks ok with the client's typestate and calls; the race, the bank that cannot tell and a borrowed cause are reported as in SessionTests; mayCall reports Paid going to the shop; unknown roles, keys and kinds, continue outside rec or not last, join out of range, too many roles or steps, deep nesting and control characters are rejected with the path; a where text is never evaluated; the same arguments give the same answer; a large simulation stays under 90,000 characters and says what it left out", "LeanFM/MCPTests.lean: tools/list has the three tools; tools/call session_check answers through the MCP dispatch with a one-line summary"]
+  , decision "session-view"
+      ["clause:selfhost.mcp.session.view"]
+      ["LeanFM/SessionView.lean", "LeanFM/SessionView.html", "LeanFM/MCP.lean", "LeanFM/Session/Diagram.lean"]
+      "Global.diagramModel returns the diagram as Shape values (rect, line, path, text) with Ink colour names; DiagramModel.svg writes the same shapes as SVG, so the SVG and the view draw one drawing. SessionView.html speaks the MCP Apps handshake (ui/initialize, ui/notifications/initialized, tool-result, host-context-changed, size-changed), builds the diagram with createElementNS from the shapes, accepting only numbers, the seven ink names mapped to CSS variables, dash patterns of digits and path data of M, H, V, L, Z and numbers, and places every string as textContent; session_simulate's events are drawn on a canvas with the prior, cause and answers of a selected event. withSessionView attaches _meta.ui.resourceUri to the three tools; resources/read returns the compiled HTML with the logic view's empty CSP."
+      ["LeanFM/MCPTests.lean: the session view is declared on exactly the three session tools; resources/read returns the compiled view with the MCP Apps MIME type and empty CSP domains; the view contains no network access, no innerHTML or other HTML insertion, no eval and no paths; it speaks the handshake and bounds the drawing (MAX_SHAPES = 4000, MAX_EVENTS = 600)", "LeanFM/SessionTests.lean: every existing diagram test passes through the shape model"]
   ]
 
 def clauseRefs : List String := clauses.map (fun c => "clause:" ++ c.id)
@@ -93,7 +103,7 @@ def errors : List String :=
   let unmapped := neverProofs.filterMap fun p =>
     if decisions.any (fun d => d.requirementRefs.contains p && !d.conformanceTests.isEmpty) then none
     else some ("negative requirement without control and test: " ++ p)
-  let logicClauses := (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic.")).map (fun c => "clause:" ++ c.id)
+  let logicClauses := (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." || c.id.startsWith "selfhost.mcp.session.")).map (fun c => "clause:" ++ c.id)
   let uncovered := logicClauses.filterMap fun c =>
     if decisions.any (fun d => d.requirementRefs.contains c) then none else some ("clause without decision: " ++ c)
   unknown ++ unmapped ++ uncovered

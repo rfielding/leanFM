@@ -8,7 +8,7 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 38 := by native_decide
+example : clauses.length = 40 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.context" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.lazy" = true := by native_decide
@@ -27,3 +27,5 @@ example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.s
 -- the session-type library is specified, and every clause has a decision and a test
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length = 11 := by native_decide
 example : LeanFM.LLMGenerated.SessionImplementation.errors = [] := by native_decide
+-- the session tools and their view are specified and implemented
+example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.session." && c.status == "implemented")).length = 2 := by native_decide

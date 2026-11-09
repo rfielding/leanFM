@@ -75,10 +75,10 @@ def main : IO Unit := do
   for t in listedTools do
     let name ← IO.ofExcept (t.getObjValAs? String "name")
     let uri := ((t.getObjValD "_meta").getObjValD "ui").getObjValAs? String "resourceUri" |>.toOption
-    let wants := logicViewTools.contains name
-    if wants && uri != some logicViewUri then throw <| IO.userError s!"MCP view: {name} lacks the view"
-    if !wants && uri.isSome then throw <| IO.userError s!"MCP view: {name} should not declare a view"
-  IO.println "ok: MCP view is declared on exactly the logic tools it draws"
+    let expected := if logicViewTools.contains name then some logicViewUri
+      else if sessionViewTools.contains name then some sessionViewUri else none
+    if uri != expected then throw <| IO.userError s!"MCP view: {name} declares {uri}, not {expected}"
+  IO.println "ok: MCP views are declared on exactly the tools they draw"
   assertContains "MCP lists the view resource" listed.body logicViewUri
   assertContains "MCP lists the view with the MCP Apps MIME type" listed.body "\"mimeType\":\"text/html;profile=mcp-app\""
   let view ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":20,\"method\":\"resources/read\",\"params\":{\"uri\":\"ui://leanfm/logic-view\"}}"
@@ -109,6 +109,43 @@ def main : IO Unit := do
   -- Hosts without the extension still get one summary line and the structured answer.
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
+  -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
+  for t in ["session_check", "session_diagram", "session_simulate"] do
+    assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
+  assertContains "MCP instructions point to the session tools" initialized.body "session_check"
+  assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
+  let sref ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"resources/read\",\"params\":{\"uri\":\"leanfm://language/session-reference\"}}"
+  assertContains "MCP serves the session reference" sref.body "LeanFM session types: the JSON form"
+  let sess ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"name\":\"Ping\",\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\",\"status\":200}]}}}}"
+  assertContains "MCP session_check answers through the dispatch" sess.body "\"verdict\":\"ok\""
+  let sessText ← summaryOf "MCP session_check text is a one-line summary" sess.body
+  assertContains "MCP session_check summary gives the reading" sessText "session_check ok: Ping: no issues"
+  let sessBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"roles\":[\"A\"],\"steps\":[{\"exec\":\"x\"}]}}}}"
+  assertContains "MCP session_check rejects an unknown step as a tool error" sessBad.body "\"isError\":true"
+  let sim ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"tools/call\",\"params\":{\"name\":\"session_simulate\",\"arguments\":{\"seed\":5,\"instances\":3,\"protocol\":{\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\"}]}}}}"
+  assertContains "MCP session_simulate runs concurrent copies" sim.body "6 events from 3 sessions"
+  assertContains "MCP lists the session view" listed.body sessionViewUri
+  let sview ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":34,\"method\":\"resources/read\",\"params\":{\"uri\":\"ui://leanfm/session-view\"}}"
+  let sviewJson ← IO.ofExcept (Json.parse sview.body)
+  let sviewItem ← IO.ofExcept ((sviewJson.getObjValD "result").getObjValD "contents" |>.getArrVal? 0)
+  let shtml ← IO.ofExcept (sviewItem.getObjValAs? String "text")
+  if shtml != sessionViewHtml then throw <| IO.userError "MCP session view: resources/read does not return the compiled view"
+  if (sviewItem.getObjValAs? String "mimeType").toOption != some logicViewMimeType then
+    throw <| IO.userError "MCP session view: wrong MIME type"
+  let scsp := ((sviewItem.getObjValD "_meta").getObjValD "ui").getObjValD "csp"
+  for key in ["connectDomains", "resourceDomains", "frameDomains", "baseUriDomains"] do
+    if scsp.getObjValD key != Json.arr #[] then throw <| IO.userError s!"MCP session view: {key} is not empty"
+  let sbare := shtml.replace "http://www.w3.org/2000/svg" ""
+  for needle in ["http://", "https://", "src=", "href=", "fetch(", "XMLHttpRequest", "WebSocket", "EventSource",
+      "import(", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",
+      "DOMParser", "/home/", "/Users/", "leanfm://"] do
+    if sbare.contains needle then throw <| IO.userError s!"MCP session view: forbidden text {needle}"
+  IO.println "ok: MCP session view has no network access, no HTML or code from data, and no paths"
+  assertContains "MCP session view speaks the MCP Apps handshake" shtml "\"ui/initialize\""
+  assertContains "MCP session view renders tool results" shtml "\"ui/notifications/tool-result\""
+  assertContains "MCP session view reports its size" shtml "\"ui/notifications/size-changed\""
+  assertContains "MCP session view builds SVG elements, not markup" shtml "createElementNS"
+  assertContains "MCP session view bounds the drawing" shtml "MAX_SHAPES = 4000, MAX_EVENTS = 600"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new

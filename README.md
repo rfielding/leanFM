@@ -122,6 +122,36 @@ The MCP tools are read-only. Review and acceptance happen in git: LeanFM records
 These use Claude's documented [instruction imports](https://code.claude.com/docs/en/memory)
 and [project MCP configuration](https://code.claude.com/docs/en/mcp).
 
+### Claude Desktop
+
+Claude Desktop reaches LeanFM through the MCP-only server and a small stdio bridge
+(`mcp-remote`, run with `npx`, so Node is required). Build and start the server, then add it to
+Claude Desktop's configuration on macOS and restart the app:
+
+```sh
+lake build leanfm-mcp
+LEANFM_MCP_PORT=8090 .lake/build/bin/leanfm-mcp &
+CFG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+python3 - "$CFG" <<'PY'
+import json, os, sys
+p = sys.argv[1]
+d = json.load(open(p)) if os.path.exists(p) else {}
+d.setdefault("mcpServers", {})["leanfm"] = {
+    "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8090/mcp"]}
+os.makedirs(os.path.dirname(p), exist_ok=True)
+json.dump(d, open(p, "w"), indent=2)
+PY
+osascript -e 'quit app "Claude"'; sleep 2; open -a Claude
+```
+
+Then design with session types in the conversation, for example: "Use LeanFM to design a
+library-lending service as a session type, check it, and animate a stream of 20 borrowers."
+`session_check`, `session_diagram` and `session_simulate` take a protocol in the JSON form
+described by the `leanfm://language/session-reference` resource. Their results render inline:
+the generated sequence diagram, each role's typestate API, the calls with routes and status
+codes, and the event stream as an animation where clicking an event traces its `prior` and
+`cause`. The logic tools (`check_ctl`, `check_protocol`, `knows`, ...) render in their own view.
+
 The [launcher](scripts/claude.sh) keeps Claude configuration, session history,
 memory, and temporary files under the ignored `.cache/claude/` directory using
 [`CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_TMPDIR`](https://code.claude.com/docs/en/env-vars).
@@ -271,7 +301,7 @@ GET /graph.dot Graphviz DOT
 GET /auth.dot  auth group DOT
 GET /assembled.dot assembled-system DOT
 GET /health    health check
-POST /mcp      read-only MCP endpoint for project context, prompts, and validation tools
+POST /mcp      read-only MCP endpoint: project context, prompts, validation, logic and session-type tools
 ```
 
 The MCP endpoint treats `book/main.pdf` as durable agent context, comparable to

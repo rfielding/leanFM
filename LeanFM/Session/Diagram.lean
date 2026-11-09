@@ -50,11 +50,56 @@ def diagramEscape (s : String) : String :=
     if c == '&' then "&amp;" else if c == '<' then "&lt;"
     else if c == '>' then "&gt;" else if c == '"' then "&quot;" else c.toString
 
+/-- A colour by role, resolved by a theme: the SVG renderer and the MCP view each map it to their
+own palette, so the same drawing reads in dark and light. -/
+inductive Ink where
+  | none | bg | fg | line | arrow | frame | muted | actFill
+  deriving DecidableEq, Repr
+
+def Ink.name : Ink → String
+  | .none => "none" | .bg => "bg" | .fg => "fg" | .line => "line" | .arrow => "arrow"
+  | .frame => "frame" | .muted => "muted" | .actFill => "actFill"
+
+def DiagramTheme.ink (t : DiagramTheme) : Ink → String
+  | .none => "none" | .bg => t.bg | .fg => t.fg | .line => t.line | .arrow => t.arrow
+  | .frame => t.frame | .muted => t.muted | .actFill => t.actFill
+
+/-- One drawn element. A diagram is a list of these, so it can be written out as SVG text or handed
+to a view as data that the view turns into SVG elements itself, never as markup. -/
+inductive Shape where
+  | rect (cls : String) (x y w h rx : Nat) (fill stroke : Ink)
+  | line (cls : String) (x1 y1 x2 y2 : Nat) (stroke : Ink) (width dash : String) (arrow : Bool)
+  | path (cls : String) (d : String) (fill stroke : Ink) (dash : String) (arrow : Bool)
+  | text (cls : String) (x y : Nat) (anchor : String) (fill : Ink) (size : Nat) (bold : Bool)
+      (content : String)
+  deriving Repr
+
+namespace Shape
+
+private def clsAttr (c : String) : String := if c == "" then "" else s!" class=\"{c}\""
+private def dashAttr (d : String) : String := if d == "" then "" else s!" stroke-dasharray=\"{d}\""
+private def headAttr (a : Bool) : String := if a then " marker-end=\"url(#head)\"" else ""
+
+def svg (t : DiagramTheme) : Shape → String
+  | .rect c x y w h rx fill stroke =>
+      s!"<rect{clsAttr c} x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"" ++
+      (if rx == 0 then "" else s!" rx=\"{rx}\"") ++ s!" fill=\"{t.ink fill}\" stroke=\"{t.ink stroke}\"/>"
+  | .line c x1 y1 x2 y2 stroke width dash arrow =>
+      s!"<line{clsAttr c} x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" stroke=\"{t.ink stroke}\"" ++
+      (if width == "" then "" else s!" stroke-width=\"{width}\"") ++ dashAttr dash ++ headAttr arrow ++ "/>"
+  | .path c d fill stroke dash arrow =>
+      s!"<path{clsAttr c} d=\"{d}\" fill=\"{t.ink fill}\" stroke=\"{t.ink stroke}\"" ++ dashAttr dash ++ headAttr arrow ++ "/>"
+  | .text c x y anchor fill size bold content =>
+      s!"<text x=\"{x}\" y=\"{y}\" text-anchor=\"{anchor}\" fill=\"{t.ink fill}\" font-size=\"{size}\"" ++
+      (if bold then " font-weight=\"bold\"" else "") ++ clsAttr c ++ s!">{diagramEscape content}</text>"
+
+end Shape
+
 namespace Diagram
 
 structure St (R : Type) where
   y     : Nat := 70
-  out   : Array String := #[]
+  out   : Array Shape := #[]
   /-- Messages drawn so far, by id: sender, receiver, cause, and whether it was a reply. -/
   sent  : List (String × R × R × Option String × Bool) := []
   /-- Activation bars: request id, callee, inset, top, bottom (the lowest response so far). -/
@@ -72,46 +117,46 @@ def margin : Nat := 90
 def xOf [DecidableEq R] (roles : List R) (r : R) : Nat :=
   margin + colW * (roles.idxOf r)
 
-def emit (s : String) : M R Unit := modify fun st => { st with out := st.out.push s }
+def emit (s : Shape) : M R Unit := modify fun st => { st with out := st.out.push s }
 def adv (n : Nat) : M R Unit := modify fun st => { st with y := st.y + n }
 def getY : M R Nat := return (← get).y
 
-def text (t : DiagramTheme) (x y : Nat) (s : String) (anchor := "middle") (color := t.fg)
-    (size := 12) (style := "") : String :=
-  s!"<text x=\"{x}\" y=\"{y}\" text-anchor=\"{anchor}\" fill=\"{color}\" font-size=\"{size}\"{style}>{diagramEscape s}</text>"
+def text (x y : Nat) (s : String) (anchor := "middle") (color := Ink.fg) (size := 12)
+    (bold := false) (cls := "") : Shape :=
+  .text cls x y anchor color size bold s
 
 /-- Left and right edge of a frame at nesting depth `d`. -/
 def edges (n d : Nat) : Nat × Nat :=
   (margin - 70 + 8 * d, margin + colW * (n - 1) + 70 - 8 * d)
 
 /-- The frame's pentagon tab and caption; returns nothing, draws at the current y. -/
-def frameTop (t : DiagramTheme) (n d : Nat) (op caption : String) : M R Nat := do
+def frameTop (n d : Nat) (op caption : String) : M R Nat := do
   if (← get).fresh then adv 22
   let y ← getY
   let (x0, _) := edges n d
   let w := 10 + 8 * op.length
-  emit s!"<path d=\"M{x0} {y} h{w} v12 l-6 6 h-{w - 6} z\" fill=\"{t.bg}\" stroke=\"{t.frame}\"/>"
-  emit (text t (x0 + 5) (y + 13) op "start" t.frame 11 " font-weight=\"bold\"")
+  emit (.path "" s!"M{x0} {y} h{w} v12 l-6 6 h-{w - 6} z" .bg .frame "" false)
+  emit (text (x0 + 5) (y + 13) op "start" .frame 11 (bold := true))
   if caption != "" then
-    emit (text t (x0 + w + 8) (y + 13) s!"[{caption}]" "start" t.frame 11)
+    emit (text (x0 + w + 8) (y + 13) s!"[{caption}]" "start" .frame 11)
   adv 8
   modify fun st => { st with fresh := true }
   return y
 
-def frameBottom (t : DiagramTheme) (n d top : Nat) (kind : String) : M R Unit := do
+def frameBottom (n d top : Nat) (kind : String) : M R Unit := do
   adv 8
   let y ← getY
   let (x0, x1) := edges n d
-  emit s!"<rect class=\"frame {kind}\" x=\"{x0}\" y=\"{top}\" width=\"{x1 - x0}\" height=\"{y - top}\" fill=\"none\" stroke=\"{t.frame}\"/>"
+  emit (.rect s!"frame {kind}" x0 top (x1 - x0) (y - top) 0 .none .frame)
   adv 10
 
-def divider (t : DiagramTheme) (n d : Nat) (caption : String) : M R Unit := do
+def divider (n d : Nat) (caption : String) : M R Unit := do
   adv 4
   let y ← getY
   let (x0, x1) := edges n d
-  emit s!"<line x1=\"{x0}\" y1=\"{y}\" x2=\"{x1}\" y2=\"{y}\" stroke=\"{t.frame}\" stroke-dasharray=\"6 4\"/>"
+  emit (.line "" x0 y x1 y .frame "" "6 4" false)
   modify fun st => { st with branchTop := y }
-  if caption != "" then emit (text t (x0 + 6) (y + 13) s!"[{caption}]" "start" t.frame 11)
+  if caption != "" then emit (text (x0 + 6) (y + 13) s!"[{caption}]" "start" .frame 11)
   adv 6
 
 /-- A message is a reply when its cause chain reaches a request (a message that was not itself a
@@ -130,7 +175,7 @@ where
 
 def isReply [DecidableEq R] (st : St R) (i : Interaction R) : Bool := (answers st i).isSome
 
-def arrow [DecidableEq R] (t : DiagramTheme) (roles : List R) (i : Interaction R) : M R Unit := do
+def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
   adv 30
   modify fun st => { st with fresh := false }
   let st ← get
@@ -142,19 +187,19 @@ def arrow [DecidableEq R] (t : DiagramTheme) (roles : List R) (i : Interaction R
   let label := (match i.id with | some x => s!"{x}: " | none => "") ++ i.label ++
     (match i.route with | some r => s!" · {r}" | none => "") ++
     (match i.status with | some s => s!" · {s}" | none => "")
-  let dash := if reply then " stroke-dasharray=\"6 4\"" else ""
+  let dash := if reply then "6 4" else ""
   let cls := if reply then "msg reply" else "msg"
   if x1 == x2 then
-    emit s!"<path class=\"{cls}\" d=\"M{x1} {y - 8} h40 v16 h-40\" fill=\"none\" stroke=\"{t.arrow}\"{dash} marker-end=\"url(#head)\"/>"
-    emit (text t (x1 + 46) (y + 4) label "start")
+    emit (.path cls s!"M{x1} {y - 8} h40 v16 h-40" .none .arrow dash true)
+    emit (text (x1 + 46) (y + 4) label "start")
   else
-    emit s!"<line class=\"{cls}\" x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{t.arrow}\" stroke-width=\"1.5\"{dash} marker-end=\"url(#head)\"/>"
-    emit (text t ((x1 + x2) / 2) (y - 6) label)
+    emit (.line cls x1 y x2 y .arrow "1.5" dash true)
+    emit (text ((x1 + x2) / 2) (y - 6) label)
   -- a where clause goes under the arrow, so a long one cannot push the label off its arrow
   if let some g := i.guard then
     let gx := if x1 == x2 then x1 + 46 else (x1 + x2) / 2
     let anchor := if x1 == x2 then "start" else "middle"
-    emit (text t gx (y + (if x1 == x2 then 18 else 14)) s!"[{g.text}]" anchor t.muted 11 " class=\"guard\"")
+    emit (text gx (y + (if x1 == x2 then 18 else 14)) s!"[{g.text}]" anchor .muted 11 (cls := "guard"))
     adv 18
   if let some id := i.id then
     modify fun st => { st with sent := (id, i.src, i.dst, i.cause, reply) :: st.sent }
@@ -176,91 +221,106 @@ def arrow [DecidableEq R] (t : DiagramTheme) (roles : List R) (i : Interaction R
         let busy := (st.bars.filter fun b => b.2.1 == i.dst && b.2.2.2.1 == b.2.2.2.2).length
         { st with bars := st.bars ++ [(id, i.dst, busy, y, y)] }
 
-def act [DecidableEq R] (t : DiagramTheme) (roles : List R) (r : R) (label : String) : M R Unit := do
+def act [DecidableEq R] (roles : List R) (r : R) (label : String) : M R Unit := do
   adv 12
   modify fun st => { st with fresh := false }
   let y ← getY
   let x := xOf roles r
   let w := 16 + 7 * label.length
-  emit s!"<rect class=\"act\" x=\"{x - w / 2}\" y=\"{y}\" width=\"{w}\" height=\"24\" rx=\"10\" fill=\"{t.actFill}\" stroke=\"{t.arrow}\"/>"
-  emit (text t x (y + 16) label)
+  emit (.rect "act" (x - w / 2) y w 24 10 .actFill .arrow)
+  emit (text x (y + 16) label)
   adv 26
 
-partial def draw [DecidableEq R] [ToString R] (t : DiagramTheme) (roles : List R) (d : Nat) :
+partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
     Global R → M R Unit
   | .done => pure ()
-  | .msg i k => do arrow t roles i; draw t roles d k
-  | .act r l k => do act t roles r l; draw t roles d k
+  | .msg i k => do arrow roles i; draw roles d k
+  | .act r l k => do act roles r l; draw roles d k
   | .var name => do
       adv 22
       let y ← getY
       let (x0, _) := edges roles.length d
-      emit (text t (x0 + 8) y s!"↻ continue {name}" "start" t.frame 11 " class=\"continue\"")
+      emit (text (x0 + 8) y s!"↻ continue {name}" "start" .frame 11 (cls := "continue"))
       adv 6
   | .choice bs => do
       let caption := match Global.decider bs with
         | .ok r => s!"{r} selects; others offer"
         | .error _ => "race: no single role selects"
-      let top ← frameTop t roles.length d "alt" caption
-      branches t roles d bs ""
-      frameBottom t roles.length d top "alt"
+      let top ← frameTop roles.length d "alt" caption
+      branches roles d bs ""
+      frameBottom roles.length d top "alt"
   | .par bs k => do
-      let top ← frameTop t roles.length d "par" ""
-      branches t roles d bs ""
-      frameBottom t roles.length d top "par"
-      draw t roles d k
+      let top ← frameTop roles.length d "par" ""
+      branches roles d bs ""
+      frameBottom roles.length d top "par"
+      draw roles d k
   | .join need bs k => do
-      let top ← frameTop t roles.length d "par" s!"any {need} of {bs.length}"
-      branches t roles d bs ""
-      frameBottom t roles.length d top "join"
-      draw t roles d k
+      let top ← frameTop roles.length d "par" s!"any {need} of {bs.length}"
+      branches roles d bs ""
+      frameBottom roles.length d top "join"
+      draw roles d k
   | .loop name body => do
-      let top ← frameTop t roles.length d "loop" name
-      draw t roles (d + 1) body
-      frameBottom t roles.length d top "loop"
+      let top ← frameTop roles.length d "loop" name
+      draw roles (d + 1) body
+      frameBottom roles.length d top "loop"
   | .sessions body k => do
-      let top ← frameTop t roles.length d "loop" "sessions: one instance per request, concurrently"
-      draw t roles (d + 1) body
-      frameBottom t roles.length d top "sessions"
-      draw t roles d k
+      let top ← frameTop roles.length d "loop" "sessions: one instance per request, concurrently"
+      draw roles (d + 1) body
+      frameBottom roles.length d top "sessions"
+      draw roles d k
   | .box name body k => do
-      let top ← frameTop t roles.length d "ref" name
-      draw t roles (d + 1) body
-      frameBottom t roles.length d top "ref"
-      draw t roles d k
+      let top ← frameTop roles.length d "ref" name
+      draw roles (d + 1) body
+      frameBottom roles.length d top "ref"
+      draw roles d k
 where
-  branches (t : DiagramTheme) (roles : List R) (d : Nat) (bs : List (Global R)) (cap : String) :
+  branches (roles : List R) (d : Nat) (bs : List (Global R)) (cap : String) :
       M R Unit := do
     let mut firstB := true
     for b in bs do
-      if !firstB then divider t roles.length (d) cap
+      if !firstB then divider roles.length (d) cap
       firstB := false
-      draw t roles (d + 1) b
+      draw roles (d + 1) b
 
 end Diagram
+
+/-- A drawn diagram: its size and its shapes, in drawing order. -/
+structure DiagramModel where
+  width  : Nat
+  height : Nat
+  shapes : Array Shape
+  deriving Repr
+
+/-- The shapes of a sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
+def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : List R)
+    (title : String := "") : DiagramModel :=
+  let ((), st) := (Diagram.draw roles 0 g).run {}
+  let bottom := st.y + 30
+  let width := Diagram.margin * 2 + Diagram.colW * (roles.length - 1)
+  let height := bottom + 40
+  let heads := roles.flatMap fun r =>
+    let x := Diagram.xOf roles r
+    let name := toString r
+    let w := 24 + 8 * name.length
+    [ Shape.rect "role" (x - w / 2) 20 w 28 4 .actFill .fg, Diagram.text x 39 name
+    , Shape.rect "role" (x - w / 2) bottom w 28 4 .actFill .fg, Diagram.text x (bottom + 19) name
+    , Shape.line "lifeline" x 48 x bottom .line "" "4 4" false ]
+  let bars := st.bars.filterMap fun (_, r, inset, top, bot) =>
+    if bot ≤ top then none else
+    some (Shape.rect "activation" (Diagram.xOf roles r - 5 + 7 * inset) top 10 (bot - top) 0 .actFill .arrow)
+  let titleEl := if title == "" then [] else [Diagram.text 10 14 title "start" .muted 11]
+  { width, height, shapes := (titleEl ++ heads ++ bars).toArray ++ st.out }
+
+/-- The model written out as SVG text in a theme. -/
+def DiagramModel.svg (m : DiagramModel) (t : DiagramTheme := .dark) : String :=
+  s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{m.width}\" height=\"{m.height}\" viewBox=\"0 0 {m.width} {m.height}\" font-family=\"ui-sans-serif, system-ui, sans-serif\">" ++
+  s!"<defs><marker id=\"head\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerWidth=\"8\" markerHeight=\"8\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"{t.arrow}\"/></marker></defs>" ++
+  s!"<rect width=\"100%\" height=\"100%\" fill=\"{t.bg}\"/>" ++
+  String.join (m.shapes.toList.map (Shape.svg t)) ++ "</svg>"
 
 /-- An SVG sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
 def Global.diagram [DecidableEq R] [ToString R] (g : Global R) (roles : List R)
     (theme : DiagramTheme := .dark) (title : String := "") : String :=
-  let t := theme
-  let ((), st) := (Diagram.draw t roles 0 g).run {}
-  let bottom := st.y + 30
-  let width := Diagram.margin * 2 + Diagram.colW * (roles.length - 1)
-  let height := bottom + 40
-  let heads := roles.map fun r =>
-    let x := Diagram.xOf roles r
-    let name := toString r
-    let w := 24 + 8 * name.length
-    s!"<g class=\"role\"><rect x=\"{x - w / 2}\" y=\"20\" width=\"{w}\" height=\"28\" rx=\"4\" fill=\"{t.actFill}\" stroke=\"{t.fg}\"/>{Diagram.text t x 39 name}" ++
-    s!"<rect x=\"{x - w / 2}\" y=\"{bottom}\" width=\"{w}\" height=\"28\" rx=\"4\" fill=\"{t.actFill}\" stroke=\"{t.fg}\"/>{Diagram.text t x (bottom + 19) name}" ++
-    s!"<line x1=\"{x}\" y1=\"48\" x2=\"{x}\" y2=\"{bottom}\" stroke=\"{t.line}\" stroke-dasharray=\"4 4\"/></g>"
-  let bars := st.bars.filterMap fun (_, r, inset, top, bot) =>
-    if bot ≤ top then none else
-    some s!"<rect class=\"activation\" x=\"{Diagram.xOf roles r - 5 + 7 * inset}\" y=\"{top}\" width=\"10\" height=\"{bot - top}\" fill=\"{t.actFill}\" stroke=\"{t.arrow}\"/>"
-  let titleEl := if title == "" then "" else Diagram.text t 10 14 title "start" t.muted 11
-  s!"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\" font-family=\"ui-sans-serif, system-ui, sans-serif\">" ++
-  s!"<defs><marker id=\"head\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerWidth=\"8\" markerHeight=\"8\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"{t.arrow}\"/></marker></defs>" ++
-  s!"<rect width=\"100%\" height=\"100%\" fill=\"{t.bg}\"/>" ++ titleEl ++
-  String.join heads ++ String.join bars ++ String.join st.out.toList ++ "</svg>"
+  (g.diagramModel roles title).svg theme
 
 end LeanFM.Session

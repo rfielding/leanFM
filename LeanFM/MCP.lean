@@ -4,6 +4,8 @@ import LeanFM.LLMGenerated.Requirements
 import LeanFM.LLMGenerated.Implementation
 import LeanFM.Logic
 import LeanFM.MCPView
+import LeanFM.SessionView
+import LeanFM.SessionTools
 
 namespace LeanFM.MCP
 
@@ -27,7 +29,11 @@ def instructions : String :=
   "and acceptance happen in git: LeanFM records no approvals, so do not stop to ask for one. The MCP " ++
   "surface is read-only: it supplies canonical context and deterministic checks. " ++
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
-  "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference."
+  "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference. " ++
+  "For interactions between roles (services, clients, actors, APIs), design a session type and check it with " ++
+  "session_check, draw it with session_diagram and animate it with session_simulate; read " ++
+  "leanfm://language/session-reference for the JSON form. Show people the diagrams and streams these tools " ++
+  "generate rather than drawing interaction diagrams by hand."
 
 def ok (id result : Json) : Response :=
   { status := 200
@@ -69,6 +75,10 @@ def resources : Array Json := #[
     "LeanFM implementation language reference" "Live implementation and traceability constructors." "text/markdown",
   resource "leanfm://language/logic-reference" "logic-reference"
     "LeanFM logic reference" "JSON formula grammar, operator readings, verdicts, evidence and terminal convention for the logic tools." "text/markdown",
+  resource "leanfm://language/session-reference" "session-reference"
+    "LeanFM session types (JSON form)" "How to write a protocol for session_check, session_diagram and session_simulate, with an example, the step kinds, limits and how to read the answers." "text/markdown",
+  resource sessionViewUri "session-view" "LeanFM session view"
+    "Interactive view of session_check, session_diagram and session_simulate results: the generated diagram, typestate, calls and the animated event stream (MCP Apps)." logicViewMimeType,
   resource logicViewUri "logic-view" "LeanFM logic view"
     "Interactive view of check_protocol, check_ctl, check_reassembly and knows results (MCP Apps)." logicViewMimeType
 ]
@@ -132,6 +142,12 @@ def resourceContents (uri : String) : IO (Except String Json) := do
       | "leanfm://language/logic-reference" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", "text/markdown"),
             ("text", LeanFM.Logic.reference)]
+      | "leanfm://language/session-reference" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", "text/markdown"),
+            ("text", LeanFM.SessionTools.reference)]
+      | "ui://leanfm/session-view" =>
+          pure <| Json.mkObj [("uri", uri), ("mimeType", logicViewMimeType),
+            ("text", sessionViewHtml), ("_meta", logicViewResourceMeta)]
       | "ui://leanfm/logic-view" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", logicViewMimeType),
             ("text", logicViewHtml), ("_meta", logicViewResourceMeta)]
@@ -203,11 +219,24 @@ def toolDefinitions : Array Json := #[
       ("initial", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("query", anyJson "optional term to decide"),
       ("seesAll", Json.mkObj [("type", "boolean"), ("description", Json.str "the actor sees every channel (a network attacker)")])]
-      ["events", "actor", "at"])
+      ["events", "actor", "at"]),
+  tool "session_check" "Check a session type"
+    "Check a protocol between roles written as a session type (JSON form: {name?, roles, steps}; read leanfm://language/session-reference). Returns ok or the issues (races, roles that cannot tell which branch was taken, causes a sender never saw), each role's local type and typestate API, the calls (request, responses with status, nested calls), and the generated diagram. With mayCall [[caller, callee], ...] every channel is HTTP and calls that break request/response are reported."
+    (schema [("protocol", anyJson "{name?, roles: [role names], steps: [steps]}"),
+      ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])])] ["protocol"]),
+  tool "session_diagram" "Draw a session type"
+    "Draw a protocol as a UML sequence diagram generated from the session type: alt frames name the role that selects, par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
+    (schema [("protocol", anyJson "{name?, roles, steps}"), ("theme", stringSchema "dark (default) or light")] ["protocol"]),
+  tool "session_simulate" "Generate an event stream from a session type"
+    "Run a protocol with a seed: sessions blocks (or, without one, concurrent copies of the protocol) start instances at staggered times, par branches interleave, choices pick branches. Each event carries prior (what it happened after), cause and answers (the request it responds to). The view animates the stream."
+    (schema [("protocol", anyJson "{name?, roles, steps}"),
+      ("seed", Json.mkObj [("type", "integer")]), ("instances", Json.mkObj [("type", "integer")]),
+      ("spread", Json.mkObj [("type", "integer")]), ("loops", Json.mkObj [("type", "integer")]),
+      ("maxEvents", Json.mkObj [("type", "integer")])] ["protocol"])
 ]
 
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
-def tools : Array Json := toolDefinitions.map withLogicView
+def tools : Array Json := toolDefinitions.map (withSessionView ∘ withLogicView)
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
 `logicSummaryLimit` characters. The full answer is only in structuredContent. -/
@@ -232,6 +261,9 @@ def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
     ("structuredContent", body), ("isError", isError)]
 
 def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except String Json :=
+  match LeanFM.SessionTools.run name arguments with
+  | some outcome => .ok (logicResult name outcome)
+  | none =>
   match LeanFM.Logic.run name arguments with
   | some outcome => .ok (logicResult name outcome)
   | none =>
