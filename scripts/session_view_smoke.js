@@ -134,6 +134,19 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   expectText("a role with several steps is shown choosing", byId.walk, "Desk chooses");
   expectText("the roles waiting are named", byId.walk, "Member, Librarian wait");
   button(byId.walk, "Undo").click(); await wait(120);
+  // the sketch: click two lifelines, label the message, and it is added to the protocol text
+  const lanes = byId.editor.all().filter((n) => n.attrs && n.attrs["data-role"]);
+  if (lanes.length < 2) throw new Error("the sketch shows no lifelines");
+  const before = byId.editor.all().find((n) => n.tag === "textarea").value;
+  lanes[0].click(); await wait(20); lanes[1].click(); await wait(20);
+  const labelIn = byId.editor.all().find((n) => n.tag === "input" && n.dataset && n.dataset.field === "label");
+  if (!labelIn) throw new Error("the sketch asks for no label");
+  labelIn.value = "Ping";
+  button(byId.editor, "Add").click(); await wait(120);
+  const after = byId.editor.all().find((n) => n.tag === "textarea").value;
+  if (!after.includes(`Ping from ${lanes[0].attrs["data-role"]} to ${lanes[1].attrs["data-role"]};`) || after.length <= before.length)
+    throw new Error("the sketch did not add its message to the text");
+  console.log("ok: the sketch adds a message by clicking two lifelines");
   button(byId.walk, "Close").click(); await wait(50);
   if (byId.walk.children.length) throw new Error("Close leaves the walk-through open");
   console.log("ok: undo and close work");

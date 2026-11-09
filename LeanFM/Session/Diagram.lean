@@ -231,9 +231,15 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
       match st.bars.find? (fun b => b.1 == r && b.2.2.2.1 == b.2.2.2.2) with
       | some _ => { st with bars := st.bars.map fun b =>
           if b.1 == r && b.2.2.2.1 == b.2.2.2.2 then (b.1, b.2.1, b.2.2.1, b.2.2.2.1, y) else b }
-      | none => match st.bars.find? (·.1 == r) with
-        | some (_, callee, inset, _, _) =>
-            { st with bars := st.bars ++ [(r, callee, inset, min st.branchTop y, y)] }
+      | none => match st.bars.reverse.find? (·.1 == r) with
+        | some (_, callee, inset, top, bot) =>
+            if st.branchTop ≤ bot then
+              -- Several replies may answer one request in the same branch.
+              { st with bars := st.bars.map fun b =>
+                  if b.1 == r && b.2.2.2.1 == top && b.2.2.2.2 == bot
+                  then (r, callee, inset, top, y) else b }
+            else
+              { st with bars := st.bars ++ [(r, callee, inset, max st.branchTop top, y)] }
         | none => st
   | none => if let some id := i.id then
       modify fun st =>

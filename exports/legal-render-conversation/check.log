@@ -1,0 +1,531 @@
+python3 scripts/chatui_sandbox_check.py
+ok: required bwrap user/process/network namespace sandbox
+cd ui && npm run check && npm run build && npm run check:bundle
+
+> leanfm-ui@0.1.0 check
+> tsc --noEmit
+
+
+> leanfm-ui@0.1.0 build
+> vite build
+
+vite v6.4.4 building for production...
+transforming...
+✓ 25 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/react-app.js  463.56 kB │ gzip: 141.44 kB
+✓ built in 745ms
+
+> leanfm-ui@0.1.0 check:bundle
+> ! grep -q 'process.env.NODE_ENV' dist/react-app.js
+
+rebuild: LeanFM.ChatUI.Web (an include_str input changed)
+rebuild: LeanFM.SessionView (an include_str input changed)
+lake build leanfm-server
+✔ [78/128] Built LeanFM.Session.OpenApi (279ms)
+✔ [79/128] Built LeanFM.ChatUI.Web (219ms)
+✔ [81/128] Built LeanFM.LLMGenerated.SelfHosting (311ms)
+✔ [82/128] Built LeanFM.ChatUI.Web:c.o (76ms)
+✔ [83/128] Built LeanFM.Session.Skeleton (486ms)
+✔ [84/128] Built LeanFM.Session.Evolution (418ms)
+✔ [85/128] Built LeanFM.Session.Review (399ms)
+✔ [89/128] Built LeanFM.LLMGenerated.McpLogicImplementation (206ms)
+✔ [90/128] Built LeanFM.LLMGenerated.SessionImplementation (206ms)
+✔ [91/128] Built LeanFM.SessionView (558ms)
+✔ [92/128] Built LeanFM.LLMGenerated.SelfHosting:c.o (218ms)
+✔ [94/128] Built LeanFM.LLMGenerated.SessionImplementation:c.o (75ms)
+✔ [95/128] Built LeanFM.Session.Diagram:c.o (573ms)
+✔ [96/128] Built LeanFM.SessionView:c.o (48ms)
+✔ [97/128] Built LeanFM.LLMGenerated.Requirements (410ms)
+✔ [98/128] Built LeanFM.Session.Text (788ms)
+✔ [101/128] Built LeanFM.Session.SkeletonTs (392ms)
+✔ [102/128] Built LeanFM.Session.ProjectionTests (857ms)
+✔ [105/128] Built LeanFM.LLMGenerated.Implementation (186ms)
+✔ [107/128] Built LeanFM.Session.SessionTests:c.o (904ms)
+✔ [108/128] Built LeanFM.Render (617ms)
+✔ [109/128] Built LeanFM.Session (424ms)
+✔ [112/128] Built LeanFM.Logic (1.9s)
+✔ [114/128] Built LeanFM.Overlay (421ms)
+✔ [116/128] Built LeanFM.SessionTools (835ms)
+✔ [117/128] Built LeanFM.MCP (681ms)
+✔ [118/128] Built LeanFM.MCP:c.o (372ms)
+✔ [119/128] Built LeanFM.SessionTools:c.o (1.6s)
+✔ [120/128] Built LeanFM.SessionToolsTests (1.7s)
+✔ [121/128] Built LeanFM.SessionToolsTests:c.o (211ms)
+✔ [122/128] Built LeanFM (422ms)
+✔ [124/128] Built LeanFM.ChatUI.Server (3.5s)
+✔ [126/128] Built Server (797ms)
+✔ [128/128] Built «leanfm-server»:exe (380ms)
+Build completed successfully (128 jobs).
+✔ [116/118] Built Main (445ms)
+✔ [118/118] Built leanfm:exe (379ms)
+Per-task FSM CTL checks
+    AF terminal: true
+    AG capacity: true
+    AF terminal: true
+    AG capacity: true
+CTL from initial observation
+AG capacity (all reachable queues stay within capacity): true
+✔ [30/32] Built Validate (136ms)
+✔ [32/32] Built «leanfm-validate»:exe (127ms)
+ok: all generated requirements are well-formed typed Lean values
+ok: generated implementation plan covers the requirement
+✔ [4/4] Built LeanFM.ReferenceExamples.Request (148ms)
+Build completed successfully (4 jobs).
+✔ [5/5] Built LeanFM.ReferenceExamples.RequestImplementation (135ms)
+Build completed successfully (5 jobs).
+ok: MCP initialization supplies durable book instructions
+ok: MCP negotiates a protocol version
+ok: MCP lists the central book
+ok: MCP lists canonical requirements
+ok: MCP reads the complete central PDF without overflowing the stack
+ok: MCP validation tool returns checked reports
+ok: MCP rejects unknown methods
+ok: MCP lists check_ctl with an input schema
+ok: MCP logic tools require their arguments
+ok: MCP serves the logic reference
+ok: MCP check_ctl passes arguments and returns a verdict
+ok: MCP check_ctl returns a counterexample
+ok: MCP rejects malformed logic as a tool error
+ok: MCP rejection names the typing error
+ok: MCP knows decides a query
+ok: MCP knows returns the derivation
+ok: MCP lists check_protocol
+ok: MCP lists check_reassembly
+ok: MCP check_reassembly finds an evasion with defaults
+ok: MCP check_reassembly lists the segments
+ok: MCP check_protocol finds a plaintext leak
+ok: MCP check_protocol shows the send to its addressee, via the attacker
+ok: MCP check_protocol text is a summary, not a second copy
+ok: MCP check_protocol summary gives verdict and reading
+ok: MCP rejection text is a summary
+ok: MCP rejection summary gives the reason
+ok: MCP check_ctl text is a summary
+ok: MCP check_ctl summary gives the verdict
+ok: MCP views are declared on exactly the tools they draw
+ok: MCP lists the view resource
+ok: MCP lists the view with the MCP Apps MIME type
+ok: MCP reads the view with its MIME type and no CSP domains
+ok: MCP view has no network access, no HTML or code from data, and no paths
+ok: MCP view speaks the MCP Apps handshake
+ok: MCP view announces it is ready
+ok: MCP view renders tool results
+ok: MCP view reports its size
+ok: MCP view bounds the drawing
+ok: MCP rejects an undeclared ui:// URI
+ok: MCP check_protocol result is unchanged by the view
+ok: MCP check_protocol summary is unchanged
+ok: MCP lists session_check
+ok: MCP lists session_diagram
+ok: MCP lists session_simulate
+ok: MCP lists session_conform
+ok: MCP lists session_skeleton
+ok: MCP lists session_next
+ok: MCP lists session_compat
+ok: MCP lists session_ctl
+ok: MCP lists session_openapi
+ok: MCP lists session_review
+ok: MCP instructions point to the session tools
+ok: MCP lists the session reference
+ok: MCP serves the session reference
+ok: MCP session_check reads Lean protocol text through the dispatch
+ok: MCP session_check echoes the Lean text
+ok: MCP session_check text is a one-line summary
+ok: MCP session_check summary gives the reading
+ok: MCP session_check rejects an unknown step as a tool error
+ok: MCP session_skeleton puts the code in the text a model reads
+ok: MCP session_skeleton writes each state as a class
+ok: MCP session_compat answers per role
+ok: MCP session_compat says who waits
+ok: MCP session_review puts its findings in the text
+ok: MCP session_skeleton writes TypeScript in a typescript fence
+ok: MCP session_skeleton TypeScript states extend State
+ok: MCP session_skeleton rejects an unknown language
+ok: MCP session_simulate runs concurrent copies
+ok: MCP lists the session view
+ok: logic view script parses
+ok: session view script parses
+ok: MCP session view runs every session tool's result, the walk-through and the animation (18 checks)
+ok: MCP session view has no network access, no HTML or code from data, and no paths
+ok: MCP session view speaks the MCP Apps handshake
+ok: MCP session view renders tool results
+ok: MCP session view reports its size
+ok: MCP session view builds SVG elements, not markup
+ok: MCP session view bounds the drawing
+ok: MCP session view starts the animation simple
+ok: MCP session view offers the walk-through
+ok: MCP offers the session design prompt
+ok: MCP session design prompt ends at session_conform
+ok: MCP session view edits through tools/call
+ok: MCP session view calls only the session tools, bounded
+ok: MCP host answers a preflight from claude.ai
+ok: MCP host allows the MCP request headers
+ok: MCP host refuses an unlisted origin without CORS headers
+ok: MCP host serves a server-side client with no Origin
+ok: MCP host adds CORS headers for claude.ai
+ok: MCP host answers GET /mcp with 405
+ok: MCP host does not serve /api/llm
+ok: MCP host does not serve /api/session
+ok: MCP host does not serve /
+ok: MCP host does not serve /renders/
+ok: MCP host does not serve /api/projects
+ok: MCP host refuses a non-JSON body
+ok: MCP host refuses an Accept without JSON
+ok: MCP host serves a Streamable HTTP Accept header
+ok: MCP host refuses an unsupported protocol version
+ok: MCP host accepts protocol version 2025-06-18
+ok: MCP host refuses a body over 256 KiB
+ok: MCP host requires the configured token
+ok: MCP host acknowledges a notification with 202 and no body
+ok: MCP host serves the burst, then rate limits with Retry-After
+ok: MCP host refills a client's allowance over time
+ok: MCP host refuses a tool call beyond the in-flight limit
+ok: MCP host answers /healthz
+ok: MCP host compacts an oversized reply below the limit, keeping its verdict
+ok: MCP host replaces an irreducible reply with error -32000
+ok: MCP host never allows every origin or credentials, and never caches
+ok: MCP host log line holds no body, token or client address
+ok: MCP lists leanfm://project/specification/SelfHosting.lean
+ok: MCP reads leanfm://project/specification/SelfHosting.lean
+ok: MCP lists leanfm://project/specification/McpLogicImplementation.lean
+ok: MCP reads leanfm://project/specification/McpLogicImplementation.lean
+ok: MCP lists leanfm://project/specification/SessionImplementation.lean
+ok: MCP reads leanfm://project/specification/SessionImplementation.lean
+ok: MCP instructions point at LeanFM's own requirements
+ok: parses EX
+ok: parses AX
+ok: parses EF
+ok: parses AF
+ok: parses EG
+ok: parses AG
+ok: parses never
+ok: parses not
+ok: parses EU
+ok: parses AU
+ok: parses EW
+ok: parses AW
+ok: parses implies
+ok: parses stronglyImplies
+ok: bare F is a typing error naming AF/EF
+ok: unknown operator rejected
+ok: code-shaped text stays an inert predicate atom
+ok: depth bound rejects
+ok: node bound rejects
+ok: string bound rejects
+ok: fixpoint labelling agrees with LeanFM.CTL (140 checks)
+ok: 5000-state draft yields resource-limit, never proved
+ok: predicate atom yields unknown, never proved
+ok: K yields unsupported
+ok: misspelled message is rejected, not false
+ok: never-claim disproved
+ok: counterexample ends with LogicInputRejected
+ok: EF proved with witness reaching answered
+ok: AF disproved on a ping-pong cycle with a lasso
+ok: unknown message in stronglyImplies rejected
+ok: unreachable antecedent: stronglyImplies disproved as vacuous
+ok: plain AG implies with unreachable antecedent is proved (the vacuity the lint warns about)
+ok: deadlock reported and AF disproved
+ok: reading is English
+ok: negation pushed through duals
+ok: stronglyImplies lint
+ok: mode is always
+ok: quantifier mismatch lint
+ok: valid consultation trace admissible
+ok: trace yields a sequence diagram
+ok: duplicate id reported
+ok: dangling reference reported
+ok: forward cause reported
+ok: wrong src reported
+ok: out-of-grammar event reported
+ok: independent requests are concurrent
+ok: an edge that runs backwards in time is reported
+ok: hidden predicate is implementation-only with a proposed event
+ok: event-mentioning predicate is derived
+ok: no predicate text is observable
+ok: formula atoms classified separately
+ok: knows: before Alice answers, Ivo cannot derive nb
+ok: knows: after Alice answers, Ivo can derive nb
+ok: knows: the derivation names the delivering event and the key used
+ok: knows: Ivo learns na from Alice's first message
+ok: knows: a concurrent leak of sk(A) does not count
+ok: knows: the same leak in the causal past opens Bob's reply
+ok: knows: a signature opens with the public key
+ok: knows: a public-key ciphertext stays closed without the private key
+ok: knows: a hash is never inverted
+ok: knows: a hash can be recomputed from its input
+ok: knows: a malformed term is rejected
+ok: knows: a term with two constructors is rejected
+ok: knows: an unknown event is rejected
+ok: knows atom: the 1978 protocol leaks Bob's nonce
+ok: knows atom: the counterexample shows the network holding nb
+ok: knows atom: with Lowe's fix the leak is gone
+ok: knows atom: some history reaches the end knowing s
+ok: knows atom: another reaches it without knowing s
+ok: knows atom: so it is not true on every path
+ok: knows atom: an undeclared actor is rejected
+ok: knows atom: canonical tasks declare no knowledge
+ok: check_protocol: the 1978 protocol leaks Bob's nonce
+ok: check_protocol: the attack is Lowe's, through Ivo
+ok: check_protocol: every wire hop agrees with its evidence event
+ok: check_protocol: authentication fails in 1978
+ok: check_protocol: Lowe's fix keeps the nonce secret
+ok: check_protocol: Lowe's fix keeps agreement
+ok: check_protocol: an honest run can still complete
+ok: check_protocol: sending an unbound variable is rejected
+ok: check_protocol: the attacker cannot be an honest role
+ok: check_protocol: a claim no role makes is an unknown name
+ok: check_protocol: with one session of Bob, reflection is impossible
+ok: check_protocol: with two sessions of Bob, Ivo impersonates Alice
+ok: check_protocol: Bob's second session answers his first session's challenge
+ok: check_protocol: an honest run still completes with two sessions
+ok: check_protocol: more sessions than the bound are rejected
+ok: check_protocol: sessions adding up past the thread bound are rejected
+ok: check_protocol: a role name with # is rejected, since sessions use it
+ok: check_protocol: two roles making the same fresh variable are rejected
+ok: check_protocol: a fresh value the attacker already knows is rejected
+ok: check_protocol: sending a fresh variable before making it is rejected
+ok: check_protocol: with no defender, Bob accepts bad
+ok: check_protocol: a defender that drops bad stops it in plaintext
+ok: check_protocol: the defender still lets good through
+ok: check_protocol: bad sealed for Bob goes past a defender without the key
+ok: check_protocol: the evasion is delivered by the defender, sealed
+ok: check_protocol: a defender holding Bob's key sees inside and drops it
+ok: check_protocol: and still delivers sealed good
+ok: check_protocol: a rewriting defender turns bad into good
+ok: check_protocol: the rewrite shows in the evidence
+ok: check_protocol: the defender's link is not the attacker's
+ok: check_protocol: a defender protecting an undeclared role is rejected
+ok: check_protocol: a defender named like the attacker is rejected
+ok: check_protocol: a rewrite inventing a variable is rejected
+ok: check_reassembly: first-wins defender, last-wins host: evaded
+ok: check_reassembly: the evasion writes a decoy byte, then the signature over it
+ok: check_reassembly: last-wins defender, first-wins host: evaded
+ok: check_reassembly: that evasion sends the signature's first byte, then a decoy over it
+ok: check_reassembly: the same policy on both sides cannot be evaded (first)
+ok: check_reassembly: the same policy on both sides cannot be evaded (last)
+ok: check_reassembly: a matched policy still lets the signature through to be caught
+ok: check_reassembly: a passive defender is evaded the same way, without an alert
+ok: check_reassembly: a long signature is rejected
+ok: check_reassembly: a signature with the decoy mark is rejected
+ok: check_reassembly: an unknown policy is rejected
+ok: check_reassembly: an unknown mode is rejected
+ok: knows: a dangling reference is rejected
+ok: oversized arguments rejected
+ok: all LeanFM.Logic tests passed
+ok: scenario -> 491 protobuf bytes -> identical scenario
+lake exe leanfm-diagrams
+✔ [116/118] Built Diagrams (479ms)
+✔ [118/118] Built «leanfm-diagrams»:exe (370ms)
+wrote diagrams/auth.dot
+wrote diagrams/worker.dot
+wrote diagrams/get_docs.dot
+wrote diagrams/post_review.dot
+wrote diagrams/tasks.dot
+wrote diagrams/assembled.dot
+wrote diagrams/get_docs-interaction.svg
+wrote diagrams/post_review-interaction.svg
+wrote diagrams/get_docs-state.svg
+wrote diagrams/post_review-state.svg
+wrote diagrams/latency-line.svg
+wrote diagrams/outcomes-pie.svg
+wrote diagrams/index.html
+wrote diagrams/theorems.html
+lake env lean --run RuntimeReliabilityDiagram.lean
+ok: runtime actor topology generated from typed populations and gates
+lake env lean --run NestedForkJoinExample.lean
+ok: nested race event identity, predecessor order and reply-before-cleanup example
+lake env lean --run StochasticUserMDPExample.lean
+ok: stochastic user MDP has valid mass, deterministic server steps, reward 19/5, latency 36/5
+lake env lean --run BakeryFlowExample.lean
+ok: bakery figures generated from 20000 sales and 140 batches; measured P(F<=1200ms sold)=1, raw 0.5454
+lake env lean --run OAuthGrammarExample.lean
+ok: OAuth granted and denied interaction diagrams generated
+lake env lean --run TopologyExample.lean
+ok: 10 interfaces, 8 channels, 3 findings; islands view 5 of 7 messages
+lake env lean --run MCPInteractionExample.lean
+ok: MCP interaction diagram generated
+lake env lean --run LogicInteractionExample.lean
+ok: MCP logic interaction diagram generated
+lake env lean --run WebServerProtocolChapter.lean
+ok: generated 12 grammars, 66 protobuf payloads, and 9 running HTTP routes
+lake env lean --run StochasticUserMDPExample.lean
+ok: stochastic user MDP has valid mass, deterministic server steps, reward 19/5, latency 36/5
+make -C projects/PaxosKV check
+make[1]: Entering directory '/home/rfielding/code/leanFM/projects/PaxosKV'
+cd /home/rfielding/code/leanFM && python3 scripts/chatui_specification.py /home/rfielding/code/leanFM/projects/PaxosKV \
+  Project.Requirements.requirements Project.Implementation.implementation
+ok: canonical project specification and 3 generated task views
+Catalog: spec/tasks.json; evidence: reports/specification-check/validation.json
+Acceptance unchanged. This is elaboration and structural validation, not a deployed-code proof.
+make -C source check
+make[2]: Entering directory '/home/rfielding/code/leanFM/projects/PaxosKV/source'
+/home/rfielding/code/leanFM/.toolchains/go/bin/go build -o ../.cache/paxos-kv ./cmd/paxos-kv
+/home/rfielding/code/leanFM/.toolchains/go/bin/go vet ./...
+/home/rfielding/code/leanFM/.toolchains/go/bin/go test -race ./...
+?   	leanfm/paxoskv/cmd/paxos-kv	[no test files]
+?   	leanfm/paxoskv/internal/metrics	[no test files]
+?   	leanfm/paxoskv/web/templates	[no test files]
+ok  	leanfm/paxoskv/internal/paxos	1.384s
+ok  	leanfm/paxoskv/internal/protocol	1.009s
+ok  	leanfm/paxoskv/internal/trace	1.009s
+ok  	leanfm/paxoskv/internal/web	1.012s
+make[2]: Leaving directory '/home/rfielding/code/leanFM/projects/PaxosKV/source'
+make[1]: Leaving directory '/home/rfielding/code/leanFM/projects/PaxosKV'
+python3 scripts/validate_video_overview.py
+ok: video overview provenance and CTL vocabulary match the checked sources
+lake build LeanFM.LLMGenerated.Requirements
+Build completed successfully (9 jobs).
+lake env lean LeanFM/LLMGenerated/SelfHostingTests.lean
+lake env lean --run ReviewSelfHosting.lean
+ok: self-hosting product composition and review generated (structural validation only)
+lake env lean --run ReviewResumableWork.lean
+ok: resumable work candidate requirements and generated views
+python3 scripts/chatui_work_state_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.016s
+
+OK
+python3 scripts/chatui_workspace_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.012s
+
+OK
+python3 scripts/chatui_crypto_test.py
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.795s
+
+OK
+python3 scripts/chatui_patch_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.577s
+
+OK
+python3 scripts/chatui_media_test.py
+test_corrupt_mislabeled_oversized_and_disk_bound (__main__.Images.test_corrupt_mislabeled_oversized_and_disk_bound) ... ok
+test_native_pixels_originals_and_immutable_ids (__main__.Images.test_native_pixels_originals_and_immutable_ids) ... ok
+test_safe_svg_raster_and_no_active_or_external_content (__main__.Images.test_safe_svg_raster_and_no_active_or_external_content) ... ok
+test_traversal_foreign_root_symlink_and_integrity_fail_closed (__main__.Images.test_traversal_foreign_root_symlink_and_integrity_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.204s
+
+OK
+python3 scripts/chatui_specification_test.py
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 8.304s
+
+OK
+python3 scripts/chatui_project_state_test.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 1.522s
+
+OK
+python3 scripts/chatui_work_state_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.014s
+
+OK
+python3 scripts/chatui_workspace_reset_test.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.004s
+
+OK
+python3 scripts/chatui_workspace_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.011s
+
+OK
+python3 scripts/chatui_command_test.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.468s
+
+OK
+python3 scripts/chatui_runtime_test.py
+...
+----------------------------------------------------------------------
+Ran 3 tests in 0.821s
+
+OK
+python3 scripts/chatui_application_unit_test.py
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.012s
+
+OK
+python3 scripts/check_ui_tour.py
+ok: 11 current Chat UI screenshots, accessibility snapshots and keyboard traces
+lake env lean --run LeanFM/LLMGenerated/ApplicationLaunchTests.lean
+ok: accepted application launch requirements, protobuf and implementation traceability
+lake env lean LeanFM/ChatUI/ProviderTests.lean
+lake env lean LeanFM/ChatUI/HttpRequestTests.lean
+bash scripts/chatui_http_check.sh
+ok: one password unlocks both providers; no plaintext, cross-account access, corrupt-bundle fallback or stale session after key rotation
+ok: LeanFM without examples; three erased-chat resumes retain book/spec/protobuf/source and isolation
+test_add_provider_preserves_login_usage_and_existing_credentials (__main__.MultiProvider.test_add_provider_preserves_login_usage_and_existing_credentials) ... ok
+test_book_palette_normalization_keeps_editor_revision_valid (__main__.MultiProvider.test_book_palette_normalization_keeps_editor_revision_valid) ... ok
+test_budget_is_checked_between_paid_rounds_for_both_providers (__main__.MultiProvider.test_budget_is_checked_between_paid_rounds_for_both_providers) ... ok
+test_catalog_identity_and_single_password (__main__.MultiProvider.test_catalog_identity_and_single_password) ... ok
+test_client_batches_finish_beyond_the_old_limit_without_replay (__main__.MultiProvider.test_client_batches_finish_beyond_the_old_limit_without_replay) ... ok
+test_concurrent_provider_updates_do_not_lose_keys (__main__.MultiProvider.test_concurrent_provider_updates_do_not_lose_keys) ... ok
+test_defaults_and_readiness_do_not_force_questions_or_accept_gates (__main__.MultiProvider.test_defaults_and_readiness_do_not_force_questions_or_accept_gates) ... ok
+test_existing_account_update_and_login_password_change_keep_keys (__main__.MultiProvider.test_existing_account_update_and_login_password_change_keep_keys) ... ok
+test_failed_book_worker_keeps_stderr_and_exit_status (__main__.MultiProvider.test_failed_book_worker_keeps_stderr_and_exit_status) ... ok
+test_failed_checks_keep_codes_and_require_verified_recovery (__main__.MultiProvider.test_failed_checks_keep_codes_and_require_verified_recovery) ... ok
+test_four_large_images_survive_http_framing_and_provider_encoding (__main__.MultiProvider.test_four_large_images_survive_http_framing_and_provider_encoding) ... ok
+test_image_upload_pixels_followup_resend_and_project_isolation (__main__.MultiProvider.test_image_upload_pixels_followup_resend_and_project_isolation) ... ok
+test_implementation_type_repairs_survive_batches_beyond_old_cap (__main__.MultiProvider.test_implementation_type_repairs_survive_batches_beyond_old_cap) ... ok
+test_incomplete_and_billing_failures_stop_before_mutations_or_retries (__main__.MultiProvider.test_incomplete_and_billing_failures_stop_before_mutations_or_retries) ... ok
+test_local_checker_failure_stops_both_providers_without_an_extra_paid_round (__main__.MultiProvider.test_local_checker_failure_stops_both_providers_without_an_extra_paid_round) ... ok
+test_native_tools_book_and_bounded_repair (__main__.MultiProvider.test_native_tools_book_and_bounded_repair) ... ok
+test_no_plaintext_keys_or_raw_error_body_on_disk (__main__.MultiProvider.test_no_plaintext_keys_or_raw_error_body_on_disk) ... ok
+test_patch_counts_recover_locally_and_changed_bad_patches_cannot_loop (__main__.MultiProvider.test_patch_counts_recover_locally_and_changed_bad_patches_cannot_loop) ... ok
+test_paused_turn_continues_but_unfinished_tool_response_does_not_claim_success (__main__.MultiProvider.test_paused_turn_continues_but_unfinished_tool_response_does_not_claim_success) ... ok
+test_rejected_repair_and_failed_openai_loop_keep_all_reported_usage (__main__.MultiProvider.test_rejected_repair_and_failed_openai_loop_keep_all_reported_usage) ... ok
+test_rotation_retains_other_provider_and_cancels_old_agent (__main__.MultiProvider.test_rotation_retains_other_provider_and_cancels_old_agent) ... ok
+test_routes_concurrently_without_cross_user_or_provider_fallback (__main__.MultiProvider.test_routes_concurrently_without_cross_user_or_provider_fallback) ... ok
+test_runnable_goal_repairs_port_and_survives_deleted_chat (__main__.MultiProvider.test_runnable_goal_repairs_port_and_survives_deleted_chat) ... ok
+test_single_provider_missing_model_and_wrong_password_fail_closed (__main__.MultiProvider.test_single_provider_missing_model_and_wrong_password_fail_closed) ... ok
+test_specification_diagnostics_repair_within_original_turn (__main__.MultiProvider.test_specification_diagnostics_repair_within_original_turn) ... ok
+test_specification_turn_compiles_real_project_views_and_rejects_unchecked_success (__main__.MultiProvider.test_specification_turn_compiles_real_project_views_and_rejects_unchecked_success) ... ok
+test_tcp_framing_waits_for_body_and_utf8_and_rejects_ambiguous_input (__main__.MultiProvider.test_tcp_framing_waits_for_body_and_utf8_and_rejects_ambiguous_input) ... ok
+test_web_research_continues_across_batches_with_citations (__main__.MultiProvider.test_web_research_continues_across_batches_with_citations) ... ok
+test_wrapped_book_is_recovered_locally_and_ambiguous_books_are_rejected (__main__.MultiProvider.test_wrapped_book_is_recovered_locally_and_ambiguous_books_are_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 29 tests in 118.848s
+
+OK
+test_anonymous_projects_and_accounts_share_identity_but_never_keys (__main__.SharedProjects.test_anonymous_projects_and_accounts_share_identity_but_never_keys) ... ok
+test_cross_site_and_rebinding_requests_cannot_mutate_or_bill (__main__.SharedProjects.test_cross_site_and_rebinding_requests_cannot_mutate_or_bill) ... ok
+test_project_writer_and_cancellation_are_bound_to_initiating_session (__main__.SharedProjects.test_project_writer_and_cancellation_are_bound_to_initiating_session) ... ok
+test_readable_creation_and_renamed_root_preserve_open_and_confirmed_delete (__main__.SharedProjects.test_readable_creation_and_renamed_root_preserve_open_and_confirmed_delete) ... ok
+test_source_writes_need_no_approval_record (__main__.SharedProjects.test_source_writes_need_no_approval_record) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 15.800s
+
+OK
+ok: independent ports retain their password-unlocked sessions without changing encrypted keys
+......
+----------------------------------------------------------------------
+Ran 6 tests in 4.440s
+
+OK
+ok: rendered light/dark PDF backgrounds and text contrast differ; book text is identical
+ok: ChatUI bootstrap, durable book/source edits, artifacts, and concurrent session isolation
+ok: one password unlocks both provider keys after server restart
+ok: encrypted credentials, account isolation, migration and restart invalidation
+lake build LeanFM.ChatUI.Implementation
+Build completed successfully (5 jobs).
+ok: ChatUI implementation decisions are traceable

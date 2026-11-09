@@ -59,6 +59,12 @@
   button.step.choice { border-color: var(--amber); border-width: 2px; }
   .walk-wait { color: var(--dim); font-size: 14px; }
   .walk-end { color: var(--good); font-weight: 600; }
+  .sketch svg { display: block; width: 100%; height: 150px; background: var(--bg); border-radius: 6px; }
+  .sketch .lane { cursor: pointer; }
+  .sketch-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .sketch-form input[type=text] { background: var(--bg); color: var(--fg); border: 1px solid var(--edge); border-radius: 6px;
+    padding: 5px 8px; font: 15px ui-monospace, Menlo, monospace; min-width: 9em; }
+  .sketch-hint { font-size: 14px; color: var(--dim); margin: 6px 0 0; }
 </style>
 </head>
 <body>
@@ -495,9 +501,14 @@ function editor(lean) {
   walkBtn.setAttribute("aria-label", "Walk through one session step by step, choosing each message");
   walkBtn.addEventListener("click", () => { walkEvents = []; stepWalk(); });
   const controls = el("div", "controls"); controls.append(check, animate, walkBtn);
+  area.addEventListener("keyup", () => { caret = area.selectionStart; });
+  area.addEventListener("click", () => { caret = area.selectionStart; });
+  area.addEventListener("input", () => { caret = area.selectionStart; drawSketch(); });
   const box = panel("Protocol (Lean, editable)", area);
   box.append(snips, controls, editStatus);
-  editorBox.replaceChildren(box);
+  sketchBox = el("div", "sketch");
+  editorBox.replaceChildren(box, panel("Sketch: click the sender's lifeline, then the receiver's", sketchBox));
+  drawSketch();
 }
 function say(msg, kind) { if (editStatus) { editStatus.textContent = msg; editStatus.className = "edit-status" + (kind ? " " + kind : ""); } }
 function schedule() { clearTimeout(timer); timer = setTimeout(() => run("session_check"), EDIT_PAUSE_MS); }
@@ -522,6 +533,142 @@ async function run(name, extra) {
     inFlight = false;
     if (again) { const [n, x] = again; again = null; run(n, x); }
   }
+}
+
+// ---- the sketch: add messages by clicking lifelines; LeanFM draws the real diagram ------------
+// The sketch shows only the roles' lifelines. Each click pair adds one statement to the protocol
+// text (at the cursor, or before the protocol's closing brace), and LeanFM rechecks it: every
+// diagram on the page is still the one LeanFM generates from the text.
+let sketchBox = null, caret = null, pick = null;
+const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/, ROUTE = /^(GET|PUT|POST|DELETE|PATCH|HEAD|OPTIONS) \/[A-Za-z0-9_\-\/{}.~:]*$/;
+// Where a new statement goes: after the line holding the cursor, or, with no cursor, on its own line
+// just above the closing brace of the last protocol (or of a sessions block that ends its body).
+function placement(src) {
+  if (caret !== null && caret >= 0 && caret <= src.length) {
+    const start = src.lastIndexOf("\n", caret - 1) + 1, nl = src.indexOf("\n", caret), end = nl < 0 ? src.length : nl;
+    const line = src.slice(start, end), indent = (line.match(/^\s*/) || [""])[0] + (line.trimEnd().endsWith("{") ? "  " : "");
+    return { at: end, before: "\n" + indent, after: "" };
+  }
+  let close = src.lastIndexOf("}");
+  if (close < 0) return { at: src.length, before: "\n", after: "" };
+  const inner = src.slice(0, close).trimEnd();
+  if (inner.endsWith("}") && /sessions\s*\{/.test(src)) close = inner.length - 1;
+  const start = src.lastIndexOf("\n", close - 1) + 1;
+  const closeIndent = (src.slice(start, close).match(/^\s*/) || [""])[0];
+  if (src.slice(start, close).trim() !== "") {
+    // the brace shares its line with text (`{ }` on one line): break it, dropping the space before it
+    let from = close; while (from > 0 && src[from - 1] === " ") from--;
+    return { at: from, cut: close, before: "\n" + closeIndent + "  ", after: "\n" + closeIndent };
+  }
+  return { at: start, before: closeIndent + "  ", after: "\n" };
+}
+function insertLine(line) {
+  const src = text.value, p = placement(src);
+  const piece = p.before + line + p.after;
+  text.value = src.slice(0, p.at) + piece + src.slice(p.cut === undefined ? p.at : p.cut);
+  caret = p.at + p.before.length + line.length;
+  schedule(); drawSketch();
+}
+function insertionPoint(src) { return placement(src).at; }
+function usedIds(src) { return new Set([...src.matchAll(/(^|[\s;{])([a-z][A-Za-z0-9_]*):\s*[A-Za-z_]/g)].map((m) => m[2])); }
+function freshId(label, src) {
+  const used = usedIds(src); let base = label.charAt(0).toLowerCase() || "m", id = base, n = 2;
+  while (used.has(id)) id = base + n++;
+  return id;
+}
+function lastRequest(src, from, to) {
+  // the latest `id: Label from <from> to <to>` before the insertion point: what a reply answers
+  const upTo = src.slice(0, insertionPoint(src));
+  // a statement with a cause is itself a reply, so only causeless ones are requests to answer
+  const re = new RegExp("([a-z][A-Za-z0-9_]*):\\s*([A-Za-z_][A-Za-z0-9_]*)\\s+from\\s+" + from + "\\s+to\\s+" + to + "\\b([^;]*);", "g");
+  let m, last = null;
+  while ((m = re.exec(upTo))) if (!/\bcause\b/.test(m[3])) last = { id: m[1], label: m[2] };
+  return last;
+}
+function drawSketch() {
+  if (!sketchBox || !text) return;
+  const roles = rolesOf(text.value);
+  const W = 760, H = 150, m = 70, step = roles.length > 1 ? (W - 2 * m) / (roles.length - 1) : 0;
+  const svg = sv("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Lifelines of " + roles.join(", ") });
+  roles.forEach((r, i) => {
+    const x = roles.length > 1 ? m + i * step : W / 2, chosen = pick === r;
+    const g = sv("g", { class: "lane", tabindex: 0, role: "button", "aria-label": (pick ? "to " : "from ") + r, "data-role": r });
+    g.appendChild(sv("rect", { x: x - 40, y: 0, width: 80, height: H, fill: "transparent" }));
+    g.appendChild(sv("rect", { x: x - 46, y: 10, width: 92, height: 30, rx: 5, fill: "var(--ink-actFill)", stroke: chosen ? "var(--amber)" : "var(--ink-fg)", "stroke-width": chosen ? 3 : 1 }));
+    g.appendChild(sv("text", { x, y: 30, "text-anchor": "middle", fill: "var(--ink-fg)", "font-size": 15 }, r));
+    g.appendChild(sv("line", { x1: x, y1: 40, x2: x, y2: H - 6, stroke: chosen ? "var(--amber)" : "var(--ink-line)", "stroke-width": chosen ? 3 : 1.5, "stroke-dasharray": "5 5" }));
+    const go = () => sketchClick(r);
+    g.addEventListener("click", go);
+    g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    svg.appendChild(g);
+  });
+  const parts = [svg];
+  const addRole = el("div", "sketch-form"), roleIn = el("input"), roleBtn = el("button", "", "Add role");
+  roleIn.type = "text"; roleIn.placeholder = "NewRole"; roleIn.setAttribute("aria-label", "Name of a role to add");
+  roleBtn.addEventListener("click", () => {
+    const r = roleIn.value.trim();
+    if (!IDENT.test(r) || roles.includes(r)) { say(IDENT.test(r) ? r + " is already a role." : "A role name is a letter followed by letters, digits or _.", "bad"); return; }
+    const all = [...text.value.matchAll(/protocol\s+[^\s(]+\s*\(([^)]*)\)/g)];
+    if (!all.length) { say("Add a protocol line first: protocol Name (A, B) { }", "bad"); return; }
+    const last = all[all.length - 1], at = last.index + last[0].length - 1;
+    text.value = text.value.slice(0, at) + (last[1].trim() ? ", " : "") + r + text.value.slice(at);
+    schedule(); drawSketch();
+  });
+  addRole.append(roleIn, roleBtn);
+  parts.push(pick ? sketchForm(pick) : el("p", "sketch-hint", "Click a lifeline to start a message, the same one twice for an event. New lines go at the cursor in the text, or at the end."), addRole);
+  sketchBox.replaceChildren(...parts);
+  reportSize();
+}
+let target = null;
+function sketchClick(r) {
+  if (!pick) { pick = r; target = null; drawSketch(); return; }
+  target = r; drawSketch();
+  const input = sketchBox.querySelector ? sketchBox.querySelector("input[data-field=label]") : null;
+  if (input && input.focus) input.focus();
+}
+function sketchForm(from) {
+  const box = el("div");
+  if (!target) { box.appendChild(el("p", "sketch-hint", `From ${from}: now click the receiver (or ${from} again for an event).`)); return box; }
+  const to = target, isEvent = to === from;
+  const form = el("div", "sketch-form");
+  const label = el("input"); label.type = "text"; label.placeholder = "Label"; label.dataset.field = "label";
+  label.setAttribute("aria-label", "Label of the " + (isEvent ? "event" : "message"));
+  form.append(el("span", "walk-role", isEvent ? `${from}:` : `${from} → ${to}:`), label);
+  const req = isEvent ? null : lastRequest(text.value, to, from);
+  let reply = null, route = null, status = null;
+  if (!isEvent) {
+    route = el("input"); route.type = "text"; route.placeholder = "route, e.g. POST /orders"; route.dataset.field = "route";
+    route.setAttribute("aria-label", "HTTP route, optional");
+    status = el("input"); status.type = "text"; status.placeholder = "status"; status.size = 5; status.dataset.field = "status";
+    status.setAttribute("aria-label", "HTTP status of a reply, optional");
+    form.append(route);
+    if (req) {
+      reply = el("input"); reply.type = "checkbox"; reply.id = "sketch-reply"; reply.checked = true;
+      const lab = el("label", "", ` reply to ${req.label}`); lab.setAttribute("for", "sketch-reply");
+      form.append(reply, lab, status);
+    }
+  }
+  const add = el("button", "step", "Add"), cancel = el("button", "", "Cancel");
+  const commit = () => {
+    const l = label.value.trim();
+    if (!IDENT.test(l)) { say("A label is a letter followed by letters, digits or _.", "bad"); return; }
+    if (isEvent) { insertLine(`${l} at ${from};`); }
+    else {
+      const r = route && route.value.trim(), st = status && status.value.trim();
+      if (r && !ROUTE.test(r)) { say("A route is a method and a path, such as POST /orders.", "bad"); return; }
+      if (st && !/^[1-5][0-9][0-9]$/.test(st)) { say("A status is three digits, such as 200.", "bad"); return; }
+      const answering = reply && reply.checked && req;
+      const id = answering ? "" : freshId(l, text.value) + ": ";
+      insertLine(`${id}${l} from ${from} to ${to}` + (answering ? ` cause ${req.id}` : "") + (r ? ` route "${r}"` : "") + (answering && st ? ` status ${st}` : "") + ";");
+    }
+    pick = null; target = null; drawSketch();
+  };
+  add.addEventListener("click", commit);
+  label.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); commit(); } });
+  cancel.addEventListener("click", () => { pick = null; target = null; drawSketch(); });
+  form.append(add, cancel);
+  box.appendChild(form);
+  return box;
 }
 
 // ---- the walk-through: play every role, one allowed step at a time ---------------------------

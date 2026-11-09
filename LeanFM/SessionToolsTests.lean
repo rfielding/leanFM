@@ -112,6 +112,9 @@ def rejects (p : String) (needle : String) : Bool :=
 #guard rejects r#"{"roles": ["A", "A"], "steps": []}"# "distinct"
 #guard rejects r#"{"roles": ["A", "B"], "steps": [{"msg": "X\u0007", "from": "A", "to": "B"}]}"# "control character"
 #guard rejects r#"{"roles": [], "steps": []}"# "at least one role"
+-- protocol text sent under the JSON form's key is pointed to lean, not met with "roles must be ..."
+#guard let r := call check r#"{"protocol": "protocol P (A, B) { X from A to B; }"}"#
+  verdict r == "rejected" && (reason r).contains "put LeanFM protocol text in lean"
 #guard rejects r#"{"roles": ["A", "B"], "steps": [], "code": "rm -rf /"}"# "unknown keys [code]"
 #guard verdict (call check "{}") == "rejected"
 -- the limits hold
@@ -361,6 +364,8 @@ def nextOf (r : Except String Json) : String := (field r "next").compress
 -- from the start only the member may act
 #guard verdict (next (leanArgs lendingProtocol)) == "running"
 #guard nextOf (next (leanArgs lendingProtocol)) == "[{\"from\":\"Member\",\"label\":\"Borrow\",\"to\":\"Desk\"}]"
+-- the steps are in the report, which goes into the text a model reads
+#guard (field (next (leanArgs lendingProtocol)) "report").getStr?.toOption == some "- Borrow from Member to Desk"
 -- after Borrow the Desk chooses, and both steps name the Borrow as their cause
 #guard nextOf (walk r#"[{"id":"w1","from":"Member","to":"Desk","label":"Borrow"}]"#) ==
   "[{\"cause\":\"w1\",\"from\":\"Desk\",\"label\":\"Lent\",\"to\":\"Member\"},{\"cause\":\"w1\",\"from\":\"Desk\",\"label\":\"Hold\",\"to\":\"Librarian\"}]"
@@ -464,6 +469,11 @@ def pathOf (r : Except String Json) : List String :=
 -- the parallel draft may charge after NoSeat: the counterexample runs to the Charge itself
 #guard verdict (prop tripParallel neverChargeAfterNoSeat) == "disproved"
 #guard pathOf (prop tripParallel neverChargeAfterNoSeat) == ["Book", "HoldSeat", "NoSeat", "HoldRoom", "RoomHeld", "Charge"]
+-- and the same path is in the report, which goes into the text a model reads
+#guard ((field (prop tripParallel neverChargeAfterNoSeat) "report").getStr?.toOption.getD "") ==
+  "counterexample: Book → HoldSeat → NoSeat → HoldRoom → RoomHeld → Charge"
+-- a path that ends where the session ended says it stays there
+#guard ((field (prop tripSequential r#"{"AF": {"after": "Charge"}}"#) "report").getStr?.toOption.getD "").endsWith "(and stays there)"
 -- holding in sequence fixes it, every hold is confirmed or released, and every session ends
 #guard verdict (prop tripSequential neverChargeAfterNoSeat) == "proved"
 #guard verdict (prop tripSequential r#"{"AG": {"implies": [{"after": "SeatHeld"}, {"AF": {"or": [{"after": "SeatConfirmed"}, {"after": "SeatReleased"}]}}]}}"#) == "proved"

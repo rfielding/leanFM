@@ -1,0 +1,40 @@
+protocol DepositHistories (Tenant, Landlord, Registry, Post, Court) {
+  lease: LeaseSigned from Landlord to Tenant;
+  paid: DepositPaid from Tenant to Landlord cause lease;
+  DepositProtected from Landlord to Registry cause paid;
+  choice {
+    ended: LeaseEnded from Tenant to Landlord;
+    choice {
+      address: ForwardingAddress from Tenant to Landlord;
+      choice {
+        DeductionsItemized from Landlord to Tenant cause address;
+        DepositReturned from Landlord to Tenant cause address;
+      } or {
+        returned: DepositReturned from Landlord to Tenant cause address;
+        claim: ClaimFiled from Tenant to Court cause returned;
+        judgment: Judgment from Court to Landlord cause claim;
+        PenaltyPaid from Landlord to Tenant cause judgment;
+      }
+    } or {
+      AddressPosted from Tenant to Post;
+      BelievesViolated at Tenant;
+      -- Proposed recovery: a later direct resend, beyond the recorded horizon.
+      address: ForwardingAddress from Tenant to Landlord;
+      choice {
+        DeductionsItemized from Landlord to Tenant cause address;
+        DepositReturned from Landlord to Tenant cause address;
+      } or {
+        returned: DepositReturned from Landlord to Tenant cause address;
+        claim: ClaimFiled from Tenant to Court cause returned;
+        judgment: Judgment from Court to Landlord cause claim;
+        PenaltyPaid from Landlord to Tenant cause judgment;
+      }
+    }
+  } or {
+    hardship: HardshipRequest from Tenant to Landlord;
+    RentOffsetAgreed from Landlord to Tenant cause hardship;
+    LeaseEnded from Tenant to Landlord;
+    address2: ForwardingAddress from Tenant to Landlord;
+    DepositReturned from Landlord to Tenant cause address2;
+  }
+}

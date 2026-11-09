@@ -284,6 +284,8 @@ def parseProtocol (args : Json) : Except String Protocol := do
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
     | .error _ => throw "lean is required: LeanFM protocol text such as protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
+  if p.getStr?.isOk then
+    throw "protocol is the JSON form {name?, roles, steps}; put LeanFM protocol text in lean instead"
   let extra := (keysOf p).filter (!["name", "roles", "steps"].contains ·)
   if !extra.isEmpty then throw s!"protocol has unknown keys {extra}; allowed: name, roles, steps"
   let name := (p.getObjValAs? String "name").toOption.getD "Protocol"
@@ -534,7 +536,12 @@ def next (args : Json) : Except String Json := do
       | 1 => "1 step may happen next"
       | n => s!"{n} steps may happen next"
     let ending := if canEnd && !steps.isEmpty then "; the session may also end here" else ""
-    return Json.mkObj [("tool", "session_next"), ("verdict", verdict), ("name", p.name),
+    -- the steps go in the text a model reads too, one per line
+    let line (s : Conform.NextStep) : String :=
+      let who := if s.isAct then s!"{s.label} at {s.src}" else s!"{s.label} from {s.src} to {s.dst}"
+      match s.cause with | some c => s!"- {who} (cause {c})" | none => s!"- {who}"
+    let report := "\n".intercalate (steps.map line)
+    return Json.mkObj [("tool", "session_next"), ("verdict", verdict), ("name", p.name), ("report", report),
       ("roles", Json.arr (p.roles.map Json.str).toArray),
       ("reading", s!"{p.name}: after {evs.length} event{if evs.length == 1 then "" else "s"}, {what}{ending}"),
       ("next", Json.arr (steps.map stepJson).toArray), ("canEnd", canEnd), ("lean", p.lean)]
@@ -598,7 +605,21 @@ def ctl (args : Json) : Except String Json := do
     ("transitions", Json.arr (graph.edges.map transition).toArray)]
   let answer ← LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)])
   let reading := (answer.getObjValAs? String "reading").toOption.getD ""
+  -- the path goes in the text a model reads too: the messages in order, and where a lasso repeats
+  let evidence := (answer.getObjVal? "evidence").toOption.getD Json.null
+  let steps := match evidence.getObjVal? "path" with
+    | .ok (.arr a) => a.toList.filterMap fun st => (st.getObjValAs? String "message").toOption
+    | _ => []
+  let kind := (evidence.getObjValAs? String "kind").toOption.getD "path"
+  -- loopsBackTo indexes the path, whose first entry is the start state (no message)
+  let loop := match (evidence.getObjValAs? Nat "loopsBackTo").toOption with
+    | some 0 => " (then repeats from the start)"
+    | some i => if i ≥ steps.length then " (and stays there)"
+      else s!" (then repeats from {steps.getD i ""})"
+    | none => ""
+  let report := if steps.isEmpty then "" else s!"{kind}: {" → ".intercalate steps}{loop}"
   return answer.setObjVal! "tool" (Json.str "session_ctl")
+    |>.setObjVal! "report" (Json.str report)
     |>.setObjVal! "reading" (Json.str s!"{p.name}: {reading}")
     |>.setObjVal! "states" (toJson graph.states.length)
     |>.setObjVal! "lean" (Json.str p.lean)
@@ -739,6 +760,10 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   branch, what each message carries) and the transport: a function that delivers a message.
 
 Every answer echoes the text as `lean`; the view shows it in an editor and rechecks as you type.
+Under the editor, the sketch adds statements by clicking: the sender's lifeline, then the
+receiver's (the same one twice for an event), then a label, with an optional route and, for a
+reply to the latest request the other way, a status. To design from nothing, check a protocol with
+no statements, such as `protocol Shop (Client, Server) { }`, and sketch from there.
 
 ## Building software from a protocol
 

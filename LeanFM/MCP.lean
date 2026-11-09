@@ -327,7 +327,7 @@ def sessionDesignPrompt : String :=
   "whom) and notHttp for channels that are something else (a text message, a queue); then every request must " ++
   "get a response.\n" ++
   "3. Show me the result: the view draws the diagram, each role's typestate API and the calls; I can edit " ++
-  "the protocol there and LeanFM rechecks it, and Walk through lets me play one session step by step " ++
+  "the protocol there or sketch it by clicking lifelines, and LeanFM rechecks it; Walk through lets me play one session step by step " ++
   "(session_next). Then call session_simulate so I can watch many sessions run.\n" ++
   "4. When I agree with the protocol, call session_skeleton for a module with each role's typestate as " ++
   "classes (Python by default, or language typescript, where a step the protocol forbids does not compile), " ++

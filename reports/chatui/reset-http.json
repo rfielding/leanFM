@@ -7,7 +7,7 @@
     "no phantom example tab or route",
     "new project with both PDFs",
     "durable inputs reach provider after each reset",
-    "artifact and acceptance bytes unchanged",
+    "artifact bytes unchanged",
     "foreign project inaccessible",
     "symlinked foreign schema excluded from provider context"
   ],

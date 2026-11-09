@@ -4,7 +4,7 @@ import Lean
 session-view). One static HTML document, compiled in. It draws a result's diagram from LeanFM's
 shapes with createElementNS, animates its event stream on a canvas, shows every other field as
 text, and edits the protocol as LeanFM protocol text, rechecking it through the host's tools/call; it
-declares no network domains (editing Lean text; session_conform's problems show as issues; the animation starts simple; arrows drawn thicker than frames; text haloed; walk-through via session_next; script checked with node --check; no choice symbols; counterexample and compatibility panels). Lake does not track include_str, so a change to the HTML needs a change here too. -/
+declares no network domains (editing Lean text; session_conform's problems show as issues; the animation starts simple; arrows drawn thicker than frames; text haloed; walk-through via session_next; script checked with node --check; no choice symbols; counterexample and compatibility panels; a sketch that adds messages by clicking lifelines, trimming a split brace, offering replies only to requests). Lake does not track include_str, so a change to the HTML needs a change here too. -/
 
 namespace LeanFM.MCP
 open Lean

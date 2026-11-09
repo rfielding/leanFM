@@ -357,6 +357,23 @@ def checkout : Global Role := Checkout .client .shop .bank
 -- response in another branch gets a bar of its own from where that branch begins
 def checkoutSvg := checkout.diagram roles3
 
+-- selfhost.session.diagram: a second reply in the same branch must not
+-- create an activation at branchTop = 0, over the actor header.
+protocol RepeatedReplies (Client, Shop) {
+  request: Order from Client to Shop;
+  Quote from Shop to Client cause request;
+  Receipt from Shop to Client cause request;
+}
+def repeatedRepliesModel :=
+  (RepeatedReplies Role.client Role.shop).diagramModel [.client, .shop]
+def activationSpans (m : DiagramModel) : List (Nat × Nat) :=
+  m.shapes.toList.filterMap fun
+    | .rect "activation" _ y _ h _ _ _ => some (y, y + h)
+    | _ => none
+#guard activationSpans repeatedRepliesModel == [(100, 160)]
+#guard (activationSpans repeatedRepliesModel).all (fun (top, _) => top ≥ 48)
+#guard (activationSpans (checkout.diagramModel roles3)).all (fun (top, _) => top ≥ 48)
+
 -- an arrow never runs along a frame's edge or a divider: frames and dividers open below the arrow
 -- before them, so where a message sits stays clear (checked on every protocol with frames here)
 def clearOfFrames (m : DiagramModel) : Bool :=
