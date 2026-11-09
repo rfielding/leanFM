@@ -1,0 +1,17 @@
+{"name": "McpAppsToolCall", "roles": ["Host", "Server", "View"], "steps": [
+  {"msg": "Initialize", "id": "i", "from": "Host", "to": "Server", "route": "initialize"},
+  {"msg": "InitializeResult", "from": "Server", "to": "Host", "cause": "i", "status": 200},
+  {"msg": "ToolsList", "id": "l", "from": "Host", "to": "Server", "route": "tools/list"},
+  {"msg": "ToolsListed", "from": "Server", "to": "Host", "cause": "l", "status": 200},
+  {"sessions": [
+    {"msg": "ToolsCall", "id": "c", "from": "Host", "to": "Server", "route": "tools/call"},
+    {"choice": [
+      [{"msg": "ToolResult", "id": "t", "from": "Server", "to": "Host", "cause": "c", "status": 200}],
+      [{"msg": "ToolError", "id": "t", "from": "Server", "to": "Host", "cause": "c", "status": 400}]]},
+    {"msg": "ResourcesRead", "id": "r", "from": "Host", "to": "Server", "cause": "t", "route": "resources/read ui://leanfm/session-view"},
+    {"msg": "ViewHtml", "from": "Server", "to": "Host", "cause": "r", "status": 200},
+    {"msg": "UiInitialize", "id": "u", "from": "View", "to": "Host", "route": "ui/initialize"},
+    {"msg": "HostContext", "id": "h", "from": "Host", "to": "View", "cause": "u"},
+    {"msg": "Initialized", "from": "View", "to": "Host", "cause": "h"},
+    {"msg": "ToolResultNotice", "from": "Host", "to": "View", "cause": "t"},
+    {"msg": "SizeChanged", "from": "View", "to": "Host"}]}]}

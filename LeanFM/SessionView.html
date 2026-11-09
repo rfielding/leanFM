@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LeanFM session</title>
+<style>
+  :root, :root[data-theme="dark"] {
+    --bg: #0b0f14; --panel: #16202b; --edge: #263445; --fg: #eceae6; --dim: #9aa6b2;
+    --good: #4ade80; --bad: #f87171; --amber: #fbbf24; --cyan: #67e8f9;
+    --ink-bg: #0b0f14; --ink-fg: #e5e7eb; --ink-line: #4b5563; --ink-arrow: #93c5fd;
+    --ink-frame: #fbbf24; --ink-muted: #9ca3af; --ink-actFill: #1f2937;
+  }
+  :root[data-theme="light"] {
+    --bg: #ffffff; --panel: #f4f5f7; --edge: #d5dae1; --fg: #1d2430; --dim: #5d6876;
+    --good: #15803d; --bad: #b91c1c; --amber: #b45309; --cyan: #0e7490;
+    --ink-bg: #ffffff; --ink-fg: #111827; --ink-line: #9ca3af; --ink-arrow: #1d4ed8;
+    --ink-frame: #b45309; --ink-muted: #4b5563; --ink-actFill: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { padding: 14px 16px 16px; display: grid; gap: 12px; }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+  .tool { font-weight: 600; }
+  .badge { border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: 13px; }
+  .ok { color: var(--good); } .issues { color: var(--bad); } .other { color: var(--amber); }
+  .reading { margin: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+  h3 { margin: 0 0 6px; font-size: 12.5px; color: var(--dim); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  pre { margin: 0; font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace; white-space: pre; overflow-x: auto; }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 2px 0; }
+  .issue { color: var(--bad); }
+  .scroll { overflow-x: auto; }
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  button, select { background: var(--panel); color: var(--fg); border: 1px solid var(--edge); border-radius: 6px;
+    padding: 4px 10px; font: inherit; cursor: pointer; }
+  button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  input[type=range] { flex: 1; min-width: 120px; accent-color: var(--amber); }
+  .pos { color: var(--dim); font: 13px ui-monospace, Menlo, monospace; }
+  canvas { display: block; width: 100%; height: 420px; background: var(--panel); border-radius: 8px; }
+  .detail { font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--fg); white-space: pre-wrap; }
+  .meta, .more { color: var(--dim); font-size: 13px; }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<main id="app"><p class="meta">Waiting for a session tool result…</p></main>
+<script>
+"use strict";
+// Draws session_check, session_diagram and session_simulate results. Tool data is placed only as
+// text nodes, SVG geometry built with createElementNS, and canvas drawing. No network.
+const MAX_SHAPES = 4000, MAX_EVENTS = 600, MAX_ITEMS = 64;
+const app = document.getElementById("app");
+
+// ---- JSON-RPC over postMessage --------------------------------------------------------------
+let nextId = 1;
+const pending = new Map();
+function send(msg) { window.parent.postMessage(msg, "*"); }
+function rpc(method, params, timeoutMs) {
+  const id = nextId++;
+  send({ jsonrpc: "2.0", id, method, params });
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error("timeout")); } }, timeoutMs);
+  });
+}
+function notify(method, params) { send({ jsonrpc: "2.0", method, params }); }
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window.parent) return;
+  let msg = event.data;
+  if (typeof msg === "string") { try { msg = JSON.parse(msg); } catch (_) { return; } }
+  if (!msg || msg.jsonrpc !== "2.0") return;
+  if (msg.method === undefined && msg.id !== undefined) {
+    const p = pending.get(msg.id);
+    if (p) { pending.delete(msg.id); msg.error ? p.reject(msg.error) : p.resolve(msg.result); }
+    return;
+  }
+  const params = msg.params || {};
+  switch (msg.method) {
+    case "ui/notifications/tool-input": break;
+    case "ui/notifications/tool-result": show(params); break;
+    case "ui/notifications/host-context-changed": theme(params); break;
+    case "ui/notifications/tool-cancelled": status("The tool call was cancelled."); break;
+    default:
+      if (msg.id !== undefined) send({ jsonrpc: "2.0", id: msg.id, result: {} });
+  }
+});
+
+function theme(ctx) {
+  if (ctx && (ctx.theme === "light" || ctx.theme === "dark")) {
+    document.documentElement.dataset.theme = ctx.theme;
+    if (anim) anim.recolor();
+  }
+}
+
+async function connect() {
+  let delay = 400; const started = Date.now();
+  while (Date.now() - started < 30000) {
+    try {
+      const result = await rpc("ui/initialize", {
+        appInfo: { name: "leanfm-session-view", version: "1.0.0" },
+        appCapabilities: { availableDisplayModes: ["inline"] },
+        protocolVersion: "2026-01-26" }, delay);
+      theme(result && result.hostContext);
+      notify("ui/notifications/initialized", {});
+      return;
+    } catch (_) { delay = Math.min(delay * 2, 5000); }
+  }
+  status("Could not connect to the host.", true);
+}
+
+let lastHeight = 0;
+function reportSize() {
+  const height = Math.ceil(app.getBoundingClientRect().bottom);
+  if (height !== lastHeight) {
+    lastHeight = height;
+    notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height });
+  }
+}
+if (typeof ResizeObserver === "function") new ResizeObserver(reportSize).observe(document.body);
+
+// ---- DOM helpers: text only ----------------------------------------------------------------
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function sv(tag, attrs, text) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) node.setAttribute(k, String(attrs[k]));
+  if (text !== undefined) node.textContent = String(text);
+  return node;
+}
+function status(text, bad) { app.replaceChildren(el("p", bad ? "err" : "meta", text)); reportSize(); }
+function panel(title, child) { const p = el("div", "panel"); p.appendChild(el("h3", "", title)); p.appendChild(child); return p; }
+
+const INKS = ["bg", "fg", "line", "arrow", "frame", "muted", "actFill"];
+function ink(name) { return INKS.includes(name) ? `var(--ink-${name})` : "none"; }
+function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+// ---- the diagram: LeanFM's shapes, turned into SVG elements --------------------------------
+function diagram(model) {
+  if (!model || !Array.isArray(model.shapes)) return el("p", "meta", "No diagram in this result.");
+  const w = num(model.width), h = num(model.height);
+  const svg = sv("svg", { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: "img",
+    "aria-label": "Sequence diagram generated by LeanFM", "font-family": "system-ui, sans-serif" });
+  const defs = sv("defs", {});
+  const marker = sv("marker", { id: "head", viewBox: "0 0 10 10", refX: 10, refY: 5, markerWidth: 8, markerHeight: 8, orient: "auto-start-reverse" });
+  marker.appendChild(sv("path", { d: "M0 0 L10 5 L0 10 z", fill: "var(--ink-arrow)" }));
+  defs.appendChild(marker); svg.appendChild(defs);
+  svg.appendChild(sv("rect", { width: w, height: h, fill: "var(--ink-bg)" }));
+  const shapes = model.shapes.slice(0, MAX_SHAPES);
+  for (const s of shapes) {
+    if (!s || typeof s !== "object") continue;
+    const cls = typeof s.cls === "string" ? { class: s.cls } : {};
+    if (s.k === "rect") {
+      svg.appendChild(sv("rect", Object.assign({}, cls, { x: num(s.x), y: num(s.y), width: num(s.w), height: num(s.h),
+        rx: num(s.rx), fill: ink(s.fill), stroke: ink(s.stroke) })));
+    } else if (s.k === "line") {
+      const a = Object.assign({}, cls, { x1: num(s.x1), y1: num(s.y1), x2: num(s.x2), y2: num(s.y2), stroke: ink(s.stroke) });
+      if (s.width) a["stroke-width"] = num(s.width);
+      if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
+      if (s.arrow === true) a["marker-end"] = "url(#head)";
+      svg.appendChild(sv("line", a));
+    } else if (s.k === "path" && typeof s.d === "string" && /^[MmHhVvLlZz0-9 .\-]+$/.test(s.d)) {
+      const a = Object.assign({}, cls, { d: s.d, fill: ink(s.fill), stroke: ink(s.stroke) });
+      if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
+      if (s.arrow === true) a["marker-end"] = "url(#head)";
+      svg.appendChild(sv("path", a));
+    } else if (s.k === "text") {
+      const a = Object.assign({}, cls, { x: num(s.x), y: num(s.y), "text-anchor": ["start", "middle", "end"].includes(s.anchor) ? s.anchor : "middle",
+        fill: ink(s.fill), "font-size": num(s.size) || 12 });
+      if (s.bold === true) a["font-weight"] = "bold";
+      svg.appendChild(sv("text", a, typeof s.text === "string" ? s.text : ""));
+    }
+  }
+  const box = el("div", "scroll"); box.appendChild(svg);
+  if (model.shapes.length > MAX_SHAPES) box.appendChild(el("p", "more", `${model.shapes.length - MAX_SHAPES} more shapes not drawn`));
+  return box;
+}
+
+// ---- the event stream on canvas -------------------------------------------------------------
+let anim = null;
+function animation(body) {
+  const roles = Array.isArray(body.roles) ? body.roles.map(String) : [];
+  const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
+  const N = E.length;
+  const wrap = el("div");
+  if (!N || !roles.length) { wrap.appendChild(el("p", "meta", "No events.")); return wrap; }
+  const cv = el("canvas"); cv.tabIndex = 0;
+  cv.setAttribute("aria-label", "Animated event stream. Space plays or pauses, arrows step, click an event to trace it.");
+  const controls = el("div", "controls");
+  const play = el("button", "", "Pause"), back = el("button", "", "◀"), fwd = el("button", "", "▶");
+  back.setAttribute("aria-label", "Step back"); fwd.setAttribute("aria-label", "Step forward");
+  const speedSel = el("select");
+  for (const v of [1, 2, 4, 8, 20]) { const o = el("option", "", `${v} events/s`); o.value = String(v); if (v === 4) o.selected = true; speedSel.appendChild(o); }
+  const scrub = el("input"); scrub.type = "range"; scrub.min = "0"; scrub.max = String(N - 1); scrub.step = "1";
+  scrub.setAttribute("aria-label", "Position in the stream");
+  controls.append(play, back, fwd, speedSel, scrub);
+  const pos = el("div", "pos");
+  const detail = el("div", "detail");
+  wrap.append(cv, controls, pos, panel("Selected event", detail));
+
+  const ctx = cv.getContext("2d");
+  let W = 0, H = 0, colors = {};
+  function recolor() {
+    const css = getComputedStyle(document.documentElement);
+    for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan"]) colors[k] = css.getPropertyValue("--" + k).trim();
+  }
+  recolor();
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(cv);
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let p = Math.min(N - 1, 12), playing = !reduce, speed = 4, sel = null;
+  const ROW = 30, HEAD = 48;
+  const xs = () => { const m = Math.min(80, W * 0.12); return roles.map((_, i) => roles.length === 1 ? W / 2 : m + i * (W - 2 * m) / (roles.length - 1)); };
+  const xOf = (X, r) => { const i = roles.indexOf(String(r)); return i < 0 ? 0 : X[i]; };
+  const nowY = () => H - 26;
+  const yOf = (i) => nowY() - (p - i) * ROW;
+  const hue = (s) => (num(s) * 137.508) % 360;
+  const col = (s, a) => `hsla(${hue(s)}, 70%, ${document.documentElement.dataset.theme === "light" ? 38 : 68}%, ${a === undefined ? 1 : a})`;
+  const idx = (x) => (Number.isInteger(x) && x >= 0 && x < N) ? x : null;
+  const label = (e) => String(e.label) + (e.route ? " · " + e.route : "") + (e.status != null ? " · " + e.status : "");
+  function ancestors(id) {
+    const out = new Set(), stack = (E[id].prior || []).map(idx).filter((x) => x !== null);
+    while (stack.length) { const a = stack.pop(); if (!out.has(a)) { out.add(a); for (const q of (E[a].prior || [])) { const j = idx(q); if (j !== null) stack.push(j); } } }
+    return out;
+  }
+  function draw() {
+    if (!W) return;
+    const X = xs();
+    ctx.clearRect(0, 0, W, H);
+    const k = Math.floor(p), frac = p - k;
+    const lo = Math.max(0, Math.floor(p - (nowY() - HEAD) / ROW) - 1);
+    const anc = sel !== null ? ancestors(sel) : null;
+    ctx.strokeStyle = colors.edge; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+    for (const x of X) { ctx.beginPath(); ctx.moveTo(x, HEAD); ctx.lineTo(x, H); ctx.stroke(); }
+    ctx.setLineDash([]);
+    for (let i = lo; i <= k; i++) {
+      const e = E[i];
+      for (const q of (e.prior || [])) {
+        const a = idx(q); if (a === null || a < lo) continue;
+        const pa = E[a];
+        const shared = [e.src, e.dst].find((r) => r === pa.src || r === pa.dst);
+        const hot = anc && (i === sel || anc.has(i)) && anc.has(a);
+        ctx.strokeStyle = hot ? colors.amber : col(e.session, 0.35); ctx.lineWidth = hot ? 3 : 1.5;
+        ctx.beginPath();
+        if (shared !== undefined) { const x = xOf(X, shared) + ((num(e.session) % 5) - 2) * 3; ctx.moveTo(x, yOf(a)); ctx.lineTo(x, yOf(i)); }
+        else { ctx.moveTo((xOf(X, pa.src) + xOf(X, pa.dst)) / 2, yOf(a)); ctx.lineTo((xOf(X, e.src) + xOf(X, e.dst)) / 2, yOf(i)); }
+        ctx.stroke();
+      }
+    }
+    if (sel !== null && sel <= k) {
+      const c = idx(E[sel].cause);
+      if (c !== null && c >= lo) {
+        const x1 = xOf(X, E[c].dst), x2 = xOf(X, E[sel].src), y1 = yOf(c), y2 = yOf(sel);
+        ctx.strokeStyle = colors.cyan; ctx.lineWidth = 2.5; ctx.setLineDash([2, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 - 40, y1, x2 - 40, y2, x2, y2); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    ctx.font = "13px system-ui, sans-serif"; ctx.textBaseline = "alphabetic";
+    for (let i = lo; i <= k && i < N; i++) {
+      const e = E[i], y = yOf(i);
+      if (y < HEAD - ROW) continue;
+      const c = i === sel ? colors.amber : col(e.session);
+      const t = i === k && !reduce ? Math.min(1, frac * 1.6) : 1, ease = 1 - Math.pow(1 - t, 3);
+      if (e.act) {
+        const x = xOf(X, e.src), w = ctx.measureText(String(e.label)).width + 20;
+        ctx.globalAlpha = 0.3 + 0.7 * ease; ctx.fillStyle = colors.panel; ctx.strokeStyle = c; ctx.lineWidth = i === sel ? 3 : 1.5;
+        ctx.beginPath(); ctx.rect(x - w / 2, y - 12, w, 22); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = colors.fg; ctx.textAlign = "center"; ctx.fillText(String(e.label), x, y + 4); ctx.globalAlpha = 1;
+      } else {
+        const x1 = xOf(X, e.src), x2 = xOf(X, e.dst), dir = Math.sign(x2 - x1) || 1, xe = x1 + (x2 - x1) * ease;
+        ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3 : 2;
+        ctx.setLineDash(e.answers != null ? [7, 5] : []);
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 6, y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(xe, y); ctx.lineTo(xe - dir * 10, y - 5); ctx.lineTo(xe - dir * 10, y + 5); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = Math.max(0.25, ease); ctx.fillStyle = colors.fg; ctx.textAlign = "center";
+        ctx.fillText(label(e), (x1 + x2) / 2, y - 6); ctx.globalAlpha = 1;
+      }
+      ctx.textAlign = "left"; ctx.fillStyle = col(e.session); ctx.fillText("#" + num(e.session), 6, y + 4);
+    }
+    ctx.fillStyle = colors.panel; ctx.fillRect(0, 0, W, HEAD);
+    ctx.font = "600 14px system-ui, sans-serif"; ctx.textAlign = "center";
+    X.forEach((x, i) => { ctx.fillStyle = colors.fg; ctx.fillText(roles[i], x, 30); });
+  }
+  let shown = -1;
+  function panelUpdate() {
+    const k = Math.floor(p);
+    scrub.value = String(k);
+    pos.textContent = `event ${k + 1} of ${N} · step ${num(E[k].time)}`;
+    const id = sel !== null ? sel : k;
+    if (id === shown) return;
+    shown = id;
+    const e = E[id];
+    const ref = (x) => { const j = idx(x); return j === null ? "—" : `${j} (${E[j].label})`; };
+    detail.textContent = [
+      `event    ${num(e.id)} at step ${num(e.time)}, session #${num(e.session)}`,
+      `message  ${e.msgId ? e.msgId + ": " : ""}${e.label}`,
+      `from→to  ${e.act ? e.src + " (event)" : e.src + " → " + e.dst}`,
+      `route    ${e.route || "—"}   status ${e.status != null ? e.status : "—"}`,
+      `prior    ${(e.prior || []).length ? (e.prior || []).map(ref).join(", ") : "none: first in its session"}`,
+      `cause    ${ref(e.cause)}`,
+      `answers  ${ref(e.answers)}`].join("\n");
+  }
+  let prev = performance.now();
+  function tick(now) {
+    const dt = (now - prev) / 1000; prev = now;
+    if (playing) { p = Math.min(N - 1 + 0.999, p + dt * speed); if (p >= N - 1 + 0.999) { playing = false; play.textContent = "Play"; } }
+    draw(); panelUpdate();
+    requestAnimationFrame(tick);
+  }
+  const setPlay = (v) => { playing = v; play.textContent = v ? "Pause" : "Play"; };
+  play.addEventListener("click", () => { if (!playing && p >= N - 1) p = 0; setPlay(!playing); });
+  const step = (d) => { setPlay(false); p = Math.max(0, Math.min(N - 1, Math.floor(p) + d)) + 0.999; };
+  back.addEventListener("click", () => step(-1));
+  fwd.addEventListener("click", () => step(1));
+  speedSel.addEventListener("change", () => { speed = num(speedSel.value) || 4; });
+  scrub.addEventListener("input", () => { setPlay(false); p = num(scrub.value) + 0.999; });
+  cv.addEventListener("click", (ev) => {
+    const r = cv.getBoundingClientRect(), y = ev.clientY - r.top, i = Math.round(p - (nowY() - y) / ROW);
+    if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW / 2) { sel = sel === i ? null : i; shown = -1; }
+  });
+  cv.addEventListener("keydown", (ev) => {
+    if (ev.key === " ") { ev.preventDefault(); setPlay(!playing); }
+    else if (ev.key === "ArrowRight") { ev.preventDefault(); step(1); }
+    else if (ev.key === "ArrowLeft") { ev.preventDefault(); step(-1); }
+  });
+  if (!playing) play.textContent = "Play";
+  anim = { recolor };
+  requestAnimationFrame((t) => { prev = t; resize(); tick(t); });
+  if (E.length > MAX_EVENTS) wrap.appendChild(el("p", "more", `${E.length - MAX_EVENTS} more events not drawn`));
+  return wrap;
+}
+
+// ---- rendering -----------------------------------------------------------------------------
+function show(result) {
+  const body = result && result.structuredContent;
+  if (!body || typeof body !== "object") { status("The result has no content to show.", true); return; }
+  anim = null;
+  const head = el("div", "head");
+  head.appendChild(el("span", "tool", String(body.tool || "session")));
+  const v = String(body.verdict || "answered");
+  head.appendChild(el("span", "badge " + (v === "ok" || v === "drawn" || v === "generated" ? "ok" : v === "issues" ? "issues" : "other"), v));
+  const parts = [head, el("p", "reading", String(body.reason || body.reading || ""))];
+  if (Array.isArray(body.issues) && body.issues.length) {
+    const ul = el("ul");
+    body.issues.slice(0, MAX_ITEMS).forEach((t) => ul.appendChild(el("li", "issue", String(t))));
+    parts.push(panel("Issues", ul));
+  }
+  if (Array.isArray(body.httpCuts) && body.httpCuts.length) {
+    const ul = el("ul");
+    body.httpCuts.slice(0, MAX_ITEMS).forEach((t) => ul.appendChild(el("li", "issue", String(t))));
+    parts.push(panel("HTTP discipline", ul));
+  }
+  if (Array.isArray(body.events)) parts.push(panel("Event stream", animation(body)));
+  if (body.diagram) parts.push(panel("Sequence diagram, generated from the protocol", diagram(body.diagram)));
+  if (typeof body.callsText === "string" && body.callsText) parts.push(panel("Calls, from cause", el("pre", "", body.callsText)));
+  if (body.projections && typeof body.projections === "object") {
+    const grid = el("div", "roles");
+    for (const r of Object.keys(body.projections).slice(0, MAX_ITEMS)) {
+      const pr = body.projections[r] || {};
+      const box = el("div");
+      if (typeof pr.error === "string") box.appendChild(el("p", "err", pr.error));
+      if (typeof pr.typestate === "string") box.appendChild(el("pre", "", pr.typestate));
+      if (typeof pr.local === "string") { box.appendChild(el("h3", "", "local type")); box.appendChild(el("pre", "", pr.local)); }
+      grid.appendChild(panel(r + ": typestate", box));
+    }
+    parts.push(grid);
+  }
+  if (Array.isArray(body.omitted) && body.omitted.length) parts.push(el("p", "more", "Left out to fit: " + body.omitted.map(String).join(", ")));
+  app.replaceChildren(...parts);
+  reportSize();
+}
+
+connect();
+</script>
+</body>
+</html>

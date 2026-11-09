@@ -132,4 +132,11 @@ def big := sim r#", "seed": 3, "instances": 200, "maxEvents": 600, "spread": 400
 -- the light theme is a real theme
 #guard ((field (call diagram (withProtocol placeOrder r#", "theme": "light""#)) "svg").getStr?.toOption.getD "").contains "#ffffff"
 
+-- LeanFM's own MCP Apps handshake, specified with the session tools (examples/sessions)
+def mcpApps : String := include_str "../examples/sessions/McpAppsToolCall.json"
+def mcpAppsCheck := call check (withProtocol mcpApps)
+#guard verdict mcpAppsCheck == "ok"
+-- the view's acknowledgement answers the host's context, so it is its own call, not part of ui/initialize
+#guard ((field mcpAppsCheck "callsText").getStr?.toOption.getD "").contains "Initialized  View → Host\n  returns no reply"
+
 end LeanFM.SessionToolsTests
