@@ -163,6 +163,32 @@ def main : IO Unit := do
     IO.println s!"ok: {label} script parses"
   checkScript "logic view" html
   checkScript "session view" shtml
+  -- ...and must run: the view is driven in Node (scripts/session_view_smoke.js, a stub DOM and host)
+  -- with real results for the lending example, through the editor, the walk-through, the
+  -- animation and every session tool's result. Any exception fails.
+  let lendingLean ← IO.FS.readFile "examples/vibecode/lending/Lending.protocol"
+  let bugLog ← IO.ofExcept (Json.parse (← IO.FS.readFile "examples/vibecode/lending/bug-log.json"))
+  let callTool (name : String) (args : List (String × Json)) : IO Json := do
+    let req := Json.mkObj [("jsonrpc", "2.0"), ("id", 90), ("method", "tools/call"),
+      ("params", Json.mkObj [("name", Json.str name), ("arguments", Json.mkObj (("lean", Json.str lendingLean) :: args))])]
+    let r ← dispatch req.compress
+    let j ← IO.ofExcept (Json.parse r.body)
+    pure (j.getObjValD "result")
+  let borrow := Json.arr #[Json.mkObj [("id", "w1"), ("from", "Member"), ("to", "Desk"), ("label", "Borrow")]]
+  let results := Json.mkObj [
+    ("check", ← callTool "session_check" []),
+    ("simulate", ← callTool "session_simulate" [("instances", (5 : Nat)), ("seed", (3 : Nat))]),
+    ("conform", ← callTool "session_conform" [("events", bugLog)]),
+    ("diagram", ← callTool "session_diagram" []),
+    ("skeleton", ← callTool "session_skeleton" []),
+    ("next", Json.arr #[← callTool "session_next" [], ← callTool "session_next" [("events", borrow)]])]
+  IO.FS.writeFile ".cache/tests/session-view.html" shtml
+  IO.FS.writeFile ".cache/tests/session-view-results.json" results.compress
+  let smoke ← IO.Process.output { cmd := "node", args := #["scripts/session_view_smoke.js",
+    ".cache/tests/session-view.html", ".cache/tests/session-view-results.json"] }
+  if smoke.exitCode != 0 then
+    throw <| IO.userError s!"MCP session view fails when driven:\n{smoke.stdout}{smoke.stderr}"
+  IO.println s!"ok: MCP session view runs every session tool's result, the walk-through and the animation ({(smoke.stdout.splitOn "\n").length - 1} checks)"
   let sbare := shtml.replace "http://www.w3.org/2000/svg" ""
   for needle in ["http://", "https://", "src=", "href=", "fetch(", "XMLHttpRequest", "WebSocket", "EventSource",
       "import(", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",
