@@ -9,6 +9,9 @@ import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
 import LeanFM.Session.Evolution
+import LeanFM.Session.OpenApi
+import LeanFM.Session.Review
+import LeanFM.Logic
 
 /-!
 # Session-type tools for MCP agents (clauses selfhost.mcp.session.tools, selfhost.mcp.session.view)
@@ -343,6 +346,15 @@ def eventJson (e : Event String) : Json :=
 
 def messageCount (g : Global String) : Nat := g.messages.length
 
+/-- Channels that are not HTTP (a text message, a queue): `notHttp: [[a, b], ...]`. -/
+def notHttpPairs (args : Json) : Except String (List (String × String)) := do
+  match args.getObjVal? "notHttp" with
+  | .error _ | .ok .null => pure []
+  | .ok (.arr a) => a.toList.mapM fun p => match p with
+      | .arr #[.str x, .str y] => pure (x, y)
+      | _ => throw "notHttp must be an array of [role, role] pairs"
+  | .ok _ => throw "notHttp must be an array of [role, role] pairs"
+
 def mayCallPairs (args : Json) : Except String (Option (List (String × String))) := do
   match args.getObjVal? "mayCall" with
   | .error _ => return none
@@ -376,8 +388,11 @@ def check (args : Json) : Except String Json := do
   let g := p.global
   let issues := g.issues p.roles
   let calls ← mayCallPairs args
+  let plain ← notHttpPairs args
+  -- every channel is HTTP except those between the roles of a notHttp pair (either direction)
+  let isHttp (a b : String) : Bool := !(plain.contains (a, b) || plain.contains (b, a))
   let cuts := match calls with
-    | some pairs => g.httpCuts (fun _ _ => true) (fun a b => pairs.contains (a, b))
+    | some pairs => g.httpCuts isHttp (fun a b => pairs.contains (a, b))
     | none => []
   let projections := p.roles.map fun r => (r, match g.project r with
     | .ok l => Json.mkObj [("local", l.render), ("typestate", l.typestate)]
@@ -565,6 +580,64 @@ def compat (args : Json) : Except String Json := do
     ("roles", Json.arr (rows.map (·.2.2.2)).toArray), ("issues", Json.arr (issues.map Json.str).toArray),
     ("notes", Json.arr (notes.map Json.str).toArray), ("lean", p.lean)]
 
+/-- A CTL formula over one session of the protocol: the protocol's state graph handed to the
+logic tools' checker as an inline task, so `{"after": "Charge"}` holds in the state a Charge has
+just reached, and the answer carries a witness or counterexample path. -/
+def ctl (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let formula ← match args.getObjVal? "formula" with
+    | .ok f => pure f
+    | .error _ => throw "formula is required: a JSON CTL formula, such as {\"never\": {\"after\": \"Charge\"}}"
+  let graph ← p.global.stateGraph
+  let transition (e : String × String × Conform.NextStep) : Json :=
+    let (a, b, n) := e
+    Json.mkObj ([("src", Json.str a), ("dst", Json.str b), ("message", Json.str n.label), ("from", Json.str n.src)] ++
+      (if n.isAct then [] else [("to", Json.str n.dst)]))
+  let draft := Json.mkObj [("id", Json.str p.name), ("states", Json.arr (graph.states.map Json.str).toArray),
+    ("initial", "s0"), ("terminals", Json.arr (graph.terminals.map Json.str).toArray),
+    ("transitions", Json.arr (graph.edges.map transition).toArray)]
+  let answer ← LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)])
+  let reading := (answer.getObjValAs? String "reading").toOption.getD ""
+  return answer.setObjVal! "tool" (Json.str "session_ctl")
+    |>.setObjVal! "reading" (Json.str s!"{p.name}: {reading}")
+    |>.setObjVal! "states" (toJson graph.states.length)
+    |>.setObjVal! "lean" (Json.str p.lean)
+
+/-- A role's HTTP interface: the requests it receives with their routes, as OpenAPI 3.1. -/
+def openapi (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let role ← match args.getObjVal? "role" with
+    | .ok (.str r) => pure r
+    | _ => throw s!"role is required: one of {", ".intercalate p.roles}"
+  if !p.roles.contains role then throw s!"{role} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
+  let (doc, unrouted) ← p.global.openApi p.name role
+  let ops := match doc.getObjValD "paths" with
+    | .obj kvs => kvs.toList.foldl (fun n (_, v) => n + (match v with | .obj ms => ms.size | _ => 0)) 0
+    | _ => 0
+  let note := if unrouted.isEmpty then "" else s!"; {unrouted.length} request{if unrouted.length == 1 then "" else "s"} without a route left out"
+  return Json.mkObj [("tool", "session_openapi"), ("verdict", "generated"), ("name", p.name), ("role", Json.str role),
+    ("reading", s!"{p.name}: OpenAPI 3.1 for {role}, {ops} operation{if ops == 1 then "" else "s"}{note}"),
+    ("openapi", doc), ("unrouted", Json.arr (unrouted.map Json.str).toArray),
+    ("language", "json"), ("code", Json.str doc.pretty), ("lean", Json.str p.lean)]
+
+/-- Every check that applies, as findings with an edit to try for each. -/
+def review (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let findings ← p.global.review p.roles
+  let routed := (p.global.messages.filter (·.route.isSome)).length
+  let scope := s!"structure, {if routed == 0 then "no HTTP (no routes)" else s!"HTTP from {routed} routed request{if routed == 1 then "" else "s"}"}, liveness, roles"
+  let reading := if findings.isEmpty then s!"{p.name}: no findings ({scope})"
+    else s!"{p.name}: {findings.length} finding{if findings.length == 1 then "" else "s"} ({scope})"
+  let report := "\n".intercalate ((List.range findings.length).map fun i =>
+    let f := findings[i]!
+    s!"{i + 1}. [{f.kind}] {f.message}\n   try: {f.suggestion}")
+  return Json.mkObj [("tool", "session_review"), ("verdict", if findings.isEmpty then "clean" else "findings"),
+    ("name", p.name), ("reading", reading),
+    ("findings", Json.arr (findings.map fun f => Json.mkObj [("kind", Json.str f.kind), ("message", Json.str f.message),
+      ("suggestion", Json.str f.suggestion)]).toArray),
+    ("issues", Json.arr (findings.map fun f => Json.str s!"{f.message} (try: {f.suggestion})").toArray),
+    ("report", Json.str report), ("lean", Json.str p.lean)]
+
 def skeleton (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let language := (args.getObjValAs? String "language").toOption.getD "python"
@@ -580,7 +653,7 @@ def skeleton (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("language", language), ("code", code), ("lean", p.lean) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat"]
+def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -591,6 +664,9 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_skeleton" => some (skeleton args)
   | "session_next" => some (next args)
   | "session_compat" => some (compat args)
+  | "session_ctl" => some (ctl args)
+  | "session_openapi" => some (openapi args)
+  | "session_review" => some (review args)
   | _ => none
 
 /-! ## Reference -/
@@ -604,11 +680,18 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
 
 ## Tools
 
+- `session_review {lean}`: every check that applies, in one answer, each finding with an edit to
+  try: the core rules; HTTP wherever a message has a `route` (its channel is HTTP and its sender may
+  call its receiver, so no flags are needed), including requests never answered (with the response
+  line to add) and responses to routed requests without a status; a session that can never end (a
+  loop with no way out); roles that take no part. Call it after every change while designing.
+
 - `session_check {lean, mayCall?}`: the core rules (one role decides each choice; every role can
   tell which branch was taken; a cause names a message its sender saw), each role's local type and
   typestate API, the calls (request, responses with status, nested calls), and the diagram. With
   `mayCall: [[caller, callee], ...]`, every channel is HTTP and calls that break the request/response
-  discipline are reported.
+  discipline are reported, including a request that never gets a response; `notHttp: [[a, b], ...]`
+  marks the channels between those roles as something else (a text message, a queue).
 - `session_diagram {lean, theme?}`: the UML sequence diagram, as SVG text and as shapes.
 - `session_simulate {lean, seed?, instances?, spread?, loops?, maxEvents?}`: a seeded event stream.
   Each event has prior (what it happened after, per role, plus join ends), cause, and answers (the
@@ -626,6 +709,19 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   session_conform's format): each allowed step with the cause it must name, and whether the session
   may end here (`running`, `finished`, or `violates` with the first problem). The view's walk-through
   calls it after every click.
+
+- `session_ctl {lean, formula}`: a CTL formula over one session, decided on the protocol's state
+  graph by the same checker as check_ctl, with a witness or counterexample path. Atoms:
+  `{\"after\": \"Label\"}` (a Label message or event has just happened) and `\"terminal\"` (the session
+  has ended). Rules the structure does not show belong here, for example:
+  never charge after no seat, `{\"AG\": {\"implies\": [{\"after\": \"NoSeat\"}, {\"AG\": {\"not\": {\"after\": \"Charge\"}}}]}}`;
+  every held seat is confirmed or released, `{\"AG\": {\"implies\": [{\"after\": \"SeatHeld\"}, {\"AF\": {\"or\":
+  [{\"after\": \"SeatConfirmed\"}, {\"after\": \"SeatReleased\"}]}}]}}`; every session ends, `{\"AF\": \"terminal\"}`.
+
+- `session_openapi {lean, role}`: the requests `role` receives, with their routes and the responses
+  the protocol allows, as an OpenAPI 3.1 document: one operation per route, the label as its
+  operationId and body, each response under its status. Message fields are not in the protocol, so
+  each message is an open object schema to fill in. Requests without a route are listed, not guessed.
 
 - `session_compat {lean, old}`: two versions of a protocol (`lean` the new one, `old` the
   previous one). For each role in both: can its new version be deployed first, among the old
@@ -646,9 +742,10 @@ Every answer echoes the text as `lean`; the view shows it in an editor and reche
 
 ## Building software from a protocol
 
-1. Write the protocol and run session_check until it has no issues; with `mayCall` for HTTP.
+1. Write the protocol and run session_check until it has no issues; with `mayCall` (and `notHttp`
+   for channels that are not HTTP) for HTTP.
 2. Show it: the diagram, each role's typestate (its API: one state per point in the conversation),
-   and session_simulate's stream.
+   a walk through one session (session_next), and session_simulate's stream.
 3. Generate the roles' states with session_skeleton and implement each role on them: per session,
    keep the state the last method returned and decide what to do next; the generated methods send
    only what each state allows, fill in causes and log every message. (In another language, write a
@@ -657,6 +754,8 @@ Every answer echoes the text as `lean`; the view shows it in an editor and reche
    event that caused it (the generated module does this; give it a log function).
 5. Run it, and check the log with session_conform; fix the code (or, if the protocol was wrong, the
    protocol) until every session conforms.
+6. State each rule the structure does not show as a CTL formula and check it with session_ctl.
+7. When a running protocol changes, session_compat says which roles can be deployed first.
 
 ## A protocol
 
@@ -687,11 +786,11 @@ protocol PlaceOrder (Client, Shop, Bank) {
 |---|---|
 | `x: Label from A to B cause y route \"...\" status 201 where e;` | a message; `x:`, `cause`, `route`, `status` and `where` are optional; `cause y` names an earlier id, and a response's cause chain reaches its request |
 | `Label at A;` | something a role does on its own |
-| `choice { ... } or { ... }` | exactly one branch happens; the role that starts every branch decides (⊕, internal choice: `select ⊕` in its projection); the others learn the branch from what arrives (&, external choice: `offer &`) |
+| `choice { ... } or { ... }` | exactly one branch happens; the role that sends the first message of every branch decides (`select` in its local type); the others learn the branch from what reaches them (`offer`) |
 | `par { ... } and { ... }` | branches run concurrently; what follows waits for all |
 | `join 2 of { ... } and { ... } and { ... }` | what follows waits for any 2 branches |
 | `rec Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |
-| `sessions { ... }` | any number of independent instances, as a server handles requests |
+| `sessions { ... }` | any number of independent instances, as a server handles requests; nested inside a protocol, a role that appears only in such blocks is a service that handles each one on its own |
 | `include Replicate Primary R1 R2 R3;` | an earlier protocol in the same text, roles renamed in order, drawn as a ref frame |
 
 Write several protocols in one text to include one in another; the last protocol is the one
@@ -703,8 +802,14 @@ Statements after a choice continue every branch. Limits: 64 KiB of text, 200 sta
 ## Reading the answers
 
 - A choice whose branches are started by different roles is a race; pick one decider.
-- \"R cannot tell which branch C chose\": give R a message in every branch, or one that differs.
+- \"R cannot tell which branch C chose\": give R a message in every branch, or one that differs. If R
+  is a service that handles each request on its own (a mailer, a text-message gateway), put each of
+  its exchanges in a nested `sessions { ... }` block: R then serves those sessions and never needs
+  to know the conversation around them.
 - \"L: S never saw y\": the cause of L must be something its sender sent or received.
+- \"R from A to B never gets a response\": over HTTP every request gets one. Add the response (a
+  message from B to A with `cause` naming the request and a `status`), or, if the channel is not
+  HTTP (a text message, a queue), name it in `notHttp`.
 - Responses are dashed in diagrams; each call is an activation bar on the callee.
 
 ## The JSON form

@@ -98,10 +98,10 @@ def noRefusal : Global Role := ConcurrentNoRefusal .client .shop .bank .warehous
 
 #guard concurrent.issues roles == []
 #guard (concurrent.project Role.client).toOption.map Local.render ==
-  some "send Pay to Shop;\noffer & {\n  receive Receipt from Shop;\n} or {\n  receive Refused from Shop;\n}"
+  some "send Pay to Shop;\noffer {\n  receive Receipt from Shop;\n} or {\n  receive Refused from Shop;\n}"
 #guard fanOut.issues roles == []
 #guard (fanOut.project Role.client).toOption.map Local.render ==
-  some "send Pay to Shop;\noffer & {\n  receive Receipt from Shop;\n} or {\n  receive Refused from Shop;\n}"
+  some "send Pay to Shop;\noffer {\n  receive Receipt from Shop;\n} or {\n  receive Refused from Shop;\n}"
 #guard noRefusal.issues roles == ["Client cannot tell which branch Bank chose"]
 
 end LeanFM.Session.ProjectionTests

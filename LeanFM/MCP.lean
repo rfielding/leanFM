@@ -224,9 +224,11 @@ def toolDefinitions : Array Json := #[
     "Check a protocol between roles written as a session type in LeanFM protocol syntax, sent as the lean string (read leanfm://language/session-reference; a JSON protocol object is also accepted). Returns ok or the issues (races, roles that cannot tell which branch was taken, causes a sender never saw), each role's local type and typestate API, the calls (request, responses with status, nested calls), and the generated diagram. With mayCall [[caller, callee], ...] every channel is HTTP and calls that break request/response are reported."
     (schema [("lean", stringSchema "LeanFM protocol text: protocol Name (Role, ...) { statements }"),
       ("protocol", anyJson "alternative to lean: {name?, roles, steps} in the JSON form"),
-      ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])])] []),
+      ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])]),
+      ("notHttp", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")]),
+        ("description", Json.str "pairs of roles whose messages are not HTTP (a text message, a queue)")])] []),
   tool "session_diagram" "Draw a session type"
-    "Draw a protocol as a UML sequence diagram generated from the session type: alt frames captioned in session-type notation (⊕ the role that selects, & the roles that offer), par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
+    "Draw a protocol as a UML sequence diagram generated from the session type: alt frames naming the role that decides, par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("theme", stringSchema "dark (default) or light")] []),
   tool "session_simulate" "Generate an event stream from a session type"
@@ -244,6 +246,17 @@ def toolDefinitions : Array Json := #[
     "Given a protocol and the events of one session so far (in session_conform's format; none for the start), list every step the protocol allows next, with the event each must give as its cause, and whether the session may end here. A walk that breaks the protocol answers violates with the first problem."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])])] []),
+  tool "session_ctl" "Check a temporal property of a session type"
+    "Decide a JSON CTL formula over one session of a protocol: its state graph (the states conformance explores, nested sessions played once) checked by the same checker as check_ctl. {\"after\": \"Label\"} holds in the state a Label message or event has just reached, \"terminal\" where the session has ended. Returns proved or disproved with a witness or counterexample path, for example {\"AG\": {\"implies\": [{\"after\": \"NoSeat\"}, {\"AG\": {\"not\": {\"after\": \"Charge\"}}}]}} (never charge after no seat)."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("formula", anyJson "JSON CTL formula over after(label) and terminal")] ["formula"]),
+  tool "session_review" "Review a session type design"
+    "Run every check that applies to a protocol and answer findings, each with an edit to try: the core rules (one decider per choice, every role can tell the branch, causes it saw); HTTP wherever a message has a route (no flags needed), including requests that never get a response and responses without a status; sessions that can never end; roles that take no part. Use it after every change while designing; clean means nothing was found."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form")] []),
+  tool "session_openapi" "A role's HTTP interface as OpenAPI"
+    "Write the requests a role receives, with their routes (route \"POST /orders\") and the responses the protocol allows (with their status), as an OpenAPI 3.1 document: one operation per route, the request's label as operationId and request body, each response under its status. A server framework or client generator can start from it; message fields are left for you to add."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("role", stringSchema "the role whose interface to write")] ["role"]),
   tool "session_compat" "Which roles can upgrade on their own"
     "Compare two versions of a protocol (lean: the new one, old: the previous one). For each role in both, answer whether its new version can be deployed first, running with the old version of every other role, and whether its old version can stay deployed after the others upgrade, by exploring each mixed system to every reachable state. A no comes with the steps to the stuck state and what each role still expects."
     (schema [("lean", stringSchema "the new version: LeanFM protocol text"), ("old", stringSchema "the previous version: LeanFM protocol text"),
@@ -281,7 +294,9 @@ def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
     | .ok code =>
       let fence := (body.getObjValAs? String "language").toOption.getD "python"
       logicSummary name body ++ "\n\n```" ++ fence ++ "\n" ++ code ++ "```"
-    | .error _ => logicSummary name body
+    | .error _ => match body.getObjValAs? String "report" with
+      | .ok report => if report.isEmpty then logicSummary name body else logicSummary name body ++ "\n\n" ++ report
+      | .error _ => logicSummary name body
   Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]),
     ("structuredContent", body), ("isError", isError)]
 
@@ -305,18 +320,30 @@ def sessionDesignPrompt : String :=
   "Help me build software by designing it as a session type with LeanFM, then implementing it.\n\n" ++
   "1. Ask me in a sentence or two what the software does, and name the roles (people, clients, services, " ++
   "workers) that exchange messages. Read leanfm://language/session-reference before writing a protocol.\n" ++
-  "2. Write the protocol in LeanFM protocol syntax and call session_check with it as the lean argument. " ++
-  "Fix every issue it reports, and explain each fix in one line. For HTTP services pass mayCall.\n" ++
+  "2. Write the protocol in LeanFM protocol syntax and call session_review with it as the lean argument " ++
+  "(it runs every check that applies and suggests an edit for each finding; give requests a route to " ++
+  "check them as HTTP); session_check shows the projections, typestates and calls. " ++
+  "Fix every issue it reports, and explain each fix in one line. For HTTP services pass mayCall (who may call " ++
+  "whom) and notHttp for channels that are something else (a text message, a queue); then every request must " ++
+  "get a response.\n" ++
   "3. Show me the result: the view draws the diagram, each role's typestate API and the calls; I can edit " ++
-  "the protocol there and LeanFM rechecks it. Then call session_simulate so I can watch many sessions run.\n" ++
-  "4. When I agree with the protocol, call session_skeleton for a Python module with each role's typestate " ++
-  "as classes, and implement each role with it: its methods send only what each state allows, fill in causes " ++
-  "and log every message in session_conform's format, so the code adds only the decisions and the transport. " ++
-  "In another language, write a handler per state the same way and log every message as JSON " ++
+  "the protocol there and LeanFM rechecks it, and Walk through lets me play one session step by step " ++
+  "(session_next). Then call session_simulate so I can watch many sessions run.\n" ++
+  "4. When I agree with the protocol, call session_skeleton for a module with each role's typestate as " ++
+  "classes (Python by default, or language typescript, where a step the protocol forbids does not compile), " ++
+  "and implement each role with it: its methods send only what each state allows, fill in causes and log " ++
+  "every message in session_conform's format, so the code adds only the decisions and the transport. For a " ++
+  "role that serves HTTP, session_openapi gives its interface as OpenAPI to start the server from. In " ++
+  "another language, write a handler per state the same way and log every message as JSON " ++
   "{id, session, from, to, label, cause}, and every event as {id, session, at, label, act: true}.\n" ++
   "5. When I paste a log from running it, call session_conform with the protocol and the events, and fix the " ++
   "code until every session conforms. If the protocol itself was wrong, change the protocol first and " ++
-  "recheck it.\n\n" ++
+  "recheck it.\n" ++
+  "6. For each rule the protocol must keep that its structure does not show (never charge after a refusal; " ++
+  "every hold is confirmed or released), call session_ctl with a CTL formula over after(label), and fix the " ++
+  "protocol when it is disproved, using the counterexample path.\n" ++
+  "7. When I change a protocol that is already running, call session_compat with the new version as lean and " ++
+  "the old one as old, and tell me which roles can be deployed first.\n\n" ++
   "Keep the protocol text as the source of truth. Never draw interaction diagrams by hand: show the ones " ++
   "LeanFM generates."
 

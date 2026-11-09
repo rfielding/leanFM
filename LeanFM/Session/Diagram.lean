@@ -14,11 +14,11 @@ one notation, so a diagram is a view of the protocol, never a separate drawing:
 | `route "POST /orders"`, `status 201` | `· POST /orders`, `· 201` after the label              |
 | a request and its responses      | an activation bar on the callee, request to last response  |
 | `L at A`                         | action box on A's lifeline                                 |
-| `choice { } or { }`              | `alt` frame, `⊕ D selects · & E, F offer`: ⊕ marks the decider (internal choice), & the roles in the choice that learn it from what arrives (external choice) |
+| `choice { } or { }`              | `alt` frame captioned `D decides`: the role that sends the first message of every branch |
 | `par { } and { }`                | `par` frame with dashed dividers                           |
 | `join k of { } and { }`          | `par` frame captioned `any k of n`                         |
 | `rec N { ... continue N; }`      | `loop N` frame; `continue N` drawn as `↻ continue N`              |
-| `sessions { }`                   | `loop` frame captioned `sessions`, around one instance     |
+| `sessions { }`                   | `loop` frame captioned `one session per request`, around one instance |
 | `include P ...`                  | `ref P` frame around P's steps                             |
 
 Negative requirements: no construct is dropped (each has an element the tests look for); no arrow
@@ -116,14 +116,20 @@ structure St (R : Type) where
   branchTop : Nat := 0
   /-- The last thing drawn was a frame's tab, so a frame opening now must start lower. -/
   fresh : Bool := false
+  /-- Distance between lifelines: wide enough for the widest message label. -/
+  colW : Nat := 180
 
 abbrev M (R : Type) := StateM (St R)
 
-def colW : Nat := 180
+def minColW : Nat := 180
+def maxColW : Nat := 420
 def margin : Nat := 90
 
-def xOf [DecidableEq R] (roles : List R) (r : R) : Nat :=
-  margin + colW * (roles.idxOf r)
+def xAt [DecidableEq R] (cw : Nat) (roles : List R) (r : R) : Nat :=
+  margin + cw * (roles.idxOf r)
+
+def xOf [DecidableEq R] (roles : List R) (r : R) : M R Nat := do
+  return xAt (← get).colW roles r
 
 def emit (s : Shape) : M R Unit := modify fun st => { st with out := st.out.push s }
 def adv (n : Nat) : M R Unit := modify fun st => { st with y := st.y + n }
@@ -134,8 +140,11 @@ def text (x y : Nat) (s : String) (anchor := "middle") (color := Ink.fg) (size :
   .text cls x y anchor color size bold s
 
 /-- Left and right edge of a frame at nesting depth `d`. -/
-def edges (n d : Nat) : Nat × Nat :=
-  (margin - 70 + 8 * d, margin + colW * (n - 1) + 70 - 8 * d)
+def edgesAt (cw n d : Nat) : Nat × Nat :=
+  (margin - 70 + 8 * d, margin + cw * (n - 1) + 70 - 8 * d)
+
+def edges (n d : Nat) : M R (Nat × Nat) := do
+  return edgesAt (← get).colW n d
 
 /-- The frame's pentagon tab and caption; returns nothing, draws at the current y. -/
 def frameTop (n d : Nat) (op caption : String) : M R Nat := do
@@ -143,7 +152,7 @@ def frameTop (n d : Nat) (op caption : String) : M R Nat := do
   -- never runs along the arrow
   if (← get).fresh then adv 22 else adv 14
   let y ← getY
-  let (x0, _) := edges n d
+  let (x0, _) ← edges n d
   let w := 10 + 8 * op.length
   emit (.path "" s!"M{x0} {y} h{w} v12 l-6 6 h-{w - 6} z" .bg .frame "" false)
   emit (text (x0 + 5) (y + 13) op "start" .frame 11 (bold := true))
@@ -156,14 +165,14 @@ def frameTop (n d : Nat) (op caption : String) : M R Nat := do
 def frameBottom (n d top : Nat) (kind : String) : M R Unit := do
   adv 12
   let y ← getY
-  let (x0, x1) := edges n d
+  let (x0, x1) ← edges n d
   emit (.rect s!"frame {kind}" x0 top (x1 - x0) (y - top) 0 .none .frame)
   adv 10
 
 def divider (n d : Nat) (caption : String) : M R Unit := do
   adv 12
   let y ← getY
-  let (x0, x1) := edges n d
+  let (x0, x1) ← edges n d
   emit (.line "" x0 y x1 y .frame "" "6 4" false)
   modify fun st => { st with branchTop := y }
   if caption != "" then emit (text (x0 + 6) (y + 13) s!"[{caption}]" "start" .frame 11)
@@ -192,8 +201,8 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
   let y := st.y
   let answered := answers st i
   let reply := answered.isSome
-  let x1 := xOf roles i.src
-  let x2 := xOf roles i.dst
+  let x1 ← xOf roles i.src
+  let x2 ← xOf roles i.dst
   let label := (match i.id with | some x => s!"{x}: " | none => "") ++ i.label ++
     (match i.route with | some r => s!" · {r}" | none => "") ++
     (match i.status with | some s => s!" · {s}" | none => "")
@@ -235,7 +244,7 @@ def act [DecidableEq R] (roles : List R) (r : R) (label : String) : M R Unit := 
   adv 12
   modify fun st => { st with fresh := false }
   let y ← getY
-  let x := xOf roles r
+  let x ← xOf roles r
   let w := 16 + 7 * label.length
   emit (.rect "act" (x - w / 2) y w 24 10 .actFill .arrow)
   emit (text x (y + 16) label (cls := "boxed"))
@@ -249,19 +258,15 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
   | .var name => do
       adv 22
       let y ← getY
-      let (x0, _) := edges roles.length d
+      let (x0, _) ← edges roles.length d
       emit (text (x0 + 8) y s!"↻ continue {name}" "start" .frame 11 (cls := "continue"))
       adv 6
   | .choice bs => do
-      -- session-type notation: ⊕ the role that chooses (internal choice), & the roles that learn
-      -- the choice from what arrives (external choice)
+      -- the role that sends the first message of every branch decides; the others learn the
+      -- branch from what reaches them, so the caption names only the decider
       let caption := match Global.decider bs with
-        | .ok r =>
-          let offering := roles.filter fun o => o != r && bs.any (Global.involves o)
-          let names := ", ".intercalate (offering.map toString)
-          let verb := if offering.length == 1 then "offers" else "offer"
-          if offering.isEmpty then s!"⊕ {r} selects" else s!"⊕ {r} selects · & {names} {verb}"
-        | .error _ => "race: no single role selects"
+        | .ok r => s!"{r} decides"
+        | .error _ => "race: no single role decides"
       let top ← frameTop roles.length d "alt" caption
       branches roles d bs ""
       frameBottom roles.length d top "alt"
@@ -280,7 +285,7 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
       draw roles (d + 1) body
       frameBottom roles.length d top "loop"
   | .sessions body k => do
-      let top ← frameTop roles.length d "loop" "sessions: one instance per request, concurrently"
+      let top ← frameTop roles.length d "loop" "one session per request"
       draw roles (d + 1) body
       frameBottom roles.length d top "sessions"
       draw roles d k
@@ -300,6 +305,32 @@ where
 
 end Diagram
 
+namespace Diagram
+
+/-- A message's label as drawn: `id: Label · route · status`. -/
+def labelText {R : Type} (i : Interaction R) : String :=
+  (match i.id with | some x => s!"{x}: " | none => "") ++ i.label ++
+    (match i.route with | some r => s!" · {r}" | none => "") ++
+    (match i.status with | some s => s!" · {s}" | none => "")
+
+/-- The messages of a protocol, for sizing the drawing. -/
+partial def messagesOf {R : Type} : Global R → List (Interaction R)
+  | .msg i k => i :: messagesOf k
+  | .act _ _ k => messagesOf k
+  | .choice bs => bs.flatMap messagesOf
+  | .par bs k | .join _ bs k => bs.flatMap messagesOf ++ messagesOf k
+  | .loop _ b => messagesOf b
+  | .var _ | .done => []
+  | .sessions b k | .box _ b k => messagesOf b ++ messagesOf k
+
+/-- Lifelines far enough apart that the widest label (about 7 pixels a character at 12 pixels)
+fits between neighbours, within `minColW` and `maxColW`. -/
+def columnWidth {R : Type} (g : Global R) : Nat :=
+  let widest := (messagesOf g).foldl (fun m i => max m (labelText i).length) 0
+  max minColW (min maxColW (7 * widest + 36))
+
+end Diagram
+
 /-- A drawn diagram: its size and its shapes, in drawing order. -/
 structure DiagramModel where
   width  : Nat
@@ -310,12 +341,13 @@ structure DiagramModel where
 /-- The shapes of a sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
 def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : List R)
     (title : String := "") : DiagramModel :=
-  let ((), st) := (Diagram.draw roles 0 g).run {}
+  let cw := Diagram.columnWidth g
+  let ((), st) := (Diagram.draw roles 0 g).run { colW := cw }
   let bottom := st.y + 30
-  let width := Diagram.margin * 2 + Diagram.colW * (roles.length - 1)
+  let width := Diagram.margin * 2 + cw * (roles.length - 1)
   let height := bottom + 40
   let heads := roles.flatMap fun r =>
-    let x := Diagram.xOf roles r
+    let x := Diagram.xAt cw roles r
     let name := toString r
     let w := 24 + 8 * name.length
     [ Shape.rect "role" (x - w / 2) 20 w 28 4 .actFill .fg, Diagram.text x 39 name (cls := "boxed")
@@ -323,7 +355,7 @@ def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : Lis
     , Shape.line "lifeline" x 48 x bottom .line "" "4 4" false ]
   let bars := st.bars.filterMap fun (_, r, inset, top, bot) =>
     if bot ≤ top then none else
-    some (Shape.rect "activation" (Diagram.xOf roles r - 5 + 7 * inset) top 10 (bot - top) 0 .actFill .arrow)
+    some (Shape.rect "activation" (Diagram.xAt cw roles r - 5 + 7 * inset) top 10 (bot - top) 0 .actFill .arrow)
   let titleEl := if title == "" then [] else [Diagram.text 10 14 title "start" .muted 11]
   { width, height, shapes := (titleEl ++ heads ++ bars).toArray ++ st.out }
 

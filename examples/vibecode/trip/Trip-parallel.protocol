@@ -1,0 +1,31 @@
+/-- First draft: a flight and a hotel held at once, then paid, or both released. The Agency's
+    final choice does not depend on what the holds answered, so it may charge after NoSeat. -/
+protocol Trip (Traveler, Agency, Flights, Hotels, Payments) {
+  sessions {
+    b: Book from Traveler to Agency route "POST /trips";
+    par {
+      f: HoldSeat from Agency to Flights;
+      choice {
+        SeatHeld from Flights to Agency cause f;
+      } or {
+        NoSeat from Flights to Agency cause f;
+      }
+    } and {
+      h: HoldRoom from Agency to Hotels;
+      choice {
+        RoomHeld from Hotels to Agency cause h;
+      } or {
+        NoRoom from Hotels to Agency cause h;
+      }
+    }
+    choice {
+      c: Charge from Agency to Payments;
+      Charged from Payments to Agency cause c;
+      Booked from Agency to Traveler cause b status 201;
+    } or {
+      ReleaseSeat from Agency to Flights;
+      ReleaseRoom from Agency to Hotels;
+      Unavailable from Agency to Traveler cause b status 409;
+    }
+  }
+}

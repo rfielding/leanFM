@@ -640,6 +640,15 @@ structure Evidence where
   note : String := ""
 deriving Inhabited
 
+/-- A path followed by the evidence from its last state: the second path continues the first. -/
+def extend (e : Evidence) (more : Option Evidence) : Evidence :=
+  match more with
+  | some e2 =>
+    if e2.path.length ≤ 1 then e else
+    { e with path := e.path ++ e2.path.drop 1,
+             loopStart := e2.loopStart.map (· + e.path.length - 1) }
+  | none => e
+
 open Model in
 /-- `holds = true`: explain why `f` holds at node `i`; `false`: why it fails. -/
 partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option Evidence :=
@@ -662,8 +671,10 @@ partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option
   | true, .stronglyImplies a _ => reach a "witness"
   | true, .or fs => (fs.find? (fun g => get (sat g) i)).bind (evidence m i true)
   | true, .implies a b => if get (sat b) i then evidence m i true b else evidence m i false a
-  | false, .ag g => reach (.not g) "counterexample"
-  | false, .never g => reach g "counterexample"
+  -- reach the state where g fails (or, for never, holds), then show why with g's own evidence
+  -- from there, so a nested AG(p -> AG q) ends at the step that breaks q, not at p
+  | false, .ag g => (reach (.not g) "counterexample").map fun e => extend e (evidence m (e.path.getLastD i) false g)
+  | false, .never g => (reach g "counterexample").map fun e => extend e (evidence m (e.path.getLastD i) true g)
   | false, .ax g => step (.not g) "counterexample"
   | false, .af g => loop (.not g) "counterexample"
   | false, .au a b =>

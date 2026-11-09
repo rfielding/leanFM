@@ -57,6 +57,7 @@ namespace Conform
 structure State where
   g    : Global String
   bind : List (String × String)
+  deriving Inhabited
 
 partial def subst (n : String) (body : Global String) : Global String → Global String
   | .var m => if m == n then .loop n body else .var m
@@ -210,6 +211,19 @@ partial def nextOf (bind : List (String × String)) (fuel : Nat := 32) : Global 
   | .box _ b k => nextOf bind fuel (Global.andThen b k)
   | .var _ | .done => []
 
+/-- Nested `sessions` blocks taken as one instance each, in place. -/
+partial def inlineNested : Global String → Global String
+  | .msg i k => .msg i (inlineNested k)
+  | .act a l k => .act a l (inlineNested k)
+  | .choice bs => .choice (bs.map inlineNested)
+  | .par bs k => .par (bs.map inlineNested) (inlineNested k)
+  | .join n bs k => .join n (bs.map inlineNested) (inlineNested k)
+  | .loop n b => .loop n (inlineNested b)
+  | .var n => .var n
+  | .sessions b k => Global.andThen (inlineNested b) (inlineNested k)
+  | .box n b k => .box n (inlineNested b) (inlineNested k)
+  | .done => .done
+
 /-- The protocol states that explain a run of one session, or the first problem with it. -/
 def statesAfter (g : Global String) (evs : List LogEvent) : Except String (List State) := do
   let r := checkSession g "walk" evs true
@@ -224,20 +238,74 @@ end Conform
 
 /-- What may happen next in one session after `log` (its events, in order): every step some state
 that explains the run allows, and whether the session may end here. With `sessions { body }` at the
-top the session is one instance of the body. A run the protocol does not allow is an error naming
+top the session is one instance of the body; nested `sessions` blocks are played once, in place. A run the protocol does not allow is an error naming
 its first problem. -/
 def Global.next (g : Global String) (log : List LogEvent) : Except String (List Conform.NextStep × Bool) := do
   let body := match g with | .sessions b _ => b | other => other
+  -- a walk plays one instance of each nested sessions block where it happens (a service's own
+  -- session, such as sending a text), so the steps of services appear in the walk too
+  let body := Conform.inlineNested body
   let states ← Conform.statesAfter body log
   let steps := (states.flatMap fun st => Conform.nextOf st.bind 32 st.g).eraseDups
   return (steps, states.any (Conform.nullable ·.g))
 
+/-- One session of a protocol as a state graph, for temporal properties: the states conformance
+explores (residual global types with their bindings, nested `sessions` played once in place), every
+step between them, and the states where the session may end. At most `maxNodes` states. -/
+structure StateGraph where
+  states    : List String
+  terminals : List String
+  /-- source, target, step -/
+  edges     : List (String × String × Conform.NextStep)
+
+def Global.stateGraph (g : Global String) (maxNodes : Nat := 2000) : Except String StateGraph := Id.run do
+  let body := Conform.inlineNested (match g with | .sessions b _ => b | other => other)
+  let keyOf (st : Conform.State) := Conform.key st.g ++ "|" ++ toString (st.bind.map (·.1))
+  let mut names : List (String × String) := [(keyOf { g := body, bind := [] }, "s0")]
+  let mut queue : List Conform.State := [{ g := body, bind := [] }]
+  let mut edges : List (String × String × Conform.NextStep) := []
+  let mut terminals : List String := []
+  let mut fresh := 0
+  while !queue.isEmpty do
+    let st := queue.head!
+    queue := queue.tail!
+    let src := (names.lookup (keyOf st)).getD "?"
+    if Conform.nullable st.g then terminals := terminals ++ [src]
+    for n in (Conform.nextOf st.bind 32 st.g).eraseDups do
+      fresh := fresh + 1
+      let e : LogEvent := { id := s!"g{fresh}", src := n.src, dst := n.dst, label := n.label, cause := n.cause, isAct := n.isAct }
+      for st' in Conform.step e 64 false st do
+        let k := keyOf st'
+        let dst ← match names.lookup k with
+          | some d => pure d
+          | none =>
+            if names.length ≥ maxNodes then
+              return .error s!"more than {maxNodes} protocol states; the property was not checked"
+            let d := s!"s{names.length}"
+            names := names ++ [(k, d)]
+            queue := queue ++ [st']
+            pure d
+        if !edges.any (fun (a, b, m) => a == src && b == dst && m == n) then
+          edges := edges ++ [(src, dst, n)]
+  return .ok { states := names.map (·.2), terminals, edges }
+
 /-- Check a log against the protocol, session by session, in the order sessions first appear.
-With `sessions { body }` at the top, each session is checked against the body. -/
+With `sessions { body }` at the top, each session is checked against the body, or, when it does
+not fit the body, against a `sessions` block nested in it (a service's own session). -/
 def Global.conforms (g : Global String) (log : List LogEvent) (allowIncomplete := false) :
     List Conform.SessionResult :=
   let body := match g with | .sessions b _ => b | other => other
+  -- a session of a nested sessions block (a service's own session) is checked against that block
+  let nested := Global.nestedSessions body
   let ids := (log.map (·.session)).eraseDups
-  ids.map fun sid => Conform.checkSession body sid (log.filter (·.session == sid)) allowIncomplete
+  ids.map fun sid =>
+    let evs := log.filter (·.session == sid)
+    let top := Conform.checkSession body sid evs allowIncomplete
+    if top.problem.isNone then top else
+      match nested.findSome? (fun b =>
+          let r := Conform.checkSession b sid evs allowIncomplete
+          if r.problem.isNone then some r else none) with
+      | some r => r
+      | none => top
 
 end LeanFM.Session

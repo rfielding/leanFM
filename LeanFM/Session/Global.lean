@@ -109,8 +109,8 @@ partial def lines {R : Type} [ToString R] [BEq R] (ind : String := "") : Local R
   | .send to l k => s!"{ind}send {l} to {to};" :: lines ind k
   | .recv fr l k => s!"{ind}receive {l} from {fr};" :: lines ind k
   | .act l k => s!"{ind}{l};" :: lines ind k
-  | .select bs => block ind "select ⊕" "or" bs
-  | .offer bs => block ind "offer &" "or" bs
+  | .select bs => block ind "select" "or" bs
+  | .offer bs => block ind "offer" "or" bs
   | .par bs k => block ind "par" "and" (bs.filter (· != .done)) ++ lines ind k
   | .join n bs k =>
     -- as the typestate reads it: a role in no more than n of the branches waits for all of its own
@@ -381,8 +381,52 @@ partial def projectFrom [DecidableEq R] [ToString R] (r : R) (started : Bool) (g
     if involves r b then pure (.sessions (← projectFrom r false b) k') else pure k'
   | .done => pure .done
 
-def project [DecidableEq R] [ToString R] (r : R) (g : Global R) : Except String (Local R) :=
-  projectFrom r false g
+/-- The protocol with its nested `sessions` blocks taken out: what the roles of one session do in
+it themselves. -/
+partial def withoutNested : Global R → Global R
+  | .msg i k => .msg i (withoutNested k)
+  | .act a l k => .act a l (withoutNested k)
+  | .choice bs => .choice (bs.map withoutNested)
+  | .par bs k => .par (bs.map withoutNested) (withoutNested k)
+  | .join n bs k => .join n (bs.map withoutNested) (withoutNested k)
+  | .loop n b => .loop n (withoutNested b)
+  | .var n => .var n
+  | .sessions _ k => withoutNested k
+  | .box _ b k => withoutNested (andThen b k)
+  | .done => .done
+
+/-- The bodies of the `sessions` blocks nested directly in a protocol (not inside one another). -/
+partial def nestedSessions : Global R → List (Global R)
+  | .msg _ k | .act _ _ k => nestedSessions k
+  | .choice bs => bs.flatMap nestedSessions
+  | .par bs k | .join _ bs k => bs.flatMap nestedSessions ++ nestedSessions k
+  | .loop _ b => nestedSessions b
+  | .var _ | .done => []
+  | .sessions b k => b :: nestedSessions k
+  | .box _ b k => nestedSessions (andThen b k)
+
+/-- Project the global type onto one role. A role that takes part only in nested `sessions` blocks
+is a service, such as a text-message gateway: it handles each of those sessions on its own and never
+sees the conversation around them, so its local type serves them (`sessions { ... }`) and is not
+projected through the choices of the enclosing session. When it serves different sessions, each
+must start with a message of its own, so it can tell which one has begun. -/
+def project [DecidableEq R] [ToString R] (r : R) (g : Global R) : Except String (Local R) := do
+  let (body, after) := match g with | .sessions b k => (b, k) | other => (other, Global.done)
+  let inner := (nestedSessions body).filter (involves r)
+  if inner.isEmpty || involves r (withoutNested body) || involves r after then
+    projectFrom r false g
+  else
+    let served ← inner.mapM (projectFrom r false)
+    match served.eraseDups with
+    | [l] => pure (.sessions l .done)
+    | ls =>
+      let firsts := ls.map Local.firstReceives
+      let all := firsts.filterMap id
+      if all.length == ls.length && all.all (fun f => !f.isEmpty) &&
+          (all.flatten).eraseDups.length == all.flatten.length then
+        pure (.sessions (.offer ls) .done)
+      else
+        throw s!"{r} serves sessions that it cannot tell apart from their first message"
 
 /-- Every issue of the core rules, for the given roles. -/
 def issues [DecidableEq R] [ToString R] (g : Global R) (roles : List R) : List String :=

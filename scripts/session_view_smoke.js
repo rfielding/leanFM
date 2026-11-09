@@ -131,8 +131,8 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   if (!first) throw new Error("the walk-through offers no step");
   first.click(); await wait(120);
   expectText("a step taken is listed", byId.walk, ": " + first.textContent.split(" → ")[0]);
-  expectText("a choice is marked with ⊕", byId.walk, "⊕");
-  expectText("the roles waiting on a choice are marked with &", byId.walk, "& ");
+  expectText("a role with several steps is shown choosing", byId.walk, "Desk chooses");
+  expectText("the roles waiting are named", byId.walk, "Member, Librarian wait");
   button(byId.walk, "Undo").click(); await wait(120);
   button(byId.walk, "Close").click(); await wait(50);
   if (byId.walk.children.length) throw new Error("Close leaves the walk-through open");
@@ -149,6 +149,14 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   expectText("session_conform shows where the run breaks the protocol", byId.results, "Where the run breaks the protocol");
   await show(R.diagram);
   expectText("session_diagram result renders", byId.results, "Sequence diagram");
+  if (R.ctl) {
+    await show(R.ctl);
+    expectText("session_ctl shows its counterexample path", byId.results, "Counterexample: the steps that break it");
+  }
+  if (R.compat) {
+    await show(R.compat);
+    expectText("session_compat shows which roles can upgrade", byId.results, "Which roles can upgrade on their own");
+  }
   await show(R.skeleton);
   expectText("session_skeleton result renders its reading", byId.results, "typestate as classes");
 

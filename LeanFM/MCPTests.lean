@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat"] do
+  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -132,6 +132,8 @@ def main : IO Unit := do
   let compatCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"tools/call\",\"params\":{\"name\":\"session_compat\",\"arguments\":{\"lean\":\"protocol P (A, B) { x: Ping from A to B; }\",\"old\":\"protocol P (A, B) { x: Ping from A to B; Pong from B to A cause x; }\"}}}"
   assertContains "MCP session_compat answers per role" compatCall.body "\"verdict\":\"incompatible\""
   assertContains "MCP session_compat says who waits" compatCall.body "A waits to receive Pong from B"
+  let reviewCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"session_review\",\"arguments\":{\"lean\":\"protocol P (A, B) { Ask from A to B route \\\"GET /x\\\"; }\"}}}"
+  assertContains "MCP session_review puts its findings in the text" reviewCall.body "1. [http] Ask from A to B never gets a response"
   let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
   assertContains "MCP session_skeleton writes TypeScript in a typescript fence" skelTs.body "```typescript"
   assertContains "MCP session_skeleton TypeScript states extend State" skelTs.body "export class BS1 extends State"
@@ -184,6 +186,8 @@ def main : IO Unit := do
     ("conform", ← callTool "session_conform" [("events", bugLog)]),
     ("diagram", ← callTool "session_diagram" []),
     ("skeleton", ← callTool "session_skeleton" []),
+    ("ctl", ← callTool "session_ctl" [("formula", (Json.parse "{\"AG\": {\"implies\": [{\"after\": \"Approved\"}, {\"AG\": {\"not\": {\"after\": \"Waitlisted\"}}}]}}").toOption.get!)]),
+    ("compat", ← callTool "session_compat" [("old", Json.str lendingLean)]),
     ("next", Json.arr #[← callTool "session_next" [], ← callTool "session_next" [("events", borrow)]])]
   IO.FS.writeFile ".cache/tests/session-view.html" shtml
   IO.FS.writeFile ".cache/tests/session-view-results.json" results.compress

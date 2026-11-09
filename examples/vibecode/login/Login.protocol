@@ -1,0 +1,41 @@
+/-- Two-factor login: a password, then a code sent by text message; the user may ask for a new code
+    and retry until the code is valid or the account locks. Sms is a service: it handles each text
+    in its own session (the nested sessions blocks) and never sees the login around it. -/
+protocol Login (User, App, Auth, Sms) {
+  sessions {
+    p: Password from User to App route "POST /login";
+    c: CheckPassword from App to Auth cause p route "POST /auth/password";
+    choice {
+      ok: PasswordOk from Auth to App cause c status 200;
+      CodeSent from App to User cause p status 202;
+      sessions { s: SendCode from Auth to Sms; Queued from Sms to Auth cause s status 202; Text from Sms to User; }
+      rec Try {
+        choice {
+          r: Resend from User to App route "POST /login/resend";
+          rs: ResendCode from App to Auth cause r;
+          ResendOk from Auth to App cause rs status 202;
+          Resent from App to User cause r status 202;
+          sessions { s: SendCode from Auth to Sms; Queued from Sms to Auth cause s status 202; Text from Sms to User; }
+          continue Try;
+        } or {
+        e: EnterCode from User to App route "POST /login/code";
+        v: VerifyCode from App to Auth cause e route "POST /auth/code";
+        choice {
+          Valid from Auth to App cause v status 200;
+          Welcome from App to User cause e status 200;
+        } or {
+          Invalid from Auth to App cause v status 401;
+          TryAgain from App to User cause e status 401;
+          continue Try;
+        } or {
+          Locked from Auth to App cause v status 423;
+          AccountLocked from App to User cause e status 423;
+        }
+        }
+      }
+    } or {
+      BadPassword from Auth to App cause c status 401;
+      Denied from App to User cause p status 401;
+    }
+  }
+}

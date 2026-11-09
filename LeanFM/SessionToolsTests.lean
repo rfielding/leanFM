@@ -44,7 +44,7 @@ def po := call check (withProtocol placeOrder)
         "p: Pay  Client → Shop\n  returns Receipt 200 | PaymentDeclined 402\n" ++
         "    c: Charge  Shop → Bank\n      returns Charged | Declined")
 -- the diagram comes as shapes: an alt frame names the shop as the role that selects
-#guard ((field po "diagram").getObjValD "shapes").compress.contains "⊕ Shop selects · & "
+#guard ((field po "diagram").getObjValD "shapes").compress.contains "[Shop decides]"
 -- every answer echoes the protocol it checked, so the view can edit it
 #guard (field po "protocol").compress == (parse! placeOrder).compress
 #guard (field (call diagram (withProtocol placeOrder)) "protocol").compress == (parse! placeOrder).compress
@@ -90,7 +90,10 @@ def purchase : String := r#"{"roles": ["Client", "Shop", "Bank"], "steps": [
 def http := call check (withProtocol purchase r#", "mayCall": [["Client", "Shop"], ["Client", "Bank"], ["Shop", "Bank"]]"#)
 #guard strs (field http "httpCuts") ==
   [ "Paid answers p, which Client sent to Bank, but goes to Shop"
-  , "Shipped is a request from Shop to Client, which Shop may not call" ]
+  , "Shipped is a request from Shop to Client, which Shop may not call"
+  , "Pay (p) from Client to Bank never gets a response"
+  , "Paid from Bank to Shop never gets a response"
+  , "Shipped from Shop to Client never gets a response" ]
 #guard verdict http == "issues"
 -- a where text is shown in the diagram, never evaluated
 #guard ((field (call diagram (withProtocol purchase)) "svg").getStr?.toOption.getD "").contains "[p.amount = q.price]"
@@ -382,6 +385,152 @@ def fullWalk : String := r#"[{"id":"w1","from":"Member","to":"Desk","label":"Bor
   (parse! r#"[{"id":"1","from":"H","to":"A","label":"Ping"},{"id":"2","from":"H","to":"B","label":"Ping"}]"#))) ==
   "[{\"act\":true,\"from\":\"H\",\"label\":\"Bye\"}]"
 
+/-! ## HTTP: every request gets a response -/
+
+def httpCheck (t : String) (pairs : String) (extra : List (String × Json) := []) : Except String Json :=
+  check (extra.foldl (fun j (k, v) => j.setObjVal! k v) ((leanArgs t).setObjVal! "mayCall" (parse! pairs)))
+-- the first draft of two-factor login: the code's answers are caused by the login request, so the
+-- request carrying the code is never answered
+def loginDraft : String := "protocol Login (User, App) { p: Password from User to App; e: EnterCode from User to App; Welcome from App to User cause p; }"
+#guard strs (field (httpCheck loginDraft "[[\"User\",\"App\"]]") "httpCuts") == ["EnterCode (e) from User to App never gets a response"]
+-- a request made before a loop and answered after it is not reported by a run that goes round again
+#guard strs (field (httpCheck "protocol P (C, S) { o: Order from C to S; rec W { choice { Busy at S; continue W; } or { Ready at S; } } Done from S to C cause o; }" "[[\"C\",\"S\"]]") "httpCuts") == []
+-- notHttp: a text message is not an HTTP request, so it needs no response and no permission
+def withText : String := "protocol L (User, App, Sms) { p: Password from User to App; s: Send from App to Sms; Sent from Sms to App cause s; Text from Sms to User; Ok from App to User cause p; }"
+#guard strs (field (httpCheck withText "[[\"User\",\"App\"],[\"App\",\"Sms\"]]") "httpCuts") ==
+  ["Text is a request from Sms to User, which Sms may not call", "Text from Sms to User never gets a response"]
+#guard strs (field (httpCheck withText "[[\"User\",\"App\"],[\"App\",\"Sms\"]]" [("notHttp", parse! "[[\"Sms\",\"User\"]]")]) "httpCuts") == []
+#guard reason (httpCheck withText "[[\"User\",\"App\"]]" [("notHttp", parse! "[\"Sms\"]")]) == "notHttp must be an array of [role, role] pairs"
+
+/-! ## Diagram layout found by using the tools: captions and label room -/
+
+def loginLoop : String := "protocol Login (User, App, Auth, Sms) { p: Password from User to App; c: CheckPassword from App to Auth cause p route \"POST /auth/password\"; s: SendCode from Auth to Sms; Text from Sms to User; rec Try { e: EnterCode from User to App; v: VerifyCode from App to Auth cause e; choice { Valid from Auth to App cause v; Welcome from App to User cause e; } or { Invalid from Auth to App cause v; TryAgain from App to User cause e; continue Try; } } }"
+def loginSvg : String := ((field (diagram (leanArgs loginLoop)) "svg").getStr?.toOption).getD ""
+-- a choice is captioned with the role that decides
+#guard loginSvg.contains "[Auth decides]"
+-- "c: CheckPassword · POST /auth/password" is 38 characters: lifelines move apart to fit it
+#guard loginSvg.startsWith "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1086\""
+-- short labels keep the narrowest spacing
+#guard ((field (diagram (leanArgs "protocol P (A, B) { Hi from A to B; }")) "svg").getStr?.toOption.getD "").startsWith "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"360\""
+
+/-! ## Services: roles that take part only in nested sessions blocks -/
+
+def loginProtocol : String := include_str "../examples/vibecode/login/Login.protocol"
+def loginHttp : Except String Json := check ((leanArgs loginProtocol).setObjVal! "mayCall"
+  (parse! "[[\"User\",\"App\"],[\"App\",\"Auth\"],[\"Auth\",\"Sms\"]]") |>.setObjVal! "notHttp" (parse! "[[\"Sms\",\"User\"]]"))
+-- the two-factor login from the dogfooding session checks clean, HTTP included
+#guard verdict loginHttp == "ok"
+-- Sms serves its own sessions: it never sees the login's choices, so nothing asks it to tell them apart
+def localOf (r : Except String Json) (role : String) : String :=
+  (((field r "projections").getObjValD role).getObjValAs? String "local").toOption.getD ""
+#guard localOf loginHttp "Sms" == "sessions {\n  receive SendCode from Auth;\n  send Queued to Auth;\n  send Text to User;\n}"
+-- the roles of the login keep the sub-sessions where they happen
+#guard (localOf loginHttp "Auth").contains "    sessions {\n      send SendCode to Sms;\n      receive Queued from Sms;\n    }"
+-- without the nested blocks, the same Sms would have to follow the retry loop, and cannot
+def loginInline : String := loginProtocol.replace "sessions { s: SendCode from Auth to Sms; Queued from Sms to Auth cause s status 202; Text from Sms to User; }" "s: SendCode from Auth to Sms; Queued from Sms to Auth cause s status 202; Text from Sms to User;"
+#guard (strs (field (check (leanArgs loginInline)) "issues")).any (·.startsWith "Sms cannot tell which branch")
+-- a service with two kinds of session tells them apart by the first message
+def mailer : String := "protocol Accounts (User, App, Mail) { sessions { choice { Join from User to App; sessions { Welcome from App to Mail; } } or { Forgot from User to App; sessions { Reset from App to Mail; Link from Mail to User; } } } }"
+#guard localOf (check (leanArgs mailer)) "Mail" == "sessions {\n  offer {\n    receive Welcome from App;\n  } or {\n    receive Reset from App;\n    send Link to User;\n  }\n}"
+-- negative: two kinds that start alike cannot be told apart
+#guard (strs (field (check (leanArgs (mailer.replace "Reset from App to Mail" "Welcome from App to Mail"))) "issues")).contains
+  "Mail serves sessions that it cannot tell apart from their first message"
+-- simulated logins with their text-message sessions conform, each sub-session checked against its block
+def loginSim : Json := ((simulate ((leanArgs loginProtocol).setObjVal! "instances" (toJson 6) |>.setObjVal! "seed" (toJson 4))).toOption.get!).getObjValD "events"
+#guard verdict (conform ((leanArgs loginProtocol).setObjVal! "events" loginSim)) == "conforms"
+-- negative: a text-message session that skips the gateway's answer is reported
+#guard verdict (conform ((leanArgs loginProtocol).setObjVal! "events" (parse! r#"[{"id":"t1","session":"sms1","from":"Auth","to":"Sms","label":"SendCode"},{"id":"t2","session":"sms1","from":"Sms","to":"User","label":"Text"}]"#))) == "violates"
+-- a walk plays the text-message session in place: after CodeSent, Auth sends the code to Sms
+def loginWalk : String := r#"[{"id":"w1","from":"User","to":"App","label":"Password"},
+  {"id":"w2","from":"App","to":"Auth","label":"CheckPassword","cause":"w1"},
+  {"id":"w3","from":"Auth","to":"App","label":"PasswordOk","cause":"w2"},
+  {"id":"w4","from":"App","to":"User","label":"CodeSent","cause":"w1"}]"#
+#guard (field (next ((leanArgs loginProtocol).setObjVal! "events" (parse! loginWalk))) "next").compress ==
+  "[{\"from\":\"Auth\",\"label\":\"SendCode\",\"to\":\"Sms\"}]"
+-- the generated service starts each of its sessions in the body's first state
+#guard ((field (skeleton (leanArgs loginProtocol)) "code").getStr?.toOption.getD "").contains
+  "def sms(session, transport, log=None, new_id=None):\n    \"\"\"Sms's start state in a new session.\"\"\"\n    return SmsS1("
+
+/-! ## session_ctl: properties the structure does not show -/
+
+def tripParallel : String := include_str "../examples/vibecode/trip/Trip-parallel.protocol"
+def tripSequential : String := include_str "../examples/vibecode/trip/Trip.protocol"
+def prop (t f : String) : Except String Json := ctl ((leanArgs t).setObjVal! "formula" (parse! f))
+def neverChargeAfterNoSeat : String := r#"{"AG": {"implies": [{"after": "NoSeat"}, {"AG": {"not": {"after": "Charge"}}}]}}"#
+def pathOf (r : Except String Json) : List String :=
+  match (field r "evidence").getObjValD "path" with
+  | .arr a => a.toList.filterMap fun n => (n.getObjValAs? String "message").toOption
+  | _ => []
+-- the parallel draft may charge after NoSeat: the counterexample runs to the Charge itself
+#guard verdict (prop tripParallel neverChargeAfterNoSeat) == "disproved"
+#guard pathOf (prop tripParallel neverChargeAfterNoSeat) == ["Book", "HoldSeat", "NoSeat", "HoldRoom", "RoomHeld", "Charge"]
+-- holding in sequence fixes it, every hold is confirmed or released, and every session ends
+#guard verdict (prop tripSequential neverChargeAfterNoSeat) == "proved"
+#guard verdict (prop tripSequential r#"{"AG": {"implies": [{"after": "SeatHeld"}, {"AF": {"or": [{"after": "SeatConfirmed"}, {"after": "SeatReleased"}]}}]}}"#) == "proved"
+#guard verdict (prop tripSequential r#"{"AF": "terminal"}"#) == "proved"
+#guard verdict (check ((leanArgs tripSequential).setObjVal! "mayCall" (parse! "[[\"Traveler\",\"Agency\"],[\"Agency\",\"Flights\"],[\"Agency\",\"Hotels\"],[\"Agency\",\"Payments\"]]"))) == "ok"
+-- negative: an unknown label and a missing formula are rejected, not answered
+#guard (reason (prop tripSequential r#"{"never": {"after": "Teleport"}}"#)).contains "unknown message Teleport"
+#guard (reason (ctl (leanArgs tripSequential))).startsWith "formula is required"
+
+/-! ## session_openapi: a role's HTTP interface -/
+
+def signIn : String := include_str "../examples/vibecode/signin/SignIn.protocol"
+def api (t role : String) : Except String Json := openapi ((leanArgs t).setObjVal! "role" (Json.str role))
+def opsOf (r : Except String Json) : List String :=
+  match (field r "openapi").getObjValD "paths" with
+  | .obj kvs => kvs.toList.flatMap fun (p, v) => match v with
+    | .obj ms => ms.toList.map fun (m, _) => s!"{m} {p}"
+    | _ => []
+  | _ => []
+-- the sign-in App serves two requests, start and callback, each its own session
+#guard verdict (check ((leanArgs signIn).setObjVal! "mayCall" (parse! "[[\"Browser\",\"App\"],[\"Browser\",\"Idp\"],[\"App\",\"Idp\"]]"))) == "ok"
+#guard opsOf (api signIn "App") == ["get /callback", "get /login"]
+#guard (((((field (api signIn "App") "openapi").getObjValD "paths").getObjValD "/callback").getObjValD "get").getObjValD "responses").compress.contains "\"401\":{\"content\""
+#guard ((field (api signIn "App") "openapi").getObjValAs? String "openapi").toOption == some "3.1.0"
+-- a POST carries its request's label as its body; a request without a status gets a default response
+#guard opsOf (api tripSequential "Flights") == ["post /seats/confirmations", "delete /seats/holds", "post /seats/holds"]
+#guard ((((field (api tripSequential "Flights") "openapi").getObjValD "paths").getObjValD "/seats/holds").getObjValD "post").compress.contains "\"requestBody\""
+-- negative: requests without a route are listed, not guessed; conflicting or malformed routes and
+-- unknown roles are rejected
+#guard strs (field (api "protocol P (A, B) { q: Ask from A to B; Answer from B to A cause q; }" "B") "unrouted") == ["Ask from A"]
+#guard reason (api "protocol P (A, B) { Ask from A to B route \"GET /x\"; Tell from A to B route \"GET /x\"; }" "B") == "GET /x is both Ask and Tell"
+#guard reason (api "protocol P (A, B) { Ask from A to B route \"FETCH /x\"; }" "B") == "route \"FETCH /x\": fetch is not an HTTP method"
+#guard reason (api "protocol P (A, B) { Ask from A to B route \"GET x\"; }" "B") == "route \"GET x\": the path must start with /"
+#guard reason (api signIn "Nobody") == "Nobody is not a role of SignIn; its roles are Browser, App, Idp"
+
+/-! ## session_review: every check that applies, with an edit for each finding -/
+
+def rev (t : String) : Except String Json := review (leanArgs t)
+def kinds (r : Except String Json) : List String :=
+  match field r "findings" with
+  | .arr a => a.toList.filterMap (·.getObjValAs? String "kind" |>.toOption)
+  | _ => []
+def suggestions (r : Except String Json) : List String :=
+  match field r "findings" with
+  | .arr a => a.toList.filterMap (·.getObjValAs? String "suggestion" |>.toOption)
+  | _ => []
+-- every example reviews clean
+#guard [lendingProtocol, loginProtocol, tripSequential, signIn].all (fun t => verdict (rev t) == "clean")
+-- HTTP comes from routes, so the first login draft is caught with no flags, and the answer is written out
+def draft : String := "protocol Login (User, App, Sms) { p: Password from User to App route \"POST /login\"; Text from Sms to User; e: EnterCode from User to App route \"POST /login/code\"; Welcome from App to User cause p status 200; }"
+#guard strs (field (rev draft) "issues") ==
+  ["EnterCode (e) from User to App never gets a response (try: Answer it: `EnterCodeDone from App to User cause e status 200;` (or the status it means).)"]
+-- a routed request without an id gets one in the suggestion; a response without a status is named
+#guard (suggestions (rev "protocol P (A, B) { Ask from A to B route \"GET /x\"; }")).head? ==
+  some "Give Ask an id (`x: Ask from A to B ...`), then answer it: `AskDone from B to A cause x status 200;`."
+#guard strs (field (rev "protocol P (A, B) { q: Ask from A to B route \"GET /x\"; Answer from B to A cause q; }") "issues") ==
+  ["Answer answers Ask (GET /x) without a status (try: Add the status it means, such as `status 200`, to Answer.)"]
+-- a loop with no way out, with the steps into it; a role that takes no part
+#guard strs (field (rev "protocol P (A, B) { Hello from A to B; rec L { Ping from A to B; continue L; } }") "issues") ==
+  ["the session can never end, whatever happens (try: Give the loop a branch that leaves it (one without continue), or end it.)"]
+#guard strs (field (rev "protocol P (A, B) { choice { Quit from A to B; } or { Stay from A to B; rec L { Ping from A to B; continue L; } } }") "issues") ==
+  ["after Stay, the session can never end (try: Give the loop a branch that leaves it (one without continue), or end it.)"]
+#guard kinds (rev "protocol P (A, B, C) { Hi from A to B; }") == ["roles"]
+-- the structural rules come with their usual fix
+#guard (suggestions (rev "protocol P (A, B, C) { choice { X from A to B; } or { Y from B to C; } }")).any (·.startsWith "Let one role send the first message")
+#guard (suggestions (rev (loginInline))).any (·.startsWith "Send Sms a message in each branch")
+
 /-! ## session_compat -/
 
 def compatOf (newer older : String) : Except String Json :=
@@ -413,6 +562,8 @@ def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow 
 -- par: branches interleave in the composed system, and a reordering inside a branch is found
 #guard verdict (compatOf "protocol F (H, A, B) { par { Ping from H to A; } and { Ping from H to B; } }" "protocol F (H, A, B) { par { Ping from H to B; } and { Ping from H to A; } }") == "compatible"
 #guard verdict (compatOf "protocol T (S, R) { x: Ask from S to R; y: Tell from S to R; }" "protocol T (S, R) { y: Tell from S to R; x: Ask from S to R; }") == "incompatible"
+-- a version that drops the text gateway's answer cannot go first against the old Auth
+#guard verdict (compatOf (loginProtocol.replace "Queued from Sms to Auth cause s status 202; " "") loginProtocol) == "incompatible"
 #guard reason (compat (leanArgs lendingProtocol)) == "old is required: the previous version's LeanFM protocol text"
 #guard (reason (compatOf lendingProtocol "protocol Broken (A) { oops }")).startsWith "the old version: line 1"
 
@@ -434,9 +585,9 @@ def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).get
 -- join k of: the generated fork joins on k ends
 #guard (code "protocol R (P, A, B, C) { join 2 of { wa: W from P to A; S from A to P cause wa; } and { wb: W from P to B; S from B to P cause wb; } and { wc: W from P to C; S from C to P cause wc; } Done at P; }").contains
   "return Fork([PS1(ep), PS3(ep), PS5(ep)], lambda: PS7(ep), need=2)"
--- choices are captioned in session-type notation: ⊕ the decider, & the roles that offer
-#guard ((field (diagram (leanArgs lendingProtocol)) "svg").getStr?.toOption.getD "").contains "[⊕ Desk selects · &amp; Member, Librarian offer]"
-#guard ((field (check (leanArgs lendingProtocol)) "projections").getObjValD "Member" |>.getObjValAs? String "local").toOption.map (·.contains "offer & {") == some true
+-- choices are captioned with the role that decides
+#guard ((field (diagram (leanArgs lendingProtocol)) "svg").getStr?.toOption.getD "").contains "[Desk decides]"
+#guard ((field (check (leanArgs lendingProtocol)) "projections").getObjValD "Member" |>.getObjValAs? String "local").toOption.map (·.contains "offer {") == some true
 -- two messages alike with different ids or causes: the cause is passed, not guessed
 #guard (code "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
   "def send_reply(self, cause=None, body=None):"

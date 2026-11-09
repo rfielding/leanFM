@@ -92,8 +92,8 @@ cat <<'TXT'
 Quit and reopen Claude Desktop, then start a conversation with, for example:
 
   Use LeanFM's design_with_session_types prompt to design a library-lending service:
-  members borrow and return books, a librarian approves holds. Check it, show the diagram
-  and each role's typestate, animate 20 members, generate the code with session_skeleton,
-  implement it, and conform its logs.
+  members borrow and return books, a librarian approves holds. Review it with session_review
+  until it is clean, show the diagram and each role's typestate, animate 20 members, generate
+  the code with session_skeleton, implement it, and conform its logs.
 
 TXT

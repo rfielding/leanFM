@@ -55,7 +55,6 @@
   .walk-steps { margin: 0 0 8px; padding-left: 26px; font: 14px/1.6 ui-monospace, Menlo, monospace; }
   .walk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
   .walk-role { min-width: 9em; font-weight: 600; }
-  .walk-role .sym { color: var(--amber); font-weight: 700; }
   button.step { font-size: 15px; padding: 6px 14px; border-color: var(--ink-arrow); }
   button.step.choice { border-color: var(--amber); border-width: 2px; }
   .walk-wait { color: var(--dim); font-size: 14px; }
@@ -399,7 +398,7 @@ function render(body) {
   const head = el("div", "head");
   head.appendChild(el("span", "tool", String(body.tool || "session")));
   const v = String(body.verdict || "answered");
-  head.appendChild(el("span", "badge " + (v === "ok" || v === "drawn" || v === "generated" || v === "conforms" ? "ok" : v === "issues" || v === "violates" ? "issues" : "other"), v));
+  head.appendChild(el("span", "badge " + (v === "ok" || v === "drawn" || v === "generated" || v === "conforms" || v === "proved" || v === "compatible" ? "ok" : v === "issues" || v === "violates" || v === "disproved" || v === "incompatible" ? "issues" : "other"), v));
   const parts = [head, el("p", "reading", String(body.reason || body.reading || ""))];
   if (Array.isArray(body.issues) && body.issues.length) {
     const ul = el("ul");
@@ -410,6 +409,25 @@ function render(body) {
     const ul = el("ul");
     body.httpCuts.slice(0, MAX_ITEMS).forEach((t) => ul.appendChild(el("li", "issue", String(t))));
     parts.push(panel("HTTP discipline", ul));
+  }
+  // session_ctl: the witness or counterexample path, one message per line
+  if (body.evidence && typeof body.evidence === "object" && Array.isArray(body.evidence.path)) {
+    const steps = body.evidence.path.slice(0, MAX_ITEMS).map((n) => (n && typeof n.message === "string") ? n.message : null).filter((m) => m !== null);
+    const kind = String(body.evidence.kind || "");
+    if (steps.length) {
+      const ol = el("ol", "walk-steps");
+      steps.forEach((m) => ol.appendChild(el("li", "", m)));
+      parts.push(panel(kind === "counterexample" ? "Counterexample: the steps that break it" : "Witness: steps where it holds", ol));
+    } else if (body.evidence.note) parts.push(el("p", "meta", String(body.evidence.note)));
+  }
+  // session_compat: per role, can it go first, can it stay behind
+  if (body.tool === "session_compat" && Array.isArray(body.roles) && body.roles.length && typeof body.roles[0] === "object") {
+    const ul = el("ul");
+    for (const r of body.roles.slice(0, MAX_ITEMS)) {
+      const up = r && r.upgradeFirst && r.upgradeFirst.ok === true, stay = r && r.stayBehind && r.stayBehind.ok === true;
+      ul.appendChild(el("li", up && stay ? "" : "issue", `${String(r.role)}: ${up ? "can" : "cannot"} upgrade first, ${stay ? "can" : "cannot"} stay on the old version`));
+    }
+    parts.push(panel("Which roles can upgrade on their own", ul));
   }
   if (Array.isArray(body.events)) parts.push(panel("Event stream", animation(body)));
   if (body.diagram) parts.push(panel("Sequence diagram, generated from the protocol", diagram(body.diagram)));
@@ -541,9 +559,8 @@ function drawWalk(body) {
   for (const r of senders) {
     const mine = next.filter((n) => String(n.from) === r);
     const row = el("div", "walk-row"), who = el("span", "walk-role");
-    // ⊕: this role chooses among several steps; otherwise it simply may take the one
-    if (mine.length > 1) { who.appendChild(el("span", "sym", "⊕ ")); who.appendChild(document.createTextNode(r + " chooses")); }
-    else who.appendChild(document.createTextNode(r));
+    // a role with several steps chooses among them; with one it simply may take it
+    who.appendChild(document.createTextNode(mine.length > 1 ? r + " chooses" : r));
     row.appendChild(who);
     for (const n of mine) {
       const b = el("button", "step" + (mine.length > 1 ? " choice" : ""), n.act === true ? `${n.label} (event)` : `${n.label} → ${n.to}`);
@@ -559,10 +576,7 @@ function drawWalk(body) {
     box.appendChild(row);
   }
   const waiting = roles.filter((r) => !senders.includes(r));
-  const choosing = senders.some((r) => next.filter((n) => String(n.from) === r).length > 1);
-  const verb = waiting.length === 1 ? "waits" : "wait";
-  if (next.length && waiting.length) box.appendChild(el("p", "walk-wait", choosing
-    ? `& ${waiting.join(", ")} ${verb} to learn the choice from what arrives` : `${waiting.join(", ")} ${verb}`));
+  if (next.length && waiting.length) box.appendChild(el("p", "walk-wait", `${waiting.join(", ")} ${waiting.length === 1 ? "waits" : "wait"}`));
   if (body.canEnd === true && next.length) box.appendChild(el("p", "walk-end", "The session may also end here."));
   const undo = el("button", "", "Undo"), restart = el("button", "", "Start again"), close = el("button", "", "Close");
   undo.disabled = !walkEvents.length;

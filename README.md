@@ -159,7 +159,7 @@ osascript -e 'quit app "Claude"'; sleep 2; open -a Claude
 
 Then design with session types in the conversation, for example: "Use LeanFM to design a
 library-lending service as a session type, check it, and animate a stream of 20 borrowers."
-`session_check`, `session_diagram`, `session_simulate`, `session_conform`, `session_next`, `session_compat` and `session_skeleton` take the protocol as LeanFM protocol
+`session_review`, `session_check`, `session_diagram`, `session_simulate`, `session_conform`, `session_next`, `session_ctl`, `session_openapi`, `session_compat` and `session_skeleton` take the protocol as LeanFM protocol
 text (`protocol Name (Roles) { ... }`, the same syntax as `LeanFM/Session/Syntax.lean`), read by a
 parser for that grammar alone, so nothing submitted is elaborated or run; the
 `leanfm://language/session-reference` resource documents it. Their results render inline, with the
@@ -168,8 +168,13 @@ the generated sequence diagram, each role's typestate API, the calls with routes
 codes, and the event stream as an animation where clicking an event traces its `prior` and
 `cause` (simple by default; More detail shows every route, status and prior link).
 Walk through (in the view, or `session_next`) plays one session a step at a time: a button for each
-message the protocol allows next, grouped by the role that sends it, with ⊕ where a role chooses
-and & for the roles that learn the choice from what arrives.
+message the protocol allows next, grouped by the role that sends it.
+`session_review` runs every check that applies (HTTP wherever a message has a route) and suggests an
+edit for each finding; call it after every change.
+`session_openapi` writes a role's HTTP interface (the requests it receives, with routes and
+statuses) as an OpenAPI 3.1 document to start a server or client from.
+`session_ctl` checks a rule the protocol's structure does not show, as a CTL formula over its
+messages ("never charge after no seat"), with the path that breaks it.
 `session_compat` compares two versions of a protocol and says which roles can be deployed first and
 which can stay on the old version, from the mixed systems themselves, with the steps to any
 deadlock.
@@ -181,7 +186,10 @@ cause}` per message) against the protocol and says where a session first breaks 
 
 For the whole loop on one small service (a protocol, the code generated from its typestates, an
 implementation on that code, and `session_conform` catching a plausible bug in its log), see
-[`examples/vibecode/lending`](examples/vibecode/lending/README.md).
+[`examples/vibecode/lending`](examples/vibecode/lending/README.md); for temporal properties, the trip
+saga in [`examples/vibecode/trip`](examples/vibecode/trip/README.md); for a service in its own
+sessions, the two-factor login in [`examples/vibecode/login`](examples/vibecode/login/Login.protocol);
+for an HTTP interface as OpenAPI, the sign-in in [`examples/vibecode/signin`](examples/vibecode/signin/SignIn.protocol).
 
 The [launcher](scripts/claude.sh) keeps Claude configuration, session history,
 memory, and temporary files under the ignored `.cache/claude/` directory using

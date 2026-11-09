@@ -72,9 +72,9 @@ def purchase : Global Role := Purchase .client .shop .bank
 #guard purchase.labels == ["Order", "Quote", "Pay", "Paid", "Shipped", "SoldOut"]
 -- a role that has not started is absent from a branch that never contacts it
 #guard (purchase.project Role.bank).toOption.map Local.render ==
-  some "offer & {\n  receive Pay from Client;\n  send Paid to Shop;\n} or {\n}"
+  some "offer {\n  receive Pay from Client;\n  send Paid to Shop;\n} or {\n}"
 #guard (purchase.project Role.shop).toOption.map Local.render ==
-  some "receive Order from Client;\nselect ⊕ {\n  send Quote to Client;\n  receive Paid from Bank;\n  send Shipped to Client;\n} or {\n  send SoldOut to Client;\n}"
+  some "receive Order from Client;\nselect {\n  send Quote to Client;\n  receive Paid from Bank;\n  send Shipped to Client;\n} or {\n  send SoldOut to Client;\n}"
 
 -- a where clause is typed Lean over decoded payloads
 def payGuard : Guard := Id.run do
@@ -172,7 +172,12 @@ def mayCall : Role → Role → Bool
 
 #guard purchase.httpCuts allHttp mayCall ==
   [ "Paid answers p, which Client sent to Bank, but goes to Shop"
-  , "Shipped is a request from Shop to Client, which Shop may not call" ]
+  , "Shipped is a request from Shop to Client, which Shop may not call"
+  -- over HTTP every request gets a response: these are left waiting at the end of a run
+  , "Pay (p) from Client to Bank never gets a response"
+  , "Paid from Bank to Shop never gets a response"
+  , "Shipped from Shop to Client never gets a response" ]
+
 
 protocol PurchaseHttp (Client, Shop, Bank) {
   o: Order from Client to Shop;
@@ -239,7 +244,7 @@ def purchaseSvg := purchase.diagram roles3
 -- but goes to Shop, so both stay solid
 #guard occurs purchaseSvg "class=\"msg reply\"" == 2
 #guard occurs purchaseSvg "class=\"frame alt\"" == 1
-#guard (purchaseSvg.splitOn "[⊕ Shop selects · &amp; Client, Bank offer]").length == 2
+#guard (purchaseSvg.splitOn "[Shop decides]").length == 2
 #guard occurs purchaseSvg ">p: Pay<" == 1
 #guard occurs purchaseSvg "class=\"guard\">[p.amount = q.price]" == 1
 
@@ -253,12 +258,12 @@ def replicatedSvg := replicatedOrder.diagram [.client, .primary, .r1, .r2, .r3]
 def transferSvg := transfer.diagram [.sender, .receiver]
 #guard occurs transferSvg "class=\"frame loop\"" == 1
 #guard occurs transferSvg "↻ continue Block" == 1
-#guard occurs transferSvg "[⊕ Receiver selects · &amp; Sender offers]" == 1
+#guard occurs transferSvg "[Receiver decides]" == 1
 
 -- an event is an action box; a race is drawn, and named as one, rather than hidden
 def timerSvg := (TransferWithTimer Role.sender Role.receiver).diagram [.sender, .receiver]
 #guard occurs timerSvg "class=\"act\"" == 1
-#guard occurs timerSvg "[race: no single role selects]" == 1
+#guard occurs timerSvg "[race: no single role decides]" == 1
 
 -- a response that follows other calls is still the reply to the call that asked for it, and a
 -- new call made after a reply is not a reply

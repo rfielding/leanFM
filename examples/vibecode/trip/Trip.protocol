@@ -1,0 +1,39 @@
+/-- Booking a trip: the seat is held first, then the room, so the Agency charges only when both are
+    held; every hold is then confirmed or released, so no airline or hotel is left holding. -/
+protocol Trip (Traveler, Agency, Flights, Hotels, Payments) {
+  sessions {
+    b: Book from Traveler to Agency route "POST /trips";
+    f: HoldSeat from Agency to Flights route "POST /seats/holds";
+    choice {
+      SeatHeld from Flights to Agency cause f status 201;
+      h: HoldRoom from Agency to Hotels route "POST /rooms/holds";
+      choice {
+        RoomHeld from Hotels to Agency cause h status 201;
+        c: Charge from Agency to Payments route "POST /charges";
+        choice {
+          Charged from Payments to Agency cause c status 201;
+          cs: ConfirmSeat from Agency to Flights route "POST /seats/confirmations";
+          SeatConfirmed from Flights to Agency cause cs status 200;
+          cr: ConfirmRoom from Agency to Hotels route "POST /rooms/confirmations";
+          RoomConfirmed from Hotels to Agency cause cr status 200;
+          Booked from Agency to Traveler cause b status 201;
+        } or {
+          Declined from Payments to Agency cause c status 402;
+          rs: ReleaseSeat from Agency to Flights route "DELETE /seats/holds";
+          SeatReleased from Flights to Agency cause rs status 204;
+          rr: ReleaseRoom from Agency to Hotels route "DELETE /rooms/holds";
+          RoomReleased from Hotels to Agency cause rr status 204;
+          PaymentFailed from Agency to Traveler cause b status 402;
+        }
+      } or {
+        NoRoom from Hotels to Agency cause h status 409;
+        rs2: ReleaseSeat from Agency to Flights route "DELETE /seats/holds";
+        SeatReleased from Flights to Agency cause rs2 status 204;
+        Unavailable from Agency to Traveler cause b status 409;
+      }
+    } or {
+      NoSeat from Flights to Agency cause f status 409;
+      Unavailable from Agency to Traveler cause b status 409;
+    }
+  }
+}

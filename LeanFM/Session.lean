@@ -13,6 +13,8 @@ import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
 import LeanFM.Session.Evolution
+import LeanFM.Session.OpenApi
+import LeanFM.Session.Review
 import LeanFM.Session.ProjectionTests
 import LeanFM.Session.SessionTests
 
