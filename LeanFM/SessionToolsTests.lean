@@ -319,9 +319,22 @@ with session_skeleton, then `python3 lending.py > log.json` and `--bug > bug-log
 def lendingProtocol : String := include_str "../examples/vibecode/lending/Lending.protocol"
 def lendingArgs (log : String) : Json := (leanArgs lendingProtocol).setObjVal! "events" (parse! log)
 #guard verdict (check (leanArgs lendingProtocol)) == "ok"
--- the README's picture is the generated diagram of the current protocol, not a drawing
+-- the README's picture is the generated diagram of the current protocol, not a drawing. A copy may
+-- carry a provenance manifest (C2PA content credentials, added when a file is delivered); that one
+-- metadata element is set aside and everything drawn is compared exactly
+def withoutProvenance (svg : String) : String :=
+  let s := svg.replace " xmlns:c2pa=\"http://c2pa.org/manifest\"" ""
+  match s.splitOn "<metadata>" with
+  | [before, rest] => match rest.splitOn "</metadata>" with
+    | [_, after] => before ++ after
+    | _ => s
+  | _ => s
 #guard (field (diagram ((leanArgs lendingProtocol).setObjVal! "theme" (Json.str "dark"))) "svg").getStr?.toOption ==
-  some (include_str "../examples/vibecode/lending/Lending.svg")
+  some (withoutProvenance (include_str "../examples/vibecode/lending/Lending.svg"))
+-- negative: only the metadata goes; a change to the drawing still shows
+#guard withoutProvenance "<svg xmlns:c2pa=\"http://c2pa.org/manifest\"><metadata>m</metadata><text>A</text></svg>" == "<svg><text>A</text></svg>"
+#guard withoutProvenance "<svg><text>A</text></svg>" != "<svg><text>B</text></svg>"
+#guard withoutProvenance "<svg><metadata>1</metadata><metadata>2</metadata></svg>" == "<svg><metadata>1</metadata><metadata>2</metadata></svg>"
 #guard verdict (conform (lendingArgs (include_str "../examples/vibecode/lending/log.json"))) == "conforms"
 #guard ((field (conform (lendingArgs (include_str "../examples/vibecode/lending/log.json"))) "reading").getStr?.toOption.getD "").contains
   "80 events in 20 sessions follow the protocol"
