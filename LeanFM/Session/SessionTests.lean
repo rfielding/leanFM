@@ -4,6 +4,9 @@ import LeanFM.Session.Physics
 import LeanFM.Session.Spec
 import LeanFM.Session.Topology
 import LeanFM.Session.Http
+import LeanFM.Session.Diagram
+import LeanFM.Session.Calls
+import LeanFM.Session.Events
 
 /-!
 # Session-type library tests (clauses selfhost.session.*)
@@ -40,6 +43,11 @@ structure Timeout where               deriving TypeName
 structure Write   where key : String  deriving TypeName
 structure Stored  where               deriving TypeName
 structure Done    where               deriving TypeName
+structure Bid     where amount : Nat  deriving TypeName
+structure Get     where               deriving TypeName
+structure Page    where               deriving TypeName
+structure Declined where              deriving TypeName
+structure Refused where               deriving TypeName
 
 def roles3 : List Role := [.client, .shop, .bank]
 
@@ -211,5 +219,203 @@ def deployment : Topology Role :=
 -- a library adds an interface kind by refining one; LeanFM itself does not change
 def grpc : IfaceKind := IfaceKind.http.refine "grpc" (adds := [⟨"deadline exceeded"⟩])
 #guard grpc.lineage == ["stream", "http"]
+
+/-! ## selfhost.session.diagram -/
+
+/-- How many times `pat` occurs in `s`. -/
+def occurs (s pat : String) : Nat := (s.splitOn pat).length - 1
+
+def purchaseSvg := purchase.diagram roles3
+-- every message is one arrow, and nothing else is drawn as an arrow
+#guard occurs purchaseSvg "class=\"msg" == purchase.labels.length
+-- replies (the cause chain reaches a call from the receiver to the sender) are dashed: Quote and
+-- SoldOut answer o; Pay is a new call made after a reply, and Paid answers Client's call to Bank
+-- but goes to Shop, so both stay solid
+#guard occurs purchaseSvg "class=\"msg reply\"" == 2
+#guard occurs purchaseSvg "class=\"frame alt\"" == 1
+#guard (purchaseSvg.splitOn "[Shop selects; others offer]").length == 2
+#guard occurs purchaseSvg ">p: Pay<" == 1
+#guard occurs purchaseSvg "class=\"guard\">[p.amount = q.price]" == 1
+
+def replicatedSvg := replicatedOrder.diagram [.client, .primary, .r1, .r2, .r3]
+#guard occurs replicatedSvg "class=\"msg" == 8
+#guard occurs replicatedSvg "class=\"frame ref\"" == 1
+#guard occurs replicatedSvg "[Replicate]" == 1
+#guard occurs replicatedSvg "class=\"frame join\"" == 1
+#guard occurs replicatedSvg "[any 2 of 3]" == 1
+
+def transferSvg := transfer.diagram [.sender, .receiver]
+#guard occurs transferSvg "class=\"frame loop\"" == 1
+#guard occurs transferSvg "↻ continue Block" == 1
+#guard occurs transferSvg "[Receiver selects; others offer]" == 1
+
+-- an event is an action box; a race is drawn, and named as one, rather than hidden
+def timerSvg := (TransferWithTimer Role.sender Role.receiver).diagram [.sender, .receiver]
+#guard occurs timerSvg "class=\"act\"" == 1
+#guard occurs timerSvg "[race: no single role selects]" == 1
+
+-- a response that follows other calls is still the reply to the call that asked for it, and a
+-- new call made after a reply is not a reply
+protocol PayThenCharge (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  q: Quote from Shop to Client cause o;
+  p: Pay from Client to Shop cause q;
+  v: Verify from Shop to Bank cause p;
+  h: Hold from Bank to Shop cause v;
+     Receipt from Shop to Client cause h;
+}
+def payThenChargeSvg := (PayThenCharge Role.client Role.shop Role.bank).diagram roles3
+#guard occurs payThenChargeSvg "class=\"msg reply\"" == 3  -- Quote, Hold, Receipt
+#guard occurs payThenChargeSvg "class=\"msg\"" == 3        -- Order, Pay, Verify
+
+protocol Serve (Client, Shop) {
+  sessions {
+    g: Get from Client to Shop;
+       Page from Shop to Client cause g;
+  }
+}
+def serveSvg := (Serve Role.client Role.shop).diagram [.client, .shop]
+#guard occurs serveSvg "class=\"frame sessions\"" == 1
+#guard occurs serveSvg "class=\"msg reply\"" == 1
+
+protocol Bidding (Client, Shop) {
+  q: Quote from Shop to Client;
+  b: Bid from Client to Shop cause q where b.amount < q.price && b.amount > 0;
+}
+def biddingSvg := (Bidding Role.client Role.shop).diagram [.client, .shop]
+#guard occurs biddingSvg "[b.amount &lt; q.price &amp;&amp; b.amount &gt; 0]" == 1
+#guard occurs biddingSvg "b.amount <" == 0
+
+/-! ## selfhost.session.calls -/
+
+protocol Checkout (Client, Shop, Bank) {
+  o: Order from Client to Shop route "POST /orders";
+  choice {
+    q: Quote from Shop to Client cause o status 201;
+    p: Pay from Client to Shop cause q route "POST /orders/{id}/payment" where p.amount = q.price;
+    v: Verify from Shop to Bank cause p route "POST /charges";
+    choice {
+      h: Hold from Bank to Shop cause v;
+         Receipt from Shop to Client cause h status 200;
+    } or {
+      x: Declined from Bank to Shop cause v;
+         Refused from Shop to Client cause x status 402;
+    }
+  } or {
+    SoldOut from Shop to Client cause o status 409;
+  }
+}
+def checkout : Global Role := Checkout .client .shop .bank
+
+#guard checkout.issues roles3 == []
+-- a call is a request with the responses its cause chain ties to it; the bank's charge is part of
+-- the payment's detail, nested under it; responses are never calls of their own
+#guard checkout.callsText ==
+  "o: Order  Client → Shop  POST /orders\n" ++
+  "  returns Quote 201 | SoldOut 409\n" ++
+  "p: Pay  Client → Shop  POST /orders/{id}/payment\n" ++
+  "  returns Receipt 200 | Refused 402\n" ++
+  "    v: Verify  Shop → Bank  POST /charges\n" ++
+  "      returns Hold | Declined"
+-- a one-way message is a call with no reply
+#guard purchase.callsText ==
+  "o: Order  Client → Shop\n  returns Quote | SoldOut\n" ++
+  "p: Pay  Client → Bank\n  returns no reply\n" ++
+  "    Paid  Bank → Shop\n      returns no reply\n" ++
+  "Shipped  Shop → Client\n  returns no reply"
+
+-- each role's projection read as a typestate API
+#guard ((checkout.typestates roles3).lookup Role.client).bind (·.toOption) == some ((
+  "start : S0\n" ++
+  "S0.sendOrder(m : Order) : S1    -- to Shop\n" ++
+  "S1.receive() : Quote × S2 (from Shop) | SoldOut × End (from Shop)\n" ++
+  "S2.sendPay(m : Pay) : S3    -- to Shop\n" ++
+  "S3.receive() : Receipt × End (from Shop) | Refused × End (from Shop)"))
+#guard ((checkout.typestates roles3).lookup Role.bank).bind (·.toOption) == some ((
+  "start : S0\n" ++
+  "S0.receive() : Verify × S1 (from Shop) | nothing × End\n" ++
+  "S1.sendHold(m : Hold) : End    -- to Shop\n" ++
+  "S1.sendDeclined(m : Declined) : End    -- to Shop"))
+-- a loop's continue returns to the loop's state
+#guard ((transfer.typestates [.sender, .receiver]).lookup Role.sender).bind (·.toOption) == some ((
+  "start : S0\n" ++
+  "S0.sendData(m : Data) : S1    -- to Receiver\n" ++
+  "S1.receive() : Ack × S0 (from Receiver) | LastAck × End (from Receiver)"))
+
+-- the diagram shows routes and statuses, and each call as an activation bar on the callee; a
+-- response in another branch gets a bar of its own from where that branch begins
+def checkoutSvg := checkout.diagram roles3
+#guard occurs checkoutSvg "o: Order · POST /orders<" == 1
+#guard occurs checkoutSvg "q: Quote · 201<" == 1
+#guard occurs checkoutSvg "Refused · 402<" == 1
+#guard occurs checkoutSvg "class=\"activation\"" == 6
+
+protocol Lookup (Client, Shop) {
+  g: Get from Client to Shop route "GET /pages?q=<a&b>";
+     Page from Shop to Client cause g status 200;
+}
+def lookupSvg := (Lookup Role.client Role.shop).diagram [.client, .shop]
+#guard occurs lookupSvg "GET /pages?q=&lt;a&amp;b&gt;" == 1
+#guard occurs lookupSvg "<a&b>" == 0
+
+/-! ## selfhost.session.events -/
+
+/-- Every link of every event points to an earlier event of the same session. -/
+def linksBackward (evs : Array (Event Role)) : Bool :=
+  evs.toList.all fun e =>
+    (e.prior ++ e.cause.toList ++ e.answers.toList).all fun p =>
+      p < e.id && (evs[p]?.map (·.session)) == some e.session
+
+/-- The events a given event reaches backwards through prior. -/
+partial def before (evs : Array (Event Role)) (id : Nat) : List Nat :=
+  match evs[id]? with
+  | some e => e.prior ++ e.prior.flatMap (before evs)
+  | none => []
+
+def sorted (xs : List String) : List String := xs.mergeSort (· ≤ ·)
+def sessionLabels (evs : Array (Event Role)) (s : Nat) : List String :=
+  (evs.toList.filter (·.session == s)).map (·.label)
+
+-- each session of a served protocol is one instance of it; the response answers its request
+def serveEvents := (Serve Role.client Role.shop).simulate (seed := 3) (instances := 5)
+#guard serveEvents.size == 10
+#guard linksBackward serveEvents
+#guard (List.range 5).all fun i => sessionLabels serveEvents (i + 1) == ["Get", "Page"]
+#guard serveEvents.toList.all fun e => e.label != "Page" || (e.answers.bind (serveEvents[·]?)).map (·.label) == some "Get"
+
+-- whatever branches the seed picks, a run contains exactly the messages of one run of the protocol
+#guard (List.range 20).all fun seed =>
+  let evs := checkout.simulate (seed := seed)
+  linksBackward evs &&
+  (checkout.runs.map fun r => sorted (r.map Step.label)).contains (sorted (sessionLabels evs 0))
+-- the same seed gives the same stream
+#guard eventsJson (checkout.simulate (seed := 9)) == eventsJson (checkout.simulate (seed := 9))
+
+-- par branches are concurrent: neither reaches the other through prior; what follows the par
+-- reaches both, even the branch whose actors it does not involve
+-- (on different actors: one actor handles one message at a time, so its own events are ordered)
+protocol Fan (Client, Shop, Bank, Ledger) {
+  o: Order from Client to Shop;
+  v: Verify from Shop to Bank cause o;
+  par {
+    Receipt from Shop to Client cause o;
+  } and {
+    Hold from Bank to Ledger cause v;
+  }
+  Done from Shop to Client cause o;
+}
+def fanEvents := (Fan Role.client Role.shop Role.bank Role.r1).simulate (seed := 5)
+def idOf (evs : Array (Event Role)) (l : String) : Nat := ((evs.toList.find? (·.label == l)).map (·.id)).getD 0
+#guard linksBackward fanEvents
+#guard !(before fanEvents (idOf fanEvents "Receipt")).contains (idOf fanEvents "Hold")
+#guard !(before fanEvents (idOf fanEvents "Hold")).contains (idOf fanEvents "Receipt")
+#guard (before fanEvents (idOf fanEvents "Done")).contains (idOf fanEvents "Receipt")
+#guard (before fanEvents (idOf fanEvents "Done")).contains (idOf fanEvents "Hold")
+
+-- a loop repeats at most its fuel, then ends
+#guard ((transfer.simulate (seed := 1) (loops := 2)).toList.filter (·.label == "Data")).length ≤ 3
+
+-- strings are escaped in the JSON
+#guard jsonString "a\"b\\c\n" == "\"a\\\"b\\\\c\\n\""
 
 end LeanFM.Session.SessionTests

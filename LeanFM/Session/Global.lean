@@ -39,6 +39,12 @@ structure Interaction (R : Type) where
   src   : R
   dst   : R
   cause : Option String := none
+  /-- The status a response carries (an HTTP code, or a result tag of a function call), for
+  people and generated views; no rule reads it. -/
+  status : Option Nat := none
+  /-- The operation a request invokes (an HTTP method and path such as `POST /orders`, or a
+  function name), for people and generated views; no rule reads it. -/
+  route : Option String := none
   guard : Option Guard := none
   deriving Repr
 

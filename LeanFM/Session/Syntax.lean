@@ -23,6 +23,10 @@ protocol Purchase (Client, Shop, Bank) {
 * A message label is the name of a Lean type, the protocol's vocabulary; a misspelt label is
   an unknown identifier, not a new message.
 * `o:` names a message so that later ones can say `cause o` and guards can read `o.item`.
+* `route "POST /orders"` names the operation a request invokes: an HTTP method and path, or a
+  function name. Like `status`, no rule reads it.
+* `status 402` is the status a response carries: an HTTP code, or the result tag of a function
+  call. No rule reads it; generated diagrams and call listings show it.
 * `where e` is a Lean `Bool`-valued condition over the payloads of named earlier messages; it is
   type-checked when the protocol is written and evaluated over decoded payloads at check time.
 * `Timeout at Sender;` is an event at one role only.
@@ -41,7 +45,7 @@ open Lean
 declare_syntax_cat sess_stmt (behavior := both)
 syntax sess_binder := ident " : " ident
 
-syntax (atomic(ident " : "))? ident &" from " ident &" to " ident (&" cause " ident)? (" where " term)? ";" : sess_stmt
+syntax (atomic(ident " : "))? ident &" from " ident &" to " ident (&" cause " ident)? (&" route " str)? (&" status " num)? (" where " term)? ";" : sess_stmt
 syntax ident " at " ident ";" : sess_stmt
 syntax &"choice " " { " sess_stmt* " }" (&" or " " { " sess_stmt* " }")* : sess_stmt
 syntax &"par " " { " sess_stmt* " }" (&" and " " { " sess_stmt* " }")* : sess_stmt
@@ -69,10 +73,12 @@ def str (n : Name) : Term := Syntax.mkStrLit n.toString
 macro_rules
   | `(sess% [$_bs,*] { }) => `(LeanFM.Session.Global.done)
 
-  | `(sess% [$bs,*] { $[$i:ident :]? $l:ident from $a:ident to $b:ident $[cause $c:ident]? $[where $e:term]? ; $rest* }) => do
+  | `(sess% [$bs,*] { $[$i:ident :]? $l:ident from $a:ident to $b:ident $[cause $c:ident]? $[route $rt:str]? $[status $st:num]? $[where $e:term]? ; $rest* }) => do
     let binders : Array (Ident × Ident) := bs.getElems.map fun b => (⟨b.raw[0]⟩, ⟨b.raw[2]⟩)
     let idT ← match i with | some i => `(some $(str i.getId)) | none => `(none)
     let causeT ← match c with | some c => `(some $(str c.getId)) | none => `(none)
+    let statusT ← match st with | some n => `(some $n) | none => `(none)
+    let routeT ← match rt with | some r => `(some $r) | none => `(none)
     -- the guard sees the payloads of earlier named messages and of this one
     let scope := match i with | some i => binders.push (i, l) | none => binders
     let guardT ← match e with
@@ -88,7 +94,7 @@ macro_rules
       | some i => pure (bs.getElems.push (← `(sess_binder| $i:ident : $l:ident)))
       | none => pure bs.getElems
     `(LeanFM.Session.Global.msg
-        { id := $idT, label := (fun (_ : Option $l) => $(str l.getId)) none, src := $a, dst := $b, cause := $causeT, guard := $guardT }
+        { id := $idT, label := (fun (_ : Option $l) => $(str l.getId)) none, src := $a, dst := $b, cause := $causeT, status := $statusT, route := $routeT, guard := $guardT }
         (sess% [$bs',*] { $rest* }))
 
   | `(sess% [$bs,*] { $l:ident at $r:ident ; $rest* }) =>

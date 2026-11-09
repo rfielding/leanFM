@@ -20,3 +20,5 @@ import LeanFM.Render
 import LeanFM.MCP
 -- the session-type library and its tests (clauses selfhost.session.*)
 import LeanFM.Session
+-- the philosophy calculator example and its tests
+import LeanFM.Philosophy.ExistenceTests

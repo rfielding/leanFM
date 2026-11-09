@@ -5,6 +5,9 @@ import LeanFM.Session.Http
 import LeanFM.Session.Spec
 import LeanFM.Session.Syntax
 import LeanFM.Session.Knowledge
+import LeanFM.Session.Diagram
+import LeanFM.Session.Calls
+import LeanFM.Session.Events
 import LeanFM.Session.ProjectionTests
 import LeanFM.Session.SessionTests
 
@@ -18,6 +21,9 @@ Pull in only what you use:
 * `LeanFM.Session.Physics`  channel declarations and presets
 * `LeanFM.Session.Topology` interfaces, scopes and the deployment tree
 * `LeanFM.Session.Http`     the HTTP call discipline (cut and un-cut)
+* `LeanFM.Session.Diagram`  sequence diagrams drawn from a global type
+* `LeanFM.Session.Calls`    calls (request, detail, responses) and typestate APIs
+* `LeanFM.Session.Events`   event streams generated from a global type
 * `LeanFM.Session.Spec`     properties, assumptions and handled conditions
 
 This module brings in all of them.
