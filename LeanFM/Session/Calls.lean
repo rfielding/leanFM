@@ -134,7 +134,7 @@ inductive Method (R : Type) where
   | recv (fromRole : R) (label : String) (next : String)
   | act (label : String) (next : String)
   | offer (alts : List (OfferAlt R))
-  | fork (branches : List String) (next : String)
+  | fork (branches : List String) (next : String) (need : Option Nat := none)
   | serve (body : String) (next : String)
   | cont (next : String)
   | stop
@@ -160,6 +160,7 @@ partial def append : Local R → Local R → Local R
   | .select bs, b => .select (bs.map (append · b))
   | .offer bs, b => .offer (bs.map (append · b))
   | .par bs k, b => .par bs (append k b)
+  | .join n bs k, b => .join n bs (append k b)
   | .loop n body, b => .loop n (append body b)
   | .sessions body k, b => .sessions body (append k b)
   | .var n, _ => .var n
@@ -173,6 +174,13 @@ partial def norm : Local R → Local R
     | [] => norm k
     | [b] => norm (append b k)
     | live => .par live k
+  -- a role in fewer branches than the join needs waits for all of its own: whether the others
+  -- have ended it cannot see, so the run is held to the count by conformance
+  | .join n bs k =>
+    match bs.filter (fun b => match b with | .done => false | _ => true) with
+    | [] => norm k
+    | [b] => norm (append b k)
+    | live => if n ≥ live.length then .par live k else .join n live k
   | l => l
 
 mutual
@@ -207,6 +215,9 @@ partial def edges (env : List (String × String)) (i : Nat) (l : Local R) : M R 
   | .par bs k => do
       let subs ← bs.mapM (ts env)
       method i (.fork subs (← ts env k))
+  | .join n bs k => do
+      let subs ← bs.mapM (ts env)
+      method i (.fork subs (← ts env k) (some n))
   | .loop n b => edges ((n, nm i) :: env) i b
   | .sessions b k => do
       let b' ← ts env b
@@ -228,7 +239,8 @@ def Method.line (i : Nat) : Method R → String
       | .nothing => "nothing × End"
       | .other k => s!"_ × {k}"
     s!"{nm i}.receive() : {" | ".intercalate a}"
-  | .fork subs k => s!"{nm i}.fork() : ({" ∥ ".intercalate subs}) then {k}"
+  | .fork subs k none => s!"{nm i}.fork() : ({" ∥ ".intercalate subs}) then {k}"
+  | .fork subs k (some n) => s!"{nm i}.fork() : any {n} of ({" ∥ ".intercalate subs}) then {k}"
   | .serve b k => s!"{nm i}.serve() : many {b} then {k}"
   | .cont k => s!"{nm i}.continue() : {k}"
   | .stop => s!"{nm i}.stop() : End"

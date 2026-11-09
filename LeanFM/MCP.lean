@@ -226,7 +226,7 @@ def toolDefinitions : Array Json := #[
       ("protocol", anyJson "alternative to lean: {name?, roles, steps} in the JSON form"),
       ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])])] []),
   tool "session_diagram" "Draw a session type"
-    "Draw a protocol as a UML sequence diagram generated from the session type: alt frames name the role that selects, par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
+    "Draw a protocol as a UML sequence diagram generated from the session type: alt frames captioned in session-type notation (⊕ the role that selects, & the roles that offer), par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("theme", stringSchema "dark (default) or light")] []),
   tool "session_simulate" "Generate an event stream from a session type"

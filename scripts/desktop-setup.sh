@@ -60,11 +60,18 @@ python3 - "$CFG" "$PORT" <<'PY'
 import json, os, shutil, sys
 path, port = sys.argv[1], sys.argv[2]
 data = {}
+backed_up = False
 if os.path.exists(path):
     with open(path) as f:
         text = f.read()
-    data = json.loads(text) if text.strip() else {}
+    try:
+        data = json.loads(text) if text.strip() else {}
+    except ValueError as e:
+        sys.exit(f"{path} is not valid JSON ({e}); nothing was changed. Fix it, or move it aside and rerun.")
+    if not isinstance(data, dict) or not isinstance(data.get("mcpServers", {}), dict):
+        sys.exit(f"{path} does not hold an object with an mcpServers object; nothing was changed.")
     shutil.copy(path, path + ".bak")
+    backed_up = True
 entry = {"command": "npx", "args": ["-y", "mcp-remote", f"http://127.0.0.1:{port}/mcp"]}
 servers = data.setdefault("mcpServers", {})
 if servers.get("leanfm") == entry:
@@ -76,7 +83,8 @@ else:
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
-    print(f"Added LeanFM to {path} (previous version saved as .bak); restart Claude Desktop")
+    note = " (previous version saved as .bak)" if backed_up else ""
+    print(f"Added LeanFM to {path}{note}; restart Claude Desktop")
 PY
 
 cat <<'TXT'
@@ -85,6 +93,7 @@ Quit and reopen Claude Desktop, then start a conversation with, for example:
 
   Use LeanFM's design_with_session_types prompt to design a library-lending service:
   members borrow and return books, a librarian approves holds. Check it, show the diagram
-  and each role's typestate, animate 20 members, then sketch the code and conform its logs.
+  and each role's typestate, animate 20 members, generate the code with session_skeleton,
+  implement it, and conform its logs.
 
 TXT

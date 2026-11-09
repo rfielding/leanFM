@@ -81,18 +81,22 @@ class End(State):
 
 
 class Fork:
-    """Concurrent branches: run each state in branches toward End, then join to continue. For par,
-    join with the End of every branch. For join k, join once k branches have ended and keep running
-    the others beside what follows; the typestate does not carry k, so session_conform checks it."""
+    """Concurrent branches: run each state in branches toward End, then join to continue: with the
+    End of every branch for par, or of need of them for join (the others keep running beside what
+    follows). A role in fewer branches than a join needs waits for all of its own; whether the
+    others have ended it cannot see, so session_conform holds the run to the count."""
 
-    def __init__(self, branches, then):
+    def __init__(self, branches, then, need=None):
         self.branches, self._then, self._joined = branches, then, False
+        self.need = len(branches) if need is None else need
 
     def join(self, *ends):
         if self._joined:
             raise ProtocolError("this fork was already joined")
-        if not ends or len(ends) > len(self.branches) or not all(isinstance(e, End) for e in ends):
-            raise ProtocolError("join takes the End of each branch that has finished")
+        if len(ends) < self.need or len(ends) > len(self.branches) or not all(isinstance(e, End) for e in ends):
+            raise ProtocolError(f"join takes the End of {self.need} of the {len(self.branches)} branches")
+        if len({id(e) for e in ends}) != len(ends):
+            raise ProtocolError("join was given the same End twice")
         self._joined = True
         return self._then()
 

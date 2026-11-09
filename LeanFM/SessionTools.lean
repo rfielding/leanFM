@@ -595,7 +595,7 @@ protocol PlaceOrder (Client, Shop, Bank) {
 |---|---|
 | `x: Label from A to B cause y route \"...\" status 201 where e;` | a message; `x:`, `cause`, `route`, `status` and `where` are optional; `cause y` names an earlier id, and a response's cause chain reaches its request |
 | `Label at A;` | something a role does on its own |
-| `choice { ... } or { ... }` | exactly one branch happens; the role that starts every branch decides |
+| `choice { ... } or { ... }` | exactly one branch happens; the role that starts every branch decides (⊕, internal choice: `select ⊕` in its projection); the others learn the branch from what arrives (&, external choice: `offer &`) |
 | `par { ... } and { ... }` | branches run concurrently; what follows waits for all |
 | `join 2 of { ... } and { ... } and { ... }` | what follows waits for any 2 branches |
 | `rec Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |

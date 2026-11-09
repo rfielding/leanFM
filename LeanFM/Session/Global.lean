@@ -91,6 +91,8 @@ inductive Local (R : Type) where
   /-- Another role chose; this role learns which branch from what arrives. -/
   | offer  (branches : List (Local R))
   | par    (branches : List (Local R)) (k : Local R)
+  /-- Branches of which this role continues once `need` have ended (the rest keep running). -/
+  | join   (need : Nat) (branches : List (Local R)) (k : Local R)
   | loop   (name : String) (body : Local R)
   | var    (name : String)
   /-- Serve (or start) any number of instances of `body`, each on its own thread, then `k`. -/
@@ -107,9 +109,13 @@ partial def lines {R : Type} [ToString R] [BEq R] (ind : String := "") : Local R
   | .send to l k => s!"{ind}send {l} to {to};" :: lines ind k
   | .recv fr l k => s!"{ind}receive {l} from {fr};" :: lines ind k
   | .act l k => s!"{ind}{l};" :: lines ind k
-  | .select bs => block ind "select" "or" bs
-  | .offer bs => block ind "offer" "or" bs
+  | .select bs => block ind "select ⊕" "or" bs
+  | .offer bs => block ind "offer &" "or" bs
   | .par bs k => block ind "par" "and" (bs.filter (· != .done)) ++ lines ind k
+  | .join n bs k =>
+    -- as the typestate reads it: a role in no more than n of the branches waits for all of its own
+    let live := bs.filter (· != .done)
+    block ind (if live.length ≤ n then "par" else s!"join {n} of") "and" live ++ lines ind k
   | .loop n b => (s!"{ind}rec {n} " ++ "{") :: lines (ind ++ "  ") b ++ [ind ++ "}"]
   | .var n => [s!"{ind}continue {n};"]
   | .sessions b k => (s!"{ind}sessions " ++ "{") :: lines (ind ++ "  ") b ++ [ind ++ "}"] ++ lines ind k
@@ -275,7 +281,7 @@ partial def _root_.LeanFM.Session.Local.firstReceives {R : Type} [BEq R] : Local
   | .recv _ l _ => some [l]
   | .send .. | .act .. => none
   | .select bs | .offer bs => bs.foldlM (fun acc b => do pure (acc ++ (← b.firstReceives))) []
-  | .par bs k =>
+  | .par bs k | .join _ bs k =>
     let live := bs.filter (· != .done)
     if live.isEmpty then k.firstReceives
     else live.foldlM (fun acc b => do pure (acc ++ (← b.firstReceives))) []
@@ -365,7 +371,7 @@ partial def projectFrom [DecidableEq R] [ToString R] (r : R) (started : Bool) (g
     let ps ← bs.mapM (projectFrom r (started || c == r))
     if c == r then pure (.select ps) else mergeBranches r c started ps
   | .par bs k => do pure (.par (← bs.mapM (projectFrom r started)) (← projectFrom r started k))
-  | .join _ bs k => do pure (.par (← bs.mapM (projectFrom r started)) (← projectFrom r started k))
+  | .join n bs k => do pure (.join n (← bs.mapM (projectFrom r started)) (← projectFrom r started k))
   | .loop n b => do pure (.loop n (← projectFrom r started b))
   | .var n => pure (.var n)
   -- every instance is a fresh session: nobody has taken part in it yet

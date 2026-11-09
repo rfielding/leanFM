@@ -14,7 +14,7 @@ one notation, so a diagram is a view of the protocol, never a separate drawing:
 | `route "POST /orders"`, `status 201` | `· POST /orders`, `· 201` after the label              |
 | a request and its responses      | an activation bar on the callee, request to last response  |
 | `L at A`                         | action box on A's lifeline                                 |
-| `choice { } or { }`              | `alt` frame, `D selects` (the decider), the others offer   |
+| `choice { } or { }`              | `alt` frame, `⊕ D selects · & E, F offer`: ⊕ marks the decider (internal choice), & the roles in the choice that learn it from what arrives (external choice) |
 | `par { } and { }`                | `par` frame with dashed dividers                           |
 | `join k of { } and { }`          | `par` frame captioned `any k of n`                         |
 | `rec N { ... continue N; }`      | `loop N` frame; `continue N` drawn as `↻ continue N`              |
@@ -250,8 +250,14 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
       emit (text (x0 + 8) y s!"↻ continue {name}" "start" .frame 11 (cls := "continue"))
       adv 6
   | .choice bs => do
+      -- session-type notation: ⊕ the role that chooses (internal choice), & the roles that learn
+      -- the choice from what arrives (external choice)
       let caption := match Global.decider bs with
-        | .ok r => s!"{r} selects; others offer"
+        | .ok r =>
+          let offering := roles.filter fun o => o != r && bs.any (Global.involves o)
+          let names := ", ".intercalate (offering.map toString)
+          let verb := if offering.length == 1 then "offers" else "offer"
+          if offering.isEmpty then s!"⊕ {r} selects" else s!"⊕ {r} selects · & {names} {verb}"
         | .error _ => "race: no single role selects"
       let top ← frameTop roles.length d "alt" caption
       branches roles d bs ""

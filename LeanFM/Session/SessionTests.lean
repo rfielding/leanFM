@@ -72,9 +72,9 @@ def purchase : Global Role := Purchase .client .shop .bank
 #guard purchase.labels == ["Order", "Quote", "Pay", "Paid", "Shipped", "SoldOut"]
 -- a role that has not started is absent from a branch that never contacts it
 #guard (purchase.project Role.bank).toOption.map Local.render ==
-  some "offer {\n  receive Pay from Client;\n  send Paid to Shop;\n} or {\n}"
+  some "offer & {\n  receive Pay from Client;\n  send Paid to Shop;\n} or {\n}"
 #guard (purchase.project Role.shop).toOption.map Local.render ==
-  some "receive Order from Client;\nselect {\n  send Quote to Client;\n  receive Paid from Bank;\n  send Shipped to Client;\n} or {\n  send SoldOut to Client;\n}"
+  some "receive Order from Client;\nselect ⊕ {\n  send Quote to Client;\n  receive Paid from Bank;\n  send Shipped to Client;\n} or {\n  send SoldOut to Client;\n}"
 
 -- a where clause is typed Lean over decoded payloads
 def payGuard : Guard := Id.run do
@@ -155,6 +155,11 @@ protocol ReplicatedOrder (Client, Primary, A, B, C) {
   Done from Primary to Client cause o;
 }
 def replicatedOrder : Global Role := ReplicatedOrder .client .primary .r1 .r2 .r3
+-- the join's count survives projection and reaches the typestate
+#guard ((replicatedOrder.project Role.primary).toOption.map Local.render).map (·.contains "join 2 of {") == some true
+#guard ((((replicatedOrder.typestates [.primary]).lookup Role.primary).bind (·.toOption)).map (·.contains "S1.fork() : any 2 of (S2 ∥ S4 ∥ S6) then S8")) == some true
+-- a replica takes part in one branch: for it the join is that branch, then nothing
+#guard ((replicatedOrder.project Role.r1).toOption.map Local.render) == some "receive Write from Primary;\nsend Stored to Primary;"
 #guard replicatedOrder.issues [.client, .primary, .r1, .r2, .r3] == []
 #guard replicatedOrder.labels.length == 8
 
@@ -234,7 +239,7 @@ def purchaseSvg := purchase.diagram roles3
 -- but goes to Shop, so both stay solid
 #guard occurs purchaseSvg "class=\"msg reply\"" == 2
 #guard occurs purchaseSvg "class=\"frame alt\"" == 1
-#guard (purchaseSvg.splitOn "[Shop selects; others offer]").length == 2
+#guard (purchaseSvg.splitOn "[⊕ Shop selects · &amp; Client, Bank offer]").length == 2
 #guard occurs purchaseSvg ">p: Pay<" == 1
 #guard occurs purchaseSvg "class=\"guard\">[p.amount = q.price]" == 1
 
@@ -248,7 +253,7 @@ def replicatedSvg := replicatedOrder.diagram [.client, .primary, .r1, .r2, .r3]
 def transferSvg := transfer.diagram [.sender, .receiver]
 #guard occurs transferSvg "class=\"frame loop\"" == 1
 #guard occurs transferSvg "↻ continue Block" == 1
-#guard occurs transferSvg "[Receiver selects; others offer]" == 1
+#guard occurs transferSvg "[⊕ Receiver selects · &amp; Sender offers]" == 1
 
 -- an event is an action box; a race is drawn, and named as one, rather than hidden
 def timerSvg := (TransferWithTimer Role.sender Role.receiver).diagram [.sender, .receiver]

@@ -44,7 +44,7 @@ def po := call check (withProtocol placeOrder)
         "p: Pay  Client → Shop\n  returns Receipt 200 | PaymentDeclined 402\n" ++
         "    c: Charge  Shop → Bank\n      returns Charged | Declined")
 -- the diagram comes as shapes: an alt frame names the shop as the role that selects
-#guard ((field po "diagram").getObjValD "shapes").compress.contains "Shop selects; others offer"
+#guard ((field po "diagram").getObjValD "shapes").compress.contains "⊕ Shop selects · & "
 -- every answer echoes the protocol it checked, so the view can edit it
 #guard (field po "protocol").compress == (parse! placeOrder).compress
 #guard (field (call diagram (withProtocol placeOrder)) "protocol").compress == (parse! placeOrder).compress
@@ -349,6 +349,12 @@ def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).get
 #guard (code "protocol T (S, R) { rec B { d: Data from S to R; choice { Ack from R to S cause d; continue B; } or { Done from R to S cause d; } } }").contains "return msg, SS0(ep)"
 #guard (code "protocol F (H, A, B) { par { x: Ping from H to A; Pong from A to H cause x; } and { y: Ping from H to B; Pong from B to H cause y; } Bye at H; }").contains
   "return Fork([HS1(ep), HS3(ep)], lambda: HS5(ep))"
+-- join k of: the generated fork joins on k ends
+#guard (code "protocol R (P, A, B, C) { join 2 of { wa: W from P to A; S from A to P cause wa; } and { wb: W from P to B; S from B to P cause wb; } and { wc: W from P to C; S from C to P cause wc; } Done at P; }").contains
+  "return Fork([PS1(ep), PS3(ep), PS5(ep)], lambda: PS7(ep), need=2)"
+-- choices are captioned in session-type notation: ⊕ the decider, & the roles that offer
+#guard ((field (diagram (leanArgs lendingProtocol)) "svg").getStr?.toOption.getD "").contains "[⊕ Desk selects · &amp; Member, Librarian offer]"
+#guard ((field (check (leanArgs lendingProtocol)) "projections").getObjValD "Member" |>.getObjValAs? String "local").toOption.map (·.contains "offer & {") == some true
 -- two messages alike with different ids or causes: the cause is passed, not guessed
 #guard (code "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
   "def send_reply(self, cause=None, body=None):"
