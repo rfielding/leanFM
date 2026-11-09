@@ -187,7 +187,50 @@ def checkSession (g : Global String) (sid : String) (evs : List LogEvent) (allow
   return { session := sid, events := count, complete := false,
            problem := some ((evs.getLast?.map (·.id)).getD "", s!"the session stops early; the protocol still expects {", ".intercalate allowed}") }
 
+/-- One step a protocol allows next: a message, with the event its cause must name, or an event. -/
+structure NextStep where
+  label : String
+  src   : String
+  /-- the receiver; for an event, the role that performs it -/
+  dst   : String
+  isAct : Bool := false
+  /-- the id of the earlier event this step must give as its cause, when the protocol names one -/
+  cause : Option String := none
+  deriving Repr, BEq, Inhabited
+
+/-- The steps a protocol state allows next, with causes resolved through the run's bindings. -/
+partial def nextOf (bind : List (String × String)) (fuel : Nat := 32) : Global String → List NextStep
+  | .msg i _ => [{ label := i.label, src := i.src, dst := i.dst, cause := i.cause.bind (fun y => bind.lookup y) }]
+  | .act r l _ => [{ label := l, src := r, dst := r, isAct := true }]
+  | .choice bs => bs.flatMap (nextOf bind fuel)
+  | .par bs k => bs.flatMap (nextOf bind fuel) ++ (if bs.all nullable then nextOf bind fuel k else [])
+  | .join n bs k => bs.flatMap (nextOf bind fuel) ++ (if (bs.filter nullable).length ≥ n then nextOf bind fuel k else [])
+  | .loop n b => if fuel == 0 then [] else nextOf bind (fuel - 1) (subst n (.loop n b) b)
+  | .sessions _ k => nextOf bind fuel k
+  | .box _ b k => nextOf bind fuel (Global.andThen b k)
+  | .var _ | .done => []
+
+/-- The protocol states that explain a run of one session, or the first problem with it. -/
+def statesAfter (g : Global String) (evs : List LogEvent) : Except String (List State) := do
+  let r := checkSession g "walk" evs true
+  if let some (e, why) := r.problem then throw s!"event {e}: {why}"
+  let mut states : List State := [{ g, bind := [] }]
+  for e in evs do
+    let next := states.flatMap (step e 64 false)
+    states := next.foldl (fun acc st => if acc.any (stateKey · == stateKey st) then acc else acc ++ [st]) []
+  return states
+
 end Conform
+
+/-- What may happen next in one session after `log` (its events, in order): every step some state
+that explains the run allows, and whether the session may end here. With `sessions { body }` at the
+top the session is one instance of the body. A run the protocol does not allow is an error naming
+its first problem. -/
+def Global.next (g : Global String) (log : List LogEvent) : Except String (List Conform.NextStep × Bool) := do
+  let body := match g with | .sessions b _ => b | other => other
+  let states ← Conform.statesAfter body log
+  let steps := (states.flatMap fun st => Conform.nextOf st.bind 32 st.g).eraseDups
+  return (steps, states.any (Conform.nullable ·.g))
 
 /-- Check a log against the protocol, session by session, in the order sessions first appear.
 With `sessions { body }` at the top, each session is checked against the body. -/

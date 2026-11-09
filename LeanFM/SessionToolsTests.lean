@@ -351,6 +351,37 @@ def withoutProvenance (svg : String) : String :=
 #guard (field (skeleton ((leanArgs lendingProtocol).setObjVal! "language" (Json.str "typescript"))) "code").getStr?.toOption ==
   some (include_str "../examples/vibecode/lending/lending_protocol.ts")
 
+/-! ## session_next -/
+
+def walk (evs : String) : Except String Json := next ((leanArgs lendingProtocol).setObjVal! "events" (parse! evs))
+def nextOf (r : Except String Json) : String := (field r "next").compress
+-- from the start only the member may act
+#guard verdict (next (leanArgs lendingProtocol)) == "running"
+#guard nextOf (next (leanArgs lendingProtocol)) == "[{\"from\":\"Member\",\"label\":\"Borrow\",\"to\":\"Desk\"}]"
+-- after Borrow the Desk chooses, and both steps name the Borrow as their cause
+#guard nextOf (walk r#"[{"id":"w1","from":"Member","to":"Desk","label":"Borrow"}]"#) ==
+  "[{\"cause\":\"w1\",\"from\":\"Desk\",\"label\":\"Lent\",\"to\":\"Member\"},{\"cause\":\"w1\",\"from\":\"Desk\",\"label\":\"Hold\",\"to\":\"Librarian\"}]"
+-- a whole session ends there
+def fullWalk : String := r#"[{"id":"w1","from":"Member","to":"Desk","label":"Borrow"},
+  {"id":"w2","from":"Desk","to":"Librarian","label":"Hold","cause":"w1"},
+  {"id":"w3","from":"Librarian","to":"Desk","label":"Denied","cause":"w2"},
+  {"id":"w4","from":"Desk","to":"Member","label":"Refused","cause":"w1"}]"#
+#guard verdict (walk fullWalk) == "finished"
+#guard (field (walk fullWalk) "canEnd") == Json.bool true
+-- negative: a walk the protocol does not allow is reported, not extended; malformed events are rejected
+#guard verdict (walk r#"[{"id":"w1","from":"Desk","to":"Member","label":"Lent"}]"#) == "violates"
+#guard (strs (field (walk r#"[{"id":"w1","from":"Desk","to":"Member","label":"Lent"}]"#) "issues")).head? ==
+  some "event w1: Lent from Desk to Member is not allowed here; the protocol allows Borrow from Member to Desk"
+#guard (reason (walk r#"[{"id":"w1","from":"Member","to":"Desk"}]"#)).contains "has no label"
+#guard (reason (next ((leanArgs lendingProtocol).setObjVal! "events" (Json.arr ((List.range 201).map fun i => parse! s!"\{\"id\":\"{i}\",\"from\":\"Member\",\"to\":\"Desk\",\"label\":\"Borrow\"}").toArray)))) ==
+  "at most 200 events in a walk"
+-- events and par: both branches are offered at once, and the event after them only when both end
+#guard nextOf (next (leanArgs "protocol F (H, A, B) { par { x: Ping from H to A; } and { y: Ping from H to B; } Bye at H; }")) ==
+  "[{\"from\":\"H\",\"label\":\"Ping\",\"to\":\"A\"},{\"from\":\"H\",\"label\":\"Ping\",\"to\":\"B\"}]"
+#guard nextOf (next ((leanArgs "protocol F (H, A, B) { par { x: Ping from H to A; } and { y: Ping from H to B; } Bye at H; }").setObjVal! "events"
+  (parse! r#"[{"id":"1","from":"H","to":"A","label":"Ping"},{"id":"2","from":"H","to":"B","label":"Ping"}]"#))) ==
+  "[{\"act\":true,\"from\":\"H\",\"label\":\"Bye\"}]"
+
 /-! ## session_skeleton -/
 
 def skel (t : String) : Except String Json := skeleton (leanArgs t)

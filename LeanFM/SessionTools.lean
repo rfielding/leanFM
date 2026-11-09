@@ -493,6 +493,36 @@ def conform (args : Json) : Except String Json := do
          ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
     , ("diagram", diagramJson p) ]
 
+/-- What may happen next in one session: the walk-through in the view calls this after each step. -/
+def next (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let evs ← match args.getObjVal? "events" with
+    | .ok (.arr a) =>
+        if a.size > limits.maxSteps then throw s!"at most {limits.maxSteps} events in a walk"
+        a.toList.mapM logEvent
+    | .ok .null | .error _ => pure []
+    | _ => throw "events must be an array of the events so far"
+  let stepJson (s : Conform.NextStep) : Json :=
+    let base := [("label", Json.str s.label), ("from", Json.str s.src)]
+    let tail := if s.isAct then [("act", Json.bool true)] else [("to", Json.str s.dst)]
+    Json.mkObj (base ++ tail ++ (match s.cause with | some c => [("cause", Json.str c)] | none => []))
+  match p.global.next evs with
+  | .error why =>
+    return Json.mkObj [("tool", "session_next"), ("verdict", "violates"), ("name", p.name),
+      ("reading", s!"{p.name}: the walk breaks the protocol at {why}"), ("issues", Json.arr #[Json.str why]),
+      ("next", Json.arr #[]), ("canEnd", false), ("lean", p.lean)]
+  | .ok (steps, canEnd) =>
+    let verdict := if steps.isEmpty then (if canEnd then "finished" else "stuck") else "running"
+    let what := match steps.length with
+      | 0 => if canEnd then "the session has ended" else "nothing can happen and the session cannot end"
+      | 1 => "1 step may happen next"
+      | n => s!"{n} steps may happen next"
+    let ending := if canEnd && !steps.isEmpty then "; the session may also end here" else ""
+    return Json.mkObj [("tool", "session_next"), ("verdict", verdict), ("name", p.name),
+      ("roles", Json.arr (p.roles.map Json.str).toArray),
+      ("reading", s!"{p.name}: after {evs.length} event{if evs.length == 1 then "" else "s"}, {what}{ending}"),
+      ("next", Json.arr (steps.map stepJson).toArray), ("canEnd", canEnd), ("lean", p.lean)]
+
 def skeleton (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let language := (args.getObjValAs? String "language").toOption.getD "python"
@@ -508,7 +538,7 @@ def skeleton (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("language", language), ("code", code), ("lean", p.lean) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton"]
+def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -517,6 +547,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_simulate" => some (simulate args)
   | "session_conform" => some (conform args)
   | "session_skeleton" => some (skeleton args)
+  | "session_next" => some (next args)
   | _ => none
 
 /-! ## Reference -/
@@ -547,6 +578,11 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   \"Shop\", \"label\": \"Completed\", \"act\": true}`. Each session must follow the protocol: order,
   choices, the cause the protocol names, and an end the protocol allows (unless allowIncomplete).
   session_simulate's events are accepted as they are.
+
+- `session_next {lean, events?}`: what may happen next in one session after the events so far (in
+  session_conform's format): each allowed step with the cause it must name, and whether the session
+  may end here (`running`, `finished`, or `violates` with the first problem). The view's walk-through
+  calls it after every click.
 
 - `session_skeleton {lean, language?}`: a self-contained Python (the default) or TypeScript
   (`\"language\": \"typescript\"`) module with every role's typestate as classes, one per state. In

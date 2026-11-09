@@ -240,6 +240,10 @@ def toolDefinitions : Array Json := #[
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"]),
+  tool "session_next" "What may happen next in a session"
+    "Given a protocol and the events of one session so far (in session_conform's format; none for the start), list every step the protocol allows next, with the event each must give as its cause, and whether the session may end here. A walk that breaks the protocol answers violates with the first problem."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])])] []),
   tool "session_skeleton" "Generate code to implement a session type"
     "Write a self-contained Python or TypeScript module from a protocol: every role's typestate as classes, one per state (in TypeScript a step the state does not allow does not type-check). A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),

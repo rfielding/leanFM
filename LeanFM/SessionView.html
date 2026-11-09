@@ -52,10 +52,18 @@
   .snips button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
   .edit-status { font-size: 13px; color: var(--dim); min-height: 1.4em; }
   .edit-status.bad { color: var(--bad); } .edit-status.good { color: var(--good); }
+  .walk-steps { margin: 0 0 8px; padding-left: 26px; font: 14px/1.6 ui-monospace, Menlo, monospace; }
+  .walk-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+  .walk-role { min-width: 9em; font-weight: 600; }
+  .walk-role .sym { color: var(--amber); font-weight: 700; }
+  button.step { font-size: 15px; padding: 6px 14px; border-color: var(--ink-arrow); }
+  button.step.choice { border-color: var(--amber); border-width: 2px; }
+  .walk-wait { color: var(--dim); font-size: 14px; }
+  .walk-end { color: var(--good); font-weight: 600; }
 </style>
 </head>
 <body>
-<main id="app"><div id="editor"></div><div id="results"><p class="meta">Waiting for a session tool result…</p></div></main>
+<main id="app"><div id="editor"></div><div id="walk"></div><div id="results"><p class="meta">Waiting for a session tool result…</p></div></main>
 <script>
 "use strict";
 // Draws session_check, session_diagram and session_simulate results. Tool data is placed only as
@@ -65,6 +73,9 @@ const MAX_SHAPES = 4000, MAX_EVENTS = 600, MAX_ITEMS = 64;
 const EDIT_TOOLS = ["session_check", "session_simulate"], MAX_EDIT_BYTES = 65536, EDIT_PAUSE_MS = 700;
 const app = document.getElementById("app");
 const editorBox = document.getElementById("editor"), results = document.getElementById("results");
+const walkBox = document.getElementById("walk");
+// The walk-through calls only session_next, one call at a time, with at most MAX_WALK events.
+const WALK_TOOL = "session_next", MAX_WALK = 200;
 
 // ---- JSON-RPC over postMessage --------------------------------------------------------------
 let nextId = 1;
@@ -221,8 +232,8 @@ function animation(body) {
   detailBtn.setAttribute("aria-pressed", "false");
   controls.append(play, back, fwd, speedSel, detailBtn, scrub);
   const pos = el("div", "pos");
-  const detail = el("div", "detail");
-  wrap.append(cv, controls, pos, panel("Selected event", detail));
+  const selBox = el("div", "detail");
+  wrap.append(cv, controls, pos, panel("Selected event", selBox));
 
   const ctx = cv.getContext("2d");
   let W = 0, H = 0, colors = {};
@@ -331,7 +342,7 @@ function animation(body) {
     shown = id;
     const e = E[id];
     const ref = (x) => { const j = idx(x); return j === null ? "—" : `${j} (${E[j].label})`; };
-    detail.textContent = [
+    selBox.textContent = [
       `event    ${num(e.id)} at step ${num(e.time)}, session #${num(e.session)}`,
       `message  ${e.msgId ? e.msgId + ": " : ""}${e.label}`,
       `from→to  ${e.act ? e.src + " (event)" : e.src + " → " + e.dst}`,
@@ -462,7 +473,10 @@ function editor(lean) {
   area.addEventListener("keydown", (ev) => {
     if (ev.key === "Tab" && !ev.shiftKey) { ev.preventDefault(); area.setRangeText("  ", area.selectionStart, area.selectionEnd, "end"); }
   });
-  const controls = el("div", "controls"); controls.append(check, animate);
+  const walkBtn = el("button", "", "Walk through");
+  walkBtn.setAttribute("aria-label", "Walk through one session step by step, choosing each message");
+  walkBtn.addEventListener("click", () => { walkEvents = []; stepWalk(); });
+  const controls = el("div", "controls"); controls.append(check, animate, walkBtn);
   const box = panel("Protocol (Lean, editable)", area);
   box.append(snips, controls, editStatus);
   editorBox.replaceChildren(box);
@@ -490,6 +504,75 @@ async function run(name, extra) {
     inFlight = false;
     if (again) { const [n, x] = again; again = null; run(n, x); }
   }
+}
+
+// ---- the walk-through: play every role, one allowed step at a time ---------------------------
+let walkEvents = [], walkBusy = false;
+function stepLabel(e) {
+  return e.act ? `${e.from}: ${e.label}` : `${e.from} → ${e.to}: ${e.label}`;
+}
+async function stepWalk() {
+  if (!text || walkBusy) return;
+  if (!canCall) { walkBox.replaceChildren(panel("Walk through", el("p", "err", "This host does not let the view call tools; ask Claude to run session_next."))); reportSize(); return; }
+  walkBusy = true;
+  try {
+    const result = await rpc("tools/call", { name: WALK_TOOL, arguments: { lean: text.value, events: walkEvents } }, 30000);
+    const body = result && result.structuredContent;
+    if (result && result.isError) drawWalk({ verdict: "rejected", reading: String((body && body.reason) || "LeanFM rejected the protocol."), next: [] });
+    else if (body && typeof body === "object") drawWalk(body);
+  } catch (e) {
+    if (e && (e.code === -32601 || e.message === "timeout")) canCall = false;
+    drawWalk({ verdict: "rejected", reading: "The walk failed: " + String((e && e.message) || e), next: [] });
+  } finally { walkBusy = false; }
+}
+function drawWalk(body) {
+  const box = el("div");
+  if (walkEvents.length) {
+    const ol = el("ol", "walk-steps");
+    const index = new Map(walkEvents.map((e, i) => [e.id, i + 1]));
+    for (const e of walkEvents) ol.appendChild(el("li", "", stepLabel(e) + (e.cause && index.has(e.cause) ? `   (cause: ${index.get(e.cause)})` : "")));
+    box.appendChild(ol);
+  } else box.appendChild(el("p", "meta", "One session from the start. Each button is a step the protocol allows now."));
+  const v = String(body.verdict || "");
+  box.appendChild(el("p", v === "violates" || v === "rejected" || v === "stuck" ? "err" : v === "finished" ? "walk-end" : "reading", String(body.reading || "")));
+  const next = Array.isArray(body.next) ? body.next.slice(0, MAX_ITEMS) : [];
+  const roles = Array.isArray(body.roles) ? body.roles.map(String) : [];
+  const senders = [...new Set(next.map((n) => String(n.from)))];
+  for (const r of senders) {
+    const mine = next.filter((n) => String(n.from) === r);
+    const row = el("div", "walk-row"), who = el("span", "walk-role");
+    // ⊕: this role chooses among several steps; otherwise it simply may take the one
+    if (mine.length > 1) { who.appendChild(el("span", "sym", "⊕ ")); who.appendChild(document.createTextNode(r + " chooses")); }
+    else who.appendChild(document.createTextNode(r));
+    row.appendChild(who);
+    for (const n of mine) {
+      const b = el("button", "step" + (mine.length > 1 ? " choice" : ""), n.act === true ? `${n.label} (event)` : `${n.label} → ${n.to}`);
+      b.addEventListener("click", () => {
+        if (walkEvents.length >= MAX_WALK) return;
+        const ev = { id: "w" + (walkEvents.length + 1), session: "walk", from: String(n.from), label: String(n.label) };
+        if (n.act === true) ev.act = true; else ev.to = String(n.to);
+        if (typeof n.cause === "string") ev.cause = n.cause;
+        walkEvents.push(ev); stepWalk();
+      });
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  }
+  const waiting = roles.filter((r) => !senders.includes(r));
+  const choosing = senders.some((r) => next.filter((n) => String(n.from) === r).length > 1);
+  const verb = waiting.length === 1 ? "waits" : "wait";
+  if (next.length && waiting.length) box.appendChild(el("p", "walk-wait", choosing
+    ? `& ${waiting.join(", ")} ${verb} to learn the choice from what arrives` : `${waiting.join(", ")} ${verb}`));
+  if (body.canEnd === true && next.length) box.appendChild(el("p", "walk-end", "The session may also end here."));
+  const undo = el("button", "", "Undo"), restart = el("button", "", "Start again"), close = el("button", "", "Close");
+  undo.disabled = !walkEvents.length;
+  undo.addEventListener("click", () => { walkEvents.pop(); stepWalk(); });
+  restart.addEventListener("click", () => { walkEvents = []; stepWalk(); });
+  close.addEventListener("click", () => { walkEvents = []; walkBox.replaceChildren(); reportSize(); });
+  const controls = el("div", "controls"); controls.append(undo, restart, close);
+  box.appendChild(controls);
+  walkBox.replaceChildren(panel("Walk through one session", box));
+  reportSize();
 }
 
 connect();

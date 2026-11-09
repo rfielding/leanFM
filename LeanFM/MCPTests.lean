@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton"] do
+  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -147,6 +147,22 @@ def main : IO Unit := do
   let scsp := ((sviewItem.getObjValD "_meta").getObjValD "ui").getObjValD "csp"
   for key in ["connectDomains", "resourceDomains", "frameDomains", "baseUriDomains"] do
     if scsp.getObjValD key != Json.arr #[] then throw <| IO.userError s!"MCP session view: {key} is not empty"
+  -- Each view's script must parse: a syntax error leaves the view blank in the host, and the
+  -- substring checks here cannot see one. Node checks the syntax without running anything.
+  let checkScript (label page : String) : IO Unit := do
+    let script := match page.splitOn "<script>" with
+      | [_, rest] => (rest.splitOn "</script>").headD ""
+      | _ => ""
+    if script.isEmpty then throw <| IO.userError s!"{label}: no single script element"
+    IO.FS.createDirAll ".cache/tests"
+    let path := s!".cache/tests/{label.replace " " "-"}.js"
+    IO.FS.writeFile path script
+    let out ← try IO.Process.output { cmd := "node", args := #["--check", path] }
+      catch _ => throw <| IO.userError s!"{label}: node is needed to check the view's script (install Node.js)"
+    if out.exitCode != 0 then throw <| IO.userError s!"{label}: the script does not parse:\n{out.stderr}"
+    IO.println s!"ok: {label} script parses"
+  checkScript "logic view" html
+  checkScript "session view" shtml
   let sbare := shtml.replace "http://www.w3.org/2000/svg" ""
   for needle in ["http://", "https://", "src=", "href=", "fetch(", "XMLHttpRequest", "WebSocket", "EventSource",
       "import(", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",
@@ -159,6 +175,7 @@ def main : IO Unit := do
   assertContains "MCP session view builds SVG elements, not markup" shtml "createElementNS"
   assertContains "MCP session view bounds the drawing" shtml "MAX_SHAPES = 4000, MAX_EVENTS = 600"
   assertContains "MCP session view starts the animation simple" shtml "detail = false"
+  assertContains "MCP session view offers the walk-through" shtml "const WALK_TOOL = \"session_next\", MAX_WALK = 200;"
   let promptsListed ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":35,\"method\":\"prompts/list\"}"
   assertContains "MCP offers the session design prompt" promptsListed.body "design_with_session_types"
   let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
