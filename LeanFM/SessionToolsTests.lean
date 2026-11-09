@@ -382,6 +382,40 @@ def fullWalk : String := r#"[{"id":"w1","from":"Member","to":"Desk","label":"Bor
   (parse! r#"[{"id":"1","from":"H","to":"A","label":"Ping"},{"id":"2","from":"H","to":"B","label":"Ping"}]"#))) ==
   "[{\"act\":true,\"from\":\"H\",\"label\":\"Bye\"}]"
 
+/-! ## session_compat -/
+
+def compatOf (newer older : String) : Except String Json :=
+  compat ((leanArgs newer).setObjVal! "old" (Json.str older))
+def lendingV2 : String := include_str "../examples/vibecode/lending/Lending-v2.protocol"
+-- renewing: the Desk and the Librarian can upgrade first; the Member must wait for the Desk
+#guard verdict (compatOf lendingV2 lendingProtocol) == "incompatible"
+#guard (field (compatOf lendingV2 lendingProtocol) "reading").getStr?.toOption == some "Lending → Lending: upgrade first: Desk, Librarian"
+#guard (strs (field (compatOf lendingV2 lendingProtocol) "issues")) ==
+  [ "Member cannot upgrade first: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member → Desk: Borrow; Desk → Member: Lent; Member chooses to send Renew to Desk)"
+  , "Desk cannot stay on the old version: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member → Desk: Borrow; Desk → Member: Lent; Member chooses to send Renew to Desk)" ]
+-- the same protocol is compatible with itself, and v1 after v2 is the mirror image
+#guard verdict (compatOf lendingProtocol lendingProtocol) == "compatible"
+#guard (field (compatOf lendingProtocol lendingV2) "reading").getStr?.toOption == some "Lending → Lending: upgrade first: Member, Librarian"
+-- dropping holds: the Desk may answer Refused at once, which the old Member accepts there, so the
+-- Desk can go first (a role-by-role subtyping check would refuse this); the Member cannot, because
+-- the old Desk may still put it on hold and send Waitlisted
+def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow from Member to Desk; choice { l: Lent from Desk to Member cause b; r: Return from Member to Desk; Returned from Desk to Member cause r; } or { Refused from Desk to Member cause b; } } }"
+#guard (field (compatOf noHolds lendingProtocol) "reading").getStr?.toOption == some "Lending → Lending: upgrade first: Desk"
+#guard (strs (field (compatOf noHolds lendingProtocol) "notes")) == ["only in the old version: Librarian"]
+#guard (strs (field (compatOf noHolds lendingProtocol) "issues")).head? ==
+  some "Member cannot upgrade first: Member waits to receive Lent from Desk, receive Refused from Desk; Desk is stuck trying to send Waitlisted to Member (after Member → Desk: Borrow; Desk → Librarian: Hold; Librarian → Desk: Approved)"
+-- negative: a message nobody sends any more leaves its receiver waiting
+#guard (strs (field (compatOf "protocol P (A, B) { x: Ping from A to B; }" "protocol P (A, B) { x: Ping from A to B; Pong from B to A cause x; }") "issues")) ==
+  [ "A cannot upgrade first: B is stuck trying to send Pong to A (after A → B: Ping)"
+  , "A cannot stay on the old version: A waits to receive Pong from B (after A → B: Ping)"
+  , "B cannot upgrade first: A waits to receive Pong from B (after A → B: Ping)"
+  , "B cannot stay on the old version: B is stuck trying to send Pong to A (after A → B: Ping)" ]
+-- par: branches interleave in the composed system, and a reordering inside a branch is found
+#guard verdict (compatOf "protocol F (H, A, B) { par { Ping from H to A; } and { Ping from H to B; } }" "protocol F (H, A, B) { par { Ping from H to B; } and { Ping from H to A; } }") == "compatible"
+#guard verdict (compatOf "protocol T (S, R) { x: Ask from S to R; y: Tell from S to R; }" "protocol T (S, R) { y: Tell from S to R; x: Ask from S to R; }") == "incompatible"
+#guard reason (compat (leanArgs lendingProtocol)) == "old is required: the previous version's LeanFM protocol text"
+#guard (reason (compatOf lendingProtocol "protocol Broken (A) { oops }")).startsWith "the old version: line 1"
+
 /-! ## session_skeleton -/
 
 def skel (t : String) : Except String Json := skeleton (leanArgs t)

@@ -244,6 +244,10 @@ def toolDefinitions : Array Json := #[
     "Given a protocol and the events of one session so far (in session_conform's format; none for the start), list every step the protocol allows next, with the event each must give as its cause, and whether the session may end here. A walk that breaks the protocol answers violates with the first problem."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])])] []),
+  tool "session_compat" "Which roles can upgrade on their own"
+    "Compare two versions of a protocol (lean: the new one, old: the previous one). For each role in both, answer whether its new version can be deployed first, running with the old version of every other role, and whether its old version can stay deployed after the others upgrade, by exploring each mixed system to every reachable state. A no comes with the steps to the stuck state and what each role still expects."
+    (schema [("lean", stringSchema "the new version: LeanFM protocol text"), ("old", stringSchema "the previous version: LeanFM protocol text"),
+      ("protocol", anyJson "alternative to lean: the JSON form")] ["old"]),
   tool "session_skeleton" "Generate code to implement a session type"
     "Write a self-contained Python or TypeScript module from a protocol: every role's typestate as classes, one per state (in TypeScript a step the state does not allow does not type-check). A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),

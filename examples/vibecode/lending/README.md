@@ -80,6 +80,21 @@ The whole loop, small enough to read in one sitting:
 Desktop, attach or paste `log.json` and ask Claude to run `session_conform` against the protocol; the
 result shows in the session view under "Where the run breaks the protocol".
 
+## Changing the protocol
+
+[`Lending-v2.protocol`](Lending-v2.protocol) lets a member renew a loan before returning it. Which
+parts of a running system can move to v2 first? `session_compat` (the new version as `lean`, this
+one as `old`) runs each mix of versions to every reachable state:
+
+```
+Lending → Lending: upgrade first: Desk, Librarian
+Member cannot upgrade first: Member is stuck trying to send Renew to Desk; Desk waits to receive
+  Return from Member (after Member → Desk: Borrow; Desk → Member: Lent; Member chooses to send Renew to Desk)
+```
+
+So the Desk goes first (it accepts Renew and still accepts Return), then the members. The reverse is
+also checked: an old Desk cannot stay behind once members renew.
+
 `LeanFM/SessionToolsTests.lean` checks both logs, the generated module and the picture against the
 current protocol, so `lake build` fails if they drift apart; `python3 -m unittest -v test_lending`
 checks the generated states' refusals and that the logs are what `lending.py` writes; `npm run check`

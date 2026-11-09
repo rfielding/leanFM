@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next"] do
+  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -129,6 +129,9 @@ def main : IO Unit := do
   let skelText ← IO.ofExcept (((skelJson.getObjValD "result").getObjValD "content" |>.getArrVal? 0) >>= (·.getObjValAs? String "text"))
   assertContains "MCP session_skeleton puts the code in the text a model reads" skelText "```python"
   assertContains "MCP session_skeleton writes each state as a class" skelText "class BS1(State):"
+  let compatCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"tools/call\",\"params\":{\"name\":\"session_compat\",\"arguments\":{\"lean\":\"protocol P (A, B) { x: Ping from A to B; }\",\"old\":\"protocol P (A, B) { x: Ping from A to B; Pong from B to A cause x; }\"}}}"
+  assertContains "MCP session_compat answers per role" compatCall.body "\"verdict\":\"incompatible\""
+  assertContains "MCP session_compat says who waits" compatCall.body "A waits to receive Pong from B"
   let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
   assertContains "MCP session_skeleton writes TypeScript in a typescript fence" skelTs.body "```typescript"
   assertContains "MCP session_skeleton TypeScript states extend State" skelTs.body "export class BS1 extends State"

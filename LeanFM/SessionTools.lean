@@ -8,6 +8,7 @@ import LeanFM.Session.Text
 import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
+import LeanFM.Session.Evolution
 
 /-!
 # Session-type tools for MCP agents (clauses selfhost.mcp.session.tools, selfhost.mcp.session.view)
@@ -523,6 +524,47 @@ def next (args : Json) : Except String Json := do
       ("reading", s!"{p.name}: after {evs.length} event{if evs.length == 1 then "" else "s"}, {what}{ending}"),
       ("next", Json.arr (steps.map stepJson).toArray), ("canEnd", canEnd), ("lean", p.lean)]
 
+/-- Two versions of a protocol: which roles can upgrade first, and which can stay on the old one. -/
+def compat (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let oldText ← match args.getObjVal? "old" with
+    | .ok (.str s) => pure s
+    | _ => throw "old is required: the previous version's LeanFM protocol text"
+  let q ← (parseProtocol (Json.mkObj [("lean", Json.str oldText)])).mapError ("the old version: " ++ ·)
+  let body (g : Global String) := match g with | .sessions b _ => b | other => other
+  let results ← (body p.global).compat (body q.global) p.roles q.roles
+  let answer (r : Except String (Option Evolution.Failure)) : Json × Bool :=
+    match r with
+    | .ok none => (Json.mkObj [("ok", true)], true)
+    | .ok (some f) => (Json.mkObj [("ok", false), ("reason", Json.str f.reason),
+        ("after", Json.arr (f.path.map Json.str).toArray)], false)
+    | .error e => (Json.mkObj [("ok", false), ("reason", Json.str e)], false)
+  let rows := results.map fun c =>
+    let (u, uok) := answer c.upgradeFirst
+    let (s, sok) := answer c.stayBehind
+    (c.role, uok, sok, Json.mkObj [("role", Json.str c.role), ("upgradeFirst", u), ("stayBehind", s)])
+  let why (j : Json) : String :=
+    let reason := (j.getObjValAs? String "reason").toOption.getD ""
+    match j.getObjValD "after" with
+    | .arr a => if a.isEmpty then reason else
+        s!"{reason} (after {"; ".intercalate (a.toList.filterMap (·.getStr?.toOption))})"
+    | _ => reason
+  let issues := rows.flatMap fun (r, uok, sok, j) =>
+    (if uok then [] else [s!"{r} cannot upgrade first: " ++ why (j.getObjValD "upgradeFirst")]) ++
+    (if sok then [] else [s!"{r} cannot stay on the old version: " ++ why (j.getObjValD "stayBehind")])
+  let onlyNew := p.roles.filter (!q.roles.contains ·)
+  let onlyOld := q.roles.filter (!p.roles.contains ·)
+  let first := rows.filter (·.2.1) |>.map (·.1)
+  let order := if issues.isEmpty then "every role can upgrade on its own schedule"
+    else if first.isEmpty then "no role can upgrade on its own"
+    else s!"upgrade first: {", ".intercalate first}"
+  let notes := (if onlyNew.isEmpty then [] else [s!"only in the new version: {", ".intercalate onlyNew}"]) ++
+    (if onlyOld.isEmpty then [] else [s!"only in the old version: {", ".intercalate onlyOld}"])
+  return Json.mkObj [("tool", "session_compat"), ("verdict", if issues.isEmpty then "compatible" else "incompatible"),
+    ("name", p.name), ("reading", s!"{q.name} → {p.name}: {order}"),
+    ("roles", Json.arr (rows.map (·.2.2.2)).toArray), ("issues", Json.arr (issues.map Json.str).toArray),
+    ("notes", Json.arr (notes.map Json.str).toArray), ("lean", p.lean)]
+
 def skeleton (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let language := (args.getObjValAs? String "language").toOption.getD "python"
@@ -538,7 +580,7 @@ def skeleton (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("language", language), ("code", code), ("lean", p.lean) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next"]
+def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -548,6 +590,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_conform" => some (conform args)
   | "session_skeleton" => some (skeleton args)
   | "session_next" => some (next args)
+  | "session_compat" => some (compat args)
   | _ => none
 
 /-! ## Reference -/
@@ -583,6 +626,13 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   session_conform's format): each allowed step with the cause it must name, and whether the session
   may end here (`running`, `finished`, or `violates` with the first problem). The view's walk-through
   calls it after every click.
+
+- `session_compat {lean, old}`: two versions of a protocol (`lean` the new one, `old` the
+  previous one). For each role in both: can its new version be deployed first, among the old
+  versions of every other role, and can its old version stay deployed after the others upgrade?
+  Each mixed system is explored to every reachable state; a no comes with the steps to where it gets
+  stuck. Adding a message a role may receive usually lets that role upgrade first; adding one it
+  may send usually means the receivers must upgrade first.
 
 - `session_skeleton {lean, language?}`: a self-contained Python (the default) or TypeScript
   (`\"language\": \"typescript\"`) module with every role's typestate as classes, one per state. In
