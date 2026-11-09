@@ -4,6 +4,8 @@ import LeanFM.Session.Http
 import LeanFM.Session.Diagram
 import LeanFM.Session.Calls
 import LeanFM.Session.Events
+import LeanFM.Session.Text
+import LeanFM.Session.Conform
 
 /-!
 # Session-type tools for MCP agents (clauses selfhost.mcp.session.tools, selfhost.mcp.session.view)
@@ -211,13 +213,71 @@ structure Protocol where
   roles : List String
   global : Global String
   steps : Nat
+  /-- the protocol as LeanFM protocol text: the text sent, or the JSON form written out -/
+  lean  : String
+
+/-! ## The JSON form written as protocol text -/
+
+namespace ToText
+open LeanFM.Session.Text
+
+abbrev W := StateM (List Def)
+
+def str (j : Json) (k : String) : Option String := (j.getObjValAs? String k).toOption
+
+mutual
+partial def stmts (roles : List String) (js : List Json) : W (List Stmt) := js.mapM (stmt roles)
+
+partial def branchesOf (roles : List String) (j : Json) (k : String) : W (List (List Stmt)) :=
+  match j.getObjVal? k with
+  | .ok (.arr a) => a.toList.mapM fun b => match b with
+    | .arr steps => stmts roles steps.toList
+    | _ => pure []
+  | _ => pure []
+
+partial def listOf (roles : List String) (j : Json) (k : String) : W (List Stmt) :=
+  match j.getObjVal? k with
+  | .ok (.arr a) => stmts roles a.toList
+  | _ => pure []
+
+partial def stmt (roles : List String) (j : Json) : W Stmt := do
+  if let some l := str j "msg" then
+    return .msg (str j "id") l ((str j "from").getD "") ((str j "to").getD "") (str j "cause") (str j "route")
+      ((j.getObjVal? "status").toOption.bind (·.getNat?.toOption)) (str j "where")
+  if let some l := str j "event" then return .event l ((str j "at").getD "")
+  if (j.getObjVal? "choice").isOk then return .choice (← branchesOf roles j "choice")
+  if (j.getObjVal? "par").isOk then return .par (← branchesOf roles j "par")
+  if let .ok v := j.getObjVal? "join" then
+    return .join (v.getNat?.toOption.getD 1) (← branchesOf roles j "of")
+  if let some n := str j "rec" then return .loop n (← listOf roles j "steps")
+  if let some n := str j "continue" then return .cont n
+  if (j.getObjVal? "sessions").isOk then return .sessions (← listOf roles j "sessions")
+  if let some n := str j "include" then
+    -- an included protocol becomes a protocol of its own over the same roles, written before
+    let body ← listOf roles j "steps"
+    modify fun ds => if ds.any (·.name == n) then ds else ds ++ [{ name := n, roles, body }]
+    return .incl n roles
+  return .event "?" ""
+end
+
+def write (name : String) (roles : List String) (steps : List Json) : String :=
+  let (body, defs) := (stmts roles steps).run []
+  LeanFM.Session.Text.write (defs ++ [{ name, roles, body }])
+
+end ToText
 
 def parseProtocol (args : Json) : Except String Protocol := do
   if args.compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
+  if let .ok v := args.getObjVal? "lean" then
+    let text ← match v.getStr? with
+      | .ok t => pure t
+      | .error _ => throw "lean must be a string of LeanFM protocol text"
+    let r ← LeanFM.Session.Text.parse text
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
-    | .error _ => throw "protocol is required: {name?, roles: [..], steps: [..]}; read leanfm://language/session-reference"
+    | .error _ => throw "lean is required: LeanFM protocol text such as protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
   let extra := (keysOf p).filter (!["name", "roles", "steps"].contains ·)
   if !extra.isEmpty then throw s!"protocol has unknown keys {extra}; allowed: name, roles, steps"
   let name := (p.getObjValAs? String "name").toOption.getD "Protocol"
@@ -236,7 +296,7 @@ def parseProtocol (args : Json) : Except String Protocol := do
     | .ok (.arr a) => pure a.toList
     | _ => throw "steps must be an array of steps"
   let (global, count) ← (steps { roles } js).run 0
-  return { name, roles, global, steps := count }
+  return { name, roles, global, steps := count, lean := ToText.write name roles js }
 
 /-! ## Results -/
 
@@ -326,6 +386,7 @@ def check (args : Json) : Except String Json := do
     else s!"{p.name}: {problems.length} issue{if problems.length == 1 then "" else "s"}: {problems.head!}"
   return fit <| Json.mkObj
     [ ("tool", "session_check"), ("verdict", verdict), ("reading", reading), ("name", p.name)
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("issues", Json.arr (issues.map Json.str).toArray)
     , ("httpCuts", match calls with | some _ => Json.arr (cuts.map Json.str).toArray | none => Json.null)
@@ -342,6 +403,7 @@ def diagram (args : Json) : Except String Json := do
     [ ("tool", "session_diagram"), ("verdict", "drawn")
     , ("reading", s!"{p.name}: sequence diagram of {messageCount p.global} messages across {p.roles.length} lifelines")
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
     , ("svg", m.svg (themeOf args)), ("diagram", diagramJson p) ]
 
 def natArg (args : Json) (key : String) (dflt maxV : Nat) : Except String Nat :=
@@ -376,39 +438,167 @@ def simulate (args : Json) : Except String Json := do
     [ ("tool", "session_simulate"), ("verdict", "generated")
     , ("reading", s!"{p.name}: {evs.size} events from {sessions} session{if sessions == 1 then "" else "s"} (seed {seed})")
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
     , ("seed", seed), ("instances", instances), ("sessions", sessions)
     , ("events", Json.arr (evs.map eventJson))
     , ("diagram", diagramJson p) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_simulate"]
+/-- A logged event: the fields session_simulate writes (src, dst, act) or from/to; ids, sessions and
+causes may be strings or numbers. -/
+def logEvent (j : Json) : Except String LogEvent := do
+  let text (k : String) : Option String :=
+    match j.getObjVal? k with
+    | .ok (.str s) => some s
+    | .ok (.num n) => some n.toString
+    | _ => none
+  let id ← match text "id" with | some s => pure s | none => .error "every event needs an id"
+  let label ← match text "label" with | some s => pure s | none => .error s!"event {id} has no label"
+  let isAct := (j.getObjValAs? Bool "act").toOption.getD false
+  let src ← match text "from" <|> text "src" <|> text "at" with
+    | some s => pure s | none => .error s!"event {id} has no from (or src)"
+  let dst := if isAct then src else (text "to" <|> text "dst").getD ""
+  if !isAct && dst.isEmpty then .error s!"event {id} has no to (or dst)"
+  for s in [id, label, src, dst] do
+    if s.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
+  return { id, session := (text "session").getD "0", src, dst, label, cause := text "cause", isAct }
+
+def maxLogEvents : Nat := 2000
+
+def conform (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let evs ← match args.getObjVal? "events" with
+    | .ok (.arr a) =>
+        if a.size > maxLogEvents then throw s!"at most {maxLogEvents} events"
+        a.toList.mapM logEvent
+    | _ => throw "events must be an array of logged events {id, session?, from, to, label, cause?} (or {id, at, label, act: true})"
+  let allowIncomplete := (args.getObjValAs? Bool "allowIncomplete").toOption.getD false
+  let results := p.global.conforms evs allowIncomplete
+  let bad := results.filter (·.problem.isSome)
+  let incomplete := results.filter (!·.complete)
+  let verdict := if bad.isEmpty then "conforms" else "violates"
+  let problems := bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
+  let reading := if bad.isEmpty
+    then s!"{p.name}: {evs.length} events in {results.length} session{if results.length == 1 then "" else "s"} follow the protocol" ++
+      (if incomplete.isEmpty then "" else s!"; {incomplete.length} still running")
+    else s!"{p.name}: {bad.length} of {results.length} sessions break the protocol; first: {problems.head!}"
+  return fit <| Json.mkObj
+    [ ("tool", "session_conform"), ("verdict", verdict), ("reading", reading), ("name", p.name)
+    , ("roles", Json.arr (p.roles.map Json.str).toArray)
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
+    , ("issues", Json.arr ((problems.take 64).map Json.str).toArray)
+    , ("sessions", Json.arr ((results.take 200).map fun r => Json.mkObj
+        [("session", r.session), ("events", r.events), ("complete", r.complete),
+         ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
+    , ("diagram", diagramJson p) ]
+
+def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
   | "session_check" => some (check args)
   | "session_diagram" => some (diagram args)
   | "session_simulate" => some (simulate args)
+  | "session_conform" => some (conform args)
   | _ => none
 
 /-! ## Reference -/
 
-def reference : String := "# LeanFM session types: the JSON form
+def reference : String := "# LeanFM session types
 
-Design interactions between roles as a session type, then let LeanFM check it and draw it.
-Every diagram, call list and event stream is generated from the protocol you send.
+Design interactions between roles as a session type in LeanFM's protocol syntax, then let LeanFM
+check it, draw it and run it. Every diagram, call list and event stream is generated from the text.
+Send the text as the `lean` argument of the tools. It is read by a parser for this grammar only:
+nothing in it is elaborated or run, and a `where` condition is shown, never evaluated.
 
 ## Tools
 
-- `session_check {protocol, mayCall?}`: the core rules (one role decides each choice; every role can
+- `session_check {lean, mayCall?}`: the core rules (one role decides each choice; every role can
   tell which branch was taken; a cause names a message its sender saw), each role's local type and
   typestate API, the calls (request, responses with status, nested calls), and the diagram. With
   `mayCall: [[caller, callee], ...]`, every channel is HTTP and calls that break the request/response
   discipline are reported.
-- `session_diagram {protocol, theme?}`: the UML sequence diagram, as SVG text and as shapes.
-- `session_simulate {protocol, seed?, instances?, spread?, loops?, maxEvents?}`: a seeded event stream.
+- `session_diagram {lean, theme?}`: the UML sequence diagram, as SVG text and as shapes.
+- `session_simulate {lean, seed?, instances?, spread?, loops?, maxEvents?}`: a seeded event stream.
   Each event has prior (what it happened after, per role, plus join ends), cause, and answers (the
-  request it responds to). The view animates it.
+  request it responds to). The view animates it. A protocol without `sessions` runs as `instances`
+  concurrent copies.
+
+- `session_conform {lean, events, allowIncomplete?}`: check what a running program logged against
+  the protocol. Log one event per message sent, `{\"id\": \"e7\", \"session\": \"42\", \"from\": \"Shop\",
+  \"to\": \"Client\", \"label\": \"Quote\", \"cause\": \"e6\"}`, and one per event, `{\"id\": ..., \"at\":
+  \"Shop\", \"label\": \"Completed\", \"act\": true}`. Each session must follow the protocol: order,
+  choices, the cause the protocol names, and an end the protocol allows (unless allowIncomplete).
+  session_simulate's events are accepted as they are.
+
+Every answer echoes the text as `lean`; the view shows it in an editor and rechecks as you type.
+
+## Building software from a protocol
+
+1. Write the protocol and run session_check until it has no issues; with `mayCall` for HTTP.
+2. Show it: the diagram, each role's typestate (its API: one state per point in the conversation),
+   and session_simulate's stream.
+3. Implement each role from its typestate: a handler per state, sending only what that state allows.
+4. Log every message as an event with the protocol's label, the session it belongs to and the
+   event that caused it.
+5. Run it, and check the log with session_conform; fix the code (or, if the protocol was wrong, the
+   protocol) until every session conforms.
 
 ## A protocol
+
+```lean
+/-- Placing an order: quote, pay, charge the card. -/
+protocol PlaceOrder (Client, Shop, Bank) {
+  o: CreateOrder from Client to Shop route \"POST /orders\";
+  choice {
+    q: Quote from Shop to Client cause o status 201;
+    p: Pay from Client to Shop cause q where p.amount = q.price;
+    c: Charge from Shop to Bank cause p;
+    choice {
+      d: Charged from Bank to Shop cause c;
+      Receipt from Shop to Client cause d status 200;
+    } or {
+      x: Declined from Bank to Shop cause c;
+      PaymentDeclined from Shop to Client cause x status 402;
+    }
+  } or {
+    SoldOut from Shop to Client cause o status 409;
+  }
+}
+```
+
+## Statements
+
+| statement | meaning |
+|---|---|
+| `x: Label from A to B cause y route \"...\" status 201 where e;` | a message; `x:`, `cause`, `route`, `status` and `where` are optional; `cause y` names an earlier id, and a response's cause chain reaches its request |
+| `Label at A;` | something a role does on its own |
+| `choice { ... } or { ... }` | exactly one branch happens; the role that starts every branch decides |
+| `par { ... } and { ... }` | branches run concurrently; what follows waits for all |
+| `join 2 of { ... } and { ... } and { ... }` | what follows waits for any 2 branches |
+| `rec Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |
+| `sessions { ... }` | any number of independent instances, as a server handles requests |
+| `include Replicate Primary R1 R2 R3;` | an earlier protocol in the same text, roles renamed in order, drawn as a ref frame |
+
+Write several protocols in one text to include one in another; the last protocol is the one
+checked. Names are Lean identifiers (`«two words»` works). `--` and `/- -/` comments are allowed.
+Statements after a choice continue every branch. Limits: 64 KiB of text, 200 statements, 12 roles,
+16 branches per construct, nesting 24 deep, names and strings of 200 characters; simulations up to
+200 instances and 600 events.
+
+## Reading the answers
+
+- A choice whose branches are started by different roles is a race; pick one decider.
+- \"R cannot tell which branch C chose\": give R a message in every branch, or one that differs.
+- \"L: S never saw y\": the cause of L must be something its sender sent or received.
+- Responses are dashed in diagrams; each call is an activation bar on the callee.
+
+## The JSON form
+
+The tools also accept `protocol: {name, roles, steps}` in place of `lean`, and answer with the same
+protocol written as text. Each step is an object with exactly one kind key: `msg` (with `from`,
+`to`, and optional `id`, `cause`, `route`, `status`, `where`), `event` (with `at`), `choice` and
+`par` (arrays of branches, each an array of steps), `join` (a number, with `of`), `rec` (with
+`steps`), `continue`, `sessions` (an array of steps) and `include` (with `steps`):
 
 ```json
 {\"name\": \"PlaceOrder\", \"roles\": [\"Client\", \"Shop\", \"Bank\"], \"steps\": [
@@ -425,32 +615,6 @@ Every diagram, call list and event stream is generated from the protocol you sen
     [{\"msg\": \"SoldOut\", \"from\": \"Shop\", \"to\": \"Client\", \"cause\": \"o\", \"status\": 409}]]}
 ]}
 ```
-
-## Steps
-
-Each step is an object with exactly one of these keys:
-
-| step | meaning |
-|---|---|
-| `{msg, from, to, id?, cause?, route?, status?, where?}` | a message; `cause` names an earlier `id`; a response's cause chain reaches its request |
-| `{event, at}` | something a role does on its own |
-| `{choice: [[steps], [steps], ...]}` | exactly one branch happens; the role that starts every branch decides |
-| `{par: [[steps], ...]}` | branches run concurrently; what follows waits for all |
-| `{join: k, of: [[steps], ...]}` | what follows waits for any k branches |
-| `{rec: name, steps: [...]}` | a loop; `{continue: name}` as the last step of a branch repeats it |
-| `{sessions: [steps]}` | any number of independent instances, as a server handles requests |
-| `{include: name, steps: [...]}` | a named sub-protocol, drawn as a ref frame |
-
-Steps after a choice continue every branch. `where` is shown in diagrams, never evaluated.
-Limits: at most 200 steps, 12 roles, 16 branches per construct, nesting 24 deep, strings of 200
-characters; simulations up to 200 instances and 600 events.
-
-## Reading the answers
-
-- A choice whose branches are started by different roles is a race; pick one decider.
-- \"R cannot tell which branch C chose\": give R a message in every branch, or one that differs.
-- \"L: S never saw y\": the cause of L must be something its sender sent or received.
-- Responses are dashed in diagrams; each call is an activation bar on the callee.
 "
 
 end LeanFM.SessionTools

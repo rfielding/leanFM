@@ -1,4 +1,5 @@
 import LeanFM.SessionTools
+import LeanFM.Session.SessionTests
 
 /-! Tests for the MCP session tools (clause selfhost.mcp.session.tools). Built with the library, so
 `lake build` runs every `#guard`. -/
@@ -44,6 +45,9 @@ def po := call check (withProtocol placeOrder)
         "    c: Charge  Shop → Bank\n      returns Charged | Declined")
 -- the diagram comes as shapes: an alt frame names the shop as the role that selects
 #guard ((field po "diagram").getObjValD "shapes").compress.contains "Shop selects; others offer"
+-- every answer echoes the protocol it checked, so the view can edit it
+#guard (field po "protocol").compress == (parse! placeOrder).compress
+#guard (field (call diagram (withProtocol placeOrder)) "protocol").compress == (parse! placeOrder).compress
 -- the same arguments give the same answer
 #guard (call check (withProtocol placeOrder)).toOption.map (·.compress) == po.toOption.map (·.compress)
 
@@ -138,5 +142,170 @@ def mcpAppsCheck := call check (withProtocol mcpApps)
 #guard verdict mcpAppsCheck == "ok"
 -- the view's acknowledgement answers the host's context, so it is its own call, not part of ui/initialize
 #guard ((field mcpAppsCheck "callsText").getStr?.toOption.getD "").contains "Initialized  View → Host\n  returns no reply"
+
+/-! ## Lean protocol text (the main input) -/
+
+open LeanFM.Session in
+/-- The text parser and the `protocol` command agree: the same diagram, issues and projections. -/
+def agrees {R : Type} [DecidableEq R] [ToString R] (text : String) (g : Global R) (roles : List R) : Bool :=
+  match LeanFM.Session.Text.parse text with
+  | .error _ => false
+  | .ok p =>
+    p.roles == roles.map toString &&
+    p.global.diagram p.roles == g.diagram roles &&
+    p.global.issues p.roles == g.issues roles &&
+    (p.roles.zip roles).all fun (s, r) =>
+      ((p.global.project s).toOption.map Local.render) == ((g.project r).toOption.map Local.render)
+
+open LeanFM.Session.SessionTests in
+#guard agrees "protocol Purchase (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  choice {
+    q: Quote from Shop to Client cause o;
+    p: Pay   from Client to Bank cause q where p.amount = q.price;
+       Paid  from Bank to Shop cause p;
+       Shipped from Shop to Client;
+  } or {
+       SoldOut from Shop to Client cause o;
+  }
+}" LeanFM.Session.SessionTests.purchase roles3
+
+open LeanFM.Session.SessionTests in
+#guard agrees "-- the receiver decides whether the block repeats
+protocol Transfer (Sender, Receiver) {
+  rec Block {
+    d: Data from Sender to Receiver;
+    choice {
+      Ack from Receiver to Sender cause d;
+      continue Block;
+    } or {
+      LastAck from Receiver to Sender cause d;
+    }
+  }
+}" transfer [.sender, .receiver]
+
+open LeanFM.Session.SessionTests in
+#guard agrees "protocol TransferWithTimer (Sender, Receiver) {
+  rec Block {
+    d: Data from Sender to Receiver;
+    choice {
+      Timeout at Sender;
+      continue Block;
+    } or {
+      Ack from Receiver to Sender cause d;
+      continue Block;
+    }
+  }
+}" (TransferWithTimer Role.sender Role.receiver) [.sender, .receiver]
+
+open LeanFM.Session.SessionTests in
+#guard agrees "/-- Two of three replicas store the write. -/
+protocol Replicate (P, A, B, C) {
+  join 2 of {
+    wa: Write from P to A; Stored from A to P cause wa;
+  } and {
+    wb: Write from P to B; Stored from B to P cause wb;
+  } and {
+    wc: Write from P to C; Stored from C to P cause wc;
+  }
+}
+protocol ReplicatedOrder (Client, Primary, R1, R2, R3) {
+  o: Order from Client to Primary;
+  include Replicate Primary R1 R2 R3;
+  Done from Primary to Client cause o;
+}" replicatedOrder [.client, .primary, .r1, .r2, .r3]
+
+open LeanFM.Session.SessionTests in
+#guard agrees "protocol PurchaseHttp (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  choice {
+    q: Quote   from Shop to Client cause o;
+    p: Pay     from Client to Bank cause q where p.amount = q.price;
+    r: Receipt from Bank to Client cause p;
+    c: Confirm from Client to Shop cause r where c.amount = r.amount;
+    v: Verify  from Shop to Bank cause c;
+    w: Paid    from Bank to Shop cause v;
+       Shipped from Shop to Client cause w;
+  } or {
+       SoldOut from Shop to Client cause o;
+  }
+}" (PurchaseHttp Role.client Role.shop Role.bank) roles3
+
+open LeanFM.Session.SessionTests in
+#guard agrees "protocol Serve (Client, Shop) {
+  sessions {
+    g: Get from Client to Shop;
+       Page from Shop to Client cause g;
+  }
+}" (Serve Role.client Role.shop) [.client, .shop]
+
+-- the reference's Lean example checks ok through the tool, and the answer echoes the text
+def leanExample : String := ((reference.splitOn "```lean\n")[1]!.splitOn "\n```")[0]!
+def leanArgs (t : String) : Json := Json.mkObj [("lean", Json.str t)]
+def lo := check (leanArgs leanExample)
+#guard verdict lo == "ok"
+#guard (field lo "lean").getStr?.toOption == some leanExample
+-- the Lean example and the JSON example are the same protocol
+#guard (field lo "diagram").compress == (field po "diagram").compress
+#guard (field lo "callsText").compress == (field po "callsText").compress
+-- a JSON protocol is answered with the same protocol as text, which reads back to the same diagram
+#guard match (field po "lean").getStr? with
+  | .ok t => (field (check (leanArgs t)) "diagram").compress == (field po "diagram").compress
+  | .error _ => false
+
+-- errors give the line and column, and nothing is guessed
+def leanRejects (t : String) (needle : String) : Bool :=
+  let r := check (leanArgs t)
+  verdict r == "rejected" && (reason r).contains needle
+#guard leanRejects "protocol P (A, B) {\n  X from A to C;\n}" "C is not one of the roles"
+#guard leanRejects "protocol P (A, B) {\n  X from A to B\n}" "line 3, column 1: expected ';' at the end of the message"
+#guard leanRejects "protocol P (A, B) {\n  X from A to B;\n" "line 1, column 19: a '{' is never closed"
+#guard leanRejects "/- never closed\nprotocol P (A) { }" "line 1, column 1: this comment is never closed"
+#guard leanRejects "protocol P (A, B) { X from A to B route \"open; }" "this string is never closed"
+#guard leanRejects "protocol P (A, B) { rec L { X from A to B; } continue L; }" "continue L is not inside rec L"
+#guard leanRejects "protocol P (A, B) { rec L { continue L; X from A to B; } }" "must be the last statement"
+#guard leanRejects "protocol P (A, B) { include Q A B; }" "no protocol Q is defined before this one"
+#guard leanRejects "protocol Q (A) { X at A; }\nprotocol P (A, B) { include Q A B; }" "include Q needs 1 roles, not 2"
+#guard leanRejects "protocol P (A, A) { }" "role names must be distinct"
+#guard leanRejects "protocol P (A, B) { join 3 of { X from A to B; } and { Y from B to A; } }" "out of range"
+-- text is never elaborated: Lean commands are not protocol syntax, so they are an error, not run
+#guard leanRejects "#eval IO.Process.exit 1\nprotocol P (A) { X at A; }" "line 1, column 1: expected 'protocol'"
+#guard leanRejects "protocol P (A, B) { X from A to B where (IO.Process.exit 1; }" "never ends with ';'"
+-- a where condition is text, shown as written
+#guard ((field (diagram (leanArgs "protocol P (A, B) { p: X from A to B where p.n <  3   && true; }")) "svg").getStr?.toOption.getD "").contains "[p.n &lt; 3 &amp;&amp; true]"
+-- names with spaces, comments everywhere
+#guard verdict (check (leanArgs "protocol «Two Words» («The Client», Shop) { -- hello\n  /- a /- nested -/ comment -/\n  «Place Order» from «The Client» to Shop; }")) == "ok"
+-- the limits hold for text too
+#guard leanRejects ("protocol P (A, B) {" ++ String.join ((List.range 201).map fun _ => " X from A to B;") ++ " }") "more than 200 steps"
+#guard leanRejects ("protocol P (" ++ ", ".intercalate ((List.range 13).map fun i => s!"R{i}") ++ ") { }") "at most 12 roles"
+
+/-! ## session_conform -/
+
+-- session_simulate's events, fed back unchanged, conform; the PlaceOrder stream has 20 sessions
+def simOut := (simulate ((leanArgs leanExample).setObjVal! "instances" (toJson 20) |>.setObjVal! "seed" (toJson 4))).toOption.get!
+def simEvents : Json := simOut.getObjValD "events"
+def conformArgs (evs : Json) : Json := (leanArgs leanExample).setObjVal! "events" evs
+#guard verdict (conform (conformArgs simEvents)) == "conforms"
+#guard ((field (conform (conformArgs simEvents)) "reading").getStr?.toOption.getD "").contains "in 20 sessions follow the protocol"
+-- a log in the documented shape, with string ids and from/to
+def goodLog : String := r#"[
+  {"id": "e1", "session": "s1", "from": "Client", "to": "Shop", "label": "CreateOrder"},
+  {"id": "e2", "session": "s1", "from": "Shop", "to": "Client", "label": "SoldOut", "cause": "e1"},
+  {"id": "e3", "session": "s2", "from": "Client", "to": "Shop", "label": "CreateOrder"},
+  {"id": "e4", "session": "s2", "from": "Shop", "to": "Client", "label": "Quote", "cause": "e3"}]"#
+#guard verdict (conform (conformArgs (parse! goodLog))) == "violates"
+#guard (strs (field (conform (conformArgs (parse! goodLog))) "issues")).head? ==
+  some "session s2, event e4: the session stops early; the protocol still expects Pay from Client to Shop"
+#guard verdict (conform ((conformArgs (parse! goodLog)).setObjVal! "allowIncomplete" (toJson true))) == "conforms"
+-- a bug in the implementation: the shop charges the bank before the client pays
+def badLog : String := r#"[
+  {"id": "e1", "session": "s1", "from": "Client", "to": "Shop", "label": "CreateOrder"},
+  {"id": "e2", "session": "s1", "from": "Shop", "to": "Client", "label": "Quote", "cause": "e1"},
+  {"id": "e3", "session": "s1", "from": "Shop", "to": "Bank", "label": "Charge", "cause": "e2"}]"#
+#guard (strs (field (conform (conformArgs (parse! badLog))) "issues")).head? ==
+  some "session s1, event e3: Charge from Shop to Bank is not allowed here; the protocol allows Pay from Client to Shop"
+-- malformed logs are rejected, not guessed
+#guard (reason (conform (conformArgs (parse! r#"[{"id": "e1", "from": "Client", "to": "Shop"}]"#)))).contains "has no label"
+#guard (reason (conform (conformArgs (Json.str "nope")))).contains "events must be an array"
 
 end LeanFM.SessionToolsTests

@@ -31,8 +31,8 @@ def instructions : String :=
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
   "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference. " ++
   "For interactions between roles (services, clients, actors, APIs), design a session type and check it with " ++
-  "session_check, draw it with session_diagram and animate it with session_simulate; read " ++
-  "leanfm://language/session-reference for the JSON form. Show people the diagrams and streams these tools " ++
+  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, writing the protocol in " ++
+  "LeanFM protocol syntax as the lean argument (leanfm://language/session-reference). Show people the diagrams and streams these tools " ++
   "generate rather than drawing interaction diagrams by hand."
 
 def ok (id result : Json) : Response :=
@@ -76,7 +76,7 @@ def resources : Array Json := #[
   resource "leanfm://language/logic-reference" "logic-reference"
     "LeanFM logic reference" "JSON formula grammar, operator readings, verdicts, evidence and terminal convention for the logic tools." "text/markdown",
   resource "leanfm://language/session-reference" "session-reference"
-    "LeanFM session types (JSON form)" "How to write a protocol for session_check, session_diagram and session_simulate, with an example, the step kinds, limits and how to read the answers." "text/markdown",
+    "LeanFM session types" "How to write a protocol in LeanFM protocol syntax for session_check, session_diagram and session_simulate: an example, the statements, limits, how to read the answers, and the JSON alternative." "text/markdown",
   resource sessionViewUri "session-view" "LeanFM session view"
     "Interactive view of session_check, session_diagram and session_simulate results: the generated diagram, typestate, calls and the animated event stream (MCP Apps)." logicViewMimeType,
   resource logicViewUri "logic-view" "LeanFM logic view"
@@ -221,18 +221,25 @@ def toolDefinitions : Array Json := #[
       ("seesAll", Json.mkObj [("type", "boolean"), ("description", Json.str "the actor sees every channel (a network attacker)")])]
       ["events", "actor", "at"]),
   tool "session_check" "Check a session type"
-    "Check a protocol between roles written as a session type (JSON form: {name?, roles, steps}; read leanfm://language/session-reference). Returns ok or the issues (races, roles that cannot tell which branch was taken, causes a sender never saw), each role's local type and typestate API, the calls (request, responses with status, nested calls), and the generated diagram. With mayCall [[caller, callee], ...] every channel is HTTP and calls that break request/response are reported."
-    (schema [("protocol", anyJson "{name?, roles: [role names], steps: [steps]}"),
-      ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])])] ["protocol"]),
+    "Check a protocol between roles written as a session type in LeanFM protocol syntax, sent as the lean string (read leanfm://language/session-reference; a JSON protocol object is also accepted). Returns ok or the issues (races, roles that cannot tell which branch was taken, causes a sender never saw), each role's local type and typestate API, the calls (request, responses with status, nested calls), and the generated diagram. With mayCall [[caller, callee], ...] every channel is HTTP and calls that break request/response are reported."
+    (schema [("lean", stringSchema "LeanFM protocol text: protocol Name (Role, ...) { statements }"),
+      ("protocol", anyJson "alternative to lean: {name?, roles, steps} in the JSON form"),
+      ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])])] []),
   tool "session_diagram" "Draw a session type"
     "Draw a protocol as a UML sequence diagram generated from the session type: alt frames name the role that selects, par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
-    (schema [("protocol", anyJson "{name?, roles, steps}"), ("theme", stringSchema "dark (default) or light")] ["protocol"]),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("theme", stringSchema "dark (default) or light")] []),
   tool "session_simulate" "Generate an event stream from a session type"
     "Run a protocol with a seed: sessions blocks (or, without one, concurrent copies of the protocol) start instances at staggered times, par branches interleave, choices pick branches. Each event carries prior (what it happened after), cause and answers (the request it responds to). The view animates the stream."
-    (schema [("protocol", anyJson "{name?, roles, steps}"),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("seed", Json.mkObj [("type", "integer")]), ("instances", Json.mkObj [("type", "integer")]),
       ("spread", Json.mkObj [("type", "integer")]), ("loops", Json.mkObj [("type", "integer")]),
-      ("maxEvents", Json.mkObj [("type", "integer")])] ["protocol"])
+      ("maxEvents", Json.mkObj [("type", "integer")])] []),
+  tool "session_conform" "Check a recorded run against a session type"
+    "Check events a running program logged ({id, session, from, to, label, cause}, or {id, session, at, label, act: true} for an event; session_simulate's events also work) against the protocol: in every session each event must be allowed at that point, carry the cause the protocol names, and the session must end where the protocol can end (unless allowIncomplete). Returns conforms or violates with the first problem per session and what the protocol allowed instead."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"])
 ]
 
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
@@ -275,7 +282,29 @@ def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except Stri
   | "code_generation_prompt" => .ok <| textContent LeanFM.codeGenerationSystemPrompt
   | _ => .error s!"unknown tool: {name}"
 
+/-- The workflow for building software from a session type, as a prompt Claude Desktop can offer. -/
+def sessionDesignPrompt : String :=
+  "Help me build software by designing it as a session type with LeanFM, then implementing it.\n\n" ++
+  "1. Ask me in a sentence or two what the software does, and name the roles (people, clients, services, " ++
+  "workers) that exchange messages. Read leanfm://language/session-reference before writing a protocol.\n" ++
+  "2. Write the protocol in LeanFM protocol syntax and call session_check with it as the lean argument. " ++
+  "Fix every issue it reports, and explain each fix in one line. For HTTP services pass mayCall.\n" ++
+  "3. Show me the result: the view draws the diagram, each role's typestate API and the calls; I can edit " ++
+  "the protocol there and LeanFM rechecks it. Then call session_simulate so I can watch many sessions run.\n" ++
+  "4. When I agree with the protocol, implement each role from its typestate: one handler per state, " ++
+  "sending only what that state allows. Log every message as JSON {id, session, from, to, label, cause} with " ++
+  "the protocol's labels, and every event as {id, session, at, label, act: true}.\n" ++
+  "5. When I paste a log from running it, call session_conform with the protocol and the events, and fix the " ++
+  "code until every session conforms. If the protocol itself was wrong, change the protocol first and " ++
+  "recheck it.\n\n" ++
+  "Keep the protocol text as the source of truth. Never draw interaction diagrams by hand: show the ones " ++
+  "LeanFM generates."
+
 def prompts : Array Json := #[
+  Json.mkObj [("name", "design_with_session_types"),
+    ("title", "Build software from a session type"),
+    ("description", "Design the interactions as a LeanFM session type, check and animate it, implement each role from its typestate, and check run logs against the protocol."),
+    ("arguments", Json.arr #[])],
   Json.mkObj [("name", "requirements_interrogation"),
     ("title", "Argue observable requirements"),
     ("description", "Use the book and live language reference to discover durable observable requirements."),
@@ -290,6 +319,7 @@ def promptResult (name : String) : Except String Json := do
   let text ← match name with
     | "requirements_interrogation" => pure LeanFM.requirementsInterrogationChecklist
     | "one_shot_implementation" => pure LeanFM.codeGenerationSystemPrompt
+    | "design_with_session_types" => pure sessionDesignPrompt
     | _ => throw s!"unknown prompt: {name}"
   return Json.mkObj [("description", name),
     ("messages", Json.arr #[Json.mkObj [("role", "user"),

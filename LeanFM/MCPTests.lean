@@ -110,14 +110,15 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_simulate"] do
+  for t in ["session_check", "session_diagram", "session_simulate", "session_conform"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
   let sref ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"resources/read\",\"params\":{\"uri\":\"leanfm://language/session-reference\"}}"
-  assertContains "MCP serves the session reference" sref.body "LeanFM session types: the JSON form"
-  let sess ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"name\":\"Ping\",\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\",\"status\":200}]}}}}"
-  assertContains "MCP session_check answers through the dispatch" sess.body "\"verdict\":\"ok\""
+  assertContains "MCP serves the session reference" sref.body "# LeanFM session types"
+  let sess ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p status 200; }\"}}}"
+  assertContains "MCP session_check reads Lean protocol text through the dispatch" sess.body "\"verdict\":\"ok\""
+  assertContains "MCP session_check echoes the Lean text" sess.body "protocol Ping (A, B)"
   let sessText ← summaryOf "MCP session_check text is a one-line summary" sess.body
   assertContains "MCP session_check summary gives the reading" sessText "session_check ok: Ping: no issues"
   let sessBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"roles\":[\"A\"],\"steps\":[{\"exec\":\"x\"}]}}}}"
@@ -146,6 +147,13 @@ def main : IO Unit := do
   assertContains "MCP session view reports its size" shtml "\"ui/notifications/size-changed\""
   assertContains "MCP session view builds SVG elements, not markup" shtml "createElementNS"
   assertContains "MCP session view bounds the drawing" shtml "MAX_SHAPES = 4000, MAX_EVENTS = 600"
+  assertContains "MCP session view starts the animation simple" shtml "detail = false"
+  let promptsListed ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":35,\"method\":\"prompts/list\"}"
+  assertContains "MCP offers the session design prompt" promptsListed.body "design_with_session_types"
+  let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
+  assertContains "MCP session design prompt ends at session_conform" promptGot.body "session_conform"
+  assertContains "MCP session view edits through tools/call" shtml "\"tools/call\""
+  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\"], MAX_EDIT_BYTES = 65536"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new

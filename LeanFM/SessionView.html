@@ -44,16 +44,27 @@
   .detail { font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--fg); white-space: pre-wrap; }
   .meta, .more { color: var(--dim); font-size: 13px; }
   .err { color: var(--bad); }
+  textarea { width: 100%; min-height: 320px; resize: vertical; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--edge); border-radius: 6px; padding: 8px 10px;
+    font: 14px/1.5 ui-monospace, "SFMono-Regular", Menlo, monospace; tab-size: 2; }
+  textarea:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .snips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .snips button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
+  .edit-status { font-size: 13px; color: var(--dim); min-height: 1.4em; }
+  .edit-status.bad { color: var(--bad); } .edit-status.good { color: var(--good); }
 </style>
 </head>
 <body>
-<main id="app"><p class="meta">Waiting for a session tool result…</p></main>
+<main id="app"><div id="editor"></div><div id="results"><p class="meta">Waiting for a session tool result…</p></div></main>
 <script>
 "use strict";
 // Draws session_check, session_diagram and session_simulate results. Tool data is placed only as
 // text nodes, SVG geometry built with createElementNS, and canvas drawing. No network.
 const MAX_SHAPES = 4000, MAX_EVENTS = 600, MAX_ITEMS = 64;
+// The editor may call only these tools, one call at a time, with text that parses as JSON.
+const EDIT_TOOLS = ["session_check", "session_simulate"], MAX_EDIT_BYTES = 65536, EDIT_PAUSE_MS = 700;
 const app = document.getElementById("app");
+const editorBox = document.getElementById("editor"), results = document.getElementById("results");
 
 // ---- JSON-RPC over postMessage --------------------------------------------------------------
 let nextId = 1;
@@ -137,7 +148,7 @@ function sv(tag, attrs, text) {
   if (text !== undefined) node.textContent = String(text);
   return node;
 }
-function status(text, bad) { app.replaceChildren(el("p", bad ? "err" : "meta", text)); reportSize(); }
+function status(text, bad) { results.replaceChildren(el("p", bad ? "err" : "meta", text)); reportSize(); }
 function panel(title, child) { const p = el("div", "panel"); p.appendChild(el("h3", "", title)); p.appendChild(child); return p; }
 
 const INKS = ["bg", "fg", "line", "arrow", "frame", "muted", "actFill"];
@@ -186,8 +197,9 @@ function diagram(model) {
 }
 
 // ---- the event stream on canvas -------------------------------------------------------------
-let anim = null;
+let anim = null, animGen = 0;
 function animation(body) {
+  const gen = ++animGen;
   const roles = Array.isArray(body.roles) ? body.roles.map(String) : [];
   const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
   const N = E.length;
@@ -202,7 +214,10 @@ function animation(body) {
   for (const v of [1, 2, 4, 8, 20]) { const o = el("option", "", `${v} events/s`); o.value = String(v); if (v === 4) o.selected = true; speedSel.appendChild(o); }
   const scrub = el("input"); scrub.type = "range"; scrub.min = "0"; scrub.max = String(N - 1); scrub.step = "1";
   scrub.setAttribute("aria-label", "Position in the stream");
-  controls.append(play, back, fwd, speedSel, scrub);
+  // simple by default: only the newest arrows are labelled, no prior links until an event is selected
+  const detailBtn = el("button", "", "More detail");
+  detailBtn.setAttribute("aria-pressed", "false");
+  controls.append(play, back, fwd, speedSel, detailBtn, scrub);
   const pos = el("div", "pos");
   const detail = el("div", "detail");
   wrap.append(cv, controls, pos, panel("Selected event", detail));
@@ -221,16 +236,18 @@ function animation(body) {
   }
   if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(cv);
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let p = Math.min(N - 1, 12), playing = !reduce, speed = 4, sel = null;
-  const ROW = 30, HEAD = 48;
+  let p = Math.min(N - 1, 12), playing = !reduce, speed = 4, sel = null, detail = false;
+  const HEAD = 48, LABELLED = 4;
+  const ROW = () => detail ? 30 : 42;
   const xs = () => { const m = Math.min(80, W * 0.12); return roles.map((_, i) => roles.length === 1 ? W / 2 : m + i * (W - 2 * m) / (roles.length - 1)); };
   const xOf = (X, r) => { const i = roles.indexOf(String(r)); return i < 0 ? 0 : X[i]; };
   const nowY = () => H - 26;
-  const yOf = (i) => nowY() - (p - i) * ROW;
+  const yOf = (i) => nowY() - (p - i) * ROW();
   const hue = (s) => (num(s) * 137.508) % 360;
   const col = (s, a) => `hsla(${hue(s)}, 70%, ${document.documentElement.dataset.theme === "light" ? 38 : 68}%, ${a === undefined ? 1 : a})`;
   const idx = (x) => (Number.isInteger(x) && x >= 0 && x < N) ? x : null;
-  const label = (e) => String(e.label) + (e.route ? " · " + e.route : "") + (e.status != null ? " · " + e.status : "");
+  const label = (e) => detail ? String(e.label) + (e.route ? " · " + e.route : "") + (e.status != null ? " · " + e.status : "")
+    : String(e.label) + (e.status != null && num(e.status) >= 400 ? " · " + e.status : "");
   function ancestors(id) {
     const out = new Set(), stack = (E[id].prior || []).map(idx).filter((x) => x !== null);
     while (stack.length) { const a = stack.pop(); if (!out.has(a)) { out.add(a); for (const q of (E[a].prior || [])) { const j = idx(q); if (j !== null) stack.push(j); } } }
@@ -241,13 +258,14 @@ function animation(body) {
     const X = xs();
     ctx.clearRect(0, 0, W, H);
     const k = Math.floor(p), frac = p - k;
-    const lo = Math.max(0, Math.floor(p - (nowY() - HEAD) / ROW) - 1);
+    const lo = Math.max(0, Math.floor(p - (nowY() - HEAD) / ROW()) - 1);
     const anc = sel !== null ? ancestors(sel) : null;
     ctx.strokeStyle = colors.edge; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
     for (const x of X) { ctx.beginPath(); ctx.moveTo(x, HEAD); ctx.lineTo(x, H); ctx.stroke(); }
     ctx.setLineDash([]);
     for (let i = lo; i <= k; i++) {
       const e = E[i];
+      if (!detail && !(anc && (i === sel || anc.has(i)))) continue;  // simple: only the selected event's history
       for (const q of (e.prior || [])) {
         const a = idx(q); if (a === null || a < lo) continue;
         const pa = E[a];
@@ -271,24 +289,31 @@ function animation(body) {
     ctx.font = "13px system-ui, sans-serif"; ctx.textBaseline = "alphabetic";
     for (let i = lo; i <= k && i < N; i++) {
       const e = E[i], y = yOf(i);
-      if (y < HEAD - ROW) continue;
+      if (y < HEAD - ROW()) continue;
+      const recent = detail || k - i < LABELLED || i === sel || (anc && anc.has(i));
+      ctx.globalAlpha = recent ? 1 : 0.35;
       const c = i === sel ? colors.amber : col(e.session);
       const t = i === k && !reduce ? Math.min(1, frac * 1.6) : 1, ease = 1 - Math.pow(1 - t, 3);
       if (e.act) {
         const x = xOf(X, e.src), w = ctx.measureText(String(e.label)).width + 20;
         ctx.globalAlpha = 0.3 + 0.7 * ease; ctx.fillStyle = colors.panel; ctx.strokeStyle = c; ctx.lineWidth = i === sel ? 3 : 1.5;
         ctx.beginPath(); ctx.rect(x - w / 2, y - 12, w, 22); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = colors.fg; ctx.textAlign = "center"; ctx.fillText(String(e.label), x, y + 4); ctx.globalAlpha = 1;
+        if (recent) { ctx.fillStyle = colors.fg; ctx.textAlign = "center"; ctx.fillText(String(e.label), x, y + 4); }
+        ctx.globalAlpha = 1;
       } else {
         const x1 = xOf(X, e.src), x2 = xOf(X, e.dst), dir = Math.sign(x2 - x1) || 1, xe = x1 + (x2 - x1) * ease;
-        ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3 : 2;
+        ctx.globalAlpha = recent ? 1 : 0.35;
+        ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3 : recent ? 2 : 1.5;
         ctx.setLineDash(e.answers != null ? [7, 5] : []);
         ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 6, y); ctx.stroke(); ctx.setLineDash([]);
         ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(xe, y); ctx.lineTo(xe - dir * 10, y - 5); ctx.lineTo(xe - dir * 10, y + 5); ctx.closePath(); ctx.fill();
-        ctx.globalAlpha = Math.max(0.25, ease); ctx.fillStyle = colors.fg; ctx.textAlign = "center";
-        ctx.fillText(label(e), (x1 + x2) / 2, y - 6); ctx.globalAlpha = 1;
+        if (recent) {
+          ctx.globalAlpha = Math.max(0.25, ease); ctx.fillStyle = colors.fg; ctx.textAlign = "center";
+          ctx.fillText(label(e), (x1 + x2) / 2, y - 6);
+        }
+        ctx.globalAlpha = 1;
       }
-      ctx.textAlign = "left"; ctx.fillStyle = col(e.session); ctx.fillText("#" + num(e.session), 6, y + 4);
+      if (detail) { ctx.textAlign = "left"; ctx.fillStyle = col(e.session); ctx.fillText("#" + num(e.session), 6, y + 4); }
     }
     ctx.fillStyle = colors.panel; ctx.fillRect(0, 0, W, HEAD);
     ctx.font = "600 14px system-ui, sans-serif"; ctx.textAlign = "center";
@@ -315,6 +340,7 @@ function animation(body) {
   }
   let prev = performance.now();
   function tick(now) {
+    if (gen !== animGen || !cv.isConnected) return;  // a newer result replaced this stream
     const dt = (now - prev) / 1000; prev = now;
     if (playing) { p = Math.min(N - 1 + 0.999, p + dt * speed); if (p >= N - 1 + 0.999) { playing = false; play.textContent = "Play"; } }
     draw(); panelUpdate();
@@ -326,10 +352,14 @@ function animation(body) {
   back.addEventListener("click", () => step(-1));
   fwd.addEventListener("click", () => step(1));
   speedSel.addEventListener("change", () => { speed = num(speedSel.value) || 4; });
+  detailBtn.addEventListener("click", () => {
+    detail = !detail; detailBtn.textContent = detail ? "Less detail" : "More detail";
+    detailBtn.setAttribute("aria-pressed", String(detail));
+  });
   scrub.addEventListener("input", () => { setPlay(false); p = num(scrub.value) + 0.999; });
   cv.addEventListener("click", (ev) => {
-    const r = cv.getBoundingClientRect(), y = ev.clientY - r.top, i = Math.round(p - (nowY() - y) / ROW);
-    if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW / 2) { sel = sel === i ? null : i; shown = -1; }
+    const r = cv.getBoundingClientRect(), y = ev.clientY - r.top, i = Math.round(p - (nowY() - y) / ROW());
+    if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW() / 2) { sel = sel === i ? null : i; shown = -1; }
   });
   cv.addEventListener("keydown", (ev) => {
     if (ev.key === " ") { ev.preventDefault(); setPlay(!playing); }
@@ -347,16 +377,21 @@ function animation(body) {
 function show(result) {
   const body = result && result.structuredContent;
   if (!body || typeof body !== "object") { status("The result has no content to show.", true); return; }
+  if (typeof body.lean === "string") editor(body.lean);
+  render(body);
+}
+
+function render(body) {
   anim = null;
   const head = el("div", "head");
   head.appendChild(el("span", "tool", String(body.tool || "session")));
   const v = String(body.verdict || "answered");
-  head.appendChild(el("span", "badge " + (v === "ok" || v === "drawn" || v === "generated" ? "ok" : v === "issues" ? "issues" : "other"), v));
+  head.appendChild(el("span", "badge " + (v === "ok" || v === "drawn" || v === "generated" || v === "conforms" ? "ok" : v === "issues" || v === "violates" ? "issues" : "other"), v));
   const parts = [head, el("p", "reading", String(body.reason || body.reading || ""))];
   if (Array.isArray(body.issues) && body.issues.length) {
     const ul = el("ul");
     body.issues.slice(0, MAX_ITEMS).forEach((t) => ul.appendChild(el("li", "issue", String(t))));
-    parts.push(panel("Issues", ul));
+    parts.push(panel(body.tool === "session_conform" ? "Where the run breaks the protocol" : "Issues", ul));
   }
   if (Array.isArray(body.httpCuts) && body.httpCuts.length) {
     const ul = el("ul");
@@ -379,8 +414,80 @@ function show(result) {
     parts.push(grid);
   }
   if (Array.isArray(body.omitted) && body.omitted.length) parts.push(el("p", "more", "Left out to fit: " + body.omitted.map(String).join(", ")));
-  app.replaceChildren(...parts);
+  results.replaceChildren(...parts);
   reportSize();
+}
+
+// ---- the editor: edit the protocol in Lean, LeanFM rechecks it -----------------------------
+let text = null, editStatus = null, timer = null, inFlight = false, again = null, canCall = true;
+function rolesOf(src) {
+  // the roles of the last protocol in the text, for the insert buttons; LeanFM itself parses the text
+  const all = [...src.matchAll(/protocol\s+[^\s(]+\s*\(([^)]*)\)/g)];
+  const last = all.length ? all[all.length - 1][1] : "";
+  const rs = last.split(",").map((r) => r.trim()).filter((r) => r);
+  return rs.length ? rs : ["A", "B"];
+}
+function editor(lean) {
+  if (text || typeof lean !== "string") return;  // the editor keeps what the person typed
+  const area = el("textarea");
+  area.spellcheck = false;
+  area.setAttribute("aria-label", "Protocol in LeanFM syntax. LeanFM checks it after each pause in typing.");
+  area.value = lean;
+  text = area;
+  editStatus = el("div", "edit-status", "Edit the protocol: LeanFM checks it when you pause.");
+  const snips = el("div", "snips");
+  const templates = {
+    "message": (a, b) => `n: Name from ${a} to ${b};`,
+    "reply": (a, b) => `Reply from ${b} to ${a} cause n status 200;`,
+    "event": (a) => `Done at ${a};`,
+    "choice": (a, b) => `choice {\n  Yes from ${b} to ${a};\n} or {\n  No from ${b} to ${a};\n}`,
+    "par": (a, b) => `par {\n  Left from ${a} to ${b};\n} and {\n  Right from ${b} to ${a};\n}`,
+    "rec": (a, b) => `rec Loop {\n  Next from ${a} to ${b};\n  choice {\n    More from ${b} to ${a};\n    continue Loop;\n  } or {\n    Stop from ${b} to ${a};\n  }\n}`,
+    "sessions": (a, b) => `sessions {\n  r: Request from ${a} to ${b};\n  Response from ${b} to ${a} cause r;\n}` };
+  for (const k of Object.keys(templates)) {
+    const btn = el("button", "", "+ " + k);
+    btn.setAttribute("aria-label", "Insert a " + k + " statement at the cursor");
+    btn.addEventListener("click", () => {
+      const r = rolesOf(area.value), t = templates[k](r[0], r[1] || r[0]);
+      area.setRangeText(t, area.selectionStart, area.selectionEnd, "end"); area.focus(); schedule();
+    });
+    snips.appendChild(btn);
+  }
+  const check = el("button", "", "Check now"), animate = el("button", "", "Animate 10 sessions");
+  check.addEventListener("click", () => run("session_check"));
+  animate.addEventListener("click", () => run("session_simulate", { instances: 10, seed: Date.now() % 100000 }));
+  area.addEventListener("input", schedule);
+  area.addEventListener("keydown", (ev) => {
+    if (ev.key === "Tab" && !ev.shiftKey) { ev.preventDefault(); area.setRangeText("  ", area.selectionStart, area.selectionEnd, "end"); }
+  });
+  const controls = el("div", "controls"); controls.append(check, animate);
+  const box = panel("Protocol (Lean, editable)", area);
+  box.append(snips, controls, editStatus);
+  editorBox.replaceChildren(box);
+}
+function say(msg, kind) { if (editStatus) { editStatus.textContent = msg; editStatus.className = "edit-status" + (kind ? " " + kind : ""); } }
+function schedule() { clearTimeout(timer); timer = setTimeout(() => run("session_check"), EDIT_PAUSE_MS); }
+async function run(name, extra) {
+  if (!EDIT_TOOLS.includes(name) || !text) return;
+  if (!canCall) { say("This host does not let the view call tools; ask Claude to run " + name + " on the edited protocol.", "bad"); return; }
+  const source = text.value;
+  if (!source.trim()) { say("The protocol is empty.", "bad"); return; }
+  if (new Blob([source]).size > MAX_EDIT_BYTES) { say("The protocol is over 64 KiB.", "bad"); return; }
+  if (inFlight) { again = [name, extra]; return; }  // one call at a time: the latest edit wins
+  inFlight = true; say(name === "session_check" ? "Checking…" : "Generating…");
+  try {
+    const result = await rpc("tools/call", { name, arguments: Object.assign({ lean: source }, extra || {}) }, 30000);
+    const body = result && result.structuredContent;
+    if (result && result.isError) say(String((body && body.reason) || "LeanFM rejected the protocol."), "bad");
+    else if (body && typeof body === "object") { render(body); say(String(body.reading || "Checked."), body.verdict === "issues" ? "bad" : "good"); }
+    else say("The host returned no result.", "bad");
+  } catch (e) {
+    if (e && (e.code === -32601 || e.message === "timeout")) canCall = false;
+    say(canCall ? "The check failed: " + String((e && e.message) || e) : "This host does not let the view call tools; ask Claude to run " + name + " on the edited protocol.", "bad");
+  } finally {
+    inFlight = false;
+    if (again) { const [n, x] = again; again = null; run(n, x); }
+  }
 }
 
 connect();

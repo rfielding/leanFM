@@ -125,8 +125,21 @@ and [project MCP configuration](https://code.claude.com/docs/en/mcp).
 ### Claude Desktop
 
 Claude Desktop reaches LeanFM through the MCP-only server and a small stdio bridge
-(`mcp-remote`, run with `npx`, so Node is required). Build and start the server, then add it to
-Claude Desktop's configuration on macOS and restart the app:
+(`mcp-remote`, run with `npx`, so Node is required). On Linux or macOS, from a fresh clone:
+
+```sh
+git clone https://github.com/rfielding/leanfm.git && cd leanfm
+bash scripts/desktop-setup.sh
+```
+
+[`scripts/desktop-setup.sh`](scripts/desktop-setup.sh) installs elan if it is missing, builds
+`leanfm-mcp`, starts it on port 8090 (log and pid under `.cache/desktop/`), and adds a `leanfm`
+entry to Claude Desktop's configuration, keeping the other entries and a `.bak` of the previous
+file. Rerun it after a `git pull`, then quit and reopen Claude Desktop. Start with the
+`design_with_session_types` prompt: it walks from the roles to a checked protocol, each role's
+typestate, code that logs its messages, and `session_conform` on those logs.
+
+The same steps by hand, on macOS:
 
 ```sh
 lake build leanfm-mcp
@@ -146,11 +159,16 @@ osascript -e 'quit app "Claude"'; sleep 2; open -a Claude
 
 Then design with session types in the conversation, for example: "Use LeanFM to design a
 library-lending service as a session type, check it, and animate a stream of 20 borrowers."
-`session_check`, `session_diagram` and `session_simulate` take a protocol in the JSON form
-described by the `leanfm://language/session-reference` resource. Their results render inline:
+`session_check`, `session_diagram`, `session_simulate` and `session_conform` take the protocol as LeanFM protocol
+text (`protocol Name (Roles) { ... }`, the same syntax as `LeanFM/Session/Syntax.lean`), read by a
+parser for that grammar alone, so nothing submitted is elaborated or run; the
+`leanfm://language/session-reference` resource documents it. Their results render inline, with the
+protocol in an editor that LeanFM rechecks as you type:
 the generated sequence diagram, each role's typestate API, the calls with routes and status
 codes, and the event stream as an animation where clicking an event traces its `prior` and
-`cause`. The logic tools (`check_ctl`, `check_protocol`, `knows`, ...) render in their own view.
+`cause` (simple by default; More detail shows every route, status and prior link).
+`session_conform` checks a log of a running implementation (`{id, session, from, to, label,
+cause}` per message) against the protocol and says where a session first breaks it. The logic tools (`check_ctl`, `check_protocol`, `knows`, ...) render in their own view.
 
 The [launcher](scripts/claude.sh) keeps Claude configuration, session history,
 memory, and temporary files under the ignored `.cache/claude/` directory using

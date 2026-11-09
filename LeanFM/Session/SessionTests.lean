@@ -7,6 +7,7 @@ import LeanFM.Session.Http
 import LeanFM.Session.Diagram
 import LeanFM.Session.Calls
 import LeanFM.Session.Events
+import LeanFM.Session.Conform
 
 /-!
 # Session-type library tests (clauses selfhost.session.*)
@@ -417,5 +418,46 @@ def idOf (evs : Array (Event Role)) (l : String) : Nat := ((evs.toList.find? (·
 
 -- strings are escaped in the JSON
 #guard jsonString "a\"b\\c\n" == "\"a\\\"b\\\\c\\n\""
+
+/-! ## selfhost.session.conform -/
+
+def toLog (evs : Array (Event Role)) : List LogEvent :=
+  evs.toList.map fun e =>
+    let l : LogEvent := { id := toString e.id, session := toString e.session, src := toString e.src, dst := toString e.dst, label := e.label, cause := e.cause.map toString, isAct := e.isAct }
+    l
+
+def allConform (g : Global Role) (evs : Array (Event Role)) (incomplete := false) : Bool :=
+  let gs : Global String := g.mapRoles toString
+  (gs.conforms (toLog evs) incomplete).all (·.problem.isNone)
+
+-- every generated run conforms: choices, loops, par interleavings, 2-of-3 joins, includes, sessions
+#guard (List.range 12).all fun seed => allConform checkout (checkout.simulate (seed := seed))
+#guard (List.range 12).all fun seed => allConform transfer (transfer.simulate (seed := seed) (loops := 3))
+def fan : Global Role := Fan Role.client Role.shop Role.bank Role.r1
+#guard (List.range 12).all fun seed => allConform fan (fan.simulate (seed := seed))
+#guard (List.range 12).all fun seed => allConform replicatedOrder (replicatedOrder.simulate (seed := seed))
+#guard (List.range 6).all fun seed =>
+  allConform (Serve Role.client Role.shop) ((Serve Role.client Role.shop).simulate (seed := seed) (instances := 6))
+
+def run3 : List LogEvent := toLog (checkout.simulate (seed := 3))
+def checkoutS : Global String := checkout.mapRoles toString
+def problemOf (log : List LogEvent) (incomplete := false) : String :=
+  ((checkoutS.conforms log incomplete).findSome? (·.problem)).map (·.2) |>.getD ""
+
+#guard problemOf run3 == ""
+-- a wrong label is not allowed, and the answer says what was
+#guard (problemOf (run3.set 0 { run3[0]! with label := "Ordr" })).startsWith "Ordr from Client to Shop is not allowed here; the protocol allows Order from Client to Shop"
+-- a missing or wrong cause is caught: its label and roles fit, its cause does not
+#guard (problemOf (run3.set 1 { run3[1]! with cause := none })).contains "its cause does not"
+-- a session that stops early is reported, unless sessions still running are allowed
+#guard (problemOf run3.dropLast).contains "the session stops early"
+#guard problemOf run3.dropLast (incomplete := true) == ""
+-- a repeated event id, and a cause that is not an earlier event, are reported
+#guard (problemOf (run3 ++ [run3[0]!])).contains "appears twice"
+#guard (problemOf ((run3.set 1 { run3[1]! with cause := some "e99" }))).contains "is not an earlier event"
+-- order matters: a reply before its request is caught (its cause has not happened yet)
+#guard (problemOf ([run3[1]!, run3[0]!] ++ run3.drop 2)).contains "is not an earlier event"
+-- and an event in the wrong place without a cause is not allowed there
+#guard (problemOf ([run3[0]!, run3[0]!] |>.set 1 { run3[0]! with id := "x1" })).contains "is not allowed here"
 
 end LeanFM.Session.SessionTests

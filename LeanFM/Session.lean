@@ -8,6 +8,8 @@ import LeanFM.Session.Knowledge
 import LeanFM.Session.Diagram
 import LeanFM.Session.Calls
 import LeanFM.Session.Events
+import LeanFM.Session.Text
+import LeanFM.Session.Conform
 import LeanFM.Session.ProjectionTests
 import LeanFM.Session.SessionTests
 
@@ -24,6 +26,8 @@ Pull in only what you use:
 * `LeanFM.Session.Diagram`  sequence diagrams drawn from a global type
 * `LeanFM.Session.Calls`    calls (request, detail, responses) and typestate APIs
 * `LeanFM.Session.Events`   event streams generated from a global type
+* `LeanFM.Session.Text`     protocol text read without elaborating it (for MCP clients)
+* `LeanFM.Session.Conform`  checking a logged run against the protocol
 * `LeanFM.Session.Spec`     properties, assumptions and handled conditions
 
 This module brings in all of them.
