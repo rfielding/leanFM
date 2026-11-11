@@ -1,0 +1,25 @@
+-- Illustrative declared assumptions, not measured repayment rates or advice.
+-- A 1000 USD advance: two weeks of grace at 0 USD per week, then 10 USD per week until repaid.
+-- Half the borrowers repay at the end of the grace period; the rest repay each later week with probability 1/4.
+protocol Loan (Borrower, Lender) {
+  Advance from Lender to Borrower amount 1000 USD;
+  accrue 0 USD per week from Borrower to Lender;
+  choice at Borrower using declared("early") {
+    probability 1/2:
+      Repay from Borrower to Lender amount 1000 USD after 2 weeks;
+  } or {
+    probability 1/2:
+      Extend from Borrower to Lender after 2 weeks;
+      accrue 10 USD per week from Borrower to Lender;
+      rec Week {
+        choice at Borrower using declared("weekly") {
+          probability 1/4:
+            Repay from Borrower to Lender amount 1000 USD after 1 week;
+        } or {
+          probability 3/4:
+            Missed from Borrower to Lender after 1 week;
+            continue Week;
+        }
+      }
+  }
+}

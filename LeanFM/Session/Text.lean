@@ -39,6 +39,8 @@ inductive Stmt where
   | msg (id : Option String) (label src dst : String) (cause route : Option String)
       (status : Option Nat) (guard : Option String)
   | timed (time : Generative.TimeExpr) (message : Stmt)
+  | valued (amount : Generative.Amount) (message : Stmt)
+  | accrue (as : List Generative.Accrual)
   | clock (name : String) (refs : List String)
   | obligation (spec : Generative.Obligation)
   | weighted (name actor : String) (weights : List LeanFM.Overlay.Q) (branches : List (List Stmt))
@@ -254,7 +256,8 @@ def duration : P Nat := do
     | "minute" | "minutes" => pure 60000
     | "hour" | "hours" => pure 3600000
     | "day" | "days" => pure 86400000
-    | _ => fail "unknown time unit; use ms, seconds, minutes, hours or days"
+    | "week" | "weeks" => pure 604800000
+    | _ => fail "unknown time unit; use ms, seconds, minutes, hours, days or weeks"
   if n * scale > 9007199254740991 then fail "duration exceeds the safe integer millisecond limit"
   return n * scale
 
@@ -267,7 +270,27 @@ def timeRefs : P (List String) := do
     sym '('; let a ← timeRef; sym ','; let b ← timeRef; sym ')'; return [a,b]
   return [← timeRef]
 
+/-- `after d` or `after sample { d : p; ... }`: a delay after the previous step. -/
+partial def delaySample : P (List (Nat × LeanFM.Overlay.Q)) := do
+  if !(← keyword? "sample") then return [(← duration, LeanFM.Overlay.Q.one)]
+  sym '{'
+  let rec entries (acc : List (Nat × LeanFM.Overlay.Q)) : P (List (Nat × LeanFM.Overlay.Q)) := do
+    if ← sym? '}' then return acc
+    if acc.length ≥ 16 then fail "a delay distribution has at most 16 entries"
+    let d ← duration; sym ':'; let q ← fraction; sym ';'
+    entries (acc ++ [(d,q)])
+  let offsets ← entries []
+  match Generative.checkWeights (offsets.map (·.2)) with
+  | .error e => fail e
+  | .ok _ => pure ()
+  if (offsets.map (·.1)).eraseDups.length != offsets.length then fail "duplicate delay in sample"
+  return offsets
+
 partial def timeExpr : P Generative.TimeExpr := do
+  if ← keyword? "next" then
+    let d ← duration
+    if d == 0 then fail "a gate's period must be longer than zero"
+    return { period := some d }
   let base ← if (← peekIdent) == some "time" || (← peekIdent) == some "max" then
       pure ({ refs := ← timeRefs } : Generative.TimeExpr)
     else pure { clock := some (← ident "a clock name or time(messageId)") }
@@ -285,6 +308,47 @@ partial def timeExpr : P Generative.TimeExpr := do
   | .ok _ => pure ()
   if (offsets.map (·.1)).eraseDups.length != offsets.length then fail "duplicate delay in sample"
   return { base with offsets }
+
+/-- `N UNIT`: a whole quantity of at most 12 digits and a unit name (selfhost.session.amounts). -/
+def quantity : P (Nat × String) := do
+  let n ← boundedNumber 12
+  let unit ← ident "a unit (such as USD)"
+  if unit.length > 32 then fail "a unit name has at most 32 characters"
+  return (n, unit)
+
+/-- `{ 5 apple; 4 orange; -3 USD; }`: a trade vector. Positive entries move from the sender to the
+receiver and negative ones back, so the two sides cancel unit by unit. -/
+partial def tradeVector : P (List Generative.Amount) := do
+  let rec entries (acc : List Generative.Amount) : P (List Generative.Amount) := do
+    if ← sym? '}' then return acc
+    if acc.length ≥ 16 then fail "a trade vector has at most 16 entries"
+    let reverse ← sym? '-'
+    let (n, unit) ← quantity; sym ';'
+    if acc.any (·.unit == unit) then fail s!"unit {unit} appears twice in the trade vector"
+    entries (acc ++ [{ unit, outcomes := [(n, LeanFM.Overlay.Q.one)], reverse }])
+  let es ← entries []
+  if es.isEmpty then fail "a trade vector needs at least one entry"
+  return es
+
+/-- `N UNIT`, or `sample { N UNIT : p; ... }` with one unit and distinct quantities. -/
+partial def amountExpr : P Generative.Amount := do
+  if !(← keyword? "sample") then
+    let (n, unit) ← quantity
+    return { unit, outcomes := [(n, LeanFM.Overlay.Q.one)] }
+  sym '{'
+  let rec entries (acc : List (Nat × String × LeanFM.Overlay.Q)) : P (List (Nat × String × LeanFM.Overlay.Q)) := do
+    if ← sym? '}' then return acc
+    if acc.length ≥ 16 then fail "an amount distribution has at most 16 entries"
+    let (n, unit) ← quantity; sym ':'; let q ← fraction; sym ';'
+    entries (acc ++ [(n, unit, q)])
+  let es ← entries []
+  let some (_, unit, _) := es.head? | fail "an amount sample needs at least one entry"
+  if es.any (fun (_, u, _) => u != unit) then fail "an amount sample uses one unit"
+  if (es.map (·.1)).eraseDups.length != es.length then fail "duplicate quantity in amount sample"
+  match Generative.checkWeights (es.map (·.2.2)) with
+  | .error e => fail e
+  | .ok _ => pure ()
+  return { unit, outcomes := es.map fun (n, _, q) => (n, q) }
 
 partial def obligationSpec : P Generative.Obligation := do
   let first ← ident "an obligation name"
@@ -309,8 +373,30 @@ partial def obligationSpec : P Generative.Obligation := do
   let withinMs ← duration; sym ';'
   if !(← keyword? "on") || !(← keyword? "breach") || !(← keyword? "record") then
     fail "expected on breach record Label"
-  let breach ← ident "a monitor label"; sym ';'; sym '}'
-  return { name, actor, clock, labels := ls, withinMs, breach }
+  let breach ← ident "a monitor label"
+  let penalty ← do
+    if ← keyword? "pays" then
+      let (quantity, unit) ← quantity
+      if !(← keyword? "to") then fail "expected to Role after the penalty"
+      let payee ← ident "the role paid"
+      if payee == actor then fail "a penalty is paid to another role, not to its payer"
+      pure (some ({ quantity, unit, payee } : Generative.Penalty))
+    else pure none
+  sym ';'; sym '}'
+  return { name, actor, clock, labels := ls, withinMs, breach, penalty }
+
+/-- `N UNIT per PERIOD`: `per week` is per one week, `per 2 weeks` a duration. -/
+def rateEntry : P (Nat × String × Nat) := do
+  let (quantity, unit) ← quantity
+  if !(← keyword? "per") then fail "expected per PERIOD (such as per week)"
+  let periodMs ← if (← nextChar).any Char.isDigit then duration else do
+    let u ← ident "a time unit"
+    match u with
+    | "ms" => pure 1 | "second" => pure 1000 | "minute" => pure 60000 | "hour" => pure 3600000
+    | "day" => pure 86400000 | "week" => pure 604800000
+    | _ => fail "unknown period; use ms, second, minute, hour, day or week, or a number and unit"
+  if periodMs == 0 then fail "a rate's period must be longer than zero"
+  return (quantity, unit, periodMs)
 
 mutual
 partial def block : P (List Stmt) := do
@@ -347,6 +433,33 @@ partial def stmt : P Stmt := do
     let name ← ident "a clock name"; sym '='
     let refs ← timeRefs; sym ';'; return .clock name refs
   if w == "obligation" && (← peekIdent) != some "from" && (← nextChar) != some ':' then return .obligation (← obligationSpec)
+  if w == "accrue" && ((← nextChar).any Char.isDigit || (← nextChar) == some '{') then
+    -- one rate, or a rate vector { 1000 USD per week; -1 roomweek per week; } whose negative entries
+    -- flow the other way, so the two sides cancel unit by unit at every moment
+    let entries ← if ← sym? '{' then do
+        let rec more (acc : List (Bool × Nat × String × Nat)) : P (List (Bool × Nat × String × Nat)) := do
+          if ← sym? '}' then return acc
+          if acc.length ≥ 16 then fail "a rate vector has at most 16 entries"
+          let reverse ← sym? '-'
+          let (n, unit, period) ← rateEntry
+          sym ';'
+          if acc.any (·.2.2.1 == unit) then fail s!"unit {unit} appears twice in the rate vector"
+          more (acc ++ [(reverse, n, unit, period)])
+        let es ← more []
+        if es.isEmpty then fail "a rate vector needs at least one entry"
+        pure es
+      else do
+        let (n, unit, period) ← rateEntry
+        pure [(false, n, unit, period)]
+    if !(← keyword? "from") then fail "expected from Payer"
+    let payer ← ident "the paying role"
+    if !(← keyword? "to") then fail "expected to Payee"
+    let payee ← ident "the role paid"
+    if payer == payee then fail "an accrual is paid to another role, not to its payer"
+    sym ';'
+    return .accrue (entries.map fun (rev, quantity, unit, periodMs) =>
+      if rev then { payer := payee, payee := payer, unit, quantity, periodMs }
+      else { payer, payee, unit, quantity, periodMs })
   if w == "choice" && (← peekIdent) == some "at" then
     discard <| keyword? "at"
     let actor ← ident "the choosing role"
@@ -415,8 +528,16 @@ partial def stmt : P Stmt := do
   if ← keyword? "at" then
     if id.isSome then failAt start "an event has no message id"
     let r ← ident "a role"
+    let timing ← do
+      if ← keyword? "after" then pure (some ({ offsets := ← delaySample, relative := true } : Generative.TimeExpr))
+      else if ← keyword? "at" then
+        if !(← keyword? "next") then fail "an event's time is after d or at next d"
+        let d ← duration
+        if d == 0 then fail "a gate's period must be longer than zero"
+        pure (some ({ period := some d } : Generative.TimeExpr))
+      else pure none
     sym ';'
-    return .event label r
+    return match timing with | some t => .timed t (.event label r) | none => .event label r
   if !(← keyword? "from") then fail s!"expected 'from' or 'at' after {label}"
   let src ← ident "the sending role"
   if !(← keyword? "to") then fail "expected 'to'"
@@ -424,10 +545,18 @@ partial def stmt : P Stmt := do
   let cause ← do if ← keyword? "cause" then pure (some (← ident "a message id")) else pure none
   let route ← do if ← keyword? "route" then pure (some (← stringLit)) else pure none
   let status ← do if ← keyword? "status" then pure (some (← number)) else pure none
-  let timing ← do if ← keyword? "at" then pure (some (← timeExpr)) else pure none
+  let amounts ← do
+    if ← keyword? "amount" then
+      if ← sym? '{' then tradeVector else pure [← amountExpr]
+    else pure []
+  let timing ← do
+    if ← keyword? "at" then pure (some (← timeExpr))
+    else if ← keyword? "after" then pure (some ({ offsets := ← delaySample, relative := true } : Generative.TimeExpr))
+    else pure none
   let guard ← do if ← keyword? "where" then pure (some (← whereText)) else pure none
   sym ';' "';' at the end of the message"
   let message := Stmt.msg id label src dst cause route status guard
+  let message := amounts.foldl (fun m a => .valued a m) message
   return match timing with | some t => .timed t message | none => message
 end
 
@@ -487,6 +616,11 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
     match s with
     | .clock _ _ | .obligation _ => next ()
     | .timed _ message => build c (message :: rest) i
+    | .valued _ message => build c (message :: rest) i
+    | .accrue as =>
+      for a in as do
+        discard <| role here a.payer; discard <| role here a.payee
+      next ()
     | .weighted name actor _ bs =>
       if name == "__branch" then bfail here "probability is only allowed inside choice at Role using declared(name)"
       let who ← role here actor
@@ -578,6 +712,20 @@ def showTime (t : Generative.TimeExpr) : String :=
       | rs => "max(" ++ ", ".intercalate (rs.map (fun r => "time(" ++ showIdent r ++ ")")) ++ ")"
   base ++ " + sample { " ++ " ".intercalate (t.offsets.map fun (d,q) => s!"{d} ms : {q.text};") ++ " }"
 
+def showDelay (os : List (Nat × LeanFM.Overlay.Q)) : String :=
+  "sample { " ++ " ".intercalate (os.map fun (d,q) => s!"{d} ms : {q.text};") ++ " }"
+
+/-- ` at T` or ` after D`, as the parser reads them. -/
+def timeText (t : Generative.TimeExpr) : String :=
+  match t.period with
+  | some d => s!" at next {d} ms"
+  | none => if t.relative then " after " ++ showDelay t.offsets else " at " ++ showTime t
+
+def showAmount (a : Generative.Amount) : String :=
+  match a.outcomes with
+  | [(n, _)] => s!"{if a.reverse then "-" else ""}{n} {showIdent a.unit}"
+  | os => "sample { " ++ " ".intercalate (os.map fun (n,q) => s!"{n} {showIdent a.unit} : {q.text};") ++ " }"
+
 mutual
 partial def writeStmts (ind : String) (ss : List Stmt) : List String := ss.flatMap (writeStmt ind)
 
@@ -588,17 +736,31 @@ partial def writeBranches (ind kw sep : String) (bs : List (List Stmt)) : List S
     [ind ++ kw ++ " {"] ++ writeStmts (ind ++ "  ") b ++
       (rest.flatMap fun b => [ind ++ "} " ++ sep ++ " {"] ++ writeStmts (ind ++ "  ") b) ++ [ind ++ "}"]
 
+/-- A message with its amount and time, in the order the parser reads them. -/
+partial def writeAnnotated (ind : String) (t : Option Generative.TimeExpr) (as : List Generative.Amount) : Stmt → List String
+  | .timed t' m => writeAnnotated ind (some t') as m
+  | .valued a' m => writeAnnotated ind t (a' :: as) m
+  | .msg id label src dst cause route status guard =>
+    (writeStmt ind (.msg id label src dst cause route status none)).map fun line =>
+      (line.dropEnd 1).toString ++
+        (match as with
+         | [] => ""
+         | [a] => if a.reverse then " amount { " ++ showAmount a ++ "; }" else " amount " ++ showAmount a
+         | _ => " amount { " ++ " ".intercalate (as.map fun a => showAmount a ++ ";") ++ " }") ++
+        (t.map timeText).getD "" ++
+        (guard.map (" where " ++ ·)).getD "" ++ ";"
+  | .event label r => [ind ++ showIdent label ++ " at " ++ showIdent r ++ (t.map timeText).getD "" ++ ";"]
+  | _ => []
+
 partial def writeStmt (ind : String) : Stmt → List String
   | .clock name refs => [ind ++ "clock " ++ showIdent name ++ " = " ++
       (if refs.length == 1 then "time(" ++ showIdent refs.head! ++ ")" else
        "max(" ++ ", ".intercalate (refs.map (fun r => "time(" ++ showIdent r ++ ")")) ++ ")") ++ ";"]
   | .obligation o => [ind ++ s!"obligation {showIdent o.name} on {showIdent o.actor} \{ trigger {showIdent o.clock}; require " ++
-      " or ".intercalate (o.labels.map showIdent) ++ s!" within {o.withinMs} ms; on breach record {showIdent o.breach}; }"]
-  | .timed t (.msg id label src dst cause route status guard) =>
-    (writeStmt ind (.msg id label src dst cause route status none)).map fun line =>
-      (line.dropEnd 1).toString ++ " at " ++ showTime t ++
-        (guard.map (" where " ++ ·)).getD "" ++ ";"
-  | .timed _ _ => []
+      " or ".intercalate (o.labels.map showIdent) ++ s!" within {o.withinMs} ms; on breach record {showIdent o.breach}" ++
+      (match o.penalty with | some p => s!" pays {p.quantity} {showIdent p.unit} to {showIdent p.payee}" | none => "") ++ "; }"]
+  | .timed t m => writeAnnotated ind (some t) [] m
+  | .valued a m => writeAnnotated ind none [a] m
   | .weighted name actor weights bs =>
     let decorated := bs.zipIdx |>.map fun (b,i) =>
       (if weights.isEmpty then [] else [ind ++ "  probability " ++ (weights[i]!).text ++ ":"]) ++ writeStmts (ind ++ "  ") b
@@ -612,6 +774,15 @@ partial def writeStmt (ind : String) : Stmt → List String
       (match status with | some s => s!" status {s}" | none => "") ++
       (match guard with | some g => " where " ++ g | none => "") ++ ";"]
   | .event label r => [ind ++ showIdent label ++ " at " ++ showIdent r ++ ";"]
+  | .accrue as =>
+    match as with
+    | [a] => [ind ++ s!"accrue {a.quantity} {showIdent a.unit} per {a.periodMs} ms from {showIdent a.payer} to {showIdent a.payee};"]
+    | a :: _ =>
+      -- the first entry fixes the direction; entries flowing the other way are negative
+      [ind ++ "accrue { " ++ " ".intercalate (as.map fun x =>
+        s!"{if x.payer == a.payer then "" else "-"}{x.quantity} {showIdent x.unit} per {x.periodMs} ms;") ++
+        s!" }} from {showIdent a.payer} to {showIdent a.payee};"]
+    | [] => []
   | .choice bs => writeBranches ind "choice" "or" bs
   | .par bs => writeBranches ind "par" "and" bs
   | .join k bs => writeBranches ind s!"join {k} of" "and" bs

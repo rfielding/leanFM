@@ -1,0 +1,13 @@
+-- Weekly rent behind a periodic gate. Each week the Landlord checks in (an hour's work), then the
+-- Rent waits for the next week boundary, so every week holds exactly one payment however long the
+-- check takes. Occupancy accrues all the time: 1 roomweek per week to the Tenant.
+-- The graph is the same for any horizon: pass horizon "52 weeks" and the rent is paid 52 times.
+protocol WeeklyRent (Tenant, Landlord) {
+  Lease from Landlord to Tenant;
+  accrue 1 roomweek per week from Landlord to Tenant;
+  rec Week {
+    Check from Landlord to Tenant after 1 hour;
+    Rent from Tenant to Landlord amount 1000 USD at next 1 week;
+    continue Week;
+  }
+}

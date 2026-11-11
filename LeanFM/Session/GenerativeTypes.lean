@@ -9,7 +9,37 @@ structure TimeExpr where
   clock : Option String := none
   refs : List String := []
   offsets : List (Nat × Q) := [(0, Q.one)]
+  /-- `after d`: d after the previous step on the path, rather than after a clock or message. -/
+  relative : Bool := false
+  /-- `at next d`: the next whole multiple of d since the session began (a periodic gate) -/
+  period : Option Nat := none
   deriving Inhabited, Repr
+
+/-- What a message moves from its sender to its receiver (selfhost.session.amounts):
+one unit, and one or more whole quantities with exact probabilities. -/
+structure Amount where
+  unit : String
+  outcomes : List (Nat × Q)
+  /-- moves from the receiver to the sender: the negative entries of a trade vector -/
+  reverse : Bool := false
+  deriving Inhabited, Repr
+
+/-- Paid by an obligation's actor to `payee` when the obligation is violated. -/
+structure Penalty where
+  quantity : Nat
+  unit : String
+  payee : String
+  deriving Inhabited, Repr
+
+/-- `accrue N UNIT per PERIOD from A to B`: A pays B at this rate until the next accrual for the
+same payer, payee and unit (selfhost.session.mdp.rewards). -/
+structure Accrual where
+  payer : String
+  payee : String
+  unit : String
+  quantity : Nat
+  periodMs : Nat
+  deriving Inhabited, Repr, BEq
 
 structure Obligation where
   name : String
@@ -18,6 +48,7 @@ structure Obligation where
   labels : List String
   withinMs : Nat
   breach : String
+  penalty : Option Penalty := none
   deriving Inhabited, Repr
 
 def checkWeights (weights : List Q) : Except String Unit := do

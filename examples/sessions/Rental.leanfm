@@ -1,0 +1,10 @@
+-- A rental as a continuous trade. While the lease runs, the flow vector is
+-- { -1000 USD/week, +1 roomweek/week } for the Tenant and its negation for the Landlord:
+-- the two sides cancel unit by unit at every moment. 1000 USD per week is the exchange rate
+-- between roomweeks (one room for one week) and dollars; over 7 weeks the trade is
+-- { -7000 USD, +7 roomweek } for the Tenant.
+protocol Rental (Tenant, Landlord) {
+  Lease from Landlord to Tenant;
+  accrue { 1000 USD per week; -1 roomweek per week; } from Tenant to Landlord;
+  MoveOut from Tenant to Landlord after 7 weeks;
+}

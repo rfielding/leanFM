@@ -1,0 +1,25 @@
+-- Illustrative declared assumptions, not measured fill rates.
+-- A trader resubmits a limit order, paying a 2 USD fee per attempt, until it fills or the trader gives up.
+-- Each attempt: fills 1/4; otherwise rejected, then the trader retries 2/3 of the time.
+protocol LimitOrder (Trader, Exchange) {
+  rec Attempt {
+    o: Order from Trader to Exchange amount 2 USD;
+    choice at Exchange using declared("fill-odds") {
+      probability 1/4:
+        f: Filled from Exchange to Trader cause o;
+        Payment from Trader to Exchange cause f amount 1000 USD;
+        Shares from Exchange to Trader cause f amount 10 SHARE;
+    } or {
+      probability 3/4:
+        r: Rejected from Exchange to Trader cause o;
+        choice at Trader using declared("persistence") {
+          probability 2/3:
+            Retry from Trader to Exchange cause r;
+            continue Attempt;
+        } or {
+          probability 1/3:
+            GiveUp from Trader to Exchange cause r;
+        }
+    }
+  }
+}

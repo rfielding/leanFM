@@ -1,0 +1,24 @@
+-- Illustrative declared assumptions, not measured frequencies or legal advice.
+-- The Landlord holds the Tenant's 1000 USD deposit when the lease ends; balances count from then.
+-- One day is a fixed 24 hours; deadline equality is fulfillment.
+protocol PricedDepositSettlement (Tenant, Landlord) {
+  ended: LeaseEnded from Tenant to Landlord;
+  address: ForwardingAddress from Tenant to Landlord;
+  clock settlement = max(time(ended), time(address));
+  obligation Act.Section2 on Landlord {
+    trigger settlement;
+    require DepositReturned or DeductionsItemized within 14 days;
+    on breach record Section2Violated pays 2000 USD to Tenant;
+  }
+  choice at Landlord using declared("illustrative-settlement-v1") {
+    probability 3/4:
+      DepositReturned from Landlord to Tenant cause address amount 1000 USD
+        at settlement + sample { 7 days : 9/10; 25 days : 1/10; };
+  } or {
+    probability 1/4:
+      itemised: DeductionsItemized from Landlord to Tenant cause address
+        at settlement + 6 days;
+      DepositReturned from Landlord to Tenant cause address
+        amount sample { 700 USD : 1/2; 400 USD : 1/2; } at time(itemised);
+  }
+}

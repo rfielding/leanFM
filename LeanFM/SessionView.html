@@ -459,14 +459,65 @@ function render(body) {
   }
   if (Array.isArray(body.events)) parts.push(panel("Event stream", animation(body)));
   if (body.diagram) parts.push(panel(body.diagramKind === "mdp" ? "Decision process under the supplied policy" : "Sequence diagram, generated from the protocol", diagram(body.diagram)));
-  if (body.tool === "session_mdp") {
+  if (body.tool === "session_mdp" && body.view === "walk") {
+    const box = el("div");
+    const money = (m) => Object.keys(m || {}).flatMap((r) => Object.keys(m[r] || {}).filter((u) => m[r][u] !== "0")
+      .map((u) => `${r} ${m[r][u]} ${u}`)).join(" · ");
+    const ul = el("ul");
+    for (const w of (Array.isArray(body.walks) ? body.walks : []).slice(0, MAX_ITEMS))
+      ul.appendChild(el("li", w.ended ? "" : "issue", `${w.session != null ? "Session " + String(w.session) : "Walk"}: ${String(w.steps)} steps, ` +
+        `${w.ended ? "ended" : "not ended"}, probability ${String(w.probability)}, ${String(w.durationMs)} ms` + (money(w.balances) ? " · " + money(w.balances) : "")));
+    box.appendChild(ul);
+    if (body.total) box.appendChild(el("p", "", `Total over ${String(body.total.sessions)}: ${money(body.total.balances) || "nothing moved"}`));
+    parts.push(panel("Realized rewards of these walks", box));
+  } else if (body.tool === "session_mdp" && (body.view === "chain" || body.view === "horizon")) {
+    const box = el("div");
+    if (body.view === "horizon")
+      box.appendChild(el("p", "", `Over ${String(body.periods)} whole periods: gate passages ${String(body.gatePassages)}, ` +
+        `still running at the horizon with probability ${String(body.stillRunning)}`));
+    box.appendChild(el("p", "", "Expected messages per session: " + String(body.expectedMessages) +
+      (body.expectedDurationMs && body.expectedDurationMs !== "0" ? " · expected duration " + String(body.expectedDurationMs) + " ms" : "")));
+    const outs = el("ul");
+    for (const o of (Array.isArray(body.outcomes) ? body.outcomes : []).slice(0, MAX_ITEMS)) {
+      const bal = (Array.isArray(o.expectedBalances) ? o.expectedBalances : []).filter((b) => b && b.expected !== "0")
+        .map((b) => `${b.role} ${b.expected} ${b.unit}`).join(" · ");
+      outs.appendChild(el("li", "", `${String(o.label)}: probability ${String(o.probability)}${bal ? " · given this, " + bal : ""}`));
+    }
+    if (outs.children.length) { box.appendChild(el("h3", "", "Outcomes")); box.appendChild(outs); }
+    const visits = el("ul");
+    for (const st of (Array.isArray(body.states) ? body.states : []).slice(0, MAX_ITEMS))
+      visits.appendChild(el("li", "", `${st.kind === "state" ? "S" + st.id : String(st.label)}${st.detail ? " (" + String(st.detail) + ")" : ""}: expected visits ${String(st.expectedVisits)}`));
+    box.appendChild(visits);
+    const expected = (Array.isArray(body.expectedBalances) ? body.expectedBalances : []).slice(0, MAX_ITEMS);
+    if (expected.length) {
+      box.appendChild(el("h3", "", "Expected net balance per role"));
+      const ex = el("ul");
+      for (const e of expected) ex.appendChild(el("li", "", `${e.role}: ${e.expected} ${e.unit}`));
+      box.appendChild(ex);
+    }
+    for (const n of (Array.isArray(body.notes) ? body.notes : []).slice(0, MAX_ITEMS)) box.appendChild(el("p", "", String(n)));
+    parts.push(panel("Expected visits and amounts", box));
+  } else if (body.tool === "session_mdp") {
     const box = el("div");
     box.appendChild(el("p", "", "Terminal probability total: " + String(body.terminalProbability) +
       " · Any deadline violated: " + String(body.violationProbability)));
     const ul = el("ul");
-    for (const t of (body.terminals || []).slice(0, MAX_ITEMS))
-      ul.appendChild(el("li", "", String(t.label) + " · " + String(t.detail) + " · probability " + String(t.probability)));
+    const money = (bs) => (Array.isArray(bs) ? bs : []).filter((b) => b && b.net !== 0)
+      .map((b) => `${b.role} ${b.net > 0 ? "+" : ""}${b.net} ${b.unit}`).join(" · ");
+    for (const t of (body.terminals || []).slice(0, MAX_ITEMS)) {
+      const m = money(t.balances);
+      ul.appendChild(el("li", "", String(t.label) + " · " + String(t.detail) + " · probability " + String(t.probability) + (m ? " · " + m : "")));
+    }
     box.appendChild(ul);
+    const expected = (Array.isArray(body.expectedBalances) ? body.expectedBalances : []).slice(0, MAX_ITEMS);
+    if (expected.length) {
+      box.appendChild(el("h3", "", "Expected net balance per role"));
+      const ex = el("ul");
+      for (const e of expected) ex.appendChild(el("li", "", `${e.role}: ${e.expected} ${e.unit}`));
+      for (const e of (Array.isArray(body.expectedPenalties) ? body.expectedPenalties : []).slice(0, MAX_ITEMS))
+        ex.appendChild(el("li", "", `${e.payer} pays ${e.expected} ${e.unit} in penalties`));
+      box.appendChild(ex);
+    }
     parts.push(panel("Terminal outcomes", box));
   }
   if (typeof body.callsText === "string" && body.callsText) parts.push(panel("Calls, from cause", el("pre", "", body.callsText)));

@@ -7,6 +7,7 @@ import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
+import LeanFM.Session.Chain
 import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
@@ -281,7 +282,9 @@ def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) 
   match Generative.compile r roles with
   | .ok _ => return some r
   | .error e =>
-    if e.startsWith "timed generation/monitoring supports" then
+    -- constructs the tree and the simulator cannot run, but the chain can: keep the layer, say why
+    if e.startsWith "timed generation/monitoring supports" || e.startsWith "accrue needs the chain view" ||
+       e.startsWith "after on an event" then
       return some { r with metadata := Json.mkObj [("layer", r.metadata), ("executionUnsupported", e)] }
     throw e
 
@@ -443,7 +446,181 @@ def diagram (args : Json) : Except String Json := do
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("svg", m.svg (themeOf args)), ("diagram", diagramJson p) ]
 
-/-- Native decision-tree view under the resolved policy (selfhost.session.mdp). -/
+/-- Whether the statements need the chain: a loop (rec), which the tree cannot unfold, or an accrual
+or event delay, which accrue over time spent in states. -/
+partial def hasLoop : List Text.Stmt → Bool
+  | [] => false
+  | s :: rest => (match s with
+    | .loop .. | .accrue .. | .timed _ (.event ..) => true
+    | .timed t _ => t.period.isSome
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.any hasLoop
+    | .sessions b => hasLoop b
+    | _ => false) || hasLoop rest
+
+/-- session_mdp for a session with loops, or when view is chain: expected visits, traversals and
+amounts from the absorbing chain (selfhost.session.mdp.loops). -/
+def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except String Json := do
+  let c ← Chain.analyse layer
+  let model ← Chain.drawing c p.roles
+  let exp := Chain.expected c p.roles
+  let stateLine (s : Chain.State) : String :=
+    let name := if s.kind == "state" then s!"S{s.id}" else s.label
+    s!"- {name}" ++ (if s.detail.isEmpty then "" else s!" ({s.detail})") ++ s!": {Chain.ratText c.visits[s.id]!}"
+  let edgeLines := (c.edges.toList.filter (·.kind == "message")).map fun e =>
+    s!"- {e.label}: ×{Chain.ratText (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" · {e.amountText}")
+  let outcomes := c.ends.map fun k => (k, Chain.outcome c p.roles k)
+  let outcomeLines := outcomes.map fun (k, (prob, given)) =>
+    s!"- {c.states[k]!.label}: probability {Chain.ratText prob}" ++ match given with
+      | some (bal, dur) => (if Chain.balancesText bal == "" then "" else s!", expected {Chain.balancesText bal}") ++
+          (if dur == 0 then "" else s!", expected duration {Chain.daysText dur}")
+      | none => " (never happens, so nothing is expected given it)"
+  let duration := Chain.expectedDuration c
+  let report := "\n".intercalate (["Outcomes (how the session ends):"] ++ outcomeLines ++
+    ["Expected visits per state:"] ++ c.states.toList.map stateLine ++
+    ["Expected traversals per message edge:"] ++ edgeLines ++
+    [s!"Expected messages: {Chain.ratText (Chain.expectedMessages c)}"] ++
+    (if duration == 0 then [] else [s!"Expected duration: {Chain.daysText duration}"]) ++
+    (if exp.isEmpty then [] else ["Expected net balance per role:"] ++ exp.map fun (r,u,v) => s!"- {r}: {Chain.ratText v} {u}") ++
+    Chain.legend c p.roles ++ c.notes)
+  let provenance := Decision.output
+  let result := Json.mkObj [("report", report),
+    ("tool", "session_mdp"), ("verdict", "drawn"), ("view", "chain"), ("name", p.name), ("lean", p.lean),
+    ("overlay", args.getObjValD "overlay"), ("generative", layer.metadata),
+    ("reading", "Absorbing Markov chain under the supplied policy, with several rewards: expected visits solve v = start + vQ exactly; an edge's expected traversals are its source's visits times its probability; expected time is traversals times mean delay; amounts are traversals times each edge's trade vector, plus every rate in force times the time spent; each outcome's probability and conditional expectations come from absorption probabilities. Loops are counted, not unrolled. Not policy optimization."),
+    ("states", toJson (c.states.map (Chain.stateJson c))), ("edges", toJson (c.edges.map (Chain.edgeJson c))),
+    ("terminalProbability", Chain.ratText (outcomes.foldl (fun acc (_, (q, _)) => acc + q) 0)),
+    ("expectedMessages", Chain.ratText (Chain.expectedMessages c)),
+    ("expectedDurationMs", Chain.ratText duration),
+    ("outcomes", toJson (outcomes.map fun (k, (prob, given)) => Json.mkObj ([("state", toJson k), ("label", c.states[k]!.label),
+      ("probability", Chain.ratText prob)] ++ match given with
+      | some (bal, dur) => [("expectedBalances", toJson (bal.map fun ((r, u, v) : String × String × Rat) =>
+            Json.mkObj [("role", Json.str r), ("unit", Json.str u), ("expected", Json.str (Chain.ratText v))])),
+          ("expectedDurationMs", Json.str (Chain.ratText dur))]
+      | none => [("expectedBalances", Json.null), ("expectedDurationMs", Json.null)]))),
+    ("expectedBalances", toJson (exp.map fun (r,u,v) => Json.mkObj [("role", r), ("unit", u), ("expected", Chain.ratText v)])),
+    ("expectedByRole", Chain.byRole exp), ("breakdown", Chain.breakdownJson c),
+    ("notes", toJson c.notes),
+    ("diagramKind", "mdp"), ("svg", model.svg (themeOf args)),
+    ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", toJson (model.shapes.map shapeJson))]),
+    ("provenance", Json.mkObj [("prompt", provenance.prompt), ("question", "What are the expected visits to each state, traversals of each edge and net balance per role under the supplied policy?"),
+      ("eventSource", provenance.eventSource), ("reducer", "Build the state graph; solve v = start + vQ over transient states with exact rationals; traversals = visits × probability; balances = Σ traversals × mean amount"),
+      ("unit", "expected counts and amounts as exact rationals, per complete session"),
+      ("boundary", "One session from start until it ends, which happens with probability 1 (otherwise the tool refuses); delays are after the previous step (after d); absolute times and deadlines are not used")])]
+  if result.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
+  return result
+
+/-- A step of a hand-written walk, or an event of a stream with its session and time. -/
+def walkStep (j : Json) : Except String (Chain.Step × Option String × Option Nat) := do
+  let label ← match j.getObjValAs? String "label" with
+    | .ok l => if l.isEmpty || l.length > limits.maxString then throw "a step's label is empty or too long" else pure l
+    | .error _ => throw "every step or event needs a label"
+  let opt (k : String) : Option String := (j.getObjValAs? String k).toOption
+  let session : Option String := match j.getObjVal? "session" with
+    | .ok (.str x) => some x
+    | .ok (.num n) => some (toString n)
+    | _ => none
+  let time := ((j.getObjValAs? Nat "timeMs").toOption.orElse fun _ => (j.getObjValAs? Nat "time").toOption)
+  let after := (j.getObjValAs? Nat "afterMs").toOption.map (fun (n : Nat) => (n : Rat))
+  return ({ label, sender := opt "from", receiver := opt "to", afterMs := after }, session, time)
+
+def walkJson (c : Chain.Chain) (w : Chain.Walked) (session : Option String) : Json := Json.mkObj
+  [("session", toJson session), ("steps", w.steps), ("ended", w.ended),
+   ("probability", Chain.ratText w.probability), ("durationMs", Chain.ratText w.duration),
+   ("balances", Chain.byRole w.balances),
+   ("edges", toJson ((List.range c.edges.size).filterMap fun i =>
+     if w.counts[i]! == 0 then none else some (Json.mkObj [("label", c.edges[i]!.label), ("count", toJson (w.counts[i]! : Nat))])))]
+
+/-- session_mdp with events (an event stream, walked per session) or walk (one hand-written walk):
+realized rewards on actual counts and times (selfhost.session.mdp.walk). -/
+def mdpWalk (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except String Json := do
+  let c ← Chain.analyse layer
+  let raw ← match args.getObjVal? "events", args.getObjVal? "walk" with
+    | .ok (.arr a), _ => pure (a.toList, true)
+    | _, .ok (.arr a) => pure (a.toList, false)
+    | _, _ => throw "events or walk must be an array"
+  let (items, isStream) := raw
+  if items.length > 512 then throw "at most 512 events or steps"
+  let parsed ← items.mapM walkStep
+  -- sessions in order of first appearance; a stream's times become delays since the previous event
+  let sessions := (parsed.map (·.2.1)).eraseDups
+  let timed := parsed.filter (·.2.2.isSome)
+  if isStream && !timed.isEmpty && timed.length != parsed.length then
+    throw "every event needs timeMs (or time) when any does"
+  let mut walks : List (Option String × Chain.Walked) := []
+  for sid in sessions do
+    let mine := parsed.filter (·.2.1 == sid)
+    let mut prev := 0
+    let mut steps := []
+    for (st, _, t) in mine do
+      match t with
+      | some ms =>
+        if ms < prev then throw s!"time goes backwards in session {sid.getD "?"} at {st.label}"
+        steps := steps ++ [{ st with afterMs := some ((ms - prev : Nat) : Rat) }]
+        prev := ms
+      | none => steps := steps ++ [st]
+    let w ← (Chain.walk c steps).mapError fun e => match sid with | some x => s!"session {x}: {e}" | none => e
+    walks := walks ++ [(sid, { w with balances := Chain.ordered c p.roles w.balances })]
+  let total := Chain.ordered c p.roles <|
+    walks.foldl (fun acc (_, w) => w.balances.foldl (fun acc (r, u, x) => Chain.addTo acc r u x) acc) []
+  let totalDuration := walks.foldl (fun acc (_, w) => acc + w.duration) 0
+  let line (sid : Option String) (w : Chain.Walked) : String :=
+    s!"- {(sid.map (s!"session " ++ ·)).getD "walk"}: {w.steps} steps, " ++ (if w.ended then "ended" else "not ended") ++
+      s!", probability {Chain.ratText w.probability}, duration {Chain.daysText w.duration}" ++
+      (if Chain.balancesText w.balances == "" then "" else s!", {Chain.balancesText w.balances}")
+  let report := "\n".intercalate (["Realized rewards of the given walks (not expectations):"] ++
+    walks.map (fun (sid, w) => line sid w) ++
+    (if walks.length > 1 then [s!"Total over {walks.length} sessions: duration {Chain.daysText totalDuration}" ++
+      (if Chain.balancesText total == "" then "" else s!", {Chain.balancesText total}")] else []))
+  return Json.mkObj [("report", report), ("tool", "session_mdp"), ("verdict", "walked"), ("view", "walk"),
+    ("name", p.name), ("lean", p.lean),
+    ("reading", "Realized rewards of the given walks: the chain's weights (trade vectors per traversal, rates in force times time) applied to actual counts and times, not expectations."),
+    ("walks", toJson (walks.map fun (sid, w) => walkJson c w sid)),
+    ("total", Json.mkObj [("sessions", walks.length), ("durationMs", Chain.ratText totalDuration), ("balances", Chain.byRole total)]),
+    ("provenance", Json.mkObj [("prompt", Decision.output.prompt), ("question", "What did these walks realize, per role and unit?"),
+      ("eventSource", if isStream then "the given event stream, grouped by session" else "the given walk"),
+      ("reducer", "Match each step to the one edge reachable through choice, loop and rate edges; count traversals and time; apply each edge's trade vector and the rates in force"),
+      ("unit", "exact amounts per role and unit, milliseconds"), ("boundary", "the given events only; a session that stops early is reported as not ended")])]
+
+/-- session_mdp with horizon: whole periods behind a periodic gate (selfhost.session.mdp.horizon). -/
+def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text : String) : Except String Json := do
+  let horizonMs ← (Generative.parseValue Text.duration text).mapError (s!"horizon: " ++ ·)
+  let c0 ← Chain.analyse layer (solveAll := false)
+  let h ← Chain.horizon c0 horizonMs
+  let c := h.chain
+  let model ← Chain.drawing c p.roles
+  let exp := Chain.expected c p.roles
+  let duration := Chain.expectedDuration c
+  let edgeLines := (c.edges.toList.filter fun e => e.kind == "message" || e.kind == "event").map fun e =>
+    s!"- {e.label}: ×{Chain.ratText (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" · {e.amountText}")
+  let remainder := horizonMs - h.periods * h.periodMs
+  let report := "\n".intercalate ([s!"Over {h.periods} whole periods of {Chain.periodText h.periodMs}:",
+      s!"- gate passages: {Chain.ratText h.passages}", s!"- still running at the horizon: probability {Chain.ratText h.stillRunning}",
+      s!"- expected time: {Chain.daysText duration}"] ++
+    (if remainder == 0 then [] else [s!"- the last {Chain.daysText (remainder : Nat)} (a partial period) is not counted"]) ++
+    ["Expected traversals per step:"] ++ edgeLines ++
+    (if exp.isEmpty then [] else ["Expected totals per role:"] ++ exp.map fun (r,u,v) => s!"- {r}: {Chain.ratText v} {u}") ++
+    Chain.legend c p.roles)
+  let provenance := Decision.output
+  let result := Json.mkObj [("report", report),
+    ("tool", "session_mdp"), ("verdict", "drawn"), ("view", "horizon"), ("name", p.name), ("lean", p.lean),
+    ("reading", "Whole periods behind a periodic gate: the start's segment and the cycle between gates are solved as absorbing chains; the gate passes q0(1 + q + ... + q^(N-1)) times; the wait at the gate fills each period; rewards are traversals times trade vectors plus rates in force times time. The graph does not depend on the horizon; only the number of periods does."),
+    ("periods", h.periods), ("periodMs", h.periodMs), ("horizonMs", horizonMs), ("uncountedMs", remainder),
+    ("gatePassages", Chain.ratText h.passages), ("stillRunning", Chain.ratText h.stillRunning),
+    ("expectedDurationMs", Chain.ratText duration), ("expectedMessages", Chain.ratText (Chain.expectedMessages c)),
+    ("states", toJson (c.states.map (Chain.stateJson c))), ("edges", toJson (c.edges.map (Chain.edgeJson c))),
+    ("expectedBalances", toJson (exp.map fun (r,u,v) => Json.mkObj [("role", r), ("unit", u), ("expected", Chain.ratText v)])),
+    ("expectedByRole", Chain.byRole exp), ("breakdown", Chain.breakdownJson c),
+    ("diagramKind", "mdp"), ("svg", model.svg (themeOf args)),
+    ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", toJson (model.shapes.map shapeJson))]),
+    ("provenance", Json.mkObj [("prompt", provenance.prompt), ("question", s!"What happens over {h.periods} whole periods behind the gate?"),
+      ("eventSource", provenance.eventSource),
+      ("reducer", "Solve the start's segment and the cycle between gates as absorbing chains; combine with exact geometric sums over the periods; the gate's wait fills each period"),
+      ("unit", "expected counts, milliseconds and amounts per role and unit, exact, over the horizon"),
+      ("boundary", s!"{h.periods} whole periods of {h.periodMs} ms from the session's start; a partial period after them is not counted")])]
+  if result.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
+  return result
+
+/-- Native decision view under the resolved policy (selfhost.session.mdp, .mdp.loops). -/
 def mdp (args : Json) : Except String Json := do
   let p ← parseProtocol args
   if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before rendering the MDP"
@@ -451,18 +628,36 @@ def mdp (args : Json) : Except String Json := do
   let layer ← match p.generative with
     | some r => pure r
     | none => Generative.resolve parsed.body
+  let view := (args.getObjValAs? String "view").toOption.getD "auto"
+  if !["auto", "tree", "chain"].contains view then throw "view must be tree, chain or auto"
+  if (args.getObjVal? "events").isOk || (args.getObjVal? "walk").isOk then return ← mdpWalk args p layer
+  if let .ok (.str text) := args.getObjVal? "horizon" then return ← mdpHorizon args p layer text
+  if view == "chain" || (view == "auto" && hasLoop layer.body) then return ← mdpChain args p layer
   let nodes ← Decision.build layer p.roles
   let model ← Decision.drawing nodes
   let terminals := nodes.filter (·.kind == "terminal")
   let total := terminals.foldl (fun q n => LeanFM.Overlay.Q.add q n.mass) LeanFM.Overlay.Q.zero
   let provenance := Decision.output
-  let result := Json.mkObj [
+  -- the outcome in the text a model reads: each terminal, then the expected results
+  let terminalLine (n : Decision.Node) : String :=
+    let money := Decision.balanceText n.balances
+    s!"- {n.mass.text}: {n.label}, {n.detail}" ++ (if money.isEmpty then "" else s!" · {money}")
+  let expectedLines := (Decision.expected nodes).map fun (r,u,v) => s!"- {r}: {v} {u}"
+  let penaltyLines := (Decision.expectedPenalties nodes).map fun (r,u,v) => s!"- {r} pays {v} {u} in penalties"
+  let report := "\n".intercalate (["Terminals (probability: outcome):"] ++ terminals.toList.map terminalLine ++
+    [s!"P(any violation) = {(Decision.violationMass nodes).text}"] ++
+    (if expectedLines.isEmpty then [] else ["Expected net balance per role:"] ++ expectedLines) ++ penaltyLines)
+  let result := Json.mkObj [("report", report),
     ("tool", "session_mdp"), ("verdict", "drawn"), ("name", p.name), ("lean", p.lean),
     ("overlay", args.getObjValD "overlay"), ("generative", layer.metadata),
     ("reading", "Finite decision tree under the supplied policy. Policy edges select actions; transition edges describe outcomes. Terminal probabilities sum exactly to 1. This is not policy optimization."),
     ("nodes", toJson (nodes.map Decision.nodeJson)),
     ("terminals", toJson (terminals.map Decision.nodeJson)),
     ("terminalProbability", total.text), ("violationProbability", (Decision.violationMass nodes).text),
+    ("expectedBalances", toJson ((Decision.expected nodes).map fun (r,u,v) =>
+      Json.mkObj [("role", r), ("unit", u), ("expected", v)])),
+    ("expectedPenalties", toJson ((Decision.expectedPenalties nodes).map fun (r,u,v) =>
+      Json.mkObj [("payer", r), ("unit", u), ("expected", v)])),
     ("diagramKind", "mdp"), ("svg", model.svg (themeOf args)),
     ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", toJson (model.shapes.map shapeJson))]),
     ("provenance", Json.mkObj [("prompt", provenance.prompt), ("question", provenance.question),
@@ -805,6 +1000,45 @@ unless satisfied, and violated after it. Generation currently supports finite se
 choices, at most 4096 expanded paths, and rejects timed concurrency, recursion and includes.
 Legacy unannotated simulation is unchanged. These annotations belong to the MCP text
 parser; the native Lean protocol macro remains the structural grammar.
+
+## Amounts, time, rates and trades: decision processes
+
+Messages can move value, steps can take time, and rates can run while time passes. `session_mdp`
+then gives expected values (and realized ones for an event stream), all as exact fractions.
+These annotations never change the structure: projection, conformance and CTL are unchanged.
+
+| annotation | meaning |
+|---|---|
+| `Pay from A to B amount 1000 USD;` | moves 1000 USD from sender to receiver |
+| `amount sample { 700 USD : 1/2; 400 USD : 1/2; }` | an uncertain amount; probabilities sum to 1 |
+| `Swap from A to B amount { 5 apple; 4 orange; -3 USD; };` | a trade vector: positive entries move from sender to receiver, negative ones back, so the two sides sum to zero in every unit |
+| `on breach record Late pays 2000 USD to Tenant;` | in an obligation: a penalty its actor pays when it is violated |
+| `Reply from B to A after 2 days;` | a delay after the previous step (also `after sample { 1 days : 1/2; 3 days : 1/2; }`; units ms, seconds, minutes, hours, days, weeks) |
+| `accrue 10 USD per week from Borrower to Lender;` | a rate in force from here until the next accrue for the same two roles and unit; `accrue 0` (or none at all) is grace |
+| `accrue { 1000 USD per week; -1 roomweek per week; } from Tenant to Landlord;` | a rate vector: a continuous trade whose two sides cancel unit by unit at every moment |
+| `Rent from Tenant to Landlord amount 1000 USD at next 1 week;` | a periodic gate: waits for the next whole week since the session began |
+
+Units are names: a roomweek is one room for one week, and 1000 USD per week is the exchange rate
+between roomweeks and dollars, not an amount. Results are maps keyed by unit, per role.
+
+How `session_mdp` reads a session:
+
+- without loops, rates or gates: a decision tree; each terminal has its probability, times,
+  deadline reports and each role's balance; `expectedBalances` sums them.
+- with `rec`, `accrue` or `after` on an event (or `view: \"chain\"`): an absorbing Markov chain.
+  Expected visits solve v = start + vQ; an edge's traversals are visits times probability; time is
+  traversals times mean delay; balances are traversals times trade vectors plus rates times time.
+  Each way of ending (its last step) is an outcome with its probability and the expected balances
+  given it. A rate that depends on which path reached a state, and deadlines in loops, are refused.
+- with one gate and `horizon: \"52 weeks\"`: whole periods, whether or not the session ends. The gate
+  makes each period hold one passage, so the graph is the same for every horizon: a weekly trade
+  that always continues passes exactly 52 times. Work before a gate must fit in its period, and every
+  loop must pass the gate.
+- with `events` (session_conform's format, with timeMs): the realized rewards of each session's
+  walk, its probability under the policy, and the totals.
+
+See examples/sessions: PricedDepositSettlement (amounts, a penalty), LimitOrder (a loop, fees, two
+outcomes), Loan (grace, then interest), Rental (a rate vector) and WeeklyRent (a gate over a horizon).
 
 ## Tools
 

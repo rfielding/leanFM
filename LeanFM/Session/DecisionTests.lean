@@ -64,4 +64,63 @@ def shiftedNodes := (mdp (args shifted)).toOption.get!.getObjValD "nodes" |>.get
   n.getObjValD "timeMs" == toJson (86400000 : Nat) && n.getObjValD "detail" == Json.str "trigger = day 1")
 #guard shiftedNodes.any (fun n => n.getObjValD "kind" == Json.str "obligation" &&
   n.getObjValD "detail" == Json.str "Landlord: due day 15")
+
+/-! Requirement selfhost.session.amounts: amounts on states, balances at terminals, exact expectations. -/
+def pricedText := include_str "../../examples/sessions/PricedDepositSettlement.leanfm"
+def priced := (mdp (args pricedText)).toOption.get!
+def pricedTerminals := ((priced.getObjValD "terminals").getArr?).toOption.get!.toList
+def netOf (t : Json) (role : String) : Int :=
+  (((t.getObjValD "balances").getArr?).toOption.get!.toList.find? (fun b => b.getObjValD "role" == Json.str role)).map
+    (fun b => (b.getObjValAs? Int "net").toOption.getD 0) |>.getD 0
+#guard ok (mdp (args pricedText)) "drawn"
+#guard priced.getObjValD "terminalProbability" == Json.str "1"
+-- the amount sample splits the deductions branch: four terminals, masses still exact
+#guard pricedTerminals.map (·.getObjValD "probability") == [Json.str "27/40", Json.str "3/40", Json.str "1/8", Json.str "1/8"]
+-- balances: the deposit returned, plus the 2000 USD penalty only where the deadline was missed
+#guard pricedTerminals.map (netOf · "Tenant") == [1000, 3000, 700, 400]
+-- value is moved, not created: each terminal's balances sum to zero
+#guard pricedTerminals.all fun t => netOf t "Tenant" + netOf t "Landlord" == 0
+-- exact expectations: 27/40·1000 + 3/40·3000 + 1/8·700 + 1/8·400 = 2075/2
+#guard priced.getObjValD "expectedBalances" == toJson [
+  Json.mkObj [("role", "Tenant"), ("unit", "USD"), ("expected", "2075/2")],
+  Json.mkObj [("role", "Landlord"), ("unit", "USD"), ("expected", "-2075/2")]]
+#guard priced.getObjValD "expectedPenalties" == toJson [
+  Json.mkObj [("payer", "Landlord"), ("unit", "USD"), ("expected", "150")]]
+#guard ((priced.getObjValAs? String "report").toOption.getD "").contains "Tenant: 2075/2 USD"
+#guard ((priced.getObjValAs? String "svg").toOption.getD "").contains "Expected: Tenant +2075/2 USD"
+-- the violated terminal names its penalty; the others do not
+#guard pricedTerminals.map (fun t => ((t.getObjValAs? String "detail").toOption.getD "").contains "pays 2000 USD") == [false, true, false, false]
+-- erasure: amounts and penalties leave the global type and its checks unchanged
+def unpriced := ((pricedText.replace " amount 1000 USD" "").replace "\n        amount sample { 700 USD : 1/2; 400 USD : 1/2; }" "").replace " pays 2000 USD to Tenant" ""
+#guard (Text.parse pricedText).toOption.map (reprStr ·.global) == (Text.parse unpriced).toOption.map (reprStr ·.global)
+-- amounts compose with time samples in one message: 2 times × 2 amounts
+def both := "protocol P (A,B) { r: R from A to B; Pay from B to A cause r amount sample { 10 USD : 1/2; 20 USD : 1/2; } at time(r) + sample { 1 days : 1/4; 2 days : 3/4; }; }"
+#guard ((mdp (args both)).toOption.get!.getObjValD "terminals").getArr?.toOption.get!.size == 4
+#guard (mdp (args both)).toOption.get!.getObjValD "expectedBalances" == toJson [
+  Json.mkObj [("role", "A"), ("unit", "USD"), ("expected", "15")], Json.mkObj [("role", "B"), ("unit", "USD"), ("expected", "-15")]]
+-- an exchange in two units: each unit is conserved on its own
+def swap := "protocol Swap (Buyer, Seller) { o: Order from Buyer to Seller amount 1000 USD; Goods from Seller to Buyer cause o amount 3 Widget; }"
+#guard (mdp (args swap)).toOption.get!.getObjValD "expectedBalances" == toJson [
+  Json.mkObj [("role", "Buyer"), ("unit", "USD"), ("expected", "-1000")], Json.mkObj [("role", "Seller"), ("unit", "USD"), ("expected", "1000")],
+  Json.mkObj [("role", "Buyer"), ("unit", "Widget"), ("expected", "3")], Json.mkObj [("role", "Seller"), ("unit", "Widget"), ("expected", "-3")]]
+-- the protocol text writes amounts and penalties back as it read them
+def pricedParsed := (Text.parse pricedText).toOption.get!
+def rewritten := Text.write [{ name := pricedParsed.name, roles := pricedParsed.roles, body := pricedParsed.body }]
+#guard rewritten.contains "amount 1000 USD at settlement"
+#guard rewritten.contains "amount sample { 700 USD : 1/2; 400 USD : 1/2; }"
+#guard rewritten.contains "pays 2000 USD to Tenant"
+#guard ((mdp (args rewritten)).toOption.get!.getObjValD "expectedBalances") == priced.getObjValD "expectedBalances"
+-- negative: malformed amounts and penalties are rejected, never guessed
+#guard errorHas (mdp (args "protocol P (A,B) { R from A to B amount sample { 1 USD : 1/2; 2 EUR : 1/2; }; }")) "one unit"
+#guard errorHas (mdp (args "protocol P (A,B) { R from A to B amount sample { 1 USD : 1/2; 2 USD : 1/3; }; }")) "not 1"
+#guard errorHas (mdp (args "protocol P (A,B) { R from A to B amount sample { 1 USD : 1/2; 1 USD : 1/2; }; }")) "duplicate quantity"
+#guard errorHas (mdp (args "protocol P (A,B) { R from A to B amount 1234567890123 USD; }")) "too large"
+#guard errorHas (mdp (args "protocol P (A,B) { R from A to B amount -5 USD; }")) "number"
+#guard errorHas (mdp (args "protocol P (A,B) { R from A to B amount 5.5 USD; }")) "expected a unit"
+#guard errorHas (mdp (args "protocol P (A,B) { R at A amount 5 USD; }")) "';'"
+#guard errorHas (mdp (args (pricedText.replace "pays 2000 USD to Tenant" "pays 2000 USD to Landlord"))) "not to its payer"
+#guard errorHas (mdp (args (pricedText.replace "pays 2000 USD to Tenant" "pays 2000 USD to Bank"))) "unknown role Bank"
+-- a pending obligation's penalty is not counted
+def pendingPriced := "protocol P (A,B) { r: R from A to B; clock c = time(r); obligation O on B { trigger c; require Yes within 1 days; on breach record Bad pays 50 USD to A; } choice at B using declared(\"x\") { probability 1/2: Yes from B to A; } or { probability 1/2: No from B to A; } }"
+#guard (mdp (args pendingPriced)).toOption.get!.getObjValD "expectedPenalties" == toJson ([] : List Json)
 end LeanFM.Session.DecisionTests

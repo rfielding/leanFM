@@ -28,3 +28,4 @@ import LeanFM.SessionToolsTests
 import LeanFM.Session.GenerativeTests
 
 import LeanFM.Session.DecisionTests
+import LeanFM.Session.ChainTests

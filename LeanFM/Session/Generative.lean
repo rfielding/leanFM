@@ -82,8 +82,14 @@ abbrev ResolveM := StateT ResolveState (Except String)
 def qJson (q : Q) : Json := Json.str q.text
 
 def timeJson (t : TimeExpr) : Json := Json.mkObj
-  [("clock", toJson t.clock), ("refs", toJson t.refs),
+  [("clock", toJson t.clock), ("refs", toJson t.refs), ("relative", t.relative), ("periodMs", toJson t.period),
    ("offsets", toJson (t.offsets.map fun (d,q) => Json.mkObj [("delayMs", d), ("probability", qJson q)]))]
+
+/-- The id (or label) of the message under any amount or time annotations. -/
+partial def messageKey : Stmt → Option String
+  | .msg id label .. => some (id.getD label)
+  | .timed _ m | .valued _ m => messageKey m
+  | _ => none
 
 def record (j : Json) : ResolveM Unit := modify fun s => { s with metadata := s.metadata ++ [j], active := true }
 
@@ -91,14 +97,30 @@ mutual
 partial def resolveList (ext : External) (ss : List Stmt) : ResolveM (List Stmt) := ss.mapM (resolveStmt ext)
 partial def resolveStmt (ext : External) (s : Stmt) : ResolveM Stmt := do
   match s with
+  | .timed t (.event label role) =>
+    record <| Json.mkObj [("kind", "timing"), ("event", label), ("role", role), ("at", timeJson t), ("origin", "inline")]
+    return s
   | .timed t m => resolveMessage ext m (some t)
+  | .accrue as =>
+    for a in as do
+      record <| Json.mkObj [("kind", "accrual"), ("payer", a.payer), ("payee", a.payee), ("unit", a.unit),
+        ("quantity", a.quantity), ("periodMs", a.periodMs)]
+    return s
+  | .valued a m =>
+    let key := (messageKey m).getD ""
+    record <| Json.mkObj [("kind", "amount"), ("message", key), ("unit", a.unit), ("reverse", a.reverse),
+      ("outcomes", toJson (a.outcomes.map fun (n,q) => Json.mkObj [("quantity", n), ("probability", qJson q)]))]
+    return .valued a (← resolveStmt ext m)
   | .msg .. => resolveMessage ext s none
   | .clock name refs =>
     record <| Json.mkObj [("kind", "clock"), ("name", name), ("refs", toJson refs)]
     return s
   | .obligation o =>
     record <| Json.mkObj [("kind", "obligation"), ("name", o.name), ("actor", o.actor),
-      ("trigger", o.clock), ("labels", toJson o.labels), ("withinMs", o.withinMs), ("breach", o.breach)]
+      ("trigger", o.clock), ("labels", toJson o.labels), ("withinMs", o.withinMs), ("breach", o.breach),
+      ("penalty", match o.penalty with
+        | some p => Json.mkObj [("quantity", p.quantity), ("unit", p.unit), ("payee", p.payee)]
+        | none => Json.null)]
     return s
   | .choice bs => resolveChoice ext none "" [] bs
   | .weighted name actor qs bs => resolveChoice ext (some name) actor qs bs
@@ -126,8 +148,7 @@ partial def resolveChoice (ext : External) (named : Option String) (actor : Stri
   -- Empty actor denotes a plain choice whose decider is still derived from Global.
   return .weighted name actor qs bodies
 partial def resolveMessage (ext : External) (m : Stmt) (inlineTime : Option TimeExpr) : ResolveM Stmt := do
-  let .msg id label _ _ _ _ _ _ := m | throw "timeAt annotation requires a message"
-  let key := id.getD label
+  let some key := messageKey m | throw "timeAt annotation requires a message"
   let replacement := ext.timings.lookup key
   if replacement.isSome then
     if (← get).usedTimings.contains key then throw s!"ambiguous timing target {key}; give messages unique ids"
@@ -162,6 +183,8 @@ inductive Action where
   | act (role label : String)
   | clock (name : String) (refs : List String)
   | obligation (o : Obligation)
+  /-- An amount outcome moved by the message just before it (selfhost.session.amounts). -/
+  | transfer (src dst unit : String) (quantity : Nat) (weight : Q)
   deriving Inhabited
 
 structure Path where
@@ -188,14 +211,30 @@ partial def expandStmt (s : Stmt) : Except String (List Path) := do
   | .msg id label src dst cause route status guard =>
     let i : Interaction String := { id, label, src, dst, cause, route, status, guard := guard.map (fun text => { text, eval := fun _ => none }) }
     return [{ actions := [.msg i none] }]
+  | .timed _ (.event ..) => throw "after on an event is used by the chain view (view chain); the tree times messages only"
+  | .accrue _ => throw "accrue needs the chain view: a rate accrues over time spent in states (view chain, or a session with rec)"
   | .timed t m =>
     checkWeights (t.offsets.map (·.2))
     let paths ← expandStmt m
     let mut result := []
     for p in paths do
-      let [.msg i _] := p.actions | throw "timing must annotate one message"
+      -- the message comes first; an amount's transfer may follow it
+      let .msg i _ :: tail := p.actions | throw "timing must annotate one message"
       for (d,q) in t.offsets do
-        result := result ++ [{ actions := [.msg i (some { t with offsets := [(d,q)] })], probability := q }]
+        if result.length ≥ maxPaths then throw "generative resource limit: more than 4096 paths"
+        let timed : Action := .msg i (some { t with offsets := [(d,q)] })
+        result := result ++ [{ p with actions := timed :: tail, probability := Q.mul p.probability q }]
+    return result
+  | .valued a m =>
+    checkWeights (a.outcomes.map (·.2))
+    let paths ← expandStmt m
+    let mut result := []
+    for p in paths do
+      let some (.msg i _) := p.actions.head? | throw "an amount must annotate one message"
+      for (n,q) in a.outcomes do
+        if result.length ≥ maxPaths then throw "generative resource limit: more than 4096 paths"
+        let moved : Action := if a.reverse then Action.transfer i.dst i.src a.unit n q else Action.transfer i.src i.dst a.unit n q
+        result := result ++ [{ p with actions := p.actions ++ [moved], probability := Q.mul p.probability q }]
     return result
   | .event l r => return [{ actions := [.act r l] }]
   | .clock n refs => return [{ actions := [.clock n refs] }]
@@ -246,7 +285,7 @@ def schedule (p : Path) (roles : List String) (observed : Option (List Observati
   for action in p.actions do
     if !stopped then
       match action with
-      | .decision .. => pure ()
+      | .decision .. | .transfer .. => pure ()
       | .clock name refs =>
         if (clocks.lookup name).isSome then throw s!"duplicate clock {name}"
         let times ← refs.mapM fun r => match env.lookup r with
@@ -263,7 +302,8 @@ def schedule (p : Path) (roles : List String) (observed : Option (List Observati
         else
           let mut timeAt := now
           if let some t := timing then
-            let base ← match t.clock with
+            let base ← if let some d := t.period then pure ((now / d + 1) * d - ((t.offsets.head?).map (·.1)).getD 0)
+              else if t.relative then pure now else match t.clock with
               | some c => match clocks.lookup c with
                 | some v => pure v | none => throw s!"unknown or forward clock {c}"
               | none =>
@@ -312,7 +352,12 @@ def reports (s : Schedule) (horizon : Nat) : List Json :=
       | none => if horizon > deadline then "violated" else "pending"
     Json.mkObj [("name", o.spec.name), ("actor", o.spec.actor), ("triggerMs", o.start),
       ("deadlineMs", deadline), ("observedUntilMs", horizon), ("satisfiedAtMs", toJson o.satisfied),
-      ("status", status), ("record", if status == "violated" then Json.str o.spec.breach else Json.null)]) ++ s.notTriggered.map (fun o => Json.mkObj
+      ("status", status), ("record", if status == "violated" then Json.str o.spec.breach else Json.null),
+      ("penalty", match o.spec.penalty with
+        | some p => if status == "violated"
+            then Json.mkObj [("quantity", p.quantity), ("unit", p.unit), ("from", o.spec.actor), ("to", p.payee)]
+            else Json.null
+        | none => Json.null)]) ++ s.notTriggered.map (fun o => Json.mkObj
       [("name", o.name), ("actor", o.actor), ("status", "not-triggered")])
 
 def compile (r : Resolved) (roles : List String) : Except String (List (Path × Schedule)) := do
@@ -326,6 +371,8 @@ def compile (r : Resolved) (roles : List String) : Except String (List (Path × 
         if !roles.contains o.actor then throw s!"obligation {o.name}: unknown actor {o.actor}"
         if o.labels.isEmpty || o.labels.any (fun l => !vocabulary.contains (o.actor,l)) then
           throw s!"obligation {o.name}: unknown message label for actor {o.actor}"
+        if let some pen := o.penalty then
+          if !roles.contains pen.payee then throw s!"obligation {o.name}: the penalty goes to unknown role {pen.payee}"
   paths.mapM fun p => return (p, ← schedule p roles)
 
 /-- Integer tickets on exact rational masses, using the same seeded LCG family as Sim. -/

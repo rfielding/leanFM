@@ -1,0 +1,26 @@
+-- Illustrative declared assumptions. Weekly rent behind a gate, with a nested choice:
+-- each week the Tenant reports all fine (3/4) or complains (1/4); after a complaint the Landlord
+-- repairs and credits 200 USD (2/3) or ends the lease (1/3). Occupancy accrues until the session ends.
+protocol RentWithRepairs (Tenant, Landlord) {
+  Lease from Landlord to Tenant;
+  accrue 1 roomweek per week from Landlord to Tenant;
+  rec Week {
+    Rent from Tenant to Landlord amount 1000 USD at next 1 week;
+    choice at Tenant using declared("week-goes") {
+      probability 3/4:
+        Fine from Tenant to Landlord after 1 hour;
+        continue Week;
+    } or {
+      probability 1/4:
+        Complaint from Tenant to Landlord after 1 hour;
+        choice at Landlord using declared("landlord-response") {
+          probability 2/3:
+            Repair from Landlord to Tenant amount 200 USD after 1 days;
+            continue Week;
+        } or {
+          probability 1/3:
+            Terminate from Landlord to Tenant after 1 days;
+        }
+    }
+  }
+}
