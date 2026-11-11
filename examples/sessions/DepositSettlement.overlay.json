@@ -1,0 +1,15 @@
+{
+  "name": "illustrative-external-settlement-v1",
+  "choices": [
+    {
+      "choice": "illustrative-settlement-v1",
+      "weights": ["1/2", "1/2"]
+    }
+  ],
+  "timings": [
+    {
+      "message": "itemised",
+      "at": "settlement + sample { 6 days : 4/5; 18 days : 1/5; }"
+    }
+  ]
+}

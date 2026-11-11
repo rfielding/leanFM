@@ -1,0 +1,34 @@
+// DESIGN NOTATION — the timing/probability extensions are not implemented syntax.
+// Scope: settlement after lease end and direct address delivery.
+// All probabilities and delays below are illustrative declared assumptions.
+// One day = 24 hours in this model; deadline boundary is inclusive.
+
+protocol DepositSettlement (Tenant, Landlord) {
+  ended: LeaseEnded from Tenant to Landlord;
+  address: ForwardingAddress from Tenant to Landlord;
+
+  clock settlement = max(time(ended), time(address));
+
+  obligation Act.Section2 on Landlord {
+    trigger settlement;
+    require DepositReturned or DeductionsItemized within 14 days;
+    on breach record Section2Violated;
+    // Monitoring does not remove late executions from the grammar.
+  }
+
+  choice at Landlord using declared("illustrative-settlement-v1") {
+    probability 3/4:
+      DepositReturned from Landlord to Tenant cause address
+        at settlement + sample {
+          7 days  : 9/10;
+          25 days : 1/10;
+        };
+  } or {
+    probability 1/4:
+      itemised: DeductionsItemized from Landlord to Tenant cause address
+        at settlement + 6 days;
+      DepositReturned from Landlord to Tenant cause address
+        at time(itemised);
+  }
+}
+

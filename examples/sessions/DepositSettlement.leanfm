@@ -1,0 +1,22 @@
+-- Illustrative declared assumptions, not measured frequencies.
+-- One day is a fixed 24 hours; deadline equality is fulfillment.
+protocol DepositSettlement (Tenant, Landlord) {
+  ended: LeaseEnded from Tenant to Landlord;
+  address: ForwardingAddress from Tenant to Landlord;
+  clock settlement = max(time(ended), time(address));
+  obligation Act.Section2 on Landlord {
+    trigger settlement;
+    require DepositReturned or DeductionsItemized within 14 days;
+    on breach record Section2Violated;
+  }
+  choice at Landlord using declared("illustrative-settlement-v1") {
+    probability 3/4:
+      DepositReturned from Landlord to Tenant cause address
+        at settlement + sample { 7 days : 9/10; 25 days : 1/10; };
+  } or {
+    probability 1/4:
+      itemised: DeductionsItemized from Landlord to Tenant cause address
+        at settlement + 6 days;
+      DepositReturned from Landlord to Tenant cause address at time(itemised);
+  }
+}

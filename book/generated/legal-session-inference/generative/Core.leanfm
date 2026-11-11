@@ -1,0 +1,10 @@
+protocol DepositSettlement (Tenant, Landlord) {
+  LeaseEnded from Tenant to Landlord;
+  address: ForwardingAddress from Tenant to Landlord;
+  choice {
+    DepositReturned from Landlord to Tenant cause address;
+  } or {
+    DeductionsItemized from Landlord to Tenant cause address;
+    DepositReturned from Landlord to Tenant cause address;
+  }
+}

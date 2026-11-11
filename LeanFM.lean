@@ -24,3 +24,7 @@ import LeanFM.Session
 import LeanFM.Philosophy.ExistenceTests
 -- the MCP session tools and their tests (clauses selfhost.mcp.session.*)
 import LeanFM.SessionToolsTests
+
+import LeanFM.Session.GenerativeTests
+
+import LeanFM.Session.DecisionTests

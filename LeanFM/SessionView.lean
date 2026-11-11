@@ -13,7 +13,7 @@ def sessionViewUri : String := "ui://leanfm/session-view"
 def sessionViewHtml : String := include_str "SessionView.html"
 
 /-- The tools whose results the session view draws. -/
-def sessionViewTools : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_ctl", "session_compat"]
+def sessionViewTools : List String := ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_ctl", "session_compat"]
 
 def sessionViewToolMeta : Json :=
   Json.mkObj [("ui", Json.mkObj [("resourceUri", sessionViewUri)])]

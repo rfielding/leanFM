@@ -5,6 +5,8 @@ import LeanFM.Session.Diagram
 import LeanFM.Session.Calls
 import LeanFM.Session.Events
 import LeanFM.Session.Text
+import LeanFM.Session.Generative
+import LeanFM.Session.Decision
 import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
@@ -221,6 +223,7 @@ structure Protocol where
   steps : Nat
   /-- the protocol as LeanFM protocol text: the text sent, or the JSON form written out -/
   lean  : String
+  generative : Option Generative.Resolved := none
 
 /-! ## The JSON form written as protocol text -/
 
@@ -272,6 +275,18 @@ def write (name : String) (roles : List String) (steps : List Json) : String :=
 
 end ToText
 
+def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) : Except String (Option Generative.Resolved) := do
+  let r ← Generative.resolve body ((args.getObjVal? "overlay").toOption.filter (· != Json.null))
+  if !r.active then return none
+  match Generative.compile r roles with
+  | .ok _ => return some r
+  | .error e =>
+    if e.startsWith "timed generation/monitoring supports" then
+      return some { r with metadata := Json.mkObj [("layer", r.metadata), ("executionUnsupported", e)] }
+    throw e
+
+def generativeJson (p : Protocol) : Json := (p.generative.map (·.metadata)).getD Json.null
+
 def parseProtocol (args : Json) : Except String Protocol := do
   if args.compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
@@ -280,7 +295,7 @@ def parseProtocol (args : Json) : Except String Protocol := do
       | .ok t => pure t
       | .error _ => throw "lean must be a string of LeanFM protocol text"
     let r ← LeanFM.Session.Text.parse text
-    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text }
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
     | .error _ => throw "lean is required: LeanFM protocol text such as protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
@@ -304,7 +319,9 @@ def parseProtocol (args : Json) : Except String Protocol := do
     | .ok (.arr a) => pure a.toList
     | _ => throw "steps must be an array of steps"
   let (global, count) ← (steps { roles } js).run 0
-  return { name, roles, global, steps := count, lean := ToText.write name roles js }
+  let text := ToText.write name roles js
+  let parsed ← Text.parse text
+  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args }
 
 /-! ## Results -/
 
@@ -406,7 +423,7 @@ def check (args : Json) : Except String Json := do
     else s!"{p.name}: {problems.length} issue{if problems.length == 1 then "" else "s"}: {problems.head!}"
   return fit <| Json.mkObj
     [ ("tool", "session_check"), ("verdict", verdict), ("reading", reading), ("name", p.name)
-    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("issues", Json.arr (issues.map Json.str).toArray)
     , ("httpCuts", match calls with | some _ => Json.arr (cuts.map Json.str).toArray | none => Json.null)
@@ -423,8 +440,36 @@ def diagram (args : Json) : Except String Json := do
     [ ("tool", "session_diagram"), ("verdict", "drawn")
     , ("reading", s!"{p.name}: sequence diagram of {messageCount p.global} messages across {p.roles.length} lifelines")
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
-    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("svg", m.svg (themeOf args)), ("diagram", diagramJson p) ]
+
+/-- Native decision-tree view under the resolved policy (selfhost.session.mdp). -/
+def mdp (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before rendering the MDP"
+  let parsed ← Text.parse p.lean
+  let layer ← match p.generative with
+    | some r => pure r
+    | none => Generative.resolve parsed.body
+  let nodes ← Decision.build layer p.roles
+  let model ← Decision.drawing nodes
+  let terminals := nodes.filter (·.kind == "terminal")
+  let total := terminals.foldl (fun q n => LeanFM.Overlay.Q.add q n.mass) LeanFM.Overlay.Q.zero
+  let provenance := Decision.output
+  let result := Json.mkObj [
+    ("tool", "session_mdp"), ("verdict", "drawn"), ("name", p.name), ("lean", p.lean),
+    ("overlay", args.getObjValD "overlay"), ("generative", layer.metadata),
+    ("reading", "Finite decision tree under the supplied policy. Policy edges select actions; transition edges describe outcomes. Terminal probabilities sum exactly to 1. This is not policy optimization."),
+    ("nodes", toJson (nodes.map Decision.nodeJson)),
+    ("terminals", toJson (terminals.map Decision.nodeJson)),
+    ("terminalProbability", total.text), ("violationProbability", (Decision.violationMass nodes).text),
+    ("diagramKind", "mdp"), ("svg", model.svg (themeOf args)),
+    ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", toJson (model.shapes.map shapeJson))]),
+    ("provenance", Json.mkObj [("prompt", provenance.prompt), ("question", provenance.question),
+      ("eventSource", provenance.eventSource), ("reducer", provenance.reducer), ("unit", provenance.unit),
+      ("boundary", "One complete finite sequential session, including zero-mass paths; obligations observed until each terminal time")])]
+  if result.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
+  return result
 
 def natArg (args : Json) (key : String) (dflt maxV : Nat) : Except String Nat :=
   match args.getObjVal? key with
@@ -450,6 +495,19 @@ def simulate (args : Json) : Except String Json := do
   let spread ← natArg args "spread" 40 limits.maxSpread
   let loops ← natArg args "loops" 4 limits.maxLoops
   let maxEvents ← natArg args "maxEvents" 300 limits.maxEvents
+  if let some layer := p.generative then
+    if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before timed generation"
+    if (args.getObjVal? "spread").isOk || (args.getObjVal? "loops").isOk then
+      throw "timed generation uses session-relative clocks; spread and loops are unsupported"
+    let generated ← Generative.generate layer p.roles seed instances maxEvents
+    return fit <| Json.mkObj
+      [("tool", "session_simulate"), ("verdict", "generated"),
+       ("reading", s!"{p.name}: {generated.events.size} timed events in {instances} sessions; ms relative to each session; deadlines reported separately"),
+       ("name", p.name), ("roles", toJson p.roles), ("lean", p.lean), ("protocol", args.getObjValD "protocol"),
+       ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
+       ("seed", seed), ("instances", instances), ("sessions", instances),
+       ("events", Json.arr (generated.events.map eventJson)), ("deadlineReports", toJson generated.reports),
+       ("diagram", diagramJson p)]
   -- a protocol without a sessions block runs as `instances` concurrent copies of itself
   let g := if hasSessions p.global then p.global else .sessions p.global .done
   let evs := g.simulate seed instances spread loops maxEvents
@@ -458,7 +516,7 @@ def simulate (args : Json) : Except String Json := do
     [ ("tool", "session_simulate"), ("verdict", "generated")
     , ("reading", s!"{p.name}: {evs.size} events from {sessions} session{if sessions == 1 then "" else "s"} (seed {seed})")
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
-    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("seed", seed), ("instances", instances), ("sessions", sessions)
     , ("events", Json.arr (evs.map eventJson))
     , ("diagram", diagramJson p) ]
@@ -484,6 +542,26 @@ def logEvent (j : Json) : Except String LogEvent := do
 
 def maxLogEvents : Nat := 2000
 
+def deadlineReports (p : Protocol) (args : Json) (evs : List LogEvent) : Except String Json := do
+  let some layer := p.generative | return Json.null
+  let raw ← args.getObjValAs? (Array Json) "events"
+  let timed ← (evs.zip raw.toList).mapM fun (e,j) => do
+    let t ← match (j.getObjVal? "timeMs").toOption <|> (j.getObjVal? "time").toOption with
+      | some v => v.getNat?
+      | none => throw s!"event {e.id}: timed monitoring requires timeMs (or time)"
+    if t > 9007199254740991 then throw "timestamp exceeds the safe integer limit"
+    return (e.session, { src := e.src, dst := e.dst, label := e.label, time := t, isAct := e.isAct : Generative.Observation })
+  let horizon ← match args.getObjVal? "horizonMs" with
+    | .error _ => pure none
+    | .ok j => pure (some (← j.getNat?))
+  if horizon.any (· > 9007199254740991) then throw "horizon exceeds the safe integer limit"
+  let sessions := (evs.map (·.session)).eraseDups
+  let result ← sessions.mapM fun id => do
+    let observations := timed.filterMap fun (s,e) => if s == id then some e else none
+    let report ← Generative.monitor layer p.roles observations horizon
+    return Json.mkObj [("session", id), ("report", report)]
+  return toJson result
+
 def conform (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let evs ← match args.getObjVal? "events" with
@@ -501,10 +579,11 @@ def conform (args : Json) : Except String Json := do
     then s!"{p.name}: {evs.length} events in {results.length} session{if results.length == 1 then "" else "s"} follow the protocol" ++
       (if incomplete.isEmpty then "" else s!"; {incomplete.length} still running")
     else s!"{p.name}: {bad.length} of {results.length} sessions break the protocol; first: {problems.head!}"
+  let deadlines ← if bad.isEmpty then deadlineReports p args evs else pure Json.null
   return fit <| Json.mkObj
-    [ ("tool", "session_conform"), ("verdict", verdict), ("reading", reading), ("name", p.name)
+    [ ("tool", "session_conform"), ("deadlineReports", deadlines), ("verdict", verdict), ("reading", reading), ("name", p.name)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
-    , ("lean", p.lean), ("protocol", args.getObjValD "protocol")
+    , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("issues", Json.arr ((problems.take 64).map Json.str).toArray)
     , ("sessions", Json.arr ((results.take 200).map fun r => Json.mkObj
         [("session", r.session), ("events", r.events), ("complete", r.complete),
@@ -674,12 +753,13 @@ def skeleton (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("language", language), ("code", code), ("lean", p.lean) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"]
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
   | "session_check" => some (check args)
   | "session_diagram" => some (diagram args)
+  | "session_mdp" => some (mdp args)
   | "session_simulate" => some (simulate args)
   | "session_conform" => some (conform args)
   | "session_skeleton" => some (skeleton args)
@@ -699,6 +779,33 @@ check it, draw it and run it. Every diagram, call list and event stream is gener
 Send the text as the `lean` argument of the tools. It is read by a parser for this grammar only:
 nothing in it is elaborated or run, and a `where` condition is shown, never evaluated.
 
+## Inline generation and deadline monitoring
+
+The text parser also accepts named weighted choices, clocks, message times and obligations.
+See examples/sessions/DepositSettlement.leanfm for the complete legal illustration.
+Use choice at Landlord using declared(\"settlement-v1\") with probability 3/4:
+and probability 1/4: at the start of its two branches. Fractions must sum exactly to one.
+A clock can be max(time(ended), time(address)); message timing can be
+at settlement + sample { 7 days : 9/10; 25 days : 1/10; }.
+An obligation names its actor, trigger clock, required message labels, inclusive within
+duration and on breach record label. Breaches are reports, not invented wire messages.
+
+The optional overlay object has name, choices [{choice, weights}] and timings [{message, at}].
+Weights are fraction strings; at is a time-expression string. A named choice or plain choice:0
+is its target; a timing targets a message id or unique label. External entries explicitly
+replace matching inline entries, retain origin metadata, and never remove structural paths.
+Zero probability does not prove impossibility in CTL.
+
+Timed simulation uses exact rational probabilities, seeded sampling and session-relative ms.
+Days are fixed 24-hour durations. Unannotated messages occur at the preceding message time.
+Timed conformance requires timeMs (or time) on every event, with optional horizonMs for
+an incomplete capture. Structural verdict and deadlineReports are separate; observed delays
+need not belong to a sampling distribution. A deadline is pending at its exact boundary
+unless satisfied, and violated after it. Generation currently supports finite sequential
+choices, at most 4096 expanded paths, and rejects timed concurrency, recursion and includes.
+Legacy unannotated simulation is unchanged. These annotations belong to the MCP text
+parser; the native Lean protocol macro remains the structural grammar.
+
 ## Tools
 
 - `session_review {lean}`: every check that applies, in one answer, each finding with an edit to
@@ -713,6 +820,12 @@ nothing in it is elaborated or run, and a `where` condition is shown, never eval
   `mayCall: [[caller, callee], ...]`, every channel is HTTP and calls that break the request/response
   discipline are reported, including a request that never gets a response; `notHttp: [[a, b], ...]`
   marks the channels between those roles as something else (a text message, a queue).
+- `session_mdp {lean, overlay?, theme?}`: render the finite decision tree with policy edges,
+  timed transitions and terminal outcomes. Returns SVG, shapes, exact terminal masses summing
+  to 1 and violationProbability (any obligation violated, each terminal counted once).
+  Pending obligations remain pending. Requires a complete probability layer for choices;
+  rejects unsupported scheduling and graphs above 96 nodes rather than truncate.
+  This unfolds the supplied policy; it does not optimize actions or solve unbounded MDPs.
 - `session_diagram {lean, theme?}`: the UML sequence diagram, as SVG text and as shapes.
 - `session_simulate {lean, seed?, instances?, spread?, loops?, maxEvents?}`: a seeded event stream.
   Each event has prior (what it happened after, per role, plus join ends), cause, and answers (the

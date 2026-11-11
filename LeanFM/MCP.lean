@@ -223,44 +223,49 @@ def toolDefinitions : Array Json := #[
   tool "session_check" "Check a session type"
     "Check a protocol between roles written as a session type in LeanFM protocol syntax, sent as the lean string (read leanfm://language/session-reference; a JSON protocol object is also accepted). Returns ok or the issues (races, roles that cannot tell which branch was taken, causes a sender never saw), each role's local type and typestate API, the calls (request, responses with status, nested calls), and the generated diagram. With mayCall [[caller, callee], ...] every channel is HTTP and calls that break request/response are reported."
     (schema [("lean", stringSchema "LeanFM protocol text: protocol Name (Role, ...) { statements }"),
-      ("protocol", anyJson "alternative to lean: {name?, roles, steps} in the JSON form"),
+      ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: {name?, roles, steps} in the JSON form"),
       ("mayCall", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")])]),
       ("notHttp", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "array")]),
         ("description", Json.str "pairs of roles whose messages are not HTTP (a text message, a queue)")])] []),
   tool "session_diagram" "Draw a session type"
     "Draw a protocol as a UML sequence diagram generated from the session type: alt frames naming the role that decides, par and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
+      ("theme", stringSchema "dark (default) or light")] []),
+  tool "session_mdp" "Render a session decision process and terminal probabilities"
+    "Render a finite sequential session under its inline or external probability policy as a decision tree, with action selections, chance transitions, times and terminal deadline reports. Returns SVG and an interactive MCP Apps view, exact terminal probabilities whose total is checked to equal 1, and violationProbability counting each violating terminal once. Zero-probability paths remain. Requires complete weights; unsupported scheduling and output limits fail explicitly. This view does not optimize a policy."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative JSON protocol"),
+      ("overlay", anyJson "optional external named choice weights and message timings replacing inline entries"),
       ("theme", stringSchema "dark (default) or light")] []),
   tool "session_simulate" "Generate an event stream from a session type"
-    "Run a protocol with a seed: sessions blocks (or, without one, concurrent copies of the protocol) start instances at staggered times, par branches interleave, choices pick branches. Each event carries prior (what it happened after), cause and answers (the request it responds to). The view animates the stream."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    "Run a protocol with a seed: sessions blocks (or, without one, concurrent copies of the protocol) start instances at staggered times, par branches interleave, choices pick branches. Each event carries prior (what it happened after), cause and answers (the request it responds to). The view animates the stream. Inline or external generation layers use finite sequential choices, exact probabilities and session-relative milliseconds; deadlineReports are separate from structural conformance. Timed par, recursion, spread and loops are rejected."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("seed", Json.mkObj [("type", "integer")]), ("instances", Json.mkObj [("type", "integer")]),
       ("spread", Json.mkObj [("type", "integer")]), ("loops", Json.mkObj [("type", "integer")]),
       ("maxEvents", Json.mkObj [("type", "integer")])] []),
   tool "session_conform" "Check a recorded run against a session type"
-    "Check events a running program logged ({id, session, from, to, label, cause}, or {id, session, at, label, act: true} for an event; session_simulate's events also work) against the protocol: in every session each event must be allowed at that point, carry the cause the protocol names, and the session must end where the protocol can end (unless allowIncomplete). Returns conforms or violates with the first problem per session and what the protocol allowed instead."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    "Check events a running program logged ({id, session, from, to, label, cause}, or {id, session, at, label, act: true} for an event; session_simulate's events also work) against the protocol: in every session each event must be allowed at that point, carry the cause the protocol names, and the session must end where the protocol can end (unless allowIncomplete). Returns conforms or violates with the first problem per session and what the protocol allowed instead. With timing annotations, every event needs timeMs or time in milliseconds; horizonMs advances observation of incomplete traces. Deadline reports do not change the structural verdict."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
-      ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"]),
+      ("horizonMs", anyJson "optional observation horizon in milliseconds relative to each session"), ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"]),
   tool "session_next" "What may happen next in a session"
     "Given a protocol and the events of one session so far (in session_conform's format; none for the start), list every step the protocol allows next, with the event each must give as its cause, and whether the session may end here. A walk that breaks the protocol answers violates with the first problem."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])])] []),
   tool "session_ctl" "Check a temporal property of a session type"
     "Decide a JSON CTL formula over one session of a protocol: its state graph (the states conformance explores, nested sessions played once) checked by the same checker as check_ctl. {\"after\": \"Label\"} holds in the state a Label message or event has just reached, \"terminal\" where the session has ended. Returns proved or disproved with a witness or counterexample path, for example {\"AG\": {\"implies\": [{\"after\": \"NoSeat\"}, {\"AG\": {\"not\": {\"after\": \"Charge\"}}}]}} (never charge after no seat)."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("formula", anyJson "JSON CTL formula over after(label) and terminal")] ["formula"]),
   tool "session_review" "Review a session type design"
     "Run every check that applies to a protocol and answer findings, each with an edit to try: the core rules (one decider per choice, every role can tell the branch, causes it saw); HTTP wherever a message has a route (no flags needed), including requests that never get a response and responses without a status; sessions that can never end; roles that take no part. Use it after every change while designing; clean means nothing was found."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form")] []),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form")] []),
   tool "session_openapi" "A role's HTTP interface as OpenAPI"
     "Write the requests a role receives, with their routes (route \"POST /orders\") and the responses the protocol allows (with their status), as an OpenAPI 3.1 document: one operation per route, the request's label as operationId and request body, each response under its status. A server framework or client generator can start from it; message fields are left for you to add."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("role", stringSchema "the role whose interface to write")] ["role"]),
   tool "session_compat" "Which roles can upgrade on their own"
     "Compare two versions of a protocol (lean: the new one, old: the previous one). For each role in both, answer whether its new version can be deployed first, running with the old version of every other role, and whether its old version can stay deployed after the others upgrade, by exploring each mixed system to every reachable state. A no comes with the steps to the stuck state and what each role still expects."
     (schema [("lean", stringSchema "the new version: LeanFM protocol text"), ("old", stringSchema "the previous version: LeanFM protocol text"),
-      ("protocol", anyJson "alternative to lean: the JSON form")] ["old"]),
+      ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form")] ["old"]),
   tool "session_skeleton" "Generate code to implement a session type"
     "Write a self-contained Python or TypeScript module from a protocol: every role's typestate as classes, one per state (in TypeScript a step the state does not allow does not type-check). A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form"),

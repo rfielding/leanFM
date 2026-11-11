@@ -1,4 +1,5 @@
 import LeanFM.Session.Global
+import LeanFM.Session.GenerativeTypes
 
 /-!
 # Protocol text: LeanFM's `protocol` syntax, read without elaborating it (clause selfhost.mcp.session.tools)
@@ -37,6 +38,10 @@ namespace LeanFM.Session.Text
 inductive Stmt where
   | msg (id : Option String) (label src dst : String) (cause route : Option String)
       (status : Option Nat) (guard : Option String)
+  | timed (time : Generative.TimeExpr) (message : Stmt)
+  | clock (name : String) (refs : List String)
+  | obligation (spec : Generative.Obligation)
+  | weighted (name actor : String) (weights : List LeanFM.Overlay.Q) (branches : List (List Stmt))
   | event (label role : String)
   | choice (branches : List (List Stmt))
   | par (branches : List (List Stmt))
@@ -67,6 +72,7 @@ def limits : Limits := {}
 
 structure St where
   pos : Nat := 0
+  depth : Nat := 0
 
 abbrev P := ReaderT (Array Char) (StateT St (Except String))
 
@@ -168,7 +174,7 @@ def sym? (c : Char) : P Bool := do
 def sym (c : Char) (what : String := s!"'{c}'") : P Unit := do
   if !(← sym? c) then fail s!"expected {what}"
 
-partial def number : P Nat := do
+partial def boundedNumber (maxDigits : Nat) : P Nat := do
   skip
   let start := (← get).pos
   let rec go (acc : Nat) (n : Nat) : P (Nat × Nat) := do
@@ -177,8 +183,10 @@ partial def number : P Nat := do
     | none => return (acc, n)
   let (v, n) ← go 0 0
   if n == 0 then failAt start "expected a number"
-  if n > 6 then failAt start "this number is too large"
+  if n > maxDigits then failAt start "this number is too large"
   return v
+
+def number : P Nat := boundedNumber 6
 
 partial def stringLit : P String := do
   skip
@@ -229,16 +237,97 @@ partial def whereText : P String := do
   let words := (raw.splitOn " ").flatMap (fun w => w.splitOn "\n") |>.flatMap (·.splitOn "\t") |>.filter (· != "")
   checkLen start "where condition" (" ".intercalate words)
 
+
+/-- Bounded exact annotation syntax (selfhost.session.generative). -/
+def fraction : P LeanFM.Overlay.Q := do
+  let n ← number
+  let d ← if ← sym? '/' then number else pure 1
+  if d == 0 || n > d then fail "probability must be between 0 and 1 with a nonzero denominator"
+  return LeanFM.Overlay.Q.norm n d
+
+def duration : P Nat := do
+  let n ← boundedNumber 16
+  let unit ← ident "a time unit (ms, seconds, minutes, hours, days)"
+  let scale ← match unit with
+    | "ms" => pure 1
+    | "second" | "seconds" => pure 1000
+    | "minute" | "minutes" => pure 60000
+    | "hour" | "hours" => pure 3600000
+    | "day" | "days" => pure 86400000
+    | _ => fail "unknown time unit; use ms, seconds, minutes, hours or days"
+  if n * scale > 9007199254740991 then fail "duration exceeds the safe integer millisecond limit"
+  return n * scale
+
+def timeRef : P String := do
+  if !(← keyword? "time") then fail "expected time(messageId)"
+  sym '('; let id ← ident "a prior message id"; sym ')'; return id
+
+def timeRefs : P (List String) := do
+  if ← keyword? "max" then
+    sym '('; let a ← timeRef; sym ','; let b ← timeRef; sym ')'; return [a,b]
+  return [← timeRef]
+
+partial def timeExpr : P Generative.TimeExpr := do
+  let base ← if (← peekIdent) == some "time" || (← peekIdent) == some "max" then
+      pure ({ refs := ← timeRefs } : Generative.TimeExpr)
+    else pure { clock := some (← ident "a clock name or time(messageId)") }
+  if !(← sym? '+') then return base
+  if !(← keyword? "sample") then return { base with offsets := [(← duration, LeanFM.Overlay.Q.one)] }
+  sym '{'
+  let rec entries (acc : List (Nat × LeanFM.Overlay.Q)) : P (List (Nat × LeanFM.Overlay.Q)) := do
+    if ← sym? '}' then return acc
+    if acc.length ≥ 16 then fail "a delay distribution has at most 16 entries"
+    let d ← duration; sym ':'; let q ← fraction; sym ';'
+    entries (acc ++ [(d,q)])
+  let offsets ← entries []
+  match Generative.checkWeights (offsets.map (·.2)) with
+  | .error e => fail e
+  | .ok _ => pure ()
+  if (offsets.map (·.1)).eraseDups.length != offsets.length then fail "duplicate delay in sample"
+  return { base with offsets }
+
+partial def obligationSpec : P Generative.Obligation := do
+  let first ← ident "an obligation name"
+  let rec qualified (name : String) : P String := do
+    if ← sym? '.' then qualified (name ++ "." ++ (← ident "a name component"))
+    else return name
+  let name ← qualified first
+  if name.length > limits.maxString then fail "obligation name is too long"
+  if !(← keyword? "on") then fail "expected on Role"
+  let actor ← ident "a role"; sym '{'
+  if !(← keyword? "trigger") then fail "expected trigger clock"
+  let clock ← ident "a clock"; sym ';'
+  if !(← keyword? "require") then fail "expected require Label"
+  let first ← ident "a message label"
+  let rec labels (acc : List String) : P (List String) := do
+    if ← keyword? "or" then
+      if acc.length ≥ 16 then fail "at most 16 obligation labels"
+      labels (acc ++ [← ident "a message label"])
+    else return acc
+  let ls ← labels [first]
+  if !(← keyword? "within") then fail "expected within duration"
+  let withinMs ← duration; sym ';'
+  if !(← keyword? "on") || !(← keyword? "breach") || !(← keyword? "record") then
+    fail "expected on breach record Label"
+  let breach ← ident "a monitor label"; sym ';'; sym '}'
+  return { name, actor, clock, labels := ls, withinMs, breach }
+
 mutual
 partial def block : P (List Stmt) := do
   skip
   let opened := (← get).pos
   sym '{'
+  let depth := (← get).depth
+  if depth ≥ limits.maxDepth then fail "statements are nested too deeply"
+  modify fun s => { s with depth := depth + 1 }
   let rec go (acc : Array Stmt) : P (List Stmt) := do
     if ← sym? '}' then return acc.toList
     if (← peek).isNone then failAt opened "a '{' is never closed"
+    if acc.size ≥ limits.maxSteps then fail "more than 200 steps in block"
     go (acc.push (← stmt))
-  go #[]
+  let result ← go #[]
+  modify fun s => { s with depth := depth }
+  return result
 
 partial def branches (sep : String) : P (List (List Stmt)) := do
   let first ← block
@@ -254,6 +343,42 @@ partial def stmt : P Stmt := do
   let s0 ← get
   let w ← ident "a statement"
   -- the construct words are not reserved: they are constructs only when followed by their shape
+  if w == "clock" && (← peekIdent) != some "from" && (← nextChar) != some ':' then
+    let name ← ident "a clock name"; sym '='
+    let refs ← timeRefs; sym ';'; return .clock name refs
+  if w == "obligation" && (← peekIdent) != some "from" && (← nextChar) != some ':' then return .obligation (← obligationSpec)
+  if w == "choice" && (← peekIdent) == some "at" then
+    discard <| keyword? "at"
+    let actor ← ident "the choosing role"
+    if !(← keyword? "using") || !(← keyword? "declared") then fail "expected using declared(name)"
+    sym '('; let name ← stringLit; sym ')'
+    let bs ← branches "or"
+    let mut weights := []
+    let mut bodies := []
+    for b in bs do
+      match b with
+      | .weighted "__branch" "" ws body :: [] =>
+        weights := weights ++ ws; bodies := bodies ++ body
+      | _ =>
+        if !weights.isEmpty then fail "every branch needs probability n/d"
+        bodies := bodies ++ [b]
+    if !weights.isEmpty then
+      if weights.length != bs.length then fail "every branch needs probability n/d"
+      match Generative.checkWeights weights with
+      | .error e => fail e
+      | .ok _ => pure ()
+    return .weighted name actor weights bodies
+  if w == "probability" && (← nextChar).any Char.isDigit then
+    if (← get).depth ≥ limits.maxDepth then fail "statements are nested too deeply"
+    modify fun s => { s with depth := s.depth + 1 }
+    let q ← fraction; sym ':'
+    let rec body (acc : List Stmt) : P (List Stmt) := do
+      if (← nextChar) == some '}' then return acc
+      if acc.length ≥ limits.maxSteps then fail "too many statements"
+      body (acc ++ [← stmt])
+    let parsedBody ← body []
+    modify fun s => { s with depth := s.depth - 1 }
+    return .weighted "__branch" "" [q] [parsedBody]
   if w == "choice" && (← nextChar) == some '{' then return .choice (← branches "or")
   if w == "par" && (← nextChar) == some '{' then return .par (← branches "and")
   if w == "sessions" && (← nextChar) == some '{' then return .sessions (← block)
@@ -299,9 +424,11 @@ partial def stmt : P Stmt := do
   let cause ← do if ← keyword? "cause" then pure (some (← ident "a message id")) else pure none
   let route ← do if ← keyword? "route" then pure (some (← stringLit)) else pure none
   let status ← do if ← keyword? "status" then pure (some (← number)) else pure none
+  let timing ← do if ← keyword? "at" then pure (some (← timeExpr)) else pure none
   let guard ← do if ← keyword? "where" then pure (some (← whereText)) else pure none
   sym ';' "';' at the end of the message"
-  return .msg id label src dst cause route status guard
+  let message := Stmt.msg id label src dst cause route status guard
+  return match timing with | some t => .timed t message | none => message
 end
 
 partial def file : P (List Def) := do
@@ -358,6 +485,16 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
     set (n + 1)
     let next := fun () => build c rest (i + 1)
     match s with
+    | .clock _ _ | .obligation _ => next ()
+    | .timed _ message => build c (message :: rest) i
+    | .weighted name actor _ bs =>
+      if name == "__branch" then bfail here "probability is only allowed inside choice at Role using declared(name)"
+      let who ← role here actor
+      let gs ← nest here bs
+      match Global.decider gs with
+      | .ok r => if r != who then bfail here "declared choice actor does not match its decider"
+      | .error e => bfail here e
+      return Global.andThen (.choice gs) (← next ())
     | .msg id label src dst cause route status guard =>
       let src' ← role here src
       let dst' ← role here dst
@@ -405,6 +542,8 @@ structure Parsed where
   roles  : List String
   global : Global String
   steps  : Nat
+  body : List Stmt := []
+  deriving Inhabited
 
 def parse (text : String) : Except String Parsed := do
   if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
@@ -415,7 +554,7 @@ def parse (text : String) : Except String Parsed := do
   let ctx : Ctx := { defs := earlier, rename := [], roles := main.roles, path := main.name,
                      inside := [main.name] }
   let (g, n) ← (build ctx main.body).run 0
-  return { name := main.name, roles := main.roles, global := g, steps := n }
+  return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body }
 
 /-! ## Writing -/
 
@@ -431,6 +570,14 @@ def showString (s : String) : String :=
   "\"" ++ String.join (s.toList.map fun c =>
     if c == '"' then "\\\"" else if c == '\\' then "\\\\" else c.toString) ++ "\""
 
+def showTime (t : Generative.TimeExpr) : String :=
+  let base := match t.clock with
+    | some c => showIdent c
+    | none => match t.refs with
+      | [r] => "time(" ++ showIdent r ++ ")"
+      | rs => "max(" ++ ", ".intercalate (rs.map (fun r => "time(" ++ showIdent r ++ ")")) ++ ")"
+  base ++ " + sample { " ++ " ".intercalate (t.offsets.map fun (d,q) => s!"{d} ms : {q.text};") ++ " }"
+
 mutual
 partial def writeStmts (ind : String) (ss : List Stmt) : List String := ss.flatMap (writeStmt ind)
 
@@ -442,6 +589,21 @@ partial def writeBranches (ind kw sep : String) (bs : List (List Stmt)) : List S
       (rest.flatMap fun b => [ind ++ "} " ++ sep ++ " {"] ++ writeStmts (ind ++ "  ") b) ++ [ind ++ "}"]
 
 partial def writeStmt (ind : String) : Stmt → List String
+  | .clock name refs => [ind ++ "clock " ++ showIdent name ++ " = " ++
+      (if refs.length == 1 then "time(" ++ showIdent refs.head! ++ ")" else
+       "max(" ++ ", ".intercalate (refs.map (fun r => "time(" ++ showIdent r ++ ")")) ++ ")") ++ ";"]
+  | .obligation o => [ind ++ s!"obligation {showIdent o.name} on {showIdent o.actor} \{ trigger {showIdent o.clock}; require " ++
+      " or ".intercalate (o.labels.map showIdent) ++ s!" within {o.withinMs} ms; on breach record {showIdent o.breach}; }"]
+  | .timed t (.msg id label src dst cause route status guard) =>
+    (writeStmt ind (.msg id label src dst cause route status none)).map fun line =>
+      (line.dropEnd 1).toString ++ " at " ++ showTime t ++
+        (guard.map (" where " ++ ·)).getD "" ++ ";"
+  | .timed _ _ => []
+  | .weighted name actor weights bs =>
+    let decorated := bs.zipIdx |>.map fun (b,i) =>
+      (if weights.isEmpty then [] else [ind ++ "  probability " ++ (weights[i]!).text ++ ":"]) ++ writeStmts (ind ++ "  ") b
+    [ind ++ "choice at " ++ showIdent actor ++ " using declared(" ++ showString name ++ ") {"] ++
+      List.flatten (decorated.zipIdx |>.map fun (lines,i) => (if i == 0 then [] else [ind ++ "} or {"]) ++ lines) ++ [ind ++ "}"]
   | .msg id label src dst cause route status guard =>
     [ind ++ (match id with | some i => showIdent i ++ ": " | none => "") ++ showIdent label ++
       " from " ++ showIdent src ++ " to " ++ showIdent dst ++

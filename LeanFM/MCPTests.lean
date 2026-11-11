@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"] do
+  for t in ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -171,6 +171,8 @@ def main : IO Unit := do
   -- ...and must run: the view is driven in Node (scripts/session_view_smoke.js, a stub DOM and host)
   -- with real results for the lending example, through the editor, the walk-through, the
   -- animation and every session tool's result. Any exception fails.
+  assertContains "MCP exposes external probability layers" toolsListed.body "\"overlay\""
+  assertContains "MCP exposes observation horizons" toolsListed.body "\"horizonMs\""
   let lendingLean ← IO.FS.readFile "examples/vibecode/lending/Lending.protocol"
   let bugLog ← IO.ofExcept (Json.parse (← IO.FS.readFile "examples/vibecode/lending/bug-log.json"))
   let callTool (name : String) (args : List (String × Json)) : IO Json := do
@@ -180,7 +182,28 @@ def main : IO Unit := do
     let j ← IO.ofExcept (Json.parse r.body)
     pure (j.getObjValD "result")
   let borrow := Json.arr #[Json.mkObj [("id", "w1"), ("from", "Member"), ("to", "Desk"), ("label", "Borrow")]]
+  let timedLean ← IO.FS.readFile "examples/sessions/DepositSettlement.leanfm"
+  let timedOverlay := Json.mkObj [("name", "test-layer"), ("choices", toJson [
+    Json.mkObj [("choice", "illustrative-settlement-v1"), ("weights", toJson ["0", "1"])]] )]
+  let timedRequest := Json.mkObj [("jsonrpc", "2.0"), ("id", 91), ("method", "tools/call"),
+    ("params", Json.mkObj [("name", "session_simulate"), ("arguments", Json.mkObj [
+      ("lean", timedLean), ("overlay", timedOverlay), ("instances", 2), ("seed", 11)])])]
+  let timedResponse ← dispatch timedRequest.compress
+  assertContains "MCP generates timed traces with an external overlay" timedResponse.body "deadlineReports"
+  let timedJson ← IO.ofExcept (Json.parse timedResponse.body)
+  let mdpRequest := timedRequest.setObjVal! "params" (Json.mkObj [
+    ("name", "session_mdp"), ("arguments", Json.mkObj [("lean", timedLean), ("overlay", timedOverlay)])])
+  let mdpResponse ← dispatch mdpRequest.compress
+  assertContains "MCP renders the native decision view" mdpResponse.body "terminalProbability"
+  let mdpJson ← IO.ofExcept (Json.parse mdpResponse.body)
+  let mdpResult := mdpJson.getObjValD "result"
+  if (mdpResult.getObjValD "structuredContent").getObjValD "terminalProbability" != Json.str "1" then
+    throw (IO.userError "MCP terminal probability is not one")
+  let mdpDefinition := (LeanFM.MCP.tools.find? (fun t => (t.getObjValAs? String "name").toOption == some "session_mdp")).getD Json.null
+  assertContains "MCP attaches decision diagram to the session app" mdpDefinition.compress "ui://leanfm/session-view"
   let results := Json.mkObj [
+    ("mdp", mdpResult),
+    ("timed", timedJson.getObjValD "result"),
     ("check", ← callTool "session_check" []),
     ("simulate", ← callTool "session_simulate" [("instances", (5 : Nat)), ("seed", (3 : Nat))]),
     ("conform", ← callTool "session_conform" [("events", bugLog)]),
@@ -214,7 +237,7 @@ def main : IO Unit := do
   let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
   assertContains "MCP session design prompt ends at session_conform" promptGot.body "session_conform"
   assertContains "MCP session view edits through tools/call" shtml "\"tools/call\""
-  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\"], MAX_EDIT_BYTES = 65536"
+  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\"], MAX_EDIT_BYTES = 65536"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new

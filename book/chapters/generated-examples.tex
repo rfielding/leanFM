@@ -137,6 +137,74 @@ remaining $1/1000$ gives up at 615\,ms.}
 \label{fig:overlay-distribution}
 \end{herefigure}
 
+
+\section{Inline generative session types}
+
+The session tools now accept timing and probability annotations alongside the
+message grammar. The following settlement example is implemented in the text
+parser used by MCP; it is not an extension to Lean's native protocol macro.
+Its probabilities are illustrative declarations, not measurements or legal
+claims. Days mean fixed 24-hour durations.
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{../examples/sessions/DepositSettlement.leanfm}
+
+Erasing these annotations preserves the global interaction grammar. The
+obligation starts at the maximum of the two named event times; either required
+message from its actor satisfies it at or before the deadline. A late return
+remains a legal message trace and produces a separate violation report.
+\texttt{on breach record} never fabricates a message.
+
+An external \texttt{overlay} argument remains available. It contains a
+\texttt{name}, a \texttt{choices} array of named choices and exact fraction
+strings in \texttt{weights}, and an optional \texttt{timings} array whose
+\texttt{message} targets a unique id or label and whose \texttt{at} is a time
+expression. Entries replace matching inline annotations and retain their
+origin in the effective-layer report. Plain choices are addressed by traversal
+index, starting with \texttt{choice:0}. Zero mass never removes a structural
+branch or establishes a CTL impossibility.
+
+\texttt{session\_simulate} samples the finite paths with a seed and emits
+session-relative milliseconds. \texttt{session\_conform} checks recorded
+messages against the unchanged grammar, then monitors their actual timestamps
+independently of the sampling distribution. Its \texttt{horizonMs} argument
+can advance an incomplete observation: an unsatisfied obligation is pending
+at its boundary and violated after it.
+
+The supported execution boundary is finite sequential choices, with bounded
+path expansion. Annotated concurrency, recursion and includes report missing
+scheduling semantics rather than silently choosing a scheduler. Unannotated
+session tools retain their existing behavior. Requirements
+\texttt{selfhost.session.generative}, its execution and monitor clauses,
+and \texttt{SessionImplementation.lean} record this boundary;
+\texttt{GenerativeTests.lean} checks erasure, replacement, seeded traces,
+deadline boundaries and rejection cases.
+
+
+\subsection{Decision-process rendering through MCP}
+
+The \texttt{session\_mdp} tool renders the checked session directly as a finite
+decision tree under its supplied policy. It accepts the same \texttt{lean}
+text and optional external \texttt{overlay}, with light or dark themes.
+Policy edges choose actions; transition edges carry conditional outcome
+probabilities. Each terminal shows its final message, time, obligation reports
+and exact probability. The tool checks that all terminal probabilities sum
+to one, and refuses incomplete weights rather than normalizing them.
+
+The separate \texttt{violationProbability} is the probability that at least
+one obligation is violated at the terminal observation time. It counts each
+terminal once, even when several obligations fail there. A pending deadline
+remains pending. Zero-mass outcomes remain in the drawing. SVG and the MCP
+Apps view are generated from the same checked graph, and the editor's
+\texttt{MDP diagram} button preserves the external layer.
+
+This view preserves branch histories rather than merging states by their
+visible labels. It unfolds a finite process under a fixed policy; optimal-policy
+search and unbounded MDP solving remain outside its scope. Graphs exceeding
+96 nodes or the response/dimension bounds fail explicitly instead of appearing
+complete after truncation. Requirement \texttt{selfhost.session.mdp},
+\texttt{Decision.lean}, and \texttt{DecisionTests.lean} record and check these
+semantics.
+
 \section{What comes next}
 
 The same functions accept a measured overlay, reduced from recorded traces by

@@ -92,7 +92,7 @@ function host(msg) {
     const name = msg.params && msg.params.name;
     toolCalls.push(name);
     const answer = name === "session_next" ? R.next[Math.min(nextCalls++, R.next.length - 1)]
-      : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : null;
+      : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp : null;
     if (answer) deliver({ jsonrpc: "2.0", id: msg.id, result: answer });
     else deliver({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "unexpected tool " + name } });
   } else if (msg.id !== undefined && msg.method) deliver({ jsonrpc: "2.0", id: msg.id, result: {} });
@@ -118,6 +118,27 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   await wait(200);
   if (!hostSent.some((m) => m.method === "ui/notifications/initialized")) throw new Error("the view never finished the handshake");
   console.log("ok: the view completes the MCP Apps handshake");
+
+  await show(R.check);
+  if (R.mdp) {
+    await show(R.mdp);
+    expectText("native MDP graph renders", byId.results, "Decision process under the supplied policy");
+    expectText("terminal mass is visible", byId.results, "Terminal probability total: 1");
+    if (!byId.results.all().some(n => n.tag === "svg")) throw new Error("MDP SVG missing");
+    button(byId.editor, "MDP diagram").click(); await wait(120);
+    const sent = hostSent.filter(m => m.method === "tools/call" && m.params.name === "session_mdp").pop();
+    if (sent?.params.arguments.overlay?.name !== "test-layer") throw new Error("MDP redraw lost overlay");
+  }
+  if (R.timed) {
+    await show(R.timed);
+    expectText("timed layer renders", byId.results, "Generation assumptions");
+    expectText("deadline monitoring renders", byId.results, "fulfilled");
+    button(byId.editor, "Animate 10 sessions").click(); await wait(120);
+    const sent = hostSent.filter(m => m.method === "tools/call" && m.params.name === "session_simulate").pop();
+    if (sent?.params.arguments.overlay?.name !== "test-layer")
+      throw new Error("editor lost the external overlay");
+    console.log("ok: editor retains the external probability layer");
+  }
 
   await show(R.check);
   expectText("session_check result renders its typestates", byId.results, "typestate");
