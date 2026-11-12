@@ -21,14 +21,16 @@ const messages: Record<string, string> = {
   not_seated: 'Take a seat first.', seat_occupied: 'A person holds that seat; they must leave it first.', invalid_seat_plan: 'Choose a listed controller and team.',
   invalid_bot_settings: 'Choose listed bot settings.', invalid_team: 'Choose another existing team.', no_person_on_team: 'That team has no person to accept a merge.',
   duplicate_proposal: 'Those teams already have a pending proposal.', no_proposal: 'That proposal is no longer pending.', not_on_team: 'Only people on the two teams can answer.',
-  deadline_passed: 'Your time ran out before the move arrived.', already_seated: 'You already have a seat in this game.', seat_unavailable: 'That seat is taken.',
+  deadline_passed: 'Your clock ran out before the move arrived.', already_seated: 'You already have a seat in this game.', seat_unavailable: 'That seat is taken.',
   not_creator: 'Only the challenge creator can start the game.', not_playing: 'This game is not in progress.', not_your_turn: 'It is not your turn.',
   stale_move: 'The board changed; your move was not played. Look again.', occupied: 'That point is occupied.', ko: 'Ko: that recapture must wait a round.',
   superko: 'Superko: that move recreates an earlier position.', illegal_move: 'That move is not on the board.', invalid_board: 'Choose a listed board size.',
   invalid_password: 'Use a password of 8 to 128 characters.', already_claimed: 'That name is already claimed.',
-  name_variant_in_use: 'Someone is signed in with the same name in different letter case; it cannot be claimed until they leave.',
+  name_in_use: 'Someone is signed in with that name as a guest. It can be claimed once they sign out.',
+  wrong_password: 'Wrong password.', throttled: 'Too many wrong passwords for this name; try again later.',
+  not_claimed: 'That name is not claimed.', too_soon: 'The password was changed less than a minute ago; wait a moment.',
   capacity: 'The server holds its maximum number of claimed names.', unavailable: 'The claim could not be saved. Try again later.',
-  invalid_seats: 'Choose 2 to 8 players.', invalid_deadline: 'Choose a listed deadline.', invalid_bot_time: 'Choose a listed bot deadline.', invalid_ko_rule: 'Choose a listed ko rule.',
+  invalid_seats: 'Choose 2 to 8 players.', invalid_clock: 'Choose a listed main time, number of periods and period length.', invalid_ko_rule: 'Choose a listed ko rule.',
 };
 
 let counter = Date.now() * 1000;
@@ -60,12 +62,38 @@ export async function issueSession(identity: string, password = '') {
   const response = await fetch('./api/issue_session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Could not start a session.');
-  auth.session = result.session; auth.identity = result.identity || identity; auth.claimed = !!result.claimed;
-  storage.setItem('goserver:session', auth.session); storage.setItem('goserver:identity', auth.identity);
-  storage.setItem('goserver:claimed', auth.claimed ? '1' : '');
+  signedIn(result.session, result.identity || identity, !!result.claimed);
 }
 
-export function markClaimed() { auth.claimed = true; storage.setItem('goserver:claimed', '1'); }
+function signedIn(session: string, identity: string, claimed: boolean) {
+  auth.session = session; auth.identity = identity; auth.claimed = claimed;
+  storage.setItem('goserver:session', session); storage.setItem('goserver:identity', identity);
+  storage.setItem('goserver:claimed', claimed ? '1' : '');
+}
+
+// These run from the sign-in form, before there is a session; each password is sent once
+// and never kept.
+async function post(action: string, body: Record<string, unknown>) {
+  const response = await fetch('./api/' + action, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({...body, requestId: nextID()})});
+  const result = await response.json();
+  if (!response.ok || result.code || result.error) throw new Error(messages[result.code] || result.error || 'The action could not be completed.');
+  return result;
+}
+export async function claimName(identity: string, password: string) {
+  const r = await post('claim_name', {identity, password}); signedIn(r.session, r.identity, true);
+}
+export async function changePassword(identity: string, password: string, newPassword: string) {
+  const r = await post('change_password', {identity, password, newPassword}); signedIn(r.session, r.identity, true);
+}
+export async function releaseName(identity: string, password: string) {
+  await post('release_name', {identity, password});
+}
+export async function signOut() {
+  try { await post('sign_out', {sessionId: auth.session}); } catch { /* the session may already be gone */ }
+  storage.setItem('goserver:session', ''); storage.setItem('goserver:lastName', auth.identity);
+  storage.setItem('goserver:notice', 'Signed out. Enter a name to continue.');
+  auth.session = ''; location.reload();
+}
 
 // A tiny shared notice line ("feedback") any component can write to.
 type Listener = (m: {text: string; error: boolean}) => void;

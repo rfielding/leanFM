@@ -609,11 +609,15 @@ func (w *Work) cleanupMove(s *State, c int, teams []int) int {
 
 // SearchParams bounds one bot search.
 type SearchParams struct {
-	Budget  time.Duration
-	C       float64 // UCT exploration constant (Lab default 0.7)
-	T       float64 // margin softness in points (Lab default 4)
-	Mode    string  // "margin" (default), "win" or "rank"
-	Teams   []int   // per seat (index 0 = seat 1) team number; nil = everyone alone
+	Budget time.Duration // the hard limit
+	// Planned, when set, turns on time management: stop early once the best move is
+	// settled, and at Planned unless the top two candidates are close.
+	Planned time.Duration
+	Cancel  <-chan struct{} // closed when the server shuts down
+	C       float64         // UCT exploration constant (Lab default 0.7)
+	T       float64         // margin softness in points (Lab default 4)
+	Mode    string          // "margin" (default), "win" or "rank"
+	Teams   []int           // per seat (index 0 = seat 1) team number; nil = everyone alone
 	NodeCap int
 	Seed    int64
 	History map[uint64]bool // earlier position keys, used when ko is on (advisory)
@@ -637,6 +641,8 @@ type SearchResult struct {
 	Top        []Candidate             // at most 8, most visited first
 	RootQ      [MaxPlayers + 1]float64 // mean reward per seat at the root
 	RootProj   [MaxPlayers + 1]float64 // mean final score per seat at the root
+	Stop       string                  // settled, planned, limit or single
+	Planned    time.Duration
 }
 
 type node struct {
@@ -791,6 +797,7 @@ func Search(g *Geom, root *State, p SearchParams) SearchResult {
 	var rootScore [MaxPlayers + 1]float64
 	nodes, iters := 1, 0
 	deadline := start.Add(p.Budget)
+	stop := ""
 	for {
 		for b := 0; b < 16; b++ {
 			s := root.Clone()
@@ -859,7 +866,43 @@ func Search(g *Geom, root *State, p SearchParams) SearchResult {
 			iters++
 		}
 		if time.Now().After(deadline) {
+			stop = "limit"
 			break
+		}
+		select {
+		case <-p.Cancel:
+			stop = "cancelled"
+		default:
+		}
+		if stop == "cancelled" {
+			break
+		}
+		if p.Planned > 0 && len(R.untried) == 0 {
+			if len(R.children) <= 1 {
+				stop = "single"
+				break
+			}
+			n1, n2 := 0, 0
+			for _, ch := range R.children {
+				if ch.n > n1 {
+					n1, n2 = ch.n, n1
+				} else if ch.n > n2 {
+					n2 = ch.n
+				}
+			}
+			el := time.Since(start)
+			if iters >= 50 && el > 0 {
+				rate := float64(iters) / el.Seconds()
+				possible := rate * (p.Budget - el).Seconds()
+				if float64(n1-n2) > possible {
+					stop = "settled" // the second-best cannot catch up in the time left
+					break
+				}
+			}
+			if el >= p.Planned && float64(n2) < 0.7*float64(n1) {
+				stop = "planned"
+				break
+			}
 		}
 	}
 	mover := root.ToMove
@@ -870,7 +913,7 @@ func Search(g *Geom, root *State, p SearchParams) SearchResult {
 		}
 		return kids[a].w[mover] > kids[b].w[mover]
 	})
-	res := SearchResult{Move: MovePass, Iterations: iters}
+	res := SearchResult{Move: MovePass, Iterations: iters, Stop: stop, Planned: p.Planned}
 	for i, ch := range kids {
 		if i == 8 || ch.n == 0 {
 			break

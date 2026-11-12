@@ -11,7 +11,7 @@ import (
 
 func seatedTable(t *testing.T, seats uint32, people ...string) (*table, map[string]string) {
 	t.Helper()
-	tb := newTable(t, CreateGame{BoardSize: 5, Seats: seats, TurnDeadlineMS: 60000})
+	tb := newTable(t, CreateGame{BoardSize: 5, Seats: seats, MainTimeMS: 60000})
 	tok := map[string]string{"alice": tb.alice, "bob": tb.bob}
 	for _, name := range []string{"carol", "dave"} {
 		tok[name], _ = tb.s.IssueSession(name)

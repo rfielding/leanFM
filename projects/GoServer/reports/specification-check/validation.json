@@ -9,11 +9,11 @@
   "unit": "task grammars",
   "boundary": ".",
   "artifacts": {
-    "spec/Requirements.lean": "75b5c85c167a7ebb9feb4bb47311d861de9dbb842b2c42187749aa137067a72e",
-    "spec/Requirements.proto": "9312986c93b1987fa6c512252bdc1e0d0b4dd68e0930b0ec725175351cc3ac40",
-    "book/main.tex": "5f7409af9ca524dca83d1ebd6ca9f26bfd7984d770c0807105aad8427bae28bf",
-    "spec/Implementation.lean": "6bd231206742fdc1aa018445a1e2947697811cad6783c109cae9f000a006a858"
+    "spec/Requirements.lean": "d55342543774ef9df6ff95df0ea5289c030ed18016a18aa029e3fc660fb4c04c",
+    "spec/Requirements.proto": "20cd146200fa5f3243f7958eee0e83ba0b67a8aa00a175ea3dd0d969528df1d9",
+    "book/main.tex": "2457f019f6ce660a083a4031e8595c89e2a1bbe8e0900089d7d18daf75317047",
+    "spec/Implementation.lean": "c3e87857a77274fa0179efe1e6eaf8dd485559a88375eeef089b653df3ffbdb8"
   },
-  "task_count": 24,
+  "task_count": 28,
   "acceptance": "unchanged"
 }

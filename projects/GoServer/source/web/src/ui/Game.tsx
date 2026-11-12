@@ -6,8 +6,19 @@ import type {GameCtl} from '../game/game';
 import {BoardCanvas, GameTree, NavBar} from './Board';
 import {ChatForm, ChatList, Tabs, useCtl, type ChatItem} from './common';
 import {GifPanel, PlayBar, ScoresPanel, SearchPanel, SeatsPanel} from './Panels';
+import {SessionTypePanel} from './SessionType';
 
 const SIDE = [{id: 'scores', label: 'Scores'}, {id: 'search', label: 'Search'}, {id: 'seats', label: 'Seats'}, {id: 'chat', label: 'Chat'}, {id: 'gif', label: 'GIF'}];
+
+// Requirement refs: property:chat follows the tree. The remarks pinned to positions on the line
+// from the empty board to the viewed position, in the order of that line, each tagged with its move.
+export function alongLine(g: GameCtl, items: ChatItem[] | null): ChatItem[] | null {
+  if (!items || !g.root) return items;
+  const path = g.pathRefs(), here = g.chatNode();
+  return items.map((it, i) => ({it, i, d: path.get(it.node || 'm0')})).filter(x => x.d !== undefined)
+    .sort((a, b) => (a.d! - b.d!) || (a.i - b.i))
+    .map(({it, d}) => ({...it, where: (it.node || 'm0') === here ? 'here' : d ? 'move ' + d : 'start'}));
+}
 
 export function useGameChat(gameId: string, active: boolean) {
   const [items, setItems] = useState<ChatItem[] | null>(null), [people, setPeople] = useState<string[]>([]);
@@ -34,7 +45,7 @@ export function GamePanel({g, name, active, chat}: {g: GameCtl; name: string; ac
       if (!g.root || e.ctrlKey || e.metaKey || e.altKey) return; const t = e.target as HTMLElement, tag = t.tagName, k = e.key;
       // typing goes to inputs; a focused tab keeps ←/→ for moving between tabs but every other key still works
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || (t.getAttribute('role') === 'tab' && k.startsWith('Arrow'))) return;
-      if (k === 'ArrowLeft') { g.back(); e.preventDefault(); } else if (k === 'ArrowRight') { g.fwd(); e.preventDefault(); } else if (k === 'ArrowUp') { g.sib(-1); e.preventDefault(); } else if (k === 'ArrowDown') { g.sib(1); e.preventDefault(); }
+      if (k === 'ArrowLeft') { g.back(); e.preventDefault(); } else if (k === 'ArrowRight') { g.fwd(); e.preventDefault(); } else if (k === 'ArrowUp') { g.upDown(-1); e.preventDefault(); } else if (k === 'ArrowDown') { g.upDown(1); e.preventDefault(); }
       else if (k === 'Home') { g.home(); e.preventDefault(); } else if (k === 'End') { g.end(); e.preventDefault(); } else if (k === 'l' || k === 'L') g.toLive();
       else if ((k === 'c' || k === 'C') && g.analysisAllowed()) g.localSearch(g.cur, true); else if (k === 'p' || k === 'P') { g.pass(); e.preventDefault(); }
     };
@@ -52,7 +63,8 @@ export function GamePanel({g, name, active, chat}: {g: GameCtl; name: string; ac
           <BoardCanvas g={g} />
           <NavBar g={g} />
           <GameTree g={g} />
-          <div className="keys"><kbd>←</kbd> <kbd>→</kbd> step · <kbd>↑</kbd> <kbd>↓</kbd> variation · <kbd>L</kbd> live · <kbd>P</kbd> pass on your turn · <kbd>C</kbd> computer move in a variation. Click a point to play on your turn; elsewhere a click starts a variation when analysis is open to you.</div>
+          <div className="keys"><kbd>←</kbd> <kbd>→</kbd> step · <kbd>↑</kbd> <kbd>↓</kbd> choose among the next moves A, B… (or switch variation) · <kbd>L</kbd> live · <kbd>P</kbd> pass · <kbd>C</kbd> computer move. On your live turn a click or P plays in the game; once analysis is open to you (a finished game, or watching), a click, P or C plays for whichever seat is to move in the position you are viewing, as a variation.</div>
+          <SessionTypePanel />
         </div>
         <div className="side">
           <PlayBar g={g} />
@@ -62,9 +74,10 @@ export function GamePanel({g, name, active, chat}: {g: GameCtl; name: string; ac
             {tab === 'search' ? <><h3>Search at this position</h3><SearchPanel g={g} /></> : null}
             {tab === 'seats' ? <><h3>Seats and teams</h3><SeatsPanel g={g} /></> : null}
             {tab === 'chat' ? <><h3>Challenge conversation</h3>
-              <ChatList items={chat.items} placeholder="This conversation is separate from the room." label="Challenge conversation" className="game-chat" />
-              <ChatForm className="game-chat-form" label="Message this challenge" placeholder="Discuss your game…" disabled={chat.items === null}
-                onSend={async body => { try { await api('send_game_chat', {gameId: g.gameId, body, requestId: nextID()}); await chat.reload(); } catch (e: any) { feedback(e.message, true); throw e; } }} /></> : null}
+              <p className="small muted">Remarks belong to the position they were written at: this shows the ones along the line from the empty board to the position on the board{g.cur && g.cur.depth ? ' (move ' + g.cur.depth + ')' : ''}.</p>
+              <ChatList items={alongLine(g, chat.items)} placeholder={chat.items && chat.items.length ? 'No remarks along this line up to here.' : 'This conversation is separate from the room.'} label="Challenge conversation" className="game-chat" />
+              <ChatForm className="game-chat-form" label="Message this challenge" placeholder={g.cur && g.cur !== g.live ? 'Remark on move ' + g.cur.depth + '…' : 'Discuss your game…'} disabled={chat.items === null}
+                onSend={async body => { try { await api('send_game_chat', {gameId: g.gameId, body, node: g.chatNode(), requestId: nextID()}); await chat.reload(); } catch (e: any) { feedback(e.message, true); throw e; } }} /></> : null}
             {tab === 'gif' ? <><h3>Animated GIF</h3><GifPanel g={g} /></> : null}
           </section>
         </div>

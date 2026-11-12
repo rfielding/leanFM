@@ -4,7 +4,7 @@
 // The page: a name form until there is a session, then one tab per open room plus a Rooms tab
 // for finding and creating rooms. Each room stays mounted while its tab is open.
 import {useEffect, useRef, useState} from 'react';
-import {api, auth, feedback, issueSession, nextID, onFeedback, storage} from '../api';
+import {api, auth, changePassword, claimName, feedback, issueSession, nextID, onFeedback, releaseName, signOut, storage} from '../api';
 import {Tabs} from './common';
 import {RoomView} from './Room';
 import {RankingView} from './Ranking';
@@ -20,7 +20,7 @@ export function App() {
   return (
     <>
       <header className="topbar"><div className="brand"><span className="brandstone" aria-hidden="true" /><strong>GoServer</strong><span className="tag">N-player Go</span></div>
-        <span className="identity-label">{session ? auth.identity + (auth.claimed ? ' · claimed' : '') : 'Choose a local name to join'}</span></header>
+        <span className="identity-label">{session ? <>{auth.identity + (auth.claimed ? ' · claimed' : ' · guest')} <button type="button" className="subtle sign-out" onClick={() => void signOut()}>Sign out</button></> : 'Choose a local name to join'}</span></header>
       <main>
         {!session ? <Welcome onSignedIn={() => setSession(auth.session)} /> : null}
         <p className="notice">Local preview · rooms, challenges and games reset when the app restarts; claimed names and the ranking are kept.</p>
@@ -32,22 +32,82 @@ export function App() {
   );
 }
 
+// The sign-in form: a name alone signs in as a guest; one password signs in to a claimed
+// name; the same new password twice claims an unclaimed name. Changing the password and
+// releasing the name sit in a panel that stays closed until opened.
 function Welcome({onSignedIn}: {onSignedIn: () => void}) {
-  const ref = useRef<HTMLInputElement>(null), pass = useRef<HTMLInputElement>(null), [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLInputElement>(null), pass = useRef<HTMLInputElement>(null), again = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
   useEffect(() => { const last = storage.getItem('goserver:lastName'); if (last && ref.current) { ref.current.value = last; ref.current.focus(); } }, []);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); if (busy || !ref.current) return; setBusy(true);
-    const name = ref.current.value.trim(), password = pass.current?.value || '';
-    try { await issueSession(name, password); if (pass.current) pass.current.value = ''; onSignedIn(); feedback('Welcome, ' + auth.identity + '. Choose a room or create your own.'); }
-    catch (err: any) { feedback(err.message, true); if (/password/.test(err.message)) pass.current?.focus(); } finally { setBusy(false); }
+  const name = () => (ref.current?.value || '').trim();
+  const run = async (action: () => Promise<string | void>, clear: (HTMLInputElement | null)[]) => {
+    if (busy) return; setBusy(true);
+    try { const done = await action(); if (done) feedback(done); }
+    catch (err: any) { feedback(err.message, true); }
+    finally { clear.forEach(i => { if (i) i.value = ''; }); setBusy(false); }
+  };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = pass.current?.value || '', p2 = again.current?.value || '';
+    void run(async () => {
+      if (!name()) throw new Error('Enter a name.');
+      if (p2 && p !== p2) throw new Error('The two passwords differ. To sign in, fill only the first one.');
+      if (p2) { await claimName(name(), p); onSignedIn(); return 'The name ' + auth.identity + ' is yours now. Sign in with this password from now on.'; }
+      await issueSession(name(), p); onSignedIn(); return 'Welcome, ' + auth.identity + '. Choose a room or create your own.';
+    }, [pass.current, again.current]);
   };
   return (
     <section className="welcome"><div><p className="eyebrow">A PLACE TO MEET AND PLAY</p><h1>Find your room.<br />Make a challenge.</h1>
       <p>Two to eight players on one board. Score is territory minus the stones you lose. Empty seats are played by the server's search bots.</p></div>
-      <form className="session-form" onSubmit={submit}><label>Your local display name<input ref={ref} className="identity" maxLength={128} required autoComplete="nickname" placeholder="Choose a name" /></label>
-        <label>Password <span className="muted small">(only for a claimed name)</span><input ref={pass} className="password" type="password" maxLength={128} autoComplete="current-password" placeholder="Leave empty if unclaimed" /></label>
-        <button type="submit" disabled={busy}>Enter GoServer</button></form>
+      <div className="session-card">
+        <form className="session-form" onSubmit={submit}>
+          <label>Name<input ref={ref} className="identity" maxLength={128} required autoComplete="username" placeholder="Choose a name" /></label>
+          <label>Password <span className="hint">empty: play as a guest</span><input ref={pass} className="password" type="password" maxLength={128} autoComplete="current-password" /></label>
+          <label>Repeat password <span className="hint">only to claim a new name</span><input ref={again} className="password-again" type="password" maxLength={128} autoComplete="new-password" /></label>
+          <button type="submit" disabled={busy}>Enter GoServer</button></form>
+        <ManageName name={name} run={run} onSignedIn={onSignedIn} busy={busy} />
+      </div>
     </section>
+  );
+}
+
+function ManageName({name, run, onSignedIn, busy}: {name: () => string; run: (a: () => Promise<string | void>, clear: (HTMLInputElement | null)[]) => Promise<void>; onSignedIn: () => void; busy: boolean}) {
+  const cur = useRef<HTMLInputElement>(null), next = useRef<HTMLInputElement>(null), next2 = useRef<HTMLInputElement>(null);
+  const rel = useRef<HTMLInputElement>(null), sure = useRef<HTMLInputElement>(null);
+  const change = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      if (!name()) throw new Error('Enter the name above first.');
+      if ((next.current?.value || '') !== (next2.current?.value || '')) throw new Error('The two new passwords differ.');
+      await changePassword(name(), cur.current?.value || '', next.current?.value || ''); onSignedIn();
+      return 'Password changed for ' + auth.identity + '. Any other session for the name was signed out.';
+    }, [cur.current, next.current, next2.current]);
+  };
+  const release = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      if (!name()) throw new Error('Enter the name above first.');
+      if (!sure.current?.checked) throw new Error('Tick the box to confirm the release.');
+      await releaseName(name(), rel.current?.value || '');
+      if (sure.current) sure.current.checked = false;
+      return 'Released ' + name() + '. Anyone may use or claim it now, and it has left the ranking.';
+    }, [rel.current]);
+  };
+  return (
+    <details className="manage-name">
+      <summary>Manage a claimed name</summary>
+      <p className="hint">Uses the name entered above.</p>
+      <form className="change-password" onSubmit={change}><h3>Change password</h3>
+        <label>Current password<input ref={cur} type="password" maxLength={128} required autoComplete="current-password" /></label>
+        <label>New password<input ref={next} type="password" minLength={8} maxLength={128} required autoComplete="new-password" /></label>
+        <label>Repeat new password<input ref={next2} type="password" minLength={8} maxLength={128} required autoComplete="new-password" /></label>
+        <button type="submit" disabled={busy}>Change password</button></form>
+      <form className="release-name" onSubmit={release}><h3>Release name</h3>
+        <p className="hint">The name becomes free for anyone and leaves the ranking. Your games still count for the other players.</p>
+        <label>Password<input ref={rel} type="password" maxLength={128} required autoComplete="current-password" /></label>
+        <label className="check"><input ref={sure} type="checkbox" /> I want to give up this name</label>
+        <button type="submit" className="danger" disabled={busy}>Release name</button></form>
+    </details>
   );
 }
 

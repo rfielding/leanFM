@@ -103,6 +103,13 @@ def main():
         fill(alice,A+' .challenge-form input[name=name]',game,A+' .challenge-form')
         wait(alice,text(G+' .game-heading')+"==="+json.dumps(game))
         assert evaluate(alice,"Array.from(document.querySelectorAll('"+A+" .game-tabs [role=tab]')).length===2")
+        # the session-type panel stays closed until opened, then shows LeanFM's diagram and its text
+        assert evaluate(alice,"!!"+q(G+' .session-type')+" && !"+q(G+' .session-type')+".open")
+        evaluate(alice,q(G+' .session-type > summary')+".click()")
+        wait(alice,"(()=>{const i="+q(G+' .session-figure img')+";return i&&i.complete&&i.naturalWidth>300})()")
+        wait(alice,"!!"+q(G+' .session-text'))
+        assert evaluate(alice,q(G+' .session-text pre')+".textContent.includes('protocol GoServer') && "+text(G+' .session-type')+".includes('Drawn by LeanFM')")
+        evaluate(alice,q(G+' .session-type > summary')+".click()")
         click(alice,G+' [role=tab][data-panel="chat"]'); wait(alice,"!!"+q(G+' .game-chat-form fieldset:not([disabled])'))
         fill(alice,G+' .game-chat-form input','game secret',G+' .game-chat-form')
         wait(alice,text(G+' .game-chat')+".includes('game secret')")
@@ -139,32 +146,51 @@ def main():
         wait(alice,text(A+' .room-heading')+"==="+json.dumps(room)+" && "+text(G+' .game-chat')+".includes('bob game')")
         shot=call('Page.captureScreenshot',{'format':'png','captureBeyondViewport':True},alice)
         (REPORT/'browser.png').write_bytes(base64.b64decode(shot['data']))
-        # Claim a name in the Ranking tab: the password never stays in the page or its storage,
-        # a claimed name then needs the password, and the password ends the older session.
-        secret='browser pass 42'
-        click(bob,'[role=tab][data-room="__ranking"]'); wait(bob,"!!"+q('.claim form'))
-        wait(bob,text('.ranking')+".includes('No rated games yet')")
-        evaluate(bob,"{const f=document.querySelectorAll('.claim input');f[0].value="+json.dumps(secret)+";f[1].value='different pass';"+q('.claim form')+".requestSubmit()}")
+        # Claim on the sign-in form: bob signs out, enters his name with a new password typed
+        # twice, and keeps his seat. The password never stays in the page or its storage; a
+        # claimed name then needs it, and signing in with it ends the older session.
+        secret='browser pass 42'; second='browser pass 43'
+        def form(session, fields, form_sel):
+            evaluate(session, '{'+''.join(q(k)+'.value='+json.dumps(v)+';' for k,v in fields.items())+q(form_sel)+'.requestSubmit()}')
+        click(bob,'.sign-out'); wait(bob,"!!"+q('.session-form'))
+        assert evaluate(bob, q('.identity')+".value==='browser-bob'")
+        form(bob,{'.password':secret,'.password-again':'different pass'},'.session-form')
         wait(bob,text('.feedback')+".includes('passwords differ')")
-        evaluate(bob,"{const f=document.querySelectorAll('.claim input');f[0].value="+json.dumps(secret)+";f[1].value="+json.dumps(secret)+";"+q('.claim form')+".requestSubmit()}")
-        wait(bob,text('.claim')+".includes('is claimed')")
+        form(bob,{'.password':secret,'.password-again':secret},'.session-form')
+        wait(bob,text('.room-panel[data-room="lobby"] .room-state')+"==='Joined'")
         assert evaluate(bob,text('.identity-label')+".includes('claimed')")
         assert evaluate(bob,"!JSON.stringify(Object.assign({},sessionStorage)).includes("+json.dumps(secret)+") && !document.body.innerHTML.includes("+json.dumps(secret)+")")
+        click(bob,'[role=tab][data-room="__ranking"]'); wait(bob,text('.ranking')+".includes('No rated games yet')")
         carol=tab(); wait(carol,"!!"+q('.session-form'))
-        fill(carol,'.identity','BROWSER-BOB','.session-form')
+        assert evaluate(carol,"!"+q('.manage-name')+".open")
+        form(carol,{'.identity':'BROWSER-BOB'},'.session-form')
         wait(carol,text('.feedback')+".includes('claimed; enter its password')")
-        evaluate(carol,q('.password')+".value='wrong password';"+q('.identity')+".value='browser-bob';"+q('.session-form')+".requestSubmit()")
+        form(carol,{'.identity':'browser-bob','.password':'wrong password'},'.session-form')
         wait(carol,text('.feedback')+".includes('wrong password')")
-        evaluate(carol,q('.password')+".value="+json.dumps(secret)+";"+q('.session-form')+".requestSubmit()")
+        form(carol,{'.password':secret},'.session-form')
         wait(carol,text('.room-panel[data-room="lobby"] .room-state')+"==='Joined'")
         assert evaluate(carol,text('.identity-label')+".startsWith('browser-bob') && !document.body.innerHTML.includes("+json.dumps(secret)+")")
         assert evaluate(bob,"(async()=>{const r=await fetch('./api/list_rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sessionStorage.getItem('goserver:session'),requestId:9})});return (await r.json()).code==='unauthorized'})()")
-        assert not any(secret in line for line in (DATA/'goserver.jsonl').read_text().splitlines()), 'plaintext password in the data file'
+        # change the password, then release the name, from the panel that opens on request
+        click(carol,'.sign-out'); wait(carol,"!!"+q('.session-form'))
+        evaluate(carol,q('.manage-name summary')+".click()"); wait(carol,q('.manage-name')+".open")
+        evaluate(carol,"{const f=document.querySelectorAll('.change-password input');f[0].value="+json.dumps(secret)+";f[1].value="+json.dumps(second)+";f[2].value="+json.dumps(second)+";"+q('.change-password')+".requestSubmit()}")
+        wait(carol,text('.feedback')+".includes('Password changed')")
+        click(carol,'.sign-out'); wait(carol,"!!"+q('.session-form'))
+        evaluate(carol,q('.manage-name summary')+".click()"); wait(carol,q('.manage-name')+".open")
+        evaluate(carol,"{"+q('.release-name input[type=password]')+".value="+json.dumps(second)+";"+q('.release-name')+".requestSubmit()}")
+        wait(carol,text('.feedback')+".includes('Tick the box')")
+        evaluate(carol,"{"+q('.release-name input[type=password]')+".value="+json.dumps(second)+";"+q('.release-name input[type=checkbox]')+".checked=true;"+q('.release-name')+".requestSubmit()}")
+        wait(carol,text('.feedback')+".includes('Released')")
+        form(carol,{'.identity':'browser-bob','.password':'','.password-again':''},'.session-form')
+        wait(carol,text('.room-panel[data-room="lobby"] .room-state')+"==='Joined'")
+        assert evaluate(carol,text('.identity-label')+".includes('guest')")
+        assert not any(secret in line or second in line for line in (DATA/'goserver.jsonl').read_text().splitlines()), 'plaintext password in the data file'
         shot=call('Page.captureScreenshot',{'format':'png','captureBeyondViewport':True},carol)
         (REPORT/'browser-ranking.png').write_bytes(base64.b64decode(shot['data']))
         assert not errors, errors
         source_hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'source').rglob('*') if p.is_file() and 'node_modules' not in p.parts and p.suffix != '' and 'static/app' not in str(p)}
-        report={'status':'passed','checks':['claim a name in the Ranking tab, password required afterwards and ends the older session, password never in page, storage or data file','real make run readiness','named room creation','named challenge creation/open','two-user room and game chat','membership rejection before room entry','literal markup rendering','no displayed session token or placeholder link','room tabs and per-room game tabs','delayed response lands only in its own room tab','no uncaught browser errors'],'source_sha256':source_hashes,'screenshot':'reports/browser/browser.png'}
+        report={'status':'passed','checks':['session-type panel closed until opened, then LeanFM diagram and text from spec/Session.lean','sign out, claim a name with the password typed twice, password required afterwards and ends the older session, change password and release from the closed panel, password never in page, storage or data file','real make run readiness','named room creation','named challenge creation/open','two-user room and game chat','membership rejection before room entry','literal markup rendering','no displayed session token or placeholder link','room tabs and per-room game tabs','delayed response lands only in its own room tab','no uncaught browser errors'],'source_sha256':source_hashes,'screenshot':'reports/browser/browser.png'}
         (REPORT/'browser-validation.json').write_text(json.dumps(report,indent=2)+'\n')
         print('ok: real Chrome room tabs, game tabs, room/challenge/chat flow, isolation, literal text and stale-response checks')
     finally:

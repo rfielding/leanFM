@@ -7,6 +7,11 @@ import {makeGif} from '../game/gif';
 import {beep, soundPrefs} from '../game/sound';
 import {Stone, useCtl} from './common';
 
+// a seat's byo-yomi clock as of the last state: main time, or the periods left of the period length
+function seatClock(gs: any, seat: any) {
+  if (gs.status !== 'playing') return '–';
+  return seat.mainLeftMs > 0 ? fmtClock(seat.mainLeftMs) : seat.periodsLeft + ' × ' + fmtClock(gs.byoyomiMs);
+}
 function fmtClock(ms: number) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
 function Status({g}: {g: GameCtl}) {
@@ -15,10 +20,11 @@ function Status({g}: {g: GameCtl}) {
   const s = cur.state, K = g.K, G = g.G; let L1: React.ReactNode, L2 = '';
   if (cur === g.root) { L1 = 'Empty board'; L2 = K + ' players on ' + G.N + '×' + G.N + ', ko rule ' + (s.koOn ? 'on' : 'off') + '.'; }
   else { const i = cur.info || {}, bits: string[] = [];
-    if (cur.local) bits.push('your variation (not part of the game)');
-    if (i.source === 'deadline') bits.push('deadline expired: board unchanged'); if (i.source === 'person') bits.push('played by ' + g.seatName(cur.player));
+    if (cur.rid) bits.push('review move by ' + cur.author + ', kept for everyone in this game (not part of the game)'); else if (cur.local) bits.push('your variation (not part of the game)');
+    if (i.source === 'deadline') bits.push('clock ran out: board unchanged'); if (i.source === 'person') bits.push('played by ' + g.seatName(cur.player));
     if (i.source === 'bot') bits.push('played by the server bot'); if (i.source === 'autopilot') bits.push('played by autopilot for ' + g.seatName(cur.player));
     if (i.guard) bits.push('played on instead of passing to remove dead stones');
+    if (i.search && i.search.plannedMs) bits.push('thought ' + (i.search.ms / 1000).toFixed(1) + ' s of a planned ' + (i.search.plannedMs / 1000).toFixed(1) + ' s (' + ({settled: 'stopped early: the choice was settled', planned: 'stopped at the plan', limit: 'a close call, stretched to the limit', single: 'only one move'} as Record<string, string>)[i.search.stop] + ')');
     if (i.captured && i.victims) bits.push('captured ' + Object.keys(i.victims).map(v => i.victims[v] + ' ' + PLAYERS[+v].name).join(', '));
     if (i.suicide) bits.push('suicide, lost ' + i.suicide); if (i.resigned) bits.push('resigned'); if (i.source === 'resigned') bits.push('automatic pass after resigning');
     L1 = <span>Move {cur.depth} · <Stone p={cur.player} /> {g.seatName(cur.player)} {g.coord(cur.move)}</span>; L2 = bits.join(' · '); }
@@ -40,8 +46,11 @@ export function PlayBar({g}: {g: GameCtl}) {
   useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(false), 3000); return () => clearTimeout(t); }, [armed]);
   let clock = '–:––', pct = 0, warn = false, idle = true;
   if (gs && gs.status === 'playing') {
-    const seat = gs.seats[gs.toMove - 1], botTurn = seat.controller !== 'person', limit = botTurn ? gs.botMs : gs.turnDeadlineMs, left = gs.remainingMs - (performance.now() - gs.stateAt);
-    const mine = gs.toMove === g.mySeat() && !botTurn; warn = !botTurn && left <= 10000; idle = false; clock = fmtClock(left); pct = Math.min(100, Math.max(0, (1 - left / limit) * 100));
+    // every seat has the same byo-yomi clock: main time, then periods
+    const seat = gs.seats[gs.toMove - 1], botTurn = seat.controller !== 'person', inMain = seat.mainLeftMs > 0;
+    const limit = inMain ? gs.mainTimeMs : gs.byoyomiMs, left = gs.remainingMs - (performance.now() - gs.stateAt);
+    const mine = gs.toMove === g.mySeat() && !botTurn; warn = !botTurn && left <= 10000; idle = false;
+    clock = inMain ? fmtClock(left) : 'byo-yomi ' + fmtClock(left) + ' × ' + seat.periodsLeft; pct = Math.min(100, Math.max(0, (1 - left / limit) * 100));
     if (mine && warn && warned.current !== gs.moveNo) { warned.current = gs.moveNo; beep(880, 140); beep(880, 140, .22); }
     const sec = Math.ceil(left / 1000); if (mine && sec <= 5 && sec > 0 && sec !== lastTick.current) { lastTick.current = sec; beep(1320, 60); }
   }
@@ -55,7 +64,7 @@ export function PlayBar({g}: {g: GameCtl}) {
       <Status g={g} />
       <div className="row">
         {gs && gs.status === 'open' && gs.creator === auth.identity ? <button type="button" className="primary gv-start" onClick={() => void g.act('start_game', {}, 'Game started. Bots took the empty seats.')}>Start game (bots fill empty seats)</button> : null}
-        <button type="button" className="gv-pass" disabled={!myTurn} title="Pass (P)" onClick={() => g.pass()}>Pass</button>
+        <button type="button" className="gv-pass" disabled={!g.canPassHere()} title={myTurn ? 'Pass (P)' : 'Pass in this variation, for the seat to move (P)'} onClick={() => g.pass()}>Pass</button>
         <button type="button" className="gv-resign" disabled={!myTurn} onClick={() => { if (!armed) { setArmed(true); return; } setArmed(false); g.resign(); }}>{armed ? 'Confirm resign' : 'Resign'}</button>
         {playing && me ? <button type="button" className="gv-autopilot" onClick={() => void g.act('set_autopilot', {on: g.myControl() !== 'autopilot'})}>{g.myControl() === 'autopilot' ? 'Take my seat back' : 'Let a bot play for me'}</button> : null}
       </div>
@@ -104,15 +113,15 @@ export function ScoresPanel({g}: {g: GameCtl}) {
   return (
     <>
       <table className="scores"><tbody>
-        <tr>{['Player', 'Terr.', 'Bowl', 'Score', 'Proj.', 'Outlook'].map(t => <th key={t}>{t}</th>)}</tr>
+        <tr>{['Player', 'Terr.', 'Bowl', 'Score', 'Proj.', 'Outlook', 'Clock'].map(t => <th key={t}>{t}</th>)}</tr>
         {Array.from({length: K}, (_, i) => i + 1).map(p => { const seat = gs.seats[p - 1], out = !!(s.out & (1 << p)), toPlay = p === s.toMove && !over;
           return <tr key={p} className={toPlay ? 'tomove' : ''}>
             <td className="name"><Stone p={p} /> {seat.player || PLAYERS[p].name}{seat.controller === 'bot' ? <span className="team">bot</span> : null}{seat.controller === 'autopilot' ? <span className="team">autopilot</span> : null}{out ? <span className="team">resigned</span> : null}{tA ? <span className="team">T{g.teamOf(p)}</span> : null}{toPlay ? <span className="tag">to play</span> : null}</td>
             <td>{sc.terr[p]}</td>
             <td><b>{s.losses[p]}</b><div className="bks">{Array.from({length: K}, (_, j) => j + 1).filter(c => bd[p][c]).map(c => <span key={c} className="bk" title={c === p ? 'lost to own suicide' : 'captured by ' + g.seatName(c)}>{c === p ? 'self' : <Stone p={c} size={14} />}{bd[p][c]}</span>)}</div></td>
-            <td><b>{sc.scores[p]}</b></td><td>{vw ? vw.proj[p - 1].toFixed(1) : '–'}</td><td>{vw ? Math.round(vw.q[p - 1] * 100) + '%' : '–'}</td>
+            <td><b>{sc.scores[p]}</b></td><td>{vw ? vw.proj[p - 1].toFixed(1) : '–'}</td><td>{vw ? Math.round(vw.q[p - 1] * 100) + '%' : '–'}</td><td className="clock-cell">{seatClock(gs, seat)}</td>
           </tr>; })}
-        <tr><td colSpan={6} className="small muted left">{tA ? <>Team totals: {totals.map(t => <span key={t.t} className="teamtotal">T{t.t} {t.seats.map(p => <Stone key={p} p={p} size={16} />)} <b>{t.score}</b></span>)}</> : 'No teams: everyone plays alone.'}</td></tr>
+        <tr><td colSpan={7} className="small muted left">{tA ? <>Team totals: {totals.map(t => <span key={t.t} className="teamtotal">T{t.t} {t.seats.map(p => <Stone key={p} p={p} size={16} />)} <b>{t.score}</b></span>)}</> : 'No teams: everyone plays alone.'}</td></tr>
       </tbody></table>
       <div className="small muted">{!vw ? 'Proj. and Outlook appear for positions a search has weighed: every bot move, or your own analysis.' :
         vw.src === 'here' ? (vw.server ? 'Proj. and Outlook: the server bot\'s search at this position (' : 'Proj. and Outlook: your local search at this position (') + vw.n.toLocaleString() + ' playouts' + (vw.live ? ', running' : '') + ').' :

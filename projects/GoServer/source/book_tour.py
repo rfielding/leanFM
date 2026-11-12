@@ -150,8 +150,12 @@ class Person:
 
     def press(self, key):
         """A real key press, as from the keyboard (CDP key events, not a synthetic DOM event)."""
+        named = {'Home': 36, 'End': 35, 'ArrowLeft': 37, 'ArrowUp': 38, 'ArrowRight': 39, 'ArrowDown': 40}
         for t in ('keyDown', 'keyUp'):
-            self.b.call('Input.dispatchKeyEvent', {'type': t, 'key': key, 'text': key if t == 'keyDown' else '', 'code': 'Key' + key.upper(), 'windowsVirtualKeyCode': ord(key.upper())}, self.s)
+            if key in named:
+                self.b.call('Input.dispatchKeyEvent', {'type': t, 'key': key, 'code': key, 'windowsVirtualKeyCode': named[key]}, self.s)
+            else:
+                self.b.call('Input.dispatchKeyEvent', {'type': t, 'key': key, 'text': key if t == 'keyDown' else '', 'code': 'Key' + key.upper(), 'windowsVirtualKeyCode': ord(key.upper())}, self.s)
 
     def tab(self, name):
         self.click(G + ' [role=tab][data-panel="' + name + '"]')
@@ -217,10 +221,10 @@ def main():
                 ['open the app'], clip={'x': 0, 'y': 0, 'width': WIDTH, 'height': 520})
         sign_in(alice)
         alice.js("document.querySelector('.room-panel:not([hidden]) .challenge-form input[name=name]').value='Evening three-way'")
-        for sel, v in [('.room-panel:not([hidden]) select[name=board]', '9'), ('.room-panel:not([hidden]) select[name=seats]', '3'), ('.room-panel:not([hidden]) select[name=deadline]', '60000'), ('.room-panel:not([hidden]) select[name=bot]', '500')]:
+        for sel, v in [('.room-panel:not([hidden]) select[name=board]', '9'), ('.room-panel:not([hidden]) select[name=seats]', '3'), ('.room-panel:not([hidden]) select[name=main]', '60000'), ('.room-panel:not([hidden]) select[name=periods]', '3'), ('.room-panel:not([hidden]) select[name=period]', '10000')]:
             alice.select(sel, v)
         capture(alice, '02-create-challenge', 'Creating a challenge',
-                'Alice is in the lobby and fills in a challenge: a 9×9 board, three players, a one-minute human deadline and half a second per bot move. The ko rule stays on Auto, which is off for three players.',
+                'Alice is in the lobby and fills in a challenge: a 9×9 board, three players, and a byo-yomi clock of one minute of main time and then three periods of ten seconds, the same for people and bots. The ko rule stays on Auto, which is off for three players.',
                 ['sign in as alice', 'fill in the New challenge form'], clip={'x': 0, 'y': 60, 'width': WIDTH, 'height': 1000})
         alice.js("document.querySelector('.room-panel:not([hidden]) .challenge-form').requestSubmit()")
         alice.wait("!!document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .rrow[data-seat=\"3\"] .plan-ctl')")
@@ -305,7 +309,8 @@ def main():
         alice.wait("(document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .gv-autopilot')||{textContent:''}).textContent.includes('Let a bot play')")
         MY_TURN = "(document.querySelector('" + G + " .status')||{textContent:''}).textContent.includes('your move') && !document.querySelector('" + G + " .gv-pass').disabled"
         pressed_once = False
-        for _ in range(700):  # people pass; the bot plays until it is content to pass too
+        ends_by = time.monotonic() + 600  # people pass; the bot plays on its byo-yomi clock until it passes too
+        while time.monotonic() < ends_by:
             if alice.js("GameViewDebug.status()") == 'finished':
                 break
             for p in (alice, bob):
@@ -314,18 +319,72 @@ def main():
                         alice.js("document.querySelector('" + G + " [role=tab][aria-selected=true]').focus()")
                         alice.press('p')
                         if not pressed_once:
-                            alice.wait("!(" + MY_TURN + ")", 8)
-                            pressed_once = True
+                            try:  # a board update may race the key press; the loop presses again
+                                alice.wait("!(" + MY_TURN + ")", 8)
+                                pressed_once = True
+                            except RuntimeError:
+                                pass
                     else:
                         p.click(G + ' .gv-pass')
             time.sleep(.4)
-        alice.wait("GameViewDebug.status()==='finished'", 60)
+        alice.wait("GameViewDebug.status()==='finished'", 120)
         alice.wait("!!document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) [role=tab][data-panel=\"chat\"] .badge')", 10)  # unread announcement on the Chat tab
         alice.tab('chat')
         alice.wait("document.querySelector('.room-panel:not([hidden]) .game-panel:not([hidden]) .game-chat').textContent.includes('Game over')", 10)
         capture(alice, '08-game-over', 'The result',
                 'When every remaining player has passed in a row the game ends. The Chat tab lights up with an unread count; the server announces team scores and the winners in the game conversation. Everyone, players included, can now branch and analyse any position.',
                 ['alice passes with the P key, bob with the Pass button, until the bot also passes'], scroll_to=G)
+        # After the end every player's moves are open to analysis: step back, pass with P for
+        # whoever was to move there, then let the computer choose the next seat's move with C.
+        alice.js("document.activeElement && document.activeElement.blur()")
+        alice.press('Home')
+        alice.wait("(document.querySelector('" + G + " .status')||{textContent:''}).textContent.includes('Empty board')")
+        alice.press('ArrowRight'); alice.press('ArrowRight')
+        alice.wait("!!document.querySelector('" + G + " .gv-pass:not([disabled])')")
+        alice.press('p')
+        alice.wait("(document.querySelector('" + G + " .status')||{textContent:''}).textContent.includes('not part of the game') && document.querySelector('" + G + " .status').textContent.includes('Move 3')")
+        alice.press('c')
+        alice.wait("(document.querySelector('" + G + " .status')||{textContent:''}).textContent.includes('Move 4') && document.querySelector('" + G + " .status').textContent.includes('not part of the game')", 20)
+        # The moves after the finish are kept for everyone in the game; a remark sticks to its position.
+        alice.wait("GameViewDebug.reviewCount() >= 2 && GameViewDebug.curRef().startsWith('r')", 10)
+        alice.tab('chat')
+        alice.wait("!!document.querySelector('" + G + " .game-chat-form fieldset:not([disabled])')")
+        alice.js("document.querySelector('" + G + " .game-chat-form input').value='this was the losing move';document.querySelector('" + G + " .game-chat-form').requestSubmit()")
+        alice.wait("Array.from(document.querySelectorAll('" + G + " .game-chat .chat-item')).some(i => i.textContent.includes('this was the losing move') && i.textContent.includes('here'))")
+        capture(alice, '08a-review-chat', 'Reviewing together',
+                'After the game alice steps back to move 2, passes for the seat to move there and lets the computer pick the next move. Both moves are kept on the server for everyone in the game, and her remark is pinned to the position she was looking at: the Chat tab shows the remarks along the line on the board, so stepping back hides it again and anyone who walks into this variation sees it.',
+                ['alice: Home, then → twice', 'alice: P, then C', 'alice: write a remark in Chat'], scroll_to=G)
+        here = alice.js("GameViewDebug.curRef()")
+        alice.js("document.activeElement && document.activeElement.blur()")
+        alice.press('Home')
+        alice.wait("!Array.from(document.querySelectorAll('" + G + " .game-chat .chat-item')).some(i => i.textContent.includes('this was the losing move'))")
+        bob.b.call('Page.reload', {}, bob.s)
+        # tabs survive the reload; the room opens on its Lobby, so bob opens the game's tab again
+        bob.wait("!!document.querySelector('.room-panel:not([hidden]) .game-tabs [role=tab]:not([data-game=\"__lobby\"])')", 20)
+        bob.js("document.querySelector('.room-panel:not([hidden]) .game-tabs [role=tab]:not([data-game=\"__lobby\"])').click()")
+        bob.wait("window.GameViewDebug && GameViewDebug.reviewCount() >= 2", 20)
+        bob.js("GameViewDebug.goRef(" + json.dumps(here) + ")")
+        bob.tab('chat')
+        bob.wait("Array.from(document.querySelectorAll('" + G + " .game-chat .chat-item')).some(i => i.textContent.includes('this was the losing move'))", 20)
+        # ↑/↓ choose among the next moves when there are several (the game's move and the review's)
+        alice.js("document.activeElement && document.activeElement.blur()")
+        alice.press('Home')
+        for _ in range(12):  # walk the game forward to the first position with two next moves
+            time.sleep(.15)
+            if alice.js("document.querySelectorAll('" + G + " .chips .chip').length") >= 2:
+                break
+            alice.press('ArrowRight')
+        alice.wait("document.querySelectorAll('" + G + " .chips .chip').length >= 2")
+        depth = alice.js("+((document.querySelector('" + G + " .status').textContent.match(/Move (\\d+)/)||[0,0])[1])")
+        first = alice.js("document.querySelector('" + G + " .chips .chip.main').textContent.trim()[0]")
+        alice.press('ArrowDown')
+        alice.wait("document.querySelector('" + G + " .chips .chip.main').textContent.trim()[0] !== " + json.dumps(first))
+        chosen = alice.js("document.querySelector('" + G + " .chips .chip.main').textContent.trim()")
+        alice.press('ArrowRight')
+        alice.wait("(document.querySelector('" + G + " .status')||{textContent:''}).textContent.includes('Move " + str(depth + 1) + "')")
+        alice.press('ArrowLeft'); alice.press('ArrowUp')
+        alice.wait("document.querySelector('" + G + " .chips .chip.main').textContent.trim()[0] === " + json.dumps(first))
+        alice.press('l')
         # rooms and games are tabs: open a second room, then come back to the game's room
         alice.click('[role=tab][data-room="__rooms"]')
         alice.wait("!!document.querySelector('.room-form')")

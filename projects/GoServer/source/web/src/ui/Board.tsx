@@ -41,8 +41,8 @@ export function NavBar({g}: {g: GameCtl}) {
         <button className="sq nav-back" type="button" title="Back (←)" disabled={none || !p} onClick={() => g.back()}>◀</button>
         <button className="sq nav-fwd" type="button" title="Forward on the chosen line (→)" disabled={none || !cur.children.length} onClick={() => g.fwd()}>▶</button>
         <button className="sq nav-end" type="button" title="End of line (End)" disabled={none || !cur.children.length} onClick={() => g.end()}>▶|</button>
-        <button className="sq nav-up" type="button" title="Previous variation (↑)" disabled={none || !p || i <= 0} onClick={() => g.sib(-1)}>▲</button>
-        <button className="sq nav-down" type="button" title="Next variation (↓)" disabled={none || !p || i >= p.children.length - 1} onClick={() => g.sib(1)}>▼</button>
+        <button className="sq nav-up" type="button" title={cur && cur.children.length > 1 ? 'Choose the previous next move (↑)' : 'Previous variation (↑)'} disabled={none || !g.canUpDown(-1)} onClick={() => g.upDown(-1)}>▲</button>
+        <button className="sq nav-down" type="button" title={cur && cur.children.length > 1 ? 'Choose the next next move (↓)' : 'Next variation (↓)'} disabled={none || !g.canUpDown(1)} onClick={() => g.upDown(1)}>▼</button>
         <button className="sq live nav-live" type="button" title="Back to the live game (L)" disabled={none || cur === g.live} onClick={() => g.toLive()}>Live</button>
       </div>
       <div className="chips"><span className="lab">Next</span>

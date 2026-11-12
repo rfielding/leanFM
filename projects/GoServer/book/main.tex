@@ -88,11 +88,22 @@ the previous name, and says why.
 \section{Bounds}
 Names are 1--128 Unicode characters, trimmed; room names are unique and
 case-sensitive and are never interpreted as paths or markup. Chat bodies are
-1--4000 characters, and each room or game keeps its latest 100 entries. There
+1--4000 characters; each room keeps its latest 100 entries and each game its
+latest 500. There
 are at most 16 rooms including the lobby and 64 challenges in total. Each
 session has a finite budget of admitted mutations; once it is spent, new
 mutations are rejected while already accepted results stay replayable, so a
 retried request never applies twice.
+
+\section{Chat follows the tree}
+Every game chat message is pinned to the position the sender was looking at: a
+position of the game (at most the moves played so far) or, after the finish, a
+node of the review tree. Server notices are pinned to the position they report
+on. The Chat tab shows the remarks pinned to the positions on the line from the
+empty board to the position on the board, in the order of that line, each tagged
+with its move (or \emph{here}). So a player can step back four moves and write
+``this was the losing move'': stepping back further hides it, and anyone who
+later walks to that position, along the game or into a variation, sees it.
 
 \section{Correlation and replay}
 Every request carries a request ID unique per session and task, and receives
@@ -135,17 +146,21 @@ and seat, so a hash collision can never reject a legal move. Passes, timeouts
 and resignations are never rejected for repeating a position.
 
 \section{Clocks and ending}
-A person's turn has a deadline (5 seconds to 64 minutes, default one minute); a
-bot's search has its own budget (0.25 to 16 seconds, default 1 second). An
-unanswered turn becomes a \emph{timeout}: it passes the turn but neither ends
-nor resets a round of passes. A move arriving after its deadline is rejected
-and the timeout wins. The game ends when every remaining seat has passed since
+Every seat, person or bot, plays on the same Japanese byo-yomi clock: main time
+(1, 5, 10, 20, 30 or 60 minutes; default 5), then a number of periods (1, 3, 5
+or 10; default 5) of equal length (10, 20, 30 or 60 seconds; default 30). A turn
+may use what is left of the main time and then the periods. A move made within
+a period keeps that period; every period run over is used up. When the last
+period runs over, the turn is a \emph{timeout}: it passes the turn but neither
+ends nor resets a round of passes, and the seat keeps one period for its later
+turns. A move arriving after the seat's clock ran out is rejected and the
+timeout wins. Switching autopilot on or off never touches the clock. The game ends when every remaining seat has passed since
 the last stone, after one full round of timeouts (scored as it stands), or at
 \(3N^2\) moves on an \(N\times N\) board. A resigned seat passes automatically
 and cannot win. The final scores and winners are announced in game chat.
 
 \section{Challenge parameters}
-Board size (default 11), seats 2--8 (default 4), the two clocks, the ko rule,
+Board size (default 11), seats 2--8 (default 4), the byo-yomi clock, the ko rule,
 and the bot settings of the Lab: exploration constant 0.5, 0.7 (default), 1.0
 or 1.4; reward \emph{margin} (a soft margin against the best rival, the
 default), \emph{win} or \emph{rank}; and margin softness 2, 4 (default) or 8
@@ -167,18 +182,31 @@ Bots run Monte Carlo tree search on the server, for their team's combined
 score. A bot turn is dispatched to a bounded pool of search workers (at most
 \(\min(8, \textit{CPUs}/2)\) at once), each with a time budget and a 200,000-node
 cap, and the search never holds the game lock. A result is applied only to the
-game, seat and turn revision it was dispatched for, and only before that turn's
-deadline; a late result is discarded (Figure~\ref{fig:bot_turn}). No client can
-submit a bot's move, and a bot never moves for a person's seat. Each bot move
-publishes its search: playouts, time, the top candidates with visit counts, the
-mover's expected reward, and every seat's projected final score and outlook.
+game, seat and turn revision it was dispatched for, and only before the seat's
+clock runs out; a late result is discarded (Figure~\ref{fig:bot_turn}). No
+client can submit a bot's move, and a bot never moves for a person's seat.
+
+A bot plays on its seat's clock and manages it so that it has plenty of time
+but does not waste it on easy moves. In main time it plans a share of what is
+left, divided by the moves it still expects to play (at least eight, and the
+empty points over the seats); in byo-yomi it plans half a period. It may stretch
+a close call to four shares, or into most of one period once main time runs
+short, but it never plans to use up a period. While it searches it checks how
+fast the playouts come: once the second-best move could not overtake the best
+in the time it has left, the choice is \emph{settled} and it stops at once; at
+the planned time it stops unless the top two moves are close (the second has at
+least 70\% of the best's visits); a move with one candidate takes no time.
+Each bot move publishes its search: playouts, time, the time it planned and why
+it stopped, the top candidates with visit counts, the mover's expected reward,
+and every seat's projected final score and outlook. The status line says, for
+example, ``thought 2.2 s of a planned 2.2 s (stopped at the plan)''.
 
 \section{Autopilot}
 A seated person may switch autopilot on, letting a server bot play their seat
-with the bot clock and published search, and switch it off at any time. The
-seat, team and name stay theirs. Switching off during their own turn discards
-the pending bot result and gives them the rest of the human deadline, measured
-from the start of the turn.
+on the seat's own clock with published search, and switch it off at any time.
+The seat, team and name stay theirs. Switching off during their own turn
+discards the pending bot result and leaves them whatever the seat's clock still
+holds for that turn; neither switch adds or removes time.
 
 \section{Team merges}
 During play a seated person may propose merging their team with another team
@@ -192,23 +220,39 @@ combined score (Figure~\ref{fig:team_merge}).
 % ---------------------------------------------------------------------------
 \chapter{Claimed names and ranking}
 \label{ch:claims}
-\section{Claiming a name}
-Anyone can enter any free name. To keep it, the person signed in under that
-name opens the Ranking tab and sets a password (8 to 128 characters, typed
-twice). From then on the server gives a session for the name only with that
-password; signing in with it ends any older session for the name, and the person
-keeps their rooms, games and seats, because those belong to the name. Claims
-ignore letter case and surrounding spaces, so \texttt{Alice} and
-\texttt{alice} are one name, and a claim is refused while someone else is
-signed in under a case variant. Names beginning \texttt{bot-} belong to bots
-and nobody can sign in with one.
+\section{The sign-in form}
+Everything about a name happens on the sign-in form, and the form reads what you
+filled in:
+\begin{itemize}
+  \item \textbf{A name alone}: you play as a guest under that name, as long as
+  nobody has claimed it and nobody else is signed in with it.
+  \item \textbf{A name and one password}: you sign in to your claimed name. Any
+  older session for the name ends; your rooms, games and seats stay, because they
+  belong to the name.
+  \item \textbf{A name and the same new password twice}: you claim the name and
+  are signed in. This works only if nobody has claimed it and nobody is signed in
+  with it as a guest. If you were that guest, press \emph{Sign out} first; your
+  seats come with you.
+\end{itemize}
+Below the form, \emph{Manage a claimed name} opens a panel that is closed by
+default. \emph{Change password} takes the current password once and the new one
+twice; it signs out every other session for the name. \emph{Release name} takes
+the password and a ticked confirmation; the name becomes free for anyone and
+leaves the ranking. Its rated games keep counting for the other players, but a
+later claim of the same name starts afresh, because each claim is a different
+player to the rating.
+
+Claims ignore letter case and surrounding spaces, so \texttt{Rob} and
+\texttt{rob} are one name. Names beginning \texttt{bot-} belong to bots and
+nobody can sign in with one.
 
 The server stores a salted PBKDF2-SHA256 hash (600{,}000 rounds), never the
 password. After five wrong passwords in a row for one name, each further
-attempt waits twice as long as the last (2 seconds, then 4, up to 15 minutes),
-and only one attempt per name is checked at a time; at most two hashes are
-computed at once. There is no password reset: a forgotten password means a new
-name.
+attempt (to sign in, change the password or release the name) waits twice as
+long as the last (2 seconds, then 4, up to 15 minutes), and only one attempt per
+name is checked at a time; at most two hashes are computed at once. A name
+changes its password at most once a minute. There is no password reset: a
+forgotten password means a new name.
 
 \section{Which games count}
 A finished game is \emph{rated} when seats on at least two different teams are
@@ -250,7 +294,7 @@ line, flushed to disk before the claim is acknowledged. On start the file is
 replayed: a line cut off by a crash is dropped, and any other damaged line stops
 the start with its line number rather than silently losing history. The folder
 is private to the user (mode 0700, file 0600), symlinks are refused, and no web
-route reads it. Up to 1000 claims and 100{,}000 rated games are kept; beyond
+route reads it. Up to 1000 claims at once, 20{,}000 account records (claims, password changes and releases) and 100{,}000 rated games are kept; beyond
 that a game says in its chat that it was not added. Rooms, games, chat and
 sessions still reset on restart.
 
@@ -265,29 +309,50 @@ The browser reproduces the Lab against server state:
   turn, there is no preview and the pointer shows that a click would be refused;
   \item player colours drawn as stones on a small wood tile, so a black stone
   never reads as a hollow white ring on the dark page;
-  \item an always-visible play bar (whose turn it is, the clock, Pass, Resign,
+  \item an always-visible play bar (whose turn it is, the clock showing main
+  time or ``byo-yomi 0:23 \(\times\) 3'', Pass, Resign,
   autopilot) above tabs for Scores, Search, Seats, Chat and GIF; the Chat tab
   counts unread messages and the Seats tab flags a merge awaiting the viewer's
   answer;
-  \item navigation with Home, Back, Forward, End and previous/next variation,
-  by buttons and by the arrow, Home and End keys; a variation tree and next-move
-  chips;
+  \item navigation with Home, Back, Forward and End, by buttons and by the
+  arrow, Home and End keys; where a position has two or more next moves
+  (labelled A, B, \ldots\ on the board and in the next-move chips), up and down
+  choose which one Forward follows, without moving; elsewhere they switch to the
+  previous or next sibling variation; a variation tree;
   \item a \emph{Search at this position} panel listing candidate moves with
   visit share and reward, from the bot's published search or the viewer's own;
-  \item per seat: Territory, Bowl, Score, Proj.\ (projected final score) and
-  Outlook (expected reward), and team totals;
+  \item per seat: Territory, Bowl, Score, Proj.\ (projected final score),
+  Outlook (expected reward) and Clock (main time left, or periods left), and
+  team totals;
   \item a clickable projected-score timeline along the viewed line;
   \item pending merge proposals with who has accepted and who must still answer;
   \item GIF export of the viewed line, and stone, capture and last-ten-seconds
   sounds with a toggle;
   \item live following while at the latest move, otherwise a notice that new
-  moves arrived.
+  moves arrived;
+  \item under the board, a \emph{Session type of GoServer} panel that stays
+  closed until opened: the sequence diagram LeanFM draws from
+  \path{spec/Session.lean}, the session-type text it was drawn from, and what
+  the picture answers (question, source, reducer, unit and boundary).
 \end{itemize}
-Variations and local searches run in the viewer's browser with the Lab engine
-on a copy of the position. They are never sent to the server, never change the
-game, and vanish when the page closes. Watchers may branch and search at any
+The panel's files are generated by \path{spec/SessionPanel.lean} with LeanFM's
+own renderer, never drawn by hand; after a change to \path{spec/Session.lean},
+run \texttt{lake env lean --run projects/GoServer/spec/SessionPanel.lean} from
+the LeanFM root, or \texttt{TestSessionPanelMatchesTheSpec} fails.
+During play, variations and local searches run in the viewer's browser with
+the Lab engine on a copy of the position. They are never sent to the server,
+never change the game, and vanish when the page closes. Once the game has
+finished, every variation move anyone in the game plays becomes part of a shared
+\emph{review tree}: the server checks it against the rules from the position it
+follows, keeps it for as long as the game exists, and every game member sees it
+appear in their own tree; reloading the page loses nothing. The same move after
+the same position is one node. The review never changes the game, its result or
+the ranking, and local searches still stay in the browser. Watchers may branch and search at any
 time; a person seated in a game in play may browse the actual moves, and may
-branch and search once the game has finished. That last rule is a fairness
+branch and search once the game has finished. Wherever analysis is open, the viewer plays
+for whichever seat is to move in the position on screen: a click on a point, a
+pass with \texttt{P} or the Pass button, or the computer's choice with
+\texttt{C}; each becomes a variation. That last rule is a fairness
 convention of the provided browser, not a security boundary: a public position
 can always be copied into another tool. The page is dark-only, and its text
 is always light on a dark background: highlighted buttons and tags use yellow
@@ -328,8 +393,26 @@ test; \path{source/traceability.json} lists them in full.
   \item \textbf{Two transitions for one turn} (move, bot result, timeout,
   auto-pass): a turn sequence number under the lock and the replay cache
   (\texttt{TestTurnsNeverEndTwice}).
-  \item \textbf{A move accepted after its deadline}: the deadline is rechecked
-  on arrival and the timeout applied first (\texttt{TestLateMoveLosesToTheDeadline}).
+  \item \textbf{A move accepted after its deadline}: the seat's clock is
+  rechecked on arrival and the timeout applied first
+  (\texttt{TestLateMoveLosesToTheDeadline}).
+  \item \textbf{A clock that cheats}: periods used up only when run over, one
+  timer per turn at the clock's end, autopilot switches that never touch it, a
+  bot plan that never reaches the end of a period, searches cancelled at
+  shutdown (\texttt{TestByoyomiChargesMainTimeThenPeriods},
+  \texttt{TestMovesAreChargedAndAutopilotLeavesTheClock},
+  \texttt{TestBotPlanNeverUsesUpAPeriod}, \texttt{TestSearchStopsEarlyOnSettledMoves}).
+  \item \textbf{A review move that changes the game, or that should not
+  exist}: review moves only after the finish, only by game members, only after
+  existing positions, checked by replaying the rules, capped at 2000 per game,
+  kept apart from the record (\texttt{TestReviewTreeAfterTheFinish}).
+  \item \textbf{A remark pinned to a position that does not exist}: the
+  server resolves every pin and falls back to the latest actual position
+  (\texttt{TestReviewTreeAfterTheFinish}; the usage tour checks the Chat tab
+  follows the line and survives a reload).
+  \item \textbf{A session-type picture that is stale or hand-drawn}: generated
+  from the spec by LeanFM, checked against it, shown as an image
+  (\texttt{TestSessionPanelMatchesTheSpec}, \texttt{browser\_check.py}).
   \item \textbf{A stale or misdirected bot result}: results bound to game, seat
   and turn revision (\texttt{TestBotNeverMovesForAHuman},
   \texttt{TestAllBotGamePlaysToTheEnd}).
@@ -355,12 +438,12 @@ test; \path{source/traceability.json} lists them in full.
   hovers an empty and an occupied point in Chrome).
   \item \textbf{A claimed name used without its password}, including case
   variants and bot names: claim lookup by lower-cased name, constant-time hash
-  comparison, the per-name doubling delay (\texttt{TestClaimNameAndSignIn},
+  comparison, the per-name doubling delay (\texttt{TestClaimFromTheSignInForm},
   \texttt{TestWrongPasswordsAreThrottled}, \texttt{TestClaimSignInAndRankingOverHTTP},
   \texttt{browser\_check.py}).
   \item \textbf{A password kept or shown}: only a salted hash is stored; the
   claim never enters the replay cache; responses, the page, its storage and the
-  data file are checked for it (\texttt{TestClaimNameAndSignIn},
+  data file are checked for it (\texttt{TestClaimFromTheSignInForm},
   \texttt{TestDataFileIsDurableAndRefusesDamage}, \texttt{browser\_check.py});
   PBKDF2 is checked against RFC~7914 (\texttt{TestPBKDF2MatchesRFC7914Vector}).
   \item \textbf{A rating from a game that should not count}, or a game counted
@@ -368,10 +451,17 @@ test; \path{source/traceability.json} lists them in full.
   flag, random result identities, exact integer weights
   (\texttt{TestFinishedGamesFeedTheRanking}, \texttt{TestFitMatchesIndependentNewtonFit},
   checked against an independent Newton's-method fit).
+  \item \textbf{A password changed or a name released without the current
+  password}, or a released name's games passing to its next owner: the sign-in
+  check and throttle, ending every session for the name, claim ids in the fit
+  (\texttt{TestChangePasswordNeedsTheCurrentOne},
+  \texttt{TestReleaseNameNeedsThePasswordAndFreesTheName},
+  \texttt{TestReleasedClaimLeavesTheRankingAndIsNotInherited},
+  \texttt{TestChangePasswordAndReleaseOverHTTP}, \texttt{browser\_check.py}).
   \item \textbf{A claim acknowledged before it is on disk, or a damaged or
   escaping data file}: write and flush before acknowledging, torn-tail
   truncation, refusal of other damage and of symlinks
-  (\texttt{TestClaimIsNotAcknowledgedUntilDurable},
+  (\texttt{TestClaimAndChangeAreNotAcknowledgedUntilDurable},
   \texttt{TestDataFileIsDurableAndRefusesDamage}, \texttt{TestDataPathRefusesSymlinksAndEscapes}).
   \item \textbf{A game that never ends}: passes, the timeout round and the
   \(3N^2\) cap (\texttt{TestPassesEndTheGame},
@@ -437,8 +527,8 @@ its evidence under \path{reports/}.
   \item Handicaps and tournaments.
   \item Persistence of rooms, games and chat across restarts, and SGF export of
   game records (claims and rated results already persist).
-  \item Password change and recovery; names that look alike in other scripts
-  (homoglyphs) are not treated as the same name.
+  \item Password recovery; names that look alike in other scripts (homoglyphs)
+  are not treated as the same name.
   \item Rating uncertainty is not shown; a player with few games simply stays
   near 1500.
   \item Push transport: the browser polls (every 0.5 seconds while playing).

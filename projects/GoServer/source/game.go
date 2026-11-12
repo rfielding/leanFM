@@ -26,18 +26,12 @@ const (
 	CtlPerson    = "person"
 	CtlAutopilot = "autopilot" // view only: a person's seat played by a bot
 
-	DefaultBoardSize      = 11
-	DefaultSeats          = 4
-	DefaultTurnDeadlineMS = 60000
-	DefaultBotMS          = 1000
-	DefaultExploreMilli   = 700
-	DefaultRewardMode     = "margin"
-	DefaultSoftness       = 4
-	MinTurnDeadlineMS     = 5000
-	MaxTurnDeadlineMS     = 3840000
-	MinBotMS              = 250
-	MaxBotMS              = 16000
-	MaxMoveRecords        = 3 * 19 * 19
+	DefaultBoardSize    = 11
+	DefaultSeats        = 4
+	DefaultExploreMilli = 700
+	DefaultRewardMode   = "margin"
+	DefaultSoftness     = 4
+	MaxMoveRecords      = 3 * 19 * 19
 )
 
 var allowedExplore = map[uint32]bool{500: true, 700: true, 1000: true, 1400: true}
@@ -160,7 +154,9 @@ type GetGameState struct {
 	SessionID string `json:"sessionId"`
 	GameID    string `json:"gameId"`
 	SinceMove uint32 `json:"sinceMove"`
-	RequestID uint64 `json:"requestId"`
+	// SinceReview asks only for review nodes from this index on
+	SinceReview uint32 `json:"sinceReview"`
+	RequestID   uint64 `json:"requestId"`
 }
 type SeatView struct {
 	Seat       uint32   `json:"seat"`
@@ -172,6 +168,9 @@ type SeatView struct {
 	Score      int32    `json:"score"`
 	Resigned   bool     `json:"resigned"`
 	LossesBy   []uint32 `json:"lossesBy"` // index i: own stones removed by seat i+1 (own index = suicide)
+	// the seat's byo-yomi clock at the start of the current turn (for the seat to move, see GameState.RemainingMS)
+	MainLeftMS  uint64 `json:"mainLeftMs"`
+	PeriodsLeft uint32 `json:"periodsLeft"`
 }
 type TeamView struct {
 	Team      uint32   `json:"team"`
@@ -204,6 +203,8 @@ type SearchSummary struct {
 	RootProjMilli       []int32         `json:"rootProjMilli"`
 	RootOutlookPermille []int32         `json:"rootOutlookPermille"`
 	Guard               bool            `json:"guard"`
+	Stop                string          `json:"stop"` // settled, planned, limit or single
+	PlannedMS           uint32          `json:"plannedMs"`
 }
 type MoveRecord struct {
 	MoveNo   uint32         `json:"moveNo"`
@@ -224,11 +225,14 @@ type GameState struct {
 	Creator        string       `json:"creator"`
 	BoardSize      uint32       `json:"boardSize"`
 	KoOn           bool         `json:"koOn"`
-	TurnDeadlineMS uint64       `json:"turnDeadlineMs"`
-	BotMS          uint64       `json:"botMs"`
+	MainTimeMS     uint64       `json:"mainTimeMs"`
+	ByoyomiPeriods uint32       `json:"byoyomiPeriods"`
+	ByoyomiMS      uint64       `json:"byoyomiMs"`
 	MoveNo         uint32       `json:"moveNo"`
 	ToMove         uint32       `json:"toMove"`
 	RemainingMS    uint64       `json:"remainingMs"`
+	Review         []ReviewNode `json:"review"`
+	ReviewCount    uint32       `json:"reviewCount"`
 	Cells          []int32      `json:"cells"`
 	Owner          []int32      `json:"owner"`
 	Seats          []SeatView   `json:"seats"`
@@ -252,6 +256,9 @@ type seat struct {
 	// everAutopilot: the seat switched to autopilot at some point, so it is not rated
 	everAutopilot bool
 	team          int
+	// the byo-yomi clock, charged at the end of each of the seat's turns
+	mainLeft    time.Duration
+	periodsLeft int
 }
 
 func (st *seat) botControlled() bool { return st.controller == CtlBot || st.autopilot }
@@ -299,19 +306,18 @@ func normalizeGameParams(r CreateGame) (cfg gameConfig, code string) {
 	if cfg.seats < 2 || cfg.seats > MaxPlayers {
 		return cfg, "invalid_seats"
 	}
-	cfg.deadline = r.TurnDeadlineMS
-	if cfg.deadline == 0 {
-		cfg.deadline = DefaultTurnDeadlineMS
+	cfg.mainMs, cfg.periods, cfg.periodMs = r.MainTimeMS, r.ByoyomiPeriods, r.ByoyomiMS
+	if cfg.mainMs == 0 {
+		cfg.mainMs = DefaultMainTimeMS
 	}
-	if cfg.deadline < MinTurnDeadlineMS || cfg.deadline > MaxTurnDeadlineMS {
-		return cfg, "invalid_deadline"
+	if cfg.periods == 0 {
+		cfg.periods = DefaultByoyomiPeriods
 	}
-	cfg.bot = r.BotMS
-	if cfg.bot == 0 {
-		cfg.bot = DefaultBotMS
+	if cfg.periodMs == 0 {
+		cfg.periodMs = DefaultByoyomiMS
 	}
-	if cfg.bot < MinBotMS || cfg.bot > MaxBotMS {
-		return cfg, "invalid_bot_time"
+	if !allowedMainTime[cfg.mainMs] || !allowedPeriods[cfg.periods] || !allowedPeriodMS[cfg.periodMs] {
+		return cfg, "invalid_clock"
 	}
 	cfg.ko = int(r.KoRule)
 	if cfg.ko < KoAuto || cfg.ko > KoOn {
@@ -369,25 +375,12 @@ func normalizeGameParams(r CreateGame) (cfg gameConfig, code string) {
 
 type gameConfig struct {
 	board, seats, ko int
-	deadline, bot    uint64
+	mainMs, periodMs uint64
+	periods          uint32
 	explore          uint32
 	mode             string
 	softness         uint32
 	plan             []seat
-}
-
-func (s *ServerCore) humanLimit(g *game) time.Duration {
-	if s.turnLimit > 0 {
-		return s.turnLimit
-	}
-	return time.Duration(g.turnDeadlineMs) * time.Millisecond
-}
-
-func (s *ServerCore) botBudget(g *game) time.Duration {
-	if s.botBudgetOverride > 0 {
-		return s.botBudgetOverride
-	}
-	return time.Duration(g.botMs) * time.Millisecond
 }
 
 func koEnabled(rule, seats int) bool {
@@ -517,6 +510,10 @@ func (s *ServerCore) startGame(r StartGame) any {
 				g.seatInfo[i] = seat{player: botName(i + 1), controller: CtlBot, team: g.seatInfo[i].team}
 			}
 		}
+		c := s.clockOf(g)
+		for i := range g.seatInfo {
+			g.seatInfo[i].mainLeft, g.seatInfo[i].periodsLeft = c.main, c.periods
+		}
 		geom := GeomFor(g.boardSize)
 		st := NewState(geom, g.seats, koEnabled(g.koRule, g.seats))
 		g.play = &play{geom: geom, state: st, history: map[uint64][][]byte{}, startedAt: s.clock()}
@@ -553,8 +550,8 @@ func (s *ServerCore) setAutopilot(r SetAutopilot) any {
 			p := g.play
 			if p.state.ToMove == n && !p.state.IsOut(n) {
 				// The switch takes effect on the current turn: discard any pending
-				// bot result and restart the controller's clock; the person's
-				// deadline is always measured from the start of the turn.
+				// bot result and rearm the controller at the same clock instant;
+				// the seat's clock always counts from the start of the turn.
 				p.turnSeq++
 				if p.timer != nil {
 					p.timer.Stop()
@@ -589,8 +586,8 @@ func (s *ServerCore) playMove(r PlayMove) any {
 		if int(r.MoveNo) != st.MoveNo {
 			return reject(r.RequestID, "stale_move", "play_move")
 		}
-		if s.clock().Sub(p.turnBegan) > s.humanLimit(g) {
-			// The deadline has passed but its timer has not fired yet: the timeout wins.
+		if s.clock().Sub(p.turnBegan) >= s.clockOf(g).limit(seatNow) {
+			// The clock ran out but its timer has not fired yet: the timeout wins.
 			s.applyLocked(g, MoveTimeout, "deadline", nil)
 			return reject(r.RequestID, "deadline_passed", "play_move")
 		}
@@ -671,6 +668,13 @@ func (s *ServerCore) applyLocked(g *game, m int, source string, search *SearchSu
 	st := p.state
 	n := st.ToMove
 	rec := MoveRecord{MoveNo: uint32(st.MoveNo), Seat: uint32(n), Source: source, Search: search, Victims: make([]uint32, g.seats)}
+	c, ct := s.clockOf(g), &g.seatInfo[n-1]
+	switch {
+	case m == MoveTimeout:
+		c.timedOut(ct)
+	case source != "resigned":
+		c.charge(ct, s.clock().Sub(p.turnBegan))
+	}
 	switch {
 	case m >= 0:
 		x, y := p.geom.XY(m)
@@ -721,9 +725,9 @@ func (s *ServerCore) beginTurnLocked(g *game) {
 	s.armTurnLocked(g, true)
 }
 
-// armTurnLocked starts the timer and, for bot-controlled seats, a bot search for
-// the current turn revision. fresh is false when an autopilot switch rearms the
-// same turn: a person's deadline then still counts from turnBegan.
+// armTurnLocked starts the timer at the instant the seat's clock runs out and, for
+// bot-controlled seats, a bot search for the current turn revision. An autopilot switch
+// rearms the same turn (fresh false): the clock still counts from turnBegan.
 func (s *ServerCore) armTurnLocked(g *game, fresh bool) {
 	if s.closed {
 		return
@@ -732,27 +736,29 @@ func (s *ServerCore) armTurnLocked(g *game, fresh bool) {
 	seq := p.turnSeq
 	gameID := g.id
 	n := p.state.ToMove
-	var wait time.Duration
-	if g.seatInfo[n-1].botControlled() {
-		budget := s.botBudget(g)
+	c, st := s.clockOf(g), &g.seatInfo[n-1]
+	elapsed := s.clock().Sub(p.turnBegan)
+	wait := c.limit(st) - elapsed
+	if wait <= 0 {
+		s.applyLocked(g, MoveTimeout, "deadline", nil)
+		return
+	}
+	if st.botControlled() {
+		empty := 0
+		for _, pt := range p.geom.pts {
+			if p.state.Cells[pt] == 0 {
+				empty++
+			}
+		}
+		planned, hard := s.botBudget(botPlan(c, st, elapsed, empty, g.seats))
 		p.botStart = s.clock()
-		wait = budget*2 + time.Second
-		job := botJob{gameID: gameID, seq: seq, geom: p.geom, state: p.state.Clone(), budget: budget,
+		job := botJob{gameID: gameID, seq: seq, geom: p.geom, state: p.state.Clone(), budget: hard, planned: planned,
 			params: SearchParams{C: float64(g.exploreMilli) / 1000, T: float64(g.softness), Mode: g.rewardMode, Teams: g.teamArray()}}
 		job.params.History = make(map[uint64]bool, len(p.history)) // advisory for search; the transition re-checks exactly
 		for k := range p.history {
 			job.params.History[k] = true
 		}
 		s.bots.dispatch(s, job)
-	} else {
-		wait = s.humanLimit(g)
-		if !fresh {
-			wait -= s.clock().Sub(p.turnBegan)
-		}
-		if wait <= 0 {
-			s.applyLocked(g, MoveTimeout, "deadline", nil)
-			return
-		}
 	}
 	p.timer = time.AfterFunc(wait, func() { s.timeout(gameID, seq) })
 }
@@ -801,7 +807,7 @@ func (s *ServerCore) applyBotResult(job botJob, res SearchResult) {
 
 func summarize(geom *Geom, root *State, res SearchResult) *SearchSummary {
 	k := root.K
-	out := &SearchSummary{Playouts: uint32(res.Iterations), Ms: uint32(res.Elapsed / time.Millisecond), Guard: res.Guard,
+	out := &SearchSummary{Playouts: uint32(res.Iterations), Ms: uint32(res.Elapsed / time.Millisecond), Guard: res.Guard, Stop: res.Stop, PlannedMS: uint32(res.Planned / time.Millisecond),
 		Candidates: []CandidateView{}, RootProjMilli: make([]int32, k), RootOutlookPermille: make([]int32, k)}
 	for i := 1; i <= k; i++ {
 		out.RootProjMilli[i-1] = int32(res.RootProj[i] * 1000)
@@ -868,7 +874,7 @@ func (s *ServerCore) finishLocked(g *game) {
 	for _, w := range winners {
 		wn = append(wn, views[w-1].Player)
 	}
-	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Body: "Game over (" + p.endReason + "). " + strings.Join(parts, ", ") + ". Winner: " + strings.Join(wn, ", "), TimeMS: s.clock().UnixMilli()})
+	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Node: g.pinLocked(""), Body: "Game over (" + p.endReason + "). " + strings.Join(parts, ", ") + ". Winner: " + strings.Join(wn, ", "), TimeMS: s.clock().UnixMilli()})
 	s.recordResultLocked(g, views)
 }
 
@@ -920,7 +926,8 @@ func teamViews(v []SeatView) []TeamView {
 func (s *ServerCore) seatViewsLocked(g *game, sc *Score) []SeatView {
 	views := make([]SeatView, g.seats)
 	for i, st := range g.seatInfo {
-		views[i] = SeatView{Seat: uint32(i + 1), Player: st.player, Controller: st.viewController(), Team: uint32(st.team), LossesBy: make([]uint32, g.seats)}
+		views[i] = SeatView{Seat: uint32(i + 1), Player: st.player, Controller: st.viewController(), Team: uint32(st.team), LossesBy: make([]uint32, g.seats),
+			MainLeftMS: uint64(st.mainLeft / time.Millisecond), PeriodsLeft: uint32(st.periodsLeft)}
 	}
 	if g.play == nil {
 		return views
@@ -997,7 +1004,7 @@ func (s *ServerCore) proposeMerge(r ProposeMerge) any {
 			g.proposals = map[uint32]*proposal{}
 		}
 		g.proposals[pr.id] = pr
-		g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Body: fmt.Sprintf("%s proposes merging team %d with team %d. Every person on both teams must accept.", identity, a, b), TimeMS: s.clock().UnixMilli()})
+		g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Node: g.pinLocked(""), Body: fmt.Sprintf("%s proposes merging team %d with team %d. Every person on both teams must accept.", identity, a, b), TimeMS: s.clock().UnixMilli()})
 		return MergeProposed{GameID: g.id, ProposalID: pr.id, TeamA: uint32(a), TeamB: uint32(b), RequestID: r.RequestID}
 	})
 }
@@ -1059,7 +1066,7 @@ func (s *ServerCore) mergeLocked(g *game, pr *proposal) {
 			s.withdrawLocked(g, id, "a team changed")
 		}
 	}
-	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Body: fmt.Sprintf("Teams merged into team %d: %s.", to, strings.Join(seats, ", ")), TimeMS: s.clock().UnixMilli()})
+	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Node: g.pinLocked(""), Body: fmt.Sprintf("Teams merged into team %d: %s.", to, strings.Join(seats, ", ")), TimeMS: s.clock().UnixMilli()})
 }
 
 func (s *ServerCore) withdrawLocked(g *game, id uint32, reason string) {
@@ -1068,7 +1075,7 @@ func (s *ServerCore) withdrawLocked(g *game, id uint32, reason string) {
 		return
 	}
 	delete(g.proposals, id)
-	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Body: fmt.Sprintf("Merge of team %d with team %d withdrawn: %s.", pr.a, pr.b, reason), TimeMS: s.clock().UnixMilli()})
+	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Node: g.pinLocked(""), Body: fmt.Sprintf("Merge of team %d with team %d withdrawn: %s.", pr.a, pr.b, reason), TimeMS: s.clock().UnixMilli()})
 }
 
 // Requirement refs: grammar:game_state; proof:game_state never crosses authority or scope.
@@ -1081,7 +1088,7 @@ func (s *ServerCore) gameState(r GetGameState) any {
 			return reject(r.RequestID, "forbidden", "game_state")
 		}
 		out := GameState{GameID: g.id, GameName: g.name, Status: g.status, Creator: g.creator, BoardSize: uint32(g.boardSize),
-			KoOn: koEnabled(g.koRule, g.seats), TurnDeadlineMS: g.turnDeadlineMs, BotMS: g.botMs, RequestID: r.RequestID,
+			KoOn: koEnabled(g.koRule, g.seats), MainTimeMS: g.mainTimeMs, ByoyomiPeriods: g.byoyomiPeriods, ByoyomiMS: g.byoyomiMs, RequestID: r.RequestID,
 			ExploreMilli: g.exploreMilli, RewardMode: g.rewardMode, Softness: g.softness,
 			Cells: []int32{}, Owner: []int32{}, Moves: []MoveRecord{}, Winners: []uint32{}, Proposals: []MergeView{}}
 		ids := make([]int, 0, len(g.proposals))
@@ -1117,19 +1124,24 @@ func (s *ServerCore) gameState(r GetGameState) any {
 			out.Cells = append(out.Cells, int32(p.state.Cells[pt]))
 			out.Owner = append(out.Owner, int32(sc.Owner[pt]))
 		}
+		out.Review, out.ReviewCount = []ReviewNode{}, uint32(len(g.review))
+		if int(r.SinceReview) < len(g.review) {
+			out.Review = append(out.Review, g.review[r.SinceReview:]...)
+		}
 		if int(r.SinceMove) < len(p.moves) {
 			out.Moves = append(out.Moves, p.moves[r.SinceMove:]...)
 		}
 		if g.status == GamePlaying {
-			var left time.Duration
-			if g.seatInfo[p.state.ToMove-1].botControlled() {
-				left = s.botBudget(g) - s.clock().Sub(p.botStart)
-			} else {
-				left = s.humanLimit(g) - s.clock().Sub(p.turnBegan)
+			// the seat to move: what is left of its main time, or of its current period
+			c, st := s.clockOf(g), &g.seatInfo[p.state.ToMove-1]
+			mainLeft, periods, periodLeft := c.stage(st, s.clock().Sub(p.turnBegan))
+			left := mainLeft
+			if mainLeft == 0 {
+				left = periodLeft
 			}
-			if left > 0 {
-				out.RemainingMS = uint64(left / time.Millisecond)
-			}
+			out.RemainingMS = uint64(left / time.Millisecond)
+			out.Seats[p.state.ToMove-1].MainLeftMS = uint64(mainLeft / time.Millisecond)
+			out.Seats[p.state.ToMove-1].PeriodsLeft = uint32(periods)
 		} else {
 			out.Winners = winnersOf(out.Seats)
 			out.EndReason = p.endReason

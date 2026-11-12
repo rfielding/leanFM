@@ -1,0 +1,251 @@
+protocol CreateRoomP (Person, Server) {
+  q: CreateRoom from Person to Server;
+  choice {
+    a: RoomCreated from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+protocol EnterRoomP (Person, Server) {
+  q: EnterRoom from Person to Server;
+  choice {
+    a: RoomEntered from Server to Person cause q
+       where a.requestId = q.requestId ∧ a.roomId = q.roomId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+protocol ListGamesP (Person, Server) {
+  q: ListGames from Person to Server;
+  choice {
+    a: GamesListed from Server to Person cause q
+       where a.requestId = q.requestId ∧ a.roomId = q.roomId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+protocol RoomChatP (Person, Server) {
+  q: SendRoomChat from Person to Server;
+  choice {
+    a: RoomChat from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+protocol CreateGameP (Person, Server) {
+  q: CreateGame from Person to Server;
+  choice {
+    a: GameCreated from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+protocol TakeSeatP (Person, Server) {
+  q: TakeSeat from Person to Server;
+  choice {
+    a: SeatTaken from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+protocol StartGameP (Person, Server) {
+  q: StartGame from Person to Server;
+  choice {
+    a: GameStarted from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+/-- Before the start the creator plans seats, people take and leave them, and anyone in the
+room may watch; the creator ends the phase with StartGame. -/
+protocol Challenge (Person, Server) {
+  include CreateGameP Person Server;
+  rec Open {
+    choice {
+      p: SetSeatPlan from Person to Server;
+      choice {
+        SeatPlanSet from Server to Person cause p;
+      } or {
+        RequestRejected from Server to Person cause p;
+      }
+      continue Open;
+    } or {
+      include TakeSeatP Person Server;
+      continue Open;
+    } or {
+      l: LeaveSeat from Person to Server;
+      choice {
+        SeatLeft from Server to Person cause l;
+      } or {
+        RequestRejected from Server to Person cause l;
+      }
+      continue Open;
+    } or {
+      include StartGameP Person Server;
+    }
+  }
+}
+/-- A person's move is a request in its own session. The server answers it, or refuses it:
+not this person's turn, a stale move number, the seat's byo-yomi clock already run out. -/
+protocol PlayMoveP (Person, Server) {
+  m: PlayMove from Person to Server;
+  choice {
+    p: MovePlayed from Server to Person cause m
+       where p.requestId = m.requestId ∧ p.moveNo = m.moveNo;
+  } or {
+    x: RequestRejected from Server to Person cause m where x.requestId = m.requestId;
+  }
+}
+
+/-- One bot search, bound to its turn revision. The result is applied only if the turn it was
+dispatched for is still the current one; otherwise it is dropped. -/
+protocol BotTurnP (Server, Bot) {
+  t: BotTurn from Server to Bot;
+  c: BotMoveChosen from Bot to Server cause t where c.turnSeq = t.turnSeq;
+  choice {
+    Applied at Server;
+  } or {
+    Stale at Server;
+  }
+}
+
+/-- The server's side of one turn: a bot (or autopilot) plays it, the seat's byo-yomi clock ends it, or a
+resigned seat passes. A person's own move ends it through PlayMoveP, in another session.
+Everything here is recorded at the server; people see it through GameState. -/
+protocol Turn (Server, Bot) {
+  choice {
+    include BotTurnP Server Bot;
+  } or {
+    ClockRanOut at Server;
+  } or {
+    Passed at Server;
+  }
+}
+
+/-- A first attempt: the person's move as one more branch of the turn. -/
+protocol TurnNaive (Person, Server, Bot) {
+  choice {
+    include BotTurnP Server Bot;
+  } or {
+    ClockRanOut at Server;
+  } or {
+    m: PlayMove from Person to Server;
+    MovePlayed from Server to Person cause m;
+  }
+}
+
+/-- A first attempt at telling people: the server sends each outcome as it happens. -/
+protocol TurnPushed (Person, Server, Bot) {
+  choice {
+    t: BotTurn from Server to Bot;
+    c: BotMoveChosen from Bot to Server cause t;
+    BotMovePlayed from Server to Person cause c;
+  } or {
+    ClockRanOut at Server;
+    TurnTimedOut from Server to Person;
+  } or {
+    AutoPassed from Server to Person;
+  }
+}
+protocol ProposeMergeP (Person, Server) {
+  q: ProposeMerge from Person to Server;
+  choice {
+    a: MergeProposed from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+
+/-- A first attempt at one answer to a proposal: the response, then perhaps the outcome. -/
+protocol RespondMergeNaive (Person, Server) {
+  q: RespondMerge from Person to Server;
+  choice {
+    MergeResponded from Server to Person cause q;
+    choice {
+      TeamsMerged from Server to Person;
+    } or {
+      MergeWithdrawn from Server to Person;
+    } or {
+    }
+  } or {
+    RequestRejected from Server to Person cause q;
+  }
+}
+
+/-- One answer to a proposal. The response says where the proposal stands: still pending,
+merged (this was the last acceptance) or withdrawn (a decline, or a team changed). -/
+protocol RespondMergeP (Person, Server) {
+  q: RespondMerge from Person to Server;
+  choice {
+    a: MergeResponded from Server to Person cause q
+       where a.requestId = q.requestId ∧ a.proposalId = q.proposalId ∧
+             (a.status = "pending" ∨ a.status = "merged" ∨ a.status = "withdrawn");
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+protocol GameStateP (Person, Server) {
+  q: GetGameState from Person to Server;
+  choice {
+    a: GameState from Server to Person cause q where a.requestId = q.requestId;
+  } or {
+    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+  }
+}
+/-- GoServer, all of it. In a room a person creates rooms, lists games and chats; a challenge
+runs to its start; then the server plays turn after turn until the game finishes, while any
+number of independent request sessions run beside it. -/
+protocol GoServer (Person, Server, Bot) {
+  include EnterRoomP Person Server;
+  rec Lobby {
+    choice {
+      include CreateRoomP Person Server;
+      continue Lobby;
+    } or {
+      include ListGamesP Person Server;
+      continue Lobby;
+    } or {
+      include RoomChatP Person Server;
+      continue Lobby;
+    } or {
+      include Challenge Person Server;
+    }
+  }
+  par {
+    rec Turns {
+      choice {
+        include Turn Server Bot;
+        continue Turns;
+      } or {
+        Finished at Server;
+      }
+    }
+  } and {
+    sessions { include PlayMoveP Person Server; }
+  } and {
+    sessions {
+      a: SetAutopilot from Person to Server;
+      choice {
+        AutopilotSet from Server to Person cause a;
+      } or {
+        RequestRejected from Server to Person cause a;
+      }
+    }
+  } and {
+    sessions {
+      choice {
+        include ProposeMergeP Person Server;
+      } or {
+        include RespondMergeP Person Server;
+      }
+    }
+  } and {
+    sessions { include GameStateP Person Server; }
+  }
+}

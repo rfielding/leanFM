@@ -151,7 +151,7 @@ func TestGameplayWireFieldsReachTheCore(t *testing.T) {
 	h := newHandler(core, "8081")
 	token := call(t, h, "/api/issue_session", map[string]any{"identity": "alice"})["session"].(string)
 	call(t, h, "/api/enter_room", map[string]any{"sessionId": token, "roomId": "lobby", "requestId": 1})
-	game := call(t, h, "/api/create_game", map[string]any{"sessionId": token, "roomId": "lobby", "gameName": "duel", "boardSize": 9, "seats": 2, "turnDeadlineMs": 60000, "koRule": 2, "botMs": 250, "requestId": 2})
+	game := call(t, h, "/api/create_game", map[string]any{"sessionId": token, "roomId": "lobby", "gameName": "duel", "boardSize": 9, "seats": 2, "mainTimeMs": 60000, "byoyomiPeriods": 1, "byoyomiMs": 10000, "koRule": 2, "requestId": 2})
 	id := game["gameId"].(string)
 	if game["boardSize"] != float64(9) || game["seats"] != float64(2) || game["koRule"] != float64(2) {
 		t.Fatal(game)
@@ -322,9 +322,9 @@ func TestClaimSignInAndRankingOverHTTP(t *testing.T) {
 	}
 	defer accounts.Close()
 	h := newHandler(goserver.NewServerWith(accounts), "8081")
-	token := call(t, h, "/api/issue_session", map[string]any{"identity": "grace"})["session"].(string)
-	claimed := call(t, h, "/api/claim_name", map[string]any{"sessionId": token, "password": "a good password", "requestId": 1})
-	if claimed["identity"] != "grace" {
+	claimed := call(t, h, "/api/claim_name", map[string]any{"identity": "grace", "password": "a good password", "requestId": 1})
+	token, _ := claimed["session"].(string)
+	if claimed["identity"] != "grace" || token == "" {
 		t.Fatal(claimed)
 	}
 	if code, body := status(h, "/api/issue_session", map[string]any{"identity": "Grace"}); code != 401 || strings.Contains(body, "pbkdf2") {
@@ -344,5 +344,70 @@ func TestClaimSignInAndRankingOverHTTP(t *testing.T) {
 	}
 	if code, _ := status(h, "/api/issue_session", map[string]any{"identity": "bot-3"}); code != 400 {
 		t.Fatal("a person took a bot name")
+	}
+	signed := call(t, h, "/api/sign_out", map[string]any{"sessionId": token, "requestId": 3})
+	if signed["requestId"] != float64(3) {
+		t.Fatal(signed)
+	}
+}
+
+// Requirement refs: property:change_password needs the current password; property:release_name frees the name.
+func TestChangePasswordAndReleaseOverHTTP(t *testing.T) {
+	h := newHandler(goserver.NewServer(), "8081")
+	call(t, h, "/api/claim_name", map[string]any{"identity": "ken", "password": "ken's first", "requestId": 1})
+	changed := call(t, h, "/api/change_password", map[string]any{"identity": "ken", "password": "ken's first", "newPassword": "ken's second", "requestId": 2})
+	if changed["identity"] != "ken" || changed["session"] == "" {
+		t.Fatal(changed)
+	}
+	bad := call(t, h, "/api/release_name", map[string]any{"identity": "ken", "password": "ken's first", "requestId": 3})
+	if bad["code"] != "wrong_password" {
+		t.Fatal(bad)
+	}
+	if got := call(t, h, "/api/release_name", map[string]any{"identity": "ken", "password": "ken's second", "requestId": 4}); got["identity"] != "ken" {
+		t.Fatal(got)
+	}
+	if code, _ := status(h, "/api/issue_session", map[string]any{"identity": "ken"}); code != 200 {
+		t.Fatal("released name not free")
+	}
+}
+
+// Requirement refs: property:session type panel; proof:the session type panel never misleads.
+// The panel's text must be the current session types of spec/Session.lean; rerun
+// `lake env lean --run projects/GoServer/spec/SessionPanel.lean` from the LeanFM root.
+func TestSessionPanelMatchesTheSpec(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "..", "spec", "Session.lean"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept []string
+	inside := false
+	for _, line := range strings.Split(string(src), "\n") {
+		switch {
+		case strings.HasPrefix(line, "--@begin "):
+			inside = true
+		case strings.HasPrefix(line, "--@end "):
+			inside = false
+		case inside:
+			kept = append(kept, line)
+		}
+	}
+	if want := strings.Join(kept, "\n") + "\n"; sessionText != want {
+		t.Fatal("static/session/goserver.leanfm is stale: regenerate it with spec/SessionPanel.lean")
+	}
+	h := newHandler(goserver.NewServer(), "8081")
+	for path, kind := range map[string]string{"/session/goserver.svg": "image/svg+xml", "/session/goserver.leanfm": "text/plain", "/session/provenance.json": "application/json"} {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:8081"+path, nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), kind) {
+			t.Fatalf("%s: %d %s", path, w.Code, w.Header().Get("Content-Type"))
+		}
+	}
+	if !strings.Contains(sessionSVG, "ClockRanOut") || !strings.Contains(sessionSVG, "PlayMove") || strings.Contains(sessionSVG, "<script") {
+		t.Fatal("the session diagram is not the current GoServer protocol, or carries script")
+	}
+	var prov map[string]any
+	if json.Unmarshal([]byte(sessionProvenance), &prov) != nil || prov["protocol"] != "GoServer" || prov["reducer"] == nil || prov["boundary"] == nil {
+		t.Fatalf("provenance: %s", sessionProvenance)
 	}
 }

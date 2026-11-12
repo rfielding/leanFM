@@ -11,12 +11,13 @@ import (
 
 // botJob is BotTurn: a private copy of the position, bound to a game and turn revision.
 type botJob struct {
-	gameID string
-	seq    uint64
-	geom   *Geom
-	state  *State
-	budget time.Duration
-	params SearchParams
+	gameID  string
+	seq     uint64
+	geom    *Geom
+	state   *State
+	budget  time.Duration // hard limit
+	planned time.Duration
+	params  SearchParams
 }
 
 // BotPool is the Bot actor: a fixed number of search slots. Searches run
@@ -55,6 +56,8 @@ func (b *BotPool) dispatch(s *ServerCore, job botJob) {
 			return
 		}
 		job.params.Budget = job.budget
+		job.params.Planned = job.planned
+		job.params.Cancel = b.done
 		job.params.Seed = time.Now().UnixNano()
 		res := Search(job.geom, job.state, job.params)
 		<-b.slots

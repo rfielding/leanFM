@@ -107,7 +107,7 @@ function NewChallenge({disabled, roomId, onCreated}: {disabled: boolean; roomId:
     e.preventDefault(); if (busy.current) return; busy.current = true;
     const f = new FormData(e.currentTarget), num = (k: string) => parseInt(String(f.get(k)), 10), form = e.currentTarget;
     try {
-      const created = await api('create_game', {roomId, gameName: String(f.get('name') || '').trim(), boardSize: num('board'), seats: num('seats'), turnDeadlineMs: num('deadline'), botMs: num('bot'), koRule: num('ko'), exploreMilli: num('explore'), rewardMode: String(f.get('reward')), softness: num('softness'), requestId: nextID()});
+      const created = await api('create_game', {roomId, gameName: String(f.get('name') || '').trim(), boardSize: num('board'), seats: num('seats'), mainTimeMs: num('main'), byoyomiPeriods: num('periods'), byoyomiMs: num('period'), koRule: num('ko'), exploreMilli: num('explore'), rewardMode: String(f.get('reward')), softness: num('softness'), requestId: nextID()});
       (form.elements.namedItem('name') as HTMLInputElement).value = '';
       await onCreated(created, f.get('sit') === 'on');
     } catch (err: any) { feedback(err.message, true); } finally { busy.current = false; }
@@ -118,8 +118,9 @@ function NewChallenge({disabled, roomId, onCreated}: {disabled: boolean; roomId:
       <div className="grid2">
         <label>Board<select name="board" defaultValue="11">{[5, 7, 9, 11, 13, 19].map(n => <option key={n}>{n}</option>)}</select></label>
         <label>Players<select name="seats" defaultValue="4">{[2, 3, 4, 5, 6, 7, 8].map(n => <option key={n}>{n}</option>)}</select></label>
-        <label>Human deadline<select name="deadline" defaultValue="60000">{[[10000, '10 s'], [15000, '15 s'], [30000, '30 s'], [60000, '1 min'], [120000, '2 min'], [240000, '4 min'], [480000, '8 min'], [960000, '16 min'], [1920000, '32 min'], [3840000, '64 min']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
-        <label>Bot deadline<select name="bot" defaultValue="1000">{[[250, '0.25 s'], [500, '0.5 s'], [1000, '1 s'], [2000, '2 s'], [4000, '4 s'], [8000, '8 s'], [16000, '16 s']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
+        <label>Main time<select name="main" defaultValue="300000">{[[60000, '1 min'], [300000, '5 min'], [600000, '10 min'], [1200000, '20 min'], [1800000, '30 min'], [3600000, '60 min']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
+        <label>Byo-yomi periods<select name="periods" defaultValue="5">{[1, 3, 5, 10].map(n => <option key={n} value={n}>{n}</option>)}</select></label>
+        <label>Period length<select name="period" defaultValue="30000">{[[10000, '10 s'], [20000, '20 s'], [30000, '30 s'], [60000, '60 s']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select></label>
         <label>Ko rule<select name="ko" defaultValue="0"><option value="0">Auto (on for 2 players)</option><option value="2">Simple ko + superko</option><option value="1">Off</option></select></label>
         <label>Exploration C<select name="explore" defaultValue="700"><option value="500">0.5</option><option value="700">0.7</option><option value="1000">1.0</option><option value="1400">1.4</option></select></label>
         <label>Bot reward<select name="reward" defaultValue="margin"><option value="margin">Soft margin vs best rival</option><option value="win">Win / share win</option><option value="rank">Rank</option></select></label>

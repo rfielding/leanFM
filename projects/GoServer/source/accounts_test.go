@@ -41,88 +41,6 @@ func TestPBKDF2MatchesRFC7914Vector(t *testing.T) {
 	}
 }
 
-func TestClaimNameAndSignIn(t *testing.T) {
-	s := fastServer(t)
-	alice, _ := s.IssueSession("alice")
-	if c := code(s.Handle(ClaimName{SessionID: "nope", Password: "long enough", RequestID: 1})); c != "unauthorized" {
-		t.Fatalf("claim without a session: %q", c)
-	}
-	if c := code(s.Handle(ClaimName{SessionID: alice, Password: "short", RequestID: 2})); c != "invalid_password" {
-		t.Fatalf("short password: %q", c)
-	}
-	if c := code(s.Handle(ClaimName{SessionID: alice, Password: strings.Repeat("x", 129), RequestID: 3})); c != "invalid_password" {
-		t.Fatalf("long password: %q", c)
-	}
-	got := s.Handle(ClaimName{SessionID: alice, Password: "correct horse", RequestID: 4})
-	if c, ok := got.(NameClaimed); !ok || c.Identity != "alice" {
-		t.Fatalf("claim: %#v", got)
-	}
-	if raw, _ := json.Marshal(got); strings.Contains(string(raw), "correct horse") || strings.Contains(string(raw), "pbkdf2") {
-		t.Fatal("claim result carries the password or its hash")
-	}
-	if c := code(s.Handle(ClaimName{SessionID: alice, Password: "another one", RequestID: 5})); c != "already_claimed" {
-		t.Fatalf("second claim replaced the password: %q", c)
-	}
-	// a claimed name needs its password, in any letter case
-	if _, err := s.SignIn("alice", ""); !errors.Is(err, ErrClaimed) {
-		t.Fatalf("no password: %v", err)
-	}
-	if _, err := s.SignIn("ALICE", "wrong guess"); !errors.Is(err, ErrWrongPass) {
-		t.Fatalf("case variant with a wrong password: %v", err)
-	}
-	if _, err := s.SignIn("bob", "a password"); !errors.Is(err, ErrNotClaimed) {
-		t.Fatalf("password for an unclaimed name: %v", err)
-	}
-	for _, bot := range []string{"bot-1", "BOT-7", " bot-2"} {
-		if _, err := s.SignIn(bot, ""); !errors.Is(err, ErrBotName) {
-			t.Fatalf("person took the bot name %q: %v", bot, err)
-		}
-	}
-	// the password ends the old session and keeps the claim's spelling
-	issued, err := s.SignIn(" Alice", "correct horse")
-	if err != nil || issued.Identity != "alice" || !issued.Claimed {
-		t.Fatalf("sign in with password: %+v %v", issued, err)
-	}
-	if _, ok := s.identityFor(alice); ok {
-		t.Fatal("the older session for a claimed name survived")
-	}
-	if who, ok := s.identityFor(issued.SessionID); !ok || who != "alice" {
-		t.Fatal("new session does not hold the name")
-	}
-}
-
-func TestClaimRefusedWhileACaseVariantIsInUse(t *testing.T) {
-	s := fastServer(t)
-	upper, _ := s.IssueSession("Carol")
-	s.IssueSession("carol")
-	if c := code(s.Handle(ClaimName{SessionID: upper, Password: "long enough", RequestID: 1})); c != "name_variant_in_use" {
-		t.Fatalf("claimed while a case variant is live: %q", c)
-	}
-}
-
-func TestWrongPasswordsAreThrottled(t *testing.T) {
-	s := fastServer(t)
-	now := time.Unix(1_800_000_000, 0)
-	s.clock = func() time.Time { return now }
-	dave, _ := s.IssueSession("dave")
-	s.Handle(ClaimName{SessionID: dave, Password: "right password", RequestID: 1})
-	for i := 0; i < FreeFailures; i++ {
-		if _, err := s.SignIn("dave", "wrong"); !errors.Is(err, ErrWrongPass) {
-			t.Fatalf("failure %d: %v", i, err)
-		}
-	}
-	if _, err := s.SignIn("dave", "right password"); !errors.Is(err, ErrThrottled) {
-		t.Fatalf("attempt during the delay was checked: %v", err)
-	}
-	now = now.Add(1100 * time.Millisecond)
-	if _, err := s.SignIn("dave", "right password"); err != nil {
-		t.Fatalf("after the delay: %v", err)
-	}
-	if throttleDelay(FreeFailures+30) != MaxThrottle || throttleDelay(FreeFailures+1) != 2*time.Second {
-		t.Fatal("delay does not double up to the cap")
-	}
-}
-
 func TestDataFileIsDurableAndRefusesDamage(t *testing.T) {
 	dir := t.TempDir()
 	a, err := OpenAccounts(dir)
@@ -130,7 +48,10 @@ func TestDataFileIsDurableAndRefusesDamage(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.rounds = 1000
-	if c := a.AddClaim("erin", "secret words"); c != "" {
+	if c := a.AddClaim("erin", "first words"); c != "" {
+		t.Fatal(c)
+	}
+	if c := a.SetPassword("erin", "secret words"); c != "" {
 		t.Fatal(c)
 	}
 	r := ResultRecord{ID: "r1", GameID: "g-1", Seats: []ResultSeat{{Player: "erin", Kind: "person", Team: 1, Place: 1}, {Player: "bot:1000ms/0.70/margin/4", Kind: "bot", Team: 2, Place: 2}}}
@@ -143,7 +64,7 @@ func TestDataFileIsDurableAndRefusesDamage(t *testing.T) {
 	a.Close()
 	path := filepath.Join(dir, DataFileName)
 	raw, _ := os.ReadFile(path)
-	if strings.Contains(string(raw), "secret words") {
+	if strings.Contains(string(raw), "secret words") || strings.Contains(string(raw), "first words") {
 		t.Fatal("plaintext password stored")
 	}
 	if info, _ := os.Stat(path); info.Mode().Perm() != 0o600 {
@@ -157,6 +78,9 @@ func TestDataFileIsDurableAndRefusesDamage(t *testing.T) {
 	}
 	if _, _, ok := b.Claim("ERIN"); !ok || b.Ranking().RatedGames != 1 {
 		t.Fatal("claim or result lost across restart")
+	}
+	if _, err := b.Authenticate("erin", "secret words"); err != nil {
+		t.Fatalf("changed password lost across restart: %v", err)
 	}
 	b.Close()
 	if after, _ := os.ReadFile(path); string(after) != string(raw) {
@@ -202,15 +126,181 @@ func TestDataPathRefusesSymlinksAndEscapes(t *testing.T) {
 	}
 }
 
-func TestClaimIsNotAcknowledgedUntilDurable(t *testing.T) {
+func claimAs(t *testing.T, s *ServerCore, name, password string) NameClaimed {
+	t.Helper()
+	got := s.Handle(ClaimName{Identity: name, Password: password, RequestID: 1})
+	c, ok := got.(NameClaimed)
+	if !ok {
+		t.Fatalf("claim %s: %#v", name, got)
+	}
+	return c
+}
+
+func TestClaimFromTheSignInForm(t *testing.T) {
 	s := fastServer(t)
-	fay, _ := s.IssueSession("fay")
+	for _, bad := range []struct{ name, pass, code string }{
+		{"rfielding", "short", "invalid_password"},
+		{"rfielding", strings.Repeat("x", 129), "invalid_password"},
+		{"bot-2", "long enough", "invalid_name"},
+		{"", "long enough", "invalid_name"},
+	} {
+		if c := code(s.Handle(ClaimName{Identity: bad.name, Password: bad.pass, RequestID: 1})); c != bad.code {
+			t.Fatalf("claim %q/%q: %q want %q", bad.name, bad.pass, c, bad.code)
+		}
+	}
+	got := claimAs(t, s, "rfielding", "correct horse")
+	if who, ok := s.identityFor(got.SessionID); !ok || who != "rfielding" {
+		t.Fatal("a claim does not sign the person in")
+	}
+	if raw, _ := json.Marshal(got); strings.Contains(string(raw), "correct horse") || strings.Contains(string(raw), "pbkdf2") {
+		t.Fatal("claim result carries the password or its hash")
+	}
+	// a claimed name cannot be claimed again, in any letter case, and its password stays
+	for _, again := range []string{"rfielding", "RFielding", " rfielding "} {
+		if c := code(s.Handle(ClaimName{Identity: again, Password: "another one", RequestID: 2})); c != "name_in_use" && c != "already_claimed" {
+			t.Fatalf("claimed %q again: %q", again, c)
+		}
+	}
+	s.Handle(SignOut{SessionID: got.SessionID, RequestID: 3})
+	if c := code(s.Handle(ClaimName{Identity: "RFIELDING", Password: "another one", RequestID: 4})); c != "already_claimed" {
+		t.Fatalf("claim replaced the password: %q", c)
+	}
+	// one password signs in; none, or a wrong one, does not
+	if _, err := s.SignIn("rfielding", ""); !errors.Is(err, ErrClaimed) {
+		t.Fatalf("no password: %v", err)
+	}
+	if _, err := s.SignIn("RFIELDING", "wrong guess"); !errors.Is(err, ErrWrongPass) {
+		t.Fatalf("case variant with a wrong password: %v", err)
+	}
+	if _, err := s.SignIn("guest", "a password"); !errors.Is(err, ErrNotClaimed) {
+		t.Fatalf("password for an unclaimed name: %v", err)
+	}
+	for _, bot := range []string{"bot-1", "BOT-7", " bot-2"} {
+		if _, err := s.SignIn(bot, ""); !errors.Is(err, ErrBotName) {
+			t.Fatalf("person took the bot name %q: %v", bot, err)
+		}
+	}
+	first, err := s.SignIn(" RFielding", "correct horse")
+	if err != nil || first.Identity != "rfielding" || !first.Claimed {
+		t.Fatalf("sign in with password: %+v %v", first, err)
+	}
+	second, _ := s.SignIn("rfielding", "correct horse")
+	if _, ok := s.identityFor(first.SessionID); ok {
+		t.Fatal("the older session for a claimed name survived a new sign-in")
+	}
+	if who, _ := s.identityFor(second.SessionID); who != "rfielding" {
+		t.Fatal("new session does not hold the name")
+	}
+}
+
+func TestClaimRefusedWhileTheNameIsInUse(t *testing.T) {
+	s := fastServer(t)
+	guest, _ := s.IssueSession("rob")
+	for _, name := range []string{"rob", "Rob"} {
+		if c := code(s.Handle(ClaimName{Identity: name, Password: "long enough", RequestID: 1})); c != "name_in_use" {
+			t.Fatalf("claimed %q while a guest holds it: %q", name, c)
+		}
+	}
+	// signing out frees the name; the claim keeps the guest's seats, which belong to the name
+	if _, ok := s.Handle(SignOut{SessionID: guest, RequestID: 2}).(SignedOut); !ok {
+		t.Fatal("sign out")
+	}
+	if _, ok := s.identityFor(guest); ok {
+		t.Fatal("session survived sign out")
+	}
+	if c := code(s.Handle(SignOut{SessionID: guest, RequestID: 3})); c != "unauthorized" {
+		t.Fatal("signed out twice")
+	}
+	claimAs(t, s, "rob", "long enough")
+}
+
+func TestChangePasswordNeedsTheCurrentOne(t *testing.T) {
+	s := fastServer(t)
+	now := time.Unix(1_800_000_000, 0)
+	s.clock = func() time.Time { return now }
+	old := claimAs(t, s, "ann", "first password")
+	other, _ := s.SignIn("ann", "first password")
+	change := func(cur, next string) any {
+		return s.Handle(ChangePassword{Identity: "ANN", Password: cur, NewPassword: next, RequestID: 1})
+	}
+	if c := code(change("not it", "second password")); c != "wrong_password" {
+		t.Fatalf("changed without the current password: %q", c)
+	}
+	if c := code(change("first password", "short")); c != "invalid_password" {
+		t.Fatalf("short new password: %q", c)
+	}
+	if c := code(s.Handle(ChangePassword{Identity: "nobody", Password: "first password", NewPassword: "second password", RequestID: 1})); c != "not_claimed" {
+		t.Fatalf("unclaimed name: %q", c)
+	}
+	got, ok := change("first password", "second password").(PasswordChanged)
+	if !ok || got.Identity != "ann" {
+		t.Fatal("change refused")
+	}
+	for _, tok := range []string{old.SessionID, other.SessionID} {
+		if _, ok := s.identityFor(tok); ok {
+			t.Fatal("a session from before the change survived it")
+		}
+	}
+	if _, err := s.SignIn("ann", "first password"); !errors.Is(err, ErrWrongPass) {
+		t.Fatal("old password still works")
+	}
+	if _, err := s.SignIn("ann", "second password"); err != nil {
+		t.Fatalf("new password: %v", err)
+	}
+	if c := code(change("second password", "third password")); c != "too_soon" {
+		t.Fatalf("two changes within a minute: %q", c)
+	}
+	now = now.Add(PasswordChangeGap)
+	if _, ok := change("second password", "third password").(PasswordChanged); !ok {
+		t.Fatal("change after the gap")
+	}
+	// wrong current passwords share the sign-in throttle
+	for i := 0; i < FreeFailures; i++ {
+		change("wrong", "fourth password")
+	}
+	if c := code(change("third password", "fourth password")); c != "throttled" {
+		t.Fatalf("change escaped the throttle: %q", c)
+	}
+}
+
+func TestWrongPasswordsAreThrottled(t *testing.T) {
+	s := fastServer(t)
+	now := time.Unix(1_800_000_000, 0)
+	s.clock = func() time.Time { return now }
+	claimAs(t, s, "dave", "right password")
+	for i := 0; i < FreeFailures; i++ {
+		if _, err := s.SignIn("dave", "wrong"); !errors.Is(err, ErrWrongPass) {
+			t.Fatalf("failure %d: %v", i, err)
+		}
+	}
+	if _, err := s.SignIn("dave", "right password"); !errors.Is(err, ErrThrottled) {
+		t.Fatalf("attempt during the delay was checked: %v", err)
+	}
+	now = now.Add(1100 * time.Millisecond)
+	if _, err := s.SignIn("dave", "right password"); err != nil {
+		t.Fatalf("after the delay: %v", err)
+	}
+	if throttleDelay(FreeFailures+30) != MaxThrottle || throttleDelay(FreeFailures+1) != 2*time.Second {
+		t.Fatal("delay does not double up to the cap")
+	}
+}
+
+func TestClaimAndChangeAreNotAcknowledgedUntilDurable(t *testing.T) {
+	s := fastServer(t)
 	s.accounts.failNext = errors.New("disk full")
-	if c := code(s.Handle(ClaimName{SessionID: fay, Password: "long enough", RequestID: 1})); c != "unavailable" {
+	if c := code(s.Handle(ClaimName{Identity: "fay", Password: "long enough", RequestID: 1})); c != "unavailable" {
 		t.Fatalf("claim acknowledged without a durable record: %q", c)
 	}
 	if _, _, ok := s.accounts.Claim("fay"); ok {
 		t.Fatal("failed claim kept in memory")
+	}
+	claimAs(t, s, "fay", "long enough")
+	s.accounts.failNext = errors.New("disk full")
+	if c := code(s.Handle(ChangePassword{Identity: "fay", Password: "long enough", NewPassword: "new password", RequestID: 2})); c != "unavailable" {
+		t.Fatalf("change acknowledged without a durable record: %q", c)
+	}
+	if _, err := s.SignIn("fay", "long enough"); err != nil {
+		t.Fatal("failed change replaced the password")
 	}
 }
 
@@ -292,9 +382,12 @@ func TestFinishedGamesFeedTheRanking(t *testing.T) {
 		}
 		return s.accounts.Ranking()
 	}
+	// a guest signs out and claims the same name: seats and games belong to the name
 	claimBoth := func(tb *table) {
-		tb.s.Handle(ClaimName{SessionID: tb.alice, Password: "alice's pass", RequestID: tb.id()})
-		tb.s.Handle(ClaimName{SessionID: tb.bob, Password: "bob's password", RequestID: tb.id()})
+		tb.s.Handle(SignOut{SessionID: tb.alice, RequestID: tb.id()})
+		tb.alice = claimAs(t, tb.s, "alice", "alice's pass").SessionID
+		tb.s.Handle(SignOut{SessionID: tb.bob, RequestID: tb.id()})
+		tb.bob = claimAs(t, tb.s, "bob", "bob's password").SessionID
 	}
 	none := func(*table) {}
 	k := play(t, claimBoth, none, false)
@@ -320,5 +413,81 @@ func TestFinishedGamesFeedTheRanking(t *testing.T) {
 	}
 	if k := play(t, none, none, false); k.RatedGames != 0 {
 		t.Fatalf("unclaimed names were rated: %+v", k.Entries)
+	}
+}
+
+// Requirement refs: property:release_name frees the name; proof:release_name never frees a
+// name without its password.
+func TestReleaseNameNeedsThePasswordAndFreesTheName(t *testing.T) {
+	s := fastServer(t)
+	held := claimAs(t, s, "hal", "hal's password")
+	if c := code(s.Handle(ReleaseName{Identity: "hal", Password: "wrong one", RequestID: 1})); c != "wrong_password" {
+		t.Fatalf("released without the password: %q", c)
+	}
+	if c := code(s.Handle(ReleaseName{Identity: "nobody", Password: "whatever1", RequestID: 2})); c != "not_claimed" {
+		t.Fatalf("released an unclaimed name: %q", c)
+	}
+	s.accounts.failNext = errors.New("disk full")
+	if c := code(s.Handle(ReleaseName{Identity: "hal", Password: "hal's password", RequestID: 3})); c != "unavailable" {
+		t.Fatalf("release acknowledged without a durable record: %q", c)
+	}
+	if _, _, ok := s.accounts.Claim("hal"); !ok {
+		t.Fatal("failed release dropped the claim")
+	}
+	if got, ok := s.Handle(ReleaseName{Identity: "HAL", Password: "hal's password", RequestID: 4}).(NameReleased); !ok || got.Identity != "hal" {
+		t.Fatal("release refused")
+	}
+	if _, ok := s.identityFor(held.SessionID); ok {
+		t.Fatal("a session for the released name survived")
+	}
+	if _, err := s.SignIn("hal", ""); err != nil {
+		t.Fatalf("released name not free for a guest: %v", err)
+	}
+	for i := 0; i < FreeFailures+1; i++ {
+		s.Handle(ReleaseName{Identity: "hal", Password: "x", RequestID: 5})
+	}
+}
+
+func TestReleasedClaimLeavesTheRankingAndIsNotInherited(t *testing.T) {
+	dir := t.TempDir()
+	a, err := OpenAccounts(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.rounds = 1000
+	a.AddClaim("ivy", "ivy password")
+	first := a.claimedBefore("ivy", time.Now().Add(time.Hour))
+	bot := "bot:1000ms/0.70/margin/4"
+	for i, place := range []uint32{1, 1, 2} {
+		a.RecordResult(ResultRecord{ID: "r" + string(rune('a'+i)), Seats: []ResultSeat{{Player: "ivy", Kind: "person", Team: 1, Place: place, Claim: first}, {Player: bot, Kind: "bot", Team: 2, Place: 3 - place}}})
+	}
+	before := a.Ranking()
+	if len(before.Entries) != 2 || before.Entries[0].Player != "ivy" {
+		t.Fatalf("before release: %+v", before.Entries)
+	}
+	botRating := before.Entries[1].Rating
+	if code := a.Release("ivy"); code != "" {
+		t.Fatal(code)
+	}
+	after := a.Ranking()
+	if len(after.Entries) != 1 || after.Entries[0].Player != "bot 1000 ms, explore 0.70, margin 4" || after.Entries[0].Rating != botRating {
+		t.Fatalf("after release the bot's rating moved or ivy stayed listed: %+v", after.Entries)
+	}
+	// a new claim of the same name is a new player with no rated games
+	a.AddClaim("ivy", "someone else")
+	if again := a.Ranking(); len(again.Entries) != 1 {
+		t.Fatalf("new claim inherited the released claim's games: %+v", again.Entries)
+	}
+	a.Close()
+	b, err := OpenAccounts(dir)
+	if err != nil {
+		t.Fatalf("replay of claim, release and new claim: %v", err)
+	}
+	defer b.Close()
+	if _, err := b.Authenticate("ivy", "someone else"); err != nil {
+		t.Fatal("the new claim did not survive a restart")
+	}
+	if again := b.Ranking(); len(again.Entries) != 1 || again.Entries[0].Rating != botRating {
+		t.Fatalf("after restart: %+v", again.Entries)
 	}
 }

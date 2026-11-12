@@ -58,6 +58,7 @@ message SendGameChat {
   string game_id = 2;
   string body = 3;
   uint64 request_id = 4;
+  string node = 5;
 }
 message GameChat {
   string game_id = 1;
@@ -65,6 +66,7 @@ message GameChat {
   string body = 3;
   int64 time_ms = 4;
   uint64 request_id = 5;
+  string node = 6;
 }
 message RequestRejected {
   uint64 request_id = 1;
@@ -81,14 +83,15 @@ message CreateGame {
   string game_name = 3;
   uint32 board_size = 4;
   uint32 seats = 5;
-  uint64 turn_deadline_ms = 6;
+  uint64 main_time_ms = 6;
   int32 ko_rule = 7;
-  uint64 bot_ms = 8;
+  uint64 byoyomi_ms = 8;
   uint32 explore_milli = 9;
   string reward_mode = 10;
   uint32 softness = 11;
   repeated SeatPlan seat_plan = 12;
   uint64 request_id = 13;
+  uint32 byoyomi_periods = 14;
 }
 message GameCreated {
   string game_id = 1;
@@ -99,13 +102,14 @@ message GameCreated {
   string game_name = 6;
   uint32 board_size = 7;
   uint32 seats = 8;
-  uint64 turn_deadline_ms = 9;
+  uint64 main_time_ms = 9;
   int32 ko_rule = 10;
-  uint64 bot_ms = 11;
+  uint64 byoyomi_ms = 11;
   uint32 explore_milli = 12;
   string reward_mode = 13;
   uint32 softness = 14;
   repeated SeatPlan seat_plan = 15;
+  uint32 byoyomi_periods = 16;
 }
 message SetSeatPlan {
   string session_id = 1;
@@ -217,6 +221,7 @@ message GetGameState {
   string game_id = 2;
   uint32 since_move = 3;
   uint64 request_id = 4;
+  uint32 since_review = 5;
 }
 message GameState {
   string game_id = 1;
@@ -225,8 +230,8 @@ message GameState {
   string creator = 4;
   uint32 board_size = 5;
   bool ko_on = 6;
-  uint64 turn_deadline_ms = 7;
-  uint64 bot_ms = 8;
+  uint64 main_time_ms = 7;
+  uint64 byoyomi_ms = 8;
   uint32 move_no = 9;
   uint32 to_move = 10;
   uint64 remaining_ms = 11;
@@ -242,6 +247,9 @@ message GameState {
   string reward_mode = 21;
   uint32 softness = 22;
   uint64 request_id = 23;
+  uint32 byoyomi_periods = 24;
+  repeated ReviewNode review = 25;
+  uint32 review_count = 26;
 }
 message BotTurn {
   string game_id = 1;
@@ -303,6 +311,8 @@ message SeatView {
   int32 score = 7;
   bool resigned = 8;
   repeated uint32 losses_by = 9;
+  uint64 main_left_ms = 10;
+  uint32 periods_left = 11;
 }
 message TeamView {
   uint32 team = 1;
@@ -335,6 +345,8 @@ message SearchSummary {
   repeated int32 root_proj_milli = 4;
   repeated int32 root_outlook_permille = 5;
   bool guard = 6;
+  string stop = 7;
+  uint32 planned_ms = 8;
 }
 message MoveRecord {
   uint32 move_no = 1;
@@ -360,13 +372,32 @@ message SessionIssued {
   uint64 request_id = 4;
 }
 message ClaimName {
-  string session_id = 1;
+  string identity = 1;
   string password = 2;
   uint64 request_id = 3;
 }
 message NameClaimed {
+  string session_id = 1;
+  string identity = 2;
+  uint64 request_id = 3;
+}
+message ChangePassword {
   string identity = 1;
+  string password = 2;
+  string new_password = 3;
+  uint64 request_id = 4;
+}
+message PasswordChanged {
+  string session_id = 1;
+  string identity = 2;
+  uint64 request_id = 3;
+}
+message SignOut {
+  string session_id = 1;
   uint64 request_id = 2;
+}
+message SignedOut {
+  uint64 request_id = 1;
 }
 message GetRanking {
   string session_id = 1;
@@ -376,5 +407,29 @@ message RankEntry { uint32 rank = 1; string player = 2; string kind = 3; int32 r
 message RankingListed {
   repeated RankEntry entries = 1;
   uint32 rated_games = 2;
+  uint64 request_id = 3;
+}
+message ReleaseName {
+  string identity = 1;
+  string password = 2;
+  uint64 request_id = 3;
+}
+message NameReleased {
+  string identity = 1;
+  uint64 request_id = 2;
+}
+message ReviewNode { string id = 1; string parent = 2; string kind = 3; uint32 x = 4; uint32 y = 5; uint32 seat = 6; string author = 7; int64 time_ms = 8; }
+message AddReviewMove {
+  string session_id = 1;
+  string game_id = 2;
+  string parent = 3;
+  string kind = 4;
+  uint32 x = 5;
+  uint32 y = 6;
+  uint64 request_id = 7;
+}
+message ReviewMoveAdded {
+  string game_id = 1;
+  ReviewNode node = 2;
   uint64 request_id = 3;
 }

@@ -58,13 +58,13 @@ func code(v any) string {
 func TestCreateGameValidatesBoardParameters(t *testing.T) {
 	tb := newTable(t, CreateGame{})
 	st := tb.state(t, tb.alice)
-	if st.BoardSize != DefaultBoardSize || len(st.Seats) != DefaultSeats || st.TurnDeadlineMS != DefaultTurnDeadlineMS || st.Status != GameOpen {
+	if st.BoardSize != DefaultBoardSize || len(st.Seats) != DefaultSeats || st.MainTimeMS != DefaultMainTimeMS || st.ByoyomiPeriods != DefaultByoyomiPeriods || st.ByoyomiMS != DefaultByoyomiMS || st.Status != GameOpen {
 		t.Fatalf("defaults: %+v", st)
 	}
 	if st.KoOn {
 		t.Fatal("auto ko must be off for four players")
 	}
-	for _, bad := range []CreateGame{{BoardSize: 8}, {Seats: 9}, {Seats: 1}, {TurnDeadlineMS: 10}, {KoRule: 7}, {BotMS: 99999}} {
+	for _, bad := range []CreateGame{{BoardSize: 8}, {Seats: 9}, {Seats: 1}, {MainTimeMS: 10}, {KoRule: 7}, {ByoyomiPeriods: 4}, {ByoyomiMS: 99999}} {
 		bad.SessionID, bad.RoomID, bad.GameName, bad.RequestID = tb.alice, "lobby", "x", tb.id()
 		if code(tb.s.Handle(bad)) == "" {
 			t.Fatalf("accepted invalid parameters %+v", bad)

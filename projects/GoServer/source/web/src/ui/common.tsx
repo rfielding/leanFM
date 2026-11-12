@@ -38,7 +38,7 @@ export function Tabs({tabs, active, onSelect, onClose, label, className = ''}: {
   );
 }
 
-export interface ChatItem { sender: string; timeMs: number; body: string; }
+export interface ChatItem { sender: string; timeMs: number; body: string; node?: string; where?: string; }
 
 export function ChatList({items, placeholder, label, className}: {items: ChatItem[] | null; placeholder: string; label: string; className: string}) {
   const ref = useRef<HTMLOListElement>(null), pinned = useRef(true);
@@ -48,7 +48,7 @@ export function ChatList({items, placeholder, label, className}: {items: ChatIte
     <ol ref={ref} className={'chat-list ' + className} aria-label={label} aria-live="polite" onScroll={onScroll}>
       {items === null ? <li className="empty">Loading…</li> : !items.length ? <li className="empty">{placeholder}</li> :
         items.map((it, i) => (
-          <li key={i} className="chat-item"><div className="chat-meta"><strong>{it.sender}</strong> <time dateTime={new Date(it.timeMs).toISOString()}>{new Date(it.timeMs).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</time></div><p>{it.body}</p></li>
+          <li key={i} className="chat-item"><div className="chat-meta"><strong>{it.sender}</strong>{it.where ? <span className="chat-where">{it.where}</span> : null} <time dateTime={new Date(it.timeMs).toISOString()}>{new Date(it.timeMs).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</time></div><p>{it.body}</p></li>
         ))}
     </ol>
   );

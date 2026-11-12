@@ -6,23 +6,23 @@
   "unit": "one screenshot per scenario step",
   "boundary": "local loopback app on port 8095; in-memory state discarded afterwards; no credentials shown",
   "browser": "Chrome/153.0.8010.12",
-  "created": "2026-11-01T07:08:20+00:00",
+  "created": "2026-11-12T05:35:08+00:00",
   "inputs": {
-    "source/game.go": "d02207b67f46cebd420c08deb41130176a7ab58796f26043ac50eeee7ec3258d",
-    "source/engine.go": "db2a6bf1353741e1b4d983fd846b75f9ebeb54dfa96d299fadddde393d611694",
-    "source/bot.go": "7e537d050eaf3f055c54f89a9b6c4f0d10a821800b29c18802e9d9631bf9758f",
-    "source/server.go": "78a6740649e771c194f9bdec793d879875388aeb3ff3f5df0732bb304fabf879",
-    "source/cmd/demo/main.go": "78bf2bb0d8e6cabc873dc5e712a509d58ab70990e6419bc1de942ac9b0e6dd8f",
+    "source/game.go": "b5ccc44ae35503c83ce7cafde3ed2329bae9eff01d1f5004fb4fc8562c7dd0ac",
+    "source/engine.go": "1addbf7d950fe4cd3af9e3c7e270bb1121d9c7768fbc844d9c940ffff22d67a0",
+    "source/bot.go": "bd33417bcb9808c8d85ba42b35664529ff16049f5bc88337896bacd81b446f16",
+    "source/server.go": "16e73d76c2310f869f9838acb817b45befcd64da2f5e0caddc48b5538366b2c1",
+    "source/cmd/demo/main.go": "ad6bd4e6c11048c9ae449677f38aa56ca90ecaf277d70bbc731665ba69b64c91",
     "source/cmd/demo/static/index.html": "98bb7de5dcece48412f5776f0fce7a260a2bb16034e127abbcc6e0a9ce4c02b1",
-    "source/web/src/ui/App.tsx": "8667f08b6eb04e8274df138fec6c10bedeb9cafa0a3cb592b7b08dafbca2d97e",
-    "source/web/src/ui/Room.tsx": "b91ec475f12ce1118988e1dae1fa74f0cff6906e69a03234c15ce9814cc985aa",
-    "source/web/src/ui/Game.tsx": "7125af4a3129c66d4844f7d1aa80053e49fa18830db50fa8f6ef520e6fb521c1",
-    "source/web/src/ui/Panels.tsx": "e683912e0708876d2fefad17c301d8fe09f352e27cc092ef045e95c4a4a43ea1",
-    "source/web/src/ui/Board.tsx": "9759676434a60b3642a86783f32794b234691547dbd3c415c7ee225e85caf1b4",
-    "source/web/src/game/game.ts": "8a3871dbd979a2d10e70e3b3e5205fbc001579ff93343878049240ac1ae1b235",
-    "source/web/src/styles.css": "bc7aafddf807ee06bf15bbac76ac0b4274db16460d42fdbd83e8faae777d39ae",
+    "source/web/src/ui/App.tsx": "20081f6e41719a06410bc1845914f78641bf3319577a52cd42134bc2b66a715c",
+    "source/web/src/ui/Room.tsx": "712ee694afe98a808a5e27fdb7c40a83d8394bb76be4a2c8bfa06a823b9c8662",
+    "source/web/src/ui/Game.tsx": "1963d0bf92d56bea3a2e673f32aa9784d5136287c024e1d65ac66fd532dea95e",
+    "source/web/src/ui/Panels.tsx": "13f04462265e07f316bc8902fc926a3f7b84e4830bedfc6ec47d751867302a41",
+    "source/web/src/ui/Board.tsx": "42d1c2cbf4cc74ecdbf6891f49a5d224383956423f5e8af3d3dcd861fd691152",
+    "source/web/src/game/game.ts": "f81f26048146f4e6e0a79becfbcc44a0be7bf4d1eea7583b9a2d9f9b1f6e4af1",
+    "source/web/src/styles.css": "101a0db96559be3250447074431ce3e4368258d5d249ab8d2351b41e646312fe",
     "source/cmd/demo/static/engine.js": "34b905f09e9640d534a03e4755c372ff76913963e71ab23669cd34005f20b86e",
-    "source/book_tour.py": "b9c06a5da0b7a4f25b00c82957dc5035cb79fbc449fd883af1e73c9232a30d68"
+    "source/book_tour.py": "96854ebd52040bd1d571a1716d86bc2909b8325eaef7f1985b6a0bf4f8c179b9"
   },
   "captures": [
     {
@@ -34,19 +34,19 @@
         "open the app"
       ],
       "file": "book/assets/tour/01-welcome.png",
-      "sha256": "bd729a0dc6743ac3ab04874675b5b7845f04782d605ceeb04a5e97a1d7f97e5a"
+      "sha256": "483059b00a5a2f0512f67711966a69ee2e6ec9783170abfcc3573da0f9b57e21"
     },
     {
       "id": "02-create-challenge",
       "title": "Creating a challenge",
-      "caption": "Alice is in the lobby and fills in a challenge: a 9×9 board, three players, a one-minute human deadline and half a second per bot move. The ko rule stays on Auto, which is off for three players.",
+      "caption": "Alice is in the lobby and fills in a challenge: a 9×9 board, three players, and a byo-yomi clock of one minute of main time and then three periods of ten seconds, the same for people and bots. The ko rule stays on Auto, which is off for three players.",
       "viewer": "alice",
       "steps": [
         "sign in as alice",
         "fill in the New challenge form"
       ],
       "file": "book/assets/tour/02-create-challenge.png",
-      "sha256": "b607bc1155573e09e69917f5dd00d655dfd144015613e93bd995c230e7ccf836"
+      "sha256": "c9dc71e104f661207b82afb0e3d0b75c008d5fb3b2315602735f00b14f23b1b9"
     },
     {
       "id": "03-seat-plan",
@@ -59,7 +59,7 @@
         "bob: open the challenge, Sit here"
       ],
       "file": "book/assets/tour/03-seat-plan.png",
-      "sha256": "243a9c51cd961c3acbbfbd403758e016a0b3b9b9cf5278e919c13ef617a7e2bc"
+      "sha256": "019a3c398a9feae9217efeaf09cdb26e7f9574657e0b2382ad6d5876313be0ca"
     },
     {
       "id": "04a-aim",
@@ -70,7 +70,7 @@
         "alice: move the pointer over an empty point on her turn"
       ],
       "file": "book/assets/tour/04a-aim.png",
-      "sha256": "86b238a610fb570ceeb7a557034f5fdb23bc9aee9b0ff5d63a34e6dfe46d1837"
+      "sha256": "ce3b7bcbdf22f725c24b4ff727e6fb063c98e219a206b78c9978c186ccb545a3"
     },
     {
       "id": "04-bot-search",
@@ -82,7 +82,7 @@
         "alice: Back one move"
       ],
       "file": "book/assets/tour/04-bot-search.png",
-      "sha256": "8703d2af7b6e835ddadecc40de65d1d104e50f20332cba1890637d4a8c00d119"
+      "sha256": "127a73a39ef2cb5c48032012880da779f174307102581206e0968352a355298c"
     },
     {
       "id": "05-watcher-variation",
@@ -96,7 +96,7 @@
         "carol: Analyze here"
       ],
       "file": "book/assets/tour/05-watcher-variation.png",
-      "sha256": "4019c35a1b4867b368d4abe7208055d683d0d58588f1fe1b775f873944801b5b"
+      "sha256": "ff2fb547e3bc3b23bb74b95e336d9beba9f23df31a9aeee177c783bfd23bb242"
     },
     {
       "id": "06-merge-proposal",
@@ -107,7 +107,7 @@
         "bob: Merge my team with Team 1, Propose"
       ],
       "file": "book/assets/tour/06-merge-proposal.png",
-      "sha256": "ce2f0f2560809d668ea705ecfdfb52062e28d3853da9c40162a9be28e71c2137"
+      "sha256": "b53affb01f4adc9f967c408eccbc503556a6a94682898fa6f25abac62db81f00"
     },
     {
       "id": "07-team-and-autopilot",
@@ -119,7 +119,7 @@
         "alice: Let a bot play for me"
       ],
       "file": "book/assets/tour/07-team-and-autopilot.png",
-      "sha256": "a589a39f77ecd0741781b952b4de76c8d9aaa1a7d5a49972695080cae47fbd04"
+      "sha256": "6c9d6cefba27d47bc297a5b0e4059c522e78d121f6a958a134f186831100cdb3"
     },
     {
       "id": "08-game-over",
@@ -130,7 +130,20 @@
         "alice passes with the P key, bob with the Pass button, until the bot also passes"
       ],
       "file": "book/assets/tour/08-game-over.png",
-      "sha256": "28fc2e7278733448e51850b9840dfb90b28a53a0184b8957e05b4ba5dc6a8c64"
+      "sha256": "4473c2135b4301e143f9e641020c0f6a17e5e263c3d5c474b4677a679bb2e133"
+    },
+    {
+      "id": "08a-review-chat",
+      "title": "Reviewing together",
+      "caption": "After the game alice steps back to move 2, passes for the seat to move there and lets the computer pick the next move. Both moves are kept on the server for everyone in the game, and her remark is pinned to the position she was looking at: the Chat tab shows the remarks along the line on the board, so stepping back hides it again and anyone who walks into this variation sees it.",
+      "viewer": "alice",
+      "steps": [
+        "alice: Home, then → twice",
+        "alice: P, then C",
+        "alice: write a remark in Chat"
+      ],
+      "file": "book/assets/tour/08a-review-chat.png",
+      "sha256": "cb8cd42eea56826246424c84e779e5bfc5427e54777eedaa60801f7dd45be356"
     },
     {
       "id": "09-tabs",
@@ -142,7 +155,7 @@
         "alice: back to the lobby room tab"
       ],
       "file": "book/assets/tour/09-tabs.png",
-      "sha256": "6819a73ce5c02319723daee82ef1f38f3845f104da8cdac27e731bb43b80e470"
+      "sha256": "2636d8455be8ae84a5fcdedcd9b5adfb7ca51f40c83715efb6f5dbc5e0f6a8e5"
     }
   ],
   "note": "Bot moves come from a time-limited search, so stone positions differ between runs; the scenario steps do not."

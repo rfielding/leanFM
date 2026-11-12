@@ -14,7 +14,7 @@ A visitor chooses a local display name. Nothing else is needed for the local pre
 \clearpage
 
 \section{Creating a challenge}
-Alice is in the lobby and fills in a challenge: a 9$\times$9 board, three players, a one-minute human deadline and half a second per bot move. The ko rule stays on Auto, which is off for three players.
+Alice is in the lobby and fills in a challenge: a 9$\times$9 board, three players, and a byo-yomi clock of one minute of main time and then three periods of ten seconds, the same for people and bots. The ko rule stays on Auto, which is off for three players.
 
 \begin{figure}[ht]
 \centering
@@ -90,6 +90,16 @@ When every remaining player has passed in a row the game ends. The Chat tab ligh
 \centering
 \includegraphics[width=\textwidth]{assets/tour/08-game-over.png}
 \caption{The result, seen by alice. Steps: alice passes with the P key, bob with the Pass button, until the bot also passes.}
+\end{figure}
+\clearpage
+
+\section{Reviewing together}
+After the game alice steps back to move 2, passes for the seat to move there and lets the computer pick the next move. Both moves are kept on the server for everyone in the game, and her remark is pinned to the position she was looking at: the Chat tab shows the remarks along the line on the board, so stepping back hides it again and anyone who walks into this variation sees it.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\textwidth]{assets/tour/08a-review-chat.png}
+\caption{Reviewing together, seen by alice. Steps: alice: Home, then → twice; alice: P, then C; alice: write a remark in Chat.}
 \end{figure}
 \clearpage
 

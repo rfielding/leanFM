@@ -1,0 +1,12 @@
+{"unit": "messages and local events on the Person, Server and Bot lifelines",
+ "roles": ["Person", "Server", "Bot"],
+ "reducer":
+ "LeanFM SessionTools.parseProtocol of those regions without doc comments, then annotatedModel drawn as SVG in the dark theme",
+ "question":
+ "What is the session type of GoServer: who sends which message to whom, in which order, and where the choices, loops and independent sessions are?",
+ "protocol": "GoServer",
+ "prompt": "let's show the session type for the game in a hidden panel",
+ "generator": "projects/GoServer/spec/SessionPanel.lean",
+ "eventSource":
+ "spec/Session.lean, the regions from --@begin Rooms to --@end GoServer",
+ "boundary": "protocol GoServer with every protocol it includes"}

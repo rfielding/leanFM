@@ -334,23 +334,37 @@
         "pointAt",
         "showTab",
         "updateBadges",
-        "swatch"
+        "swatch",
+        "GameCtl.pass",
+        "GameCtl.canPassHere",
+        "GameCtl.tryPlay",
+        "GameCtl.upDown",
+        "GameCtl.canUpDown"
       ],
       "tests": [
         "TestLabAssetsAndNewRoutes",
         "TestRoomAndGameTabsAndPointerPreview",
         "TestBowlRecordsWhoCaptured",
-        "source/book_tour.py (book/assets/tour/manifest.json)"
+        "source/book_tour.py (book/assets/tour/manifest.json)",
+        "book_tour.py"
       ]
     },
     {
       "requirements": [
         "grammar:sign_in",
         "grammar:claim_name",
+        "grammar:change_password",
+        "grammar:sign_out",
+        "grammar:release_name",
         "property:sign_in honours claims",
-        "property:claim_name binds a password to the session's own name",
+        "property:claim_name binds a password to an unclaimed name",
+        "property:change_password needs the current password",
+        "property:sign_out ends the session",
+        "property:release_name frees the name",
         "proof:sign_in never lets anyone borrow a claimed name",
-        "proof:claim_name never takes another name"
+        "proof:claim_name never takes another name",
+        "proof:change_password never works without the current password",
+        "proof:release_name never frees a name without its password"
       ],
       "files": [
         "source/accounts.go",
@@ -364,20 +378,29 @@
       "symbols": [
         "Accounts.AddClaim",
         "Accounts.Authenticate",
+        "Accounts.SetPassword",
+        "Accounts.Release",
         "pbkdf2Key",
         "throttleDelay",
         "ServerCore.SignIn",
         "ServerCore.claimName",
+        "ServerCore.changePassword",
+        "ServerCore.signOut",
+        "ServerCore.releaseName",
+        "ServerCore.issueLocked",
         "nameKey",
         "isBotName"
       ],
       "tests": [
         "TestPBKDF2MatchesRFC7914Vector",
-        "TestClaimNameAndSignIn",
-        "TestClaimRefusedWhileACaseVariantIsInUse",
+        "TestClaimFromTheSignInForm",
+        "TestClaimRefusedWhileTheNameIsInUse",
+        "TestChangePasswordNeedsTheCurrentOne",
         "TestWrongPasswordsAreThrottled",
-        "TestClaimIsNotAcknowledgedUntilDurable",
+        "TestClaimAndChangeAreNotAcknowledgedUntilDurable",
+        "TestReleaseNameNeedsThePasswordAndFreesTheName",
         "TestClaimSignInAndRankingOverHTTP",
+        "TestChangePasswordAndReleaseOverHTTP",
         "browser_check.py"
       ]
     },
@@ -413,7 +436,100 @@
         "TestFinishedGamesFeedTheRanking",
         "TestDataFileIsDurableAndRefusesDamage",
         "TestDataPathRefusesSymlinksAndEscapes",
-        "TestClaimSignInAndRankingOverHTTP"
+        "TestClaimSignInAndRankingOverHTTP",
+        "TestReleasedClaimLeavesTheRankingAndIsNotInherited"
+      ]
+    },
+    {
+      "requirements": [
+        "property:byo-yomi clocks",
+        "property:bots spend time where it matters",
+        "proof:clocks never cheat",
+        "property:turns always end",
+        "property:set_autopilot keeps the seat"
+      ],
+      "files": [
+        "source/clock.go",
+        "source/game.go",
+        "source/engine.go",
+        "source/bot.go",
+        "source/web/src/ui/Panels.tsx",
+        "source/web/src/ui/Room.tsx"
+      ],
+      "symbols": [
+        "clockSpec.limit",
+        "clockSpec.stage",
+        "clockSpec.charge",
+        "clockSpec.timedOut",
+        "botPlan",
+        "ServerCore.armTurnLocked",
+        "ServerCore.applyLocked",
+        "SearchParams.Planned",
+        "SearchParams.Cancel",
+        "SearchResult.Stop"
+      ],
+      "tests": [
+        "TestByoyomiChargesMainTimeThenPeriods",
+        "TestBotPlanNeverUsesUpAPeriod",
+        "TestMovesAreChargedAndAutopilotLeavesTheClock",
+        "TestSearchStopsEarlyOnSettledMoves",
+        "TestLateMoveLosesToTheDeadline",
+        "TestDeadlineTimesOutAndAbandonmentEnds"
+      ]
+    },
+    {
+      "requirements": [
+        "property:session type panel",
+        "proof:the session type panel never misleads"
+      ],
+      "files": [
+        "spec/SessionPanel.lean",
+        "source/cmd/demo/static/session/goserver.leanfm",
+        "source/cmd/demo/static/session/goserver.svg",
+        "source/cmd/demo/static/session/provenance.json",
+        "source/cmd/demo/main.go",
+        "source/web/src/ui/SessionType.tsx"
+      ],
+      "symbols": [
+        "Project.SessionPanel.main",
+        "SessionTypePanel"
+      ],
+      "tests": [
+        "TestSessionPanelMatchesTheSpec",
+        "browser_check.py"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:review_move",
+        "property:post-game review is shared and remembered",
+        "property:chat follows the tree",
+        "proof:review never changes the game",
+        "proof:chat never pins to a position that does not exist"
+      ],
+      "files": [
+        "source/review.go",
+        "source/server.go",
+        "source/game.go",
+        "source/cmd/demo/main.go",
+        "source/web/src/game/game.ts",
+        "source/web/src/ui/Game.tsx",
+        "source/web/src/ui/common.tsx",
+        "source/web/src/ui/Panels.tsx"
+      ],
+      "symbols": [
+        "ServerCore.addReviewMove",
+        "game.positionLocked",
+        "game.pinLocked",
+        "GameCtl.share",
+        "GameCtl.syncReview",
+        "GameCtl.chatNode",
+        "GameCtl.pathRefs",
+        "alongLine"
+      ],
+      "tests": [
+        "TestReviewTreeAfterTheFinish",
+        "book_tour.py"
       ]
     }
   ],

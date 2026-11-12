@@ -29,10 +29,14 @@ import (
 )
 
 const (
-	MinPasswordBytes    = 8
-	MaxPasswordBytes    = 128
-	MaxClaims           = 1000
-	MaxResults          = 100000
+	MinPasswordBytes = 8
+	MaxPasswordBytes = 128
+	MaxClaims        = 1000
+	MaxResults       = 100000
+	// claims, password changes and releases together
+	MaxAccountRecords = 20000
+	// a name changes its password at most once in this interval
+	PasswordChangeGap   = time.Minute
 	DefaultPBKDF2Rounds = 600000
 	// failures per name before attempts are delayed, and the longest delay
 	FreeFailures = 5
@@ -45,7 +49,7 @@ const (
 // Errors a caller may show; none reveals a hash, and a wrong password says only that.
 var (
 	ErrClaimed      = errors.New("this name is claimed; enter its password")
-	ErrNotClaimed   = errors.New("this name is not claimed; leave the password empty")
+	ErrNotClaimed   = errors.New("this name is not claimed: leave the password empty to sign in as a guest, or type a new password twice to claim it")
 	ErrWrongPass    = errors.New("wrong password")
 	ErrThrottled    = errors.New("too many wrong passwords for this name; try again later")
 	ErrBotName      = errors.New("names beginning bot- belong to bots")
@@ -58,6 +62,8 @@ func nameKey(name string) string { return strings.ToLower(strings.TrimSpace(name
 func isBotName(name string) bool { return strings.HasPrefix(nameKey(name), "bot-") }
 
 type claim struct {
+	// ID is random per claim: a later claim of a released name is a different player
+	ID        string `json:"id,omitempty"`
 	Name      string `json:"name"`
 	Key       string `json:"key"`
 	Hash      string `json:"hash"`
@@ -70,7 +76,8 @@ type ResultSeat struct {
 	Player string `json:"player"`
 	Kind   string `json:"kind"` // person, bot or "" when unrated
 	Team   uint32 `json:"team"`
-	Place  uint32 `json:"place"` // 1 = first; equal places tie
+	Place  uint32 `json:"place"`           // 1 = first; equal places tie
+	Claim  string `json:"claim,omitempty"` // a person's claim id when the game finished
 }
 
 // ResultRecord is one finished game; ID is random, so it stays unique across restarts.
@@ -81,10 +88,26 @@ type ResultRecord struct {
 	Seats      []ResultSeat `json:"seats"`
 }
 
+// passwordChange replaces a claim's hash; the claim time stays.
+type passwordChange struct {
+	Key       string `json:"key"`
+	Hash      string `json:"hash"`
+	ChangedAt int64  `json:"at"`
+}
+
+// release frees a claimed name.
+type release struct {
+	Key        string `json:"key"`
+	ID         string `json:"id,omitempty"`
+	ReleasedAt int64  `json:"at"`
+}
+
 type record struct {
-	Type   string        `json:"type"`
-	Claim  *claim        `json:"claim,omitempty"`
-	Result *ResultRecord `json:"result,omitempty"`
+	Release  *release        `json:"release,omitempty"`
+	Type     string          `json:"type"`
+	Claim    *claim          `json:"claim,omitempty"`
+	Result   *ResultRecord   `json:"result,omitempty"`
+	Password *passwordChange `json:"password,omitempty"`
 }
 
 type failures struct {
@@ -106,12 +129,14 @@ type Accounts struct {
 	hashers  chan struct{}
 	rounds   int
 	now      func() time.Time
-	ranking  *Ranking // cached fit; nil after a new result
-	failNext error    // test hook: the next append fails
+	fit      *Ranking // cached fit of every result; nil after a new result
+	records  int      // claims, password changes and releases recorded
+	changed  map[string]int64
+	failNext error // test hook: the next append fails
 }
 
 func NewMemoryAccounts() *Accounts {
-	return &Accounts{claims: map[string]*claim{}, seen: map[string]bool{}, fails: map[string]*failures{},
+	return &Accounts{claims: map[string]*claim{}, seen: map[string]bool{}, fails: map[string]*failures{}, changed: map[string]int64{},
 		hashers: make(chan struct{}, 2), rounds: DefaultPBKDF2Rounds, now: time.Now}
 }
 
@@ -202,10 +227,27 @@ func (a *Accounts) replay(line []byte) error {
 		if c.Key != nameKey(c.Name) || !validName(c.Name) || !strings.HasPrefix(c.Hash, "pbkdf2-sha256$") {
 			return errors.New("malformed claim")
 		}
-		if _, dup := a.claims[c.Key]; dup || len(a.claims) >= MaxClaims {
+		if _, dup := a.claims[c.Key]; dup || len(a.claims) >= MaxClaims || a.records >= MaxAccountRecords {
 			return errors.New("duplicate claim or too many claims")
 		}
 		a.claims[c.Key] = c
+		a.records++
+	case r.Type == "password" && r.Password != nil:
+		c, ok := a.claims[r.Password.Key]
+		if !ok || !strings.HasPrefix(r.Password.Hash, "pbkdf2-sha256$") || a.records >= MaxAccountRecords {
+			return errors.New("password change without its claim, malformed, or too many")
+		}
+		c.Hash = r.Password.Hash
+		a.records++
+		a.changed[r.Password.Key] = r.Password.ChangedAt
+	case r.Type == "release" && r.Release != nil:
+		c, ok := a.claims[r.Release.Key]
+		if !ok || c.ID != r.Release.ID || a.records >= MaxAccountRecords {
+			return errors.New("release without its claim, or too many account records")
+		}
+		delete(a.claims, r.Release.Key)
+		delete(a.changed, r.Release.Key)
+		a.records++
 	case r.Type == "result" && r.Result != nil:
 		if r.Result.ID == "" || len(r.Result.Seats) > MaxPlayers {
 			return errors.New("malformed result")
@@ -269,12 +311,19 @@ func (a *Accounts) Claim(name string) (claimName string, claimedAt int64, ok boo
 	return c.Name, c.ClaimedAt, true
 }
 
-// claimedExactly reports whether name itself (not a case variant) was claimed before t.
-func (a *Accounts) claimedBefore(name string, t time.Time) bool {
+// claimedBefore returns the claim id when name itself (not a case variant) was claimed
+// before t, and "" otherwise.
+func (a *Accounts) claimedBefore(name string, t time.Time) string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	c, ok := a.claims[nameKey(name)]
-	return ok && c.Name == name && c.ClaimedAt < t.UnixMilli()
+	if !ok || c.Name != name || c.ClaimedAt >= t.UnixMilli() {
+		return ""
+	}
+	if c.ID == "" {
+		return "-" // a claim written before claim ids
+	}
+	return c.ID
 }
 
 // pbkdf2Key is PBKDF2 (RFC 8018) with HMAC over h; standard library only.
@@ -421,14 +470,73 @@ func (a *Accounts) AddClaim(name, password string) (code string) {
 	if _, taken := a.claims[key]; taken {
 		return "already_claimed"
 	}
-	if len(a.claims) >= MaxClaims {
+	if len(a.claims) >= MaxClaims || a.records >= MaxAccountRecords {
 		return "capacity"
 	}
-	c := &claim{Name: name, Key: key, Hash: h, ClaimedAt: a.now().UnixMilli()}
+	c := &claim{ID: newRecordID(), Name: name, Key: key, Hash: h, ClaimedAt: a.now().UnixMilli()}
+	if c.ID == "" {
+		return "unavailable"
+	}
 	if err := a.append(record{Type: "claim", Claim: c}); err != nil {
 		return "unavailable"
 	}
 	a.claims[key] = c
+	a.records++
+	return ""
+}
+
+// SetPassword durably replaces a claimed name's password; the caller has already
+// checked the current one with Authenticate.
+func (a *Accounts) SetPassword(name, password string) (code string) {
+	if len(password) < MinPasswordBytes || len(password) > MaxPasswordBytes {
+		return "invalid_password"
+	}
+	key := nameKey(name)
+	h, err := a.hash(password)
+	if err != nil {
+		return "unavailable"
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, ok := a.claims[key]
+	if !ok {
+		return "not_claimed"
+	}
+	now := a.now().UnixMilli()
+	if last, ok := a.changed[key]; ok && now-last < PasswordChangeGap.Milliseconds() {
+		return "too_soon"
+	}
+	if a.records >= MaxAccountRecords {
+		return "capacity"
+	}
+	if err := a.append(record{Type: "password", Password: &passwordChange{Key: key, Hash: h, ChangedAt: now}}); err != nil {
+		return "unavailable"
+	}
+	c.Hash = h
+	a.records++
+	a.changed[key] = now
+	return ""
+}
+
+// Release durably frees a claimed name; the caller has already checked its password.
+func (a *Accounts) Release(name string) (code string) {
+	key := nameKey(name)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, ok := a.claims[key]
+	if !ok {
+		return "not_claimed"
+	}
+	if a.records >= MaxAccountRecords {
+		return "capacity"
+	}
+	if err := a.append(record{Type: "release", Release: &release{Key: key, ID: c.ID, ReleasedAt: a.now().UnixMilli()}}); err != nil {
+		return "unavailable"
+	}
+	delete(a.claims, key)
+	delete(a.changed, key)
+	delete(a.fails, key)
+	a.records++
 	return ""
 }
 
@@ -458,16 +566,29 @@ func (a *Accounts) RecordResult(r ResultRecord) error {
 	}
 	a.seen[r.ID] = true
 	a.results = append(a.results, r)
-	a.ranking = nil
+	a.fit = nil
 	return nil
 }
 
-// Ranking returns the cached fit, computing it after any new result.
+// Ranking lists bots and current claims from the cached fit of every result. A released
+// claim's games still shape everyone's ratings, but the released claim is not listed.
 func (a *Accounts) Ranking() *Ranking {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.ranking == nil {
-		a.ranking = Fit(a.results)
+	if a.fit == nil {
+		a.fit = Fit(a.results)
 	}
-	return a.ranking
+	out := &Ranking{RatedGames: a.fit.RatedGames, Exact: a.fit.Exact}
+	for _, e := range a.fit.Entries {
+		if e.Kind == "person" {
+			c, ok := a.claims[nameKey(e.Player)]
+			current := ok && c.Name == e.Player && (e.claim == c.ID || (e.claim == "-" && c.ID == ""))
+			if !current {
+				continue
+			}
+		}
+		out.Entries = append(out.Entries, e)
+	}
+	rankEntries(out.Entries)
+	return out
 }

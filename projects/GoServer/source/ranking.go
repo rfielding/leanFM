@@ -26,6 +26,7 @@ type RankEntry struct {
 	Rating int32  `json:"rating"`
 	Games  uint32 `json:"games"`
 	Firsts uint32 `json:"firsts"`
+	claim  string // a person's claim id
 }
 
 type Ranking struct {
@@ -64,6 +65,15 @@ func Fit(results []ResultRecord) *Ranking {
 			continue
 		}
 		rated++
+		// a person is one player per claim: name and claim id
+		seats := make([]ResultSeat, len(r.Seats))
+		for i, x := range r.Seats {
+			if x.Kind == "person" && x.Claim != "" {
+				x.Player += "\x00" + x.Claim
+			}
+			seats[i] = x
+		}
+		r.Seats = seats
 		byTeam := map[uint32][]ResultSeat{}
 		for _, s := range r.Seats {
 			if s.Player == "" {
@@ -173,22 +183,28 @@ func Fit(results []ResultRecord) *Ranking {
 	for i, p := range players {
 		elo := AnchorElo + 400*math.Log10(gamma[i])
 		out.Exact[p] = elo
-		out.Entries = append(out.Entries, RankEntry{Player: displayPlayer(p), Kind: kinds[p], Rating: int32(math.Round(elo)), Games: games[p], Firsts: firsts[p]})
+		name, claimID, _ := strings.Cut(p, "\x00")
+		out.Entries = append(out.Entries, RankEntry{Player: displayPlayer(name), Kind: kinds[p], Rating: int32(math.Round(elo)), Games: games[p], Firsts: firsts[p], claim: claimID})
 	}
-	sort.SliceStable(out.Entries, func(i, j int) bool {
-		a, b := out.Entries[i], out.Entries[j]
+	rankEntries(out.Entries)
+	return out
+}
+
+// rankEntries orders by rating (then name) and gives equal ratings an equal rank.
+func rankEntries(entries []RankEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		a, b := entries[i], entries[j]
 		if a.Rating != b.Rating {
 			return a.Rating > b.Rating
 		}
 		return a.Player < b.Player
 	})
-	for i := range out.Entries {
-		out.Entries[i].Rank = uint32(i + 1)
-		if i > 0 && out.Entries[i].Rating == out.Entries[i-1].Rating {
-			out.Entries[i].Rank = out.Entries[i-1].Rank
+	for i := range entries {
+		entries[i].Rank = uint32(i + 1)
+		if i > 0 && entries[i].Rating == entries[i-1].Rating {
+			entries[i].Rank = entries[i-1].Rank
 		}
 	}
-	return out
 }
 
 // displayPlayer shows a bot key bot:1000ms/700/margin/4 as "bot 1000 ms, explore 0.70, margin 4".

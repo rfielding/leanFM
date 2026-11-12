@@ -111,7 +111,7 @@ structure GameState      where requestId : Nat deriving TypeName
 -- Every request can be refused, without mutation, naming the request it refuses.
 structure RequestRejected where requestId : Nat deriving TypeName
 -- Events at the server alone: its clock, a bot result applied or discarded, a recorded outcome.
-structure Deadline       where deriving TypeName
+structure ClockRanOut    where deriving TypeName
 structure Applied        where deriving TypeName
 structure Stale          where deriving TypeName
 structure Passed         where deriving TypeName
@@ -224,7 +224,7 @@ protocol Challenge (Person, Server) {
 
 --@begin Play
 /-- A person's move is a request in its own session. The server answers it, or refuses it:
-not this person's turn, a stale move number, a deadline already passed. -/
+not this person's turn, a stale move number, the seat's byo-yomi clock already run out. -/
 protocol PlayMoveP (Person, Server) {
   m: PlayMove from Person to Server;
   choice {
@@ -247,14 +247,14 @@ protocol BotTurnP (Server, Bot) {
   }
 }
 
-/-- The server's side of one turn: a bot (or autopilot) plays it, the clock ends it, or a
+/-- The server's side of one turn: a bot (or autopilot) plays it, the seat's byo-yomi clock ends it, or a
 resigned seat passes. A person's own move ends it through PlayMoveP, in another session.
 Everything here is recorded at the server; people see it through GameState. -/
 protocol Turn (Server, Bot) {
   choice {
     include BotTurnP Server Bot;
   } or {
-    Deadline at Server;
+    ClockRanOut at Server;
   } or {
     Passed at Server;
   }
@@ -265,7 +265,7 @@ protocol TurnNaive (Person, Server, Bot) {
   choice {
     include BotTurnP Server Bot;
   } or {
-    Deadline at Server;
+    ClockRanOut at Server;
   } or {
     m: PlayMove from Person to Server;
     MovePlayed from Server to Person cause m;
@@ -279,7 +279,7 @@ protocol TurnPushed (Person, Server, Bot) {
     c: BotMoveChosen from Bot to Server cause t;
     BotMovePlayed from Server to Person cause c;
   } or {
-    Deadline at Server;
+    ClockRanOut at Server;
     TurnTimedOut from Server to Person;
   } or {
     AutoPassed from Server to Person;
@@ -425,7 +425,7 @@ def groups : List (String × Global Role × List Role) :=
 
 -- The first attempt at a turn is not: the person's move races the server's clock and the bot.
 #guard (TurnNaive Role.person Role.server Role.bot).issues roles ==
-  [ "no single role decides a choice, so it is a race: Server starts BotTurn or Deadline; Person starts PlayMove" ]
+  [ "no single role decides a choice, so it is a race: Server starts BotTurn or ClockRanOut; Person starts PlayMove" ]
 
 -- Nor is the first attempt at answering a merge: after MergeResponded the person cannot tell
 -- whether an outcome is still coming.
@@ -448,7 +448,10 @@ def mayCall : Role → Role → Bool
 #guard (TurnPushed Role.person Role.server Role.bot).httpCuts isHttp mayCall ==
   [ "BotMovePlayed is a request from Server to Person, which Server may not call"
   , "TurnTimedOut is a request from Server to Person, which Server may not call"
-  , "AutoPassed is a request from Server to Person, which Server may not call" ]
+  , "AutoPassed is a request from Server to Person, which Server may not call"
+  , "BotMovePlayed from Server to Person never gets a response"
+  , "TurnTimedOut from Server to Person never gets a response"
+  , "AutoPassed from Server to Person never gets a response" ]
 
 -- Recorded at the server and read through GameState, every message of the whole project is a
 -- request a person may make, or the answer to one, going back to that person.

@@ -70,9 +70,10 @@ type CreateGame struct {
 	GameName       string     `json:"gameName"`
 	BoardSize      uint32     `json:"boardSize"`
 	Seats          uint32     `json:"seats"`
-	TurnDeadlineMS uint64     `json:"turnDeadlineMs"`
+	MainTimeMS     uint64     `json:"mainTimeMs"`
+	ByoyomiPeriods uint32     `json:"byoyomiPeriods"`
+	ByoyomiMS      uint64     `json:"byoyomiMs"`
 	KoRule         int32      `json:"koRule"`
-	BotMS          uint64     `json:"botMs"`
 	ExploreMilli   uint32     `json:"exploreMilli"`
 	RewardMode     string     `json:"rewardMode"`
 	Softness       uint32     `json:"softness"`
@@ -87,9 +88,10 @@ type GameCreated struct {
 	Status         string     `json:"status"`
 	BoardSize      uint32     `json:"boardSize"`
 	Seats          uint32     `json:"seats"`
-	TurnDeadlineMS uint64     `json:"turnDeadlineMs"`
+	MainTimeMS     uint64     `json:"mainTimeMs"`
+	ByoyomiPeriods uint32     `json:"byoyomiPeriods"`
+	ByoyomiMS      uint64     `json:"byoyomiMs"`
 	KoRule         int32      `json:"koRule"`
-	BotMS          uint64     `json:"botMs"`
 	ExploreMilli   uint32     `json:"exploreMilli"`
 	RewardMode     string     `json:"rewardMode"`
 	Softness       uint32     `json:"softness"`
@@ -124,6 +126,8 @@ type SendGameChat struct {
 	GameID    string `json:"gameId"`
 	Body      string `json:"body"`
 	RequestID uint64 `json:"requestId"`
+	// Node is the position the sender is viewing (m<k> or r<n>); see pinLocked
+	Node string `json:"node"`
 }
 type GameChat struct {
 	GameID    string `json:"gameId"`
@@ -131,6 +135,7 @@ type GameChat struct {
 	Body      string `json:"body"`
 	TimeMS    int64  `json:"timeMs"`
 	RequestID uint64 `json:"requestId"`
+	Node      string `json:"node"`
 }
 type RequestRejected struct {
 	RequestID uint64 `json:"requestId"`
@@ -160,8 +165,9 @@ type game struct {
 	chat                              []GameChat
 	boardSize                         int
 	seats                             int
-	turnDeadlineMs                    uint64
-	botMs                             uint64
+	mainTimeMs                        uint64
+	byoyomiPeriods                    uint32
+	byoyomiMs                         uint64
 	koRule                            int
 	exploreMilli                      uint32
 	rewardMode                        string
@@ -170,6 +176,10 @@ type game struct {
 	proposals                         map[uint32]*proposal
 	nextProposal                      uint32
 	play                              *play
+	// the shared review tree of a finished game (property:post-game review is shared and remembered)
+	review     []ReviewNode
+	reviewIdx  map[string]int
+	reviewKids map[string]string
 }
 type cachedResult struct {
 	fingerprint string
@@ -199,7 +209,7 @@ type ServerCore struct {
 	bots     *BotPool
 	accounts *Accounts
 	closed   bool
-	// test hooks: shorter bot budgets and human turn limits
+	// test hooks: quicker bots, and straight byo-yomi with one short period
 	botBudgetOverride time.Duration
 	turnLimit         time.Duration
 }
@@ -323,8 +333,16 @@ func (s *ServerCore) Handle(request any) any {
 		return s.proposeMerge(r)
 	case RespondMerge:
 		return s.respondMerge(r)
+	case AddReviewMove:
+		return s.addReviewMove(r)
 	case ClaimName:
 		return s.claimName(r)
+	case ChangePassword:
+		return s.changePassword(r)
+	case SignOut:
+		return s.signOut(r)
+	case ReleaseName:
+		return s.releaseName(r)
 	case GetRanking:
 		return s.getRanking(r)
 	default:
@@ -429,14 +447,14 @@ func (s *ServerCore) createGame(r CreateGame) any {
 		}
 		id := s.newID("game")
 		g := &game{id: id, roomID: rm.id, creator: identity, name: name, status: GameOpen, members: map[string]bool{identity: true},
-			boardSize: cfg.board, seats: cfg.seats, turnDeadlineMs: cfg.deadline, botMs: cfg.bot, koRule: cfg.ko,
+			boardSize: cfg.board, seats: cfg.seats, mainTimeMs: cfg.mainMs, byoyomiPeriods: cfg.periods, byoyomiMs: cfg.periodMs, koRule: cfg.ko,
 			exploreMilli: cfg.explore, rewardMode: cfg.mode, softness: cfg.softness, seatInfo: cfg.plan}
 		rm.games[id] = g
 		plan := make([]SeatPlan, cfg.seats)
 		for i, st := range cfg.plan {
 			plan[i] = SeatPlan{Seat: uint32(i + 1), Controller: st.controller, Team: uint32(st.team)}
 		}
-		return GameCreated{GameName: name, GameID: id, RoomID: rm.id, Creator: identity, Status: GameOpen, BoardSize: uint32(cfg.board), Seats: uint32(cfg.seats), TurnDeadlineMS: cfg.deadline, KoRule: int32(cfg.ko), BotMS: cfg.bot, ExploreMilli: cfg.explore, RewardMode: cfg.mode, Softness: cfg.softness, SeatPlan: plan, RequestID: r.RequestID}
+		return GameCreated{GameName: name, GameID: id, RoomID: rm.id, Creator: identity, Status: GameOpen, BoardSize: uint32(cfg.board), Seats: uint32(cfg.seats), MainTimeMS: cfg.mainMs, ByoyomiPeriods: cfg.periods, ByoyomiMS: cfg.periodMs, KoRule: int32(cfg.ko), ExploreMilli: cfg.explore, RewardMode: cfg.mode, Softness: cfg.softness, SeatPlan: plan, RequestID: r.RequestID}
 	})
 }
 
@@ -486,7 +504,7 @@ func (s *ServerCore) sendGameChat(r SendGameChat) any {
 		if g == nil || !g.members[identity] {
 			return reject(r.RequestID, "forbidden", "game_chat")
 		}
-		msg := GameChat{GameID: g.id, Sender: identity, Body: r.Body, TimeMS: s.clock().UnixMilli(), RequestID: r.RequestID}
+		msg := GameChat{GameID: g.id, Sender: identity, Body: r.Body, TimeMS: s.clock().UnixMilli(), RequestID: r.RequestID, Node: g.pinLocked(r.Node)}
 		g.chat = appendBoundedGame(g.chat, msg)
 		return msg
 	})
@@ -575,8 +593,8 @@ func appendBoundedRoom(v []RoomChat, x RoomChat) []RoomChat {
 }
 func appendBoundedGame(v []GameChat, x GameChat) []GameChat {
 	v = append(v, x)
-	if len(v) > MaxChatEntries {
-		v = v[len(v)-MaxChatEntries:]
+	if len(v) > MaxGameChatEntries {
+		v = v[len(v)-MaxGameChatEntries:]
 	}
 	return v
 }

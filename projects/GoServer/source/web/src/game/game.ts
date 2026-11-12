@@ -10,11 +10,16 @@ import {api, auth, feedback, nextID} from '../api';
 import {beep, moveSound} from './sound';
 import {COLS, PLAYERS} from './draw';
 
+const LOCAL_SEARCH_MS = 2000;
+
 export class GameCtl {
   readonly gameId: string;
   gs: any = null; records: any[] = []; G: any = null; K = 0;
   root: any = null; cur: any = null; live: any = null;
   private byId = new Map<number, any>(); private nextNode = 1;
+  // positions the server knows: actual[k] is the position after k actual moves (m<k>); byRid maps
+  // review nodes (r<n>) of a finished game's shared review tree
+  private actual: any[] = []; private byRid = new Map<string, any>(); private reviewSeen = 0;
   mismatch = false; flashMsg = ''; private flashT = 0;
   think: any = null; autoplay = false; private worker: Worker | null = null; private searchId = 0;
   territory = true; heat = true; hoverPt = -1;
@@ -59,7 +64,7 @@ export class GameCtl {
   private ensureTree() {
     const gs = this.gs; if (this.root || !gs || gs.status === 'open') return;
     this.K = gs.seats.length; this.G = makeGeom(gs.boardSize);
-    this.root = this.mkNode(null, null, newState(this.G, this.K, gs.koOn), null, 0, false); this.root.server = true; this.cur = this.live = this.root;
+    this.root = this.mkNode(null, null, newState(this.G, this.K, gs.koOn), null, 0, false); this.root.server = true; this.cur = this.live = this.root; this.actual = [this.root];
   }
   private syncMoves(recs: any[]) {
     for (const rec of recs) {
@@ -70,19 +75,54 @@ export class GameCtl {
       let ch = parent.children.find((c: any) => c.move === m && !c.server);
       if (ch && ch.player === parent.state.toMove) ch.local = false;
       else { const s = cloneState(parent.state), player = s.toMove, res = play(this.G, s, m); ch = this.mkNode(parent, m, s, res, player, false); parent.children.push(ch); }
-      ch.server = true; ch.rec = rec; ch.info.source = rec.source; if (rec.search && rec.search.guard) ch.info.guard = true;
+      ch.server = true; ch.rec = rec; ch.info.source = rec.source; if (rec.search && rec.search.guard) ch.info.guard = true; if (rec.search) ch.info.search = {ms: rec.search.ms, plannedMs: rec.search.plannedMs, stop: rec.search.stop};
       parent.main = parent.children.indexOf(ch);
-      const follow = this.cur === this.live; this.live = ch; if (follow) { this.cur = ch; if (this.active) moveSound(ch); }
+      const follow = this.cur === this.live; this.live = ch; this.actual.push(ch); if (follow) { this.cur = ch; if (this.active) moveSound(ch); }
     }
     const gs = this.gs;
     if (gs && gs.cells.length && this.records.length === gs.moveNo) { const cells = this.G.pts.map((p: number) => this.live.state.cells[p]); this.mismatch = cells.some((v: number, i: number) => v !== gs.cells[i]); }
   }
+  // ---------- the shared review tree of a finished game, and positions chat is pinned to ----------
+  // A node's position id: m<k> for the actual game, r<n> for a review node; '' for a variation
+  // the server does not have (made during play, or not yet sent).
+  ref(node: any): string { return node.rid ? node.rid : node.server ? 'm' + node.depth : ''; }
+  nodeOfRef(ref: string): any { if (ref.startsWith('r')) return this.byRid.get(ref) || null; const k = +ref.slice(1); return ref.startsWith('m') && Number.isInteger(k) ? this.actual[k] || null : null; }
+  // the position a chat message is pinned to: the viewed node, or its nearest ancestor the server knows
+  chatNode(): string { for (let p = this.cur; p; p = p.parent) { const r = this.ref(p); if (r) return r; } return ''; }
+  // the positions on the line from the empty board to the viewed node
+  pathRefs(): Map<string, number> { const m = new Map<string, number>(); for (let p = this.cur; p; p = p.parent) { const r = this.ref(p); if (r) m.set(r, p.depth); } return m; }
+  private syncReview(nodes: any[]) {
+    for (const rn of nodes) {
+      const parent = this.nodeOfRef(rn.parent); if (!parent) break; // parents always come first; ask again next poll
+      this.reviewSeen++;
+      if (this.byRid.has(rn.id)) continue;
+      const m = rn.kind === 'place' ? this.ptOf(rn.x, rn.y) : -1;
+      let ch = parent.children.find((c: any) => c.move === m && !c.server);
+      if (!ch) { const s = cloneState(parent.state), player = s.toMove, res = play(this.G, s, m); res.source = 'review'; ch = this.mkNode(parent, m, s, res, player, true); parent.children.push(ch); }
+      ch.rid = rn.id; ch.author = rn.author; this.byRid.set(rn.id, ch);
+    }
+  }
+  // After the finish every variation move is kept on the server for every game member; a node
+  // whose parent is not kept yet sends its parent first.
+  private async share(node: any): Promise<string> {
+    if (this.ref(node)) return this.ref(node);
+    if (!this.gs || this.gs.status !== 'finished' || !node.parent) return '';
+    if (node.sharing) return node.sharing;
+    node.sharing = (async () => {
+      const parent = await this.share(node.parent); if (!parent) return '';
+      const G = this.G, m = node.move, place = m >= 0;
+      const r = await api('review_move', {gameId: this.gameId, parent, kind: place ? 'place' : 'pass', x: place ? m % G.W - 1 : 0, y: place ? (m / G.W | 0) - 1 : 0, requestId: nextID()});
+      node.rid = r.node.id; node.author = r.node.author; this.byRid.set(node.rid, node); this.emit(); return node.rid;
+    })().catch((e: any) => { node.sharing = null; this.flash(e.message); return ''; });
+    return node.sharing;
+  }
+
   async refresh() {
     if (this.busy || !this.alive) return; this.busy = true;
     try {
-      const st = await api('game_state', {gameId: this.gameId, sinceMove: this.records.length, requestId: nextID()});
+      const st = await api('game_state', {gameId: this.gameId, sinceMove: this.records.length, sinceReview: this.reviewSeen, requestId: nextID()});
       if (!this.alive || st.gameId !== this.gameId) return; // a response for another game never lands here
-      const prev = this.gs && this.gs.status; this.gs = st; this.ensureTree(); if (this.root) this.syncMoves(st.moves || []);
+      const prev = this.gs && this.gs.status; this.gs = st; this.ensureTree(); if (this.root) { this.syncMoves(st.moves || []); this.syncReview(st.review || []); }
       this.gs.stateAt = performance.now();
       if (prev !== st.status && st.status === 'finished') beep(523, 300);
       this.emit();
@@ -110,7 +150,15 @@ export class GameCtl {
   // Pass or resign in the real game on my turn, even while viewing another position: the view
   // jumps back to the live game first, so the move is never made somewhere unseen.
   private notMyTurn() { const gs = this.gs; return !gs || gs.status !== 'playing' ? 'The game is not in progress.' : this.myControl() === 'autopilot' ? 'Autopilot has your seat; take it back first.' : this.mySeat() ? 'It is not your turn.' : 'Only seated players can pass.'; }
-  pass() { if (!this.myLiveTurn()) { this.flash(this.notMyTurn()); return; } if (this.cur !== this.live) this.toLive(); void this.serverMove('pass', -1); }
+  // P or Pass: on my live turn it passes in the real game (jumping back to the live position
+  // first); wherever analysis is open (a finished game, or a watcher) it passes in the viewed
+  // variation for whichever seat is to move there, like a click on a point or C for the computer.
+  pass() {
+    if (this.myLiveTurn()) { if (this.cur !== this.live) this.toLive(); void this.serverMove('pass', -1); return; }
+    if (this.root && this.analysisAllowed()) { this.tryPlay(this.cur, -1); return; }
+    this.flash(this.notMyTurn());
+  }
+  canPassHere(): boolean { return this.myLiveTurn() || (!!this.root && this.analysisAllowed() && !isTerminal(this.G, this.cur.state)); }
   resign() { if (!this.myLiveTurn()) { this.flash(this.notMyTurn()); return; } if (this.cur !== this.live) this.toLive(); void this.serverMove('resign', RESIGN); }
   tryPlay(node: any, m: number) {
     const G = this.G;
@@ -122,9 +170,10 @@ export class GameCtl {
     if (isTerminal(G, node.state)) { this.flash('The game is over at this position.'); return; }
     if (!isLegal(G, node.state, m)) { this.flash(node.state.cells[m] ? 'That point is occupied.' : 'Ko: that recapture must wait one round.'); return; }
     if (m >= 0 && node.state.koOn) { const s = cloneState(node.state); play(G, s, m); for (let p = node; p; p = p.parent) if (p.key === stateKey(G, s)) { this.flash('Superko: that recreates an earlier position.'); return; } }
-    const ex = node.children.find((c: any) => c.move === m); if (ex) { node.main = node.children.indexOf(ex); this.go(ex); return; }
+    const ex = node.children.find((c: any) => c.move === m); if (ex) { node.main = node.children.indexOf(ex); this.go(ex); if (ex.local) void this.share(ex); return; }
     const s = cloneState(node.state), player = s.toMove, res = play(G, s, m); res.source = 'local';
     const ch = this.mkNode(node, m, s, res, player, true); node.children.push(ch); node.main = node.children.length - 1; moveSound(ch); this.go(ch);
+    void this.share(ch);
   }
   clickPoint(m: number) {
     if (!this.root) return; const cur = this.cur;
@@ -141,12 +190,13 @@ export class GameCtl {
   setHover(m: number) { if (m !== this.hoverPt) { this.hoverPt = m; this.emit(); } }
 
   // ---------- local analysis (Lab search worker; never sent to the server) ----------
+  // A local search thinks for a fixed two seconds; the game's clock belongs to the players.
   stopThinking() { if (this.think) { clearTimeout(this.think.hard); this.think = null; } if (this.worker) { this.worker.terminate(); this.worker = null; } }
   localSearch(node: any, playIt: boolean) {
     const G = this.G, gs = this.gs;
     if (this.think || !this.analysisAllowed() || isTerminal(G, node.state)) return;
     if (!this.worker) { this.worker = new Worker('./search-worker.js'); this.worker.onmessage = e => this.onWorker(e); }
-    const id = ++this.searchId, s = node.state, dead = gs.botMs;
+    const id = ++this.searchId, s = node.state, dead = LOCAL_SEARCH_MS;
     this.think = {id, node, playIt, live: null, t0: performance.now(), dead};
     this.think.hard = window.setTimeout(() => { if (this.think && this.think.id === id) { this.stopThinking(); this.emit(); } }, dead + 2000);
     const hist = []; for (let p = node; p; p = p.parent) hist.push(p.key);
@@ -163,7 +213,7 @@ export class GameCtl {
       const m = d.move, ex = node.children.find((c: any) => c.move === m);
       if (ex) { node.main = node.children.indexOf(ex); if (this.cur === node) this.cur = ex; }
       else { const s = cloneState(node.state), player = s.toMove, res = play(this.G, s, m); res.source = 'local'; if (d.guard) res.guard = true;
-        const ch = this.mkNode(node, m, s, res, player, true); node.children.push(ch); node.main = node.children.length - 1; if (this.cur === node) { moveSound(ch); this.cur = ch; } }
+        const ch = this.mkNode(node, m, s, res, player, true); node.children.push(ch); node.main = node.children.length - 1; if (this.cur === node) { moveSound(ch); this.cur = ch; } void this.share(ch); }
     }
     this.emit();
     const cur = this.cur;
@@ -179,6 +229,18 @@ export class GameCtl {
   home() { if (this.root) this.go(this.root); }
   end() { let n = this.cur; if (!n) return; while (n.children.length) n = n.children[n.main]; this.go(n); }
   toLive() { let p = this.live; if (!p) return; while (p.parent) { p.parent.main = p.parent.children.indexOf(p); p = p.parent; } this.go(this.live); }
+  // ↑/↓: with two or more next moves (A, B, ...) choose which one → follows, staying put;
+  // otherwise switch to the previous or next sibling variation of the current move.
+  upDown(d: number) {
+    const c = this.cur; if (!c) return;
+    const n = c.children.length;
+    if (n > 1) { c.main = (c.main + d + n) % n; this.emit(); return; }
+    this.sib(d);
+  }
+  canUpDown(d: number): boolean {
+    const c = this.cur; if (!c) return false; if (c.children.length > 1) return true;
+    const p = c.parent; if (!p) return false; const j = p.children.indexOf(c) + d; return j >= 0 && j < p.children.length;
+  }
   sib(d: number) { const p = this.cur?.parent; if (!p) return; const j = p.children.indexOf(this.cur) + d; if (j < 0 || j >= p.children.length) return; p.main = j; this.go(p.children[j]); }
   jump(n: any) { for (let q = n; q.parent; q = q.parent) q.parent.main = q.parent.children.indexOf(q); this.go(n); }
   nodeById(id: number) { return this.byId.get(id); }
@@ -200,6 +262,7 @@ export class GameCtl {
   // Read-only probes for the scripted book tour (source/book_tour.py); they change nothing.
   probes() {
     return {point: (x: number, y: number) => (this.live ? this.live.state.cells[this.ptOf(x, y)] : -1), size: () => (this.G ? this.G.N : 9),
-      liveMove: () => this.records.length, lastSource: () => (this.records.length ? this.records[this.records.length - 1].source : ''), status: () => (this.gs ? this.gs.status : '')};
+      liveMove: () => this.records.length, lastSource: () => (this.records.length ? this.records[this.records.length - 1].source : ''), status: () => (this.gs ? this.gs.status : ''),
+      reviewCount: () => this.byRid.size, curRef: () => (this.cur ? this.chatNode() : ''), goRef: (r: string) => { const n = this.nodeOfRef(r); if (n) this.go(n); return !!n; }};
   }
 }
