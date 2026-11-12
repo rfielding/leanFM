@@ -1,0 +1,29 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+protocol SignIn (Browser, App, Idp) {
+  sessions by r.state {
+    s: Start from Browser to App route "GET /login";
+    r: RedirectToIdp from App to Browser cause s status 302;
+    a: Authorize from Browser to Idp route "GET /authorize"
+       where a.state = r.state and a.redirect_uri = r.redirect_uri and a.code_challenge = r.code_challenge;
+    LoginPage from Idp to Browser cause a status 200;
+    c: Credentials from Browser to Idp route "POST /login" where c.state = a.state;
+    choice {
+      b: RedirectBack from Idp to Browser cause c status 302 where b.state = a.state;
+      cb: Callback from Browser to App route "GET /callback" where cb.state = r.state and cb.code = b.code;
+      t: ExchangeCode from App to Idp cause cb route "POST /token"
+         where t.code = cb.code and t.redirect_uri = r.redirect_uri and t.client_id = r.client_id;
+      choice {
+        Tokens from Idp to App cause t status 200;
+        SignedIn from App to Browser cause cb status 302;
+      } or {
+        BadCode from Idp to App cause t status 400;
+        SignInFailed from App to Browser cause cb status 401;
+      }
+    } or {
+      d: DeniedBack from Idp to Browser cause c status 302 where d.state = a.state;
+      e: ErrorCallback from Browser to App route "GET /callback" where e.state = r.state;
+      SignInFailed from App to Browser cause e status 401;
+    }
+  }
+}
+\end{lstlisting}

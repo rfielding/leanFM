@@ -1,501 +1,87 @@
-\chapter{Worked Example: OAuth Authorization Code Flow}
+\chapter{Worked Example: Signing In over HTTP}
 \label{ch:oauth-example}
 
 \index{OAuth}
-This chapter is a behavioural sketch inspired by the OAuth authorization-code
-flow, starting above HTTP and protobuf, to exercise scenario decomposition,
-parameter flow, alternatives, requirements and rendering. In session-type terms it
-is a global type with five roles, a grant-or-deny choice by the authorization
-service, and parameters such as \texttt{state} and the code that flow from one
-message to a later one. Its channels are HTTP calls and browser redirects, whose
-physics (a redirect never followed, a callback replayed by an attacker) is where
-the security requirements live.
+Signing in with an identity provider is the OAuth 2.0 authorization code flow
+with PKCE, and in practice it is plain HTTP: three parties, a handful of routes,
+redirects that the browser follows, and a few values that must come back
+unchanged. This chapter writes it as a session type with typed messages, in
+\texttt{examples/oauth}, and shows what LeanFM checks and generates from it.
 
-The listings are \emph{proposed notation}, not compiled; the generated figures are
-real. The flow is simplified: the authorization request omits \texttt{client\_id}
-and \texttt{response\_type}, and the token request carries only the code, without
-\texttt{redirect\_uri}, client authentication or PKCE, all required by RFC~6749
-and current guidance. The knowledge claims hold for this simplified flow only.
+\section{The session type}
 
-\section{Actors, values, and observable events}
+\index{session key}
+\texttt{SessionType.leanfm} declares the messages as structures, then the
+protocol. Every message is an HTTP request with its route or a response with its
+status. One sign-in is one session, keyed by OAuth's \texttt{state}: the app's
+start and its callback are two separate HTTP requests, and \texttt{state} is what
+ties them together, so it is the session's key.
 
-The person is modelled separately from the browser, because redirects are
-observable messages between software participants.
-
-\begin{lstlisting}
-inductive Actor where
-  | user | browser | app | authorizationServer | resourceServer
-
-opaque State       : Type
-opaque AuthCode    : Type
-opaque AccessToken : Type
-opaque Resource    : Type
-opaque Profile     : Type
-opaque Password    : Type
-opaque Bytes       : Type
-\end{lstlisting}
-
-Every terminal elaborates to the common event envelope; ``authorization
-redirected'', for example, becomes:
-
-\begin{lstlisting}
-{ timeAt := t2, id := e2, priorIds := [e1]
-, session := browserSession, task := oauthAuthorizationTask
-, from := Actor.app, to := Actor.browser
-, kind := "authorization redirected"
-, fields := [field "state" state, field "redirectUri" callback]
-}
-\end{lstlisting}
-
-\subsection*{Authentication detail used by Production 2}
-
-OAuth does not prescribe how the authorization service authenticates the person; a
-password branch exercises knowledge flow without pretending the password is an
-OAuth parameter.
-
-\begin{lstlisting}
-def authenticateAtAuthorizationServer (password : Password) : Scenario :=
-  scenario "authenticate resource owner" do
-    from_ .browser
-    to_ .authorizationServer
-    emitBytes "credentials submitted"
-      (protectFor .authorizationServer
-        (encode [field "password" password]))
-
-    from_ .authorizationServer
-    to_ .browser
-    oneOf "authentication result"
-      [ emitBytes "authentication accepted" (encode [tag 1])
-      , emitBytes "authentication rejected" (encode [tag 0])
-      ]
-\end{lstlisting}
-
-\texttt{protectFor} promises confidentiality to the named endpoint, realized later
-by TLS, message-level encryption or a trusted local channel. Without it, a network
-observer would derive the password from the bytes.
-
-\section{Production 1: application request and redirect}
-
-\begin{lstlisting}
-def applicationRequestAndRedirect (resource : Resource) : Scenario :=
-  scenario "application request and redirect" do
-    let state <- declare State "state"
-    let callback := Uri.https "app.example" "/oauth/callback"
-
-    from_ .browser
-    to_ .app
-    emit "application request" [field "resource" resource]
-
-    from_ .app
-    to_ .browser
-    emit "authorization redirected"
-      [field "state" state, field "redirectUri" callback]
-
-    export "state" state
-    export "redirectUri" callback
-    export "resource" resource
-\end{lstlisting}
-
-The production establishes the correlation value \texttt{state} and exports it;
-nothing says how the application stores it.
-
-\section{Production 2: authorize, then grant or deny}
-
-\begin{lstlisting}
-def authorizationGranted : Scenario :=
-  scenario "authorization granted" do
-    use state <- imported State "state"
-    let code <- declare AuthCode "code"
-
-    from_ .authorizationServer
-    to_ .browser
-    emit "authorization code returned"
-      [field "state" state, field "code" code]
-
-    from_ .browser
-    to_ .app
-    emit "authorization callback"
-      [field "state" state, field "code" code]
-    export "code" code
-
-def authorizationDenied : Scenario :=
-  scenario "authorization denied" do
-    use state <- imported State "state"
-    from_ .authorizationServer
-    to_ .browser
-    emit "authorization error returned"
-      [field "state" state, field "reason" "access_denied"]
-    from_ .browser
-    to_ .app
-    emit "authorization error callback"
-      [field "state" state, field "reason" "access_denied"]
-
-def authorizeAndDecide (password : Password) : Scenario :=
-  scenario "authorize and decide" do
-    use state       <- imported State "state"
-    use redirectUri <- imported Uri "redirectUri"
-
-    from_ .browser
-    to_ .authorizationServer
-    emit "authorization requested"
-      [field "state" state, field "redirectUri" redirectUri]
-
-    include (authenticateAtAuthorizationServer password)
-    oneOf "authorization decision"
-      [ include authorizationGranted
-      , include authorizationDenied
-      ]
-\end{lstlisting}
-
-Collapsed, the production is one node; expanded, it shows authentication and the
-choice. A probability distribution may be attached later without changing the
-legal traces.
-
-\section{Scenario 3: exchange the code and use the token}
-
-\begin{lstlisting}
-def exchangeAndFetch : Scenario :=
-  scenario "exchange code and fetch resource" do
-    use code     <- imported AuthCode "code"
-    use resource <- imported Resource "resource"
-    let token    <- declare AccessToken "accessToken"
-    let profile  <- declare Profile "profile"
-
-    from_ .app
-    to_ .authorizationServer
-    emit "token requested" [field "code" code]
-
-    from_ .authorizationServer
-    to_ .app
-    emit "access token issued" [field "accessToken" token]
-
-    from_ .app
-    to_ .resourceServer
-    emit "protected resource requested"
-      [field "accessToken" token, field "resource" resource]
-
-    from_ .resourceServer
-    to_ .app
-    emit "protected resource returned"
-      [field "resource" resource, field "profile" profile]
-
-    from_ .app
-    to_ .browser
-    emit "application response" [field "profile" profile]
-\end{lstlisting}
-
-The token is visible only where the protocol transmits it; the grammar says nothing
-about the server's database or the application's sessions.
-
-\section{Reading the scenarios together}
-
-\begin{lstlisting}
-def oauthAuthorization (resource : Resource) (password : Password) : Scenario :=
-  scenario "OAuth authorization code flow" do
-    include (applicationRequestAndRedirect resource)
-    include (authorizeAndDecide password)
-    after authorizationGranted include exchangeAndFetch
-
-def oauthSystem (resource : Resource) (password : Password) : SystemSpec :=
-  generatedBy (oauthAuthorization resource password)
-  |> requireAll oauthRequirements
-\end{lstlisting}
-
-The \texttt{after} line is a guarded nonterminal reference: the denial branch ends
-without exchanging a code.
-
-\section{The parallel protobuf alphabet}
-
-The scenario says which messages may occur, in what order, with which parameter
-relationships; the protobuf file assigns field numbers and wire types to the same
-messages:
-
-\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize]{examples/oauth.proto}
-
-Each scenario message maps to one member of \texttt{EventEnvelope.payload}; the
-envelope carries identity, \texttt{prior\_ids}, the \texttt{(session\_id,
-task\_id)} key, a clock tick and the endpoints. Order, queues, probability and
-dwell stay in the scenario; byte tags stay in the schema. Validation checks that
-every terminal has one variant with matching endpoints and field types. Protobuf
-does not promise one canonical byte sequence, so byte-for-byte comparison also
-fixes deterministic serialization and length-delimited framing.
-
-\section{Generate one legal trace and its artifacts}
-
-Generation chooses productions and field values; everything after is a
-deterministic projection of the resulting events. Choose the accepted and granted
-alternatives and instantiate
-
-\begin{lstlisting}[language={}]
-session = "s1"             task = "oauth"
-resource = "profile"       state = "x7"
-redirectUri = "https://a/cb"
-protectedCredentials = aa bb
-code = 01 02               accessToken = 03 04
-profile = 05 06
-\end{lstlisting}
-
-The production derivation is
-
-\begin{lstlisting}[language={}]
-oauth
-=> applicationRequestAndRedirect ;
-   authorizeAndDecide ;
-   after(authorizationGranted, exchangeAndFetch)
-=> applicationRequestAndRedirect ;
-   authorizationRequested ;
-   credentialsSubmitted ; authenticationAccepted ;
-   authorizationGranted ; exchangeAndFetch
-\end{lstlisting}
-
-The grant admits \texttt{exchangeAndFetch}; denial would disable it. Expanding the
-remaining nonterminals gives this terminal word:
+\input{generated/oauth-signin.tex}
 
 \begin{figure}[htbp]
 \centering
-\AccessibleFigure{Accepted OAuth trace with twelve messages. Message from Browser to Application: event e one application Request. Message from Application to Browser: event e two authorization Redirect. Message from Browser to Authorization: event e three authorization Request. Message from Browser to Authorization: event e four credentials Submitted. Message from Authorization to Browser: event e five authentication Result true. Message from Authorization to Browser: event e six authorization Code Returned. Message from Browser to Application: event e seven authorization Callback. Message from Application to Authorization: event e eight token Request. Message from Authorization to Application: event e nine access Token Issued. Message from Application to Resource: event e ten protected Resource Request. Message from Resource to Application: event e eleven protected Resource Returned. Message from Application to Browser: event e twelve application Response.}{%
-\resizebox{\textwidth}{!}{\input{generated/oauth-accepted-trace.tex}}}
-\caption{The selected terminal word as an interaction diagram. Event IDs label
-messages on arrows; no actor-to-actor arrow is written as implication-like text.}
-\label{fig:oauth-accepted-terminal-word}
+\AccessibleFigure{Sequence diagram of SignIn between Browser App and Idp. The browser starts at the app and is redirected to the provider. It authorizes and signs in. The provider either redirects back with a code which the browser brings to the app's callback and the app exchanges at the token endpoint or redirects back with an error to the same callback.}{%
+\ThemedDiagram{width=.8\textwidth}{oauth-signin}}
+\caption{\texttt{SignIn} as LeanFM draws it. Each condition is drawn where it
+applies; the provider decides between the code and the error, and the token
+endpoint between tokens and a bad code.}
+\label{fig:oauth-signin}
 \end{figure}
 
-The choice has disappeared into ordinary terminals: \texttt{e5}'s bytes select
-the accepted authentication, and \texttt{e6}'s oneof tag, source and bytes
-distinguish grant from error. No separate ``chooser'' value is needed.
+The conditions say which values must come back. The browser's authorization
+request carries the app's \texttt{state}, \texttt{redirect\_uri} and PKCE
+challenge; the callback carries the same \texttt{state} and the code the provider
+issued; the app exchanges exactly that code. The password, the PKCE verifier and
+the access token end in \texttt{\_secr}: they are secrets, so no condition reads
+them and no log carries them. The callback route takes either message, the code
+or the error, as one HTTP endpoint whose request takes two shapes.
 
-\subsection{Envelope stream and concrete bytes}
+\section{A forged callback}
 
-Clock ticks and identifiers increase; the chain is linear, so
-\texttt{priorIds(e$n$)} is \texttt{[e$n-1$]} (a fork or join would change the
-lists, not the procedure). One envelope from the companion fixture:
+\index{CSRF}
+A callback whose \texttt{state} is not the one the app sent is forged or replayed,
+the cross-site request forgery that \texttt{state} exists to stop. Logged by the
+services, it does not conform:
 
-\lstinputlisting[language={},basicstyle=\ttfamily\tiny,
-  breaklines=true,firstline=3,lastline=3]{examples/oauth-granted.bytes}
+\input{generated/oauth-forged-log.tex}
 
-\texttt{examples/oauth-granted.bytes} holds all twelve (440 bytes; largest 46).
-There is no generator or round-trip check for this fixture, so it is an example,
-not evidence of reproduced serialization.
+\input{generated/oauth-forged.tex}
 
-\subsection{Event graph with stored backpointers}
+The same check names a log that files the sign-in under any session other than
+its \texttt{state}, and an exchange of a code other than the one the callback
+brought.
 
-Parsing each envelope selects a payload alternative, checks its
-\texttt{src}/\texttt{dst}, and consumes one terminal. The event graph:
+\section{What it generates}
 
-\begin{figure}[htbp]
-\centering
-\AccessibleFigure{OAuth accepted event-order graph. Events e one through e twelve form one predecessor chain. Every arrow points backward from an event to the event ID stored in its prior IDs list.}{%
-\resizebox{.92\textwidth}{!}{\input{generated/oauth-accepted-prior-graph.tex}}}
-\caption{The accepted trace as an event graph. Arrows are stored backpointers:
-\texttt{e1} has none and each later event points to its immediate predecessor.}
-\label{fig:oauth-accepted-prior-graph}
-\end{figure}
+\index{OpenAPI}
+\texttt{SessionFiles.lean} writes, beside the session type:
 
-This is one path; the residual state machine, derived from every legal residual,
-also has the rejected and denied branches.
+\input{generated/oauth-files.tex}
 
-\subsection{Actor projections}
+Each actor that serves HTTP gets its own OpenAPI document. The app's callback
+shows HTTP as it is normally used: a GET carries its fields as query parameters,
+the two messages share one operation, and a redirect carries its message in the
+\texttt{Location} URL rather than in a body:
 
-Projection keeps each actor's terminals in order: Resource receives \texttt{e10}
-and sends \texttt{e11}. The global word stays authoritative for cross-component
-order and parameter equality, which a projection cannot show.
+\input{generated/oauth-callback-openapi.tex}
 
-\subsection{Event order, queues, and memory}
+The Lean module has every role's states. The app serves one machine per sign-in:
 
-The interaction diagram and the state-machine path are the same order graph laid
-out by actor and by residual; neither is drawn independently. The word does not fix
-a transport schedule; the canonical one runs \texttt{produce; transport; receive}
-per event, so every queue peaks at one message and the global queued-byte peak is
-46. Another interleaving may peak higher, so this schedule is a witness, not the
-memory-budget proof.
+\input{generated/oauth-app-states.tex}
 
-\subsection{Measurements, plots, and verdicts}
+\section{What is not a requirement}
 
-From the clocks and correlation key, the generated task attempt is
+\index{Implementation.lean}
+Some choices belong to an implementation rather than to the protocol: that every
+route is HTTPS, that the token request is form-encoded, how the app keeps pending
+sign-ins by \texttt{state}, and how the PKCE challenge is computed.
+\texttt{Implementation.lean}, written by hand beside the session type, records
+them with their reasons:
 
-\begin{lstlisting}[language={}]
-{ key = ("s1", "oauth"),
-  started = { kind = applicationRequest, timeAt = 0 },
-  completed = { kind = applicationResponse, timeAt = 23 },
-  outcome = succeeded, latency = 23 ticks }
-\end{lstlisting}
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true,firstline=11,lastline=42]{../examples/oauth/Implementation.lean}
 
-It contributes a latency point \texttt{(maxConcurrency=1, latency=23)}, a byte
-series ending at \texttt{(clock=23, bytes=440)} and a success to the outcome
-chart, but no success probability: estimating the grant's 0.87 needs many
-sessions, including incomplete ones. Trace monitors accept \texttt{state=x7}, the
-code \texttt{01 02}, and no exchange after denial; CTL obligations need every
-reachable residual. The pipeline:
-
-\begin{lstlisting}[language={}]
-grammar + field values
-  -> legal terminal word
-  -> typed EventEnvelope stream
-  -> framed protobuf bytes
-  -> partial-order graph + interaction diagram
-  -> residual FSM path + per-actor projections
-  -> queue schedule + byte-pressure samples
-  -> task attempt + probability/latency/XY reducers
-  -> replay fixture + trace-local property verdicts
-\end{lstlisting}
-
-Only branch and value generation, and the transport schedule, add choices; every
-other arrow is reproducible.
-
-\section{Interaction diagrams by scenario}
-
-\begin{figure}[p]
-\centering
-\resizebox{\textwidth}{!}{\OAuthInteractionDiagram{diagramink}{diagramsurface}{diagramsurface}}
-\caption{OAuth interaction view. Production frames provide collapsible abstraction
-boundaries. The authorization production contains its request and both alternatives;
-the guarded exchange production is enabled only by the granted alternative.}
-\label{fig:oauth-interaction}
-\end{figure}
-
-\section{Requirements as observable constraints}
-
-\begin{lstlisting}
-def oauthRequirements : List Requirement :=
-  [ require "callback state matches request"
-      (on "authorization callback" (previouslySame "state"
-        "authorization requested"))
-
-  , forbid "code exchange after denial"
-      (previously "authorization denied" && event "token requested")
-
-  , require "issued token came from a code"
-      (on "access token issued" (previouslySame "code" "token requested"))
-
-  , ctl "every decision reaches the application"
-      (AG (decisionAtAuthorizationServer --> AF callbackAtApplication))
-
-  , ctl "a protected result is never returned without a token request"
-      (AG (resourceReturned --> previously tokenRequested))
-  ]
-\end{lstlisting}
-
-\subsection{Who knows the password?}
-
-\index{knowledge!derived from events}
-This OAuth instance applies the trace-derived knowledge closure from
-Section~\ref{sec:knowledge-closure}:
-
-\begin{lstlisting}
-def passwordKnowers (trace : Trace WireEvent) : List Actor :=
-  allActors.filter fun actor =>
-    Derives (knowledgeFrom actor trace) (value password)
-
-theorem oauth_password_knowers
-    (trace : Trace WireEvent)
-    (accepted : (oauthSystem resource password).Accepts trace)
-    (initial : InitiallyKnown password [.browser, .authorizationServer])
-    (honest : Uncompromised [.browser, .authorizationServer])
-    (protection : PerfectProtection protectFor) :
-    passwordKnowers trace = [.browser, .authorizationServer] := by
-  exact knowledgeClosureOfProtectedField accepted initial honest protection
-\end{lstlisting}
-
-\noindent Proposed notation: neither the theorem nor the library lemma it uses
-exists yet.
-
-The browser knows a typed password; a narrower boundary needs a trusted credential
-actor, and compromise, logging or failed protection change the result.
-
-\subsection{Byte-level refinement without choosing a transport}
-
-Every vague OAuth message can be assigned a canonical byte term before HTTP or
-protobuf is chosen:
-
-\begin{lstlisting}
-refineMessage "authorization requested" where
-  term := tuple
-    [ tagBytes 0x01
-    , namedBytes "state" (encode state)
-    , namedBytes "redirectUri" (encode callback)
-    ]
-  bytes := encodeCanonical term
-
-refineMessage "token requested" where
-  term := tuple [tagBytes 0x02, namedBytes "code" (encode code)]
-  bytes := encodeCanonical term
-\end{lstlisting}
-
-An HTTP mapping might put these bytes in form fields, a protobuf mapping in
-numbered fields; either must prove that decoding and re-encoding preserve the
-terminal and its bindings. \texttt{previously} is a trace predicate for now.
-
-\section{Probabilities and charts}
-
-The randomness belongs to the user, who grants or denies consent; everything else
-reacts deterministically. As written, though, the server emits both grant and
-error, so by the deciding-actor rule of Chapter~\ref{ch:grammar} the server
-chooses. A faithful model adds a consent event from the browser,
-\texttt{ConsentGiven} or \texttt{ConsentRefused}, making the user's choice
-observable. Weights live in an overlay (Chapter~\ref{ch:generated-examples});
-the proposed \texttt{weightedOneOf} writes them inline:
-
-\begin{lstlisting}
-def consentDecision : Scenario :=
-  weightedOneOf "consent decision"
-    [ weighted (87 / 100) authorizationGranted
-    , weighted (13 / 100) authorizationDenied ]
-
-def oauthCharts : List ChartSpec :=
-  [ pie "authorization outcomes" do
-      source events; groupBy terminalOutcome; value count
-  , line "end-to-end authorization latency" do
-      source (correlate events by "state")
-      x clock; y (elapsed "authorization requested" "application response")
-  ]
-\end{lstlisting}
-
-The branches then begin with different consent bytes, and every later transition
-may have probability one: the grant branch carries mass $0.87$ through queues,
-transport and the deterministic response. Deterministic processing transports
-probability mass; it does not remove it.
-
-For the simplified path with no loss or timeout,
-\AccessibleEquation{The probability of a grant callback equals zero point eight seven times one times one times one and equals zero point eight seven. The probability of a denial callback equals zero point one three.}{\[
-  P(\text{grant callback}) = 0.87 \cdot 1 \cdot 1 \cdot 1 = 0.87,
-  \qquad
-  P(\text{denial callback}) = 0.13.
-\]}
-Each factor of one is a deterministic step; dwell affects latency, not mass.
-Scheduling (which enabled actor runs next) remains nondeterministic, so the composed
-system is an MDP, analysed under a fixed or quantified policy
-(Chapter~\ref{ch:assumptions}). With several sessions in flight, its state
-holds every actor's queues and per-\texttt{(session, task)} residuals, since one
-user's choice changes queue pressure for others. The percentages are inputs or
-measurements; the grammar says only what is possible.
-
-\section{Residual state machine}
-
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[->,>=Latex,node distance=2.10cm,on grid,
-  every state/.style={draw,minimum size=.9cm,font=\small}]
-  \node[state,initial] (start) {start};
-  \node[state] (requested) [below=of start] {requested};
-  \node[state] (decision) [below=of requested] {decision};
-  \node[state] (callback) [below left=1.5cm and 2.0cm of decision] {callback};
-  \node[state,accepting] (denied) [below right=1.5cm and 2.0cm of decision] {denied};
-  \node[state] (token) [below=of callback] {token};
-  \node[state] (fetch) [below=of token] {fetch};
-  \node[state,accepting] (done) [below=of fetch] {done};
-  \path
-    (start) edge node[right,fill=diagramsurface,inner sep=1pt] {request} (requested)
-    (requested) edge node[right,fill=diagramsurface,inner sep=1pt] {authorize} (decision)
-    (decision) edge node[left,fill=diagramsurface,inner sep=1pt,align=right] {code} (callback)
-    (decision) edge node[right,fill=diagramsurface,inner sep=1pt,align=left] {deny} (denied)
-    (callback) edge node[right,fill=diagramsurface,inner sep=1pt] {exchange} (token)
-    (token) edge node[right,fill=diagramsurface,inner sep=1pt] {issued} (fetch)
-    (fetch) edge node[right,fill=diagramsurface,inner sep=1pt] {resource} (done);
-\end{tikzpicture}
-\caption{Illustrative OAuth state machine, drawn by hand. The full machine also
-contains the rejected-authentication branch.}
-\label{fig:oauth-state-machine}
-\end{figure}
-
-The automaton is behavioural: cookies, database rows, threads and cryptographic
-state are refinements of this contract, not part of it.
+The PKCE check itself, that the verifier hashes to the challenge, is a computation
+on secrets that no \texttt{where} condition can state; it is a question for the
+protocol checker of Chapter~\ref{ch:questions}, which asks whether an attacker can
+ever learn a marked secret, rather than for conformance.

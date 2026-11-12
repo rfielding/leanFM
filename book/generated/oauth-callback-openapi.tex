@@ -1,0 +1,42 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+paths:
+  "/callback":
+    get:
+      operationId: "CallbackErrorCallback"
+      parameters:
+        - in: "query"
+          name: "state"
+          required: true
+          schema:
+            type: "string"
+        - in: "query"
+          name: "code"
+          required: false
+          schema:
+            type: "string"
+        - in: "query"
+          name: "error"
+          required: false
+          schema:
+            type: "string"
+      responses:
+        "302":
+          description: "SignedIn: the Location URL carries return_to as query parameters"
+          headers:
+            Location:
+              required: true
+              schema:
+                format: "uri"
+                type: "string"
+        "401":
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SignInFailed"
+          description: "SignInFailed"
+      summary: "Callback or ErrorCallback from Browser"
+  "/login":
+    get:
+      operationId: "Start"
+      parameters:
+\end{lstlisting}

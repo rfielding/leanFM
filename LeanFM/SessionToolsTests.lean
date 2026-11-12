@@ -507,7 +507,9 @@ def opsOf (r : Except String Json) : List String :=
 -- negative: requests without a route are listed, not guessed; conflicting or malformed routes and
 -- unknown roles are rejected
 #guard strs (field (api "protocol P (A, B) { q: Ask from A to B; Answer from B to A cause q; }" "B") "unrouted") == ["Ask from A"]
-#guard reason (api "protocol P (A, B) { Ask from A to B route \"GET /x\"; Tell from A to B route \"GET /x\"; }" "B") == "GET /x is both Ask and Tell"
+-- one route may carry two messages: they share one operation
+#guard opsOf (api "protocol P (A, B) { Ask from A to B route \"GET /x\"; Tell from A to B route \"GET /x\"; }" "B") == ["get /x"]
+#guard (((((field (api "protocol P (A, B) { Ask from A to B route \"GET /x\"; Tell from A to B route \"GET /x\"; }" "B") "openapi").getObjValD "paths").getObjValD "/x").getObjValD "get").getObjValAs? String "operationId").toOption == some "AskTell"
 #guard reason (api "protocol P (A, B) { Ask from A to B route \"FETCH /x\"; }" "B") == "route \"FETCH /x\": fetch is not an HTTP method"
 #guard reason (api "protocol P (A, B) { Ask from A to B route \"GET x\"; }" "B") == "route \"GET x\": the path must start with /"
 #guard reason (api signIn "Nobody") == "Nobody is not a role of SignIn; its roles are Browser, App, Idp"

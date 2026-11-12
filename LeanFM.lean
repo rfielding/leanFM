@@ -35,5 +35,6 @@ import LeanFM.Session.TypesTests
 import LeanFM.Session.EnvelopeTests
 import LeanFM.Generated.PlaceOrder
 import LeanFM.Session.ProtoTests
+import LeanFM.Session.OAuthTests
 import LeanFM.SecretsTests
 import LeanFM.CheckMetricsTests

@@ -1,0 +1,6 @@
+prompt: the oauth example should be straight-up http, as normally implemented.
+question: How does sign-in with an identity provider read as a typed session type over plain HTTP, and what does it generate?
+eventSource: examples/oauth/SessionType.leanfm and a log written in OAuthChapterExample.lean
+reducer: session_diagram, session_conform and sessionFiles (Payload.proto, Payload.lean, actors/*-openapi.yaml)
+unit: messages of one sign-in session, keyed by state
+boundary: protocol SignIn

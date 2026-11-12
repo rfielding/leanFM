@@ -1,0 +1,31 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+namespace App
+
+inductive State where
+  | s1
+  | s2
+  | s3
+  | s4
+  | s5
+  | s6
+  | s7
+  | s8
+  | done
+  deriving Repr, BEq, DecidableEq
+
+def start : State := .s1
+
+/-- The step an event takes App from a state, where the protocol allows it. -/
+def step : State -> Event -> Option State
+  | .s1, { src := .browser, dst := .app, payload := .start _, .. } => some .s2
+  | .s2, { src := .app, dst := .browser, payload := .redirectToIdp _, .. } => some .s3
+  | .s3, { src := .browser, dst := .app, payload := .callback _, .. } => some .s4
+  | .s3, { src := .browser, dst := .app, payload := .errorCallback _, .. } => some .s8
+  | .s4, { src := .app, dst := .idp, payload := .exchangeCode _, .. } => some .s5
+  | .s5, { src := .idp, dst := .app, payload := .tokens _, .. } => some .s6
+  | .s5, { src := .idp, dst := .app, payload := .badCode _, .. } => some .s7
+  | .s6, { src := .app, dst := .browser, payload := .signedIn _, .. } => some .done
+  | .s7, { src := .app, dst := .browser, payload := .signInFailed _, .. } => some .done
+  | .s8, { src := .app, dst := .browser, payload := .signInFailed _, .. } => some .done
+  | _, _ => none
+\end{lstlisting}

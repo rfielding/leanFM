@@ -1,0 +1,99 @@
+/-- The browser asks the app to sign in; return_to is where to go afterwards. -/
+structure Start where
+  return_to : String
+
+/-- The app sends the browser to the identity provider. state is the session's key: it comes back
+on the callback and is how the app tells concurrent sign-ins apart. code_challenge is PKCE's
+S256 hash of a verifier only the app knows. -/
+structure RedirectToIdp where
+  state : String
+  client_id : String
+  redirect_uri : String
+  code_challenge : String
+
+/-- The browser follows the redirect: the same parameters, as a GET on the provider. -/
+structure Authorize where
+  state : String
+  client_id : String
+  redirect_uri : String
+  code_challenge : String
+
+structure LoginPage
+
+/-- The person signs in at the provider; the password is a secret, never logged. -/
+structure Credentials where
+  username : String
+  password_secr : String
+  state : String
+
+/-- The provider sends the browser back to the app with a one-time code. -/
+structure RedirectBack where
+  state : String
+  code : String
+
+/-- Or the provider sends the browser back with an error, such as access_denied. -/
+structure DeniedBack where
+  state : String
+  error : String
+
+/-- The browser follows the redirect to the app's callback with the code. -/
+structure Callback where
+  state : String
+  code : String
+
+/-- Or it follows the error redirect to the same callback route. -/
+structure ErrorCallback where
+  state : String
+  error : String
+
+/-- The app exchanges the code at the provider, proving it holds the PKCE verifier. -/
+structure ExchangeCode where
+  code : String
+  redirect_uri : String
+  client_id : String
+  code_verifier_secr : String
+
+/-- The tokens are secrets, never logged. -/
+structure Tokens where
+  access_token_secr : String
+  expires_in : Nat
+
+/-- Signed in: the app sends the browser on to where it started. -/
+structure SignedIn where
+  return_to : String
+
+structure BadCode
+structure SignInFailed
+
+/-- Signing in with an identity provider: the OAuth 2.0 authorization code flow with PKCE, over
+plain HTTP. Every message is an HTTP request or response, with its route or status. One sign-in is
+one session, keyed by state: the app's start and its callback are two HTTP requests, and state is
+what ties them together. The callback route carries either message, as an HTTP endpoint whose
+request takes two shapes. -/
+protocol SignIn (Browser, App, Idp) {
+  sessions by r.state {
+    s: Start from Browser to App route "GET /login";
+    r: RedirectToIdp from App to Browser cause s status 302;
+    a: Authorize from Browser to Idp route "GET /authorize"
+       where a.state = r.state and a.redirect_uri = r.redirect_uri and a.code_challenge = r.code_challenge;
+    LoginPage from Idp to Browser cause a status 200;
+    c: Credentials from Browser to Idp route "POST /login" where c.state = a.state;
+    choice {
+      b: RedirectBack from Idp to Browser cause c status 302 where b.state = a.state;
+      cb: Callback from Browser to App route "GET /callback" where cb.state = r.state and cb.code = b.code;
+      t: ExchangeCode from App to Idp cause cb route "POST /token"
+         where t.code = cb.code and t.redirect_uri = r.redirect_uri and t.client_id = r.client_id;
+      choice {
+        Tokens from Idp to App cause t status 200;
+        SignedIn from App to Browser cause cb status 302;
+      } or {
+        BadCode from Idp to App cause t status 400;
+        SignInFailed from App to Browser cause cb status 401;
+      }
+    } or {
+      d: DeniedBack from Idp to Browser cause c status 302 where d.state = a.state;
+      e: ErrorCallback from Browser to App route "GET /callback" where e.state = r.state;
+      SignInFailed from App to Browser cause e status 401;
+    }
+  }
+}

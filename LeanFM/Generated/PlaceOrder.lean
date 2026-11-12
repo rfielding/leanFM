@@ -89,7 +89,7 @@ inductive State where
 def start : State := .s0
 
 /-- The step an event takes Client from a state, where the protocol allows it. -/
-def step : State → Event → Option State
+def step : State -> Event -> Option State
   | .s0, { src := .client, dst := .shop, payload := .createOrder _, .. } => some .s1
   | .s1, { src := .shop, dst := .client, payload := .quote _, .. } => some .s2
   | .s1, { src := .shop, dst := .client, payload := .soldOut _, .. } => some .done
@@ -99,7 +99,7 @@ def step : State → Event → Option State
   | _, _ => none
 
 /-- Whether the session may end here. -/
-def final : State → Bool
+def final : State -> Bool
   | .done => true
   | _ => false
 
@@ -131,7 +131,7 @@ inductive State where
 def start : State := .s0
 
 /-- The step an event takes Shop from a state, where the protocol allows it. -/
-def step : State → Event → Option State
+def step : State -> Event -> Option State
   | .s0, { src := .client, dst := .shop, payload := .createOrder _, .. } => some .s1
   | .s1, { src := .shop, dst := .client, payload := .quote _, .. } => some .s2
   | .s1, { src := .shop, dst := .client, payload := .soldOut _, .. } => some .done
@@ -144,7 +144,7 @@ def step : State → Event → Option State
   | _, _ => none
 
 /-- Whether the session may end here. -/
-def final : State → Bool
+def final : State -> Bool
   | .done => true
   | _ => false
 
@@ -171,14 +171,14 @@ inductive State where
 def start : State := .s0
 
 /-- The step an event takes Bank from a state, where the protocol allows it. -/
-def step : State → Event → Option State
+def step : State -> Event -> Option State
   | .s0, { src := .shop, dst := .bank, payload := .charge _, .. } => some .s1
   | .s1, { src := .bank, dst := .shop, payload := .charged _, .. } => some .done
   | .s1, { src := .bank, dst := .shop, payload := .declined _, .. } => some .done
   | _, _ => none
 
 /-- Whether the session may end here. -/
-def final : State → Bool
+def final : State -> Bool
   | .s0 => true
   | .done => true
   | _ => false

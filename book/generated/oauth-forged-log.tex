@@ -1,0 +1,9 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+{"fields":{},"from":"Browser","id":"e1","label":"Start","session":"st-81","to":"App"}
+{"cause":"e1","fields":{"client_id":"app","code_challenge":"E9Me","redirect_uri":"https://app.example/callback","state":"st-81"},"from":"App","id":"e2","label":"RedirectToIdp","session":"st-81","to":"Browser"}
+{"fields":{"client_id":"app","code_challenge":"E9Me","redirect_uri":"https://app.example/callback","state":"st-81"},"from":"Browser","id":"e3","label":"Authorize","session":"st-81","to":"Idp"}
+{"cause":"e3","fields":{},"from":"Idp","id":"e4","label":"LoginPage","session":"st-81","to":"Browser"}
+{"fields":{"state":"st-81"},"from":"Browser","id":"e5","label":"Credentials","session":"st-81","to":"Idp"}
+{"cause":"e5","fields":{"code":"c-5","state":"st-81"},"from":"Idp","id":"e6","label":"RedirectBack","session":"st-81","to":"Browser"}
+{"fields":{"code":"c-5","state":"st-99"},"from":"Browser","id":"e7","label":"Callback","session":"st-81","to":"App"}
+\end{lstlisting}
