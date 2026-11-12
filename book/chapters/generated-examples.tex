@@ -205,6 +205,84 @@ complete after truncation. Requirement \texttt{selfhost.session.mdp},
 \texttt{Decision.lean}, and \texttt{DecisionTests.lean} record and check these
 semantics.
 
+\section{Promises, assumptions and observation periods}
+\label{sec:sla}
+
+A probability on a choice is an \emph{assumption}. It describes what a peer
+decides where no other role can see, such as whether the network delivers a
+forward or whether a database row exists. A requirement is a \emph{promise}: a
+minimum or maximum that the protocol keeps whatever happens inside one entry.
+LeanFM writes promises after the protocols, in one block for each entry
+message id:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{../examples/sessions/UserLookup.leanfm}
+
+There are two kinds of clause. \texttt{every q reaches \dots\ within d} is a
+hard deadline. One miss is a counterexample, so the clause takes no window.
+\texttt{at least} and \texttt{at most} are promised fractions, and each needs
+an observation period (\texttt{over 1 hour} or \texttt{over 500 entries}).
+Without one, the first slow answer after deployment would break a promise about
+ninety-nine answers in a hundred before there had been any observation to judge
+it by. \texttt{confidence} (95/100 by default) is how sure a window's verdict
+must be, and \texttt{expecting 500 per hour} states the traffic, so the size of
+a time window can be checked before anything runs.
+
+\subsection{At design time: promises against assumptions}
+
+\texttt{session\_sla} checks each promise against the assumptions on the
+session's Markov chain. It starts from each occurrence of the entry and follows
+every path, keeping exact rational masses. A path hits when it reaches a target
+within the deadline. It misses when it passes the deadline, the next entry or
+the end of the session. The result is the exact per-entry probability (an
+interval if exploration stops at its bound) and a verdict. When the verdict is
+violated, the result also gives the most probable path that breaks the promise,
+with each assumption it passes through shown as \texttt{[name: p]}:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{generated/sla-userlookup.txt}
+
+The error budget cannot be met: $\frac{999}{1000}\cdot\frac{1}{100} +
+\frac{1}{1000} = \frac{1099}{100000}$ is more than $\frac{1}{200}$. The report
+names the two assumptions responsible, and a design change, such as a retry
+after \texttt{Failure} or a fallback replica, is the way to meet it. The
+window size follows from the margin between the promise and the worst case:
+$\lceil\ln(1/(1-c))/\textit{margin}\rceil$ entries are enough to tell the
+promise apart from a failure rate of 0 or 1. That is 150 entries for 98/100
+and 600 for 1/200, and an hour at 500 an hour holds only the first.
+
+\subsection{At run time: the event stream is the state}
+
+Actors keep no state of their own. Each event in the stream is named by a
+unique timestamp \texttt{ts}, and \texttt{prev} and \texttt{cause} link it to
+earlier events. A role's state is its view: its own events and their causal
+past. A reward vector \texttt{\{role: \{unit: amount\}\}} is written only on an
+event where it changes. The vector at any event is found by walking
+\texttt{prev} back to the latest one written, and none found means zero.
+Writing a vector equal to the one inherited is refused, so every vector in the
+stream marks a change.
+
+An entry \emph{hits} when a target lies in its causal future within the
+deadline. An answer that names no cause does not count, however soon it comes.
+An entry whose deadline outlives the stream is \emph{pending}, not missed. Each
+window is judged with an exact one-sided binomial test, but only once it has
+closed. A time window closes when the stream has passed its end plus the
+deadline, and an entry window closes when it holds its count of decided
+entries. Until then the window is \emph{open}. Here, a short execution misses
+its third ask:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{generated/sla-execution.txt}
+
+One miss in four would break a promise of 99/100 if it were judged at once.
+Because the 300-entry period has not closed, the promise is still open. Of 300
+closed entries, 300 hits is met at 95/100 confidence ($0.99^{300} \approx
+0.049$), 299 is undecided, and 290 is violated. \texttt{SlaTests.lean} checks
+these cases, along with the refusals: a fraction without a window, a window on
+\texttt{every}, unknown names, a choice without an assumption, duplicate
+timestamps, links to later events, and a vector rewritten unchanged. Clauses
+\texttt{selfhost.session.sla} and \texttt{selfhost.session.execution} record
+the semantics. \texttt{SlaChapterExample.lean} generates both reports above,
+and \texttt{generated/sla-provenance.txt} records the prompt, question, source,
+reducer, units and boundary.
+
 \section{What comes next}
 
 The same functions accept a measured overlay, reduced from recorded traces by

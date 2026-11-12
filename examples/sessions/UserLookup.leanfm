@@ -1,0 +1,53 @@
+-- Illustrative assumptions, not measured rates.
+-- A user lookup behind a reverse proxy. The probabilities are assumptions: the hidden internal
+-- choices of peers (the Db's lookup, the Browser's next request) and of the network (a forward
+-- the Proxy loses), as seen from outside. The require block states what every lookup must
+-- achieve, per entry of q.
+protocol UserLookup (Browser, Proxy, Api, Db) {
+  rec Browse {
+    q: GetUser from Browser to Proxy;
+    choice at Proxy using declared("forward-delivered") {
+      probability 999/1000:
+        f: Forward from Proxy to Api cause q after 2 ms;
+        d: SelectUser from Api to Db cause f after 1 ms;
+        choice at Db using declared("lookup") {
+          probability 97/100:
+            r: Row from Db to Api cause d after sample { 20 ms : 999/1000; 400 ms : 1/1000; };
+            Ok200 from Api to Proxy cause r;
+            Ok from Proxy to Browser cause q;
+        } or {
+          probability 2/100:
+            r: Empty from Db to Api cause d after 20 ms;
+            NotFound404 from Api to Proxy cause r;
+            NotFound from Proxy to Browser cause q;
+        } or {
+          probability 1/100:
+            r: Failure from Db to Api cause d after 50 ms;
+            Unavailable503 from Api to Proxy cause r;
+            Unavailable from Proxy to Browser cause q;
+        }
+    } or {
+      probability 1/1000:
+        Dropped at Proxy;
+        Timeout504 from Proxy to Browser cause q after 1900 ms;
+    }
+    choice at Browser using declared("next") {
+      probability 4/5:
+        Again from Browser to Proxy;
+        NextApi from Proxy to Api;
+        NextDb from Api to Db;
+        continue Browse;
+    } or {
+      probability 1/5:
+        Quit from Browser to Proxy;
+        CloseApi from Proxy to Api;
+        CloseDb from Api to Db;
+    }
+  }
+}
+
+require per q {
+  every q reaches Ok, NotFound, Unavailable, Timeout504 within 2 seconds;
+  at least 98/100 of q reach Ok, NotFound within 300 ms over 1 hour expecting 500 per hour;
+  at most 1/200 of q reach Unavailable, Timeout504 over 1 hour expecting 500 per hour;
+}

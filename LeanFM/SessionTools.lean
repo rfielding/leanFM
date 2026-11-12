@@ -8,6 +8,7 @@ import LeanFM.Session.Text
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
 import LeanFM.Session.Chain
+import LeanFM.Session.Sla
 import LeanFM.Session.Conform
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
@@ -1195,13 +1196,157 @@ def skeleton (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("language", language), ("code", code), ("lean", p.lean) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"]
+/-! ## Requirements: assumptions against requirements, and observed event streams (selfhost.session.sla, .execution) -/
+
+def boundText (b : Generative.Bound) : String :=
+  match b with
+  | .every => "every"
+  | .atLeast p => s!"at least {p.text}"
+  | .atMost p => s!"at most {p.text}"
+
+def windowText (w : Option Generative.Window) : String :=
+  match w with
+  | some (.time ms) => Chain.daysText (ms : Rat)
+  | some (.entries n) => s!"{n} entries"
+  | none => "-"
+
+def slaEvent (j : Json) : Except String (Sla.Ev × Option (List (String × String × Rat))) := do
+  let ts ← (j.getObjValAs? Nat "ts").mapError fun _ => "every event needs ts, a whole number of milliseconds that is unique in the stream"
+  let label ← match j.getObjValAs? String "label" with
+    | .ok l => if l.isEmpty || l.length > limits.maxString then throw s!"event {ts}: the label is empty or too long" else pure l
+    | .error _ => throw s!"event {ts} needs a label"
+  let str (k : String) : String := (j.getObjValAs? String k).toOption.getD ""
+  let src := if (str "from").isEmpty then str "role" else str "from"
+  let link (k : String) : Except String (Option Nat) := match j.getObjVal? k with
+    | .ok .null | .error _ => pure none
+    | .ok v => match v.getNat? with
+      | .ok n => pure (some n)
+      | .error _ => throw s!"event {ts}: {k} is the timestamp of an earlier event"
+  let reward : Option (List (String × String × Rat)) ← match j.getObjVal? "reward" with
+    | .ok (.obj kv) => some <$> (kv.toList.flatMapM fun (role, units) => match units with
+        | .obj ukv => ukv.toList.mapM fun (unit, v) => match v.getInt? with
+          | .ok n => pure (role, unit, (n : Rat))
+          | .error _ => throw s!"event {ts}: reward amounts are whole numbers"
+        | _ => throw s!"event {ts}: reward is {"{"}role: {"{"}unit: amount}}")
+    | .ok .null | .error _ => pure none
+    | _ => throw s!"event {ts}: reward is {"{"}role: {"{"}unit: amount}}"
+  return ({ ts, label, src, dst := str "to", prev := ← link "prev", cause := ← link "cause" }, reward)
+
+/-- A duration for people: ms below a second, otherwise the largest unit. -/
+def msText (ms : Nat) : String := if ms < 1000 then s!"{ms} ms" else Chain.daysText (ms : Rat)
+
+/-- A probability for people: the exact fraction when it is short, else ≈ a decimal with the exact value after it. -/
+def probText (r : Rat) : String :=
+  let x := Chain.readable r true
+  if x.startsWith "≈" then s!"{x} (exactly {Chain.ratText r})" else x
+
+def vectorJson (v : List (String × String × Rat)) : Json :=
+  Json.arr (v.map fun (r, u, a) => Json.mkObj [("role", r), ("unit", u), ("amount", Chain.ratText a)]).toArray
+
+def vectorText (v : List (String × String × Rat)) : String :=
+  if v.isEmpty then "zero" else ", ".intercalate (v.map fun (r, u, a) => s!"{r} {Chain.ratText a} {u}")
+
+def sla (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before checking its requirements"
+  let parsed ← Text.parse p.lean
+  if parsed.requires.isEmpty then
+    throw "the protocol states no requirements: add require per q { every q reaches Reply within 2 seconds; } after it, where q is a message id"
+  let layer ← match p.generative with
+    | some r => pure r
+    | none => Generative.resolve parsed.body
+  let c ← (Chain.analyse layer).mapError fun e =>
+    if e.startsWith "every choice needs probabilities" || (e.splitOn "needs probabilities").length > 1 then
+      s!"an assumption is missing: requirements are checked against the probabilities stated on every choice ({e})"
+    else e
+  let designs ← parsed.requires.mapM (Sla.design c parsed.body)
+  let designJson := designs.map fun d => Json.mkObj
+    [ ("requirement", d.req.text), ("entry", d.req.entry), ("bound", boundText d.req.bound),
+      ("targets", toJson d.req.targets), ("withinMs", toJson d.req.withinMs), ("window", windowText d.req.window),
+      ("confidence", d.req.confidence.text), ("verdict", d.verdict),
+      ("probability", Json.mkObj [("lo", Chain.ratText d.lo), ("hi", Chain.ratText d.hi), ("loText", Chain.readable d.lo true), ("hiText", Chain.readable d.hi true)]),
+      ("entries", toJson d.entries.length), ("path", toJson d.path), ("assumptions", toJson d.assumptions),
+      ("windowNeeds", toJson d.need), ("windowHoldsThem", toJson d.windowOk), ("note", d.note) ]
+  let intervalText (d : Sla.DesignVerdict) : String :=
+    if d.lo == d.hi then probText d.lo else s!"between {probText d.lo} and {probText d.hi}"
+  let designLines := designs.map fun d =>
+    let need := match d.need, d.windowOk with
+      | some n, some true => s!" The window holds the {n} entries it needs to decide at {d.req.confidence.text} confidence."
+      | some n, some false => s!" The window will not hold the {n} entries it needs to decide at {d.req.confidence.text} confidence: lengthen it or expect more traffic."
+      | some n, none => s!" Deciding it needs about {n} entries per window at {d.req.confidence.text} confidence; add expecting N per hour to check the window holds them."
+      | none, _ => ""
+    let path := if d.verdict == "met" || d.path.isEmpty then "" else
+      s!" The most probable path that breaks it: {" → ".intercalate d.path}" ++
+      (if d.assumptions.isEmpty then "." else s!", through the assumption{if d.assumptions.length > 1 then "s" else ""} {", ".intercalate d.assumptions}.")
+    let note := if d.note.isEmpty then "" else " " ++ (d.note.take 1).toString.toUpper ++ (d.note.drop 1).toString ++ "."
+    s!"- {d.req.text}
+  {d.verdict.toUpper}: per entry the probability of reaching {", ".intercalate d.req.targets}{(d.req.withinMs.map fun w => s!" within {msText w}").getD ""} is {intervalText d}.{path}{need}{note}"
+  -- an observed stream: the execution is its events
+  let mut observedJson : Json := Json.null
+  let mut observedLines : List String := []
+  let mut atJson : Json := Json.null
+  if let .ok (.arr evs) := args.getObjVal? "events" then
+    let parsedEvs ← evs.toList.mapM slaEvent
+    let x ← Sla.Execution.make (parsedEvs.map (·.1)) (parsedEvs.filterMap fun (e, r) => r.map (e.ts, ·))
+    let mut perReq := #[]
+    for r in parsed.requires do
+      let some label := Sla.entryLabelOf parsed.body r.entry | throw s!"{r.entry} is not a message id"
+      let ts := Sla.trials x r label
+      let misses := ts.filter (·.outcome == "miss")
+      let pending := (ts.filter (·.outcome == "pending")).length
+      let ws := if r.bound == .every then [] else Sla.windows r ts (x.order.back?.getD 0)
+      let verdict := if r.bound == .every then (if misses.isEmpty then "met" else "violated")
+        else if ws.any (·.verdict == "violated") then "violated"
+        else if ws.any (·.closed) && (ws.filter (·.closed)).all (·.verdict == "met") then "met"
+        else if ws.any (·.closed) then "undecided" else "open"
+      perReq := perReq.push (Json.mkObj
+        [ ("requirement", r.text), ("verdict", verdict), ("entries", toJson ts.length),
+          ("hits", toJson (ts.filter (·.outcome == "hit")).length), ("misses", toJson misses.length), ("pending", toJson pending),
+          ("missedEntries", toJson ((misses.take 20).map (·.entry))),
+          ("counterexample", match misses.head? with
+            | some m => Json.mkObj [("entry", toJson m.entry), ("causalFuture", toJson (x.future m.entry (m.entry + (r.withinMs.getD 0))))]
+            | none => Json.null),
+          ("windows", Json.arr (ws.map fun w => Json.mkObj [("start", toJson w.start), ("entries", toJson w.entries), ("hits", toJson w.hits), ("closed", toJson w.closed), ("verdict", w.verdict), ("pValue", toJson w.pValue)]).toArray) ])
+      let wtext := if ws.isEmpty then "" else " Windows: " ++ ", ".intercalate (ws.map fun w => s!"{w.hits}/{w.entries} {w.verdict}") ++
+        (if verdict == "open" then " (no observation period has closed yet, so nothing is decided)." else ".")
+      observedLines := observedLines ++ [s!"- {r.text}
+  {verdict.toUpper} on the stream: {ts.length} entries, {(ts.filter (·.outcome == "hit")).length} reached a target, {misses.length} missed, {pending} pending.{wtext}{match misses.head? with | some m => s!" First miss: the entry at {m.entry}." | none => ""}"]
+    let views := p.roles.map fun role => (role, (x.view role).length)
+    let last := x.order.back?.getD 0
+    let finals := p.roles.map fun role => (role, x.view role |>.getLast?.map x.rewardAt |>.getD [])
+    observedJson := Json.mkObj [("events", toJson x.order.size), ("requirements", Json.arr perReq),
+      ("views", Json.arr (views.map fun (r, n) => Json.mkObj [("role", r), ("events", toJson n)]).toArray),
+      ("rewardAtLast", vectorJson (x.rewardAt last)),
+      ("rewardPerRole", Json.arr (finals.map fun (r, v) => Json.mkObj [("role", r), ("atLatestEventInView", vectorJson v)]).toArray)]
+    observedLines := observedLines ++ [s!"Each role's state is its view: " ++ ", ".intercalate (views.map fun (r, n) => s!"{r} {n} events") ++ ".",
+      s!"The reward vector at the last event ({last}), found by walking prev back to the latest vector: {vectorText (x.rewardAt last)}."]
+    if let .ok atv := args.getObjVal? "at" then
+      let atTs ← atv.getNat?.mapError fun _ => "at is the timestamp of an event"
+      if !x.events.contains atTs then throw s!"at {atTs} is not an event of the stream"
+      atJson := Json.mkObj [("at", toJson atTs), ("causalPast", toJson (x.causalPast atTs)), ("reward", vectorJson (x.rewardAt atTs)),
+        ("views", Json.arr (p.roles.map fun (role : String) => Json.mkObj [("role", Json.str role), ("events", toJson ((x.view role).filter (· ≤ atTs)))]).toArray)]
+      observedLines := observedLines ++ [s!"At {atTs}: {(x.causalPast atTs).length} events in its causal past; reward vector {vectorText (x.rewardAt atTs)}."]
+  let report := "\n".intercalate (["Requirements against the stated assumptions (exact, per entry):"] ++ designLines ++
+    (if observedLines.isEmpty then [] else ["", "Requirements on the observed event stream:"] ++ observedLines))
+  let verdict := if designs.any (·.verdict == "violated") then "violated" else if designs.all (·.verdict == "met") then "met" else "undecided"
+  return Json.mkObj
+    [ ("tool", "session_sla"), ("verdict", verdict), ("name", p.name), ("lean", p.lean), ("report", report),
+      ("design", Json.arr designJson.toArray), ("observed", observedJson), ("at", atJson),
+      ("provenance", Json.mkObj
+        [ ("question", "Does the protocol meet its require clauses, per entry, under the probabilities stated on its choices, and on the observed stream?"),
+          ("eventSource", "the protocol text's choices and delays (assumptions); the events argument when given (unique timestamps, prev and cause links, reward vectors where they change)"),
+          ("reducer", "design: exact enumeration over the chain view from each entry until a target, the deadline, the next entry or the end, interval [hits, hits + unresolved]; observed: causal future of each entry, tumbling windows, exact one-sided binomial test"),
+          ("unit", "probability per entry; entries per window; reward amounts per role and unit"),
+          ("boundary", "one entry per occurrence of the require block's message id; the main protocol") ]) ]
+
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
   | "session_check" => some (check args)
   | "session_diagram" => some (diagram args)
   | "session_mdp" => some (mdp args)
+  | "session_sla" => some (sla args)
   | "session_simulate" => some (simulate args)
   | "session_conform" => some (conform args)
   | "session_skeleton" => some (skeleton args)
@@ -1294,6 +1439,47 @@ outcomes), Loan (grace, then interest), Rental (a rate vector), WeeklyRent (a ga
 RentWithRepairs (a nested choice behind a gate) and Ride (three parties, a retry loop, nested
 choices, delays and payments through a platform).
 
+## Requirements: what is promised, and the event stream as state
+
+Choice probabilities are assumptions: what peers decide where nobody else can see. Requirements
+are promises, written after the protocols in one block per entry message id:
+
+```
+require per q {
+  every q reaches Ok, NotFound, Unavailable, Timeout504 within 2 seconds;
+  at least 98/100 of q reach Ok, NotFound within 300 ms over 1 hour expecting 500 per hour;
+  at most 1/200 of q reach Unavailable, Timeout504 over 1 hour confidence 99/100;
+}
+```
+
+| clause | meaning |
+|---|---|
+| `every q reaches A, B within d;` | a hard deadline: every occurrence of q is followed in its causal future by A or B within d. One miss is a counterexample, so it takes no window. |
+| `at least p of q reach A within d over W;` | a promised minimum fraction of entries. |
+| `at most p of q reach A over W;` | a promised maximum fraction. |
+| `over 1 hour`, `over 500 entries` | the observation period: tumbling windows by time or by entry count, required for every fraction, so the first miss alone never breaks a promise. |
+| `confidence 95/100` | the confidence a window's verdict must reach (default 95/100). |
+| `expecting 500 per hour` | the expected entry rate, so a time window can be checked for size at design time. |
+
+At design time, `session_sla` checks each requirement against the assumptions on the chain: per
+entry, the exact interval of the probability (an interval when exploration is cut short), the
+verdict met, violated or undecided, and the most probable path that breaks it, with each
+assumption it passes through shown as `[name: p]`. A window needs ceil(ln(1/(1-c))/margin)
+entries to tell the promise from a failure rate of 0 or 1. The tool says when a window cannot hold
+that many.
+
+An execution is an event stream, and it is the only state: actors keep none of their own.
+`{ts, label, from, to, prev?, cause?, reward?}` names each event by a unique timestamp, and `prev`
+and `cause` link it to earlier events. A role's view is its events and their causal past. A reward
+vector `{role: {unit: amount}}` is written only where it changes, and the vector at an event is
+found by walking `prev` back to the latest one written (none means zero). An entry hits when a
+target is in its causal future within the deadline. An entry whose deadline outlives the stream is
+pending. Each window is judged only once it closes, with an exact one-sided binomial test, and
+until then it is open.
+
+See examples/sessions/UserLookup (a lost forward, a failing lookup and a 504 timer; the error
+budget is violated by the stated assumptions).
+
 ## Tools
 
 - `session_review {lean}`: every check that applies, in one answer, each finding with an edit to
@@ -1301,6 +1487,11 @@ choices, delays and payments through a platform).
   call its receiver, so no flags are needed), including requests never answered (with the response
   line to add) and responses to routed requests without a status; a session that can never end (a
   loop with no way out); roles that take no part. Call it after every change while designing.
+
+- `session_sla {lean, events?, at?}`: the `require per` block against the assumptions (exact
+  interval, verdict, breaking path, window size), and with `events` against an execution (hits,
+  misses, pending, each closed window's verdict, each role's view); `at` gives one event's reward
+  vector and causal past.
 
 - `session_check {lean, mayCall?}`: the core rules (one role decides each choice; every role can
   tell which branch was taken; a cause names a message its sender saw), each role's local type and

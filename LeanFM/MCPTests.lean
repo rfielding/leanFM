@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"] do
+  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -134,6 +134,9 @@ def main : IO Unit := do
   assertContains "MCP session_compat says who waits" compatCall.body "A waits to receive Pong from B"
   let reviewCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"session_review\",\"arguments\":{\"lean\":\"protocol P (A, B) { Ask from A to B route \\\"GET /x\\\"; }\"}}}"
   assertContains "MCP session_review puts its findings in the text" reviewCall.body "1. [http] Ask from A to B never gets a response"
+  let slaCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_sla\",\"arguments\":{\"lean\":\"protocol P (A, B) { q: Ask from A to B; Answer from B to A cause q after 100 ms; }\\nrequire per q { every q reaches Answer within 1 second; }\"}}}"
+  assertContains "MCP session_sla answers the design verdict" slaCall.body "session_sla met"
+  assertContains "MCP session_sla puts the report in the text" slaCall.body "Requirements against the stated assumptions"
   let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
   assertContains "MCP session_skeleton writes TypeScript in a typescript fence" skelTs.body "```typescript"
   assertContains "MCP session_skeleton TypeScript states extend State" skelTs.body "export class BS1 extends State"

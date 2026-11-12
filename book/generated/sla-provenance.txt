@@ -1,0 +1,7 @@
+prompt: the SLAs in the session type really seems to tie things together well. the way to keep state out of the actors is to put the state into the observable event stream.
+question: does UserLookup keep its promises under its stated assumptions, and what does an execution show before and after its observation period closes?
+eventSource: examples/sessions/UserLookup.leanfm; the execution in SlaChapterExample.lean
+reducer: LeanFM.SessionTools.sla (LeanFM.Session.Sla.design on the chain; Execution.make, trials and windows on the stream)
+unit: entries of the require block's message id; probabilities as exact fractions; times in milliseconds; reward amounts per role and unit
+boundary: the main protocol, one entry per occurrence of q; windows judged only once closed
+generator: SlaChapterExample.lean

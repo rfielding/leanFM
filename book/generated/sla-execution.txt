@@ -1,0 +1,10 @@
+Requirements against the stated assumptions (exact, per entry):
+- at least 99/100 of q reach Answer within 300 ms over 300 entries;
+  MET: per entry the probability of reaching Answer within 300 ms is 1. The window holds the 300 entries it needs to decide at 19/20 confidence.
+
+Requirements on the observed event stream:
+- at least 99/100 of q reach Answer within 300 ms over 300 entries;
+  OPEN on the stream: 4 entries, 3 reached a target, 1 missed, 0 pending. Windows: 3/4 open (no observation period has closed yet, so nothing is decided). First miss: the entry at 3000.
+Each role's state is its view: A 7 events, B 7 events.
+The reward vector at the last event (4120), found by walking prev back to the latest vector: A -4 USD.
+At 3000: 5 events in its causal past; reward vector A -3 USD.

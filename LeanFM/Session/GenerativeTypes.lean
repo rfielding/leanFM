@@ -58,4 +58,39 @@ def checkWeights (weights : List Q) : Except String Unit := do
   let sum := weights.foldl Q.add Q.zero
   if sum != Q.one then throw s!"probabilities sum to {sum.text}, not 1; no silent normalization"
 
+/-! Requirements (selfhost.session.sla): what the protocol must achieve per entry, as opposed
+to the probabilities stated on choices, which are assumptions about peers' hidden internal
+choices. -/
+
+/-- How often entries must reach a target: every entry (a hard deadline, checkable on one
+trace), or at least / at most a fraction of entries (checkable only over a window). -/
+inductive Bound where
+  | every
+  | atLeast (p : Q)
+  | atMost (p : Q)
+  deriving Inhabited, Repr, BEq
+
+/-- An observation window: a span of time or a number of entries. -/
+inductive Window where
+  | time (ms : Nat)
+  | entries (n : Nat)
+  deriving Inhabited, Repr, BEq
+
+/-- `every q reaches A, B within 2 seconds;` or
+`at least 99/100 of q reach A within 300 ms over 1 hour confidence 95/100 expecting 500 per hour;`
+inside `require per q { ... }`. -/
+structure Requirement where
+  /-- the message id each entry is an occurrence of -/
+  entry : String
+  bound : Bound
+  targets : List String
+  withinMs : Option Nat := none
+  window : Option Window := none
+  confidence : Q := Q.norm 95 100
+  /-- expected traffic: entries per period (ms), for checking the window can decide the bound -/
+  rate : Option (Nat × Nat) := none
+  /-- the clause as written, for reports -/
+  text : String := ""
+  deriving Inhabited, Repr
+
 end LeanFM.Session.Generative

@@ -77,6 +77,8 @@ def limits : Limits := {}
 structure St where
   pos : Nat := 0
   depth : Nat := 0
+  /-- `require per q { ... }` clauses after the protocols (selfhost.session.sla) -/
+  requires : Array Generative.Requirement := #[]
 
 abbrev P := ReaderT (Array Char) (StateT St (Except String))
 
@@ -389,6 +391,18 @@ partial def obligationSpec : P Generative.Obligation := do
 
 /-! ## Bounded loops (selfhost.session.rec.bounded): expanded into explicit copies -/
 
+/-- The labels of every message and event in a body (included protocols are checked when built). -/
+partial def labelsOf : List Stmt → List String
+  | [] => []
+  | s :: rest => (match s with
+    | .msg _ label .. => [label]
+    | .event label _ => [label]
+    | .timed _ m | .valued _ m => labelsOf [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap labelsOf
+    | .loop _ b | .sessions b => labelsOf b
+    | .bounded _ _ b o => labelsOf b ++ labelsOf o
+    | _ => []) ++ labelsOf rest
+
 /-- The ids a body declares (message ids), in any branch. -/
 partial def declaredIds : List Stmt → List String
   | [] => []
@@ -642,11 +656,96 @@ partial def stmt : P Stmt := do
   return match timing with | some t => .timed t message | none => message
 end
 
+/-- A time unit's length in milliseconds. -/
+def unitMs (u : String) : Option Nat :=
+  match u with
+  | "ms" => some 1
+  | "second" | "seconds" => some 1000
+  | "minute" | "minutes" => some 60000
+  | "hour" | "hours" => some 3600000
+  | "day" | "days" => some 86400000
+  | "week" | "weeks" => some 604800000
+  | _ => none
+
+/-- One clause of `require per q { ... }` (selfhost.session.sla):
+`every q reaches A, B [within d];` or
+`at least|at most p of q reach A, B [within d] over (d | N entries) [confidence c] [expecting N per unit];` -/
+partial def requirement (entry : String) : P Generative.Requirement := do
+  skip
+  let start := (← get).pos
+  let bound ← if ← keyword? "every" then pure Generative.Bound.every
+    else if ← keyword? "at" then
+      if ← keyword? "least" then pure (Generative.Bound.atLeast (← fraction))
+      else if ← keyword? "most" then pure (Generative.Bound.atMost (← fraction))
+      else fail "expected 'at least' or 'at most'"
+    else fail "a requirement starts with 'every', 'at least' or 'at most'"
+  if bound != .every && !(← keyword? "of") then fail "expected 'of' after the fraction"
+  let who ← ident "the entry"
+  if who != entry then failAt start s!"this block requires per {entry}; the clause is about {who}"
+  if !(← keyword? (if bound == .every then "reaches" else "reach")) then
+    fail (if bound == .every then "expected 'reaches'" else "expected 'reach'")
+  let rec targets (acc : Array String) : P (List String) := do
+    let t ← ident "a message or event label"
+    let acc := acc.push t
+    if acc.size > 16 then fail "at most 16 targets"
+    if ← sym? ',' then targets acc else return acc.toList
+  let ts ← targets #[]
+  let mut r : Generative.Requirement := { entry, bound, targets := ts }
+  let mut more := true
+  while more do
+    if ← keyword? "within" then
+      if r.withinMs.isSome then fail "'within' given twice"
+      r := { r with withinMs := some (← duration) }
+    else if ← keyword? "over" then
+      if r.window.isSome then fail "'over' given twice"
+      let n ← boundedNumber 9
+      let u ← ident "a time unit or 'entries'"
+      if u == "entries" || u == "entry" then
+        if n == 0 then fail "a window needs at least one entry"
+        r := { r with window := some (.entries n) }
+      else match unitMs u with
+        | some ms => if n == 0 then fail "a window needs a positive length" else r := { r with window := some (.time (n * ms)) }
+        | none => fail "unknown window unit; use entries, ms, seconds, minutes, hours, days or weeks"
+    else if ← keyword? "confidence" then
+      let c ← fraction
+      if c.num == 0 || c.num == c.den then fail "confidence must be strictly between 0 and 1"
+      r := { r with confidence := c }
+    else if ← keyword? "expecting" then
+      let n ← boundedNumber 9
+      if !(← keyword? "per") then fail "expected 'per' and a time unit, as in expecting 500 per hour"
+      let u ← ident "a time unit"
+      match unitMs u with
+      | some ms => r := { r with rate := some (n, ms) }
+      | none => fail "unknown time unit; use ms, second, minute, hour, day or week"
+    else more := false
+  sym ';' "';' after the requirement"
+  if bound == .every && r.window.isSome then
+    failAt start "'every' is a hard deadline, checkable on each entry: it takes no observation window"
+  if bound != .every && r.window.isNone then
+    failAt start "a required fraction is only checkable over an observation window: add 'over 1 hour' or 'over 1000 entries'"
+  let src ← read
+  let text := String.ofList (src.extract start (← get).pos).toList
+  return { r with text := text.trimAscii.toString }
+
 partial def file : P (List Def) := do
   let rec go (acc : Array Def) : P (List Def) := do
     skip
     if (← peek).isNone then return acc.toList
     let start := (← get).pos
+    if ← keyword? "require" then
+      if acc.isEmpty then failAt start "requirements follow the protocol they are about"
+      if !(← keyword? "per") then fail "expected 'per' and a message id, as in require per q { ... }"
+      let entry ← ident "a message id"
+      sym '{' "'{' and the requirements"
+      let rec clauses : P Unit := do
+        skip
+        if ← sym? '}' then return
+        let r ← requirement entry
+        if (← get).requires.size ≥ 16 then fail "at most 16 requirements"
+        modify fun s => { s with requires := s.requires.push r }
+        clauses
+      clauses
+      return ← go acc
     if !(← keyword? "protocol") then fail "expected 'protocol'"
     let name ← ident "the protocol's name"
     if acc.any (·.name == name) then failAt start s!"protocol {name} is defined twice"
@@ -761,6 +860,8 @@ structure Parsed where
   global : Global String
   steps  : Nat
   body : List Stmt := []
+  /-- `require per q { ... }` (selfhost.session.sla) -/
+  requires : List Generative.Requirement := []
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -777,13 +878,22 @@ def buildWith (text : String) (body : List Stmt) : Except String (Global String)
 def parse (text : String) : Except String Parsed := do
   if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
   let src := text.toList.toArray
-  let (defs, _) ← (file.run src).run {}
+  let (defs, st) ← (file.run src).run {}
   let main := defs.getLast!
   let earlier := defs.dropLast
   let ctx : Ctx := { defs := earlier, rename := [], roles := main.roles, path := main.name,
                      inside := [main.name] }
   let (g, n) ← (build ctx main.body).run 0
-  return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body }
+  -- requirements name a message id of the main protocol and labels that occur in the text
+  let ids := declaredIds main.body
+  let labels := defs.flatMap (fun d => labelsOf d.body)
+  for r in st.requires do
+    if !ids.contains r.entry then
+      throw s!"require per {r.entry}: {r.entry} is not a message id of protocol {main.name}; give the message an id, as in {r.entry}: Request from A to B;"
+    for t in r.targets do
+      if !labels.contains t then throw s!"requirement '{r.text}': {t} is not a message or event of the protocol"
+  return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
+           requires := st.requires.toList }
 
 /-! ## Writing -/
 
