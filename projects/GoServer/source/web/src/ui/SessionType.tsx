@@ -1,20 +1,22 @@
 // Requirement refs: property:session type panel; proof:the session type panel never misleads.
 //
 // A panel that stays closed until opened: GoServer's session type as LeanFM draws it, with the
-// text it was drawn from and what the picture answers. Both files are generated from
-// spec/Session.lean by spec/SessionPanel.lean; nothing here is drawn by hand. They load only
-// when the panel is first opened.
+// text it was drawn from and what the picture answers, the implementation choices that realize it
+// (spec/Implementation.lean) and the GoServer book as a dark-mode PDF. All are written by
+// spec/SessionPanel.lean; nothing here is drawn by hand. They load only when the panel is first opened.
 import {useState} from 'react';
 
 type Provenance = {question: string; eventSource: string; reducer: string; unit: string; boundary: string; protocol: string};
 
 export function SessionTypePanel() {
-  const [text, setText] = useState<string | null>(null), [prov, setProv] = useState<Provenance | null>(null), [error, setError] = useState('');
+  const [text, setText] = useState<string | null>(null), [impl, setImpl] = useState<string | null>(null);
+  const [prov, setProv] = useState<Provenance | null>(null), [error, setError] = useState('');
   const load = async (open: boolean) => {
     if (!open || text !== null) return;
     try {
-      const [t, p] = await Promise.all([fetch('./session/goserver.leanfm').then(r => r.text()), fetch('./session/provenance.json').then(r => r.json())]);
-      setText(t); setProv(p);
+      const [t, p, i] = await Promise.all([fetch('./session/goserver.leanfm').then(r => r.text()), fetch('./session/provenance.json').then(r => r.json()),
+        fetch('./session/implementation.lean').then(r => r.text())]);
+      setText(t); setProv(p); setImpl(i);
     } catch { setError('The session type could not be loaded.'); }
   };
   return (
@@ -24,6 +26,8 @@ export function SessionTypePanel() {
       {prov ? <p className="muted small">{prov.question} Drawn by LeanFM from {prov.eventSource}; {prov.reducer}. Shows {prov.unit}, for {prov.boundary}.</p> : null}
       <div className="session-figure"><img src="./session/goserver.svg" alt="Sequence diagram of the GoServer session type" loading="lazy" /></div>
       {text !== null ? <details className="session-text"><summary>Session type text</summary><pre>{text}</pre></details> : null}
+      {impl !== null ? <details className="session-text"><summary>Implementation (spec/Implementation.lean)</summary><pre>{impl}</pre></details> : null}
+      <p className="small"><a href="./session/goserver-dark.pdf" target="_blank" rel="noopener">The GoServer book (PDF, dark mode)</a></p>
     </details>
   );
 }

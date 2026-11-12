@@ -11,7 +11,11 @@ current `spec/Session.lean` and LeanFM's own sequence-diagram renderer, never by
   verbatim, so the parser types every `where` condition against the structures;
 * `source/cmd/demo/static/session/goserver.svg`: LeanFM's sequence diagram of protocol
   `GoServer` with every protocol it includes, in the dark theme;
-* `source/cmd/demo/static/session/provenance.json`: what the picture answers and how.
+* `source/cmd/demo/static/session/provenance.json`: what the picture answers and how;
+* `source/cmd/demo/static/session/implementation.lean`: `spec/Implementation.lean`, verbatim, the
+  choices that realize the session type;
+* `source/cmd/demo/static/session/goserver-dark.pdf`: the GoServer book's dark-mode PDF,
+  `book/main-dark.pdf`, byte for byte (run `make -C book` first when it changed).
 
 Run from the LeanFM root after changing `spec/Session.lean`:
 `lake env lean --run projects/GoServer/spec/SessionPanel.lean`.
@@ -65,6 +69,9 @@ def main : IO Unit := do
     , ("protocol", p.name), ("roles", toJson p.roles)
     , ("generator", root ++ "/spec/SessionPanel.lean") ]
   IO.FS.writeFile (out ++ "/provenance.json") (provenance.pretty ++ "\n")
+  -- beside the session type: the implementation choices, and the dark-mode book that explains them
+  IO.FS.writeFile (out ++ "/implementation.lean") (← IO.FS.readFile (root ++ "/spec/Implementation.lean"))
+  IO.FS.writeBinFile (out ++ "/goserver-dark.pdf") (← IO.FS.readBinFile (root ++ "/book/main-dark.pdf"))
   IO.println s!"wrote {out}: {p.name}, {text.length} characters of session types, {svg.length} bytes of SVG"
 
 end Project.SessionPanel

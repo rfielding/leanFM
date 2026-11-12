@@ -395,7 +395,21 @@ func TestSessionPanelMatchesTheSpec(t *testing.T) {
 		t.Fatal("static/session/goserver.leanfm is stale: regenerate it with spec/SessionPanel.lean")
 	}
 	h := newHandler(goserver.NewServer(), "8081")
-	for path, kind := range map[string]string{"/session/goserver.svg": "image/svg+xml", "/session/goserver.leanfm": "text/plain", "/session/provenance.json": "application/json"} {
+	impl, err := os.ReadFile("../../../spec/Implementation.lean")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sessionImplementation != string(impl) {
+		t.Fatal("static/session/implementation.lean is stale: regenerate it with spec/SessionPanel.lean")
+	}
+	if !strings.HasPrefix(sessionBook, "%PDF-") {
+		t.Fatal("static/session/goserver-dark.pdf is not a PDF")
+	}
+	if book, err := os.ReadFile("../../../book/main-dark.pdf"); err == nil && string(book) != sessionBook {
+		t.Fatal("static/session/goserver-dark.pdf is stale: regenerate it with spec/SessionPanel.lean")
+	}
+	for path, kind := range map[string]string{"/session/goserver.svg": "image/svg+xml", "/session/goserver.leanfm": "text/plain", "/session/provenance.json": "application/json",
+		"/session/implementation.lean": "text/plain", "/session/goserver-dark.pdf": "application/pdf"} {
 		r := httptest.NewRequest("GET", "http://127.0.0.1:8081"+path, nil)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)

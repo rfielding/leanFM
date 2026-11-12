@@ -142,9 +142,11 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 		body *string
 		kind string
 	}{
-		"/session/goserver.svg":    {&sessionSVG, "image/svg+xml"},
-		"/session/goserver.leanfm": {&sessionText, "text/plain; charset=utf-8"},
-		"/session/provenance.json": {&sessionProvenance, "application/json"},
+		"/session/goserver.svg":        {&sessionSVG, "image/svg+xml"},
+		"/session/goserver.leanfm":     {&sessionText, "text/plain; charset=utf-8"},
+		"/session/provenance.json":     {&sessionProvenance, "application/json"},
+		"/session/implementation.lean": {&sessionImplementation, "text/plain; charset=utf-8"},
+		"/session/goserver-dark.pdf":   {&sessionBook, "application/pdf"},
 	} {
 		file := file
 		mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
@@ -312,3 +314,12 @@ var sessionText string
 
 //go:embed static/session/provenance.json
 var sessionProvenance string
+
+// spec/Implementation.lean beside the session type, and the GoServer book's dark-mode PDF; both
+// copied by spec/SessionPanel.lean.
+//
+//go:embed static/session/implementation.lean
+var sessionImplementation string
+
+//go:embed static/session/goserver-dark.pdf
+var sessionBook string
