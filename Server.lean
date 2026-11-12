@@ -328,7 +328,9 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/renders/tasks" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "tasks")
   | "/renders/assembled" => pure <| response 200 "text/html; charset=utf-8" (LeanFM.diagramRenderPage "assembled")
   | "/renders/theorems" => pure <| response 200 "text/html; charset=utf-8" LeanFM.theoremRenderPage
-  | "/metrics" => pure <| response 200 "text/plain; version=0.0.4; charset=utf-8" LeanFM.prometheusMetrics
+  | "/metrics" => do
+      let checks ← LeanFM.CheckMetrics.checkStats.get
+      pure <| response 200 "text/plain; version=0.0.4; charset=utf-8" (LeanFM.prometheusMetrics ++ "\n" ++ checks.render)
   | "/openapi.yaml" => pure <| response 200 "application/yaml; charset=utf-8" LeanFM.openApiYaml
   | "/report" => pure <| response 200 "text/plain; charset=utf-8" LeanFM.textReport
   | "/tools/scenarios" => pure <| response 200 "application/json; charset=utf-8" LeanFM.scenarioCatalogJson

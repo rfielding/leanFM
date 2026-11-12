@@ -236,7 +236,11 @@ within the deadline. It misses when it passes the deadline, the next entry or
 the end of the session. The result is the exact per-entry probability (an
 interval if exploration stops at its bound) and a verdict. When the verdict is
 violated, the result also gives the most probable path that breaks the promise,
-with each assumption it passes through shown as \texttt{[name: p]}:
+with each assumption it passes through shown as
+\texttt{[name \textrightarrow{} First: p]}. The name belongs to the whole choice, like a
+question such as \texttt{IsBusy}, and the branch taken is named by its first message, the one the
+other roles see. The same choice therefore reads \texttt{[IsBusy \textrightarrow{} Pong: 9/10]} on one
+branch and \texttt{[IsBusy \textrightarrow{} SlowPong: 1/10]} on the other:
 
 \lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{generated/sla-userlookup.txt}
 

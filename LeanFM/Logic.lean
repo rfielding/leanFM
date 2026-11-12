@@ -1419,6 +1419,130 @@ def parseProtocol (args : Json) : Except String Protocol := do
       pure (some ({ name := n, protects, knows, drop, rewrite } : Inline))
   return { attacker, attackerKnows, domain, domains, roles, flags := [], defender }
 
+/-! ### Secrets (selfhost.mcp.logic.secrets)
+
+Marking a secret is asking a question: the attacker never derives it. A secret is marked by name
+(an atom or symmetric key whose name ends in `_secr`) or listed in the `secrets` argument. -/
+
+def maxSecrets : Nat := 16
+
+/-- A name without its session suffix: `na_secr#2` is a copy of `na_secr`. -/
+def baseName (n : String) : String := (n.splitOn "#").headD n
+
+def secretName (n : String) : Bool := (baseName n).endsWith "_secr"
+
+/-- Every atom, key and agent name inside a term. -/
+def msgNames : Msg → List String
+  | .atom n | .key n | .pk n | .sk n => [n]
+  | .pair a b | .enc a b => msgNames a ++ msgNames b
+  | .hash b => msgNames b
+
+/-- The atoms and symmetric keys inside a term. -/
+def msgLeaves : Msg → List Msg
+  | .atom n => [.atom n]
+  | .key n => [.key n]
+  | .pk _ | .sk _ => []
+  | .pair a b | .enc a b => msgLeaves a ++ msgLeaves b
+  | .hash b => msgLeaves b
+
+/-- Is `s` the term `m` or inside it? -/
+def msgHas (m s : Msg) : Bool :=
+  m == s || match m with
+    | .pair a b | .enc a b => msgHas a s || msgHas b s
+    | .hash b => msgHas b s
+    | _ => false
+
+def patLits : Pat → List Msg
+  | .lit m => [m]
+  | .var _ => []
+  | .pair a b | .enc a b => patLits a ++ patLits b
+  | .hash b | .pk b | .sk b => patLits b
+
+def patText : Pat → String
+  | .lit m => m.render
+  | .var x => x
+  | .pair a b => patText a ++ ", " ++ patText b
+  | .enc k b => "{" ++ patText b ++ "}" ++ patText k
+  | .hash b => s!"h({patText b})"
+  | .pk a => s!"pk({patText a})"
+  | .sk a => s!"sk({patText a})"
+
+/-- The key that opens a ciphertext sealed under this key pattern. -/
+def openerText : Pat → String
+  | .lit m => m.inverse.render
+  | .pk a => s!"sk({patText a})"
+  | .sk a => s!"pk({patText a})"
+  | k => patText k
+
+/-- Every term the protocol itself mentions: step literals, choices, fresh values and domains. -/
+def protocolTerms (p : Protocol) : List Msg :=
+  p.roles.flatMap (fun r => r.steps.flatMap fun
+    | .choose _ vs => vs
+    | .send to m => patLits to ++ patLits m
+    | .recv m => patLits m
+    | .claim _ args => args.flatMap patLits
+    | .fresh _ => []) ++
+  (freshValues p.roles).map (·.2) ++ p.domain ++ p.domains.flatMap (·.2)
+
+/-- Secrets marked by name: atoms and symmetric keys whose name ends in `_secr`. -/
+def namedSecrets (p : Protocol) : List Msg :=
+  ((protocolTerms p).flatMap msgLeaves |>.filter fun
+    | .atom n | .key n => secretName n
+    | _ => false).eraseDups
+
+/-- The secrets a pattern carries: secret terms inside it (a pattern without variables is matched as
+the whole term it builds, so a marked hash is found), and variables holding secrets. -/
+def patSecrets (secrets : List Msg) (secretVars : List String) (q : Pat) : List String :=
+  match q.vars, q.inst [] with
+  | [], some m => (secrets.filter (msgHas m ·)).map Msg.render
+  | _, _ => match q with
+    | .lit m => (secrets.filter (msgHas m ·)).map Msg.render
+    | .var x => if secretVars.contains x then [x] else []
+    | .pair a b | .enc a b => patSecrets secrets secretVars a ++ patSecrets secrets secretVars b
+    | .hash b | .pk b | .sk b => patSecrets secrets secretVars b
+
+/-- Every ciphertext inside a pattern, as (key pattern, body pattern). -/
+def patSealed : Pat → List (Pat × Pat)
+  | .enc k b => (k, b) :: (patSealed k ++ patSealed b)
+  | .pair a b => patSealed a ++ patSealed b
+  | .hash b | .pk b | .sk b => patSealed b
+  | _ => []
+
+/-- What protects each secret: the opening key of every ciphertext a role sends with a secret
+inside, with the role and step that sends it. -/
+def protectors (p : Protocol) (secrets : List Msg) : List Json := Id.run do
+  let mut out : List Json := []
+  for r in p.roles.filter (·.session == 1) do
+    let secretVars := r.steps.flatMap fun
+      | .choose x vs => if secretName x || vs.any (fun v => secrets.any (msgHas v ·)) then [x] else []
+      | .fresh x => if secretName x then [x] else []
+      | .recv pat => pat.vars.filter secretName
+      | _ => []
+    for (st, i) in r.steps.zipIdx do
+      if let .send _ msg := st then
+        for (k, b) in patSealed msg do
+          let carried := (patSecrets secrets secretVars b).eraseDups
+          unless carried.isEmpty do
+            out := out ++ [Json.mkObj [("protector", Json.str (openerText k)),
+              ("protects", toJson carried), ("sentBy", Json.str s!"{r.name}, step {i + 1}"),
+              ("message", Json.str (patText msg))]]
+  return out
+
+/-- Names that look secret but are not marked: a forgotten marker is reported, never silently unchecked. -/
+def secretLint (p : Protocol) (secrets : List Msg) : List String :=
+  let looks := fun (n : String) =>
+    let l := n.toLower
+    ["passw", "secret", "token", "priv", "cred"].any fun w => (l.splitOn w).length > 1
+  let listedLeaves := secrets.filterMap fun | .atom n | .key n => some n | _ => none
+  let leafNames := (protocolTerms p).flatMap msgLeaves |>.filterMap fun | .atom n | .key n => some n | _ => none
+  let varNames := p.roles.flatMap fun r => r.steps.flatMap fun
+    | .choose x _ | .fresh x => [x]
+    | .send to m => to.vars ++ m.vars
+    | .recv m => m.vars
+    | .claim _ args => args.flatMap Pat.vars
+  ((leafNames ++ varNames).map baseName).eraseDups.filter fun n =>
+    looks n && !secretName n && !listedLeaves.contains n
+
 end ProtocolTool
 
 /-- Ask `check_ctl` a formula over a generated protocol model. -/
@@ -1428,31 +1552,87 @@ def _root_.LeanFM.Session.Attack.Protocol.check (p : LeanFM.Session.Attack.Proto
   | .ok j => j
   | .error e => Json.mkObj [("verdict", "error"), ("reason", e)]
 
-def checkProtocol (args : Json) : ToolOutcome := do
+/-- check_protocol with the model's state bound as a parameter, so the cut-off answer can be tested on a
+small model; the tool always uses `bounds.maxModelNodes`. -/
+def checkProtocolWith (limit : Nat) (args : Json) : ToolOutcome := do
   let p ← parseProtocol args
-  let f ← match (args.getObjVal? "formula").toOption with
-    | some fj => parseBounded fj
-    | none => throw "check_protocol needs a formula"
-  let m := p.explore bounds.maxModelNodes
+  -- secrets: marked by name (_secr) or listed; each is a question (selfhost.mcp.logic.secrets)
+  let listed ← match (args.getObjVal? "secrets").toOption with
+    | none => pure []
+    | some (.arr items) =>
+      if items.size > maxSecrets then throw s!"secrets lists {items.size} terms; the bound is {maxSecrets}"
+      items.toList.mapM boundedTerm
+    | some _ => throw "secrets is an array of terms"
+  let names := (protocolTerms p).flatMap msgNames
+  for t in listed do
+    unless (msgNames t).any names.contains do
+      throw s!"secret {t.render} uses no name of the protocol, so its check would pass vacuously"
+  let secrets := (namedSecrets p ++ listed).eraseDups
+  if secrets.length > maxSecrets then
+    throw s!"the protocol marks {secrets.length} secrets; the bound is {maxSecrets}"
+  let f? ← match (args.getObjVal? "formula").toOption with
+    | some fj => some <$> parseBounded fj
+    | none => pure none
+  if f?.isNone && secrets.isEmpty then
+    throw "check_protocol needs a formula or a secret (a name ending in _secr, or a term in secrets)"
+  let m := p.explore limit
   let size : List (String × Json) := [("states", toJson m.states.size), ("transitions", toJson m.edges.length)]
+  let draft := p.draft m "protocol"
+  let wireOf := fun (r : Json) =>
+    let path := match (r.getObjValD "evidence").getObjValD "path" with
+      | .arr ps => ps.toList.filterMap fun s => (s.getObjValD "message").getStr?.toOption
+      | _ => []
+    (p.replayWire path).map LeanFM.Session.Attack.Hop.toJson
+  let secretResults : List (String × Json) := secrets.map fun s =>
+    let base := [("term", Json.str s.render), ("json", LeanFM.Session.Attack.termJson s),
+      ("marked", Json.str (match s with
+        | .atom n | .key n => if secretName n then "by name" else "listed"
+        | _ => "listed"))]
+    if m.truncated then ("resource-limit", Json.mkObj (base ++ [("verdict", Json.str "resource-limit")]))
+    else
+      let q := Json.mkObj [("AG", Json.mkObj [("not", Json.mkObj [("knows", Json.mkObj [("actor", Json.str p.attacker), ("term", LeanFM.Session.Attack.termJson s)])])])]
+      match checkCtl (Json.mkObj [("task", draft), ("formula", q)]) with
+      | .ok r =>
+        match (r.getObjValD "verdict").getStr?.toOption with
+        | some "proved" => ("kept", Json.mkObj (base ++ [("verdict", Json.str "kept")]))
+        | some "disproved" => ("leaked", Json.mkObj (base ++ [("verdict", Json.str "leaked"), ("evidence", r.getObjValD "evidence"),
+            ("wire", Json.arr (wireOf r).toArray)]))
+        | _ => ("resource-limit", Json.mkObj (base ++ [("verdict", Json.str "resource-limit")]))
+      | .error e => ("resource-limit", Json.mkObj (base ++ [("verdict", Json.str "resource-limit"), ("reason", Json.str e)]))
+  let warnings := (secretLint p secrets).map fun n =>
+    s!"{n} looks secret but is not marked: name it {n}_secr or list it in secrets, or it is not checked"
+  let extras : List (String × Json) :=
+    (if secrets.isEmpty then [] else
+      [("secrets", Json.arr (secretResults.map (·.2)).toArray),
+       ("protectors", Json.arr (protectors p secrets).toArray)]) ++
+    (if warnings.isEmpty then [] else [("warnings", toJson warnings)])
+  let note := ("note", Json.str ("bounded: each session runs once, with the declared number of sessions per role; variables bind values from the declared domains; every channel is the attacker's" ++
+        (match p.defender with
+         | some g => s!", except {g.name}'s links to the roles it protects; {g.name} sees inside a ciphertext only with a key it holds"
+         | none => "")))
+  match f? with
+  | none =>
+    let leaked := secretResults.filter (·.1 == "leaked")
+    let cut := secretResults.any (·.1 == "resource-limit")
+    let verdict := if !leaked.isEmpty then "disproved" else if cut then "resource-limit" else "proved"
+    let reading := s!"{(secretResults.filter (·.1 == "kept")).length} of {secrets.length} secrets kept from {p.attacker}" ++
+      (if leaked.isEmpty then "" else ": " ++ ", ".intercalate (leaked.map fun (_, j) => ((j.getObjValD "term").getStr?.toOption.getD "?") ++ " leaked"))
+    return Json.mkObj ([("tool", Json.str "check_protocol"), ("bounds", boundsJson), ("verdict", Json.str verdict), ("reading", Json.str reading)] ++
+      size ++ extras ++ [note])
+  | some f =>
   if m.truncated then
     return verdictJson "check_protocol" "resource-limit" f.reading <| size ++
-      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the generated model exceeds {bounds.maxModelNodes} states; nothing was proved")])]
-  let r ← checkCtl (Json.mkObj [("task", p.draft m "protocol"), ("formula", f.toJson)])
-  let path := match (r.getObjValD "evidence").getObjValD "path" with
-    | .arr ps => ps.toList.filterMap fun s => (s.getObjValD "message").getStr?.toOption
-    | _ => []
-  let wire := (p.replayWire path).map LeanFM.Session.Attack.Hop.toJson
+      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the generated model exceeds {limit} states; nothing was proved")])] ++ extras
+  let r ← checkCtl (Json.mkObj [("task", draft), ("formula", f.toJson)])
+  let wire := wireOf r
   let keep := ["verdict", "reading", "mode", "evidence", "deadlocks"]
   let body := match r with
     | .obj kvs => kvs.toList.filter (fun (k, _) => keep.contains k)
     | _ => []
   return Json.mkObj ([("tool", Json.str "check_protocol"), ("bounds", boundsJson)] ++ body ++ size ++
-    [("wire", Json.arr wire.toArray),
-     ("note", Json.str ("bounded: each session runs once, with the declared number of sessions per role; variables bind values from the declared domains; every channel is the attacker's" ++
-        (match p.defender with
-         | some g => s!", except {g.name}'s links to the roles it protects; {g.name} sees inside a ciphertext only with a key it holds"
-         | none => "")))])
+    [("wire", Json.arr wire.toArray)] ++ extras ++ [note])
+
+def checkProtocol (args : Json) : ToolOutcome := checkProtocolWith bounds.maxModelNodes args
 
 /-! ## check_reassembly (decision logic-reassembly)
 
@@ -1548,7 +1728,7 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## check_protocol"
   , ""
-  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, …; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula."
+  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, …; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula, secrets ([terms]). A name ending in _secr marks a secret, and so does a term in secrets: each is the question never knows(attacker, secret), answered kept, leaked or resource-limit, with the keys that protect it and warnings for names that look secret but are unmarked; with secrets the formula is optional. A hash hides its input, so mark a hash too when a server accepts it in place of the password."
   , ""
   , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`, `{\"fresh\": x}` (binds x to a value new in this session: x in the first, x#2 in the second; no two roles make the same fresh variable, and the attacker may not already know it). A domain that holds a fresh value also holds its copies in other sessions. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
   , ""

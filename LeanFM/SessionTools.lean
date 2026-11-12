@@ -1464,7 +1464,9 @@ require per q {
 At design time, `session_sla` checks each requirement against the assumptions on the chain: per
 entry, the exact interval of the probability (an interval when exploration is cut short), the
 verdict met, violated or undecided, and the most probable path that breaks it, with each
-assumption it passes through shown as `[name: p]`. A window needs ceil(ln(1/(1-c))/margin)
+assumption it passes through shown as `[name → First: p]`: the choice's name, the first message
+of the branch taken, and its probability. Name a choice for its question (`IsBusy`), since the
+name covers every branch. A window needs ceil(ln(1/(1-c))/margin)
 entries to tell the promise from a failure rate of 0 or 1. The tool says when a window cannot hold
 that many.
 

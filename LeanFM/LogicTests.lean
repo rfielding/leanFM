@@ -300,6 +300,20 @@ def main : IO Unit := do
   expect "check_protocol: authentication fails in 1978" (verdictOf (proto false agreement) == "disproved")
   expect "check_protocol: Lowe's fix keeps the nonce secret" (verdictOf (proto true secrecy) == "proved")
   expect "check_protocol: Lowe's fix keeps agreement" (verdictOf (proto true agreement) == "proved")
+  -- secrets (decision logic-secrets): nb_secr marked by name, no formula
+  let secretNs := fun (lowe : Bool) =>
+    let j := nsArgs lowe (json% {EF: true})
+    let txt := ((match j with | .obj kvs => Json.obj (kvs.erase "formula") | o => o).compress).replace "\"nb\"" "\"nb_secr\""
+    (run "check_protocol" ((Json.parse txt).toOption.getD Json.null)).getD (.error "no tool")
+  let leakedNb := fun (o : ToolOutcome) => match o with
+    | .ok j => (j.getObjValD "secrets").compress.contains "\"term\":\"nb_secr\"" && (j.getObjValD "secrets").compress.contains "\"verdict\":\"leaked\""
+    | _ => false
+  expect "secrets: nb_secr leaks in 1978" (verdictOf (secretNs false) == "disproved" && leakedNb (secretNs false))
+  -- unconditional secrecy fails even with Lowe's fix: Bob may run with Ivo and tell him nb; that is why conditional secrecy stays a formula
+  expect "secrets: nb_secr is told to Ivo when Bob runs with him, even with Lowe's fix" (leakedNb (secretNs true))
+  expect "secrets: the leak shows what crossed the wire" (match secretNs false with
+    | .ok j => (j.getObjValD "secrets").compress.contains "\"wire\":[{"
+    | _ => false)
   expect "check_protocol: an honest run can still complete"
     (verdictOf (proto true (json% {EF: {and: [{claimed: "commit(B, A)"}, {claimed: "finished(A, B)"}]}})) == "proved")
   expect "check_protocol: sending an unbound variable is rejected"

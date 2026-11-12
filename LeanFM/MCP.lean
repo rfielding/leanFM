@@ -6,6 +6,7 @@ import LeanFM.Logic
 import LeanFM.MCPView
 import LeanFM.SessionView
 import LeanFM.SessionTools
+import LeanFM.CheckMetrics
 
 namespace LeanFM.MCP
 
@@ -198,13 +199,14 @@ def toolDefinitions : Array Json := #[
     (schema [("formula", anyJson "JSON formula"), ("predicates", Json.mkObj [("type", "array"), ("items", stringSchema "predicate text")]),
       ("task", anyJson "optional canonical task id or inline draft")] []),
   tool "check_protocol" "Find attacks on a security protocol"
-    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {fresh: var}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), each with an optional number of concurrent sessions (1 to 4; later sessions are named Alice#2, …, and fresh values na#2, …), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. An optional defender {name, protects: [roles], knows: [keys], drop: [patterns], rewrite: [{match, replace}]} sits between the network and the roles it protects: it drops a message when a drop pattern matches any part it can see (it opens a ciphertext only with a key it can build) and rewrites a whole message that matches a rewrite. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path: {event: send, from, to, via, term} for an honest send (to is its addressee, via the attacker) and {event: recv, from, to, term} for a delivery. Bounded: each session runs once."
+    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {fresh: var}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), each with an optional number of concurrent sessions (1 to 4; later sessions are named Alice#2, …, and fresh values na#2, …), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. An optional defender {name, protects: [roles], knows: [keys], drop: [patterns], rewrite: [{match, replace}]} sits between the network and the roles it protects: it drops a message when a drop pattern matches any part it can see (it opens a ciphertext only with a key it can build) and rewrites a whole message that matches a rewrite. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path: {event: send, from, to, via, term} for an honest send (to is its addressee, via the attacker) and {event: recv, from, to, term} for a delivery. Bounded: each session runs once. Secrets: an atom or symmetric key named with the suffix _secr (passwd_secr), or a term listed in secrets (such as {hash: {atom: passwd_secr}}), is a question: does the attacker ever derive it? Each gets kept, leaked (with the path and the wire) or resource-limit, the keys that protect it are named with the step that sends them, and names that look secret but are unmarked come back as warnings. With secrets the formula is optional."
     (schema [("roles", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("attacker", anyJson "{name, knows: [terms]}"),
       ("domain", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("domains", anyJson "variable name to an array of terms"),
       ("defender", anyJson "optional {name, protects: [role names], knows: [terms], drop: [patterns], rewrite: [{match, replace}]}"),
-      ("formula", anyJson "JSON formula")] ["roles", "attacker", "formula"]),
+      ("secrets", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")]), ("description", Json.str "terms that must never reach the attacker, beside names ending in _secr; at most 16")]),
+      ("formula", anyJson "JSON formula; optional when the protocol marks secrets")] ["roles", "attacker"]),
   tool "check_reassembly" "Find stream-reassembly evasions"
     "A defender scans a TCP stream for a signature, and the host behind it reassembles the same stream; the attacker chooses every segment (any offset and length, the signature's bytes or others, repeated with different bytes). Each side keeps the first or the last bytes of an overlap. Returns check_ctl's verdict over every segmentation and, for an evasion, the segments that make it. Defaults: signature EVIL, box first, host last, mode blocking (an IPS resets the stream on a match; passive is an IDS that alerts), formula never claimed delivered(sig) in blocking mode and never (delivered and not alerted) in passive mode. Claims for a formula: alerted(sig), delivered(sig)."
     (schema [("signature", stringSchema "1 to 4 characters, no ."),
@@ -392,6 +394,9 @@ private def field (json : Json) (name : String) : Except String Json := json.get
 private def stringField (json : Json) (name : String) : Except String String := do
   (← field json name).getStr?
 
+/-- The names of the listed tools: the only tool names a metric label may carry. -/
+def listedToolNames : List String := tools.toList.filterMap fun t => (t.getObjValAs? String "name").toOption
+
 def dispatchJson (request : Json) : IO Response := do
   let id := (field request "id").toOption.getD Json.null
   let method ← match stringField request "method" with
@@ -421,7 +426,13 @@ def dispatchJson (request : Json) : IO Response := do
   | "tools/call" =>
       match stringField params "name" with
       | .error err => pure <| rpcError id (-32602) err
-      | .ok name => match toolResult name ((field params "arguments").toOption.getD (Json.mkObj [])) with
+      | .ok name =>
+        let t0 ← IO.monoNanosNow
+        let result := toolResult name ((field params "arguments").toOption.getD (Json.mkObj []))
+        let t1 ← IO.monoNanosNow
+        -- recorded after the answer is computed, so it can neither change nor fail it (selfhost.mcp.metrics)
+        LeanFM.CheckMetrics.checkStats.modify (·.record listedToolNames name result (t1 - t0))
+        match result with
         | .ok result => pure <| ok id result
         | .error err => pure <| rpcError id (-32602) err
   | "prompts/list" => pure <| ok id <| Json.mkObj [("prompts", Json.arr prompts)]

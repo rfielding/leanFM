@@ -137,6 +137,9 @@ def main : IO Unit := do
   let slaCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_sla\",\"arguments\":{\"lean\":\"protocol P (A, B) { q: Ask from A to B; Answer from B to A cause q after 100 ms; }\\nrequire per q { every q reaches Answer within 1 second; }\"}}}"
   assertContains "MCP session_sla answers the design verdict" slaCall.body "session_sla met"
   assertContains "MCP session_sla puts the report in the text" slaCall.body "Requirements against the stated assumptions"
+  let checks ← LeanFM.CheckMetrics.checkStats.get
+  assertContains "MCP counts session_sla in the check metrics" checks.render "leanfm_check_calls_total{tool=\"session_sla\",verdict=\"met\"} 1"
+  assertContains "MCP check metrics time every call" checks.render "leanfm_check_duration_seconds_count{tool=\"session_sla\",verdict=\"met\"} 1"
   let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
   assertContains "MCP session_skeleton writes TypeScript in a typescript fence" skelTs.body "```typescript"
   assertContains "MCP session_skeleton TypeScript states extend State" skelTs.body "export class BS1 extends State"

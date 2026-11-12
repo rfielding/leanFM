@@ -48,12 +48,38 @@ structure DesignVerdict where
   note : String
   deriving Inhabited
 
-/-- A step's name on a path: the message or event label, or for a stated choice the assumption
-taken, as [name: probability]. -/
-private def stepName (c : Chain) (e : Edge) : String :=
+/-- The first message or event of the branch a policy edge selects: what the other roles see first,
+so how they tell the branches apart. Follows single non-choice edges (at most 24); none when the
+branch starts with another choice. -/
+def branchFirst (c : Chain) (s : Nat) : Option String := Id.run do
+  let mut cur := s
+  for _ in [0:24] do
+    let outs := c.edges.filter (·.src == cur)
+    match outs.toList with
+    | [e] =>
+      if e.kind == "message" || e.kind == "event" then return some e.step
+      else if e.kind == "policy" then return none
+      else cur := e.dst
+    | _ => return none
+  return none
+
+/-- A path step: a message or event by its label; a stated choice as [name → first message of the
+branch taken: probability], so the assumption names the outcome as well as the question. -/
+def stepName (c : Chain) (e : Edge) : String :=
   if e.kind == "message" || e.kind == "event" then e.step
-  else if e.kind == "policy" then s!"[{(c.states[e.src]?.map (·.detail)).getD "choice"}: {e.prob.text}]"
+  else if e.kind == "policy" then
+    let name := (c.states[e.src]?.map (·.detail)).getD "choice"
+    match branchFirst c e.dst with
+    | some first => s!"[{name} → {first}: {e.prob.text}]"
+    | none => s!"[{name}: {e.prob.text}]"
   else e.label
+
+/-- Milliseconds as written in requirements: whole seconds as seconds, otherwise ms. -/
+def durationText (ms : Nat) : String :=
+  if ms ≥ 1000 && ms % 1000 == 0 then
+    let s := ms / 1000
+    s!"{s} second{if s == 1 then "" else "s"}"
+  else s!"{ms} ms"
 
 /-- From each entry edge, the exact probability of reaching a target before the deadline, before the
 next entry and before the session ends. Continuations are enumerated breadth first over (state,
@@ -95,7 +121,7 @@ def entryOutcome (c : Chain) (r : Requirement) (entryLabel : String) (ei : Nat) 
             if m' > hitMass then hitMass := m'; hitPath := path'
           else if late || isEntry e then
             misses := misses + m'
-            let why := if late then s!"(the deadline passes at {daysText (t' : Rat)})" else "(the next entry comes first)"
+            let why := if late then s!"(at {durationText t'}, past the {durationText (r.withinMs.getD 0)} deadline)" else "(the next entry comes first)"
             if m' > missMass then missMass := m'; missPath := path' ++ [why]
           else
             let (old, op) := (next.get? (e.dst, t')).getD (0, path')

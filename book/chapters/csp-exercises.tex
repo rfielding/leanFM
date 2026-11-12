@@ -661,6 +661,61 @@ shows Guard itself delivering \texttt{\{bad\}pk(B)}. Give Guard Bob's private ke
 as an intercepting gateway has, and it drops it again. The table is the argument
 for and against interception in four rows.
 
+\subsection{Marking secrets}
+\label{sec:secrets}
+
+\index{secrets}
+Computing everything an attacker could derive is the expensive part of these
+checks, and most of it answers questions nobody asked. Ivo learning Alice's name
+matters to no one. So a declaration marks what must stay secret, and the mark is
+the question: \emph{the attacker never derives this, on any path}. That is
+\texttt{AG not knows(Ivo, s)}, decided once for each marked secret.
+
+There are two ways to mark a secret. A name ending in \texttt{\_secr} marks an
+atom or key by name: \texttt{passwd\_secr}, or a fresh \texttt{na\_secr}, whose
+copies in later sessions are secrets too. Any other term, compound ones included,
+is listed in \texttt{secrets}. The distinction matters for hashes. A hash hides
+its input, so \texttt{h(passwd\_secr)} reveals nothing about the password, and
+the hash is not secret merely because its input is. But a server that accepts
+the hash in place of the password has made the hash a password. It must be
+marked, and listing \texttt{\{hash: \{atom: passwd\_secr\}\}} does that.
+
+Here is a password login where the client sends the hash of its password, first
+in clear, then sealed under the server's public key:
+
+\begin{center}
+\input{generated/secrets-login.tex}
+\end{center}
+
+\begin{quote}
+\input{generated/secrets-protectors.tex}
+\end{quote}
+
+In clear, the password stays secret and the hash leaks, which is exactly the
+pass-the-hash attack: Ivo replays what he saw. The leak comes with the path and
+the message on the wire. Sealed, both are kept, and the answer names what keeps
+them: \texttt{sk(Server)}, because every ciphertext that carries a secret is only
+as safe as its opening key. A leak of that key would be a leak of the password.
+The last line is a warning from a one-line declaration that sends a
+\texttt{session\_token}. A name that looks secret but carries no mark is
+reported rather than silently left unchecked, because a forgotten marker would
+otherwise look exactly like a pass.
+
+The idea is close to Perl's taint mode, from the other side. Taint protects
+\emph{integrity}: data from outside is marked, the mark follows it, and it may
+not reach a sensitive operation unchecked. A secret mark protects
+\emph{confidentiality}: the marked data may not reach the attacker. Both are
+labels that follow data, and both need a rule for when the label stops: Perl's
+is matching the data against a pattern, ours is a one-way function, and in both
+cases the rule is wrong exactly when the result is itself a credential.
+
+A mark asks an unconditional question. In Needham--Schroeder with
+\texttt{nb\_secr} marked, the nonce leaks even with Lowe's fix, because Bob may
+legitimately run with Ivo and tell him. Secrecy that depends on whom a role
+talks to stays a formula, like \texttt{never (claimed commit(B, A) and
+knows(Ivo, nb))} above. The marks are for values that must never leave, whoever
+asks: passwords, private keys, the hash a server accepts.
+
 \subsection{Reassembly}
 \label{sec:reassembly}
 
