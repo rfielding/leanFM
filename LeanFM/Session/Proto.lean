@@ -20,7 +20,9 @@ message Quote {
 `uint64`, `uint32`, `fixed64` and `fixed32` are `Nat`; `int64`, `int32`, `sint64`, `sint32`,
 `sfixed64` and `sfixed32` are `Int`; `string` is `String`; `bool` is `Bool`; a message name is that
 structure; `repeated` is `List` and `optional` is `Option`. The `//` comment lines just before a
-message document it. Each field keeps its number.
+message document it. Each field keeps its number, and is named by its JSON name, as protobuf's JSON
+mapping writes it (`request_id` is `requestId`, what implementations send); the .proto LeanFM writes
+back uses the original name. A name ending in `_secr` keeps its name, so the secret stays marked.
 
 Negative requirements: the file is read by this parser alone and nothing in it runs. `float`,
 `double` (inexact) and `bytes` are refused with the reason; so are `import` (nothing outside the
@@ -72,6 +74,16 @@ partial def lex (cs : List Char) (line : Nat := 1) (acc : Array (Tok × Nat) := 
       lex (rest.drop (body.length + 1)) line (acc.push (.str (String.ofList body), line))
     else if "{}=;[]<>,()".contains c then lex rest line (acc.push (.sym c, line))
     else .error s!"line {line}: unexpected character {c}"
+
+/-- A field's JSON name, as protobuf's JSON mapping writes it: `request_id` is `requestId`. A secret
+keeps its name, so its `_secr` mark is not lost. -/
+def jsonName (f : String) : String :=
+  if Types.isSecret f then f else
+  let rec go : List Char → Bool → List Char
+    | [], _ => []
+    | '_' :: rest, _ => go rest true
+    | c :: rest, up => (if up then c.toUpper else c) :: go rest false
+  String.ofList (go f.toList false)
 
 def scalar (t : String) : Option Ty :=
   if ["uint64", "uint32", "fixed64", "fixed32"].contains t then some .nat
@@ -135,7 +147,8 @@ def ofProto (text : String) : Except String Env := do
             match r5 with
             | (.sym ';', _) :: r6 =>
               let ty := if wrap == "list" then Ty.list base else if wrap == "opt" then Ty.opt base else base
-              fields := fields.push { name := f, ty, number := n }
+              let j := jsonName f
+              fields := fields.push { name := j, ty, number := n, protoName := if j == f then "" else f }
               body := r6
             | _ => fail l2 s!"{name}.{f}: expected ';'"
           | _ => fail l2 s!"{name}: expected a field, such as uint64 price = 1;"

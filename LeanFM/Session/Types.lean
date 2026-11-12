@@ -27,7 +27,7 @@ TypeScript message classes) are written from them.
 
 Negative requirements: a type that names no structure, a structure that contains itself, two
 structures or two fields with one name, a field name that is a keyword of Lean, Python,
-TypeScript or protobuf, a `List` or `Option` of a `List` or `Option`, and more than 64 structures or
+TypeScript or protobuf, a `List` or `Option` of a `List` or `Option`, and more than 256 structures or
 64 fields in one are errors. A condition that reads a field whose name ends in `_secr` is refused,
 because the fields conditions read are logged; a logged event that carries a `_secr` field, or a
 field its message does not declare, is refused.
@@ -48,6 +48,8 @@ structure Field where
   ty   : Ty
   /-- the protobuf field number a .proto gave it; 0 when numbered by position -/
   number : Nat := 0
+  /-- the field's name in the .proto when it differs from `name`, its JSON name -/
+  protoName : String := ""
   deriving BEq, Repr, Inhabited
 
 structure Message where
@@ -59,7 +61,7 @@ structure Message where
 /-- The structures a text declares, in the order written. -/
 abbrev Env := List Message
 
-def maxMessages : Nat := 64
+def maxMessages : Nat := 256
 def maxFieldsPer : Nat := 64
 
 def builtins : List (String × Ty) :=
@@ -294,7 +296,7 @@ def protoScalar : Ty → String
 
 def protoField (f : Field) (n : Nat) : String :=
   let pre := match f.ty with | .list _ => "repeated " | .opt _ => "optional " | _ => ""
-  s!"  {pre}{protoScalar f.ty} {f.name} = {if f.number != 0 then f.number else n};"
+  s!"  {pre}{protoScalar f.ty} {if f.protoName.isEmpty then f.name else f.protoName} = {if f.number != 0 then f.number else n};"
 
 /-- A label as a protobuf message name: letters, digits and _ only. -/
 def protoName (s : String) : String :=

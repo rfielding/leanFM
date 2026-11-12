@@ -79,6 +79,9 @@ field's protobuf number, so new fields go at the end:
 
 \input{generated/lang-types-proto.tex}
 
+The same structures give each actor's HTTP interface, written as OpenAPI beside
+the \texttt{.proto} (Chapter~\ref{ch:generated} shows the shop's).
+
 An existing \texttt{.proto} can stand in for the structures. LeanFM reads only the
 part with an exact Lean type: unsigned integers are \texttt{Nat}, signed ones
 \texttt{Int}, and every field keeps its number. \texttt{float} and

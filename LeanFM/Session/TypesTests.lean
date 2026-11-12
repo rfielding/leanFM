@@ -45,7 +45,7 @@ def nested := "structure Address where\n  city : String\nstructure Ship where\n 
 #guard refuses "structure Nat where y : Int\nprotocol P (A, B) { X from A to B; }" "built-in type"
 #guard refuses "structure X where y : Nat := 3\nprotocol P (A, B) { X from A to B; }" "default values"
 #guard refuses "protocol P (A, B) { X from A to B; }\nstructure X where y : Nat" "structures come before the protocols"
-#guard refuses (String.join ((List.range 65).map fun i => s!"structure T{i}\n") ++ "protocol P (A, B) { X from A to B; }") "at most 64 structures"
+#guard refuses (String.join ((List.range 257).map fun i => s!"structure T{i}\n") ++ "protocol P (A, B) { X from A to B; }") "at most 256 structures"
 
 /-! Conditions are typed before anything runs -/
 

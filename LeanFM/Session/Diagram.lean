@@ -18,7 +18,7 @@ one notation, so a diagram is a view of the protocol, never a separate drawing:
 | `par { } and { }`                | `par` frame with dashed dividers                           |
 | `join k of { } and { }`          | `par` frame captioned `any k of n`                         |
 | `rec N { ... continue N; }`      | `loop N` frame; `continue N` drawn as `↻ continue N`              |
-| `sessions { }`                   | `loop` frame captioned `one session per request`, around one instance |
+| `sessions { }`                   | `loop` frame captioned `one session per request` (or `one session per x.f` when keyed), around one instance |
 | `include P ...`                  | `ref P` frame around P's steps                             |
 
 Negative requirements: no construct is dropped (each has an element the tests look for); no arrow
@@ -122,8 +122,22 @@ structure St (R : Type) where
   expected counts); empty when the protocol has none. -/
   notes : Array String := #[]
   noteIx : Nat := 0
+  /-- Session keys, (message id, field) (selfhost.session.envelope): a sessions block whose body
+  holds the id is captioned with its key. -/
+  keys : List (String × String) := []
 
 abbrev M (R : Type) := StateM (St R)
+
+/-- The message ids of a body, not counting nested sessions blocks (their own sessions). -/
+partial def ownIds : Global R → List String
+  | .msg i k => i.id.toList ++ ownIds k
+  | .act _ _ k => ownIds k
+  | .choice bs => bs.flatMap ownIds
+  | .par bs k | .join _ bs k => bs.flatMap ownIds ++ ownIds k
+  | .loop _ b => ownIds b
+  | .sessions _ k => ownIds k
+  | .box _ b k => ownIds b ++ ownIds k
+  | .var _ | .done => []
 
 def minColW : Nat := 180
 def maxColW : Nat := 420
@@ -330,7 +344,12 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
       draw roles (d + 1) body
       frameBottom roles.length d top "loop"
   | .sessions body k => do
-      let top ← frameTop roles.length d "loop" "one session per request"
+      -- a keyed block is one session per value of its key: one sign-in per state
+      let ids := ownIds body
+      let caption := match (← get).keys.find? (ids.contains ·.1) with
+        | some (x, f) => s!"one session per {x}.{f}"
+        | none => "one session per request"
+      let top ← frameTop roles.length d "loop" caption
       draw roles (d + 1) body
       frameBottom roles.length d top "sessions"
       draw roles d k
@@ -385,10 +404,10 @@ structure DiagramModel where
 
 /-- The shapes of a sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
 def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : List R)
-    (title : String := "") (notes : Array String := #[]) (footer : List String := []) : DiagramModel :=
+    (title : String := "") (notes : Array String := #[]) (footer : List String := []) (keys : List (String × String) := []) : DiagramModel :=
   let widestNote := notes.foldl (fun m n => max m n.length) 0
   let cw := max (Diagram.columnWidth g) (min Diagram.maxColW (7 * widestNote + 36))
-  let ((), st) := (Diagram.draw roles 0 g).run { colW := cw, notes }
+  let ((), st) := (Diagram.draw roles 0 g).run { colW := cw, notes, keys }
   let bottom := st.y + 30
   let width := Diagram.margin * 2 + cw * (roles.length - 1)
   let height := bottom + 40

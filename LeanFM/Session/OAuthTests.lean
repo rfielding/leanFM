@@ -77,6 +77,9 @@ def app := (files.lookup "actors/app-openapi.yaml").getD ""
 -- every role has its states in the Lean module: each serves one machine per sign-in
 #guard (["namespace Browser", "namespace App", "namespace Idp"].all fun n => has ((files.lookup "Payload.lean").getD "") n)
 
+-- the diagram captions the keyed block with its key
+#guard has (str (diagram (args)) "svg") "one session per r.state"
+
 -- negative: a role that cannot name a file is refused, so no role can name a path outside generated/
 def badRole : String := match sessionFiles (Json.mkObj [("lean", Json.str "protocol P («../x», B) { Ask from B to «../x» route \"GET /a\"; Ok from «../x» to B status 200; }")]) with
   | .error e => e | .ok _ => ""

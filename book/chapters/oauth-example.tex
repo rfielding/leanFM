@@ -70,6 +70,21 @@ The Lean module has every role's states. The app serves one machine per sign-in:
 
 \input{generated/oauth-app-states.tex}
 
+\subsection*{The generated files in full}
+
+They are what the session type amounts to as code, so here they are whole.
+\texttt{generated/Payload.proto}, the messages and the event envelope:
+
+\input{generated/oauth-payload-proto.tex}
+
+\texttt{generated/actors/app-openapi.yaml}, the app's interface:
+
+\input{generated/oauth-app-openapi.tex}
+
+\texttt{generated/actors/idp-openapi.yaml}, the identity provider's:
+
+\input{generated/oauth-idp-openapi.tex}
+
 \section{What is not a requirement}
 
 \index{Implementation.lean}

@@ -478,10 +478,10 @@ end Annotate
 under each arrow its branch's probability, its amounts, its delay and, when the session's chain can
 be solved, its expected count per session. Without annotations, the plain diagram. -/
 def annotatedModel (p : Protocol) : DiagramModel := Id.run do
-  let some layer := p.generative | return p.global.diagramModel p.roles p.name
+  let some layer := p.generative | return p.global.diagramModel p.roles p.name (keys := p.keys)
   let (tagged, notes) := (Annotate.tagStmts none layer.body).run #[]
-  if notes.all (· == "") then return p.global.diagramModel p.roles p.name
-  let .ok g := Text.buildWith p.lean tagged | return p.global.diagramModel p.roles p.name
+  if notes.all (· == "") then return p.global.diagramModel p.roles p.name (keys := p.keys)
+  let .ok g := Text.buildWith p.lean tagged | return p.global.diagramModel p.roles p.name (keys := p.keys)
   -- expected counts and totals from the chain, when it can be solved without a horizon
   let chain := (Chain.analyse { layer with body := tagged }).toOption
   let counts : Array String := match chain with
@@ -498,7 +498,7 @@ def annotatedModel (p : Protocol) : DiagramModel := Id.run do
   let full := (List.range notes.size).toArray.map fun k =>
     " - ".intercalate (([notes[k]!] ++ (counts[k]?).toList).filter (· != ""))
   let (order, plain) := Annotate.strip g
-  return plain.diagramModel p.roles p.name (order.toArray.map fun k => (full[k]?).getD "") footer
+  return plain.diagramModel p.roles p.name (order.toArray.map fun k => (full[k]?).getD "") footer p.keys
 
 def diagramJson (p : Protocol) : Json :=
   let m := annotatedModel p

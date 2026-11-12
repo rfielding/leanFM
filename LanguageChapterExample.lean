@@ -155,7 +155,11 @@ def main : IO Unit := do
   write "lang-types-lean.tex" (listing ("\n".intercalate ((moduleLines.dropWhile (!·.startsWith "/-- What an event carries")).take 23)))
   write "lang-lean-client.tex" (listing ("\n".intercalate (((moduleLines.dropWhile (· != "namespace Client")).takeWhile (· != "end Client")) ++ ["end Client"])))
   let api ← tool "session_openapi" (openapi (withOrder [("role", "Shop")]))
-  write "lang-openapi.tex" (listing ("\n".intercalate ((str api "code").splitOn "\n" |>.take 40)))
+  -- the shop's actor file, as SessionFiles writes it: actors/shop-openapi.yaml
+  let orderFiles ← IO.ofExcept (sessionFiles (withOrder))
+  let shopYaml := (orderFiles.lookup "actors/shop-openapi.yaml").getD (str api "code")
+  write "lang-openapi.tex" (listing ("\n".intercalate ((shopYaml.splitOn "\n").dropWhile (· != "paths:"))))
+  write "lang-openapi-schemas.tex" (listing ("\n".intercalate (((shopYaml.splitOn "\n").dropWhile (· != "components:")).takeWhile (· != "info:"))))
   let sk ← tool "session_skeleton" (skeleton (withOrder [("language", "typescript")]))
   let code := (str sk "code").splitOn "\n"
   let start := (code.findIdx? (fun l => (l.splitOn "class Client").length > 1)).getD 0

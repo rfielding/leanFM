@@ -49,14 +49,19 @@ number in the same body.
 
 \index{OpenAPI}
 \index{protobuf}
-A role that serves HTTP gets its interface written out as OpenAPI 3.1: one
+Each actor that serves HTTP gets its interface written out as OpenAPI 3.1, in
+\texttt{generated/actors/<role>-openapi.yaml} beside the session type: one
 operation per route, the label as its operation id, and every response the
-protocol allows under its status. The shop's, abridged:
+protocol allows under its status. The shop's paths, from
+\texttt{actors/shop-openapi.yaml}:
 
 \input{generated/lang-openapi.tex}
 
-Each body's schema is its message type, with only its declared fields: the session
-type says which calls there are, and its structures what each one carries.
+and its schemas, one per message, each the message type with only its declared
+fields: the session type says which calls there are, and its structures what each
+one carries.
+
+\input{generated/lang-openapi-schemas.tex}
 
 \index{Lean module}
 The session itself becomes one Lean module. Its payload is an inductive type with

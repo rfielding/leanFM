@@ -986,6 +986,8 @@ structure Parsed where
   types : Types.Env := []
   /-- session keys: (message id, field path) (selfhost.session.envelope) -/
   keys : List (String × String) := []
+  /-- the labels of every protocol in the text, the main one's and the earlier ones' -/
+  allLabels : List String := []
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -1043,7 +1045,8 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
     | .ok t => throw s!"sessions by {x}.{f}: a session key is a Nat or String field, and {label}.{f} is {t.render}"
     | .error e => throw s!"sessions by {x}.{f}: {e}"
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
-           requires := st.requires.toList, types := env, keys := st.keys.toList }
+           requires := st.requires.toList, types := env, keys := st.keys.toList,
+           allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups }
 
 /-! ## Writing -/
 

@@ -105,4 +105,18 @@ def parallel := "protocol R (P, A, B) { par { X from P to A; } and { Y from P to
 #guard has (str (types (Json.mkObj [("lean", Json.str parallel)])) "leanModuleNote") "P: its projection runs branches in parallel"
 #guard has (str (types (Json.mkObj [("lean", Json.str parallel)])) "leanModule") "namespace A"
 
+/-! GoServer: its .proto is the source of its message types -/
+
+def goProto := include_str "../../projects/GoServer/spec/Requirements.proto"
+def goEnv := (Proto.ofProto goProto).toOption.getD []
+-- fields are named by their protobuf JSON names, as the Go server sends them; the proto names are kept
+#guard (goEnv.find? (·.name == "RoomCreated")).map (·.fields.map fun f => (f.name, f.protoName)) ==
+  some [("roomId", "room_id"), ("requestId", "request_id")]
+#guard has ((Types.proto goEnv ["RoomCreated"] "p").toOption.getD "") "  uint64 request_id = 2;"
+-- the session-type panel's text, with the Types region generated from the proto, checks: every
+-- where condition reads whole, typed messages
+def goPanel := include_str "../../projects/GoServer/source/cmd/demo/static/session/goserver.leanfm"
+#guard (Text.parse goPanel) matches .ok _
+#guard has (reason (check (Json.mkObj [("lean", Json.str (goPanel.replace "where a.requestId = q.requestId;" "where a.requestID = q.requestId;"))]))) "has no field requestID"
+
 end LeanFM.Session.ProtoTests

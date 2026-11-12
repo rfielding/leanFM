@@ -1,0 +1,35 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+components:
+  schemas:
+    CreateOrder:
+      additionalProperties: false
+      description: "What the client orders."
+      properties:
+        item:
+          type: "string"
+        quantity:
+          minimum: 0
+          type: "integer"
+      required:
+        - "item"
+        - "quantity"
+      title: "CreateOrder"
+      type: "object"
+    Quote:
+      additionalProperties: false
+      description: "The shop's price for the order, in cents."
+      properties:
+        price:
+          minimum: 0
+          type: "integer"
+      required:
+        - "price"
+      title: "Quote"
+      type: "object"
+    SoldOut:
+      additionalProperties: false
+      properties: {}
+      required: []
+      title: "SoldOut"
+      type: "object"
+\end{lstlisting}

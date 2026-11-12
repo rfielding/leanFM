@@ -54,6 +54,10 @@ def main : IO Unit := do
   let appYaml := (files.lookup "actors/app-openapi.yaml").getD ""
   let pathLines := ((appYaml.splitOn "\n").dropWhile (· != "paths:")).take 40
   write "oauth-callback-openapi.tex" (listing ("\n".intercalate pathLines))
+  -- the generated files in full: the .proto and each actor's OpenAPI
+  write "oauth-payload-proto.tex" (listing ((files.lookup "Payload.proto").getD ""))
+  write "oauth-app-openapi.tex" (listing appYaml)
+  write "oauth-idp-openapi.tex" (listing ((files.lookup "actors/idp-openapi.yaml").getD ""))
   let leanLines := ((files.lookup "Payload.lean").getD "").splitOn "\n"
   let appStates := (leanLines.dropWhile (· != "namespace App")).takeWhile (!·.startsWith "/-- Whether the session may end here")
   write "oauth-app-states.tex" (listing ("\n".intercalate appStates))

@@ -22,101 +22,407 @@ instance : ToString Role := ⟨fun | .person => "Person" | .server => "Server" |
 /-! ## Vocabulary: only the fields guards read are typed here; the rest are in Requirements.proto -/
 
 --@begin Types
--- Rooms
-structure CreateRoom     where requestId : Nat deriving TypeName
-structure RoomCreated    where requestId : Nat deriving TypeName
-structure ListRooms      where requestId : Nat deriving TypeName
-structure RoomsListed    where requestId : Nat deriving TypeName
-structure EnterRoom      where
-  requestId : Nat
+-- Generated from spec/Requirements.proto by spec/SessionTypes.lean; regenerate it rather than editing.
+-- Fields carry their protobuf JSON names, as the Go server sends them.
+structure EnterRoom where
+  sessionId : String
   roomId : String
-  deriving TypeName
-structure RoomEntered    where
   requestId : Nat
+  deriving TypeName
+
+structure RoomEntered where
   roomId : String
-  deriving TypeName
-structure ListGames      where
+  gameIds : List String
   requestId : Nat
+  deriving TypeName
+
+structure ListGames where
   roomId : String
-  deriving TypeName
-structure GamesListed    where
+  sessionId : String
   requestId : Nat
-  roomId : String
   deriving TypeName
-structure SendRoomChat   where requestId : Nat deriving TypeName
-structure RoomChat       where requestId : Nat deriving TypeName
--- Challenges
-structure CreateGame     where requestId : Nat deriving TypeName
-structure GameCreated    where requestId : Nat deriving TypeName
-structure SetSeatPlan    where requestId : Nat deriving TypeName
-structure SeatPlanSet    where requestId : Nat deriving TypeName
-structure TakeSeat       where requestId : Nat deriving TypeName
-structure SeatTaken      where requestId : Nat deriving TypeName
-structure LeaveSeat      where requestId : Nat deriving TypeName
-structure SeatLeft       where requestId : Nat deriving TypeName
-structure StartGame      where requestId : Nat deriving TypeName
-structure GameStarted    where requestId : Nat deriving TypeName
-structure JoinGame       where
-  requestId : Nat
+
+structure GameListed where
   gameId : String
+  creator : String
+  status : String
+  gameName : String
+  boardSize : Nat
+  seats : Nat
+  seatsFilled : Nat
   deriving TypeName
-structure GameJoined     where
+
+structure GamesListed where
+  games : List GameListed
   requestId : Nat
+  roomId : String
+  deriving TypeName
+
+structure SendRoomChat where
+  sessionId : String
+  roomId : String
+  body : String
+  requestId : Nat
+  deriving TypeName
+
+structure RoomChat where
+  roomId : String
+  sender : String
+  body : String
+  timeMs : Int
+  requestId : Nat
+  deriving TypeName
+
+structure RequestRejected where
+  requestId : Nat
+  code : String
+  task : String
+  scopeId : String
+  deriving TypeName
+
+structure CreateRoom where
+  sessionId : String
+  roomName : String
+  requestId : Nat
+  deriving TypeName
+
+structure RoomCreated where
+  roomId : String
+  requestId : Nat
+  deriving TypeName
+
+structure SeatPlan where
+  seat : Nat
+  controller : String
+  team : Nat
+  deriving TypeName
+
+structure CreateGame where
+  sessionId : String
+  roomId : String
+  gameName : String
+  boardSize : Nat
+  seats : Nat
+  mainTimeMs : Nat
+  koRule : Int
+  byoyomiMs : Nat
+  exploreMilli : Nat
+  rewardMode : String
+  softness : Nat
+  seatPlan : List SeatPlan
+  requestId : Nat
+  byoyomiPeriods : Nat
+  deriving TypeName
+
+structure GameCreated where
   gameId : String
-  deriving TypeName
-structure SendGameChat   where requestId : Nat deriving TypeName
-structure GameChat       where requestId : Nat deriving TypeName
--- Play
-structure PlayMove       where
+  roomId : String
+  creator : String
+  status : String
   requestId : Nat
-  moveNo : Nat
+  gameName : String
+  boardSize : Nat
+  seats : Nat
+  mainTimeMs : Nat
+  koRule : Int
+  byoyomiMs : Nat
+  exploreMilli : Nat
+  rewardMode : String
+  softness : Nat
+  seatPlan : List SeatPlan
+  byoyomiPeriods : Nat
   deriving TypeName
-structure MovePlayed     where
+
+structure SetSeatPlan where
+  sessionId : String
+  gameId : String
+  seat : Nat
+  controller : String
+  team : Nat
   requestId : Nat
-  moveNo : Nat
   deriving TypeName
-structure SetAutopilot   where requestId : Nat deriving TypeName
-structure AutopilotSet   where requestId : Nat deriving TypeName
-structure BotTurn        where
-  turnSeq : Nat
-  moveNo : Nat
-  deriving TypeName
-structure BotMoveChosen  where turnSeq : Nat deriving TypeName
-structure BotMovePlayed  where moveNo : Nat deriving TypeName
-structure TurnTimedOut   where moveNo : Nat deriving TypeName
-structure AutoPassed     where moveNo : Nat deriving TypeName
-structure GameFinished   where deriving TypeName
--- Teams
-structure ProposeMerge   where requestId : Nat deriving TypeName
-structure MergeProposed  where
+
+structure SeatPlanSet where
+  gameId : String
+  seat : Nat
+  controller : String
+  team : Nat
   requestId : Nat
+  deriving TypeName
+
+structure TakeSeat where
+  sessionId : String
+  gameId : String
+  seat : Nat
+  requestId : Nat
+  deriving TypeName
+
+structure SeatTaken where
+  gameId : String
+  seat : Nat
+  requestId : Nat
+  deriving TypeName
+
+structure LeaveSeat where
+  sessionId : String
+  gameId : String
+  requestId : Nat
+  deriving TypeName
+
+structure SeatLeft where
+  gameId : String
+  seat : Nat
+  requestId : Nat
+  deriving TypeName
+
+structure StartGame where
+  sessionId : String
+  gameId : String
+  requestId : Nat
+  deriving TypeName
+
+structure SeatView where
+  seat : Nat
+  player : String
+  controller : String
+  team : Nat
+  territory : Int
+  losses : Int
+  score : Int
+  resigned : Bool
+  lossesBy : List Nat
+  mainLeftMs : Nat
+  periodsLeft : Nat
+  deriving TypeName
+
+structure GameStarted where
+  gameId : String
+  seats : List SeatView
+  requestId : Nat
+  deriving TypeName
+
+structure SetAutopilot where
+  sessionId : String
+  gameId : String
+  on : Bool
+  requestId : Nat
+  deriving TypeName
+
+structure AutopilotSet where
+  gameId : String
+  seat : Nat
+  on : Bool
+  requestId : Nat
+  deriving TypeName
+
+structure PlayMove where
+  sessionId : String
+  gameId : String
+  moveNo : Nat
+  kind : String
+  x : Nat
+  y : Nat
+  requestId : Nat
+  deriving TypeName
+
+structure MovePlayed where
+  gameId : String
+  moveNo : Nat
+  seat : Nat
+  kind : String
+  x : Nat
+  y : Nat
+  captured : Nat
+  requestId : Nat
+  victims : List Nat
+  suicide : Nat
+  deriving TypeName
+
+structure ProposeMerge where
+  sessionId : String
+  gameId : String
+  otherTeam : Nat
+  requestId : Nat
+  deriving TypeName
+
+structure MergeProposed where
+  gameId : String
   proposalId : Nat
-  deriving TypeName
-structure RespondMerge   where
+  teamA : Nat
+  teamB : Nat
   requestId : Nat
-  proposalId : Nat
   deriving TypeName
+
+structure RespondMerge where
+  sessionId : String
+  gameId : String
+  proposalId : Nat
+  accept : Bool
+  requestId : Nat
+  deriving TypeName
+
 structure MergeResponded where
-  requestId : Nat
+  gameId : String
   proposalId : Nat
   status : String
-  deriving TypeName
-structure TeamsMerged    where proposalId : Nat deriving TypeName
-structure MergeWithdrawn where proposalId : Nat deriving TypeName
--- Watching
-structure GetGameState   where
   requestId : Nat
-  sinceMove : Nat
   deriving TypeName
-structure GameState      where requestId : Nat deriving TypeName
--- Every request can be refused, without mutation, naming the request it refuses.
-structure RequestRejected where requestId : Nat deriving TypeName
--- Events at the server alone: its clock, a bot result applied or discarded, a recorded outcome.
-structure ClockRanOut    where deriving TypeName
-structure Applied        where deriving TypeName
-structure Stale          where deriving TypeName
-structure Passed         where deriving TypeName
-structure Finished       where deriving TypeName
+
+structure GetGameState where
+  sessionId : String
+  gameId : String
+  sinceMove : Nat
+  requestId : Nat
+  sinceReview : Nat
+  deriving TypeName
+
+structure TeamView where
+  team : Nat
+  seats : List Nat
+  territory : Int
+  losses : Int
+  score : Int
+  deriving TypeName
+
+structure MergeView where
+  proposalId : Nat
+  teamA : Nat
+  teamB : Nat
+  proposer : String
+  acceptedBy : List String
+  waitingFor : List String
+  deriving TypeName
+
+structure Candidate where
+  kind : String
+  x : Nat
+  y : Nat
+  visits : Nat
+  rewardPermille : Int
+  outlookPermille : List Int
+  projMilli : List Int
+  deriving TypeName
+
+structure SearchSummary where
+  playouts : Nat
+  ms : Nat
+  candidates : List Candidate
+  rootProjMilli : List Int
+  rootOutlookPermille : List Int
+  guard : Bool
+  stop : String
+  plannedMs : Nat
+  deriving TypeName
+
+structure MoveRecord where
+  moveNo : Nat
+  seat : Nat
+  kind : String
+  x : Nat
+  y : Nat
+  captured : Nat
+  source : String
+  victims : List Nat
+  suicide : Nat
+  search : SearchSummary
+  deriving TypeName
+
+structure ReviewNode where
+  id : String
+  parent : String
+  kind : String
+  x : Nat
+  y : Nat
+  seat : Nat
+  author : String
+  timeMs : Int
+  deriving TypeName
+
+structure GameState where
+  gameId : String
+  gameName : String
+  status : String
+  creator : String
+  boardSize : Nat
+  koOn : Bool
+  mainTimeMs : Nat
+  byoyomiMs : Nat
+  moveNo : Nat
+  toMove : Nat
+  remainingMs : Nat
+  cells : List Int
+  owner : List Int
+  seats : List SeatView
+  teams : List TeamView
+  proposals : List MergeView
+  moves : List MoveRecord
+  winners : List Nat
+  endReason : String
+  exploreMilli : Nat
+  rewardMode : String
+  softness : Nat
+  requestId : Nat
+  byoyomiPeriods : Nat
+  review : List ReviewNode
+  reviewCount : Nat
+  deriving TypeName
+
+structure BotTurn where
+  gameId : String
+  turnSeq : Nat
+  seat : Nat
+  moveNo : Nat
+  budgetMs : Nat
+  deriving TypeName
+
+structure BotMoveChosen where
+  gameId : String
+  turnSeq : Nat
+  kind : String
+  x : Nat
+  y : Nat
+  search : SearchSummary
+  deriving TypeName
+
+structure BotMovePlayed where
+  gameId : String
+  record : MoveRecord
+  deriving TypeName
+
+structure TurnTimedOut where
+  gameId : String
+  moveNo : Nat
+  seat : Nat
+  deriving TypeName
+
+structure AutoPassed where
+  gameId : String
+  moveNo : Nat
+  seat : Nat
+  deriving TypeName
+
+structure TeamsMerged where
+  gameId : String
+  proposalId : Nat
+  team : Nat
+  seats : List Nat
+  deriving TypeName
+
+structure MergeWithdrawn where
+  gameId : String
+  proposalId : Nat
+  reason : String
+  deriving TypeName
+
+structure Applied where deriving TypeName
+
+structure Stale where deriving TypeName
+
+structure ClockRanOut where deriving TypeName
+
+structure Passed where deriving TypeName
+
+structure Finished where deriving TypeName
 --@end Types
 
 /-! ## Rooms -/
