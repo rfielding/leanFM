@@ -1,18 +1,25 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
-/-- What the client orders. -/
-structure CreateOrder where
-  item : String
-  quantity : Nat
-  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
+/-- What an event carries: one message of the protocol, or an event a role performs alone. -/
+inductive Payload where
+  | createOrder (m : CreateOrder)
+  | quote (m : Quote)
+  | pay (m : Pay)
+  | charge (m : Charge)
+  | charged (m : Charged)
+  | receipt (m : Receipt)
+  | declined (m : Declined)
+  | paymentDeclined (m : PaymentDeclined)
+  | soldOut (m : SoldOut)
+  deriving Repr, BEq
 
-/-- The shop's price for the order, in cents. -/
-structure Quote where
-  price : Nat
-  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
-
-/-- The client pays; the card number is a secret, never logged. -/
-structure Pay where
-  amount : Nat
-  card_secr : String
-  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
+/-- The event envelope (selfhost.session.envelope): ts in nanoseconds, unique in its stream. -/
+structure Event where
+  ts : Nat
+  session : String
+  src : Role
+  dst : Role
+  cause : Option Nat := none
+  prev : Option Nat := none
+  payload : Payload
+  deriving Repr, BEq
 \end{lstlisting}

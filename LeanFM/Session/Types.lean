@@ -46,6 +46,8 @@ inductive Ty where
 structure Field where
   name : String
   ty   : Ty
+  /-- the protobuf field number a .proto gave it; 0 when numbered by position -/
+  number : Nat := 0
   deriving BEq, Repr, Inhabited
 
 structure Message where
@@ -215,6 +217,34 @@ def checkCondition (env : Env) (labelsOf : String → List String) (text : Strin
   | .ok t => throw s!"where {text}: the condition is {t.render}, not true or false"
   | .error m => throw s!"where {text}: {m}"
 
+/-! ## Integers on the wire (selfhost.session.envelope) -/
+
+/-- The largest integer a double holds exactly: 2^53 - 1. Beyond it a JSON number is not exact in
+most languages, so integers travel as decimal strings. -/
+def maxSafe : Nat := 9007199254740991
+
+/-- A decimal string as an integer: an optional `-` and 1 to 20 digits, nothing else. -/
+def decimal? (s : String) : Option Int :=
+  let (neg, ds) := match s.toList with
+    | '-' :: rest => (true, rest)
+    | cs => (false, cs)
+  if ds.isEmpty || ds.length > 20 || !ds.all Char.isDigit then none
+  else
+    let n : Nat := ds.foldl (fun acc c => acc * 10 + (c.toNat - '0'.toNat)) 0
+    some (if neg then -(n : Int) else n)
+
+/-- An integer as JSON gives it: a decimal string, or a number that is a whole number within 2^53 - 1. -/
+def integer? (v : Value) : Except String Int :=
+  match v with
+  | .str t => match decimal? t with
+    | some n => .ok n
+    | none => .error s!"{v.render} is not a decimal integer"
+  | .num q =>
+    if q.den != 1 then .error s!"{v.render} is not a whole number"
+    else if q.num.natAbs > maxSafe then .error s!"{v.render} is beyond 2^53 - 1, where JSON numbers are not exact; send it as a decimal string"
+    else .ok q.num
+  | _ => .error s!"{v.render} is not an integer"
+
 /-! ## Logged fields -/
 
 /-- A logged event's fields against its message's structure. -/
@@ -226,10 +256,19 @@ def checkFields (env : Env) (label : String) (isAct : Bool) (fields : List (Stri
     if let some s := path.find? isSecret then throw s!"the log carries the secret {label}.{k} ({s}); secrets are never logged"
     let t ← leaf env label path
     match t, v with
-    | .nat, .num q => if q.den != 1 || q < 0 then throw s!"{label}.{k} is a Nat, and the log has {v.render}"
-    | .int, .num q => if q.den != 1 then throw s!"{label}.{k} is an Int, and the log has {v.render}"
+    | .nat, .num _ | .nat, .str _ | .int, .num _ | .int, .str _ =>
+      match integer? v with
+      | .ok n => if t == .nat && n < 0 then throw s!"{label}.{k} is a Nat, and the log has {v.render}"
+      | .error why => throw s!"{label}.{k} is {t.render}, and {why}"
     | .str, .str _ | .bool, .bool _ => pure ()
     | _, _ => throw s!"{label}.{k} is {t.render}, and the log has {v.render}"
+
+/-- Logged fields with integers as exact numbers, after `checkFields` has accepted them. -/
+def coerceFields (env : Env) (label : String) (fields : List (String × Value)) : List (String × Value) :=
+  fields.map fun (k, v) =>
+    match leaf env label (k.splitOn "."), integer? v with
+    | .ok .nat, .ok n | .ok .int, .ok n => (k, .num n)
+    | _, _ => (k, v)
 
 /-! ## Generated forms -/
 
@@ -255,7 +294,7 @@ def protoScalar : Ty → String
 
 def protoField (f : Field) (n : Nat) : String :=
   let pre := match f.ty with | .list _ => "repeated " | .opt _ => "optional " | _ => ""
-  s!"  {pre}{protoScalar f.ty} {f.name} = {n};"
+  s!"  {pre}{protoScalar f.ty} {f.name} = {if f.number != 0 then f.number else n};"
 
 /-- A label as a protobuf message name: letters, digits and _ only. -/
 def protoName (s : String) : String :=
@@ -271,8 +310,27 @@ def proto (env : Env) (labels : List String) (package : String) : Except String 
     let doc := if m.doc.isEmpty then [] else (m.doc.splitOn "\n").map ("// " ++ ·.trimAscii.toString)
     "\n".intercalate (doc ++ [s!"message {protoName m.name} \{"] ++
       (m.fields.zipIdx.map fun (f, i) => protoField f (i + 1)) ++ ["}"])
+  if names.contains "Event" then throw "a message named Event would collide with the event envelope; rename it"
+  -- the envelope every event travels and is logged in (selfhost.session.envelope)
+  let carried := labels.eraseDups.map protoName
+  let snake (n : String) : String := String.ofList (n.toList.zipIdx.flatMap fun (c, i) =>
+    if c.isUpper then (if i == 0 then [c.toLower] else ['_', c.toLower]) else [c])
+  let oneof := carried.zipIdx.map fun (n, i) => s!"    {n} {snake n} = {i + 9};"
+  let envelope := "\n".intercalate ([
+    "// The event envelope: every event of the protocol, as it is carried and logged. Integers travel",
+    "// as decimal strings in JSON (the protobuf JSON mapping), so nanosecond timestamps stay exact.",
+    "message Event {",
+    "  uint64 ts = 1;        // nanoseconds; unique in its stream, and its identity",
+    "  string id = 2;        // the event's name, in a log that names events",
+    "  string session = 3;   // the session, or its key's value when the sessions block names one",
+    "  string from = 4;",
+    "  string to = 5;",
+    "  string label = 6;",
+    "  string cause = 7;     // the id or ts of the event this one answers",
+    "  string prev = 8;      // the id or ts of the event before it, where reward vectors are walked"] ++
+    (if oneof.isEmpty then [] else ["  oneof payload {"] ++ oneof ++ ["  }"]) ++ ["}"])
   return "\n".intercalate ([ "// Generated by LeanFM from the message types of the protocol; regenerate it rather than editing.",
-    "syntax = \"proto3\";", "", s!"package {package};", ""]) ++ "\n" ++ "\n\n".intercalate body ++ "\n"
+    "syntax = \"proto3\";", "", s!"package {package};", ""]) ++ "\n" ++ "\n\n".intercalate (body ++ [envelope]) ++ "\n"
 
 def leanField (f : Field) : String := s!"  {f.name} : {f.ty.render}"
 
@@ -284,8 +342,8 @@ def lean (env : Env) (labels : List String) (ns : String) : Except String String
     let doc := if m.doc.isEmpty then [] else [s!"/-- {m.doc} -/"]
     let derive := "  deriving Repr, BEq, Lean.ToJson, Lean.FromJson"
     "\n".intercalate (doc ++ (if m.fields.isEmpty then [s!"structure {name}"] else [s!"structure {name} where"] ++ m.fields.map leanField) ++ [derive])
-  return "\n".intercalate [ "/-! Generated by LeanFM from the message types of the protocol; regenerate it rather than editing. -/",
-    "import Lean.Data.Json", "", s!"namespace {ns}", "", "\n\n".intercalate body, "", s!"end {ns}", ""]
+  return "\n".intercalate [ "import Lean.Data.Json", "",
+    "/-! Generated by LeanFM from the message types of the protocol; regenerate it rather than editing. -/", "", s!"namespace {ns}", "", "\n\n".intercalate body, "", s!"end {ns}", ""]
 
 /-- A field's JSON schema, as the protobuf JSON mapping writes it. -/
 partial def Ty.schema : Ty → Lean.Json

@@ -14,6 +14,7 @@ interleave the way they would against a real server, and a seed reproduces a run
 """
 
 import argparse
+import itertools
 import json
 import random
 import sys
@@ -46,7 +47,7 @@ class Desk:
         state = self.states.get(sid) or lp.desk(sid, self.net.transport, self.net.log.append)
         msg, state = state.receive(m)
         if isinstance(state, lp.DeskS2):                    # a Borrow: lend, or ask for a hold
-            book = self.books[sid] = msg["body"]["book"]
+            book = self.books[sid] = msg["body"].book
             if self.stock.get(book, 0) > 0:
                 self.stock[book] -= 1
                 state = state.send_lent()
@@ -79,7 +80,7 @@ class Librarian:
     def receive(self, m):
         state = lp.librarian(m["session"], self.net.transport, self.net.log.append)
         msg, state = state.receive(m)
-        book = msg["body"]["book"]
+        book = msg["body"].book
         if self.holds.get(book, 0) < self.max_holds:
             self.holds[book] = self.holds.get(book, 0) + 1
             state.send_approved()
@@ -106,6 +107,9 @@ class Member:
 
 def run(members, seed, bug):
     rng = random.Random(seed)
+    # a replayable clock: events 1 microsecond apart from a fixed instant, so a seed gives one log
+    ticks = itertools.count()
+    lp.set_clock(lambda: 1794500000000000000 + 1000 * next(ticks))
     net = Network(rng)
     books = ["Dune", "Emma", "Ulysses"]
     desk = Desk(net, {"Dune": 2, "Emma": 1, "Ulysses": 1}, bug=bug)

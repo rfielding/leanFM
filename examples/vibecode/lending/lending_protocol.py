@@ -9,7 +9,9 @@ session_conform.
 from __future__ import annotations
 
 import itertools
-from dataclasses import asdict, dataclass, is_dataclass
+import re
+import time
+from dataclasses import dataclass
 from typing import List, Optional
 
 
@@ -17,9 +19,109 @@ class ProtocolError(Exception):
     """A step the protocol does not allow here."""
 
 
-def _plain(body):
-    """A message object as the plain dict that travels and is logged."""
-    return asdict(body) if is_dataclass(body) and not isinstance(body, type) else body
+_MAX_SAFE = 2**53 - 1
+_DECIMAL = re.compile(r"-?[0-9]{1,20}")
+_last_ts = 0
+
+
+_clock = time.time_ns
+
+
+def set_clock(clock):
+    """Replace the clock events are stamped from (a function giving nanoseconds), for replayable runs."""
+    global _clock, _last_ts
+    _clock, _last_ts = clock, 0
+
+
+def _now_ns():
+    """Nanoseconds since the epoch, strictly increasing in this process: each event's ts."""
+    global _last_ts
+    _last_ts = max(_clock(), _last_ts + 1)
+    return _last_ts
+
+
+def _to_wire(kind, ref, value, where):
+    if kind in ("nat", "int"):
+        if isinstance(value, bool) or not isinstance(value, int) or (kind == "nat" and value < 0):
+            raise ProtocolError(f"{where} is a {'Nat' if kind == 'nat' else 'Int'}, not {value!r}")
+        return str(value)  # integers travel as decimal strings: exact past 2**53
+    if kind == "str" and not isinstance(value, str) or kind == "bool" and not isinstance(value, bool):
+        raise ProtocolError(f"{where} is a {'String' if kind == 'str' else 'Bool'}, not {value!r}")
+    return _encode(ref, value, where) if kind == "msg" else value
+
+
+def _encode(name, body, where=None):
+    """A message of type name as its wire form, after checking every field against its type."""
+    where = where or name
+    if body is None:
+        body = {}
+    if isinstance(body, dict):
+        try:
+            body = TYPES[name](**body)
+        except TypeError as e:
+            raise ProtocolError(f"{where} does not fit {name}: {e}") from None
+    if not isinstance(body, TYPES[name]):
+        raise ProtocolError(f"{where} is a {name}, not {type(body).__name__}")
+    out = {}
+    for field, kind, ref, wrap in SCHEMA[name]:
+        value, here = getattr(body, field), f"{where}.{field}"
+        if wrap == "opt":
+            if value is not None:
+                out[field] = _to_wire(kind, ref, value, here)
+        elif wrap == "list":
+            if not isinstance(value, list):
+                raise ProtocolError(f"{here} is a list, not {value!r}")
+            out[field] = [_to_wire(kind, ref, v, here) for v in value]
+        else:
+            out[field] = _to_wire(kind, ref, value, here)
+    return out
+
+
+def _from_wire(kind, ref, value, where):
+    if kind in ("nat", "int"):
+        if isinstance(value, str) and _DECIMAL.fullmatch(value):
+            n = int(value)
+        elif isinstance(value, int) and not isinstance(value, bool) and abs(value) <= _MAX_SAFE:
+            n = value  # a JSON number is exact only within 2**53 - 1
+        else:
+            raise ProtocolError(f"{where} is a {'Nat' if kind == 'nat' else 'Int'} as a decimal string, not {value!r}")
+        if kind == "nat" and n < 0:
+            raise ProtocolError(f"{where} is a Nat, not {n}")
+        return n
+    if kind == "str" and not isinstance(value, str) or kind == "bool" and not isinstance(value, bool):
+        raise ProtocolError(f"{where} is a {'String' if kind == 'str' else 'Bool'}, not {value!r}")
+    return _decode(ref, value, where) if kind == "msg" else value
+
+
+def _decode(name, data, where=None):
+    """A received body as its message type, refusing what does not fit."""
+    where = where or name
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ProtocolError(f"{where} is a {name}, not {data!r}")
+    known = {f[0] for f in SCHEMA[name]}
+    for key in data:
+        if key not in known:
+            raise ProtocolError(f"{where} has no field {key}")
+    args = {}
+    for field, kind, ref, wrap in SCHEMA[name]:
+        value, here = data.get(field), f"{where}.{field}"
+        if value is None:
+            if wrap == "opt":
+                args[field] = None
+                continue
+            if wrap == "list":
+                args[field] = []
+                continue
+            raise ProtocolError(f"{here} is missing")
+        if wrap == "list":
+            if not isinstance(value, list):
+                raise ProtocolError(f"{here} is a list, not {value!r}")
+            args[field] = [_from_wire(kind, ref, v, here) for v in value]
+        else:
+            args[field] = _from_wire(kind, ref, value, here)
+    return TYPES[name](**args)
 
 
 def _project(body, paths):
@@ -53,12 +155,12 @@ class Endpoint:
         self.bind = {}
 
     def send(self, to, label, pid, cause_pid, body, cause=None):
-        body = _plain(body)
+        body = _encode(label, body)
         if cause is None and cause_pid is not None:
             cause = self.bind.get(cause_pid)
             if cause is None:
                 raise ProtocolError(f"{label} is caused by {cause_pid}, which has not happened in session {self.session}")
-        event = {"id": self.new_id(), "session": self.session, "from": self.role, "to": to, "label": label}
+        event = {"ts": str(_now_ns()), "id": self.new_id(), "session": self.session, "from": self.role, "to": to, "label": label}
         if cause is not None:
             event["cause"] = cause
         if pid is not None:
@@ -68,13 +170,13 @@ class Endpoint:
             reads = READS.get(pid) if pid is not None else None
             if reads:
                 # exactly the fields where conditions read; nothing else of the body is logged
-                logged["fields"] = _project({} if body is None else body, reads)
+                logged["fields"] = _project(body, reads)
             self.log(logged)
-        self.transport(dict(event, body={} if body is None else body))
+        self.transport(dict(event, body=body))
         return event
 
     def act(self, label):
-        event = {"id": self.new_id(), "session": self.session, "at": self.role, "label": label, "act": True}
+        event = {"ts": str(_now_ns()), "id": self.new_id(), "session": self.session, "at": self.role, "label": label, "act": True}
         if self.log is not None:
             self.log(dict(event))
         return event
@@ -87,6 +189,8 @@ class Endpoint:
             raise ProtocolError(f"a message of session {msg.get('session')} reached session {self.session}")
         if pid is not None:
             self.bind[pid] = msg["id"]
+        # role code sees the body as its message type, never as raw JSON
+        return dict(msg, body=_decode(msg["label"], msg.get("body"), msg["label"]))
 
     def refuse(self, state, msg, allowed):
         raise ProtocolError(f"{self.role} in {state} cannot receive {msg.get('label')} from {msg.get('from')}; "
@@ -147,7 +251,7 @@ class Server:
 
     def then(self):
         return self._then(self._ep)
-# The message types (selfhost.session.types): send methods take these, sent as plain dicts.
+# The message types (selfhost.session.types): send methods take these; received bodies are these.
 
 @dataclass
 class Borrow:
@@ -188,7 +292,22 @@ class Refused:
     pass
 
 
-# The fields of each message that where conditions read: logged, nothing else of a body.
+# Each type's fields as (name, kind, structure, list or option), for encoding and decoding.
+SCHEMA = {
+    "Borrow": [("book", "str", "", "")],
+    "Hold": [("book", "str", "", "")],
+    "Return": [("book", "str", "", "")],
+    "Lent": [],
+    "Returned": [],
+    "Approved": [],
+    "Waitlisted": [],
+    "Denied": [],
+    "Refused": []
+}
+TYPES = {"Borrow": Borrow, "Hold": Hold, "Return": Return, "Lent": Lent, "Returned": Returned, "Approved": Approved, "Waitlisted": Waitlisted, "Denied": Denied, "Refused": Refused}
+
+
+# The fields of each message that where conditions and session keys read: logged, nothing else of a body.
 READS = {}
 
 
@@ -197,7 +316,7 @@ READS = {}
 class MemberS1(State):
     """Member at S1: send_borrow -> MemberS2."""
 
-    def send_borrow(self, body: Optional[Borrow] = None):
+    def send_borrow(self, body: Borrow):
         ep = self._take()
         ep.send("Desk", "Borrow", "b", None, body)
         return MemberS2(ep)
@@ -210,15 +329,15 @@ class MemberS2(State):
         ep = self._ep
         if ep.accepts(msg, "Desk", "Lent"):
             self._take()
-            ep.received(msg, "l")
+            msg = ep.received(msg, "l")
             return msg, MemberS3(ep)
         if ep.accepts(msg, "Desk", "Waitlisted"):
             self._take()
-            ep.received(msg, None)
+            msg = ep.received(msg, None)
             return msg, End(ep)
         if ep.accepts(msg, "Desk", "Refused"):
             self._take()
-            ep.received(msg, None)
+            msg = ep.received(msg, None)
             return msg, End(ep)
         ep.refuse("MemberS2", msg, "Lent from Desk, Waitlisted from Desk, Refused from Desk")
 
@@ -226,7 +345,7 @@ class MemberS2(State):
 class MemberS3(State):
     """Member at S3: send_return -> MemberS4."""
 
-    def send_return(self, body: Optional[Return] = None):
+    def send_return(self, body: Return):
         ep = self._take()
         ep.send("Desk", "Return", "r", None, body)
         return MemberS4(ep)
@@ -239,7 +358,7 @@ class MemberS4(State):
         ep = self._ep
         if ep.accepts(msg, "Desk", "Returned"):
             self._take()
-            ep.received(msg, None)
+            msg = ep.received(msg, None)
             return msg, End(ep)
         ep.refuse("MemberS4", msg, "Returned from Desk")
 
@@ -256,7 +375,7 @@ class DeskS1(State):
         ep = self._ep
         if ep.accepts(msg, "Member", "Borrow"):
             self._take()
-            ep.received(msg, "b")
+            msg = ep.received(msg, "b")
             return msg, DeskS2(ep)
         ep.refuse("DeskS1", msg, "Borrow from Member")
 
@@ -269,7 +388,7 @@ class DeskS2(State):
         ep.send("Member", "Lent", "l", "b", body)
         return DeskS3(ep)
 
-    def send_hold(self, body: Optional[Hold] = None):
+    def send_hold(self, body: Hold):
         ep = self._take()
         ep.send("Librarian", "Hold", "h", "b", body)
         return DeskS5(ep)
@@ -282,7 +401,7 @@ class DeskS3(State):
         ep = self._ep
         if ep.accepts(msg, "Member", "Return"):
             self._take()
-            ep.received(msg, "r")
+            msg = ep.received(msg, "r")
             return msg, DeskS4(ep)
         ep.refuse("DeskS3", msg, "Return from Member")
 
@@ -303,11 +422,11 @@ class DeskS5(State):
         ep = self._ep
         if ep.accepts(msg, "Librarian", "Approved"):
             self._take()
-            ep.received(msg, None)
+            msg = ep.received(msg, None)
             return msg, DeskS6(ep)
         if ep.accepts(msg, "Librarian", "Denied"):
             self._take()
-            ep.received(msg, None)
+            msg = ep.received(msg, None)
             return msg, DeskS7(ep)
         ep.refuse("DeskS5", msg, "Approved from Librarian, Denied from Librarian")
 
@@ -342,7 +461,7 @@ class LibrarianS1(State):
         ep = self._ep
         if ep.accepts(msg, "Desk", "Hold"):
             self._take()
-            ep.received(msg, "h")
+            msg = ep.received(msg, "h")
             return msg, LibrarianS2(ep)
         ep.refuse("LibrarianS1", msg, "Hold from Desk")
 

@@ -12,18 +12,18 @@ Tool & What it does & Arguments (* required) \\
 \texttt{check\_\allowbreak{}protocol} & Find attacks on a security protocol & \texttt{attacker*, defender, domain, domains, formula, roles*, secrets} \\
 \texttt{check\_\allowbreak{}reassembly} & Find stream-reassembly evasions & \texttt{box, formula, host, mode, signature} \\
 \texttt{knows} & What an actor can derive & \texttt{actor*, at*, events*, initial, query, seesAll} \\
-\texttt{session\_\allowbreak{}check} & Check a session type & \texttt{lean, mayCall, notHttp, overlay, protocol} \\
-\texttt{session\_\allowbreak{}diagram} & Draw a session type & \texttt{lean, overlay, protocol, theme} \\
-\texttt{session\_\allowbreak{}mdp} & Render a session decision process and terminal probabilities & \texttt{events, horizon, lean, optimize, overlay, protocol, theme, view, walk} \\
-\texttt{session\_\allowbreak{}sla} & Check a session type's service-level requirements & \texttt{at, events, lean*, overlay, theme} \\
-\texttt{session\_\allowbreak{}simulate} & Generate an event stream from a session type & \texttt{instances, lean, loops, maxEvents, overlay, protocol, seed, spread} \\
-\texttt{session\_\allowbreak{}conform} & Check a recorded run against a session type & \texttt{allowIncomplete, events*, horizonMs, lean, overlay, protocol} \\
-\texttt{session\_\allowbreak{}next} & What may happen next in a session & \texttt{events, lean, overlay, protocol} \\
-\texttt{session\_\allowbreak{}ctl} & Check a temporal property of a session type & \texttt{formula*, lean, overlay, protocol} \\
-\texttt{session\_\allowbreak{}review} & Review a session type design & \texttt{lean, overlay, protocol} \\
-\texttt{session\_\allowbreak{}openapi} & A role's HTTP interface as OpenAPI & \texttt{lean, overlay, protocol, role*} \\
-\texttt{session\_\allowbreak{}types} & The message types as protobuf, Lean and JSON schema & \texttt{lean, protocol} \\
-\texttt{session\_\allowbreak{}compat} & Which roles can upgrade on their own & \texttt{lean, old*, overlay, protocol} \\
-\texttt{session\_\allowbreak{}skeleton} & Generate code to implement a session type & \texttt{language, lean, protocol} \\
+\texttt{session\_\allowbreak{}check} & Check a session type & \texttt{lean, mayCall, notHttp, overlay, proto, protocol} \\
+\texttt{session\_\allowbreak{}diagram} & Draw a session type & \texttt{lean, overlay, proto, protocol, theme} \\
+\texttt{session\_\allowbreak{}mdp} & Render a session decision process and terminal probabilities & \texttt{events, horizon, lean, optimize, overlay, proto, protocol, theme, view, walk} \\
+\texttt{session\_\allowbreak{}sla} & Check a session type's service-level requirements & \texttt{at, events, lean*, overlay, proto, theme} \\
+\texttt{session\_\allowbreak{}simulate} & Generate an event stream from a session type & \texttt{instances, lean, loops, maxEvents, overlay, proto, protocol, seed, spread} \\
+\texttt{session\_\allowbreak{}conform} & Check a recorded run against a session type & \texttt{allowIncomplete, events*, horizonMs, lean, overlay, proto, protocol} \\
+\texttt{session\_\allowbreak{}next} & What may happen next in a session & \texttt{events, lean, overlay, proto, protocol} \\
+\texttt{session\_\allowbreak{}ctl} & Check a temporal property of a session type & \texttt{formula*, lean, overlay, proto, protocol} \\
+\texttt{session\_\allowbreak{}review} & Review a session type design & \texttt{lean, overlay, proto, protocol} \\
+\texttt{session\_\allowbreak{}openapi} & A role's HTTP interface as OpenAPI & \texttt{lean, overlay, proto, protocol, role*} \\
+\texttt{session\_\allowbreak{}types} & The message types as protobuf, Lean and JSON schema & \texttt{lean, proto, protocol} \\
+\texttt{session\_\allowbreak{}compat} & Which roles can upgrade on their own & \texttt{lean, old*, overlay, proto, protocol} \\
+\texttt{session\_\allowbreak{}skeleton} & Generate code to implement a session type & \texttt{language, lean, proto, protocol} \\
 \bottomrule
 \end{tabular}

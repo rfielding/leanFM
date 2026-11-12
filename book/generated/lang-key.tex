@@ -1,0 +1,11 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+structure Ask where
+  caller : String
+
+protocol Keyed (Client, Server) {
+  sessions by a.caller {
+    a: Ask from Client to Server;
+    Reply from Server to Client cause a;
+  }
+}
+\end{lstlisting}

@@ -33,7 +33,7 @@ the language's tutorial. Appendix~\ref{ch:mcp-tools} lists the tools.
 \index{PlaceOrder}
 Here is a complete program: a client places an order, the shop quotes or says it
 is sold out, the client pays, and the bank charges the card or declines it. The
-structures at the top are the message types; the protocol follows them.
+structures at the top are its message types.
 
 \input{generated/lang-placeorder.tex}
 
@@ -62,15 +62,29 @@ conform.
 
 \index{message type}
 \index{structure}
-Every message has a type, written as a Lean structure before the protocols. A
+Every message has a type, written as a Lean structure in the session type. A
 message carries the structure its label names: \texttt{Pay} carries an
 \texttt{amount} and a \texttt{card\_secr}. A label that names no structure, such as
 \texttt{SoldOut}, carries nothing, and so does an event. A field is a
 \texttt{Nat}, \texttt{Int}, \texttt{String}, \texttt{Bool}, another structure, or a
 \texttt{List} or \texttt{Option} of one of those; \texttt{x y : Nat} declares two
 fields, as in Lean, so a move in a game is \texttt{structure Play where x y : Nat}
-and a pass is \texttt{structure Pass}. Fields are numbered in the order written,
-and that number is the field's protobuf number, so new fields go at the end.
+and a pass is \texttt{structure Pass}.
+
+The session type is the source, and the rest is written from it, the way an
+OpenAPI file is written for an HTTP interface: the \texttt{.proto}, the Lean module
+(Chapter~\ref{ch:generated}) and the OpenAPI document. Implementations use those
+directly. Fields are numbered in the order written, and that number is the
+field's protobuf number, so new fields go at the end:
+
+\input{generated/lang-types-proto.tex}
+
+An existing \texttt{.proto} can stand in for the structures. LeanFM reads only the
+part with an exact Lean type: unsigned integers are \texttt{Nat}, signed ones
+\texttt{Int}, and every field keeps its number. \texttt{float} and
+\texttt{double} are refused because they are not exact (a price is an integer
+number of cents), and so are \texttt{import} (LeanFM reads only the text it is
+given), nested messages, \texttt{enum}, \texttt{oneof} and \texttt{map}.
 
 The types are what the conditions and the logs are checked against. A
 \texttt{where} condition is typed when the text is read, before anything runs:

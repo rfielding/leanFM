@@ -85,6 +85,8 @@ structure St where
   requires : Array Generative.Requirement := #[]
   /-- `structure Name where field : Type` declarations: the message types (selfhost.session.types) -/
   types : Array Types.Message := #[]
+  /-- `sessions by x.field`: session keys as (message id, field path) (selfhost.session.envelope) -/
+  keys : Array (String × String) := #[]
 
 abbrev P := ReaderT (Array Char) (StateT St (Except String))
 
@@ -420,6 +422,19 @@ partial def declaredIds : List Stmt → List String
     | .bounded _ _ b o => declaredIds b ++ declaredIds o
     | _ => []) ++ declaredIds rest
 
+/-- The units a body's amounts, rates and penalties name (selfhost.session.envelope). -/
+partial def unitsOf : List Stmt → List String
+  | [] => []
+  | s :: rest => (match s with
+    | .valued a m => a.unit :: unitsOf [m]
+    | .timed _ m => unitsOf [m]
+    | .accrue as => as.map (·.unit)
+    | .obligation o => (o.penalty.map (·.unit)).toList
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap unitsOf
+    | .loop _ b | .sessions b => unitsOf b
+    | .bounded _ _ b o => unitsOf b ++ unitsOf o
+    | _ => []) ++ unitsOf rest
+
 /-- Each message id a body declares with its label, in any branch. -/
 partial def idLabels : List Stmt → List (String × String)
   | [] => []
@@ -616,6 +631,20 @@ partial def stmt : P Stmt := do
   if w == "choice" && (← nextChar) == some '{' then return .choice (← branches "or")
   if w == "par" && (← nextChar) == some '{' then return .par (← branches "and")
   if w == "sessions" && (← nextChar) == some '{' then return .sessions (← block)
+  -- `sessions by b.member { ... }`: the session key, a field of a message of the block (selfhost.session.envelope)
+  if w == "sessions" && (← peekIdent) == some "by" then
+    discard <| keyword? "by"
+    let at_ := (← get).pos
+    let x ← ident "a message id of the block"
+    sym '.' "'.' and the key's field, as in sessions by b.member"
+    let mut path := [← ident "the key's field"]
+    while ← sym? '.' do path := path ++ [← ident "a field"]
+    if (← nextChar) != some '{' then fail "expected '{' after the session key"
+    let body ← block
+    if !(declaredIds body).contains x then
+      failAt at_ s!"sessions by {x}: {x} is not the id of a message of this sessions block"
+    modify fun s => { s with keys := s.keys.push (x, ".".intercalate path) }
+    return .sessions body
   if w == "join" && (← nextChar).any Char.isDigit then
     let n ← number
     if !(← keyword? "of") then fail "expected 'of' after join's number"
@@ -955,6 +984,8 @@ structure Parsed where
   requires : List Generative.Requirement := []
   /-- the message types (selfhost.session.types) -/
   types : Types.Env := []
+  /-- session keys: (message id, field path) (selfhost.session.envelope) -/
+  keys : List (String × String) := []
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -968,7 +999,9 @@ def buildWith (text : String) (body : List Stmt) : Except String (Global String)
   let (g, _) ← (build ctx body).run 0
   return g
 
-def parse (text : String) : Except String Parsed := do
+/-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
+(selfhost.session.proto); the text may then not declare structures of its own. -/
+def parse (text : String) (types : Option Types.Env := none) : Except String Parsed := do
   if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
   let src := text.toList.toArray
   let (defs, st) ← (file.run src).run {}
@@ -986,7 +1019,11 @@ def parse (text : String) : Except String Parsed := do
     for t in r.targets do
       if !labels.contains t then throw s!"requirement '{r.text}': {t} is not a message or event of the protocol"
   -- message types, and every where condition typed against them before anything runs
-  let env := st.types.toList
+  let env ← match types with
+    | some env =>
+      if !st.types.isEmpty then throw "the message types come from the .proto, so the text may not declare structures as well"
+      pure env
+    | none => pure st.types.toList
   Types.check env
   for d in defs do
     let ids := idLabels d.body
@@ -995,8 +1032,18 @@ def parse (text : String) : Except String Parsed := do
       match Types.checkCondition env labelsOf text with
       | .ok _ => pure ()
       | .error e => throw s!"in {d.name}, {label}: {e}"
+  -- a session key is a Nat or String field of its message, and not a secret
+  let allIds := defs.flatMap fun d => idLabels d.body
+  for (x, f) in st.keys do
+    let some (_, label) := allIds.find? (·.1 == x)
+      | throw s!"sessions by {x}.{f}: {x} is not a message id of the text"
+    if (f.splitOn ".").any Types.isSecret then throw s!"sessions by {x}.{f}: a session key is logged with every event, so it may not be a secret"
+    match Types.leaf env label (f.splitOn ".") with
+    | .ok .nat | .ok .str => pure ()
+    | .ok t => throw s!"sessions by {x}.{f}: a session key is a Nat or String field, and {label}.{f} is {t.render}"
+    | .error e => throw s!"sessions by {x}.{f}: {e}"
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
-           requires := st.requires.toList, types := env }
+           requires := st.requires.toList, types := env, keys := st.keys.toList }
 
 /-! ## Writing -/
 

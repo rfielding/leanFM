@@ -1,0 +1,23 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+message Event {
+  uint64 ts = 1;        // nanoseconds; unique in its stream, and its identity
+  string id = 2;        // the event's name, in a log that names events
+  string session = 3;   // the session, or its key's value when the sessions block names one
+  string from = 4;
+  string to = 5;
+  string label = 6;
+  string cause = 7;     // the id or ts of the event this one answers
+  string prev = 8;      // the id or ts of the event before it, where reward vectors are walked
+  oneof payload {
+    CreateOrder create_order = 9;
+    Quote quote = 10;
+    Pay pay = 11;
+    Charge charge = 12;
+    Charged charged = 13;
+    Receipt receipt = 14;
+    Declined declined = 15;
+    PaymentDeclined payment_declined = 16;
+    SoldOut sold_out = 17;
+  }
+}
+\end{lstlisting}

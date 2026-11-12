@@ -55,18 +55,32 @@ protocol allows under its status. The shop's, abridged:
 
 \input{generated/lang-openapi.tex}
 
-Each body's schema is its message type, with only its declared fields. The same
-types are written out as protobuf, to fix the shape and bytes of each message so
-every role and every stored record agrees on them:
+Each body's schema is its message type, with only its declared fields: the session
+type says which calls there are, and its structures what each one carries.
 
-\input{generated/lang-types-proto.tex}
-
-and as Lean structures that convert to and from JSON, for code written in Lean:
+\index{Lean module}
+The session itself becomes one Lean module. Its payload is an inductive type with
+one constructor per message, wrapped in the event envelope:
 
 \input{generated/lang-types-lean.tex}
 
+and each role's states are an inductive type with a step function. The client's,
+generated from its projection:
+
+\input{generated/lang-lean-client.tex}
+
+A step exists exactly where the protocol lets that event move the role, so the
+module is the protocol's transition system over typed events: \texttt{accepts}
+runs one session's events through it, and the checked-in module for
+\texttt{PlaceOrder} is compiled and run in LeanFM's own tests. A role that runs
+branches in parallel or serves sessions has no single machine, and LeanFM says so
+rather than writing one.
+
 The skeletons carry them too: a Python dataclass or a TypeScript interface per
-message, and each send method takes its message's type. None of these say anything
+message, with \texttt{Nat} and \texttt{Int} as Python integers and TypeScript
+\texttt{bigint}s. A send method takes its message's type and encodes it, a
+receive decodes the body back into it, and a body that does not fit is refused
+either way, so role code never handles raw JSON. None of these say anything
 about order or about who decides; that is the protocol's job. The LeanFM server's
 own messages are an example (Appendix~\ref{ch:web-protocol}).
 

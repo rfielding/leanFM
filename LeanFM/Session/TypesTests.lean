@@ -80,7 +80,13 @@ def log (quote pay : Json) : Except String Json := conform (args order [("allowI
   ev "e3" "Pay" "Client" "Shop" (some "e2") (some pay)])])
 #guard str (log (json% {price: 10}) (json% {amount: 10})) "verdict" == "conforms"
 #guard has (reason (log (json% {price: 10}) (json% {amount: 10, tip: 2}))) "event e3: Pay has no field tip"
-#guard has (reason (log (json% {price: "10"}) (json% {amount: 10}))) "event e2: Quote.price is Nat, and the log has \"10\""
+#guard has (reason (log (json% {price: "ten"}) (json% {amount: 10}))) "event e2: Quote.price is Nat, and \"ten\" is not a decimal integer"
+-- integers travel as decimal strings (selfhost.session.envelope): exact past 2^53, where doubles are not
+#guard str (log (json% {price: "10"}) (json% {amount: "10"})) "verdict" == "conforms"
+#guard str (log (json% {price: "9007199254740993"}) (json% {amount: "9007199254740993"})) "verdict" == "conforms"
+#guard str (log (json% {price: "9007199254740993"}) (json% {amount: "9007199254740992"})) "verdict" == "violates"
+#guard has (reason (log (json% {price: 9007199254740993}) (json% {amount: 10}))) "beyond 2^53 - 1, where JSON numbers are not exact; send it as a decimal string"
+#guard has (reason (log (json% {price: 10.5}) (json% {amount: 10}))) "is not a whole number"
 #guard has (reason (log (json% {price: -1}) (json% {amount: 10}))) "Quote.price is a Nat, and the log has -1"
 #guard has (reason (log (json% {price: 10}) (json% {amount: 10, card_secr: "4242"}))) "the log carries the secret Pay.card_secr"
 #guard has (reason (conform (args order [("allowIncomplete", Json.bool true), ("events", Json.arr #[
@@ -110,9 +116,10 @@ def shopApi := openapi (args order [("role", "Shop")])
 -- skeletons: a dataclass or interface per message, and send methods take it
 def code (lang : String) : String := str (skeleton (args order [("language", Json.str lang)])) "code"
 #guard has (code "python") "@dataclass\nclass Pay:\n    \"\"\"The client pays; the card number is a secret, never logged.\"\"\"\n    amount: int\n    card_secr: str"
-#guard has (code "python") "def send_pay(self, body: Optional[Pay] = None):"
-#guard has (code "typescript") "export interface Pay {\n  amount: number;\n  card_secr: string;\n}"
-#guard has (code "typescript") "sendPay(body?: Pay): "
+#guard has (code "python") "def send_pay(self, body: Pay):"
+#guard has (code "python") "def send_sold_out(self, body: Optional[SoldOut] = None):"
+#guard has (code "typescript") "export interface Pay {\n  amount: bigint;\n  card_secr: string;\n}"
+#guard has (code "typescript") "sendPay(body: Pay): "
 #guard has (code "typescript") "export type SoldOut = Record<string, never>;"
 -- a message type may not take the name of a class the module defines
 #guard has (reason (skeleton (args "structure Endpoint where n : Nat\nprotocol P (A, B) { Endpoint from A to B; }"))) "same Python name as a class"

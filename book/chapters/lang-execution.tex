@@ -25,6 +25,38 @@ question, and the chain from \texttt{Receipt} back to \texttt{CreateOrder} is th
 whole call. A real program logs the same shape, one line per message, and the
 code generated from a protocol logs it automatically (Chapter~\ref{ch:generated}).
 
+\section{The event envelope}
+
+\index{event envelope}
+\index{protobuf}
+An event has a declared shape like any message. JSON is only how it travels: the
+envelope is a protobuf message, written by LeanFM with the protocol's message
+types, and its payload is one of those types.
+
+\input{generated/lang-envelope.tex}
+
+Integers, timestamps included, travel as decimal strings. A JSON number is a
+64-bit float, with 53 bits for the integer part; a browser that parses a larger
+one silently drops its low bits, and nanoseconds since the epoch are already past
+$2^{53}$. So LeanFM accepts a JSON number as an integer only when it is whole and
+within $2^{53}-1$, and asks for a decimal string otherwise. Every timestamp is in
+nanoseconds and unique in its stream: generated streams separate events that fall
+on the same instant by a nanosecond, always after what they happened after.
+
+\index{session key}
+Sessions are told apart by data the protocol declares. A \texttt{sessions} block
+may name its key, a field of one of its messages:
+
+\input{generated/lang-key.tex}
+
+The generated code logs the key with its message, and conformance requires every
+event of a session to name the key's value as its session. A log that files
+\texttt{alice}'s ask under session \texttt{s1} does not conform:
+
+\input{generated/lang-key-log.tex}
+
+\input{generated/lang-key-conform.tex}
+
 \section{Conformance}
 
 \index{conformance}
@@ -78,8 +110,8 @@ driven, one click at a time.
 
 \index{reward vector}
 \index{view}
-For questions about value and promises, events are keyed by a unique timestamp,
-and two links point back in time: \texttt{prev}, the event before this one in its
+For questions about value and promises, events are keyed by their unique
+timestamp, and two links point back in time: \texttt{prev}, the event before this one in its
 thread, and \texttt{cause}, the event that made it happen. Both must name earlier
 events of the same stream. A role's \emph{view} is its own events and everything
 in their causal past: exactly what it could have learned.

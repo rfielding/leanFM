@@ -42,24 +42,25 @@ def tool (name : String) (r : Except String Json) : IO Json :=
 
 def write (name body : String) : IO Unit := IO.FS.writeFile (out ++ name) body
 
-def ctlRow (text : String) (english : String) (formula : Json) : IO String := do
-  let r ← tool "session_ctl" (ctl (withLean text [("formula", formula)]))
+def ctlRow (text : String) (english : String) (formula : Json) (more : List (String × Json) := []) : IO String := do
+  let r ← tool "session_ctl" (ctl (withLean text ([("formula", formula)] ++ more)))
   let report := str r "report"
   return s!"{english}\n  {formula.compress}\n  {str r "verdict"}" ++ (if report.isEmpty then "" else s!": {report}")
 
 def main : IO Unit := do
   let order ← IO.FS.readFile "examples/sessions/PlaceOrder.leanfm"
+  let withOrder (more : List (String × Json) := []) : Json := withLean order more
   let ping ← IO.FS.readFile "examples/sessions/Ping.leanfm"
   IO.FS.createDirAll out
 
   -- Chapter: the protocol is the program
   write "lang-placeorder.tex" (listing order)
   for theme in ["light", "dark"] do
-    let d ← tool "session_diagram" (diagram (withLean order [("theme", Json.str theme)]))
+    let d ← tool "session_diagram" (diagram (withOrder [("theme", Json.str theme)]))
     write s!"lang-placeorder-{theme}.svg" (str d "svg")
 
   -- Chapter: what a protocol means
-  let c ← tool "session_check" (check (withLean order))
+  let c ← tool "session_check" (check (withOrder))
   let proj := c.getObjValD "projections"
   let locals := ["Client", "Shop", "Bank"].map fun r => s!"-- {r}\n" ++ str (proj.getObjValD r) "local"
   write "lang-placeorder-locals.tex" (listing ("\n\n".intercalate locals))
@@ -102,7 +103,7 @@ def main : IO Unit := do
   -- Chapter: an execution is an event stream
   -- the first seed whose single session ends in a receipt, so the run shows the whole conversation
   let runs ← (List.range 40).mapM fun i => do
-    let sim ← tool "session_simulate" (simulate (withLean order [("seed", toJson (i + 1)), ("instances", toJson 1)]))
+    let sim ← tool "session_simulate" (simulate (withOrder [("seed", toJson (i + 1)), ("instances", toJson 1)]))
     pure (i + 1, match sim.getObjValD "events" with | .arr a => a.toList | _ => [])
   let (seed, evs) := (runs.find? fun (_, es) => es.any fun e => str e "label" == "Receipt").getD (runs.headD (1, []))
   let line := fun (e : Json) =>
@@ -114,7 +115,7 @@ def main : IO Unit := do
     {id: "e1", session: "42", «from»: "Client", to: "Shop", label: "CreateOrder"},
     {id: "e2", session: "42", «from»: "Shop", to: "Client", label: "Quote", cause: "e1"},
     {id: "e3", session: "42", «from»: "Shop", to: "Bank", label: "Charge", cause: "e2"}]
-  let cf ← tool "session_conform" (conform (withLean order [("events", bad)]))
+  let cf ← tool "session_conform" (conform (withOrder [("events", bad)]))
   write "lang-conform-log.tex" (listing ("\n".intercalate ((match bad with | .arr a => a.toList | _ => []).map Json.compress)))
   write "lang-conform.tex" (listing ("\n".intercalate ([str cf "reading"] ++ strs cf "issues")))
 
@@ -123,7 +124,7 @@ def main : IO Unit := do
     {id: "e1", session: "7", «from»: "Client", to: "Shop", label: "CreateOrder"},
     {id: "e2", session: "7", «from»: "Shop", to: "Client", label: "Quote", cause: "e1", fields: {price: 10}},
     {id: "e3", session: "7", «from»: "Client", to: "Shop", label: "Pay", cause: "e2", fields: {amount: 12}}]
-  let wf ← tool "session_conform" (conform (withLean order [("events", wrongAmount), ("allowIncomplete", Json.bool true)]))
+  let wf ← tool "session_conform" (conform (withOrder [("events", wrongAmount), ("allowIncomplete", Json.bool true)]))
   write "lang-where-log.tex" (listing ("\n".intercalate ((match wrongAmount with | .arr a => a.toList | _ => []).map Json.compress)))
   write "lang-where.tex" (listing (str wf "reading"))
   -- a condition that selects a branch is drawn as that branch's guard
@@ -133,13 +134,29 @@ def main : IO Unit := do
     let d ← tool "session_diagram" (diagram (withLean tier [("theme", Json.str theme)]))
     write s!"lang-tier-{theme}.svg" (str d "svg")
 
+  -- the event envelope, and a session told apart by a key the protocol declares
+  let envProto ← tool "session_types" (types (withOrder))
+  let protoLines := (str envProto "proto").splitOn "\n"
+  write "lang-envelope.tex" (listing ("\n".intercalate ((protoLines.dropWhile (!·.startsWith "message Event")).filter (· != ""))))
+  let keyed := "structure Ask where\n  caller : String\n\nprotocol Keyed (Client, Server) {\n  sessions by a.caller {\n    a: Ask from Client to Server;\n    Reply from Server to Client cause a;\n  }\n}"
+  write "lang-key.tex" (listing keyed)
+  let keyLog := json% [
+    {id: "e1", session: "s1", «from»: "Client", to: "Server", label: "Ask", fields: {caller: "alice"}},
+    {id: "e2", session: "s1", «from»: "Server", to: "Client", label: "Reply", cause: "e1"}]
+  let kc ← tool "session_conform" (conform (withLean keyed [("events", keyLog)]))
+  write "lang-key-log.tex" (listing ("\n".intercalate ((match keyLog with | .arr a => a.toList | _ => []).map Json.compress)))
+  write "lang-key-conform.tex" (listing (str kc "reading"))
+
   -- Part II: what a protocol generates
-  let ty ← tool "session_types" (types (withLean order []))
-  write "lang-types-proto.tex" (listing ("\n".intercalate ((str ty "proto").splitOn "\n" |>.drop 4 |>.take 22)))
-  write "lang-types-lean.tex" (listing ("\n".intercalate ((str ty "leanTypes").splitOn "\n" |>.drop 4 |>.take 18)))
-  let api ← tool "session_openapi" (openapi (withLean order [("role", "Shop")]))
+  let ty ← tool "session_types" (types (withOrder))
+  -- the session type is the source: the .proto, the Lean module and OpenAPI are generated from it
+  write "lang-types-proto.tex" (listing ("\n".intercalate ((str ty "proto").splitOn "\n" |>.drop 5 |>.take 22)))
+  let moduleLines := match ty.getObjValD "leanModule" with | .str m => m.splitOn "\n" | _ => []
+  write "lang-types-lean.tex" (listing ("\n".intercalate ((moduleLines.dropWhile (!·.startsWith "/-- What an event carries")).take 23)))
+  write "lang-lean-client.tex" (listing ("\n".intercalate (((moduleLines.dropWhile (· != "namespace Client")).takeWhile (· != "end Client")) ++ ["end Client"])))
+  let api ← tool "session_openapi" (openapi (withOrder [("role", "Shop")]))
   write "lang-openapi.tex" (listing ("\n".intercalate ((str api "code").splitOn "\n" |>.take 40)))
-  let sk ← tool "session_skeleton" (skeleton (withLean order [("language", "typescript")]))
+  let sk ← tool "session_skeleton" (skeleton (withOrder [("language", "typescript")]))
   let code := (str sk "code").splitOn "\n"
   let start := (code.findIdx? (fun l => (l.splitOn "class Client").length > 1)).getD 0
   write "lang-skeleton.tex" (listing ("\n".intercalate ((code.drop start).take 36)))

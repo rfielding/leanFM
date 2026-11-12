@@ -5,6 +5,8 @@ import LeanFM.Session.Diagram
 import LeanFM.Session.Calls
 import LeanFM.Session.Events
 import LeanFM.Session.Text
+import LeanFM.Session.Proto
+import LeanFM.Session.LeanGen
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
 import LeanFM.Session.Chain
@@ -228,6 +230,8 @@ structure Protocol where
   generative : Option Generative.Resolved := none
   /-- the message types the text declares (selfhost.session.types) -/
   types : Session.Types.Env := []
+  /-- session keys, (message id, field path) (selfhost.session.envelope) -/
+  keys : List (String × String) := []
 
 /-! ## The JSON form written as protocol text -/
 
@@ -316,6 +320,13 @@ def jsonTypesText (j : Json) : Except String String := do
     return "\n".intercalate decls ++ "\n"
   | _ => throw "types is an array of {name, fields: [\"amount : Nat\", ...]}"
 
+/-- The message types from the `proto` argument, a proto3 file's text (selfhost.session.proto). -/
+def protoTypes (args : Json) : Except String (Option Session.Types.Env) := do
+  match args.getObjVal? "proto" with
+  | .error _ | .ok .null => return none
+  | .ok (.str t) => return some (← Session.Proto.ofProto t)
+  | .ok _ => throw "proto is the text of a proto3 file"
+
 def parseProtocol (args : Json) : Except String Protocol := do
   if args.compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
@@ -323,8 +334,8 @@ def parseProtocol (args : Json) : Except String Protocol := do
     let text ← match v.getStr? with
       | .ok t => pure t
       | .error _ => throw "lean must be a string of LeanFM protocol text"
-    let r ← LeanFM.Session.Text.parse text
-    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args, types := r.types }
+    let r ← LeanFM.Session.Text.parse text (← protoTypes args)
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args, types := r.types, keys := r.keys }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
     | .error _ => throw "lean is required: LeanFM protocol text such as protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
@@ -350,8 +361,8 @@ def parseProtocol (args : Json) : Except String Protocol := do
     | _ => throw "steps must be an array of steps"
   let (global, count) ← (steps { roles } js).run 0
   let text := typesText ++ ToText.write name roles js
-  let parsed ← Text.parse text
-  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types }
+  let parsed ← Text.parse text (← protoTypes args)
+  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys }
 
 /-! ## Results -/
 
@@ -505,6 +516,54 @@ def eventJson (e : Event String) : Json :=
     ("answers", toJson e.answers), ("src", e.src), ("dst", e.dst), ("label", e.label),
     ("msgId", toJson e.msgId), ("route", toJson e.route), ("status", toJson e.status),
     ("act", e.isAct)]
+
+/-- A timestamp or other integer as the protobuf JSON mapping sends it: a decimal string, or a JSON
+number that is whole and within 2^53 - 1 (beyond that a double has already lost the low bits). -/
+def wireNat (j : Json) : Except String Nat :=
+  match j with
+  | .str t => match Session.Types.decimal? t with
+    | some n => if n < 0 then .error s!"{t} is negative" else .ok n.toNat
+    | none => .error s!"{t.quote} is not a decimal integer"
+  | .num n =>
+    if n.exponent != 0 then .error s!"{n.toString} is not a whole number"
+    else if n.mantissa < 0 then .error s!"{n.toString} is negative"
+    else if n.mantissa.natAbs > Session.Types.maxSafe then .error s!"{n.toString} is beyond 2^53 - 1, where JSON numbers are not exact; send it as a decimal string"
+    else .ok n.mantissa.natAbs
+  | _ => .error s!"{j.compress} is not an integer"
+
+/-- Give every event of a generated stream `ts`: nanoseconds as a decimal string, unique in the
+stream and later than every event it happened after (its prior events and its cause). The time
+(ms, or the step of an untimed run counted as 1 ms) times 10^6 is where it starts; an event that
+would share or precede one already stamped is moved 1 ns past it (selfhost.session.envelope). -/
+def stampNs (evs : Array Json) : Array Json := Id.run do
+  let num (j : Json) (k : String) : Option Nat := (j.getObjValAs? Nat k).toOption
+  let before (j : Json) : List Nat :=
+    (match j.getObjValD "prior" with | .arr a => a.toList.filterMap (·.getNat?.toOption) | _ => []) ++ (num j "cause").toList
+  let order := (List.range evs.size).toArray.qsort fun a b =>
+    let ta := (num evs[a]! "time").getD 0
+    let tb := (num evs[b]! "time").getD 0
+    ta < tb || (ta == tb && a < b)
+  let mut stamped : Std.HashMap Nat Nat := {}   -- event id to ts
+  let mut out := evs
+  let mut last : Option Nat := none
+  let mut pending := order.toList
+  let mut fuel := evs.size + 1
+  while !pending.isEmpty && fuel > 0 do
+    fuel := fuel - 1
+    let mut later : List Nat := []
+    for i in pending do
+      let e := evs[i]!
+      let ps := before e
+      if ps.all fun x => stamped.contains x || !(evs.any fun f => num f "id" == some x) then
+        let base := ((num e "time").getD 0) * 1000000
+        let after := (ps.filterMap stamped.get?).foldl max 0
+        let ts := [some base, last.map (· + 1), if ps.any stamped.contains then some (after + 1) else none].filterMap id |>.foldl max 0
+        last := some ts
+        if let some id := num e "id" then stamped := stamped.insert id ts
+        out := out.set! i (e.setObjVal! "ts" (Json.str (toString ts)))
+      else later := later ++ [i]
+    pending := later
+  return out
 
 def messageCount (g : Global String) : Nat := g.messages.length
 
@@ -873,7 +932,7 @@ def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text 
 def mdp (args : Json) : Except String Json := do
   let p ← parseProtocol args
   if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before rendering the MDP"
-  let parsed ← Text.parse p.lean
+  let parsed ← Text.parse p.lean (← protoTypes args)
   let layer ← match p.generative with
     | some r => pure r
     | none => Generative.resolve parsed.body
@@ -965,7 +1024,7 @@ def simulate (args : Json) : Except String Json := do
          ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
          ("seed", seed), ("instances", instances), ("sessions", instances),
          ("ended", toJson (g.ended.map fun (sid, e) => Json.mkObj [("session", sid), ("ended", e)])),
-         ("events", Json.arr evJson), ("diagram", diagramJson p)]
+         ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson)), ("diagram", diagramJson p)]
   if let some layer := p.generative then
     if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before timed generation"
     if (args.getObjVal? "spread").isOk || (args.getObjVal? "loops").isOk then
@@ -977,7 +1036,7 @@ def simulate (args : Json) : Except String Json := do
        ("name", p.name), ("roles", toJson p.roles), ("lean", p.lean), ("protocol", args.getObjValD "protocol"),
        ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
        ("seed", seed), ("instances", instances), ("sessions", instances),
-       ("events", Json.arr (generated.events.map eventJson)), ("deadlineReports", toJson generated.reports),
+       ("tsUnit", "ns"), ("events", Json.arr (stampNs (generated.events.map eventJson))), ("deadlineReports", toJson generated.reports),
        ("diagram", diagramJson p)]
   -- a protocol without a sessions block runs as `instances` concurrent copies of itself
   let g := if hasSessions p.global then p.global else .sessions p.global .done
@@ -989,7 +1048,7 @@ def simulate (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("seed", seed), ("instances", instances), ("sessions", sessions)
-    , ("events", Json.arr (evs.map eventJson))
+    , ("tsUnit", "ns"), ("events", Json.arr (stampNs (evs.map eventJson)))
     , ("diagram", diagramJson p) ]
 
 /-- A logged event: the fields session_simulate writes (src, dst, act) or from/to; ids, sessions and
@@ -1012,7 +1071,8 @@ def logEvent (j : Json) : Except String LogEvent := do
     | .ok (.str s) => some s
     | .ok (.num n) => some n.toString
     | _ => none
-  let id ← match text "id" with | some s => pure s | none => .error "every event needs an id"
+  -- an event is named by its id, or in the envelope's form by its ts (selfhost.session.envelope)
+  let id ← match text "id" <|> text "ts" with | some s => pure s | none => .error "every event needs an id or a ts"
   let label ← match text "label" with | some s => pure s | none => .error s!"event {id} has no label"
   let isAct := (j.getObjValAs? Bool "act").toOption.getD false
   let src ← match text "from" <|> text "src" <|> text "at" with
@@ -1037,9 +1097,11 @@ def deadlineReports (p : Protocol) (args : Json) (evs : List LogEvent) : Except 
   let some layer := p.generative | return Json.null
   let raw ← args.getObjValAs? (Array Json) "events"
   let timed ← (evs.zip raw.toList).mapM fun (e,j) => do
-    let t ← match (j.getObjVal? "timeMs").toOption <|> (j.getObjVal? "time").toOption with
-      | some v => v.getNat?
-      | none => throw s!"event {e.id}: timed monitoring requires timeMs (or time)"
+    let t ← match (j.getObjVal? "timeMs").toOption <|> (j.getObjVal? "time").toOption, (j.getObjVal? "ts").toOption with
+      | some v, _ => v.getNat?
+      -- ts is nanoseconds; deadlines are whole ms, so a fraction of a ms counts as late (rounded up)
+      | none, some v => do let ns ← (wireNat v).mapError (s!"event {e.id}: ts " ++ ·); pure ((ns + 999999) / 1000000)
+      | none, none => throw s!"event {e.id}: timed monitoring requires ts (nanoseconds) or timeMs"
     if t > 9007199254740991 then throw "timestamp exceeds the safe integer limit"
     return (e.session, { src := e.src, dst := e.dst, label := e.label, time := t, isAct := e.isAct : Generative.Observation })
   let horizon ← match args.getObjVal? "horizonMs" with
@@ -1064,19 +1126,38 @@ def conform (args : Json) : Except String Json := do
   for e in evs do
     if let .error why := Session.Types.checkFields p.types e.label e.isAct e.fields then
       throw s!"event {e.id}: {why}"
+  -- integers travel as decimal strings; conditions read them as exact numbers
+  let evs := evs.map fun e => { e with fields := Session.Types.coerceFields p.types e.label e.fields }
   let allowIncomplete := (args.getObjValAs? Bool "allowIncomplete").toOption.getD false
   let results := p.global.conforms evs allowIncomplete
+  -- a keyed session's events all carry its key's value as their session (selfhost.session.envelope)
+  let keyProblems := p.keys.flatMap fun (x, f) =>
+    let labels := (p.global.messages.filter (·.id == some x)).map (·.label)
+    (evs.map (·.session)).eraseDups.filterMap fun sid =>
+      match evs.find? (fun e => e.session == sid && labels.contains e.label) with
+      | none => none
+      | some e => match e.fields.lookup f with
+        | none => some s!"session {sid}, event {e.id}: {e.label} does not log the session key {x}.{f}"
+        | some v =>
+          let shown := match v with
+            | .str t => t
+            | .num q => if q.den == 1 then toString q.num else v.render
+            | .bool b => toString b
+          if shown == sid then none
+          else some s!"session {sid}, event {e.id}: the session key {x}.{f} is {shown}, so this session's events must name session {shown}, not {sid}"
   let bad := results.filter (·.problem.isSome)
   let incomplete := results.filter (!·.complete)
-  let verdict := if bad.isEmpty then "conforms" else "violates"
-  let problems := bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
+  let verdict := if bad.isEmpty && keyProblems.isEmpty then "conforms" else "violates"
+  let problems := (bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}") ++ keyProblems
   let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
-  let reading := if bad.isEmpty
+  let reading := if !keyProblems.isEmpty && bad.isEmpty
+    then s!"{p.name}: {keyProblems.length} session key problem{if keyProblems.length == 1 then "" else "s"}; first: {keyProblems.head!}"
+    else if bad.isEmpty
     then s!"{p.name}: {evs.length} events in {results.length} session{if results.length == 1 then "" else "s"} follow the protocol" ++
       (if incomplete.isEmpty then "" else s!"; {incomplete.length} still running") ++
       (if unchecked.isEmpty then "" else s!"; {unchecked.length} where condition{if unchecked.length == 1 then "" else "s"} unchecked: {unchecked.head!}")
     else s!"{p.name}: {bad.length} of {results.length} sessions break the protocol; first: {problems.head!}"
-  let deadlines ← if bad.isEmpty then deadlineReports p args evs else pure Json.null
+  let deadlines ← if bad.isEmpty && keyProblems.isEmpty then deadlineReports p args evs else pure Json.null
   return fit <| Json.mkObj
     [ ("tool", "session_conform"), ("deadlineReports", deadlines), ("verdict", verdict), ("reading", reading), ("name", p.name)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
@@ -1130,7 +1211,9 @@ def compat (args : Json) : Except String Json := do
   let oldText ← match args.getObjVal? "old" with
     | .ok (.str s) => pure s
     | _ => throw "old is required: the previous version's LeanFM protocol text"
-  let q ← (parseProtocol (Json.mkObj [("lean", Json.str oldText)])).mapError ("the old version: " ++ ·)
+  -- the old version reads the same .proto, unless one is given for it (oldProto)
+  let oldProto := match args.getObjVal? "oldProto" with | .ok v => v | .error _ => args.getObjValD "proto"
+  let q ← (parseProtocol (Json.mkObj [("lean", Json.str oldText), ("proto", oldProto)])).mapError ("the old version: " ++ ·)
   let body (g : Global String) := match g with | .sessions b _ => b | other => other
   let results ← (body p.global).compat (body q.global) p.roles q.roles
   let answer (r : Except String (Option Evolution.Failure)) : Json × Bool :=
@@ -1226,12 +1309,16 @@ def types (args : Json) : Except String Json := do
   let pkg := Skeleton.snake p.name
   let proto ← Session.Types.proto p.types labels pkg
   let lean ← Session.Types.lean p.types labels (Skeleton.ident p.name ++ "Types")
+  -- the whole session as one Lean module: payloads, envelope, and each role's states (selfhost.session.lean)
+  let (leanModule, moduleNote) := match p.global.leanModule p.name p.roles p.types with
+    | .ok m => (Json.str m, Json.null)
+    | .error e => (Json.null, Json.str e)
   let ms ← Session.Types.complete p.types labels
   let empty := labels.filter fun l => (Session.Types.find p.types l).isNone
   let note := if empty.isEmpty then "" else s!"; {empty.length} carr{if empty.length == 1 then "ies" else "y"} no fields ({", ".intercalate (empty.take 6)})"
   return Json.mkObj [("tool", "session_types"), ("verdict", "generated"), ("name", p.name),
     ("reading", s!"{p.name}: {ms.length} message type{if ms.length == 1 then "" else "s"} as protobuf, Lean and JSON schema{note}"),
-    ("proto", Json.str proto), ("leanTypes", Json.str lean),
+    ("proto", Json.str proto), ("leanTypes", Json.str lean), ("leanModule", leanModule), ("leanModuleNote", moduleNote),
     ("schemas", Json.mkObj (ms.map fun m => (m.name, m.schema))),
     ("language", "protobuf"), ("code", Json.str proto), ("lean", Json.str p.lean)]
 
@@ -1257,8 +1344,8 @@ def skeleton (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let language := (args.getObjValAs? String "language").toOption.getD "python"
   let code ← match language with
-    | "python" => p.global.pythonSkeleton p.name p.roles p.types
-    | "typescript" => p.global.typescriptSkeleton p.name p.roles p.types
+    | "python" => p.global.pythonSkeleton p.name p.roles p.types p.keys
+    | "typescript" => p.global.typescriptSkeleton p.name p.roles p.types p.keys
     | other => throw s!"language {other} is not supported; use python or typescript"
   let starts := ", ".intercalate (p.roles.map Skeleton.snake)
   let what := if language == "python" then "a Python" else "a TypeScript"
@@ -1283,7 +1370,9 @@ def windowText (w : Option Generative.Window) : String :=
   | none => "-"
 
 def slaEvent (j : Json) : Except String (Sla.Ev × Option (List (String × String × Rat))) := do
-  let ts ← (j.getObjValAs? Nat "ts").mapError fun _ => "every event needs ts, a whole number of milliseconds that is unique in the stream"
+  let ts ← match j.getObjVal? "ts" with
+    | .ok v => (wireNat v).mapError fun why => s!"ts {why}: ts is the event's time in nanoseconds, unique in the stream"
+    | .error _ => throw "every event needs ts, its time in nanoseconds as a decimal string, unique in the stream"
   let label ← match j.getObjValAs? String "label" with
     | .ok l => if l.isEmpty || l.length > limits.maxString then throw s!"event {ts}: the label is empty or too long" else pure l
     | .error _ => throw s!"event {ts} needs a label"
@@ -1291,9 +1380,9 @@ def slaEvent (j : Json) : Except String (Sla.Ev × Option (List (String × Strin
   let src := if (str "from").isEmpty then str "role" else str "from"
   let link (k : String) : Except String (Option Nat) := match j.getObjVal? k with
     | .ok .null | .error _ => pure none
-    | .ok v => match v.getNat? with
+    | .ok v => match wireNat v with
       | .ok n => pure (some n)
-      | .error _ => throw s!"event {ts}: {k} is the timestamp of an earlier event"
+      | .error why => throw s!"event {ts}: {k} is the timestamp of an earlier event ({why})"
   let reward : Option (List (String × String × Rat)) ← match j.getObjVal? "reward" with
     | .ok (.obj kv) => some <$> (kv.toList.flatMapM fun (role, units) => match units with
         | .obj ukv => ukv.toList.mapM fun (unit, v) => match v.getInt? with
@@ -1321,7 +1410,7 @@ def vectorText (v : List (String × String × Rat)) : String :=
 def sla (args : Json) : Except String Json := do
   let p ← parseProtocol args
   if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before checking its requirements"
-  let parsed ← Text.parse p.lean
+  let parsed ← Text.parse p.lean (← protoTypes args)
   if parsed.requires.isEmpty then
     throw "the protocol states no requirements: add require per q { every q reaches Reply within 2 seconds; } after it, where q is a message id"
   let layer ← match p.generative with
@@ -1359,6 +1448,18 @@ def sla (args : Json) : Except String Json := do
   let mut atJson : Json := Json.null
   if let .ok (.arr evs) := args.getObjVal? "events" then
     let parsedEvs ← evs.toList.mapM slaEvent
+    -- an observed stream is of this protocol: its labels and its units (selfhost.session.envelope)
+    let labels := p.global.labels.eraseDups
+    let units := (Text.unitsOf parsed.body).eraseDups
+    for (e, r) in parsedEvs do
+      if !labels.contains e.label then throw s!"event {e.ts}: {e.label} is not a message or event of {p.name}"
+      for (_, u, _) in r.getD [] do
+        if !units.contains u then throw s!"event {e.ts}: the reward names unit {u}, which {p.name} never uses{if units.isEmpty then "" else s!"; its units are {", ".intercalate units}"}"
+    -- the stream is in nanoseconds; requirements are written in ms and longer units
+    let inNs (r : Generative.Requirement) : Generative.Requirement :=
+      { r with withinMs := r.withinMs.map (· * 1000000),
+               window := r.window.map fun w => match w with | .time ms => .time (ms * 1000000) | other => other }
+    let parsed : Text.Parsed := { parsed with requires := parsed.requires.map inNs }
     let x ← Sla.Execution.make (parsedEvs.map (·.1)) (parsedEvs.filterMap fun (e, r) => r.map (e.ts, ·))
     let mut perReq := #[]
     for r in parsed.requires do
@@ -1393,7 +1494,7 @@ def sla (args : Json) : Except String Json := do
     observedLines := observedLines ++ [s!"Each role's state is its view: " ++ ", ".intercalate (views.map fun (r, n) => s!"{r} {n} events") ++ ".",
       s!"The reward vector at the last event ({last}), found by walking prev back to the latest vector: {vectorText (x.rewardAt last)}."]
     if let .ok atv := args.getObjVal? "at" then
-      let atTs ← atv.getNat?.mapError fun _ => "at is the timestamp of an event"
+      let atTs ← (wireNat atv).mapError fun why => s!"at is the timestamp of an event ({why})"
       if !x.events.contains atTs then throw s!"at {atTs} is not an event of the stream"
       atJson := Json.mkObj [("at", toJson atTs), ("causalPast", toJson (x.causalPast atTs)), ("reward", vectorJson (x.rewardAt atTs)),
         ("views", Json.arr (p.roles.map fun (role : String) => Json.mkObj [("role", Json.str role), ("events", toJson ((x.view role).filter (· ≤ atTs)))]).toArray)]
@@ -1545,8 +1646,10 @@ entries to tell the promise from a failure rate of 0 or 1. The tool says when a 
 that many.
 
 An execution is an event stream, and it is the only state: actors keep none of their own.
-`{ts, label, from, to, prev?, cause?, reward?}` names each event by a unique timestamp, and `prev`
-and `cause` link it to earlier events. A role's view is its events and their causal past. A reward
+`{ts, label, from, to, prev?, cause?, reward?}` names each event by a unique timestamp in
+nanoseconds, sent as a decimal string (nanoseconds since the epoch are past 2^53, where a JSON
+number in a browser has already lost its low bits), and `prev` and `cause` link it to earlier
+events. Labels must be the protocol's, and reward units ones its amounts use. A role's view is its events and their causal past. A reward
 vector `{role: {unit: amount}}` is written only where it changes, and the vector at an event is
 found by walking `prev` back to the latest one written (none means zero). An entry hits when a
 target is in its causal future within the deadline. An entry whose deadline outlives the stream is
@@ -1558,7 +1661,8 @@ budget is violated by the stated assumptions).
 
 ## Message types
 
-Every message has a type, declared as a Lean structure before the protocols:
+Every message has a type, declared in the session type itself, as Lean structures before the
+protocols. From them LeanFM writes the .proto, the Lean module and the OpenAPI document:
 
 ```
 structure Quote where
@@ -1568,12 +1672,32 @@ structure Pay where
   card_secr : String
 ```
 
+An existing proto3 file may stand in for the structures, given as `proto` beside `lean`. LeanFM
+reads `message`s whose fields are unsigned integers (`Nat`), signed ones (`Int`), `string`,
+`bool`, another message, `repeated` (`List`) or `optional` (`Option`), keeping each field's number;
+`float`, `double`, `bytes`, `import`, nested messages, `enum`, `oneof` and `map` are refused with
+the reason, and the text may not declare structures as well.
+
 A message whose label names a structure carries it; one whose label names none carries nothing, and
 so does an event. Field types are `Nat`, `Int`, `String`, `Bool`, another structure,
 or `List T` / `Option T` of one of those. Fields are numbered in the order written, which is their
 protobuf number, so add new fields at the end. `deriving ...` is accepted and ignored. A name ending
 in `_secr` is a secret. `session_types` writes the types as protobuf, as Lean structures with JSON
 conversions, and as JSON schemas; `session_openapi` and `session_skeleton` use the same types.
+
+## The event envelope
+
+JSON is only how a protobuf message travels. Every event is an `Event`: `ts` (nanoseconds, unique in
+its stream), `id`, `session`, `from`, `to`, `label`, `cause`, `prev`, and a payload of one of the
+protocol's message types; `session_types` writes it with the messages. Integers (`Nat`, `Int`,
+timestamps) travel as decimal strings, as the protobuf JSON mapping writes 64-bit values; a JSON
+number is accepted for one only when it is whole and within 2^53 - 1. `session_simulate` stamps every
+event with such a `ts`, unique and after everything the event happened after.
+
+A sessions block may name its key: `sessions by a.caller { a: Ask from A to B; ... }`. The key is a
+`Nat` or `String` field of a message of the block; generated code logs it with that message, and
+conformance requires every event of a session to name the key's value as its session, so threads
+are told apart by data the protocol declares.
 
 ## Conditions
 
@@ -1648,8 +1772,12 @@ read, and nothing else of a body.
   operationId and body, each response under its status. Each body's schema is its message type,
   admitting no other fields. Requests without a route are listed, not guessed.
 
-- `session_types {lean}`: the message types as a proto3 file, as Lean structures (deriving
-  ToJson and FromJson) and as JSON schemas, one per message of the protocol.
+- `session_types {lean, proto?}`: the message types as a proto3 file with the `Event` envelope, as
+  Lean structures and as JSON schemas, one per message; and `leanModule`, the session as one Lean
+  module: the payload types, `Role`, `Payload` (one constructor per message and event), `Event`,
+  and for each role its states as an inductive type with `start`, `step : State -> Event -> Option
+  State`, `final` and `accepts`. A role whose projection runs branches in parallel or serves
+  sessions has no single machine; `leanModuleNote` says so.
 
 - `session_compat {lean, old}`: two versions of a protocol (`lean` the new one, `old` the
   previous one). For each role in both: can its new version be deployed first, among the old
@@ -1665,7 +1793,10 @@ read, and nothing else of a body.
   protocol names, logs the event in session_conform's format and returns the next state; `receive`
   accepts only what the state allows; a state used twice raises. Write only the decisions (which
   branch, what each message carries) and the transport: a function that delivers a message. Each
-  message type is a dataclass (Python) or interface (TypeScript), and send methods take it.
+  message type is a dataclass (Python) or interface (TypeScript, with `Nat` and `Int` as bigint);
+  send methods take it and encode it, `receive` decodes the body into it, and a body that does not
+  fit its type is refused either way. Every logged event carries `ts` in nanoseconds; `set_clock`
+  (`setClock`) replaces the clock for replayable runs.
 
 Every answer echoes the text as `lean`; the view shows it in an editor and rechecks as you type.
 Under the editor, the sketch adds statements by clicking: the sender's lifeline, then the

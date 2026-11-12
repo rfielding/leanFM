@@ -609,12 +609,12 @@ def tsCode (t : String) : String :=
   ((field (skeleton ((leanArgs t).setObjVal! "language" (Json.str "typescript"))) "code").getStr?.toOption).getD ""
 def tsClass (t c : String) : String := (((tsCode t).splitOn s!"export class {c} extends State \{")[1]?.getD "").splitOn "\n}\n" |>.head!
 #guard (tsClass lendingProtocol "DeskS2").contains "  sendLent(body?: Lent): DeskS3 {"
-#guard (tsClass lendingProtocol "DeskS2").contains "  sendHold(body?: Hold): DeskS5 {"
+#guard (tsClass lendingProtocol "DeskS2").contains "  sendHold(body: Hold): DeskS5 {"
 -- the lending bug cannot be written: an approved hold's state has no sendLent
 #guard (tsClass lendingProtocol "DeskS6").contains "sendWaitlisted" && !(tsClass lendingProtocol "DeskS6").contains "sendLent"
 -- states with the same methods are still different types, and receive narrows by label
 #guard (tsClass lendingProtocol "DeskS6").contains "  readonly state = \"DeskS6\" as const;"
-#guard (tsClass lendingProtocol "MemberS2").contains "receive(msg: Message): { label: \"Lent\"; msg: Message; next: MemberS3 } | { label: \"Waitlisted\"; msg: Message; next: End }"
+#guard (tsClass lendingProtocol "MemberS2").contains "receive(msg: Message): { label: \"Lent\"; msg: Message; body: Lent; next: MemberS3 } | { label: \"Waitlisted\"; msg: Message; body: Waitlisted; next: End }"
 #guard (tsCode "protocol R (P, A, B, C) { join 2 of { wa: W from P to A; S from A to P cause wa; } and { wb: W from P to B; S from B to P cause wb; } and { wc: W from P to C; S from C to P cause wc; } Done at P; }").contains
   "return new Fork([new PS1(ep), new PS3(ep), new PS5(ep)] as [PS1, PS3, PS5], () => new PS7(ep), 2);"
 #guard (tsCode "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains

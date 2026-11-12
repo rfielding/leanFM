@@ -100,7 +100,7 @@ def reportStatus (r : Except String Json) : Option String := do
 #guard reportStatus (observed (observedPrefix.take 1) [("allowIncomplete",true)]) == some "not-triggered"
 #guard errorHas (observed observedPrefix [("allowIncomplete",true),("horizonMs",1)]) "horizon"
 #guard errorHas (observed (observedAt 0)) "backwards"
-#guard errorHas (observed [Json.mkObj [("id",0),("from","Tenant"),("to","Landlord"),("label","LeaseEnded")]] [("allowIncomplete",true)]) "requires timeMs"
+#guard errorHas (observed [Json.mkObj [("id",0),("from","Tenant"),("to","Landlord"),("label","LeaseEnded")]] [("allowIncomplete",true)]) "requires ts (nanoseconds) or timeMs"
 #guard ok (observed (observedPrefix ++ [event 2 "Tenant" "Landlord" "DepositReturned" 86400000 (some 1)])) "violates"
 -- Zero mass is not a conformance prohibition.
 #guard ok (conform (Json.mkObj [("lean",sampleText),("overlay",overlay),("events",toJson (observedAt 16))])) "conforms"

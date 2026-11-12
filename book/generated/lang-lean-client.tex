@@ -1,0 +1,39 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+namespace Client
+
+inductive State where
+  | s0
+  | s1
+  | s2
+  | s3
+  | done
+  deriving Repr, BEq, DecidableEq
+
+def start : State := .s0
+
+/-- The step an event takes Client from a state, where the protocol allows it. -/
+def step : State → Event → Option State
+  | .s0, { src := .client, dst := .shop, payload := .createOrder _, .. } => some .s1
+  | .s1, { src := .shop, dst := .client, payload := .quote _, .. } => some .s2
+  | .s1, { src := .shop, dst := .client, payload := .soldOut _, .. } => some .done
+  | .s2, { src := .client, dst := .shop, payload := .pay _, .. } => some .s3
+  | .s3, { src := .shop, dst := .client, payload := .receipt _, .. } => some .done
+  | .s3, { src := .shop, dst := .client, payload := .paymentDeclined _, .. } => some .done
+  | _, _ => none
+
+/-- Whether the session may end here. -/
+def final : State → Bool
+  | .done => true
+  | _ => false
+
+/-- The events Client takes part in. -/
+def involves (e : Event) : Bool := e.src == .client || e.dst == .client
+
+/-- Whether one session's events, in order, are a complete run of Client. -/
+def accepts (evs : List Event) : Bool :=
+  match (evs.filter involves).foldlM step start with
+  | some s => final s
+  | none => false
+
+end Client
+\end{lstlisting}

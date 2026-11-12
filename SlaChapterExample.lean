@@ -9,9 +9,14 @@ import LeanFM.SessionTools
 namespace SlaChapterExample
 open Lean LeanFM LeanFM.SessionTools
 
-def ev (ts : Nat) (label src dst : String) (cause prev : Option Nat := none) (reward : Option Json := none) : Json :=
-  Json.mkObj ([("ts", toJson ts), ("label", Json.str label), ("from", Json.str src), ("to", Json.str dst)] ++
-    (cause.map fun c => [("cause", toJson c)]).getD [] ++ (prev.map fun p => [("prev", toJson p)]).getD [] ++
+/-- An event at `ms` milliseconds after a fixed instant; timestamps are nanoseconds since the
+epoch, sent as decimal strings because they are past 2^53 (selfhost.session.envelope). -/
+def t0 : Nat := 1794500000000000000
+def ns (ms : Nat) : Json := Json.str (toString (t0 + ms * 1000000))
+
+def ev (ms : Nat) (label src dst : String) (cause prev : Option Nat := none) (reward : Option Json := none) : Json :=
+  Json.mkObj ([("ts", ns ms), ("label", Json.str label), ("from", Json.str src), ("to", Json.str dst)] ++
+    (cause.map fun c => [("cause", ns c)]).getD [] ++ (prev.map fun p => [("prev", ns p)]).getD [] ++
     (reward.map fun r => [("reward", r)]).getD [])
 
 def usd (role : String) (n : Int) : Json := Json.mkObj [(role, Json.mkObj [("USD", toJson n)])]
@@ -27,7 +32,7 @@ def execution : List Json :=
   , ev 4000 "Ask" "A" "B" none (some 3000) (some (usd "A" (-4)))
   , ev 4120 "Answer" "B" "A" (some 4000) (some 4000) ]
 
-def metered := "protocol Ask (A, B) { q: Ask from A to B; Answer from B to A cause q after 100 ms; }
+def metered := "protocol Ask (A, B) { q: Ask from A to B amount 1 USD; Answer from B to A cause q after 100 ms; }
 require per q { at least 99/100 of q reach Answer within 300 ms over 300 entries; }"
 
 def reportOf (r : Json) : String := (r.getObjValAs? String "report").toOption.getD ""
@@ -36,7 +41,7 @@ def main : IO Unit := do
   let lookupPath := "examples/sessions/UserLookup.leanfm"
   let lookup ← IO.FS.readFile lookupPath
   let design ← IO.ofExcept (sla (Json.mkObj [("lean", Json.str lookup)]))
-  let run ← IO.ofExcept (sla (Json.mkObj [("lean", Json.str metered), ("events", Json.arr execution.toArray), ("at", toJson 3000)]))
+  let run ← IO.ofExcept (sla (Json.mkObj [("lean", Json.str metered), ("events", Json.arr execution.toArray), ("at", ns 3000)]))
   IO.FS.createDirAll "book/generated"
   IO.FS.writeFile "book/generated/sla-userlookup.txt" (reportOf design ++ "\n")
   IO.FS.writeFile "book/generated/sla-execution.json" ((Json.arr execution.toArray).pretty ++ "\n")

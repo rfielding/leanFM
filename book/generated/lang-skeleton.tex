@@ -2,7 +2,7 @@
 export class ClientS0 extends State {
   readonly state = "ClientS0" as const;
 
-  sendCreateOrder(body?: CreateOrder): ClientS1 {
+  sendCreateOrder(body: CreateOrder): ClientS1 {
     const ep = this.take();
     ep.send("Shop", "CreateOrder", "o", null, body);
     return new ClientS1(ep);
@@ -13,17 +13,17 @@ export class ClientS0 extends State {
 export class ClientS1 extends State {
   readonly state = "ClientS1" as const;
 
-  receive(msg: Message): { label: "Quote"; msg: Message; next: ClientS2 } | { label: "SoldOut"; msg: Message; next: End } {
+  receive(msg: Message): { label: "Quote"; msg: Message; body: Quote; next: ClientS2 } | { label: "SoldOut"; msg: Message; body: SoldOut; next: End } {
     const ep = this.ep;
     if (ep.accepts(msg, "Shop", "Quote")) {
       this.take();
-      ep.received(msg, "q");
-      return { label: "Quote", msg, next: new ClientS2(ep) };
+      const body = ep.received(msg, "q") as Quote;
+      return { label: "Quote", msg, body, next: new ClientS2(ep) };
     }
     if (ep.accepts(msg, "Shop", "SoldOut")) {
       this.take();
-      ep.received(msg, null);
-      return { label: "SoldOut", msg, next: new End(ep) };
+      const body = ep.received(msg, null) as SoldOut;
+      return { label: "SoldOut", msg, body, next: new End(ep) };
     }
     return ep.refuse("ClientS1", msg, "Quote from Shop, SoldOut from Shop");
   }
@@ -33,6 +33,6 @@ export class ClientS1 extends State {
 export class ClientS2 extends State {
   readonly state = "ClientS2" as const;
 
-  sendPay(body?: Pay): ClientS3 {
+  sendPay(body: Pay): ClientS3 {
     const ep = this.take();
 \end{lstlisting}

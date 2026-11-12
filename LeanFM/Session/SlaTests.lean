@@ -73,14 +73,14 @@ def ev (ts : Nat) (label : String) (cause : Option Nat := none) (prev : Option N
 
 def usd (role : String) (n : Int) : Json := Json.mkObj [(role, Json.mkObj [("USD", toJson n)])]
 
-def simple := "protocol Ask (A, B) { q: Ask from A to B; Answer from B to A cause q after 100 ms; }
+def simple := "protocol Ask (A, B) { q: Ask from A to B amount 1 USD; Answer from B to A cause q after 100 ms; }
 require per q { at least 99/100 of q reach Answer within 300 ms over 300 entries; }"
 
-/-- n asks a second apart, each answered 100 ms later except the given ones -/
+/-- n asks a second apart, each answered 100 ms later except the given ones; timestamps in ns -/
 def stream (n : Nat) (missed : List Nat) : List Json :=
   (List.range n).flatMap fun i =>
-    let t := 1000 * (i + 1)
-    if missed.contains i then [ev t "Ask" none none "A" "B"] else [ev t "Ask" none none "A" "B", ev (t + 100) "Answer" (some t) none "B" "A"]
+    let t := 1000000000 * (i + 1)
+    if missed.contains i then [ev t "Ask" none none "A" "B"] else [ev t "Ask" none none "A" "B", ev (t + 100000000) "Answer" (some t) none "B" "A"]
 
 def observed (r : Except String Json) (k : String) : Json :=
   match r with
@@ -102,10 +102,23 @@ def withStream (evs : List Json) (extra : List (String × Json) := []) : Except 
 #guard observed (withStream (stream 300 [5])) "verdict" == Json.str "undecided"
 -- the first ask missed, but the 300-entry observation period has not closed: open, not violated
 #guard observed (withStream (stream 20 [0])) "verdict" == Json.str "open"
--- the last ask's deadline outlives the stream: pending, not a miss
-#guard observed (withStream [ev 1000 "Ask" none none "A" "B", ev 1100 "Answer" (some 1000) none "B" "A", ev 1200 "Ask" none none "A" "B"]) "pending" == toJson 1
+-- the last ask's deadline outlives the stream: pending, not a miss (200 ms later, inside 300 ms)
+#guard observed (withStream [ev 1000000000 "Ask" none none "A" "B", ev 1100000000 "Answer" (some 1000000000) none "B" "A", ev 1200000000 "Ask" none none "A" "B"]) "pending" == toJson 1
 -- an answer outside the entry's causal future does not count for it
-#guard observed (withStream [ev 1000 "Ask" none none "A" "B", ev 1100 "Answer" none none "B" "A", ev 5000 "Ask" none none "A" "B"]) "misses" == toJson 1
+#guard observed (withStream [ev 1000000000 "Ask" none none "A" "B", ev 1100000000 "Answer" none none "B" "A", ev 5000000000 "Ask" none none "A" "B"]) "misses" == toJson 1
+-- the stream is in nanoseconds: an answer 299999999 ns later hits a 300 ms deadline, one 300000001 ns later misses
+#guard observed (withStream [ev 1000000000 "Ask" none none "A" "B", ev 1299999999 "Answer" (some 1000000000) none "B" "A", ev 9000000000 "Ask" none none "A" "B", ev 9300000001 "Answer" (some 9000000000) none "B" "A", ev 99000000000 "Ask" none none "A" "B"]) "misses" == toJson 1
+
+-- timestamps travel as decimal strings: nanoseconds since the epoch are past 2^53, where a JSON
+-- number in a browser has lost its low bits (selfhost.session.envelope)
+def evs (ts : String) (label : String) (cause : Option String := none) : Json :=
+  Json.mkObj ([("ts", Json.str ts), ("label", Json.str label), ("from", "A"), ("to", "B")] ++ (cause.map fun c => [("cause", Json.str c)]).getD [])
+#guard observed (withStream [evs "1794506355478000001" "Ask", evs "1794506355478000002" "Answer" (some "1794506355478000001")]) "hits" == toJson 1
+#guard errorHas (withStream [Json.mkObj [("ts", toJson (9007199254740993 : Nat)), ("label", "Ask")]]) "beyond 2^53 - 1"
+#guard errorHas (withStream [evs "12.5" "Ask"]) "not a decimal integer"
+-- an observed stream is of this protocol: its labels and the units its amounts use
+#guard errorHas (withStream [ev 1 "Asked" none none "A" "B"]) "Asked is not a message or event of Ask"
+#guard errorHas (withStream [ev 1 "Ask" none none "A" "B" (some (usd "A" 5 |>.setObjVal! "A" (Json.mkObj [("EUR", toJson (5 : Nat))])))]) "the reward names unit EUR, which Ask never uses; its units are USD"
 
 -- timestamps are identities; links go to earlier events of the stream
 #guard errorHas (withStream [ev 1 "Ask", ev 1 "Answer"]) "two events have timestamp 1"

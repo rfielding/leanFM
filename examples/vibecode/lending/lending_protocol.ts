@@ -11,9 +11,105 @@ export class ProtocolError extends Error {}
 
 /** A message as it travels: the logged event plus a body. */
 export interface Message {
-  id: string; session: string; from: string; to: string; label: string; cause?: string; body?: unknown;
+  ts: string; id: string; session: string; from: string; to: string; label: string; cause?: string; body?: unknown;
 }
-export interface ActEvent { id: string; session: string; at: string; label: string; act: true }
+export interface ActEvent { ts: string; id: string; session: string; at: string; label: string; act: true }
+
+type Kind = "nat" | "int" | "str" | "bool" | "msg";
+/** A field as the encoder reads it: name, kind, structure (for msg), and "list", "opt" or "". */
+type FieldSpec = readonly [string, Kind, string, "" | "list" | "opt"];
+const DECIMAL = /^-?[0-9]{1,20}$/;
+let lastTs = 0n;
+let clock: () => bigint = () => BigInt(Date.now()) * 1000000n;
+
+/** Replace the clock events are stamped from (nanoseconds), for replayable runs. */
+export function setClock(c: () => bigint): void { clock = c; lastTs = 0n; }
+
+/** Nanoseconds since the epoch (at the clock's resolution), strictly increasing in this process. */
+function nowNs(): string {
+  const t = clock();
+  lastTs = t > lastTs ? t : lastTs + 1n;
+  return lastTs.toString();
+}
+
+function toWire(kind: Kind, ref: string, v: unknown, where: string): unknown {
+  if (kind === "nat" || kind === "int") {
+    // integers are bigint here and decimal strings on the wire: a JSON number is a double
+    if (typeof v !== "bigint" || (kind === "nat" && v < 0n)) {
+      throw new ProtocolError(`${where} is a ${kind === "nat" ? "Nat" : "Int"} (a bigint), not ${String(v)}`);
+    }
+    return v.toString();
+  }
+  if ((kind === "str" && typeof v !== "string") || (kind === "bool" && typeof v !== "boolean")) {
+    throw new ProtocolError(`${where} is a ${kind === "str" ? "String" : "Bool"}, not ${String(v)}`);
+  }
+  return kind === "msg" ? encode(ref, v, where) : v;
+}
+
+/** A message of type name as its wire form, after checking every field against its type. */
+export function encode(name: string, body: unknown, where: string = name): Record<string, unknown> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (typeof b !== "object" || Array.isArray(b)) throw new ProtocolError(`${where} is a ${name}, not ${String(body)}`);
+  const spec = SCHEMA[name] ?? [];
+  for (const key of Object.keys(b)) {
+    if (!spec.some(([f]) => f === key)) throw new ProtocolError(`${where} has no field ${key}`);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [field, kind, ref, wrap] of spec) {
+    const v = b[field];
+    const here = `${where}.${field}`;
+    if (v === undefined || v === null) {
+      if (wrap === "") throw new ProtocolError(`${here} is missing`);
+      if (wrap === "list") out[field] = [];
+      continue;
+    }
+    if (wrap === "list") {
+      if (!Array.isArray(v)) throw new ProtocolError(`${here} is a list`);
+      out[field] = v.map((x) => toWire(kind, ref, x, here));
+    } else out[field] = toWire(kind, ref, v, here);
+  }
+  return out;
+}
+
+function fromWire(kind: Kind, ref: string, v: unknown, where: string): unknown {
+  if (kind === "nat" || kind === "int") {
+    let n: bigint;
+    if (typeof v === "string" && DECIMAL.test(v)) n = BigInt(v);
+    else if (typeof v === "number" && Number.isSafeInteger(v)) n = BigInt(v);  // exact only within 2^53 - 1
+    else throw new ProtocolError(`${where} is a ${kind === "nat" ? "Nat" : "Int"} as a decimal string, not ${String(v)}`);
+    if (kind === "nat" && n < 0n) throw new ProtocolError(`${where} is a Nat, not ${n}`);
+    return n;
+  }
+  if ((kind === "str" && typeof v !== "string") || (kind === "bool" && typeof v !== "boolean")) {
+    throw new ProtocolError(`${where} is a ${kind === "str" ? "String" : "Bool"}, not ${String(v)}`);
+  }
+  return kind === "msg" ? decode(ref, v, where) : v;
+}
+
+/** A received body as its message type, refusing what does not fit. */
+export function decode(name: string, data: unknown, where: string = name): unknown {
+  const d = (data ?? {}) as Record<string, unknown>;
+  if (typeof d !== "object" || Array.isArray(d)) throw new ProtocolError(`${where} is a ${name}, not ${String(data)}`);
+  const spec = SCHEMA[name] ?? [];
+  for (const key of Object.keys(d)) {
+    if (!spec.some(([f]) => f === key)) throw new ProtocolError(`${where} has no field ${key}`);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [field, kind, ref, wrap] of spec) {
+    const v = d[field];
+    const here = `${where}.${field}`;
+    if (v === undefined || v === null) {
+      if (wrap === "") throw new ProtocolError(`${here} is missing`);
+      if (wrap === "list") out[field] = [];
+      continue;
+    }
+    if (wrap === "list") {
+      if (!Array.isArray(v)) throw new ProtocolError(`${here} is a list`);
+      out[field] = v.map((x) => fromWire(kind, ref, x, here));
+    } else out[field] = fromWire(kind, ref, v, here);
+  }
+  return out;
+}
 /** What session_conform reads: one per message sent or event performed. */
 export type LogEvent = (Omit<Message, "body"> & { fields?: Record<string, unknown> }) | ActEvent;
 export type Transport = (m: Message) => void;
@@ -55,25 +151,26 @@ export class Endpoint {
 
   send(to: string, label: string, pid: string | null, causePid: string | null, body: unknown,
        cause?: string): Message {
+    const wire = encode(label, body);
     if (cause === undefined && causePid !== null) {
       cause = this.bind.get(causePid);
       if (cause === undefined) {
         throw new ProtocolError(`${label} is caused by ${causePid}, which has not happened in session ${this.session}`);
       }
     }
-    const event: Omit<Message, "body"> = { id: this.newId(), session: this.session, from: this.role, to, label };
+    const event: Omit<Message, "body"> = { ts: nowNs(), id: this.newId(), session: this.session, from: this.role, to, label };
     if (cause !== undefined) event.cause = cause;
     if (pid !== null) this.bind.set(pid, event.id);
     // exactly the fields where conditions read; nothing else of the body is logged
     const reads = pid !== null ? READS[pid] : undefined;
-    this.log?.(reads && reads.length > 0 ? { ...event, fields: project(body ?? {}, reads) } : { ...event });
-    const message: Message = { ...event, body: body ?? {} };
+    this.log?.(reads && reads.length > 0 ? { ...event, fields: project(wire, reads) } : { ...event });
+    const message: Message = { ...event, body: wire };
     this.transport(message);
     return message;
   }
 
   act(label: string): ActEvent {
-    const event: ActEvent = { id: this.newId(), session: this.session, at: this.role, label, act: true };
+    const event: ActEvent = { ts: nowNs(), id: this.newId(), session: this.session, at: this.role, label, act: true };
     this.log?.({ ...event });
     return event;
   }
@@ -82,11 +179,13 @@ export class Endpoint {
     return msg.label === label && msg.from === src && msg.to === this.role;
   }
 
-  received(msg: Message, pid: string | null): void {
+  /** Binds the message and returns its body as its message type; role code never sees raw JSON. */
+  received(msg: Message, pid: string | null): unknown {
     if (String(msg.session) !== this.session) {
       throw new ProtocolError(`a message of session ${msg.session} reached session ${this.session}`);
     }
     if (pid !== null) this.bind.set(pid, msg.id);
+    return decode(msg.label, msg.body);
   }
 
   refuse(state: string, msg: Message, allowed: string): never {
@@ -143,7 +242,7 @@ export class Server<S extends State, T extends State> {
 
   then(): T { return this.after(this.ep); }
 }
-/* The message types (selfhost.session.types): send methods take these. */
+/* The message types (selfhost.session.types): send methods take these; receive gives them. */
 
 /** The book a member asks to borrow. */
 export interface Borrow {
@@ -171,7 +270,20 @@ export type Denied = Record<string, never>;
 
 export type Refused = Record<string, never>;
 
-/** The fields of each message that where conditions read: logged, nothing else of a body. */
+/** Each type's fields, for encoding and decoding. */
+const SCHEMA: Record<string, readonly FieldSpec[]> = {
+  "Borrow": [["book", "str", "", ""]] as const,
+  "Hold": [["book", "str", "", ""]] as const,
+  "Return": [["book", "str", "", ""]] as const,
+  "Lent": [] as const,
+  "Returned": [] as const,
+  "Approved": [] as const,
+  "Waitlisted": [] as const,
+  "Denied": [] as const,
+  "Refused": [] as const
+};
+
+/** The fields of each message that where conditions and session keys read: logged, nothing else of a body. */
 const READS: Record<string, string[]> = {};
 
 
@@ -179,7 +291,7 @@ const READS: Record<string, string[]> = {};
 export class MemberS1 extends State {
   readonly state = "MemberS1" as const;
 
-  sendBorrow(body?: Borrow): MemberS2 {
+  sendBorrow(body: Borrow): MemberS2 {
     const ep = this.take();
     ep.send("Desk", "Borrow", "b", null, body);
     return new MemberS2(ep);
@@ -190,22 +302,22 @@ export class MemberS1 extends State {
 export class MemberS2 extends State {
   readonly state = "MemberS2" as const;
 
-  receive(msg: Message): { label: "Lent"; msg: Message; next: MemberS3 } | { label: "Waitlisted"; msg: Message; next: End } | { label: "Refused"; msg: Message; next: End } {
+  receive(msg: Message): { label: "Lent"; msg: Message; body: Lent; next: MemberS3 } | { label: "Waitlisted"; msg: Message; body: Waitlisted; next: End } | { label: "Refused"; msg: Message; body: Refused; next: End } {
     const ep = this.ep;
     if (ep.accepts(msg, "Desk", "Lent")) {
       this.take();
-      ep.received(msg, "l");
-      return { label: "Lent", msg, next: new MemberS3(ep) };
+      const body = ep.received(msg, "l") as Lent;
+      return { label: "Lent", msg, body, next: new MemberS3(ep) };
     }
     if (ep.accepts(msg, "Desk", "Waitlisted")) {
       this.take();
-      ep.received(msg, null);
-      return { label: "Waitlisted", msg, next: new End(ep) };
+      const body = ep.received(msg, null) as Waitlisted;
+      return { label: "Waitlisted", msg, body, next: new End(ep) };
     }
     if (ep.accepts(msg, "Desk", "Refused")) {
       this.take();
-      ep.received(msg, null);
-      return { label: "Refused", msg, next: new End(ep) };
+      const body = ep.received(msg, null) as Refused;
+      return { label: "Refused", msg, body, next: new End(ep) };
     }
     return ep.refuse("MemberS2", msg, "Lent from Desk, Waitlisted from Desk, Refused from Desk");
   }
@@ -215,7 +327,7 @@ export class MemberS2 extends State {
 export class MemberS3 extends State {
   readonly state = "MemberS3" as const;
 
-  sendReturn(body?: Return): MemberS4 {
+  sendReturn(body: Return): MemberS4 {
     const ep = this.take();
     ep.send("Desk", "Return", "r", null, body);
     return new MemberS4(ep);
@@ -226,12 +338,12 @@ export class MemberS3 extends State {
 export class MemberS4 extends State {
   readonly state = "MemberS4" as const;
 
-  receive(msg: Message): { label: "Returned"; msg: Message; next: End } {
+  receive(msg: Message): { label: "Returned"; msg: Message; body: Returned; next: End } {
     const ep = this.ep;
     if (ep.accepts(msg, "Desk", "Returned")) {
       this.take();
-      ep.received(msg, null);
-      return { label: "Returned", msg, next: new End(ep) };
+      const body = ep.received(msg, null) as Returned;
+      return { label: "Returned", msg, body, next: new End(ep) };
     }
     return ep.refuse("MemberS4", msg, "Returned from Desk");
   }
@@ -246,12 +358,12 @@ export function member(session: string, transport: Transport, log?: Log, newId?:
 export class DeskS1 extends State {
   readonly state = "DeskS1" as const;
 
-  receive(msg: Message): { label: "Borrow"; msg: Message; next: DeskS2 } {
+  receive(msg: Message): { label: "Borrow"; msg: Message; body: Borrow; next: DeskS2 } {
     const ep = this.ep;
     if (ep.accepts(msg, "Member", "Borrow")) {
       this.take();
-      ep.received(msg, "b");
-      return { label: "Borrow", msg, next: new DeskS2(ep) };
+      const body = ep.received(msg, "b") as Borrow;
+      return { label: "Borrow", msg, body, next: new DeskS2(ep) };
     }
     return ep.refuse("DeskS1", msg, "Borrow from Member");
   }
@@ -267,7 +379,7 @@ export class DeskS2 extends State {
     return new DeskS3(ep);
   }
 
-  sendHold(body?: Hold): DeskS5 {
+  sendHold(body: Hold): DeskS5 {
     const ep = this.take();
     ep.send("Librarian", "Hold", "h", "b", body);
     return new DeskS5(ep);
@@ -278,12 +390,12 @@ export class DeskS2 extends State {
 export class DeskS3 extends State {
   readonly state = "DeskS3" as const;
 
-  receive(msg: Message): { label: "Return"; msg: Message; next: DeskS4 } {
+  receive(msg: Message): { label: "Return"; msg: Message; body: Return; next: DeskS4 } {
     const ep = this.ep;
     if (ep.accepts(msg, "Member", "Return")) {
       this.take();
-      ep.received(msg, "r");
-      return { label: "Return", msg, next: new DeskS4(ep) };
+      const body = ep.received(msg, "r") as Return;
+      return { label: "Return", msg, body, next: new DeskS4(ep) };
     }
     return ep.refuse("DeskS3", msg, "Return from Member");
   }
@@ -304,17 +416,17 @@ export class DeskS4 extends State {
 export class DeskS5 extends State {
   readonly state = "DeskS5" as const;
 
-  receive(msg: Message): { label: "Approved"; msg: Message; next: DeskS6 } | { label: "Denied"; msg: Message; next: DeskS7 } {
+  receive(msg: Message): { label: "Approved"; msg: Message; body: Approved; next: DeskS6 } | { label: "Denied"; msg: Message; body: Denied; next: DeskS7 } {
     const ep = this.ep;
     if (ep.accepts(msg, "Librarian", "Approved")) {
       this.take();
-      ep.received(msg, null);
-      return { label: "Approved", msg, next: new DeskS6(ep) };
+      const body = ep.received(msg, null) as Approved;
+      return { label: "Approved", msg, body, next: new DeskS6(ep) };
     }
     if (ep.accepts(msg, "Librarian", "Denied")) {
       this.take();
-      ep.received(msg, null);
-      return { label: "Denied", msg, next: new DeskS7(ep) };
+      const body = ep.received(msg, null) as Denied;
+      return { label: "Denied", msg, body, next: new DeskS7(ep) };
     }
     return ep.refuse("DeskS5", msg, "Approved from Librarian, Denied from Librarian");
   }
@@ -351,12 +463,12 @@ export function desk(session: string, transport: Transport, log?: Log, newId?: (
 export class LibrarianS1 extends State {
   readonly state = "LibrarianS1" as const;
 
-  receive(msg: Message): { label: "Hold"; msg: Message; next: LibrarianS2 } {
+  receive(msg: Message): { label: "Hold"; msg: Message; body: Hold; next: LibrarianS2 } {
     const ep = this.ep;
     if (ep.accepts(msg, "Desk", "Hold")) {
       this.take();
-      ep.received(msg, "h");
-      return { label: "Hold", msg, next: new LibrarianS2(ep) };
+      const body = ep.received(msg, "h") as Hold;
+      return { label: "Hold", msg, body, next: new LibrarianS2(ep) };
     }
     return ep.refuse("LibrarianS1", msg, "Hold from Desk");
   }

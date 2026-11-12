@@ -32,9 +32,105 @@ export class ProtocolError extends Error {}
 
 /** A message as it travels: the logged event plus a body. */
 export interface Message {
-  id: string; session: string; from: string; to: string; label: string; cause?: string; body?: unknown;
+  ts: string; id: string; session: string; from: string; to: string; label: string; cause?: string; body?: unknown;
 }
-export interface ActEvent { id: string; session: string; at: string; label: string; act: true }
+export interface ActEvent { ts: string; id: string; session: string; at: string; label: string; act: true }
+
+type Kind = \"nat\" | \"int\" | \"str\" | \"bool\" | \"msg\";
+/** A field as the encoder reads it: name, kind, structure (for msg), and \"list\", \"opt\" or \"\". */
+type FieldSpec = readonly [string, Kind, string, \"\" | \"list\" | \"opt\"];
+const DECIMAL = /^-?[0-9]{1,20}$/;
+let lastTs = 0n;
+let clock: () => bigint = () => BigInt(Date.now()) * 1000000n;
+
+/** Replace the clock events are stamped from (nanoseconds), for replayable runs. */
+export function setClock(c: () => bigint): void { clock = c; lastTs = 0n; }
+
+/** Nanoseconds since the epoch (at the clock's resolution), strictly increasing in this process. */
+function nowNs(): string {
+  const t = clock();
+  lastTs = t > lastTs ? t : lastTs + 1n;
+  return lastTs.toString();
+}
+
+function toWire(kind: Kind, ref: string, v: unknown, where: string): unknown {
+  if (kind === \"nat\" || kind === \"int\") {
+    // integers are bigint here and decimal strings on the wire: a JSON number is a double
+    if (typeof v !== \"bigint\" || (kind === \"nat\" && v < 0n)) {
+      throw new ProtocolError(`${where} is a ${kind === \"nat\" ? \"Nat\" : \"Int\"} (a bigint), not ${String(v)}`);
+    }
+    return v.toString();
+  }
+  if ((kind === \"str\" && typeof v !== \"string\") || (kind === \"bool\" && typeof v !== \"boolean\")) {
+    throw new ProtocolError(`${where} is a ${kind === \"str\" ? \"String\" : \"Bool\"}, not ${String(v)}`);
+  }
+  return kind === \"msg\" ? encode(ref, v, where) : v;
+}
+
+/** A message of type name as its wire form, after checking every field against its type. */
+export function encode(name: string, body: unknown, where: string = name): Record<string, unknown> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (typeof b !== \"object\" || Array.isArray(b)) throw new ProtocolError(`${where} is a ${name}, not ${String(body)}`);
+  const spec = SCHEMA[name] ?? [];
+  for (const key of Object.keys(b)) {
+    if (!spec.some(([f]) => f === key)) throw new ProtocolError(`${where} has no field ${key}`);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [field, kind, ref, wrap] of spec) {
+    const v = b[field];
+    const here = `${where}.${field}`;
+    if (v === undefined || v === null) {
+      if (wrap === \"\") throw new ProtocolError(`${here} is missing`);
+      if (wrap === \"list\") out[field] = [];
+      continue;
+    }
+    if (wrap === \"list\") {
+      if (!Array.isArray(v)) throw new ProtocolError(`${here} is a list`);
+      out[field] = v.map((x) => toWire(kind, ref, x, here));
+    } else out[field] = toWire(kind, ref, v, here);
+  }
+  return out;
+}
+
+function fromWire(kind: Kind, ref: string, v: unknown, where: string): unknown {
+  if (kind === \"nat\" || kind === \"int\") {
+    let n: bigint;
+    if (typeof v === \"string\" && DECIMAL.test(v)) n = BigInt(v);
+    else if (typeof v === \"number\" && Number.isSafeInteger(v)) n = BigInt(v);  // exact only within 2^53 - 1
+    else throw new ProtocolError(`${where} is a ${kind === \"nat\" ? \"Nat\" : \"Int\"} as a decimal string, not ${String(v)}`);
+    if (kind === \"nat\" && n < 0n) throw new ProtocolError(`${where} is a Nat, not ${n}`);
+    return n;
+  }
+  if ((kind === \"str\" && typeof v !== \"string\") || (kind === \"bool\" && typeof v !== \"boolean\")) {
+    throw new ProtocolError(`${where} is a ${kind === \"str\" ? \"String\" : \"Bool\"}, not ${String(v)}`);
+  }
+  return kind === \"msg\" ? decode(ref, v, where) : v;
+}
+
+/** A received body as its message type, refusing what does not fit. */
+export function decode(name: string, data: unknown, where: string = name): unknown {
+  const d = (data ?? {}) as Record<string, unknown>;
+  if (typeof d !== \"object\" || Array.isArray(d)) throw new ProtocolError(`${where} is a ${name}, not ${String(data)}`);
+  const spec = SCHEMA[name] ?? [];
+  for (const key of Object.keys(d)) {
+    if (!spec.some(([f]) => f === key)) throw new ProtocolError(`${where} has no field ${key}`);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [field, kind, ref, wrap] of spec) {
+    const v = d[field];
+    const here = `${where}.${field}`;
+    if (v === undefined || v === null) {
+      if (wrap === \"\") throw new ProtocolError(`${here} is missing`);
+      if (wrap === \"list\") out[field] = [];
+      continue;
+    }
+    if (wrap === \"list\") {
+      if (!Array.isArray(v)) throw new ProtocolError(`${here} is a list`);
+      out[field] = v.map((x) => fromWire(kind, ref, x, here));
+    } else out[field] = fromWire(kind, ref, v, here);
+  }
+  return out;
+}
 /** What session_conform reads: one per message sent or event performed. */
 export type LogEvent = (Omit<Message, \"body\"> & { fields?: Record<string, unknown> }) | ActEvent;
 export type Transport = (m: Message) => void;
@@ -76,25 +172,26 @@ export class Endpoint {
 
   send(to: string, label: string, pid: string | null, causePid: string | null, body: unknown,
        cause?: string): Message {
+    const wire = encode(label, body);
     if (cause === undefined && causePid !== null) {
       cause = this.bind.get(causePid);
       if (cause === undefined) {
         throw new ProtocolError(`${label} is caused by ${causePid}, which has not happened in session ${this.session}`);
       }
     }
-    const event: Omit<Message, \"body\"> = { id: this.newId(), session: this.session, from: this.role, to, label };
+    const event: Omit<Message, \"body\"> = { ts: nowNs(), id: this.newId(), session: this.session, from: this.role, to, label };
     if (cause !== undefined) event.cause = cause;
     if (pid !== null) this.bind.set(pid, event.id);
     // exactly the fields where conditions read; nothing else of the body is logged
     const reads = pid !== null ? READS[pid] : undefined;
-    this.log?.(reads && reads.length > 0 ? { ...event, fields: project(body ?? {}, reads) } : { ...event });
-    const message: Message = { ...event, body: body ?? {} };
+    this.log?.(reads && reads.length > 0 ? { ...event, fields: project(wire, reads) } : { ...event });
+    const message: Message = { ...event, body: wire };
     this.transport(message);
     return message;
   }
 
   act(label: string): ActEvent {
-    const event: ActEvent = { id: this.newId(), session: this.session, at: this.role, label, act: true };
+    const event: ActEvent = { ts: nowNs(), id: this.newId(), session: this.session, at: this.role, label, act: true };
     this.log?.({ ...event });
     return event;
   }
@@ -103,11 +200,13 @@ export class Endpoint {
     return msg.label === label && msg.from === src && msg.to === this.role;
   }
 
-  received(msg: Message, pid: string | null): void {
+  /** Binds the message and returns its body as its message type; role code never sees raw JSON. */
+  received(msg: Message, pid: string | null): unknown {
     if (String(msg.session) !== this.session) {
       throw new ProtocolError(`a message of session ${msg.session} reached session ${this.session}`);
     }
     if (pid !== null) this.bind.set(pid, msg.id);
+    return decode(msg.label, msg.body);
   }
 
   refuse(state: string, msg: Message, allowed: string): never {
@@ -168,7 +267,7 @@ export class Server<S extends State, T extends State> {
 
 open Typestate in
 /-- One role's classes, in TypeScript. -/
-def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local String) (tyName : String → String := fun _ => "unknown") : Except String String := do
+def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local String) (tyName : String → String := fun _ => "unknown") (required : String → Bool := fun _ => false) : Except String String := do
   let (start, ms) := l.machine
   let served : Option String := match ms.filter (fun m => s!"S{m.1}" == start) with
     | [(_, .serve b "End")] => some b
@@ -191,13 +290,14 @@ def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local S
         docs := docs ++ [s!"{mn} -> {cls role k}"]
         match lookup ixs role to lb with
         | some (pid, cpid) =>
-          lines := lines ++ [s!"  {mn}(body?: {tyName lb}): {cls role k} \{",
+          let param := if required lb then s!"body: {tyName lb}" else s!"body?: {tyName lb}"
+          lines := lines ++ [s!"  {mn}({param}): {cls role k} \{",
             s!"    const ep = this.take();",
             s!"    ep.send({lit to}, {lit lb}, {pyOptTs pid}, {pyOptTs cpid}, body);",
             s!"    return {new k "ep"};", "  }", ""]
         | none =>
           lines := lines ++ [s!"  /** The protocol has more than one message like this: pass the id of the event that caused it, if it names a cause. */",
-            s!"  {mn}(cause?: string, body?: {tyName lb}): {cls role k} \{",
+            s!"  {mn}({if required lb then s!"body: {tyName lb}, cause?: string" else s!"cause?: string, body?: {tyName lb}"}): {cls role k} \{",
             s!"    const ep = this.take();",
             s!"    ep.send({lit to}, {lit lb}, null, null, body, cause);",
             s!"    return {new k "ep"};", "  }", ""]
@@ -242,13 +342,13 @@ def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local S
     if !recvs.isEmpty then
       let allowed := ", ".intercalate (recvs.map fun (fr, lb, _) => s!"{lb} from {fr}")
       docs := docs ++ [s!"receive(msg): {allowed}"]
-      let union := " | ".intercalate (recvs.map fun (_, lb, k) => s!"\{ label: {lit lb}; msg: Message; next: {cls role k} }")
+      let union := " | ".intercalate (recvs.map fun (_, lb, k) => s!"\{ label: {lit lb}; msg: Message; body: {tyName lb}; next: {cls role k} }")
       let mut body : List String := [s!"  receive(msg: Message): {union} \{", "    const ep = this.ep;"]
       for (fr, lb, k) in recvs do
         let pid := (lookup ixs fr role lb).bind (·.1)
         body := body ++ [s!"    if (ep.accepts(msg, {lit fr}, {lit lb})) \{",
-          "      this.take();", s!"      ep.received(msg, {pyOptTs pid});",
-          s!"      return \{ label: {lit lb}, msg, next: {new k "ep"} };", "    }"]
+          "      this.take();", s!"      const body = ep.received(msg, {pyOptTs pid}) as {tyName lb};",
+          s!"      return \{ label: {lit lb}, msg, body, next: {new k "ep"} };", "    }"]
       body := body ++ [s!"    return ep.refuse({lit name}, msg, {lit allowed});", "  }", ""]
       lines := lines ++ body
     for a in alts do
@@ -279,13 +379,18 @@ where
 
 end Skeleton
 
+/-- A field as the TypeScript runtime reads it: `["name", "kind", "structure", "wrapper"]`. -/
+def tsSchemaEntry (f : Types.Field) : String :=
+  let e := schemaEntry f
+  "[" ++ ((e.drop 1).dropEnd 1).toString ++ "]"
+
 def tsType : Types.Ty → String
-  | .nat | .int => "number" | .str => "string" | .bool => "boolean"
+  | .nat | .int => "bigint" | .str => "string" | .bool => "boolean"
   | .msg n => Types.protoName n
   | .list t => s!"{tsType t}[]"
   | .opt t => tsType t
 
-/-- A message type as an interface; Nat and Int travel as JSON numbers. -/
+/-- A message type as an interface; Nat and Int are bigint, decimal strings on the wire. -/
 def tsMessage (m : Types.Message) : String :=
   let doc := if m.doc.isEmpty then [] else [s!"/** {m.doc} */"]
   let name := Types.protoName m.name
@@ -295,7 +400,7 @@ def tsMessage (m : Types.Message) : String :=
 
 open Skeleton in
 /-- The protocol as a TypeScript module: the runtime, then every role's states as classes. -/
-def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List String) (types : Types.Env := []) : Except String String := do
+def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List String) (types : Types.Env := []) (keys : List (String × String) := []) : Except String String := do
   let ixs := g.interactions
   let labels := (g.messages.map (·.label)).eraseDups
   let ms ← Types.complete types labels
@@ -306,7 +411,7 @@ def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List 
     let l ← match g.project r with
       | .ok l => pure l
       | .error e => throw s!"{r} has no projection: {e}"
-    parts := parts ++ [← roleClassesTs ixs r l Types.protoName]
+    parts := parts ++ [← roleClassesTs ixs r l Types.protoName (fun lb => !(Types.fieldsOf types lb).isEmpty)]
   let header := s!"// Generated by LeanFM from protocol {ident name}; regenerate it with session_skeleton rather than editing.
 //
 // Each role's states are classes whose methods are exactly what the protocol allows there, so a
@@ -315,12 +420,14 @@ def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List 
 // logged event plus a body); log, if given, receives every event for session_conform.
 
 "
-  let reads := s!"/** The fields of each message that where conditions read: logged, nothing else of a body. */\nconst READS: Record<string, string[]> = {readsLiteral g};\n\n"
+  let reads := s!"/** The fields of each message that where conditions and session keys read: logged, nothing else of a body. */\nconst READS: Record<string, string[]> = {readsLiteral g keys};\n\n"
   let taken := classNames (tsRuntime ++ "\n".intercalate parts)
   for m in ms do
     if taken.contains (Types.protoName m.name) then throw s!"message type {m.name} has the same TypeScript name as a class of the module; rename the message"
-  let msgs := "/* The message types (selfhost.session.types): send methods take these. */\n\n" ++
-    "\n\n".intercalate (ms.map tsMessage) ++ "\n\n"
+  let msgs := "/* The message types (selfhost.session.types): send methods take these; receive gives them. */\n\n" ++
+    "\n\n".intercalate (ms.map tsMessage) ++ "\n\n" ++
+    "/** Each type's fields, for encoding and decoding. */\nconst SCHEMA: Record<string, readonly FieldSpec[]> = {\n" ++
+    ",\n".intercalate (ms.map fun m => "  " ++ lit m.name ++ ": [" ++ ", ".intercalate (m.fields.map tsSchemaEntry) ++ "] as const") ++ "\n};\n\n"
   return header ++ tsRuntime ++ msgs ++ reads ++ "\n".intercalate parts ++ "\n"
 
 end LeanFM.Session

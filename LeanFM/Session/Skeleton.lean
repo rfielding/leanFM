@@ -76,7 +76,9 @@ def runtime : String := "\
 from __future__ import annotations
 
 import itertools
-from dataclasses import asdict, dataclass, is_dataclass
+import re
+import time
+from dataclasses import dataclass
 from typing import List, Optional
 
 
@@ -84,9 +86,109 @@ class ProtocolError(Exception):
     \"\"\"A step the protocol does not allow here.\"\"\"
 
 
-def _plain(body):
-    \"\"\"A message object as the plain dict that travels and is logged.\"\"\"
-    return asdict(body) if is_dataclass(body) and not isinstance(body, type) else body
+_MAX_SAFE = 2**53 - 1
+_DECIMAL = re.compile(r\"-?[0-9]{1,20}\")
+_last_ts = 0
+
+
+_clock = time.time_ns
+
+
+def set_clock(clock):
+    \"\"\"Replace the clock events are stamped from (a function giving nanoseconds), for replayable runs.\"\"\"
+    global _clock, _last_ts
+    _clock, _last_ts = clock, 0
+
+
+def _now_ns():
+    \"\"\"Nanoseconds since the epoch, strictly increasing in this process: each event's ts.\"\"\"
+    global _last_ts
+    _last_ts = max(_clock(), _last_ts + 1)
+    return _last_ts
+
+
+def _to_wire(kind, ref, value, where):
+    if kind in (\"nat\", \"int\"):
+        if isinstance(value, bool) or not isinstance(value, int) or (kind == \"nat\" and value < 0):
+            raise ProtocolError(f\"{where} is a {'Nat' if kind == 'nat' else 'Int'}, not {value!r}\")
+        return str(value)  # integers travel as decimal strings: exact past 2**53
+    if kind == \"str\" and not isinstance(value, str) or kind == \"bool\" and not isinstance(value, bool):
+        raise ProtocolError(f\"{where} is a {'String' if kind == 'str' else 'Bool'}, not {value!r}\")
+    return _encode(ref, value, where) if kind == \"msg\" else value
+
+
+def _encode(name, body, where=None):
+    \"\"\"A message of type name as its wire form, after checking every field against its type.\"\"\"
+    where = where or name
+    if body is None:
+        body = {}
+    if isinstance(body, dict):
+        try:
+            body = TYPES[name](**body)
+        except TypeError as e:
+            raise ProtocolError(f\"{where} does not fit {name}: {e}\") from None
+    if not isinstance(body, TYPES[name]):
+        raise ProtocolError(f\"{where} is a {name}, not {type(body).__name__}\")
+    out = {}
+    for field, kind, ref, wrap in SCHEMA[name]:
+        value, here = getattr(body, field), f\"{where}.{field}\"
+        if wrap == \"opt\":
+            if value is not None:
+                out[field] = _to_wire(kind, ref, value, here)
+        elif wrap == \"list\":
+            if not isinstance(value, list):
+                raise ProtocolError(f\"{here} is a list, not {value!r}\")
+            out[field] = [_to_wire(kind, ref, v, here) for v in value]
+        else:
+            out[field] = _to_wire(kind, ref, value, here)
+    return out
+
+
+def _from_wire(kind, ref, value, where):
+    if kind in (\"nat\", \"int\"):
+        if isinstance(value, str) and _DECIMAL.fullmatch(value):
+            n = int(value)
+        elif isinstance(value, int) and not isinstance(value, bool) and abs(value) <= _MAX_SAFE:
+            n = value  # a JSON number is exact only within 2**53 - 1
+        else:
+            raise ProtocolError(f\"{where} is a {'Nat' if kind == 'nat' else 'Int'} as a decimal string, not {value!r}\")
+        if kind == \"nat\" and n < 0:
+            raise ProtocolError(f\"{where} is a Nat, not {n}\")
+        return n
+    if kind == \"str\" and not isinstance(value, str) or kind == \"bool\" and not isinstance(value, bool):
+        raise ProtocolError(f\"{where} is a {'String' if kind == 'str' else 'Bool'}, not {value!r}\")
+    return _decode(ref, value, where) if kind == \"msg\" else value
+
+
+def _decode(name, data, where=None):
+    \"\"\"A received body as its message type, refusing what does not fit.\"\"\"
+    where = where or name
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ProtocolError(f\"{where} is a {name}, not {data!r}\")
+    known = {f[0] for f in SCHEMA[name]}
+    for key in data:
+        if key not in known:
+            raise ProtocolError(f\"{where} has no field {key}\")
+    args = {}
+    for field, kind, ref, wrap in SCHEMA[name]:
+        value, here = data.get(field), f\"{where}.{field}\"
+        if value is None:
+            if wrap == \"opt\":
+                args[field] = None
+                continue
+            if wrap == \"list\":
+                args[field] = []
+                continue
+            raise ProtocolError(f\"{here} is missing\")
+        if wrap == \"list\":
+            if not isinstance(value, list):
+                raise ProtocolError(f\"{here} is a list, not {value!r}\")
+            args[field] = [_from_wire(kind, ref, v, here) for v in value]
+        else:
+            args[field] = _from_wire(kind, ref, value, here)
+    return TYPES[name](**args)
 
 
 def _project(body, paths):
@@ -120,12 +222,12 @@ class Endpoint:
         self.bind = {}
 
     def send(self, to, label, pid, cause_pid, body, cause=None):
-        body = _plain(body)
+        body = _encode(label, body)
         if cause is None and cause_pid is not None:
             cause = self.bind.get(cause_pid)
             if cause is None:
                 raise ProtocolError(f\"{label} is caused by {cause_pid}, which has not happened in session {self.session}\")
-        event = {\"id\": self.new_id(), \"session\": self.session, \"from\": self.role, \"to\": to, \"label\": label}
+        event = {\"ts\": str(_now_ns()), \"id\": self.new_id(), \"session\": self.session, \"from\": self.role, \"to\": to, \"label\": label}
         if cause is not None:
             event[\"cause\"] = cause
         if pid is not None:
@@ -135,13 +237,13 @@ class Endpoint:
             reads = READS.get(pid) if pid is not None else None
             if reads:
                 # exactly the fields where conditions read; nothing else of the body is logged
-                logged[\"fields\"] = _project({} if body is None else body, reads)
+                logged[\"fields\"] = _project(body, reads)
             self.log(logged)
-        self.transport(dict(event, body={} if body is None else body))
+        self.transport(dict(event, body=body))
         return event
 
     def act(self, label):
-        event = {\"id\": self.new_id(), \"session\": self.session, \"at\": self.role, \"label\": label, \"act\": True}
+        event = {\"ts\": str(_now_ns()), \"id\": self.new_id(), \"session\": self.session, \"at\": self.role, \"label\": label, \"act\": True}
         if self.log is not None:
             self.log(dict(event))
         return event
@@ -154,6 +256,8 @@ class Endpoint:
             raise ProtocolError(f\"a message of session {msg.get('session')} reached session {self.session}\")
         if pid is not None:
             self.bind[pid] = msg[\"id\"]
+        # role code sees the body as its message type, never as raw JSON
+        return dict(msg, body=_decode(msg[\"label\"], msg.get(\"body\"), msg[\"label\"]))
 
     def refuse(self, state, msg, allowed):
         raise ProtocolError(f\"{self.role} in {state} cannot receive {msg.get('label')} from {msg.get('from')}; \"
@@ -218,7 +322,7 @@ class Server:
 
 open Typestate in
 /-- One role's classes. -/
-def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local String) (tyName : String → String := fun _ => "") : Except String String := do
+def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local String) (tyName : String → String := fun _ => "") (required : String → Bool := fun _ => false) : Except String String := do
   let (start, ms) := l.machine
   -- a role that only serves sessions starts each session in the body's first state
   let served : Option String := match ms.filter (fun m => s!"S{m.1}" == start) with
@@ -246,14 +350,15 @@ def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local Str
         docs := docs ++ [s!"{mn} -> {cls role k}"]
         match lookup ixs role to lb with
         | some (pid, cpid) =>
-          let ann := if (tyName lb).isEmpty then "" else s!": Optional[{tyName lb}]"
-          lines := lines ++ [s!"    def {mn}(self, body{ann} = None):".replace "body = None" "body=None",
+          -- a message with fields needs its body; one without may leave it out
+          let param := if required lb then s!"body: {tyName lb}" else s!"body: Optional[{tyName lb}] = None"
+          lines := lines ++ [s!"    def {mn}(self, {param}):",
             s!"        ep = self._take()",
             s!"        ep.send({lit to}, {lit lb}, {pyOpt pid}, {pyOpt cpid}, body)",
             s!"        return {if k == "End" then "End" else cls role k}(ep)", ""]
         | none =>
-          let ann := if (tyName lb).isEmpty then "" else s!": Optional[{tyName lb}]"
-          lines := lines ++ [s!"    def {mn}(self, cause=None, body{ann} = None):".replace "body = None" "body=None",
+          let params := if required lb then s!"body: {tyName lb}, cause=None" else s!"cause=None, body: Optional[{tyName lb}] = None"
+          lines := lines ++ [s!"    def {mn}(self, {params}):",
             s!"        \"\"\"The protocol has more than one message like this: pass the id of the event that caused it, if it names a cause.\"\"\"",
             s!"        ep = self._take()",
             s!"        ep.send({lit to}, {lit lb}, None, None, body, cause=cause)",
@@ -301,7 +406,7 @@ def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local Str
         | .recv fr lb k =>
           let pid := (lookup ixs fr role lb).bind (·.1)
           body := body ++ [s!"        if ep.accepts(msg, {lit fr}, {lit lb}):",
-            "            self._take()", s!"            ep.received(msg, {pyOpt pid})",
+            "            self._take()", s!"            msg = ep.received(msg, {pyOpt pid})",
             s!"            return msg, {cls role k}(ep)"]
         | _ => pure ()
       body := body ++ [s!"        ep.refuse({lit name}, msg, {lit allowed})", ""]
@@ -335,16 +440,16 @@ end Skeleton
 
 /-- For each message id, the field paths of it that some where condition reads: what the generated
 code logs (selfhost.session.where). Conditions outside the condition language read nothing. -/
-def Global.conditionReads (g : Global String) : List (String × List String) :=
-  let pairs := g.messages.flatMap fun i => match i.guard with
+def Global.conditionReads (g : Global String) (keys : List (String × String) := []) : List (String × List String) :=
+  let pairs := (g.messages.flatMap fun i => match i.guard with
     | some gd => match Where.parse gd.text with | .ok e => e.paths | .error _ => []
-    | none => []
+    | none => []) ++ keys
   let ids := (pairs.map (·.1)).eraseDups
   ids.map fun x => (x, ((pairs.filter (·.1 == x)).map (·.2) |>.filter (!·.isEmpty)).eraseDups)
 
 /-- The reads as a literal both Python and TypeScript accept: `{"p": ["amount"], "q": ["price"]}`. -/
-def readsLiteral (g : Global String) : String :=
-  "{" ++ ", ".intercalate (g.conditionReads.map fun (x, fs) =>
+def readsLiteral (g : Global String) (keys : List (String × String) := []) : String :=
+  "{" ++ ", ".intercalate ((g.conditionReads keys).map fun (x, fs) =>
     Skeleton.lit x ++ ": [" ++ ", ".intercalate (fs.map Skeleton.lit) ++ "]") ++ "}"
 
 /-- The names of the classes a module defines (`class Name` at the start of a line). -/
@@ -361,6 +466,15 @@ def pyType : Types.Ty → String
   | .list t => s!"List[{pyType t}]"
   | .opt t => s!"Optional[{pyType t}]"
 
+/-- A field as the runtime's encoder reads it: (name, kind, structure, wrapper). -/
+def schemaEntry (f : Types.Field) : String :=
+  let (wrap, t) := match f.ty with
+    | .list t => ("list", t) | .opt t => ("opt", t) | t => ("", t)
+  let (kind, ref) := match t with
+    | .nat => ("nat", "") | .int => ("int", "") | .str => ("str", "") | .bool => ("bool", "")
+    | .msg n => ("msg", n) | _ => ("str", "")
+  "(" ++ ", ".intercalate [Skeleton.lit f.name, Skeleton.lit kind, Skeleton.lit ref, Skeleton.lit wrap] ++ ")"
+
 /-- A message type as a dataclass. -/
 def pyMessage (m : Types.Message) : String :=
   let doc := if m.doc.isEmpty then [] else [s!"    \"\"\"{m.doc}\"\"\""]
@@ -370,7 +484,7 @@ def pyMessage (m : Types.Message) : String :=
 
 open Skeleton in
 /-- The protocol as a Python module: the runtime, then every role's states as classes. -/
-def Global.pythonSkeleton (g : Global String) (name : String) (roles : List String) (types : Types.Env := []) : Except String String := do
+def Global.pythonSkeleton (g : Global String) (name : String) (roles : List String) (types : Types.Env := []) (keys : List (String × String) := []) : Except String String := do
   let ixs := g.interactions
   let labels := (g.messages.map (·.label)).eraseDups
   let ms ← Types.complete types labels
@@ -381,7 +495,7 @@ def Global.pythonSkeleton (g : Global String) (name : String) (roles : List Stri
     let l ← match g.project r with
       | .ok l => pure l
       | .error e => throw s!"{r} has no projection: {e}"
-    parts := parts ++ [← roleClasses ixs r l Types.protoName]
+    parts := parts ++ [← roleClasses ixs r l Types.protoName (fun lb => !(Types.fieldsOf types lb).isEmpty)]
   let header := s!"\"\"\"Generated by LeanFM from protocol {ident name}; regenerate it with session_skeleton rather than editing.
 
 Each role's states are classes; a method consumes its state and returns the next. The start
@@ -392,12 +506,15 @@ session_conform.
 "
   -- the runtime's own docstring is replaced by the module's
   let rt := (runtime.splitOn "\n").drop 1
-  let reads := s!"# The fields of each message that where conditions read: logged, nothing else of a body.\nREADS = {readsLiteral g}\n\n\n"
+  let reads := s!"# The fields of each message that where conditions and session keys read: logged, nothing else of a body.\nREADS = {readsLiteral g keys}\n\n\n"
   let taken := classNames ("\n".intercalate (rt ++ parts))
   for m in ms do
     if taken.contains (Types.protoName m.name) then throw s!"message type {m.name} has the same Python name as a class of the module; rename the message"
-  let msgs := "# The message types (selfhost.session.types): send methods take these, sent as plain dicts.\n\n" ++
-    "\n\n".intercalate (ms.map pyMessage) ++ "\n\n\n"
+  let msgs := "# The message types (selfhost.session.types): send methods take these; received bodies are these.\n\n" ++
+    "\n\n".intercalate (ms.map pyMessage) ++ "\n\n\n" ++
+    "# Each type's fields as (name, kind, structure, list or option), for encoding and decoding.\nSCHEMA = {\n" ++
+    ",\n".intercalate (ms.map fun m => "    " ++ lit m.name ++ ": [" ++ ", ".intercalate (m.fields.map schemaEntry) ++ "]") ++
+    "\n}\nTYPES = {" ++ ", ".intercalate (ms.map fun m => lit m.name ++ ": " ++ Types.protoName m.name) ++ "}\n\n\n"
   return header ++ "\n".intercalate rt ++ msgs ++ reads ++ "\n".intercalate parts ++ "\n"
 
 end LeanFM.Session
