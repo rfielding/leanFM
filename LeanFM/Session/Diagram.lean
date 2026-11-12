@@ -118,6 +118,10 @@ structure St (R : Type) where
   fresh : Bool := false
   /-- Distance between lifelines: wide enough for the widest message label. -/
   colW : Nat := 180
+  /-- Annotations under each message and event, in drawing order (probabilities, amounts, delays,
+  expected counts); empty when the protocol has none. -/
+  notes : Array String := #[]
+  noteIx : Nat := 0
 
 abbrev M (R : Type) := StateM (St R)
 
@@ -194,9 +198,16 @@ where
 
 def isReply [DecidableEq R] (st : St R) (i : Interaction R) : Bool := (answers st i).isSome
 
+/-- The next annotation in drawing order. -/
+def nextNote : M R String := do
+  let st ← get
+  set { st with noteIx := st.noteIx + 1 }
+  return (st.notes[st.noteIx]?).getD ""
+
 def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
   adv 30
   modify fun st => { st with fresh := false }
+  let note ← nextNote
   let st ← get
   let y := st.y
   let answered := answers st i
@@ -220,6 +231,13 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
     let anchor := if x1 == x2 then "start" else "middle"
     emit (text gx (y + (if x1 == x2 then 18 else 14)) s!"[{g.text}]" anchor .muted 11 (cls := "guard"))
     adv 18
+  -- probabilities, amounts, delays and expected counts go under the arrow too
+  if note != "" then
+    let base := (← getY)
+    let gx := if x1 == x2 then x1 + 46 else (x1 + x2) / 2
+    let anchor := if x1 == x2 then "start" else "middle"
+    emit (text gx (base + (if i.guard.isSome then 4 else (if x1 == x2 then 18 else 14))) note anchor .frame 11 (cls := "note"))
+    adv 16
   if let some id := i.id then
     modify fun st => { st with sent := (id, i.src, i.dst, i.cause, reply) :: st.sent }
   -- a call is an activation bar on the callee, from its request down to its response; a
@@ -249,12 +267,16 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
 def act [DecidableEq R] (roles : List R) (r : R) (label : String) : M R Unit := do
   adv 12
   modify fun st => { st with fresh := false }
+  let note ← nextNote
   let y ← getY
   let x ← xOf roles r
   let w := 16 + 7 * label.length
   emit (.rect "act" (x - w / 2) y w 24 10 .actFill .arrow)
   emit (text x (y + 16) label (cls := "boxed"))
   adv 26
+  if note != "" then
+    emit (text x (y + 40) note "middle" .frame 11 (cls := "note"))
+    adv 16
 
 partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
     Global R → M R Unit
@@ -346,9 +368,10 @@ structure DiagramModel where
 
 /-- The shapes of a sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
 def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : List R)
-    (title : String := "") : DiagramModel :=
-  let cw := Diagram.columnWidth g
-  let ((), st) := (Diagram.draw roles 0 g).run { colW := cw }
+    (title : String := "") (notes : Array String := #[]) (footer : List String := []) : DiagramModel :=
+  let widestNote := notes.foldl (fun m n => max m n.length) 0
+  let cw := max (Diagram.columnWidth g) (min Diagram.maxColW (7 * widestNote + 36))
+  let ((), st) := (Diagram.draw roles 0 g).run { colW := cw, notes }
   let bottom := st.y + 30
   let width := Diagram.margin * 2 + cw * (roles.length - 1)
   let height := bottom + 40
@@ -363,7 +386,12 @@ def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : Lis
     if bot ≤ top then none else
     some (Shape.rect "activation" (Diagram.xAt cw roles r - 5 + 7 * inset) top 10 (bot - top) 0 .actFill .arrow)
   let titleEl := if title == "" then [] else [Diagram.text 10 14 title "start" .muted 11]
-  { width, height, shapes := (titleEl ++ heads ++ bars).toArray ++ st.out }
+  -- a legend under the lifelines (expected totals), when there is one
+  let width := max width (footer.foldl (fun w l => max w (l.length * 8 + 40)) 0)
+  let legend := footer.zipIdx.map fun (line, i) =>
+    Diagram.text (width / 2) (height + 6 + i * 20) line "middle" .frame 13 (cls := "legend")
+  { width, height := height + footer.length * 20 + (if footer.isEmpty then 0 else 16),
+    shapes := (titleEl ++ heads ++ bars).toArray ++ st.out ++ legend.toArray }
 
 /-- The model written out as SVG text in a theme. -/
 def DiagramModel.svg (m : DiagramModel) (t : DiagramTheme := .dark) : String :=

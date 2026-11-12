@@ -679,6 +679,17 @@ structure Parsed where
   body : List Stmt := []
   deriving Inhabited
 
+/-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
+annotations: the body's messages tagged by position, built exactly as the parser builds them). -/
+def buildWith (text : String) (body : List Stmt) : Except String (Global String) := do
+  if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
+  let (defs, _) ← (file.run text.toList.toArray).run {}
+  let main := defs.getLast!
+  let ctx : Ctx := { defs := defs.dropLast, rename := [], roles := main.roles, path := main.name,
+                     inside := [main.name] }
+  let (g, _) ← (build ctx body).run 0
+  return g
+
 def parse (text : String) : Except String Parsed := do
   if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
   let src := text.toList.toArray

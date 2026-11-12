@@ -349,8 +349,121 @@ def shapeJson : Shape → Json
       ("y", y), ("anchor", anchor), ("fill", fill.name), ("size", size), ("bold", bold),
       ("text", content)]
 
+/-! ## Annotations on the sequence diagram: probabilities, amounts, delays, expected counts -/
+
+namespace Annotate
+open LeanFM.Session.Text
+
+def tag : String := "\u0001"
+
+def timeNote (t : Generative.TimeExpr) : String :=
+  match t.period with
+  | some d => s!"at next {Chain.periodText d}"
+  | none =>
+    if t.relative then
+      match t.offsets with
+      | [(d, _)] => s!"after {Chain.daysText (d : Nat)}"
+      | os => "after " ++ " or ".intercalate (os.map fun (d, q) => s!"{Chain.daysText (d : Nat)} ({q.text})")
+    else ((Text.timeText t).drop 1).toString
+
+def amountNote (a : Generative.Amount) : String :=
+  let sign := if a.reverse then "-" else ""
+  match a.outcomes with
+  | [(n, _)] => s!"{sign}{n} {a.unit}"
+  | os => sign ++ " or ".intercalate (os.map fun (n, q) => s!"{n} ({q.text})") ++ s!" {a.unit}"
+
+abbrev TagM := StateM (Array String)
+
+/-- `orig`'s time and amount wrappers around `inner`. -/
+partial def rewrap (orig inner : Text.Stmt) : Text.Stmt :=
+  match orig with
+  | .timed t m => .timed t (rewrap m inner)
+  | .valued a m => .valued a (rewrap m inner)
+  | _ => inner
+
+/-- Tag each message and event with its position (label ++ tag ++ index) and record its annotation;
+`pending` is a branch's probability, written on the branch's first step. -/
+partial def tagStmts (pending : Option String) : List Text.Stmt → TagM (List Text.Stmt)
+  | [] => pure []
+  | s :: rest => do
+    let (s', used) ← tagStmt pending s
+    let rest' ← tagStmts (if used then none else pending) rest
+    return s' :: rest'
+where
+  tagStmt (pending : Option String) (s : Text.Stmt) : TagM (Text.Stmt × Bool) := do
+    let (core, amounts, time) := Chain.peel s
+    match core with
+    | .msg .. | .event .. =>
+      let k := (← get).size
+      let note := " · ".intercalate (pending.toList ++ amounts.map amountNote ++ (time.map timeNote).toList)
+      modify (·.push note)
+      let tagged := match core with
+        | .msg id label src dst cause route status guard => Text.Stmt.msg id (label ++ tag ++ toString k) src dst cause route status guard
+        | .event label role => .event (label ++ tag ++ toString k) role
+        | other => other
+      -- the annotations wrap the tagged step again, in the order the parser wrote them
+      return (rewrap s tagged, true)
+    | _ => match s with
+      | .weighted name actor qs bs => do
+        let bs' ← (bs.zipIdx).mapM fun (b, i) => tagStmts ((qs[i]?).map (s!"p {·.text}")) b
+        return (.weighted name actor qs bs', false)
+      | .choice bs => return (.choice (← bs.mapM (tagStmts none)), false)
+      | .par bs => return (.par (← bs.mapM (tagStmts none)), false)
+      | .join n bs => return (.join n (← bs.mapM (tagStmts none)), false)
+      | .loop name body => do
+        let b ← tagStmts pending body
+        return (.loop name b, pending.isSome)
+      | .sessions body => return (.sessions (← tagStmts none body), false)
+      | other => return (other, false)
+
+def untag (label : String) : String × Option Nat :=
+  match label.splitOn tag with
+  | [base, k] => (base, k.toNat?)
+  | _ => (label, none)
+
+/-- The tags in drawing order (the order Diagram.draw visits messages and events), and the global
+type with the tags removed. -/
+partial def strip : Global String → List Nat × Global String
+  | .msg i k => let (base, t) := untag i.label; let (ts, k') := strip k; (t.toList ++ ts, .msg { i with label := base } k')
+  | .act r l k => let (base, t) := untag l; let (ts, k') := strip k; (t.toList ++ ts, .act r base k')
+  | .choice bs => let rs := bs.map strip; (rs.flatMap (·.1), .choice (rs.map (·.2)))
+  | .par bs k => let rs := bs.map strip; let (ts, k') := strip k; (rs.flatMap (·.1) ++ ts, .par (rs.map (·.2)) k')
+  | .join n bs k => let rs := bs.map strip; let (ts, k') := strip k; (rs.flatMap (·.1) ++ ts, .join n (rs.map (·.2)) k')
+  | .loop name b => let (ts, b') := strip b; (ts, .loop name b')
+  | .sessions b k => let (ts, b') := strip b; let (ts2, k') := strip k; (ts ++ ts2, .sessions b' k')
+  | .box name b k => let (ts, b') := strip b; let (ts2, k') := strip k; (ts ++ ts2, .box name b' k')
+  | g => ([], g)
+
+end Annotate
+
+/-- The sequence diagram, annotated when the protocol carries probabilities, amounts or times:
+under each arrow its branch's probability, its amounts, its delay and, when the session's chain can
+be solved, its expected count per session. Without annotations, the plain diagram. -/
+def annotatedModel (p : Protocol) : DiagramModel := Id.run do
+  let some layer := p.generative | return p.global.diagramModel p.roles p.name
+  let (tagged, notes) := (Annotate.tagStmts none layer.body).run #[]
+  if notes.all (· == "") then return p.global.diagramModel p.roles p.name
+  let .ok g := Text.buildWith p.lean tagged | return p.global.diagramModel p.roles p.name
+  -- expected counts and totals from the chain, when it can be solved without a horizon
+  let chain := (Chain.analyse { layer with body := tagged }).toOption
+  let counts : Array String := match chain with
+    | some c => (List.range notes.size).toArray.map fun k =>
+        let t := c.edges.foldl (fun acc e => if (Annotate.untag e.step).2 == some k then acc + Chain.traversals c e else acc) 0
+        s!"×{Chain.ratText t}"
+    | none => #[]
+  -- the legend comes from the untagged chain, so no position tag reaches the reader
+  let footer : List String := match (Chain.analyse layer).toOption with
+    | some c =>
+      let d := Chain.expectedDuration c
+      Chain.legend c p.roles ++ (if d == 0 then [] else [s!"Expected duration per session: {Chain.daysText d}"])
+    | none => []
+  let full := (List.range notes.size).toArray.map fun k =>
+    " · ".intercalate (([notes[k]!] ++ (counts[k]?).toList).filter (· != ""))
+  let (order, plain) := Annotate.strip g
+  return plain.diagramModel p.roles p.name (order.toArray.map fun k => (full[k]?).getD "") footer
+
 def diagramJson (p : Protocol) : Json :=
-  let m := p.global.diagramModel p.roles p.name
+  let m := annotatedModel p
   Json.mkObj [("width", m.width), ("height", m.height),
     ("shapes", Json.arr (m.shapes.map shapeJson))]
 
@@ -438,7 +551,7 @@ def check (args : Json) : Except String Json := do
 
 def diagram (args : Json) : Except String Json := do
   let p ← parseProtocol args
-  let m := p.global.diagramModel p.roles p.name
+  let m := annotatedModel p
   return fit <| Json.mkObj
     [ ("tool", "session_diagram"), ("verdict", "drawn")
     , ("reading", s!"{p.name}: sequence diagram of {messageCount p.global} messages across {p.roles.length} lifelines")
@@ -515,13 +628,23 @@ def walkStep (j : Json) : Except String (Chain.Step × Option String × Option N
     | .ok l => if l.isEmpty || l.length > limits.maxString then throw "a step's label is empty or too long" else pure l
     | .error _ => throw "every step or event needs a label"
   let opt (k : String) : Option String := (j.getObjValAs? String k).toOption
+  let opt (k : String) : Option String := (opt k).orElse fun _ =>
+    if k == "from" then (j.getObjValAs? String "src").toOption else if k == "to" then (j.getObjValAs? String "dst").toOption else none
+  let amounts : Option (List Chain.Move) ← match j.getObjVal? "amounts" with
+    | .ok (.arr a) => some <$> a.toList.mapM fun m => do
+        let f ← (m.getObjValAs? String "from").mapError fun _ => "an amount needs from, to, unit and quantity"
+        let t ← (m.getObjValAs? String "to").mapError fun _ => "an amount needs from, to, unit and quantity"
+        let u ← (m.getObjValAs? String "unit").mapError fun _ => "an amount needs from, to, unit and quantity"
+        let q ← (m.getObjValAs? Nat "quantity").mapError fun _ => "an amount's quantity is a whole number"
+        pure ((f, t, u, (q : Rat)) : Chain.Move)
+    | _ => pure none
   let session : Option String := match j.getObjVal? "session" with
     | .ok (.str x) => some x
     | .ok (.num n) => some (toString n)
     | _ => none
   let time := ((j.getObjValAs? Nat "timeMs").toOption.orElse fun _ => (j.getObjValAs? Nat "time").toOption)
   let after := (j.getObjValAs? Nat "afterMs").toOption.map (fun (n : Nat) => (n : Rat))
-  return ({ label, sender := opt "from", receiver := opt "to", afterMs := after }, session, time)
+  return ({ label, sender := opt "from", receiver := opt "to", afterMs := after, amounts }, session, time)
 
 def walkJson (c : Chain.Chain) (w : Chain.Walked) (session : Option String) : Json := Json.mkObj
   [("session", toJson session), ("steps", w.steps), ("ended", w.ended),
@@ -539,7 +662,8 @@ def mdpWalk (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except 
     | _, .ok (.arr a) => pure (a.toList, false)
     | _, _ => throw "events or walk must be an array"
   let (items, isStream) := raw
-  if items.length > 512 then throw "at most 512 events or steps"
+  if items.length > (if isStream then 5000 else 512) then
+    throw (if isStream then "an event stream has at most 5000 events" else "a walk has at most 512 steps")
   let parsed ← items.mapM walkStep
   -- sessions in order of first appearance; a stream's times become delays since the previous event
   let sessions := (parsed.map (·.2.1)).eraseDups
@@ -690,6 +814,24 @@ def simulate (args : Json) : Except String Json := do
   let spread ← natArg args "spread" 40 limits.maxSpread
   let loops ← natArg args "loops" 4 limits.maxLoops
   let maxEvents ← natArg args "maxEvents" 300 limits.maxEvents
+  -- loops, rates and gates: generate walks of the chain (selfhost.session.generate.chain)
+  if let some layer := p.generative then
+    if hasLoop layer.body then
+      if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before generation"
+      let c ← Chain.analyse layer (solveAll := false)
+      let g ← Chain.generate c seed instances
+      let evJson := (g.events.zip g.amounts).map fun (e, ms) =>
+        (eventJson e).setObjVal! "amounts" (toJson (ms.map fun (f, t, u, q) =>
+          Json.mkObj [("from", f), ("to", t), ("unit", u), ("quantity", toJson q.num.toNat)]))
+      let endedCount := (g.ended.filter (·.2)).length
+      return fit <| Json.mkObj
+        [("tool", "session_simulate"), ("verdict", "generated"),
+         ("reading", s!"{p.name}: {g.events.size} events in {instances} sessions generated from the chain (seed {seed}); {endedCount} ended; ms relative to each session; each event carries the amounts it moved"),
+         ("name", p.name), ("roles", toJson p.roles), ("lean", p.lean), ("protocol", args.getObjValD "protocol"),
+         ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
+         ("seed", seed), ("instances", instances), ("sessions", instances),
+         ("ended", toJson (g.ended.map fun (sid, e) => Json.mkObj [("session", sid), ("ended", e)])),
+         ("events", Json.arr evJson), ("diagram", diagramJson p)]
   if let some layer := p.generative then
     if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before timed generation"
     if (args.getObjVal? "spread").isOk || (args.getObjVal? "loops").isOk then
@@ -1037,8 +1179,15 @@ How `session_mdp` reads a session:
 - with `events` (session_conform's format, with timeMs): the realized rewards of each session's
   walk, its probability under the policy, and the totals.
 
+`session_simulate` generates sessions from the same probabilities. For a session with loops, rates
+or gates it walks the chain, drawing each branch, delay and amount; every event carries the amounts
+it moved. Feeding the stream back to `session_mdp` as `events` gives each session's realized
+rewards, and over many sessions their mean approaches the expected value.
+
 See examples/sessions: PricedDepositSettlement (amounts, a penalty), LimitOrder (a loop, fees, two
-outcomes), Loan (grace, then interest), Rental (a rate vector) and WeeklyRent (a gate over a horizon).
+outcomes), Loan (grace, then interest), Rental (a rate vector), WeeklyRent (a gate over a horizon),
+RentWithRepairs (a nested choice behind a gate) and Ride (three parties, a retry loop, nested
+choices, delays and payments through a platform).
 
 ## Tools
 

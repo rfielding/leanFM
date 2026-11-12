@@ -37,6 +37,10 @@ structure Edge where
   /-- a periodic gate (at next d): the step waits for the next whole period since the start -/
   gate : Option Nat := none
   rates : List Accrual := []
+  /-- the delay distribution (after), for generating walks -/
+  delays : List (Nat × Q) := []
+  /-- each amount's sender, receiver, unit and outcomes, for generating walks -/
+  samples : List (String × String × String × List (Nat × Q)) := []
   /-- for message and event edges: the plain label, sender and receiver, for matching events -/
   step : String := ""
   sender : String := ""
@@ -70,10 +74,15 @@ def approx (r : Rat) : String :=
 /-- A signed rational to two decimals. -/
 def signedApprox (r : Rat) : String := if r ≥ 0 then "+" ++ approx r else "-" ++ approx (-r)
 
-/-- A duration in days, exact, with a decimal when it is not whole. -/
+/-- A duration in the largest unit that fits (days, hours, minutes or seconds), exact, with a
+decimal when it is not whole. -/
 def daysText (ms : Rat) : String :=
-  let d := ms / dayMs
-  s!"{ratText d} day{if d == 1 then "" else "s"}" ++ (if d.den == 1 || d < 0 then "" else s!" (≈ {approx d})")
+  let (n, unit) : Rat × String :=
+    if ms ≥ dayMs || ms == 0 then (ms / dayMs, "day")
+    else if ms ≥ 3600000 then (ms / 3600000, "hour")
+    else if ms ≥ 60000 then (ms / 60000, "minute")
+    else (ms / 1000, "second")
+  s!"{ratText n} {unit}{if n == 1 then "" else "s"}" ++ (if n.den == 1 || n < 0 then "" else s!" (≈ {approx n})")
 
 def periodText (ms : Nat) : String :=
   if ms % 604800000 == 0 then (if ms == 604800000 then "week" else s!"{ms / 604800000} weeks")
@@ -144,9 +153,12 @@ where
       let maxDelay : Rat := match time with
         | some t => if t.relative then (t.offsets.foldl (fun m (d, _) => max m d) 0 : Nat) else 0
         | none => 0
+      let delays := match time with | some t => if t.relative then t.offsets else [] | none => []
+      let samples := amounts.map fun a =>
+        if a.reverse then (dst, src, a.unit, a.outcomes) else (src, dst, a.unit, a.outcomes)
       let e : Edge := { src := n, dst := k, kind, label := text, prob := Q.one, moves,
                         amountText := ", ".intercalate (amounts.map amountText), delay, delayText,
-                        step := label, sender := src, receiver := dst, maxDelay, gate }
+                        step := label, sender := src, receiver := dst, maxDelay, gate, delays, samples }
       addEdge e
       return n
     | .accrue as =>
@@ -204,6 +216,7 @@ structure Chain where
   absorb : List (Nat × Array Rat)
   regime : Array Regime
   notes : List String
+  deriving Inhabited
 
 /-- Gauss-Jordan elimination on an augmented m × (m+1) matrix with exact rationals. -/
 def gauss (m : Nat) (a0 : Array (Array Rat)) : Except String (Array Rat) := do
@@ -506,6 +519,8 @@ structure Step where
   receiver : Option String := none
   /-- the time since the previous step, in milliseconds; none takes the edge's mean delay -/
   afterMs : Option Rat := none
+  /-- the amounts actually moved; none takes the edge's means -/
+  amounts : Option (List Move) := none
   deriving Inhabited
 
 structure Walked where
@@ -567,9 +582,17 @@ def walk (c : Chain) (steps : List Step) : Except String Walked := do
         prob := prob * qRat e.prob
       let e := c.edges[i]!
       let d := st.afterMs.getD e.delay
+      -- amounts actually moved replace the means, each matching one of the edge's moves
+      let moves ← match st.amounts with
+        | none => pure e.moves
+        | some ms => do
+          for (f, t, u, _) in ms do
+            if !e.moves.any (fun (f', t', u', _) => f' == f && t' == t && u' == u) then
+              throw (s!"step {n + 1} ({st.label}) moves {u} from {f} to {t}, which the protocol's {e.step} does not" : String)
+          pure ms
       counts := counts.set! i (counts[i]! + 1); visits := visits.set! e.dst (visits[e.dst]! + 1)
       time := time.set! e.src (time[e.src]! + d)
-      for (r, u, x) in rewards c { e with delay := d } do bal := addTo bal r u x
+      for (r, u, x) in rewards c { e with delay := d, moves } do bal := addTo bal r u x
       cur := e.dst
     | [] =>
       let describe (i : Nat) : String :=
@@ -593,6 +616,61 @@ def walk (c : Chain) (steps : List Step) : Except String Walked := do
     | _ => pure ()
   let duration := time.foldl (· + ·) 0
   return { counts, visits, time, duration, probability := prob, balances := bal, ended, steps := steps.length }
+
+/-! ## Generating walks (selfhost.session.generate.chain) -/
+
+structure Generated where
+  events : Array (Event String)
+  amounts : Array (List Move)
+  ended : List (Nat × Bool)
+  deriving Inhabited
+
+def generate (c : Chain) (seed sessions : Nat) (maxEvents : Nat := 512) : Except String Generated := do
+  let mut rng := seed
+  let mut events : Array (Event String) := #[]
+  let mut amounts : Array (List Move) := #[]
+  let mut ended : List (Nat × Bool) := []
+  for sid in [1:sessions + 1] do
+    let mut cur := c.start
+    let mut now := 0
+    let mut last : Option Nat := none
+    let mut count := 0
+    let mut guard := 0
+    while !c.ends.contains cur && count < maxEvents && guard < maxEvents * (c.states.size + 1) do
+      guard := guard + 1
+      let outs := c.edges.toList.filter (·.src == cur)
+      let e ← match outs with
+        | [] => break
+        | [e] => pure e
+        | es => do
+          let (i, r) ← Generative.choose (es.map (·.prob)) rng
+          rng := r
+          pure (es.getD i es.head!)
+      if e.kind == "message" || e.kind == "event" then
+        -- the delay: drawn, or the wait for the next whole period of a gate
+        match e.gate with
+        | some p => now := (now / p + 1) * p
+        | none =>
+          if !e.delays.isEmpty then
+            let (i, r) ← Generative.choose (e.delays.map (·.2)) rng
+            rng := r
+            now := now + ((e.delays[i]?).map (·.1)).getD 0
+        let mut moved : List Move := []
+        for (f, t, u, os) in e.samples do
+          let (i, r) ← Generative.choose (os.map (·.2)) rng
+          rng := r
+          let q : Nat := ((os[i]?).map (·.1)).getD 0
+          let m : Move := (f, t, u, (q : Rat))
+          moved := moved ++ [m]
+        let id := events.size + 1
+        let ev : Event String := { id, session := sid, prior := last.toList, cause := none, answers := none, src := e.sender, dst := e.receiver, label := e.step, msgId := none, route := none, status := none, isAct := e.kind == "event", time := now }
+        events := events.push ev
+        amounts := amounts.push moved
+        last := some id
+        count := count + 1
+      cur := e.dst
+    ended := ended ++ [(sid, c.ends.contains cur)]
+  return { events, amounts, ended }
 
 /-- The legend's lines: per role, each unit's expected balance with where it came from, and the
 effective price when the role trades exactly two units against each other. Decimals for reading;

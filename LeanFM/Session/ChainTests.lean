@@ -179,6 +179,8 @@ def loanWalk := mdp ((args loanText).setObjVal! "events" loanStream)
 #guard errorHas (mdp ((args limitText).setObjVal! "events" (toJson [ev "1" "Order" "Trader" "Exchange" 10, ev "1" "Rejected" "Exchange" "Trader" 5]))) "backwards"
 #guard errorHas (mdp ((args limitText).setObjVal! "events" (toJson [ev "1" "Order" "Trader" "Exchange" 10, Json.mkObj [("session", "1"), ("label", "Rejected")]]))) "every event needs timeMs"
 #guard errorHas (mdp ((args limitText).setObjVal! "walk" (toJson (List.replicate 513 (Json.mkObj [("label", "Order")]))))) "at most 512"
+-- a stream too large for one call is refused at the argument limit
+#guard errorHas (mdp ((args limitText).setObjVal! "events" (toJson (List.replicate 5001 (ev "1" "Order" "Trader" "Exchange" 0))))) "exceed"
 
 /-! Requirement selfhost.session.mdp.horizon: whole periods behind a periodic gate. -/
 def weeklyText := include_str "../../examples/sessions/WeeklyRent.leanfm"
@@ -233,4 +235,64 @@ def repairs := mdp ((args repairsText).setObjVal! "horizon" "4 weeks")
 -- the legend says where each role's balance came from, and the effective price
 #guard ((field repairs "svg").getStr?.toOption.getD "").contains "Landlord: -3.56 roomweek (accrue 1 roomweek/week -3.56) · +3435.30 USD (Rent +3527.20, Repair -91.90) · 964.60 USD per roomweek"
 #guard (((field repairs "breakdown").getObjValD "Landlord").getObjValD "USD") == Json.mkObj [("Rent", "761875/216"), ("Repair", "-9925/108")]
+
+/-! Requirement selfhost.session.generate.chain: generating walks of a session with loops. -/
+deriving instance Inhabited for LeanFM.SessionTools.Protocol
+def rideText := include_str "../../examples/sessions/Ride.leanfm"
+def rideChain : Chain.Chain :=
+  let p := (parseProtocol (args rideText)).toOption.get!
+  (Chain.analyse p.generative.get! (solveAll := false)).toOption.get!
+def rideGen := (Chain.generate rideChain 1 200).toOption.get!
+-- a compact stream of the first 30 sessions goes through the tool and walks back
+def compact (e : Event String) (ms : List Chain.Move) : Json :=
+  Json.mkObj [("session", e.session), ("label", e.label), ("from", e.src), ("to", e.dst), ("timeMs", e.time),
+    ("amounts", toJson (ms.map fun ((f, t, u, q) : Chain.Move) =>
+      Json.mkObj [("from", f), ("to", t), ("unit", u), ("quantity", toJson q.num.toNat)]))]
+def pairs := (rideGen.events.zip rideGen.amounts).toList
+def first30 := pairs.filter (·.1.session ≤ 30)
+def rideWalked := mdp ((args rideText).setObjVal! "events" (toJson (first30.map fun (e, ms) => compact e ms)))
+#guard ok rideWalked "walked"
+def drawn (ps : List (Event String × List Chain.Move)) (role : String) : Int :=
+  ps.foldl (fun acc (_, ms) => ms.foldl (fun acc ((f, t, _, q) : Chain.Move) =>
+    acc + (if t == role then q.num else 0) - (if f == role then q.num else 0)) acc) 0
+-- realized rewards are exactly the amounts drawn
+#guard (((field rideWalked "total").getObjValD "balances").getObjValD "Rider").getObjValD "USD" == Json.str (toString (drawn first30 "Rider"))
+-- every one of the 200 sessions walks back, and the realized total is close to 200 · (-37/2): within 10 percent
+def steps (sid : Nat) : List Chain.Step := Id.run do
+  let mut prev := 0
+  let mut out := []
+  for (e, ms) in pairs.filter (·.1.session == sid) do
+    out := out ++ [{ label := e.label, sender := some e.src, receiver := some e.dst,
+                     afterMs := some ((e.time - prev : Nat) : Rat), amounts := some ms }]
+    prev := e.time
+  return out
+def walkedAll : List Chain.Walked := (List.range 200).filterMap fun i => (Chain.walk rideChain (steps (i + 1))).toOption
+#guard walkedAll.length == 200 && walkedAll.all (·.ended)
+def realizedRider : Rat := walkedAll.foldl (fun acc w =>
+  acc + ((w.balances.find? fun (r, u, _) => r == "Rider" && u == "USD").map (·.2.2)).getD 0) 0
+#guard realizedRider == (drawn pairs "Rider" : Rat)
+#guard realizedRider ≤ -3330 && realizedRider ≥ -4070
+-- the expected Ride balances, checked by hand: Rider pays 9/10 · 20 + 1/10 · 5
+#guard field (mdp (args rideText)) "expectedByRole" == Json.mkObj [
+  ("Rider", Json.mkObj [("USD", "-37/2")]), ("Platform", Json.mkObj [("USD", "37/10")]), ("Driver", Json.mkObj [("USD", "74/5")])]
+-- an amount that the protocol's step cannot move is refused
+#guard errorHas (mdp ((args rideText).setObjVal! "walk" (toJson [Json.mkObj [("label", "Request"),
+  ("amounts", toJson [Json.mkObj [("from", "Rider"), ("to", "Platform"), ("unit", "USD"), ("quantity", toJson (5 : Nat))]])]]))) "does not"
+-- a session that never ends is cut at 512 events and marked not ended
+def spin := (parseProtocol (args "protocol P (A,B) { rec L { choice at A using declared(\"x\") { probability 1/2: R from A to B; continue L; } or { probability 1/2: S from A to B; continue L; } } }")).toOption.get!
+#guard ((Chain.generate (Chain.analyse spin.generative.get! (solveAll := false)).toOption.get! 1 1).toOption.get!).ended == [(1, false)]
+
+/-! Requirement selfhost.session.diagram.annotations: probabilities and rewards on the sequence diagram. -/
+def rideSvg := ((diagram (args rideText)).toOption.get!.getObjValAs? String "svg").toOption.getD ""
+#guard rideSvg.contains "p 4/5 · after 10 seconds · ×1"
+#guard rideSvg.contains "after 30 seconds · ×5/4"
+-- each Fare keeps its own amount though both are Rider → Platform Fare
+#guard rideSvg.contains "15 USD · ×9/20" && rideSvg.contains "25 USD · ×9/20"
+#guard rideSvg.contains "Platform: +3.70 USD (Cancel +0.50, CancelFee -0.40, Fare +18.00, Payout -14.40)"
+-- the matching tag never reaches the reader
+#guard !(rideSvg.contains "\u0001") && !((diagram (args rideText)).toOption.get!.compress.contains "\\u0001")
+-- a protocol without annotations draws exactly as the plain model
+def plainText := "protocol P (A,B) { r: R from A to B; choice { S from B to A cause r; } or { T from B to A cause r; } }"
+#guard ((diagram (args plainText)).toOption.get!.getObjValAs? String "svg").toOption ==
+  some (((parseProtocol (args plainText)).toOption.get!).global.diagramModel ["A", "B"] "P").svg
 end LeanFM.Session.ChainTests
