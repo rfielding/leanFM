@@ -7,7 +7,8 @@ Generates the files the game tab's closed-by-default "Session type" panel shows,
 current `spec/Session.lean` and LeanFM's own sequence-diagram renderer, never by hand:
 
 * `source/cmd/demo/static/session/goserver.leanfm`: the session-type regions of
-  `spec/Session.lean` (`--@begin Rooms` through `--@end GoServer`), verbatim;
+  `spec/Session.lean` (`--@begin Types`, the message structures, through `--@end GoServer`),
+  verbatim, so the parser types every `where` condition against the structures;
 * `source/cmd/demo/static/session/goserver.svg`: LeanFM's sequence diagram of protocol
   `GoServer` with every protocol it includes, in the dark theme;
 * `source/cmd/demo/static/session/provenance.json`: what the picture answers and how.
@@ -57,7 +58,7 @@ def main : IO Unit := do
   let provenance := Json.mkObj
     [ ("prompt", "let's show the session type for the game in a hidden panel")
     , ("question", "What is the session type of GoServer: who sends which message to whom, in which order, and where the choices, loops and independent sessions are?")
-    , ("eventSource", "spec/Session.lean, the regions from --@begin Rooms to --@end GoServer")
+    , ("eventSource", "spec/Session.lean, the regions from --@begin Types to --@end GoServer")
     , ("reducer", "LeanFM SessionTools.parseProtocol of those regions without doc comments, then annotatedModel drawn as SVG in the dark theme")
     , ("unit", "messages and local events on the Person, Server and Bot lifelines")
     , ("boundary", s!"protocol {p.name} with every protocol it includes")

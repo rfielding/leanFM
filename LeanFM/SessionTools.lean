@@ -24,7 +24,7 @@ import LeanFM.Logic
 build the same `Global String` the `protocol` command builds, and answer with the session library:
 issues, projections, calls, typestate, the diagram as shapes and SVG, and seeded event streams.
 
-A protocol is data: no field carries code, a guard's `where` text is shown but never evaluated,
+A protocol is data: no field carries code, a guard's `where` text is interpreted, never run as code,
 and every size is bounded. Errors name the step that caused them.
 -/
 
@@ -164,7 +164,7 @@ partial def steps (c : Ctx) (js : List Json) (index : Nat := 0) : P (Global Stri
             | .ok n => if n ≤ 999999 then pure (some n) else fail c "status is too large"
             | .error _ => fail c "status must be a natural number"
         let guardText ← optString c j "where"
-        -- a where clause in the JSON form is text only: it is shown, never evaluated
+        -- a where clause in the JSON form is text: conformance interprets it, nothing runs it as code
         let guard := guardText.map fun t => ({ text := t, eval := fun _ => none } : Guard)
         let i : Interaction String := { id, label, src, dst, cause, status, route, guard }
         return .msg i (← next ())
@@ -226,6 +226,8 @@ structure Protocol where
   /-- the protocol as LeanFM protocol text: the text sent, or the JSON form written out -/
   lean  : String
   generative : Option Generative.Resolved := none
+  /-- the message types the text declares (selfhost.session.types) -/
+  types : Session.Types.Env := []
 
 /-! ## The JSON form written as protocol text -/
 
@@ -291,6 +293,29 @@ def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) 
 
 def generativeJson (p : Protocol) : Json := (p.generative.map (·.metadata)).getD Json.null
 
+/-- The JSON form's `types`, `[{name, fields: ["amount : Nat", ...]}]`, as structure declarations.
+Names and fields are checked to be only identifiers, `:` and spaces, so they cannot carry other
+text into the protocol. -/
+def jsonTypesText (j : Json) : Except String String := do
+  match j with
+  | .null => return ""
+  | .arr a =>
+    if a.size > Types.maxMessages then throw s!"at most {Types.maxMessages} types"
+    let plain (s : String) : Bool := s.toList.all fun c => (c.isAlphanum && c.toNat < 128) || c == '_' || c == ' ' || c == ':'
+    let decls ← a.toList.mapM fun t => do
+      let name ← (t.getObjValAs? String "name").mapError fun _ => "every type needs a name"
+      if !Types.isAsciiIdent name then throw s!"type {name.quote}: a name is letters, digits and _"
+      let fs ← match t.getObjVal? "fields" with
+        | .ok (.arr fa) => fa.toList.mapM fun f => match f.getStr? with
+          | .ok x => if plain x && x.length ≤ limits.maxString && (x.splitOn ":").length == 2 then pure x
+                     else throw s!"type {name}: a field is written \"name : Type\", not {x.quote}"
+          | .error _ => throw s!"type {name}: fields are strings such as \"amount : Nat\""
+        | .error _ => pure []
+        | _ => throw s!"type {name}: fields is an array of strings such as \"amount : Nat\""
+      return "structure " ++ name ++ (if fs.isEmpty then "" else " where\n" ++ "\n".intercalate (fs.map ("  " ++ ·))) ++ "\n"
+    return "\n".intercalate decls ++ "\n"
+  | _ => throw "types is an array of {name, fields: [\"amount : Nat\", ...]}"
+
 def parseProtocol (args : Json) : Except String Protocol := do
   if args.compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
@@ -299,14 +324,15 @@ def parseProtocol (args : Json) : Except String Protocol := do
       | .ok t => pure t
       | .error _ => throw "lean must be a string of LeanFM protocol text"
     let r ← LeanFM.Session.Text.parse text
-    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args }
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args, types := r.types }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
     | .error _ => throw "lean is required: LeanFM protocol text such as protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
   if p.getStr?.isOk then
-    throw "protocol is the JSON form {name?, roles, steps}; put LeanFM protocol text in lean instead"
-  let extra := (keysOf p).filter (!["name", "roles", "steps"].contains ·)
-  if !extra.isEmpty then throw s!"protocol has unknown keys {extra}; allowed: name, roles, steps"
+    throw "protocol is the JSON form {name?, roles, steps, types?}; put LeanFM protocol text in lean instead"
+  let extra := (keysOf p).filter (!["name", "roles", "steps", "types"].contains ·)
+  if !extra.isEmpty then throw s!"protocol has unknown keys {extra}; allowed: name, roles, steps, types"
+  let typesText ← jsonTypesText (p.getObjValD "types")
   let name := (p.getObjValAs? String "name").toOption.getD "Protocol"
   if name.length > limits.maxString then throw "protocol name is too long"
   let roles ← match p.getObjVal? "roles" with
@@ -323,9 +349,9 @@ def parseProtocol (args : Json) : Except String Protocol := do
     | .ok (.arr a) => pure a.toList
     | _ => throw "steps must be an array of steps"
   let (global, count) ← (steps { roles } js).run 0
-  let text := ToText.write name roles js
+  let text := typesText ++ ToText.write name roles js
   let parsed ← Text.parse text
-  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args }
+  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types }
 
 /-! ## Results -/
 
@@ -396,7 +422,7 @@ where
     match core with
     | .msg .. | .event .. =>
       let k := (← get).size
-      let note := " · ".intercalate (pending.toList ++ amounts.map amountNote ++ (time.map timeNote).toList)
+      let note := " - ".intercalate (pending.toList ++ amounts.map amountNote ++ (time.map timeNote).toList)
       modify (·.push note)
       let tagged := match core with
         | .msg id label src dst cause route status guard => Text.Stmt.msg id (label ++ tag ++ toString k) src dst cause route status guard
@@ -450,7 +476,7 @@ def annotatedModel (p : Protocol) : DiagramModel := Id.run do
   let counts : Array String := match chain with
     | some c => (List.range notes.size).toArray.map fun k =>
         let t := c.edges.foldl (fun acc e => if (Annotate.untag e.step).2 == some k then acc + Chain.traversals c e else acc) 0
-        s!"×{Chain.ratText t}"
+        s!"x{Chain.ratText t}"
     | none => #[]
   -- the legend comes from the untagged chain, so no position tag reaches the reader
   let footer : List String := match (Chain.analyse layer).toOption with
@@ -459,7 +485,7 @@ def annotatedModel (p : Protocol) : DiagramModel := Id.run do
       Chain.legend c p.roles ++ (if d == 0 then [] else [s!"Expected duration per session: {Chain.daysText d}"])
     | none => []
   let full := (List.range notes.size).toArray.map fun k =>
-    " · ".intercalate (([notes[k]!] ++ (counts[k]?).toList).filter (· != ""))
+    " - ".intercalate (([notes[k]!] ++ (counts[k]?).toList).filter (· != ""))
   let (order, plain) := Annotate.strip g
   return plain.diagramModel p.roles p.name (order.toArray.map fun k => (full[k]?).getD "") footer
 
@@ -543,6 +569,8 @@ def check (args : Json) : Except String Json := do
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("issues", Json.arr (issues.map Json.str).toArray)
+    , ("types", Json.arr (p.types.map fun m => Json.mkObj [("name", Json.str m.name),
+        ("fields", Json.arr (m.fields.map fun f => Json.str s!"{f.name} : {f.ty.render}").toArray)]).toArray)
     , ("httpCuts", match calls with | some _ => Json.arr (cuts.map Json.str).toArray | none => Json.null)
     , ("projections", Json.mkObj projections)
     , ("calls", Json.arr (g.calls.map callJson).toArray)
@@ -593,7 +621,7 @@ def distributionJson (ms : List (String × String × List (Rat × Rat))) : Json 
 the text report summarizes) and say which were dropped; refuse only if it still does not fit. -/
 def fitMdp (result0 : Json) : Except String Json := do
   -- "= ≈ 0.35" reads as "≈ 0.35", and "×≈ 8.89" as "≈ ×8.89"
-  let tidy (t : String) : String := (t.replace " = ≈" " ≈").replace "×≈ " "≈ ×"
+  let tidy (t : String) : String := (t.replace " = ~" " ~").replace "x~" "~x"
   let result := match result0.getObjValAs? String "report" with
     | .ok t => result0.setObjVal! "report" (Json.str (tidy t))
     | .error _ => result0
@@ -624,7 +652,7 @@ def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved)
     let name := if s.kind == "state" then s!"S{s.id}" else s.label
     s!"- {name}" ++ (if s.detail.isEmpty then "" else s!" ({s.detail})") ++ s!": {Chain.ratText c.visits[s.id]!}"
   let edgeLines := (c.edges.toList.filter (·.kind == "message")).map fun e =>
-    s!"- {e.label}: ×{Chain.ratText (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" · {e.amountText}")
+    s!"- {e.label}: x{Chain.ratText (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" - {e.amountText}")
   let outcomes := c.ends.map fun k => (k, Chain.outcome c p.roles k)
   let outcomeLines := outcomes.map fun (k, (prob, given)) =>
     s!"- {c.states[k]!.label}: probability {Chain.ratText prob}" ++ match given with
@@ -661,7 +689,7 @@ def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved)
     ("diagramKind", "mdp"), ("svg", model.svg (themeOf args)),
     ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", toJson (model.shapes.map shapeJson))]),
     ("provenance", Json.mkObj [("prompt", provenance.prompt), ("question", "What are the expected visits to each state, traversals of each edge and net balance per role under the supplied policy?"),
-      ("eventSource", provenance.eventSource), ("reducer", "Build the state graph; solve v = start + vQ over transient states with exact rationals; traversals = visits × probability; balances = Σ traversals × mean amount"),
+      ("eventSource", provenance.eventSource), ("reducer", "Build the state graph; solve v = start + vQ over transient states with exact rationals; traversals = visits times probability; balances = Σ traversals times mean amount"),
       ("unit", "expected counts and amounts as exact rationals, per complete session"),
       ("boundary", "One session from start until it ends, which happens with probability 1 (otherwise the tool refuses); delays are after the previous step (after d); absolute times and deadlines are not used")])]
   fitMdp (extra.foldl (fun r (k, v) => r.setObjVal! k v) result)
@@ -795,7 +823,7 @@ def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text 
   let exp := Chain.expected c p.roles
   let duration := Chain.expectedDuration c
   let edgeLines := (c.edges.toList.filter fun e => e.kind == "message" || e.kind == "event").map fun e =>
-    s!"- {e.label}: ×{Chain.readable (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" · {e.amountText}")
+    s!"- {e.label}: x{Chain.readable (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" - {e.amountText}")
   let remainder := horizonMs - h.periods * h.periodMs
   -- the exact distribution over the periods, when it is small enough to enumerate
   let distResult := Chain.horizonDistribution c0 h
@@ -864,7 +892,7 @@ def mdp (args : Json) : Except String Json := do
   -- the outcome in the text a model reads: each terminal, then the expected results
   let terminalLine (n : Decision.Node) : String :=
     let money := Decision.balanceText n.balances
-    s!"- {n.mass.text}: {n.label}, {n.detail}" ++ (if money.isEmpty then "" else s!" · {money}")
+    s!"- {n.mass.text}: {n.label}, {n.detail}" ++ (if money.isEmpty then "" else s!" - {money}")
   let expectedLines := (Decision.expected nodes).map fun (r,u,v) => s!"- {r}: {v} {u}"
   let penaltyLines := (Decision.expectedPenalties nodes).map fun (r,u,v) => s!"- {r} pays {v} {u} in penalties"
   -- the distribution: the terminals grouped by each role and unit's balance
@@ -966,6 +994,18 @@ def simulate (args : Json) : Except String Json := do
 
 /-- A logged event: the fields session_simulate writes (src, dst, act) or from/to; ids, sessions and
 causes may be strings or numbers. -/
+def maxFields : Nat := 64
+
+/-- A logged event's fields: nested objects flattened to dotted keys, numbers as exact rationals,
+strings and booleans kept, anything else dropped (selfhost.session.where). -/
+partial def flattenFields (pre : String) (j : Json) : List (String × Session.Where.Value) :=
+  match j with
+  | .obj kvs => kvs.toList.flatMap fun (k, v) => flattenFields (if pre.isEmpty then k else pre ++ "." ++ k) v
+  | .num n => [(pre, .num ((n.mantissa : Rat) / ((10 ^ n.exponent : Nat) : Rat)))]
+  | .str t => [(pre, .str t)]
+  | .bool b => [(pre, .bool b)]
+  | _ => []
+
 def logEvent (j : Json) : Except String LogEvent := do
   let text (k : String) : Option String :=
     match j.getObjVal? k with
@@ -981,7 +1021,15 @@ def logEvent (j : Json) : Except String LogEvent := do
   if !isAct && dst.isEmpty then .error s!"event {id} has no to (or dst)"
   for s in [id, label, src, dst] do
     if s.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
-  return { id, session := (text "session").getD "0", src, dst, label, cause := text "cause", isAct }
+  let fields := match j.getObjVal? "fields" with
+    | .ok o@(.obj _) => flattenFields "" o
+    | _ => []
+  if fields.length > maxFields then .error s!"event {id} has {fields.length} fields; the bound is {maxFields}"
+  for (k, v) in fields do
+    if k.length > limits.maxString then .error s!"event {id} has a field name over {limits.maxString} characters"
+    if let .str t := v then
+      if t.length > limits.maxString then .error s!"event {id}: field {k} is over {limits.maxString} characters"
+  return { id, session := (text "session").getD "0", src, dst, label, cause := text "cause", isAct, fields }
 
 def maxLogEvents : Nat := 2000
 
@@ -1012,15 +1060,21 @@ def conform (args : Json) : Except String Json := do
         if a.size > maxLogEvents then throw s!"at most {maxLogEvents} events"
         a.toList.mapM logEvent
     | _ => throw "events must be an array of logged events {id, session?, from, to, label, cause?} (or {id, at, label, act: true})"
+  -- a logged event's fields are fields of its message, of their declared types (selfhost.session.types)
+  for e in evs do
+    if let .error why := Session.Types.checkFields p.types e.label e.isAct e.fields then
+      throw s!"event {e.id}: {why}"
   let allowIncomplete := (args.getObjValAs? Bool "allowIncomplete").toOption.getD false
   let results := p.global.conforms evs allowIncomplete
   let bad := results.filter (·.problem.isSome)
   let incomplete := results.filter (!·.complete)
   let verdict := if bad.isEmpty then "conforms" else "violates"
   let problems := bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
+  let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
   let reading := if bad.isEmpty
     then s!"{p.name}: {evs.length} events in {results.length} session{if results.length == 1 then "" else "s"} follow the protocol" ++
-      (if incomplete.isEmpty then "" else s!"; {incomplete.length} still running")
+      (if incomplete.isEmpty then "" else s!"; {incomplete.length} still running") ++
+      (if unchecked.isEmpty then "" else s!"; {unchecked.length} where condition{if unchecked.length == 1 then "" else "s"} unchecked: {unchecked.head!}")
     else s!"{p.name}: {bad.length} of {results.length} sessions break the protocol; first: {problems.head!}"
   let deadlines ← if bad.isEmpty then deadlineReports p args evs else pure Json.null
   return fit <| Json.mkObj
@@ -1028,8 +1082,10 @@ def conform (args : Json) : Except String Json := do
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("issues", Json.arr ((problems.take 64).map Json.str).toArray)
+    , ("unchecked", Json.arr ((unchecked.take 64).map Json.str).toArray)
     , ("sessions", Json.arr ((results.take 200).map fun r => Json.mkObj
         [("session", r.session), ("events", r.events), ("complete", r.complete),
+         ("unchecked", toJson (r.unchecked.map fun (e, why) => s!"{e}: {why}")),
          ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
     , ("diagram", diagramJson p) ]
 
@@ -1105,7 +1161,7 @@ def compat (args : Json) : Except String Json := do
   let notes := (if onlyNew.isEmpty then [] else [s!"only in the new version: {", ".intercalate onlyNew}"]) ++
     (if onlyOld.isEmpty then [] else [s!"only in the old version: {", ".intercalate onlyOld}"])
   return Json.mkObj [("tool", "session_compat"), ("verdict", if issues.isEmpty then "compatible" else "incompatible"),
-    ("name", p.name), ("reading", s!"{q.name} → {p.name}: {order}"),
+    ("name", p.name), ("reading", s!"{q.name} -> {p.name}: {order}"),
     ("roles", Json.arr (rows.map (·.2.2.2)).toArray), ("issues", Json.arr (issues.map Json.str).toArray),
     ("notes", Json.arr (notes.map Json.str).toArray), ("lean", p.lean)]
 
@@ -1139,7 +1195,7 @@ def ctl (args : Json) : Except String Json := do
     | some i => if i ≥ steps.length then " (and stays there)"
       else s!" (then repeats from {steps.getD i ""})"
     | none => ""
-  let report := if steps.isEmpty then "" else s!"{kind}: {" → ".intercalate steps}{loop}"
+  let report := if steps.isEmpty then "" else s!"{kind}: {" -> ".intercalate steps}{loop}"
   return answer.setObjVal! "tool" (Json.str "session_ctl")
     |>.setObjVal! "report" (Json.str report)
     |>.setObjVal! "reading" (Json.str s!"{p.name}: {reading}")
@@ -1153,7 +1209,7 @@ def openapi (args : Json) : Except String Json := do
     | .ok (.str r) => pure r
     | _ => throw s!"role is required: one of {", ".intercalate p.roles}"
   if !p.roles.contains role then throw s!"{role} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
-  let (doc, unrouted) ← p.global.openApi p.name role
+  let (doc, unrouted) ← p.global.openApi p.name role p.types
   let ops := match doc.getObjValD "paths" with
     | .obj kvs => kvs.toList.foldl (fun n (_, v) => n + (match v with | .obj ms => ms.size | _ => 0)) 0
     | _ => 0
@@ -1162,6 +1218,22 @@ def openapi (args : Json) : Except String Json := do
     ("reading", s!"{p.name}: OpenAPI 3.1 for {role}, {ops} operation{if ops == 1 then "" else "s"}{note}"),
     ("openapi", doc), ("unrouted", Json.arr (unrouted.map Json.str).toArray),
     ("language", "json"), ("code", Json.str doc.pretty), ("lean", Json.str p.lean)]
+
+/-- The message types as protobuf, Lean structures and JSON schemas (selfhost.session.types). -/
+def types (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let labels := (p.global.messages.map (·.label)).eraseDups
+  let pkg := Skeleton.snake p.name
+  let proto ← Session.Types.proto p.types labels pkg
+  let lean ← Session.Types.lean p.types labels (Skeleton.ident p.name ++ "Types")
+  let ms ← Session.Types.complete p.types labels
+  let empty := labels.filter fun l => (Session.Types.find p.types l).isNone
+  let note := if empty.isEmpty then "" else s!"; {empty.length} carr{if empty.length == 1 then "ies" else "y"} no fields ({", ".intercalate (empty.take 6)})"
+  return Json.mkObj [("tool", "session_types"), ("verdict", "generated"), ("name", p.name),
+    ("reading", s!"{p.name}: {ms.length} message type{if ms.length == 1 then "" else "s"} as protobuf, Lean and JSON schema{note}"),
+    ("proto", Json.str proto), ("leanTypes", Json.str lean),
+    ("schemas", Json.mkObj (ms.map fun m => (m.name, m.schema))),
+    ("language", "protobuf"), ("code", Json.str proto), ("lean", Json.str p.lean)]
 
 /-- Every check that applies, as findings with an edit to try for each. -/
 def review (args : Json) : Except String Json := do
@@ -1185,8 +1257,8 @@ def skeleton (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let language := (args.getObjValAs? String "language").toOption.getD "python"
   let code ← match language with
-    | "python" => p.global.pythonSkeleton p.name p.roles
-    | "typescript" => p.global.typescriptSkeleton p.name p.roles
+    | "python" => p.global.pythonSkeleton p.name p.roles p.types
+    | "typescript" => p.global.typescriptSkeleton p.name p.roles p.types
     | other => throw s!"language {other} is not supported; use python or typescript"
   let starts := ", ".intercalate (p.roles.map Skeleton.snake)
   let what := if language == "python" then "a Python" else "a TypeScript"
@@ -1238,7 +1310,7 @@ def msText (ms : Nat) : String := if ms < 1000 then s!"{ms} ms" else Chain.daysT
 /-- A probability for people: the exact fraction when it is short, else ≈ a decimal with the exact value after it. -/
 def probText (r : Rat) : String :=
   let x := Chain.readable r true
-  if x.startsWith "≈" then s!"{x} (exactly {Chain.ratText r})" else x
+  if x.startsWith "~" then s!"{x} (exactly {Chain.ratText r})" else x
 
 def vectorJson (v : List (String × String × Rat)) : Json :=
   Json.arr (v.map fun (r, u, a) => Json.mkObj [("role", r), ("unit", u), ("amount", Chain.ratText a)]).toArray
@@ -1276,7 +1348,7 @@ def sla (args : Json) : Except String Json := do
       | some n, none => s!" Deciding it needs about {n} entries per window at {d.req.confidence.text} confidence; add expecting N per hour to check the window holds them."
       | none, _ => ""
     let path := if d.verdict == "met" || d.path.isEmpty then "" else
-      s!" The most probable path that breaks it: {" → ".intercalate d.path}" ++
+      s!" The most probable path that breaks it: {" -> ".intercalate d.path}" ++
       (if d.assumptions.isEmpty then "." else s!", through the assumption{if d.assumptions.length > 1 then "s" else ""} {", ".intercalate d.assumptions}.")
     let note := if d.note.isEmpty then "" else " " ++ (d.note.take 1).toString.toUpper ++ (d.note.drop 1).toString ++ "."
     s!"- {d.req.text}
@@ -1339,7 +1411,7 @@ def sla (args : Json) : Except String Json := do
           ("unit", "probability per entry; entries per window; reward amounts per role and unit"),
           ("boundary", "one entry per occurrence of the require block's message id; the main protocol") ]) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_review"]
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_types", "session_review"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -1354,6 +1426,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_compat" => some (compat args)
   | "session_ctl" => some (ctl args)
   | "session_openapi" => some (openapi args)
+  | "session_types" => some (types args)
   | "session_review" => some (review args)
   | _ => none
 
@@ -1364,7 +1437,8 @@ def reference : String := "# LeanFM session types
 Design interactions between roles as a session type in LeanFM's protocol syntax, then let LeanFM
 check it, draw it and run it. Every diagram, call list and event stream is generated from the text.
 Send the text as the `lean` argument of the tools. It is read by a parser for this grammar only:
-nothing in it is elaborated or run, and a `where` condition is shown, never evaluated.
+nothing in it is elaborated or run as code. A `where` condition is run by conformance with
+LeanFM's own interpreter over the fields each event logs (see Conditions, below).
 
 ## Inline generation and deadline monitoring
 
@@ -1464,7 +1538,7 @@ require per q {
 At design time, `session_sla` checks each requirement against the assumptions on the chain: per
 entry, the exact interval of the probability (an interval when exploration is cut short), the
 verdict met, violated or undecided, and the most probable path that breaks it, with each
-assumption it passes through shown as `[name → First: p]`: the choice's name, the first message
+assumption it passes through shown as `[name -> First: p]`: the choice's name, the first message
 of the branch taken, and its probability. Name a choice for its question (`IsBusy`), since the
 name covers every branch. A window needs ceil(ln(1/(1-c))/margin)
 entries to tell the promise from a failure rate of 0 or 1. The tool says when a window cannot hold
@@ -1481,6 +1555,42 @@ until then it is open.
 
 See examples/sessions/UserLookup (a lost forward, a failing lookup and a 504 timer; the error
 budget is violated by the stated assumptions).
+
+## Message types
+
+Every message has a type, declared as a Lean structure before the protocols:
+
+```
+structure Quote where
+  price : Nat
+structure Pay where
+  amount : Nat
+  card_secr : String
+```
+
+A message whose label names a structure carries it; one whose label names none carries nothing, and
+so does an event. Field types are `Nat`, `Int`, `String`, `Bool`, another structure,
+or `List T` / `Option T` of one of those. Fields are numbered in the order written, which is their
+protobuf number, so add new fields at the end. `deriving ...` is accepted and ignored. A name ending
+in `_secr` is a secret. `session_types` writes the types as protobuf, as Lean structures with JSON
+conversions, and as JSON schemas; `session_openapi` and `session_skeleton` use the same types.
+
+## Conditions
+
+`p: Pay from Client to Shop cause q where p.amount = q.price;` is typed when the text is read and
+run by conformance, never compiled. The language: field paths over message ids (`p.amount`, or
+`p.address.city` through a nested structure), numbers (exact), strings, `true`, `false`,
+`= != < <= > >=`, `+ - * /`, `and`, `or`, `not`, parentheses. It must type-check against the message
+types: each path names a declared single field (not a list or a whole structure), both sides
+of a comparison have the same type, and the whole is true or false. A condition may not read a
+secret, because the fields conditions read are logged. At run time conformance evaluates it over the
+`fields` each event logs: `{\"id\": \"e3\", \"label\": \"Pay\", ..., \"fields\": {\"amount\": 12}}`. A false
+condition means the message does not match (a guard selects among branches by data), and the problem
+names the condition and the values it read. One that cannot be decided (a field missing from the log,
+a message not yet in the session, division by zero) is reported as unchecked, never as satisfied.
+Logged fields must be fields of the event's message, of their declared types, and never secrets: a
+log that breaks this is refused, naming the event. Generated code logs exactly the fields conditions
+read, and nothing else of a body.
 
 ## Tools
 
@@ -1535,8 +1645,11 @@ budget is violated by the stated assumptions).
 
 - `session_openapi {lean, role}`: the requests `role` receives, with their routes and the responses
   the protocol allows, as an OpenAPI 3.1 document: one operation per route, the label as its
-  operationId and body, each response under its status. Message fields are not in the protocol, so
-  each message is an open object schema to fill in. Requests without a route are listed, not guessed.
+  operationId and body, each response under its status. Each body's schema is its message type,
+  admitting no other fields. Requests without a route are listed, not guessed.
+
+- `session_types {lean}`: the message types as a proto3 file, as Lean structures (deriving
+  ToJson and FromJson) and as JSON schemas, one per message of the protocol.
 
 - `session_compat {lean, old}`: two versions of a protocol (`lean` the new one, `old` the
   previous one). For each role in both: can its new version be deployed first, among the old
@@ -1551,7 +1664,8 @@ budget is violated by the stated assumptions).
   tagged by `label` that narrows `next`. A method sends only what its state allows, fills in the cause the
   protocol names, logs the event in session_conform's format and returns the next state; `receive`
   accepts only what the state allows; a state used twice raises. Write only the decisions (which
-  branch, what each message carries) and the transport: a function that delivers a message.
+  branch, what each message carries) and the transport: a function that delivers a message. Each
+  message type is a dataclass (Python) or interface (TypeScript), and send methods take it.
 
 Every answer echoes the text as `lean`; the view shows it in an editor and rechecks as you type.
 Under the editor, the sketch adds statements by clicking: the sender's lifeline, then the
@@ -1579,6 +1693,15 @@ no statements, such as `protocol Shop (Client, Server) { }`, and sketch from the
 ## A protocol
 
 ```lean
+/-- The shop's price for the order, in cents. -/
+structure Quote where
+  price : Nat
+
+/-- The client pays; the card number is a secret, never logged. -/
+structure Pay where
+  amount : Nat
+  card_secr : String
+
 /-- Placing an order: quote, pay, charge the card. -/
 protocol PlaceOrder (Client, Shop, Bank) {
   o: CreateOrder from Client to Shop route \"POST /orders\";
@@ -1633,14 +1756,18 @@ Statements after a choice continue every branch. Limits: 64 KiB of text, 200 sta
 
 ## The JSON form
 
-The tools also accept `protocol: {name, roles, steps}` in place of `lean`, and answer with the same
-protocol written as text. Each step is an object with exactly one kind key: `msg` (with `from`,
+The tools also accept `protocol: {name, roles, steps, types?}` in place of `lean`, and answer with
+the same protocol written as text. `types` declares the message types:
+`[{\"name\": \"Pay\", \"fields\": [\"amount : Nat\"]}]`. Each step is an object with exactly one kind key: `msg` (with `from`,
 `to`, and optional `id`, `cause`, `route`, `status`, `where`), `event` (with `at`), `choice` and
 `par` (arrays of branches, each an array of steps), `join` (a number, with `of`), `rec` (with
 `steps`), `continue`, `sessions` (an array of steps) and `include` (with `steps`):
 
 ```json
-{\"name\": \"PlaceOrder\", \"roles\": [\"Client\", \"Shop\", \"Bank\"], \"steps\": [
+{\"name\": \"PlaceOrder\", \"roles\": [\"Client\", \"Shop\", \"Bank\"],
+ \"types\": [{\"name\": \"Quote\", \"fields\": [\"price : Nat\"]},
+           {\"name\": \"Pay\", \"fields\": [\"amount : Nat\", \"card_secr : String\"]}],
+ \"steps\": [
   {\"msg\": \"CreateOrder\", \"id\": \"o\", \"from\": \"Client\", \"to\": \"Shop\", \"route\": \"POST /orders\"},
   {\"choice\": [
     [{\"msg\": \"Quote\", \"id\": \"q\", \"from\": \"Shop\", \"to\": \"Client\", \"cause\": \"o\", \"status\": 201},

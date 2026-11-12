@@ -21,6 +21,7 @@ instance : ToString Role := ⟨fun | .person => "Person" | .server => "Server" |
 
 /-! ## Vocabulary: only the fields guards read are typed here; the rest are in Requirements.proto -/
 
+--@begin Types
 -- Rooms
 structure CreateRoom     where requestId : Nat deriving TypeName
 structure RoomCreated    where requestId : Nat deriving TypeName
@@ -116,6 +117,7 @@ structure Applied        where deriving TypeName
 structure Stale          where deriving TypeName
 structure Passed         where deriving TypeName
 structure Finished       where deriving TypeName
+--@end Types
 
 /-! ## Rooms -/
 

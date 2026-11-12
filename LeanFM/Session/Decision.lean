@@ -50,7 +50,7 @@ def complete (roles : List String) (bs : List (String × String × Int)) : List 
     (r, u, ((bs.find? (fun (r',u',_) => r' == r && u' == u)).map (·.2.2)).getD 0)
 
 def balanceText (bs : List (String × String × Int)) : String :=
-  " · ".intercalate ((bs.filter (·.2.2 != 0)).map fun (r,u,v) => s!"{r} {signed v} {u}")
+  " - ".intercalate ((bs.filter (·.2.2 != 0)).map fun (r,u,v) => s!"{r} {signed v} {u}")
 
 def eventKey (e : Event String) : String :=
   (Json.mkObj [("label", e.label), ("src", e.src), ("dst", e.dst), ("time", e.time),
@@ -69,7 +69,7 @@ def steps (p : Path) (s : Schedule) (roles : List String := []) : Except String 
       -- the amount belongs to the state of the message just drawn; its outcome is part of that state
       let some last := result.getLast? | throw "an amount without its message"
       let priced : Step := { last with
-        key := last.key ++ s!"|amount:{n}:{unit}", amountText := s!"{src} → {dst} {n} {unit}", weight := Q.mul last.weight q }
+        key := last.key ++ s!"|amount:{n}:{unit}", amountText := s!"{src} -> {dst} {n} {unit}", weight := Q.mul last.weight q }
       result := result.dropLast ++ [priced]
       balances := credit (credit balances src unit (-(n : Int))) dst unit n
     | .decision name actor branch q =>
@@ -88,12 +88,12 @@ def steps (p : Path) (s : Schedule) (roles : List String := []) : Except String 
       index := index + 1
       now := e.time
       let q := (timing.bind fun t => t.offsets.head?.map (·.2)).getD Q.one
-      result := result ++ [{ key := eventKey e, kind := "state", label := e.label, detail := s!"{e.src} → {e.dst} · {clockText e.time}", weight := q, timeMs := e.time }]
+      result := result ++ [{ key := eventKey e, kind := "state", label := e.label, detail := s!"{e.src} -> {e.dst} - {clockText e.time}", weight := q, timeMs := e.time }]
     | .act .. =>
       let some e := s.events[index]? | throw "missing scheduled action"
       index := index + 1
       now := e.time
-      result := result ++ [{ key := eventKey e, kind := "state", label := e.label, detail := s!"{e.src} · {clockText e.time}", timeMs := e.time }]
+      result := result ++ [{ key := eventKey e, kind := "state", label := e.label, detail := s!"{e.src} - {clockText e.time}", timeMs := e.time }]
   let rs := reports s s.now
   let statuses := rs.map fun r => (r.getObjValAs? String "status").toOption.getD ""
   let status := if statuses.contains "violated" then "violated"
@@ -113,7 +113,7 @@ def steps (p : Path) (s : Schedule) (roles : List String := []) : Except String 
     | _, _ => none
   let terminal : Step := {
     key := "terminal:" ++ (toJson rs).compress ++ (balanceText net), kind := "terminal", label := "End",
-    detail := " · ".intercalate ([clockText s.now, status] ++ penalties), timeMs := s.now, obligations := rs, balances := net }
+    detail := " - ".intercalate ([clockText s.now, status] ++ penalties), timeMs := s.now, obligations := rs, balances := net }
   return result ++ [terminal]
 
 def maxNodes := 96
@@ -200,7 +200,7 @@ def drawing (nodes : Array Node) : Except String DiagramModel := do
   let slot := max (boxWidth + 40) edgeWidth
   -- the expected results under the policy, under the tree
   let exp := (expected nodes).filter (·.2.2 != "0")
-  let footer := (if exp.isEmpty then [] else ["Expected: " ++ " · ".intercalate (exp.map fun (r,u,v) =>
+  let footer := (if exp.isEmpty then [] else ["Expected: " ++ " - ".intercalate (exp.map fun (r,u,v) =>
       s!"{r} {if v.startsWith "-" then v else "+" ++ v} {u}")]) ++
     [s!"P(any violation) = {(violationMass nodes).text}"]
   let width := max (max 1 terminalCount * slot) (footer.foldl (fun w l => max w (l.length * 8 + 40)) 0)
@@ -223,7 +223,7 @@ def drawing (nodes : Array Node) : Except String DiagramModel := do
       let x2 := xs[n.id]!; let y2 := n.depth * 150 + 35
       shapes := shapes.push (.line "" x1 y1 x2 y2 .arrow "2" "" true)
       let edgeLabel := (if n.kind == "action" then "policy " else "p = ") ++ n.weight.text ++
-        (if n.amountText.isEmpty then "" else " · " ++ n.amountText)
+        (if n.amountText.isEmpty then "" else " - " ++ n.amountText)
       let lw := edgeLabel.length * 7 + 10
       shapes := shapes.push (.rect "label" ((x1+x2)/2 - lw/2) ((y1+y2)/2 - 13) lw 18 4 .bg .bg)
       shapes := shapes.push (.text "boxed" ((x1+x2)/2) ((y1+y2)/2) "middle" .fg 12 false edgeLabel)

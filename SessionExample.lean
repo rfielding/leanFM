@@ -107,7 +107,10 @@ def mayCall : Role → Role → Bool
 
 #guard purchase.httpCuts allHttp mayCall ==
   [ "Paid answers p, which Client sent to Bank, but goes to Shop"
-  , "Shipped is a request from Shop to Client, which Shop may not call" ]
+  , "Shipped is a request from Shop to Client, which Shop may not call"
+  , "Pay (p) from Client to Bank never gets a response"
+  , "Paid from Bank to Shop never gets a response"
+  , "Shipped from Shop to Client never gets a response" ]
 
 /-- The same purchase un-cut for HTTP: every response goes back to the role that asked. -/
 protocol PurchaseHttp (Client, Shop, Bank) {

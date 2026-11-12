@@ -20,9 +20,9 @@ def limit := mdp (args limitText)
 #guard field limit "view" == Json.str "chain"
 -- an attempt repeats with probability 3/4 · 2/3 = 1/2, so 2 expected attempts and P(fill) = 1/2
 #guard visitsOf limit "next: Order" == Json.str "2"
-#guard traversalsOf limit "Order: Trader → Exchange" == Json.str "2"
-#guard traversalsOf limit "Rejected: Exchange → Trader" == Json.str "3/2"
-#guard traversalsOf limit "Payment: Trader → Exchange" == Json.str "1/2"
+#guard traversalsOf limit "Order: Trader -> Exchange" == Json.str "2"
+#guard traversalsOf limit "Rejected: Exchange -> Trader" == Json.str "3/2"
+#guard traversalsOf limit "Payment: Trader -> Exchange" == Json.str "1/2"
 -- fees 2 × 2 USD and half a 1000 USD payment; half of 10 shares; every unit conserved
 #guard field limit "expectedBalances" == toJson [
   Json.mkObj [("role", "Trader"), ("unit", "USD"), ("expected", "-504")], Json.mkObj [("role", "Exchange"), ("unit", "USD"), ("expected", "504")],
@@ -36,7 +36,7 @@ def limit := mdp (args limitText)
 
 -- a geometric loop that exits with probability 1/4 runs its body 4 times on average
 def geometric := "protocol G (A,B) { rec L { R from A to B amount sample { 1 USD : 1/2; 3 USD : 1/2; }; choice at A using declared(\"stop\") { probability 1/4: Done from A to B; } or { probability 3/4: Again from A to B; continue L; } } }"
-#guard traversalsOf (mdp (args geometric)) "R: A → B" == Json.str "4"
+#guard traversalsOf (mdp (args geometric)) "R: A -> B" == Json.str "4"
 -- an amount sample enters by its mean: 4 traversals × 2 USD
 #guard field (mdp (args geometric)) "expectedBalances" == toJson [
   Json.mkObj [("role", "A"), ("unit", "USD"), ("expected", "-8")], Json.mkObj [("role", "B"), ("unit", "USD"), ("expected", "8")]]
@@ -53,7 +53,7 @@ def noObligation := (pricedText.splitOn "  obligation Act.Section2").headD "" ++
 #guard ((field (mdp ((args noObligation).setObjVal! "view" "chain")) "notes").compress).contains "not used"
 
 -- the tree draws amounts on edges and expected visits on states
-#guard ((priced.getObjValAs? String "svg").toOption.getD "").contains "p = 9/10 · Landlord → Tenant 1000 USD"
+#guard ((priced.getObjValAs? String "svg").toOption.getD "").contains "p = 9/10 - Landlord -&gt; Tenant 1000 USD"
 #guard ((priced.getObjValAs? String "svg").toOption.getD "").contains "expected visits 3/4"
 
 -- negative: refuse rather than report finite numbers for a session that can never end
@@ -226,14 +226,14 @@ def repairsText := include_str "../../examples/sessions/RentWithRepairs.leanfm"
 def repairs := mdp ((args repairsText).setObjVal! "horizon" "4 weeks")
 #guard field repairs "gatePassages" == Json.str "6095/1728"
 #guard field repairs "stillRunning" == Json.str "1331/1728"
-#guard traversalsOf repairs "Repair: Landlord → Tenant" == Json.str "397/864"
-#guard traversalsOf repairs "Terminate: Landlord → Tenant" == Json.str "397/1728"
+#guard traversalsOf repairs "Repair: Landlord -> Tenant" == Json.str "397/864"
+#guard traversalsOf repairs "Terminate: Landlord -> Tenant" == Json.str "397/1728"
 -- rent minus repair credits: -1000 · 6095/1728 + 200 · 397/864 = -742025/216 USD
 #guard ((field repairs "expectedByRole").getObjValD "Tenant").getObjValD "USD" == Json.str "-742025/216"
 -- every passage fills a week; a terminated cycle adds its hour and day: 7 · 6095/1728 + 397/1728 · 25/24 days
 #guard field repairs "expectedDurationMs" == Json.str "6461781250/3"
 -- the legend says where each role's balance came from, and the effective price
-#guard ((field repairs "svg").getStr?.toOption.getD "").contains "Landlord: -3.56 roomweek (accrue 1 roomweek/week -3.56) · +3435.30 USD (Rent +3527.20, Repair -91.90) · 964.60 USD per roomweek"
+#guard ((field repairs "svg").getStr?.toOption.getD "").contains "Landlord: -3.56 roomweek (accrue 1 roomweek/week -3.56) - +3435.30 USD (Rent +3527.20, Repair -91.90) - 964.60 USD per roomweek"
 #guard (((field repairs "breakdown").getObjValD "Landlord").getObjValD "USD") == Json.mkObj [("Rent", "761875/216"), ("Repair", "-9925/108")]
 
 /-! Requirement selfhost.session.generate.chain: generating walks of a session with loops. -/
@@ -284,10 +284,10 @@ def spin := (parseProtocol (args "protocol P (A,B) { rec L { choice at A using d
 
 /-! Requirement selfhost.session.diagram.annotations: probabilities and rewards on the sequence diagram. -/
 def rideSvg := ((diagram (args rideText)).toOption.get!.getObjValAs? String "svg").toOption.getD ""
-#guard rideSvg.contains "p 4/5 · after 10 seconds · ×1"
-#guard rideSvg.contains "after 30 seconds · ×5/4"
+#guard rideSvg.contains "p 4/5 - after 10 seconds - x1"
+#guard rideSvg.contains "after 30 seconds - x5/4"
 -- each Fare keeps its own amount though both are Rider → Platform Fare
-#guard rideSvg.contains "15 USD · ×9/20" && rideSvg.contains "25 USD · ×9/20"
+#guard rideSvg.contains "15 USD - x9/20" && rideSvg.contains "25 USD - x9/20"
 #guard rideSvg.contains "Platform: +3.70 USD (Cancel +0.50, CancelFee -0.40, Fare +18.00, Payout -14.40)"
 -- the matching tag never reaches the reader
 #guard !(rideSvg.contains "\u0001") && !((diagram (args rideText)).toOption.get!.compress.contains "\\u0001")
@@ -302,7 +302,7 @@ def bounded := mdp (args boundedText)
 -- no loop is left, so the tree view (with deadlines and the timed generator) handles it
 #guard ok bounded "drawn" && field bounded "view" == Json.null
 -- three offers at most: no driver with probability (1/5)³; every balance is the unbounded ride's × 124/125
-#guard ((field bounded "report").getStr?.toOption.getD "").contains "- 1/125: End, 120000 ms · no obligations"
+#guard ((field bounded "report").getStr?.toOption.getD "").contains "- 1/125: End, 120000 ms - no obligations"
 #guard field bounded "expectedBalances" == toJson [
   Json.mkObj [("role", "Rider"), ("unit", "USD"), ("expected", "-2294/125")],
   Json.mkObj [("role", "Platform"), ("unit", "USD"), ("expected", "2294/625")],
@@ -310,7 +310,7 @@ def bounded := mdp (args boundedText)
 -- each pass is its own state with its own count: 1, 1/5, 1/25 offers
 def boundedChain := mdp ((args boundedText).setObjVal! "view" "chain")
 def boundedReport := (field boundedChain "report").getStr?.toOption.getD ""
-#guard ["×1", "×1/5", "×1/25"].all fun c => boundedReport.contains s!"- Offer: Platform → Driver: {c}\n"
+#guard ["x1", "x1/5", "x1/25"].all fun c => boundedReport.contains s!"- Offer: Platform -> Driver: {c}\n"
 -- this answer is large: it says what it left out to fit the response limit
 #guard (field boundedChain "omitted") != Json.null && boundedReport.contains "To fit the response limit"
 #guard ((field boundedChain "report").getStr?.toOption.getD "").contains "End after NoDriver: probability 1/125"
@@ -345,7 +345,7 @@ def repairsVals : List (Rat × Rat) := (repairsDist.getArr?.toOption.getD #[]).t
   Json.mkObj [("passages", toJson (2 : Nat)), ("probability", "11/144")], Json.mkObj [("passages", toJson (3 : Nat)), ("probability", "121/1728")],
   Json.mkObj [("passages", toJson (4 : Nat)), ("probability", "1331/1728")]]
 -- a year: P(at least 13 rents) = (11/12)^12, read as a decimal
-#guard ((field (mdp ((args repairsText).setObjVal! "horizon" "52 weeks")) "report").getStr?.toOption.getD "").contains "P(at least 13) ≈ 0.3520"
+#guard ((field (mdp ((args repairsText).setObjVal! "horizon" "52 weeks")) "report").getStr?.toOption.getD "").contains "P(at least 13) ~0.3520"
 -- loops without a horizon: no distribution, and the tool says why
 #guard ((field limit "report").getStr?.toOption.getD "").contains "No distribution: with loops and no horizon its support is infinite"
 

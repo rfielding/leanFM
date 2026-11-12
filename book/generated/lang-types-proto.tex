@@ -1,0 +1,23 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+// What the client orders.
+message CreateOrder {
+  string item = 1;
+  uint64 quantity = 2;
+}
+
+// The shop's price for the order, in cents.
+message Quote {
+  uint64 price = 1;
+}
+
+// The client pays; the card number is a secret, never logged.
+message Pay {
+  uint64 amount = 1;
+  string card_secr = 2;
+}
+
+message Charge {
+  uint64 amount = 1;
+  string card_secr = 2;
+}
+\end{lstlisting}

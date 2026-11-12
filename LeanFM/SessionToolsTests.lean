@@ -36,13 +36,13 @@ def po := call check (withProtocol placeOrder)
 #guard strs (field po "issues") == []
 #guard ((field po "projections").getObjValD "Client" |>.getObjValAs? String "typestate").toOption ==
   some ("start : S0\nS0.sendCreateOrder(m : CreateOrder) : S1    -- to Shop\n" ++
-        "S1.receive() : Quote × S2 (from Shop) | SoldOut × End (from Shop)\n" ++
+        "S1.receive() : Quote -> S2 (from Shop) | SoldOut -> End (from Shop)\n" ++
         "S2.sendPay(m : Pay) : S3    -- to Shop\n" ++
-        "S3.receive() : Receipt × End (from Shop) | PaymentDeclined × End (from Shop)")
+        "S3.receive() : Receipt -> End (from Shop) | PaymentDeclined -> End (from Shop)")
 #guard (field po "callsText").getStr?.toOption ==
-  some ("o: CreateOrder  Client → Shop  POST /orders\n  returns Quote 201 | SoldOut 409\n" ++
-        "p: Pay  Client → Shop\n  returns Receipt 200 | PaymentDeclined 402\n" ++
-        "    c: Charge  Shop → Bank\n      returns Charged | Declined")
+  some ("o: CreateOrder  Client -> Shop  POST /orders\n  returns Quote 201 | SoldOut 409\n" ++
+        "p: Pay  Client -> Shop\n  returns Receipt 200 | PaymentDeclined 402\n" ++
+        "    c: Charge  Shop -> Bank\n      returns Charged | Declined")
 -- the diagram comes as shapes: an alt frame names the shop as the role that selects
 #guard ((field po "diagram").getObjValD "shapes").compress.contains "[Shop decides]"
 -- every answer echoes the protocol it checked, so the view can edit it
@@ -79,7 +79,8 @@ def borrowed := call check (withProtocol r#"{"roles": ["Client", "Shop", "Bank"]
 #guard (strs (field borrowed "issues")).contains "Paid: Bank never saw o"
 
 -- with mayCall every channel is HTTP: Paid answers the client's call but goes to the shop
-def purchase : String := r#"{"roles": ["Client", "Shop", "Bank"], "steps": [
+def purchase : String := r#"{"roles": ["Client", "Shop", "Bank"],
+  "types": [{"name": "Quote", "fields": ["price : Nat"]}, {"name": "Pay", "fields": ["amount : Nat"]}], "steps": [
   {"msg": "Order", "id": "o", "from": "Client", "to": "Shop"},
   {"choice": [
     [{"msg": "Quote", "id": "q", "from": "Shop", "to": "Client", "cause": "o"},
@@ -147,14 +148,16 @@ def mcpApps : String := include_str "../examples/sessions/McpAppsToolCall.json"
 def mcpAppsCheck := call check (withProtocol mcpApps)
 #guard verdict mcpAppsCheck == "ok"
 -- the view's acknowledgement answers the host's context, so it is its own call, not part of ui/initialize
-#guard ((field mcpAppsCheck "callsText").getStr?.toOption.getD "").contains "Initialized  View → Host\n  returns no reply"
+#guard ((field mcpAppsCheck "callsText").getStr?.toOption.getD "").contains "Initialized  View -> Host\n  returns no reply"
 
 /-! ## Lean protocol text (the main input) -/
 
 open LeanFM.Session in
 /-- The text parser and the `protocol` command agree: the same diagram, issues and projections. -/
 def agrees {R : Type} [DecidableEq R] [ToString R] (text : String) (g : Global R) (roles : List R) : Bool :=
-  match LeanFM.Session.Text.parse text with
+  -- the message types the purchases' conditions read; types do not change the global type
+  let types := "structure Quote where price : Nat\nstructure Pay where amount : Nat\nstructure Receipt where amount : Nat\nstructure Confirm where amount : Nat\n"
+  match LeanFM.Session.Text.parse (types ++ text) with
   | .error _ => false
   | .ok p =>
     p.roles == roles.map toString &&
@@ -278,7 +281,7 @@ def leanRejects (t : String) (needle : String) : Bool :=
 #guard leanRejects "#eval IO.Process.exit 1\nprotocol P (A) { X at A; }" "line 1, column 1: expected 'protocol'"
 #guard leanRejects "protocol P (A, B) { X from A to B where (IO.Process.exit 1; }" "never ends with ';'"
 -- a where condition is text, shown as written
-#guard ((field (diagram (leanArgs "protocol P (A, B) { p: X from A to B where p.n <  3   && true; }")) "svg").getStr?.toOption.getD "").contains "[p.n &lt; 3 &amp;&amp; true]"
+#guard ((field (diagram (leanArgs "structure X where n : Nat\nprotocol P (A, B) { p: X from A to B where p.n <  3   && true; }")) "svg").getStr?.toOption.getD "").contains "[p.n &lt; 3 &amp;&amp; true]"
 -- names with spaces, comments everywhere
 #guard verdict (check (leanArgs "protocol «Two Words» («The Client», Shop) { -- hello\n  /- a /- nested -/ comment -/\n  «Place Order» from «The Client» to Shop; }")) == "ok"
 -- the limits hold for text too
@@ -471,7 +474,7 @@ def pathOf (r : Except String Json) : List String :=
 #guard pathOf (prop tripParallel neverChargeAfterNoSeat) == ["Book", "HoldSeat", "NoSeat", "HoldRoom", "RoomHeld", "Charge"]
 -- and the same path is in the report, which goes into the text a model reads
 #guard ((field (prop tripParallel neverChargeAfterNoSeat) "report").getStr?.toOption.getD "") ==
-  "counterexample: Book → HoldSeat → NoSeat → HoldRoom → RoomHeld → Charge"
+  "counterexample: Book -> HoldSeat -> NoSeat -> HoldRoom -> RoomHeld -> Charge"
 -- a path that ends where the session ended says it stays there
 #guard ((field (prop tripSequential r#"{"AF": {"after": "Charge"}}"#) "report").getStr?.toOption.getD "").endsWith "(and stays there)"
 -- holding in sequence fixes it, every hold is confirmed or released, and every session ends
@@ -548,27 +551,27 @@ def compatOf (newer older : String) : Except String Json :=
 def lendingV2 : String := include_str "../examples/vibecode/lending/Lending-v2.protocol"
 -- renewing: the Desk and the Librarian can upgrade first; the Member must wait for the Desk
 #guard verdict (compatOf lendingV2 lendingProtocol) == "incompatible"
-#guard (field (compatOf lendingV2 lendingProtocol) "reading").getStr?.toOption == some "Lending → Lending: upgrade first: Desk, Librarian"
+#guard (field (compatOf lendingV2 lendingProtocol) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Desk, Librarian"
 #guard (strs (field (compatOf lendingV2 lendingProtocol) "issues")) ==
-  [ "Member cannot upgrade first: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member → Desk: Borrow; Desk → Member: Lent; Member chooses to send Renew to Desk)"
-  , "Desk cannot stay on the old version: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member → Desk: Borrow; Desk → Member: Lent; Member chooses to send Renew to Desk)" ]
+  [ "Member cannot upgrade first: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member -> Desk: Borrow; Desk -> Member: Lent; Member chooses to send Renew to Desk)"
+  , "Desk cannot stay on the old version: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member -> Desk: Borrow; Desk -> Member: Lent; Member chooses to send Renew to Desk)" ]
 -- the same protocol is compatible with itself, and v1 after v2 is the mirror image
 #guard verdict (compatOf lendingProtocol lendingProtocol) == "compatible"
-#guard (field (compatOf lendingProtocol lendingV2) "reading").getStr?.toOption == some "Lending → Lending: upgrade first: Member, Librarian"
+#guard (field (compatOf lendingProtocol lendingV2) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Member, Librarian"
 -- dropping holds: the Desk may answer Refused at once, which the old Member accepts there, so the
 -- Desk can go first (a role-by-role subtyping check would refuse this); the Member cannot, because
 -- the old Desk may still put it on hold and send Waitlisted
 def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow from Member to Desk; choice { l: Lent from Desk to Member cause b; r: Return from Member to Desk; Returned from Desk to Member cause r; } or { Refused from Desk to Member cause b; } } }"
-#guard (field (compatOf noHolds lendingProtocol) "reading").getStr?.toOption == some "Lending → Lending: upgrade first: Desk"
+#guard (field (compatOf noHolds lendingProtocol) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Desk"
 #guard (strs (field (compatOf noHolds lendingProtocol) "notes")) == ["only in the old version: Librarian"]
 #guard (strs (field (compatOf noHolds lendingProtocol) "issues")).head? ==
-  some "Member cannot upgrade first: Member waits to receive Lent from Desk, receive Refused from Desk; Desk is stuck trying to send Waitlisted to Member (after Member → Desk: Borrow; Desk → Librarian: Hold; Librarian → Desk: Approved)"
+  some "Member cannot upgrade first: Member waits to receive Lent from Desk, receive Refused from Desk; Desk is stuck trying to send Waitlisted to Member (after Member -> Desk: Borrow; Desk -> Librarian: Hold; Librarian -> Desk: Approved)"
 -- negative: a message nobody sends any more leaves its receiver waiting
 #guard (strs (field (compatOf "protocol P (A, B) { x: Ping from A to B; }" "protocol P (A, B) { x: Ping from A to B; Pong from B to A cause x; }") "issues")) ==
-  [ "A cannot upgrade first: B is stuck trying to send Pong to A (after A → B: Ping)"
-  , "A cannot stay on the old version: A waits to receive Pong from B (after A → B: Ping)"
-  , "B cannot upgrade first: A waits to receive Pong from B (after A → B: Ping)"
-  , "B cannot stay on the old version: B is stuck trying to send Pong to A (after A → B: Ping)" ]
+  [ "A cannot upgrade first: B is stuck trying to send Pong to A (after A -> B: Ping)"
+  , "A cannot stay on the old version: A waits to receive Pong from B (after A -> B: Ping)"
+  , "B cannot upgrade first: A waits to receive Pong from B (after A -> B: Ping)"
+  , "B cannot stay on the old version: B is stuck trying to send Pong to A (after A -> B: Ping)" ]
 -- par: branches interleave in the composed system, and a reordering inside a branch is found
 #guard verdict (compatOf "protocol F (H, A, B) { par { Ping from H to A; } and { Ping from H to B; } }" "protocol F (H, A, B) { par { Ping from H to B; } and { Ping from H to A; } }") == "compatible"
 #guard verdict (compatOf "protocol T (S, R) { x: Ask from S to R; y: Tell from S to R; }" "protocol T (S, R) { y: Tell from S to R; x: Ask from S to R; }") == "incompatible"
@@ -582,7 +585,7 @@ def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow 
 def skel (t : String) : Except String Json := skeleton (leanArgs t)
 def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).getD ""
 -- each state's methods are exactly the typestate's
-#guard (code lendingProtocol).contains "class DeskS2(State):\n    \"\"\"Desk at S2: send_lent → DeskS3; send_hold → DeskS5.\"\"\""
+#guard (code lendingProtocol).contains "class DeskS2(State):\n    \"\"\"Desk at S2: send_lent -> DeskS3; send_hold -> DeskS5.\"\"\""
 -- a send fills in the protocol's ids: Lent is l, caused by b
 #guard (code lendingProtocol).contains "ep.send(\"Member\", \"Lent\", \"l\", \"b\", body)"
 -- a role that only serves sessions starts each one in the body's first state
@@ -600,13 +603,13 @@ def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).get
 #guard ((field (check (leanArgs lendingProtocol)) "projections").getObjValD "Member" |>.getObjValAs? String "local").toOption.map (·.contains "offer {") == some true
 -- two messages alike with different ids or causes: the cause is passed, not guessed
 #guard (code "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
-  "def send_reply(self, cause=None, body=None):"
+  "def send_reply(self, cause=None, body: Optional[Reply] = None):"
 -- TypeScript: the same states, so a step a state does not allow is a missing method, a type error
 def tsCode (t : String) : String :=
   ((field (skeleton ((leanArgs t).setObjVal! "language" (Json.str "typescript"))) "code").getStr?.toOption).getD ""
 def tsClass (t c : String) : String := (((tsCode t).splitOn s!"export class {c} extends State \{")[1]?.getD "").splitOn "\n}\n" |>.head!
-#guard (tsClass lendingProtocol "DeskS2").contains "  sendLent(body?: unknown): DeskS3 {"
-#guard (tsClass lendingProtocol "DeskS2").contains "  sendHold(body?: unknown): DeskS5 {"
+#guard (tsClass lendingProtocol "DeskS2").contains "  sendLent(body?: Lent): DeskS3 {"
+#guard (tsClass lendingProtocol "DeskS2").contains "  sendHold(body?: Hold): DeskS5 {"
 -- the lending bug cannot be written: an approved hold's state has no sendLent
 #guard (tsClass lendingProtocol "DeskS6").contains "sendWaitlisted" && !(tsClass lendingProtocol "DeskS6").contains "sendLent"
 -- states with the same methods are still different types, and receive narrows by label
@@ -615,7 +618,7 @@ def tsClass (t c : String) : String := (((tsCode t).splitOn s!"export class {c} 
 #guard (tsCode "protocol R (P, A, B, C) { join 2 of { wa: W from P to A; S from A to P cause wa; } and { wb: W from P to B; S from B to P cause wb; } and { wc: W from P to C; S from C to P cause wc; } Done at P; }").contains
   "return new Fork([new PS1(ep), new PS3(ep), new PS5(ep)] as [PS1, PS3, PS5], () => new PS7(ep), 2);"
 #guard (tsCode "protocol A (C, S) { a: Ask from C to S; Reply from S to C cause a; b: Ask from C to S; Reply from S to C cause b; }").contains
-  "sendReply(cause?: string, body?: unknown): "
+  "sendReply(cause?: string, body?: Reply): "
 #guard reason (skeleton ((leanArgs "protocol C (C, S) { q: Q from C to S; choice { SoldOut from S to C cause q; } or { soldOut from S to C cause q; } }").setObjVal! "language" (Json.str "typescript"))) ==
   "S: two methods of S1 would both be called sendSoldOut"
 -- negative: two methods with one Python name, an unknown language

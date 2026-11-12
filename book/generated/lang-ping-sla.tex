@@ -3,5 +3,5 @@ Requirements against the stated assumptions (exact, per entry):
 - every q reaches Pong, SlowPong within 1 second;
   MET: per entry the probability of reaching Pong, SlowPong within 1 second is 1.
 - at least 95/100 of q reach Pong, SlowPong within 100 ms over 1000 entries;
-  VIOLATED: per entry the probability of reaching Pong, SlowPong within 100 ms is 9/10. The most probable path that breaks it: Ping → [IsBusy → SlowPong: 1/10] → SlowPong → (at 800 ms, past the 100 ms deadline), through the assumption [IsBusy → SlowPong: 1/10]. The window holds the 60 entries it needs to decide at 19/20 confidence. The assumptions cannot meet this bound: change the protocol (a retry, a fallback) or the stated probabilities on the path shown.
+  VIOLATED: per entry the probability of reaching Pong, SlowPong within 100 ms is 9/10. The most probable path that breaks it: Ping -> [IsBusy -> SlowPong: 1/10] -> SlowPong -> (at 800 ms, past the 100 ms deadline), through the assumption [IsBusy -> SlowPong: 1/10]. The window holds the 60 entries it needs to decide at 19/20 confidence. The assumptions cannot meet this bound: change the protocol (a retry, a fallback) or the stated probabilities on the path shown.
 \end{lstlisting}

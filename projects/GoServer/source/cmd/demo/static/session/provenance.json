@@ -8,5 +8,5 @@
  "prompt": "let's show the session type for the game in a hidden panel",
  "generator": "projects/GoServer/spec/SessionPanel.lean",
  "eventSource":
- "spec/Session.lean, the regions from --@begin Rooms to --@end GoServer",
+ "spec/Session.lean, the regions from --@begin Types to --@end GoServer",
  "boundary": "protocol GoServer with every protocol it includes"}

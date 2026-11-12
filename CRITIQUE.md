@@ -146,6 +146,9 @@ them from releases would keep the repository text-only.
   (2026-11-12).
 - Assumptions name their outcome: `[IsBusy → SlowPong: 1/10]` (2026-11-12).
 - Marked secrets and check cost metrics (2026-11-12).
+- `where` conditions are run: conformance interprets them over logged fields, false
+  conditions fail, undecidable ones are reported unchecked, and generated code logs
+  only the fields conditions read (2026-11-12).
 - The book documents the language: superseded notations (task FSMs as the main
   model, the scenario authoring language, channel presets and the topology tree as
   proposed notation) and the Chat UI guide were cut (2026-11-12).

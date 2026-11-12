@@ -1,3 +1,14 @@
+/-- The book a member asks to borrow. -/
+structure Borrow where
+  book : String
+
+/-- The Desk asks the Librarian to approve a hold on the book. -/
+structure Hold where
+  book : String
+
+structure Return where
+  book : String
+
 /-- Borrowing a book. Each member's visit is one session; many run at once. -/
 protocol Lending (Member, Desk, Librarian) {
   sessions {

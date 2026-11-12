@@ -2,7 +2,7 @@
 export class ClientS0 extends State {
   readonly state = "ClientS0" as const;
 
-  sendCreateOrder(body?: unknown): ClientS1 {
+  sendCreateOrder(body?: CreateOrder): ClientS1 {
     const ep = this.take();
     ep.send("Shop", "CreateOrder", "o", null, body);
     return new ClientS1(ep);
@@ -29,10 +29,10 @@ export class ClientS1 extends State {
   }
 }
 
-/** Client at S2: sendPay → ClientS3. */
+/** Client at S2: sendPay -> ClientS3. */
 export class ClientS2 extends State {
   readonly state = "ClientS2" as const;
 
-  sendPay(body?: unknown): ClientS3 {
+  sendPay(body?: Pay): ClientS3 {
     const ep = this.take();
 \end{lstlisting}

@@ -157,7 +157,7 @@ protocol ReplicatedOrder (Client, Primary, A, B, C) {
 def replicatedOrder : Global Role := ReplicatedOrder .client .primary .r1 .r2 .r3
 -- the join's count survives projection and reaches the typestate
 #guard ((replicatedOrder.project Role.primary).toOption.map Local.render).map (·.contains "join 2 of {") == some true
-#guard ((((replicatedOrder.typestates [.primary]).lookup Role.primary).bind (·.toOption)).map (·.contains "S1.fork() : any 2 of (S2 ∥ S4 ∥ S6) then S8")) == some true
+#guard ((((replicatedOrder.typestates [.primary]).lookup Role.primary).bind (·.toOption)).map (·.contains "S1.fork() : any 2 of (S2 || S4 || S6) then S8")) == some true
 -- a replica takes part in one branch: for it the join is that branch, then nothing
 #guard ((replicatedOrder.project Role.r1).toOption.map Local.render) == some "receive Write from Primary;\nsend Stored to Primary;"
 #guard replicatedOrder.issues [.client, .primary, .r1, .r2, .r3] == []
@@ -257,7 +257,7 @@ def replicatedSvg := replicatedOrder.diagram [.client, .primary, .r1, .r2, .r3]
 
 def transferSvg := transfer.diagram [.sender, .receiver]
 #guard occurs transferSvg "class=\"frame loop\"" == 1
-#guard occurs transferSvg "↻ continue Block" == 1
+#guard occurs transferSvg "continue Block" == 1
 #guard occurs transferSvg "[Receiver decides]" == 1
 
 -- an event is an action box; a race is drawn, and named as one, rather than hidden
@@ -322,36 +322,36 @@ def checkout : Global Role := Checkout .client .shop .bank
 -- a call is a request with the responses its cause chain ties to it; the bank's charge is part of
 -- the payment's detail, nested under it; responses are never calls of their own
 #guard checkout.callsText ==
-  "o: Order  Client → Shop  POST /orders\n" ++
+  "o: Order  Client -> Shop  POST /orders\n" ++
   "  returns Quote 201 | SoldOut 409\n" ++
-  "p: Pay  Client → Shop  POST /orders/{id}/payment\n" ++
+  "p: Pay  Client -> Shop  POST /orders/{id}/payment\n" ++
   "  returns Receipt 200 | Refused 402\n" ++
-  "    v: Verify  Shop → Bank  POST /charges\n" ++
+  "    v: Verify  Shop -> Bank  POST /charges\n" ++
   "      returns Hold | Declined"
 -- a one-way message is a call with no reply
 #guard purchase.callsText ==
-  "o: Order  Client → Shop\n  returns Quote | SoldOut\n" ++
-  "p: Pay  Client → Bank\n  returns no reply\n" ++
-  "    Paid  Bank → Shop\n      returns no reply\n" ++
-  "Shipped  Shop → Client\n  returns no reply"
+  "o: Order  Client -> Shop\n  returns Quote | SoldOut\n" ++
+  "p: Pay  Client -> Bank\n  returns no reply\n" ++
+  "    Paid  Bank -> Shop\n      returns no reply\n" ++
+  "Shipped  Shop -> Client\n  returns no reply"
 
 -- each role's projection read as a typestate API
 #guard ((checkout.typestates roles3).lookup Role.client).bind (·.toOption) == some ((
   "start : S0\n" ++
   "S0.sendOrder(m : Order) : S1    -- to Shop\n" ++
-  "S1.receive() : Quote × S2 (from Shop) | SoldOut × End (from Shop)\n" ++
+  "S1.receive() : Quote -> S2 (from Shop) | SoldOut -> End (from Shop)\n" ++
   "S2.sendPay(m : Pay) : S3    -- to Shop\n" ++
-  "S3.receive() : Receipt × End (from Shop) | Refused × End (from Shop)"))
+  "S3.receive() : Receipt -> End (from Shop) | Refused -> End (from Shop)"))
 #guard ((checkout.typestates roles3).lookup Role.bank).bind (·.toOption) == some ((
   "start : S0\n" ++
-  "S0.receive() : Verify × S1 (from Shop) | nothing × End\n" ++
+  "S0.receive() : Verify -> S1 (from Shop) | nothing -> End\n" ++
   "S1.sendHold(m : Hold) : End    -- to Shop\n" ++
   "S1.sendDeclined(m : Declined) : End    -- to Shop"))
 -- a loop's continue returns to the loop's state
 #guard ((transfer.typestates [.sender, .receiver]).lookup Role.sender).bind (·.toOption) == some ((
   "start : S0\n" ++
   "S0.sendData(m : Data) : S1    -- to Receiver\n" ++
-  "S1.receive() : Ack × S0 (from Receiver) | LastAck × End (from Receiver)"))
+  "S1.receive() : Ack -> S0 (from Receiver) | LastAck -> End (from Receiver)"))
 
 -- the diagram shows routes and statuses, and each call as an activation bar on the callee; a
 -- response in another branch gets a bar of its own from where that branch begins
@@ -395,9 +395,9 @@ def clearOfFrames (m : DiagramModel) : Bool :=
 -- text outside boxes has a background halo; a role's name in its box does not
 #guard checkoutSvg.contains "font-size=\"11\" stroke=\"#111111\" stroke-width=\"4\""
 #guard checkoutSvg.contains "font-size=\"12\" class=\"boxed\">Client</text>"
-#guard occurs checkoutSvg "o: Order · POST /orders<" == 1
-#guard occurs checkoutSvg "q: Quote · 201<" == 1
-#guard occurs checkoutSvg "Refused · 402<" == 1
+#guard occurs checkoutSvg "o: Order - POST /orders<" == 1
+#guard occurs checkoutSvg "q: Quote - 201<" == 1
+#guard occurs checkoutSvg "Refused - 402<" == 1
 #guard occurs checkoutSvg "class=\"activation\"" == 6
 
 protocol Lookup (Client, Shop) {

@@ -70,7 +70,7 @@ def stepName (c : Chain) (e : Edge) : String :=
   else if e.kind == "policy" then
     let name := (c.states[e.src]?.map (·.detail)).getD "choice"
     match branchFirst c e.dst with
-    | some first => s!"[{name} → {first}: {e.prob.text}]"
+    | some first => s!"[{name} -> {first}: {e.prob.text}]"
     | none => s!"[{name}: {e.prob.text}]"
   else e.label
 

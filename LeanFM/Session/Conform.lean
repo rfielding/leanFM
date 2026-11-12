@@ -1,4 +1,5 @@
 import LeanFM.Session.Global
+import LeanFM.Session.Where
 
 /-!
 # Conformance: does a recorded run follow the protocol? (clause selfhost.session.conform)
@@ -49,6 +50,8 @@ structure LogEvent where
   label   : String
   cause   : Option String := none
   isAct   : Bool := false
+  /-- the payload fields a where condition may read, nested keys dotted (selfhost.session.where) -/
+  fields  : List (String × Where.Value) := []
   deriving Repr, Inhabited, BEq
 
 namespace Conform
@@ -57,6 +60,8 @@ namespace Conform
 structure State where
   g    : Global String
   bind : List (String × String)
+  /-- conditions that could not be decided on the way here: (event id, why); not part of the key -/
+  unchecked : List (String × String) := []
   deriving Inhabited
 
 partial def subst (n : String) (body : Global String) : Global String → Global String
@@ -111,7 +116,8 @@ partial def heads (fuel : Nat := 32) : Global String → List String
 
 /-- The states after one event. With `ignoreCause`, causes are not compared (used only to say
 whether an event fits apart from its cause). -/
-partial def step (e : LogEvent) (fuel : Nat) (ignoreCause : Bool) (s : State) : List State :=
+partial def step (e : LogEvent) (fuel : Nat) (ignoreCause : Bool) (s : State)
+    (look : String → Option (List (String × Where.Value)) := fun _ => none) (ignoreGuard : Bool := true) : List State :=
   let causeOk (c : Option String) : Bool :=
     match c with
     | none => true
@@ -120,12 +126,23 @@ partial def step (e : LogEvent) (fuel : Nat) (ignoreCause : Bool) (s : State) : 
       | none => false
   let bindId (id : Option String) : List (String × String) :=
     match id with | some x => (x, e.id) :: s.bind.filter (·.1 != x) | none => s.bind
-  let go := step e fuel ignoreCause
+  let go := fun st => step e fuel ignoreCause st look ignoreGuard
   match s.g with
   | .done | .var _ => []
   | .msg i k =>
-    if !e.isAct && i.label == e.label && i.src == e.src && i.dst == e.dst && causeOk i.cause
-    then [{ g := k, bind := bindId i.id }] else []
+    if !e.isAct && i.label == e.label && i.src == e.src && i.dst == e.dst && causeOk i.cause then
+      let moved : State := { s with g := k, bind := bindId i.id }
+      match i.guard, ignoreGuard with
+      | some gd, false =>
+        -- the message itself and the session's earlier named messages, with their logged fields
+        let scope : String → Option (List (String × Where.Value)) := fun x =>
+          if i.id == some x then some e.fields else (s.bind.lookup x).bind look
+        match Where.run gd.text scope with
+        | .yes => [moved]
+        | .no => []
+        | .unknown why => [{ moved with unchecked := s.unchecked ++ [(e.id, s!"where {gd.text}: {why}")] }]
+      | _, _ => [moved]
+    else []
   | .act r l k => if e.isAct && l == e.label && r == e.src then [{ s with g := k }] else []
   | .choice bs => bs.flatMap fun b => go { s with g := b }
   | .par bs k =>
@@ -139,9 +156,26 @@ partial def step (e : LogEvent) (fuel : Nat) (ignoreCause : Bool) (s : State) : 
     let fired := if (bs.filter nullable).length ≥ n
       then go { s with g := .par (k :: bs.filter (!nullable ·)) .done } else []
     moves ++ fired
-  | .loop n b => if fuel == 0 then [] else step e (fuel - 1) ignoreCause { s with g := subst n (.loop n b) b }
+  | .loop n b => if fuel == 0 then [] else step e (fuel - 1) ignoreCause { s with g := subst n (.loop n b) b } look ignoreGuard
   | .sessions _ k => go { s with g := k }  -- nested instances belong to other session ids
   | .box _ b k => go { s with g := Global.andThen b k }
+
+/-- The where conditions of the messages at the head of `g` that `e` matches by label, roles and
+cause: the guards that turned it away when nothing else matched. -/
+partial def guardsAt (e : LogEvent) (fuel : Nat) (s : State) : List (String × Option String) :=
+  let go := fun (g : Global String) => guardsAt e fuel { s with g }
+  match s.g with
+  | .msg i _ =>
+    if !e.isAct && i.label == e.label && i.src == e.src && i.dst == e.dst then
+      match i.guard with | some gd => [(gd.text, i.id)] | none => []
+    else []
+  | .choice bs => bs.flatMap go
+  | .par bs k => bs.flatMap go ++ (if bs.all nullable then go k else [])
+  | .join n bs k => bs.flatMap go ++ (if (bs.filter nullable).length ≥ n then go k else [])
+  | .loop n b => if fuel == 0 then [] else guardsAt e (fuel - 1) { s with g := subst n (.loop n b) b }
+  | .sessions _ k => go k
+  | .box _ b k => go (Global.andThen b k)
+  | _ => []
 
 def maxStates : Nat := 512
 
@@ -151,6 +185,8 @@ structure SessionResult where
   complete : Bool
   /-- the first problem: the event's id and what went wrong -/
   problem  : Option (String × String)
+  /-- where conditions that could not be decided: (event id, why) -/
+  unchecked : List (String × String) := []
   deriving Repr
 
 def checkSession (g : Global String) (sid : String) (evs : List LogEvent) (allowIncomplete : Bool) :
@@ -165,8 +201,18 @@ def checkSession (g : Global String) (sid : String) (evs : List LogEvent) (allow
       if !seen.contains c then
         return { session := sid, events := count, complete := false,
                  problem := some (e.id, s!"{e.label}'s cause {c} is not an earlier event of session {sid}") }
-    let next := states.flatMap (step e 64 false)
+    let look : String → Option (List (String × Where.Value)) := fun x => (evs.find? (·.id == x)).map (·.fields)
+    let next := states.flatMap fun st => step e 64 false st look false
     let next := next.foldl (fun acc st => if acc.any (stateKey · == stateKey st) then acc else acc ++ [st]) []
+    if next.isEmpty && !(states.flatMap (step e 64 false)).isEmpty then
+      -- it fits a message whose where condition is false: name the condition and what it read
+      let why := (states.flatMap fun st => (guardsAt e 64 st).map fun (text, mid) =>
+        let scope : String → Option (List (String × Where.Value)) := fun x =>
+          if mid == some x then some e.fields else (st.bind.lookup x).bind look
+        let read := Where.readings text scope
+        s!"where {text} is false" ++ (if read.isEmpty then "" else s!": {read}")).eraseDups
+      return { session := sid, events := count, complete := false,
+               problem := some (e.id, s!"{e.label} from {e.src} to {e.dst} breaks its condition: " ++ "; ".intercalate why) }
     if next.isEmpty then
       let allowed := (states.flatMap fun st => heads 32 st.g).eraseDups
       let what := if e.isAct then s!"{e.label} at {e.src}" else s!"{e.label} from {e.src} to {e.dst}"
@@ -182,8 +228,9 @@ def checkSession (g : Global String) (sid : String) (evs : List LogEvent) (allow
     seen := e.id :: seen
     count := count + 1
   let complete := states.any (nullable ·.g)
+  let unchecked := ((states.find? (nullable ·.g)).getD (states.headD default)).unchecked
   if complete || allowIncomplete then
-    return { session := sid, events := count, complete, problem := none }
+    return { session := sid, events := count, complete, problem := none, unchecked }
   let allowed := (states.flatMap fun st => heads 32 st.g).eraseDups
   return { session := sid, events := count, complete := false,
            problem := some ((evs.getLast?.map (·.id)).getD "", s!"the session stops early; the protocol still expects {", ".intercalate allowed}") }

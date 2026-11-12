@@ -30,5 +30,7 @@ import LeanFM.Session.GenerativeTests
 import LeanFM.Session.DecisionTests
 import LeanFM.Session.ChainTests
 import LeanFM.Session.SlaTests
+import LeanFM.Session.WhereTests
+import LeanFM.Session.TypesTests
 import LeanFM.SecretsTests
 import LeanFM.CheckMetricsTests

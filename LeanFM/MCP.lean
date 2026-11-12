@@ -199,7 +199,7 @@ def toolDefinitions : Array Json := #[
     (schema [("formula", anyJson "JSON formula"), ("predicates", Json.mkObj [("type", "array"), ("items", stringSchema "predicate text")]),
       ("task", anyJson "optional canonical task id or inline draft")] []),
   tool "check_protocol" "Find attacks on a security protocol"
-    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {fresh: var}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), each with an optional number of concurrent sessions (1 to 4; later sessions are named Alice#2, …, and fresh values na#2, …), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. An optional defender {name, protects: [roles], knows: [keys], drop: [patterns], rewrite: [{match, replace}]} sits between the network and the roles it protects: it drops a message when a drop pattern matches any part it can see (it opens a ciphertext only with a key it can build) and rewrites a whole message that matches a rewrite. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path: {event: send, from, to, via, term} for an honest send (to is its addressee, via the attacker) and {event: recv, from, to, term} for a delivery. Bounded: each session runs once. Secrets: an atom or symmetric key named with the suffix _secr (passwd_secr), or a term listed in secrets (such as {hash: {atom: passwd_secr}}), is a question: does the attacker ever derive it? Each gets kept, leaked (with the path and the wire) or resource-limit, the keys that protect it are named with the step that sends them, and names that look secret but are unmarked come back as warnings. With secrets the formula is optional."
+    "Declare honest roles as scripts over message patterns ({choose: {var, values}}, {fresh: var}, {send: {to, message}}, {recv: pattern}, {claim: {name, args}}; patterns are terms with {var: x}), each with an optional number of concurrent sessions (1 to 4; later sessions are named Alice#2, ..., and fresh values na#2, ...), an attacker {name, knows} who is the network, finite domains for received variables, and one formula, which may use {claimed: \"commit(B, A)\"} and {knows: {actor, term}}. An optional defender {name, protects: [roles], knows: [keys], drop: [patterns], rewrite: [{match, replace}]} sits between the network and the roles it protects: it drops a message when a drop pattern matches any part it can see (it opens a ciphertext only with a key it can build) and rewrites a whole message that matches a rewrite. Returns check_ctl's verdict and evidence over the generated model, and the messages on the returned path: {event: send, from, to, via, term} for an honest send (to is its addressee, via the attacker) and {event: recv, from, to, term} for a delivery. Bounded: each session runs once. Secrets: an atom or symmetric key named with the suffix _secr (passwd_secr), or a term listed in secrets (such as {hash: {atom: passwd_secr}}), is a question: does the attacker ever derive it? Each gets kept, leaked (with the path and the wire) or resource-limit, the keys that protect it are named with the step that sends them, and names that look secret but are unmarked come back as warnings. With secrets the formula is optional."
     (schema [("roles", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
       ("attacker", anyJson "{name, knows: [terms]}"),
       ("domain", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
@@ -272,9 +272,12 @@ def toolDefinitions : Array Json := #[
     "Run every check that applies to a protocol and answer findings, each with an edit to try: the core rules (one decider per choice, every role can tell the branch, causes it saw); HTTP wherever a message has a route (no flags needed), including requests that never get a response and responses without a status; sessions that can never end; roles that take no part. Use it after every change while designing; clean means nothing was found."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form")] []),
   tool "session_openapi" "A role's HTTP interface as OpenAPI"
-    "Write the requests a role receives, with their routes (route \"POST /orders\") and the responses the protocol allows (with their status), as an OpenAPI 3.1 document: one operation per route, the request's label as operationId and request body, each response under its status. A server framework or client generator can start from it; message fields are left for you to add."
+    "Write the requests a role receives, with their routes (route \"POST /orders\") and the responses the protocol allows (with their status), as an OpenAPI 3.1 document: one operation per route, the request's label as operationId and request body, each response under its status. Each body's schema is its message type (the structure its label names), admitting no other fields. A server framework or client generator can start from it."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("role", stringSchema "the role whose interface to write")] ["role"]),
+  tool "session_types" "The message types as protobuf, Lean and JSON schema"
+    "Write the protocol's message types (structure Name where field : Type, declared before the protocols) as a proto3 file, as Lean structures deriving ToJson and FromJson, and as one JSON schema per message. A label with no structure is an empty message. Fields are numbered in the order written."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("protocol", anyJson "alternative to lean: the JSON form")] []),
   tool "session_compat" "Which roles can upgrade on their own"
     "Compare two versions of a protocol (lean: the new one, old: the previous one). For each role in both, answer whether its new version can be deployed first, running with the old version of every other role, and whether its old version can stay deployed after the others upgrade, by exploring each mixed system to every reachable state. A no comes with the steps to the stuck state and what each role still expects."
     (schema [("lean", stringSchema "the new version: LeanFM protocol text"), ("old", stringSchema "the previous version: LeanFM protocol text"),
@@ -299,7 +302,7 @@ def logicSummary (name : String) (body : Json) : String :=
     | none, some r => s!": {r}"
     | none, none => ""
   let line := s!"{name} {(field "verdict").getD "answered"}{tail}"
-  if line.length ≤ logicSummaryLimit then line else (line.take (logicSummaryLimit - 1)).toString ++ "…"
+  if line.length ≤ logicSummaryLimit then line else (line.take (logicSummaryLimit - 1)).toString ++ "..."
 
 /-- LogicVerdict or LogicInputRejected, carried as an MCP tool result: a one-line text summary for
 people and the whole answer once, as structuredContent. -/
@@ -338,7 +341,8 @@ def sessionDesignPrompt : String :=
   "Help me build software by designing it as a session type with LeanFM, then implementing it.\n\n" ++
   "1. Ask me in a sentence or two what the software does, and name the roles (people, clients, services, " ++
   "workers) that exchange messages. Read leanfm://language/session-reference before writing a protocol.\n" ++
-  "2. Write the protocol in LeanFM protocol syntax and call session_review with it as the lean argument " ++
+  "2. Write the protocol in LeanFM protocol syntax, declaring each message's fields first as a Lean structure " ++
+  "(structure Pay where amount : Nat), and call session_review with it as the lean argument " ++
   "(it runs every check that applies and suggests an edit for each finding; give requests a route to " ++
   "check them as HTTP); session_check shows the projections, typestates and calls. " ++
   "Fix every issue it reports, and explain each fix in one line. For HTTP services pass mayCall (who may call " ++
@@ -351,7 +355,8 @@ def sessionDesignPrompt : String :=
   "classes (Python by default, or language typescript, where a step the protocol forbids does not compile), " ++
   "and implement each role with it: its methods send only what each state allows, fill in causes and log " ++
   "every message in session_conform's format, so the code adds only the decisions and the transport. For a " ++
-  "role that serves HTTP, session_openapi gives its interface as OpenAPI to start the server from. In " ++
+  "role that serves HTTP, session_openapi gives its interface as OpenAPI to start the server from, and " ++
+  "session_types gives the message types as protobuf and Lean. In " ++
   "another language, write a handler per state the same way and log every message as JSON " ++
   "{id, session, from, to, label, cause}, and every event as {id, session, at, label, act: true}.\n" ++
   "5. When I paste a log from running it, call session_conform with the protocol and the events, and fix the " ++

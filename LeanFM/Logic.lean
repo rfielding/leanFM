@@ -1340,7 +1340,7 @@ def parseProtocol (args : Json) : Except String Protocol := do
             if ss.size > maxSteps then throw s!"{name} has {ss.size} steps; the bound is {maxSteps}"
             ss.toList.zipIdx.mapM fun (sj, i) => parseStep name i sj
           | _ => throw s!"{name} needs an array of steps"
-        if name.contains '#' then throw s!"role {name}: a role's name may not contain #; later sessions are named {name}#2, …"
+        if name.contains '#' then throw s!"role {name}: a role's name may not contain #; later sessions are named {name}#2, ..."
         let sessions ← match (rj.getObjVal? "sessions").toOption with
           | none => pure 1
           | some j => match j.getNat? with
@@ -1728,7 +1728,7 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## check_protocol"
   , ""
-  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, …; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula, secrets ([terms]). A name ending in _secr marks a secret, and so does a term in secrets: each is the question never knows(attacker, secret), answered kept, leaked or resource-limit, with the keys that protect it and warnings for names that look secret but are unmarked; with secrets the formula is optional. A hash hides its input, so mark a hash too when a server accepts it in place of the password."
+  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, ...; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula, secrets ([terms]). A name ending in _secr marks a secret, and so does a term in secrets: each is the question never knows(attacker, secret), answered kept, leaked or resource-limit, with the keys that protect it and warnings for names that look secret but are unmarked; with secrets the formula is optional. A hash hides its input, so mark a hash too when a server accepts it in place of the password."
   , ""
   , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`, `{\"fresh\": x}` (binds x to a value new in this session: x in the first, x#2 in the second; no two roles make the same fresh variable, and the attacker may not already know it). A domain that holds a fresh value also holds its copies in other sessions. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
   , ""

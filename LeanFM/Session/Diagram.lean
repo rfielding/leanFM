@@ -215,8 +215,8 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
   let x1 ← xOf roles i.src
   let x2 ← xOf roles i.dst
   let label := (match i.id with | some x => s!"{x}: " | none => "") ++ i.label ++
-    (match i.route with | some r => s!" · {r}" | none => "") ++
-    (match i.status with | some s => s!" · {s}" | none => "")
+    (match i.route with | some r => s!" - {r}" | none => "") ++
+    (match i.status with | some s => s!" - {s}" | none => "")
   let dash := if reply then "6 4" else ""
   let cls := if reply then "msg reply" else "msg"
   if x1 == x2 then
@@ -287,7 +287,7 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
       adv 22
       let y ← getY
       let (x0, _) ← edges roles.length d
-      emit (text (x0 + 8) y s!"↻ continue {name}" "start" .frame 11 (cls := "continue"))
+      emit (text (x0 + 8) y s!"continue {name}" "start" .frame 11 (cls := "continue"))
       adv 6
   | .choice bs => do
       -- the role that sends the first message of every branch decides; the others learn the
@@ -296,7 +296,24 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
         | .ok r => s!"{r} decides"
         | .error _ => "race: no single role decides"
       let top ← frameTop roles.length d "alt" caption
-      branches roles d bs ""
+      -- a branch whose first message carries a where condition is selected by it: the condition
+      -- is that operand's guard, drawn at its top as UML does, and not repeated under the arrow
+      let mut firstB := true
+      for b in bs do
+        let (guard, body) := match b with
+          | .msg i k => match i.guard with
+            | some g => (some g.text, Global.msg { i with guard := none } k)
+            | none => (none, b)
+          | _ => (none, b)
+        if firstB then
+          if let some g := guard then
+            adv 22
+            let y ← getY
+            let (x0, _) ← edges roles.length d
+            emit (text (x0 + 6) y s!"[{g}]" "start" .frame 11 (cls := "guard"))
+        else divider roles.length d ((guard.map id).getD "")
+        firstB := false
+        draw roles (d + 1) body
       frameBottom roles.length d top "alt"
   | .par bs k => do
       let top ← frameTop roles.length d "par" ""
@@ -338,8 +355,8 @@ namespace Diagram
 /-- A message's label as drawn: `id: Label · route · status`. -/
 def labelText {R : Type} (i : Interaction R) : String :=
   (match i.id with | some x => s!"{x}: " | none => "") ++ i.label ++
-    (match i.route with | some r => s!" · {r}" | none => "") ++
-    (match i.status with | some s => s!" · {s}" | none => "")
+    (match i.route with | some r => s!" - {r}" | none => "") ++
+    (match i.status with | some s => s!" - {s}" | none => "")
 
 /-- The messages of a protocol, for sizing the drawing. -/
 partial def messagesOf {R : Type} : Global R → List (Interaction R)

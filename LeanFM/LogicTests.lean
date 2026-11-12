@@ -291,9 +291,9 @@ def main : IO Unit := do
       let hops := match j.getObjValD "wire" with | .arr hs => hs.toList | _ => []
       let str := fun (h : Json) (k : String) => ((h.getObjValD k).getStr?.toOption).getD "?"
       let said := hops.map fun h => if str h "event" == "send"
-        then s!"{str h "from"} → {str h "to"}: {str h "term"}" else s!"{str h "to"} ⇐ {str h "term"}"
+        then s!"{str h "from"} -> {str h "to"}: {str h "term"}" else s!"{str h "to"} <- {str h "term"}"
       -- the hops, read back as events, are exactly the message events of the path, in order
-      !hops.isEmpty && said == events.filter (fun e => e.contains '→' || e.contains '⇐') &&
+      !hops.isEmpty && said == events.filter (fun e => (e.splitOn " -> ").length > 1 || (e.splitOn " <- ").length > 1) &&
       -- a send is never addressed to the network itself
       hops.all fun h => str h "event" != "send" || (str h "via" == "Ivo" && str h "to" != "Ivo")
     | _ => false)
@@ -411,7 +411,7 @@ def main : IO Unit := do
     attacker: {name: "Ivo", knows: [{atom: "bad"}]}, domain: [{atom: "good"}, {atom: "bad"}],
     defender: $(scrub), formula: {EF: {claimed: "accept(B, good)"}}}
   expect "check_protocol: the rewrite shows in the evidence" (match (run "check_protocol" scrubOnly).getD (.error "") with
-    | .ok j => (j.getObjValD "evidence").compress.contains "Bob ⇐ good (Guard rewrote bad)"
+    | .ok j => (j.getObjValD "evidence").compress.contains "Bob <- good (Guard rewrote bad)"
     | _ => false)
   expect "check_protocol: the defender's link is not the attacker's" (match guarded sealed tls goodGets with
     | .ok j => (j.getObjValD "note").compress.contains "except Guard's links to the roles it protects"

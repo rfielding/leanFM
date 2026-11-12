@@ -1,5 +1,6 @@
 import LeanFM.Session.Global
 import LeanFM.Session.GenerativeTypes
+import LeanFM.Session.Types
 
 /-!
 # Protocol text: LeanFM's `protocol` syntax, read without elaborating it (clause selfhost.mcp.session.tools)
@@ -23,7 +24,10 @@ protocol Purchase (Client, Shop, Bank) {
 
 Several protocols may be written; the last is the one checked, and `include P A B;` applies an
 earlier one with its roles renamed in order. Labels and roles are identifiers (`«with spaces»` is
-allowed). A `where` condition is kept as text, never evaluated. `--` and `/- -/` comments and doc
+allowed). Message types are declared first, as Lean structures
+(`structure Pay where amount : Nat`; see `Session.Types`). A `where` condition is typed against
+them when the text is read and run by conformance with LeanFM's interpreter (`Session.Where`) over
+logged fields, never compiled or executed. `--` and `/- -/` comments and doc
 comments are skipped. Errors give the line and column.
 
 Negative requirements: no text is elaborated or run; a statement after `continue`, an unknown role,
@@ -79,6 +83,8 @@ structure St where
   depth : Nat := 0
   /-- `require per q { ... }` clauses after the protocols (selfhost.session.sla) -/
   requires : Array Generative.Requirement := #[]
+  /-- `structure Name where field : Type` declarations: the message types (selfhost.session.types) -/
+  types : Array Types.Message := #[]
 
 abbrev P := ReaderT (Array Char) (StateT St (Except String))
 
@@ -217,7 +223,7 @@ partial def stringLit : P String := do
   checkLen start "string" s
 
 /-- A where condition: the text up to the `;` that ends the statement, outside brackets and strings,
-with runs of whitespace made single spaces. Kept as text; never evaluated. -/
+with runs of whitespace made single spaces. Kept as text; conformance interprets it (`Session.Where`). -/
 partial def whereText : P String := do
   skip
   let start := (← get).pos
@@ -414,6 +420,28 @@ partial def declaredIds : List Stmt → List String
     | .bounded _ _ b o => declaredIds b ++ declaredIds o
     | _ => []) ++ declaredIds rest
 
+/-- Each message id a body declares with its label, in any branch. -/
+partial def idLabels : List Stmt → List (String × String)
+  | [] => []
+  | s :: rest => (match s with
+    | .msg (some x) label .. => [(x, label)]
+    | .timed _ m | .valued _ m => idLabels [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap idLabels
+    | .loop _ b | .sessions b => idLabels b
+    | .bounded _ _ b o => idLabels b ++ idLabels o
+    | _ => []) ++ idLabels rest
+
+/-- Every message's label and where condition in a body. -/
+partial def conditions : List Stmt → List (String × String)
+  | [] => []
+  | s :: rest => (match s with
+    | .msg _ label _ _ _ _ _ (some g) => [(label, g)]
+    | .timed _ m | .valued _ m => conditions [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap conditions
+    | .loop _ b | .sessions b => conditions b
+    | .bounded _ _ b o => conditions b ++ conditions o
+    | _ => []) ++ conditions rest
+
 /-- Rename the ids in `ids` (and causes and time references to them) with suffix `sfx`. -/
 partial def renameIds (ids : List String) (sfx : String) : List Stmt → List Stmt
   | [] => []
@@ -421,8 +449,12 @@ partial def renameIds (ids : List String) (sfx : String) : List Stmt → List St
 where
   r (x : String) : String := if ids.contains x then x ++ sfx else x
   rt (t : Generative.TimeExpr) : Generative.TimeExpr := { t with refs := t.refs.map r }
+  -- a condition reads the ids of its own copy
+  rg (text : String) : String := match Where.parse text with
+    | .ok e => (e.mapIds r).render
+    | .error _ => text
   go : Stmt → Stmt
-    | .msg id l a b cause route status guard => .msg (id.map r) l a b (cause.map r) route status guard
+    | .msg id l a b cause route status guard => .msg (id.map r) l a b (cause.map r) route status (guard.map rg)
     | .timed t m => .timed (rt t) (go m)
     | .valued a m => .valued a (go m)
     | .clock name refs => .clock name (refs.map r)
@@ -727,8 +759,54 @@ partial def requirement (entry : String) : P Generative.Requirement := do
   let text := String.ofList (src.extract start (← get).pos).toList
   return { r with text := text.trimAscii.toString }
 
+/-- A field's type: a plain type name, or `List` / `Option` / `Array` of one. -/
+def fieldType : P Types.Ty := do
+  let n ← ident "a type, such as Nat, String or a structure's name"
+  let wrap : Option (Types.Ty → Types.Ty) := match n with
+    | "List" | "Array" => some .list
+    | "Option" => some .opt
+    | _ => none
+  match wrap with
+  | none => return Types.Ty.ofName n
+  | some w =>
+    if (← nextChar) == some '(' then fail s!"{n} holds one plain type, such as {n} Nat (protobuf has no {n} of a List or Option)"
+    let inner ← ident s!"the type the {n} holds"
+    if ["List", "Array", "Option"].contains inner then fail s!"{n} holds one plain type, such as {n} Nat (protobuf has no {n} of a List or Option)"
+    return w (Types.Ty.ofName inner)
+
+/-- `structure Name where field : Type ... deriving A, B`, as in Lean (`x y : Nat` declares two
+fields); `structure Name` is empty. -/
+partial def structureDecl : P Types.Message := do
+  let name ← ident "the structure's name"
+  let stops := ["deriving", "structure", "protocol", "require"]
+  let rec fields (acc : Array Types.Field) : P (List Types.Field) := do
+    let s ← get
+    match ← ident? with
+    | some f =>
+      if stops.contains f then set s; return acc.toList
+      -- `x y : Nat` declares both, as in Lean
+      let mut names := #[f]
+      while !(← sym? ':') do
+        match ← ident? with
+        | some g => names := names.push g
+        | none => fail s!"expected ':' and the type of field {f}"
+      if (← nextChar) == some '=' then fail "a field is written name : Type"
+      let t ← fieldType
+      let s' ← get
+      if (← nextChar) == some ':' then fail s!"field {f}: default values (:=) are not part of a message type"
+      set s'  -- leave a following doc comment for the next structure
+      if acc.size + names.size > Types.maxFieldsPer then fail s!"structure {name} has more than {Types.maxFieldsPer} fields"
+      fields (acc ++ names.map fun n => { name := n, ty := t })
+    | none => return acc.toList
+  let fs ← if ← keyword? "where" then fields #[] else pure []
+  if ← keyword? "deriving" then
+    discard <| ident "a class name"
+    while ← sym? ',' do discard <| ident "a class name"
+  return { name, fields := fs }
+
 partial def file : P (List Def) := do
   let rec go (acc : Array Def) : P (List Def) := do
+    let before := (← get).pos
     skip
     if (← peek).isNone then return acc.toList
     let start := (← get).pos
@@ -746,7 +824,20 @@ partial def file : P (List Def) := do
         clauses
       clauses
       return ← go acc
-    if !(← keyword? "protocol") then fail "expected 'protocol'"
+    if ← keyword? "structure" then
+      if !acc.isEmpty then failAt start "structures come before the protocols that use them"
+      let m ← structureDecl
+      -- a doc comment just before the structure documents the message
+      let gap := String.ofList ((← read).extract before start).toList
+      let doc := match gap.splitOn "/--" |>.getLast? with
+        | some tail => if gap.contains '/' && (gap.splitOn "/--").length > 1 then ((tail.splitOn "-/").head?.getD "").trimAscii.toString else ""
+        | none => ""
+      let doc := " ".intercalate ((doc.splitOn "\n").map (·.trimAscii.toString) |>.filter (· != ""))
+      let m := { m with doc := doc }
+      if (← get).types.size ≥ Types.maxMessages then failAt start s!"at most {Types.maxMessages} structures"
+      modify fun s => { s with types := s.types.push m }
+      return ← go acc
+    if !(← keyword? "protocol") then fail "expected 'protocol', 'structure' or 'require'"
     let name ← ident "the protocol's name"
     if acc.any (·.name == name) then failAt start s!"protocol {name} is defined twice"
     sym '(' "'(' and the roles"
@@ -862,6 +953,8 @@ structure Parsed where
   body : List Stmt := []
   /-- `require per q { ... }` (selfhost.session.sla) -/
   requires : List Generative.Requirement := []
+  /-- the message types (selfhost.session.types) -/
+  types : Types.Env := []
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -892,8 +985,18 @@ def parse (text : String) : Except String Parsed := do
       throw s!"require per {r.entry}: {r.entry} is not a message id of protocol {main.name}; give the message an id, as in {r.entry}: Request from A to B;"
     for t in r.targets do
       if !labels.contains t then throw s!"requirement '{r.text}': {t} is not a message or event of the protocol"
+  -- message types, and every where condition typed against them before anything runs
+  let env := st.types.toList
+  Types.check env
+  for d in defs do
+    let ids := idLabels d.body
+    let labelsOf (x : String) : List String := ((ids.filter (·.1 == x)).map (·.2)).eraseDups
+    for (label, text) in conditions d.body do
+      match Types.checkCondition env labelsOf text with
+      | .ok _ => pure ()
+      | .error e => throw s!"in {d.name}, {label}: {e}"
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
-           requires := st.requires.toList }
+           requires := st.requires.toList, types := env }
 
 /-! ## Writing -/
 
@@ -1005,5 +1108,14 @@ def Def.write (d : Def) : String :=
 
 /-- Protocol text for definitions, earlier ones first. -/
 def write (defs : List Def) : String := "\n\n".intercalate (defs.map Def.write)
+
+/-- A message type as the parser reads it. -/
+def writeType (m : Types.Message) : String :=
+  (if m.doc.isEmpty then "" else s!"/-- {m.doc} -/\n") ++ "structure " ++ m.name ++
+    (if m.fields.isEmpty then "" else " where\n" ++ "\n".intercalate (m.fields.map fun f => s!"  {f.name} : {f.ty.render}"))
+
+/-- Protocol text for message types and definitions. -/
+def writeAll (types : Types.Env) (defs : List Def) : String :=
+  "\n\n".intercalate (types.map writeType ++ defs.map Def.write)
 
 end LeanFM.Session.Text

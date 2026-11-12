@@ -15,9 +15,31 @@ export interface Message {
 }
 export interface ActEvent { id: string; session: string; at: string; label: string; act: true }
 /** What session_conform reads: one per message sent or event performed. */
-export type LogEvent = Omit<Message, "body"> | ActEvent;
+export type LogEvent = (Omit<Message, "body"> & { fields?: Record<string, unknown> }) | ActEvent;
 export type Transport = (m: Message) => void;
 export type Log = (e: LogEvent) => void;
+
+/** The fields at these dotted paths of a body, nested as in the body; nothing else. */
+function project(body: unknown, paths: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const path of paths) {
+    const keys = path.split(".");
+    let cur: unknown = body;
+    let found = true;
+    for (const key of keys) {
+      if (cur !== null && typeof cur === "object" && key in (cur as Record<string, unknown>)) {
+        cur = (cur as Record<string, unknown>)[key];
+      } else { found = false; break; }
+    }
+    if (!found) continue;
+    let node = out;
+    for (const key of keys.slice(0, -1)) {
+      node = (node[key] ??= {}) as Record<string, unknown>;
+    }
+    node[keys[keys.length - 1]] = cur;
+  }
+  return out;
+}
 
 /** One role in one session. It numbers events, binds the protocol's message ids to the events that
  * were those messages, fills in causes, logs every event, and hands messages to the transport. */
@@ -42,7 +64,9 @@ export class Endpoint {
     const event: Omit<Message, "body"> = { id: this.newId(), session: this.session, from: this.role, to, label };
     if (cause !== undefined) event.cause = cause;
     if (pid !== null) this.bind.set(pid, event.id);
-    this.log?.({ ...event });
+    // exactly the fields where conditions read; nothing else of the body is logged
+    const reads = pid !== null ? READS[pid] : undefined;
+    this.log?.(reads && reads.length > 0 ? { ...event, fields: project(body ?? {}, reads) } : { ...event });
     const message: Message = { ...event, body: body ?? {} };
     this.transport(message);
     return message;
@@ -119,12 +143,43 @@ export class Server<S extends State, T extends State> {
 
   then(): T { return this.after(this.ep); }
 }
+/* The message types (selfhost.session.types): send methods take these. */
 
-/** Member at S1: sendBorrow → MemberS2. */
+/** The book a member asks to borrow. */
+export interface Borrow {
+  book: string;
+}
+
+/** The Desk asks the Librarian to approve a hold on the book. */
+export interface Hold {
+  book: string;
+}
+
+export interface Return {
+  book: string;
+}
+
+export type Lent = Record<string, never>;
+
+export type Returned = Record<string, never>;
+
+export type Approved = Record<string, never>;
+
+export type Waitlisted = Record<string, never>;
+
+export type Denied = Record<string, never>;
+
+export type Refused = Record<string, never>;
+
+/** The fields of each message that where conditions read: logged, nothing else of a body. */
+const READS: Record<string, string[]> = {};
+
+
+/** Member at S1: sendBorrow -> MemberS2. */
 export class MemberS1 extends State {
   readonly state = "MemberS1" as const;
 
-  sendBorrow(body?: unknown): MemberS2 {
+  sendBorrow(body?: Borrow): MemberS2 {
     const ep = this.take();
     ep.send("Desk", "Borrow", "b", null, body);
     return new MemberS2(ep);
@@ -156,11 +211,11 @@ export class MemberS2 extends State {
   }
 }
 
-/** Member at S3: sendReturn → MemberS4. */
+/** Member at S3: sendReturn -> MemberS4. */
 export class MemberS3 extends State {
   readonly state = "MemberS3" as const;
 
-  sendReturn(body?: unknown): MemberS4 {
+  sendReturn(body?: Return): MemberS4 {
     const ep = this.take();
     ep.send("Desk", "Return", "r", null, body);
     return new MemberS4(ep);
@@ -202,17 +257,17 @@ export class DeskS1 extends State {
   }
 }
 
-/** Desk at S2: sendLent → DeskS3; sendHold → DeskS5. */
+/** Desk at S2: sendLent -> DeskS3; sendHold -> DeskS5. */
 export class DeskS2 extends State {
   readonly state = "DeskS2" as const;
 
-  sendLent(body?: unknown): DeskS3 {
+  sendLent(body?: Lent): DeskS3 {
     const ep = this.take();
     ep.send("Member", "Lent", "l", "b", body);
     return new DeskS3(ep);
   }
 
-  sendHold(body?: unknown): DeskS5 {
+  sendHold(body?: Hold): DeskS5 {
     const ep = this.take();
     ep.send("Librarian", "Hold", "h", "b", body);
     return new DeskS5(ep);
@@ -234,11 +289,11 @@ export class DeskS3 extends State {
   }
 }
 
-/** Desk at S4: sendReturned → End. */
+/** Desk at S4: sendReturned -> End. */
 export class DeskS4 extends State {
   readonly state = "DeskS4" as const;
 
-  sendReturned(body?: unknown): End {
+  sendReturned(body?: Returned): End {
     const ep = this.take();
     ep.send("Member", "Returned", null, "r", body);
     return new End(ep);
@@ -265,22 +320,22 @@ export class DeskS5 extends State {
   }
 }
 
-/** Desk at S6: sendWaitlisted → End. */
+/** Desk at S6: sendWaitlisted -> End. */
 export class DeskS6 extends State {
   readonly state = "DeskS6" as const;
 
-  sendWaitlisted(body?: unknown): End {
+  sendWaitlisted(body?: Waitlisted): End {
     const ep = this.take();
     ep.send("Member", "Waitlisted", null, "b", body);
     return new End(ep);
   }
 }
 
-/** Desk at S7: sendRefused → End. */
+/** Desk at S7: sendRefused -> End. */
 export class DeskS7 extends State {
   readonly state = "DeskS7" as const;
 
-  sendRefused(body?: unknown): End {
+  sendRefused(body?: Refused): End {
     const ep = this.take();
     ep.send("Member", "Refused", null, "b", body);
     return new End(ep);
@@ -292,7 +347,7 @@ export function desk(session: string, transport: Transport, log?: Log, newId?: (
   return new DeskS1(new Endpoint("Desk", session, transport, log, newId));
 }
 
-/** Librarian at S1: receive(msg): Hold from Desk; skip → End (the branch taken did not involve this role). */
+/** Librarian at S1: receive(msg): Hold from Desk; skip -> End (the branch taken did not involve this role). */
 export class LibrarianS1 extends State {
   readonly state = "LibrarianS1" as const;
 
@@ -309,17 +364,17 @@ export class LibrarianS1 extends State {
   skip(): End { return new End(this.take()); }
 }
 
-/** Librarian at S2: sendApproved → End; sendDenied → End. */
+/** Librarian at S2: sendApproved -> End; sendDenied -> End. */
 export class LibrarianS2 extends State {
   readonly state = "LibrarianS2" as const;
 
-  sendApproved(body?: unknown): End {
+  sendApproved(body?: Approved): End {
     const ep = this.take();
     ep.send("Desk", "Approved", null, "h", body);
     return new End(ep);
   }
 
-  sendDenied(body?: unknown): End {
+  sendDenied(body?: Denied): End {
     const ep = this.take();
     ep.send("Desk", "Denied", null, "h", body);
     return new End(ep);

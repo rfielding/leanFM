@@ -30,13 +30,13 @@
   {"SoldOut":
    {"type": "object",
     "title": "SoldOut",
-    "description":
-    "SoldOut: the protocol names this message; its fields are yours to add"},
+    "required": [],
+    "properties": {},
+    "additionalProperties": false},
    "Quote":
    {"type": "object",
     "title": "Quote",
-    "description":
-    "Quote: the protocol names this message; its fields are yours to add"},
-   "CreateOrder":
-   {"type": "object",
+    "required": ["price"],
+    "properties": {"price": {"type": "integer", "minimum": 0}},
+    "description": "The shop's price for the order, in cents.",
 \end{lstlisting}

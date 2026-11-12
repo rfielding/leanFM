@@ -1,0 +1,13 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+structure Order where
+  total : Nat
+
+protocol Tier (Customer, Shop) {
+  o: Order from Customer to Shop;
+  choice {
+    Gold from Shop to Customer cause o where o.total >= 100;
+  } or {
+    Plain from Shop to Customer cause o where o.total < 100;
+  }
+}
+\end{lstlisting}

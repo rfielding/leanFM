@@ -1,0 +1,18 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+/-- What the client orders. -/
+structure CreateOrder where
+  item : String
+  quantity : Nat
+  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
+
+/-- The shop's price for the order, in cents. -/
+structure Quote where
+  price : Nat
+  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
+
+/-- The client pays; the card number is a secret, never logged. -/
+structure Pay where
+  amount : Nat
+  card_secr : String
+  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
+\end{lstlisting}

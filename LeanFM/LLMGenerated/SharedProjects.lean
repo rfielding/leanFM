@@ -103,7 +103,7 @@ def outputs : List DesiredOutput :=
 def spec : RequirementSpec :=
   { LeanFM.ChatUI.Requirements.spec with
     id := "leanfm.chatui.shared-projects.proposal"
-    title := "Shared project roots and private caller-owned API keys — proposed revision"
+    title := "Shared project roots and private caller-owned API keys - proposed revision"
     tasks := LeanFM.ChatUI.Requirements.spec.tasks.map fun task =>
       if task.id == "manage_projects" then projectTask else task
     properties := (LeanFM.ChatUI.Requirements.spec.properties.filter fun property =>

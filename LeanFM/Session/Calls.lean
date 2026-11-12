@@ -110,7 +110,7 @@ partial def Call.lines [ToString R] (ind : String) (c : Call R) : List String :=
   let ret := if c.responses.isEmpty then "no reply"
     else " | ".intercalate (c.responses.map Interaction.withStatus)
   let route := match r.route with | some x => s!"  {x}" | none => ""
-  s!"{ind}{name}  {r.src} → {r.dst}{route}" :: s!"{ind}  returns {ret}" ::
+  s!"{ind}{name}  {r.src} -> {r.dst}{route}" :: s!"{ind}  returns {ret}" ::
     c.nested.flatMap (Call.lines (ind ++ "    "))
 
 /-- The calls of a protocol, two lines each (the request, then what it returns), nested calls
@@ -231,16 +231,16 @@ variable [ToString R]
 /-- A method as a line of the typestate API. -/
 def Method.line (i : Nat) : Method R → String
   | .send to l k => s!"{nm i}.send{l}(m : {l}) : {k}    -- to {to}"
-  | .recv fr l k => s!"{nm i}.receive() : {l} × {k}    -- from {fr}"
+  | .recv fr l k => s!"{nm i}.receive() : {l} -> {k}    -- from {fr}"
   | .act l k => s!"{nm i}.{l}() : {k}"
   | .offer alts =>
     let a := alts.map fun
-      | .recv fr l k => s!"{l} × {k} (from {fr})"
-      | .nothing => "nothing × End"
-      | .other k => s!"_ × {k}"
+      | .recv fr l k => s!"{l} -> {k} (from {fr})"
+      | .nothing => "nothing -> End"
+      | .other k => s!"_ -> {k}"
     s!"{nm i}.receive() : {" | ".intercalate a}"
-  | .fork subs k none => s!"{nm i}.fork() : ({" ∥ ".intercalate subs}) then {k}"
-  | .fork subs k (some n) => s!"{nm i}.fork() : any {n} of ({" ∥ ".intercalate subs}) then {k}"
+  | .fork subs k none => s!"{nm i}.fork() : ({" || ".intercalate subs}) then {k}"
+  | .fork subs k (some n) => s!"{nm i}.fork() : any {n} of ({" || ".intercalate subs}) then {k}"
   | .serve b k => s!"{nm i}.serve() : many {b} then {k}"
   | .cont k => s!"{nm i}.continue() : {k}"
   | .stop => s!"{nm i}.stop() : End"

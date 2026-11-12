@@ -1,3 +1,98 @@
+-- Rooms
+structure CreateRoom     where requestId : Nat deriving TypeName
+structure RoomCreated    where requestId : Nat deriving TypeName
+structure ListRooms      where requestId : Nat deriving TypeName
+structure RoomsListed    where requestId : Nat deriving TypeName
+structure EnterRoom      where
+  requestId : Nat
+  roomId : String
+  deriving TypeName
+structure RoomEntered    where
+  requestId : Nat
+  roomId : String
+  deriving TypeName
+structure ListGames      where
+  requestId : Nat
+  roomId : String
+  deriving TypeName
+structure GamesListed    where
+  requestId : Nat
+  roomId : String
+  deriving TypeName
+structure SendRoomChat   where requestId : Nat deriving TypeName
+structure RoomChat       where requestId : Nat deriving TypeName
+-- Challenges
+structure CreateGame     where requestId : Nat deriving TypeName
+structure GameCreated    where requestId : Nat deriving TypeName
+structure SetSeatPlan    where requestId : Nat deriving TypeName
+structure SeatPlanSet    where requestId : Nat deriving TypeName
+structure TakeSeat       where requestId : Nat deriving TypeName
+structure SeatTaken      where requestId : Nat deriving TypeName
+structure LeaveSeat      where requestId : Nat deriving TypeName
+structure SeatLeft       where requestId : Nat deriving TypeName
+structure StartGame      where requestId : Nat deriving TypeName
+structure GameStarted    where requestId : Nat deriving TypeName
+structure JoinGame       where
+  requestId : Nat
+  gameId : String
+  deriving TypeName
+structure GameJoined     where
+  requestId : Nat
+  gameId : String
+  deriving TypeName
+structure SendGameChat   where requestId : Nat deriving TypeName
+structure GameChat       where requestId : Nat deriving TypeName
+-- Play
+structure PlayMove       where
+  requestId : Nat
+  moveNo : Nat
+  deriving TypeName
+structure MovePlayed     where
+  requestId : Nat
+  moveNo : Nat
+  deriving TypeName
+structure SetAutopilot   where requestId : Nat deriving TypeName
+structure AutopilotSet   where requestId : Nat deriving TypeName
+structure BotTurn        where
+  turnSeq : Nat
+  moveNo : Nat
+  deriving TypeName
+structure BotMoveChosen  where turnSeq : Nat deriving TypeName
+structure BotMovePlayed  where moveNo : Nat deriving TypeName
+structure TurnTimedOut   where moveNo : Nat deriving TypeName
+structure AutoPassed     where moveNo : Nat deriving TypeName
+structure GameFinished   where deriving TypeName
+-- Teams
+structure ProposeMerge   where requestId : Nat deriving TypeName
+structure MergeProposed  where
+  requestId : Nat
+  proposalId : Nat
+  deriving TypeName
+structure RespondMerge   where
+  requestId : Nat
+  proposalId : Nat
+  deriving TypeName
+structure MergeResponded where
+  requestId : Nat
+  proposalId : Nat
+  status : String
+  deriving TypeName
+structure TeamsMerged    where proposalId : Nat deriving TypeName
+structure MergeWithdrawn where proposalId : Nat deriving TypeName
+-- Watching
+structure GetGameState   where
+  requestId : Nat
+  sinceMove : Nat
+  deriving TypeName
+structure GameState      where requestId : Nat deriving TypeName
+-- Every request can be refused, without mutation, naming the request it refuses.
+structure RequestRejected where requestId : Nat deriving TypeName
+-- Events at the server alone: its clock, a bot result applied or discarded, a recorded outcome.
+structure ClockRanOut    where deriving TypeName
+structure Applied        where deriving TypeName
+structure Stale          where deriving TypeName
+structure Passed         where deriving TypeName
+structure Finished       where deriving TypeName
 protocol CreateRoomP (Person, Server) {
   q: CreateRoom from Person to Server;
   choice {

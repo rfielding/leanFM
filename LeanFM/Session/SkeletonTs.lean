@@ -36,9 +36,31 @@ export interface Message {
 }
 export interface ActEvent { id: string; session: string; at: string; label: string; act: true }
 /** What session_conform reads: one per message sent or event performed. */
-export type LogEvent = Omit<Message, \"body\"> | ActEvent;
+export type LogEvent = (Omit<Message, \"body\"> & { fields?: Record<string, unknown> }) | ActEvent;
 export type Transport = (m: Message) => void;
 export type Log = (e: LogEvent) => void;
+
+/** The fields at these dotted paths of a body, nested as in the body; nothing else. */
+function project(body: unknown, paths: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const path of paths) {
+    const keys = path.split(\".\");
+    let cur: unknown = body;
+    let found = true;
+    for (const key of keys) {
+      if (cur !== null && typeof cur === \"object\" && key in (cur as Record<string, unknown>)) {
+        cur = (cur as Record<string, unknown>)[key];
+      } else { found = false; break; }
+    }
+    if (!found) continue;
+    let node = out;
+    for (const key of keys.slice(0, -1)) {
+      node = (node[key] ??= {}) as Record<string, unknown>;
+    }
+    node[keys[keys.length - 1]] = cur;
+  }
+  return out;
+}
 
 /** One role in one session. It numbers events, binds the protocol's message ids to the events that
  * were those messages, fills in causes, logs every event, and hands messages to the transport. */
@@ -63,7 +85,9 @@ export class Endpoint {
     const event: Omit<Message, \"body\"> = { id: this.newId(), session: this.session, from: this.role, to, label };
     if (cause !== undefined) event.cause = cause;
     if (pid !== null) this.bind.set(pid, event.id);
-    this.log?.({ ...event });
+    // exactly the fields where conditions read; nothing else of the body is logged
+    const reads = pid !== null ? READS[pid] : undefined;
+    this.log?.(reads && reads.length > 0 ? { ...event, fields: project(body ?? {}, reads) } : { ...event });
     const message: Message = { ...event, body: body ?? {} };
     this.transport(message);
     return message;
@@ -144,7 +168,7 @@ export class Server<S extends State, T extends State> {
 
 open Typestate in
 /-- One role's classes, in TypeScript. -/
-def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local String) : Except String String := do
+def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local String) (tyName : String → String := fun _ => "unknown") : Except String String := do
   let (start, ms) := l.machine
   let served : Option String := match ms.filter (fun m => s!"S{m.1}" == start) with
     | [(_, .serve b "End")] => some b
@@ -164,16 +188,16 @@ def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local S
         let mn := "send" ++ tail lb
         if used.contains mn then throw s!"{role}: two methods of {nm i} would both be called {mn}"
         used := mn :: used
-        docs := docs ++ [s!"{mn} → {cls role k}"]
+        docs := docs ++ [s!"{mn} -> {cls role k}"]
         match lookup ixs role to lb with
         | some (pid, cpid) =>
-          lines := lines ++ [s!"  {mn}(body?: unknown): {cls role k} \{",
+          lines := lines ++ [s!"  {mn}(body?: {tyName lb}): {cls role k} \{",
             s!"    const ep = this.take();",
             s!"    ep.send({lit to}, {lit lb}, {pyOptTs pid}, {pyOptTs cpid}, body);",
             s!"    return {new k "ep"};", "  }", ""]
         | none =>
           lines := lines ++ [s!"  /** The protocol has more than one message like this: pass the id of the event that caused it, if it names a cause. */",
-            s!"  {mn}(cause?: string, body?: unknown): {cls role k} \{",
+            s!"  {mn}(cause?: string, body?: {tyName lb}): {cls role k} \{",
             s!"    const ep = this.take();",
             s!"    ep.send({lit to}, {lit lb}, null, null, body, cause);",
             s!"    return {new k "ep"};", "  }", ""]
@@ -181,14 +205,14 @@ def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local S
         let mn := "do" ++ tail lb
         if used.contains mn then throw s!"{role}: two methods of {nm i} would both be called {mn}"
         used := mn :: used
-        docs := docs ++ [s!"{mn} → {cls role k}"]
+        docs := docs ++ [s!"{mn} -> {cls role k}"]
         lines := lines ++ [s!"  {mn}(): {cls role k} \{", "    const ep = this.take();",
           s!"    ep.act({lit lb});", s!"    return {new k "ep"};", "  }", ""]
       | .fork subs k need =>
         if used.contains "fork" then throw s!"{role}: {nm i} forks twice"
         used := "fork" :: used
         let any := match need with | some n => s!"any {n} of " | none => ""
-        docs := docs ++ [s!"fork → Fork({any}{", ".intercalate (subs.map (cls role))}) then {cls role k}"]
+        docs := docs ++ [s!"fork -> Fork({any}{", ".intercalate (subs.map (cls role))}) then {cls role k}"]
         let ty := s!"Fork<[{", ".intercalate (subs.map (cls role))}], {cls role k}>"
         let needArg := match need with | some n => s!", {n}" | none => ""
         lines := lines ++ [s!"  fork(): {ty} \{", "    const ep = this.take();",
@@ -196,18 +220,18 @@ def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local S
       | .serve b k =>
         if used.contains "serve" then throw s!"{role}: {nm i} serves twice"
         used := "serve" :: used
-        docs := docs ++ [s!"serve → Server of {cls role b}, then {cls role k}"]
+        docs := docs ++ [s!"serve -> Server of {cls role b}, then {cls role k}"]
         lines := lines ++ [s!"  serve(): Server<{cls role b}, {cls role k}> \{", "    const ep = this.take();",
           s!"    return new Server(ep, (e) => {new b "e"}, (e) => {new k "e"});", "  }", ""]
       | .cont k =>
         if used.contains "again" then throw s!"{role}: {nm i} continues twice"
         used := "again" :: used
-        docs := docs ++ [s!"again → {cls role k}"]
+        docs := docs ++ [s!"again -> {cls role k}"]
         lines := lines ++ [s!"  again(): {cls role k} \{ return {new k "this.take()"}; }", ""]
       | .stop =>
         if used.contains "stop" then throw s!"{role}: {nm i} stops twice"
         used := "stop" :: used
-        docs := docs ++ ["stop → End"]
+        docs := docs ++ ["stop -> End"]
         lines := lines ++ ["  stop(): End { return new End(this.take()); }", ""]
       | .recv _ _ _ | .offer _ => pure ()
     let alts := (here.filterMap fun m => match m with
@@ -232,13 +256,13 @@ def roleClassesTs (ixs : List (Interaction String)) (role : String) (l : Local S
       | .nothing =>
         if used.contains "skip" then throw s!"{role}: {nm i} has two empty branches"
         used := "skip" :: used
-        docs := docs ++ ["skip → End (the branch taken did not involve this role)"]
+        docs := docs ++ ["skip -> End (the branch taken did not involve this role)"]
         lines := lines ++ ["  skip(): End { return new End(this.take()); }", ""]
       | .other k =>
         let mn := s!"branch{ident k}"
         if used.contains mn then throw s!"{role}: two branches of {nm i} enter {k}"
         used := mn :: used
-        docs := docs ++ [s!"{mn} → {cls role k}"]
+        docs := docs ++ [s!"{mn} -> {cls role k}"]
         lines := lines ++ [s!"  {mn}(): {cls role k} \{ return {new k "this.take()"}; }", ""]
       | .recv .. => pure ()
     let methods := (lines.reverse.dropWhile (· == "")).reverse
@@ -255,10 +279,26 @@ where
 
 end Skeleton
 
+def tsType : Types.Ty → String
+  | .nat | .int => "number" | .str => "string" | .bool => "boolean"
+  | .msg n => Types.protoName n
+  | .list t => s!"{tsType t}[]"
+  | .opt t => tsType t
+
+/-- A message type as an interface; Nat and Int travel as JSON numbers. -/
+def tsMessage (m : Types.Message) : String :=
+  let doc := if m.doc.isEmpty then [] else [s!"/** {m.doc} */"]
+  let name := Types.protoName m.name
+  if m.fields.isEmpty then "\n".intercalate (doc ++ [s!"export type {name} = Record<string, never>;"])
+  else "\n".intercalate (doc ++ [s!"export interface {name} \{"] ++
+    m.fields.map (fun f => s!"  {f.name}{match f.ty with | .opt _ => "?" | _ => ""}: {tsType f.ty};") ++ ["}"])
+
 open Skeleton in
 /-- The protocol as a TypeScript module: the runtime, then every role's states as classes. -/
-def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List String) : Except String String := do
+def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List String) (types : Types.Env := []) : Except String String := do
   let ixs := g.interactions
+  let labels := (g.messages.map (·.label)).eraseDups
+  let ms ← Types.complete types labels
   let names := roles.map ident
   if names.eraseDups.length != names.length then throw "two roles have the same TypeScript name"
   let mut parts : List String := []
@@ -266,7 +306,7 @@ def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List 
     let l ← match g.project r with
       | .ok l => pure l
       | .error e => throw s!"{r} has no projection: {e}"
-    parts := parts ++ [← roleClassesTs ixs r l]
+    parts := parts ++ [← roleClassesTs ixs r l Types.protoName]
   let header := s!"// Generated by LeanFM from protocol {ident name}; regenerate it with session_skeleton rather than editing.
 //
 // Each role's states are classes whose methods are exactly what the protocol allows there, so a
@@ -275,6 +315,12 @@ def Global.typescriptSkeleton (g : Global String) (name : String) (roles : List 
 // logged event plus a body); log, if given, receives every event for session_conform.
 
 "
-  return header ++ tsRuntime ++ "\n".intercalate parts ++ "\n"
+  let reads := s!"/** The fields of each message that where conditions read: logged, nothing else of a body. */\nconst READS: Record<string, string[]> = {readsLiteral g};\n\n"
+  let taken := classNames (tsRuntime ++ "\n".intercalate parts)
+  for m in ms do
+    if taken.contains (Types.protoName m.name) then throw s!"message type {m.name} has the same TypeScript name as a class of the module; rename the message"
+  let msgs := "/* The message types (selfhost.session.types): send methods take these. */\n\n" ++
+    "\n\n".intercalate (ms.map tsMessage) ++ "\n\n"
+  return header ++ tsRuntime ++ msgs ++ reads ++ "\n".intercalate parts ++ "\n"
 
 end LeanFM.Session

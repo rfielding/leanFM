@@ -6,11 +6,39 @@ functions are member, desk, librarian. A transport is a function that takes a me
 session_conform.
 """
 
+from __future__ import annotations
+
 import itertools
+from dataclasses import asdict, dataclass, is_dataclass
+from typing import List, Optional
 
 
 class ProtocolError(Exception):
     """A step the protocol does not allow here."""
+
+
+def _plain(body):
+    """A message object as the plain dict that travels and is logged."""
+    return asdict(body) if is_dataclass(body) and not isinstance(body, type) else body
+
+
+def _project(body, paths):
+    """The fields at these dotted paths of a body, nested as in the body; nothing else."""
+    out = {}
+    for path in paths:
+        keys = path.split(".")
+        cur = body
+        for key in keys:
+            if isinstance(cur, dict) and key in cur:
+                cur = cur[key]
+            else:
+                break
+        else:
+            node = out
+            for key in keys[:-1]:
+                node = node.setdefault(key, {})
+            node[keys[-1]] = cur
+    return out
 
 
 class Endpoint:
@@ -25,6 +53,7 @@ class Endpoint:
         self.bind = {}
 
     def send(self, to, label, pid, cause_pid, body, cause=None):
+        body = _plain(body)
         if cause is None and cause_pid is not None:
             cause = self.bind.get(cause_pid)
             if cause is None:
@@ -35,7 +64,12 @@ class Endpoint:
         if pid is not None:
             self.bind[pid] = event["id"]
         if self.log is not None:
-            self.log(dict(event))
+            logged = dict(event)
+            reads = READS.get(pid) if pid is not None else None
+            if reads:
+                # exactly the fields where conditions read; nothing else of the body is logged
+                logged["fields"] = _project({} if body is None else body, reads)
+            self.log(logged)
         self.transport(dict(event, body={} if body is None else body))
         return event
 
@@ -113,12 +147,57 @@ class Server:
 
     def then(self):
         return self._then(self._ep)
+# The message types (selfhost.session.types): send methods take these, sent as plain dicts.
+
+@dataclass
+class Borrow:
+    """The book a member asks to borrow."""
+    book: str
+
+@dataclass
+class Hold:
+    """The Desk asks the Librarian to approve a hold on the book."""
+    book: str
+
+@dataclass
+class Return:
+    book: str
+
+@dataclass
+class Lent:
+    pass
+
+@dataclass
+class Returned:
+    pass
+
+@dataclass
+class Approved:
+    pass
+
+@dataclass
+class Waitlisted:
+    pass
+
+@dataclass
+class Denied:
+    pass
+
+@dataclass
+class Refused:
+    pass
+
+
+# The fields of each message that where conditions read: logged, nothing else of a body.
+READS = {}
+
+
 
 
 class MemberS1(State):
-    """Member at S1: send_borrow → MemberS2."""
+    """Member at S1: send_borrow -> MemberS2."""
 
-    def send_borrow(self, body=None):
+    def send_borrow(self, body: Optional[Borrow] = None):
         ep = self._take()
         ep.send("Desk", "Borrow", "b", None, body)
         return MemberS2(ep)
@@ -145,9 +224,9 @@ class MemberS2(State):
 
 
 class MemberS3(State):
-    """Member at S3: send_return → MemberS4."""
+    """Member at S3: send_return -> MemberS4."""
 
-    def send_return(self, body=None):
+    def send_return(self, body: Optional[Return] = None):
         ep = self._take()
         ep.send("Desk", "Return", "r", None, body)
         return MemberS4(ep)
@@ -183,14 +262,14 @@ class DeskS1(State):
 
 
 class DeskS2(State):
-    """Desk at S2: send_lent → DeskS3; send_hold → DeskS5."""
+    """Desk at S2: send_lent -> DeskS3; send_hold -> DeskS5."""
 
-    def send_lent(self, body=None):
+    def send_lent(self, body: Optional[Lent] = None):
         ep = self._take()
         ep.send("Member", "Lent", "l", "b", body)
         return DeskS3(ep)
 
-    def send_hold(self, body=None):
+    def send_hold(self, body: Optional[Hold] = None):
         ep = self._take()
         ep.send("Librarian", "Hold", "h", "b", body)
         return DeskS5(ep)
@@ -209,9 +288,9 @@ class DeskS3(State):
 
 
 class DeskS4(State):
-    """Desk at S4: send_returned → End."""
+    """Desk at S4: send_returned -> End."""
 
-    def send_returned(self, body=None):
+    def send_returned(self, body: Optional[Returned] = None):
         ep = self._take()
         ep.send("Member", "Returned", None, "r", body)
         return End(ep)
@@ -234,18 +313,18 @@ class DeskS5(State):
 
 
 class DeskS6(State):
-    """Desk at S6: send_waitlisted → End."""
+    """Desk at S6: send_waitlisted -> End."""
 
-    def send_waitlisted(self, body=None):
+    def send_waitlisted(self, body: Optional[Waitlisted] = None):
         ep = self._take()
         ep.send("Member", "Waitlisted", None, "b", body)
         return End(ep)
 
 
 class DeskS7(State):
-    """Desk at S7: send_refused → End."""
+    """Desk at S7: send_refused -> End."""
 
-    def send_refused(self, body=None):
+    def send_refused(self, body: Optional[Refused] = None):
         ep = self._take()
         ep.send("Member", "Refused", None, "b", body)
         return End(ep)
@@ -257,7 +336,7 @@ def desk(session, transport, log=None, new_id=None):
 
 
 class LibrarianS1(State):
-    """Librarian at S1: receive(msg): Hold from Desk; skip → End (the branch taken did not involve this role)."""
+    """Librarian at S1: receive(msg): Hold from Desk; skip -> End (the branch taken did not involve this role)."""
 
     def receive(self, msg):
         ep = self._ep
@@ -272,14 +351,14 @@ class LibrarianS1(State):
 
 
 class LibrarianS2(State):
-    """Librarian at S2: send_approved → End; send_denied → End."""
+    """Librarian at S2: send_approved -> End; send_denied -> End."""
 
-    def send_approved(self, body=None):
+    def send_approved(self, body: Optional[Approved] = None):
         ep = self._take()
         ep.send("Desk", "Approved", None, "h", body)
         return End(ep)
 
-    def send_denied(self, body=None):
+    def send_denied(self, body: Optional[Denied] = None):
         ep = self._take()
         ep.send("Desk", "Denied", None, "h", body)
         return End(ep)

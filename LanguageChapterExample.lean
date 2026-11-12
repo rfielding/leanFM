@@ -118,7 +118,25 @@ def main : IO Unit := do
   write "lang-conform-log.tex" (listing ("\n".intercalate ((match bad with | .arr a => a.toList | _ => []).map Json.compress)))
   write "lang-conform.tex" (listing ("\n".intercalate ([str cf "reading"] ++ strs cf "issues")))
 
+  -- the client pays 12 against a quote of 10: the where condition is run and fails
+  let wrongAmount := json% [
+    {id: "e1", session: "7", «from»: "Client", to: "Shop", label: "CreateOrder"},
+    {id: "e2", session: "7", «from»: "Shop", to: "Client", label: "Quote", cause: "e1", fields: {price: 10}},
+    {id: "e3", session: "7", «from»: "Client", to: "Shop", label: "Pay", cause: "e2", fields: {amount: 12}}]
+  let wf ← tool "session_conform" (conform (withLean order [("events", wrongAmount), ("allowIncomplete", Json.bool true)]))
+  write "lang-where-log.tex" (listing ("\n".intercalate ((match wrongAmount with | .arr a => a.toList | _ => []).map Json.compress)))
+  write "lang-where.tex" (listing (str wf "reading"))
+  -- a condition that selects a branch is drawn as that branch's guard
+  let tier := "structure Order where\n  total : Nat\n\nprotocol Tier (Customer, Shop) {\n  o: Order from Customer to Shop;\n  choice {\n    Gold from Shop to Customer cause o where o.total >= 100;\n  } or {\n    Plain from Shop to Customer cause o where o.total < 100;\n  }\n}"
+  write "lang-tier.tex" (listing tier)
+  for theme in ["light", "dark"] do
+    let d ← tool "session_diagram" (diagram (withLean tier [("theme", Json.str theme)]))
+    write s!"lang-tier-{theme}.svg" (str d "svg")
+
   -- Part II: what a protocol generates
+  let ty ← tool "session_types" (types (withLean order []))
+  write "lang-types-proto.tex" (listing ("\n".intercalate ((str ty "proto").splitOn "\n" |>.drop 4 |>.take 22)))
+  write "lang-types-lean.tex" (listing ("\n".intercalate ((str ty "leanTypes").splitOn "\n" |>.drop 4 |>.take 18)))
   let api ← tool "session_openapi" (openapi (withLean order [("role", "Shop")]))
   write "lang-openapi.tex" (listing ("\n".intercalate ((str api "code").splitOn "\n" |>.take 40)))
   let sk ← tool "session_skeleton" (skeleton (withLean order [("language", "typescript")]))

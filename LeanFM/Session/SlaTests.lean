@@ -33,7 +33,7 @@ def errorHas (r : Except String Json) (s : String) : Bool :=
 #guard prob (run userLookup) 1 "lo" == "98804097/100000000" && design (run userLookup) 1 "verdict" == Json.str "met"
 -- 0.999 × 1/100 failures plus 1/1000 lost forwards = 1099/100000 server errors, over the 1/200 budget
 #guard prob (run userLookup) 2 "lo" == "1099/100000" && design (run userLookup) 2 "verdict" == Json.str "violated"
-#guard design (run userLookup) 2 "assumptions" == toJson ["[forward-delivered → Forward: 999/1000]", "[lookup → Failure: 1/100]"]
+#guard design (run userLookup) 2 "assumptions" == toJson ["[forward-delivered -> Forward: 999/1000]", "[lookup -> Failure: 1/100]"]
 -- the rule of three: ln(20)/0.02 → 150 entries; ln(20)/0.005 → 600, more than an hour at 500 an hour holds
 #guard design (run userLookup) 1 "windowNeeds" == toJson (some 150) && design (run userLookup) 1 "windowHoldsThem" == toJson (some true)
 #guard design (run userLookup) 2 "windowNeeds" == toJson (some 600) && design (run userLookup) 2 "windowHoldsThem" == toJson (some false)
@@ -43,7 +43,7 @@ def errorHas (r : Except String Json) (s : String) : Bool :=
 def silent := "protocol Ask (A, B) { q: Ask from A to B; choice at B using declared(\"answers\") { probability 9/10: Answer from B to A cause q after 1 second; } or { probability 1/10: Shrug from B to A; } }
 require per q { every q reaches Answer within 2 seconds; }"
 #guard design (run silent) 0 "verdict" == Json.str "violated" && prob (run silent) 0 "lo" == "9/10"
-#guard design (run silent) 0 "path" == toJson ["Ask", "[answers → Shrug: 1/10]", "Shrug", "(the session ends)"]
+#guard design (run silent) 0 "path" == toJson ["Ask", "[answers -> Shrug: 1/10]", "Shrug", "(the session ends)"]
 -- a late answer misses the deadline
 def late := "protocol Ask (A, B) { q: Ask from A to B; Answer from B to A cause q after 3 seconds; }
 require per q { every q reaches Answer within 2 seconds; }"
@@ -53,8 +53,8 @@ require per q { every q reaches Answer within 2 seconds; }"
 -- an assumption names the question and the answer taken: the same choice reads differently on each branch
 def busy := "protocol Ping (C, S) { q: Ping from C to S; choice at S using declared(\"IsBusy\") { probability 9/10: Pong from S to C cause q after 50 ms; } or { probability 1/10: SlowPong from S to C cause q after 800 ms; } }
 require per q { at least 95/100 of q reach Pong, SlowPong within 100 ms over 1000 entries; at most 1/2 of q reach Pong over 100 entries; }"
-#guard design (run busy) 0 "path" == toJson ["Ping", "[IsBusy → SlowPong: 1/10]", "SlowPong", "(at 800 ms, past the 100 ms deadline)"]
-#guard design (run busy) 1 "assumptions" == toJson ["[IsBusy → Pong: 9/10]"]
+#guard design (run busy) 0 "path" == toJson ["Ping", "[IsBusy -> SlowPong: 1/10]", "SlowPong", "(at 800 ms, past the 100 ms deadline)"]
+#guard design (run busy) 1 "assumptions" == toJson ["[IsBusy -> Pong: 9/10]"]
 
 -- refusals: a fraction needs a window, every takes none, names must exist, assumptions must be stated
 #guard errorHas (run "protocol P (A, B) { q: X from A to B; Y from B to A; }\nrequire per q { at least 99/100 of q reach Y within 1 second; }") "observation window"

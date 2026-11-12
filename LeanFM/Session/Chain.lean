@@ -82,8 +82,8 @@ def readable (r : Rat) (prob : Bool := false) : String :=
     let n := (r * 10000 + 1 / 2).floor
     let frac := (n % 10000).toNat
     let pad := if frac < 10 then "000" else if frac < 100 then "00" else if frac < 1000 then "0" else ""
-    s!"≈ {n / 10000}.{pad}{frac}"
-  else if r ≥ 0 then "≈ " ++ approx r else "≈ -" ++ approx (-r)
+    s!"~{n / 10000}.{pad}{frac}"
+  else if r ≥ 0 then "~" ++ approx r else "~-" ++ approx (-r)
 
 /-- A signed rational to two decimals. -/
 def signedApprox (r : Rat) : String := if r ≥ 0 then "+" ++ approx r else "-" ++ approx (-r)
@@ -97,7 +97,7 @@ def daysText (ms : Rat) : String :=
     else if ms ≥ 60000 then (ms / 60000, "minute")
     else (ms / 1000, "second")
   if n.den > 100000 then s!"{readable n} {unit}s" else
-  s!"{ratText n} {unit}{if n == 1 then "" else "s"}" ++ (if n.den == 1 || n < 0 then "" else s!" (≈ {approx n})")
+  s!"{ratText n} {unit}{if n == 1 then "" else "s"}" ++ (if n.den == 1 || n < 0 then "" else s!" (~{approx n})")
 
 def periodText (ms : Nat) : String :=
   if ms % 604800000 == 0 then (if ms == 604800000 then "week" else s!"{ms / 604800000} weeks")
@@ -146,7 +146,7 @@ where
     | .msg .. | .timed .. | .valued .. | .event .. =>
       let (core, amounts, time) := peel s
       let (label, src, dst, kind, text) ← match core with
-        | .msg _ label src dst .. => pure (label, src, dst, "message", s!"{label}: {src} → {dst}")
+        | .msg _ label src dst .. => pure (label, src, dst, "message", s!"{label}: {src} -> {dst}")
         | .event label role => pure (label, role, role, "event", s!"{label} at {role}")
         | _ => throw "an annotation must belong to a message or an event"
       let (delay, delayText) ← match time with
@@ -182,7 +182,7 @@ where
       let entry (x : Accrual) : String :=
         s!"{if x.payer == a.payer then "" else "-"}{x.quantity} {x.unit}/{periodText x.periodMs}"
       let text := "accrue " ++ (if as.length == 1 then entry a else "{ " ++ ", ".intercalate (as.map entry) ++ " }")
-      let n ← addState "rate" text s!"{a.payer} → {a.payee}"
+      let n ← addState "rate" text s!"{a.payer} -> {a.payee}"
       let e : Edge := { src := n, dst := k, kind := "rate", label := text ++ s!" from {a.payer} to {a.payee}", prob := Q.one, rates := as }
       addEdge e
       return n
@@ -468,7 +468,7 @@ def edgeJson (c : Chain) (e : Edge) : Json := Json.mkObj
    ("moves", toJson (e.moves.map fun (f, t, u, q) => Json.mkObj [("from", f), ("to", t), ("unit", u), ("mean", ratText q)]))]
 
 def balancesText (bs : List (String × String × Rat)) : String :=
-  " · ".intercalate ((bs.filter (·.2.2 != 0)).map fun (r,u,v) => s!"{r} {if v ≥ 0 then "+" else ""}{ratText v} {u}")
+  " - ".intercalate ((bs.filter (·.2.2 != 0)).map fun (r,u,v) => s!"{r} {if v ≥ 0 then "+" else ""}{ratText v} {u}")
 
 /-! ## Whole periods behind a gate (selfhost.session.mdp.horizon) -/
 
@@ -783,7 +783,7 @@ def histogram (title : String) (ms : List (String × String × List (Rat × Rat)
     let hi := (vals.getLast?).map (·.1) |>.getD 0
     let span := if hi == lo then 1 else hi - lo
     let height (p : Rat) : Nat := if maxP == 0 then 0 else ((p / maxP) * 100).floor.toNat
-    shapes := shapes.push (.text "" 20 (top + 14) "start" .fg 13 true s!"{r} · {u} · mean {signedApprox mean}")
+    shapes := shapes.push (.text "" 20 (top + 14) "start" .fg 13 true s!"{r} - {u} - mean {signedApprox mean}")
     shapes := shapes.push (.line "" left base right base .line "1" "" false)
     let meanX : Nat ← if n ≤ 24 then do
         let barW := max 2 ((right - left) / n)
@@ -977,7 +977,7 @@ def legend (c : Chain) (roles : List String) : List String :=
   let parts := contributions c
   let listed := (exp.map (·.1)).eraseDups
   if listed.isEmpty then [] else
-  ["Expected per role (≈, exact values in the result):"] ++ listed.map fun r =>
+  ["Expected per role (~, exact values in the result):"] ++ listed.map fun r =>
     let mine := exp.filter (·.1 == r)
     let unitText (u : String) (v : Rat) : String :=
       let srcs := (parts.filter fun (r', u', _, x) => r' == r && u' == u && x != 0).map fun (_, _, src, x) => s!"{src} {signedApprox x}"
@@ -987,10 +987,10 @@ def legend (c : Chain) (roles : List String) : List String :=
       | [(_, u1, v1), (_, u2, v2)] =>
         if (v1 > 0) != (v2 > 0) then
           let (a, ua, b, ub) := if v1.abs ≥ v2.abs then (v1.abs, u1, v2.abs, u2) else (v2.abs, u2, v1.abs, u1)
-          s!" · {approx (a / b)} {ua} per {ub}"
+          s!" - {approx (a / b)} {ua} per {ub}"
         else ""
       | _ => ""
-    s!"{r}: " ++ " · ".intercalate (mine.map fun (_, u, v) => unitText u v) ++ price
+    s!"{r}: " ++ " - ".intercalate (mine.map fun (_, u, v) => unitText u v) ++ price
 
 /-- Per role, unit and source, the exact contribution, as a nested map. -/
 def breakdownJson (c : Chain) : Json :=
@@ -1024,20 +1024,20 @@ def drawing (c : Chain) (roles : List String := []) : Except String DiagramModel
   let label (s : State) : String := if s.kind == "state" then s!"S{s.id}" else s.label
   let outcomeText (k : Nat) : String :=
     match outcome c roles k with
-    | (p, some (bal, _)) => s!"probability {ratText p}" ++ (if balancesText bal == "" then "" else " · " ++ balancesText bal)
+    | (p, some (bal, _)) => s!"probability {ratText p}" ++ (if balancesText bal == "" then "" else " - " ++ balancesText bal)
     | (_, none) => "probability 0"
   let visitsText (s : State) : String :=
     let stay := residence c s.id
-    s!"expected visits {readable c.visits[s.id]!}" ++ (if stay == 0 then "" else s!" · time here {daysText stay}")
+    s!"expected visits {readable c.visits[s.id]!}" ++ (if stay == 0 then "" else s!" - time here {daysText stay}")
   let boxW := c.states.foldl (fun w s => max w ((max (label s).length (max s.detail.length
     (if s.kind == "end" then (outcomeText s.id).length else (visitsText s).length))) * 7 + 40)) 160
   let edgeText (e : Edge) : String :=
-    (if e.kind == "message" || e.kind == "event" || e.kind == "rate" then e.label ++ " · " else
+    (if e.kind == "message" || e.kind == "event" || e.kind == "rate" then e.label ++ " - " else
         if e.kind == "policy" && e.label.startsWith "open: " then
-          (if e.prob.text == "1" then "chosen: " else if e.prob.text == "0" then "not chosen: " else "open: ") ++ (e.label.drop 6).toString ++ " · "
-        else if e.kind == "policy" then "policy " ++ e.prob.text ++ " · " else "") ++
-      s!"×{readable (traversals c e)}" ++ (if e.amountText.isEmpty then "" else " · " ++ e.amountText) ++
-      (if e.delayText.isEmpty then "" else " · " ++ e.delayText)
+          (if e.prob.text == "1" then "chosen: " else if e.prob.text == "0" then "not chosen: " else "open: ") ++ (e.label.drop 6).toString ++ " - "
+        else if e.kind == "policy" then "policy " ++ e.prob.text ++ " - " else "") ++
+      s!"x{readable (traversals c e)}" ++ (if e.amountText.isEmpty then "" else " - " ++ e.amountText) ++
+      (if e.delayText.isEmpty then "" else " - " ++ e.delayText)
   let edgeW := c.edges.foldl (fun w e => max w ((edgeText e).length * 7 + 20)) 0
   let slot := max (boxW + 60) (edgeW + 40)
   let widest := levels.foldl (fun w l => max w l.length) 1
@@ -1124,7 +1124,7 @@ def drawing (c : Chain) (roles : List String := []) : Except String DiagramModel
       shapes := shapes.push (.text "boxed" x (yy + 24) "middle" .frame 12 true (visitsText s))
   let footer := legend c roles ++
     [s!"Expected messages: {ratText (expectedMessages c)}" ++
-      (if expectedDuration c == 0 then "" else s!" · expected duration {daysText (expectedDuration c)}")]
+      (if expectedDuration c == 0 then "" else s!" - expected duration {daysText (expectedDuration c)}")]
   let width := max width (footer.foldl (fun w l => max w (l.length * 8 + 40)) 0)
   for (line, i) in footer.zipIdx do
     shapes := shapes.push (.text "" (width / 2) (height - 60 + i * 20) "middle" .frame 13 true line)

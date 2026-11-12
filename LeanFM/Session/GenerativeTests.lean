@@ -116,9 +116,10 @@ def written := Text.write [{name := parsed.name, roles := parsed.roles, body := 
 #guard errorHas (observed observedPrefix [("allowIncomplete",true),("horizonMs",toJson (9007199254740992 : Nat))]) "safe integer"
 #guard (check (Json.mkObj [("lean",sampleText),("overlay",overlay)])).toOption.get!.getObjValD "overlay" == overlay
 #guard ok (check (Json.mkObj [("lean",sampleText),("overlay",Json.null)])) "ok"
-def guarded := sampleText.replace "at time(itemised);" "at time(itemised) where (amount > 0);"
+def guarded := "structure DeductionsItemized where\n  amount : Nat\n" ++
+  sampleText.replace "at time(itemised);" "at time(itemised) where (itemised.amount > 0);"
 def guardedParsed := (Text.parse guarded).toOption.get!
-#guard ok (check (args (Text.write [{name := guardedParsed.name, roles := guardedParsed.roles, body := guardedParsed.body}]))) "ok"
+#guard ok (check (args (Text.writeAll guardedParsed.types [{name := guardedParsed.name, roles := guardedParsed.roles, body := guardedParsed.body}]))) "ok"
 #guard ok (check (args "protocol P (A,B) { clock from A to B; obligation from B to A; probability from A to B; }")) "ok"
 #guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 100 "probability 1: ") ++ "X from A to B; }")) "deeply"
 end LeanFM.Session.GenerativeTests

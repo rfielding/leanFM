@@ -115,7 +115,7 @@ def transitions (roles : List String) (st : List (Local String)) : List (String 
         | some j =>
           (moves 32 st[j]!).filterMap fun (r, k2) =>
             if r.kind == '?' && r.peer == me && r.label == s.label
-            then some (s!"{me} → {s.peer}: {s.label}", (st.set i k).set j k2) else none
+            then some (s!"{me} -> {s.peer}: {s.label}", (st.set i k).set j k2) else none
     let commits := if (own.map (·.1)).eraseDups.length > 1 || (own.length ≥ 1 && own.length < ms.length)
       then own.map fun (s, k) => (s!"{me} chooses to {s.text}", st.set i (commit s k)) else []
     steps ++ commits

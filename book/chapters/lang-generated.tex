@@ -40,7 +40,10 @@ In TypeScript a move the state does not allow does not type-check, and
 protocol allows is a type obligation. The implementer writes only the decisions
 (which branch, what each message carries) and the transport. Because the
 generated code logs every message, conformance (Chapter~\ref{ch:execution}) can
-check the running program without further instrumentation.
+check the running program without further instrumentation. With each message it
+logs exactly the fields of its body that some \texttt{where} condition reads, and
+nothing else: \texttt{PlaceOrder}'s client logs the amount it pays, never the card
+number in the same body.
 
 \section{Interfaces}
 
@@ -52,13 +55,20 @@ protocol allows under its status. The shop's, abridged:
 
 \input{generated/lang-openapi.tex}
 
-A protocol says nothing about what a message carries beyond the names a
-\texttt{where} condition uses, so each body is an open object to fill in. That is
-what protobuf is for. Protobuf definitions sit beside the protocol to regularize
-data structures: they fix the shape and bytes of each message, so every role and
-every stored record agrees on them. They say nothing about order or about who
-decides; that is the protocol's job. The LeanFM server's own messages are an
-example (Appendix~\ref{ch:web-protocol}).
+Each body's schema is its message type, with only its declared fields. The same
+types are written out as protobuf, to fix the shape and bytes of each message so
+every role and every stored record agrees on them:
+
+\input{generated/lang-types-proto.tex}
+
+and as Lean structures that convert to and from JSON, for code written in Lean:
+
+\input{generated/lang-types-lean.tex}
+
+The skeletons carry them too: a Python dataclass or a TypeScript interface per
+message, and each send method takes its message's type. None of these say anything
+about order or about who decides; that is the protocol's job. The LeanFM server's
+own messages are an example (Appendix~\ref{ch:web-protocol}).
 
 \section{Requirements and implementation, reviewed in git}
 

@@ -38,7 +38,39 @@ paid:
 \input{generated/lang-conform.tex}
 
 The verdict names the first event that breaks the protocol and what the protocol
-allowed instead. Asked after any prefix, LeanFM also says what may happen next
+allowed instead.
+
+\index{where condition}
+A \texttt{where} condition is run too. An event may carry \texttt{fields}, the
+parts of its payload a condition reads, and conformance evaluates the condition
+over them when the event matches its message. Here the client pays 12 against a
+quote of 10:
+
+\input{generated/lang-where-log.tex}
+
+\input{generated/lang-where.tex}
+
+A false condition means the message does not match, so a condition can also select
+between branches by data, as a label does. The diagram then draws it where it
+decides, as the guard of its branch:
+
+\input{generated/lang-tier.tex}
+
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{Sequence diagram of Tier. Customer sends Order to Shop. In an alt frame the Shop decides. The first operand has the guard o.total at least 100 and Shop sends Gold to Customer. The second operand has the guard o.total below 100 and Shop sends Plain to Customer.}{%
+\ThemedDiagram{width=.5\textwidth}{lang-tier}}
+\caption{A choice made by data: each operand of the \texttt{alt} frame carries the
+condition that selects it.}
+\label{fig:tier}
+\end{figure}
+
+ A condition that cannot be decided,
+because a field is missing from the log, a message has not happened, or the types
+do not compare, is reported as unchecked with its reason, never counted as
+satisfied. The condition language is small on purpose: field paths, numbers,
+strings, comparisons, arithmetic, \texttt{and}, \texttt{or} and \texttt{not}.
+LeanFM interprets it; nothing in it runs as code. Asked after any prefix, LeanFM also says what may happen next
 and whether the session may end there; that is how a walk through one session is
 driven, one click at a time.
 

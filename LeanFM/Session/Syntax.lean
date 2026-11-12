@@ -28,7 +28,8 @@ protocol Purchase (Client, Shop, Bank) {
 * `status 402` is the status a response carries: an HTTP code, or the result tag of a function
   call. No rule reads it; generated diagrams and call listings show it.
 * `where e` is a Lean `Bool`-valued condition over the payloads of named earlier messages; it is
-  type-checked when the protocol is written and evaluated over decoded payloads at check time.
+  type-checked when the protocol is written; conformance runs its text over the logged fields with
+  LeanFM's interpreter (`Session.Where`), so a condition outside that language is reported unchecked.
 * `Timeout at Sender;` is an event at one role only.
 * `choice { } or { }`: exactly one branch happens. The role that decides is not written: it is
   the one role that starts every branch, and the checker names it or reports the race.

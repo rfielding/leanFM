@@ -1,4 +1,6 @@
 import LeanFM.Session.Calls
+import LeanFM.Session.Where
+import LeanFM.Session.Types
 import Lean.Data.Json
 
 /-!
@@ -71,11 +73,39 @@ def cls (role : String) (state : String) : String :=
 def runtime : String := "\
 \"\"\"Runtime shared by every role. Generated; do not edit.\"\"\"
 
+from __future__ import annotations
+
 import itertools
+from dataclasses import asdict, dataclass, is_dataclass
+from typing import List, Optional
 
 
 class ProtocolError(Exception):
     \"\"\"A step the protocol does not allow here.\"\"\"
+
+
+def _plain(body):
+    \"\"\"A message object as the plain dict that travels and is logged.\"\"\"
+    return asdict(body) if is_dataclass(body) and not isinstance(body, type) else body
+
+
+def _project(body, paths):
+    \"\"\"The fields at these dotted paths of a body, nested as in the body; nothing else.\"\"\"
+    out = {}
+    for path in paths:
+        keys = path.split(\".\")
+        cur = body
+        for key in keys:
+            if isinstance(cur, dict) and key in cur:
+                cur = cur[key]
+            else:
+                break
+        else:
+            node = out
+            for key in keys[:-1]:
+                node = node.setdefault(key, {})
+            node[keys[-1]] = cur
+    return out
 
 
 class Endpoint:
@@ -90,6 +120,7 @@ class Endpoint:
         self.bind = {}
 
     def send(self, to, label, pid, cause_pid, body, cause=None):
+        body = _plain(body)
         if cause is None and cause_pid is not None:
             cause = self.bind.get(cause_pid)
             if cause is None:
@@ -100,7 +131,12 @@ class Endpoint:
         if pid is not None:
             self.bind[pid] = event[\"id\"]
         if self.log is not None:
-            self.log(dict(event))
+            logged = dict(event)
+            reads = READS.get(pid) if pid is not None else None
+            if reads:
+                # exactly the fields where conditions read; nothing else of the body is logged
+                logged[\"fields\"] = _project({} if body is None else body, reads)
+            self.log(logged)
         self.transport(dict(event, body={} if body is None else body))
         return event
 
@@ -182,7 +218,7 @@ class Server:
 
 open Typestate in
 /-- One role's classes. -/
-def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local String) : Except String String := do
+def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local String) (tyName : String → String := fun _ => "") : Except String String := do
   let (start, ms) := l.machine
   -- a role that only serves sessions starts each session in the body's first state
   let served : Option String := match ms.filter (fun m => s!"S{m.1}" == start) with
@@ -207,15 +243,17 @@ def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local Str
         let mn := "send_" ++ snake lb
         if used.contains mn then throw s!"{role}: two methods of {nm i} would both be called {mn}"
         used := mn :: used
-        docs := docs ++ [s!"{mn} → {cls role k}"]
+        docs := docs ++ [s!"{mn} -> {cls role k}"]
         match lookup ixs role to lb with
         | some (pid, cpid) =>
-          lines := lines ++ [s!"    def {mn}(self, body=None):",
+          let ann := if (tyName lb).isEmpty then "" else s!": Optional[{tyName lb}]"
+          lines := lines ++ [s!"    def {mn}(self, body{ann} = None):".replace "body = None" "body=None",
             s!"        ep = self._take()",
             s!"        ep.send({lit to}, {lit lb}, {pyOpt pid}, {pyOpt cpid}, body)",
             s!"        return {if k == "End" then "End" else cls role k}(ep)", ""]
         | none =>
-          lines := lines ++ [s!"    def {mn}(self, cause=None, body=None):",
+          let ann := if (tyName lb).isEmpty then "" else s!": Optional[{tyName lb}]"
+          lines := lines ++ [s!"    def {mn}(self, cause=None, body{ann} = None):".replace "body = None" "body=None",
             s!"        \"\"\"The protocol has more than one message like this: pass the id of the event that caused it, if it names a cause.\"\"\"",
             s!"        ep = self._take()",
             s!"        ep.send({lit to}, {lit lb}, None, None, body, cause=cause)",
@@ -224,32 +262,32 @@ def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local Str
         let mn := "do_" ++ snake lb
         if used.contains mn then throw s!"{role}: two methods of {nm i} would both be called {mn}"
         used := mn :: used
-        docs := docs ++ [s!"{mn} → {cls role k}"]
+        docs := docs ++ [s!"{mn} -> {cls role k}"]
         lines := lines ++ [s!"    def {mn}(self):", s!"        ep = self._take()",
           s!"        ep.act({lit lb})", s!"        return {cls role k}(ep)", ""]
       | .fork subs k need =>
         if used.contains "fork" then throw s!"{role}: {nm i} forks twice"
         used := "fork" :: used
         let any := match need with | some n => s!"any {n} of " | none => ""
-        docs := docs ++ [s!"fork → Fork({any}{", ".intercalate (subs.map (cls role))}) then {cls role k}"]
+        docs := docs ++ [s!"fork -> Fork({any}{", ".intercalate (subs.map (cls role))}) then {cls role k}"]
         let needArg := match need with | some n => s!", need={n}" | none => ""
         lines := lines ++ ["    def fork(self):", "        ep = self._take()",
           s!"        return Fork([{", ".intercalate (subs.map fun s => s!"{cls role s}(ep)")}], lambda: {cls role k}(ep){needArg})", ""]
       | .serve b k =>
         if used.contains "serve" then throw s!"{role}: {nm i} serves twice"
         used := "serve" :: used
-        docs := docs ++ [s!"serve → Server of {cls role b}, then {cls role k}"]
+        docs := docs ++ [s!"serve -> Server of {cls role b}, then {cls role k}"]
         lines := lines ++ ["    def serve(self):", "        ep = self._take()",
           s!"        return Server(ep, {cls role b}, {cls role k})", ""]
       | .cont k =>
-        docs := docs ++ [s!"again → {cls role k}"]
+        docs := docs ++ [s!"again -> {cls role k}"]
         if used.contains "again" then throw s!"{role}: {nm i} continues twice"
         used := "again" :: used
         lines := lines ++ ["    def again(self):", s!"        return {cls role k}(self._take())", ""]
       | .stop =>
         if used.contains "stop" then throw s!"{role}: {nm i} stops twice"
         used := "stop" :: used
-        docs := docs ++ ["stop → End"]
+        docs := docs ++ ["stop -> End"]
         lines := lines ++ ["    def stop(self):", "        return End(self._take())", ""]
       | .recv _ _ _ | .offer _ => pure ()
     let alts := recvs.flatten
@@ -273,13 +311,13 @@ def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local Str
         | .nothing =>
           if used.contains "skip" then throw s!"{role}: {nm i} has two empty branches"
           used := "skip" :: used
-          docs := docs ++ ["skip → End (the branch taken did not involve this role)"]
+          docs := docs ++ ["skip -> End (the branch taken did not involve this role)"]
           lines := lines ++ ["    def skip(self):", "        return End(self._take())", ""]
         | .other k =>
           let mn := s!"branch_{ident k}"
           if used.contains mn then throw s!"{role}: two branches of {nm i} enter {k}"
           used := mn :: used
-          docs := docs ++ [s!"{mn} → {cls role k}"]
+          docs := docs ++ [s!"{mn} -> {cls role k}"]
           lines := lines ++ [s!"    def {mn}(self):", s!"        return {cls role k}(self._take())", ""]
         | .recv .. => pure ()
     methods := (lines.reverse.dropWhile (· == "")).reverse
@@ -295,10 +333,47 @@ def roleClasses (ixs : List (Interaction String)) (role : String) (l : Local Str
 
 end Skeleton
 
+/-- For each message id, the field paths of it that some where condition reads: what the generated
+code logs (selfhost.session.where). Conditions outside the condition language read nothing. -/
+def Global.conditionReads (g : Global String) : List (String × List String) :=
+  let pairs := g.messages.flatMap fun i => match i.guard with
+    | some gd => match Where.parse gd.text with | .ok e => e.paths | .error _ => []
+    | none => []
+  let ids := (pairs.map (·.1)).eraseDups
+  ids.map fun x => (x, ((pairs.filter (·.1 == x)).map (·.2) |>.filter (!·.isEmpty)).eraseDups)
+
+/-- The reads as a literal both Python and TypeScript accept: `{"p": ["amount"], "q": ["price"]}`. -/
+def readsLiteral (g : Global String) : String :=
+  "{" ++ ", ".intercalate (g.conditionReads.map fun (x, fs) =>
+    Skeleton.lit x ++ ": [" ++ ", ".intercalate (fs.map Skeleton.lit) ++ "]") ++ "}"
+
+/-- The names of the classes a module defines (`class Name` at the start of a line). -/
+def classNames (code : String) : List String :=
+  (code.splitOn "\n").filterMap fun line =>
+    if line.startsWith "class " || line.startsWith "export class " || line.startsWith "export interface " || line.startsWith "export type " then
+      let rest := (line.splitOn " ").filter (· != "") |>.dropWhile (fun w => ["export", "class", "interface", "type"].contains w)
+      rest.head?.map fun w => String.ofList (w.toList.takeWhile fun c => c.isAlphanum || c == '_')
+    else none
+
+def pyType : Types.Ty → String
+  | .nat | .int => "int" | .str => "str" | .bool => "bool"
+  | .msg n => Types.protoName n
+  | .list t => s!"List[{pyType t}]"
+  | .opt t => s!"Optional[{pyType t}]"
+
+/-- A message type as a dataclass. -/
+def pyMessage (m : Types.Message) : String :=
+  let doc := if m.doc.isEmpty then [] else [s!"    \"\"\"{m.doc}\"\"\""]
+  let body := if m.fields.isEmpty && doc.isEmpty then ["    pass"]
+    else doc ++ m.fields.map fun f => s!"    {f.name}: {pyType f.ty}"
+  "\n".intercalate (["@dataclass", s!"class {Types.protoName m.name}:"] ++ body)
+
 open Skeleton in
 /-- The protocol as a Python module: the runtime, then every role's states as classes. -/
-def Global.pythonSkeleton (g : Global String) (name : String) (roles : List String) : Except String String := do
+def Global.pythonSkeleton (g : Global String) (name : String) (roles : List String) (types : Types.Env := []) : Except String String := do
   let ixs := g.interactions
+  let labels := (g.messages.map (·.label)).eraseDups
+  let ms ← Types.complete types labels
   let names := roles.map ident
   if names.eraseDups.length != names.length then throw "two roles have the same Python name"
   let mut parts : List String := []
@@ -306,7 +381,7 @@ def Global.pythonSkeleton (g : Global String) (name : String) (roles : List Stri
     let l ← match g.project r with
       | .ok l => pure l
       | .error e => throw s!"{r} has no projection: {e}"
-    parts := parts ++ [← roleClasses ixs r l]
+    parts := parts ++ [← roleClasses ixs r l Types.protoName]
   let header := s!"\"\"\"Generated by LeanFM from protocol {ident name}; regenerate it with session_skeleton rather than editing.
 
 Each role's states are classes; a method consumes its state and returns the next. The start
@@ -317,6 +392,12 @@ session_conform.
 "
   -- the runtime's own docstring is replaced by the module's
   let rt := (runtime.splitOn "\n").drop 1
-  return header ++ "\n".intercalate rt ++ "\n".intercalate parts ++ "\n"
+  let reads := s!"# The fields of each message that where conditions read: logged, nothing else of a body.\nREADS = {readsLiteral g}\n\n\n"
+  let taken := classNames ("\n".intercalate (rt ++ parts))
+  for m in ms do
+    if taken.contains (Types.protoName m.name) then throw s!"message type {m.name} has the same Python name as a class of the module; rename the message"
+  let msgs := "# The message types (selfhost.session.types): send methods take these, sent as plain dicts.\n\n" ++
+    "\n\n".intercalate (ms.map pyMessage) ++ "\n\n\n"
+  return header ++ "\n".intercalate rt ++ msgs ++ reads ++ "\n".intercalate parts ++ "\n"
 
 end LeanFM.Session

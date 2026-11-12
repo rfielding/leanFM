@@ -252,7 +252,7 @@ def Protocol.unguardedRecv (p : Protocol) (w : World) (role : Role) (t : Thread)
     let env := binding ++ t.env
     match pat.inst env with
     | some m => if w.knows m then
-        some { label := s!"{role.name} ⇐ {m}", next := { w with threads := setT { pc := t.pc + 1, env } },
+        some { label := s!"{role.name} <- {m}", next := { w with threads := setT { pc := t.pc + 1, env } },
                wire := some { event := "recv", src := p.attacker, dst := role.name, term := m } }
       else none
     | none => none
@@ -268,7 +268,7 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
     | some (.send to pat) =>
         match pat.inst t.env, to.inst t.env with
         | some m, some dst =>
-          [{ label := s!"{role.name} → {agentName dst}: {m}",
+          [{ label := s!"{role.name} -> {agentName dst}: {m}",
              next := { w with threads := setT { t with pc := t.pc + 1 }, attacker := canon (learn w.attacker m) },
              wire := some { event := "send", src := role.name, dst := p.attacker, addressee := some (agentName dst), term := m } }]
         | _, _ => []
@@ -292,7 +292,7 @@ def Protocol.moves (p : Protocol) (w : World) : List Move :=
                 let how := match orig with
                   | some o => s!" ({g.name} rewrote {o})"
                   | none => s!" via {g.name}"
-                some { label := s!"{role.name} ⇐ {m'}{how}", next := { w with threads := setT { pc := t.pc + 1, env } },
+                some { label := s!"{role.name} <- {m'}{how}", next := { w with threads := setT { pc := t.pc + 1, env } },
                        wire := some { event := "recv", src := g.name, dst := role.name, term := m' } }
         else p.unguardedRecv w role t setT pat
       | none => p.unguardedRecv w role t setT pat

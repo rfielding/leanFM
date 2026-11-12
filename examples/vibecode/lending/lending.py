@@ -51,7 +51,7 @@ class Desk:
                 self.stock[book] -= 1
                 state = state.send_lent()
             else:
-                state = state.send_hold({"book": book})
+                state = state.send_hold(lp.Hold(book=book))
         elif isinstance(state, lp.DeskS4):                  # a Return
             self.stock[self.books[sid]] += 1
             state = state.send_returned()
@@ -95,12 +95,12 @@ class Member:
         self.book = book
 
     def start(self):
-        self.state = self.state.send_borrow({"book": self.book})
+        self.state = self.state.send_borrow(lp.Borrow(book=self.book))
 
     def receive(self, m):
         msg, state = self.state.receive(m)
         if isinstance(state, lp.MemberS3):                  # Lent: read it, then return it
-            state = state.send_return({"book": self.book})
+            state = state.send_return(lp.Return(book=self.book))
         self.state = state
 
 

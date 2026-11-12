@@ -32,7 +32,8 @@ the language's tutorial. Appendix~\ref{ch:mcp-tools} lists the tools.
 
 \index{PlaceOrder}
 Here is a complete program: a client places an order, the shop quotes or says it
-is sold out, the client pays, and the bank charges the card or declines it.
+is sold out, the client pays, and the bank charges the card or declines it. The
+structures at the top are the message types; the protocol follows them.
 
 \input{generated/lang-placeorder.tex}
 
@@ -53,7 +54,33 @@ Each line is one message: a label, a sender and a receiver. The rest is optional
 \texttt{o:} names the message so later ones can point at it. \texttt{cause o} says
 this message answers \texttt{o}. \texttt{route} and \texttt{status} make the
 exchange an HTTP call and its response. \texttt{where} states a condition on the
-payloads, which LeanFM shows but never evaluates.
+payloads, and conformance runs it against what the running system logs
+(Chapter~\ref{ch:execution}): a client that pays 12 against a quote of 10 does not
+conform.
+
+\section{Message types}
+
+\index{message type}
+\index{structure}
+Every message has a type, written as a Lean structure before the protocols. A
+message carries the structure its label names: \texttt{Pay} carries an
+\texttt{amount} and a \texttt{card\_secr}. A label that names no structure, such as
+\texttt{SoldOut}, carries nothing, and so does an event. A field is a
+\texttt{Nat}, \texttt{Int}, \texttt{String}, \texttt{Bool}, another structure, or a
+\texttt{List} or \texttt{Option} of one of those; \texttt{x y : Nat} declares two
+fields, as in Lean, so a move in a game is \texttt{structure Play where x y : Nat}
+and a pass is \texttt{structure Pass}. Fields are numbered in the order written,
+and that number is the field's protobuf number, so new fields go at the end.
+
+The types are what the conditions and the logs are checked against. A
+\texttt{where} condition is typed when the text is read, before anything runs:
+\texttt{p.amount = q.price} compares two declared \texttt{Nat} fields;
+\texttt{p.total = q.price} is refused because \texttt{Pay} has no
+\texttt{total}, and \texttt{p.amount = "ten"} because a number is not a string. A
+name ending in \texttt{\_secr} is a secret, and no condition may read one,
+because the fields conditions read are logged. A log is checked against the same
+types: a field the message does not declare, a value of another type, or a secret
+in a log is refused.
 
 \section{Statements}
 
@@ -82,7 +109,11 @@ Statement & Meaning \\
 
 Statements after a choice continue every branch. Names are Lean identifiers, and
 \texttt{--} and \texttt{/- -/} comments are allowed. Several protocols may share a
-text, so one can include another; the last is the one checked. A protocol may
+text, so one can include another; the last is the one checked. This is how a large
+protocol is broken up: each part is its own named protocol, written as if it were
+the whole conversation, and the top-level protocol assembles them with
+\texttt{include}, renaming roles as it goes. Each part is checked on its own, and the
+top-level diagram draws each as a frame that names it. A protocol may
 carry amounts, delays and rates on its messages; those annotations never change
 its structure, and Chapter~\ref{ch:assumptions} covers them.
 
@@ -97,7 +128,10 @@ The same syntax can be written inside a Lean file with the \texttt{protocol}
 command of \texttt{LeanFM.Session}, where a label names a Lean structure and a
 \texttt{where} condition is type-checked Lean. The text form, a \texttt{.leanfm}
 file or the \texttt{lean} argument of a tool, is read by a parser for this grammar
-alone: nothing in it is elaborated or run.
+alone, structures included: nothing in it is elaborated as Lean. It types its
+\texttt{where} conditions itself and runs them with LeanFM's own interpreter, so
+text that arrives from any client cannot execute code in the server. Anyone who wants more isolation than that can run LeanFM itself in a
+container or a virtual machine.
 
 \section{Only what crosses a boundary}
 
