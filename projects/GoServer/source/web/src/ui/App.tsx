@@ -7,8 +7,10 @@ import {useEffect, useRef, useState} from 'react';
 import {api, auth, feedback, issueSession, nextID, onFeedback, storage} from '../api';
 import {Tabs} from './common';
 import {RoomView} from './Room';
+import {RankingView} from './Ranking';
 
 const BROWSE = '__rooms';
+const RANKING = '__ranking';
 
 export function App() {
   const [session, setSession] = useState(auth.session);
@@ -18,10 +20,10 @@ export function App() {
   return (
     <>
       <header className="topbar"><div className="brand"><span className="brandstone" aria-hidden="true" /><strong>GoServer</strong><span className="tag">N-player Go</span></div>
-        <span className="identity-label">{session ? auth.identity : 'Choose a local name to join'}</span></header>
+        <span className="identity-label">{session ? auth.identity + (auth.claimed ? ' · claimed' : '') : 'Choose a local name to join'}</span></header>
       <main>
         {!session ? <Welcome onSignedIn={() => setSession(auth.session)} /> : null}
-        <p className="notice">Local preview · rooms, challenges and games reset when the app restarts.</p>
+        <p className="notice">Local preview · rooms, challenges and games reset when the app restarts; claimed names and the ranking are kept.</p>
         <div className={'feedback' + (note.error ? ' error' : '')} role="status" aria-live="polite">{note.text}</div>
         {session ? <Rooms /> : null}
       </main>
@@ -31,18 +33,19 @@ export function App() {
 }
 
 function Welcome({onSignedIn}: {onSignedIn: () => void}) {
-  const ref = useRef<HTMLInputElement>(null), [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLInputElement>(null), pass = useRef<HTMLInputElement>(null), [busy, setBusy] = useState(false);
   useEffect(() => { const last = storage.getItem('goserver:lastName'); if (last && ref.current) { ref.current.value = last; ref.current.focus(); } }, []);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy || !ref.current) return; setBusy(true);
-    const name = ref.current.value.trim();
-    try { await issueSession(name); onSignedIn(); feedback('Welcome, ' + name + '. Choose a room or create your own.'); }
-    catch (err: any) { feedback(err.message, true); } finally { setBusy(false); }
+    const name = ref.current.value.trim(), password = pass.current?.value || '';
+    try { await issueSession(name, password); if (pass.current) pass.current.value = ''; onSignedIn(); feedback('Welcome, ' + auth.identity + '. Choose a room or create your own.'); }
+    catch (err: any) { feedback(err.message, true); if (/password/.test(err.message)) pass.current?.focus(); } finally { setBusy(false); }
   };
   return (
     <section className="welcome"><div><p className="eyebrow">A PLACE TO MEET AND PLAY</p><h1>Find your room.<br />Make a challenge.</h1>
       <p>Two to eight players on one board. Score is territory minus the stones you lose. Empty seats are played by the server's search bots.</p></div>
       <form className="session-form" onSubmit={submit}><label>Your local display name<input ref={ref} className="identity" maxLength={128} required autoComplete="nickname" placeholder="Choose a name" /></label>
+        <label>Password <span className="muted small">(only for a claimed name)</span><input ref={pass} className="password" type="password" maxLength={128} autoComplete="current-password" placeholder="Leave empty if unclaimed" /></label>
         <button type="submit" disabled={busy}>Enter GoServer</button></form>
     </section>
   );
@@ -57,11 +60,12 @@ function Rooms() {
   const openRoom = (id: string) => { setOpen(o => o.includes(id) ? o : [...o, id]); setActive(id); };
   const closeRoom = (id: string) => { setOpen(o => { const n = o.filter(x => x !== id); if (active === id) setActive(n[n.length - 1] || BROWSE); return n; }); };
   const tabs = [...open.map(id => ({id, label: '# ' + id, badge: unread[id] && id !== active ? String(unread[id]) : undefined, closable: true, data: {'data-room': id}})),
-    {id: BROWSE, label: '+ Rooms', data: {'data-room': BROWSE}}];
+    {id: BROWSE, label: '+ Rooms', data: {'data-room': BROWSE}}, {id: RANKING, label: 'Ranking', data: {'data-room': RANKING}}];
   return (
     <div className="workspace">
       <Tabs tabs={tabs} active={active} onSelect={setActive} onClose={closeRoom} label="Rooms" className="room-tabs" />
       {active === BROWSE ? <RoomBrowser openRooms={open} onOpen={openRoom} /> : null}
+      {active === RANKING ? <RankingView /> : null}
       {open.map(id => <RoomView key={id} roomId={id} active={active === id} onUnread={n => setUnread(u => u[id] === n ? u : {...u, [id]: n})} />)}
     </div>
   );

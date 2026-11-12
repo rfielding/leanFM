@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import time
@@ -17,12 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / 'reports/browser'
 PROFILE = ROOT / '.cache/rooms-browser-profile'
 BASE = 'http://127.0.0.1:8081'
+# claims and results from this check go to a throwaway folder, never the project's data/
+DATA = ROOT / '.cache/browser-check-data'
 
 def main():
     REPORT.mkdir(parents=True, exist_ok=True)
     server_log = (REPORT / 'browser-app.log').open('w')
     chrome_log = (REPORT / 'chrome.log').open('w')
-    server = subprocess.Popen(['make', 'run'], cwd=ROOT/'source', stdout=server_log, stderr=subprocess.STDOUT, start_new_session=True)
+    shutil.rmtree(DATA, ignore_errors=True)
+    server = subprocess.Popen(['make', 'run'], cwd=ROOT/'source', stdout=server_log, stderr=subprocess.STDOUT, start_new_session=True, env=dict(os.environ, GOSERVER_DATA_DIR=str(DATA)))
     chrome = None
     connection = None
     try:
@@ -95,7 +99,7 @@ def main():
         click(alice,'[role=tab][data-room="__rooms"]'); wait(alice,"!!"+q('.room-form'))
         fill(alice,'.room-name',room,'.room-form')
         wait(alice,text(A+' .room-heading')+"==="+json.dumps(room)+" && "+text(A+' .room-state')+"==='Joined'")
-        assert evaluate(alice,"Array.from(document.querySelectorAll('.room-tabs [role=tab]')).map(t=>t.dataset.room).join('|')==='lobby|'+"+json.dumps(room)+"+'|__rooms'")
+        assert evaluate(alice,"Array.from(document.querySelectorAll('.room-tabs [role=tab]')).map(t=>t.dataset.room).join('|')==='lobby|'+"+json.dumps(room)+"+'|__rooms|__ranking'")
         fill(alice,A+' .challenge-form input[name=name]',game,A+' .challenge-form')
         wait(alice,text(G+' .game-heading')+"==="+json.dumps(game))
         assert evaluate(alice,"Array.from(document.querySelectorAll('"+A+" .game-tabs [role=tab]')).length===2")
@@ -135,9 +139,32 @@ def main():
         wait(alice,text(A+' .room-heading')+"==="+json.dumps(room)+" && "+text(G+' .game-chat')+".includes('bob game')")
         shot=call('Page.captureScreenshot',{'format':'png','captureBeyondViewport':True},alice)
         (REPORT/'browser.png').write_bytes(base64.b64decode(shot['data']))
+        # Claim a name in the Ranking tab: the password never stays in the page or its storage,
+        # a claimed name then needs the password, and the password ends the older session.
+        secret='browser pass 42'
+        click(bob,'[role=tab][data-room="__ranking"]'); wait(bob,"!!"+q('.claim form'))
+        wait(bob,text('.ranking')+".includes('No rated games yet')")
+        evaluate(bob,"{const f=document.querySelectorAll('.claim input');f[0].value="+json.dumps(secret)+";f[1].value='different pass';"+q('.claim form')+".requestSubmit()}")
+        wait(bob,text('.feedback')+".includes('passwords differ')")
+        evaluate(bob,"{const f=document.querySelectorAll('.claim input');f[0].value="+json.dumps(secret)+";f[1].value="+json.dumps(secret)+";"+q('.claim form')+".requestSubmit()}")
+        wait(bob,text('.claim')+".includes('is claimed')")
+        assert evaluate(bob,text('.identity-label')+".includes('claimed')")
+        assert evaluate(bob,"!JSON.stringify(Object.assign({},sessionStorage)).includes("+json.dumps(secret)+") && !document.body.innerHTML.includes("+json.dumps(secret)+")")
+        carol=tab(); wait(carol,"!!"+q('.session-form'))
+        fill(carol,'.identity','BROWSER-BOB','.session-form')
+        wait(carol,text('.feedback')+".includes('claimed; enter its password')")
+        evaluate(carol,q('.password')+".value='wrong password';"+q('.identity')+".value='browser-bob';"+q('.session-form')+".requestSubmit()")
+        wait(carol,text('.feedback')+".includes('wrong password')")
+        evaluate(carol,q('.password')+".value="+json.dumps(secret)+";"+q('.session-form')+".requestSubmit()")
+        wait(carol,text('.room-panel[data-room="lobby"] .room-state')+"==='Joined'")
+        assert evaluate(carol,text('.identity-label')+".startsWith('browser-bob') && !document.body.innerHTML.includes("+json.dumps(secret)+")")
+        assert evaluate(bob,"(async()=>{const r=await fetch('./api/list_rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sessionStorage.getItem('goserver:session'),requestId:9})});return (await r.json()).code==='unauthorized'})()")
+        assert not any(secret in line for line in (DATA/'goserver.jsonl').read_text().splitlines()), 'plaintext password in the data file'
+        shot=call('Page.captureScreenshot',{'format':'png','captureBeyondViewport':True},carol)
+        (REPORT/'browser-ranking.png').write_bytes(base64.b64decode(shot['data']))
         assert not errors, errors
         source_hashes={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in (ROOT/'source').rglob('*') if p.is_file() and 'node_modules' not in p.parts and p.suffix != '' and 'static/app' not in str(p)}
-        report={'status':'passed','checks':['real make run readiness','named room creation','named challenge creation/open','two-user room and game chat','membership rejection before room entry','literal markup rendering','no displayed session token or placeholder link','room tabs and per-room game tabs','delayed response lands only in its own room tab','no uncaught browser errors'],'source_sha256':source_hashes,'screenshot':'reports/browser/browser.png'}
+        report={'status':'passed','checks':['claim a name in the Ranking tab, password required afterwards and ends the older session, password never in page, storage or data file','real make run readiness','named room creation','named challenge creation/open','two-user room and game chat','membership rejection before room entry','literal markup rendering','no displayed session token or placeholder link','room tabs and per-room game tabs','delayed response lands only in its own room tab','no uncaught browser errors'],'source_sha256':source_hashes,'screenshot':'reports/browser/browser.png'}
         (REPORT/'browser-validation.json').write_text(json.dumps(report,indent=2)+'\n')
         print('ok: real Chrome room tabs, game tabs, room/challenge/chat flow, isolation, literal text and stale-response checks')
     finally:

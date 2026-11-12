@@ -10,6 +10,7 @@ export const storage: {getItem(k: string): string | null; setItem(k: string, v: 
 export const auth = {
   session: storage.getItem('goserver:session') || '',
   identity: storage.getItem('goserver:identity') || '',
+  claimed: storage.getItem('goserver:claimed') === '1',
 };
 
 const messages: Record<string, string> = {
@@ -24,6 +25,9 @@ const messages: Record<string, string> = {
   not_creator: 'Only the challenge creator can start the game.', not_playing: 'This game is not in progress.', not_your_turn: 'It is not your turn.',
   stale_move: 'The board changed; your move was not played. Look again.', occupied: 'That point is occupied.', ko: 'Ko: that recapture must wait a round.',
   superko: 'Superko: that move recreates an earlier position.', illegal_move: 'That move is not on the board.', invalid_board: 'Choose a listed board size.',
+  invalid_password: 'Use a password of 8 to 128 characters.', already_claimed: 'That name is already claimed.',
+  name_variant_in_use: 'Someone is signed in with the same name in different letter case; it cannot be claimed until they leave.',
+  capacity: 'The server holds its maximum number of claimed names.', unavailable: 'The claim could not be saved. Try again later.',
   invalid_seats: 'Choose 2 to 8 players.', invalid_deadline: 'Choose a listed deadline.', invalid_bot_time: 'Choose a listed bot deadline.', invalid_ko_rule: 'Choose a listed ko rule.',
 };
 
@@ -35,7 +39,7 @@ export const nextID = () => ++counter;
 export function sessionLost() {
   storage.setItem('goserver:session', '');
   storage.setItem('goserver:lastName', auth.identity);
-  storage.setItem('goserver:notice', 'The app restarted, so your session ended. Press Enter GoServer to continue.');
+  storage.setItem('goserver:notice', auth.claimed ? 'Your session ended (the app restarted, or you signed in elsewhere). Enter your password to continue.' : 'The app restarted, so your session ended. Press Enter GoServer to continue.');
   auth.session = '';
   location.reload();
 }
@@ -48,13 +52,20 @@ export async function api(action: string, payload: Record<string, unknown> = {})
   return result;
 }
 
-export async function issueSession(identity: string) {
-  const response = await fetch('./api/issue_session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({identity})});
+// The password goes only to issue_session and is never stored; a claimed name's
+// spelling comes back from the server (claims ignore letter case).
+export async function issueSession(identity: string, password = '') {
+  const body: Record<string, string> = {identity};
+  if (password) body.password = password;
+  const response = await fetch('./api/issue_session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Could not start a session.');
-  auth.session = result.session; auth.identity = identity;
-  storage.setItem('goserver:session', auth.session); storage.setItem('goserver:identity', identity);
+  auth.session = result.session; auth.identity = result.identity || identity; auth.claimed = !!result.claimed;
+  storage.setItem('goserver:session', auth.session); storage.setItem('goserver:identity', auth.identity);
+  storage.setItem('goserver:claimed', auth.claimed ? '1' : '');
 }
+
+export function markClaimed() { auth.claimed = true; storage.setItem('goserver:claimed', '1'); }
 
 // A tiny shared notice line ("feedback") any component can write to.
 type Listener = (m: {text: string; error: boolean}) => void;

@@ -1,6 +1,6 @@
 {
   "requirement": "goserver",
-  "scope": "Rooms, challenges and chat as tabs in a React browser app; N-player Go with seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis",
+  "scope": "Rooms, challenges and chat as tabs in a React browser app; N-player Go with seat plan, autopilot, teams and merges, bot search summaries, history, variations and local analysis; claimed names with passwords and a durable ranking of claimed names and bots",
   "mappings": [
     {
       "requirements": [
@@ -342,7 +342,80 @@
         "TestBowlRecordsWhoCaptured",
         "source/book_tour.py (book/assets/tour/manifest.json)"
       ]
+    },
+    {
+      "requirements": [
+        "grammar:sign_in",
+        "grammar:claim_name",
+        "property:sign_in honours claims",
+        "property:claim_name binds a password to the session's own name",
+        "proof:sign_in never lets anyone borrow a claimed name",
+        "proof:claim_name never takes another name"
+      ],
+      "files": [
+        "source/accounts.go",
+        "source/claims.go",
+        "source/server.go",
+        "source/cmd/demo/main.go",
+        "source/web/src/api.ts",
+        "source/web/src/ui/App.tsx",
+        "source/web/src/ui/Ranking.tsx"
+      ],
+      "symbols": [
+        "Accounts.AddClaim",
+        "Accounts.Authenticate",
+        "pbkdf2Key",
+        "throttleDelay",
+        "ServerCore.SignIn",
+        "ServerCore.claimName",
+        "nameKey",
+        "isBotName"
+      ],
+      "tests": [
+        "TestPBKDF2MatchesRFC7914Vector",
+        "TestClaimNameAndSignIn",
+        "TestClaimRefusedWhileACaseVariantIsInUse",
+        "TestWrongPasswordsAreThrottled",
+        "TestClaimIsNotAcknowledgedUntilDurable",
+        "TestClaimSignInAndRankingOverHTTP",
+        "browser_check.py"
+      ]
+    },
+    {
+      "requirements": [
+        "grammar:ranking",
+        "property:ranking is computed from rated games",
+        "property:claims and results are durable",
+        "proof:ranking never counts what it should not",
+        "proof:the data file never escapes or corrupts"
+      ],
+      "files": [
+        "source/ranking.go",
+        "source/accounts.go",
+        "source/claims.go",
+        "source/game.go",
+        "source/web/src/ui/Ranking.tsx"
+      ],
+      "symbols": [
+        "Fit",
+        "Rated",
+        "ServerCore.resultLocked",
+        "ServerCore.recordResultLocked",
+        "ServerCore.getRanking",
+        "OpenAccounts",
+        "DefaultDataDir",
+        "Accounts.RecordResult",
+        "seat.everAutopilot",
+        "play.startedAt"
+      ],
+      "tests": [
+        "TestFitMatchesIndependentNewtonFit",
+        "TestFinishedGamesFeedTheRanking",
+        "TestDataFileIsDurableAndRefusesDamage",
+        "TestDataPathRefusesSymlinksAndEscapes",
+        "TestClaimSignInAndRankingOverHTTP"
+      ]
     }
   ],
-  "limits": "Handicaps, ratings, persistence, SGF export, push transport and protobuf byte conformance of the JSON harness remain outside this change. Analysis gating is enforced by the provided browser, not by the server."
+  "limits": "Handicaps, persistence of rooms and games, SGF export, push transport and protobuf byte conformance of the JSON harness remain outside this change. Analysis gating is enforced by the provided browser, not by the server."
 }

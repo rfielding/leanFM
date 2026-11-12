@@ -303,3 +303,46 @@ func TestSessionRecoveryAndLightOnDark(t *testing.T) {
 		t.Fatal("page does not opt out of Dark Reader")
 	}
 }
+
+func status(h http.Handler, path string, body any) (int, string) {
+	b, _ := json.Marshal(body)
+	r := httptest.NewRequest("POST", "http://127.0.0.1:8081"+path, bytes.NewReader(b))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w.Code, w.Body.String()
+}
+
+// Requirement refs: property:sign_in honours claims; proof:sign_in never lets anyone
+// borrow a claimed name; property:ranking is computed from rated games.
+func TestClaimSignInAndRankingOverHTTP(t *testing.T) {
+	accounts, err := goserver.OpenAccounts(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer accounts.Close()
+	h := newHandler(goserver.NewServerWith(accounts), "8081")
+	token := call(t, h, "/api/issue_session", map[string]any{"identity": "grace"})["session"].(string)
+	claimed := call(t, h, "/api/claim_name", map[string]any{"sessionId": token, "password": "a good password", "requestId": 1})
+	if claimed["identity"] != "grace" {
+		t.Fatal(claimed)
+	}
+	if code, body := status(h, "/api/issue_session", map[string]any{"identity": "Grace"}); code != 401 || strings.Contains(body, "pbkdf2") {
+		t.Fatalf("claimed name without a password: %d %s", code, body)
+	}
+	for i := 0; i < 5; i++ {
+		if code, _ := status(h, "/api/issue_session", map[string]any{"identity": "grace", "password": "not it"}); code != 401 {
+			t.Fatalf("wrong password %d: %d", i, code)
+		}
+	}
+	if code, _ := status(h, "/api/issue_session", map[string]any{"identity": "grace", "password": "a good password"}); code != 429 {
+		t.Fatalf("throttled attempt: %d", code)
+	}
+	ranking := call(t, h, "/api/ranking", map[string]any{"sessionId": token, "requestId": 2})
+	if ranking["ratedGames"] != float64(0) {
+		t.Fatal(ranking)
+	}
+	if code, _ := status(h, "/api/issue_session", map[string]any{"identity": "bot-3"}); code != 400 {
+		t.Fatal("a person took a bot name")
+	}
+}

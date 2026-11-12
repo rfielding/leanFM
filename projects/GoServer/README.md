@@ -8,7 +8,7 @@ Carlo tree search bots. During play a person can hand their seat to a bot
 (autopilot) and take it back, and teams merge when every person on both
 accepts. Every viewer steps through the game tree and sees each bot move's
 search; watchers can branch and run their own local search, which never reaches
-the server. The page is dark-only; all state resets on restart.
+the server. A person can claim their name with a password, and a Ranking tab rates claimed names and bots from rated games (Bradley-Terry, Elo scale). The page is dark-only; claims and rated results are kept in `data/goserver.jsonl`, everything else resets on restart.
 
 ```sh
 make run            # http://127.0.0.1:8081  (make run PORT=8090; never LeanFM's 8080)

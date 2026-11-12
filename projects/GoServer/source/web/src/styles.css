@@ -100,3 +100,11 @@ a.button{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;b
 .teamtotal{margin-right:12px;display:inline-flex;align-items:center;gap:4px}
 .playbar{border-color:var(--muted)}
 
+/* Requirement refs: grammar:ranking; grammar:claim_name. Ranking tab: light text on dark only. */
+.ranking-page{display:grid;grid-template-columns:minmax(280px,1fr) minmax(320px,2fr);gap:16px;align-items:start}
+@media (max-width:820px){.ranking-page{grid-template-columns:1fr}}
+.claim form button{margin-top:12px;width:100%}
+.ranking-table th.name,.ranking-table td.name{text-align:left;overflow-wrap:anywhere}
+.ranking-table tr.me td{color:var(--accent);font-weight:700}
+.ranking-table .kind{margin-left:8px;font-size:13px;border:1px solid var(--rule);border-radius:12px;padding:1px 8px;color:var(--muted)}
+.session-form label+label{margin-top:12px}

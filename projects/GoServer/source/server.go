@@ -1,7 +1,6 @@
 package goserver
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -198,6 +197,7 @@ type ServerCore struct {
 	rooms    map[string]*room
 	cache    map[string]*sessionCache
 	bots     *BotPool
+	accounts *Accounts
 	closed   bool
 	// test hooks: shorter bot budgets and human turn limits
 	botBudgetOverride time.Duration
@@ -205,33 +205,16 @@ type ServerCore struct {
 }
 
 func NewServer() *ServerCore {
-	s := &ServerCore{clock: time.Now, sessions: make(map[string]string), rooms: make(map[string]*room), cache: make(map[string]*sessionCache), bots: newBotPool(botSlotCount())}
+	s := &ServerCore{clock: time.Now, sessions: make(map[string]string), rooms: make(map[string]*room), cache: make(map[string]*sessionCache), bots: newBotPool(botSlotCount()), accounts: NewMemoryAccounts()}
 	s.rooms["lobby"] = &room{id: "lobby", members: make(map[string]bool), games: make(map[string]*game)}
 	return s
 }
 
 // Requirement refs: goserver identity boundaries and finite Server actor resources.
+// IssueSession is SignIn without a password: it serves unclaimed names only.
 func (s *ServerCore) IssueSession(identity string) (string, error) {
-	if !validName(identity) {
-		return "", errors.New("invalid identity")
-	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		return "", errors.New("session randomness unavailable")
-	}
-	token := hex.EncodeToString(secret)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.sessions) >= MaxSessions {
-		return "", errors.New("session capacity reached")
-	}
-	for _, existing := range s.sessions {
-		if existing == identity {
-			return "", errors.New("identity already in use; choose another local demo name")
-		}
-	}
-	s.sessions[token] = identity
-	return token, nil
+	out, err := s.SignIn(identity, "")
+	return out.SessionID, err
 }
 
 func (s *ServerCore) AddRoom(roomID string) error {
@@ -340,6 +323,10 @@ func (s *ServerCore) Handle(request any) any {
 		return s.proposeMerge(r)
 	case RespondMerge:
 		return s.respondMerge(r)
+	case ClaimName:
+		return s.claimName(r)
+	case GetRanking:
+		return s.getRanking(r)
 	default:
 		return RequestRejected{Code: "unsupported_request", Task: "unknown", ScopeID: ""}
 	}

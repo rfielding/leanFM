@@ -14,3 +14,4 @@ source/goserver
 spec/*.probe.lean
 source/web/node_modules/
 source/cmd/demo/static/app/
+data/

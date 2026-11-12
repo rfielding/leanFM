@@ -78,8 +78,9 @@ Watching or joining a game enters its chat; neither grants any move authority.
 
 \section{Identity}
 The server issues the session; creator and sender are always derived from it,
-never taken from request fields. There is no account registration in this local
-build: the display name identifies a person for the life of the server.
+never taken from request fields. A name is free until its holder claims it with
+a password (chapter~\ref{ch:claims}); an unclaimed display name identifies a
+person for the life of the server, as before.
 Sessions live in memory, so restarting the server forgets them; a page
 that still holds a forgotten session returns to the name form, prefilled with
 the previous name, and says why.
@@ -189,6 +190,70 @@ proposal per pair of teams. Bots of the merged team then search for its
 combined score (Figure~\ref{fig:team_merge}).
 
 % ---------------------------------------------------------------------------
+\chapter{Claimed names and ranking}
+\label{ch:claims}
+\section{Claiming a name}
+Anyone can enter any free name. To keep it, the person signed in under that
+name opens the Ranking tab and sets a password (8 to 128 characters, typed
+twice). From then on the server gives a session for the name only with that
+password; signing in with it ends any older session for the name, and the person
+keeps their rooms, games and seats, because those belong to the name. Claims
+ignore letter case and surrounding spaces, so \texttt{Alice} and
+\texttt{alice} are one name, and a claim is refused while someone else is
+signed in under a case variant. Names beginning \texttt{bot-} belong to bots
+and nobody can sign in with one.
+
+The server stores a salted PBKDF2-SHA256 hash (600{,}000 rounds), never the
+password. After five wrong passwords in a row for one name, each further
+attempt waits twice as long as the last (2 seconds, then 4, up to 15 minutes),
+and only one attempt per name is checked at a time; at most two hashes are
+computed at once. There is no password reset: a forgotten password means a new
+name.
+
+\section{Which games count}
+A finished game is \emph{rated} when seats on at least two different teams are
+held by different rated players. A bot is rated by its search settings (time,
+exploration, reward), so a 4-second bot and a 1-second bot are different
+players and beating the stronger one counts for more. A person is rated only if
+their exact name was claimed before the game started and their seat never
+switched to autopilot. Other seats still play; they just do not feed the
+ranking. Games before a claim never count, because anyone could have used the
+name then.
+
+\section{The rating}
+Teams are placed by whether they still have a member who has not resigned, then
+by team score; equal teams share a place. Every two rated seats on different
+teams make one comparison: a win and a loss, or half of each when the teams
+tie. Each pair of teams carries a total weight of one, shared among their rated
+members, so a team of three does not outvote a lone player.
+
+The ratings are the Bradley--Terry maximum-likelihood fit over all comparisons,
+on the Elo scale (400 points per factor of ten in strength). Every player also
+gets one win and one loss against a fixed 1500 anchor, which keeps ratings
+finite and holds players with few games near 1500. The fit uses every recorded
+game at once, so the ranking never depends on the order in which games finished,
+and recomputing it from the file always gives the same numbers: the weights are
+exact integers, so even the floating-point sums do not depend on order. Some
+values from the tests:
+\begin{itemize}
+  \item One game, A beats B: A 1592, B 1408 (checked by hand).
+  \item One four-player game in places 1 to 4: 1713, 1566, 1434, 1287.
+  \item A team of A and B beats C: A and B 1551 each, C 1396.
+\end{itemize}
+The Ranking tab lists claimed names and bots by rating, with each one's rated
+games and first places; it refreshes every ten seconds.
+
+\section{What survives a restart}
+Claims and rated results are appended to \path{data/goserver.jsonl} in the
+project folder (\texttt{GOSERVER\_DATA\_DIR} overrides it). Each record is one
+line, flushed to disk before the claim is acknowledged. On start the file is
+replayed: a line cut off by a crash is dropped, and any other damaged line stops
+the start with its line number rather than silently losing history. The folder
+is private to the user (mode 0700, file 0600), symlinks are refused, and no web
+route reads it. Up to 1000 claims and 100{,}000 rated games are kept; beyond
+that a game says in its chat that it was not added. Rooms, games, chat and
+sessions still reset on restart.
+
 \chapter{What every viewer sees}
 The browser reproduces the Lab against server state:
 \begin{itemize}
@@ -288,6 +353,26 @@ test; \path{source/traceability.json} lists them in full.
   the server}: the preview is gated by the same predicates as a click and drawn
   only on the canvas (\texttt{TestViewerTabsAndPointerPreview}; the usage tour
   hovers an empty and an occupied point in Chrome).
+  \item \textbf{A claimed name used without its password}, including case
+  variants and bot names: claim lookup by lower-cased name, constant-time hash
+  comparison, the per-name doubling delay (\texttt{TestClaimNameAndSignIn},
+  \texttt{TestWrongPasswordsAreThrottled}, \texttt{TestClaimSignInAndRankingOverHTTP},
+  \texttt{browser\_check.py}).
+  \item \textbf{A password kept or shown}: only a salted hash is stored; the
+  claim never enters the replay cache; responses, the page, its storage and the
+  data file are checked for it (\texttt{TestClaimNameAndSignIn},
+  \texttt{TestDataFileIsDurableAndRefusesDamage}, \texttt{browser\_check.py});
+  PBKDF2 is checked against RFC~7914 (\texttt{TestPBKDF2MatchesRFC7914Vector}).
+  \item \textbf{A rating from a game that should not count}, or a game counted
+  twice or depending on order: claim time against game start, the autopilot
+  flag, random result identities, exact integer weights
+  (\texttt{TestFinishedGamesFeedTheRanking}, \texttt{TestFitMatchesIndependentNewtonFit},
+  checked against an independent Newton's-method fit).
+  \item \textbf{A claim acknowledged before it is on disk, or a damaged or
+  escaping data file}: write and flush before acknowledging, torn-tail
+  truncation, refusal of other damage and of symlinks
+  (\texttt{TestClaimIsNotAcknowledgedUntilDurable},
+  \texttt{TestDataFileIsDurableAndRefusesDamage}, \texttt{TestDataPathRefusesSymlinksAndEscapes}).
   \item \textbf{A game that never ends}: passes, the timeout round and the
   \(3N^2\) cap (\texttt{TestPassesEndTheGame},
   \texttt{TestDeadlineTimesOutAndAbandonmentEnds}).
@@ -349,12 +434,18 @@ obligations; those rest on the controls and tests above.
 This chapter is the work queue. When an item is closed, remove it here and add
 its evidence under \path{reports/}.
 \begin{itemize}
-  \item Handicaps, ratings and tournaments.
-  \item Persistence across restarts, and SGF export of game records.
+  \item Handicaps and tournaments.
+  \item Persistence of rooms, games and chat across restarts, and SGF export of
+  game records (claims and rated results already persist).
+  \item Password change and recovery; names that look alike in other scripts
+  (homoglyphs) are not treated as the same name.
+  \item Rating uncertainty is not shown; a player with few games simply stays
+  near 1500.
   \item Push transport: the browser polls (every 0.5 seconds while playing).
   \item Reconnect grace beyond reloading the page, and moderation.
-  \item Accounts: the local build trusts a chosen display name for the life of
-  the server.
+  \item Accounts: an unclaimed display name is trusted for the life of the
+  server; anyone may sign in with a claimed name's password, so the password is
+  the account.
   \item Protobuf byte conformance of the JSON harness.
   \item Server-side enforcement of the analysis rule for seated players, which
   is impossible by nature for public positions.

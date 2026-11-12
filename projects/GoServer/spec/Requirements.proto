@@ -348,3 +348,33 @@ message MoveRecord {
   uint32 suicide = 9;
   SearchSummary search = 10;
 }
+message IssueSession {
+  string identity = 1;
+  string password = 2;
+  uint64 request_id = 3;
+}
+message SessionIssued {
+  string session_id = 1;
+  string identity = 2;
+  bool claimed = 3;
+  uint64 request_id = 4;
+}
+message ClaimName {
+  string session_id = 1;
+  string password = 2;
+  uint64 request_id = 3;
+}
+message NameClaimed {
+  string identity = 1;
+  uint64 request_id = 2;
+}
+message GetRanking {
+  string session_id = 1;
+  uint64 request_id = 2;
+}
+message RankEntry { uint32 rank = 1; string player = 2; string kind = 3; int32 rating = 4; uint32 games = 5; uint32 firsts = 6; }
+message RankingListed {
+  repeated RankEntry entries = 1;
+  uint32 rated_games = 2;
+  uint64 request_id = 3;
+}

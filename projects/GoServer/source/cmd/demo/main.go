@@ -5,6 +5,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/leanfm/goserver"
 	"io"
@@ -94,16 +95,24 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 	mux.HandleFunc("/api/issue_session", func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Identity string `json:"identity"`
+			Password string `json:"password"`
 		}
 		if !decode(w, r, &request) {
 			return
 		}
-		token, err := s.IssueSession(request.Identity)
-		if err != nil {
+		issued, err := s.SignIn(request.Identity, request.Password)
+		switch {
+		case errors.Is(err, goserver.ErrThrottled):
+			writeError(w, 429, err.Error())
+			return
+		case errors.Is(err, goserver.ErrWrongPass) || errors.Is(err, goserver.ErrClaimed):
+			writeError(w, 401, err.Error())
+			return
+		case err != nil:
 			writeError(w, 400, err.Error())
 			return
 		}
-		writeJSON(w, map[string]string{"session": token})
+		writeJSON(w, issued)
 	})
 	// The React app (source/web) is built into static/app/ by `make build`.
 	mux.HandleFunc("/app/app.js", func(w http.ResponseWriter, r *http.Request) {
@@ -184,6 +193,8 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 	mux.HandleFunc("/api/set_autopilot", action[goserver.SetAutopilot](s))
 	mux.HandleFunc("/api/propose_merge", action[goserver.ProposeMerge](s))
 	mux.HandleFunc("/api/respond_merge", action[goserver.RespondMerge](s))
+	mux.HandleFunc("/api/claim_name", action[goserver.ClaimName](s))
+	mux.HandleFunc("/api/ranking", action[goserver.GetRanking](s))
 	admitted := make(chan struct{}, 32)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -231,7 +242,22 @@ func main() {
 	if err != nil {
 		log.Fatalf("GoServer cannot start: %v. Select another port with make run PORT=8090; the existing listener was left running.", err)
 	}
-	s := goserver.NewServer()
+	dir := os.Getenv("GOSERVER_DATA_DIR")
+	if dir == "" {
+		cwd, err := os.Getwd()
+		if err == nil {
+			dir, err = goserver.DefaultDataDir(cwd)
+		}
+		if err != nil {
+			log.Fatalf("GoServer cannot find its data directory: %v", err)
+		}
+	}
+	accounts, err := goserver.OpenAccounts(dir)
+	if err != nil {
+		log.Fatalf("GoServer cannot open its claims and ranking: %v", err)
+	}
+	defer accounts.Close()
+	s := goserver.NewServerWith(accounts)
 	server := &http.Server{Handler: newHandler(s, port), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	log.Printf("GoServer ready at http://%s/", listener.Addr())
 	log.Fatal(server.Serve(listener))

@@ -185,7 +185,7 @@ def sha(p):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     subprocess.run(['make', 'build'], cwd=ROOT / 'source', check=True, stdout=subprocess.DEVNULL)
-    server = subprocess.Popen([str(ROOT / '.cache/goserver')], env=dict(os.environ, PORT=str(PORT)), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    server = subprocess.Popen([str(ROOT / '.cache/goserver')], env=dict(os.environ, PORT=str(PORT), GOSERVER_DATA_DIR=str(ROOT / '.cache/tour-data')), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     browser = None
     captures = []
     try:

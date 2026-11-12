@@ -249,7 +249,9 @@ type seat struct {
 	player     string // person identity or bot-<n>; empty while open
 	controller string // CtlOpen, CtlBot or CtlPerson
 	autopilot  bool   // a person's seat currently played by a bot
-	team       int
+	// everAutopilot: the seat switched to autopilot at some point, so it is not rated
+	everAutopilot bool
+	team          int
 }
 
 func (st *seat) botControlled() bool { return st.controller == CtlBot || st.autopilot }
@@ -276,6 +278,7 @@ type play struct {
 	bowl      [MaxPlayers + 1][MaxPlayers + 1]int // bowl[victim][capturer]
 	turnSeq   uint64
 	turnBegan time.Time // start of the current turn; never reset by autopilot switches
+	startedAt time.Time // StartGame; a name must be claimed before it for the seat to be rated
 	botStart  time.Time // start of the current bot search, when a bot controls the turn
 	timer     *time.Timer
 	endReason string
@@ -516,7 +519,7 @@ func (s *ServerCore) startGame(r StartGame) any {
 		}
 		geom := GeomFor(g.boardSize)
 		st := NewState(geom, g.seats, koEnabled(g.koRule, g.seats))
-		g.play = &play{geom: geom, state: st, history: map[uint64][][]byte{}}
+		g.play = &play{geom: geom, state: st, history: map[uint64][][]byte{}, startedAt: s.clock()}
 		g.play.remember(st)
 		g.status = GamePlaying
 		s.beginTurnLocked(g)
@@ -542,6 +545,9 @@ func (s *ServerCore) setAutopilot(r SetAutopilot) any {
 			return reject(r.RequestID, "not_seated", "set_autopilot")
 		}
 		st := &g.seatInfo[n-1]
+		if r.On {
+			st.everAutopilot = true
+		}
 		if st.autopilot != r.On {
 			st.autopilot = r.On
 			p := g.play
@@ -863,6 +869,7 @@ func (s *ServerCore) finishLocked(g *game) {
 		wn = append(wn, views[w-1].Player)
 	}
 	g.chat = appendBoundedGame(g.chat, GameChat{GameID: g.id, Sender: "server", Body: "Game over (" + p.endReason + "). " + strings.Join(parts, ", ") + ". Winner: " + strings.Join(wn, ", "), TimeMS: s.clock().UnixMilli()})
+	s.recordResultLocked(g, views)
 }
 
 // winnersOf returns the seats of the team(s) with the highest team score among
