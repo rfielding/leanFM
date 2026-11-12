@@ -15,10 +15,12 @@ def digest(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 def check(root):
     folder=root/'book/assets/ui-tour'
     manifest=json.loads((folder/'manifest.json').read_text())
-    chapter=(root/'book/chapters/chat-ui-guide.tex').read_text()
-    required=set(re.findall(r'\\UITourFigure\{([^}]+)\}',chapter))
+    # every capture the book cites, in any chapter, must be in the manifest; every capture in the
+    # manifest is validated below whether or not a chapter cites it
+    chapters=''.join(p.read_text() for p in sorted((root/'book/chapters').glob('*.tex')))
+    required=set(re.findall(r'\\UITourFigure\{([^}]+)\}',chapters))
     captures={item['name']:item for item in manifest['captures']}
-    if required!=set(captures): raise ValueError('Required Chat UI capture set does not match its manifest')
+    if not required<=set(captures): raise ValueError('The book cites a Chat UI capture its manifest does not hold: '+', '.join(sorted(required-set(captures))))
     for name,expected in manifest['source_sha256'].items():
         if Path(name).is_absolute() or '..' in Path(name).parts: raise ValueError('Capture source path escapes the project')
         # Source drift makes screenshots possibly outdated, not invalid: warn, keep building.

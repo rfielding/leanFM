@@ -1,0 +1,102 @@
+\chapter{What a Protocol Means}
+\label{ch:meaning}
+\label{ch:grammar}
+
+\index{global type}
+\index{grammar}
+A protocol is a grammar. Its terminal symbols are messages, each with a sender
+and a receiver; its productions are sequence, choice, \texttt{par},
+\texttt{join} and \texttt{rec}; the language it generates is the set of legal
+conversations. A recorded run either is a sentence of that language or it is not.
+Because every protocol reads as if it were the top-level one, requirements stack:
+a larger protocol includes smaller ones by name.
+
+This chapter is what LeanFM checks before anything runs: that the protocol can
+be implemented at all, what each role owes, and which exchanges are calls.
+
+\section{Two rules every protocol must keep}
+
+\index{realizability}
+\index{choice!race}
+\textbf{One role decides each choice.} The decider is the role that sends the
+first message of every branch. When two roles each start a branch, both could act
+at once and the conversation would leave the protocol:
+
+\input{generated/lang-race.tex}
+
+\input{generated/lang-race-issues.tex}
+
+The fix is to pick one decider: the client asks to cancel and the shop answers,
+or the shop ships and the client receives. In the literature this is the
+non-local choice, or realizability, condition.
+
+\index{projection}
+\textbf{Every role that must know which branch was taken is told.} A role whose
+later behaviour differs between branches has to receive something that tells
+them apart. Here the bank has taken part, it holds the client's money, and in one
+branch nobody tells it what happened:
+
+\input{generated/lang-blind.tex}
+
+\input{generated/lang-blind-issues.tex}
+
+A role whose part has not started yet owes nothing to a branch that never
+contacts it. In \texttt{PlaceOrder} the bank is never told that the shop sold
+out, and that is fine: its part starts with \texttt{Charge}, which only one branch
+sends. A service that handles each request on its own, such as a mailer, goes in
+a nested \texttt{sessions} block and never needs to know the conversation around
+it.
+
+A third rule is about \texttt{cause}: a message may only answer something its
+sender has sent or received. A role decides from its own history, never from
+something it could not have seen.
+
+\section{Projection: what each role owes}
+
+\index{local type}
+Projecting the protocol onto a role keeps the messages it sends or receives and
+turns the rest into its view of the choices: \texttt{select} where it decides,
+\texttt{offer} where another role does and the arriving message says which.
+\texttt{PlaceOrder}, projected:
+
+\input{generated/lang-placeorder-locals.tex}
+
+\index{typestate}
+A local type is an API. Each point in the conversation is a state, and each state
+allows exactly the moves the protocol allows there. The client's typestate:
+
+\input{generated/lang-placeorder-typestate.tex}
+
+A client in \texttt{S1} can only receive; a client in \texttt{End} has nothing
+left to do. Code generated from this (Chapter~\ref{ch:generated}) makes the wrong
+move a type error.
+
+When the protocol keeps both rules, roles that follow their local types get the
+classic guarantees: no message arrives that its receiver cannot handle, the run
+follows the protocol, and no role waits forever
+\citep{honda2008multiparty}. Each holds under the theory's assumption that every
+message arrives exactly once. Real channels lose, duplicate and reorder, so
+LeanFM lets a protocol declare each channel's physics beside it; the TFTP chapter
+(\ref{ch:tftp-physics}) shows a protocol that is perfect by the classic rules and
+has a famous bug once its physics is declared.
+
+\section{Calls}
+
+\index{HTTP}
+\index{call}
+\texttt{cause} also tells LeanFM which messages are calls and which are their
+returns. A message is the return of the nearest unanswered request the other way
+in its cause chain; otherwise it is a request. \texttt{PlaceOrder}'s calls:
+
+\input{generated/lang-placeorder-calls.tex}
+
+A \texttt{route} makes a request an HTTP call, and over HTTP every request gets a
+response on its own connection. LeanFM checks that, and suggests the line to add
+when it is missing:
+
+\input{generated/lang-review.tex}
+
+\input{generated/lang-review-report.tex}
+
+A protocol that passes all of this is ready to say more: what is assumed about
+the decisions nobody else can see, and what is promised.

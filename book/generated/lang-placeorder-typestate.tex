@@ -1,0 +1,7 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+start : S0
+S0.sendCreateOrder(m : CreateOrder) : S1    -- to Shop
+S1.receive() : Quote × S2 (from Shop) | SoldOut × End (from Shop)
+S2.sendPay(m : Pay) : S3    -- to Shop
+S3.receive() : Receipt × End (from Shop) | PaymentDeclined × End (from Shop)
+\end{lstlisting}

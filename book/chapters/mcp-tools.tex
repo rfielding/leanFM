@@ -1,0 +1,55 @@
+\chapter{The MCP Tools}
+\label{ch:mcp-tools}
+
+\index{MCP}
+The LeanFM server speaks the Model Context Protocol at \texttt{/mcp}. An agent
+that connects is given the language reference as a resource and these tools, every
+one read-only: none changes a file, and none runs submitted text as code. The
+table is generated from the server's own tool list, so it is the list an agent
+sees.
+
+\begin{center}
+\small
+\input{generated/lang-mcp-tools.tex}
+\end{center}
+
+The session tools take a protocol as the \texttt{lean} argument, the text of
+Chapter~\ref{ch:language}. Every answer carries a one-line reading for people and
+the whole result as structured content, and the server's \texttt{/metrics} counts
+each call by tool and verdict, with its time and model size.
+
+\section{How a consultation travels}
+
+\index{Model Context Protocol!consultation}
+An agent first reads durable context, the book, the canonical requirements and the
+language references, and then calls tools. Both diagrams are generated from
+LeanFM's own requirements.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{\input{generated/mcp-interaction.tex}}
+\caption{An agent obtains durable project context and deterministic evidence
+through MCP. Source: \texttt{LeanFM.MCP}; reducer and provenance:
+\texttt{book/generated/mcp-interaction-provenance.txt}.}
+\label{fig:mcp-interaction}
+\end{figure}
+
+A logic consultation is one request answered by exactly one of two outcomes: a
+verdict carrying its evidence, or a rejection naming the input fault.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.85\textwidth}{!}{\input{generated/mcp-logic-interaction.tex}}
+\caption{An agent consults LeanFM about a formula, trace or requirement. Source:
+\texttt{logicGrammar} in the self-hosting requirements; provenance:
+\texttt{book/generated/mcp-logic-interaction-provenance.txt}.}
+\label{fig:mcp-logic-interaction}
+\end{figure}
+
+These requests and responses are produced by running \texttt{LeanFM.Logic} while
+the book is built, so they cannot drift from the implementation:
+
+\input{generated/mcp-logic-examples.tex}
+
+The surface is read-only and listens only on loopback. A deployment that exposes
+it to a network must add authentication and authorization first.

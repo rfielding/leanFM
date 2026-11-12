@@ -1,0 +1,16 @@
+/-- A server that is sometimes busy, with one hard deadline and one promised fraction. -/
+protocol Ping (Client, Server) {
+  q: Ping from Client to Server;
+  choice at Server using declared("IsBusy") {
+    probability 9/10:
+      Pong from Server to Client cause q after 50 ms;
+  } or {
+    probability 1/10:
+      SlowPong from Server to Client cause q after 800 ms;
+  }
+}
+
+require per q {
+  every q reaches Pong, SlowPong within 1 second;
+  at least 95/100 of q reach Pong, SlowPong within 100 ms over 1000 entries;
+}

@@ -87,8 +87,8 @@ def decisions : List ImplementationDecision :=
       ["LeanFM/MCPTests.lean: preflight from https://claude.ai is 204 with that origin and the MCP headers allowed and exposed; a POST from an unlisted origin is 403 with no CORS headers; a POST with no Origin is served; GET /mcp is 405; /api/llm, /api/session, / and /renders/ are 404; non-JSON Content-Type is 415; Accept text/html is 406; Mcp-Protocol-Version 1999-01-01 is 400; a 300 KiB body is 413; with a token configured, no token and a wrong token are 401 and the right token is served; a notification is 202 with no body; the burst is served and the next request is 429 with Retry-After; a tools/call beyond the in-flight limit is 503; an oversized reply is compacted below the limit keeping its verdict, and an irreducible one becomes error -32000; /healthz is ok; no response sets Access-Control-Allow-Origin to * or Access-Control-Allow-Credentials", "leanfm-mcp started locally answers a curl preflight and a tools/call (checked by hand during implementation)"]
   , decision "logic-book"
       ["output:selfhost.mcp.logic.interaction", "output:selfhost.mcp.logic.states"]
-      ["book/chapters/web-server.tex", "book/generated/mcp-logic-examples.tex", "LogicInteractionExample.lean"]
-      "Generate real tool answers (one counterexample, one classification, one trace diagram) into the book from the implemented functions so section 7.5 shows actual output rather than prose claims."
+      ["book/chapters/mcp-tools.tex", "book/generated/mcp-logic-examples.tex", "LogicInteractionExample.lean"]
+      "Generate real tool answers (one counterexample, one classification, one trace diagram) into the book from the implemented functions so the MCP tools appendix shows actual output rather than prose claims."
       ["make book succeeds; generated example text matches LeanFM.Logic output"]
   , decision "session-tools"
       ["clause:selfhost.mcp.session.tools"]

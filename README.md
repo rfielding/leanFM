@@ -509,8 +509,9 @@ the long suite. A missing or denied sandbox is an environment failure, not a
 reason to skip isolation tests or run executable Lean on the host. A missing
 worker returns `local_checker_unavailable` and preserves the last checked views.
 
-The detailed Chat UI walkthrough, screenshots, and accessibility/keyboard
-records are in `book/chapters/chat-ui-guide.tex` and `book/assets/ui-tour/`.
+The Chat UI screenshots and accessibility/keyboard records are in
+`book/assets/ui-tour/`, validated by `scripts/check_ui_tour.py`; the book itself
+documents the LeanFM language, not the Chat UI.
 The app bar exposes Start/Restart, Stop, and a verified served Open app link.
 Apps share `source/Makefile` targets `build`, `run`, `stop`, `test`, `check`,
 `clean`, and `serve`; `run` is foreground and `serve` aliases it. Use the

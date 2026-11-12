@@ -1,0 +1,147 @@
+\chapter{The Protocol Is the Program}
+\label{ch:language}
+\label{ch:vision}
+
+\index{LeanFM language}
+\index{protocol}
+LeanFM is a programming language whose programs are protocols. A protocol names
+the roles in a conversation, the messages they exchange, the order those messages
+come in, who decides at each choice, what is assumed about decisions nobody else
+can see, and what the system promises. Everything else in a LeanFM project is
+generated from the protocol or checked against it: the diagrams people read, the
+requirements and implementation mapping reviewed in git, the OpenAPI and protobuf
+interfaces, the typestate code each role is written on, and the verdicts on what
+the running system logs.
+
+This book documents that language: how to write it, and what it means.
+
+\section{Who writes it}
+
+Most LeanFM is written by Claude. A person says what the software must do, in
+ordinary words. Claude writes the protocol, LeanFM checks it, and the person
+looks at what comes back: a sequence diagram, each role's obligations, a
+counterexample. They push back, and the protocol changes. Code comes last,
+written in one pass from the checked protocol.
+
+Claude learns the language from LeanFM itself. The LeanFM server speaks the Model
+Context Protocol, so an agent that connects to it is handed the language
+reference and the tools that check, draw, simulate and judge a protocol. MCP is
+the language's tutorial. Appendix~\ref{ch:mcp-tools} lists the tools.
+
+\section{A protocol}
+
+\index{PlaceOrder}
+Here is a complete program: a client places an order, the shop quotes or says it
+is sold out, the client pays, and the bank charges the card or declines it.
+
+\input{generated/lang-placeorder.tex}
+
+LeanFM draws it. This diagram is LeanFM's own rendering of the text above, not a
+drawing of it; when the text changes, so does the picture.
+
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{Sequence diagram of PlaceOrder. Client sends CreateOrder to Shop on POST /orders. In an alt frame the Shop decides. In one branch Shop sends Quote 201 to Client. Client sends Pay to Shop when the amount paid equals the price quoted. Shop sends Charge to Bank. In an inner alt frame the Bank decides: Charged and then Receipt 200 to Client. Or Declined and then PaymentDeclined 402 to Client. In the other branch Shop sends SoldOut 409 to Client. Responses are dashed. Each call is an activation bar on the callee.}{%
+\ThemedDiagram{width=.82\textwidth}{lang-placeorder}}
+\caption{\texttt{PlaceOrder} as LeanFM draws it. Each \texttt{alt} frame names the
+role that decides; responses are dashed, and each call is an activation bar on
+its callee.}
+\label{fig:placeorder}
+\end{figure}
+
+Each line is one message: a label, a sender and a receiver. The rest is optional.
+\texttt{o:} names the message so later ones can point at it. \texttt{cause o} says
+this message answers \texttt{o}. \texttt{route} and \texttt{status} make the
+exchange an HTTP call and its response. \texttt{where} states a condition on the
+payloads, which LeanFM shows but never evaluates.
+
+\section{Statements}
+
+\index{statements}
+A protocol is a list of statements. These are all of them.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{.43\textwidth}p{.5\textwidth}@{}}
+\toprule
+Statement & Meaning \\
+\midrule
+\texttt{x: L from A to B cause y route "\ldots" status 201 where e;} & a message; everything after \texttt{to B} is optional \\
+\texttt{L at A;} & something role \texttt{A} does on its own, such as a timer firing \\
+\texttt{choice \{ \ldots \} or \{ \ldots \}} & exactly one branch happens \\
+\texttt{choice at A using declared("N") \{ probability p: \ldots \}} & the same, with \texttt{A}'s decision assumed to have these probabilities (Chapter~\ref{ch:assumptions}) \\
+\texttt{par \{ \ldots \} and \{ \ldots \}} & both branches run; what follows waits for all of them \\
+\texttt{join 2 of \{ \ldots \} and \{ \ldots \} and \{ \ldots \}} & what follows waits for any two \\
+\texttt{rec Loop \{ \ldots\ continue Loop; \}} & a loop; \texttt{continue} is the last statement of its block \\
+\texttt{sessions \{ \ldots \}} & any number of independent instances, as a server handles requests \\
+\texttt{include P A B C;} & an earlier protocol, its roles renamed in order \\
+\texttt{require per q \{ \ldots \}} & what the protocol promises per occurrence of message \texttt{q} (Chapter~\ref{ch:assumptions}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Statements after a choice continue every branch. Names are Lean identifiers, and
+\texttt{--} and \texttt{/- -/} comments are allowed. Several protocols may share a
+text, so one can include another; the last is the one checked. A protocol may
+carry amounts, delays and rates on its messages; those annotations never change
+its structure, and Chapter~\ref{ch:assumptions} covers them.
+
+\index{choice!decider}
+A plain \texttt{choice} does not name who decides, because only one answer can
+be right: the role that sends the first message of every branch. In
+\texttt{PlaceOrder} the shop decides whether to quote, and the bank whether to
+charge. If two roles could each start a branch, both could act at once, and
+LeanFM reports the race (Chapter~\ref{ch:meaning}).
+
+The same syntax can be written inside a Lean file with the \texttt{protocol}
+command of \texttt{LeanFM.Session}, where a label names a Lean structure and a
+\texttt{where} condition is type-checked Lean. The text form, a \texttt{.leanfm}
+file or the \texttt{lean} argument of a tool, is read by a parser for this grammar
+alone: nothing in it is elaborated or run.
+
+\section{Only what crosses a boundary}
+
+\index{hidden state}
+A protocol says nothing about what happens inside a role. Whether the shop keeps
+its stock in a database, a cache or a spreadsheet is left free by not being
+written down. This is deliberate. A requirement that depends on a role's internal
+state is a design decision that leaked out, and checking it costs state space:
+every variable the checker must track multiplies the states it explores. A
+TLA+ module of the same order queue with a few cache bits and a clock that cannot
+affect the order shows the cost (counts from TLC, via \texttt{make tla-check}):
+
+\begin{center}
+\input{generated/tla-state-space.tex}
+\end{center}
+
+Each irrelevant bit doubles the states, and an unbounded clock makes them
+infinite \citep{lamport2002specifying}. TLA+ can omit such state too; LeanFM
+starts from the conversation, so there is nowhere to put it. The state that
+matters lives in the messages, and an execution is the stream of them
+(Chapter~\ref{ch:execution}).
+
+\section{Where the language comes from}
+
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Session types} give the backbone: one global description of a
+        conversation, projected to each role's obligations, with conditions that
+        rule out choices nobody can implement
+        \citep{honda1993types,honda2008multiparty,yoshida2013scribble}.
+  \item \textbf{Language theory} gives the reading of a protocol as a grammar
+        whose terminals are messages, so the legal conversations are its
+        language. Dana Richards and Henry Hamburger, the author's college
+        professors, are cited in \citet{richards2017logic} as where the author
+        learned these methods; for symbolization, validity and modal reasoning
+        we also draw on \citet{gensler2017introduction}.
+  \item \textbf{Protocol analysis} contributes explicit attackers, adversarial
+        choices and trace semantics. The CSP treatment of
+        \citet{ryan2001modelling}, including Steve Schneider, is where the author
+        learned it.
+  \item \textbf{Temporal logic} turns expectations into questions about every
+        possible future, or some \citep{clarke1986automatic}.
+\end{enumerate}
+
+LeanFM adds two things the classic theory leaves out. Decisions nobody else can
+see carry stated probabilities, and the protocol states what it promises, as
+minimums and maximums judged over an observation period. Both are
+Chapter~\ref{ch:assumptions}.

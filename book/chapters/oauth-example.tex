@@ -464,7 +464,7 @@ For the simplified path with no loss or timeout,
 Each factor of one is a deterministic step; dwell affects latency, not mass.
 Scheduling (which enabled actor runs next) remains nondeterministic, so the composed
 system is an MDP, analysed under a fixed or quantified policy
-(Chapter~\ref{ch:authoring-language}). With several sessions in flight, its state
+(Chapter~\ref{ch:assumptions}). With several sessions in flight, its state
 holds every actor's queues and per-\texttt{(session, task)} residuals, since one
 user's choice changes queue pressure for others. The percentages are inputs or
 measurements; the grammar says only what is possible.

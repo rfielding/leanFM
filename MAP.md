@@ -60,19 +60,27 @@ modules.
 
 | File | Lines | Writes (`book/generated/…`) | Chapter | Run by `make book`? |
 |---|---|---|---|---|
-| `SessionExample.lean` | 303 | `session-*.tex` (11) | Vision, Grammar, TFTP | **no** |
-| `TopologyExample.lean` | 482 | `topology-*.tex` (8) | Vision | yes |
+| `LanguageChapterExample.lean` | 154 | `lang-*` (21 + 4 PDFs via `scripts/svg_to_pdf.py`) | Part I and II (the language), MCP tools appendix | **no** |
+| `SlaChapterExample.lean` | 56 | `sla-*` (4) | Assumptions and promises; Event stream | **no** |
+| `SecretsChapterExample.lean` | 66 | `secrets-*` (3) | Protocol exercises (marking secrets) | **no** |
+| `SessionExample.lean` | 303 | `session-*.tex` (11) | TFTP (only `session-transfer`) | **no** |
 | `BakeryFlowExample.lean` | 191 | `bakery-*.tex` (10) | Bakery | yes |
-| `ProbabilityOverlayExample.lean` | 135 | `overlay-*.tex` (7) | Generated examples | **no** |
-| `StochasticUserMDPExample.lean` | 152 | `stochastic-user-*.tex` (4) | Authoring language | yes (also `mdp-example-check`) |
-| `RuntimeReliabilityDiagram.lean` | 41 | `runtime-actor-network.tex` | Authoring language | yes |
-| `NestedForkJoinExample.lean` | 75 | `nested-race.tex`, TLA+ provenance | Events | yes |
-| `OAuthGrammarExample.lean` | 79 | `oauth-*.tex` (5) | Grammar, OAuth | yes |
-| `MCPInteractionExample.lean` | 38 | `mcp-interaction.tex` | Web server | yes |
-| `LogicInteractionExample.lean` | 71 | `mcp-logic-*.tex` | Web server | yes |
-| `WebServerProtocolChapter.lean` | 136 | `web-protocol-*.tex` (7) | Web-server protocol | yes |
+| `OAuthGrammarExample.lean` | 79 | `oauth-*.tex` (5) | OAuth | yes |
+| `MCPInteractionExample.lean` | 38 | `mcp-interaction.tex` | MCP tools appendix | yes |
+| `LogicInteractionExample.lean` | 71 | `mcp-logic-*.tex` | MCP tools appendix | yes |
+| `WebServerProtocolChapter.lean` | 136 | `web-protocol-*.tex` (7) | Web-server protocol appendix | yes |
 | `LegalDepositExample.lean` | 261 | `legal-*.tex` (6) | Legal example | **no** |
 | `NeedhamSchroeder.lean` | 350 | `ns-*.tex` (12): Lowe's attack, reflection, defender, reassembly | Protocol exercises | yes |
+| `TopologyExample.lean` | 482 | `topology-*.tex` (8) | none since 2026-11-12 | yes |
+| `ProbabilityOverlayExample.lean` | 135 | `overlay-*.tex` (7) | none since 2026-11-12 | **no** |
+| `StochasticUserMDPExample.lean` | 152 | `stochastic-user-*.tex` (4) | none since 2026-11-12 | yes (also `mdp-example-check`) |
+| `RuntimeReliabilityDiagram.lean` | 41 | `runtime-actor-network.tex` | none since 2026-11-12 | yes |
+| `NestedForkJoinExample.lean` | 75 | `nested-race.tex`, TLA+ provenance | none since 2026-11-12 | yes |
+
+The book was reorganised around the LeanFM language on 2026-11-12. The last five
+generators above feed no chapter any more; `make book` still runs those it lists, so
+removing them is a Makefile change. The three new generators are run by hand until the
+Makefile lists them.
 
 `make diagrams` runs the same list as `make book`, minus `NeedhamSchroeder.lean`.
 `SessionExample.lean` and `NeedhamSchroeder.lean` also carry `#guard` checks that

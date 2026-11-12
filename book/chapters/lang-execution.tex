@@ -1,0 +1,91 @@
+\chapter{An Execution Is an Event Stream}
+\label{ch:execution}
+\label{ch:events}
+
+\index{event stream}
+\index{execution}
+A protocol describes every conversation that may happen; an execution is one that
+did. LeanFM represents an execution as the stream of its events, and keeps no
+other state: roles keep none of their own that a requirement may depend on. What
+a role knows at any moment is the part of the stream it has seen, and every
+question about a running system is a question about the stream.
+
+\section{Events}
+
+\index{cause}
+Each event is one message sent, or one thing a role did on its own. It carries
+its session, its sender and receiver, its label, and the event that caused it.
+Generated from \texttt{PlaceOrder} with its seed
+\input{generated/lang-simulate-seed.tex}, one session:
+
+\input{generated/lang-simulate.tex}
+
+The cause links form the conversation's spine: each answer points at its
+question, and the chain from \texttt{Receipt} back to \texttt{CreateOrder} is the
+whole call. A real program logs the same shape, one line per message, and the
+code generated from a protocol logs it automatically (Chapter~\ref{ch:generated}).
+
+\section{Conformance}
+
+\index{conformance}
+A log conforms when every session in it is a sentence of the protocol: each event
+allowed at its point, naming the cause the protocol names, and each session ending
+where the protocol can end. Here the shop charges the card before the client has
+paid:
+
+\input{generated/lang-conform-log.tex}
+
+\input{generated/lang-conform.tex}
+
+The verdict names the first event that breaks the protocol and what the protocol
+allowed instead. Asked after any prefix, LeanFM also says what may happen next
+and whether the session may end there; that is how a walk through one session is
+driven, one click at a time.
+
+\section{State lives in the stream}
+
+\index{reward vector}
+\index{view}
+For questions about value and promises, events are keyed by a unique timestamp,
+and two links point back in time: \texttt{prev}, the event before this one in its
+thread, and \texttt{cause}, the event that made it happen. Both must name earlier
+events of the same stream. A role's \emph{view} is its own events and everything
+in their causal past: exactly what it could have learned.
+
+Rewards follow the same rule. A reward vector, the balance of every role in every
+unit, is written only on an event where it changes, and writing one equal to the
+vector it inherits is refused. The vector at any event is found by walking
+\texttt{prev} back to the latest one written; finding none means zero. A
+concurrent event's vector is never taken, because it is not on the walk. In this
+stream each ask moves the client's spend and the third ask is never answered:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{generated/sla-execution.json}
+
+\section{Promises on a stream}
+
+\index{observation period}
+A \texttt{require} promise is judged on the stream as it was at design time, with
+causality in place of probability. An entry hits when a target lies in its causal
+future within the deadline; an answer that names no cause does not count, however
+soon it comes. An entry whose deadline outlives the stream is pending, not missed.
+Each window gets an exact one-sided binomial test, but only once it has closed;
+until then it is open:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{generated/sla-execution.txt}
+
+One miss in four would break a promise of 99 in 100 if it were judged at once.
+The 300-entry period has not closed, so the promise is open. Over 300 closed
+entries, 300 hits is met at 95/100 confidence ($0.99^{300} \approx 0.049$), 299
+is undecided, and 290 is violated.
+
+\section{Streams from the protocol}
+
+\index{simulation}
+The same probabilities that judge a promise can generate streams. A seeded
+generator walks the protocol, drawing each choice, delay and amount by its exact
+probability, so the same seed gives the same stream. Every generated session is a
+walk of the protocol, so it conforms by construction; fed back as an execution,
+it gives each session's realized rewards, and over many sessions their mean
+approaches the expected value of Chapter~\ref{ch:assumptions}. Generated streams
+are how an implementation is exercised before real traffic exists, and real
+streams are how its assumptions are corrected once it does.

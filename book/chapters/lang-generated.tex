@@ -1,0 +1,106 @@
+\chapter{What a Protocol Generates}
+\label{ch:generated}
+
+\index{generated artifacts}
+A LeanFM project has one program, the protocol, and many outputs. This chapter is
+what comes out, why each output is generated rather than written, and how the
+outputs are reviewed.
+
+\section{Diagrams}
+
+\index{diagram!generated}
+\index{provenance}
+The top-level protocol's diagram is what people read first, the way an OpenAPI
+viewer is where people meet an HTTP interface. It is always LeanFM's rendering of
+the current text (Figure~\ref{fig:placeorder}), never a drawing of it, so it
+cannot drift from the program. Every generated view also records why it exists:
+the prompt that asked for it, the question it answers, its event source, the
+reducer that computed it, its unit, and its boundary. A view without those is a
+picture; with them it is evidence.
+
+Large protocols are read from the top: an included protocol is a frame that
+opens, and a nested \texttt{sessions} block is a service drawn once. The same
+structure could drive an animated canvas, with each frame folding open for
+detail.
+
+\section{Code each role is written on}
+
+\index{typestate}
+\index{skeleton}
+From the typestates of Chapter~\ref{ch:meaning}, LeanFM writes a module with one
+class per state of each role, in Python or TypeScript. A method exists only where
+the protocol allows the move, fills in the cause the protocol names, logs the
+event in the format conformance reads, and returns the next state. The client of
+\texttt{PlaceOrder}, in TypeScript:
+
+\input{generated/lang-skeleton.tex}
+
+In TypeScript a move the state does not allow does not type-check, and
+\texttt{receive} returns a union tagged by label, so handling every answer the
+protocol allows is a type obligation. The implementer writes only the decisions
+(which branch, what each message carries) and the transport. Because the
+generated code logs every message, conformance (Chapter~\ref{ch:execution}) can
+check the running program without further instrumentation.
+
+\section{Interfaces}
+
+\index{OpenAPI}
+\index{protobuf}
+A role that serves HTTP gets its interface written out as OpenAPI 3.1: one
+operation per route, the label as its operation id, and every response the
+protocol allows under its status. The shop's, abridged:
+
+\input{generated/lang-openapi.tex}
+
+A protocol says nothing about what a message carries beyond the names a
+\texttt{where} condition uses, so each body is an open object to fill in. That is
+what protobuf is for. Protobuf definitions sit beside the protocol to regularize
+data structures: they fix the shape and bytes of each message, so every role and
+every stored record agrees on them. They say nothing about order or about who
+decides; that is the protocol's job. The LeanFM server's own messages are an
+example (Appendix~\ref{ch:web-protocol}).
+
+\section{Requirements and implementation, reviewed in git}
+
+\index{Requirements.lean}
+\index{Implementation.lean}
+\index{review}
+The durable record of a project is two Lean files written out from the checked
+protocol, and the work proceeds in three layers, each checked before the next:
+
+\begin{enumerate}
+  \item \textbf{Requirements} (\texttt{Requirements.lean}): the observable
+        behaviour, one clause per behaviour, each with what must always hold and
+        what must never happen.
+  \item \textbf{Implementation mapping} (\texttt{Implementation.lean}): how each
+        clause is realized and which test or proof covers it, including every
+        negative requirement.
+  \item \textbf{Source}, written in one pass from the two.
+\end{enumerate}
+
+Review is what a team already does: read the diff and commit it. LeanFM records no
+approvals, and a passing check is evidence for the review, not the review itself.
+Nothing lives only in a chat: the protocol, the two Lean files, the generated
+views and the source are all in the project's one directory, so a new session
+resumes from the files. LeanFM is itself such a project; its own requirements are
+\texttt{LeanFM/LLMGenerated/SelfHosting.lean}, and every feature in this book is a
+clause there with an implementation decision and a test.
+
+Chapter~\ref{ch:feature-discipline} is the discipline that keeps those clauses
+honest: no feature is complete until its forbidden behaviours are stated and each
+has a control and a negative test.
+
+\section{Building software from a protocol}
+
+\begin{enumerate}
+  \item Write the protocol and check it until it has no issues.
+  \item Show it: the diagram, each role's typestate, a walk through one session,
+        and a generated stream.
+  \item State the assumptions and promises, and check the promises against the
+        assumptions.
+  \item Generate each role's states and implement the role on them.
+  \item Run it, and check its log for conformance and its promises over closed
+        windows; fix the code, or the protocol if the protocol was wrong.
+  \item State each rule the structure does not show as a CTL question.
+  \item When the protocol changes, ask which roles can be redeployed first.
+\end{enumerate}

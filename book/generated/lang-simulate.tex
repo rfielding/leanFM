@@ -1,0 +1,8 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+id 0  t=4 ms  CreateOrder: Client -> Shop
+id 1  t=5 ms  Quote: Shop -> Client cause 0
+id 2  t=6 ms  Pay: Client -> Shop cause 1
+id 3  t=7 ms  Charge: Shop -> Bank cause 2
+id 4  t=8 ms  Charged: Bank -> Shop cause 3
+id 5  t=9 ms  Receipt: Shop -> Client cause 4
+\end{lstlisting}

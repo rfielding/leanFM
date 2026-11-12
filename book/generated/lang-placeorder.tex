@@ -1,0 +1,20 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+/-- Placing an order: quote, pay, charge the card. -/
+protocol PlaceOrder (Client, Shop, Bank) {
+  o: CreateOrder from Client to Shop route "POST /orders";
+  choice {
+    q: Quote from Shop to Client cause o status 201;
+    p: Pay from Client to Shop cause q where p.amount = q.price;
+    c: Charge from Shop to Bank cause p;
+    choice {
+      d: Charged from Bank to Shop cause c;
+      Receipt from Shop to Client cause d status 200;
+    } or {
+      x: Declined from Bank to Shop cause c;
+      PaymentDeclined from Shop to Client cause x status 402;
+    }
+  } or {
+    SoldOut from Shop to Client cause o status 409;
+  }
+}
+\end{lstlisting}

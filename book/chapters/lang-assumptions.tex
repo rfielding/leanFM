@@ -1,0 +1,139 @@
+\chapter{Assumptions and Promises}
+\label{ch:assumptions}
+\label{ch:generated-examples}
+
+\index{assumption}
+\index{promise}
+A protocol says what \emph{can} happen. Two more things decide whether a system
+is good enough: how often each outcome happens, and how long and how much it
+costs. LeanFM keeps them apart. A probability on a choice is an
+\emph{assumption}: what a role is expected to decide where nobody else can see.
+A \texttt{require} clause is a \emph{promise}: a minimum or maximum the system
+keeps, judged over an observation period. LeanFM checks the promises against the
+assumptions before any code exists, and against the event stream once it runs.
+
+\section{Assumptions on choices}
+
+\index{choice!probability}
+A choice whose decider's reasons are hidden carries the probabilities it is
+assumed to have, and a name:
+
+\input{generated/lang-ping.tex}
+
+\texttt{choice at Server using declared("IsBusy")} says the server decides, that
+the probabilities are declared (stated by the author, not measured), and that the
+decision is called \texttt{IsBusy}. The name belongs to the whole choice, like a
+question; the branches are its answers. Reports name the answer by the first
+message of the branch taken, so the same choice reads
+\texttt{[IsBusy → Pong: 9/10]} on one branch and
+\texttt{[IsBusy → SlowPong: 1/10]} on the other. Probabilities are exact
+fractions and must sum to one. An overlay can replace them by name without
+editing the protocol, for example with rates measured from a log
+(Chapter~\ref{ch:bakery}).
+
+\section{Time, amounts and rates}
+
+\index{delay}
+\index{amount}
+\index{rate}
+Messages can take time and move value. None of these annotations changes the
+protocol's structure: projection, conformance and temporal questions are the
+same with or without them.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{.47\textwidth}p{.46\textwidth}@{}}
+\toprule
+Annotation & Meaning \\
+\midrule
+\texttt{after 2 days}, \texttt{after sample \{ 1 days : 1/2; 3 days : 1/2; \}} & a delay after the previous step, fixed or drawn from a distribution \\
+\texttt{amount 1000 USD}, \texttt{amount sample \{ \ldots \}} & value moved from sender to receiver \\
+\texttt{amount \{ 5 apple; -3 USD; \}} & a trade vector: positive entries move forward, negative back \\
+\texttt{accrue 10 USD per week from A to B;} & a rate in force until the next \texttt{accrue} for the same roles and unit \\
+\texttt{at next 1 week} & a periodic gate: wait for the next whole week since the session began \\
+\texttt{on breach record Late pays 2000 USD to T;} & in an obligation: the penalty when its deadline passes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Units are names, so \texttt{roomweek} (one room for one week) is as good a unit as
+\texttt{USD}. Results are kept per role and per unit.
+
+\index{decision tree}
+\index{Markov chain}
+With its assumptions, a protocol without loops is a decision tree: every path to
+an end has an exact probability, a time, and each role's balance. LeanFM draws
+it:
+
+\begin{figure}[htbp]
+\centering
+\AccessibleFigure{Decision tree of Ping. Start. Ping from Client to Server at 0 ms. Server chooses IsBusy. With policy 9/10 Pong from Server to Client at 50 ms ends with terminal probability 9/10. With policy 1/10 SlowPong at 800 ms ends with terminal probability 1/10.}{%
+\ThemedDiagram{height=.72\textheight}{lang-ping-tree}}
+\caption{\texttt{Ping} under its assumption, as LeanFM draws it: the server's
+choice with its probabilities, each answer's time, and each ending's exact
+probability.}
+\label{fig:ping-tree}
+\end{figure}
+
+A protocol with loops (\texttt{rec}) is solved instead as an absorbing Markov
+chain. Expected visits $v$ solve $v = s + vQ$ over the transient states, exactly,
+in rational arithmetic, so a retry loop that runs a geometric number of times
+has an exact expected cost rather than a truncated one. A session that some state
+can never leave is reported as one that can loop forever.
+
+\section{Promises}
+
+\index{require}
+\index{service level}
+Promises are written after the protocols, one block per entry message. Every
+occurrence of the entry is one trial. \texttt{Ping}'s block says every ping is
+answered within a second, and at least 95 in 100 within 100 ms, judged over 1000
+pings.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{.42\textwidth}p{.51\textwidth}@{}}
+\toprule
+Clause & Meaning \\
+\midrule
+\texttt{every q reaches A, B within d;} & a hard deadline: each \texttt{q} reaches \texttt{A} or \texttt{B} within \texttt{d}, and one miss is a counterexample \\
+\texttt{at least p of q reach A within d over W;} & a promised minimum fraction \\
+\texttt{at most p of q reach A over W;} & a promised maximum fraction \\
+\texttt{over 1 hour}, \texttt{over 500 entries} & the observation period, required for every fraction \\
+\texttt{confidence 99/100} & how sure a verdict must be (default 95/100) \\
+\texttt{expecting 500 per hour} & the expected traffic, so a time window's size can be checked \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\index{observation period}
+A fraction needs an observation period. Without one, the first slow answer after
+deployment would break a promise about ninety-five answers in a hundred before
+there was anything to judge it by. A window is judged only once it has closed.
+
+LeanFM checks each promise against the assumptions on the chain, following every
+path from each entry with exact probabilities until a target is reached in time
+(a hit) or the deadline, the next entry or the end comes first (a miss):
+
+\input{generated/lang-ping-sla.tex}
+
+The deadline holds: even the slow answer comes at 800 ms. The fraction fails,
+because only 9 in 10 answers come within 100 ms, and the report names the
+assumption responsible. The fix is a faster busy path or a weaker promise. A
+window needs $\lceil \ln(1/(1-c))/m \rceil$ entries to tell the promise apart
+from a failure rate of 0 or 1, where $m$ is the margin to the bound; LeanFM
+reports when a window cannot hold that many.
+
+A larger example, a user lookup through a proxy that can lose a forward and a
+database that can fail:
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{../examples/sessions/UserLookup.leanfm}
+
+\lstinputlisting[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]{generated/sla-userlookup.txt}
+
+The error budget cannot be met: $\frac{999}{1000}\cdot\frac{1}{100} +
+\frac{1}{1000} = \frac{1099}{100000}$ is more than $\frac{1}{200}$, and the report
+names both assumptions on the path. Meeting it is a design change, such as a
+retry after \texttt{Failure}. The window needs 600 entries and an hour at 500 an
+hour holds only 500, so the promise needs a longer window or more traffic before
+it can be judged at all.

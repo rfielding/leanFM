@@ -1,0 +1,7 @@
+prompt: the book could use some very major simplifications. this whole software engineering method is about the leanFM language.
+question: what does a LeanFM protocol say, what does it mean, and what is generated from it?
+eventSource: examples/sessions/PlaceOrder.leanfm and examples/sessions/Ping.leanfm, plus the small protocols and logs written in LanguageChapterExample.lean
+reducer: LeanFM.SessionTools (check, diagram, review, mdp, sla, ctl, compat, simulate (the first seed from 1 whose session ends in a receipt), conform, openapi, skeleton): the functions the MCP tools call
+unit: messages, sessions, events (ms), probabilities as exact fractions
+boundary: one session of each protocol, except simulate (one instance) and sla (per entry)
+generator: LanguageChapterExample.lean, then scripts/svg_to_pdf.py for the diagrams

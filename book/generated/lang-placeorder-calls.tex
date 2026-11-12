@@ -1,0 +1,8 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+o: CreateOrder  Client → Shop  POST /orders
+  returns Quote 201 | SoldOut 409
+p: Pay  Client → Shop
+  returns Receipt 200 | PaymentDeclined 402
+    c: Charge  Shop → Bank
+      returns Charged | Declined
+\end{lstlisting}

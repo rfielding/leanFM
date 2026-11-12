@@ -1,0 +1,5 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+PlaceOrder → PlaceOrder: upgrade first: Client, Bank
+Client cannot stay on the old version: Client waits to receive Quote from Shop, receive SoldOut from Shop; Shop is stuck trying to send Backorder to Client (after Client → Shop: CreateOrder; Shop chooses to send Backorder to Client)
+Shop cannot upgrade first: Client waits to receive Quote from Shop, receive SoldOut from Shop; Shop is stuck trying to send Backorder to Client (after Client → Shop: CreateOrder; Shop chooses to send Backorder to Client)
+\end{lstlisting}

@@ -1,0 +1,38 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+export class ClientS0 extends State {
+  readonly state = "ClientS0" as const;
+
+  sendCreateOrder(body?: unknown): ClientS1 {
+    const ep = this.take();
+    ep.send("Shop", "CreateOrder", "o", null, body);
+    return new ClientS1(ep);
+  }
+}
+
+/** Client at S1: receive(msg): Quote from Shop, SoldOut from Shop. */
+export class ClientS1 extends State {
+  readonly state = "ClientS1" as const;
+
+  receive(msg: Message): { label: "Quote"; msg: Message; next: ClientS2 } | { label: "SoldOut"; msg: Message; next: End } {
+    const ep = this.ep;
+    if (ep.accepts(msg, "Shop", "Quote")) {
+      this.take();
+      ep.received(msg, "q");
+      return { label: "Quote", msg, next: new ClientS2(ep) };
+    }
+    if (ep.accepts(msg, "Shop", "SoldOut")) {
+      this.take();
+      ep.received(msg, null);
+      return { label: "SoldOut", msg, next: new End(ep) };
+    }
+    return ep.refuse("ClientS1", msg, "Quote from Shop, SoldOut from Shop");
+  }
+}
+
+/** Client at S2: sendPay → ClientS3. */
+export class ClientS2 extends State {
+  readonly state = "ClientS2" as const;
+
+  sendPay(body?: unknown): ClientS3 {
+    const ep = this.take();
+\end{lstlisting}

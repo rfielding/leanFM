@@ -1,0 +1,105 @@
+\chapter{Questions You Ask a Protocol}
+\label{ch:questions}
+\label{ch:ctl}
+
+\index{CTL}
+\index{temporal logic}
+Some rules are visible in a protocol's shape: who decides, who is told, which
+messages are calls. Others are not. ``Never charge a card after saying sold
+out'' and ``every charge ends in a receipt'' are questions about every possible
+future of a conversation. LeanFM asks them in CTL, computation tree logic
+\citep{clarke1986automatic}, over the protocol's own state graph, and every answer
+comes with a path: a witness when something is possible, a counterexample when
+something fails.
+
+\section{The operators}
+
+A CTL operator pairs a path quantifier (\textbf{A}, on every path; \textbf{E}, on
+some path) with a time operator (\textbf{F}, eventually; \textbf{G}, always;
+\textbf{U}, until).
+
+\begin{center}
+\small
+\begin{tabular}{@{}llp{.55\textwidth}@{}}
+\toprule
+Formula & Read as & Meaning \\
+\midrule
+\texttt{EF p} & possibly & some future reaches \texttt{p} \\
+\texttt{AF p} & inevitably & every future reaches \texttt{p} \\
+\texttt{AG p} & always & \texttt{p} holds now and in every future state \\
+\texttt{AG not p}, \texttt{never p} & never & no future reaches \texttt{p} \\
+\texttt{EG p} & can stay & some future keeps \texttt{p} forever \\
+\texttt{A[p U q]}, \texttt{E[p U q]} & until & \texttt{p} holds until \texttt{q} does, on every path or some \\
+\texttt{AW}, \texttt{EW} & unless & until, without requiring that \texttt{q} ever happens \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\index{possibility}
+\texttt{EF} is ``possibly'', read forward in time: something can still happen.
+Its negation is \texttt{AG not}: \texttt{never p} and \texttt{not EF p} are the
+same question, so ``is it possible?'' and ``can it never happen?'' are one
+question asked from both sides. A counterexample to a \texttt{never} is the
+witness to the \texttt{EF}.
+
+The atoms are what an observer can see: \texttt{\{"after": "Label"\}} holds in
+the state a \texttt{Label} message or event has just reached, and
+\texttt{"terminal"} holds where the session has ended. There are no atoms over a
+role's internal state, because a protocol has none (Chapter~\ref{ch:language}).
+
+\section{Asking \texttt{PlaceOrder}}
+
+Four questions and LeanFM's answers, each with the formula as it is sent:
+
+\input{generated/lang-ctl.tex}
+
+The last one fails, and the counterexample says why: a charge can be declined.
+The rule the author meant was probably ``every charge ends in a receipt or a
+declined payment'', and the counterexample is what makes that visible.
+
+\section{What an answer costs}
+
+\index{model checking!cost}
+Once the state graph exists, each CTL operator is one pass over it: reachability
+for \texttt{EF}, strongly connected components for \texttt{EG} and \texttt{AF},
+a fixpoint for \texttt{U}. The cost is about the number of states and transitions
+times the size of the formula, and breadth-first search returns the shortest
+witness, which is why the paths read well.
+
+The size of the graph is the real cost. Concurrent branches interleave, a
+deadline turns each state into a pair of state and elapsed time, and an attacker
+choosing what to send multiplies every state by its choices. Two steps by
+different roles that do not interact commute, so interleavings that differ only
+by swapping them are the same behaviour; the explosion is real only where roles
+share something. Every search has a bound, and an answer at the bound is
+\texttt{resource-limit}, never \texttt{proved}. The server's \texttt{/metrics}
+reports each check's time and model size, so the cost is measured, not guessed.
+
+\section{Who can know what}
+
+\index{knows}
+\index{secret}
+A security question asks what an attacker can derive. \texttt{knows(actor,
+term)} decides whether an actor can build a term from everything it has seen,
+taking pairs apart and opening ciphertexts with keys it can build, but never
+guessing (the Dolev--Yao model). It is a state atom like \texttt{after}, so
+\texttt{never knows(Ivo, nb)} is an ordinary CTL question.
+
+Most of what an attacker learns does not matter, so a declaration marks what
+must stay secret: a name ending in \texttt{\_secr}, or a term listed in
+\texttt{secrets}. Each mark is the question \texttt{never knows(attacker, s)}.
+Chapter~\ref{ch:csp-exercises} works through Needham--Schroeder, Lowe's attack,
+and a password login whose hash leaks when it is sent in clear.
+
+\section{Will two versions work together?}
+
+\index{compatibility}
+When a running protocol changes, not every role can be redeployed at once. For
+each role LeanFM explores the mixed system, the new version of that role among
+the old versions of the others, to every reachable state. Adding a branch in
+which the shop answers \texttt{Backorder}:
+
+\input{generated/lang-compat.tex}
+
+The client and the bank can upgrade first; the shop cannot, because an old client
+waits for a quote or a sold-out notice and would never accept a backorder.

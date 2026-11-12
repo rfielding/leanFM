@@ -55,6 +55,11 @@
 % readers; it is not printed as a second caption in the book. In interaction
 % diagrams, pronounce every arrow as "Message from A to B: message" so direction
 % and payload remain unambiguous without relying on the arrow graphic.
+% A diagram LeanFM drew in both themes (generated/NAME-light.pdf and generated/NAME-dark.pdf,
+% made by scripts/svg_to_pdf.py): the light one in main.pdf, the dark one in main-dark.pdf.
+\newcommand{\ThemedDiagram}[2]{%
+  \ifdefined\darkmode\includegraphics[#1]{generated/#2-dark.pdf}%
+  \else\includegraphics[#1]{generated/#2-light.pdf}\fi}
 \newcommand{\AccessibleFigure}[2]{%
   \tagstructbegin{tag=Figure,alttext={#1}}%
   \tagmcbegin{tag=Figure}#2\tagmcend%
@@ -299,7 +304,7 @@
     {\color{leangold}\fontsize{27}{31}\selectfont\bfseries
       L\(\boldsymbol{\exists\forall}\)NFM Software Engineering\\[.4em]
      \fontsize{15}{19}\selectfont\mdseries
-      Session types with bounded queues and unreliable messages};
+      The protocol is the program};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and ChatGPT\\[.35em]
@@ -311,88 +316,67 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-LeanFM is a way of building software by arguing about it first. You describe
-what a system should do in ordinary language; an LLM turns that into precise
-requirements; and LeanFM checks them and shows what they mean, as sequence
-diagrams, state machines, event traces and counterexamples. You push back, the
-requirements change, the pictures change with them, and only then is code written.
+LeanFM is a programming language whose programs are protocols. A protocol names
+the roles in a conversation, the messages between them and their order, who
+decides at each choice, what is assumed about decisions nobody else can see, and
+what the system promises. Everything else in a LeanFM project is generated from
+the protocol or checked against it: the diagrams people read, the requirements
+and implementation mapping reviewed in git, the interfaces, the code each role is
+written on, and the verdicts on what the running system logs.
 
-Its subject is the \emph{behavior} of software at its boundaries: who sends what to
-whom, in what order, within what time and with what probability, and what must
-always or never happen. The record it keeps is a \emph{multiparty session type},
-one global description of a conversation from which each role's obligations are
-derived. Session types come from programming-language research, where they
-guarantee that no party sends a message the other cannot handle or waits for one
-that will never come. LeanFM uses them for messages between network nodes and calls
-between APIs alike, and adds what the classic theory leaves out: every queue has a
-declared size, and every channel declares how it fails. Messages are lost,
-duplicated, reordered and late; timers fire early; a retried request arrives twice.
-LeanFM checks the protocol together with those facts.
+Most LeanFM is written by an LLM. A person says in ordinary words what the
+software must do; the model writes the protocol; LeanFM checks it and shows what
+it means, as diagrams, obligations, witnesses and counterexamples. The person
+pushes back, the protocol changes, the pictures change with it, and only then is
+code written. The model learns the language from LeanFM itself: its server speaks
+the Model Context Protocol and hands any agent that connects the language
+reference and the tools.
 
-The precise part is Lean. Every requirement is a Lean definition: the roles, the
-messages down to their protobuf bytes, the legal orders, and what must always or
-never happen. Definitions can be checked, so diagrams are generated rather than
-drawn, and a contradiction (say $A$ must reference $B$, $B$ needs a $C$, and policy
-forbids that $C$) is found before anyone builds it. Requirements about values, such
-as an identifier that must refer to a real object, are predicates whose enforcement
-the implementation mapping describes; requirements over state no observer can see
-are flagged, so they can be restated over events that can be tested.
-
-\section*{Three layers, reviewed in git}
-
-Work proceeds in three layers, each checked before the next: the
-\emph{requirements} (observable behaviour and its generated views), the
-\emph{implementation mapping} (how each requirement is realized and tested), and the
-code, written in one pass. Review is what you already do with git: read the diff
-and commit it. A passing check is evidence for that review, not the review itself.
-
-\section*{Nothing lives only in the chat}
-
-A conversation with an LLM is temporary. Everything that matters is written into
-the project's one directory: the book, requirements, protobuf schema,
-implementation mapping and source. Delete the conversation or start a new session
-and work resumes from the files. This repository is such a project, and this book
-is part of its specification, read by the agents that work on it.
+The language starts from multiparty session types, one global description of a
+conversation from which each role's obligations are derived
+\citep{honda2008multiparty}. To that it adds stated assumptions on hidden
+decisions, time and value on messages, promises judged over observation periods,
+temporal questions answered with paths, and attackers who see every channel.
 
 \section*{How to read this book}
 
-Chapter~\ref{ch:vision} sets out the method. Then come events and scenarios as
-recorded runs, a worked bakery example, global types as grammars, TFTP (where
-declaring the physics turns a perfect session type into a famous bug) and the
-authoring language. Chapter~\ref{ch:web-server} covers the server and the MCP
-interface through which an agent consults LeanFM's logic. Later chapters apply
-temporal and modal logic to security and legal examples, and
-Chapter~\ref{ch:bootstrap-contract} defines how a new project is set up.
+Part~I is the language: what a protocol says (Chapter~\ref{ch:language}), what it
+means (Chapter~\ref{ch:meaning}), its assumptions and promises
+(Chapter~\ref{ch:assumptions}), the questions you can ask it
+(Chapter~\ref{ch:questions}), and executions as event streams
+(Chapter~\ref{ch:execution}). Part~II is what a protocol generates and how the
+outputs are reviewed. Part~III works examples end to end: a bakery with declared
+and measured rates, TFTP and its physics, OAuth, a legal settlement, and security
+protocols. The appendices list the MCP tools and the server's own protocol, and
+define how a new project is set up.
 
-LeanFM is a working draft. The book records what exists alongside what is planned,
-and the evidence labels of Chapter~\ref{ch:vision} say what stands behind each
-claim. The source is public \citep{leanfmrepo}.
+Every listing, diagram and verdict in Part~I comes from LeanFM, through the same
+functions its tools call; the generator is named beside each. What LeanFM does not
+yet do is listed in \texttt{CRITIQUE.md}. The source is public \citep{leanfmrepo}.
 
 \tableofcontents
 
 \mainmatter
-\part{Session Types as a Software Engineering Method}
-\include{chapters/vision}
-\include{chapters/events}
-\include{chapters/scenarios}
-\include{chapters/bakery-example}
-\include{chapters/grammar}
-\include{chapters/tftp-physics}
-\include{chapters/authoring-language}
-\include{chapters/web-server}
-\include{chapters/chat-ui-guide}
-\include{chapters/oauth-example}
-\include{chapters/temporal-logic}
-\include{chapters/legal-example}
-\include{chapters/generated-examples}
-\include{chapters/feature-discipline}
-\include{chapters/lean-rendering}
-\include{chapters/roadmap}
+\part{The LeanFM Language}
+\include{chapters/lang-protocol}
+\include{chapters/lang-meaning}
+\include{chapters/lang-assumptions}
+\include{chapters/lang-questions}
+\include{chapters/lang-execution}
 
-\part{Security Protocol Exercises}
+\part{What a Protocol Generates}
+\include{chapters/lang-generated}
+\include{chapters/feature-discipline}
+
+\part{Worked Examples}
+\include{chapters/bakery-example}
+\include{chapters/tftp-physics}
+\include{chapters/oauth-example}
+\include{chapters/legal-example}
 \include{chapters/csp-exercises}
 
-\part{Machine Reference}
+\appendix
+\include{chapters/mcp-tools}
 \include{chapters/web-protocol}
 \include{chapters/bootstrap-contract}
 
