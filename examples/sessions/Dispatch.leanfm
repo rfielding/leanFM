@@ -1,0 +1,52 @@
+protocol Dispatch (Rider, Platform, Driver) {
+  Request from Rider to Platform amount 25 USD;
+  rec Search {
+    choice {
+      o: Offer from Platform to Driver after 30 seconds;
+      choice at Driver using declared("standard-acceptance") {
+        probability 3/5:
+          Accept from Driver to Platform cause o after 10 seconds;
+          Matched from Platform to Rider;
+          Payout from Platform to Driver amount 16 USD after 15 minutes;
+      } or {
+        probability 2/5:
+          Decline from Driver to Platform cause o after 10 seconds;
+          NoDriver from Platform to Rider;
+          choice at Rider using declared("patience") {
+            probability 1/2:
+              KeepWaiting from Rider to Platform;
+              Searching from Platform to Driver;
+              continue Search;
+          } or {
+            probability 1/2:
+              Cancel from Rider to Platform;
+              Closed from Platform to Driver;
+              Refund from Platform to Rider amount 25 USD;
+          }
+      }
+    } or {
+      b: Boost from Platform to Driver after 30 seconds;
+      choice at Driver using declared("boosted-acceptance") {
+        probability 19/20:
+          BoostAccept from Driver to Platform cause b after 10 seconds;
+          Matched from Platform to Rider;
+          BoostPayout from Platform to Driver amount 21 USD after 15 minutes;
+      } or {
+        probability 1/20:
+          BoostDecline from Driver to Platform cause b after 10 seconds;
+          NoDriver from Platform to Rider;
+          choice at Rider using declared("patience-after-boost") {
+            probability 1/2:
+              KeepWaiting from Rider to Platform;
+              Searching from Platform to Driver;
+              continue Search;
+          } or {
+            probability 1/2:
+              Cancel from Rider to Platform;
+              Closed from Platform to Driver;
+              Refund from Platform to Rider amount 25 USD;
+          }
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import LeanFM.Session.Decision
+import Std.Data.HashMap
 
 /-! Requirements selfhost.session.mdp.loops and .mdp.rewards: a sequential session with loops, under a
 supplied policy, as an absorbing Markov chain with several rewards. Expected visits come from
@@ -53,6 +54,8 @@ structure G where
   notes : List String := []
   absolute : Bool := false
   accrues : Bool := false
+  /-- choices without probabilities become open actions (selfhost.session.mdp.optimize) -/
+  allowOpen : Bool := false
 
 abbrev M := StateT G (Except String)
 
@@ -71,6 +74,17 @@ def approx (r : Rat) : String :=
   let frac := (n % 100).toNat
   s!"{whole}.{if frac < 10 then "0" else ""}{frac}"
 
+/-- A rational for reading: exact when its denominator is small, otherwise a decimal (the exact value
+stays in the result). Probabilities get four decimals. -/
+def readable (r : Rat) (prob : Bool := false) : String :=
+  if r.den ≤ 100000 then ratText r
+  else if prob then
+    let n := (r * 10000 + 1 / 2).floor
+    let frac := (n % 10000).toNat
+    let pad := if frac < 10 then "000" else if frac < 100 then "00" else if frac < 1000 then "0" else ""
+    s!"≈ {n / 10000}.{pad}{frac}"
+  else if r ≥ 0 then "≈ " ++ approx r else "≈ -" ++ approx (-r)
+
 /-- A signed rational to two decimals. -/
 def signedApprox (r : Rat) : String := if r ≥ 0 then "+" ++ approx r else "-" ++ approx (-r)
 
@@ -82,6 +96,7 @@ def daysText (ms : Rat) : String :=
     else if ms ≥ 3600000 then (ms / 3600000, "hour")
     else if ms ≥ 60000 then (ms / 60000, "minute")
     else (ms / 1000, "second")
+  if n.den > 100000 then s!"{readable n} {unit}s" else
   s!"{ratText n} {unit}{if n == 1 then "" else "s"}" ++ (if n.den == 1 || n < 0 then "" else s!" (≈ {approx n})")
 
 def periodText (ms : Nat) : String :=
@@ -175,14 +190,32 @@ where
     | .obligation o =>
       throw s!"obligation {o.name}: deadlines depend on a path's history, so the chain view does not evaluate them; use the tree view (a session without rec or accrue)"
     | .weighted name actor qs bs =>
-      if qs.isEmpty then throw s!"choice {name} needs probabilities for the chain view (probability n/d per branch)"
+      if qs.isEmpty && (← get).allowOpen then return ← build loops [Text.Stmt.choice bs] k
+      if qs.isEmpty then throw s!"choice {name} needs probabilities for the chain view (probability n/d per branch), or pass optimize to choose its branches"
       let c ← addState "choice" (if actor.isEmpty then "Choice" else actor ++ " chooses") name
       for (b, i) in bs.zipIdx do
         let entry ← build loops b k
         let e : Edge := { src := c, dst := entry, kind := "policy", label := s!"Action {i + 1}", prob := (qs[i]?).getD Q.zero }
         addEdge e
       return c
-    | .choice _ => throw "every choice needs probabilities for the chain view: choice at Role using declared(name) { probability n/d: ... }"
+    | .choice bs =>
+      if !(← get).allowOpen then
+        throw "every choice needs probabilities for the chain view: choice at Role using declared(name) { probability n/d: ... }, or pass optimize to choose its branches"
+      -- an open action: decided by the role that sends each branch's first message
+      let firstOf (b : List Stmt) : Option (String × String) := b.findSome? fun st =>
+        match (peel st).1 with
+        | .msg _ label src .. => some (src, label)
+        | .event label role => some (role, label)
+        | _ => none
+      let deciders := (bs.filterMap firstOf).map (·.1) |>.eraseDups
+      let decider := match deciders with | [r] => r | _ => "?"
+      let c ← addState "open" s!"{decider} chooses (open)" ""
+      for (b, i) in bs.zipIdx do
+        let entry ← build loops b k
+        let first := ((firstOf b).map (·.2)).getD s!"branch {i + 1}"
+        let e : Edge := { src := c, dst := entry, kind := "policy", label := s!"open: {first}", prob := Q.zero, step := first, sender := decider }
+        addEdge e
+      return c
     | .loop name body =>
       let l ← addState "loop" s!"loop {name}" ""
       let entry ← build ((name, l) :: loops) body k
@@ -295,14 +328,14 @@ def regimes (states : Array State) (edges : Array Edge) (start : Nat) (ends : Li
             throw s!"the rate in force at {name} differs between paths that reach it; declare the rate after the paths meet"
   return r.map (·.getD [])
 
-def analyse (r : Resolved) (solveAll : Bool := true) : Except String Chain := do
+def analyse (r : Resolved) (solveAll : Bool := true) (allowOpen : Bool := false) : Except String Chain := do
   let run : M (Nat × Nat) := do
     let finish ← addState "end" "End" ""
     let entry ← build [] r.body finish
     let start ← addState "start" "Start" ""
     addEdge { src := start, dst := entry, kind := "loop", label := "begin", prob := Q.one }
     return (start, finish)
-  let ((start, finish), g0) ← run.run {}
+  let ((start, finish), g0) ← run.run { allowOpen }
   if g0.absolute && g0.accrues then
     throw "an accrual needs delays after the previous step (after d); absolute times (at a clock or at time(id)) cannot be used with it"
   -- one end per distinct last step: the shared end takes the first outcome, new ends the others
@@ -326,13 +359,14 @@ def analyse (r : Resolved) (solveAll : Bool := true) : Except String Chain := do
           ends := ends ++ [(name, k)]
   let endIds := if ends.isEmpty then [finish] else ends.map (·.2)
   for st in g.states do
-    if !endIds.contains st.id then
+    if !endIds.contains st.id && st.kind != "open" then
       let out := g.edges.filter (·.src == st.id)
       if out.foldl (fun q e => Q.add q e.prob) Q.zero != Q.one then
         throw s!"outgoing probabilities of state {st.id} do not sum to 1"
   if solveAll && g.edges.any (·.gate.isSome) then
     throw "a periodic gate (at next d) needs a horizon: pass horizon, such as 52 weeks, to count whole periods"
-  let (visits, absorb) ← if solveAll then solve g.states.size start endIds g.edges
+  let solveNow := solveAll && !g.states.any (·.kind == "open")
+  let (visits, absorb) ← if solveNow then solve g.states.size start endIds g.edges
     else pure (Array.replicate g.states.size 0, [])
   let regime ← regimes g.states g.edges start endIds
   return { states := g.states, edges := g.edges, start, ends := endIds, visits, absorb, regime, notes := g.notes }
@@ -445,6 +479,7 @@ structure Horizon where
   gate : Nat
   stillRunning : Rat
   passages : Rat
+  deriving Inhabited
 
 /-- The longest time from `a` to `b` over the edges other than `skip`, with each delay at its
 largest; a cycle among those edges is refused, since every loop has to pass the gate. -/
@@ -510,6 +545,268 @@ def horizon (c0 : Chain) (horizonMs : Nat) : Except String Horizon := do
   let edges := c0.edges.set! gi { g with delay := meanWait, delayText := s!"at next {periodText P}" }
   let stillRunning := q0 * geometric q N - q0 * geometric q (N - 1)
   return { chain := { c0 with visits, edges }, periods := N, periodMs := P, gate := gi, stillRunning, passages }
+
+/-! ## Optimal policies for open choices (selfhost.session.mdp.optimize) -/
+
+structure Objective where
+  role : String
+  /-- a unit, or "time" for the expected duration -/
+  unit : String
+  maximize : Bool
+  deriving Inhabited
+
+/-- One traversal's reward for the objective: the role's share in the unit, or the delay for time. -/
+def objectiveReward (c : Chain) (o : Objective) (e : Edge) : Rat :=
+  if o.unit == "time" then e.delay
+  else (rewards c e).foldl (fun acc (r, u, x) => if r == o.role && u == o.unit then acc + x else acc) 0
+
+structure Optimal where
+  chain : Chain
+  /-- each open state: the chosen edge, and every branch's edge with its value from that choice -/
+  choices : List (Nat × Nat × List (Nat × Rat))
+  value : Rat
+  /-- a policy that never ends would have scored better, and was skipped -/
+  excluded : Bool
+  rounds : Nat
+  deriving Inhabited
+
+/-- Under `choose` (open state ↦ edge), whether every non-end state can still reach an end. -/
+def proper (c : Chain) (choose : List (Nat × Nat)) : Bool := Id.run do
+  let live (i : Nat) (e : Edge) : Bool :=
+    if c.states[e.src]!.kind == "open" then choose.lookup e.src == some i else qRat e.prob > 0
+  let mut reach := c.ends
+  let mut changed := true
+  while changed do
+    changed := false
+    for (e, i) in c.edges.zipIdx do
+      if live i e && reach.contains e.dst && !reach.contains e.src then
+        reach := e.src :: reach; changed := true
+  return c.states.all fun s => reach.contains s.id
+
+/-- Expected objective from every state under `choose`: V = R + Q V over the non-end states. -/
+def evaluate (c : Chain) (o : Objective) (choose : List (Nat × Nat)) : Except String (Array Rat) := do
+  let n := c.states.size
+  let idx := (List.range n).filter (!c.ends.contains ·)
+  let pos (i : Nat) : Nat := (idx.findIdx? (· == i)).getD 0
+  let m := idx.length
+  let mut a : Array (Array Rat) := (List.range m).toArray.map fun j =>
+    (List.range (m + 1)).toArray.map fun col => if col == j then 1 else 0
+  for (e, i) in c.edges.zipIdx do
+    if !c.ends.contains e.src then
+      let p : Rat := if c.states[e.src]!.kind == "open" then (if choose.lookup e.src == some i then 1 else 0) else qRat e.prob
+      if p != 0 then
+        let r := pos e.src
+        a := a.set! r ((a[r]!).set! m (a[r]![m]! + p * objectiveReward c o e))
+        if !c.ends.contains e.dst then
+          let col := pos e.dst
+          a := a.set! r ((a[r]!).set! col (a[r]![col]! - p))
+  let v ← gauss m a
+  let mut out : Array Rat := Array.replicate n 0
+  for (i, j) in idx.zipIdx do out := out.set! i v[j]!
+  return out
+
+def optimize (c : Chain) (o : Objective) : Except String Optimal := do
+  let opens := c.states.toList.filter (·.kind == "open") |>.map (·.id)
+  -- an initial policy under which every state can reach an end: backwards from the ends
+  let mut reach := c.ends
+  let mut choose : List (Nat × Nat) := []
+  let mut changed := true
+  while changed do
+    changed := false
+    for st in c.states do
+      if !reach.contains st.id then
+        let outs := c.edges.toList.zipIdx.filter fun (e, _) => e.src == st.id
+        if st.kind == "open" then
+          if let some (_, i) := outs.find? fun (e, _) => reach.contains e.dst then
+            choose := (st.id, i) :: choose; reach := st.id :: reach; changed := true
+        else if outs.any fun (e, _) => qRat e.prob > 0 && reach.contains e.dst then
+          reach := st.id :: reach; changed := true
+  if !c.states.all (fun s => reach.contains s.id) then
+    throw "whatever the open choices pick, some state can never reach an end; give the loop a way out"
+  let mut excluded := false
+  let mut rounds := 0
+  let mut v ← evaluate c o choose
+  let better (a b : Rat) : Bool := if o.maximize then a > b else a < b
+  let mut improving := true
+  while improving && rounds < 100 do
+    improving := false
+    rounds := rounds + 1
+    for s in opens do
+      let branches := c.edges.toList.zipIdx.filter fun (e, _) => e.src == s
+      let q (e : Edge) : Rat := objectiveReward c o e + v[e.dst]!
+      let cur := (choose.lookup s).getD 0
+      let curQ := q c.edges[cur]!
+      if let some (be, bi) := branches.foldl (fun best (e, i) => match best with
+          | none => some (e, i)
+          | some (e', i') => if better (q e) (q e') then some (e, i) else some (e', i')) none then
+        if bi != cur && better (q be) curQ then
+          let candidate := (s, bi) :: choose.filter (·.1 != s)
+          if proper c candidate then
+            choose := candidate; improving := true
+          else excluded := true
+    if improving then v ← evaluate c o choose
+  -- the chosen branches get probability 1, and the chain is solved again under them
+  let edges := c.edges.toList.zipIdx.map fun (e, i) =>
+    if c.states[e.src]!.kind == "open" then { e with prob := if choose.lookup e.src == some i then Q.one else Q.zero } else e
+  let edges := edges.toArray
+  let (visits, absorb) ← solve c.states.size c.start c.ends edges
+  let choices := opens.map fun s =>
+    let branches := c.edges.toList.zipIdx.filter fun (e, _) => e.src == s
+    (s, (choose.lookup s).getD 0, branches.map fun (e, i) => (i, objectiveReward c o e + v[e.dst]!))
+  return { chain := { c with edges, visits, absorb }, choices, value := v[c.start]!, excluded, rounds }
+
+/-! ## Distributions over whole periods (selfhost.session.mdp.distribution) -/
+
+/-- A reward vector: role, unit, amount; kept canonical (sorted, no zeros) so equal outcomes merge. -/
+abbrev Vec := List (String × String × Rat)
+
+def Vec.add (v : Vec) (r u : String) (x : Rat) : Vec := addTo v r u x
+
+def Vec.plus (a b : Vec) : Vec := b.foldl (fun acc (r, u, x) => acc.add r u x) a
+
+def Vec.canon (v : Vec) : Vec :=
+  (v.filter (·.2.2 != 0)).mergeSort fun (r, u, _) (r', u', _) => decide (r ++ "\u0000" ++ u ≤ r' ++ "\u0000" ++ u')
+
+def Vec.key (v : Vec) : String := ";".intercalate (v.canon.map fun (r, u, x) => s!"{r},{u},{ratText x}")
+
+structure PathOut where
+  prob : Rat
+  vec : Vec
+  work : Rat
+  reached : Bool
+
+/-- Every path from `a` over edges other than `skip` until `stop` or an end, branching on choices,
+delay outcomes and amount outcomes, with its probability, rewards and work time. -/
+partial def periodPaths (c : Chain) (skip a stop : Nat) : Except String (List PathOut) := do
+  let rec go (s : Nat) (prob : Rat) (vec : Vec) (work : Rat) (count : Nat) : Except String (List PathOut) := do
+    if count > 20000 then throw "a period has more than 20000 paths; simplify the session"
+    if s == stop then return [{ prob, vec, work, reached := true }]
+    if c.ends.contains s then return [{ prob, vec, work, reached := false }]
+    let mut out := []
+    for (e, i) in c.edges.zipIdx do
+      if e.src == s && i != skip then
+        let delays : List (Rat × Rat) := if e.delays.isEmpty then [(e.delay, 1)] else e.delays.map fun (d, q) => ((d : Rat), qRat q)
+        -- every combination of amount outcomes
+        let combos : List (Rat × Vec) := e.samples.foldl (fun acc (f, t, u, os) =>
+          acc.flatMap fun (p, v) => os.map fun (n, q) => (p * qRat q, (v.add f u (-(n : Rat))).add t u (n : Rat))) [(1, [])]
+        for (d, qd) in delays do
+          for (qa, moved) in combos do
+            let accrued := (c.regime[e.src]!).foldl (fun v a =>
+              let x := d * (a.quantity : Rat) / (a.periodMs : Rat)
+              (v.add a.payer a.unit (-x)).add a.payee a.unit x) moved
+            let more ← go e.dst (prob * qRat e.prob * qd * qa) (vec.plus accrued) (work + d) (count + out.length)
+            out := out ++ more
+            if out.length > 20000 then throw "a period has more than 20000 paths; simplify the session"
+    return out
+  go a 1 [] 0 0
+
+structure Distribution where
+  /-- each distinct outcome's reward vector and probability -/
+  outcomes : List (Vec × Rat)
+  /-- the probability of each number of gate passages -/
+  passages : List (Nat × Rat)
+  deriving Inhabited
+
+/-- The exact distribution of rewards over `h`'s whole periods. -/
+def horizonDistribution (c0 : Chain) (h : Horizon) : Except String Distribution := do
+  let g := c0.edges[h.gate]!
+  let sg := g.src
+  let P : Rat := (h.periodMs : Rat)
+  -- the gate's own amount outcomes, and the rates in force while waiting at it
+  let gateCombos : List (Rat × Vec) := g.samples.foldl (fun acc (f, t, u, os) =>
+    acc.flatMap fun (p, v) => os.map fun (n, q) => (p * qRat q, (v.add f u (-(n : Rat))).add t u (n : Rat))) [(1, [])]
+  let waitVec (work : Rat) : Vec := (c0.regime[sg]!).foldl (fun v a =>
+    let x := (P - work) * (a.quantity : Rat) / (a.periodMs : Rat)
+    (v.add a.payer a.unit (-x)).add a.payee a.unit x) []
+  let initPaths ← periodPaths c0 h.gate c0.start sg
+  let cycPaths ← if g.dst == sg then pure [{ prob := 1, vec := [], work := 0, reached := true : PathOut }]
+    else periodPaths c0 h.gate g.dst sg
+  let addTo (m : Std.HashMap String (Vec × Rat)) (v : Vec) (p : Rat) : Except String (Std.HashMap String (Vec × Rat)) := do
+    let k := v.key
+    let m' := match m.get? k with
+      | some (v0, p0) => m.insert k (v0, p0 + p)
+      | none => m.insert k (v.canon, p)
+    if m'.size > 4096 then throw "the distribution has more than 4096 distinct outcomes; shorten the horizon or simplify the session"
+    return m'
+  let mut finished : Std.HashMap String (Vec × Rat) := {}
+  let mut running : Std.HashMap String (Vec × Rat) := {}
+  -- period 1: the start's paths, then (if they reach it) the first passage of the gate
+  for pth in initPaths do
+    if pth.reached then
+      for (qa, moved) in gateCombos do
+        running ← addTo running ((pth.vec.plus moved).plus (waitVec pth.work)) (pth.prob * qa)
+    else finished ← addTo finished pth.vec pth.prob
+  for _ in [1:h.periods] do
+    let mut next : Std.HashMap String (Vec × Rat) := {}
+    for (_, (v, p)) in running.toList do
+      for pth in cycPaths do
+        if pth.reached then
+          for (qa, moved) in gateCombos do
+            next ← addTo next (((v.plus pth.vec).plus moved).plus (waitVec pth.work)) (p * pth.prob * qa)
+        else finished ← addTo finished (v.plus pth.vec) (p * pth.prob)
+    running := next
+  let mut all := finished
+  for (_, (v, p)) in running.toList do all ← addTo all v p
+  -- passages: none with 1 - q0; k < N with q0 q^(k-1) (1 - q); N with q0 q^(N-1)
+  let q0 := initPaths.foldl (fun acc p => if p.reached then acc + p.prob else acc) 0
+  let q := cycPaths.foldl (fun acc p => if p.reached then acc + p.prob else acc) 0
+  let N := h.periods
+  let passages := (List.range (N + 1)).map fun k =>
+    (k, if k == 0 then 1 - q0 else if k < N then q0 * q ^ (k - 1) * (1 - q) else q0 * q ^ (N - 1))
+  return { outcomes := all.toList.map (·.2), passages }
+
+/-- Each role and unit's distribution: sorted values with their probabilities. -/
+def marginals (outcomes : List (Vec × Rat)) (roles : List String) : List (String × String × List (Rat × Rat)) :=
+  let keys := (outcomes.flatMap fun (v, _) => v.map fun (r, u, _) => (r, u)).eraseDups
+  let ordered := (roles.flatMap fun r => keys.filter (·.1 == r)) ++ keys.filter (fun (r, _) => !roles.contains r)
+  ordered.map fun (r, u) =>
+    let vals := outcomes.map fun (v, p) => (((v.find? fun (r', u', _) => r' == r && u' == u).map (·.2.2)).getD 0, p)
+    let merged := vals.foldl (fun acc (x, p) =>
+      if acc.any (·.1 == x) then acc.map fun (y, q) => if y == x then (y, q + p) else (y, q) else acc ++ [(x, p)]) []
+    (r, u, merged.mergeSort fun a b => decide (a.1 ≤ b.1))
+
+/-- Histograms of each role and unit's distribution, one row each, with the mean marked. A few values
+are drawn as labelled bars side by side; many are placed along a value axis in proportion. -/
+def histogram (title : String) (ms : List (String × String × List (Rat × Rat))) : DiagramModel := Id.run do
+  let rowH := 170
+  let w := 900
+  let left := 60
+  let right := w - 40
+  let mut shapes : Array Shape := #[.text "" 20 24 "start" .fg 14 true title]
+  for ((r, u, vals), i) in ms.zipIdx do
+    let top := 50 + i * rowH
+    let base := top + 130
+    let maxP := vals.foldl (fun m (_, p) => max m p) 0
+    let n := max 1 vals.length
+    let mean := vals.foldl (fun acc (x, p) => acc + x * p) 0
+    let lo := (vals.head?).map (·.1) |>.getD 0
+    let hi := (vals.getLast?).map (·.1) |>.getD 0
+    let span := if hi == lo then 1 else hi - lo
+    let height (p : Rat) : Nat := if maxP == 0 then 0 else ((p / maxP) * 100).floor.toNat
+    shapes := shapes.push (.text "" 20 (top + 14) "start" .fg 13 true s!"{r} · {u} · mean {signedApprox mean}")
+    shapes := shapes.push (.line "" left base right base .line "1" "" false)
+    let meanX : Nat ← if n ≤ 24 then do
+        let barW := max 2 ((right - left) / n)
+        for ((x, p), j) in vals.zipIdx do
+          let x0 := left + j * barW
+          shapes := shapes.push (.rect "bar" x0 (base - height p) (max 1 (barW - 1)) (height p) 0 .arrow .arrow)
+          shapes := shapes.push (.text "" (x0 + barW / 2) (base + 16) "middle" .muted 10 false (signedApprox x))
+          shapes := shapes.push (.text "" (x0 + barW / 2) (base - 6 - height p) "middle" .frame 10 false (approx p))
+        -- between the bars on either side of the mean, in proportion
+        let idx := (vals.findIdx? fun (x, _) => x ≥ mean).getD (n - 1)
+        let (x1, x2) := (((vals[idx - 1]?).map (·.1)).getD lo, ((vals[idx]?).map (·.1)).getD hi)
+        let frac : Rat := if x2 == x1 then 0 else (mean - x1) / (x2 - x1)
+        pure (left + (if idx == 0 then 0 else (idx - 1) * barW + barW / 2) + ((frac * barW).floor.toNat))
+      else do
+        for (x, p) in vals do
+          let xs := left + (((x - lo) / span) * ((right - left : Nat) : Rat)).floor.toNat
+          shapes := shapes.push (.rect "bar" xs (base - height p) 2 (height p) 0 .arrow .arrow)
+        shapes := shapes.push (.text "" left (base + 16) "start" .muted 10 false (signedApprox lo))
+        shapes := shapes.push (.text "" right (base + 16) "end" .muted 10 false (signedApprox hi))
+        pure (left + (((mean - lo) / span) * ((right - left : Nat) : Rat)).floor.toNat)
+    shapes := shapes.push (.line "mean" meanX (top + 22) meanX base .frame "2" "5 3" false)
+    shapes := shapes.push (.text "" (meanX + 4) (top + 32) "start" .frame 10 true "mean")
+  return { width := w, height := 60 + ms.length * rowH, shapes }
 
 /-! ## One walk (selfhost.session.mdp.walk): the same rewards on actual counts and times -/
 
@@ -731,13 +1028,15 @@ def drawing (c : Chain) (roles : List String := []) : Except String DiagramModel
     | (_, none) => "probability 0"
   let visitsText (s : State) : String :=
     let stay := residence c s.id
-    s!"expected visits {ratText c.visits[s.id]!}" ++ (if stay == 0 then "" else s!" · time here {daysText stay}")
+    s!"expected visits {readable c.visits[s.id]!}" ++ (if stay == 0 then "" else s!" · time here {daysText stay}")
   let boxW := c.states.foldl (fun w s => max w ((max (label s).length (max s.detail.length
     (if s.kind == "end" then (outcomeText s.id).length else (visitsText s).length))) * 7 + 40)) 160
   let edgeText (e : Edge) : String :=
     (if e.kind == "message" || e.kind == "event" || e.kind == "rate" then e.label ++ " · " else
-        if e.kind == "policy" then "policy " ++ e.prob.text ++ " · " else "") ++
-      s!"×{ratText (traversals c e)}" ++ (if e.amountText.isEmpty then "" else " · " ++ e.amountText) ++
+        if e.kind == "policy" && e.label.startsWith "open: " then
+          (if e.prob.text == "1" then "chosen: " else if e.prob.text == "0" then "not chosen: " else "open: ") ++ (e.label.drop 6).toString ++ " · "
+        else if e.kind == "policy" then "policy " ++ e.prob.text ++ " · " else "") ++
+      s!"×{readable (traversals c e)}" ++ (if e.amountText.isEmpty then "" else " · " ++ e.amountText) ++
       (if e.delayText.isEmpty then "" else " · " ++ e.delayText)
   let edgeW := c.edges.foldl (fun w e => max w ((edgeText e).length * 7 + 20)) 0
   let slot := max (boxW + 60) (edgeW + 40)
@@ -766,6 +1065,8 @@ def drawing (c : Chain) (roles : List String := []) : Except String DiagramModel
   let mut shapes : Array Shape := #[]
   let mut bend := 0
   let mut lane := 0
+  let mut usedY : List Nat := []
+  let mut usedR : List Nat := []
   for e in c.edges do
     let forward := (depth[e.dst]!).getD 0 > (depth[e.src]!).getD 0
     let text := edgeText e
@@ -773,10 +1074,14 @@ def drawing (c : Chain) (roles : List String := []) : Except String DiagramModel
       lane := lane + 1
       let x0 := xs[e.src]!; let y0 := y e.src + 35; let low := y e.src + 35 + 12 * lane
       let lm := margin - lane * 36
-      let x2 := xs[e.dst]! - boxW / 2; let y2 := y e.dst
-      shapes := shapes.push (.path "skip" s!"M {x0} {y0} L {x0} {low} L {lm + 16} {low} Q {lm} {low} {lm} {low + 16} L {lm} {y2 - 16} Q {lm} {y2} {lm + 16} {y2} L {x2} {y2}" .none .arrow "" true)
+      -- the edge comes into its target from above, through the gap between rows, never along a row of states
+      let xd := xs[e.dst]!; let top := y e.dst - 35; let ya := top - 26 - (lane % 4) * 5
+      shapes := shapes.push (.path "skip" s!"M {x0} {y0} L {x0} {low} L {lm + 16} {low} Q {lm} {low} {lm} {low + 16} L {lm} {ya - 16} Q {lm} {ya} {lm + 16} {ya} L {xd - 16} {ya} Q {xd} {ya} {xd} {ya + 16} L {xd} {top}" .none .arrow "" true)
       let lw := text.length * 7 + 10
-      let my := (low + y2) / 2
+      -- each margin label at its own height
+      let mut my := (low + ya) / 2
+      while usedY.any (fun u => (if u > my then u - my else my - u) < 22) do my := my + 22
+      usedY := my :: usedY
       shapes := shapes.push (.rect "label" (lm - lw - 6) (my - 13) lw 18 4 .bg .bg)
       shapes := shapes.push (.text "boxed" (lm - 11) my "end" .fg 12 false text)
     else if forward then
@@ -800,7 +1105,10 @@ def drawing (c : Chain) (roles : List String := []) : Except String DiagramModel
       let out := rightmost + 40 + bend * 36
       shapes := shapes.push (.path "back" s!"M {x0} {y0} L {x0} {low} L {out - 16} {low} Q {out} {low} {out} {low - 16} L {out} {y2 + 16} Q {out} {y2} {out - 16} {y2} L {x2} {y2}" .none .arrow "6 4" true)
       let lw := text.length * 7 + 10
-      let my := (low + y2) / 2
+      -- each margin label at its own height
+      let mut my := (low + y2) / 2
+      while usedR.any (fun u => (if u > my then u - my else my - u) < 22) do my := my + 22
+      usedR := my :: usedR
       shapes := shapes.push (.rect "label" (out + 6) (my - 13) lw 18 4 .bg .bg)
       shapes := shapes.push (.text "boxed" (out + 11) my "start" .fg 12 false text)
   for s in c.states do

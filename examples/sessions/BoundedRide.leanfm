@@ -1,0 +1,45 @@
+-- Illustrative declared assumptions, not measured rates.
+-- Ride with a bounded search: the Platform offers the request to at most 3 drivers (each accepts 4/5 of
+-- the time); after a third decline it tells the Rider no driver was found. The bound makes the search's
+-- history observable: each offer is its own state, so this is a finite protocol.
+-- the Rider then waits (9/10) or cancels for a 5 USD fee, and the trip is short or long.
+-- Money moves Rider -> Platform -> Driver; the Platform keeps the difference.
+protocol BoundedRide (Rider, Platform, Driver) {
+  Request from Rider to Platform;
+  rec Dispatch at most 3 {
+    o: Offer from Platform to Driver after 30 seconds;
+    choice at Driver using declared("acceptance") {
+      probability 4/5:
+        a: Accept from Driver to Platform cause o after 10 seconds;
+        Assigned from Platform to Rider cause a;
+        choice at Rider using declared("rider-waits") {
+          probability 9/10:
+            Wait from Rider to Platform;
+            Go from Platform to Driver;
+            p: Pickup from Driver to Rider after 5 minutes;
+            choice at Driver using declared("trip-length") {
+              probability 1/2:
+                Short from Driver to Rider cause p after 10 minutes;
+                Fare from Rider to Platform amount 15 USD;
+                Payout from Platform to Driver amount 12 USD;
+            } or {
+              probability 1/2:
+                Long from Driver to Rider cause p after 20 minutes;
+                Fare from Rider to Platform amount 25 USD;
+                Payout from Platform to Driver amount 20 USD;
+            }
+        } or {
+          probability 1/10:
+            Cancel from Rider to Platform amount 5 USD after 2 minutes;
+            CancelFee from Platform to Driver amount 4 USD;
+        }
+    } or {
+      probability 1/5:
+        d: Decline from Driver to Platform cause o after 10 seconds;
+        Searching from Platform to Rider cause d;
+        continue Dispatch;
+    }
+  } otherwise {
+    NoDriver from Platform to Rider;
+  }
+}

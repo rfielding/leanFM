@@ -295,4 +295,98 @@ def rideSvg := ((diagram (args rideText)).toOption.get!.getObjValAs? String "svg
 def plainText := "protocol P (A,B) { r: R from A to B; choice { S from B to A cause r; } or { T from B to A cause r; } }"
 #guard ((diagram (args plainText)).toOption.get!.getObjValAs? String "svg").toOption ==
   some (((parseProtocol (args plainText)).toOption.get!).global.diagramModel ["A", "B"] "P").svg
+
+/-! Requirement selfhost.session.rec.bounded: a bounded loop is expanded into explicit passes. -/
+def boundedText := include_str "../../examples/sessions/BoundedRide.leanfm"
+def bounded := mdp (args boundedText)
+-- no loop is left, so the tree view (with deadlines and the timed generator) handles it
+#guard ok bounded "drawn" && field bounded "view" == Json.null
+-- three offers at most: no driver with probability (1/5)³; every balance is the unbounded ride's × 124/125
+#guard ((field bounded "report").getStr?.toOption.getD "").contains "- 1/125: End, 120000 ms · no obligations"
+#guard field bounded "expectedBalances" == toJson [
+  Json.mkObj [("role", "Rider"), ("unit", "USD"), ("expected", "-2294/125")],
+  Json.mkObj [("role", "Platform"), ("unit", "USD"), ("expected", "2294/625")],
+  Json.mkObj [("role", "Driver"), ("unit", "USD"), ("expected", "9176/625")]]
+-- each pass is its own state with its own count: 1, 1/5, 1/25 offers
+def boundedChain := mdp ((args boundedText).setObjVal! "view" "chain")
+def boundedReport := (field boundedChain "report").getStr?.toOption.getD ""
+#guard ["×1", "×1/5", "×1/25"].all fun c => boundedReport.contains s!"- Offer: Platform → Driver: {c}\n"
+-- this answer is large: it says what it left out to fit the response limit
+#guard (field boundedChain "omitted") != Json.null && boundedReport.contains "To fit the response limit"
+#guard ((field boundedChain "report").getStr?.toOption.getD "").contains "End after NoDriver: probability 1/125"
+-- copies rename their ids and named choices, so causes and names stay unambiguous
+def unrolled := (Text.parse boundedText).toOption.get!.body
+#guard (Text.write [{ name := "B", roles := ["Rider", "Platform", "Driver"], body := unrolled }]).contains "o_2: Offer"
+#guard (Text.write [{ name := "B", roles := ["Rider", "Platform", "Driver"], body := unrolled }]).contains "cause o_3"
+#guard (Text.write [{ name := "B", roles := ["Rider", "Platform", "Driver"], body := unrolled }]).contains "acceptance_3"
+-- bounds are 1..32
+#guard errorHas (mdp (args (boundedText.replace "at most 3" "at most 0"))) "between 1 and 32"
+#guard errorHas (mdp (args (boundedText.replace "at most 3" "at most 33"))) "between 1 and 32"
+
+/-! Requirement selfhost.session.mdp.distribution: full distributions where they are finite. -/
+-- the bounded ride's terminals grouped by balance: by hand, 9/25 + 9/125 + 9/625 = 279/625 for each trip length
+#guard ((field bounded "report").getStr?.toOption.getD "").contains "- Rider USD: -25 (279/625), -15 (279/625), -5 (62/625), 0 (1/125); mean -2294/125"
+-- rent with repairs over 4 weeks: ten outcomes for the Landlord, summing to 1, with the expected mean
+def repairsDist := ((field repairs "distribution").getObjValD "Landlord").getObjValD "USD"
+def repairsVals : List (Rat × Rat) := (repairsDist.getArr?.toOption.getD #[]).toList.map fun j =>
+  let rd (k : String) : Rat := match ((j.getObjValAs? String k).toOption.getD "0").splitOn "/" with
+    | [n] => (n.toInt?.getD 0 : Rat)
+    | [n, d] => (n.toInt?.getD 0 : Rat) / (d.toNat?.getD 1 : Rat)
+    | _ => 0
+  (rd "value", rd "probability")
+#guard repairsVals.length == 10
+#guard repairsVals.foldl (fun acc (_, p) => acc + p) 0 == 1
+#guard repairsVals.foldl (fun acc (x, p) => acc + x * p) 0 == (742025 : Rat) / 216
+-- four quiet weeks: (3/4)³ after the first three rents
+#guard repairsVals.contains ((4000 : Rat), (27 : Rat) / 64)
+-- the passages: q0 q^(k-1)(1 - q), and all four with (11/12)³
+#guard field repairs "passagesDistribution" == toJson [
+  Json.mkObj [("passages", toJson (0 : Nat)), ("probability", "0")], Json.mkObj [("passages", toJson (1 : Nat)), ("probability", "1/12")],
+  Json.mkObj [("passages", toJson (2 : Nat)), ("probability", "11/144")], Json.mkObj [("passages", toJson (3 : Nat)), ("probability", "121/1728")],
+  Json.mkObj [("passages", toJson (4 : Nat)), ("probability", "1331/1728")]]
+-- a year: P(at least 13 rents) = (11/12)^12, read as a decimal
+#guard ((field (mdp ((args repairsText).setObjVal! "horizon" "52 weeks")) "report").getStr?.toOption.getD "").contains "P(at least 13) ≈ 0.3520"
+-- loops without a horizon: no distribution, and the tool says why
+#guard ((field limit "report").getStr?.toOption.getD "").contains "No distribution: with loops and no horizon its support is infinite"
+
+/-! Requirement selfhost.session.mdp.optimize: the best branch at each open choice, exactly. -/
+def dispatchText := include_str "../../examples/sessions/Dispatch.leanfm"
+def opt (role unit goal : String) : Except String Json :=
+  mdp ((args dispatchText).setObjVal! "optimize" (Json.mkObj [("role", role), ("unit", unit), ("goal", goal)]))
+def chosen (r : Except String Json) : String :=
+  match field r "policy" with
+  | .arr a => ((a[0]!).getObjValAs? String "chosen").toOption.getD ""
+  | _ => ""
+def branchValue (r : Except String Json) (first : String) : String :=
+  match field r "policy" with
+  | .arr a => (((a[0]!).getObjValD "branches").getArr?.toOption.getD #[]).toList.findSome? (fun b =>
+      if (b.getObjValAs? String "first").toOption == some first then (b.getObjValAs? String "value").toOption else none) |>.getD ""
+  | _ => ""
+-- by hand: the standard offer earns the Platform 25 - (3/4)·16 - (1/4)·25 = 27/4; the boost only 152/39
+#guard chosen (opt "Platform" "USD" "max") == "Offer"
+#guard field (opt "Platform" "USD" "max") "optimalValue" == "27/4"
+-- the Driver is better off with the boost: 21 · 38/39 = 266/13, against 12
+#guard chosen (opt "Driver" "USD" "max") == "Boost"
+#guard field (opt "Driver" "USD" "max") "optimalValue" == "266/13"
+-- branch values follow the policy afterwards: an offer now, boosts later, gives the Driver 3/5·16 + 1/5·266/13 = 178/13
+#guard branchValue (opt "Driver" "USD" "max") "Offer" == "178/13"
+-- the chain is solved again under the policy: the Platform's balance under the Driver's choice
+#guard ((field (opt "Driver" "USD" "max") "report").getStr?.toOption.getD "").contains "- Platform: 152/39 USD"
+-- time: the standard offer ends sooner on average
+#guard chosen (opt "Rider" "time" "min") == "Offer"
+#guard field (opt "Rider" "time" "min") "optimalValue" == "725000"
+-- without optimize, a choice without probabilities is still refused
+#guard errorHas (mdp (args dispatchText)) "pass optimize"
+-- refusals: the role, the goal, the unit, and a session without open choices
+#guard errorHas (opt "Passenger" "USD" "max") "not a role"
+#guard errorHas (opt "Platform" "USD" "best") "max or min"
+#guard errorHas (opt "Platform" "EUR" "max") "no step or rate gives Platform any EUR"
+#guard errorHas (mdp ((args rideText).setObjVal! "optimize" (Json.mkObj [("role", "Rider"), ("unit", "USD"), ("goal", "max")]))) "at least one open choice"
+-- a policy that never ends is never chosen, however much it would pay
+def forever := "protocol P (A,B) { rec L { choice { More from A to B amount 1 USD; continue L; } or { Stop from A to B; } } }"
+def foreverOpt := mdp ((args forever).setObjVal! "optimize" (Json.mkObj [("role", "B"), ("unit", "USD"), ("goal", "max")]))
+#guard chosen foreverOpt == "Stop" && field foreverOpt "excludedNonEnding" == toJson true
+-- a session where no open choice can end is refused
+def trapped := "protocol P (A,B) { Go from A to B; rec L { choice { X from A to B; continue L; } or { Y from A to B; continue L; } } }"
+#guard errorHas (mdp ((args trapped).setObjVal! "optimize" (Json.mkObj [("role", "B"), ("unit", "time"), ("goal", "min")]))) "never reach an end"
 end LeanFM.Session.ChainTests

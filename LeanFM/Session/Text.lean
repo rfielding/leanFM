@@ -49,6 +49,8 @@ inductive Stmt where
   | par (branches : List (List Stmt))
   | join (need : Nat) (branches : List (List Stmt))
   | loop (name : String) (body : List Stmt)
+  /-- `rec Name at most N { body } otherwise { stmts }`; expanded by `unroll` right after parsing -/
+  | bounded (name : String) (n : Nat) (body : List Stmt) (otherwise : List Stmt)
   | cont (name : String)
   | sessions (body : List Stmt)
   | incl (name : String) (args : List String)
@@ -385,6 +387,79 @@ partial def obligationSpec : P Generative.Obligation := do
   sym ';'; sym '}'
   return { name, actor, clock, labels := ls, withinMs, breach, penalty }
 
+/-! ## Bounded loops (selfhost.session.rec.bounded): expanded into explicit copies -/
+
+/-- The ids a body declares (message ids), in any branch. -/
+partial def declaredIds : List Stmt → List String
+  | [] => []
+  | s :: rest => (match s with
+    | .msg (some x) .. => [x]
+    | .timed _ m | .valued _ m => declaredIds [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap declaredIds
+    | .loop _ b | .sessions b => declaredIds b
+    | .bounded _ _ b o => declaredIds b ++ declaredIds o
+    | _ => []) ++ declaredIds rest
+
+/-- Rename the ids in `ids` (and causes and time references to them) with suffix `sfx`. -/
+partial def renameIds (ids : List String) (sfx : String) : List Stmt → List Stmt
+  | [] => []
+  | s :: rest => go s :: renameIds ids sfx rest
+where
+  r (x : String) : String := if ids.contains x then x ++ sfx else x
+  rt (t : Generative.TimeExpr) : Generative.TimeExpr := { t with refs := t.refs.map r }
+  go : Stmt → Stmt
+    | .msg id l a b cause route status guard => .msg (id.map r) l a b (cause.map r) route status guard
+    | .timed t m => .timed (rt t) (go m)
+    | .valued a m => .valued a (go m)
+    | .clock name refs => .clock name (refs.map r)
+    -- named choices stay unique too: copy k's choice is name_k
+    | .weighted n a qs bs => .weighted (n ++ sfx) a qs (bs.map (renameIds ids sfx))
+    | .choice bs => .choice (bs.map (renameIds ids sfx))
+    | .par bs => .par (bs.map (renameIds ids sfx))
+    | .join k bs => .join k (bs.map (renameIds ids sfx))
+    | .loop n b => .loop n (renameIds ids sfx b)
+    | .sessions b => .sessions (renameIds ids sfx b)
+    | .bounded n k b o => .bounded n k (renameIds ids sfx b) (renameIds ids sfx o)
+    | other => other
+
+/-- Replace each `continue name` in `ss` (in any nested branch, but not inside a loop of the same
+name) by the statements `next`. -/
+partial def splice (name : String) (next : List Stmt) : List Stmt → List Stmt
+  | [] => []
+  | .cont n :: rest => if n == name then next ++ splice name next rest else .cont n :: splice name next rest
+  | s :: rest => (match s with
+    | .weighted n a qs bs => .weighted n a qs (bs.map (splice name next))
+    | .choice bs => .choice (bs.map (splice name next))
+    | .par bs => .par (bs.map (splice name next))
+    | .join k bs => .join k (bs.map (splice name next))
+    | .loop n b => if n == name then s else .loop n (splice name next b)
+    | .sessions b => .sessions (splice name next b)
+    | other => other) :: splice name next rest
+
+/-- Expand every bounded loop into explicit copies: copy k continues into copy k+1, and copy N
+continues into the otherwise block. -/
+partial def unroll : List Stmt → List Stmt
+  | [] => []
+  | .bounded name n body other :: rest =>
+    let ids := declaredIds body
+    let body := unroll body
+    let other := unroll other
+    let rec copy (k : Nat) (fuel : Nat) : List Stmt :=
+      let mine := if k == 1 then body else renameIds ids s!"_{k}" body
+      match fuel with
+      | 0 => splice name other mine
+      | f + 1 => splice name (if k ≥ n then other else copy (k + 1) f) mine
+    copy 1 n ++ unroll rest
+  | s :: rest => (match s with
+    | .weighted n a qs bs => .weighted n a qs (bs.map unroll)
+    | .choice bs => .choice (bs.map unroll)
+    | .par bs => .par (bs.map unroll)
+    | .join k bs => .join k (bs.map unroll)
+    | .loop n b => .loop n (unroll b)
+    | .sessions b => .sessions (unroll b)
+    | .timed t m => .timed t m
+    | other => other) :: unroll rest
+
 /-- `N UNIT per PERIOD`: `per week` is per one week, `per 2 weeks` a duration. -/
 def rateEntry : P (Nat × String × Nat) := do
   let (quantity, unit) ← quantity
@@ -503,6 +578,13 @@ partial def stmt : P Stmt := do
     let s1 ← get
     if let some n ← ident? then
       if (← nextChar) == some '{' then return .loop n (← block)
+      if ← keyword? "at" then
+        if !(← keyword? "most") then fail "expected rec Name at most N { ... }"
+        let bound ← number
+        if bound < 1 || bound > 32 then fail "a bounded loop runs between 1 and 32 times"
+        let body ← block
+        let other ← if ← keyword? "otherwise" then block else pure []
+        return .bounded n bound body other
     set s1
   if w == "continue" then
     let s1 ← get
@@ -577,7 +659,7 @@ partial def file : P (List Def) := do
     if rs.isEmpty then failAt start "a protocol needs at least one role"
     if rs.length > limits.maxRoles then failAt start s!"a protocol has at most {limits.maxRoles} roles"
     if rs.eraseDups.length != rs.length then failAt start "role names must be distinct"
-    go (acc.push { name, roles := rs, body := ← block })
+    go (acc.push { name, roles := rs, body := unroll (← block) })
   let defs ← go #[]
   if defs.isEmpty then fail "no protocol in the text"
   return defs
@@ -617,6 +699,8 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
     | .clock _ _ | .obligation _ => next ()
     | .timed _ message => build c (message :: rest) i
     | .valued _ message => build c (message :: rest) i
+    -- expanded by unroll at parse time; a body built directly is expanded here too
+    | .bounded .. => build c (unroll [s] ++ rest) i
     | .accrue as =>
       for a in as do
         discard <| role here a.payer; discard <| role here a.payee
@@ -764,6 +848,8 @@ partial def writeAnnotated (ind : String) (t : Option Generative.TimeExpr) (as :
   | _ => []
 
 partial def writeStmt (ind : String) : Stmt → List String
+  | .bounded name n body other => [ind ++ s!"rec {showIdent name} at most {n} \u007b"] ++ writeStmts (ind ++ "  ") body ++
+      [ind ++ "} otherwise {"] ++ writeStmts (ind ++ "  ") other ++ [ind ++ "}"]
   | .clock name refs => [ind ++ "clock " ++ showIdent name ++ " = " ++
       (if refs.length == 1 then "time(" ++ showIdent refs.head! ++ ")" else
        "max(" ++ ", ".intercalate (refs.map (fun r => "time(" ++ showIdent r ++ ")")) ++ ")") ++ ";"]

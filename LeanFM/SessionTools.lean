@@ -570,10 +570,53 @@ partial def hasLoop : List Text.Stmt → Bool
     | .sessions b => hasLoop b
     | _ => false) || hasLoop rest
 
+/-- A distribution's report lines and JSON: per role and unit, its values with probabilities (all of
+them when there are few; otherwise its range and most likely value). -/
+def distributionReport (ms : List (String × String × List (Rat × Rat))) : List String :=
+  ms.map fun (r, u, vals) =>
+    let mean := vals.foldl (fun acc (x, p) => acc + x * p) 0
+    if vals.length ≤ 12 then
+      s!"- {r} {u}: " ++ ", ".intercalate (vals.map fun (x, p) => s!"{Chain.readable x} ({Chain.readable p true})") ++ s!"; mean {Chain.readable mean}"
+    else
+      let best := vals.foldl (fun b (x, p) => if p > b.2 then (x, p) else b) (0, 0)
+      s!"- {r} {u}: {vals.length} values from {Chain.readable ((vals.head?).map (·.1) |>.getD 0)} to " ++
+        s!"{Chain.readable ((vals.getLast?).map (·.1) |>.getD 0)}; most likely {Chain.readable best.1} ({Chain.readable best.2 true}); mean {Chain.readable mean}"
+
+def distributionJson (ms : List (String × String × List (Rat × Rat))) : Json :=
+  let roles := (ms.map (·.1)).eraseDups
+  Json.mkObj (roles.map fun r => (r, Json.mkObj ((ms.filter (·.1 == r)).map fun (_, u, vals) =>
+    (u, toJson (vals.map fun (x, p) => Json.mkObj [("value", Chain.ratText x), ("probability", Chain.ratText p)])))))
+
+/-- An MDP answer within the response limit: when it is too large, drop the redundant parts in order
+(the drawing's shapes, which repeat its SVG; then the per-state, per-edge and per-node detail, which
+the text report summarizes) and say which were dropped; refuse only if it still does not fit. -/
+def fitMdp (result0 : Json) : Except String Json := do
+  -- "= ≈ 0.35" reads as "≈ 0.35", and "×≈ 8.89" as "≈ ×8.89"
+  let tidy (t : String) : String := (t.replace " = ≈" " ≈").replace "×≈ " "≈ ×"
+  let result := match result0.getObjValAs? String "report" with
+    | .ok t => result0.setObjVal! "report" (Json.str (tidy t))
+    | .error _ => result0
+  if result.compress.length ≤ limits.maxResult then return result
+  let mut r := result
+  let mut dropped : List String := []
+  for (keys, what) in [(["diagram"], "the drawing's shapes (its svg is kept)"),
+                       (["states", "edges", "nodes", "terminals"], "the per-state, per-edge and per-node detail (the report keeps the numbers)"),
+                       (["distributionSvg"], "the histogram drawing"),
+                       (["distribution"], "the full distribution data (the report summarizes it)")] do
+    if r.compress.length > limits.maxResult then
+      for k in keys do
+        if (r.getObjVal? k).isOk then r := r.setObjVal! k Json.null
+      dropped := dropped ++ [what]
+  if r.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
+  let note := "To fit the response limit, this answer leaves out " ++ " and ".intercalate dropped ++ "."
+  let report := (r.getObjValAs? String "report").toOption.getD ""
+  return (r.setObjVal! "omitted" (toJson dropped)).setObjVal! "report" (Json.str (report ++ "\n" ++ note))
+
 /-- session_mdp for a session with loops, or when view is chain: expected visits, traversals and
 amounts from the absorbing chain (selfhost.session.mdp.loops). -/
-def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except String Json := do
-  let c ← Chain.analyse layer
+def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved)
+    (solved : Option Chain.Chain := none) (extra : List (String × Json) := []) (lead : List String := []) : Except String Json := do
+  let c ← match solved with | some c => pure c | none => Chain.analyse layer
   let model ← Chain.drawing c p.roles
   let exp := Chain.expected c p.roles
   let stateLine (s : Chain.State) : String :=
@@ -588,13 +631,14 @@ def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except
           (if dur == 0 then "" else s!", expected duration {Chain.daysText dur}")
       | none => " (never happens, so nothing is expected given it)"
   let duration := Chain.expectedDuration c
-  let report := "\n".intercalate (["Outcomes (how the session ends):"] ++ outcomeLines ++
+  let report := "\n".intercalate (lead ++ ["Outcomes (how the session ends):"] ++ outcomeLines ++
     ["Expected visits per state:"] ++ c.states.toList.map stateLine ++
     ["Expected traversals per message edge:"] ++ edgeLines ++
     [s!"Expected messages: {Chain.ratText (Chain.expectedMessages c)}"] ++
     (if duration == 0 then [] else [s!"Expected duration: {Chain.daysText duration}"]) ++
     (if exp.isEmpty then [] else ["Expected net balance per role:"] ++ exp.map fun (r,u,v) => s!"- {r}: {Chain.ratText v} {u}") ++
-    Chain.legend c p.roles ++ c.notes)
+    Chain.legend c p.roles ++ c.notes ++
+    (if hasLoop layer.body then ["No distribution: with loops and no horizon its support is infinite; bound the loop (rec Name at most N) or pass a horizon behind a gate."] else []))
   let provenance := Decision.output
   let result := Json.mkObj [("report", report),
     ("tool", "session_mdp"), ("verdict", "drawn"), ("view", "chain"), ("name", p.name), ("lean", p.lean),
@@ -619,8 +663,43 @@ def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except
       ("eventSource", provenance.eventSource), ("reducer", "Build the state graph; solve v = start + vQ over transient states with exact rationals; traversals = visits × probability; balances = Σ traversals × mean amount"),
       ("unit", "expected counts and amounts as exact rationals, per complete session"),
       ("boundary", "One session from start until it ends, which happens with probability 1 (otherwise the tool refuses); delays are after the previous step (after d); absolute times and deadlines are not used")])]
-  if result.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
-  return result
+  fitMdp (extra.foldl (fun r (k, v) => r.setObjVal! k v) result)
+
+/-- session_mdp with optimize: the best branch at every open choice for one role's objective,
+by exact policy iteration (selfhost.session.mdp.optimize). -/
+def mdpOptimize (args : Json) (p : Protocol) (layer : Generative.Resolved) (o : Json) : Except String Json := do
+  let role ← (o.getObjValAs? String "role").mapError fun _ => "optimize needs role, unit and goal (max or min)"
+  let unit ← (o.getObjValAs? String "unit").mapError fun _ => "optimize needs role, unit and goal (max or min)"
+  let goal := (o.getObjValAs? String "goal").toOption.getD "max"
+  if !["max", "min"].contains goal then throw "optimize goal must be max or min"
+  if !p.roles.contains role then throw s!"optimize role {role} is not a role of the protocol"
+  let c0 ← Chain.analyse layer (allowOpen := true)
+  let opens := c0.states.toList.filter (·.kind == "open")
+  if opens.isEmpty then throw "optimize needs at least one open choice (a choice without probabilities)"
+  if unit != "time" && !(c0.edges.any fun e => (Chain.rewards c0 e).any fun (r, u, _) => r == role && u == unit) then
+    throw s!"no step or rate gives {role} any {unit}; use one of the session's units, or time"
+  let objective : Chain.Objective := { role, unit, maximize := goal == "max" }
+  let best ← Chain.optimize c0 objective
+  let c := best.chain
+  let shown (x : Rat) : String := if unit == "time" then Chain.daysText x else s!"{Chain.ratText x} {unit}"
+  let firstOf (i : Nat) : String := c.edges[i]!.step
+  let choiceJson := best.choices.map fun (s, chosen, branches) => Json.mkObj
+    [("state", toJson s), ("decider", c.states[s]!.label.replace " chooses (open)" ""),
+     ("chosen", firstOf chosen),
+     ("branches", toJson (branches.map fun (i, v) => Json.mkObj [("first", firstOf i), ("value", Chain.ratText v), ("valueText", shown v)]))]
+  let lead := [s!"Optimal policy for {role}, {goal}imizing expected {unit} (exact policy iteration, {best.rounds} rounds):"] ++
+    best.choices.map (fun (s, chosen, branches) =>
+      s!"- at S{s}, {c.states[s]!.label.replace " chooses (open)" ""} picks {firstOf chosen}. From this choice on, following the policy afterwards: " ++
+      ", ".intercalate (branches.map fun (i, v) => s!"{firstOf i} gives {shown v}")) ++
+    [s!"Optimal value from the start: {shown best.value}"] ++
+    (if best.excluded then ["A policy that never ends would have scored better and was excluded: only policies that end with probability 1 count."] else []) ++
+    ["The other roles' numbers below are what they get under this policy, not their own optimum."]
+  mdpChain args p layer (solved := some c) (lead := lead) (extra := [
+    ("view", "optimize"),
+    ("objective", Json.mkObj [("role", role), ("unit", unit), ("goal", goal)]),
+    ("policy", toJson choiceJson), ("optimalValue", Chain.ratText best.value),
+    ("rounds", toJson best.rounds), ("excludedNonEnding", toJson best.excluded),
+    ("reading", "An MDP: open choices are actions, weighted choices are the environment. Policy iteration starts from a policy under which every state ends, evaluates it exactly (V = R + QV over exact rationals) and switches an open choice only to a strictly better branch that still ends; it stops when no switch helps. The chain is then solved again with the chosen branches at probability 1.")])
 
 /-- A step of a hand-written walk, or an event of a stream with its session and time. -/
 def walkStep (j : Json) : Except String (Chain.Step × Option String × Option Nat) := do
@@ -715,21 +794,39 @@ def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text 
   let exp := Chain.expected c p.roles
   let duration := Chain.expectedDuration c
   let edgeLines := (c.edges.toList.filter fun e => e.kind == "message" || e.kind == "event").map fun e =>
-    s!"- {e.label}: ×{Chain.ratText (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" · {e.amountText}")
+    s!"- {e.label}: ×{Chain.readable (Chain.traversals c e)}" ++ (if e.amountText.isEmpty then "" else s!" · {e.amountText}")
   let remainder := horizonMs - h.periods * h.periodMs
+  -- the exact distribution over the periods, when it is small enough to enumerate
+  let distResult := Chain.horizonDistribution c0 h
+  let dist := match distResult with
+    | .ok d => (Chain.marginals d.outcomes p.roles).filter fun (_, _, vals) => vals.any (·.1 != 0)
+    | .error _ => []
+  let passages := match distResult with | .ok d => d.passages | .error _ => []
+  let distLines := match distResult with
+    | .ok _ =>
+      let N := h.periods
+      let atLeast (k : Nat) : Rat := passages.foldl (fun acc (j, q) => if j ≥ k then acc + q else acc) 0
+      let marks := ([N / 4, N / 2, (3 * N) / 4, N].filter (· ≥ 1)).eraseDups
+      ["Distribution (value (probability)):"] ++ distributionReport dist ++
+        ["- gate passages: " ++ ", ".intercalate (marks.map fun k => s!"P(at least {k}) = {Chain.readable (atLeast k) true}") ++
+         s!", P(none) = {Chain.readable ((passages.head?).map (·.2) |>.getD 0) true}"]
+    | .error e => [s!"No distribution: {e}"]
   let report := "\n".intercalate ([s!"Over {h.periods} whole periods of {Chain.periodText h.periodMs}:",
-      s!"- gate passages: {Chain.ratText h.passages}", s!"- still running at the horizon: probability {Chain.ratText h.stillRunning}",
+      s!"- gate passages: {Chain.readable h.passages}", s!"- still running at the horizon: probability {Chain.readable h.stillRunning true}",
       s!"- expected time: {Chain.daysText duration}"] ++
     (if remainder == 0 then [] else [s!"- the last {Chain.daysText (remainder : Nat)} (a partial period) is not counted"]) ++
     ["Expected traversals per step:"] ++ edgeLines ++
-    (if exp.isEmpty then [] else ["Expected totals per role:"] ++ exp.map fun (r,u,v) => s!"- {r}: {Chain.ratText v} {u}") ++
-    Chain.legend c p.roles)
+    (if exp.isEmpty then [] else ["Expected totals per role:"] ++ exp.map fun (r,u,v) => s!"- {r}: {Chain.readable v} {u}") ++
+    Chain.legend c p.roles ++ distLines)
   let provenance := Decision.output
   let result := Json.mkObj [("report", report),
     ("tool", "session_mdp"), ("verdict", "drawn"), ("view", "horizon"), ("name", p.name), ("lean", p.lean),
     ("reading", "Whole periods behind a periodic gate: the start's segment and the cycle between gates are solved as absorbing chains; the gate passes q0(1 + q + ... + q^(N-1)) times; the wait at the gate fills each period; rewards are traversals times trade vectors plus rates in force times time. The graph does not depend on the horizon; only the number of periods does."),
     ("periods", h.periods), ("periodMs", h.periodMs), ("horizonMs", horizonMs), ("uncountedMs", remainder),
     ("gatePassages", Chain.ratText h.passages), ("stillRunning", Chain.ratText h.stillRunning),
+    ("distribution", distributionJson dist),
+    ("passagesDistribution", toJson (passages.map fun (k, q) => Json.mkObj [("passages", toJson k), ("probability", Chain.ratText q)])),
+    ("distributionSvg", if dist.isEmpty then Json.null else Json.str ((Chain.histogram s!"{p.name} over {h.periods} periods: distribution per role and unit" dist).svg (themeOf args))),
     ("expectedDurationMs", Chain.ratText duration), ("expectedMessages", Chain.ratText (Chain.expectedMessages c)),
     ("states", toJson (c.states.map (Chain.stateJson c))), ("edges", toJson (c.edges.map (Chain.edgeJson c))),
     ("expectedBalances", toJson (exp.map fun (r,u,v) => Json.mkObj [("role", r), ("unit", u), ("expected", Chain.ratText v)])),
@@ -741,8 +838,7 @@ def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text 
       ("reducer", "Solve the start's segment and the cycle between gates as absorbing chains; combine with exact geometric sums over the periods; the gate's wait fills each period"),
       ("unit", "expected counts, milliseconds and amounts per role and unit, exact, over the horizon"),
       ("boundary", s!"{h.periods} whole periods of {h.periodMs} ms from the session's start; a partial period after them is not counted")])]
-  if result.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
-  return result
+  fitMdp result
 
 /-- Native decision view under the resolved policy (selfhost.session.mdp, .mdp.loops). -/
 def mdp (args : Json) : Except String Json := do
@@ -755,6 +851,8 @@ def mdp (args : Json) : Except String Json := do
   let view := (args.getObjValAs? String "view").toOption.getD "auto"
   if !["auto", "tree", "chain"].contains view then throw "view must be tree, chain or auto"
   if (args.getObjVal? "events").isOk || (args.getObjVal? "walk").isOk then return ← mdpWalk args p layer
+  if let .ok o := args.getObjVal? "optimize" then
+    if o != Json.null then return ← mdpOptimize args p layer o
   if let .ok (.str text) := args.getObjVal? "horizon" then return ← mdpHorizon args p layer text
   if view == "chain" || (view == "auto" && hasLoop layer.body) then return ← mdpChain args p layer
   let nodes ← Decision.build layer p.roles
@@ -768,10 +866,18 @@ def mdp (args : Json) : Except String Json := do
     s!"- {n.mass.text}: {n.label}, {n.detail}" ++ (if money.isEmpty then "" else s!" · {money}")
   let expectedLines := (Decision.expected nodes).map fun (r,u,v) => s!"- {r}: {v} {u}"
   let penaltyLines := (Decision.expectedPenalties nodes).map fun (r,u,v) => s!"- {r} pays {v} {u} in penalties"
+  -- the distribution: the terminals grouped by each role and unit's balance
+  let outcomes : List (Chain.Vec × Rat) := terminals.toList.map fun n =>
+    (n.balances.map fun (r, u, v) => (r, u, (v : Rat)), Chain.qRat n.mass)
+  let dist := (Chain.marginals outcomes p.roles).filter fun (_, _, vals) => vals.any (·.1 != 0)
+  let distModel := Chain.histogram s!"{p.name}: distribution per role and unit" dist
   let report := "\n".intercalate (["Terminals (probability: outcome):"] ++ terminals.toList.map terminalLine ++
     [s!"P(any violation) = {(Decision.violationMass nodes).text}"] ++
-    (if expectedLines.isEmpty then [] else ["Expected net balance per role:"] ++ expectedLines) ++ penaltyLines)
+    (if expectedLines.isEmpty then [] else ["Expected net balance per role:"] ++ expectedLines) ++ penaltyLines ++
+    (if dist.isEmpty then [] else ["Distribution (value (probability)):"] ++ distributionReport dist))
   let result := Json.mkObj [("report", report),
+    ("distribution", distributionJson dist),
+    ("distributionSvg", if dist.isEmpty then Json.null else Json.str (distModel.svg (themeOf args))),
     ("tool", "session_mdp"), ("verdict", "drawn"), ("name", p.name), ("lean", p.lean),
     ("overlay", args.getObjValD "overlay"), ("generative", layer.metadata),
     ("reading", "Finite decision tree under the supplied policy. Policy edges select actions; transition edges describe outcomes. Terminal probabilities sum exactly to 1. This is not policy optimization."),
@@ -787,8 +893,7 @@ def mdp (args : Json) : Except String Json := do
     ("provenance", Json.mkObj [("prompt", provenance.prompt), ("question", provenance.question),
       ("eventSource", provenance.eventSource), ("reducer", provenance.reducer), ("unit", provenance.unit),
       ("boundary", "One complete finite sequential session, including zero-mass paths; obligations observed until each terminal time")])]
-  if result.compress.length > limits.maxResult then throw "MDP output exceeds response limit; simplify the session"
-  return result
+  fitMdp result
 
 def natArg (args : Json) (key : String) (dflt maxV : Nat) : Except String Nat :=
   match args.getObjVal? key with
