@@ -12,7 +12,7 @@
     "spec/Requirements.lean": "d55342543774ef9df6ff95df0ea5289c030ed18016a18aa029e3fc660fb4c04c",
     "spec/Requirements.proto": "20cd146200fa5f3243f7958eee0e83ba0b67a8aa00a175ea3dd0d969528df1d9",
     "book/main.tex": "2457f019f6ce660a083a4031e8595c89e2a1bbe8e0900089d7d18daf75317047",
-    "spec/Implementation.lean": "8f05702c4b6e7cba352eae9529fe3ea3cf86548a144340f6213b145759a3ea9b"
+    "spec/Implementation.lean": "5ad38ff65ec683cd77a51f0944bfdf6bd556e6b6c73668c0c2058ef0634463f1"
   },
   "task_count": 28,
   "acceptance": "unchanged"
