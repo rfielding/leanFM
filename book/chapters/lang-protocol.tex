@@ -165,16 +165,18 @@ in LeanFM's own small language of comparisons, arithmetic and \texttt{and},
 Because the file is Lean, a protocol, role, label or message id may not be a
 Lean keyword, and a protocol may not share its name with one of its labels.
 
-The tools read the same text with their own parser, which skips the
-\texttt{import} line: nothing a client sends is elaborated or run in the server.
-That parser types the \texttt{where} conditions itself and runs them with LeanFM's
-interpreter, so text from any client cannot execute code. The two readings are
-held to agree. For every session-type file in the repository, and for the text
-the tools write back, the test suite elaborates the file and compares the
-protocol it defines with the parsed one: the same roles, diagram, issues and
-local types. A bounded loop unrolls into the same copies under the same
-renamed ids. Anyone who wants more isolation than that can run LeanFM itself in
-a container or a virtual machine.
+There is one grammar, written with Lean's own parser, and no second parser. A
+Lean file is parsed with it, and the tools parse the text a client sends with the
+same parsers, by Lean's token rules, without elaborating anything: nothing a client
+sends is compiled or run in the server. One reading then turns the parsed text
+into statements, with the same checks and limits, whichever way the text arrived.
+The tools type the \texttt{where} conditions themselves and run them with
+LeanFM's interpreter, so text from any client cannot execute code, and nesting
+deep enough to exhaust the parser is refused before parsing starts. The test
+suite elaborates every session-type file in the repository, and the text the tools
+write back, and compares the protocol each defines with the one the tools read:
+the same roles, diagram, issues and local types. Anyone who wants more isolation
+than that can run LeanFM itself in a container or a virtual machine.
 
 \section{Only what crosses a boundary}
 

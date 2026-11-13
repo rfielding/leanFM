@@ -267,10 +267,10 @@ def leanRejects (t : String) (needle : String) : Bool :=
   let r := check (leanArgs t)
   verdict r == "rejected" && (reason r).contains needle
 #guard leanRejects "protocol P (A, B) {\n  X from A to C;\n}" "C is not one of the roles"
-#guard leanRejects "protocol P (A, B) {\n  X from A to B\n}" "line 3, column 1: expected ';' at the end of the message"
-#guard leanRejects "protocol P (A, B) {\n  X from A to B;\n" "line 1, column 19: a '{' is never closed"
-#guard leanRejects "/- never closed\nprotocol P (A) { }" "line 1, column 1: this comment is never closed"
-#guard leanRejects "protocol P (A, B) { X from A to B route \"open; }" "this string is never closed"
+#guard leanRejects "protocol P (A, B) {\n  X from A to B\n}" "line 3, column 1: expected ';'"
+#guard leanRejects "protocol P (A, B) {\n  X from A to B;\n" "line 3, column 1: unexpected end of input; expected '}'"
+#guard leanRejects "/- never closed\nprotocol P (A) { }" "unterminated comment"
+#guard leanRejects "protocol P (A, B) { X from A to B route \"open; }" "unterminated string literal"
 #guard leanRejects "protocol P (A, B) { rec L { X from A to B; } continue L; }" "continue L is not inside rec L"
 #guard leanRejects "protocol P (A, B) { rec L { continue L; X from A to B; } }" "must be the last statement"
 #guard leanRejects "protocol P (A, B) { include Q A B; }" "no protocol Q is defined before this one"
@@ -278,8 +278,8 @@ def leanRejects (t : String) (needle : String) : Bool :=
 #guard leanRejects "protocol P (A, A) { }" "role names must be distinct"
 #guard leanRejects "protocol P (A, B) { join 3 of { X from A to B; } and { Y from B to A; } }" "out of range"
 -- text is never elaborated: Lean commands are not protocol syntax, so they are an error, not run
-#guard leanRejects "#eval IO.Process.exit 1\nprotocol P (A) { X at A; }" "line 1, column 1: expected 'protocol'"
-#guard leanRejects "protocol P (A, B) { X from A to B where (IO.Process.exit 1; }" "never ends with ';'"
+#guard leanRejects "#eval IO.Process.exit 1\nprotocol P (A) { X at A; }" "line 1, column 1: expected structure, protocol or require"
+#guard leanRejects "protocol P (A, B) { X from A to B where (IO.Process.exit 1; }" "expected a where condition ending with ';'"
 -- a where condition is text, shown as written
 #guard ((field (diagram (leanArgs "structure X where n : Nat\nprotocol P (A, B) { p: X from A to B where p.n <  3   && true; }")) "svg").getStr?.toOption.getD "").contains "[p.n &lt; 3 &amp;&amp; true]"
 -- names with spaces, comments everywhere
@@ -632,7 +632,7 @@ def tsClass (t c : String) : String := (((tsCode t).splitOn s!"export class {c} 
 -- in a «name» cannot end a string or start a statement
 def hostile : String := "protocol I («a\"b», «x)\\nimport os») {\n  «Go\"\"\"!» from «a\"b» to «x)\\nimport os»;\n}"
 -- a real line break inside «» never reaches the generator: the parser refuses it
-#guard reason (skel "protocol I («x)\nimport os», B) { }") == "line 1, column 13: «name» is never closed"
+#guard (reason (skel "protocol I («x)\nimport os», B) { }")).contains "a role contains a line break or another control character"
 #guard verdict (skel hostile) == "generated"
 #guard !((code hostile).splitOn "\n").any (·.startsWith "import os")
 #guard !((code hostile).splitOn "\n").any fun l => (l.dropWhile (· == ' ')).startsWith "import os"

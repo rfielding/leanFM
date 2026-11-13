@@ -173,7 +173,7 @@ of type `Pay` -/
 protocol Bad1 (A, B) { p: Pay from A to B where p.total = 1; }
 
 -- an id no earlier message has
-/-- error: Unknown identifier `z.amount` -/
+/-- error: where z.amount = 1: z is not the id of this message or an earlier one -/
 #guard_msgs (error) in
 protocol Bad2 (A, B) { p: Pay from A to B where z.amount = 1; }
 
@@ -183,24 +183,26 @@ protocol Bad2 (A, B) { p: Pay from A to B where z.amount = 1; }
 protocol Quote (A, B) { Quote from A to B; }
 
 -- a repeated role would silently shadow the first
-/-- error: role names must be distinct; A is given twice -/
+/-- error: role names must be distinct -/
 #guard_msgs (error) in
 protocol Bad3 (A, A) { Pay from A to A; }
 
--- Lean code is not a condition: the condition language has no function application, so a statement
--- holding one does not parse
-run_cmd do
-  for stmt in ["p: Pay from A to B where p.amount = (IO.println \"x\");", "p: Pay from A to B where f p.amount;",
-               "p: Pay from A to B where p.amount = 1 := by decide;"] do
-    if (Parser.runParserCategory (← getEnv) `sess_stmt stmt) matches .ok _ then
-      throwError "parsed as a statement: {stmt}"
+-- Lean code is not a condition: the condition language has no function application or tactics, so
+-- such a condition is an error, and nothing in it is elaborated
+/-- error: where f p.amount: unexpected text after the condition -/
+#guard_msgs (error) in
+protocol Bad4 (A, B) { p: Pay from A to B where f p.amount; }
+
+/-- error: where p.amount = 1 := by decide: unexpected character : -/
+#guard_msgs (error) in
+protocol Bad5 (A, B) { p: Pay from A to B where p.amount = 1 := by decide; }
 end Refused
 
 -- the text reading refuses the same name clash, and reads past the Lean header
 #guard (Text.parse "protocol Quote (A, B) { Quote from A to B; }") matches .error _
 -- and names that are Lean keywords, which Lean could not read
 #guard (match Text.parse "protocol P (A, B) { protected: Pay from A to B; }" with
-  | .error e => (e.splitOn "the message id protected is a Lean keyword").length > 1 | .ok _ => false)
+  | .error e => (e.splitOn "expected").length > 1 | .ok _ => false)
 #guard (Text.parse "protocol P (A, B) { Pay from A to B; }") matches .ok _
 def headed := "import LeanFM.Session.Syntax\n/-- d -/\nstructure Pay where amount : Nat\nprotocol P (A, B) { Pay from A to B; }"
 #guard ((Text.parse headed).toOption.map fun p => p.types.map (·.doc)) == some ["d"]

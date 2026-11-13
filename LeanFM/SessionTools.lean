@@ -875,7 +875,7 @@ def mdpWalk (args : Json) (p : Protocol) (layer : Generative.Resolved) : Except 
 
 /-- session_mdp with horizon: whole periods behind a periodic gate (selfhost.session.mdp.horizon). -/
 def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text : String) : Except String Json := do
-  let horizonMs ← (Generative.parseValue Text.duration text).mapError (s!"horizon: " ++ ·)
+  let horizonMs ← (Text.durationText text).mapError (s!"horizon: " ++ ·)
   let c0 ← Chain.analyse layer (solveAll := false)
   let h ← Chain.horizon c0 horizonMs
   let c := h.chain
@@ -1588,8 +1588,8 @@ def reference : String := "# LeanFM session types
 
 Design interactions between roles as a session type in LeanFM's protocol syntax, then let LeanFM
 check it, draw it and run it. Every diagram, call list and event stream is generated from the text.
-Send the text as the `lean` argument of the tools. It is read by a parser for this grammar only:
-nothing in it is elaborated or run as code. A `where` condition is run by conformance with
+Send the text as the `lean` argument of the tools. It is parsed with the same Lean parser that
+reads it in a Lean file, and nothing in it is elaborated or run as code. A `where` condition is run by conformance with
 LeanFM's own interpreter over the fields each event logs (see Conditions, below).
 
 The same text is a Lean file. Saved with `import LeanFM.Session.Syntax` as its first line (the

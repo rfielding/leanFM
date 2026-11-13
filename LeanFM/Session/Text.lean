@@ -1,13 +1,15 @@
 import LeanFM.Session.Global
 import LeanFM.Session.GenerativeTypes
 import LeanFM.Session.Types
+import LeanFM.Session.Grammar
 
 /-!
-# Protocol text: LeanFM's `protocol` syntax, read without elaborating it (clause selfhost.mcp.session.tools)
+# Protocol text, read with the grammar (clauses selfhost.mcp.session.tools, selfhost.session.lean-syntax)
 
-The `protocol` command is a Lean macro, so the only way to read it inside Lean would be to elaborate
-Lean, which can run code. This module reads exactly the protocol grammar and nothing else, and
-builds the same `Global String` the command builds:
+A session type is a Lean file (`Session.Syntax`). The tools read the same text with the same grammar
+(`Session.Grammar`): Lean's parser and token rules run over it, and nothing is elaborated, so text
+from any client cannot run code. This module turns the syntax tree into statements, checking every
+limit and value, and builds the `Global String` the `protocol` command builds:
 
 ```
 /-- A purchase. -/
@@ -23,16 +25,15 @@ protocol Purchase (Client, Shop, Bank) {
 ```
 
 Several protocols may be written; the last is the one checked, and `include P A B;` applies an
-earlier one with its roles renamed in order. Labels and roles are identifiers (`«with spaces»` is
-allowed). Message types are declared first, as Lean structures
+earlier one with its roles renamed in order. Message types are declared first, as Lean structures
 (`structure Pay where amount : Nat`; see `Session.Types`). A `where` condition is typed against
 them when the text is read and run by conformance with LeanFM's interpreter (`Session.Where`) over
-logged fields, never compiled or executed. `--` and `/- -/` comments and doc
-comments are skipped. Errors give the line and column.
+logged fields, never compiled or executed. Errors give the line and column.
 
 Negative requirements: no text is elaborated or run; a statement after `continue`, an unknown role,
 an undefined or recursive include, a repeated protocol name, unbalanced braces, an unterminated
-string or comment, and anything over the limits are errors, not guesses.
+string or comment, nesting deeper than the grammar allows, and anything over the limits are errors,
+not guesses.
 -/
 
 namespace LeanFM.Session.Text
@@ -75,327 +76,6 @@ structure Limits where
   maxBranches : Nat := 16
 
 def limits : Limits := {}
-
-/-! ## Reading -/
-
-structure St where
-  pos : Nat := 0
-  depth : Nat := 0
-  /-- `require per q { ... }` clauses after the protocols (selfhost.session.sla) -/
-  requires : Array Generative.Requirement := #[]
-  /-- `structure Name where field : Type` declarations: the message types (selfhost.session.types) -/
-  types : Array Types.Message := #[]
-  /-- `sessions by x.field`: session keys as (message id, field path) (selfhost.session.envelope) -/
-  keys : Array (String × String) := #[]
-
-abbrev P := ReaderT (Array Char) (StateT St (Except String))
-
-def lineCol (src : Array Char) (pos : Nat) : Nat × Nat := Id.run do
-  let mut line := 1
-  let mut col := 1
-  for i in [0:min pos src.size] do
-    if src[i]! == '\n' then line := line + 1; col := 1 else col := col + 1
-  return (line, col)
-
-def failAt (pos : Nat) (msg : String) : P α := do
-  let (l, c) := lineCol (← read) pos
-  throw s!"line {l}, column {c}: {msg}"
-
-def fail (msg : String) : P α := do failAt (← get).pos msg
-
-def peekAt (k : Nat) : P (Option Char) := do return (← read)[(← get).pos + k]?
-def peek : P (Option Char) := peekAt 0
-def bump (n : Nat := 1) : P Unit := modify fun s => { s with pos := s.pos + n }
-
-/-- Skip whitespace, `--` line comments and nested `/- -/` block comments (doc comments too). -/
-partial def skip : P Unit := do
-  match ← peek with
-  | some c =>
-    if c.isWhitespace then bump; skip
-    else if c == '-' && (← peekAt 1) == some '-' then
-      let rec toEol : P Unit := do
-        match ← peek with
-        | some '\n' | none => pure ()
-        | some _ => bump; toEol
-      toEol; skip
-    else if c == '/' && (← peekAt 1) == some '-' then
-      let start := (← get).pos
-      bump 2
-      let rec block (depth : Nat) : P Unit := do
-        match ← peek, ← peekAt 1 with
-        | none, _ => failAt start "this comment is never closed"
-        | some '-', some '/' => bump 2; if depth > 0 then block (depth - 1)
-        | some '/', some '-' => bump 2; block (depth + 1)
-        | some _, _ => bump; block depth
-      block 0; skip
-    else pure ()
-  | none => pure ()
-
-def isIdStart (c : Char) : Bool := c.isAlpha || c == '_' || c.toNat > 127
-def isIdRest (c : Char) : Bool := c.isAlphanum || c == '_' || c == '\'' || c == '!' || c == '?' || c.toNat > 127
-
-def checkLen (start : Nat) (what s : String) : P String := do
-  if s.isEmpty then failAt start s!"{what} is empty"
-  if s.length > limits.maxString then failAt start s!"{what} is longer than {limits.maxString} characters"
-  return s
-
-/-- An identifier, or `none` without moving. -/
-partial def ident? : P (Option String) := do
-  skip
-  let start := (← get).pos
-  match ← peek with
-  | some '«' =>
-    bump
-    let rec quoted (acc : String) : P String := do
-      match ← peek with
-      | some '»' => bump; return acc
-      | some '\n' | none => failAt start "«name» is never closed"
-      | some c => bump; quoted (acc.push c)
-    return some (← checkLen start "name" (← quoted ""))
-  | some c =>
-    if !isIdStart c then return none
-    let rec plain (acc : String) : P String := do
-      match ← peek with
-      | some c => if isIdRest c then bump; plain (acc.push c) else return acc
-      | none => return acc
-    return some (← checkLen start "name" (← plain ""))
-  | none => return none
-
-def ident (what : String) : P String := do
-  match ← ident? with
-  | some s => return s
-  | none => fail s!"expected {what}"
-
-/-- Look at the next identifier without consuming it. -/
-def peekIdent : P (Option String) := do
-  let s ← get
-  let r ← ident?
-  set s
-  return r
-
-def nextChar : P (Option Char) := do skip; peek
-
-def keyword? (w : String) : P Bool := do
-  let s ← get
-  match ← ident? with
-  | some x => if x == w then return true else set s; return false
-  | none => set s; return false
-
-def sym? (c : Char) : P Bool := do
-  skip
-  if (← peek) == some c then bump; return true else return false
-
-def sym (c : Char) (what : String := s!"'{c}'") : P Unit := do
-  if !(← sym? c) then fail s!"expected {what}"
-
-partial def boundedNumber (maxDigits : Nat) : P Nat := do
-  skip
-  let start := (← get).pos
-  let rec go (acc : Nat) (n : Nat) : P (Nat × Nat) := do
-    match ← peek with
-    | some c => if c.isDigit then bump; go (acc * 10 + (c.toNat - '0'.toNat)) (n + 1) else return (acc, n)
-    | none => return (acc, n)
-  let (v, n) ← go 0 0
-  if n == 0 then failAt start "expected a number"
-  if n > maxDigits then failAt start "this number is too large"
-  return v
-
-def number : P Nat := boundedNumber 6
-
-partial def stringLit : P String := do
-  skip
-  let start := (← get).pos
-  if (← peek) != some '"' then fail "expected a string in double quotes"
-  bump
-  let rec go (acc : String) : P String := do
-    match ← peek with
-    | none | some '\n' => failAt start "this string is never closed"
-    | some '"' => bump; return acc
-    | some '\\' =>
-      bump
-      match ← peek with
-      | some 'n' => bump; go (acc.push '\n')
-      | some 't' => bump; go (acc.push '\t')
-      | some '"' => bump; go (acc.push '"')
-      | some '\\' => bump; go (acc.push '\\')
-      | _ => fail "unknown escape in string"
-    | some c => bump; go (acc.push c)
-  let s ← go ""
-  if s.toList.any (fun (ch : Char) => ch.toNat < 32) then failAt start "the string contains a control character"
-  checkLen start "string" s
-
-/-- A where condition: the text up to the `;` that ends the statement, outside brackets and strings,
-with runs of whitespace made single spaces. Kept as text; conformance interprets it (`Session.Where`). -/
-partial def whereText : P String := do
-  skip
-  let start := (← get).pos
-  let rec go (acc : String) (depth : Nat) (inStr : Bool) : P String := do
-    match ← peek with
-    | none => failAt start "this where condition never ends with ';'"
-    | some c =>
-      if inStr then
-        bump
-        if c == '\\' then
-          match ← peek with
-          | some d => bump; go ((acc.push c).push d) depth true
-          | none => go acc depth true
-        else go (acc.push c) depth (c != '"')
-      else if c == '"' then bump; go (acc.push c) depth true
-      else if c == ';' && depth == 0 then return acc
-      else if c == '(' || c == '[' || c == '{' then bump; go (acc.push c) (depth + 1) false
-      else if c == ')' || c == ']' || c == '}' then
-        if depth == 0 then failAt (← get).pos "unbalanced bracket in where condition"
-        bump; go (acc.push c) (depth - 1) false
-      else bump; go (acc.push c) depth false
-  let raw ← go "" 0 false
-  let words := (raw.splitOn " ").flatMap (fun w => w.splitOn "\n") |>.flatMap (·.splitOn "\t") |>.filter (· != "")
-  checkLen start "where condition" (" ".intercalate words)
-
-
-/-- Bounded exact annotation syntax (selfhost.session.generative). -/
-def fraction : P LeanFM.Overlay.Q := do
-  let n ← number
-  let d ← if ← sym? '/' then number else pure 1
-  if d == 0 || n > d then fail "probability must be between 0 and 1 with a nonzero denominator"
-  return LeanFM.Overlay.Q.norm n d
-
-def duration : P Nat := do
-  let n ← boundedNumber 16
-  let unit ← ident "a time unit (ms, seconds, minutes, hours, days)"
-  let scale ← match unit with
-    | "ms" => pure 1
-    | "second" | "seconds" => pure 1000
-    | "minute" | "minutes" => pure 60000
-    | "hour" | "hours" => pure 3600000
-    | "day" | "days" => pure 86400000
-    | "week" | "weeks" => pure 604800000
-    | _ => fail "unknown time unit; use ms, seconds, minutes, hours, days or weeks"
-  if n * scale > 9007199254740991 then fail "duration exceeds the safe integer millisecond limit"
-  return n * scale
-
-def timeRef : P String := do
-  if !(← keyword? "time") then fail "expected time(messageId)"
-  sym '('; let id ← ident "a prior message id"; sym ')'; return id
-
-def timeRefs : P (List String) := do
-  if ← keyword? "max" then
-    sym '('; let a ← timeRef; sym ','; let b ← timeRef; sym ')'; return [a,b]
-  return [← timeRef]
-
-/-- `after d` or `after sample { d : p; ... }`: a delay after the previous step. -/
-partial def delaySample : P (List (Nat × LeanFM.Overlay.Q)) := do
-  if !(← keyword? "sample") then return [(← duration, LeanFM.Overlay.Q.one)]
-  sym '{'
-  let rec entries (acc : List (Nat × LeanFM.Overlay.Q)) : P (List (Nat × LeanFM.Overlay.Q)) := do
-    if ← sym? '}' then return acc
-    if acc.length ≥ 16 then fail "a delay distribution has at most 16 entries"
-    let d ← duration; sym ':'; let q ← fraction; sym ';'
-    entries (acc ++ [(d,q)])
-  let offsets ← entries []
-  match Generative.checkWeights (offsets.map (·.2)) with
-  | .error e => fail e
-  | .ok _ => pure ()
-  if (offsets.map (·.1)).eraseDups.length != offsets.length then fail "duplicate delay in sample"
-  return offsets
-
-partial def timeExpr : P Generative.TimeExpr := do
-  if ← keyword? "next" then
-    let d ← duration
-    if d == 0 then fail "a gate's period must be longer than zero"
-    return { period := some d }
-  let base ← if (← peekIdent) == some "time" || (← peekIdent) == some "max" then
-      pure ({ refs := ← timeRefs } : Generative.TimeExpr)
-    else pure { clock := some (← ident "a clock name or time(messageId)") }
-  if !(← sym? '+') then return base
-  if !(← keyword? "sample") then return { base with offsets := [(← duration, LeanFM.Overlay.Q.one)] }
-  sym '{'
-  let rec entries (acc : List (Nat × LeanFM.Overlay.Q)) : P (List (Nat × LeanFM.Overlay.Q)) := do
-    if ← sym? '}' then return acc
-    if acc.length ≥ 16 then fail "a delay distribution has at most 16 entries"
-    let d ← duration; sym ':'; let q ← fraction; sym ';'
-    entries (acc ++ [(d,q)])
-  let offsets ← entries []
-  match Generative.checkWeights (offsets.map (·.2)) with
-  | .error e => fail e
-  | .ok _ => pure ()
-  if (offsets.map (·.1)).eraseDups.length != offsets.length then fail "duplicate delay in sample"
-  return { base with offsets }
-
-/-- `N UNIT`: a whole quantity of at most 12 digits and a unit name (selfhost.session.amounts). -/
-def quantity : P (Nat × String) := do
-  let n ← boundedNumber 12
-  let unit ← ident "a unit (such as USD)"
-  if unit.length > 32 then fail "a unit name has at most 32 characters"
-  return (n, unit)
-
-/-- `{ 5 apple; 4 orange; -3 USD; }`: a trade vector. Positive entries move from the sender to the
-receiver and negative ones back, so the two sides cancel unit by unit. -/
-partial def tradeVector : P (List Generative.Amount) := do
-  let rec entries (acc : List Generative.Amount) : P (List Generative.Amount) := do
-    if ← sym? '}' then return acc
-    if acc.length ≥ 16 then fail "a trade vector has at most 16 entries"
-    let reverse ← sym? '-'
-    let (n, unit) ← quantity; sym ';'
-    if acc.any (·.unit == unit) then fail s!"unit {unit} appears twice in the trade vector"
-    entries (acc ++ [{ unit, outcomes := [(n, LeanFM.Overlay.Q.one)], reverse }])
-  let es ← entries []
-  if es.isEmpty then fail "a trade vector needs at least one entry"
-  return es
-
-/-- `N UNIT`, or `sample { N UNIT : p; ... }` with one unit and distinct quantities. -/
-partial def amountExpr : P Generative.Amount := do
-  if !(← keyword? "sample") then
-    let (n, unit) ← quantity
-    return { unit, outcomes := [(n, LeanFM.Overlay.Q.one)] }
-  sym '{'
-  let rec entries (acc : List (Nat × String × LeanFM.Overlay.Q)) : P (List (Nat × String × LeanFM.Overlay.Q)) := do
-    if ← sym? '}' then return acc
-    if acc.length ≥ 16 then fail "an amount distribution has at most 16 entries"
-    let (n, unit) ← quantity; sym ':'; let q ← fraction; sym ';'
-    entries (acc ++ [(n, unit, q)])
-  let es ← entries []
-  let some (_, unit, _) := es.head? | fail "an amount sample needs at least one entry"
-  if es.any (fun (_, u, _) => u != unit) then fail "an amount sample uses one unit"
-  if (es.map (·.1)).eraseDups.length != es.length then fail "duplicate quantity in amount sample"
-  match Generative.checkWeights (es.map (·.2.2)) with
-  | .error e => fail e
-  | .ok _ => pure ()
-  return { unit, outcomes := es.map fun (n, _, q) => (n, q) }
-
-partial def obligationSpec : P Generative.Obligation := do
-  let first ← ident "an obligation name"
-  let rec qualified (name : String) : P String := do
-    if ← sym? '.' then qualified (name ++ "." ++ (← ident "a name component"))
-    else return name
-  let name ← qualified first
-  if name.length > limits.maxString then fail "obligation name is too long"
-  if !(← keyword? "on") then fail "expected on Role"
-  let actor ← ident "a role"; sym '{'
-  if !(← keyword? "trigger") then fail "expected trigger clock"
-  let clock ← ident "a clock"; sym ';'
-  if !(← keyword? "require") then fail "expected require Label"
-  let first ← ident "a message label"
-  let rec labels (acc : List String) : P (List String) := do
-    if ← keyword? "or" then
-      if acc.length ≥ 16 then fail "at most 16 obligation labels"
-      labels (acc ++ [← ident "a message label"])
-    else return acc
-  let ls ← labels [first]
-  if !(← keyword? "within") then fail "expected within duration"
-  let withinMs ← duration; sym ';'
-  if !(← keyword? "on") || !(← keyword? "breach") || !(← keyword? "record") then
-    fail "expected on breach record Label"
-  let breach ← ident "a monitor label"
-  let penalty ← do
-    if ← keyword? "pays" then
-      let (quantity, unit) ← quantity
-      if !(← keyword? "to") then fail "expected to Role after the penalty"
-      let payee ← ident "the role paid"
-      if payee == actor then fail "a penalty is paid to another role, not to its payer"
-      pure (some ({ quantity, unit, payee } : Generative.Penalty))
-    else pure none
-  sym ';'; sym '}'
-  return { name, actor, clock, labels := ls, withinMs, breach, penalty }
 
 /-! ## Bounded loops (selfhost.session.rec.bounded): expanded into explicit copies -/
 
@@ -521,201 +201,7 @@ partial def unroll : List Stmt → List Stmt
     | .timed t m => .timed t m
     | other => other) :: unroll rest
 
-/-- `N UNIT per PERIOD`: `per week` is per one week, `per 2 weeks` a duration. -/
-def rateEntry : P (Nat × String × Nat) := do
-  let (quantity, unit) ← quantity
-  if !(← keyword? "per") then fail "expected per PERIOD (such as per week)"
-  let periodMs ← if (← nextChar).any Char.isDigit then duration else do
-    let u ← ident "a time unit"
-    match u with
-    | "ms" => pure 1 | "second" => pure 1000 | "minute" => pure 60000 | "hour" => pure 3600000
-    | "day" => pure 86400000 | "week" => pure 604800000
-    | _ => fail "unknown period; use ms, second, minute, hour, day or week, or a number and unit"
-  if periodMs == 0 then fail "a rate's period must be longer than zero"
-  return (quantity, unit, periodMs)
-
-mutual
-partial def block : P (List Stmt) := do
-  skip
-  let opened := (← get).pos
-  sym '{'
-  let depth := (← get).depth
-  if depth ≥ limits.maxDepth then fail "statements are nested too deeply"
-  modify fun s => { s with depth := depth + 1 }
-  let rec go (acc : Array Stmt) : P (List Stmt) := do
-    if ← sym? '}' then return acc.toList
-    if (← peek).isNone then failAt opened "a '{' is never closed"
-    if acc.size ≥ limits.maxSteps then fail "more than 200 steps in block"
-    go (acc.push (← stmt))
-  let result ← go #[]
-  modify fun s => { s with depth := depth }
-  return result
-
-partial def branches (sep : String) : P (List (List Stmt)) := do
-  let first ← block
-  let rec more (acc : Array (List Stmt)) : P (List (List Stmt)) := do
-    if ← keyword? sep then more (acc.push (← block)) else return acc.toList
-  let bs ← more #[first]
-  if bs.length > limits.maxBranches then fail s!"more than {limits.maxBranches} branches"
-  return bs
-
-partial def stmt : P Stmt := do
-  skip
-  let start := (← get).pos
-  let s0 ← get
-  let w ← ident "a statement"
-  -- the construct words are not reserved: they are constructs only when followed by their shape
-  if w == "clock" && (← peekIdent) != some "from" && (← nextChar) != some ':' then
-    let name ← ident "a clock name"; sym '='
-    let refs ← timeRefs; sym ';'; return .clock name refs
-  if w == "obligation" && (← peekIdent) != some "from" && (← nextChar) != some ':' then return .obligation (← obligationSpec)
-  if w == "accrue" && ((← nextChar).any Char.isDigit || (← nextChar) == some '{') then
-    -- one rate, or a rate vector { 1000 USD per week; -1 roomweek per week; } whose negative entries
-    -- flow the other way, so the two sides cancel unit by unit at every moment
-    let entries ← if ← sym? '{' then do
-        let rec more (acc : List (Bool × Nat × String × Nat)) : P (List (Bool × Nat × String × Nat)) := do
-          if ← sym? '}' then return acc
-          if acc.length ≥ 16 then fail "a rate vector has at most 16 entries"
-          let reverse ← sym? '-'
-          let (n, unit, period) ← rateEntry
-          sym ';'
-          if acc.any (·.2.2.1 == unit) then fail s!"unit {unit} appears twice in the rate vector"
-          more (acc ++ [(reverse, n, unit, period)])
-        let es ← more []
-        if es.isEmpty then fail "a rate vector needs at least one entry"
-        pure es
-      else do
-        let (n, unit, period) ← rateEntry
-        pure [(false, n, unit, period)]
-    if !(← keyword? "from") then fail "expected from Payer"
-    let payer ← ident "the paying role"
-    if !(← keyword? "to") then fail "expected to Payee"
-    let payee ← ident "the role paid"
-    if payer == payee then fail "an accrual is paid to another role, not to its payer"
-    sym ';'
-    return .accrue (entries.map fun (rev, quantity, unit, periodMs) =>
-      if rev then { payer := payee, payee := payer, unit, quantity, periodMs }
-      else { payer, payee, unit, quantity, periodMs })
-  if w == "choice" && (← peekIdent) == some "at" then
-    discard <| keyword? "at"
-    let actor ← ident "the choosing role"
-    if !(← keyword? "using") || !(← keyword? "declared") then fail "expected using declared(name)"
-    sym '('; let name ← stringLit; sym ')'
-    let bs ← branches "or"
-    let mut weights := []
-    let mut bodies := []
-    for b in bs do
-      match b with
-      | .weighted "__branch" "" ws body :: [] =>
-        weights := weights ++ ws; bodies := bodies ++ body
-      | _ =>
-        if !weights.isEmpty then fail "every branch needs probability n/d"
-        bodies := bodies ++ [b]
-    if !weights.isEmpty then
-      if weights.length != bs.length then fail "every branch needs probability n/d"
-      match Generative.checkWeights weights with
-      | .error e => fail e
-      | .ok _ => pure ()
-    return .weighted name actor weights bodies
-  if w == "probability" && (← nextChar).any Char.isDigit then
-    if (← get).depth ≥ limits.maxDepth then fail "statements are nested too deeply"
-    modify fun s => { s with depth := s.depth + 1 }
-    let q ← fraction; sym ':'
-    let rec body (acc : List Stmt) : P (List Stmt) := do
-      if (← nextChar) == some '}' then return acc
-      if acc.length ≥ limits.maxSteps then fail "too many statements"
-      body (acc ++ [← stmt])
-    let parsedBody ← body []
-    modify fun s => { s with depth := s.depth - 1 }
-    return .weighted "__branch" "" [q] [parsedBody]
-  if w == "choice" && (← nextChar) == some '{' then return .choice (← branches "or")
-  if w == "par" && (← nextChar) == some '{' then return .par (← branches "and")
-  if w == "sessions" && (← nextChar) == some '{' then return .sessions (← block)
-  -- `sessions by b.member { ... }`: the session key, a field of a message of the block (selfhost.session.envelope)
-  if w == "sessions" && (← peekIdent) == some "by" then
-    discard <| keyword? "by"
-    let at_ := (← get).pos
-    let x ← ident "a message id of the block"
-    sym '.' "'.' and the key's field, as in sessions by b.member"
-    let mut path := [← ident "the key's field"]
-    while ← sym? '.' do path := path ++ [← ident "a field"]
-    if (← nextChar) != some '{' then fail "expected '{' after the session key"
-    let body ← block
-    if !(declaredIds body).contains x then
-      failAt at_ s!"sessions by {x}: {x} is not the id of a message of this sessions block"
-    modify fun s => { s with keys := s.keys.push (x, ".".intercalate path) }
-    return .sessions body
-  if w == "join" && (← nextChar).any Char.isDigit then
-    let n ← number
-    if !(← keyword? "of") then fail "expected 'of' after join's number"
-    return .join n (← branches "and")
-  if w == "rec" then
-    let s1 ← get
-    if let some n ← ident? then
-      if (← nextChar) == some '{' then return .loop n (← block)
-      if ← keyword? "at" then
-        if !(← keyword? "most") then fail "expected rec Name at most N { ... }"
-        let bound ← number
-        if bound < 1 || bound > 32 then fail "a bounded loop runs between 1 and 32 times"
-        let body ← block
-        let other ← if ← keyword? "otherwise" then block else pure []
-        return .bounded n bound body other
-    set s1
-  if w == "continue" then
-    let s1 ← get
-    if let some n ← ident? then
-      if ← sym? ';' then return .cont n
-    set s1
-  if w == "include" then
-    let s1 ← get
-    if let some p ← ident? then
-      let rec args (acc : Array String) : P (List String) := do
-        if ← sym? ';' then return acc.toList
-        match ← ident? with
-        | some a => args (acc.push a)
-        | none => fail "expected a role name or ';' in include"
-      return .incl p (← args #[])
-    set s1
-  -- a message `[id:] Label from A to B ...;` or an event `Label at A;`
-  set s0
-  let first ← ident "a statement"
-  let (id, label) ← do
-    if ← sym? ':' then pure (some first, ← ident "a message label")
-    else pure (none, first)
-  if ← keyword? "at" then
-    if id.isSome then failAt start "an event has no message id"
-    let r ← ident "a role"
-    let timing ← do
-      if ← keyword? "after" then pure (some ({ offsets := ← delaySample, relative := true } : Generative.TimeExpr))
-      else if ← keyword? "at" then
-        if !(← keyword? "next") then fail "an event's time is after d or at next d"
-        let d ← duration
-        if d == 0 then fail "a gate's period must be longer than zero"
-        pure (some ({ period := some d } : Generative.TimeExpr))
-      else pure none
-    sym ';'
-    return match timing with | some t => .timed t (.event label r) | none => .event label r
-  if !(← keyword? "from") then fail s!"expected 'from' or 'at' after {label}"
-  let src ← ident "the sending role"
-  if !(← keyword? "to") then fail "expected 'to'"
-  let dst ← ident "the receiving role"
-  let cause ← do if ← keyword? "cause" then pure (some (← ident "a message id")) else pure none
-  let route ← do if ← keyword? "route" then pure (some (← stringLit)) else pure none
-  let status ← do if ← keyword? "status" then pure (some (← number)) else pure none
-  let amounts ← do
-    if ← keyword? "amount" then
-      if ← sym? '{' then tradeVector else pure [← amountExpr]
-    else pure []
-  let timing ← do
-    if ← keyword? "at" then pure (some (← timeExpr))
-    else if ← keyword? "after" then pure (some ({ offsets := ← delaySample, relative := true } : Generative.TimeExpr))
-    else pure none
-  let guard ← do if ← keyword? "where" then pure (some (← whereText)) else pure none
-  sym ';' "';' at the end of the message"
-  let message := Stmt.msg id label src dst cause route status guard
-  let message := amounts.foldl (fun m a => .valued a m) message
-  return match timing with | some t => .timed t message | none => message
-end
+/-! ## Reading: the grammar's syntax tree as statements -/
 
 /-- A time unit's length in milliseconds. -/
 def unitMs (u : String) : Option Nat :=
@@ -728,173 +214,473 @@ def unitMs (u : String) : Option Nat :=
   | "week" | "weeks" => some 604800000
   | _ => none
 
-/-- One clause of `require per q { ... }` (selfhost.session.sla):
-`every q reaches A, B [within d];` or
-`at least|at most p of q reach A, B [within d] over (d | N entries) [confidence c] [expecting N per unit];` -/
-partial def requirement (entry : String) : P Generative.Requirement := do
-  skip
-  let start := (← get).pos
-  let bound ← if ← keyword? "every" then pure Generative.Bound.every
-    else if ← keyword? "at" then
-      if ← keyword? "least" then pure (Generative.Bound.atLeast (← fraction))
-      else if ← keyword? "most" then pure (Generative.Bound.atMost (← fraction))
-      else fail "expected 'at least' or 'at most'"
-    else fail "a requirement starts with 'every', 'at least' or 'at most'"
-  if bound != .every && !(← keyword? "of") then fail "expected 'of' after the fraction"
-  let who ← ident "the entry"
-  if who != entry then failAt start s!"this block requires per {entry}; the clause is about {who}"
-  if !(← keyword? (if bound == .every then "reaches" else "reach")) then
-    fail (if bound == .every then "expected 'reaches'" else "expected 'reach'")
-  let rec targets (acc : Array String) : P (List String) := do
-    let t ← ident "a message or event label"
-    let acc := acc.push t
-    if acc.size > 16 then fail "at most 16 targets"
-    if ← sym? ',' then targets acc else return acc.toList
-  let ts ← targets #[]
+/-- What reading a file collects besides its protocols. -/
+structure Acc where
+  /-- `require per q { ... }` clauses after the protocols (selfhost.session.sla) -/
+  requires : Array Generative.Requirement := #[]
+  /-- `structure Name where field : Type` declarations: the message types (selfhost.session.types) -/
+  types : Array Types.Message := #[]
+  /-- `sessions by x.field`: session keys as (message id, field path) (selfhost.session.envelope) -/
+  keys : Array (String × String) := #[]
+
+/-- Reading: the source (for positions and requirement texts) and what has been collected. -/
+abbrev R := ReaderT String (StateT Acc (Except String))
+
+open Lean (Syntax Name) in
+section
+variable (stx : Syntax)
+
+def lineCol (src : String) (pos : String.Pos.Raw) : Nat × Nat := Id.run do
+  let mut line := 1
+  let mut col := 1
+  let mut i : String.Pos.Raw := 0
+  while i.byteIdx < pos.byteIdx && !src.atEnd i do
+    if String.Pos.Raw.get src i == '\n' then line := line + 1; col := 1 else col := col + 1
+    i := String.Pos.Raw.next src i
+  return (line, col)
+
+/-- An error at a node's position. -/
+def failAt (msg : String) : R α := do
+  let (l, c) := lineCol (← read) (stx.getPos?.getD 0)
+  throw s!"line {l}, column {c}: {msg}"
+
+def kids : Array Syntax := stx.getArgs
+
+/-- The `i`th child of an optional group, when the group is present. -/
+def opt (i : Nat) : Option Syntax := if stx.getNumArgs > i then some stx[i] else none
+
+/-- The descendants of kind `k`, outside nested nodes of that kind. -/
+partial def ofKind (k : Lean.SyntaxNodeKind) : Syntax → Array Syntax
+  | s@(.node _ kind args) => if kind == k then #[s] else args.flatMap (ofKind k)
+  | _ => #[]
+
+/-- The identifiers under a node (words the grammar matched are atoms, not identifiers). -/
+partial def identsIn : Syntax → Array Syntax
+  | s@(.ident ..) => #[s]
+  | .node _ _ args => args.flatMap identsIn
+  | _ => #[]
+
+def checkLen (what s : String) : R String := do
+  if s.isEmpty then failAt stx s!"{what} is empty"
+  if s.toList.any (fun (ch : Char) => ch.toNat < 32) then failAt stx s!"{what} contains a line break or another control character"
+  if s.length > limits.maxString then failAt stx s!"{what} is longer than {limits.maxString} characters"
+  return s
+
+/-- A plain name: one Lean identifier, not a dotted path. -/
+def name (what : String) : R String := do
+  match stx.getId with
+  | .str .anonymous s => checkLen stx what s
+  | .anonymous => failAt stx s!"expected {what}"
+  | n => failAt stx s!"{what} {n} is a dotted path; use one name"
+
+/-- A dotted path such as `b.member`, as its components. -/
+def path (what : String) : R (List String) := do
+  let cs := stx.getId.components.map (·.toString (escape := false))
+  if cs.isEmpty then failAt stx s!"expected {what}"
+  cs.mapM (checkLen stx what)
+
+/-- A decimal number of at most `maxDigits` digits. -/
+def nat (maxDigits : Nat := 6) : R Nat := do
+  let raw := (stx.isLit? Lean.numLitKind).getD ""
+  if raw.isEmpty || !raw.toList.all Char.isDigit then failAt stx "expected a decimal number"
+  if raw.length > maxDigits then failAt stx "this number is too large"
+  return raw.toNat!
+
+def strVal : R String := do
+  let some s := stx.isStrLit? | failAt stx "expected a string in double quotes"
+  if s.toList.any (fun (ch : Char) => ch.toNat < 32) then failAt stx "the string contains a control character"
+  checkLen stx "string" s
+
+def fraction : R LeanFM.Overlay.Q := do
+  let n ← nat stx[0]
+  let d ← match opt stx[1] 1 with
+    | some d => nat d
+    | none => pure 1
+  if d == 0 || n > d then failAt stx "probability must be between 0 and 1 with a nonzero denominator"
+  return LeanFM.Overlay.Q.norm n d
+
+def duration : R Nat := do
+  let n ← nat stx[0] 16
+  let u ← name stx[1] "a time unit"
+  let some scale := unitMs u | failAt stx[1] "unknown time unit; use ms, seconds, minutes, hours, days or weeks"
+  if n * scale > 9007199254740991 then failAt stx "duration exceeds the safe integer millisecond limit"
+  return n * scale
+
+def weighted (entries : List (Nat × LeanFM.Overlay.Q)) (what : String) : R (List (Nat × LeanFM.Overlay.Q)) := do
+  if entries.length > 16 then failAt stx s!"a {what} distribution has at most 16 entries"
+  match Generative.checkWeights (entries.map (·.2)) with
+  | .error e => failAt stx e
+  | .ok _ => pure ()
+  if (entries.map (·.1)).eraseDups.length != entries.length then failAt stx s!"duplicate {what} in sample"
+  return entries
+
+/-- `d` or `sample { d : p; ... }`. -/
+def delay : R (List (Nat × LeanFM.Overlay.Q)) := do
+  if stx.getNumArgs == 1 then return [(← duration stx[0], LeanFM.Overlay.Q.one)]
+  else
+    let es ← (ofKind `LeanFM.Session.Grammar.durWeight stx).toList.mapM fun w => do pure (← duration w[0], ← fraction w[2])
+    if es.isEmpty then failAt stx "a delay sample needs at least one entry"
+    weighted stx es "delay"
+
+def timeRef1 : R String := name stx[stx.getNumArgs - 2] "a prior message id"
+
+def timeRefs : R (List String) := (ofKind `LeanFM.Session.Grammar.timeRef1 stx).toList.mapM timeRef1
+
+def timeExpr : R Generative.TimeExpr := do
+  if stx[1].isOfKind `LeanFM.Session.Grammar.dur then
+    let d ← duration stx[1]
+    if d == 0 then failAt stx "a gate's period must be longer than zero"
+    return { period := some d }
+  let base : Generative.TimeExpr ← if stx[0].isOfKind `LeanFM.Session.Grammar.timeRef then pure { refs := ← timeRefs stx[0] }
+    else pure { clock := some (← name stx[0] "a clock name or time(messageId)") }
+  match opt stx[1] 1 with
+  | some d => return { base with offsets := ← delay d }
+  | none => return base
+
+def quantity : R (Bool × Nat × String) := do
+  let neg := stx[0].getNumArgs > 0
+  let n ← nat stx[1] 12
+  let unit ← name stx[2] "a unit (such as USD)"
+  if unit.length > 32 then failAt stx[2] "a unit name has at most 32 characters"
+  return (neg, n, unit)
+
+def amounts : R (List Generative.Amount) := do
+  if stx.getNumArgs == 2 then
+    let q := stx[1]
+    let (neg, n, unit) ← quantity q
+    if neg then failAt q "a single amount is not negative; use a trade vector { ... } for both directions"
+    return [{ unit, outcomes := [(n, LeanFM.Overlay.Q.one)] }]
+  else
+    if stx.getNumArgs == 5 then
+      -- sample { N UNIT : p; ... }: one unit, distinct quantities
+      let es ← (ofKind `LeanFM.Session.Grammar.qtyWeight stx).toList.mapM fun w => do
+        let (neg, n, unit) ← quantity w[0]
+        if neg then failAt w "an amount sample has no negative entries"
+        pure (n, unit, ← fraction w[2])
+      let some (_, unit, _) := es.head? | failAt stx "an amount sample needs at least one entry"
+      if es.any (fun (_, u, _) => u != unit) then failAt stx "an amount sample uses one unit"
+      let outcomes ← weighted stx (es.map fun (n, _, q) => (n, q)) "quantity"
+      return [{ unit, outcomes }]
+    else
+      -- { 5 apple; -3 USD; }: a trade vector; negative entries move the other way
+      let es := ofKind `LeanFM.Session.Grammar.qty stx
+      if es.isEmpty then failAt stx "a trade vector needs at least one entry"
+      if es.size > 16 then failAt stx "a trade vector has at most 16 entries"
+      let mut out : List Generative.Amount := []
+      for q in es do
+        let (neg, n, unit) ← quantity q
+        if out.any (·.unit == unit) then failAt q s!"unit {unit} appears twice in the trade vector"
+        out := out ++ [{ unit, outcomes := [(n, LeanFM.Overlay.Q.one)], reverse := neg }]
+      return out
+
+def timing : R Generative.TimeExpr := do
+  if stx[1].isOfKind `LeanFM.Session.Grammar.timeExpr then timeExpr stx[1]
+  else return { offsets := ← delay stx[1], relative := true }
+
+def eventTiming : R Generative.TimeExpr := do
+  if stx[1].isOfKind `LeanFM.Session.Grammar.delay then return { offsets := ← delay stx[1], relative := true }
+  let d ← duration stx[2]
+  if d == 0 then failAt stx "a gate's period must be longer than zero"
+  return { period := some d }
+
+/-- `N UNIT per PERIOD`: `per week` is per one week, `per 2 weeks` a duration. -/
+def rateEntry : R (Bool × Nat × String × Nat) := do
+  let neg := stx[0].getNumArgs > 0
+  let n ← nat stx[1] 12
+  let unit ← name stx[2] "a unit (such as USD)"
+  let periodMs ← if stx[4].isOfKind `LeanFM.Session.Grammar.dur then duration stx[4] else do
+    match ← name stx[4] "a time unit" with
+    | "ms" => pure 1 | "second" => pure 1000 | "minute" => pure 60000 | "hour" => pure 3600000
+    | "day" => pure 86400000 | "week" => pure 604800000
+    | _ => failAt stx[4] "unknown period; use ms, second, minute, hour, day or week, or a number and unit"
+  if periodMs == 0 then failAt stx[4] "a rate's period must be longer than zero"
+  return (neg, n, unit, periodMs)
+
+/-- A condition's text with runs of whitespace made single spaces. -/
+def condText : R String := do
+  let raw := stx.getAtomVal
+  let words := (raw.split Char.isWhitespace).toList.map (·.toString) |>.filter (· != "")
+  checkLen stx "where condition" (" ".intercalate words)
+
+end
+
+open Lean (Syntax) in
+/-- A message statement. -/
+def msgStmt (stx : Syntax) : R Stmt := do
+  let id ← match opt stx[0] 0 with | some i => pure (some (← name i "a message id")) | none => pure none
+  let label ← name stx[1] "a message label"
+  let src ← name stx[3] "the sending role"
+  let dst ← name stx[5] "the receiving role"
+  let cause ← match opt stx[6] 1 with | some c => pure (some (← name c "a message id")) | none => pure none
+  let route ← match opt stx[7] 1 with | some r => pure (some (← strVal r)) | none => pure none
+  let status ← match opt stx[8] 1 with | some n => pure (some (← nat n)) | none => pure none
+  let as ← match opt stx[9] 0 with | some a => amounts a | none => pure []
+  let time ← match opt stx[10] 0 with | some t => pure (some (← timing t)) | none => pure none
+  let guard ← match opt stx[11] 1 with | some c => pure (some (← condText c)) | none => pure none
+  let message := Stmt.msg id label src dst cause route status guard
+  let message := as.foldl (fun m a => .valued a m) message
+  return match time with | some t => .timed t message | none => message
+
+open Lean (Syntax) in
+def eventStmt (stx : Syntax) : R Stmt := do
+  let label ← name stx[0] "an event label"
+  let r ← name stx[2] "a role"
+  match opt stx[3] 0 with
+  | some t => return .timed (← eventTiming t) (.event label r)
+  | none => return .event label r
+
+open Lean (Syntax) in
+def obligationStmt (stx : Syntax) : R Stmt := do
+  let oname := ".".intercalate (← path stx[1] "an obligation name")
+  if oname.length > limits.maxString then failAt stx[1] "obligation name is too long"
+  let actor ← name stx[3] "a role"
+  let ls ← ([stx[9]] ++ (identsIn stx[10]).toList).mapM (name · "a message label")
+  if ls.length > 16 then failAt stx[10] "at most 16 obligation labels"
+  let pen := stx[18]
+  let penalty ← if pen.getNumArgs == 4 then do
+      let (neg, quantity, unit) ← quantity pen[1]
+      if neg then failAt pen[1] "a penalty is not negative"
+      let payee ← name pen[3] "the role paid"
+      if payee == actor then failAt pen "a penalty is paid to another role, not to its payer"
+      pure (some ({ quantity, unit, payee } : Generative.Penalty))
+    else pure none
+  let clock ← name stx[6] "a clock"
+  let withinMs ← duration stx[12]
+  let breach ← name stx[17] "a monitor label"
+  return .obligation { name := oname, actor, clock, labels := ls, withinMs, breach, penalty }
+
+open Lean (Syntax) in
+def accrueStmt (stx : Syntax) : R Stmt := do
+  -- one rate, or a rate vector whose negative entries flow the other way
+  let args := stx.getArgs
+  let rates := ofKind `LeanFM.Session.Grammar.rate stx
+  if rates.isEmpty then failAt stx "a rate vector needs at least one entry"
+  if rates.size > 16 then failAt stx "a rate vector has at most 16 entries"
+  let payer ← name args[args.size - 4]! "the paying role"
+  let payee ← name args[args.size - 2]! "the role paid"
+  if payer == payee then failAt stx "an accrual is paid to another role, not to its payer"
+  let mut out : List Generative.Accrual := []
+  for r in rates do
+    let (rev, quantity, unit, periodMs) ← rateEntry r
+    if rev && args.size == 7 then failAt r "accrue: a single rate is not negative; use a rate vector { ... } for both directions"
+    if out.any (·.unit == unit) then failAt r s!"unit {unit} appears twice in the rate vector"
+    out := out ++ [if rev then { payer := payee, payee := payer, unit, quantity, periodMs }
+      else { payer, payee, unit, quantity, periodMs }]
+  return .accrue out
+
+open Lean (Syntax) in
+/-- The blocks directly under a statement (not those nested in its blocks). -/
+def blocksOf (stx : Syntax) : Array Syntax := ofKind `LeanFM.Session.Grammar.block stx |>.filter (· != stx)
+
+open Lean (Syntax) in
+mutual
+/-- The statements of a block, one level deeper. -/
+partial def block (depth : Nat) (stx : Syntax) : R (List Stmt) := do
+  if depth ≥ limits.maxDepth then failAt stx "statements are nested too deeply"
+  let ss := stx[1].getArgs
+  if ss.size > limits.maxSteps then failAt stx s!"more than {limits.maxSteps} steps in block"
+  ss.toList.mapM (stmt (depth + 1))
+
+partial def blocks (depth : Nat) (stx : Syntax) : R (List (List Stmt)) := do
+  let bs := (stx.getArgs.toList.flatMap fun a => (ofKind `LeanFM.Session.Grammar.block a).toList)
+  if bs.length > limits.maxBranches then failAt stx s!"more than {limits.maxBranches} branches"
+  bs.mapM (block depth)
+
+partial def declaredStmt (depth : Nat) (stx : Syntax) : R Stmt := do
+  let actor ← name stx[2] "the choosing role"
+  let n ← strVal stx[6]
+  let branches := [stx[8]] ++ (ofKind `LeanFM.Session.Grammar.wbranch stx[9]).toList
+  if branches.length > limits.maxBranches then failAt stx s!"more than {limits.maxBranches} branches"
+  if depth ≥ limits.maxDepth then failAt stx "statements are nested too deeply"
+  let mut weights : List LeanFM.Overlay.Q := []
+  let mut bodies : List (List Stmt) := []
+  for b in branches do
+    if b[1].getNumArgs == 3 then weights := weights ++ [← fraction b[1][1]]
+    let ss := b[2].getArgs
+    if ss.size > limits.maxSteps then failAt b s!"more than {limits.maxSteps} steps in block"
+    bodies := bodies ++ [← ss.toList.mapM (stmt (depth + 1))]
+  if !weights.isEmpty then
+    if weights.length != bodies.length then failAt stx "every branch needs probability n/d"
+    match Generative.checkWeights weights with
+    | .error e => failAt stx e
+    | .ok _ => pure ()
+  return .weighted n actor weights bodies
+
+partial def keyedStmt (depth : Nat) (stx : Syntax) : R Stmt := do
+  -- `sessions by b.member { ... }`: the session key, a field of a message of the block
+  let p ← path stx[2] "the session key"
+  let (x, field) ← match p with
+    | x :: f :: more => pure (x, ".".intercalate (f :: more))
+    | _ => failAt stx[2] "expected '.' and the key's field, as in sessions by b.member"
+  let body ← block depth stx[3]
+  if !(declaredIds body).contains x then
+    failAt stx[2] s!"sessions by {x}: {x} is not the id of a message of this sessions block"
+  modify fun a => { a with keys := a.keys.push (x, field) }
+  return .sessions body
+
+partial def boundedStmt (depth : Nat) (stx : Syntax) : R Stmt := do
+  let n ← nat stx[4]
+  if n < 1 || n > 32 then failAt stx[4] "a bounded loop runs between 1 and 32 times"
+  let other ← match opt stx[6] 1 with | some b => block depth b | none => pure []
+  return .bounded (← name stx[1] "a loop name") n (← block depth stx[5]) other
+
+partial def stmt (depth : Nat) (stx : Syntax) : R Stmt := do
+  match stx.getKind with
+  | `LeanFM.Session.Grammar.msg => msgStmt stx
+  | `LeanFM.Session.Grammar.event => eventStmt stx
+  | `LeanFM.Session.Grammar.choice => return .choice (← blocks depth stx)
+  | `LeanFM.Session.Grammar.par => return .par (← blocks depth stx)
+  | `LeanFM.Session.Grammar.join => return .join (← nat stx[1]) (← blocks depth stx)
+  | `LeanFM.Session.Grammar.rec => return .loop (← name stx[1] "a loop name") (← block depth stx[2])
+  | `LeanFM.Session.Grammar.bounded => boundedStmt depth stx
+  | `LeanFM.Session.Grammar.sessions => return .sessions (← block depth stx[1])
+  | `LeanFM.Session.Grammar.keyed => keyedStmt depth stx
+  | `LeanFM.Session.Grammar.cont => return .cont (← name stx[1] "a loop name")
+  | `LeanFM.Session.Grammar.incl => return .incl (← name stx[1] "a protocol") (← stx[2].getArgs.toList.mapM (name · "a role name"))
+  | `LeanFM.Session.Grammar.clock => return .clock (← name stx[1] "a clock name") (← timeRefs stx[3])
+  | `LeanFM.Session.Grammar.obligation => obligationStmt stx
+  | `LeanFM.Session.Grammar.accrue => accrueStmt stx
+  | `LeanFM.Session.Grammar.declared => declaredStmt depth stx
+  | k => failAt stx s!"unexpected {k}"
+end
+
+open Lean (Syntax) in
+/-- One clause of `require per q { ... }` (selfhost.session.sla). -/
+def requirement (entry : String) (stx : Syntax) : R Generative.Requirement := do
+  let args := stx.getArgs
+  let every := args.size == 6
+  let bound ← if every then pure Generative.Bound.every else
+    let f ← fraction args[2]!
+    pure (if (args[1]!.getAtomVal == "least" || args[1]!.getId.toString == "least") then Generative.Bound.atLeast f else Generative.Bound.atMost f)
+  let whoStx := if every then args[1]! else args[4]!
+  let who ← name whoStx "the entry"
+  if who != entry then failAt stx s!"this block requires per {entry}; the clause is about {who}"
+  let tsStx := args[args.size - 3]!
+  let ts ← (tsStx.getArgs.filter (·.isIdent)).toList.mapM (name · "a message or event label")
+  if ts.length > 16 then failAt tsStx "at most 16 targets"
   let mut r : Generative.Requirement := { entry, bound, targets := ts }
-  let mut more := true
-  while more do
-    if ← keyword? "within" then
-      if r.withinMs.isSome then fail "'within' given twice"
-      r := { r with withinMs := some (← duration) }
-    else if ← keyword? "over" then
-      if r.window.isSome then fail "'over' given twice"
-      let n ← boundedNumber 9
-      let u ← ident "a time unit or 'entries'"
+  for o in args[args.size - 2]!.getArgs do
+    let word := if o[0].isIdent then o[0].getId.toString else o[0].getAtomVal
+    match word with
+    | "within" =>
+      if r.withinMs.isSome then failAt o "'within' given twice"
+      r := { r with withinMs := some (← duration o[1]) }
+    | "over" =>
+      if r.window.isSome then failAt o "'over' given twice"
+      let n ← nat o[1] 9
+      let u ← name o[2] "a time unit or 'entries'"
       if u == "entries" || u == "entry" then
-        if n == 0 then fail "a window needs at least one entry"
+        if n == 0 then failAt o "a window needs at least one entry"
         r := { r with window := some (.entries n) }
       else match unitMs u with
-        | some ms => if n == 0 then fail "a window needs a positive length" else r := { r with window := some (.time (n * ms)) }
-        | none => fail "unknown window unit; use entries, ms, seconds, minutes, hours, days or weeks"
-    else if ← keyword? "confidence" then
-      let c ← fraction
-      if c.num == 0 || c.num == c.den then fail "confidence must be strictly between 0 and 1"
+        | some ms => if n == 0 then failAt o "a window needs a positive length" else r := { r with window := some (.time (n * ms)) }
+        | none => failAt o[2] "unknown window unit; use entries, ms, seconds, minutes, hours, days or weeks"
+    | "confidence" =>
+      let c ← fraction o[1]
+      if c.num == 0 || c.num == c.den then failAt o "confidence must be strictly between 0 and 1"
       r := { r with confidence := c }
-    else if ← keyword? "expecting" then
-      let n ← boundedNumber 9
-      if !(← keyword? "per") then fail "expected 'per' and a time unit, as in expecting 500 per hour"
-      let u ← ident "a time unit"
-      match unitMs u with
+    | _ =>
+      let n ← nat o[1] 9
+      match unitMs (← name o[3] "a time unit") with
       | some ms => r := { r with rate := some (n, ms) }
-      | none => fail "unknown time unit; use ms, second, minute, hour, day or week"
-    else more := false
-  sym ';' "';' after the requirement"
+      | none => failAt o[3] "unknown time unit; use ms, second, minute, hour, day or week"
   if bound == .every && r.window.isSome then
-    failAt start "'every' is a hard deadline, checkable on each entry: it takes no observation window"
+    failAt stx "'every' is a hard deadline, checkable on each entry: it takes no observation window"
   if bound != .every && r.window.isNone then
-    failAt start "a required fraction is only checkable over an observation window: add 'over 1 hour' or 'over 1000 entries'"
+    failAt stx "a required fraction is only checkable over an observation window: add 'over 1 hour' or 'over 1000 entries'"
   let src ← read
-  let text := String.ofList (src.extract start (← get).pos).toList
+  let text := match stx.getPos? with
+    | some a => match stx.getTailPos? with
+      | some b => String.Pos.Raw.extract src a b
+      | none => ""
+    | none => ""
   return { r with text := text.trimAscii.toString }
 
-/-- A field's type: a plain type name, or `List` / `Option` / `Array` of one. -/
-def fieldType : P Types.Ty := do
-  let n ← ident "a type, such as Nat, String or a structure's name"
-  let wrap : Option (Types.Ty → Types.Ty) := match n with
-    | "List" | "Array" => some .list
-    | "Option" => some .opt
-    | _ => none
-  match wrap with
-  | none => return Types.Ty.ofName n
-  | some w =>
-    if (← nextChar) == some '(' then fail s!"{n} holds one plain type, such as {n} Nat (protobuf has no {n} of a List or Option)"
-    let inner ← ident s!"the type the {n} holds"
-    if ["List", "Array", "Option"].contains inner then fail s!"{n} holds one plain type, such as {n} Nat (protobuf has no {n} of a List or Option)"
-    return w (Types.Ty.ofName inner)
+open Lean (Syntax) in
+/-- A message type: `structure Name where field : Type ... deriving A, B` (`x y : Nat` declares
+both); `structure Name` is empty. The doc comment before it documents it. -/
+def structureDecl (doc : Option Syntax) (stx : Syntax) : R Types.Message := do
+  let mname ← name stx[1] "the structure's name"
+  let mut fields : Array Types.Field := #[]
+  for f in ofKind `LeanFM.Session.Grammar.field stx[2] do
+    let ft := f[2]
+    let tn ← name ft[0] "a type, such as Nat, String or a structure's name"
+    let ty ← if ft[1].isIdent then do
+        let inner ← name ft[1] s!"the type the {tn} holds"
+        if ["List", "Array", "Option"].contains inner then
+          failAt ft s!"{tn} holds one plain type, such as {tn} Nat (protobuf has no {tn} of a List or Option)"
+        pure ((if tn == "Option" then Types.Ty.opt else Types.Ty.list) (Types.Ty.ofName inner))
+      else pure (Types.Ty.ofName tn)
+    for n in f[0].getArgs do
+      fields := fields.push { name := ← name n "a field name", ty }
+  if fields.size > Types.maxFieldsPer then failAt stx s!"structure {mname} has more than {Types.maxFieldsPer} fields"
+  let docText := match doc with
+    | some d =>
+      let raw := ((d[1].getAtomVal.dropEnd 2).toString)
+      " ".intercalate ((raw.split Char.isWhitespace).toList.map (·.toString) |>.filter (· != ""))
+    | none => ""
+  return { name := mname, fields := fields.toList, doc := docText }
 
-/-- `structure Name where field : Type ... deriving A, B`, as in Lean (`x y : Nat` declares two
-fields); `structure Name` is empty. -/
-partial def structureDecl : P Types.Message := do
-  let name ← ident "the structure's name"
-  let stops := ["deriving", "structure", "protocol", "require"]
-  let rec fields (acc : Array Types.Field) : P (List Types.Field) := do
-    let s ← get
-    match ← ident? with
-    | some f =>
-      if stops.contains f then set s; return acc.toList
-      -- `x y : Nat` declares both, as in Lean
-      let mut names := #[f]
-      while !(← sym? ':') do
-        match ← ident? with
-        | some g => names := names.push g
-        | none => fail s!"expected ':' and the type of field {f}"
-      if (← nextChar) == some '=' then fail "a field is written name : Type"
-      let t ← fieldType
-      let s' ← get
-      if (← nextChar) == some ':' then fail s!"field {f}: default values (:=) are not part of a message type"
-      set s'  -- leave a following doc comment for the next structure
-      if acc.size + names.size > Types.maxFieldsPer then fail s!"structure {name} has more than {Types.maxFieldsPer} fields"
-      fields (acc ++ names.map fun n => { name := n, ty := t })
-    | none => return acc.toList
-  let fs ← if ← keyword? "where" then fields #[] else pure []
-  if ← keyword? "deriving" then
-    discard <| ident "a class name"
-    while ← sym? ',' do discard <| ident "a class name"
-  return { name, fields := fs }
+open Lean (Syntax) in
+/-- One protocol (`protocolBody`): its name, roles and statements, bounded loops unrolled. -/
+def protocolDef (body : Syntax) : R Def := do
+  let pname ← name body[1] "the protocol's name"
+  let rs ← (body[3].getArgs.filter (·.isIdent)).toList.mapM (name · "a role")
+  if rs.isEmpty then failAt body "a protocol needs at least one role"
+  if rs.length > limits.maxRoles then failAt body s!"a protocol has at most {limits.maxRoles} roles"
+  if rs.eraseDups.length != rs.length then failAt body "role names must be distinct"
+  let b ← block 0 body[5]
+  if (labelsOf b).contains pname then
+    failAt body s!"protocol {pname} has a message {pname}; in Lean they would be two declarations with one name, so rename one of them"
+  return { name := pname, roles := rs, body := unroll b }
 
-partial def file : P (List Def) := do
-  -- the Lean header (selfhost.session.lean-syntax): `import LeanFM.Session.Syntax` makes the file a Lean
-  -- file; the text reading has nothing to load
-  let rec header : P Unit := do
-    let s0 ← get
-    if ← keyword? "import" then
-      discard <| ident "a module name"
-      while (← peek) == some '.' do bump; discard <| ident "a module name"
-      header
-    else set s0  -- a doc comment after the header documents what follows it
-  header
-  let rec go (acc : Array Def) : P (List Def) := do
-    let before := (← get).pos
-    skip
-    if (← peek).isNone then return acc.toList
-    let start := (← get).pos
-    if ← keyword? "require" then
-      if acc.isEmpty then failAt start "requirements follow the protocol they are about"
-      if !(← keyword? "per") then fail "expected 'per' and a message id, as in require per q { ... }"
-      let entry ← ident "a message id"
-      sym '{' "'{' and the requirements"
-      let rec clauses : P Unit := do
-        skip
-        if ← sym? '}' then return
-        let r ← requirement entry
-        if (← get).requires.size ≥ 16 then fail "at most 16 requirements"
-        modify fun s => { s with requires := s.requires.push r }
-        clauses
-      clauses
-      return ← go acc
-    if ← keyword? "structure" then
-      if !acc.isEmpty then failAt start "structures come before the protocols that use them"
-      let m ← structureDecl
-      -- a doc comment just before the structure documents the message
-      let gap := String.ofList ((← read).extract before start).toList
-      let doc := match gap.splitOn "/--" |>.getLast? with
-        | some tail => if gap.contains '/' && (gap.splitOn "/--").length > 1 then ((tail.splitOn "-/").head?.getD "").trimAscii.toString else ""
-        | none => ""
-      let doc := " ".intercalate ((doc.splitOn "\n").map (·.trimAscii.toString) |>.filter (· != ""))
-      let m := { m with doc := doc }
-      if (← get).types.size ≥ Types.maxMessages then failAt start s!"at most {Types.maxMessages} structures"
-      modify fun s => { s with types := s.types.push m }
-      return ← go acc
-    if !(← keyword? "protocol") then fail "expected 'protocol', 'structure' or 'require'"
-    let name ← ident "the protocol's name"
-    if acc.any (·.name == name) then failAt start s!"protocol {name} is defined twice"
-    sym '(' "'(' and the roles"
-    let rec roles (rs : Array String) : P (List String) := do
-      if ← sym? ')' then return rs.toList
-      if !rs.isEmpty then sym ',' "',' or ')'"
-      roles (rs.push (← ident "a role"))
-    let rs ← roles #[]
-    if rs.isEmpty then failAt start "a protocol needs at least one role"
-    if rs.length > limits.maxRoles then failAt start s!"a protocol has at most {limits.maxRoles} roles"
-    if rs.eraseDups.length != rs.length then failAt start "role names must be distinct"
-    let body ← block
-    if (labelsOf body).contains name then
-      failAt start s!"protocol {name} has a message {name}; in Lean they would be two declarations with one name, so rename one of them"
-    go (acc.push { name, roles := rs, body := unroll body })
-  let defs ← go #[]
-  if defs.isEmpty then fail "no protocol in the text"
-  return defs
+open Lean (Syntax) in
+/-- Every protocol of a file, earlier ones first; structures and requirements are collected. -/
+def fileDefs (stx : Syntax) : R (List Def) := do
+  let mut defs : Array Def := #[]
+  for item in stx[1].getArgs do
+    let doc := opt item[0] 0
+    let body := item[1]
+    let k := body.getKind
+    if k == `LeanFM.Session.Grammar.structureBody then
+      if !defs.isEmpty then failAt body "structures come before the protocols that use them"
+      if (← get).types.size ≥ Types.maxMessages then failAt body s!"at most {Types.maxMessages} structures"
+      let m ← structureDecl doc body
+      modify fun a => { a with types := a.types.push m }
+    else if k == `LeanFM.Session.Grammar.requireBody then
+      if defs.isEmpty then failAt body "requirements follow the protocol they are about"
+      let entry ← name body[2] "a message id"
+      for c in body[4].getArgs do
+        if (← get).requires.size ≥ 16 then failAt c "at most 16 requirements"
+        let r ← requirement entry c
+        modify fun a => { a with requires := a.requires.push r }
+    else
+      let d ← protocolDef body
+      if defs.any (·.name == d.name) then failAt body s!"protocol {d.name} is defined twice"
+      defs := defs.push d
+  if defs.isEmpty then failAt stx "no protocol in the text"
+  return defs.toList
+
+/-- Read protocol text with the grammar (Lean's parser, never elaborated): its protocols and what
+else it declares. -/
+def readText (text : String) : Except String (List Def × Acc) := do
+  if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
+  let stx ← Grammar.parseFile text
+  (fileDefs stx |>.run text).run {}
+
+open Lean (Syntax) in
+/-- Read one annotation value with a grammar parser: a fraction, duration or time expression in an
+overlay or a tool argument. -/
+def readValue (p : Lean.Parser.Parser) (f : Syntax → R α) (text : String) : Except String α := do
+  if text.length > 4096 then throw "annotation text is too long"
+  let stx ← Grammar.parseValue p text
+  let (v, _) ← (f stx |>.run text).run {}
+  return v
+
+def fractionText : String → Except String LeanFM.Overlay.Q := readValue Grammar.frac fraction
+def durationText : String → Except String Nat := readValue Grammar.dur duration
+def timeExprText : String → Except String Generative.TimeExpr := readValue Grammar.timeExpr timeExpr
+
 
 /-! ## Building the global type -/
 
@@ -1006,8 +792,7 @@ structure Parsed where
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
 annotations: the body's messages tagged by position, built exactly as the parser builds them). -/
 def buildWith (text : String) (body : List Stmt) : Except String (Global String) := do
-  if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
-  let (defs, _) ← (file.run text.toList.toArray).run {}
+  let (defs, _) ← readText text
   let main := defs.getLast!
   let ctx : Ctx := { defs := defs.dropLast, rename := [], roles := main.roles, path := main.name,
                      inside := [main.name] }
@@ -1027,9 +812,7 @@ def leanWords : List String :=
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
 (selfhost.session.proto); the text may then not declare structures of its own. -/
 def parse (text : String) (types : Option Types.Env := none) : Except String Parsed := do
-  if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
-  let src := text.toList.toArray
-  let (defs, st) ← (file.run src).run {}
+  let (defs, st) ← readText text
   let main := defs.getLast!
   let earlier := defs.dropLast
   let ctx : Ctx := { defs := earlier, rename := [], roles := main.roles, path := main.name,
@@ -1077,6 +860,10 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
            allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups }
 
 /-! ## Writing -/
+
+def isIdStart (c : Char) : Bool := c.isAlpha || c == '_' || c.toNat > 127
+def isIdRest (c : Char) : Bool := c.isAlphanum || c == '_' || c == '\'' || c == '!' || c == '?' || c.toNat > 127
+
 
 def isPlainIdent (s : String) : Bool :=
   match s.toList with

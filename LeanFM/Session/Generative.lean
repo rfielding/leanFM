@@ -12,16 +12,6 @@ open Lean LeanFM.Overlay
 
 abbrev Stmt := Text.Stmt
 
-def parseValue (p : Text.P α) (s : String) : Except String α := do
-  if s.length > 4096 then throw "annotation text is too long"
-  let parser : Text.P α := do
-    let v ← p
-    Text.skip
-    if (← Text.peek).isSome then Text.fail "unexpected trailing annotation text"
-    return v
-  let (v, _) ← (parser.run s.toList.toArray).run {}
-  return v
-
 def objKeys (j : Json) : List String := match j with
   | .obj o => o.toList.map (·.1)
   | _ => []
@@ -57,14 +47,14 @@ def external (j : Json) : Except String External := do
     onlyKeys c ["choice", "weights"]
     let key ← strField c "choice"
     let qs ← (← arrayField c "weights").mapM fun q => do
-      parseValue Text.fraction (← q.getStr?)
+      Text.fractionText (← q.getStr?)
     checkWeights qs
     return (key, qs)
   let timings ← (← arrayField j "timings").mapM fun t => do
     onlyKeys t ["message", "at"]
     let key ← strField t "message"
     let expression ← t.getObjValAs? String "at"
-    return (key, ← parseValue Text.timeExpr expression)
+    return (key, ← Text.timeExprText expression)
   if (choices.map (·.1)).eraseDups.length != choices.length ||
      (timings.map (·.1)).eraseDups.length != timings.length then throw "duplicate overlay target"
   return { name, choices, timings }

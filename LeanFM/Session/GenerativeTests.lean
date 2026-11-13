@@ -68,7 +68,7 @@ def externalWeights := Json.mkObj [("name","external-v1"),("choices",toJson [Jso
 #guard errorHas (check (args (sampleText.replace "itemised:" "address:"))) "duplicate message id"
 #guard errorHas (check (args (sampleText.replace "at time(itemised)" "at time(address)"))) "backwards"
 #guard errorHas (check (args (sampleText.replace "14 days" "14 months"))) "unknown time unit"
-#guard errorHas (check (args (sampleText.replace "14 days" "-1 days"))) "expected a number"
+#guard errorHas (check (args (sampleText.replace "14 days" "-1 days"))) "numeral"
 
 -- Clock declarations do not make an otherwise unspecified branch uniform.
 def unknownWeights := sampleText.replace "probability 3/4:" "" |>.replace "probability 1/4:" ""
@@ -121,5 +121,9 @@ def guarded := (sampleText.replace "import LeanFM.Session.Syntax\n" "import Lean
 def guardedParsed := (Text.parse guarded).toOption.get!
 #guard ok (check (args (Text.writeAll guardedParsed.types [{name := guardedParsed.name, roles := guardedParsed.roles, body := guardedParsed.body}]))) "ok"
 #guard ok (check (args "protocol P (A,B) { clock from A to B; obligation from B to A; probability from A to B; }")) "ok"
-#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 100 "probability 1: ") ++ "X from A to B; }")) "deeply"
+#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 30 "par { ") ++ "X from A to B; " ++ String.join (List.replicate 30 "} ") ++ "}")) "nested too deeply"
+-- nesting past what the grammar parses is refused before parsing, so no input can exhaust the stack
+#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 1000 "par { ") ++ "}")) "nested more than 64 deep"
+-- probability is only part of a declared choice
+#guard errorHas (Text.parse "protocol P (A,B) { probability 1/2: X from A to B; }") "expected"
 end LeanFM.Session.GenerativeTests
