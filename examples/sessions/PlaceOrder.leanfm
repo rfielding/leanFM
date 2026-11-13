@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- What the client orders. -/
 structure CreateOrder where
   item : String

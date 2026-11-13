@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative declared assumptions, not measured repayment rates or advice.
 -- A 1000 USD advance: two weeks of grace at 0 USD per week, then 10 USD per week until repaid.
 -- Half the borrowers repay at the end of the grace period; the rest repay each later week with probability 1/4.

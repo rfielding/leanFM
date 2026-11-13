@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- Signing in with an identity provider (OAuth authorization code). The App handles the start and
     the callback as two separate requests, so it serves each in its own session. -/
 protocol SignIn (Browser, App, Idp) {

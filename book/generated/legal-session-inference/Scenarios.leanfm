@@ -1,7 +1,9 @@
+import LeanFM.Session.Syntax
+
 protocol ItemisedReturn (Tenant, Landlord, Registry) {
   lease: LeaseSigned from Landlord to Tenant;
   paid: DepositPaid from Tenant to Landlord cause lease;
-  protected: DepositProtected from Landlord to Registry cause paid;
+  protection: DepositProtected from Landlord to Registry cause paid;
   ended: LeaseEnded from Tenant to Landlord;
   address: ForwardingAddress from Tenant to Landlord;
   itemised: DeductionsItemized from Landlord to Tenant cause address;
@@ -11,7 +13,7 @@ protocol ItemisedReturn (Tenant, Landlord, Registry) {
 protocol LateReturnRepaired (Tenant, Landlord, Registry, Court) {
   lease: LeaseSigned from Landlord to Tenant;
   paid: DepositPaid from Tenant to Landlord cause lease;
-  protected: DepositProtected from Landlord to Registry cause paid;
+  protection: DepositProtected from Landlord to Registry cause paid;
   ended: LeaseEnded from Tenant to Landlord;
   address: ForwardingAddress from Tenant to Landlord;
   returned: DepositReturned from Landlord to Tenant cause address;
@@ -23,7 +25,7 @@ protocol LateReturnRepaired (Tenant, Landlord, Registry, Court) {
 protocol AddressLost (Tenant, Landlord, Registry, Post) {
   lease: LeaseSigned from Landlord to Tenant;
   paid: DepositPaid from Tenant to Landlord cause lease;
-  protected: DepositProtected from Landlord to Registry cause paid;
+  protection: DepositProtected from Landlord to Registry cause paid;
   ended: LeaseEnded from Tenant to Landlord;
   posted: AddressPosted from Tenant to Post;
   BelievesViolated at Tenant;
@@ -32,7 +34,7 @@ protocol AddressLost (Tenant, Landlord, Registry, Post) {
 protocol HardshipOffset (Tenant, Landlord, Registry) {
   lease: LeaseSigned from Landlord to Tenant;
   paid: DepositPaid from Tenant to Landlord cause lease;
-  protected: DepositProtected from Landlord to Registry cause paid;
+  protection: DepositProtected from Landlord to Registry cause paid;
   hardship: HardshipRequest from Tenant to Landlord;
   offset: RentOffsetAgreed from Landlord to Tenant cause hardship;
   ended: LeaseEnded from Tenant to Landlord;

@@ -834,6 +834,16 @@ partial def structureDecl : P Types.Message := do
   return { name, fields := fs }
 
 partial def file : P (List Def) := do
+  -- the Lean header (selfhost.session.lean-syntax): `import LeanFM.Session.Syntax` makes the file a Lean
+  -- file; the text reading has nothing to load
+  let rec header : P Unit := do
+    let s0 ← get
+    if ← keyword? "import" then
+      discard <| ident "a module name"
+      while (← peek) == some '.' do bump; discard <| ident "a module name"
+      header
+    else set s0  -- a doc comment after the header documents what follows it
+  header
   let rec go (acc : Array Def) : P (List Def) := do
     let before := (← get).pos
     skip
@@ -878,7 +888,10 @@ partial def file : P (List Def) := do
     if rs.isEmpty then failAt start "a protocol needs at least one role"
     if rs.length > limits.maxRoles then failAt start s!"a protocol has at most {limits.maxRoles} roles"
     if rs.eraseDups.length != rs.length then failAt start "role names must be distinct"
-    go (acc.push { name, roles := rs, body := unroll (← block) })
+    let body ← block
+    if (labelsOf body).contains name then
+      failAt start s!"protocol {name} has a message {name}; in Lean they would be two declarations with one name, so rename one of them"
+    go (acc.push { name, roles := rs, body := unroll body })
   let defs ← go #[]
   if defs.isEmpty then fail "no protocol in the text"
   return defs
@@ -935,7 +948,7 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
     | .msg id label src dst cause route status guard =>
       let src' ← role here src
       let dst' ← role here dst
-      let g : Option Guard := guard.map fun t => { text := t, eval := fun _ => none }
+      let g : Option Guard := guard.map fun t => { text := t }
       let i : Interaction String :=
         { id := id, label := label, src := src', dst := dst', cause := cause, route := route,
           status := status, guard := g }
@@ -1001,6 +1014,16 @@ def buildWith (text : String) (body : List Stmt) : Except String (Global String)
   let (g, _) ← (build ctx body).run 0
   return g
 
+/-- Lean's keywords: a session-type file is Lean (selfhost.session.lean-syntax), so no protocol, role,
+label or message id may be one. -/
+def leanWords : List String :=
+  [ "abbrev", "at", "attribute", "axiom", "by", "calc", "class", "def", "deriving", "do", "else", "end",
+    "example", "export", "extends", "for", "from", "fun", "have", "if", "import", "in", "inductive",
+    "instance", "let", "local", "macro", "match", "mutual", "namespace", "noncomputable", "nomatch", "opaque",
+    "open", "partial", "private", "protected", "protocol", "require", "return", "scoped", "section",
+    "set_option", "show", "structure", "suffices", "syntax", "then", "theorem", "universe", "unsafe",
+    "variable", "where", "with", "Prop", "Sort", "Type" ]
+
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
 (selfhost.session.proto); the text may then not declare structures of its own. -/
 def parse (text : String) (types : Option Types.Env := none) : Except String Parsed := do
@@ -1012,6 +1035,11 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
   let ctx : Ctx := { defs := earlier, rename := [], roles := main.roles, path := main.name,
                      inside := [main.name] }
   let (g, n) ← (build ctx main.body).run 0
+  for d in defs do
+    for (what, x) in [("protocol", d.name)] ++ d.roles.map (("role", ·)) ++ (labelsOf d.body).map (("label", ·)) ++
+        (declaredIds d.body).map (("message id", ·)) do
+      if leanWords.contains x then
+        throw s!"in {d.name}: the {what} {x} is a Lean keyword; a session-type file is Lean, so choose another name"
   -- requirements name a message id of the main protocol and labels that occur in the text
   let ids := declaredIds main.body
   let labels := defs.flatMap (fun d => labelsOf d.body)
@@ -1164,8 +1192,11 @@ def writeType (m : Types.Message) : String :=
   (if m.doc.isEmpty then "" else s!"/-- {m.doc} -/\n") ++ "structure " ++ m.name ++
     (if m.fields.isEmpty then "" else " where\n" ++ "\n".intercalate (m.fields.map fun f => s!"  {f.name} : {f.ty.render}"))
 
-/-- Protocol text for message types and definitions. -/
+/-- The header that makes protocol text a Lean file (selfhost.session.lean-syntax). -/
+def header : String := "import LeanFM.Session.Syntax\n\n"
+
+/-- Protocol text for message types and definitions: a whole Lean file. -/
 def writeAll (types : Types.Env) (defs : List Def) : String :=
-  "\n\n".intercalate (types.map writeType ++ defs.map Def.write)
+  header ++ "\n\n".intercalate (types.map writeType ++ defs.map Def.write)
 
 end LeanFM.Session.Text

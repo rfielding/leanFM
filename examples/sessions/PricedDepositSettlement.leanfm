@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative declared assumptions, not measured frequencies or legal advice.
 -- The Landlord holds the Tenant's 1000 USD deposit when the lease ends; balances count from then.
 -- One day is a fixed 24 hours; deadline equality is fulfillment.

@@ -52,7 +52,8 @@ partial def stripDocs (s : String) : String :=
 
 def main : IO Unit := do
   let src ← IO.FS.readFile (root ++ "/spec/Session.lean")
-  let text := "\n".intercalate (regions (src.splitOn "\n")).toList ++ "\n"
+  -- the panel's text is a Lean file of its own: the header makes the regions elaborate standalone
+  let text := "import LeanFM.Session.Syntax\n\n" ++ "\n".intercalate (regions (src.splitOn "\n")).toList ++ "\n"
   let args := Json.mkObj [("lean", Json.str (stripDocs text)), ("theme", "dark")]
   let p ← IO.ofExcept (parseProtocol args)
   let svg := (annotatedModel p).svg (themeOf args)

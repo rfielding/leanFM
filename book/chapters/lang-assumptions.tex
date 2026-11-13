@@ -69,7 +69,7 @@ it:
 \centering
 \AccessibleFigure{Decision tree of Ping. Start. Ping from Client to Server at 0 ms. Server chooses IsBusy. With policy 9/10 Pong from Server to Client at 50 ms ends with terminal probability 9/10. With policy 1/10 SlowPong at 800 ms ends with terminal probability 1/10.}{%
 \ThemedDiagram{height=.72\textheight}{lang-ping-tree}}
-\caption{\texttt{Ping} under its assumption, as LeanFM draws it: the server's
+\caption{\texttt{PingServer} under its assumption, as LeanFM draws it: the server's
 choice with its probabilities, each answer's time, and each ending's exact
 probability.}
 \label{fig:ping-tree}
@@ -86,7 +86,7 @@ can never leave is reported as one that can loop forever.
 \index{require}
 \index{service level}
 Promises are written after the protocols, one block per entry message. Every
-occurrence of the entry is one trial. \texttt{Ping}'s block says every ping is
+occurrence of the entry is one trial. \texttt{PingServer}'s block says every ping is
 answered within a second, and at least 95 in 100 within 100 ms, judged over 1000
 pings.
 

@@ -116,14 +116,14 @@ def main : IO Unit := do
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
   let sref ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"resources/read\",\"params\":{\"uri\":\"leanfm://language/session-reference\"}}"
   assertContains "MCP serves the session reference" sref.body "# LeanFM session types"
-  let sess ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p status 200; }\"}}}"
+  let sess ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":31,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"lean\":\"protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p status 200; }\"}}}"
   assertContains "MCP session_check reads Lean protocol text through the dispatch" sess.body "\"verdict\":\"ok\""
-  assertContains "MCP session_check echoes the Lean text" sess.body "protocol Ping (A, B)"
+  assertContains "MCP session_check echoes the Lean text" sess.body "protocol PingPong (A, B)"
   let sessText ← summaryOf "MCP session_check text is a one-line summary" sess.body
-  assertContains "MCP session_check summary gives the reading" sessText "session_check ok: Ping: no issues"
+  assertContains "MCP session_check summary gives the reading" sessText "session_check ok: PingPong: no issues"
   let sessBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"roles\":[\"A\"],\"steps\":[{\"exec\":\"x\"}]}}}}"
   assertContains "MCP session_check rejects an unknown step as a tool error" sessBad.body "\"isError\":true"
-  let skel ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":37,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\"}}}"
+  let skel ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":37,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p; }\"}}}"
   -- unlike the other tools, the text is not a one-line summary: the generated code is the answer
   let skelJson ← IO.ofExcept (Json.parse skel.body)
   let skelText ← IO.ofExcept (((skelJson.getObjValD "result").getObjValD "content" |>.getArrVal? 0) >>= (·.getObjValAs? String "text"))
@@ -140,10 +140,10 @@ def main : IO Unit := do
   let checks ← LeanFM.CheckMetrics.checkStats.get
   assertContains "MCP counts session_sla in the check metrics" checks.render "leanfm_check_calls_total{tool=\"session_sla\",verdict=\"met\"} 1"
   assertContains "MCP check metrics time every call" checks.render "leanfm_check_duration_seconds_count{tool=\"session_sla\",verdict=\"met\"} 1"
-  let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
+  let skelTs ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":39,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p; }\",\"language\":\"typescript\"}}}"
   assertContains "MCP session_skeleton writes TypeScript in a typescript fence" skelTs.body "```typescript"
   assertContains "MCP session_skeleton TypeScript states extend State" skelTs.body "export class BS1 extends State"
-  let skelBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":38,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol Ping (A, B) { }\",\"language\":\"rust\"}}}"
+  let skelBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":38,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol PingPong (A, B) { }\",\"language\":\"rust\"}}}"
   assertContains "MCP session_skeleton rejects an unknown language" skelBad.body "language rust is not supported"
   let sim ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"tools/call\",\"params\":{\"name\":\"session_simulate\",\"arguments\":{\"seed\":5,\"instances\":3,\"protocol\":{\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\"}]}}}}"
   assertContains "MCP session_simulate runs concurrent copies" sim.body "6 events from 3 sessions"

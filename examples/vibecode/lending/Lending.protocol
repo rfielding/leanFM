@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- The book a member asks to borrow. -/
 structure Borrow where
   book : String

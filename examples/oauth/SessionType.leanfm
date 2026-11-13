@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- The browser asks the app to sign in; return_to is where to go afterwards. -/
 structure Start where
   return_to : String

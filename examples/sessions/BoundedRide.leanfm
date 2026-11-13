@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative declared assumptions, not measured rates.
 -- Ride with a bounded search: the Platform offers the request to at most 3 drivers (each accepts 4/5 of
 -- the time); after a third decline it tells the Rider no driver was found. The bound makes the search's

@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- First draft: a flight and a hotel held at once, then paid, or both released. The Agency's
     final choice does not depend on what the holds answered, so it may charge after NoSeat. -/
 protocol Trip (Traveler, Agency, Flights, Hotels, Payments) {

@@ -29,7 +29,7 @@ instance : ToString Role := ⟨fun
   | .client => "Client" | .shop => "Shop" | .bank => "Bank" | .sender => "Sender"
   | .receiver => "Receiver" | .primary => "Primary" | .r1 => "R1" | .r2 => "R2" | .r3 => "R3"⟩
 
--- Message labels are structures; `TypeName` lets guards read decoded payloads.
+-- Message labels are structures; guards are type-checked against their fields.
 structure Order    where item : String  deriving TypeName
 structure Quote    where price : Nat    deriving TypeName
 structure Pay      where amount : Nat   deriving TypeName
@@ -87,15 +87,20 @@ protocol PurchaseWithHold (Client, Shop, Bank) {
 -- Projection gives each role its local type; the shop's is a production of its own.
 #guard (purchase.project Role.shop |>.toOption |>.isSome)
 
--- The guard is typed Lean over decoded payloads: 10 = 10 holds, 10 = 12 does not.
+-- The guard is type-checked as Lean when the protocol is written; conformance runs its text over the
+-- logged fields with LeanFM's interpreter: 10 = 10 holds, 10 = 12 does not.
 def payGuard : Guard := Id.run do
   match purchase with
-  | .msg _ (.choice ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨"", fun _ => none⟩
-  | _ => ⟨"", fun _ => none⟩
+  | .msg _ (.choice ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨""⟩
+  | _ => ⟨""⟩
 
+def paid (amount : Nat) : Where.Lookup := fun
+  | "q" => some [("price", .num 10)]
+  | "p" => some [("amount", .num amount)]
+  | _ => none
 #guard payGuard.text == "p.amount = q.price"
-#guard payGuard.eval [("q", Dynamic.mk (Quote.mk 10)), ("p", Dynamic.mk (Pay.mk 10))] == some true
-#guard payGuard.eval [("q", Dynamic.mk (Quote.mk 10)), ("p", Dynamic.mk (Pay.mk 12))] == some false
+#guard Where.run payGuard.text (paid 10) == .yes
+#guard Where.run payGuard.text (paid 12) == .no
 
 /-! ## HTTP: cut and un-cut (pay for the HTTP module only here) -/
 

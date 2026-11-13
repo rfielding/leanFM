@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Weekly rent behind a periodic gate. Each week the Landlord checks in (an hour's work), then the
 -- Rent waits for the next week boundary, so every week holds exactly one payment however long the
 -- check takes. Occupancy accrues all the time: 1 roomweek per week to the Tenant.

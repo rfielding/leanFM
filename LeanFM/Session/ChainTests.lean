@@ -106,7 +106,7 @@ def loan := mdp (args loanText)
 #guard field (mdp (args (loanText.replace "  accrue 0 USD per week from Borrower to Lender;\n" ""))) "expectedBalances" == field loan "expectedBalances"
 
 -- a trade is a vector whose two sides cancel unit by unit, in the tree and in the chain
-def swap2 := "protocol Swap (A, B) { Swap from A to B amount { 5 apple; 4 orange; -3 USD; }; }"
+def swap2 := "protocol Swapping (A, B) { Swap from A to B amount { 5 apple; 4 orange; -3 USD; }; }"
 #guard ok (mdp (args swap2)) "drawn"
 def swapExpected := toJson [
   Json.mkObj [("role", "A"), ("unit", "apple"), ("expected", "-5")], Json.mkObj [("role", "B"), ("unit", "apple"), ("expected", "5")],

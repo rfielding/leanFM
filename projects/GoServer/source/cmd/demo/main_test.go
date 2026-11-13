@@ -391,7 +391,8 @@ func TestSessionPanelMatchesTheSpec(t *testing.T) {
 			kept = append(kept, line)
 		}
 	}
-	if want := strings.Join(kept, "\n") + "\n"; sessionText != want {
+	// the panel's text is a Lean file of its own: the import header, then the regions verbatim
+	if want := "import LeanFM.Session.Syntax\n\n" + strings.Join(kept, "\n") + "\n"; sessionText != want {
 		t.Fatal("static/session/goserver.leanfm is stale: regenerate it with spec/SessionPanel.lean")
 	}
 	h := newHandler(goserver.NewServer(), "8081")

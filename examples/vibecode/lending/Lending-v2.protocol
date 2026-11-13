@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- Version 2: a member may renew a loan any number of times before returning the book. -/
 protocol Lending (Member, Desk, Librarian) {
   sessions {

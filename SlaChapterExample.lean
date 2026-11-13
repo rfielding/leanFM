@@ -32,7 +32,7 @@ def execution : List Json :=
   , ev 4000 "Ask" "A" "B" none (some 3000) (some (usd "A" (-4)))
   , ev 4120 "Answer" "B" "A" (some 4000) (some 4000) ]
 
-def metered := "protocol Ask (A, B) { q: Ask from A to B amount 1 USD; Answer from B to A cause q after 100 ms; }
+def metered := "protocol Metered (A, B) { q: Ask from A to B amount 1 USD; Answer from B to A cause q after 100 ms; }
 require per q { at least 99/100 of q reach Answer within 300 ms over 300 entries; }"
 
 def reportOf (r : Json) : String := (r.getObjValAs? String "report").toOption.getD ""

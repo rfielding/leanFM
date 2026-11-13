@@ -141,14 +141,40 @@ be right: the role that sends the first message of every branch. In
 charge. If two roles could each start a branch, both could act at once, and
 LeanFM reports the race (Chapter~\ref{ch:meaning}).
 
-The same syntax can be written inside a Lean file with the \texttt{protocol}
-command of \texttt{LeanFM.Session}, where a label names a Lean structure and a
-\texttt{where} condition is type-checked Lean. The text form, a \texttt{.leanfm}
-file or the \texttt{lean} argument of a tool, is read by a parser for this grammar
-alone, structures included: nothing in it is elaborated as Lean. It types its
-\texttt{where} conditions itself and runs them with LeanFM's own interpreter, so
-text that arrives from any client cannot execute code in the server. Anyone who wants more isolation than that can run LeanFM itself in a
-container or a virtual machine.
+\subsection*{A session type is a Lean file}
+
+\index{Lean!session-type file}
+A \texttt{.leanfm} file is Lean. Its first line, \texttt{import
+LeanFM.Session.Syntax}, loads the library that defines the \texttt{protocol}
+command and the \texttt{require} command, and from the LeanFM directory
+
+\begin{lstlisting}[language={},basicstyle=\ttfamily\small]
+lake env lean examples/sessions/PlaceOrder.leanfm
+\end{lstlisting}
+
+\noindent elaborates it like any other Lean file. Every construct in this chapter
+and in Chapter~\ref{ch:assumptions} parses: amounts, delays, clocks, obligations,
+accruals, declared choices, bounded loops, keyed sessions and the requirements
+after a protocol. Each label is a Lean type. A label that no structure declares,
+such as \texttt{SoldOut}, is a message that carries nothing, and the command
+declares the empty structure for it. Each \texttt{where} condition is
+type-checked as a Lean proposition over the structures, so \texttt{p.total} is a
+Lean error in the editor as well as a refusal from the tools. The condition stays
+in LeanFM's own small language of comparisons, arithmetic and \texttt{and},
+\texttt{or}, \texttt{not}: a function call is not part of it and does not parse.
+Because the file is Lean, a protocol, role, label or message id may not be a
+Lean keyword, and a protocol may not share its name with one of its labels.
+
+The tools read the same text with their own parser, which skips the
+\texttt{import} line: nothing a client sends is elaborated or run in the server.
+That parser types the \texttt{where} conditions itself and runs them with LeanFM's
+interpreter, so text from any client cannot execute code. The two readings are
+held to agree. For every session-type file in the repository, and for the text
+the tools write back, the test suite elaborates the file and compares the
+protocol it defines with the parsed one: the same roles, diagram, issues and
+local types. A bounded loop unrolls into the same copies under the same
+renamed ids. Anyone who wants more isolation than that can run LeanFM itself in
+a container or a virtual machine.
 
 \section{Only what crosses a boundary}
 

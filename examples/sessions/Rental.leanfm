@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- A rental as a continuous trade. While the lease runs, the flow vector is
 -- { -1000 USD/week, +1 roomweek/week } for the Tenant and its negation for the Landlord:
 -- the two sides cancel unit by unit at every moment. 1000 USD per week is the exchange rate

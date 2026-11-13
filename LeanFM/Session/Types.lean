@@ -84,7 +84,11 @@ def reserved : List String :=
     "instance", "interface", "is", "lambda", "let", "match", "message", "namespace", "new", "none",
     "nonlocal", "not", "null", "open", "option", "optional", "or", "package", "pass", "raise",
     "repeated", "return", "self", "structure", "switch", "syntax", "then", "this", "throw", "true",
-    "try", "type", "typeof", "var", "void", "where", "while", "with", "yield", "None", "True", "False" ]
+    "try", "type", "typeof", "var", "void", "where", "while", "with", "yield", "None", "True", "False",
+    -- Lean's own words, since a structure declaration is Lean (selfhost.session.lean-syntax)
+    "at", "by", "have", "show", "deriving", "theorem", "example", "variable", "universe", "mut", "abbrev",
+    "inductive", "mutual", "section", "private", "protected", "unless", "calc", "suffices", "nomatch",
+    "Type", "Prop", "Sort" ]
 
 def isAsciiIdent (s : String) : Bool :=
   match s.toList with

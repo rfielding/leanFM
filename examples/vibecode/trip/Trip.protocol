@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- Booking a trip: the seat is held first, then the room, so the Agency charges only when both are
     held; every hold is then confirmed or released, so no airline or hotel is left holding. -/
 protocol Trip (Traveler, Agency, Flights, Hotels, Payments) {

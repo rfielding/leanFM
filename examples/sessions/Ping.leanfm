@@ -1,5 +1,7 @@
+import LeanFM.Session.Syntax
+
 /-- A server that is sometimes busy, with one hard deadline and one promised fraction. -/
-protocol Ping (Client, Server) {
+protocol PingServer (Client, Server) {
   q: Ping from Client to Server;
   choice at Server using declared("IsBusy") {
     probability 9/10:

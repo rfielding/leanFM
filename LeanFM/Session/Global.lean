@@ -17,17 +17,11 @@ namespace LeanFM.Session
 
 /-! ## Payloads and typed guards -/
 
-/-- Decoded payloads of the messages seen so far on one run, by message id. -/
-abbrev Env := List (String × Dynamic)
-
-def Env.find (env : Env) (id : String) (α : Type) [TypeName α] : Option α :=
-  (env.lookup id).bind (·.get? α)
-
-/-- A `where` clause. The protocol syntax elaborates the clause as a Lean `Bool` over the typed
-payloads it names, so it is checked when the protocol is written; `text` is kept for display. -/
+/-- A `where` clause. The `protocol` command type-checks the clause as a Lean proposition over the
+typed payloads it names, so it is checked when the protocol is written; `text` is what conformance
+runs over logged fields with LeanFM's interpreter (`Session.Where`) and what views show. -/
 structure Guard where
   text : String
-  eval : Env → Option Bool
 
 instance : Repr Guard := ⟨fun g _ => repr g.text⟩
 

@@ -40,18 +40,18 @@ def errorHas (r : Except String Json) (s : String) : Bool :=
 #guard Sla.windowNeed { entry := "q", bound := .atLeast (Overlay.Q.norm 99 100), targets := [] } == some 300
 
 -- a hard deadline that a silent branch breaks: the path ends where the session ends
-def silent := "protocol Ask (A, B) { q: Ask from A to B; choice at B using declared(\"answers\") { probability 9/10: Answer from B to A cause q after 1 second; } or { probability 1/10: Shrug from B to A; } }
+def silent := "protocol AskOnce (A, B) { q: Ask from A to B; choice at B using declared(\"answers\") { probability 9/10: Answer from B to A cause q after 1 second; } or { probability 1/10: Shrug from B to A; } }
 require per q { every q reaches Answer within 2 seconds; }"
 #guard design (run silent) 0 "verdict" == Json.str "violated" && prob (run silent) 0 "lo" == "9/10"
 #guard design (run silent) 0 "path" == toJson ["Ask", "[answers -> Shrug: 1/10]", "Shrug", "(the session ends)"]
 -- a late answer misses the deadline
-def late := "protocol Ask (A, B) { q: Ask from A to B; Answer from B to A cause q after 3 seconds; }
+def late := "protocol AskOnce (A, B) { q: Ask from A to B; Answer from B to A cause q after 3 seconds; }
 require per q { every q reaches Answer within 2 seconds; }"
 #guard design (run late) 0 "verdict" == Json.str "violated" && prob (run late) 0 "lo" == "0"
 #guard design (run late) 0 "path" == toJson ["Ask", "Answer", "(at 3 seconds, past the 2 seconds deadline)"]
 
 -- an assumption names the question and the answer taken: the same choice reads differently on each branch
-def busy := "protocol Ping (C, S) { q: Ping from C to S; choice at S using declared(\"IsBusy\") { probability 9/10: Pong from S to C cause q after 50 ms; } or { probability 1/10: SlowPong from S to C cause q after 800 ms; } }
+def busy := "protocol PingPong (C, S) { q: Ping from C to S; choice at S using declared(\"IsBusy\") { probability 9/10: Pong from S to C cause q after 50 ms; } or { probability 1/10: SlowPong from S to C cause q after 800 ms; } }
 require per q { at least 95/100 of q reach Pong, SlowPong within 100 ms over 1000 entries; at most 1/2 of q reach Pong over 100 entries; }"
 #guard design (run busy) 0 "path" == toJson ["Ping", "[IsBusy -> SlowPong: 1/10]", "SlowPong", "(at 800 ms, past the 100 ms deadline)"]
 #guard design (run busy) 1 "assumptions" == toJson ["[IsBusy -> Pong: 9/10]"]
@@ -73,7 +73,7 @@ def ev (ts : Nat) (label : String) (cause : Option Nat := none) (prev : Option N
 
 def usd (role : String) (n : Int) : Json := Json.mkObj [(role, Json.mkObj [("USD", toJson n)])]
 
-def simple := "protocol Ask (A, B) { q: Ask from A to B amount 1 USD; Answer from B to A cause q after 100 ms; }
+def simple := "protocol AskOnce (A, B) { q: Ask from A to B amount 1 USD; Answer from B to A cause q after 100 ms; }
 require per q { at least 99/100 of q reach Answer within 300 ms over 300 entries; }"
 
 /-- n asks a second apart, each answered 100 ms later except the given ones; timestamps in ns -/
@@ -117,8 +117,8 @@ def evs (ts : String) (label : String) (cause : Option String := none) : Json :=
 #guard errorHas (withStream [Json.mkObj [("ts", toJson (9007199254740993 : Nat)), ("label", "Ask")]]) "beyond 2^53 - 1"
 #guard errorHas (withStream [evs "12.5" "Ask"]) "not a decimal integer"
 -- an observed stream is of this protocol: its labels and the units its amounts use
-#guard errorHas (withStream [ev 1 "Asked" none none "A" "B"]) "Asked is not a message or event of Ask"
-#guard errorHas (withStream [ev 1 "Ask" none none "A" "B" (some (usd "A" 5 |>.setObjVal! "A" (Json.mkObj [("EUR", toJson (5 : Nat))])))]) "the reward names unit EUR, which Ask never uses; its units are USD"
+#guard errorHas (withStream [ev 1 "Asked" none none "A" "B"]) "Asked is not a message or event of AskOnce"
+#guard errorHas (withStream [ev 1 "Ask" none none "A" "B" (some (usd "A" 5 |>.setObjVal! "A" (Json.mkObj [("EUR", toJson (5 : Nat))])))]) "the reward names unit EUR, which AskOnce never uses; its units are USD"
 
 -- timestamps are identities; links go to earlier events of the stream
 #guard errorHas (withStream [ev 1 "Ask", ev 1 "Answer"]) "two events have timestamp 1"

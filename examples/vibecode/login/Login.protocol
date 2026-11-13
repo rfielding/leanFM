@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 /-- Two-factor login: a password, then a code sent by text message; the user may ask for a new code
     and retry until the code is valid or the account locks. Sms is a service: it handles each text
     in its own session (the nested sessions blocks) and never sees the login around it. -/

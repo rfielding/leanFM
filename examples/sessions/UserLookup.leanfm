@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative assumptions, not measured rates.
 -- A user lookup behind a reverse proxy. The probabilities are assumptions: the hidden internal
 -- choices of peers (the Db's lookup, the Browser's next request) and of the network (a forward

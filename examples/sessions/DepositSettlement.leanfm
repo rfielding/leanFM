@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative declared assumptions, not measured frequencies.
 -- One day is a fixed 24 hours; deadline equality is fulfillment.
 protocol DepositSettlement (Tenant, Landlord) {

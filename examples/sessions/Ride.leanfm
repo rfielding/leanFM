@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative declared assumptions, not measured rates.
 -- A ride: the Platform offers the request to drivers until one accepts (each accepts 4/5 of the time),
 -- the Rider then waits (9/10) or cancels for a 5 USD fee, and the trip is short or long.

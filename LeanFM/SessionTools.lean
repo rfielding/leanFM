@@ -167,7 +167,7 @@ partial def steps (c : Ctx) (js : List Json) (index : Nat := 0) : P (Global Stri
             | .error _ => fail c "status must be a natural number"
         let guardText ← optString c j "where"
         -- a where clause in the JSON form is text: conformance interprets it, nothing runs it as code
-        let guard := guardText.map fun t => ({ text := t, eval := fun _ => none } : Guard)
+        let guard := guardText.map fun t => ({ text := t } : Guard)
         let i : Interaction String := { id, label, src, dst, cause, status, route, guard }
         return .msg i (← next ())
     | "event" =>
@@ -338,7 +338,7 @@ def parseProtocol (args : Json) : Except String Protocol := do
     return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args, types := r.types, keys := r.keys }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
-    | .error _ => throw "lean is required: LeanFM protocol text such as protocol Ping (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
+    | .error _ => throw "lean is required: LeanFM protocol text such as protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
   if p.getStr?.isOk then
     throw "protocol is the JSON form {name?, roles, steps, types?}; put LeanFM protocol text in lean instead"
   let extra := (keysOf p).filter (!["name", "roles", "steps", "types"].contains ·)
@@ -360,7 +360,8 @@ def parseProtocol (args : Json) : Except String Protocol := do
     | .ok (.arr a) => pure a.toList
     | _ => throw "steps must be an array of steps"
   let (global, count) ← (steps { roles } js).run 0
-  let text := typesText ++ ToText.write name roles js
+  -- the echoed text is a whole Lean file (selfhost.session.lean-syntax)
+  let text := Text.header ++ typesText ++ ToText.write name roles js
   let parsed ← Text.parse text (← protoTypes args)
   return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys }
 
@@ -1591,6 +1592,12 @@ Send the text as the `lean` argument of the tools. It is read by a parser for th
 nothing in it is elaborated or run as code. A `where` condition is run by conformance with
 LeanFM's own interpreter over the fields each event logs (see Conditions, below).
 
+The same text is a Lean file. Saved with `import LeanFM.Session.Syntax` as its first line (the
+tools accept and write that line), `lake env lean File.leanfm` elaborates it with the LeanFM
+library: labels are types (a label no structure declares carries nothing), and every condition is
+type-checked against the structures. So names may not be Lean keywords, and a protocol may not
+share its name with one of its labels.
+
 ## Inline generation and deadline monitoring
 
 The text parser also accepts named weighted choices, clocks, message times and obligations.
@@ -1874,6 +1881,8 @@ no statements, such as `protocol Shop (Client, Server) { }`, and sketch from the
 ## A protocol
 
 ```lean
+import LeanFM.Session.Syntax
+
 /-- The shop's price for the order, in cents. -/
 structure Quote where
   price : Nat

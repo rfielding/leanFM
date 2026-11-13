@@ -76,14 +76,12 @@ def purchase : Global Role := Purchase .client .shop .bank
 #guard (purchase.project Role.shop).toOption.map Local.render ==
   some "receive Order from Client;\nselect {\n  send Quote to Client;\n  receive Paid from Bank;\n  send Shipped to Client;\n} or {\n  send SoldOut to Client;\n}"
 
--- a where clause is typed Lean over decoded payloads
+-- a where clause is type-checked as Lean over the payloads it names; its text is what conformance runs
 def payGuard : Guard := Id.run do
   match purchase with
-  | .msg _ (.choice ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨"", fun _ => none⟩
-  | _ => ⟨"", fun _ => none⟩
+  | .msg _ (.choice ((.msg _ (.msg p _)) :: _)) => p.guard.getD ⟨""⟩
+  | _ => ⟨""⟩
 #guard payGuard.text == "p.amount = q.price"
-#guard payGuard.eval [("q", Dynamic.mk (Quote.mk 10)), ("p", Dynamic.mk (Pay.mk 10))] == some true
-#guard payGuard.eval [("q", Dynamic.mk (Quote.mk 10)), ("p", Dynamic.mk (Pay.mk 12))] == some false
 
 -- a role that has taken part must be told which branch was chosen
 protocol PurchaseWithHold (Client, Shop, Bank) {

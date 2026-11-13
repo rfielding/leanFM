@@ -1,3 +1,5 @@
+import LeanFM.Session.Syntax
+
 -- Illustrative declared assumptions, not measured fill rates.
 -- A trader resubmits a limit order, paying a 2 USD fee per attempt, until it fills or the trader gives up.
 -- Each attempt: fills 1/4; otherwise rejected, then the trader retries 2/3 of the time.
