@@ -204,7 +204,8 @@ def clauseRefs : List String := clauses.map (fun c => "clause:" ++ c.id)
 def errors : List String :=
   let unknown := decisions.flatMap fun d =>
     d.requirementRefs.filterMap fun r => if clauseRefs.contains r then none else some ("unknown reference: " ++ r)
-  let sessionClauses := (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).map (fun c => "clause:" ++ c.id)
+  -- a proposed clause is a requirement not yet implemented: its decision comes when it is built
+  let sessionClauses := (clauses.filter (fun c => c.id.startsWith "selfhost.session." && c.status == "implemented")).map (fun c => "clause:" ++ c.id)
   let uncovered := sessionClauses.filterMap fun c =>
     if decisions.any (fun d => d.requirementRefs.contains c && !d.conformanceTests.isEmpty) then none
     else some ("session clause without decision and test: " ++ c)
