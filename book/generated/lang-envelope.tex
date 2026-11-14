@@ -3,21 +3,23 @@ message Event {
   uint64 ts = 1;        // nanoseconds; unique in its stream, and its identity
   string id = 2;        // the event's name, in a log that names events
   string session = 3;   // the session, or its key's value when the sessions block names one
-  string from = 4;
-  string to = 5;
+  string from = 4;      // the sending actor: Role, or Role/instance
+  string to = 5;        // the receiving actor
   string label = 6;
   string cause = 7;     // the id or ts of the event this one answers
-  string prev = 8;      // the id or ts of the event before it, where reward vectors are walked
+  string prev = 8;      // the id or ts of the previous event the same actor sent
+  uint64 sent_at = 9;   // the sender's clock when it sent, ns; compared only with that clock
+  uint64 received_at = 10; // the receiver's clock when it received, ns
   oneof payload {
-    CreateOrder create_order = 9;
-    Quote quote = 10;
-    Pay pay = 11;
-    Charge charge = 12;
-    Charged charged = 13;
-    Receipt receipt = 14;
-    Declined declined = 15;
-    PaymentDeclined payment_declined = 16;
-    SoldOut sold_out = 17;
+    CreateOrder create_order = 11;
+    Quote quote = 12;
+    Pay pay = 13;
+    Charge charge = 14;
+    Charged charged = 15;
+    Receipt receipt = 16;
+    Declined declined = 17;
+    PaymentDeclined payment_declined = 18;
+    SoldOut sold_out = 19;
   }
 }
 \end{lstlisting}

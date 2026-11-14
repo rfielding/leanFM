@@ -38,5 +38,6 @@ import LeanFM.Session.ProtoTests
 import LeanFM.Session.OAuthTests
 import LeanFM.Session.LeanSyntaxTests
 import LeanFM.Session.SpecCheckTests
+import LeanFM.Session.ActorTests
 import LeanFM.SecretsTests
 import LeanFM.CheckMetricsTests

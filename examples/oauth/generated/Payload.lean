@@ -119,6 +119,9 @@ structure Event where
   dst : Role
   cause : Option Nat := none
   prev : Option Nat := none
+  /-- the sender's clock when it sent and the receiver's when it received, ns (selfhost.session.timelines) -/
+  sentAt : Option Nat := none
+  receivedAt : Option Nat := none
   payload : Payload
   deriving Repr, BEq
 

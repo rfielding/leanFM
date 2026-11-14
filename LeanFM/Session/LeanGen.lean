@@ -169,7 +169,9 @@ def Global.leanModule (g : Global String) (name : String) (roles : List String) 
     ["  deriving Repr, BEq, DecidableEq", ""] ++ payload ++ ["",
     "/-- The event envelope (selfhost.session.envelope): ts in nanoseconds, unique in its stream. -/",
     "structure Event where", "  ts : Nat", "  session : String", "  src : Role", "  dst : Role",
-    "  cause : Option Nat := none", "  prev : Option Nat := none", "  payload : Payload", "  deriving Repr, BEq", "",
+    "  cause : Option Nat := none", "  prev : Option Nat := none",
+    "  /-- the sender's clock when it sent and the receiver's when it received, ns (selfhost.session.timelines) -/",
+    "  sentAt : Option Nat := none", "  receivedAt : Option Nat := none", "  payload : Payload", "  deriving Repr, BEq", "",
     ] ++ skipped ++ ["\n\n".intercalate machines, "", s!"end {ns}", ""]), notes)
 
 end LeanFM.Session

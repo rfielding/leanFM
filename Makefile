@@ -189,6 +189,7 @@ book: lean
 	lake env lean --run LogicInteractionExample.lean
 	lake env lean --run WebServerProtocolChapter.lean
 	lake env lean --run NeedhamSchroeder.lean
+	lake env lean --run SpansChapterExample.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

@@ -1,0 +1,9 @@
+\begin{tabular}{@{}llllll@{}}
+\toprule
+Call & Caller & Callee & Caller waited & Callee took & Network \\
+\midrule
+GetUser & Browser@1 & Api/a1 & 18.0 ms & 14.0 ms & 4.0 ms \\
+Query & Api/a1 & Db/d1 & 12.0 ms & 10.0 ms & 2.0 ms \\
+Get & Api/a1 & Cache@1 & 4.0 ms & 2.0 ms & 2.0 ms \\
+\bottomrule
+\end{tabular}

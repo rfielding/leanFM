@@ -52,6 +52,16 @@ structure LogEvent where
   isAct   : Bool := false
   /-- the payload fields a where condition may read, nested keys dotted (selfhost.session.where) -/
   fields  : List (String × Where.Value) := []
+  /-- the actors (selfhost.session.actor-conformance): `Role/instance` as logged, or empty when the
+  log names only the role, in which case the actor is the role in this session -/
+  srcActor : String := ""
+  dstActor : String := ""
+  /-- the previous event of the same sending actor, in its own order -/
+  prev    : Option String := none
+  /-- readings of the sender's clock when it sent and the receiver's when it received, in
+  nanoseconds (selfhost.session.timelines); each is compared only with readings of its own clock -/
+  sentAt  : Option Nat := none
+  receivedAt : Option Nat := none
   deriving Repr, Inhabited, BEq
 
 namespace Conform

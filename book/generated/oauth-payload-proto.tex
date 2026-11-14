@@ -90,26 +90,28 @@ message Event {
   uint64 ts = 1;        // nanoseconds; unique in its stream, and its identity
   string id = 2;        // the event's name, in a log that names events
   string session = 3;   // the session, or its key's value when the sessions block names one
-  string from = 4;
-  string to = 5;
+  string from = 4;      // the sending actor: Role, or Role/instance
+  string to = 5;        // the receiving actor
   string label = 6;
   string cause = 7;     // the id or ts of the event this one answers
-  string prev = 8;      // the id or ts of the event before it, where reward vectors are walked
+  string prev = 8;      // the id or ts of the previous event the same actor sent
+  uint64 sent_at = 9;   // the sender's clock when it sent, ns; compared only with that clock
+  uint64 received_at = 10; // the receiver's clock when it received, ns
   oneof payload {
-    Start start = 9;
-    RedirectToIdp redirect_to_idp = 10;
-    Authorize authorize = 11;
-    LoginPage login_page = 12;
-    Credentials credentials = 13;
-    RedirectBack redirect_back = 14;
-    Callback callback = 15;
-    ExchangeCode exchange_code = 16;
-    Tokens tokens = 17;
-    SignedIn signed_in = 18;
-    BadCode bad_code = 19;
-    SignInFailed sign_in_failed = 20;
-    DeniedBack denied_back = 21;
-    ErrorCallback error_callback = 22;
+    Start start = 11;
+    RedirectToIdp redirect_to_idp = 12;
+    Authorize authorize = 13;
+    LoginPage login_page = 14;
+    Credentials credentials = 15;
+    RedirectBack redirect_back = 16;
+    Callback callback = 17;
+    ExchangeCode exchange_code = 18;
+    Tokens tokens = 19;
+    SignedIn signed_in = 20;
+    BadCode bad_code = 21;
+    SignInFailed sign_in_failed = 22;
+    DeniedBack denied_back = 23;
+    ErrorCallback error_callback = 24;
   }
 }
 \end{lstlisting}

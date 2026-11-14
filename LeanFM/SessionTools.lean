@@ -7,6 +7,8 @@ import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Proto
 import LeanFM.Session.SpecCheck
+import LeanFM.Session.Actors
+import LeanFM.Session.Spans
 import LeanFM.Session.LeanGen
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
@@ -1091,7 +1093,21 @@ def logEvent (j : Json) : Except String LogEvent := do
     if k.length > limits.maxString then .error s!"event {id} has a field name over {limits.maxString} characters"
     if let .str t := v then
       if t.length > limits.maxString then .error s!"event {id}: field {k} is over {limits.maxString} characters"
-  return { id, session := (text "session").getD "0", src, dst, label, cause := text "cause", isAct, fields }
+  -- actors (selfhost.session.actor-conformance): from and to may be Role/instance
+  let (srcRole, srcActor) ← Actors.parse src |>.mapError (s!"event {id}: " ++ ·)
+  let (dstRole, dstActor) ← if isAct then pure (srcRole, srcActor) else Actors.parse dst |>.mapError (s!"event {id}: " ++ ·)
+  -- clock readings (selfhost.session.timelines): nanoseconds on the sender's and the receiver's clock
+  let reading (k : String) : Except String (Option Nat) := match j.getObjVal? k with
+    | .ok .null => pure none
+    | .ok v => do let n ← (wireNat v).mapError (s!"event {id}: {k} " ++ ·); pure (some n)
+    | .error _ => pure none
+  let sentAt ← reading "sentAt"
+  let receivedAt ← reading "receivedAt"
+  let prev := text "prev"
+  if let some p := prev then
+    if p.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
+  return { id, session := (text "session").getD "0", src := srcRole, dst := dstRole, label, cause := text "cause", isAct, fields,
+           srcActor, dstActor := if isAct then srcActor else dstActor, prev, sentAt, receivedAt }
 
 def maxLogEvents : Nat := 2000
 
@@ -1131,7 +1147,10 @@ def conform (args : Json) : Except String Json := do
   -- integers travel as decimal strings; conditions read them as exact numbers
   let evs := evs.map fun e => { e with fields := Session.Types.coerceFields p.types e.label e.fields }
   let allowIncomplete := (args.getObjValAs? Bool "allowIncomplete").toOption.getD false
-  let results := p.global.conforms evs allowIncomplete
+  -- the log's interleaving carries no information: each session is replayed in an order consistent
+  -- with its prev and cause links (selfhost.session.actor-conformance)
+  let linkProblems := (Actors.check evs).map fun (e, why) => s!"event {e}: {why}"
+  let results := p.global.conforms (Actors.linearize evs) allowIncomplete
   -- a keyed session's events all carry its key's value as their session (selfhost.session.envelope)
   let keyProblems := p.keys.flatMap fun (x, f) =>
     let labels := (p.global.messages.filter (·.id == some x)).map (·.label)
@@ -1149,10 +1168,13 @@ def conform (args : Json) : Except String Json := do
           else some s!"session {sid}, event {e.id}: the session key {x}.{f} is {shown}, so this session's events must name session {shown}, not {sid}"
   let bad := results.filter (·.problem.isSome)
   let incomplete := results.filter (!·.complete)
+  let keyProblems := linkProblems ++ keyProblems
   let verdict := if bad.isEmpty && keyProblems.isEmpty then "conforms" else "violates"
   let problems := (bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}") ++ keyProblems
   let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
-  let reading := if !keyProblems.isEmpty && bad.isEmpty
+  let reading := if !linkProblems.isEmpty && bad.isEmpty
+    then s!"{p.name}: {linkProblems.length} problem{if linkProblems.length == 1 then "" else "s"} with the log's links; first: {linkProblems.head!}"
+    else if !keyProblems.isEmpty && bad.isEmpty
     then s!"{p.name}: {keyProblems.length} session key problem{if keyProblems.length == 1 then "" else "s"}; first: {keyProblems.head!}"
     else if bad.isEmpty
     then s!"{p.name}: {evs.length} events in {results.length} session{if results.length == 1 then "" else "s"} follow the protocol" ++
@@ -1171,6 +1193,55 @@ def conform (args : Json) : Except String Json := do
          ("unchecked", toJson (r.unchecked.map fun (e, why) => s!"{e}: {why}")),
          ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
     , ("diagram", diagramJson p) ]
+
+/-- Calls, their two views, timelines and critical paths of a log (selfhost.session.timelines,
+selfhost.session.critical-path): every duration a difference of one clock's readings. -/
+def spans (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let evs ← match args.getObjVal? "events" with
+    | .ok (.arr a) =>
+        if a.size > maxLogEvents then throw s!"at most {maxLogEvents} events"
+        a.toList.mapM logEvent
+    | _ => throw "events must be an array of logged events {id, session?, from, to, label, cause?, prev?, sentAt?, receivedAt?}"
+  for e in evs do
+    for r in (if e.isAct then [e.src] else [e.src, e.dst]) do
+      if !p.roles.contains r then throw s!"event {e.id}: {r} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
+  let linkProblems := (Actors.check evs).map fun (e, why) => s!"event {e}: {why}"
+  let ordered := Actors.linearize evs
+  let byId := ordered.map fun e => (e.id, e)
+  let all := Spans.spans ordered
+  let reports := all.map (Spans.report byId all)
+  let issues := linkProblems ++ reports.flatMap (·.issues)
+  let ns (o : Option Nat) : Json := match o with | some n => Json.str (toString n) | none => Json.null
+  let ids (cs : List Spans.Span) : Json := Json.arr (cs.map fun c => Json.str c.request.id).toArray
+  let spanJson (r : Spans.Report) : Json := Json.mkObj
+    [ ("request", Json.str r.span.request.id), ("reply", Json.str r.span.reply.id), ("label", Json.str r.span.request.label)
+    , ("caller", Json.str (Spans.caller r.span)), ("callee", Json.str (Spans.callee r.span))
+    , ("callerViewNs", ns r.span.callerView), ("calleeViewNs", ns r.span.calleeView), ("networkNs", ns r.network)
+    , ("subcalls", ids r.subs), ("notAwaited", ids r.notAwaited)
+    , ("criticalPath", ids r.critical), ("criticalNs", Json.str (toString r.criticalNs)), ("boundNs", Json.str (toString r.boundNs)) ]
+  let roots := Spans.roots byId all
+  let timelines := roots.map fun s =>
+    let placed := Spans.place byId all s (- (Int.ofNat (s.request.sentAt.getD 0)))
+    let placed := placed.toArray.qsort (fun a b => a.2.2 < b.2.2) |>.toList
+    Json.mkObj [("root", Json.str s.request.id), ("events", Json.arr (placed.map fun (e, a, t) =>
+      Json.mkObj [("event", Json.str e), ("actor", Json.str a), ("atNs", Json.str (toString t))]).toArray)]
+  let ms (n : Nat) : String :=
+    let whole := n / 1000000
+    let frac := (n % 1000000) / 1000
+    s!"{whole}.{if frac < 10 then "00" else if frac < 100 then "0" else ""}{frac} ms"
+  let rootText := roots.filterMap fun s => (reports.find? (·.span.request.id == s.request.id)).map fun r =>
+    let took := (r.span.callerView.map fun n => s!"{Spans.caller r.span} waited {ms n}").getD "unmeasured"
+    let crit := if r.critical.isEmpty then "" else s!", critical path {" -> ".intercalate (r.critical.map (·.request.label))} ({ms r.criticalNs})"
+    s!"{r.span.request.label}: {took}{crit}"
+  let verdict := if issues.isEmpty then "measured" else "inconsistent"
+  let reading := if issues.isEmpty
+    then s!"{p.name}: {all.length} call{if all.length == 1 then "" else "s"} in {roots.length} tree{if roots.length == 1 then "" else "s"}" ++
+      (if rootText.isEmpty then "" else "; " ++ "; ".intercalate (rootText.take 4))
+    else s!"{p.name}: {issues.length} problem{if issues.length == 1 then "" else "s"}; first: {issues.head!}"
+  return Json.mkObj [("tool", "session_spans"), ("verdict", Json.str verdict), ("reading", Json.str reading), ("name", Json.str p.name),
+    ("spans", Json.arr ((reports.take 200).map spanJson).toArray), ("timelines", Json.arr (timelines.take 20).toArray),
+    ("issues", Json.arr ((issues.take 64).map Json.str).toArray), ("lean", Json.str p.lean)]
 
 /-- What may happen next in one session: the walk-through in the view calls this after each step. -/
 def next (args : Json) : Except String Json := do
@@ -1540,7 +1611,7 @@ def sla (args : Json) : Except String Json := do
           ("unit", "probability per entry; entries per window; reward amounts per role and unit"),
           ("boundary", "one entry per occurrence of the require block's message id; the main protocol") ]) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_types", "session_review"]
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_types", "session_review"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -1550,6 +1621,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_sla" => some (sla args)
   | "session_simulate" => some (simulate args)
   | "session_conform" => some (conform args)
+  | "session_spans" => some (spans args)
   | "session_skeleton" => some (skeleton args)
   | "session_next" => some (next args)
   | "session_compat" => some (compat args)
@@ -1786,7 +1858,18 @@ read, and nothing else of a body.
   \"to\": \"Client\", \"label\": \"Quote\", \"cause\": \"e6\"}`, and one per event, `{\"id\": ..., \"at\":
   \"Shop\", \"label\": \"Completed\", \"act\": true}`. Each session must follow the protocol: order,
   choices, the cause the protocol names, and an end the protocol allows (unless allowIncomplete).
-  session_simulate's events are accepted as they are.
+  session_simulate's events are accepted as they are. The order of the log does not matter: `from`
+  and `to` may name actors (`Server/s1`), `prev` names the previous event the same actor sent, and
+  `sentAt`/`receivedAt` are the sender's and the receiver's clock readings in nanoseconds; each
+  session is replayed in the order these links and each actor's own clock give, and links that
+  name nothing, fork an actor's order, or form a cycle are reported.
+
+- `session_spans {lean, events}`: time every call in a log (a request and the reply naming it as
+  cause) without comparing clocks: the caller's view (reply received minus request sent, its
+  clock), the callee's own (reply sent minus request received, its clock), the network time both
+  ways together, the sub-calls (concurrent where they overlap on the callee's clock), the critical
+  path, and each call tree on its root caller's timeline. A callee that took longer than its caller
+  waited is reported as inconsistent.
 
 - `session_next {lean, events?}`: what may happen next in one session after the events so far (in
   session_conform's format): each allowed step with the cause it must name, and whether the session

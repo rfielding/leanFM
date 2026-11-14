@@ -1,0 +1,8 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+e1  Browser -> Api/a1  GetUser  cause -  prev -  sentAt 0  receivedAt 5002000000
+e2  Api/a1 -> Db/d1  Query  cause e1  prev -  sentAt 5003000000  receivedAt 97004000000
+e3  Api/a1 -> Cache  Get  cause e1  prev e2  sentAt 5003000000  receivedAt 3600004000000
+e4  Db/d1 -> Api/a1  Row  cause e2  prev -  sentAt 97014000000  receivedAt 5015000000
+e5  Cache -> Api/a1  Hit  cause e3  prev -  sentAt 3600006000000  receivedAt 5007000000
+e6  Api/a1 -> Browser  Ok  cause e1  prev e3  sentAt 5016000000  receivedAt 18000000
+\end{lstlisting}

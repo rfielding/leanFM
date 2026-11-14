@@ -106,6 +106,65 @@ LeanFM interprets it; nothing in it runs as code. Asked after any prefix, LeanFM
 and whether the session may end there; that is how a walk through one session is
 driven, one click at a time.
 
+\section{Actors, links and clocks}
+\label{sec:actors}
+
+\index{actor}\index{happens-before}\index{clock skew}
+A server runs many instances of a protocol at once, and its log interleaves
+them. The interleaving carries no information: what matters is the order in
+which each \emph{actor} processed its messages. An event may name its actors as
+\texttt{Role/instance}, so \texttt{Api/a1} is one thread of the API.
+Three things order a log: \texttt{prev}, the previous event the same actor
+sent; \texttt{cause}, the event a message answers; and each actor's own clock.
+An actor's readings, \texttt{sentAt} when it sent and \texttt{receivedAt} when it
+received, order its own events, and they are compared only with each other. Here
+a browser asks an API, which asks a database and a cache in parallel. The four
+machines' clocks disagree by seconds and by an hour:
+
+\input{generated/spans-log.tex}
+
+Conformance replays each session in the order these links give, so the verdict
+is the same whatever order the log was written in:
+
+\input{generated/spans-conform.tex}
+
+\index{session\_spans}
+Durations come from the same rule. A call is a request and the reply that names
+it as its cause. The caller's view runs from the request sent to the reply
+received, on the caller's clock. The callee's own view runs from the request
+received to the reply sent, on its clock. Each is a difference of one clock's
+readings, so skew cannot touch it. The caller's view is never shorter. The
+difference is network and queueing time, both directions together. A log cannot
+split it into the two legs without synchronized clocks, so LeanFM does not
+split it. \texttt{session\_spans} answers:
+
+\begin{center}
+\small
+\input{generated/spans-table.tex}
+\end{center}
+
+\input{generated/spans-reading.tex}
+
+\index{critical path}
+The query and the cache ran at once: their intervals overlap on the API's clock.
+So the API's 14~ms is bounded below by the longer of the two, not their sum. The
+query is the critical path, and making the cache faster would not shorten the
+call. Along a chain of calls one after another the durations add. Across
+concurrent ones, the longest counts. A \texttt{join k of n} replies once $k$ are
+back, and a reply that arrives later is listed as not awaited.
+
+The call tree also lies on one timeline, the browser's. Each callee's clock is
+offset so that it received the request at the moment the request was sent. Its
+own durations then lay out the rest, and no two clocks are compared:
+
+\input{generated/spans-timeline.tex}
+
+A log whose clocks contradict each other is caught, not averaged. If the
+database claims a longer time than the API waited for it, an event belongs to
+another call, a cause is missing, or a clock jumped:
+
+\input{generated/spans-skewed.tex}
+
 \section{State lives in the stream}
 
 \index{reward vector}
