@@ -6,6 +6,7 @@ import LeanFM.Session.Calls
 import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Proto
+import LeanFM.Session.SpecCheck
 import LeanFM.Session.LeanGen
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
@@ -1257,33 +1258,9 @@ def ctl (args : Json) : Except String Json := do
   let formula ← match args.getObjVal? "formula" with
     | .ok f => pure f
     | .error _ => throw "formula is required: a JSON CTL formula, such as {\"never\": {\"after\": \"Charge\"}}"
-  let graph ← p.global.stateGraph
-  let transition (e : String × String × Conform.NextStep) : Json :=
-    let (a, b, n) := e
-    Json.mkObj ([("src", Json.str a), ("dst", Json.str b), ("message", Json.str n.label), ("from", Json.str n.src)] ++
-      (if n.isAct then [] else [("to", Json.str n.dst)]))
-  let draft := Json.mkObj [("id", Json.str p.name), ("states", Json.arr (graph.states.map Json.str).toArray),
-    ("initial", "s0"), ("terminals", Json.arr (graph.terminals.map Json.str).toArray),
-    ("transitions", Json.arr (graph.edges.map transition).toArray)]
-  let answer ← LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)])
-  let reading := (answer.getObjValAs? String "reading").toOption.getD ""
-  -- the path goes in the text a model reads too: the messages in order, and where a lasso repeats
-  let evidence := (answer.getObjVal? "evidence").toOption.getD Json.null
-  let steps := match evidence.getObjVal? "path" with
-    | .ok (.arr a) => a.toList.filterMap fun st => (st.getObjValAs? String "message").toOption
-    | _ => []
-  let kind := (evidence.getObjValAs? String "kind").toOption.getD "path"
-  -- loopsBackTo indexes the path, whose first entry is the start state (no message)
-  let loop := match (evidence.getObjValAs? Nat "loopsBackTo").toOption with
-    | some 0 => " (then repeats from the start)"
-    | some i => if i ≥ steps.length then " (and stays there)"
-      else s!" (then repeats from {steps.getD i ""})"
-    | none => ""
-  let report := if steps.isEmpty then "" else s!"{kind}: {" -> ".intercalate steps}{loop}"
+  -- the same check as a Lean Spec's properties (Spec.check): one checker, one answer
+  let answer ← p.global.checkFormula p.name formula
   return answer.setObjVal! "tool" (Json.str "session_ctl")
-    |>.setObjVal! "report" (Json.str report)
-    |>.setObjVal! "reading" (Json.str s!"{p.name}: {reading}")
-    |>.setObjVal! "states" (toJson graph.states.length)
     |>.setObjVal! "lean" (Json.str p.lean)
 
 /-- A role's HTTP interface: the requests it receives with their routes, as OpenAPI 3.1. -/

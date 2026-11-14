@@ -131,6 +131,18 @@ promise that the transfer \emph{will} finish needs a stated fairness assumption 
 the channel, such as ``a packet sent infinitely often is delivered infinitely
 often''.
 
+\index{Spec!properties}
+The protocol itself makes the same point before any physics is added. The
+requirements written in Lean beside \texttt{Transfer} state their temporal
+properties, and LeanFM proves each one over the protocol's state graph when the
+file compiles, with the checker that answers \texttt{session\_ctl}: a false
+property breaks the build and names its counterexample. \texttt{AG EF terminal}
+and ``a one-block transfer exists'' are proved. \texttt{AF terminal} is disproved
+with the path \texttt{Data -> Ack}, repeated forever: the receiver decides when the
+last block has come, and nothing in the type bounds the length of a file. A promise
+that every transfer ends needs that bound or an assumption, stated where it can be
+seen.
+
 \section{What the classic session-type reading leaves out}
 
 \index{multiparty session type}

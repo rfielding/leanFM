@@ -3,6 +3,7 @@ import LeanFM.Session.Physics
 import LeanFM.Session.Topology
 import LeanFM.Session.Http
 import LeanFM.Session.Spec
+import LeanFM.Session.SpecCheck
 import LeanFM.Session.Syntax
 import LeanFM.Session.Knowledge
 import LeanFM.Session.Diagram

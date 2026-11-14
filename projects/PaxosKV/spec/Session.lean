@@ -125,10 +125,13 @@ def handles : List (Role × Role × List Condition) :=
 
 def spec : Spec Role :=
   { global := write, roles, physics, handles
-    properties := [ .AG (.EF .terminal), sent% DurableAccepted ]
+    properties := [ .AG (.EF .terminal), .EF (sent% DurableAccepted) ]
     assumptions := [.fairDelivery .kv0 .kv1, .fairDelivery .kv1 .kv0] }
 
 #guard spec.issues == []
+-- the properties are proved over the protocol's state graph when this file compiles: from every
+-- state a write can still finish, and a write can become durable
+#guard spec.check "Write" == []
 
 /-! ## The deployment: two islands -/
 

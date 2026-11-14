@@ -192,18 +192,27 @@ def tftpPhysics : Physics Role :=
     timers := [{ role := .sender }] }
 --@end tftpPhysics
 
-/-- Requirements: what each channel's protocol handles, two properties, and the assumption the
-liveness property needs. -/
+/-- Requirements: what each channel's protocol handles, the properties the protocol promises, and
+the assumptions about the channels. -/
 def tftp : Spec Role :=
   { global := transfer, roles := [.sender, .receiver], physics := tftpPhysics
     handles := [ (.sender, .receiver, [.loss, .reorder])
                , (.receiver, .sender, [.loss]) ]
-    properties := [ .AG (.EF .terminal), .AF .terminal
-                  , .someUntil (.not (sent% Timeout)) (sent% LastAck) ]
+    properties := [ .AG (.EF .terminal)
+                  , .someUntil (.not (sent% Ack)) (sent% LastAck) ]
     assumptions := [.fairDelivery .sender .receiver, .fairDelivery .receiver .sender] }
 
 -- The ACK channel can reorder, and the protocol does not say it handles that: one finding.
 #guard tftp.issues == ["channel Receiver -> Sender surfaces reorder, which its protocol does not handle"]
+
+-- The properties are proved, over the protocol's state graph, when this file compiles: from every
+-- state the transfer can still finish, and a one-block transfer exists.
+#guard (tftp.verdicts "Transfer").map (·.2.1) == ["proved", "proved"]
+
+-- The protocol does not promise that every transfer ends: the receiver decides when the last block
+-- has come, and may acknowledge forever. Stated as a property, it is disproved with that path.
+#guard ({ tftp with properties := [.AF .terminal] }.check "Transfer").getLast? ==
+  some "property disproved: Transfer: on every path, eventually the task has ended; counterexample: Data -> Ack (then repeats from Ack)"
 
 -- With no physics at all, the same protocol has nothing to handle: the default is reliable.
 #guard ({ global := transfer, roles := [.sender, .receiver] } : Spec Role).issues == []
