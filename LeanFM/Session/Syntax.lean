@@ -2,6 +2,7 @@ import Lean
 import LeanFM.Session.Global
 import LeanFM.Session.Spec
 import LeanFM.Session.Text
+import LeanFM.Session.System
 
 /-!
 # The `protocol` command: a session-type file is Lean (clause selfhost.session.lean-syntax)
@@ -168,6 +169,51 @@ def elabRequire : CommandElab := fun stx => do
   let entry ← read (Text.name body[2] "a message id")
   for c in body[4].getArgs do
     discard <| withRef c (read (Text.requirement entry c))
+
+/-- The roles of a protocol the `protocol` command defined: its explicit parameters, in order. -/
+def protocolRoles (c : Name) : CommandElabM (List String) := do
+  let info <- getConstInfo c
+  let rec go : Expr -> List String
+    | .forallE n _ b bi => (if bi == .default then [n.toString] else []) ++ go b
+    | _ => []
+  return go info.type
+
+/-- `system Name { instance x : Role [serial]; accept P (fresh Role, x, ...); }` defines
+`Name : LeanFM.Session.System` (selfhost.session.instances): each accept applies protocol `P` to
+its own role names, so an unknown protocol is a Lean error, and the players are checked against the
+roles `P` was declared with. -/
+@[command_elab LeanFM.Session.Grammar.systemCmd]
+def elabSystem : CommandElab := fun stx => do
+  let doc : Option (TSyntax ``Lean.Parser.Command.docComment) := stx[0].getOptional?.map (⟨·⟩)
+  let body := stx[1]
+  -- the protocols accepted, with the roles their protocol commands declared
+  let mut defs : List Text.Def := []
+  let mut consts : List (Prod String Name) := []
+  for a in Text.ofKind `LeanFM.Session.Grammar.acceptDecl body do
+    let pid := a[1]
+    let c <- withRef pid do
+      let cs <- resolveGlobalName pid.getId
+      match cs.find? (fun x => x.2.isEmpty) with
+      | some (c, _) => pure c
+      | none => throwError "accept {pid.getId}: no protocol {pid.getId} is defined"
+    let p := pid.getId.toString
+    if !defs.any (fun x => x.name == p) then
+      defs := defs ++ [{ name := p, roles := <- protocolRoles c, body := [] }]
+      consts := consts ++ [(p, c)]
+  let sd <- withRef body (read (Text.systemDecl defs body))
+  let shared <- sd.shared.toArray.mapM fun (n, r, s) =>
+    `(({ name := $(str n), role := $(str r), serial := $(quote s) } : LeanFM.Session.Shared))
+  let accepts <- sd.accepts.toArray.mapM fun (p, players) => do
+    let roles := ((defs.find? (fun x => x.name == p)).map (fun x => x.roles)).getD []
+    let c := (consts.lookup p).getD (Name.mkSimple p)
+    let ps <- players.toArray.mapM fun (f, n) =>
+      if f then `(LeanFM.Session.Player.fresh) else `(LeanFM.Session.Player.shared $(str n))
+    let args := roles.toArray.map fun r => (str r : Term)
+    `(({ protocolName := $(str p), roles := [$(roles.toArray.map str),*], players := [$ps,*],
+         global := ($(mkIdent c) $args*) } : LeanFM.Session.Accept))
+  let n := nm sd.name
+  elabCommand (<- withRef body `($[$doc:docComment]? def $n : LeanFM.Session.System :=
+    { name := $(str sd.name), shared := [$shared,*], accepts := [$accepts,*] }))
 
 /-- A property atom naming a message by its vocabulary type, so a misspelt label is a type error:
 `sent% Dup` elaborates only if `Dup` is a type. -/

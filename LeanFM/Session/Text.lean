@@ -67,6 +67,19 @@ structure Def where
   body  : List Stmt
   deriving Inhabited
 
+/-- A `system` block as written (selfhost.session.instances): shared instances (name, role,
+serial) and accepts (protocol, players: `fresh Role` as `(true, Role)`, an instance as
+`(false, name)`). -/
+structure SystemDef where
+  name    : String
+  shared  : List (Prod String (Prod String Bool))
+  accepts : List (Prod String (List (Prod Bool String)))
+  deriving Inhabited, Repr
+
+/-- At most this many shared instances and accepts in one system. -/
+def maxShared : Nat := 8
+def maxAccepts : Nat := 4
+
 structure Limits where
   maxBytes   : Nat := 65536
   maxSteps   : Nat := 200
@@ -222,6 +235,8 @@ structure Acc where
   types : Array Types.Message := #[]
   /-- `sessions by x.field`: session keys as (message id, field path) (selfhost.session.envelope) -/
   keys : Array (String × String) := #[]
+  /-- `system` blocks after the protocols they accept (selfhost.session.instances) -/
+  systems : Array SystemDef := #[]
 
 /-- Reading: the source (for positions and requirement texts) and what has been collected. -/
 abbrev R := ReaderT String (StateT Acc (Except String))
@@ -635,6 +650,48 @@ def protocolDef (body : Syntax) : R Def := do
   return { name := pname, roles := rs, body := unroll b }
 
 open Lean (Syntax) in
+/-- A `system` block (selfhost.session.instances), checked against the protocols defined before it
+(`defs`: each protocol's name and roles). Every accept names an earlier protocol and gives one
+player per role, in the protocol's order: `fresh Role`, naming that role, or a shared instance
+declared in the block whose role is that role. -/
+def systemDecl (defs : List Def) (stx : Syntax) : R SystemDef := do
+  let sname <- name stx[1] "the system's name"
+  let mut shared : Array (Prod String (Prod String Bool)) := #[]
+  let mut accepts : Array (String × List (Prod Bool String)) := #[]
+  for item in stx[3].getArgs do
+    if item.getKind == `LeanFM.Session.Grammar.instDecl then
+      let n <- name item[1] "the instance's name"
+      let r <- name item[3] "the role it plays"
+      if shared.any (fun x => x.1 == n) then failAt item s!"instance {n} is declared twice"
+      if shared.size >= maxShared then failAt item s!"a system has at most {maxShared} shared instances"
+      shared := shared.push (n, r, item[4].getNumArgs > 0)
+    else
+      let p <- name item[1] "the protocol it accepts"
+      if accepts.size >= maxAccepts then failAt item s!"a system has at most {maxAccepts} accepts"
+      let some d := defs.find? (fun x => x.name == p)
+        | failAt item s!"accept {p}: no protocol {p} is defined before this system"
+      let args := item[3].getArgs.filter (fun x => x.getKind == `LeanFM.Session.Grammar.acceptArg)
+      if args.size != d.roles.length then
+        failAt item s!"accept {p} needs one player for each of its {d.roles.length} roles ({", ".intercalate d.roles}), not {args.size}"
+      let mut players : Array (Prod Bool String) := #[]
+      for (a, r) in args.toList.zip d.roles do
+        let isFresh := a[0].getNumArgs > 0
+        let n <- name a[1] (if isFresh then "a role" else "a shared instance")
+        if isFresh then
+          if n != r then failAt a s!"accept {p}: the role in this position is {r}, so write fresh {r}"
+          if shared.any (fun x => x.1 == n) then failAt a s!"accept {p}: {n} is a shared instance, so it cannot be fresh"
+        else
+          match shared.find? (fun x => x.1 == n) with
+          | none => failAt a s!"accept {p}: {n} is not a shared instance declared before this accept; write fresh {r} for a new {r} per instance"
+          | some (_, role, _) =>
+            if role != r then failAt a s!"accept {p}: {n} plays {role}, but the role in this position is {r}"
+        if players.any (fun x => x.2 == n) then failAt a s!"accept {p}: {n} is given twice"
+        players := players.push (isFresh, n)
+      accepts := accepts.push (p, players.toList)
+  if accepts.isEmpty then failAt stx s!"system {sname} accepts nothing; add accept Protocol (fresh Role, ...);"
+  return { name := sname, shared := shared.toList, accepts := accepts.toList }
+
+open Lean (Syntax) in
 /-- Every protocol of a file, earlier ones first; structures and requirements are collected. -/
 def fileDefs (stx : Syntax) : R (List Def) := do
   let mut defs : Array Def := #[]
@@ -654,9 +711,16 @@ def fileDefs (stx : Syntax) : R (List Def) := do
         if (← get).requires.size ≥ 16 then failAt c "at most 16 requirements"
         let r ← requirement entry c
         modify fun a => { a with requires := a.requires.push r }
+    else if k == `LeanFM.Session.Grammar.systemBody then
+      if defs.isEmpty then failAt body "a system follows the protocols it accepts"
+      let s <- systemDecl defs.toList body
+      if (<- get).systems.any (fun x => x.name == s.name) then failAt body s!"system {s.name} is defined twice"
+      if defs.any (fun x => x.name == s.name) then failAt body s!"system {s.name} has the name of a protocol"
+      modify fun a => { a with systems := a.systems.push s }
     else
       let d ← protocolDef body
       if defs.any (·.name == d.name) then failAt body s!"protocol {d.name} is defined twice"
+      if (← get).systems.any (·.name == d.name) then failAt body s!"protocol {d.name} has the name of a system"
       defs := defs.push d
   if defs.isEmpty then failAt stx "no protocol in the text"
   return defs.toList
@@ -787,6 +851,8 @@ structure Parsed where
   keys : List (String × String) := []
   /-- the labels of every protocol in the text, the main one's and the earlier ones' -/
   allLabels : List String := []
+  /-- the text's `system` blocks (selfhost.session.instances) -/
+  systems : List SystemDef := []
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -806,7 +872,7 @@ def leanWords : List String :=
     "example", "export", "extends", "for", "from", "fun", "have", "if", "import", "in", "inductive",
     "instance", "let", "local", "macro", "match", "mutual", "namespace", "noncomputable", "nomatch", "opaque",
     "open", "partial", "private", "protected", "protocol", "require", "return", "scoped", "section",
-    "set_option", "show", "structure", "suffices", "syntax", "then", "theorem", "universe", "unsafe",
+    "set_option", "show", "structure", "suffices", "syntax", "system", "then", "theorem", "universe", "unsafe",
     "variable", "where", "with", "Prop", "Sort", "Type" ]
 
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
@@ -857,7 +923,7 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
     | .error e => throw s!"sessions by {x}.{f}: {e}"
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
            requires := st.requires.toList, types := env, keys := st.keys.toList,
-           allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups }
+           allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList }
 
 /-! ## Writing -/
 

@@ -1,0 +1,20 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+protocol Refresh (Client, Db, Cache) {
+  l: Lock from Client to Db;
+  c: Invalidate from Client to Cache cause l;
+  Done from Cache to Client cause c;
+  Unlock from Client to Db cause l;
+}
+protocol Evict (Client, Db, Cache) {
+  e: Drop from Client to Cache;
+  w: WriteBack from Client to Db cause e;
+  Saved from Db to Client cause w;
+  Dropped from Cache to Client cause e;
+}
+system Shop {
+  instance db : Db serial;
+  instance cache : Cache serial;
+  accept Refresh (fresh Client, db, cache);
+  accept Evict (fresh Client, db, cache);
+}
+\end{lstlisting}

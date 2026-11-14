@@ -278,7 +278,7 @@ def leanRejects (t : String) (needle : String) : Bool :=
 #guard leanRejects "protocol P (A, A) { }" "role names must be distinct"
 #guard leanRejects "protocol P (A, B) { join 3 of { X from A to B; } and { Y from B to A; } }" "out of range"
 -- text is never elaborated: Lean commands are not protocol syntax, so they are an error, not run
-#guard leanRejects "#eval IO.Process.exit 1\nprotocol P (A) { X at A; }" "line 1, column 1: expected structure, protocol or require"
+#guard leanRejects "#eval IO.Process.exit 1\nprotocol P (A) { X at A; }" "line 1, column 1: expected structure, protocol, require or system"
 #guard leanRejects "protocol P (A, B) { X from A to B where (IO.Process.exit 1; }" "expected a where condition ending with ';'"
 -- a where condition is text, shown as written
 #guard ((field (diagram (leanArgs "structure X where n : Nat\nprotocol P (A, B) { p: X from A to B where p.n <  3   && true; }")) "svg").getStr?.toOption.getD "").contains "[p.n &lt; 3 &amp;&amp; true]"

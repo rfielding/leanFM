@@ -165,6 +165,79 @@ another call, a cause is missing, or a clock jumped:
 
 \input{generated/spans-skewed.tex}
 
+\section{Instances}
+\label{sec:instances}
+
+\index{instance}\index{system}\index{deadlock}\index{session\_instances}
+A protocol describes one conversation. A server runs many at once: each accept
+spawns an instance with a session id of its own, and every instance needs its own
+identity so that concurrency is handled correctly. A \texttt{system} block, written
+after the protocols, says which instances exist. Here two code paths share a
+database and a cache. \texttt{Refresh} locks the database and then invalidates
+the cache. \texttt{Evict} drops from the cache and then writes back to the
+database:
+
+\input{generated/instances-system.tex}
+
+\texttt{instance db : Db serial;} declares a shared instance, created once, that
+plays role \texttt{Db}; its actor is \texttt{Db/db}. Each \texttt{accept} is one
+instance of its protocol, with one player per role in the protocol's order.
+\texttt{fresh Client} is a new actor for every instance (\texttt{Client/s1},
+\texttt{Client/s2}, and so on). A shared instance plays its own role, and only
+that role. An instance owns its state exclusively, here its protocol state, and
+instances interact only by messages, using only the shared instances they were
+given. In a Lean file \texttt{system} is a Lean command. It defines a value whose
+accepts are the protocols applied to their own roles, so a misspelt protocol is a
+Lean error, and the tools read the same block with the same grammar.
+
+A \texttt{serial} instance serves one session at a time: from its first message in
+a session until that session no longer mentions its role, the others wait. That
+is what a lock does, or a row held in a transaction, or a single-threaded server.
+\texttt{session\_instances} interleaves a bounded number of instances, one to
+four in all, and explores every order. With one instance of each accept, it
+finds this:
+
+\input{generated/instances-deadlock.tex}
+
+This is the classic lock-order deadlock, found from the protocols alone. The path is
+the shortest one, and each instance says what it waits for and who holds it.
+Taking the database first in both code paths (\texttt{EvictInOrder}) removes it.
+Properties can then be stated per instance: each is checked for every instance,
+its messages are that instance's own, and \texttt{terminal} means that instance
+has finished. System properties are stated too, and there \texttt{sent X} is any
+instance's \texttt{X}. All of them go to the same checker that proves a single
+protocol's properties:
+
+\input{generated/instances-fixed.tex}
+
+\noindent The number of states shows what \texttt{serial} costs and what it
+buys:
+
+\begin{center}
+\small
+\input{generated/instances-counts.tex}
+\end{center}
+
+Instances that are not serial never wait for one another. Their states are
+every combination of each instance's own protocol state, which is why that row
+grows fastest. A serial instance cuts the interleavings it forbids, and the
+opposite order adds the states that lead into the deadlock.
+
+\index{isolation}
+Isolation is checked over every reachable step: a step of instance \texttt{s}
+involves only \texttt{s}'s fresh actors and the shared instances \texttt{s} was
+given. A message of one instance never reaches another's thread, and no instance
+uses a reference it was not given. A log of the system is held to the same rule.
+Every actor names an instance, and a fresh actor belongs to one session only.
+Here one client thread appears in two sessions:
+
+\input{generated/instances-log.tex}
+
+\noindent What instances do not have yet is data. With protocol state alone, a race
+between two instances at a shared one is an order of messages that properties can
+see. When an instance owns data, such as a stock count, the same orders can leave
+different data, and that is the next step.
+
 \section{State lives in the stream}
 
 \index{reward vector}

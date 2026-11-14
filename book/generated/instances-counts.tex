@@ -1,0 +1,10 @@
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{1 of each} & \multicolumn{2}{c}{2 of each} \\
+System & States & Deadlocked & States & Deadlocked \\
+\midrule
+Shop: opposite orders, serial & 19 & 1 & 160 & 16 \\
+OrderedShop: one order, serial & 16 & 0 & 112 & 0 \\
+ConcurrentShop: not serial & 25 & 0 & 625 & 0 \\
+\bottomrule
+\end{tabular}

@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_types", "session_review"] do
+  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -121,6 +121,11 @@ def main : IO Unit := do
   assertContains "MCP session_check echoes the Lean text" sess.body "protocol PingPong (A, B)"
   let sessText ← summaryOf "MCP session_check text is a one-line summary" sess.body
   assertContains "MCP session_check summary gives the reading" sessText "session_check ok: PingPong: no issues"
+  -- instances interleaved (clause selfhost.session.instances): two paths taking two serial instances in opposite orders
+  let inst ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"tools/call\",\"params\":{\"name\":\"session_instances\",\"arguments\":{\"instances\":1,\"lean\":\"protocol P (C, X, Y) { a: A from C to X; b: B from C to Y cause a; Z from C to X cause a; } protocol Q (C, X, Y) { b: B2 from C to Y; a: A2 from C to X cause b; Z2 from C to Y cause b; } system S { instance x : X serial; instance y : Y serial; accept P (fresh C, x, y); accept Q (fresh C, x, y); }\"}}}"
+  assertContains "MCP session_instances finds the deadlock through the dispatch" inst.body "\"verdict\":\"deadlock\""
+  let instText ← summaryOf "MCP session_instances text is a one-line summary" inst.body
+  assertContains "MCP session_instances summary names the path" instText "deadlock after A@s1 from C/s1 to X/x -> B2@s2 from C/s2 to Y/y"
   let sessBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":32,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"protocol\":{\"roles\":[\"A\"],\"steps\":[{\"exec\":\"x\"}]}}}}"
   assertContains "MCP session_check rejects an unknown step as a tool error" sessBad.body "\"isError\":true"
   let skel ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":37,\"method\":\"tools/call\",\"params\":{\"name\":\"session_skeleton\",\"arguments\":{\"lean\":\"protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p; }\"}}}"

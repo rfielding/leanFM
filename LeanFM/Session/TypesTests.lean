@@ -40,7 +40,7 @@ def nested := "structure Address where\n  city : String\nstructure Ship where\n 
 #guard refuses "structure X where y : Nat\nstructure X where z : Nat\nprotocol P (A, B) { X from A to B; }" "declared twice"
 #guard refuses "structure X where\n  y : Nat\n  y : Int\nprotocol P (A, B) { X from A to B; }" "two fields named y"
 -- a keyword is not a field name: Lean reads `class` as a keyword, so the structure ends before it
-#guard refuses "structure X where class : Nat\nprotocol P (A, B) { X from A to B; }" "line 1, column 19: expected structure, protocol or require"
+#guard refuses "structure X where class : Nat\nprotocol P (A, B) { X from A to B; }" "line 1, column 19: expected structure, protocol, require or system"
 #guard refuses "structure X where y : List List\nprotocol P (A, B) { X from A to B; }" "holds one plain type"
 #guard refuses "structure X where y : Option (List Nat)\nprotocol P (A, B) { X from A to B; }" "holds one plain type"
 #guard refuses "structure Nat where y : Int\nprotocol P (A, B) { X from A to B; }" "built-in type"

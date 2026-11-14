@@ -38,6 +38,27 @@ def toJson : Prop' → Json
 
 end Prop'
 
+/-- A CTL formula (the logic tools' JSON) decided over an inline task (their draft form: states,
+initial, terminals, transitions): the checker's answer, with `report` naming the path's messages in
+order. -/
+def checkDraft (name : String) (draft formula : Json) : Except String Json := do
+  let answer <- LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)])
+  let reading := (answer.getObjValAs? String "reading").toOption.getD ""
+  -- the path in words: the messages in order, and where a lasso repeats
+  let evidence := (answer.getObjVal? "evidence").toOption.getD Json.null
+  let steps := match evidence.getObjVal? "path" with
+    | .ok (.arr a) => a.toList.filterMap fun st => (st.getObjValAs? String "message").toOption
+    | _ => []
+  let kind := (evidence.getObjValAs? String "kind").toOption.getD "path"
+  -- loopsBackTo indexes the path, whose first entry is the start state (no message)
+  let loop := match (evidence.getObjValAs? Nat "loopsBackTo").toOption with
+    | some 0 => " (then repeats from the start)"
+    | some i => if i >= steps.length then " (and stays there)" else s!" (then repeats from {steps.getD i ""})"
+    | none => ""
+  let report := if steps.isEmpty then "" else s!"{kind}: {" -> ".intercalate steps}{loop}"
+  return answer |>.setObjVal! "report" (Json.str report)
+    |>.setObjVal! "reading" (Json.str s!"{name}: {reading}")
+
 /-- A CTL formula (the logic tools' JSON) decided over one session of a protocol: the checker's
 answer, with `report` naming the path's messages in order and `states` the graph's size. -/
 def Global.checkFormula (g : Global String) (name : String) (formula : Json) : Except String Json := do
@@ -49,23 +70,8 @@ def Global.checkFormula (g : Global String) (name : String) (formula : Json) : E
   let draft := Json.mkObj [("id", Json.str name), ("states", Json.arr (graph.states.map Json.str).toArray),
     ("initial", "s0"), ("terminals", Json.arr (graph.terminals.map Json.str).toArray),
     ("transitions", Json.arr (graph.edges.map transition).toArray)]
-  let answer ← LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)])
-  let reading := (answer.getObjValAs? String "reading").toOption.getD ""
-  -- the path in words: the messages in order, and where a lasso repeats
-  let evidence := (answer.getObjVal? "evidence").toOption.getD Json.null
-  let steps := match evidence.getObjVal? "path" with
-    | .ok (.arr a) => a.toList.filterMap fun st => (st.getObjValAs? String "message").toOption
-    | _ => []
-  let kind := (evidence.getObjValAs? String "kind").toOption.getD "path"
-  -- loopsBackTo indexes the path, whose first entry is the start state (no message)
-  let loop := match (evidence.getObjValAs? Nat "loopsBackTo").toOption with
-    | some 0 => " (then repeats from the start)"
-    | some i => if i ≥ steps.length then " (and stays there)" else s!" (then repeats from {steps.getD i ""})"
-    | none => ""
-  let report := if steps.isEmpty then "" else s!"{kind}: {" -> ".intercalate steps}{loop}"
-  return answer |>.setObjVal! "report" (Json.str report)
-    |>.setObjVal! "reading" (Json.str s!"{name}: {reading}")
-    |>.setObjVal! "states" (toJson graph.states.length)
+  let answer ← checkDraft name draft formula
+  return answer.setObjVal! "states" (toJson graph.states.length)
 
 namespace Spec
 variable {R : Type} [DecidableEq R] [ToString R]

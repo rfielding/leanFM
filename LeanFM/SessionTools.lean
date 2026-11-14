@@ -9,6 +9,7 @@ import LeanFM.Session.Proto
 import LeanFM.Session.SpecCheck
 import LeanFM.Session.Actors
 import LeanFM.Session.Spans
+import LeanFM.Session.Instances
 import LeanFM.Session.LeanGen
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
@@ -1150,6 +1151,11 @@ def conform (args : Json) : Except String Json := do
   -- the log's interleaving carries no information: each session is replayed in an order consistent
   -- with its prev and cause links (selfhost.session.actor-conformance)
   let linkProblems := (Actors.check evs).map fun (e, why) => s!"event {e}: {why}"
+  -- with a system declared, every actor is one of its instances (selfhost.session.instances)
+  let systems <- if p.lean.isEmpty then pure [] else Instances.systemsOf p.lean
+  let linkProblems := linkProblems ++ match systems.getLast? with
+    | some sys => (Instances.checkActors sys evs).map fun (e, why) => s!"event {e}: {why}"
+    | none => []
   let results := p.global.conforms (Actors.linearize evs) allowIncomplete
   -- a keyed session's events all carry its key's value as their session (selfhost.session.envelope)
   let keyProblems := p.keys.flatMap fun (x, f) =>
@@ -1320,6 +1326,49 @@ def compat (args : Json) : Except String Json := do
     ("name", p.name), ("reading", s!"{q.name} -> {p.name}: {order}"),
     ("roles", Json.arr (rows.map (·.2.2.2)).toArray), ("issues", Json.arr (issues.map Json.str).toArray),
     ("notes", Json.arr (notes.map Json.str).toArray), ("lean", p.lean)]
+
+/-- Formulas given as an array argument, at most `maxV` of them. -/
+def formulas (args : Json) (key : String) (maxV : Nat := 8) : Except String (List Json) :=
+  match args.getObjVal? key with
+  | .error _ => .ok []
+  | .ok (.arr a) => if a.size > maxV then .error s!"{key} holds at most {maxV} formulas" else .ok a.toList
+  | .ok _ => .error s!"{key} is an array of JSON CTL formulas"
+
+/-- The text's last system explored with instances interleaved (selfhost.session.instances):
+deadlocks with their paths, isolation over every step, and per-instance and system formulas. -/
+def instances (args : Json) : Except String Json := do
+  let p <- parseProtocol args
+  let systems <- Instances.systemsOf p.lean
+  let some sys := systems.getLast?
+    | throw "the text declares no system; add one after the protocols: system Shop { instance db : Db serial; accept Order (fresh Client, db); }"
+  let n <- natArg args "instances" 2 Instances.maxInstances
+  let perInstance <- formulas args "perInstance"
+  let properties <- formulas args "properties"
+  let r <- Instances.run sys n perInstance properties
+  let g := r.graph
+  let disproved := r.verdicts.filter (fun x => x.verdict != "proved")
+  let verdict := if !r.deadlocks.isEmpty then "deadlock" else if !r.isolation.isEmpty then "isolation"
+    else if !disproved.isEmpty then "disproved" else "ok"
+  let count := g.insts.length
+  let reading := match verdict with
+    | "deadlock" => s!"{sys.name}: {g.deadlocks.length} deadlocked state{if g.deadlocks.length == 1 then "" else "s"} with {count} instances; first: {r.deadlocks.head!}"
+    | "isolation" => s!"{sys.name}: {r.isolation.length} isolation problem{if r.isolation.length == 1 then "" else "s"}; first: {r.isolation.head!}"
+    | "disproved" => let v := disproved.head!; s!"{sys.name}: {disproved.length} propert{if disproved.length == 1 then "y" else "ies"} not proved; first, {v.formula.compress} for {v.scope}: {v.verdict}: {v.why}"
+    | _ => s!"{sys.name}: {count} instances interleaved over {g.keys.size} states: no deadlock, every step isolated" ++
+      (if r.verdicts.isEmpty then "" else s!", {r.verdicts.length} propert{if r.verdicts.length == 1 then "y" else "ies"} proved")
+  return fit <| Json.mkObj
+    [ ("tool", "session_instances"), ("verdict", Json.str verdict), ("reading", Json.str reading), ("name", Json.str sys.name)
+    , ("instances", Json.arr (g.insts.map fun i => Json.mkObj
+        [("id", Json.str i.id), ("protocol", Json.str i.protocolName),
+         ("actors", Json.mkObj (i.actors.map fun (r, a) => (r, Json.str a)))]).toArray)
+    , ("shared", Json.arr (sys.shared.map fun sh => Json.mkObj
+        [("name", Json.str sh.name), ("role", Json.str sh.role), ("actor", Json.str s!"{sh.role}/{sh.name}"), ("serial", Json.bool sh.serial)]).toArray)
+    , ("states", toJson g.keys.size), ("steps", toJson g.edges.size), ("deadlockedStates", toJson g.deadlocks.length)
+    , ("deadlocks", Json.arr (r.deadlocks.map Json.str).toArray)
+    , ("isolation", Json.arr ((r.isolation.take 64).map Json.str).toArray)
+    , ("properties", Json.arr (r.verdicts.map fun v => Json.mkObj
+        [("formula", v.formula), ("scope", Json.str v.scope), ("verdict", Json.str v.verdict), ("reading", Json.str v.why)]).toArray)
+    , ("lean", Json.str p.lean) ]
 
 /-- A CTL formula over one session of the protocol: the protocol's state graph handed to the
 logic tools' checker as an inline task, so `{"after": "Charge"}` holds in the state a Charge has
@@ -1611,7 +1660,7 @@ def sla (args : Json) : Except String Json := do
           ("unit", "probability per entry; entries per window; reward amounts per role and unit"),
           ("boundary", "one entry per occurrence of the require block's message id; the main protocol") ]) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_openapi", "session_types", "session_review"]
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -1626,6 +1675,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_next" => some (next args)
   | "session_compat" => some (compat args)
   | "session_ctl" => some (ctl args)
+  | "session_instances" => some (instances args)
   | "session_openapi" => some (openapi args)
   | "session_types" => some (types args)
   | "session_review" => some (review args)
@@ -1822,6 +1872,30 @@ Logged fields must be fields of the event's message, of their declared types, an
 log that breaks this is refused, naming the event. Generated code logs exactly the fields conditions
 read, and nothing else of a body.
 
+## Instances
+
+A protocol describes one conversation; a server runs many at once. A `system` block, after the
+protocols, says which instances exist:
+
+```
+system Shop {
+  instance db : Db serial;
+  instance cache : Cache;
+  accept Order (fresh Client, db, cache);
+}
+```
+
+`instance db : Db serial;` is a shared instance, created once, playing role `Db` (its actor is
+`Db/db`). `accept Order (...)` is one instance of `Order` per accept, with one player per role in
+`Order`'s order: `fresh Client` (that position's role) is a new actor for every instance
+(`Client/s1`, `Client/s2`, ...), and a shared instance plays its own role. Instances share nothing
+but messages, and use only the shared instances they were given. A `serial` instance serves one
+session at a time, from its first message in a session until that session no longer mentions its
+role; without `serial`, each caller gets a session of its own. So two accepts that take two serial
+instances in opposite orders can deadlock, and `session_instances` shows how. With a system in the
+text, `session_conform` also checks the log's actors: every one is `Role/instance`, a shared
+instance plays its own role, and a fresh actor belongs to one session only.
+
 ## Tools
 
 - `session_review {lean}`: every check that applies, in one answer, each finding with an edit to
@@ -1870,6 +1944,14 @@ read, and nothing else of a body.
   ways together, the sub-calls (concurrent where they overlap on the callee's clock), the critical
   path, and each call tree on its root caller's timeline. A callee that took longer than its caller
   waited is reported as inconsistent.
+
+- `session_instances {lean, instances?, perInstance?, properties?}`: the text's last `system`
+  block (see Instances below) with 1 to 4 instances of each accept interleaved (default 2, at
+  most 4 in all): every deadlock with the steps that reach it and what each instance waits for,
+  isolation over every step, and each formula's verdict with its path. A `perInstance` formula is
+  checked for every instance: `{\"after\": \"Label\"}` is that instance's Label and `\"terminal\"`
+  means it has finished. A `properties` formula is about the system: any instance's Label, and
+  every instance able to end. Answers `ok`, `deadlock`, `isolation` or `disproved`.
 
 - `session_next {lean, events?}`: what may happen next in one session after the events so far (in
   session_conform's format): each allowed step with the cause it must name, and whether the session

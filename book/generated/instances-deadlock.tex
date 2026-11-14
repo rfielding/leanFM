@@ -1,0 +1,5 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+deadlock after Lock@s1 from Client/s1 to Db/db -> Drop@s2 from Client/s2 to Cache/cache:
+  s1 waits to send Invalidate from Client/s1 to Cache/cache (needs Cache/cache, which s2 holds);
+  s2 waits to send WriteBack from Client/s2 to Db/db (needs Db/db, which s1 holds)
+\end{lstlisting}

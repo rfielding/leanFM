@@ -11,6 +11,8 @@ import LeanFM.Session.Calls
 import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Conform
+import LeanFM.Session.System
+import LeanFM.Session.Instances
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
 import LeanFM.Session.Evolution
@@ -37,6 +39,8 @@ Pull in only what you use:
 * `LeanFM.Session.Skeleton` each role's typestate as code to implement
 * `LeanFM.Session.Evolution` which roles of a changed protocol can upgrade on their own
 * `LeanFM.Session.Spec`     properties, assumptions and handled conditions
+* `LeanFM.Session.System`   systems: shared instances and the protocols accepted against them
+* `LeanFM.Session.Instances` instances interleaved: deadlocks, isolation, per-instance properties
 
 This module brings in all of them.
 -/

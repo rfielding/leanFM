@@ -152,8 +152,22 @@ def reqClause : Parser := node `LeanFM.Session.Grammar.reqClause
 def requireBody : Parser := node `LeanFM.Session.Grammar.requireBody
   ("require " >> W "per" >> ident >> "{" >> many reqClause >> "}")
 
+/-- `instance db : Db serial;`: a shared instance named `db` playing role `Db`. -/
+def instDecl : Parser := node `LeanFM.Session.Grammar.instDecl
+  ("instance " >> ident >> " : " >> ident >> optional (W "serial") >> ";")
+/-- One player of an accept: `fresh Role` or the name of a shared instance. -/
+def acceptArg : Parser := node `LeanFM.Session.Grammar.acceptArg (optional (W "fresh") >> ident)
+/-- `accept Order (fresh Client, db, cache);`: one instance of `Order` per accept. -/
+def acceptDecl : Parser := node `LeanFM.Session.Grammar.acceptDecl
+  (W "accept" >> ident >> "(" >> sepBy1 acceptArg "," >> ")" >> ";")
+def systemBody : Parser := node `LeanFM.Session.Grammar.systemBody
+  ("system " >> ident >> "{" >> many (instDecl <|> acceptDecl) >> "}")
+
 /-- `protocol Name (Roles) { ... }` as a Lean command (`Session.Syntax` elaborates it). -/
 @[command_parser] def protocolCmd : Parser := leading_parser optional Command.docComment >> protocolBody
+
+/-- `system Name { instance ...; accept ...; }` as a Lean command (selfhost.session.instances). -/
+@[command_parser] def systemCmd : Parser := leading_parser optional Command.docComment >> systemBody
 
 /-- `require per q { ... }` as a Lean command. -/
 @[command_parser] def requireCmd : Parser := leading_parser requireBody
@@ -185,7 +199,7 @@ def structureBody : Parser := node `LeanFM.Session.Grammar.structureBody
 def file : Parser := node `LeanFM.Session.Grammar.file
   (many (node `LeanFM.Session.Grammar.import ("import " >> ident)) >>
     many (node `LeanFM.Session.Grammar.item (optional Command.docComment >>
-      (structureBody <|> protocolBody <|> requireBody))) >>
+      (structureBody <|> protocolBody <|> requireBody <|> systemBody))) >>
     notFollowedBy (Command.moduleDoc) "module doc comment (/-! -/); use -- comments")
 
 /-! ## Running the grammar on text -/
@@ -239,7 +253,7 @@ private unsafe def runImpl (p : Parser) (what : String) (text : String) : Except
 @[implemented_by runImpl, never_extract] opaque run (p : Parser) (what : String) (text : String) : Except String Syntax
 
 /-- Parse protocol text: the Lean header, structures, protocols and requirements. -/
-def parseFile (text : String) : Except String Syntax := run file "structure, protocol or require" text
+def parseFile (text : String) : Except String Syntax := run file "structure, protocol, require or system" text
 
 /-- Parse one annotation value, such as a fraction, duration or time expression. -/
 def parseValue (p : Parser) (text : String) : Except String Syntax := run p "the end of the value" text
