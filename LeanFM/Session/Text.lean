@@ -65,7 +65,15 @@ structure Def where
   name  : String
   roles : List String
   body  : List Stmt
+  /-- `version N` (selfhost.session.versions); 0 when the protocol has none -/
+  version : Nat := 0
   deriving Inhabited
+
+/-- The highest version a protocol may declare. -/
+def maxVersion : Nat := 9999
+
+/-- The newest protocol of this name among `defs` (defined earlier ones first). -/
+def latest (defs : List Def) (n : String) : Option Def := defs.reverse.find? fun d => d.name == n
 
 /-- A `system` block as written (selfhost.session.instances): shared instances (name, role,
 serial) and accepts (protocol, players: `fresh Role` as `(true, Role)`, an instance as
@@ -644,10 +652,16 @@ def protocolDef (body : Syntax) : R Def := do
   if rs.isEmpty then failAt body "a protocol needs at least one role"
   if rs.length > limits.maxRoles then failAt body s!"a protocol has at most {limits.maxRoles} roles"
   if rs.eraseDups.length != rs.length then failAt body "role names must be distinct"
-  let b ← block 0 body[5]
+  let version <- match body[5].getArgs with
+    | #[_, v] =>
+      let n <- nat v
+      if n == 0 || n > maxVersion then failAt v s!"a version is 1 to {maxVersion}"
+      pure n
+    | _ => pure 0
+  let b <- block 0 body[6]
   if (labelsOf b).contains pname then
     failAt body s!"protocol {pname} has a message {pname}; in Lean they would be two declarations with one name, so rename one of them"
-  return { name := pname, roles := rs, body := unroll b }
+  return { name := pname, roles := rs, body := unroll b, version }
 
 open Lean (Syntax) in
 /-- A `system` block (selfhost.session.instances), checked against the protocols defined before it
@@ -668,7 +682,7 @@ def systemDecl (defs : List Def) (stx : Syntax) : R SystemDef := do
     else
       let p <- name item[1] "the protocol it accepts"
       if accepts.size >= maxAccepts then failAt item s!"a system has at most {maxAccepts} accepts"
-      let some d := defs.find? (fun x => x.name == p)
+      let some d := latest defs p
         | failAt item s!"accept {p}: no protocol {p} is defined before this system"
       let args := item[3].getArgs.filter (fun x => x.getKind == `LeanFM.Session.Grammar.acceptArg)
       if args.size != d.roles.length then
@@ -719,7 +733,15 @@ def fileDefs (stx : Syntax) : R (List Def) := do
       modify fun a => { a with systems := a.systems.push s }
     else
       let d ← protocolDef body
-      if defs.any (·.name == d.name) then failAt body s!"protocol {d.name} is defined twice"
+      -- versions of one protocol: each numbered, oldest first (selfhost.session.versions)
+      match latest defs.toList d.name with
+      | none => pure ()
+      | some prev =>
+        if prev.version == 0 && d.version == 0 then failAt body s!"protocol {d.name} is defined twice"
+        if prev.version == 0 || d.version == 0 then
+          failAt body s!"protocol {d.name} is defined twice, once without a version; give every version of it a number"
+        if d.version <= prev.version then
+          failAt body s!"protocol {d.name} version {d.version} follows version {prev.version}; versions go oldest first, each higher than the one before"
       if (← get).systems.any (·.name == d.name) then failAt body s!"protocol {d.name} has the name of a system"
       defs := defs.push d
   if defs.isEmpty then failAt stx "no protocol in the text"
@@ -818,7 +840,7 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
       return .var name
     | .sessions body => return .sessions (← deeper here body) (← next ())
     | .incl name args =>
-      let some d := c.defs.find? (·.name == name)
+      let some d := latest c.defs name
         | bfail here s!"include {name}: no protocol {name} is defined before this one"
       if c.inside.contains name then bfail here s!"include {name} includes itself"
       if args.length != d.roles.length then
@@ -853,6 +875,11 @@ structure Parsed where
   allLabels : List String := []
   /-- the text's `system` blocks (selfhost.session.instances) -/
   systems : List SystemDef := []
+  /-- the main protocol's version, 0 when it has none (selfhost.session.versions) -/
+  version : Nat := 0
+  /-- every protocol with more than one version: each version (number, roles, global type),
+  oldest first -/
+  versioned : List (Prod String (List (Prod Nat (Prod (List String) (Global String))))) := []
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -921,9 +948,24 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
     | .ok .nat | .ok .str => pure ()
     | .ok t => throw s!"sessions by {x}.{f}: a session key is a Nat or String field, and {label}.{f} is {t.render}"
     | .error e => throw s!"sessions by {x}.{f}: {e}"
+  -- every version of every versioned protocol, each built against the protocols before it
+  let builtAt (i : Nat) : Except String (Global String) := do
+    let d := defs[i]!
+    let ctx : Ctx := { defs := defs.take i, rename := [], roles := d.roles, path := d.name, inside := [d.name] }
+    let (gi, _) <- (build ctx d.body).run 0
+    pure gi
+  let names := ((defs.filter fun d => d.version > 0).map fun d => d.name).eraseDups
+  let versioned <- names.filterMapM fun nm => do
+    let idx := (List.range defs.length).filter fun i => defs[i]!.name == nm
+    if idx.length < 2 then return none
+    let vs <- idx.mapM fun i => do
+      let gi <- if i + 1 == defs.length then pure g else builtAt i
+      pure (defs[i]!.version, defs[i]!.roles, gi)
+    return some (nm, vs)
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
            requires := st.requires.toList, types := env, keys := st.keys.toList,
-           allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList }
+           allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList,
+           version := main.version, versioned }
 
 /-! ## Writing -/
 
@@ -1034,7 +1076,7 @@ partial def writeStmt (ind : String) : Stmt → List String
 end
 
 def Def.write (d : Def) : String :=
-  "\n".intercalate (s!"protocol {showIdent d.name} ({", ".intercalate (d.roles.map showIdent)}) \{" ::
+  "\n".intercalate (s!"protocol {showIdent d.name} ({", ".intercalate (d.roles.map showIdent)}){if d.version == 0 then "" else s!" version {d.version}"} \{" ::
     writeStmts "  " d.body ++ ["}"])
 
 /-- Protocol text for definitions, earlier ones first. -/

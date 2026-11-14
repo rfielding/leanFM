@@ -1,0 +1,5 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+Lookup version 3 has no clean upgrade path from version 2:
+with Client upgraded, the deployment gets stuck at the start: Client is stuck trying to send Fetch to Server; Server waits to receive Get from Client;
+with Server upgraded, the deployment gets stuck at the start: Client is stuck trying to send Get to Server; Server waits to receive Fetch from Client
+\end{lstlisting}

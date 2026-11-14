@@ -62,6 +62,9 @@ structure LogEvent where
   nanoseconds (selfhost.session.timelines); each is compared only with readings of its own clock -/
   sentAt  : Option Nat := none
   receivedAt : Option Nat := none
+  /-- the protocol and version the event names (selfhost.session.versions) -/
+  protocolName : Option String := none
+  version : Option Nat := none
   deriving Repr, Inhabited, BEq
 
 namespace Conform

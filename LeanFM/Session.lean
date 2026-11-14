@@ -13,6 +13,7 @@ import LeanFM.Session.Text
 import LeanFM.Session.Conform
 import LeanFM.Session.System
 import LeanFM.Session.Instances
+import LeanFM.Session.Versions
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
 import LeanFM.Session.Evolution

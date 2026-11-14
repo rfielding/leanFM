@@ -142,6 +142,7 @@ validate:
 	@lake env lean LeanFM/PopulationTests.lean
 	@lake env lean LeanFM/CharacterizationTests.lean
 	@lake env lean LeanFM/CTLTests.lean
+	@lake build LeanFM.MCPHost
 	@lake env lean --run LeanFM/MCPTests.lean
 	@lake env lean --run LeanFM/LogicTests.lean
 	@python3 scripts/roundtrip_generated_scenario.py
@@ -191,6 +192,14 @@ book: lean
 	lake env lean --run NeedhamSchroeder.lean
 	lake env lean --run SpansChapterExample.lean
 	lake env lean --run InstancesChapterExample.lean
+	lake env lean --run LanguageChapterExample.lean
+	python3 scripts/svg_to_pdf.py book/generated/lang-*.svg
+	lake env lean --run SlaChapterExample.lean
+	lake env lean --run SecretsChapterExample.lean
+	lake env lean --run OAuthChapterExample.lean
+	python3 scripts/svg_to_pdf.py book/generated/oauth-signin-*.svg
+	lake env lean --run SessionFiles.lean examples/oauth
+	lake env lean --run VersionsChapterExample.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

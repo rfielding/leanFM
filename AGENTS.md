@@ -65,6 +65,12 @@ conforming existing code, edit the source tree, add or update tests, and run the
 repository checks. Missing or contradictory durable information is a reason to
 return to specification, not permission to guess from chat history.
 
+The command-line steps an agent wants the user to run for the current request go in
+`./update` at the project root, rewritten for each request: changes to protected files such
+as the Makefile, and staging new files. Keep each step safe to run again, never commit or
+push from it, and do not ask the user to paste commands instead. `./update` is in
+`.gitignore` and is never added to git.
+
 Useful repository commands:
 
 ```sh

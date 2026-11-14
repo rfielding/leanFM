@@ -12,14 +12,14 @@ inductive Payload where
   | soldOut (m : SoldOut)
   deriving Repr, BEq
 
-/-- The event envelope (selfhost.session.envelope): ts in nanoseconds, unique in its stream. -/
-structure Event where
-  ts : Nat
-  session : String
-  src : Role
-  dst : Role
-  cause : Option Nat := none
-  prev : Option Nat := none
-  /-- the sender's clock when it sent and the receiver's when it received, ns (selfhost.session.timelines) -/
-  sentAt : Option Nat := none
+/-- The protocol and version this module speaks (selfhost.session.versions). -/
+def protocolName : String := "PlaceOrder"
+def protocolVersion : Nat := 0
+
+/-- The versions a peer may speak to this build: its own, and the one before it while the upgrade runs. -/
+def acceptedVersions : List Nat := [0]
+
+/-- The highest version both sides accept, or none: never a guess. -/
+def negotiate (theirs : List Nat) : Option Nat :=
+  (acceptedVersions.filter theirs.contains).foldl (fun acc v => some (match acc with | some a => max a v | none => v)) none
 \end{lstlisting}

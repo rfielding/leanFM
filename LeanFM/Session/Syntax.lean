@@ -3,6 +3,7 @@ import LeanFM.Session.Global
 import LeanFM.Session.Spec
 import LeanFM.Session.Text
 import LeanFM.Session.System
+import LeanFM.Session.Versions
 
 /-!
 # The `protocol` command: a session-type file is Lean (clause selfhost.session.lean-syntax)
@@ -132,7 +133,9 @@ partial def gen (scope : List (String × String)) : List Text.Stmt → MacroM Te
     | .sessions b => `(LeanFM.Session.Global.sessions $(← gen scope b) $(← gen scope rest))
     | .incl p args =>
       let as := args.toArray.map fun a => (nm a : Term)
-      `(LeanFM.Session.Global.box $(str p) ($(nm p) $as*) $(← gen scope rest))
+      -- a versioned protocol is included by its newest version, Name.vN (selfhost.session.versions)
+      let shown := (p.splitOn ".").headD p
+      `(LeanFM.Session.Global.box $(str shown) ($(mkIdent p.toName) $as*) $(<- gen scope rest))
 
 /-- Read one command's syntax with `Session.Text`, against this file's source. -/
 def read (f : Text.R α) : CommandElabM α := do
@@ -145,6 +148,70 @@ def read (f : Text.R α) : CommandElabM α := do
       | [] => e
     throwError msg
 
+/-- The roles of a protocol the `protocol` command defined: its explicit parameters, in order. -/
+def protocolRoles (c : Name) : CommandElabM (List String) := do
+  let info <- getConstInfo c
+  let rec go : Expr -> List String
+    | .forallE n _ b bi => (if bi == .default then [n.toString] else []) ++ go b
+    | _ => []
+  return go info.type
+
+/-- The protocols a body includes, by name. -/
+partial def includesOf : List Text.Stmt -> List String
+  | [] => []
+  | s :: rest => (match s with
+      | .incl p _ => [p]
+      | .timed _ m | .valued _ m => includesOf [m]
+      | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap includesOf
+      | .loop _ b | .sessions b => includesOf b
+      | .bounded _ _ b o => includesOf b ++ includesOf o
+      | _ => []) ++ includesOf rest
+
+/-- The body with each include of `p` naming `target` instead. -/
+partial def retarget (targets : List (Prod String String)) : List Text.Stmt -> List Text.Stmt
+  | [] => []
+  | s :: rest => (match s with
+      | .incl p args => .incl ((targets.lookup p).getD p) args
+      | .timed t m => .timed t ((retarget targets [m]).headD m)
+      | .valued a m => .valued a ((retarget targets [m]).headD m)
+      | .weighted n a qs bs => .weighted n a qs (bs.map (retarget targets))
+      | .choice bs => .choice (bs.map (retarget targets))
+      | .par bs => .par (bs.map (retarget targets))
+      | .join k bs => .join k (bs.map (retarget targets))
+      | .loop n b => .loop n (retarget targets b)
+      | .sessions b => .sessions (retarget targets b)
+      | .bounded n k b o => .bounded n k (retarget targets b) (retarget targets o)
+      | other => other) :: retarget targets rest
+
+/-- Includes look this far back for a versioned protocol's newest version. -/
+def maxVersionSearched : Nat := Text.maxVersion
+
+/-- The newest version at most `upTo` of protocol `p` defined so far, with its constant. -/
+def newestVersion (p : String) (upTo : Nat) : CommandElabM (Option (Prod Nat Name)) := do
+  let env <- getEnv
+  let ns <- getCurrNamespace
+  let mut k := upTo
+  while k > 0 do
+    let c := ns ++ s!"{p}.v{k}".toName
+    if env.contains c then return some (k, c)
+    -- a version declared in an enclosing namespace or another module, by its plain name
+    let rs <- resolveGlobalName s!"{p}.v{k}".toName
+    if let some (c', _) := rs.find? (fun x => x.2.isEmpty) then return some (k, c')
+    k := k - 1
+  return none
+
+/-- A protocol constant applied to its own role names, evaluated: its roles and global type. -/
+unsafe def evalProtocolUnsafe (c : Name) : CommandElabM (Prod (List String) (Global String)) := do
+  let roles <- protocolRoles c
+  let args := roles.toArray.map fun r => (str r : Term)
+  let g <- liftTermElabM do
+    let t <- `($(mkIdent c) $args*)
+    Term.evalTerm (Global String) (mkApp (mkConst ``LeanFM.Session.Global) (mkConst ``String)) t
+  return (roles, g)
+
+@[implemented_by evalProtocolUnsafe]
+opaque evalProtocol (c : Name) : CommandElabM (Prod (List String) (Global String))
+
 /-- `protocol Name (Role, ...) { statements }` defines `Name : (roles) -> Global R` for any role
 type `R`, so the same protocol can be instantiated and stacked with different roles. -/
 @[command_elab LeanFM.Session.Grammar.protocolCmd]
@@ -156,10 +223,38 @@ def elabProtocol : CommandElab := fun stx => do
   for l in (Text.labelsOf d.body).eraseDups do
     let known ← (do let cs ← resolveGlobalName (Name.mkSimple l); pure (cs.any (·.2.isEmpty)))
     if !known then elabCommand (← `(structure $(nm l):ident))
-  let value ← liftMacroM (gen [] d.body)
+  -- an include of a versioned protocol means its newest version
+  let mut targets : List (Prod String String) := []
+  for p in includesOf d.body do
+    if (<- resolveGlobalName (Name.mkSimple p)).any (fun x => x.2.isEmpty) then continue
+    if let some (k, _) <- newestVersion p maxVersionSearched then targets := targets ++ [(p, s!"{p}.v{k}")]
+  let value <- liftMacroM (gen [] (retarget targets d.body))
   let roles := d.roles.toArray.map nm
-  let n := nm d.name
-  elabCommand (← withRef body `($[$doc:docComment]? def $n {R : Type} ($roles* : R) : LeanFM.Session.Global R := $value))
+  if d.version == 0 then
+    let n := nm d.name
+    elabCommand (<- withRef body `($[$doc:docComment]? def $n {R : Type} ($roles* : R) : LeanFM.Session.Global R := $value))
+    return
+  -- version N is Name.vN, checked against the version before it (selfhost.session.versions)
+  if (<- resolveGlobalName (Name.mkSimple d.name)).any (fun x => x.2.isEmpty) then
+    throwErrorAt body "protocol {d.name} is defined without a version; give every version of it a number"
+  if let some (k, _) <- newestVersion d.name Text.maxVersion then
+    if k >= d.version then
+      throwErrorAt body "protocol {d.name} version {d.version} follows version {k}; versions go oldest first, each higher than the one before"
+  let n := mkIdent s!"{d.name}.v{d.version}".toName
+  let defn <- withRef body `($[$doc:docComment]? def $n {R : Type} ($roles* : R) : LeanFM.Session.Global R := $value)
+  if let some (k, c) <- newestVersion d.name (d.version - 1) then
+    -- the candidate is defined and evaluated in a throwaway environment; only a version with a clean
+    -- upgrade path is defined, so nothing can include a refused one
+    let answer <- withoutModifyingEnv do
+      elabCommand defn
+      let old <- evalProtocol c
+      let new <- evalProtocol ((<- getCurrNamespace) ++ s!"{d.name}.v{d.version}".toName)
+      pure (Versions.search old.2 new.2 old.1 new.1)
+    match answer with
+    | .ok (.clean _) => pure ()
+    | .ok (.none why) => throwErrorAt body (Versions.refusal d.name k d.version why)
+    | .error e => throwErrorAt body "{d.name} version {d.version}: the upgrade path from version {k} could not be searched: {e}"
+  elabCommand defn
 
 /-- `require per q { ... }`: what each entry q must reach and by when (selfhost.session.sla). LeanFM's
 tools check it against the protocol; elaborating it checks each clause. -/
@@ -169,14 +264,6 @@ def elabRequire : CommandElab := fun stx => do
   let entry ← read (Text.name body[2] "a message id")
   for c in body[4].getArgs do
     discard <| withRef c (read (Text.requirement entry c))
-
-/-- The roles of a protocol the `protocol` command defined: its explicit parameters, in order. -/
-def protocolRoles (c : Name) : CommandElabM (List String) := do
-  let info <- getConstInfo c
-  let rec go : Expr -> List String
-    | .forallE n _ b bi => (if bi == .default then [n.toString] else []) ++ go b
-    | _ => []
-  return go info.type
 
 /-- `system Name { instance x : Role [serial]; accept P (fresh Role, x, ...); }` defines
 `Name : LeanFM.Session.System` (selfhost.session.instances): each accept applies protocol `P` to

@@ -141,7 +141,7 @@ def stmt : Parser := { fn := stmtFn, info := (alternatives skip).info }
 /-! ## Protocols, requirements, structures, files -/
 
 def protocolBody : Parser := node `LeanFM.Session.Grammar.protocolBody
-  ("protocol " >> ident >> "(" >> sepBy ident "," >> ")" >> block stmt)
+  ("protocol " >> ident >> "(" >> sepBy ident "," >> ")" >> optional (W "version" >> numLit) >> block stmt)
 
 def reqOpt : Parser := node `LeanFM.Session.Grammar.reqOpt
   ((W "within" >> dur) <|> (W "over" >> numLit >> ident) <|> (W "confidence" >> frac) <|>

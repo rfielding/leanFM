@@ -553,18 +553,18 @@ def compatOf (newer older : String) : Except String Json :=
 def lendingV2 : String := include_str "../examples/vibecode/lending/Lending-v2.protocol"
 -- renewing: the Desk and the Librarian can upgrade first; the Member must wait for the Desk
 #guard verdict (compatOf lendingV2 lendingProtocol) == "incompatible"
-#guard (field (compatOf lendingV2 lendingProtocol) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Desk, Librarian"
+#guard (field (compatOf lendingV2 lendingProtocol) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Desk, Librarian; clean upgrade path: Desk then Member then Librarian"
 #guard (strs (field (compatOf lendingV2 lendingProtocol) "issues")) ==
   [ "Member cannot upgrade first: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member -> Desk: Borrow; Desk -> Member: Lent; Member chooses to send Renew to Desk)"
   , "Desk cannot stay on the old version: Member is stuck trying to send Renew to Desk; Desk waits to receive Return from Member (after Member -> Desk: Borrow; Desk -> Member: Lent; Member chooses to send Renew to Desk)" ]
 -- the same protocol is compatible with itself, and v1 after v2 is the mirror image
 #guard verdict (compatOf lendingProtocol lendingProtocol) == "compatible"
-#guard (field (compatOf lendingProtocol lendingV2) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Member, Librarian"
+#guard (field (compatOf lendingProtocol lendingV2) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Member, Librarian; clean upgrade path: Member then Desk then Librarian"
 -- dropping holds: the Desk may answer Refused at once, which the old Member accepts there, so the
 -- Desk can go first (a role-by-role subtyping check would refuse this); the Member cannot, because
 -- the old Desk may still put it on hold and send Waitlisted
 def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow from Member to Desk; choice { l: Lent from Desk to Member cause b; r: Return from Member to Desk; Returned from Desk to Member cause r; } or { Refused from Desk to Member cause b; } } }"
-#guard (field (compatOf noHolds lendingProtocol) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Desk"
+#guard (field (compatOf noHolds lendingProtocol) "reading").getStr?.toOption == some "Lending -> Lending: upgrade first: Desk; clean upgrade path: Desk then Member"
 #guard (strs (field (compatOf noHolds lendingProtocol) "notes")) == ["only in the old version: Librarian"]
 #guard (strs (field (compatOf noHolds lendingProtocol) "issues")).head? ==
   some "Member cannot upgrade first: Member waits to receive Lent from Desk, receive Refused from Desk; Desk is stuck trying to send Waitlisted to Member (after Member -> Desk: Borrow; Desk -> Librarian: Hold; Librarian -> Desk: Approved)"
@@ -579,7 +579,7 @@ def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow 
 #guard verdict (compatOf "protocol T (S, R) { x: Ask from S to R; y: Tell from S to R; }" "protocol T (S, R) { y: Tell from S to R; x: Ask from S to R; }") == "incompatible"
 -- a version that drops the text gateway's answer cannot go first against the old Auth
 #guard verdict (compatOf (loginProtocol.replace "Queued from Sms to Auth cause s status 202; " "") loginProtocol) == "incompatible"
-#guard reason (compat (leanArgs lendingProtocol)) == "old is required: the previous version's LeanFM protocol text"
+#guard reason (compat (leanArgs lendingProtocol)) == "old is required: the previous version's LeanFM protocol text, unless the text keeps two versions (protocol Name (...) version 1 { ... } then version 2)"
 #guard (reason (compatOf lendingProtocol "protocol Broken (A) { oops }")).startsWith "the old version: line 1"
 
 /-! ## session_skeleton -/

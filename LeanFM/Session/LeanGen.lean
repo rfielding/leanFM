@@ -135,7 +135,8 @@ def roleMachine (g : Global String) (r : String) (labels : List String) : Except
 open LeanGen in
 /-- The protocol as a Lean module: message structures, roles, payload, event envelope, and each
 role's states with its step function. -/
-def Global.leanModule (g : Global String) (name : String) (roles : List String) (types : Types.Env) : Except String (String × List String) := do
+def Global.leanModule (g : Global String) (name : String) (roles : List String) (types : Types.Env)
+    (versions : Prod Nat (List Nat) := (0, [])) : Except String (Prod String (List String)) := do
   let labels := (g.messages.map (·.label)).eraseDups
   let acts := g.labels.eraseDups.filter (!labels.contains ·)
   let ms ← Types.complete types labels
@@ -158,6 +159,10 @@ def Global.leanModule (g : Global String) (name : String) (roles : List String) 
     | .ok m => machines := machines ++ [m]
     | .error e => notes := notes ++ [e]
   let ns := upper name
+  let version := versions.1
+  -- its own version, and the one before it while the upgrade runs (as Versions.accepted)
+  let before := (versions.2.filter (fun x => x < version)).foldl max 0
+  let accepted : List Nat := (if before == 0 then [] else [before]) ++ [version]
   let skipped := if notes.isEmpty then [] else
     ["/-! Roles without states here, each with the reason:"] ++ notes.map ("* " ++ ·) ++ ["-/", ""]
   return ("\n".intercalate ([
@@ -167,11 +172,23 @@ def Global.leanModule (g : Global String) (name : String) (roles : List String) 
     "system over typed events (selfhost.session.lean). -/", "", s!"namespace {ns}", "", "\n\n".intercalate structs, "",
     "/-- The roles. -/", "inductive Role where"] ++ roleNames.map (fun r => s!"  | {r}") ++
     ["  deriving Repr, BEq, DecidableEq", ""] ++ payload ++ ["",
+    "/-- The protocol and version this module speaks (selfhost.session.versions). -/",
+    s!"def protocolName : String := {name.quote}", s!"def protocolVersion : Nat := {version}", "",
+    "/-- The versions a peer may speak to this build: its own, and the one before it while the upgrade runs. -/",
+    s!"def acceptedVersions : List Nat := {accepted}", "",
+    "/-- The highest version both sides accept, or none: never a guess. -/",
+    "def negotiate (theirs : List Nat) : Option Nat :=",
+    "  (acceptedVersions.filter theirs.contains).foldl (fun acc v => some (match acc with | some a => max a v | none => v)) none", "",
     "/-- The event envelope (selfhost.session.envelope): ts in nanoseconds, unique in its stream. -/",
     "structure Event where", "  ts : Nat", "  session : String", "  src : Role", "  dst : Role",
     "  cause : Option Nat := none", "  prev : Option Nat := none",
     "  /-- the sender's clock when it sent and the receiver's when it received, ns (selfhost.session.timelines) -/",
-    "  sentAt : Option Nat := none", "  receivedAt : Option Nat := none", "  payload : Payload", "  deriving Repr, BEq", "",
+    "  sentAt : Option Nat := none", "  receivedAt : Option Nat := none",
+    "  /-- the protocol and version it was sent in -/",
+    "  protocol : String := protocolName", "  version : Nat := protocolVersion",
+    "  payload : Payload", "  deriving Repr, BEq", "",
+    "/-- Whether an event is one this build may take: this protocol, in a version it accepts. -/",
+    "def admits (e : Event) : Bool := e.protocol == protocolName && acceptedVersions.contains e.version", "",
     ] ++ skipped ++ ["\n\n".intercalate machines, "", s!"end {ns}", ""]), notes)
 
 end LeanFM.Session

@@ -1,0 +1,20 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\scriptsize,breaklines=true]
+protocol Lookup (Client, Server) version 1 {
+  q: Get from Client to Server;
+  Found from Server to Client cause q;
+}
+
+protocol Lookup (Client, Server) version 2 {
+  q: Get from Client to Server;
+  choice {
+    Found from Server to Client cause q;
+  } or {
+    Missing from Server to Client cause q;
+  }
+}
+
+protocol Lookup (Client, Server) version 4 {
+  q: Get from Client to Server;
+  Missing from Server to Client cause q;
+}
+\end{lstlisting}

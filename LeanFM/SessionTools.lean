@@ -10,6 +10,7 @@ import LeanFM.Session.SpecCheck
 import LeanFM.Session.Actors
 import LeanFM.Session.Spans
 import LeanFM.Session.Instances
+import LeanFM.Session.Versions
 import LeanFM.Session.LeanGen
 import LeanFM.Session.Generative
 import LeanFM.Session.Decision
@@ -236,6 +237,15 @@ structure Protocol where
   types : Session.Types.Env := []
   /-- session keys, (message id, field path) (selfhost.session.envelope) -/
   keys : List (String × String) := []
+  /-- the main protocol's version, 0 when it has none (selfhost.session.versions) -/
+  version : Nat := 0
+  /-- each version of the main protocol, oldest first: (number, roles, global type); empty when
+  it has one version -/
+  versions : List (Prod Nat (Prod (List String) (Global String))) := []
+  /-- each version checked against the one before it, with the upgrade order found -/
+  upgrades : List Versions.Upgrade := []
+  /-- the main protocol's labels across its versions: each one's payload field number -/
+  labelHistory : List String := []
 
 /-! ## The JSON form written as protocol text -/
 
@@ -339,7 +349,12 @@ def parseProtocol (args : Json) : Except String Protocol := do
       | .ok t => pure t
       | .error _ => throw "lean must be a string of LeanFM protocol text"
     let r ← LeanFM.Session.Text.parse text (← protoTypes args)
-    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := ← generativeLayer r.body r.roles args, types := r.types, keys := r.keys }
+    -- a version without a clean upgrade path from the one before is refused, as the Lean
+    -- elaborator refuses it (selfhost.session.versions)
+    let upgrades <- Versions.check r
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := <- generativeLayer r.body r.roles args, types := r.types, keys := r.keys,
+             version := r.version, versions := (r.versioned.lookup r.name).getD [], upgrades,
+             labelHistory := Versions.labelHistory r }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
     | .error _ => throw "lean is required: LeanFM protocol text such as protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
@@ -1104,11 +1119,36 @@ def logEvent (j : Json) : Except String LogEvent := do
     | .error _ => pure none
   let sentAt ← reading "sentAt"
   let receivedAt ← reading "receivedAt"
+  -- the protocol and version it was sent in (selfhost.session.versions); 0 is no version
+  let version := match <- reading "version" with | some 0 => none | v => v
+  let protocolName := text "protocol"
   let prev := text "prev"
-  if let some p := prev then
-    if p.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
+  for t in [prev, protocolName] do
+    if let some p := t then
+      if p.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
   return { id, session := (text "session").getD "0", src := srcRole, dst := dstRole, label, cause := text "cause", isAct, fields,
-           srcActor, dstActor := if isAct then srcActor else dstActor, prev, sentAt, receivedAt }
+           srcActor, dstActor := if isAct then srcActor else dstActor, prev, sentAt, receivedAt, protocolName, version }
+
+/-- What is wrong with the versions a log's events name (selfhost.session.versions): against a
+versioned protocol, every event names one of its versions and no other protocol, and one session
+speaks one version. -/
+def versionProblems (p : Protocol) (evs : List LogEvent) : List String := Id.run do
+  let declared := if p.versions.isEmpty then (if p.version == 0 then [] else [p.version]) else p.versions.map (fun v => v.1)
+  let shown := ", ".intercalate (declared.map toString)
+  let mut out : List String := []
+  for e in evs do
+    if let some n := e.protocolName then
+      if n != p.name then out := out ++ [s!"event {e.id}: it belongs to protocol {n}, not {p.name}"]
+    if declared.isEmpty then
+      if let some v := e.version then out := out ++ [s!"event {e.id}: it names version {v}, but {p.name} has no versions"]
+    else match e.version with
+      | none => out := out ++ [s!"event {e.id}: it names no version; {p.name} has version{if declared.length == 1 then "" else "s"} {shown}, so every event says which it speaks"]
+      | some v => if !declared.contains v then out := out ++ [s!"event {e.id}: version {v} is not a version of {p.name} ({shown})"]
+  for sid in (evs.map fun e => e.session).eraseDups do
+    let vs := ((evs.filter fun e => e.session == sid).filterMap fun e => e.version).eraseDups
+    if vs.length > 1 then
+      out := out ++ [s!"session {sid}: its events name versions {", ".intercalate (vs.map toString)}; one session speaks one version"]
+  return out
 
 def maxLogEvents : Nat := 2000
 
@@ -1156,7 +1196,12 @@ def conform (args : Json) : Except String Json := do
   let linkProblems := linkProblems ++ match systems.getLast? with
     | some sys => (Instances.checkActors sys evs).map fun (e, why) => s!"event {e}: {why}"
     | none => []
-  let results := p.global.conforms (Actors.linearize evs) allowIncomplete
+  -- each session is checked against the version its events name (selfhost.session.versions)
+  let versionIssues := versionProblems p evs
+  let results := if p.versions.isEmpty then p.global.conforms (Actors.linearize evs) allowIncomplete
+    else p.versions.flatMap fun (v, _, g) =>
+      let mine := evs.filter fun e => e.version == some v
+      if mine.isEmpty then [] else g.conforms (Actors.linearize mine) allowIncomplete
   -- a keyed session's events all carry its key's value as their session (selfhost.session.envelope)
   let keyProblems := p.keys.flatMap fun (x, f) =>
     let labels := (p.global.messages.filter (·.id == some x)).map (·.label)
@@ -1174,11 +1219,13 @@ def conform (args : Json) : Except String Json := do
           else some s!"session {sid}, event {e.id}: the session key {x}.{f} is {shown}, so this session's events must name session {shown}, not {sid}"
   let bad := results.filter (·.problem.isSome)
   let incomplete := results.filter (!·.complete)
-  let keyProblems := linkProblems ++ keyProblems
+  let keyProblems := versionIssues ++ linkProblems ++ keyProblems
   let verdict := if bad.isEmpty && keyProblems.isEmpty then "conforms" else "violates"
   let problems := (bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}") ++ keyProblems
   let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
-  let reading := if !linkProblems.isEmpty && bad.isEmpty
+  let reading := if !versionIssues.isEmpty
+    then s!"{p.name}: {versionIssues.length} version problem{if versionIssues.length == 1 then "" else "s"}; first: {versionIssues.head!}"
+    else if !linkProblems.isEmpty && bad.isEmpty
     then s!"{p.name}: {linkProblems.length} problem{if linkProblems.length == 1 then "" else "s"} with the log's links; first: {linkProblems.head!}"
     else if !keyProblems.isEmpty && bad.isEmpty
     then s!"{p.name}: {keyProblems.length} session key problem{if keyProblems.length == 1 then "" else "s"}; first: {keyProblems.head!}"
@@ -1286,15 +1333,27 @@ def next (args : Json) : Except String Json := do
 
 /-- Two versions of a protocol: which roles can upgrade first, and which can stay on the old one. -/
 def compat (args : Json) : Except String Json := do
-  let p ← parseProtocol args
-  let oldText ← match args.getObjVal? "old" with
-    | .ok (.str s) => pure s
-    | _ => throw "old is required: the previous version's LeanFM protocol text"
-  -- the old version reads the same .proto, unless one is given for it (oldProto)
-  let oldProto := match args.getObjVal? "oldProto" with | .ok v => v | .error _ => args.getObjValD "proto"
-  let q ← (parseProtocol (Json.mkObj [("lean", Json.str oldText), ("proto", oldProto)])).mapError ("the old version: " ++ ·)
+  -- without old, the text's own versions: the newest two (selfhost.session.versions); a text whose
+  -- versions have no clean upgrade path is refused by parseProtocol before this
+  let p <- match args.getObjVal? "old" with
+    | .ok _ => parseProtocol args
+    | .error _ => (parseProtocol args).mapError fun e => e
+  let q <- match args.getObjVal? "old" with
+    | .ok (.str oldText) =>
+      -- the old version reads the same .proto, unless one is given for it (oldProto)
+      let oldProto := match args.getObjVal? "oldProto" with | .ok v => v | .error _ => args.getObjValD "proto"
+      (parseProtocol (Json.mkObj [("lean", Json.str oldText), ("proto", oldProto)])).mapError (fun e => "the old version: " ++ e)
+    | .ok _ => throw "old is the previous version's LeanFM protocol text"
+    | .error _ =>
+      match p.versions.reverse with
+      | _ :: (v, roles, g) :: _ => pure { p with name := s!"{p.name} version {v}", roles, global := g }
+      | _ => throw "old is required: the previous version's LeanFM protocol text, unless the text keeps two versions (protocol Name (...) version 1 { ... } then version 2)"
+  let p := if args.getObjVal? "old" |>.isOk then p else
+    { p with name := if p.version == 0 then p.name else s!"{p.name} version {p.version}" }
   let body (g : Global String) := match g with | .sessions b _ => b | other => other
   let results ← (body p.global).compat (body q.global) p.roles q.roles
+  -- the deployment order: every role upgrading one at a time, every mixture on the way checked
+  let path <- Versions.search q.global p.global q.roles p.roles
   let answer (r : Except String (Option Evolution.Failure)) : Json × Bool :=
     match r with
     | .ok none => (Json.mkObj [("ok", true)], true)
@@ -1322,9 +1381,14 @@ def compat (args : Json) : Except String Json := do
     else s!"upgrade first: {", ".intercalate first}"
   let notes := (if onlyNew.isEmpty then [] else [s!"only in the new version: {", ".intercalate onlyNew}"]) ++
     (if onlyOld.isEmpty then [] else [s!"only in the old version: {", ".intercalate onlyOld}"])
+  let (pathJson, pathText) := match path with
+    | .clean o => (Json.mkObj [("clean", true), ("order", Json.arr (o.map Json.str).toArray)],
+        s!"clean upgrade path: {" then ".intercalate o}")
+    | .none why => (Json.mkObj [("clean", false), ("stuck", Json.arr (why.map fun (w : Versions.Stuck) => Json.str w.text).toArray)],
+        "no clean upgrade path")
   return Json.mkObj [("tool", "session_compat"), ("verdict", if issues.isEmpty then "compatible" else "incompatible"),
-    ("name", p.name), ("reading", s!"{q.name} -> {p.name}: {order}"),
-    ("roles", Json.arr (rows.map (·.2.2.2)).toArray), ("issues", Json.arr (issues.map Json.str).toArray),
+    ("name", p.name), ("reading", s!"{q.name} -> {p.name}: {order}; {pathText}"), ("upgradePath", pathJson),
+    ("roles", Json.arr (rows.map fun (r : Prod String (Prod Bool (Prod Bool Json))) => r.2.2.2).toArray), ("issues", Json.arr (issues.map Json.str).toArray),
     ("notes", Json.arr (notes.map Json.str).toArray), ("lean", p.lean)]
 
 /-- Formulas given as an array argument, at most `maxV` of them. -/
@@ -1405,10 +1469,10 @@ def types (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let labels := (p.global.messages.map (·.label)).eraseDups
   let pkg := Skeleton.snake p.name
-  let proto ← Session.Types.proto p.types labels pkg
+  let proto <- Session.Types.proto p.types labels pkg p.labelHistory
   let lean ← Session.Types.lean p.types labels (Skeleton.ident p.name ++ "Types")
   -- the whole session as one Lean module: payloads, envelope, and each role's states (selfhost.session.lean)
-  let (leanModule, moduleNote) := match p.global.leanModule p.name p.roles p.types with
+  let (leanModule, moduleNote) := match p.global.leanModule p.name p.roles p.types (p.version, p.versions.map (fun v => v.1)) with
     | .ok (m, []) => (Json.str m, Json.null)
     | .ok (m, notes) => (Json.str m, Json.str ("; ".intercalate notes))
     | .error e => (Json.null, Json.str e)
@@ -1459,8 +1523,8 @@ Payload.proto, Payload.lean, and actors/<role>-openapi.yaml for each role that s
 def sessionFiles (args : Json) : Except String (List (String × String)) := do
   let p ← parseProtocol args
   let labels := (p.global.messages.map (·.label)).eraseDups
-  let proto ← Session.Types.proto p.types labels (Skeleton.snake p.name)
-  let (lean, _) ← p.global.leanModule p.name p.roles p.types
+  let proto <- Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory
+  let (lean, _) <- p.global.leanModule p.name p.roles p.types (p.version, p.versions.map (fun v => v.1))
   let mut files := [("Payload.proto", proto), ("Payload.lean", lean)]
   for r in p.roles do
     let (doc, _) ← p.global.openApi p.name r p.types
@@ -1872,6 +1936,28 @@ Logged fields must be fields of the event's message, of their declared types, an
 log that breaks this is refused, naming the event. Generated code logs exactly the fields conditions
 read, and nothing else of a body.
 
+## Versions
+
+A file keeps the versions of a protocol still deployed, oldest first, each a whole protocol:
+
+```
+protocol Lookup (Client, Server) version 1 { q: Get from Client to Server; Found from Server to Client cause q; }
+protocol Lookup (Client, Server) version 2 {
+  q: Get from Client to Server;
+  choice { Found from Server to Client cause q; } or { Missing from Server to Client cause q; }
+}
+```
+
+Each version must have a clean upgrade path from the one before: an order to upgrade the roles one
+at a time such that every mixed deployment on the way (upgraded roles on the new version, the rest
+on the old) runs without getting stuck. A version without one is refused, by Lean when the file
+compiles and by every tool when it reads the text, with the first steps that get stuck. In Lean,
+version N is `Lookup.vN`; a plain `include Lookup` or `accept Lookup` means the newest version
+defined before it. Every event carries `protocol` and `version` in its envelope (fields 11 and 12;
+payloads start at 16), and a label keeps its payload number in every version; a dropped label's
+number is reserved. With a versioned protocol, `session_conform` requires every event to name one of
+its versions and checks each session against the version it names.
+
 ## Instances
 
 A protocol describes one conversation; a server runs many at once. A `system` block, after the
@@ -1978,12 +2064,14 @@ instance plays its own role, and a fresh actor belongs to one session only.
   State`, `final` and `accepts`. A role whose projection runs branches in parallel or serves
   sessions has no single machine; `leanModuleNote` says so.
 
-- `session_compat {lean, old}`: two versions of a protocol (`lean` the new one, `old` the
-  previous one). For each role in both: can its new version be deployed first, among the old
-  versions of every other role, and can its old version stay deployed after the others upgrade?
-  Each mixed system is explored to every reachable state; a no comes with the steps to where it gets
-  stuck. Adding a message a role may receive usually lets that role upgrade first; adding one it
-  may send usually means the receivers must upgrade first.
+- `session_compat {lean, old?}`: two versions of a protocol (`lean` the new one, `old` the
+  previous one; without `old`, the newest two versions `lean` keeps). For each role in both: can
+  its new version be deployed first, among the old versions of every other role, and can its old
+  version stay deployed after the others upgrade? Each mixed system is explored to every reachable
+  state; a no comes with the steps to where it gets stuck. `upgradePath` is an order to upgrade the
+  roles one at a time, every mixed deployment on the way checked, or why there is none. Adding a
+  message a role may receive usually lets that role upgrade first; adding one it may send usually
+  means the receivers must upgrade first.
 
 - `session_skeleton {lean, language?}`: a self-contained Python (the default) or TypeScript
   (`\"language\": \"typescript\"`) module with every role's typestate as classes, one per state. In

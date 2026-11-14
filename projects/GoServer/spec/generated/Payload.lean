@@ -583,6 +583,17 @@ inductive Payload where
   | finished
   deriving Repr, BEq
 
+/-- The protocol and version this module speaks (selfhost.session.versions). -/
+def protocolName : String := "GoServer"
+def protocolVersion : Nat := 0
+
+/-- The versions a peer may speak to this build: its own, and the one before it while the upgrade runs. -/
+def acceptedVersions : List Nat := [0]
+
+/-- The highest version both sides accept, or none: never a guess. -/
+def negotiate (theirs : List Nat) : Option Nat :=
+  (acceptedVersions.filter theirs.contains).foldl (fun acc v => some (match acc with | some a => max a v | none => v)) none
+
 /-- The event envelope (selfhost.session.envelope): ts in nanoseconds, unique in its stream. -/
 structure Event where
   ts : Nat
@@ -594,8 +605,14 @@ structure Event where
   /-- the sender's clock when it sent and the receiver's when it received, ns (selfhost.session.timelines) -/
   sentAt : Option Nat := none
   receivedAt : Option Nat := none
+  /-- the protocol and version it was sent in -/
+  protocol : String := protocolName
+  version : Nat := protocolVersion
   payload : Payload
   deriving Repr, BEq
+
+/-- Whether an event is one this build may take: this protocol, in a version it accepts. -/
+def admits (e : Event) : Bool := e.protocol == protocolName && acceptedVersions.contains e.version
 
 /-! Roles without states here, each with the reason:
 * Person: its projection runs branches in parallel (par or join), whose states are not one machine; Lean states are generated for sequential roles

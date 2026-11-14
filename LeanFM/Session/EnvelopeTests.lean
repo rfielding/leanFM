@@ -84,7 +84,9 @@ def natKeyed := keyed.replace "caller : String" "caller : Nat"
 
 def proto := str (types (args placeOrder)) "proto"
 #guard has proto "message Event {\n  uint64 ts = 1;"
-#guard has proto "  oneof payload {\n    CreateOrder create_order = 11;\n    Quote quote = 12;\n    Pay pay = 13;"
+#guard has proto "  oneof payload {\n    CreateOrder create_order = 16;\n    Quote quote = 17;\n    Pay pay = 18;"
+-- every event names its protocol and version; fields up to 15 are the header's (selfhost.session.versions)
+#guard has proto "  string protocol = 11;" && has proto "  uint32 version = 12;"
 -- the clock readings of the sender and the receiver travel in every event (selfhost.session.timelines)
 #guard has proto "  uint64 sent_at = 9;" && has proto "  uint64 received_at = 10;"
 #guard has (reason (types (args "structure Event where n : Nat\nprotocol P (A, B) { Event from A to B; }"))) "would collide with the event envelope"

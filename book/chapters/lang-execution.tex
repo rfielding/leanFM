@@ -238,6 +238,56 @@ between two instances at a shared one is an order of messages that properties ca
 see. When an instance owns data, such as a stock count, the same orders can leave
 different data, and that is the next step.
 
+\section{Versions}
+\label{sec:versions}
+
+\index{version}\index{upgrade path}\index{schema evolution}
+A deployed protocol changes while it runs. For a while some peers speak the old
+version and some the new, so every peer must know which version it is talking
+to, and a change that leaves no safe way to get there must be caught before it
+ships. A file therefore keeps the versions still deployed, oldest first, each a
+whole protocol:
+
+\input{generated/versions-text.tex}
+
+A \emph{clean upgrade path} from one version to the next is an order in which
+the roles upgrade one at a time, such that every mixed deployment along the way,
+with the upgraded roles on the new version and the rest on the old, runs without
+getting stuck. LeanFM searches the orders breadth first and explores each mixed
+deployment to every reachable state, with the same search
+\texttt{session\_compat} uses. When the server gains an answer, the client must
+learn it first. When the server stops sending one, the server goes first:
+
+\input{generated/versions-orders.tex}
+
+A version with no clean path does not compile. In a Lean file, version \(N\) is
+the definition \texttt{Lookup.vN}, and the elaborator checks it against the
+version before it as the file is compiled. A rename of the request leaves no
+role able to go first, and Lean rejects it with the reason. Every tool rejects
+the same text with the same words:
+
+\input{generated/versions-refused.tex}
+
+\noindent The rejected version is never defined, so nothing can include it. A
+plain \texttt{include Lookup} means the newest version defined before it.
+
+On the wire, every event names its protocol and version in the envelope's header,
+fields 11 and 12. Payloads start at field 16, and each label keeps its number in
+every version: its place in the order the labels first appeared, version by
+version. A label a later version drops keeps its number and name reserved, so no
+new label can ever be decoded as an old one:
+
+\input{generated/versions-envelope.tex}
+
+The generated Lean module carries the same facts. It holds the protocol name and
+version on every event, the versions it accepts (its own, and the one before it
+while the upgrade runs), and \texttt{negotiate}, which picks the highest version
+both peers accept and answers none rather than guessing. A log of a versioned
+protocol must say which version each event speaks. Each session is checked
+against its own version:
+
+\input{generated/versions-log.tex}
+
 \section{State lives in the stream}
 
 \index{reward vector}
