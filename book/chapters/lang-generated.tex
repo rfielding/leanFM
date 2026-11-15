@@ -79,7 +79,13 @@ module is the protocol's transition system over typed events: \texttt{accepts}
 runs one session's events through it, and the checked-in module for
 \texttt{PlaceOrder} is compiled and run in LeanFM's own tests. A role that runs
 branches in parallel or serves sessions has no single machine, and LeanFM says so
-rather than writing one.
+rather than writing one. The module also knows which protocol and version it
+speaks: every event carries both, \texttt{acceptedVersions} lists the versions a
+peer may speak to it (its own, and the one before it while an upgrade runs),
+\texttt{negotiate} picks the highest version both sides accept or none, and
+\texttt{admits} refuses an event of another protocol or version
+(Section~\ref{sec:versions}). The Python and TypeScript skeletons do not check
+versions yet.
 
 The skeletons carry them too: a Python dataclass or a TypeScript interface per
 message, with \texttt{Nat} and \texttt{Int} as Python integers and TypeScript
@@ -130,6 +136,11 @@ has a control and a negative test.
   \item Generate each role's states and implement the role on them.
   \item Run it, and check its log for conformance and its promises over closed
         windows; fix the code, or the protocol if the protocol was wrong.
-  \item State each rule the structure does not show as a CTL question.
-  \item When the protocol changes, ask which roles can be redeployed first.
+  \item State each rule the structure does not show as a CTL question, or as a
+        property in the Lean file, proved when it compiles.
+  \item Declare the instances that run and what they share, and check them for
+        deadlocks and isolation (Section~\ref{sec:instances}).
+  \item When the protocol changes, keep the old version in the file beside the
+        new one: LeanFM finds the order to redeploy the roles in, or refuses the
+        change (Section~\ref{sec:versions}).
 \end{enumerate}

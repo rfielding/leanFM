@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Reset(unittest.TestCase):
     def setUp(self):
+        # the project-local cache may not exist yet in a fresh checkout
+        (ROOT / ".cache").mkdir(exist_ok=True)
         self.temporary = tempfile.TemporaryDirectory(prefix="workspace-reset-", dir=ROOT / ".cache")
         self.addCleanup(self.temporary.cleanup)
         self.fixture = Path(self.temporary.name)

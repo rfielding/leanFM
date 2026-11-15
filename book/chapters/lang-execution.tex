@@ -294,8 +294,10 @@ against its own version:
 \index{view}
 For questions about value and promises, events are keyed by their unique
 timestamp, and two links point back in time: \texttt{prev}, the event before this one in its
-thread, and \texttt{cause}, the event that made it happen. Both must name earlier
-events of the same stream. A role's \emph{view} is its own events and everything
+thread, sent or received, and \texttt{cause}, the event that made it happen. Both must
+name events of the same stream with smaller timestamps. (This is how
+\texttt{session\_sla} reads a stream. Conformance reads \texttt{prev} more
+narrowly, as the previous event the same actor sent; Section~\ref{sec:actors}.) A role's \emph{view} is its own events and everything
 in their causal past: exactly what it could have learned.
 
 Rewards follow the same rule. A reward vector, the balance of every role in every

@@ -60,11 +60,14 @@ declined payment'', and the counterexample is what makes that visible.
 \section{What an answer costs}
 
 \index{model checking!cost}
-Once the state graph exists, each CTL operator is one pass over it: reachability
-for \texttt{EF}, strongly connected components for \texttt{EG} and \texttt{AF},
-a fixpoint for \texttt{U}. The cost is about the number of states and transitions
-times the size of the formula, and breadth-first search returns the shortest
-witness, which is why the paths read well.
+Once the state graph exists, each CTL operator is a fixpoint over it, computed by
+labelling states until nothing changes: a least fixpoint for \texttt{EU} and
+\texttt{AU} (and so for \texttt{EF} and \texttt{AF}, which are their special
+cases), a greatest fixpoint for \texttt{EG}, and \texttt{AG} as the negation of
+\texttt{EF}. Each round is one pass over the states and transitions, and there
+are at most as many rounds as states, so the cost grows with the size of the
+graph and of the formula, never with the number of paths. Breadth-first search
+then returns the shortest witness, which is why the paths read well.
 
 The size of the graph is the real cost. Concurrent branches interleave, a
 deadline turns each state into a pair of state and elapsed time, and an attacker
@@ -74,6 +77,25 @@ by swapping them are the same behaviour; the explosion is real only where roles
 share something. Every search has a bound, and an answer at the bound is
 \texttt{resource-limit}, never \texttt{proved}. The server's \texttt{/metrics}
 reports each check's time and model size, so the cost is measured, not guessed.
+
+\section{Properties in the Lean file}
+
+\index{Spec}
+\index{property!proved at compile time}
+A question can also live beside the protocol, in the Lean file, as a property of
+a \texttt{Spec}: \texttt{.AG (.EF .terminal)} for ``from every state the
+transfer can still finish'', or \texttt{.EF (sent\% DurableAccepted)} for ``a
+write can be accepted''. A label in a property is a Lean type, so a misspelt one
+is a Lean error. \texttt{spec.check} decides every property with the same checker
+and the same state graph \texttt{session\_ctl} uses, so the line
+
+\begin{lstlisting}[language={},basicstyle=\ttfamily\small]
+#guard spec.check "Write" == []
+\end{lstlisting}
+
+\noindent fails the build when a property is disproved, and the failure carries the
+counterexample path. A property the graph cannot decide is reported as not
+checked, never as holding. Chapter~\ref{ch:tftp-physics} shows one disproved.
 
 \section{Who can know what}
 
@@ -102,4 +124,8 @@ which the shop answers \texttt{Backorder}:
 \input{generated/lang-compat.tex}
 
 The client and the bank can upgrade first; the shop cannot, because an old client
-waits for a quote or a sold-out notice and would never accept a backorder.
+waits for a quote or a sold-out notice and would never accept a backorder. The
+first line ends with the deployment order: upgrade one role at a time, client,
+then shop, then bank, and every mixed deployment along the way still works. When a file
+keeps both versions, a version with no such order does not compile
+(Section~\ref{sec:versions}).

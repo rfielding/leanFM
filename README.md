@@ -1,3 +1,5 @@
+[![Lean Action CI](https://github.com/rfielding/leanFM/actions/workflows/lean_action_ci.yml/badge.svg?branch=main)](https://github.com/rfielding/leanFM/actions/workflows/lean_action_ci.yml)
+
 [Read the LeanFM PDF book](book/main.pdf) · [Dark PDF](book/main-dark.pdf)
 
 Lean Formal Methods, based on communicating heirarchial processes.

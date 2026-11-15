@@ -749,7 +749,8 @@ The three examples produce a concrete checklist:
   \item actor-local grammar definitions and trace projection;
   \item synchronization by common event identity and bytes;
   \item typed symbolic variables and prefix-dependent guards, including
-        equalities and counters;
+        equalities and counters (equalities between message fields: done, as
+        \texttt{where} conditions; counters: not yet);
   \item a transport-neutral term-to-byte relation with encryption and hashing;
   \item channels, so that each actor's observations are declared;
   \item explicit initial knowledge, compromise and freshness assumptions;
@@ -762,7 +763,8 @@ The three examples produce a concrete checklist:
   \item probabilities on the $E$ quantifier, from overlays, reported next to
         CTL verdicts;
   \item deadlines on $F$ and $U$, with timeout branches wherever $A$ must
-        meet them;
+        meet them (deadlines per entry message, as \texttt{require} clauses and
+        \texttt{obligation} statements: done; on the CTL operators: not yet);
   \item relational theorem schemas for indistinguishability; and
   \item counterexamples drawn both as a global interaction diagram and as each
         actor's local projection.

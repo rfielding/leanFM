@@ -141,8 +141,10 @@ names. Negative invariants:
 
 Controls are an authenticated explicit project ID, canonical root resolution,
 exact source-inventory membership, UTF-8 reads, a finite response limit and
-project-keyed React state. Negative tests request another account's file and a
-guessed \texttt{.git/config}; both return not-found without revealing existence.
+project-keyed React state. A negative test asks, without signing in, for another
+account's password file through the project's file and source routes with
+\texttt{../..} in the path; each request is refused (403 or 404), and no bytes come
+back.
 The positive test creates, lists and opens a project-local file and checks its
 exact content.
 

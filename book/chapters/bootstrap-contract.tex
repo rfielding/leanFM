@@ -71,11 +71,8 @@ paths.
 
 \section{Required commands and order}
 
-The project supplies deterministic equivalents of these commands. In this
-repository the references and checklist come from the running server
-(\texttt{/tools/leanfm-language/requirements-reference},
-\texttt{/tools/requirements/interrogation}, or the MCP resources of the same
-name), and \texttt{make check} validates and renders:
+The project supplies deterministic equivalents of these five steps, under these
+conventional names:
 
 \begin{lstlisting}[language=bash]
 make reference       # print the complete requirements-language reference
@@ -84,6 +81,14 @@ make validate        # elaborate and run LeanFM plus protobuf validation
 make render          # derive interaction and residual-state review views
 make check           # validate, then render
 \end{lstlisting}
+
+\noindent This repository has only \texttt{make validate} and \texttt{make check}
+of these. Its references and checklist come from the running server
+(\texttt{/tools/leanfm-language/requirements-reference},
+\texttt{/tools/requirements/interrogation}, or the MCP resources of the same
+name), \texttt{make diagrams} renders the review views, and its \texttt{make check}
+runs the sandbox check, the build, validation, the diagrams, the MDP and Paxos
+example checks, the video check, the self-hosting checks and the ChatUI checks.
 
 An agent runs \texttt{reference} and \texttt{interrogation} before authoring, and
 never infers constructors from prose or invents a lookalike. The validator and the

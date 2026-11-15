@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Commands(unittest.TestCase):
     def test_unavailable_build_targets_are_rejected_before_make_execution(self):
+        # the project-local cache may not exist yet in a fresh checkout
+        (ROOT / ".cache").mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="command-targets-", dir=ROOT / ".cache") as fixture:
             root = Path(fixture)
             for source in [None, "$(shell touch should-not-run)\nbook:\n\t@true\n"]:

@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Workspace(unittest.TestCase):
     def setUp(self):
+        # the project-local cache may not exist yet in a fresh checkout
+        (ROOT / ".cache").mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(prefix="project-names-", dir=ROOT / ".cache")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)

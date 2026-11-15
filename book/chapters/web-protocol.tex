@@ -58,8 +58,10 @@ defined in this order:
         opaque bytes at the protocol boundary; a form adapter must use an
         explicitly declared textual encoding and must never place credentials
         in a URL, trace, diagnostic, or returned object.
-  \item Recover the authenticated user from the
-        \texttt{leanfm\_session} HttpOnly, SameSite cookie. The cookie is
+  \item Recover the authenticated user from the session cookie,
+        \texttt{leanfm\_session} on the default port 8080 and
+        \texttt{leanfm\_session\_<port>} on any other, sent HttpOnly with
+        \texttt{SameSite=Strict}. The cookie is
         transport authorization, not a field silently added to every protobuf
         message. It authorizes model calls and use of that user's provider
         keys; it does not decide which project may be read, because projects

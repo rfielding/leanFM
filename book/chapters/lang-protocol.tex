@@ -117,16 +117,24 @@ Statement & Meaning \\
 \texttt{par \{ \ldots \} and \{ \ldots \}} & both branches run; what follows waits for all of them \\
 \texttt{join 2 of \{ \ldots \} and \{ \ldots \} and \{ \ldots \}} & what follows waits for any two \\
 \texttt{rec Loop \{ \ldots\ continue Loop; \}} & a loop; \texttt{continue} is the last statement of its block \\
+\texttt{rec Loop at most 3 \{ \ldots \} otherwise \{ \ldots \}} & a loop taken at most 3 times; a \texttt{continue Loop} after the last time runs the \texttt{otherwise} block \\
 \texttt{sessions \{ \ldots \}} & any number of independent instances, as a server handles requests \\
+\texttt{sessions by a.caller \{ \ldots \}} & the same, each session named by a field of message \texttt{a} (Chapter~\ref{ch:execution}) \\
 \texttt{include P A B C;} & an earlier protocol, its roles renamed in order \\
+\texttt{clock}, \texttt{obligation}, \texttt{accrue} & time, deadlines and value (Chapter~\ref{ch:assumptions}) \\
+\midrule
+\multicolumn{2}{@{}l}{\emph{Beside the protocols, at the top level of a text}} \\
+\texttt{protocol P (A, B) version 2 \{ \ldots \}} & a version of \texttt{P}, checked against the version before it (Chapter~\ref{ch:execution}) \\
 \texttt{require per q \{ \ldots \}} & what the protocol promises per occurrence of message \texttt{q} (Chapter~\ref{ch:assumptions}) \\
+\texttt{system S \{ instance \ldots; accept \ldots; \}} & the instances that run, and the protocols accepted against them (Chapter~\ref{ch:execution}) \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 Statements after a choice continue every branch. Names are Lean identifiers, and
 \texttt{--} and \texttt{/- -/} comments are allowed. Several protocols may share a
-text, so one can include another; the last is the one checked. This is how a large
+text, so one can include another; the last is the one checked, and a plain
+\texttt{include} of a protocol kept in several versions means its newest one. This is how a large
 protocol is broken up: each part is its own named protocol, written as if it were
 the whole conversation, and the top-level protocol assembles them with
 \texttt{include}, renaming roles as it goes. Each part is checked on its own, and the
@@ -145,8 +153,8 @@ LeanFM reports the race (Chapter~\ref{ch:meaning}).
 
 \index{Lean!session-type file}
 A \texttt{.leanfm} file is Lean. Its first line, \texttt{import
-LeanFM.Session.Syntax}, loads the library that defines the \texttt{protocol}
-command and the \texttt{require} command, and from the LeanFM directory
+LeanFM.Session.Syntax}, loads the library that defines the \texttt{protocol},
+\texttt{require} and \texttt{system} commands, and from the LeanFM directory
 
 \begin{lstlisting}[language={},basicstyle=\ttfamily\small]
 lake env lean examples/sessions/PlaceOrder.leanfm
@@ -163,7 +171,8 @@ Lean error in the editor as well as a refusal from the tools. The condition stay
 in LeanFM's own small language of comparisons, arithmetic and \texttt{and},
 \texttt{or}, \texttt{not}: a function call is not part of it and does not parse.
 Because the file is Lean, a protocol, role, label or message id may not be a
-Lean keyword, and a protocol may not share its name with one of its labels.
+Lean keyword (\texttt{system} and \texttt{protocol} are keywords wherever the
+library is loaded), and a protocol may not share its name with one of its labels.
 
 There is one grammar, written with Lean's own parser, and no second parser. A
 Lean file is parsed with it, and the tools parse the text a client sends with the
