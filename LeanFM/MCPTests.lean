@@ -381,6 +381,14 @@ def main : IO Unit := do
     | .ok j => (((j.getObjValD "result").getObjValD "structuredContent").getObjValAs? String "state").toOption.getD ""
     | .error _ => ""
   expect "MCP session_next names the state: a loop's pass returns to it, an end does not" (stateOf n0 != "" && stateOf n0 == stateOf n1 && stateOf n0 != stateOf n2)
+  -- GoServer is an HTTP site: its session type routes 14 requests (route "POST /api/..."), so the
+  -- Server's projection is an OpenAPI document of 14 operations, and the review checks HTTP
+  let oa ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":54,\"method\":\"tools/call\",\"params\":{\"name\":\"session_openapi\",\"arguments\":{\"example\":\"goserver\",\"role\":\"Server\"}}}"
+  expect "MCP session_openapi gives GoServer's Server 14 operations within the result limit" (oa.body.contains "OpenAPI 3.1 for Server, 14 operations" && oa.body.contains "/api/play_move" && compactReply oa.body == oa.body)
+  let srv ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":55,\"method\":\"tools/call\",\"params\":{\"name\":\"session_actor\",\"arguments\":{\"example\":\"goserver\",\"role\":\"Server\"}}}"
+  expect "MCP session_actor of GoServer's Server serves 14 routes within the result limit, naming what it left out" (srv.body.contains "serves 14 routes" && srv.body.contains "the same document is in openapiYaml" && compactReply srv.body == srv.body)
+  let rv ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":56,\"method\":\"tools/call\",\"params\":{\"name\":\"session_review\",\"arguments\":{\"example\":\"goserver\"}}}"
+  expect "MCP session_review of GoServer checks HTTP and says liveness was not checked: partial, never clean" (rv.body.contains "\"verdict\":\"partial\"" && rv.body.contains "HTTP from 14 routed requests" && rv.body.contains "not checked: liveness")
   let exBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"../../etc/passwd\"}}}"
   expect "MCP refuses an example LeanFM does not carry, naming the ones it does" (exBad.body.contains "example must be one of goserver" && !exBad.body.contains "root:")
   let exBoth ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"ride\",\"lean\":\"protocol P (A, B) { X from A to B; }\"}}}"

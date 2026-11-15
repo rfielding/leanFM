@@ -115,8 +115,11 @@ def neverEnds (g : StateGraph) : List (List String) := Id.run do
 end Review
 
 open Review in
-/-- Every check that applies, as findings with suggested edits. -/
-def Global.review (g : Global String) (roles : List String) : Except String (List Finding) := do
+/-- Every check that applies, as findings with suggested edits, with the checks that could not run and why: liveness needs the whole state graph,
+and a protocol over its bound (GoServer's parallel sessions interleave into more than 2000 states)
+is reported as not checked rather than stopping the review, so the structure, HTTP and role checks
+still answer. -/
+def Global.reviewAll (g : Global String) (roles : List String) : List Finding × List String := Id.run do
   let core := (g.issues roles).map fun m => { kind := "structure", message := m, suggestion := suggestCore m : Finding }
   -- HTTP where the protocol says so: routes mark requests
   let msgs := g.messages
@@ -130,14 +133,22 @@ def Global.review (g : Global String) (roles : List String) : Except String (Lis
       (c.responses.filter (·.status.isNone)).map fun r =>
         { kind := "http", message := s!"{r.label} answers {c.request.label} ({c.request.route.getD ""}) without a status",
           suggestion := s!"Add the status it means, such as `status 200`, to {r.label}." : Finding }
-  let graph ← g.stateGraph
-  let loops := (neverEnds graph).map fun path =>
+  let (graphLoops, notChecked) := match g.stateGraph with
+    | .ok graph => (neverEnds graph, [])
+    | .error why => ([], [s!"liveness (whether every session can end): {why}"])
+  let loops := graphLoops.map fun path =>
     { kind := "liveness",
       message := if path.isEmpty then "the session can never end, whatever happens"
         else s!"after {", ".intercalate path}, the session can never end",
       suggestion := "Give the loop a branch that leaves it (one without continue), or end it." : Finding }
   let idle := roles.filter (fun r => !(msgs.any fun i => i.src == r || i.dst == r) && !g.involves r) |>.map fun r =>
     { kind := "roles", message := s!"{r} takes no part", suggestion := s!"Remove {r} from the role list, or give it its messages." : Finding }
-  return core ++ http ++ statusless.eraseDups ++ loops ++ idle
+  return (core ++ http ++ statusless.eraseDups ++ loops ++ idle, notChecked)
+
+/-- The findings alone; a check that could not run is an error, as before. -/
+def Global.review (g : Global String) (roles : List String) : Except String (List Finding) :=
+  match g.reviewAll roles with
+  | (fs, []) => .ok fs
+  | (_, why :: _) => .error why
 
 end LeanFM.Session

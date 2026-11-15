@@ -236,7 +236,10 @@ func newHandler(s *goserver.ServerCore, port string) http.Handler {
 			writeError(w, 403, "unapproved origin")
 			return
 		}
+		// every /api/ route is POST, as the session type's routes say (route "POST /api/...");
+		// a 405 names the method that is allowed (RFC 9110, 15.5.6)
 		if len(r.URL.Path) >= 5 && r.URL.Path[:5] == "/api/" && r.Method != "POST" {
+			w.Header().Set("Allow", "POST")
 			writeError(w, 405, "POST required")
 			return
 		}

@@ -429,40 +429,40 @@ structure Finished where deriving TypeName
 
 --@begin Rooms
 protocol CreateRoomP (Person, Server) {
-  q: CreateRoom from Person to Server;
+  q: CreateRoom from Person to Server route "POST /api/create_room";
   choice {
-    a: RoomCreated from Server to Person cause q where a.requestId = q.requestId;
+    a: RoomCreated from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
 protocol EnterRoomP (Person, Server) {
-  q: EnterRoom from Person to Server;
+  q: EnterRoom from Person to Server route "POST /api/enter_room";
   choice {
-    a: RoomEntered from Server to Person cause q
+    a: RoomEntered from Server to Person cause q status 200
        where a.requestId = q.requestId ∧ a.roomId = q.roomId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
 protocol ListGamesP (Person, Server) {
-  q: ListGames from Person to Server;
+  q: ListGames from Person to Server route "POST /api/list_games";
   choice {
-    a: GamesListed from Server to Person cause q
+    a: GamesListed from Server to Person cause q status 200
        where a.requestId = q.requestId ∧ a.roomId = q.roomId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
 protocol RoomChatP (Person, Server) {
-  q: SendRoomChat from Person to Server;
+  q: SendRoomChat from Person to Server route "POST /api/send_room_chat";
   choice {
-    a: RoomChat from Server to Person cause q where a.requestId = q.requestId;
+    a: RoomChat from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 --@end Rooms
@@ -471,29 +471,29 @@ protocol RoomChatP (Person, Server) {
 
 --@begin Challenge
 protocol CreateGameP (Person, Server) {
-  q: CreateGame from Person to Server;
+  q: CreateGame from Person to Server route "POST /api/create_game";
   choice {
-    a: GameCreated from Server to Person cause q where a.requestId = q.requestId;
+    a: GameCreated from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
 protocol TakeSeatP (Person, Server) {
-  q: TakeSeat from Person to Server;
+  q: TakeSeat from Person to Server route "POST /api/take_seat";
   choice {
-    a: SeatTaken from Server to Person cause q where a.requestId = q.requestId;
+    a: SeatTaken from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
 protocol StartGameP (Person, Server) {
-  q: StartGame from Person to Server;
+  q: StartGame from Person to Server route "POST /api/start_game";
   choice {
-    a: GameStarted from Server to Person cause q where a.requestId = q.requestId;
+    a: GameStarted from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
@@ -503,22 +503,22 @@ protocol Challenge (Person, Server) {
   include CreateGameP Person Server;
   rec Open {
     choice {
-      p: SetSeatPlan from Person to Server;
+      p: SetSeatPlan from Person to Server route "POST /api/set_seat_plan";
       choice {
-        SeatPlanSet from Server to Person cause p;
+        SeatPlanSet from Server to Person cause p status 200;
       } or {
-        RequestRejected from Server to Person cause p;
+        RequestRejected from Server to Person cause p status 200;
       }
       continue Open;
     } or {
       include TakeSeatP Person Server;
       continue Open;
     } or {
-      l: LeaveSeat from Person to Server;
+      l: LeaveSeat from Person to Server route "POST /api/leave_seat";
       choice {
-        SeatLeft from Server to Person cause l;
+        SeatLeft from Server to Person cause l status 200;
       } or {
-        RequestRejected from Server to Person cause l;
+        RequestRejected from Server to Person cause l status 200;
       }
       continue Open;
     } or {
@@ -534,12 +534,12 @@ protocol Challenge (Person, Server) {
 /-- A person's move is a request in its own session. The server answers it, or refuses it:
 not this person's turn, a stale move number, the seat's byo-yomi clock already run out. -/
 protocol PlayMoveP (Person, Server) {
-  m: PlayMove from Person to Server;
+  m: PlayMove from Person to Server route "POST /api/play_move";
   choice {
-    p: MovePlayed from Server to Person cause m
+    p: MovePlayed from Server to Person cause m status 200
        where p.requestId = m.requestId ∧ p.moveNo = m.moveNo;
   } or {
-    x: RequestRejected from Server to Person cause m where x.requestId = m.requestId;
+    x: RequestRejected from Server to Person cause m status 200 where x.requestId = m.requestId;
   }
 }
 
@@ -575,8 +575,8 @@ protocol TurnNaive (Person, Server, Bot) {
   } or {
     ClockRanOut at Server;
   } or {
-    m: PlayMove from Person to Server;
-    MovePlayed from Server to Person cause m;
+    m: PlayMove from Person to Server route "POST /api/play_move";
+    MovePlayed from Server to Person cause m status 200;
   }
 }
 
@@ -599,19 +599,19 @@ protocol TurnPushed (Person, Server, Bot) {
 
 --@begin Teams
 protocol ProposeMergeP (Person, Server) {
-  q: ProposeMerge from Person to Server;
+  q: ProposeMerge from Person to Server route "POST /api/propose_merge";
   choice {
-    a: MergeProposed from Server to Person cause q where a.requestId = q.requestId;
+    a: MergeProposed from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 
 /-- A first attempt at one answer to a proposal: the response, then perhaps the outcome. -/
 protocol RespondMergeNaive (Person, Server) {
-  q: RespondMerge from Person to Server;
+  q: RespondMerge from Person to Server route "POST /api/respond_merge";
   choice {
-    MergeResponded from Server to Person cause q;
+    MergeResponded from Server to Person cause q status 200;
     choice {
       TeamsMerged from Server to Person;
     } or {
@@ -619,20 +619,20 @@ protocol RespondMergeNaive (Person, Server) {
     } or {
     }
   } or {
-    RequestRejected from Server to Person cause q;
+    RequestRejected from Server to Person cause q status 200;
   }
 }
 
 /-- One answer to a proposal. The response says where the proposal stands: still pending,
 merged (this was the last acceptance) or withdrawn (a decline, or a team changed). -/
 protocol RespondMergeP (Person, Server) {
-  q: RespondMerge from Person to Server;
+  q: RespondMerge from Person to Server route "POST /api/respond_merge";
   choice {
-    a: MergeResponded from Server to Person cause q
+    a: MergeResponded from Server to Person cause q status 200
        where a.requestId = q.requestId ∧ a.proposalId = q.proposalId ∧
              (a.status = "pending" ∨ a.status = "merged" ∨ a.status = "withdrawn");
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 --@end Teams
@@ -641,11 +641,11 @@ protocol RespondMergeP (Person, Server) {
 
 --@begin Watch
 protocol GameStateP (Person, Server) {
-  q: GetGameState from Person to Server;
+  q: GetGameState from Person to Server route "POST /api/game_state";
   choice {
-    a: GameState from Server to Person cause q where a.requestId = q.requestId;
+    a: GameState from Server to Person cause q status 200 where a.requestId = q.requestId;
   } or {
-    x: RequestRejected from Server to Person cause q where x.requestId = q.requestId;
+    x: RequestRejected from Server to Person cause q status 200 where x.requestId = q.requestId;
   }
 }
 --@end Watch
@@ -685,11 +685,11 @@ protocol GoServer (Person, Server, Bot) {
     sessions { include PlayMoveP Person Server; }
   } and {
     sessions {
-      a: SetAutopilot from Person to Server;
+      a: SetAutopilot from Person to Server route "POST /api/set_autopilot";
       choice {
-        AutopilotSet from Server to Person cause a;
+        AutopilotSet from Server to Person cause a status 200;
       } or {
-        RequestRejected from Server to Person cause a;
+        RequestRejected from Server to Person cause a status 200;
       }
     }
   } and {

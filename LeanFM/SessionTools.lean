@@ -373,6 +373,7 @@ def examples : List (String × String × String) :=
   , ("placeorder", "examples/sessions/PlaceOrder.leanfm", include_str "../examples/sessions/PlaceOrder.leanfm")
   , ("lending", "examples/vibecode/lending/Lending.protocol", include_str "../examples/vibecode/lending/Lending.protocol") ]
 
+/-- The names, as the tools offer them (the examples above are compiled in: see examples). -/
 def exampleNames : List String := examples.map (·.1)
 
 /-- The arguments with `example` replaced by that example's text as `lean`. -/
@@ -661,10 +662,18 @@ def fit (body : Json) : Json := Id.run do
   let mut b := body
   let mut omitted : List String := []
   -- the drawing first, then per-role and per-call detail that session_actor gives for one role
-  for key in ["svg", "diagram", "projections", "calls", "types"] do
+  -- duplicates next (openapi when openapiYaml has it, proto which session_types gives), and the
+  -- protocol text's echo last: the caller sent it, or named the example
+  for key in ["svg", "diagram", "projections", "calls", "types", "openapi", "proto", "lean"] do
     if b.compress.length > limits.maxResult && (b.getObjVal? key).isOk && b.getObjValD key != Json.null then
+      if key == "openapi" && !(b.getObjVal? "openapiYaml").isOk && !(b.getObjVal? "code").isOk then continue
       b := b.setObjVal! key Json.null
-      omitted := omitted ++ [if key == "projections" then "projections (each role's local type and typestate: session_actor gives one role's)" else key]
+      omitted := omitted ++ [match key with
+        | "projections" => "projections (each role's local type and typestate: session_actor gives one role's)"
+        | "openapi" => "openapi (the same document is in openapiYaml)"
+        | "proto" => "proto (session_types gives it)"
+        | "lean" => "lean (the protocol text you sent, or the example you named)"
+        | k => k]
   if b.compress.length > limits.maxResult then
     if let .ok (.arr evs) := b.getObjVal? "events" then
       let mut n := evs.size
@@ -1526,10 +1535,18 @@ def openapi (args : Json) : Except String Json := do
     | .obj kvs => kvs.toList.foldl (fun n (_, v) => n + (match v with | .obj ms => ms.size | _ => 0)) 0
     | _ => 0
   let note := if unrouted.isEmpty then "" else s!"; {unrouted.length} request{if unrouted.length == 1 then "" else "s"} without a route left out"
-  return Json.mkObj [("tool", "session_openapi"), ("verdict", "generated"), ("name", p.name), ("role", Json.str role),
-    ("reading", s!"{p.name}: OpenAPI 3.1 for {role}, {ops} operation{if ops == 1 then "" else "s"}{note}"),
-    ("openapi", doc), ("unrouted", Json.arr (unrouted.map Json.str).toArray),
-    ("language", "json"), ("code", Json.str doc.pretty), ("lean", Json.str p.lean)]
+  -- the document goes in code (which the text content repeats); a large one goes once, compact,
+  -- without the structured copy, so a whole server's interface fits the result limit
+  let large := doc.pretty.length > 20000
+  let code := if large then doc.compress else doc.pretty
+  let head : List (String × Json) := [("tool", Json.str "session_openapi"), ("verdict", Json.str "generated"),
+    ("name", Json.str p.name), ("role", Json.str role),
+    ("reading", Json.str (s!"{p.name}: OpenAPI 3.1 for {role}, {ops} operation{if ops == 1 then "" else "s"}{note}" ++
+      (if large then "; the document is in code, compact (too large to send twice)" else "")))]
+  let docPart : List (String × Json) := if large then [] else [("openapi", doc)]
+  let tail : List (String × Json) := [("unrouted", Json.arr (unrouted.map Json.str).toArray),
+    ("language", Json.str "json"), ("code", Json.str code), ("lean", Json.str p.lean)]
+  return fit <| Json.mkObj (head ++ docPart ++ tail)
 
 /-- The message types as protobuf, Lean structures and JSON schemas (selfhost.session.types). -/
 def types (args : Json) : Except String Json := do
@@ -1604,15 +1621,19 @@ def sessionFiles (args : Json) : Except String (List (String × String)) := do
 /-- Every check that applies, as findings with an edit to try for each. -/
 def review (args : Json) : Except String Json := do
   let p ← parseProtocol args
-  let findings ← p.global.review p.roles
+  let (findings, notChecked) := p.global.reviewAll p.roles
   let routed := (p.global.messages.filter (·.route.isSome)).length
-  let scope := s!"structure, {if routed == 0 then "no HTTP (no routes)" else s!"HTTP from {routed} routed request{if routed == 1 then "" else "s"}"}, liveness, roles"
-  let reading := if findings.isEmpty then s!"{p.name}: no findings ({scope})"
-    else s!"{p.name}: {findings.length} finding{if findings.length == 1 then "" else "s"} ({scope})"
+  let scope := s!"structure, {if routed == 0 then "no HTTP (no routes)" else s!"HTTP from {routed} routed request{if routed == 1 then "" else "s"}"}, " ++
+    (if notChecked.isEmpty then "liveness, " else "") ++ "roles"
+  let skipped := if notChecked.isEmpty then "" else "; not checked: " ++ "; ".intercalate notChecked
+  let reading := if findings.isEmpty then s!"{p.name}: no findings ({scope}){skipped}"
+    else s!"{p.name}: {findings.length} finding{if findings.length == 1 then "" else "s"} ({scope}){skipped}"
   let report := "\n".intercalate ((List.range findings.length).map fun i =>
     let f := findings[i]!
     s!"{i + 1}. [{f.kind}] {f.message}\n   try: {f.suggestion}")
-  return Json.mkObj [("tool", "session_review"), ("verdict", if findings.isEmpty then "clean" else "findings"),
+  -- clean means every check ran and found nothing; with a check skipped and nothing found, partial
+  let verdict := if !findings.isEmpty then "findings" else if notChecked.isEmpty then "clean" else "partial"
+  return Json.mkObj [("tool", "session_review"), ("verdict", Json.str verdict), ("notChecked", Json.arr (notChecked.map Json.str).toArray),
     ("name", p.name), ("reading", reading),
     ("findings", Json.arr (findings.map fun f => Json.mkObj [("kind", Json.str f.kind), ("message", Json.str f.message),
       ("suggestion", Json.str f.suggestion)]).toArray),

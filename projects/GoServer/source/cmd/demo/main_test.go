@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -424,5 +425,41 @@ func TestSessionPanelMatchesTheSpec(t *testing.T) {
 	var prov map[string]any
 	if json.Unmarshal([]byte(sessionProvenance), &prov) != nil || prov["protocol"] != "GoServer" || prov["reducer"] == nil || prov["boundary"] == nil {
 		t.Fatalf("provenance: %s", sessionProvenance)
+	}
+}
+
+// Every route the session type declares (route "POST /api/..." in spec/Session.lean, carried into
+// the generated static/session/goserver.leanfm) is served by this handler with POST, and refused
+// with 405 for any other method: the spec and the server agree on the HTTP interface.
+func TestSessionTypeRoutesAreServedOnlyWithPost(t *testing.T) {
+	text, err := os.ReadFile("static/session/goserver.leanfm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := regexp.MustCompile(`route "POST (/api/[a-z_]+)"`).FindAllStringSubmatch(string(text), -1)
+	if len(routes) < 14 {
+		t.Fatalf("expected the session type's 14 routed requests, found %d", len(routes))
+	}
+	h := newHandler(goserver.NewServer(), "8081")
+	for _, m := range routes {
+		path := m[1]
+		for _, method := range []string{"GET", "PUT", "DELETE", "PATCH"} {
+			r := httptest.NewRequest(method, "http://127.0.0.1:8081"+path, strings.NewReader(`{}`))
+			r.Host = "127.0.0.1:8081"
+			r.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != 405 || w.Header().Get("Allow") != "POST" {
+				t.Fatalf("%s %s: got %d (Allow %q), want 405 with Allow: POST", method, path, w.Code, w.Header().Get("Allow"))
+			}
+		}
+		r := httptest.NewRequest("POST", "http://127.0.0.1:8081"+path, strings.NewReader(`{}`))
+		r.Host = "127.0.0.1:8081"
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code == 404 || w.Code == 405 {
+			t.Fatalf("POST %s: got %d; the session type routes it, so the server must serve it", path, w.Code)
+		}
 	}
 }
