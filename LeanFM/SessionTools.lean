@@ -22,6 +22,8 @@ import LeanFM.Session.SkeletonTs
 import LeanFM.Session.Evolution
 import LeanFM.Session.OpenApi
 import LeanFM.Session.Review
+import LeanFM.Session.ActorView
+import LeanFM.Session.Dataset
 import LeanFM.Logic
 
 /-!
@@ -1724,7 +1726,147 @@ def sla (args : Json) : Except String Json := do
           ("unit", "probability per entry; entries per window; reward amounts per role and unit"),
           ("boundary", "one entry per occurrence of the require block's message id; the main protocol") ]) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review"]
+/-! ## One role's view (selfhost.session.actor) -/
+
+def rowJson (r : ActorView.Row) : Json :=
+  Json.mkObj ([("label", Json.str r.label), ("direction", Json.str r.direction), ("peer", Json.str r.peer)] ++
+    (match r.route with | some x => [("route", Json.str x)] | none => []) ++
+    (match r.status with | some x => [("status", toJson x)] | none => []) ++
+    (match r.field with | some x => [("field", toJson x)] | none => []))
+
+/-- The protocol as one role sees it: its local type and typestate, a sequence diagram of only the
+steps it takes part in (lifelines: the role and its peers), its messages with direction, peer, route,
+status and payload field number, the HTTP interface it serves as OpenAPI, the routes it calls, and
+the whole protocol's proto file (a role's payloads keep the whole protocol's field numbers). -/
+def actor (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let role ← match args.getObjVal? "role" with
+    | .ok (.str r) => pure r
+    | _ => throw s!"role is required: one of {", ".intercalate p.roles}"
+  if !p.roles.contains role then throw s!"{role} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
+  let projection := match p.global.project role with
+    | .ok l => Json.mkObj [("local", l.render), ("typestate", l.typestate)]
+    | .error e => Json.mkObj [("error", e)]
+  let lanes := ActorView.lanes p.roles role p.global
+  let model := (p.global.restrict role).diagramModel lanes s!"{p.name} as {role} sees it" (keys := p.keys)
+  let rows := ActorView.rows p.global role p.labelHistory
+  let labels := (p.global.messages.map (·.label)).eraseDups
+  let proto := match Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory with
+    | .ok t => Json.str t
+    | .error e => Json.mkObj [("error", e)]
+  let (served, servedYaml) := match p.global.openApi p.name role p.types with
+    | .ok (doc, _) => (doc, Json.str (yaml doc))
+    | .error e => (Json.mkObj [("error", e)], Json.null)
+  let sends := (rows.filter (·.direction == "sends")).length
+  let receives := (rows.filter (·.direction == "receives")).length
+  let evs := (rows.filter (·.direction == "event")).length
+  let serves := (ActorView.serves rows).length
+  let calls := ActorView.calls rows
+  let peers := lanes.filter (· != role)
+  let problem := (projection.getObjValAs? String "error").toOption
+  let plural (n : Nat) (w : String) : String := s!"{n} {w}{if n == 1 then "" else "s"}"
+  let reading := s!"{p.name} as {role} sees it: sends {plural sends "message"}, receives {receives}" ++
+    (if evs == 0 then "" else s!", {plural evs "event"} of its own") ++
+    s!"; serves {plural serves "route"}, calls {plural calls.length "route"}; peers: " ++
+    (if peers.isEmpty then "none" else ", ".intercalate peers) ++
+    (match problem with | some e => s!"; it has no local type: {e}" | none => "")
+  return fit <| Json.mkObj
+    [ ("tool", "session_actor"), ("verdict", if problem.isSome then "issues" else "projected"), ("reading", reading)
+    , ("name", p.name), ("role", Json.str role), ("roles", Json.arr (p.roles.map Json.str).toArray)
+    , ("lean", p.lean), ("overlay", args.getObjValD "overlay")
+    , ("lanes", Json.arr (lanes.map Json.str).toArray)
+    , ("projection", projection)
+    , ("messages", Json.arr (rows.map rowJson).toArray)
+    , ("calls", Json.arr (calls.map rowJson).toArray)
+    , ("openapi", served), ("openapiYaml", servedYaml)
+    , ("proto", proto)
+    , ("svg", model.svg (themeOf args))
+    , ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", Json.arr (model.shapes.map shapeJson))])
+    , ("provenance", Json.mkObj
+        [ ("question", Json.str s!"What does {role} send, receive and serve in {p.name}, and with whom?")
+        , ("eventSource", "the protocol text")
+        , ("reducer", "Global.restrict (the steps the role takes part in, in their frames), Global.project (the local type), ActorView.rows (messages with Types.payloadNumbers), Global.openApi")
+        , ("unit", "messages and routes")
+        , ("boundary", "the main protocol; nested sessions and included protocols in place") ]) ]
+
+/-! ## Large datasets (selfhost.session.dataset) -/
+
+def datasetStep (e : Event String) : Dataset.Step :=
+  { label := e.label, src := e.src, dst := e.dst, isAct := e.isAct, time := e.time }
+
+/-- Events grouped by session, sessions in order of first appearance. -/
+def bySession (evs : Array (Event String)) : List (Nat × Array Dataset.Step) := Id.run do
+  let mut order : Array Nat := #[]
+  let mut groups : Std.HashMap Nat (Array Dataset.Step) := {}
+  for e in evs do
+    if !groups.contains e.session then order := order.push e.session
+    groups := groups.insert e.session ((groups.getD e.session #[]).push (datasetStep e))
+  return order.toList.map fun sid => (sid, groups.getD sid #[])
+
+/-- Many generated sessions, summarized: path, message, role, length and duration distributions.
+With a probability layer the sessions follow its exact weights (the chain for loops and rates, the
+timed generator otherwise); without one each walk takes one allowed step or the end, equally likely,
+and the answer says that these frequencies describe the walker, not the system. -/
+def dataset (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before generating a dataset (session_check lists them)"
+  let seed ← natArg args "seed" 1 4294967295
+  let sessions ← natArg args "sessions" 1000 Dataset.maxSessions
+  if sessions == 0 then throw s!"sessions must be 1 to {Dataset.maxSessions}"
+  let (runs, basis, timeUnit) ← match p.generative with
+    | some layer =>
+      if hasLoop layer.body then do
+        let c ← Chain.analyse layer (solveAll := false)
+        let mut runs : Array Dataset.Run := #[]
+        let mut total := 0
+        for i in [0:sessions] do
+          let g ← Chain.generate c (Dataset.sessionSeed seed i) 1 Dataset.maxSessionEvents
+          let ended := g.ended.any (·.2)
+          total := total + g.events.size
+          if total > Dataset.maxEvents then
+            throw s!"the dataset would exceed {Dataset.maxEvents} events after {runs.size} sessions; ask for fewer sessions"
+          runs := runs.push { steps := g.events.map datasetStep, ended, truncated := !ended }
+        pure (runs, "weighted", "ms")
+      else do
+        let gen ← match Generative.generate layer p.roles seed sessions Dataset.maxEvents with
+          | .ok g => pure g
+          | .error e => throw (if e.startsWith "generative event limit"
+              then s!"the dataset would exceed {Dataset.maxEvents} events; ask for fewer sessions" else e)
+        let runs := (bySession gen.events).toArray.map fun (_, st) => ({ steps := st, ended := true } : Dataset.Run)
+        pure (runs, "weighted", "ms")
+    | none => do
+      let runs ← Dataset.walkMany p.global seed sessions
+      pure (runs, "walk", "steps")
+  let sum := Dataset.summary runs timeUnit
+  let n := runs.size
+  let events := (sum.getObjValAs? Nat "events").toOption.getD 0
+  let distinct := (sum.getObjValAs? Nat "distinctPaths").toOption.getD 0
+  let top := match sum.getObjValD "paths" with
+    | .arr a => match a[0]? with
+      | some row => s!"; most common ({Dataset.decimal2 (((row.getObjValAs? Nat "count").toOption.getD 0) * 100) n}%): {(row.getObjValAs? String "path").toOption.getD ""}"
+      | none => ""
+    | _ => ""
+  let basisText := if basis == "weighted"
+    then "sessions follow the protocol's probability layer, so frequencies estimate its stated probabilities"
+    else "the protocol states no probabilities: each walk took one allowed step or the end, equally likely, so these frequencies describe the walker, not the system"
+  let notEnded := n - ((sum.getObjValAs? Nat "ended").toOption.getD 0)
+  let endNote := if notEnded == 0 then "" else s!"; {notEnded} did not end (cut at the event limit or stuck)"
+  return fit <| (sum.mergeObj (Json.mkObj
+    [ ("tool", "session_dataset"), ("verdict", "generated")
+    , ("reading", s!"{p.name}: {n} sessions, {events} events (seed {seed}); {distinct} distinct paths{top}{endNote}; {basisText}")
+    , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
+    , ("lean", p.lean), ("overlay", args.getObjValD "overlay")
+    , ("seed", seed), ("basis", Json.str basis)
+    , ("provenance", Json.mkObj
+        [ ("prompt", Json.str s!"session_dataset sessions={sessions} seed={seed}")
+        , ("question", Json.str s!"How are {sessions} generated sessions of {p.name} distributed over paths, messages, roles, lengths and durations?")
+        , ("eventSource", Json.str (if basis == "weighted" then "the probability layer's generator (Chain.generate for loops and rates, Generative.generate otherwise), seeded"
+            else "Dataset.walk: Conform.nextOf and Conform.step from the start, one allowed step or the end chosen uniformly by the seeded generator"))
+        , ("reducer", "group by session; count paths (labels in order), messages (label, sender, receiver), sessions containing each message, messages sent and received per role, events per session, and session duration")
+        , ("unit", Json.str s!"sessions; events; duration in {timeUnit}")
+        , ("boundary", Json.str s!"{n} generated sessions, at most {Dataset.maxSessionEvents} events each and {Dataset.maxEvents} in all; the top {Dataset.maxPaths} paths and {Dataset.maxRows} messages listed, the rest counted") ]) ]))
+
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -1743,6 +1885,8 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_openapi" => some (openapi args)
   | "session_types" => some (types args)
   | "session_review" => some (review args)
+  | "session_actor" => some (actor args)
+  | "session_dataset" => some (dataset args)
   | _ => none
 
 /-! ## Reference -/
@@ -2030,6 +2174,20 @@ instance plays its own role, and a fresh actor belongs to one session only.
   ways together, the sub-calls (concurrent where they overlap on the callee's clock), the critical
   path, and each call tree on its root caller's timeline. A callee that took longer than its caller
   waited is reported as inconsistent.
+
+- `session_actor {lean, role}`: the protocol as one role sees it: its local type and typestate, a
+  sequence diagram of only the steps it takes part in (its lifeline and its peers'), its messages
+  (sends, receives or its own event, with peer, route, status and payload field number), the HTTP
+  interface it serves as OpenAPI (JSON and YAML), the routes it calls, and the whole protocol's
+  proto file (a role's payloads keep the whole protocol's field numbers).
+
+- `session_dataset {lean, sessions?, seed?}`: generate many sessions (default 1000, at most
+  10000, 200000 events in all) and answer how they are distributed: paths with their counts (top
+  12), messages with how many sessions contain each, messages sent and received per role, events
+  per session and duration histograms. With a probability layer the sessions follow its weights;
+  without one each walk takes one allowed step or the end, equally likely, and the answer says those
+  frequencies describe the walker, not the system. Sessions that were cut at 600 events or got stuck
+  are counted, never reported as ended.
 
 - `session_instances {lean, instances?, perInstance?, properties?}`: the text's last `system`
   block (see Instances below) with 1 to 4 instances of each accept interleaved (default 2, at

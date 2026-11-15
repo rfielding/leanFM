@@ -51,5 +51,29 @@ the book is built, so they cannot drift from the implementation:
 
 \input{generated/mcp-logic-examples.tex}
 
-The surface is read-only and listens only on loopback. A deployment that exposes
-it to a network must add authentication and authorization first.
+\section{The explorer inside Claude}
+\label{sec:mcp-explorer}
+
+\index{MCP!Claude Desktop}
+The session tools declare an MCP Apps view, so a host that renders MCP Apps (Claude Desktop,
+claude.ai) draws their answers inline, and the view is an explorer as well as a picture. It keeps
+the protocol text in an editor that LeanFM rechecks after each pause, with a navigation bar:
+\emph{Whole protocol} (\texttt{session\_check}); one button per role (\texttt{session\_actor}),
+showing that role's typestate, a sequence diagram of only the steps it takes part in, its
+messages with their payload field numbers, the OpenAPI document it serves and the proto file;
+\emph{Protobuf} (\texttt{session\_types}); and \emph{Dataset} (\texttt{session\_dataset}),
+which generates up to 10000 sessions and charts how they are distributed over paths, messages,
+each role's load, lengths and durations. A protocol with probabilities is sampled by its weights;
+one without is walked, each allowed step or the end equally likely, and the chart says that those
+frequencies describe the walker rather than the system. Every bar is a count LeanFM returned,
+listed with its provenance.
+
+None of these tools calls a model. Started by Claude Desktop as a child process
+(\texttt{leanfm-mcp --stdio}, set up by \texttt{scripts/claude\_desktop\_config.py}), LeanFM
+needs no API key, no port and no authentication; Claude's own turns belong to the Claude
+subscription. The same executable over HTTP (\texttt{deploy/mcp/README.md}) serves a public host
+behind TLS, which claude.ai and the mobile apps reach as a custom connector.
+
+The full server, with the chat UI, listens only on loopback. A deployment that exposes it to a
+network must add authentication and authorization first; \texttt{leanfm-mcp}, which holds no user
+data and only computes, is limited by rate and concurrency instead.

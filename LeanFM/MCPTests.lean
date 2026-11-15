@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review"] do
+  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -222,6 +222,9 @@ def main : IO Unit := do
     ("skeleton", ← callTool "session_skeleton" []),
     ("ctl", ← callTool "session_ctl" [("formula", (Json.parse "{\"AG\": {\"implies\": [{\"after\": \"Approved\"}, {\"AG\": {\"not\": {\"after\": \"Waitlisted\"}}}]}}").toOption.get!)]),
     ("compat", ← callTool "session_compat" [("old", Json.str lendingLean)]),
+    ("actor", ← callTool "session_actor" [("role", "Member")]),
+    ("dataset", ← callTool "session_dataset" [("sessions", (500 : Nat))]),
+    ("types", ← callTool "session_types" []),
     ("next", Json.arr #[← callTool "session_next" [], ← callTool "session_next" [("events", borrow)]])]
   IO.FS.writeFile ".cache/tests/session-view.html" shtml
   IO.FS.writeFile ".cache/tests/session-view-results.json" results.compress
@@ -248,7 +251,7 @@ def main : IO Unit := do
   let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
   assertContains "MCP session design prompt ends at session_conform" promptGot.body "session_conform"
   assertContains "MCP session view edits through tools/call" shtml "\"tools/call\""
-  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\"], MAX_EDIT_BYTES = 65536"
+  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\"], MAX_EDIT_BYTES = 65536"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new
@@ -324,6 +327,32 @@ def main : IO Unit := do
   IO.println "ok: MCP host never allows every origin or credentials, and never caches"
   let line := logLine (post [("Authorization", "Bearer s3cret")] (body := "{\"secret\":1}") (peer := "203.0.113.9")) goodTok 5
   expect "MCP host log line holds no body, token or client address" (!line.contains "s3cret" && !line.contains "secret" && !line.contains "203.0.113.9")
+  -- standard input and output (clause selfhost.mcp.stdio): the same dispatch, one message per line
+  let sInit ← stdioReply "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}\r\n"
+  expect "MCP stdio answers initialize on one line" (match sInit with
+    | some l => l.contains "\"protocolVersion\"" && !l.contains "\n" && l.contains "\"id\":1"
+    | none => false)
+  expect "MCP stdio writes nothing for a notification" ((← stdioReply "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}").isNone)
+  expect "MCP stdio writes nothing for a blank line" ((← stdioReply "  \n").isNone)
+  expect "MCP stdio writes nothing for a response the client sends" ((← stdioReply "{\"jsonrpc\":\"2.0\",\"id\":9,\"result\":{}}").isNone)
+  expect "MCP stdio answers a line that is not JSON with -32700" (match ← stdioReply "not json" with
+    | some l => l.contains "-32700" && !l.contains "\n"
+    | none => false)
+  let hugeLine := "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":{\"x\":\"" ++ String.ofList (List.replicate (maxBodyBytes + 1) 'a') ++ "\"}}"
+  expect "MCP stdio refuses a message over 256 KiB with -32600" (match ← stdioReply hugeLine with
+    | some l => l.contains "-32600" && l.length < 400
+    | none => false)
+  let sTools ← stdioReply "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\"}"
+  let hTools ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/list\"}"
+  expect "MCP stdio lists the same tools as HTTP" (sTools == some hTools.body)
+  let sActor ← stdioReply "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"session_actor\",\"arguments\":{\"role\":\"B\",\"lean\":\"protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p status 200; }\"}}}"
+  expect "MCP stdio runs session_actor" (match sActor with
+    | some l => l.contains "\"verdict\":\"projected\"" && l.contains "PingPong as B sees it"
+    | none => false)
+  let sData ← stdioReply "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"sessions\":50,\"lean\":\"protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p status 200; }\"}}}"
+  expect "MCP stdio runs session_dataset" (match sData with
+    | some l => l.contains "\"verdict\":\"generated\"" && l.contains "\"sessions\":50"
+    | none => false)
   -- LeanFM's own requirements and mappings are readable resources
   for uri in ["leanfm://project/specification/SelfHosting.lean", "leanfm://project/specification/McpLogicImplementation.lean",
       "leanfm://project/specification/SessionImplementation.lean"] do

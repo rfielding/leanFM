@@ -3,8 +3,13 @@ import LeanFM.ChatUI.HttpRequest
 import Std.Async.TCP
 import Std.Async.Timer
 
-/-! leanfm-mcp: the MCP endpoint alone, for remote hosting (clause selfhost.mcp.hosting).
-Configuration comes from the environment; see deploy/mcp/README.md. -/
+/-! leanfm-mcp: the MCP endpoint alone, for remote hosting (clause selfhost.mcp.hosting) over HTTP,
+or with --stdio for a client that starts it as a child process (clause selfhost.mcp.stdio).
+HTTP configuration comes from the environment; see deploy/mcp/README.md.
+
+  leanfm-mcp                         HTTP on LEANFM_MCP_BIND:LEANFM_MCP_PORT (default 127.0.0.1:8090)
+  leanfm-mcp --stdio [--root DIR]    MCP on standard input and output; DIR is the LeanFM checkout
+                                     whose book and specifications the resources read -/
 
 open Std
 open Std.Net
@@ -74,7 +79,47 @@ partial def serveLoop (cfg : HostConfig) (limits : Limits) (server : TcpServer) 
     catch err => IO.eprintln s!"connection failed: {err}") Task.Priority.dedicated
   serveLoop cfg limits server
 
-def main : IO Unit := do
+/-- One message per line until standard input ends. Standard output carries only replies. -/
+partial def stdioLoop (stdin stdout stderr : IO.FS.Stream) : IO Unit := do
+  let line ← stdin.getLine
+  if line.isEmpty then return
+  let reply ← try stdioReply line
+    catch err =>
+      stderr.putStrLn s!"internal error: {err}"
+      pure (some (LeanFM.MCP.rpcError Lean.Json.null (-32603) "internal error").body)
+  if let some out := reply then
+    stdout.putStr (out ++ "\n")
+    stdout.flush
+  stdioLoop stdin stdout stderr
+
+def usage : String :=
+  "usage: leanfm-mcp [--stdio [--root DIR]]\n" ++
+  "  without --stdio it serves MCP over HTTP, configured by LEANFM_MCP_* (see deploy/mcp/README.md)"
+
+/-- The command line: --stdio and --root DIR, each at most once; anything else is refused. -/
+def parseArgs : List String -> Except String (Bool × Option String)
+  | [] => .ok (false, none)
+  | "--stdio" :: rest => do
+      let (s, r) <- parseArgs rest
+      if s then throw "--stdio given twice" else pure (true, r)
+  | "--root" :: dir :: rest => do
+      let (s, r) <- parseArgs rest
+      if r.isSome then throw "--root given twice" else pure (s, some dir)
+  | other :: _ => .error s!"unknown argument {other}"
+
+def serveStdio (root : Option String) : IO UInt32 := do
+  let stderr ← IO.getStderr
+  if let some dir := root then
+    unless ← System.FilePath.isDir dir do
+      stderr.putStrLn s!"--root {dir} is not a directory"
+      return 2
+    IO.Process.setCurrentDir dir
+  stderr.putStrLn s!"leanfm-mcp on standard input and output; resources read from {← IO.currentDir}"
+  stderr.flush
+  stdioLoop (← IO.getStdin) (← IO.getStdout) stderr
+  return 0
+
+def serveHttp : IO Unit := do
   let cfg ← HostConfig.fromEnv
   let some addr := IPv4Addr.ofString cfg.bind
     | throw <| IO.userError s!"LEANFM_MCP_BIND must be an IPv4 address, not {cfg.bind}"
@@ -86,7 +131,20 @@ def main : IO Unit := do
   (← IO.getStdout).flush
   serveLoop cfg limits server
 
+def main (args : List String) : IO UInt32 := do
+  match parseArgs args with
+  | .error why =>
+      IO.eprintln s!"{why}\n{usage}"
+      return 2
+  | .ok (true, root) => serveStdio root
+  | .ok (false, some _) =>
+      IO.eprintln s!"--root needs --stdio\n{usage}"
+      return 2
+  | .ok (false, none) =>
+      serveHttp
+      return 0
+
 end LeanFM.McpServer
 
-def main : IO Unit :=
-  LeanFM.McpServer.main
+def main (args : List String) : IO UInt32 :=
+  LeanFM.McpServer.main args

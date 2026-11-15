@@ -365,7 +365,11 @@ def compile (r : Resolved) (roles : List String) : Except String (List (Path × 
           if !roles.contains pen.payee then throw s!"obligation {o.name}: the penalty goes to unknown role {pen.payee}"
   paths.mapM fun p => return (p, ← schedule p roles)
 
-/-- Integer tickets on exact rational masses, using the same seeded LCG family as Sim. -/
+/-- Integer tickets on exact rational masses, using the same seeded LCG family as Sim. A ticket is
+built from the high 32 bits of each state, as Sim draws: the low bits of a power-of-two LCG have
+short periods (the lowest alternates), so a ticket taken from them modulo an even denominator would
+follow how many draws came before it rather than the masses. Rejection keeps every ticket below
+`den` equally likely. -/
 def choose (qs : List Q) (seed : Nat) : Except String (Nat × Nat) := do
   let den := qs.foldl (fun d q => Nat.lcm d q.den) 1
   let mut state := seed
@@ -374,8 +378,8 @@ def choose (qs : List Q) (seed : Nat) : Except String (Nat × Nat) := do
     let mut range := 1
     while range < den do
       state := (state * 6364136223846793005 + 1442695040888963407) % 18446744073709551616
-      ticket := ticket * 18446744073709551616 + state
-      range := range * 18446744073709551616
+      ticket := ticket * 4294967296 + state / 4294967296
+      range := range * 4294967296
     let usable := range - range % den
     if ticket < usable then
       ticket := ticket % den
@@ -398,7 +402,7 @@ def generate (r : Resolved) (roles : List String) (seed instances maxEvents : Na
   if total != Q.one then throw "generative path mass is not 1"
   let mut rng := seed
   let mut events := #[]
-  let mut out := []
+  let mut out : Array Json := #[]
   for session in [0:instances] do
     let (ix,next) ← choose (paths.map fun (p,_) => p.probability) rng
     rng := next
@@ -406,8 +410,8 @@ def generate (r : Resolved) (roles : List String) (seed instances maxEvents : Na
     let shift := events.size
     if shift + s.events.size > maxEvents then throw "generative event limit exceeded; reduce instances or increase maxEvents"
     events := events ++ s.events.map fun e => { e with session, id := e.id + shift, prior := e.prior.map (· + shift), cause := e.cause.map (· + shift), answers := e.answers.map (· + shift) }
-    out := out ++ [Json.mkObj [("session", session), ("observedUntilMs", s.now), ("obligations", toJson (reports s s.now))]]
-  return { events, reports := out }
+    out := out.push (Json.mkObj [("session", session), ("observedUntilMs", s.now), ("obligations", toJson (reports s s.now))])
+  return { events, reports := out.toList }
 
 /-- Replay one observed session, considering every structural alternative regardless of weight. -/
 def monitor (r : Resolved) (roles : List String) (observed : List Observation) (horizon : Option Nat) : Except String Json := do

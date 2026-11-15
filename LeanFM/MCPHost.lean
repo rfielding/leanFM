@@ -296,4 +296,32 @@ def render (res : Resp) : ByteArray :=
     String.join (headers.map (fun (k, v) => s!"{k}: {v}\r\n")) ++ "\r\n"
   head.toUTF8 ++ body
 
+/-! ## Standard input and output (clause selfhost.mcp.stdio)
+
+A client that starts LeanFM as a child process (Claude Desktop's configuration file, Claude Code,
+an editor) speaks MCP as one JSON-RPC message per line on standard input, and reads one per line on
+standard output. Standard output carries nothing else: the banner and any error go to standard
+error. The messages go to the same `LeanFM.MCP.dispatchJson` as HTTP, with the same size limit and
+the same result compaction, so the two transports give the same answers. -/
+
+/-- The line to write for one line read, or none: nothing for a blank line, a notification or a
+response the client sends; a JSON-RPC error for a line that is not JSON or is over `maxBodyBytes`.
+The reply is compact JSON, which has no raw newline, so it is exactly one line. -/
+def stdioReply (line : String) : IO (Option String) := do
+  let line := line.trimAsciiEnd.toString
+  if line.isEmpty then return none
+  if line.utf8ByteSize > maxBodyBytes then
+    return some (LeanFM.MCP.rpcError Json.null (-32600) s!"the message exceeds the {maxBodyBytes}-byte limit").body
+  match Json.parse line with
+  | .error err => return some (LeanFM.MCP.rpcError Json.null (-32700) err).body
+  | .ok message =>
+    let (hasId, isResponse) := match message with
+      | .obj kvs => (kvs.contains "id", !kvs.contains "method" && (kvs.contains "result" || kvs.contains "error"))
+      | _ => (true, false)
+    -- a response from the client (to a request the server never makes) needs no answer
+    if isResponse then return none
+    let reply ← LeanFM.MCP.dispatchJson message
+    if !hasId then return none
+    return some (if reply.status == 200 then compactReply reply.body else reply.body)
+
 end LeanFM.MCPHost

@@ -92,7 +92,8 @@ function host(msg) {
     const name = msg.params && msg.params.name;
     toolCalls.push(name);
     const answer = name === "session_next" ? R.next[Math.min(nextCalls++, R.next.length - 1)]
-      : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp : null;
+      : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp
+      : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types : null;
     if (answer) deliver({ jsonrpc: "2.0", id: msg.id, result: answer });
     else deliver({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "unexpected tool " + name } });
   } else if (msg.id !== undefined && msg.method) deliver({ jsonrpc: "2.0", id: msg.id, result: {} });
@@ -171,6 +172,36 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   button(byId.walk, "Close").click(); await wait(50);
   if (byId.walk.children.length) throw new Error("Close leaves the walk-through open");
   console.log("ok: undo and close work");
+
+  // navigation: each role's view, the payloads, a dataset, and back to the whole protocol
+  if (R.actor && R.dataset && R.types) {
+    await show(R.check);
+    button(byId.editor, "Member").click(); await wait(150);
+    const asked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_actor").pop();
+    if (asked?.params.arguments.role !== "Member") throw new Error("the role button did not ask for that role's view");
+    expectText("a role's view lists what it sends and receives", byId.results, "What Member sends and receives");
+    expectText("a role's view draws only its steps", byId.results, "Sequence diagram: only the steps Member takes part in");
+    expectText("a role's view shows the payloads", byId.results, "Payloads (protobuf");
+    if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("no SVG drawn for the role's view");
+    if (!button(byId.editor, "Member").attrs.class.includes("on")) throw new Error("the role's button is not marked as the current view");
+    const count = byId.editor.all().find((n) => n.tag === "input" && n.attrs.type === "number");
+    if (!count) throw new Error("no dataset size field");
+    count.value = "99999"; count.dispatch("change");
+    if (count.value !== "10000") throw new Error("the dataset size is not capped at 10000");
+    count.value = "500"; count.dispatch("change");
+    button(byId.editor, "Dataset").click(); await wait(150);
+    const askedData = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_dataset").pop();
+    if (askedData?.params.arguments.sessions !== 500) throw new Error("the dataset button did not send the size");
+    expectText("a dataset charts its paths", byId.results, "Paths taken");
+    expectText("a dataset charts each role's load", byId.results, "Load per role");
+    expectText("a dataset says where its numbers come from", byId.results, "Where these numbers come from");
+    expectText("a dataset without probabilities says what its frequencies mean", byId.results, "describe the walker, not the system");
+    button(byId.editor, "Protobuf").click(); await wait(150);
+    expectText("the payloads view shows the proto file", byId.results, "Message types and envelope (protobuf)");
+    button(byId.editor, "Whole protocol").click(); await wait(150);
+    expectText("back to the whole protocol", byId.results, "Sequence diagram, generated from the protocol");
+    console.log("ok: the navigation reaches each role, the payloads and a dataset");
+  }
 
   await show(R.simulate);
   await wait(400);

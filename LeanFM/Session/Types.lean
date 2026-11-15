@@ -310,6 +310,13 @@ def protoName (s : String) : String :=
 /-- The first payload field of the envelope: fields 1 to 15 are the header's (selfhost.session.versions). -/
 def firstPayloadField : Nat := 16
 
+/-- Each label's payload field number in the envelope's oneof: its place in the history (labels in
+order of first appearance across the versions), then the labels the history lacks, from
+`firstPayloadField`. One definition, so a role's view and the proto file cannot disagree. -/
+def payloadNumbers (labels : List String) (history : List String := []) : List (String × Nat) :=
+  let order := if history.isEmpty then labels.eraseDups else history ++ labels.eraseDups.filter (fun l => !history.contains l)
+  order.zipIdx.map fun (l, i) => (l, i + firstPayloadField)
+
 /-- The messages as a proto3 file. `history` is every label of every version of the protocol in
 order of first appearance (selfhost.session.versions): a label's payload field is its place there,
 so it keeps its number in every version, and a label the newest version dropped is reserved. -/
@@ -323,10 +330,9 @@ def proto (env : Env) (labels : List String) (package : String) (history : List 
       (m.fields.zipIdx.map fun (f, i) => protoField f (i + 1)) ++ ["}"])
   if names.contains "Event" then throw "a message named Event would collide with the event envelope; rename it"
   -- the envelope every event travels and is logged in (selfhost.session.envelope)
-  let order := if history.isEmpty then labels.eraseDups else history ++ labels.eraseDups.filter (fun l => !history.contains l)
   let snake (n : String) : String := String.ofList (n.toList.zipIdx.flatMap fun (c, i) =>
     if c.isUpper then (if i == 0 then [c.toLower] else ['_', c.toLower]) else [c])
-  let numbered := order.zipIdx.map fun (l, i) => (l, i + firstPayloadField)
+  let numbered := payloadNumbers labels history
   let oneof := (numbered.filter fun (l, _) => labels.contains l).map fun (l, k) =>
     s!"    {protoName l} {snake (protoName l)} = {k};"
   -- a dropped label's number and name stay reserved, so no later label can be misread as it

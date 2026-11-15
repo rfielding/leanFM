@@ -12,6 +12,49 @@ LEANFM_MCP_PORT=8090 .lake/build/bin/leanfm-mcp
 curl -s http://127.0.0.1:8090/healthz
 ```
 
+## Run it inside Claude Desktop, with no server
+
+Claude Desktop can start `leanfm-mcp` itself and talk to it over standard input and output. No
+port is opened and no API key is involved: LeanFM's tools never call a model, and Claude's own
+turns come out of the Claude subscription.
+
+```sh
+lake build leanfm-mcp
+python3 scripts/claude_desktop_config.py --root "$PWD" --install   # on the machine running Claude Desktop
+```
+
+If Claude Desktop runs on another computer (a Mac) and LeanFM is built on this one, run the script
+there with `--ssh`, so Claude Desktop starts LeanFM through ssh (which must log in without a
+prompt):
+
+```sh
+ssh LINUXHOST cat code/leanFM/scripts/claude_desktop_config.py | \
+  python3 - --ssh LINUXHOST --root /home/ME/code/leanFM --install
+```
+
+Quit and reopen Claude Desktop. The session tools then draw LeanFM's explorer inline: the whole
+protocol, each role's view with its OpenAPI and protobuf, walk-throughs, animations and datasets.
+By hand, the entry is `{"mcpServers": {"leanfm": {"command": ".../leanfm-mcp", "args": ["--stdio",
+"--root", "/path/to/leanFM"]}}}` in `claude_desktop_config.json`.
+
+## Run it on a public host (EC2 or any VM)
+
+Claude (claude.ai, the desktop and mobile apps) reaches a connector added by URL from Anthropic's
+servers, so the host must be public and speak HTTPS; Streamable HTTP is the transport Claude uses,
+and `leanfm-mcp` already serves it at `/mcp` (no WebSocket is needed). On a small instance:
+
+```sh
+lake build leanfm-mcp
+LEANFM_MCP_BIND=127.0.0.1 LEANFM_MCP_PORT=8090 .lake/build/bin/leanfm-mcp &
+caddy reverse-proxy --from leanfm.example.com --to 127.0.0.1:8090    # TLS from Let's Encrypt
+```
+
+Then add `https://leanfm.example.com/mcp` as a custom connector. Without `LEANFM_MCP_TOKEN` it needs
+no authentication. Every tool is read-only and deterministic, and holds no user data. Each client
+is still held to the rate and in-flight limits below, so an open endpoint can be slowed but not made
+to do unbounded work. A static host such as GitHub Pages cannot serve it, because every answer is
+computed by the Lean checker.
+
 ## Run it in a container
 
 ```sh
