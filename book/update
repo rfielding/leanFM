@@ -8,6 +8,5 @@ cp main.pdf      ../../rfielding.github.com/leanFM.pdf
   git add leanFM-dark.pdf  
   git commit -a -m "update book"
   git push origin master
-  ls -al
 )
 

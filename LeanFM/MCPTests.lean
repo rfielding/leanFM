@@ -371,6 +371,10 @@ def main : IO Unit := do
   expect "MCP session_explore gives the Bot's state machine, End included" (exStates.body.contains "\"verdict\":\"states\"" && exStates.body.contains "receive BotTurn from Server" && exStates.body.contains "\"to\":\"End\"")
   let exNoRole ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":49,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"states\":\"Mallory\"}}}"
   expect "MCP session_explore refuses a state machine of a role the protocol does not have" (exNoRole.body.contains "Mallory is not a role of GoServer")
+  let exFocusStates ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"focus\":\"Turn\",\"states\":\"Bot\"}}}"
+  expect "MCP session_explore gives a role's state machine in one protocol of the text" (exFocusStates.body.contains "\"verdict\":\"states\"" && exFocusStates.body.contains "\"name\":\"Turn\"" && exFocusStates.body.contains "receive BotTurn from Server")
+  let exFocusNoRole ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"focus\":\"CreateRoomP\",\"states\":\"Bot\"}}}"
+  expect "MCP session_explore refuses a role the focused protocol does not have" (exFocusNoRole.body.contains "Bot is not a role of CreateRoomP")
   let exNoMsg ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"message\":\"Nope\"}}}"
   expect "MCP session_explore refuses a message the protocol does not have" (exNoMsg.body.contains "Nope is not a message of GoServer")
   -- the walk names its state, the same after a loop's pass as at its start

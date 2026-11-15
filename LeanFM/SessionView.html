@@ -950,11 +950,29 @@ function treePanels(body) {
     box.appendChild(head);
     if (n.detail) box.appendChild(el("p", "reading", n.detail));
     if (n.protocol && n.kind !== "role") box.appendChild(el("p", "meta", "In protocol " + n.protocol + (Number.isInteger(n.first) ? `, lines ${n.first}` + (n.last && n.last !== n.first ? ` to ${n.last}` : "") : "")));
-    const acts = el("div", "controls"), out = el("div");
+    const acts = el("div", "controls"), out = el("div"), machines = el("div");
+    // a protocol the text defines: its own lines, its roles from its header, and the text up to it
+    const def = n.protocol ? (Array.isArray(body.definitions) ? body.definitions : []).find((d) => d && d.name === n.protocol) : null;
+    const own = ["definition", "include"].includes(n.kind) && def && Number.isInteger(def.last);
     if (["protocol", "definition", "include"].includes(n.kind) && n.protocol) {
       const b = el("button", "", "Sequence diagram of " + n.protocol);
       b.addEventListener("click", () => askInto(out, "session_explore", { focus: n.protocol }, (r) => diagram(r.diagram)));
       acts.appendChild(b);
+    }
+    if (own) {
+      const lines = String(body.lean || "").split("\n");
+      const header = (lines[def.first - 1] || "").match(/protocol\s+[A-Za-z_][A-Za-z0-9_.]*\s*\(([^)]*)\)/);
+      const roles = header ? header[1].split(",").map((x) => x.trim()).filter((x) => IDENT.test(x)) : [];
+      for (const r of roles) {
+        const sm = el("button", "", "State machine of " + r);
+        sm.setAttribute("aria-label", "State machine of " + r + " in " + n.protocol);
+        sm.addEventListener("click", () => askInto(machines, "session_explore", { focus: n.protocol, states: r }, machineView));
+        acts.appendChild(sm);
+      }
+      const upto = lines.slice(0, def.last).join("\n") + "\n";
+      const w = el("button", "", "Walk the grammar of " + n.protocol);
+      w.addEventListener("click", () => { walkPanel.replaceChildren(); grammarWalk(walkPanel, (label) => { lit = label; draw(); }, upto, n.protocol); });
+      acts.appendChild(w);
     }
     if (n.kind === "message" && n.message) {
       const b = el("button", "", "Payload of " + n.message);
@@ -978,8 +996,10 @@ function treePanels(body) {
     }
     if (acts.children.length) box.appendChild(acts);
     if (Number.isInteger(n.first)) box.appendChild(panel("Source", sourceBox(body.lean, n.first, n.last)));
-    box.appendChild(out);
+    box.appendChild(out); box.appendChild(machines);
     detail.replaceChildren(box); reportSize();
+    // picking a protocol of the list draws its interaction diagram at once
+    if (own) askInto(out, "session_explore", { focus: n.protocol }, (r) => diagram(r.diagram));
   }
   function toggle(t) { if (t.kids.length) { t.open = !t.open; layout(true); } show(t); }
   function hit(cx, cy) {
@@ -1212,7 +1232,7 @@ function machineView(r) {
 // ---- walking the grammar: the global state machine, grown one step at a time by session_next -----
 // Each answer names the protocol state the walk is in and the steps allowed next; a state reached
 // again is the same node, so loops close. Only the explored part is ever drawn.
-function grammarWalk(target, onStep) {
+function grammarWalk(target, onStep, source, title) {
   const events = [], seen = new Map();
   let busy = false, stepNo = 0, here = null;
   const states = [], edges = [], finals = [];
@@ -1221,13 +1241,14 @@ function grammarWalk(target, onStep) {
     nameOf: (s) => seen.get(s) || s, onMove: (e) => take(e) });
   const controls = el("div", "controls"), restart = el("button", "", "Restart"), undo = el("button", "", "Undo");
   controls.append(restart, undo);
-  const pnl = panel("Walk the grammar: the global state machine, grown as you go", head);
+  const pnl = panel("Walk the grammar" + (title ? " of " + title : "") + ": the global state machine, grown as you go", head);
   pnl.append(g.el, controls, log);
   target.replaceChildren(pnl);
   async function ask() {
     if (busy) return; busy = true;
     try {
-      const result = await rpc("tools/call", { name: WALK_TOOL, arguments: Object.assign({ lean: text ? text.value : "", events }, currentOverlay ? { overlay: currentOverlay } : {}) }, 30000);
+      const lean = typeof source === "string" ? source : (text ? text.value : "");
+      const result = await rpc("tools/call", { name: WALK_TOOL, arguments: Object.assign({ lean, events }, currentOverlay ? { overlay: currentOverlay } : {}) }, 30000);
       const b = result && result.structuredContent;
       if (!b || result.isError) { head.textContent = String((b && b.reason) || "LeanFM refused the walk."); return; }
       const st = String(b.state || ("w" + events.length));

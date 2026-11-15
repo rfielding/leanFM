@@ -497,10 +497,10 @@ protocol StartGameP (Person, Server) {
   }
 }
 
-/-- Before the start the creator plans seats, people take and leave them, and anyone in the
-room may watch; the creator ends the phase with StartGame. -/
+/-- After GameCreated, before the start: the creator plans seats, people take and leave them,
+and anyone in the room may watch. The phase ends only when StartGame is accepted; a rejected
+StartGame (seats not filled, not the creator) leaves the challenge open. -/
 protocol Challenge (Person, Server) {
-  include CreateGameP Person Server;
   rec Open {
     choice {
       p: SetSeatPlan from Person to Server route "POST /api/set_seat_plan";
@@ -522,7 +522,13 @@ protocol Challenge (Person, Server) {
       }
       continue Open;
     } or {
-      include StartGameP Person Server;
+      s: StartGame from Person to Server route "POST /api/start_game";
+      choice {
+        a: GameStarted from Server to Person cause s status 200 where a.requestId = s.requestId;
+      } or {
+        x: RequestRejected from Server to Person cause s status 200 where x.requestId = s.requestId;
+        continue Open;
+      }
     }
   }
 }
@@ -653,11 +659,21 @@ protocol GameStateP (Person, Server) {
 /-! ## The whole project -/
 
 --@begin GoServer
-/-- GoServer, all of it. In a room a person creates rooms, lists games and chats; a challenge
-runs to its start; then the server plays turn after turn until the game finishes, while any
-number of independent request sessions run beside it. -/
+/-- GoServer, all of it. A person enters a room (a rejected entry is retried); in the room they
+create rooms, list games and chat; a rejected CreateGame returns to the room, an accepted one
+opens a challenge that runs to its start; then the server plays turn after turn until the game
+finishes, while any number of independent request sessions run beside it. -/
 protocol GoServer (Person, Server, Bot) {
-  include EnterRoomP Person Server;
+  rec Enter {
+    e: EnterRoom from Person to Server route "POST /api/enter_room";
+    choice {
+      a: RoomEntered from Server to Person cause e status 200
+         where a.requestId = e.requestId ∧ a.roomId = e.roomId;
+    } or {
+      x: RequestRejected from Server to Person cause e status 200 where x.requestId = e.requestId;
+      continue Enter;
+    }
+  }
   rec Lobby {
     choice {
       include CreateRoomP Person Server;
@@ -669,7 +685,14 @@ protocol GoServer (Person, Server, Bot) {
       include RoomChatP Person Server;
       continue Lobby;
     } or {
-      include Challenge Person Server;
+      g: CreateGame from Person to Server route "POST /api/create_game";
+      choice {
+        c: GameCreated from Server to Person cause g status 200 where c.requestId = g.requestId;
+        include Challenge Person Server;
+      } or {
+        x: RequestRejected from Server to Person cause g status 200 where x.requestId = g.requestId;
+        continue Lobby;
+      }
     }
   }
   par {

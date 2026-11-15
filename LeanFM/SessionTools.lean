@@ -1959,11 +1959,24 @@ choices and their branches, parallel branches, loops, independent sessions, mess
 with their lines), the roles (what each sends and receives), and every protocol defined, each node
 with the lines of the text it comes from. With `focus: Name`, the text up to the end of Name's
 definition is read, so Name is its main protocol, and its diagram is drawn as session_diagram draws
-it (an include as a box). -/
+it (an include as a box). With `focus: Name` and `states: Role`, Role's state machine in Name. -/
 def explore (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let text := p.lean
   let ds := Outline.defs text
+  -- with focus: the text up to the end of Name's definition, read on its own so Name is its main
+  -- protocol; with states as well, a role of Name is projected, and without, Name's diagram is drawn
+  let focused : Option (Protocol × Outline.Def) ← match args.getObjVal? "focus" with
+    | .ok (.str name) => do
+      let some d := ds.find? (·.name == name)
+        | throw s!"{name} is not a protocol of the text; its protocols are {", ".intercalate (ds.map (·.name))}"
+      let upto := "\n".intercalate ((text.splitOn "\n").take d.last) ++ "\n"
+      let q ← parseProtocol (Json.mkObj ([("lean", Json.str upto)] ++
+        (match args.getObjVal? "proto" with | .ok v => [("proto", v)] | .error _ => [])))
+      if q.name != name then throw s!"{name} could not be read on its own (the text up to it ends with {q.name})"
+      pure (some (q, d))
+    | .ok _ => throw "focus must be the name of a protocol the text defines"
+    | .error _ => pure none
   -- a message's payload: example JSON, JSON schema, protobuf message, field number, where it is sent
   if let .ok v := args.getObjVal? "message" then
     let .ok label := v.getStr? | throw "message must be the label of a message of the protocol"
@@ -1992,6 +2005,7 @@ def explore (args : Json) : Except String Json := do
       , ("proto", match Session.Types.protoBlock proto label with | some b => Json.str b | none => Json.null) ]
   -- a role's state machine: its typestate's states and transitions
   if let .ok v := args.getObjVal? "states" then
+    let p := (focused.map (·.1)).getD p
     let .ok role := v.getStr? | throw s!"states must be a role: one of {", ".intercalate p.roles}"
     if !p.roles.contains role then throw s!"{role} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
     let l ← p.global.project role
@@ -2031,14 +2045,9 @@ def explore (args : Json) : Except String Json := do
       , ("start", Json.str start), ("finals", Json.arr (finals.map Json.str).toArray)
       , ("states", Json.arr (states.map Json.str).toArray), ("edges", Json.arr edges)
       , ("typestate", Json.str l.typestate) ]
-  match args.getObjVal? "focus" with
-  | .ok (.str name) =>
-    let some d := ds.find? (·.name == name)
-      | throw s!"{name} is not a protocol of the text; its protocols are {", ".intercalate (ds.map (·.name))}"
-    let upto := "\n".intercalate ((text.splitOn "\n").take d.last) ++ "\n"
-    let q ← parseProtocol (Json.mkObj ([("lean", Json.str upto)] ++
-      (match args.getObjVal? "proto" with | .ok v => [("proto", v)] | .error _ => [])))
-    if q.name != name then throw s!"{name} could not be read on its own (the text up to it ends with {q.name})"
+  match focused with
+  | some (q, d) =>
+    let name := q.name
     let m := annotatedModel q
     return fit <| Json.mkObj
       [ ("tool", "session_explore"), ("verdict", "drawn"), ("focus", Json.str name)
@@ -2046,8 +2055,7 @@ def explore (args : Json) : Except String Json := do
       , ("name", p.name), ("roles", Json.arr (q.roles.map Json.str).toArray), ("first", toJson d.first), ("last", toJson d.last)
       , ("svg", m.svg (themeOf args))
       , ("diagram", Json.mkObj [("width", m.width), ("height", m.height), ("shapes", Json.arr (m.shapes.map shapeJson))]) ]
-  | .ok _ => throw "focus must be the name of a protocol the text defines"
-  | .error _ =>
+  | none =>
     let load := p.roles.map fun r =>
       let rows := ActorView.rows p.global r
       let sends := (rows.filter (·.direction == "sends")).length
