@@ -105,7 +105,22 @@ def forever : String := "protocol Forever (A, B) { rec L { Ping from A to B; con
 -- never: an unbounded request (sessions, or events in all)
 #guard refused (dataset (args shopText [("sessions", toJson (0 : Nat))])) "sessions must be 1 to 10000"
 #guard refused (dataset (args shopText [("sessions", toJson (10001 : Nat))])) "sessions is at most 10000"
-#guard refused (dataset (args forever [("sessions", toJson (400 : Nat))])) "would exceed 200000 events"
+-- the event bound refuses rather than truncates (the tool's 1000000 is checked in MCPTests, compiled)
+#guard match parseProtocol (args forever) with
+  | .ok p => match Dataset.walkCounts p.global 1 3 (bound := 1000) with
+    | .error e => (e.splitOn "would exceed 1000 events after 1 sessions").length == 2
+    | .ok _ => false
+  | .error _ => false
+-- counting as the sessions are made gives the same summary as counting them afterwards
+#guard match parseProtocol (args shopText) with
+  | .ok p => match Dataset.walkCounts p.global 1 200 with
+    | .ok a => a.summary "steps" == Dataset.summary (walks shopText 200) "steps"
+    | .error _ => false
+  | .error _ => false
+-- a protocol whose parallel branches interleave says its paths are orders, not outcomes
+-- three branches of three messages: 9!/(3!^3) = 1680 orders, so 12 sessions all but surely differ
+def interleave : String := "protocol I (A, B, C, D) { par { A1 from A to D; A2 from A to D; A3 from A to D; } and { B1 from B to D; B2 from B to D; B3 from B to D; } and { C1 from C to D; C2 from C to D; C3 from C to D; } }"
+#guard ((str (dataset (args interleave [("sessions", toJson (12 : Nat))])) "reading").splitOn "parallel branches interleave").length == 2
 -- never: a dataset of a protocol with issues
 #guard refused (dataset (args "protocol Bad (A, B, C) { choice { X from A to B; } or { Y from C to B; } }")) "fix protocol issues"
 

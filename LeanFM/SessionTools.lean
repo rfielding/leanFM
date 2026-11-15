@@ -24,6 +24,7 @@ import LeanFM.Session.OpenApi
 import LeanFM.Session.Review
 import LeanFM.Session.ActorView
 import LeanFM.Session.Dataset
+import LeanFM.Session.Outline
 import LeanFM.Logic
 
 /-!
@@ -359,7 +360,37 @@ def protoTypes (args : Json) : Except String (Option Session.Types.Env) := do
   | .ok (.str t) => return some (← Session.Proto.ofProto t)
   | .ok _ => throw "proto is the text of a proto3 file"
 
-def parseProtocol (args : Json) : Except String Protocol := do
+/-- Protocols LeanFM carries, compiled in, so a client that cannot send a file (Claude Desktop, a
+phone) can name one: `example: "goserver"` instead of `lean` (clause selfhost.session.explorer). A
+fixed list of names: no argument names a path, and nothing is read from disk. Lake does not track
+include_str, so after one of these files changes, MCPTests (which compares each with its file)
+fails until this module is rebuilt. -/
+def examples : List (String × String × String) :=
+  [ ("goserver", "projects/GoServer/source/cmd/demo/static/session/goserver.leanfm",
+      include_str "../projects/GoServer/source/cmd/demo/static/session/goserver.leanfm")
+  , ("ride", "examples/sessions/Ride.leanfm", include_str "../examples/sessions/Ride.leanfm")
+  , ("boundedride", "examples/sessions/BoundedRide.leanfm", include_str "../examples/sessions/BoundedRide.leanfm")
+  , ("placeorder", "examples/sessions/PlaceOrder.leanfm", include_str "../examples/sessions/PlaceOrder.leanfm")
+  , ("lending", "examples/vibecode/lending/Lending.protocol", include_str "../examples/vibecode/lending/Lending.protocol") ]
+
+def exampleNames : List String := examples.map (·.1)
+
+/-- The arguments with `example` replaced by that example's text as `lean`. -/
+def withExample (args : Json) : Except String Json := do
+  match args.getObjVal? "example" with
+  | .error _ => pure args
+  | .ok (.str n) =>
+    if (args.getObjVal? "lean").isOk || (args.getObjVal? "protocol").isOk then
+      throw "give example or lean (or protocol), not both"
+    match examples.find? (·.1 == n) with
+    | some (_, _, text) => pure ((match args with | .obj kvs => Json.obj (kvs.erase "example") | j => j).setObjVal! "lean" (Json.str text))
+    | none => throw s!"example must be one of {", ".intercalate exampleNames}"
+  | .ok _ => throw s!"example must be the name of one of LeanFM's examples: {", ".intercalate exampleNames}"
+
+def parseProtocol (args0 : Json) : Except String Protocol := do
+  if args0.compress.length > limits.maxArgumentBytes then
+    throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
+  let args ← withExample args0
   if args.compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
   if let .ok v := args.getObjVal? "lean" then
@@ -629,10 +660,11 @@ the end, each omission said in `omitted`. -/
 def fit (body : Json) : Json := Id.run do
   let mut b := body
   let mut omitted : List String := []
-  for key in ["svg", "diagram"] do
-    if b.compress.length > limits.maxResult then
+  -- the drawing first, then per-role and per-call detail that session_actor gives for one role
+  for key in ["svg", "diagram", "projections", "calls", "types"] do
+    if b.compress.length > limits.maxResult && (b.getObjVal? key).isOk && b.getObjValD key != Json.null then
       b := b.setObjVal! key Json.null
-      omitted := omitted ++ [key]
+      omitted := omitted ++ [if key == "projections" then "projections (each role's local type and typestate: session_actor gives one role's)" else key]
   if b.compress.length > limits.maxResult then
     if let .ok (.arr evs) := b.getObjVal? "events" then
       let mut n := evs.size
@@ -1821,32 +1853,30 @@ def dataset (args : Json) : Except String Json := do
   let seed ← natArg args "seed" 1 4294967295
   let sessions ← natArg args "sessions" 1000 Dataset.maxSessions
   if sessions == 0 then throw s!"sessions must be 1 to {Dataset.maxSessions}"
-  let (runs, basis, timeUnit) ← match p.generative with
+  let (acc, basis, timeUnit) ← match p.generative with
     | some layer =>
       if hasLoop layer.body then do
         let c ← Chain.analyse layer (solveAll := false)
-        let mut runs : Array Dataset.Run := #[]
-        let mut total := 0
+        let mut acc : Dataset.Acc := {}
         for i in [0:sessions] do
           let g ← Chain.generate c (Dataset.sessionSeed seed i) 1 Dataset.maxSessionEvents
           let ended := g.ended.any (·.2)
-          total := total + g.events.size
-          if total > Dataset.maxEvents then
-            throw s!"the dataset would exceed {Dataset.maxEvents} events after {runs.size} sessions; ask for fewer sessions"
-          runs := runs.push { steps := g.events.map datasetStep, ended, truncated := !ended }
-        pure (runs, "weighted", "ms")
+          if acc.events + g.events.size > Dataset.maxEvents then
+            throw s!"the dataset would exceed {Dataset.maxEvents} events after {acc.sessions} sessions; ask for fewer sessions"
+          acc := acc.add { steps := g.events.map datasetStep, ended, truncated := !ended }
+        pure (acc, "weighted", "ms")
       else do
         let gen ← match Generative.generate layer p.roles seed sessions Dataset.maxEvents with
           | .ok g => pure g
           | .error e => throw (if e.startsWith "generative event limit"
               then s!"the dataset would exceed {Dataset.maxEvents} events; ask for fewer sessions" else e)
-        let runs := (bySession gen.events).toArray.map fun (_, st) => ({ steps := st, ended := true } : Dataset.Run)
-        pure (runs, "weighted", "ms")
+        let acc := (bySession gen.events).foldl (fun a (_, st) => a.add ({ steps := st, ended := true } : Dataset.Run)) ({} : Dataset.Acc)
+        pure (acc, "weighted", "ms")
     | none => do
-      let runs ← Dataset.walkMany p.global seed sessions
-      pure (runs, "walk", "steps")
-  let sum := Dataset.summary runs timeUnit
-  let n := runs.size
+      let acc ← Dataset.walkCounts p.global seed sessions
+      pure (acc, "walk", "steps")
+  let sum := acc.summary timeUnit
+  let n := acc.sessions
   let events := (sum.getObjValAs? Nat "events").toOption.getD 0
   let distinct := (sum.getObjValAs? Nat "distinctPaths").toOption.getD 0
   let top := match sum.getObjValD "paths" with
@@ -1859,9 +1889,10 @@ def dataset (args : Json) : Except String Json := do
     else "the protocol states no probabilities: each walk took one allowed step or the end, equally likely, so these frequencies describe the walker, not the system"
   let notEnded := n - ((sum.getObjValAs? Nat "ended").toOption.getD 0)
   let endNote := if notEnded == 0 then "" else s!"; {notEnded} did not end (cut at the event limit or stuck)"
+  let pathsNote := match sum.getObjValAs? String "pathsNote" with | .ok t => if t.isEmpty then "" else s!" ({t})" | .error _ => ""
   return fit <| (sum.mergeObj (Json.mkObj
     [ ("tool", "session_dataset"), ("verdict", "generated")
-    , ("reading", s!"{p.name}: {n} sessions, {events} events (seed {seed}); {distinct} distinct paths{top}{endNote}; {basisText}")
+    , ("reading", s!"{p.name}: {n} sessions, {events} events (seed {seed}); {distinct} distinct paths{pathsNote}{if pathsNote.isEmpty then top else ""}{endNote}; {basisText}")
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("overlay", args.getObjValD "overlay")
     , ("seed", seed), ("basis", Json.str basis)
@@ -1874,7 +1905,59 @@ def dataset (args : Json) : Except String Json := do
         , ("unit", Json.str s!"sessions; events; duration in {timeUnit}")
         , ("boundary", Json.str s!"{n} generated sessions, at most {Dataset.maxSessionEvents} events each and {Dataset.maxEvents} in all; the top {Dataset.maxPaths} paths and {Dataset.maxRows} messages listed, the rest counted") ]) ]))
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset"]
+/-! ## The tree to browse (selfhost.session.explorer) -/
+
+/-- The protocol as a tree to browse, or, with `focus`, the sequence diagram of one protocol the text
+defines. The tree: the main protocol's structure (included protocols with their own lines,
+choices and their branches, parallel branches, loops, independent sessions, messages and events
+with their lines), the roles (what each sends and receives), and every protocol defined, each node
+with the lines of the text it comes from. With `focus: Name`, the text up to the end of Name's
+definition is read, so Name is its main protocol, and its diagram is drawn as session_diagram draws
+it (an include as a box). -/
+def explore (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let text := p.lean
+  let ds := Outline.defs text
+  match args.getObjVal? "focus" with
+  | .ok (.str name) =>
+    let some d := ds.find? (·.name == name)
+      | throw s!"{name} is not a protocol of the text; its protocols are {", ".intercalate (ds.map (·.name))}"
+    let upto := "\n".intercalate ((text.splitOn "\n").take d.last) ++ "\n"
+    let q ← parseProtocol (Json.mkObj ([("lean", Json.str upto)] ++
+      (match args.getObjVal? "proto" with | .ok v => [("proto", v)] | .error _ => [])))
+    if q.name != name then throw s!"{name} could not be read on its own (the text up to it ends with {q.name})"
+    let m := annotatedModel q
+    return fit <| Json.mkObj
+      [ ("tool", "session_explore"), ("verdict", "drawn"), ("focus", Json.str name)
+      , ("reading", s!"{name}: sequence diagram of {messageCount q.global} messages across {q.roles.length} lifelines (lines {d.first} to {d.last})")
+      , ("name", p.name), ("roles", Json.arr (q.roles.map Json.str).toArray), ("first", toJson d.first), ("last", toJson d.last)
+      , ("svg", m.svg (themeOf args))
+      , ("diagram", Json.mkObj [("width", m.width), ("height", m.height), ("shapes", Json.arr (m.shapes.map shapeJson))]) ]
+  | .ok _ => throw "focus must be the name of a protocol the text defines"
+  | .error _ =>
+    let load := p.roles.map fun r =>
+      let rows := ActorView.rows p.global r
+      let sends := (rows.filter (·.direction == "sends")).length
+      let receives := (rows.filter (·.direction == "receives")).length
+      (r, s!"sends {sends} and receives {receives} kinds of message; open it for its view")
+    let (nodes, omitted, _) := Outline.tree text p.name p.global load
+    let msgs := (nodes.filter (·.kind == "message")).size
+    let incs := (nodes.filter (·.kind == "include")).size
+    let cut := if omitted == 0 then "" else s!"; {omitted} more nodes left out (at most {Outline.maxNodes})"
+    return fit <| Json.mkObj
+      [ ("tool", "session_explore"), ("verdict", "outlined")
+      , ("reading", s!"{p.name}: {nodes.size} nodes to browse: {ds.length} protocols defined, {incs} included where used, {msgs} message steps, {p.roles.length} roles{cut}; folded at the start, open a node to see inside")
+      , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray), ("lean", Json.str text)
+      , ("tree", Json.arr (nodes.map Outline.nodeJson)), ("treeOmitted", toJson omitted)
+      , ("definitions", Json.arr (ds.map fun d => Json.mkObj [("name", Json.str d.name), ("first", toJson d.first), ("last", toJson d.last)]).toArray)
+      , ("provenance", Json.mkObj
+          [ ("question", Json.str s!"How is {p.name} put together: which protocols it includes, where it chooses, runs in parallel, loops and starts independent sessions, and which messages each part sends?")
+          , ("eventSource", "the protocol text")
+          , ("reducer", "Text.parse into the main protocol's global type, walked by Outline.walk (an include as its protocol's node); Outline.defs for each definition's lines; ActorView.rows for each role's messages")
+          , ("unit", "nodes: protocols, frames, branches, messages and events; lines of the text")
+          , ("boundary", s!"the main protocol {p.name} with every protocol it includes, the protocols defined, and the roles; at most {Outline.maxNodes} nodes") ]) ]
+
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -1895,6 +1978,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_review" => some (review args)
   | "session_actor" => some (actor args)
   | "session_dataset" => some (dataset args)
+  | "session_explore" => some (explore args)
   | _ => none
 
 /-! ## Reference -/
@@ -2190,12 +2274,22 @@ instance plays its own role, and a fresh actor belongs to one session only.
   proto file (a role's payloads keep the whole protocol's field numbers).
 
 - `session_dataset {lean, sessions?, seed?}`: generate many sessions (default 1000, at most
-  10000, 200000 events in all) and answer how they are distributed: paths with their counts (top
+  10000, 1000000 events in all) and answer how they are distributed: paths with their counts (top
   12), messages with how many sessions contain each, messages sent and received per role, events
   per session and duration histograms. With a probability layer the sessions follow its weights;
   without one each walk takes one allowed step or the end, equally likely, and the answer says those
   frequencies describe the walker, not the system. Sessions that were cut at 600 events or got stuck
   are counted, never reported as ended.
+
+- `session_explore {lean | example, focus?}`: the protocol as a tree to browse: the main protocol's
+  structure (included protocols, choices and branches, parallel branches, loops, sessions, messages
+  and events), the roles and every protocol defined, each node with the lines it comes from. The
+  view draws it on a canvas, folded at the start: click to open, drag to pan, wheel to zoom, and
+  a node shows its source, a protocol's sequence diagram or a role's view. With `focus: Name`, the
+  sequence diagram of the protocol Name the text defines.
+
+- Every session tool also takes `example` instead of `lean`: the name of a protocol LeanFM carries
+  (goserver, ride, boundedride, placeorder, lending), for a client that cannot send a file.
 
 - `session_instances {lean, instances?, perInstance?, properties?}`: the text's last `system`
   block (see Instances below) with 1 to 4 instances of each accept interleaved (default 2, at

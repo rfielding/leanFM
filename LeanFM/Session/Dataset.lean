@@ -17,7 +17,7 @@ open Lean
 
 /-- Bounds: sessions per request, events in all, and events in one session. -/
 def maxSessions : Nat := 10000
-def maxEvents : Nat := 200000
+def maxEvents : Nat := 1000000
 def maxSessionEvents : Nat := 600
 /-- Rows kept in each distribution of the answer; the rest are counted. -/
 def maxPaths : Nat := 12
@@ -126,76 +126,112 @@ def decimal2 (num den : Nat) : String :=
   let frac := h % 100
   s!"{h / 100}.{if frac < 10 then "0" else ""}{frac}"
 
-/-- Values counted into at most `maxBuckets` ranges of equal width; each value once. -/
-def histogram (vals : List Nat) : List Json :=
-  match vals.min?, vals.max? with
-  | some lo, some hi =>
-    let distinct := vals.eraseDups.length
-    if distinct ≤ maxBuckets then
-      let ks := (vals.eraseDups.toArray.qsort (· < ·)).toList
-      ks.map fun k => Json.mkObj [("from", toJson k), ("to", toJson k), ("count", toJson (vals.filter (· == k)).length)]
-    else
-      let width := (hi - lo) / maxBuckets + 1
-      (List.range maxBuckets).filterMap fun b =>
-        let a := lo + b * width
-        let z := a + width - 1
-        if a > hi then none else
-        some (Json.mkObj [("from", toJson a), ("to", toJson (min z hi)),
-          ("count", toJson (vals.filter fun v => a ≤ v && v ≤ z).length)])
-  | _, _ => []
+/-- Values counted into at most `maxBuckets` ranges of equal width; each value once. Counted with a
+table, so 10000 values cost 10000 steps, not their square. -/
+def histogram (vals : Array Nat) : List Json := Id.run do
+  if vals.isEmpty then return []
+  let lo := vals.foldl min vals[0]!
+  let hi := vals.foldl max vals[0]!
+  let mut counts : Std.HashMap Nat Nat := {}
+  for v in vals do counts := counts.insert v (counts.getD v 0 + 1)
+  if counts.size ≤ maxBuckets then
+    let ks := (counts.toList.map (·.1)).toArray.qsort (· < ·)
+    return ks.toList.map fun k => Json.mkObj [("from", toJson k), ("to", toJson k), ("count", toJson (counts.getD k 0))]
+  let width := (hi - lo) / maxBuckets + 1
+  let mut buckets : Array Nat := Array.replicate maxBuckets 0
+  for v in vals do
+    let b := min (maxBuckets - 1) ((v - lo) / width)
+    buckets := buckets.modify b (· + 1)
+  return (List.range maxBuckets).filterMap fun b =>
+    let a := lo + b * width
+    if a > hi then none else
+    some (Json.mkObj [("from", toJson a), ("to", toJson (min (a + width - 1) hi)), ("count", toJson buckets[b]!)])
 
-/-- How the runs are distributed: over paths, messages, roles, lengths and durations. `timeUnit` is
-"ms" for runs from a probability layer and "steps" for walks. -/
-def summary (runs : Array Run) (timeUnit : String) : Json := Id.run do
-  let mut paths : Std.HashMap String Nat := {}
-  let mut labels : Std.HashMap String Nat := {}
-  let mut labelSessions : Std.HashMap String Nat := {}
-  let mut sent : Std.HashMap String Nat := {}
-  let mut received : Std.HashMap String Nat := {}
-  let mut events := 0
-  for r in runs do
-    let key := pathKey r
-    paths := paths.insert key (paths.getD key 0 + 1)
-    let mut seen : List String := []
-    for s in r.steps do
-      events := events + 1
-      let lk := if s.isAct then s!"{s.label} at {s.src}" else s!"{s.label} from {s.src} to {s.dst}"
-      labels := labels.insert lk (labels.getD lk 0 + 1)
-      if !seen.contains lk then
-        seen := lk :: seen
-        labelSessions := labelSessions.insert lk (labelSessions.getD lk 0 + 1)
-      sent := sent.insert s.src (sent.getD s.src 0 + 1)
-      if !s.isAct then received := received.insert s.dst (received.getD s.dst 0 + 1)
-  let n := runs.size
-  let ended := (runs.filter (·.ended)).size
-  let truncated := (runs.filter (·.truncated)).size
-  let stuck := n - ended - truncated
-  let lengths := runs.toList.map (·.steps.size)
-  let durations := runs.toList.map fun r => match r.steps.toList.map (·.time) with
-    | [] => 0
-    | ts => (ts.max?.getD 0) - (ts.min?.getD 0)
-  let pathRows := ranked paths
-  let roles := (sent.toList.map (·.1) ++ received.toList.map (·.1)).eraseDups
+/-- The counts of a dataset so far: each session is added as it is generated and then dropped, so
+memory grows with the distinct paths and messages, not with the events. -/
+structure Acc where
+  sessions : Nat := 0
+  events : Nat := 0
+  ended : Nat := 0
+  truncated : Nat := 0
+  paths : Std.HashMap String Nat := {}
+  labels : Std.HashMap String Nat := {}
+  labelSessions : Std.HashMap String Nat := {}
+  sent : Std.HashMap String Nat := {}
+  received : Std.HashMap String Nat := {}
+  lengths : Array Nat := #[]
+  durations : Array Nat := #[]
+
+def Acc.add (a : Acc) (r : Run) : Acc := Id.run do
+  let mut a := a
+  let key := pathKey r
+  a := { a with paths := a.paths.insert key (a.paths.getD key 0 + 1) }
+  let mut seen : Std.HashMap String Unit := {}
+  let mut lo := 0
+  let mut hi := 0
+  let mut first := true
+  for s in r.steps do
+    let lk := if s.isAct then s!"{s.label} at {s.src}" else s!"{s.label} from {s.src} to {s.dst}"
+    a := { a with events := a.events + 1, labels := a.labels.insert lk (a.labels.getD lk 0 + 1),
+                  sent := a.sent.insert s.src (a.sent.getD s.src 0 + 1) }
+    if !s.isAct then a := { a with received := a.received.insert s.dst (a.received.getD s.dst 0 + 1) }
+    if !seen.contains lk then
+      seen := seen.insert lk ()
+      a := { a with labelSessions := a.labelSessions.insert lk (a.labelSessions.getD lk 0 + 1) }
+    if first then lo := s.time; hi := s.time; first := false
+    else lo := min lo s.time; hi := max hi s.time
+  return { a with sessions := a.sessions + 1, ended := a.ended + (if r.ended then 1 else 0),
+                  truncated := a.truncated + (if r.truncated then 1 else 0),
+                  lengths := a.lengths.push r.steps.size, durations := a.durations.push (hi - lo) }
+
+/-- How the sessions are distributed: over paths, messages, roles, lengths and durations.
+`timeUnit` is "ms" for sessions from a probability layer and "steps" for walks. -/
+def Acc.summary (a : Acc) (timeUnit : String) : Json :=
+  let n := a.sessions
+  let pathRows := ranked a.paths
+  let roles := (a.sent.toList.map (·.1) ++ a.received.toList.map (·.1)).eraseDups
   let roleRows := (roles.toArray.qsort (· < ·)).toList.map fun r =>
-    Json.mkObj [("role", Json.str r), ("sent", toJson (sent.getD r 0)), ("received", toJson (received.getD r 0))]
-  let labelRows := ranked labels
-  let sumD := durations.foldl (· + ·) 0
-  return Json.mkObj
-    [ ("sessions", toJson n), ("events", toJson events)
-    , ("ended", toJson ended), ("truncated", toJson truncated), ("stuck", toJson stuck)
-    , ("distinctPaths", toJson pathRows.length)
+    Json.mkObj [("role", Json.str r), ("sent", toJson (a.sent.getD r 0)), ("received", toJson (a.received.getD r 0))]
+  let labelRows := ranked a.labels
+  let sumD := a.durations.foldl (· + ·) 0
+  let mn (xs : Array Nat) : Nat := xs.foldl min (xs[0]?.getD 0)
+  let mx (xs : Array Nat) : Nat := xs.foldl max 0
+  -- with parallel branches nearly every session interleaves in its own order: say so, so the
+  -- path chart is not read as a distribution of outcomes
+  let pathsNote := if n > 1 && pathRows.length * 10 ≥ n * 9
+    then "almost every session took its own order (parallel branches interleave), so compare the messages rather than the paths"
+    else ""
+  Json.mkObj
+    [ ("sessions", toJson n), ("events", toJson a.events)
+    , ("ended", toJson a.ended), ("truncated", toJson a.truncated), ("stuck", toJson (n - a.ended - a.truncated))
+    , ("distinctPaths", toJson pathRows.length), ("pathsNote", Json.str pathsNote)
     , ("paths", Json.arr ((pathRows.take maxPaths).map fun (k, c) =>
         Json.mkObj [("path", Json.str k), ("count", toJson c)]).toArray)
     , ("pathsOmitted", toJson (pathRows.length - min pathRows.length maxPaths))
     , ("messages", Json.arr ((labelRows.take maxRows).map fun (k, c) =>
-        Json.mkObj [("message", Json.str k), ("count", toJson c), ("sessions", toJson (labelSessions.getD k 0))]).toArray)
+        Json.mkObj [("message", Json.str k), ("count", toJson c), ("sessions", toJson (a.labelSessions.getD k 0))]).toArray)
     , ("messagesOmitted", toJson (labelRows.length - min labelRows.length maxRows))
     , ("load", Json.arr (roleRows.take maxRows).toArray)
-    , ("lengths", Json.mkObj [("unit", "events per session"), ("min", toJson (lengths.min?.getD 0)),
-        ("max", toJson (lengths.max?.getD 0)), ("mean", Json.str (decimal2 events n)),
-        ("histogram", Json.arr (histogram lengths).toArray)])
-    , ("durations", Json.mkObj [("unit", Json.str timeUnit), ("min", toJson (durations.min?.getD 0)),
-        ("max", toJson (durations.max?.getD 0)), ("mean", Json.str (decimal2 sumD n)),
-        ("histogram", Json.arr (histogram durations).toArray)]) ]
+    , ("lengths", Json.mkObj [("unit", "events per session"), ("min", toJson (mn a.lengths)),
+        ("max", toJson (mx a.lengths)), ("mean", Json.str (decimal2 a.events n)),
+        ("histogram", Json.arr (histogram a.lengths).toArray)])
+    , ("durations", Json.mkObj [("unit", Json.str timeUnit), ("min", toJson (mn a.durations)),
+        ("max", toJson (mx a.durations)), ("mean", Json.str (decimal2 sumD n)),
+        ("histogram", Json.arr (histogram a.durations).toArray)]) ]
+
+def summary (runs : Array Run) (timeUnit : String) : Json :=
+  (runs.foldl Acc.add {}).summary timeUnit
+
+/-- `sessions` walks, each added to the counts as it is made and then dropped, refusing more than
+`maxEvents` in all. -/
+def walkCounts (g : Global String) (seed sessions : Nat) (bound : Nat := maxEvents) : Except String Acc := do
+  if sessions == 0 || sessions > maxSessions then throw s!"sessions must be 1 to {maxSessions}"
+  let mut a : Acc := {}
+  for i in [0:sessions] do
+    let (r, _) := walk g (sessionSeed seed i)
+    if a.events + r.steps.size > bound then
+      throw s!"the dataset would exceed {bound} events after {a.sessions} sessions; ask for fewer sessions"
+    a := a.add r
+  return a
 
 end LeanFM.Session.Dataset

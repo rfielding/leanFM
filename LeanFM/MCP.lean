@@ -32,7 +32,7 @@ def instructions : String :=
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
   "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference. " ++
   "For interactions between roles (services, clients, actors, APIs), design a session type and check it with " ++
-  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, show one role's view (its diagram, OpenAPI and payloads) with session_actor, generate a large dataset to see how sessions distribute with session_dataset, generate code to implement it with session_skeleton, writing the protocol in " ++
+  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, show one role's view (its diagram, OpenAPI and payloads) with session_actor, generate a large dataset to see how sessions distribute with session_dataset, browse a protocol's tree of included protocols, branches and roles on a canvas with session_explore (example goserver is a whole specification to show), generate code to implement it with session_skeleton, writing the protocol in " ++
   "LeanFM protocol syntax as the lean argument (leanfm://language/session-reference). Show people the diagrams and streams these tools " ++
   "generate rather than drawing interaction diagrams by hand."
 
@@ -297,18 +297,33 @@ def toolDefinitions : Array Json := #[
     (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("role", stringSchema "the role to project onto"), ("theme", stringSchema "dark (default) or light")] ["role"]),
   tool "session_dataset" "Generate many sessions and summarize them"
-    "Generate a large dataset of sessions from a protocol (default 1000, at most 10000 sessions and 200000 events) and answer how it is distributed: the paths taken with their counts (top 12; the rest counted), each message with how many sessions contain it, messages sent and received per role, and histograms of events per session and of duration. With a probability layer (weights on choices, rec loops, rates) sessions follow its exact weights and durations are in ms; without one, each walk takes one allowed step or the end, equally likely, and the answer says these frequencies describe the walker, not the system. Sessions cut at 600 events or stuck are counted, never reported as ended. Use it to see whether a protocol fits its requirements at volume: which paths dominate, which messages are rare, which role carries the load."
+    "Generate a large dataset of sessions from a protocol (default 1000, at most 10000 sessions and 1000000 events) and answer how it is distributed: the paths taken with their counts (top 12; the rest counted), each message with how many sessions contain it, messages sent and received per role, and histograms of events per session and of duration. When almost every session interleaves its parallel branches in its own order, the answer says to compare messages rather than paths. With a probability layer (weights on choices, rec loops, rates) sessions follow its exact weights and durations are in ms; without one, each walk takes one allowed step or the end, equally likely, and the answer says these frequencies describe the walker, not the system. Sessions cut at 600 events or stuck are counted, never reported as ended. Use it to see whether a protocol fits its requirements at volume: which paths dominate, which messages are rare, which role carries the load."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("sessions", Json.mkObj [("type", "integer"), ("description", Json.str "sessions to generate, 1 to 10000 (default 1000)")]),
       ("seed", Json.mkObj [("type", "integer")])] []),
+  tool "session_explore" "Browse a protocol as a tree"
+    "Answer a protocol as a tree to browse, drawn by the view on a canvas, folded at the start: the main protocol's structure (each included protocol as a node with its own lines, choices naming the role that decides, their branches, parallel branches, loops, independent sessions, messages and events), the roles (open one for its view) and every protocol the text defines, each node with the lines of the text it comes from. Click a node to open it, drag to pan, wheel to zoom; a node shows its source, a protocol's sequence diagram (focus) or a role's view (session_actor). With focus: Name, answers the sequence diagram of protocol Name as the text defines it. Use example: \"goserver\" to browse the GoServer specification LeanFM carries."
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"),
+      ("focus", stringSchema "optional: a protocol the text defines, to draw its sequence diagram"), ("theme", stringSchema "dark (default) or light")] []),
   tool "session_skeleton" "Generate code to implement a session type"
     "Write a self-contained Python or TypeScript module from a protocol: every role's typestate as classes, one per state (in TypeScript a step the state does not allow does not type-check). A method sends only what its state allows, fills in the cause the protocol names, logs the event in session_conform's format and returns the next state; receive accepts only what the state allows; a state used twice raises. Implement the roles by writing only the decisions (which branch, what each message carries) and the transport."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("language", stringSchema "python (default) or typescript")] [])
 ]
 
+/-- Every session tool that takes protocol text also takes `example`, the name of a protocol LeanFM
+carries (selfhost.session.explorer), for a client that cannot send a file. -/
+def withExampleArgument (tool : Json) : Json :=
+  let name := (tool.getObjValAs? String "name").toOption.getD ""
+  let input := tool.getObjValD "inputSchema"
+  let props := input.getObjValD "properties"
+  if !name.startsWith "session_" || !(props.getObjVal? "lean").isOk then tool else
+  let ex := Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.SessionTools.exampleNames.map Json.str).toArray),
+    ("description", Json.str "instead of lean: a protocol LeanFM carries (goserver is the GoServer specification)")]
+  tool.setObjVal! "inputSchema" (input.setObjVal! "properties" (props.setObjVal! "example" ex))
+
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
-def tools : Array Json := toolDefinitions.map (withSessionView ∘ withLogicView)
+def tools : Array Json := toolDefinitions.map (withSessionView ∘ withLogicView ∘ withExampleArgument)
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
 `logicSummaryLimit` characters. The full answer is only in structuredContent. -/

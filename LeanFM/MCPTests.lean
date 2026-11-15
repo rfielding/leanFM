@@ -110,7 +110,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset"] do
+  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
@@ -225,6 +225,8 @@ def main : IO Unit := do
     ("actor", ← callTool "session_actor" [("role", "Member")]),
     ("dataset", ← callTool "session_dataset" [("sessions", (500 : Nat))]),
     ("types", ← callTool "session_types" []),
+    ("explore", ← callTool "session_explore" []),
+    ("exploreFocus", ← callTool "session_explore" [("focus", "Lending")]),
     ("next", Json.arr #[← callTool "session_next" [], ← callTool "session_next" [("events", borrow)]])]
   IO.FS.writeFile ".cache/tests/session-view.html" shtml
   IO.FS.writeFile ".cache/tests/session-view-results.json" results.compress
@@ -251,7 +253,7 @@ def main : IO Unit := do
   let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
   assertContains "MCP session design prompt ends at session_conform" promptGot.body "session_conform"
   assertContains "MCP session view edits through tools/call" shtml "\"tools/call\""
-  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\"], MAX_EDIT_BYTES = 65536"
+  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\", \"session_explore\"], MAX_EDIT_BYTES = 65536"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new
@@ -353,6 +355,24 @@ def main : IO Unit := do
   expect "MCP stdio runs session_dataset" (match sData with
     | some l => l.contains "\"verdict\":\"generated\"" && l.contains "\"sessions\":50"
     | none => false)
+  -- the examples LeanFM carries (clause selfhost.session.explorer): compiled in, each still the file it came from
+  for (name, path, text) in LeanFM.SessionTools.examples do
+    let onDisk ← IO.FS.readFile path
+    expect s!"MCP example {name} is the current {path} (rebuild LeanFM.SessionTools after changing it)" (onDisk == text)
+  let ex ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":40,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\"}}}"
+  expect "MCP session_explore outlines the GoServer example" (ex.body.contains "\"verdict\":\"outlined\"" && ex.body.contains "include Challenge" && ex.body.length < 100000)
+  let exFocus ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"focus\":\"Challenge\"}}}"
+  expect "MCP session_explore draws one GoServer protocol" (exFocus.body.contains "\"verdict\":\"drawn\"" && exFocus.body.contains "\"focus\":\"Challenge\"")
+  let exBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"../../etc/passwd\"}}}"
+  expect "MCP refuses an example LeanFM does not carry, naming the ones it does" (exBad.body.contains "example must be one of goserver" && !exBad.body.contains "root:")
+  let exBoth ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"ride\",\"lean\":\"protocol P (A, B) { X from A to B; }\"}}}"
+  expect "MCP refuses example and lean together" (exBoth.body.contains "give example or lean")
+  let chk ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":44,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"goserver\"}}}"
+  expect "MCP session_check of GoServer fits the result limit, saying what it left out" (chk.body.contains "\"verdict\":\"ok\"" && chk.body.contains "projections (each role" && compactReply chk.body == chk.body)
+  let big ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"example\":\"goserver\",\"sessions\":10000}}}"
+  expect "MCP session_dataset runs 10000 GoServer sessions within the result limit" (big.body.contains "\"sessions\":10000" && big.body.contains "parallel branches interleave" && big.body.length < 100000)
+  let tooBig ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":46,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"sessions\":2000,\"lean\":\"protocol Forever (A, B) { rec L { Ping from A to B; continue L; } }\"}}}"
+  expect "MCP session_dataset refuses more than 1000000 events rather than truncating" (tooBig.body.contains "would exceed 1000000 events")
   -- LeanFM's own requirements and mappings are readable resources
   for uri in ["leanfm://project/specification/SelfHosting.lean", "leanfm://project/specification/McpLogicImplementation.lean",
       "leanfm://project/specification/SessionImplementation.lean"] do

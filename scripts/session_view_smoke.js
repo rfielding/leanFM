@@ -93,7 +93,8 @@ function host(msg) {
     toolCalls.push(name);
     const answer = name === "session_next" ? R.next[Math.min(nextCalls++, R.next.length - 1)]
       : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp
-      : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types : null;
+      : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types
+      : name === "session_explore" ? (msg.params.arguments && msg.params.arguments.focus ? R.exploreFocus : R.explore) : null;
     if (answer) deliver({ jsonrpc: "2.0", id: msg.id, result: answer });
     else deliver({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "unexpected tool " + name } });
   } else if (msg.id !== undefined && msg.method) deliver({ jsonrpc: "2.0", id: msg.id, result: {} });
@@ -180,6 +181,9 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     const asked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_actor").pop();
     if (asked?.params.arguments.role !== "Member") throw new Error("the role button did not ask for that role's view");
     expectText("a role's view lists what it sends and receives", byId.results, "What Member sends and receives");
+    // a successful call says what LeanFM answered, never that the host returned nothing
+    if (byId.editor.textContent.includes("The host returned no result")) throw new Error("a successful call was reported as returning no result");
+    console.log("ok: a successful call is not reported as an empty one");
     expectText("a role's view draws only its steps", byId.results, "Sequence diagram: only the steps Member takes part in");
     expectText("a role's view shows the payloads", byId.results, "Payloads (protobuf");
     if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("no SVG drawn for the role's view");
@@ -201,6 +205,29 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     button(byId.editor, "Whole protocol").click(); await wait(150);
     expectText("back to the whole protocol", byId.results, "Sequence diagram, generated from the protocol");
     console.log("ok: the navigation reaches each role, the payloads and a dataset");
+  }
+
+  // the tree: drawn on a canvas, folded, opened by keys, a node's source and a protocol's diagram beside it
+  if (R.explore && R.exploreFocus) {
+    await show(R.explore);
+    const cv = byId.results.all().find((n) => n.tag === "canvas" && n.className.includes("tree"));
+    if (!cv) throw new Error("the tree is not drawn on a canvas");
+    await wait(80);
+    expectText("the tree selects the main protocol at the start", byId.results, "the main protocol");
+    expectText("the selected node shows its source lines", byId.results, "Source");
+    for (const key of ["ArrowDown", "Enter", "ArrowRight", "ArrowLeft", "+", "-", "0", "ArrowUp"]) { cv.dispatch("keydown", { key }); await wait(30); }
+    button(byId.results, "Open one more level").click(); await wait(350);
+    button(byId.results, "Close all").click(); await wait(350);
+    button(byId.results, "Fit").click(); await wait(30);
+    cv.dispatch("wheel", { deltaY: -100, clientX: 100, clientY: 100 });
+    cv.dispatch("pointerdown", { clientX: 100, clientY: 100 }); cv.dispatch("pointermove", { clientX: 160, clientY: 140 }); cv.dispatch("pointerup", {});
+    await wait(30);
+    button(byId.results, "Sequence diagram of Lending").click(); await wait(150);
+    const asked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_explore").pop();
+    if (asked?.params.arguments.focus !== "Lending") throw new Error("the diagram button did not ask for that protocol");
+    if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("the protocol's diagram is not drawn");
+    if (!button(byId.editor, "Tree").attrs.class.includes("on")) throw new Error("the Tree view is not marked current");
+    console.log("ok: the tree opens, closes, pans, zooms and shows a protocol's diagram");
   }
 
   await show(R.simulate);
