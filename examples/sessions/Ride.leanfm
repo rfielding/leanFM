@@ -4,6 +4,8 @@ import LeanFM.Session.Syntax
 -- A ride: the Platform offers the request to drivers until one accepts (each accepts 4/5 of the time),
 -- the Rider then waits (9/10) or cancels for a 5 USD fee, and the trip is short or long.
 -- Money moves Rider -> Platform -> Driver; the Platform keeps the difference.
+-- The search is unbounded on purpose: it is the example of a loop the chain view solves. A real
+-- platform gives up; BoundedRide.leanfm offers at most 3 times and then sends NoDriver to the Rider.
 protocol Ride (Rider, Platform, Driver) {
   Request from Rider to Platform;
   rec Dispatch {

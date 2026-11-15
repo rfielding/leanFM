@@ -299,6 +299,17 @@ def write (name : String) (roles : List String) (steps : List Json) : String :=
 
 end ToText
 
+/-- Whether the statements need the chain: a loop (rec), which the tree cannot unfold, or an accrual
+or event delay, which accrue over time spent in states. -/
+partial def hasLoop : List Text.Stmt → Bool
+  | [] => false
+  | s :: rest => (match s with
+    | .loop .. | .accrue .. | .timed _ (.event ..) => true
+    | .timed t _ => t.period.isSome
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.any hasLoop
+    | .sessions b => hasLoop b
+    | _ => false) || hasLoop rest
+
 def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) : Except String (Option Generative.Resolved) := do
   let r ← Generative.resolve body ((args.getObjVal? "overlay").toOption.filter (· != Json.null))
   if !r.active then return none
@@ -308,7 +319,12 @@ def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) 
     -- constructs the tree and the simulator cannot run, but the chain can: keep the layer, say why
     if e.startsWith "timed generation/monitoring supports" || e.startsWith "accrue needs the chain view" ||
        e.startsWith "after on an event" then
-      return some { r with metadata := Json.mkObj [("layer", r.metadata), ("executionUnsupported", e)] }
+      -- say what does and does not run: with a loop or a rate the chain generates (session_simulate,
+      -- session_dataset) and solves it (session_mdp); only the finite-path deadline monitor cannot
+      let note := if hasLoop body
+        then "Generation and expectations use the chain view: session_simulate, session_dataset and session_mdp run this protocol with its loops and rates. Per-session deadline monitoring needs finite paths (no rec, par, join, sessions or include), so session_conform gives no deadline reports for it."
+        else e
+      return some { r with metadata := Json.mkObj [("layer", r.metadata), ("executionUnsupported", note)] }
     throw e
 
 def generativeJson (p : Protocol) : Json := (p.generative.map (·.metadata)).getD Json.null
@@ -668,17 +684,6 @@ def diagram (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("svg", m.svg (themeOf args)), ("diagram", diagramJson p) ]
-
-/-- Whether the statements need the chain: a loop (rec), which the tree cannot unfold, or an accrual
-or event delay, which accrue over time spent in states. -/
-partial def hasLoop : List Text.Stmt → Bool
-  | [] => false
-  | s :: rest => (match s with
-    | .loop .. | .accrue .. | .timed _ (.event ..) => true
-    | .timed t _ => t.period.isSome
-    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.any hasLoop
-    | .sessions b => hasLoop b
-    | _ => false) || hasLoop rest
 
 /-- A distribution's report lines and JSON: per role and unit, its values with probabilities (all of
 them when there are few; otherwise its range and most likely value). -/
@@ -1156,6 +1161,9 @@ def maxLogEvents : Nat := 2000
 
 def deadlineReports (p : Protocol) (args : Json) (evs : List LogEvent) : Except String Json := do
   let some layer := p.generative | return Json.null
+  -- a layer only the chain can run (rec, rates) has no finite paths to monitor: no deadline
+  -- reports, and the layer's executionUnsupported note says so; the structural verdict stands
+  if (layer.metadata.getObjVal? "executionUnsupported").isOk then return Json.null
   let raw ← args.getObjValAs? (Array Json) "events"
   let timed ← (evs.zip raw.toList).mapM fun (e,j) => do
     let t ← match (j.getObjVal? "timeMs").toOption <|> (j.getObjVal? "time").toOption, (j.getObjVal? "ts").toOption with

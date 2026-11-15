@@ -46,6 +46,10 @@ structure Edge where
   step : String := ""
   sender : String := ""
   receiver : String := ""
+  /-- for message edges: the message's own id (o in o: Offer) and the id it names as its cause, so a
+  generated event carries the cause the protocol requires (selfhost.session.generate.chain) -/
+  msgId : Option String := none
+  causeId : Option String := none
   deriving Inhabited
 
 structure G where
@@ -149,6 +153,9 @@ where
         | .msg _ label src dst .. => pure (label, src, dst, "message", s!"{label}: {src} -> {dst}")
         | .event label role => pure (label, role, role, "event", s!"{label} at {role}")
         | _ => throw "an annotation must belong to a message or an event"
+      let (msgId, causeId) := match core with
+        | .msg id _ _ _ cause .. => (id, cause)
+        | _ => (none, none)
       let (delay, delayText) ← match time with
         | none => pure (0, "")
         | some t =>
@@ -173,7 +180,8 @@ where
         if a.reverse then (dst, src, a.unit, a.outcomes) else (src, dst, a.unit, a.outcomes)
       let e : Edge := { src := n, dst := k, kind, label := text, prob := Q.one, moves,
                         amountText := ", ".intercalate (amounts.map amountText), delay, delayText,
-                        step := label, sender := src, receiver := dst, maxDelay, gate, delays, samples }
+                        step := label, sender := src, receiver := dst, maxDelay, gate, delays, samples,
+                        msgId, causeId }
       addEdge e
       return n
     | .accrue as =>
@@ -931,6 +939,9 @@ def generate (c : Chain) (seed sessions : Nat) (maxEvents : Nat := 512) : Except
     let mut cur := c.start
     let mut now := 0
     let mut last : Option Nat := none
+    -- each message id's latest event in this session: a loop rebinds o on every pass, and a cause
+    -- names the latest, as conformance reads it
+    let mut ids : List (String × Nat) := []
     let mut count := 0
     let mut guard := 0
     while !c.ends.contains cur && count < maxEvents && guard < maxEvents * (c.states.size + 1) do
@@ -960,7 +971,9 @@ def generate (c : Chain) (seed sessions : Nat) (maxEvents : Nat := 512) : Except
           let m : Move := (f, t, u, (q : Rat))
           moved := moved ++ [m]
         let id := events.size + 1
-        let ev : Event String := { id, session := sid, prior := last.toList, cause := none, answers := none, src := e.sender, dst := e.receiver, label := e.step, msgId := none, route := none, status := none, isAct := e.kind == "event", time := now }
+        let cause := e.causeId.bind fun c => ids.lookup c
+        let ev : Event String := { id, session := sid, prior := last.toList, cause, answers := none, src := e.sender, dst := e.receiver, label := e.step, msgId := e.msgId, route := none, status := none, isAct := e.kind == "event", time := now }
+        if let some m := e.msgId then ids := (m, id) :: ids.filter (·.1 != m)
         events := events.push ev
         amounts := amounts.push moved
         last := some id

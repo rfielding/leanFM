@@ -282,6 +282,28 @@ def realizedRider : Rat := walkedAll.foldl (fun acc w =>
 def spin := (parseProtocol (args "protocol P (A,B) { rec L { choice at A using declared(\"x\") { probability 1/2: R from A to B; continue L; } or { probability 1/2: S from A to B; continue L; } } }")).toOption.get!
 #guard ((Chain.generate (Chain.analyse spin.generative.get! (solveAll := false)).toOption.get! 1 1).toOption.get!).ended == [(1, false)]
 
+-- generated events carry the message ids and causes the protocol names, so a generated stream
+-- conforms: Accept names its Offer, Assigned its Accept, Short or Long its Pickup, every pass of the
+-- loop naming that pass's Offer
+def rideSim := simulate ((args rideText).setObjVal! "instances" (toJson (10 : Nat)))
+-- every session whole: nothing left out to fit the answer
+#guard field rideSim "omitted" == Json.null
+def rideEvents : Json := field rideSim "events"
+def rideConform := conform ((args rideText).setObjVal! "events" rideEvents)
+#guard (field rideConform "verdict") == Json.str "conforms"
+-- a chain-only layer has no finite paths to monitor: no deadline reports, and the structural verdict stands
+#guard (field rideConform "deadlineReports") == Json.null
+#guard match rideEvents with
+  | .arr a => a.any (fun e => e.getObjValD "label" == Json.str "Accept" && e.getObjValD "cause" != Json.null)
+  | _ => false
+-- the layer's note says what runs (the chain) and what does not (per-session deadline monitoring)
+def rideNote : String := ((field (check (args rideText)) "generative").getObjValAs? String "executionUnsupported").toOption.getD ""
+#guard (rideNote.splitOn "session_simulate, session_dataset and session_mdp run this protocol").length == 2
+#guard (rideNote.splitOn "session_conform gives no deadline reports").length == 2
+-- a protocol with par and no loop keeps the generator's own reason
+def parText : String := "protocol P (A, B) { par { X from A to B after 1 seconds; } and { Y from B to A; } }"
+#guard ((((field (check (args parText)) "generative").getObjValAs? String "executionUnsupported").toOption.getD "").splitOn "finite sequential choices only").length == 2
+
 /-! Requirement selfhost.session.diagram.annotations: probabilities and rewards on the sequence diagram. -/
 def rideSvg := ((diagram (args rideText)).toOption.get!.getObjValAs? String "svg").toOption.getD ""
 #guard rideSvg.contains "p 4/5 - after 10 seconds - x1"
