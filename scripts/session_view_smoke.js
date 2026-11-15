@@ -228,6 +228,33 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("the protocol's diagram is not drawn");
     if (!button(byId.editor, "Tree").attrs.class.includes("on")) throw new Error("the Tree view is not marked current");
     console.log("ok: the tree opens, closes, pans, zooms and shows a protocol's diagram");
+    // walking the grammar from the main protocol: the global machine grows, the tree lights the step
+    await show(R.explore); await wait(80);
+    button(byId.results, "Walk the grammar").click(); await wait(150);
+    expectText("the grammar walk starts", byId.results, "Walk the grammar: the global state machine");
+    const machine = byId.results.all().find((n) => n.tag === "canvas" && n.className.includes("machine"));
+    if (!machine) throw new Error("the walk is not drawn on a canvas");
+    const firstMove = buttons(byId.results).find((b) => b.textContent.includes(" → "));
+    if (!firstMove) throw new Error("the walk offers no step");
+    firstMove.click(); await wait(700);
+    const walked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_next").pop();
+    if (!walked || !Array.isArray(walked.params.arguments.events) || walked.params.arguments.events.length !== 1) throw new Error("the step was not sent to session_next");
+    button(byId.results, "Undo").click(); await wait(150);
+    button(byId.results, "Restart").click(); await wait(150);
+    console.log("ok: the grammar walk takes a step, undoes it and restarts");
+  }
+  if (R.exploreStates && R.exploreMessage) {
+    await show(R.exploreStates); await wait(80);
+    expectText("a role's state machine is drawn", byId.results, "State machine of Desk");
+    if (!byId.results.all().some((n) => n.tag === "canvas" && n.className.includes("machine"))) throw new Error("the state machine is not a canvas");
+    const t = buttons(byId.results).find((b) => b.textContent.includes(" → "));
+    if (!t) throw new Error("the state machine offers no transition");
+    t.click(); await wait(600);
+    expectText("taking a transition moves the current state", byId.results, "current:");
+    await show(R.exploreMessage); await wait(50);
+    expectText("a message shows its example JSON", byId.results, "Example JSON");
+    expectText("a message shows its protobuf", byId.results, "Protobuf");
+    console.log("ok: a role's state machine walks, and a message shows its payload");
   }
 
   await show(R.simulate);

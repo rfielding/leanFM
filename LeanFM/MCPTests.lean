@@ -227,6 +227,8 @@ def main : IO Unit := do
     ("types", ← callTool "session_types" []),
     ("explore", ← callTool "session_explore" []),
     ("exploreFocus", ← callTool "session_explore" [("focus", "Lending")]),
+    ("exploreStates", ← callTool "session_explore" [("states", "Desk")]),
+    ("exploreMessage", ← callTool "session_explore" [("message", "Borrow")]),
     ("next", Json.arr #[← callTool "session_next" [], ← callTool "session_next" [("events", borrow)]])]
   IO.FS.writeFile ".cache/tests/session-view.html" shtml
   IO.FS.writeFile ".cache/tests/session-view-results.json" results.compress
@@ -363,6 +365,22 @@ def main : IO Unit := do
   expect "MCP session_explore outlines the GoServer example" (ex.body.contains "\"verdict\":\"outlined\"" && ex.body.contains "include Challenge" && ex.body.length < 100000)
   let exFocus ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"focus\":\"Challenge\"}}}"
   expect "MCP session_explore draws one GoServer protocol" (exFocus.body.contains "\"verdict\":\"drawn\"" && exFocus.body.contains "\"focus\":\"Challenge\"")
+  let exMsg ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":47,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"message\":\"PlayMove\"}}}"
+  expect "MCP session_explore describes a GoServer message: example JSON, schema and protobuf" (exMsg.body.contains "\"verdict\":\"described\"" && exMsg.body.contains "message PlayMove {" && exMsg.body.contains "\"moveNo\":\"0\"")
+  let exStates ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":48,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"states\":\"Bot\"}}}"
+  expect "MCP session_explore gives the Bot's state machine, End included" (exStates.body.contains "\"verdict\":\"states\"" && exStates.body.contains "receive BotTurn from Server" && exStates.body.contains "\"to\":\"End\"")
+  let exNoRole ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":49,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"states\":\"Mallory\"}}}"
+  expect "MCP session_explore refuses a state machine of a role the protocol does not have" (exNoRole.body.contains "Mallory is not a role of GoServer")
+  let exNoMsg ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"message\":\"Nope\"}}}"
+  expect "MCP session_explore refuses a message the protocol does not have" (exNoMsg.body.contains "Nope is not a message of GoServer")
+  -- the walk names its state, the same after a loop's pass as at its start
+  let n0 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { rec Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\"}}}"
+  let n1 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { rec Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\",\"events\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"More\"}]}}}"
+  let n2 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":53,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { rec Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\",\"events\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"Stop\"}]}}}"
+  let stateOf (r : Response) : String := match Json.parse r.body with
+    | .ok j => (((j.getObjValD "result").getObjValD "structuredContent").getObjValAs? String "state").toOption.getD ""
+    | .error _ => ""
+  expect "MCP session_next names the state: a loop's pass returns to it, an end does not" (stateOf n0 != "" && stateOf n0 == stateOf n1 && stateOf n0 != stateOf n2)
   let exBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"../../etc/passwd\"}}}"
   expect "MCP refuses an example LeanFM does not carry, naming the ones it does" (exBad.body.contains "example must be one of goserver" && !exBad.body.contains "root:")
   let exBoth ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"ride\",\"lean\":\"protocol P (A, B) { X from A to B; }\"}}}"

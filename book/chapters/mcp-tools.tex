@@ -75,7 +75,12 @@ the move animated; dragging pans, the wheel zooms, arrow keys move the selection
 protocol is a node carrying its own definition's lines, each choice names the role that decides,
 and the roles and every protocol the text defines hang beside the main structure. The selected node
 shows its source lines, and a button asks LeanFM for that protocol's sequence diagram or that role's
-view. A chat client cannot send a file, so the session tools also take \texttt{example}, the name
+view. A message opens into what crosses the wire: an example JSON body, its JSON schema and its
+protobuf message. A role opens into its state machine, drawn on a canvas, where a token moves along
+each transition taken. From the main protocol, \emph{Walk the grammar} grows the global state
+machine one step at a time: \texttt{session\_next} names the state the walk is in and the steps
+allowed next, a state reached again is the same node (so a loop closes), and only the explored part is
+drawn, which keeps a specification too large to show in full explorable. A chat client cannot send a file, so the session tools also take \texttt{example}, the name
 of a specification LeanFM carries: \texttt{example: "goserver"} browses the GoServer
 specification's 18 protocols, and \texttt{session\_dataset} on it generates 10000 sessions,
 about 320000 events, in a few seconds.

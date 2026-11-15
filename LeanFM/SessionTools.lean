@@ -1338,6 +1338,23 @@ def spans (args : Json) : Except String Json := do
     ("spans", Json.arr ((reports.take 200).map spanJson).toArray), ("timelines", Json.arr (timelines.take 20).toArray),
     ("issues", Json.arr ((issues.take 64).map Json.str).toArray), ("lean", Json.str p.lean)]
 
+/-- A residual protocol with every loop directly inside a loop of the same name collapsed: the inner
+loop shadows the outer, so `rec L { rec L { b } }` behaves as `rec L { b }`. Stepping into a loop
+leaves exactly that nesting, so without this a walk that goes round a loop once would not be named as
+the state it started from. -/
+partial def collapseLoops : Global String → Global String
+  | .loop n b => match collapseLoops b with
+    | .loop m inner => if m == n then .loop n inner else .loop n (.loop m inner)
+    | b' => .loop n b'
+  | .msg i k => .msg i (collapseLoops k)
+  | .act r l k => .act r l (collapseLoops k)
+  | .choice bs => .choice (bs.map collapseLoops)
+  | .par bs k => .par (bs.map collapseLoops) (collapseLoops k)
+  | .join n bs k => .join n (bs.map collapseLoops) (collapseLoops k)
+  | .sessions b k => .sessions (collapseLoops b) (collapseLoops k)
+  | .box n b k => .box n (collapseLoops b) (collapseLoops k)
+  | other => other
+
 /-- What may happen next in one session: the walk-through in the view calls this after each step. -/
 def next (args : Json) : Except String Json := do
   let p ← parseProtocol args
@@ -1357,6 +1374,14 @@ def next (args : Json) : Except String Json := do
       ("reading", s!"{p.name}: the walk breaks the protocol at {why}"), ("issues", Json.arr #[Json.str why]),
       ("next", Json.arr #[]), ("canEnd", false), ("lean", p.lean)]
   | .ok (steps, canEnd) =>
+    -- the protocol state the walk is in, as a short name: equal for walks that reach the same state
+    -- (a loop's start again), so a view can draw a revisit as a cycle (selfhost.session.explorer)
+    let body := Conform.inlineNested (match p.global with | .sessions b _ => b | other => other)
+    let stateId := match Conform.statesAfter body evs with
+      -- keyed as Global.stateGraph keys a state: the residual protocol and the ids it has bound,
+      -- by name only (each pass of a loop binds an id to a new event, and is still the same state)
+      | .ok sts => s!"q{(String.intercalate ";" (((sts.map fun st => Conform.key (collapseLoops st.g) ++ "|" ++ toString ((st.bind.map (·.1)).eraseDups.mergeSort (· ≤ ·))).eraseDups).mergeSort (· ≤ ·))).hash}"
+      | .error _ => ""
     let verdict := if steps.isEmpty then (if canEnd then "finished" else "stuck") else "running"
     let what := match steps.length with
       | 0 => if canEnd then "the session has ended" else "nothing can happen and the session cannot end"
@@ -1371,7 +1396,7 @@ def next (args : Json) : Except String Json := do
     return Json.mkObj [("tool", "session_next"), ("verdict", verdict), ("name", p.name), ("report", report),
       ("roles", Json.arr (p.roles.map Json.str).toArray),
       ("reading", s!"{p.name}: after {evs.length} event{if evs.length == 1 then "" else "s"}, {what}{ending}"),
-      ("next", Json.arr (steps.map stepJson).toArray), ("canEnd", canEnd), ("lean", p.lean)]
+      ("next", Json.arr (steps.map stepJson).toArray), ("canEnd", canEnd), ("state", Json.str stateId), ("lean", p.lean)]
 
 /-- Two versions of a protocol: which roles can upgrade first, and which can stay on the old one. -/
 def compat (args : Json) : Except String Json := do
@@ -1918,6 +1943,73 @@ def explore (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let text := p.lean
   let ds := Outline.defs text
+  -- a message's payload: example JSON, JSON schema, protobuf message, field number, where it is sent
+  if let .ok v := args.getObjVal? "message" then
+    let .ok label := v.getStr? | throw "message must be the label of a message of the protocol"
+    let uses := p.global.messages.filter (·.label == label)
+    if uses.isEmpty then throw s!"{label} is not a message of {p.name}"
+    let labels := (p.global.messages.map (·.label)).eraseDups
+    let ms ← Session.Types.complete p.types labels
+    let some m := ms.find? (·.name == label) | throw s!"{label} has no message type"
+    let proto ← Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory
+    let field := (Session.Types.payloadNumbers labels p.labelHistory).lookup label
+    let declared := (Session.Types.find p.types label).isSome
+    return fit <| Json.mkObj
+      [ ("tool", "session_explore"), ("verdict", "described"), ("message", Json.str label)
+      , ("reading", s!"{label}: {m.fields.length} field{if m.fields.length == 1 then "" else "s"}" ++
+          (if declared then "" else " (no structure declares it, so it carries nothing)") ++
+          (match field with | some f => s!"; payload field {f} of the envelope" | none => "") ++
+          s!"; sent {uses.length} way{if uses.length == 1 then "" else "s"}")
+      , ("name", p.name)
+      , ("uses", Json.arr (uses.map fun i => Json.mkObj ([("from", Json.str i.src), ("to", Json.str i.dst)] ++
+          (match i.route with | some r => [("route", Json.str r)] | none => []) ++
+          (match i.status with | some x => [("status", toJson x)] | none => []))).toArray)
+      , ("field", toJson field)
+      , ("example", m.example p.types)
+      , ("exampleNote", "integers are decimal strings, as the protobuf JSON mapping writes 64-bit integers and conformance reads them")
+      , ("schema", m.schema)
+      , ("proto", match Session.Types.protoBlock proto label with | some b => Json.str b | none => Json.null) ]
+  -- a role's state machine: its typestate's states and transitions
+  if let .ok v := args.getObjVal? "states" then
+    let .ok role := v.getStr? | throw s!"states must be a role: one of {", ".intercalate p.roles}"
+    if !p.roles.contains role then throw s!"{role} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
+    let l ← p.global.project role
+    let (start, methods) := l.machine
+    let edge (a b label kind : String) : Json :=
+      Json.mkObj [("from", Json.str a), ("to", Json.str b), ("label", Json.str label), ("kind", Json.str kind)]
+    let mut edges : Array Json := #[]
+    let mut finals : List String := []
+    for (i, m) in methods do
+      let src := s!"S{i}"
+      match m with
+      | .send t lab n => edges := edges.push (edge src n s!"send {lab} to {t}" "send")
+      | .recv f lab n => edges := edges.push (edge src n s!"receive {lab} from {f}" "receive")
+      | .act lab n => edges := edges.push (edge src n lab "event")
+      | .offer alts =>
+        for a in alts do
+          match a with
+          | .recv f lab n => edges := edges.push (edge src n s!"receive {lab} from {f}" "receive")
+          | .other n => edges := edges.push (edge src n "another branch" "other")
+          -- the role takes no part in this branch: its session is over
+          | .nothing => edges := edges.push (edge src "End" "nothing for this role" "other")
+      | .fork bs n need =>
+        for b in bs do edges := edges.push (edge src b "branch" "fork")
+        edges := edges.push (edge src n (match need with | some k => s!"after {k} branches" | none => "after every branch") "join")
+      | .serve body n =>
+        edges := edges.push (edge src body "each session" "serve")
+        edges := edges.push (edge src n "then" "then")
+      | .cont n => edges := edges.push (edge src n "" "then")
+      | .stop => finals := finals ++ [src]
+    let named := (edges.toList.flatMap fun e => [(e.getObjValAs? String "from").toOption.getD "", (e.getObjValAs? String "to").toOption.getD ""])
+    let states := ([start] ++ (methods.map fun (x : Prod Nat (Method String)) => s!"S{x.1}") ++ named).eraseDups.filter (· != "")
+    if states.contains "End" then finals := (finals ++ ["End"]).eraseDups
+    if states.length > 400 then throw s!"{role}'s state machine has {states.length} states; at most 400 are drawn"
+    return fit <| Json.mkObj
+      [ ("tool", "session_explore"), ("verdict", "states"), ("role", Json.str role), ("name", p.name)
+      , ("reading", s!"{p.name} as {role}: a state machine of {states.length} states and {edges.size} transitions, from its typestate")
+      , ("start", Json.str start), ("finals", Json.arr (finals.map Json.str).toArray)
+      , ("states", Json.arr (states.map Json.str).toArray), ("edges", Json.arr edges)
+      , ("typestate", Json.str l.typestate) ]
   match args.getObjVal? "focus" with
   | .ok (.str name) =>
     let some d := ds.find? (·.name == name)

@@ -74,7 +74,10 @@
   table.rows th { color: var(--dim); font-weight: 600; }
   .chart svg { display: block; width: 100%; height: auto; }
   .code-tools { display: flex; gap: 8px; margin-bottom: 6px; }
-  canvas.tree { height: 560px; cursor: grab; }
+  canvas.tree, canvas.machine { height: 560px; cursor: grab; }
+  canvas.machine { height: 480px; }
+  .moves { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .moves button { font: 14px ui-monospace, Menlo, monospace; }
   canvas.tree.dragging { cursor: grabbing; }
   .src { counter-reset: none; }
   .src .ln { color: var(--dim); user-select: none; display: inline-block; min-width: 3.5em; }
@@ -94,6 +97,9 @@ const EDIT_TOOLS = ["session_check", "session_simulate", "session_mdp", "session
 const MAX_DATASET = 10000, MAX_LABEL = 96;
 // The tree canvas draws at most MAX_TREE nodes and shows at most MAX_SOURCE lines of a node's source.
 const MAX_TREE = 1500, MAX_SOURCE = 80;
+// A state machine draws at most MAX_STATES states; above FOCUS_STATES only those within FOCUS_RADIUS
+// transitions of the current state are drawn, so a machine too large to show stays explorable.
+const MAX_STATES = 400, FOCUS_STATES = 60, FOCUS_RADIUS = 2;
 const app = document.getElementById("app");
 const editorBox = document.getElementById("editor"), results = document.getElementById("results");
 const walkBox = document.getElementById("walk");
@@ -480,6 +486,8 @@ function render(body) {
   if (body.tool === "session_actor") parts.push(...actorPanels(body));
   if (body.tool === "session_dataset") parts.push(...datasetPanels(body));
   if (body.tool === "session_explore" && Array.isArray(body.tree)) parts.push(...treePanels(body));
+  if (body.tool === "session_explore" && body.verdict === "states") parts.push(panel("State machine of " + String(body.role) + ": click a state, take a transition", machineView(body)));
+  if (body.tool === "session_explore" && body.verdict === "described") parts.push(panel("Payload of " + String(body.message), payloadView(body)));
   if (body.tool === "session_types" && typeof body.proto === "string") {
     parts.push(panel("Message types and envelope (protobuf)", codeBox(body.proto)));
     if (typeof body.leanModule === "string") {
@@ -859,7 +867,8 @@ function treePanels(body) {
   const detail = el("div");
   wrap.append(cv, controls);
   const ctx = cv.getContext("2d");
-  let W = 0, H = 0, colors = {}, zoom = 1, panX = 24, panY = 24, sel = root, anim = null;
+  let W = 0, H = 0, colors = {}, zoom = 1, panX = 24, panY = 24, sel = root, anim = null, lit = null, treeLayoutGen = 0;
+  const walkPanel = el("div");
   function recolor() {
     const css = getComputedStyle(document.documentElement);
     for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan", "good", "bg"]) colors[k] = css.getPropertyValue("--" + k).trim();
@@ -886,9 +895,9 @@ function treePanels(body) {
     }
     const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!animate || reduce) { for (const t of vis) { t.x = t.tx; t.y = t.ty; } draw(); return; }
-    const from = vis.map((t) => [t, t.x, t.y]), t0 = performance.now(), D = 280;
+    const from = vis.map((t) => [t, t.x, t.y]), t0 = performance.now(), D = 280, mine = ++treeLayoutGen;
     anim = (now) => {
-      if (gen !== treeGen) return;
+      if (gen !== treeGen || mine !== treeLayoutGen) return;
       const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
       for (const [t, x, y] of from) { t.x = x + (t.tx - x) * e; t.y = y + (t.ty - y) * e; }
       draw();
@@ -912,9 +921,11 @@ function treePanels(body) {
     ctx.font = "14px system-ui, sans-serif"; ctx.textBaseline = "middle";
     for (const t of vis) {
       const c = ink(t);
-      ctx.fillStyle = colors.panel; ctx.strokeStyle = c; ctx.lineWidth = t === sel ? 3 : 1.5;
+      // the message the grammar walk just took is lit wherever it appears in the open tree
+      const isLit = lit !== null && t.n.message === lit;
+      ctx.fillStyle = isLit ? colors.amber : colors.panel; ctx.strokeStyle = c; ctx.lineWidth = t === sel || isLit ? 3 : 1.5;
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(t.x, t.y, t.w, 24, 6); else ctx.rect(t.x, t.y, t.w, 24); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = colors.fg;
+      ctx.fillStyle = isLit ? colors.bg : colors.fg;
       let label = String(t.n.label); if (label.length > 60) label = label.slice(0, 57) + "...";
       ctx.fillText(label, t.x + PADX, t.y + 12.5);
       if (t.kids.length) { ctx.fillStyle = c; ctx.fillText(t.open ? "-" : "+" + t.kids.length, t.x + t.w - 30, t.y + 12.5); }
@@ -944,6 +955,21 @@ function treePanels(body) {
       const b = el("button", "", "Sequence diagram of " + n.protocol);
       b.addEventListener("click", () => askInto(out, "session_explore", { focus: n.protocol }, (r) => diagram(r.diagram)));
       acts.appendChild(b);
+    }
+    if (n.kind === "message" && n.message) {
+      const b = el("button", "", "Payload of " + n.message);
+      b.addEventListener("click", () => askInto(out, "session_explore", { message: n.message }, payloadView));
+      acts.appendChild(b);
+    }
+    if (n.kind === "role") {
+      const sm = el("button", "", "State machine of " + n.label);
+      sm.addEventListener("click", () => askInto(out, "session_explore", { states: n.label }, machineView));
+      acts.appendChild(sm);
+    }
+    if (n.kind === "protocol") {
+      const w = el("button", "", "Walk the grammar");
+      w.addEventListener("click", () => { walkPanel.replaceChildren(); grammarWalk(walkPanel, (label) => { lit = label; draw(); }); });
+      acts.appendChild(w);
     }
     if (n.kind === "role") {
       const b = el("button", "", "View as " + n.label);
@@ -999,9 +1025,255 @@ function treePanels(body) {
   });
   closeB.addEventListener("click", () => { for (const t of byId.values()) t.open = false; root.open = true; layout(true); show(root); });
   setTimeout(() => { resize(); layout(false); show(root); }, 0);
-  const out = [panel("Tree: click to open, drag to pan, wheel to zoom", wrap), panel("Selected", detail)];
+  const out = [panel("Tree: click to open, drag to pan, wheel to zoom", wrap), panel("Selected", detail), walkPanel];
   if (num(body.treeOmitted)) out.push(el("p", "more", `${num(body.treeOmitted)} more nodes left out by LeanFM`));
   return out;
+}
+
+// ---- a message's payload: what LeanFM says it carries ------------------------------------------
+function payloadView(r) {
+  const box = el("div");
+  const uses = Array.isArray(r.uses) ? r.uses : [];
+  if (uses.length) box.appendChild(table(["from", "to", "route", "status"], uses.map((u) => [u.from, u.to, u.route, u.status])));
+  if (r.example && typeof r.example === "object") {
+    box.appendChild(panel("Example JSON (as posted or returned)", codeBox(JSON.stringify(r.example, null, 2))));
+    if (r.exampleNote) box.appendChild(el("p", "meta", String(r.exampleNote)));
+  }
+  if (typeof r.proto === "string") box.appendChild(panel("Protobuf" + (r.field != null ? ` (payload field ${r.field} of the envelope)` : ""), codeBox(r.proto)));
+  if (r.schema) { const d = el("details"); d.appendChild(el("summary", "", "JSON schema")); d.appendChild(codeBox(JSON.stringify(r.schema, null, 2))); box.appendChild(d); }
+  return box;
+}
+
+// ---- a state machine on canvas: layered from the start state, a token that moves -----------------
+// states: names; edges: {from, to, label, kind}; LeanFM gives both, the view lays them out.
+function graphView(opts) {
+  const gen = ++treeGen;
+  const wrap = el("div"), cv = el("canvas", "machine"); cv.tabIndex = 0;
+  cv.setAttribute("aria-label", opts.aria || "State machine. Drag to pan, wheel to zoom, click a state to select it; its transitions are buttons below.");
+  const info = el("p", "meta"), moves = el("div", "moves");
+  wrap.append(cv, info, moves);
+  const ctx = cv.getContext("2d");
+  let W = 0, H = 0, colors = {}, zoom = 1, panX = 30, panY = 30;
+  let states = [], edges = [], start = null, finals = new Set(), cur = null, pos = new Map(), token = null, layoutGen = 0;
+  function recolor() {
+    const css = getComputedStyle(document.documentElement);
+    for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan", "good", "bg", "bad"]) colors[k] = css.getPropertyValue("--" + k).trim();
+    colors.arrow = css.getPropertyValue("--ink-arrow").trim();
+  }
+  recolor();
+  function shown() {
+    if (states.length <= FOCUS_STATES || cur === null) return new Set(states);
+    const keep = new Set([cur]); let frontier = [cur];
+    for (let d = 0; d < FOCUS_RADIUS; d++) {
+      const nextF = [];
+      for (const e of edges) for (const [a, b] of [[e.from, e.to], [e.to, e.from]]) if (frontier.includes(a) && !keep.has(b)) { keep.add(b); nextF.push(b); }
+      frontier = nextF;
+    }
+    return keep;
+  }
+  function layout(animate) {
+    const vis = shown(), root = vis.has(start) ? start : cur;
+    const depth = new Map([[root, 0]]), order = [root];
+    for (let i = 0; i < order.length; i++) for (const e of edges)
+      if (e.from === order[i] && vis.has(e.to) && !depth.has(e.to)) { depth.set(e.to, depth.get(order[i]) + 1); order.push(e.to); }
+    for (const s of vis) if (!depth.has(s)) { depth.set(s, 0); order.push(s); }
+    const rows = new Map(), target = new Map();
+    for (const s of order) { const d = depth.get(s), r = rows.get(d) || 0; rows.set(d, r + 1); target.set(s, { x: d * 250, y: r * 96 }); }
+    // keep the current state in view: the camera follows the walk
+    const c = target.get(cur);
+    if (c && W) { const sx = panX + c.x * zoom, sy = panY + c.y * zoom;
+      if (sx < 40 || sx > W - 160) panX = W / 2 - c.x * zoom;
+      if (sy < 40 || sy > H - 60) panY = H / 3 - c.y * zoom; }
+    const from = new Map(pos), t0 = performance.now(), D = 300, mine = ++layoutGen;
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!animate || reduce) { pos = target; draw(); return; }
+    const step = (now) => {
+      // a newer layout (a new graph from LeanFM) replaces this one: its tween stops here
+      if (mine !== layoutGen) return;
+      const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3), next = new Map();
+      for (const [s, p] of target) { const a = from.get(s) || p; next.set(s, { x: a.x + (p.x - a.x) * e, y: a.y + (p.y - a.y) * e }); }
+      pos = next; draw();
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  const R = 22;
+  function ends(e) {
+    const a = pos.get(e.from), b = pos.get(e.to);
+    if (!a || !b) return null;
+    if (e.from === e.to) return { a, b, self: true };
+    const back = b.x <= a.x, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 + (back ? 60 + Math.abs(a.x - b.x) * 0.15 : 0);
+    return { a, b, c: { x: mx, y: my } };
+  }
+  function at(g, t) {
+    if (g.self) { const ang = t * 2 * Math.PI; return { x: g.a.x + Math.sin(ang) * 18, y: g.a.y - R - 18 + Math.cos(ang) * -18 + 18 }; }
+    const u = 1 - t;
+    return { x: u * u * g.a.x + 2 * u * t * g.c.x + t * t * g.b.x, y: u * u * g.a.y + 2 * u * t * g.c.y + t * t * g.b.y };
+  }
+  function draw() {
+    if (!W) return;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = colors.bg || "#000"; ctx.fillRect(0, 0, W, H);
+    ctx.translate(panX, panY); ctx.scale(zoom, zoom);
+    ctx.font = "13px system-ui, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+    const few = edges.length <= 40;
+    for (const e of edges) {
+      const g = ends(e); if (!g) continue;
+      const hot = e.from === cur;
+      ctx.strokeStyle = hot ? colors.amber : (e.kind === "send" ? colors.arrow : e.kind === "receive" ? colors.cyan : colors.edge);
+      ctx.lineWidth = hot ? 2.5 : 1.5; ctx.setLineDash(e.kind === "other" || e.kind === "then" ? [5, 5] : []);
+      ctx.beginPath();
+      if (g.self) ctx.arc(g.a.x, g.a.y - R - 12, 14, 0, 2 * Math.PI);
+      else { ctx.moveTo(g.a.x, g.a.y); ctx.quadraticCurveTo(g.c.x, g.c.y, g.b.x, g.b.y); }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (!g.self) { const p = at(g, 0.82), q = at(g, 0.86), ang = Math.atan2(q.y - p.y, q.x - p.x);
+        ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - 9 * Math.cos(ang - 0.4), q.y - 9 * Math.sin(ang - 0.4)); ctx.lineTo(q.x - 9 * Math.cos(ang + 0.4), q.y - 9 * Math.sin(ang + 0.4)); ctx.fill(); }
+      // a label sits above its edge, cut to the room between the two states
+      if ((hot || few) && e.label) { const m = at(g, 0.5); let t = String(e.label); const room = g.self ? 26 : Math.max(8, Math.floor((Math.hypot(g.b.x - g.a.x, g.b.y - g.a.y) - 2 * R - 16) / 7));
+        if (t.length > room) t = t.slice(0, room - 2) + "..";
+        const ly = g.self ? m.y - 22 : m.y - 13;
+        ctx.fillStyle = colors.bg; const w = ctx.measureText ? ctx.measureText(t).width + 8 : 120; ctx.fillRect(m.x - w / 2, ly - 9, w, 18);
+        ctx.fillStyle = hot ? colors.amber : colors.dim; ctx.fillText(t, m.x, ly); }
+    }
+    for (const [s, p] of pos) {
+      ctx.fillStyle = s === cur ? colors.amber : colors.panel;
+      ctx.strokeStyle = finals.has(s) ? colors.good : s === start ? colors.amber : colors.fg; ctx.lineWidth = s === cur ? 3 : 1.5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      if (finals.has(s)) { ctx.beginPath(); ctx.arc(p.x, p.y, R - 5, 0, 2 * Math.PI); ctx.stroke(); }
+      ctx.fillStyle = s === cur ? colors.bg : colors.fg;
+      let name = String(opts.nameOf ? opts.nameOf(s) : s); if (name.length > 7) name = name.slice(0, 6) + "..";
+      ctx.fillText(name, p.x, p.y);
+    }
+    if (token) { ctx.fillStyle = colors.amber; ctx.beginPath(); ctx.arc(token.x, token.y, 7, 0, 2 * Math.PI); ctx.fill(); }
+    const hidden = states.length - pos.size;
+    info.textContent = `${states.length} states, ${edges.length} transitions` + (hidden > 0 ? `; showing the ${pos.size} within ${FOCUS_RADIUS} steps of ${cur} (${hidden} hidden)` : "") +
+      (cur !== null ? `; current: ${opts.nameOf ? opts.nameOf(cur) : cur}` + (finals.has(cur) ? " (may end here)" : "") : "");
+  }
+  function resize() { const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); draw(); }
+  if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(cv);
+  function listMoves() {
+    const outs = edges.filter((e) => e.from === cur);
+    moves.replaceChildren();
+    for (const e of outs) {
+      const b = el("button", "", (e.label || e.kind) + " → " + (opts.nameOf ? opts.nameOf(e.to) : e.to));
+      b.addEventListener("click", () => (opts.onMove ? opts.onMove(e) : api.move(e)));
+      moves.appendChild(b);
+    }
+    if (!outs.length) moves.appendChild(el("span", "meta", finals.has(cur) ? "The session may end here; nothing else can happen." : "No transition from here."));
+    if (opts.extraMoves) opts.extraMoves(moves);
+  }
+  const api = {
+    el: wrap,
+    set(st, ed, s0, fin, c) { states = st.slice(0, MAX_STATES); edges = ed.filter((e) => states.includes(e.from) && states.includes(e.to)); start = s0; finals = new Set(fin || []); cur = c === undefined ? s0 : c; layout(false); listMoves(); },
+    move(e) {
+      const g = ends(e), t0 = performance.now(), D = 450;
+      const done = () => { token = null; cur = e.to; layout(true); listMoves(); if (opts.onArrive) opts.onArrive(e); };
+      const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!g || reduce) { done(); return; }
+      const stepT = (now) => { const k = Math.min(1, (now - t0) / D); token = at(g, k); draw(); if (k < 1) requestAnimationFrame(stepT); else done(); };
+      requestAnimationFrame(stepT);
+    },
+    current() { return cur; },
+  };
+  let drag = null;
+  cv.addEventListener("pointerdown", (ev) => { drag = { x: ev.clientX, y: ev.clientY, px: panX, py: panY, moved: false }; });
+  cv.addEventListener("pointermove", (ev) => { if (!drag) return; const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; if (drag.moved) { panX = drag.px + dx; panY = drag.py + dy; draw(); } });
+  const end = () => { setTimeout(() => { drag = null; }, 0); };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointerleave", end);
+  cv.addEventListener("click", (ev) => {
+    if (drag && drag.moved) return;
+    const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left - panX) / zoom, y = (ev.clientY - r.top - panY) / zoom;
+    for (const [s, p] of pos) if ((x - p.x) ** 2 + (y - p.y) ** 2 <= R * R && !opts.walk) { cur = s; layout(true); listMoves(); return; }
+  });
+  cv.addEventListener("wheel", (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+    const z = Math.max(0.2, Math.min(4, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15))); panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw(); }, { passive: false });
+  cv.addEventListener("keydown", (ev) => {
+    if (ev.key === "+" || ev.key === "=") { zoom = Math.min(4, zoom * 1.2); draw(); }
+    else if (ev.key === "-") { zoom = Math.max(0.2, zoom / 1.2); draw(); }
+    else if (ev.key === "0") { zoom = 1; panX = 30; panY = 30; draw(); }
+    else return;
+    ev.preventDefault();
+  });
+  setTimeout(resize, 0);
+  return api;
+}
+function machineView(r) {
+  const box = el("div");
+  const g = graphView({ aria: "State machine of " + String(r.role) + ". Its transitions from the current state are buttons below the drawing." });
+  g.set((r.states || []).map(String), (Array.isArray(r.edges) ? r.edges : []).map((e) => ({ from: String(e.from), to: String(e.to), label: String(e.label || ""), kind: String(e.kind || "") })),
+    String(r.start || "S0"), (r.finals || []).map(String));
+  box.appendChild(g.el);
+  if (typeof r.typestate === "string") { const d = el("details"); d.appendChild(el("summary", "", "Typestate API")); d.appendChild(el("pre", "", r.typestate)); box.appendChild(d); }
+  return box;
+}
+
+// ---- walking the grammar: the global state machine, grown one step at a time by session_next -----
+// Each answer names the protocol state the walk is in and the steps allowed next; a state reached
+// again is the same node, so loops close. Only the explored part is ever drawn.
+function grammarWalk(target, onStep) {
+  const events = [], seen = new Map();
+  let busy = false, stepNo = 0, here = null;
+  const states = [], edges = [], finals = [];
+  const head = el("p", "reading", "Walking the grammar from the start…"), log = el("ol", "walk-steps");
+  const g = graphView({ walk: true, aria: "The global state machine, as far as this walk has explored it. The steps allowed next are buttons below.",
+    nameOf: (s) => seen.get(s) || s, onMove: (e) => take(e) });
+  const controls = el("div", "controls"), restart = el("button", "", "Restart"), undo = el("button", "", "Undo");
+  controls.append(restart, undo);
+  const pnl = panel("Walk the grammar: the global state machine, grown as you go", head);
+  pnl.append(g.el, controls, log);
+  target.replaceChildren(pnl);
+  async function ask() {
+    if (busy) return; busy = true;
+    try {
+      const result = await rpc("tools/call", { name: WALK_TOOL, arguments: Object.assign({ lean: text ? text.value : "", events }, currentOverlay ? { overlay: currentOverlay } : {}) }, 30000);
+      const b = result && result.structuredContent;
+      if (!b || result.isError) { head.textContent = String((b && b.reason) || "LeanFM refused the walk."); return; }
+      const st = String(b.state || ("w" + events.length));
+      here = st;
+      if (!seen.has(st)) { seen.set(st, "s" + states.length); states.push(st); }
+      if (b.canEnd && !finals.includes(st)) finals.push(st);
+      // the steps allowed next become edges to states not yet known (named by the step) until taken
+      const nexts = (Array.isArray(b.next) ? b.next : []);
+      for (let i = edges.length - 1; i >= 0; i--) if (edges[i].pending) edges.splice(i, 1);
+      for (const n of nexts) {
+        const label = n.act === true ? `${n.label} at ${n.from}` : `${n.label}: ${n.from} → ${n.to}`;
+        // a step already taken from this state keeps its known edge; only new steps lead to "?"
+        const known = edges.find((x) => !x.pending && x.from === st && x.label === label);
+        if (known) known.step = n;
+        else edges.push({ from: st, to: "?" + st + "/" + n.label + "/" + n.from, label, kind: n.act === true ? "event" : "send", pending: true, step: n });
+      }
+      const pendings = edges.filter((e) => e.pending).map((e) => e.to);
+      for (const p of pendings) seen.set(p, "?");
+      g.set(states.concat(pendings), edges, states[0], finals, st);
+      head.textContent = String(b.reading || "");
+    } catch (e) { head.textContent = "The walk failed: " + String((e && e.message) || e); }
+    finally { busy = false; reportSize(); }
+  }
+  function take(e) {
+    if (!e.step || events.length >= MAX_WALK) return;
+    const n = e.step, ev = { id: "g" + (++stepNo), session: "walk", from: String(n.from), label: String(n.label) };
+    if (n.act === true) ev.act = true; else ev.to = String(n.to);
+    if (typeof n.cause === "string") ev.cause = n.cause;
+    events.push(ev);
+    log.appendChild(el("li", "", e.label));
+    if (onStep) onStep(String(n.label));
+    // the token runs along the step's edge; the answer then names where it arrived
+    const from = e.from;
+    g.move(e);
+    setTimeout(async () => {
+      await ask();
+      // where LeanFM says the walk is now: a new state, or one already drawn (a loop closing)
+      const arrived = here;
+      const known = edges.find((x) => x.from === from && x.label === e.label && !x.pending);
+      if (!known) edges.push({ from, to: arrived, label: e.label, kind: e.kind });
+      g.set(states.concat(edges.filter((x) => x.pending).map((x) => x.to)), edges, states[0], finals, arrived);
+    }, 480);
+  }
+  restart.addEventListener("click", () => { events.length = 0; states.length = 0; edges.length = 0; finals.length = 0; seen.clear(); log.replaceChildren(); stepNo = 0; if (onStep) onStep(null); ask(); });
+  undo.addEventListener("click", () => { if (!events.length) return; events.pop(); log.lastChild && log.removeChild(log.lastChild); ask(); });
+  ask();
 }
 
 // ---- the sketch: add messages by clicking lifelines; LeanFM draws the real diagram ------------

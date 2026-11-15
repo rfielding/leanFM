@@ -104,6 +104,8 @@ structure Node where
   protocol : String := ""
   first : Option Nat := none
   last : Option Nat := none
+  /-- for a message node, its label alone, to ask for its payload -/
+  message : String := ""
   deriving Repr, Inhabited
 
 structure St where
@@ -129,7 +131,7 @@ partial def walk (ds : List Def) (lines : Array String) (parent : Nat) (inDef : 
     let line := d.bind fun d => lineOf lines d.first d.last s!"{i.label} from"
     let detail := ([i.route.map (s!"route " ++ ·), i.status.map (s!"status " ++ toString ·), i.cause.map (s!"cause " ++ ·)].filterMap id) |> ", ".intercalate
     let _ ← add { id := 0, parent := some parent, kind := "message", label := s!"{i.label}: {i.src} -> {i.dst}", detail,
-                  protocol := inDef, first := line, last := line }
+                  protocol := inDef, first := line, last := line, message := i.label }
     walk ds lines parent inDef k
   | .act r l k => do
     let d := (ds.find? (·.name == inDef))
@@ -199,6 +201,7 @@ def nodeJson (n : Node) : Json :=
     (if n.detail.isEmpty then [] else [("detail", Json.str n.detail)]) ++
     (if n.protocol.isEmpty then [] else [("protocol", Json.str n.protocol)]) ++
     (match n.first with | some f => [("first", toJson f)] | none => []) ++
-    (match n.last with | some l => [("last", toJson l)] | none => []))
+    (match n.last with | some l => [("last", toJson l)] | none => []) ++
+    (if n.message.isEmpty then [] else [("message", Json.str n.message)]))
 
 end LeanFM.Session.Outline

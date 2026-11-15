@@ -391,4 +391,34 @@ def Message.schema (m : Message) : Lean.Json :=
     ("additionalProperties", Lean.Json.bool false)] ++
     (if m.doc.isEmpty then [] else [("description", Lean.Json.str m.doc)]))
 
+/-- An example of a field's JSON value, as an event logs it and conformance reads it: integers as
+decimal strings (the protobuf JSON mapping's form for 64-bit integers), strings empty, a list with
+one element, a nested message filled in to `fuel` levels. -/
+partial def Ty.example (env : Env) (fuel : Nat) : Ty → Lean.Json
+  | .nat | .int => Lean.Json.str "0"
+  | .str => Lean.Json.str ""
+  | .bool => Lean.Json.bool false
+  | .list t => Lean.Json.arr #[Ty.example env fuel t]
+  | .opt t => Ty.example env fuel t
+  | .msg n => match fuel, find env n with
+    | f + 1, some m => Lean.Json.mkObj (m.fields.map fun x => (x.name, Ty.example env f x.ty))
+    | _, _ => Lean.Json.mkObj []
+
+/-- An example payload of a message: every field, nested messages to four levels. -/
+def Message.example (env : Env) (m : Message) : Lean.Json :=
+  Lean.Json.mkObj (m.fields.map fun f => (f.name, Ty.example env 4 f.ty))
+
+/-- The block `message Name { ... }` of a proto file, as it is written there. -/
+def protoBlock (proto name : String) : Option String := Id.run do
+  let lines := proto.splitOn "\n"
+  let head := s!"message {protoName name} " ++ "{"
+  let mut out : List String := []
+  let mut inside := false
+  for l in lines do
+    if !inside && l.startsWith head then inside := true
+    if inside then
+      out := out ++ [l]
+      if l == "}" then return some ("\n".intercalate out)
+  return none
+
 end LeanFM.Session.Types
