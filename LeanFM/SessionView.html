@@ -9,13 +9,13 @@
     --bg: #0b0f14; --panel: #16202b; --edge: #263445; --fg: #eceae6; --dim: #9aa6b2;
     --good: #4ade80; --bad: #f87171; --amber: #fbbf24; --cyan: #67e8f9;
     --ink-bg: #0b0f14; --ink-fg: #e5e7eb; --ink-line: #4b5563; --ink-arrow: #93c5fd;
-    --ink-frame: #fbbf24; --ink-muted: #9ca3af; --ink-actFill: #1f2937;
+    --ink-frame: #fbbf24; --ink-muted: #9ca3af; --ink-actFill: #1f2937; --ink-hl: #f472b6;
   }
   :root[data-theme="light"] {
     --bg: #ffffff; --panel: #f4f5f7; --edge: #d5dae1; --fg: #1d2430; --dim: #5d6876;
     --good: #15803d; --bad: #b91c1c; --amber: #b45309; --cyan: #0e7490;
     --ink-bg: #ffffff; --ink-fg: #111827; --ink-line: #9ca3af; --ink-arrow: #1d4ed8;
-    --ink-frame: #b45309; --ink-muted: #4b5563; --ink-actFill: #f3f4f6;
+    --ink-frame: #b45309; --ink-muted: #4b5563; --ink-actFill: #f3f4f6; --ink-hl: #be185d;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--fg);
@@ -35,6 +35,11 @@
   .scroll { overflow-x: auto; }
   .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  button.fold { font-size: 12px; padding: 1px 8px; margin: 2px 0 4px; }
+  button.foldhead { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; margin: 0 0 6px;
+    padding: 4px 8px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg); border-color: var(--ink-arrow); }
+  button.foldhead .hint { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--dim); }
+  svg rect.hot:hover, svg rect.hot:focus-visible { stroke: var(--amber); stroke-width: 2; stroke-dasharray: 4 3; fill: var(--amber); fill-opacity: .08; outline: none; }
   button, select { background: var(--panel); color: var(--fg); border: 1px solid var(--edge); border-radius: 6px;
     padding: 4px 10px; font: inherit; cursor: pointer; }
   button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
@@ -191,51 +196,287 @@ function sv(tag, attrs, text) {
 }
 function status(text, bad) { results.replaceChildren(el("p", bad ? "err" : "meta", text)); reportSize(); }
 function panel(title, child) { const p = el("div", "panel"); p.appendChild(el("h3", "", title)); p.appendChild(child); return p; }
+// A panel whose whole header is a button that says what it does: hide or show what is under it.
+function foldPanel(title, child, open) {
+  const p = el("div", "panel"), b = el("button", "foldhead"), mark = el("span"), name = el("span", "", title), hint = el("span", "hint");
+  b.append(mark, name, hint);
+  const set = (on) => { child.hidden = !on; mark.textContent = on ? "▾" : "▸"; hint.textContent = on ? "click to hide" : "click to show";
+    b.setAttribute("aria-expanded", String(on)); };
+  set(open !== false);
+  b.addEventListener("click", () => { set(child.hidden); reportSize(); });
+  p.append(b, child);
+  return p;
+}
+// LeanFM's drawing as shapes the view can fold and click; failing that, its SVG as an image.
+function drawing(r, opts) {
+  if (r && r.diagram && Array.isArray(r.diagram.shapes)) return diagram(r.diagram, opts);
+  if (r && typeof r.svg === "string" && r.svg.startsWith("<svg")) {
+    const box = el("div", "scroll"), img = el("img");
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(r.svg); img.alt = String(r.reading || "sequence diagram");
+    box.appendChild(img); return box;
+  }
+  const why = Array.isArray(r && r.omitted) && r.omitted.length ? " LeanFM left out: " + r.omitted.join(", ") + "." : "";
+  return el("p", "err", "No drawing came back for this protocol." + why);
+}
 
 const INKS = ["bg", "fg", "line", "arrow", "frame", "muted", "actFill"];
 function ink(name) { return INKS.includes(name) ? `var(--ink-${name})` : "none"; }
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
-// ---- the diagram: LeanFM's shapes, turned into SVG elements --------------------------------
-function diagram(model) {
+// A collapse button over a drawing: the drawing folds away, the button stays to bring it back.
+function collapsible(what, child) {
+  const wrap = el("div"), b = el("button", "fold", "▾ Collapse " + what);
+  b.setAttribute("aria-expanded", "true");
+  b.addEventListener("click", () => {
+    const open = child.hidden; child.hidden = !open;
+    b.textContent = (open ? "▾ Collapse " : "▸ Show ") + what;
+    b.setAttribute("aria-expanded", String(open)); reportSize();
+  });
+  wrap.append(b, child);
+  return wrap;
+}
+
+// ---- the sequence diagram, interactive ----------------------------------------------------------
+// LeanFM draws the diagram; the view only folds it. A frame (alt, par, loop, sessions, ref) is a
+// rect classed "frame <kind>" with its tab on its top edge. Folding a frame squeezes everything
+// between its header and its bottom edge to nothing and lifts what lies below, so lifelines and
+// activation bars shorten instead of breaking. An included protocol (ref) starts folded; a click on
+// a frame's header folds or opens it; "states" on a ref frame folds it and shows its roles' state
+// machines below; a click on an actor shows that actor's state machine in the protocol drawn.
+const FRAME_HEAD = 26, FRAME_FOOT = 6;
+function rolesOfProtocol(name) {
+  const src = text ? text.value : "";
+  const re = new RegExp("protocol\\s+" + name.replace(/[.]/g, "\\.") + "\\s*\\(([^)]*)\\)");
+  const m = src.match(re);
+  return m ? m[1].split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(x)) : [];
+}
+function diagram(model, opts) {
   if (!model || !Array.isArray(model.shapes)) return el("p", "meta", "No diagram in this result.");
-  const w = num(model.width), h = num(model.height);
-  const svg = sv("svg", { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: "img",
-    "aria-label": "Diagram generated by LeanFM", "font-family": "system-ui, sans-serif" });
-  const defs = sv("defs", {});
-  const marker = sv("marker", { id: "head", viewBox: "0 0 10 10", refX: 10, refY: 5, markerUnits: "userSpaceOnUse", markerWidth: 12, markerHeight: 12, orient: "auto-start-reverse" });
-  marker.appendChild(sv("path", { d: "M0 0 L10 5 L0 10 z", fill: "var(--ink-arrow)" }));
-  defs.appendChild(marker); svg.appendChild(defs);
-  svg.appendChild(sv("rect", { width: w, height: h, fill: "var(--ink-bg)" }));
-  const shapes = model.shapes.slice(0, MAX_SHAPES);
+  opts = opts || {};
+  const shapes = model.shapes.slice(0, MAX_SHAPES).filter((s) => s && typeof s === "object");
+  const w = num(model.width), h0 = num(model.height);
+  // the frames, outermost first; a ref frame's caption names the protocol it includes
+  const frames = [];
   for (const s of shapes) {
-    if (!s || typeof s !== "object") continue;
-    const cls = typeof s.cls === "string" ? { class: s.cls } : {};
-    if (s.k === "rect") {
-      svg.appendChild(sv("rect", Object.assign({}, cls, { x: num(s.x), y: num(s.y), width: num(s.w), height: num(s.h),
-        rx: num(s.rx), fill: ink(s.fill), stroke: ink(s.stroke) })));
-    } else if (s.k === "line") {
-      const a = Object.assign({}, cls, { x1: num(s.x1), y1: num(s.y1), x2: num(s.x2), y2: num(s.y2), stroke: ink(s.stroke) });
-      if (s.width) a["stroke-width"] = num(s.width);
-      if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
-      if (s.arrow === true) a["marker-end"] = "url(#head)";
-      svg.appendChild(sv("line", a));
-    } else if (s.k === "path" && typeof s.d === "string" && /^[MmHhVvLlZz0-9 .\-]+$/.test(s.d)) {
-      const a = Object.assign({}, cls, { d: s.d, fill: ink(s.fill), stroke: ink(s.stroke) });
-      if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
-      if (s.arrow === true) { a["marker-end"] = "url(#head)"; a["stroke-width"] = 2.5; }
-      svg.appendChild(sv("path", a));
-    } else if (s.k === "text") {
-      const a = Object.assign({}, cls, { x: num(s.x), y: num(s.y), "text-anchor": ["start", "middle", "end"].includes(s.anchor) ? s.anchor : "middle",
-        fill: ink(s.fill), "font-size": num(s.size) || 12 });
-      // a halo in the background colour keeps lines from cutting through letters; boxed text needs none
-      if (s.cls !== "boxed") Object.assign(a, { stroke: "var(--ink-bg)", "stroke-width": 4, "stroke-linejoin": "round", "paint-order": "stroke" });
-      if (s.bold === true) a["font-weight"] = "bold";
-      svg.appendChild(sv("text", a, typeof s.text === "string" ? s.text : ""));
-    }
+    if (s.k !== "rect" || typeof s.cls !== "string" || !s.cls.startsWith("frame ")) continue;
+    const f = { kind: s.cls.slice(6), x: num(s.x), y: num(s.y), w: num(s.w), h: num(s.h), name: "" };
+    const cap = shapes.find((t) => t.k === "text" && num(t.y) === f.y + 13 && num(t.x) > f.x + 8 && num(t.x) < f.x + f.w && typeof t.text === "string" && t.text.startsWith("["));
+    if (cap) f.name = cap.text.replace(/^\[|\]$/g, "");
+    f.mode = f.kind === "ref" ? "hidden" : "open";
+    frames.push(f);
   }
-  const box = el("div", "scroll"); box.appendChild(svg);
-  if (model.shapes.length > MAX_SHAPES) box.appendChild(el("p", "more", `${model.shapes.length - MAX_SHAPES} more shapes not drawn`));
+  frames.sort((a, b) => (a.y - b.y) || (b.h - a.h));
+  // ---- the source each drawn part comes from, as the explorer's tree finds it: within the protocol
+  // that owns the part (the innermost included protocol around it, else the one drawn), the next
+  // line, in drawing order, that has the part's message ("Label from"), event ("Label at") or
+  // keyword (choice, rec, par, sessions, include Name)
+  const srcLines = String(typeof opts.source === "string" ? opts.source : (text ? text.value : "")).split("\n");
+  const defOf = (name) => (Array.isArray(opts.defs) ? opts.defs : []).find((d) => d && d.name === name);
+  const ownerAt = (y, self) => {
+    let best = null;
+    for (const f of frames) if (f !== self && f.kind === "ref" && f.name && y > f.y && y < f.y + f.h && (!best || f.h < best.h)) best = f;
+    return best ? best.name : (opts.focus || "");
+  };
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blockEnd = (from, last) => {
+    let depth = 0, opened = false;
+    for (let i = from; i <= last; i++) {
+      for (const ch of srcLines[i - 1] || "") { if (ch === "{") { depth++; opened = true; } else if (ch === "}") depth--; }
+      if (opened && depth <= 0) return i;
+    }
+    return from;
+  };
+  const stmtEnd = (from, last) => { for (let i = from; i <= last; i++) if ((srcLines[i - 1] || "").includes(";")) return i; return from; };
+  const items = [];
+  for (let i = 0; i < shapes.length; i++) {
+    const s = shapes[i];
+    const isMsg = (s.k === "line" || s.k === "path") && /\bmsg\b/.test(s.cls || "");
+    const isAct = s.k === "rect" && s.cls === "act";
+    if (!isMsg && !isAct) continue;
+    const lab = shapes.slice(i + 1, i + 3).find((t) => t.k === "text" && typeof t.text === "string");
+    if (!lab) continue;
+    const y = s.k === "line" ? num(s.y1) : s.k === "rect" ? num(s.y) : Number((String(s.d).match(/^M\s*-?[0-9.]+\s+(-?[0-9.]+)/) || [])[1]) + 8;
+    const label = isMsg ? lab.text.replace(/^[A-Za-z_][A-Za-z0-9_]*: /, "").split(" - ")[0] : lab.text;
+    items.push({ y, shape: s, label: lab, what: (isMsg ? "message " : "event ") + label,
+      re: new RegExp("(^|[^A-Za-z0-9_])" + esc(label) + (isMsg ? " from\\b" : " at\\b")), block: false });
+  }
+  const KW = { alt: /\bchoice\b/, loop: /\brec\s+[A-Za-z_]/, sessions: /\bsessions\b/, par: /\bpar\b/, join: /\bpar\b/ };
+  for (const f of frames) {
+    const re = f.kind === "ref" ? (f.name ? new RegExp("\\binclude\\s+" + esc(f.name) + "\\b") : null) : KW[f.kind];
+    if (re) items.push({ y: f.y, frame: f, re, block: true, what: (f.kind === "ref" ? "include " + f.name : f.kind + " frame") });
+  }
+  items.sort((a, b) => a.y - b.y);
+  const cursor = new Map();
+  for (const it of items) {
+    const P = ownerAt(it.y, it.frame), d = defOf(P);
+    if (!d || !Number.isInteger(d.first) || !Number.isInteger(d.last)) continue;
+    let at = cursor.has(P) ? cursor.get(P) : d.first;
+    for (let i = at; i <= d.last; i++) {
+      if (it.re.test(srcLines[i - 1] || "")) {
+        it.range = { protocol: P, first: i, last: it.block ? blockEnd(i, d.last) : stmtEnd(i, d.last) };
+        cursor.set(P, i + 1);
+        break;
+      }
+    }
+    if (it.frame && it.range) it.frame.range = it.range;
+  }
+  let select = Array.isArray(opts.select) ? opts.select : [];
+  const lit = (rg) => !!rg && select.some((q) => q.protocol === rg.protocol && q.first <= rg.last && q.last >= rg.first && !(rg.first < q.first && rg.last > q.last && items.some((o) => o.frame && o.range === rg)));
+  const openAround = () => {
+    for (const it of items) if (!it.frame && lit(it.range)) for (const f of frames) if (it.y > f.y && it.y < f.y + f.h) f.mode = "open";
+  };
+  openAround();
+  let scrolled = false;
+  const body = el("div"), scroll = el("div", "scroll"), below = el("div");
+  body.append(scroll, below);
+  const box = collapsible("interaction diagram", body);
+  const machinesOf = (title, protocol, roles) => {
+    const pnl = el("div");
+    for (const r of roles) {
+      const out = el("div");
+      pnl.appendChild(panel("State machine of " + r + (protocol ? " in " + protocol : ""), out));
+      askInto(out, "session_explore", Object.assign({ states: r }, protocol ? { focus: protocol } : {}), machineView);
+    }
+    return pnl;
+  };
+  function render() {
+    // the folded regions: inside the header of each folded frame that no folded frame contains
+    const folded = [];
+    for (const f of frames) {
+      if (f.mode === "open") continue;
+      const a = f.y + FRAME_HEAD, b = f.y + f.h - FRAME_FOOT;
+      if (b <= a || folded.some((r) => a >= r.a && b <= r.b)) continue;
+      folded.push({ a, b, f, steps: 0 });
+    }
+    const inside = (y) => folded.find((r) => y > r.a && y < r.b);
+    const map = (y) => { let d = 0; for (const r of folded) { if (y >= r.b) d += r.b - r.a; else if (y > r.a) d += y - r.a; } return y - d; };
+    const lift = folded.reduce((d, r) => d + (r.b - r.a), 0), h = h0 - lift;
+    const svg = sv("svg", { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: "img",
+      "aria-label": "Diagram generated by LeanFM. Frame headers and actors are clickable.", "font-family": "system-ui, sans-serif" });
+    const defs = sv("defs", {});
+    const marker = sv("marker", { id: "head", viewBox: "0 0 10 10", refX: 10, refY: 5, markerUnits: "userSpaceOnUse", markerWidth: 12, markerHeight: 12, orient: "auto-start-reverse" });
+    marker.appendChild(sv("path", { d: "M0 0 L10 5 L0 10 z", fill: "var(--ink-arrow)" }));
+    defs.appendChild(marker); svg.appendChild(defs);
+    svg.appendChild(sv("rect", { width: w, height: h, fill: "var(--ink-bg)" }));
+    const hlShapes = new Set();
+    for (const it of items) if (!it.frame && lit(it.range)) { hlShapes.add(it.shape); hlShapes.add(it.label); }
+    let firstLit = null;
+    for (const s of shapes) {
+      const cls = typeof s.cls === "string" ? { class: s.cls } : {};
+      const hl = hlShapes.has(s);
+      if (hl) { const yy = s.k === "line" ? num(s.y1) : num(s.y); if (firstLit === null || yy < firstLit) firstLit = yy; }
+      if (s.k === "rect") {
+        const y1 = num(s.y), y2 = y1 + num(s.h);
+        if (inside(y1) && inside(y2) && inside(y1) === inside(y2)) continue;
+        const my1 = map(y1), my2 = map(y2);
+        svg.appendChild(sv("rect", Object.assign({}, cls, { x: num(s.x), y: my1, width: num(s.w), height: Math.max(0, my2 - my1),
+          rx: num(s.rx), fill: ink(s.fill), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) }, hl ? { "stroke-width": 3 } : {})));
+      } else if (s.k === "line") {
+        const y1 = num(s.y1), y2 = num(s.y2);
+        if (inside(y1) && inside(y2)) { if (/msg/.test(s.cls || "")) inside(y1).steps++; continue; }
+        const a = Object.assign({}, cls, { x1: num(s.x1), y1: map(y1), x2: num(s.x2), y2: map(y2), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
+        if (s.width) a["stroke-width"] = num(s.width);
+        if (hl) a["stroke-width"] = 3.5;
+        if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
+        if (s.arrow === true) a["marker-end"] = "url(#head)";
+        svg.appendChild(sv("line", a));
+      } else if (s.k === "path" && typeof s.d === "string" && /^[MmHhVvLlZz0-9 .\-]+$/.test(s.d)) {
+        // every path LeanFM draws is relative after its first point: move that point only
+        const m = s.d.match(/^M\s*(-?[0-9.]+)\s+(-?[0-9.]+)(.*)$/s);
+        if (!m) continue;
+        const y = Number(m[2]);
+        if (inside(y)) { if (/msg/.test(s.cls || "")) inside(y).steps++; continue; }
+        const a = Object.assign({}, cls, { d: `M${m[1]} ${map(y)}${m[3]}`, fill: ink(s.fill), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
+        if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
+        if (s.arrow === true) { a["marker-end"] = "url(#head)"; a["stroke-width"] = 2.5; }
+        svg.appendChild(sv("path", a));
+      } else if (s.k === "text") {
+        const y = num(s.y);
+        if (inside(y)) continue;
+        const a = Object.assign({}, cls, { x: num(s.x), y: map(y), "text-anchor": ["start", "middle", "end"].includes(s.anchor) ? s.anchor : "middle",
+          fill: hl ? "var(--ink-hl)" : ink(s.fill), "font-size": num(s.size) || 12 });
+        if (s.cls !== "boxed") Object.assign(a, { stroke: "var(--ink-bg)", "stroke-width": 4, "stroke-linejoin": "round", "paint-order": "stroke" });
+        if (s.bold === true || hl) a["font-weight"] = "bold";
+        svg.appendChild(sv("text", a, typeof s.text === "string" ? s.text : ""));
+      }
+    }
+    for (const f of frames) {
+      if (!lit(f.range) || inside(f.y)) continue;
+      const t = map(f.y), b = map(f.y + f.h);
+      svg.appendChild(sv("rect", { x: f.x - 2, y: t - 2, width: f.w + 4, height: b - t + 4, fill: "var(--ink-hl)", "fill-opacity": 0.07, stroke: "var(--ink-hl)", "stroke-width": 2 }));
+      if (firstLit === null || f.y < firstLit) firstLit = f.y;
+    }
+    // controls drawn over the diagram: frame headers, the states link of a ref frame, the actors
+    const hot = (x, y, ww, hh, label, onClick) => {
+      const r = sv("rect", { class: "hot", x, y, width: ww, height: hh, fill: "transparent", style: "cursor:pointer", tabindex: 0, role: "button", "aria-label": label });
+      r.appendChild(sv("title", {}, label));
+      r.addEventListener("click", (ev) => { ev.stopPropagation(); onClick(); });
+      r.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onClick(); } });
+      svg.appendChild(r);
+    };
+    for (const f of frames) {
+      const top = map(f.y);
+      if (inside(f.y)) continue;
+      const shut = folded.find((r) => r.f === f);
+      if (f.mode !== "open") {
+        const note = f.mode === "states" ? "◆ states below" : `▸ ${shut ? shut.steps : 0} step${shut && shut.steps === 1 ? "" : "s"} hidden`;
+        svg.appendChild(sv("text", { x: f.x + f.w - (f.kind === "ref" ? 64 : 10), y: top + 13, "text-anchor": "end", fill: "var(--ink-frame)", "font-size": 11,
+          stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, note));
+      }
+      const what = (f.kind === "ref" ? "included protocol " : f.kind + " frame ") + (f.name || "");
+      hot(f.x, top, f.w - (f.kind === "ref" ? 60 : 0), 20, (f.mode === "open" ? "Fold " : "Show the interaction of ") + what,
+        () => { f.mode = f.mode === "open" ? "hidden" : "open"; pick(f.range, what); render(); });
+      if (f.kind === "ref" && f.name) {
+        const on = f.mode === "states";
+        svg.appendChild(sv("text", { x: f.x + f.w - 8, y: top + 13, "text-anchor": "end", fill: "var(--ink-arrow)", "font-size": 11,
+          "text-decoration": "underline", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, on ? "interaction" : "states"));
+        hot(f.x + f.w - 60, top, 60, 20, (on ? "Show the interaction of " : "Show the state machines of ") + f.name,
+          () => { f.mode = on ? "open" : "states"; render(); });
+      }
+    }
+    for (const it of items) {
+      if (it.frame || !it.range) continue;
+      const s = it.shape, y = it.y;
+      if (inside(y)) continue;
+      const xs = s.k === "line" ? [num(s.x1), num(s.x2)] : s.k === "rect" ? [num(s.x), num(s.x) + num(s.w)] : [num((String(s.d).match(/^M\s*(-?[0-9.]+)/) || [])[1]), num((String(s.d).match(/^M\s*(-?[0-9.]+)/) || [])[1]) + 46];
+      const x0 = Math.min(...xs), x1 = Math.max(...xs);
+      hot(x0, map(y) - 16, Math.max(24, x1 - x0), 22, "Source of " + it.what, () => { pick(it.range, it.what); render(); });
+    }
+    for (const s of shapes) {
+      if (s.k !== "rect" || s.cls !== "role") continue;
+      const cx = num(s.x) + num(s.w) / 2;
+      const nameShape = shapes.find((t) => t.k === "text" && t.cls === "boxed" && Math.abs(num(t.x) - cx) < 2 && num(t.y) > num(s.y) && num(t.y) < num(s.y) + num(s.h) + 2);
+      const role = nameShape && typeof nameShape.text === "string" ? nameShape.text : "";
+      if (!role) continue;
+      svg.appendChild(sv("text", { x: cx, y: map(num(s.y)) + num(s.h) + 13, "text-anchor": "middle", fill: "var(--ink-arrow)", "font-size": 11,
+        "text-decoration": "underline", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, "states"));
+      hot(num(s.x), map(num(s.y)), num(s.w), num(s.h) + 16, "State machine of " + role + (opts.focus ? " in " + opts.focus : ""), () => {
+        below.replaceChildren(machinesOf("", opts.focus || null, [role]));
+        reportSize();
+      });
+    }
+    scroll.replaceChildren(svg);
+    // the first highlighted part in view, once
+    if (!scrolled && firstLit !== null && select.length) {
+      scrolled = true;
+      const y = map(firstLit);
+      setTimeout(() => { try { if (scroll.scrollHeight > scroll.clientHeight) scroll.scrollTop = Math.max(0, y - 80); else if (svg.scrollIntoView) { const r = svg.getBoundingClientRect(); window.scrollBy(0, r.top + y - 120); } } catch (_) {} }, 0);
+    }
+    if (model.shapes.length > MAX_SHAPES) scroll.appendChild(el("p", "more", `${model.shapes.length - MAX_SHAPES} more shapes not drawn`));
+    // the state machines of the ref frames shown as states, under the diagram
+    const asStates = frames.filter((f) => f.mode === "states" && f.name);
+    if (asStates.length) {
+      below.replaceChildren(...asStates.map((f) => panel("States of " + f.name, machinesOf("", f.name, rolesOfProtocol(f.name)))));
+    } else if (below.dataset.kind === "states") below.replaceChildren();
+    below.dataset.kind = asStates.length ? "states" : "";
+    reportSize();
+  }
+  function pick(rg, what) {
+    if (!rg) return;
+    select = [rg];
+    if (typeof opts.onPick === "function") opts.onPick(rg, what);
+  }
+  render();
   return box;
 }
 
@@ -499,6 +740,8 @@ function render(body) {
   if (body.diagram) parts.push(panel(body.diagramKind === "mdp" ? "Decision process under the supplied policy"
     : body.tool === "session_actor" ? "Sequence diagram: only the steps " + String(body.role) + " takes part in"
     : "Sequence diagram, generated from the protocol", diagram(body.diagram)));
+  else if (Array.isArray(body.omitted) && body.omitted.includes("diagram"))
+    parts.push(panel("Sequence diagram", el("p", "err", "The drawing was left out to keep the answer under LeanFM's size limit. Ask for a smaller part (a protocol in the tree, or one role of it).")));
   if (body.tool === "session_mdp" && body.view === "walk") {
     const box = el("div");
     const money = (m) => Object.keys(m || {}).flatMap((r) => Object.keys(m[r] || {}).filter((u) => m[r][u] !== "0")
@@ -860,7 +1103,7 @@ function treePanels(body) {
   if (!root) { wrap.appendChild(el("p", "meta", "No tree in this result.")); return [wrap]; }
   root.open = true;
   const cv = el("canvas", "tree"); cv.tabIndex = 0;
-  cv.setAttribute("aria-label", "The protocol as a tree. Click a node to open or close it and see it below; drag to pan, wheel to zoom. Keys: arrows move, Enter opens or closes, plus and minus zoom, 0 fits.");
+  cv.setAttribute("aria-label", "The protocol as a tree. Click a node to select it and see it drawn below; click its plus badge, double click it or press Enter to open or close it; drag to pan, wheel to zoom. Keys: left goes to the parent, right into the first child, up and down to the previous and next sibling, Enter opens or closes, plus and minus zoom, 0 fits.");
   const controls = el("div", "controls");
   const fitB = el("button", "", "Fit"), openB = el("button", "", "Open one more level"), closeB = el("button", "", "Close all");
   controls.append(fitB, openB, closeB);
@@ -954,11 +1197,7 @@ function treePanels(body) {
     // a protocol the text defines: its own lines, its roles from its header, and the text up to it
     const def = n.protocol ? (Array.isArray(body.definitions) ? body.definitions : []).find((d) => d && d.name === n.protocol) : null;
     const own = ["definition", "include"].includes(n.kind) && def && Number.isInteger(def.last);
-    if (["protocol", "definition", "include"].includes(n.kind) && n.protocol) {
-      const b = el("button", "", "Sequence diagram of " + n.protocol);
-      b.addEventListener("click", () => askInto(out, "session_explore", { focus: n.protocol }, (r) => diagram(r.diagram)));
-      acts.appendChild(b);
-    }
+    const payloadOut = el("div"), picked = el("div");
     if (own) {
       const lines = String(body.lean || "").split("\n");
       const header = (lines[def.first - 1] || "").match(/protocol\s+[A-Za-z_][A-Za-z0-9_.]*\s*\(([^)]*)\)/);
@@ -976,7 +1215,7 @@ function treePanels(body) {
     }
     if (n.kind === "message" && n.message) {
       const b = el("button", "", "Payload of " + n.message);
-      b.addEventListener("click", () => askInto(out, "session_explore", { message: n.message }, payloadView));
+      b.addEventListener("click", () => askInto(payloadOut, "session_explore", { message: n.message }, payloadView));
       acts.appendChild(b);
     }
     if (n.kind === "role") {
@@ -991,15 +1230,31 @@ function treePanels(body) {
     }
     if (n.kind === "role") {
       const b = el("button", "", "View as " + n.label);
-      b.addEventListener("click", () => askInto(out, "session_actor", { role: n.label }, (r) => { const d = el("div"); d.append(...actorPanels(r)); if (r.diagram) d.appendChild(panel("Only the steps " + n.label + " takes part in", diagram(r.diagram))); return d; }));
+      b.addEventListener("click", () => askInto(out, "session_actor", { role: n.label }, (r) => { const d = el("div"); d.append(...actorPanels(r)); d.appendChild(foldPanel("Only the steps " + n.label + " takes part in", drawing(r))); return d; }));
       acts.appendChild(b);
     }
     if (acts.children.length) box.appendChild(acts);
-    if (Number.isInteger(n.first)) box.appendChild(panel("Source", sourceBox(body.lean, n.first, n.last)));
-    box.appendChild(out); box.appendChild(machines);
+    if (Number.isInteger(n.first)) box.appendChild(foldPanel("Source, lines " + n.first + (n.last && n.last !== n.first ? " to " + n.last : ""), sourceBox(body.lean, n.first, n.last)));
+    box.append(payloadOut, out, picked, machines);
     detail.replaceChildren(box); reportSize();
-    // picking a protocol of the list draws its interaction diagram at once
-    if (own) askInto(out, "session_explore", { focus: n.protocol }, (r) => diagram(r.diagram));
+    // whatever is picked is drawn: a protocol (main, defined or included) as its whole interaction
+    // diagram; a step, choice, branch, loop or block as the diagram of the protocol its text is in,
+    // with its own part highlighted and the frames around it opened. A click on an arrow or a frame
+    // header of the drawing shows the source it was drawn from, as an element viewer does.
+    if (n.protocol && !["role", "roles", "definitions"].includes(n.kind)) {
+      const whole = ["protocol", "definition", "include"].includes(n.kind);
+      const select = [];
+      if (!whole) (function gather(t) {
+        if (Number.isInteger(t.n.first) && t.n.protocol) select.push({ protocol: t.n.protocol, first: t.n.first, last: t.n.last || t.n.first });
+        for (const k of t.kids) gather(k);
+      })(t);
+      const onPick = (rg, what) => {
+        picked.replaceChildren(foldPanel(`Source of ${what}: ${rg.protocol}, line${rg.last > rg.first ? `s ${rg.first} to ${rg.last}` : " " + rg.first}`, sourceBox(body.lean, rg.first, rg.last)));
+        reportSize();
+      };
+      askInto(out, "session_explore", { focus: n.protocol }, (r) => foldPanel("Sequence diagram of " + n.protocol, drawing(r,
+        { focus: n.protocol, defs: body.definitions, source: body.lean, select, onPick })));
+    }
   }
   function toggle(t) { if (t.kids.length) { t.open = !t.open; layout(true); } show(t); }
   function hit(cx, cy) {
@@ -1017,7 +1272,20 @@ function treePanels(body) {
   });
   const end = () => { cv.className = "tree"; setTimeout(() => { drag = null; }, 0); };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointerleave", end);
-  cv.addEventListener("click", (ev) => { if (drag && drag.moved) return; const t = hit(ev.clientX, ev.clientY); if (t) toggle(t); });
+  // as in an element viewer: a click on a node selects it (and draws it below); only its +N / -
+  // badge at the right end opens or closes it; a double click or Enter also opens or closes it
+  const onBadge = (t, cx) => {
+    if (!t.kids.length) return false;
+    const r = cv.getBoundingClientRect(), x = (cx - r.left - panX) / zoom;
+    return x >= t.x + t.w - 36;
+  };
+  cv.addEventListener("click", (ev) => {
+    if (drag && drag.moved) return;
+    const t = hit(ev.clientX, ev.clientY);
+    if (!t) return;
+    if (onBadge(t, ev.clientX)) toggle(t); else if (t !== sel) show(t);
+  });
+  cv.addEventListener("dblclick", (ev) => { const t = hit(ev.clientX, ev.clientY); if (t && !onBadge(t, ev.clientX) && t.kids.length) { t.open = !t.open; layout(true); } });
   cv.addEventListener("wheel", (ev) => {
     ev.preventDefault();
     const r = cv.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
@@ -1025,11 +1293,13 @@ function treePanels(body) {
     panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw();
   }, { passive: false });
   cv.addEventListener("keydown", (ev) => {
-    const vis = visible(), i = vis.indexOf(sel);
-    if (ev.key === "ArrowDown" && i + 1 < vis.length) show(vis[i + 1]);
-    else if (ev.key === "ArrowUp" && i > 0) show(vis[i - 1]);
-    else if (ev.key === "ArrowRight") { if (sel.kids.length && !sel.open) toggle(sel); else if (sel.open && sel.kids.length) show(sel.kids[0]); }
-    else if (ev.key === "ArrowLeft") { if (sel.open && sel.kids.length) toggle(sel); else if (byId.has(sel.n.parent)) show(byId.get(sel.n.parent)); }
+    // left and right move along the tree's depth (left to the parent, right into the first child,
+    // opening it); up and down move among the siblings, the children of the same parent
+    const parent = byId.get(sel.n.parent), sibs = parent ? parent.kids : [sel], i = sibs.indexOf(sel);
+    if (ev.key === "ArrowDown") { if (i + 1 < sibs.length) show(sibs[i + 1]); }
+    else if (ev.key === "ArrowUp") { if (i > 0) show(sibs[i - 1]); }
+    else if (ev.key === "ArrowRight") { if (sel.kids.length) { if (!sel.open) { sel.open = true; layout(true); } show(sel.kids[0]); } }
+    else if (ev.key === "ArrowLeft") { if (parent) show(parent); }
     else if (ev.key === "Enter" || ev.key === " ") toggle(sel);
     else if (ev.key === "+" || ev.key === "=") { zoom = Math.min(4, zoom * 1.2); draw(); }
     else if (ev.key === "-") { zoom = Math.max(0.2, zoom / 1.2); draw(); }
@@ -1220,12 +1490,12 @@ function graphView(opts) {
   return api;
 }
 function machineView(r) {
-  const box = el("div");
+  const inner = el("div"), box = collapsible("state machine" + (r.role ? " of " + String(r.role) : ""), inner);
   const g = graphView({ aria: "State machine of " + String(r.role) + ". Its transitions from the current state are buttons below the drawing." });
   g.set((r.states || []).map(String), (Array.isArray(r.edges) ? r.edges : []).map((e) => ({ from: String(e.from), to: String(e.to), label: String(e.label || ""), kind: String(e.kind || "") })),
     String(r.start || "S0"), (r.finals || []).map(String));
-  box.appendChild(g.el);
-  if (typeof r.typestate === "string") { const d = el("details"); d.appendChild(el("summary", "", "Typestate API")); d.appendChild(el("pre", "", r.typestate)); box.appendChild(d); }
+  inner.appendChild(g.el);
+  if (typeof r.typestate === "string") { const d = el("details"); d.appendChild(el("summary", "", "Typestate API")); d.appendChild(el("pre", "", r.typestate)); inner.appendChild(d); }
   return box;
 }
 

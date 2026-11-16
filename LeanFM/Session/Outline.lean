@@ -176,6 +176,19 @@ partial def walk (ds : List Def) (lines : Array String) (parent : Nat) (inDef : 
       walk ds lines c n b
     walk ds lines parent inDef k
 
+/-- The body of the first box named `n` in `g`: what `include n` put there. -/
+partial def findBox (n : String) : Global String → Option (Global String)
+  | .done => none
+  | .var _ => none
+  | .msg _ k => findBox n k
+  | .act _ _ k => findBox n k
+  | .choice bs => bs.findSome? (findBox n)
+  | .par bs k => (bs.findSome? (findBox n)).orElse fun _ => findBox n k
+  | .join _ bs k => (bs.findSome? (findBox n)).orElse fun _ => findBox n k
+  | .loop _ b => findBox n b
+  | .sessions b k => (findBox n b).orElse fun _ => findBox n k
+  | .box m b k => if m == n then some b else (findBox n b).orElse fun _ => findBox n k
+
 /-- The whole tree: the main protocol (its structure), every protocol the text defines, and the
 roles with their typestate. `typestates` gives each role's typestate text or why it has none. -/
 def tree (text : String) (main : String) (g : Global String) (typestates : List (String × String)) : Array Node × Nat × List Def :=
@@ -191,7 +204,10 @@ def tree (text : String) (main : String) (g : Global String) (typestates : List 
         let _ ← add { id := 0, parent := some rs, kind := "role", label := r, detail := ts, protocol := main }
     if let some dn ← add { id := 0, parent := some root, kind := "definitions", label := s!"protocols defined: {ds.length}", protocol := main } then
       for x in ds do
-        let _ ← add { id := 0, parent := some dn, kind := "definition", label := x.name, protocol := x.name, first := some x.first, last := some x.last }
+        -- a defined protocol opens to its own steps, as an include of it does; one the main
+        -- protocol never includes (the main one itself, or one unused) stays a leaf
+        if let some dnode ← add { id := 0, parent := some dn, kind := "definition", label := x.name, protocol := x.name, first := some x.first, last := some x.last } then
+          if let some b := findBox x.name g then walk ds lines dnode x.name b
   let ((), s) := m.run {}
   (s.nodes, s.omitted, ds)
 

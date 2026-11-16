@@ -661,10 +661,11 @@ the end, each omission said in `omitted`. -/
 def fit (body : Json) : Json := Id.run do
   let mut b := body
   let mut omitted : List String := []
-  -- the drawing first, then per-role and per-call detail that session_actor gives for one role
-  -- duplicates next (openapi when openapiYaml has it, proto which session_types gives), and the
-  -- protocol text's echo last: the caller sent it, or named the example
-  for key in ["svg", "diagram", "projections", "calls", "types", "openapi", "proto", "lean"] do
+  -- the SVG first (the view draws from the shapes in diagram), then per-role and per-call detail
+  -- that session_actor gives for one role, duplicates (openapi when openapiYaml has it, proto which
+  -- session_types gives) and the protocol text's echo (the caller sent it, or named the example);
+  -- the shapes last, since without them the view has no drawing at all
+  for key in ["svg", "projections", "calls", "types", "openapi", "proto", "lean", "diagram"] do
     if b.compress.length > limits.maxResult && (b.getObjVal? key).isOk && b.getObjValD key != Json.null then
       if key == "openapi" && !(b.getObjVal? "openapiYaml").isOk && !(b.getObjVal? "code").isOk then continue
       b := b.setObjVal! key Json.null
