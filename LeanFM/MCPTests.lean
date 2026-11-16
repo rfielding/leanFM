@@ -158,6 +158,9 @@ def main : IO Unit := do
   let sviewItem ← IO.ofExcept ((sviewJson.getObjValD "result").getObjValD "contents" |>.getArrVal? 0)
   let shtml ← IO.ofExcept (sviewItem.getObjValAs? String "text")
   if shtml != sessionViewHtml then throw <| IO.userError "MCP session view: resources/read does not return the compiled view"
+  -- the view is larger than the tool-result limit; reading it must still return the whole view
+  if compactReply sview.body != sview.body then throw <| IO.userError "MCP session view: resources/read was compacted (the host would get no view)"
+  if compactReply sview.body 1000 != sview.body then throw <| IO.userError "MCP session view: a resource read is compacted under a small limit"
   if (sviewItem.getObjValAs? String "mimeType").toOption != some logicViewMimeType then
     throw <| IO.userError "MCP session view: wrong MIME type"
   let scsp := ((sviewItem.getObjValD "_meta").getObjValD "ui").getObjValD "csp"

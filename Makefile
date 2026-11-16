@@ -26,7 +26,7 @@ all: build lean book
 
 build: ui-build
 	@python3 scripts/invalidate_include_str.py
-	lake build leanfm-server
+	lake build leanfm-server leanfm-mcp
 
 # Every Lean library module and executable, not just the server's imports.
 lean: build

@@ -190,13 +190,22 @@ def keepLastSteps (reply : Json) : Json :=
   mapPath reply (fun path => path.extract (path.size - min path.size keptPathSteps) path.size)
     s!"only the last {keptPathSteps} path steps are included to fit the 25,000-token result limit"
 
-/-- Keep a reply within `limit` characters: drop per-step knowledge, then early path steps, and
-otherwise replace it with an error that names the limit. -/
+/-- A resources/read reply (its result carries contents): the views' HTML, the book and the
+references. The 25,000-token limit is on tool results, so these are never compacted; replacing the
+session view's HTML with an error left the host with no view at all ("Unable to reach leanfm"). -/
+def isResourceReply (reply : Json) : Bool :=
+  match (reply.getObjValD "result").getObjVal? "contents" with
+  | .ok _ => true
+  | .error _ => false
+
+/-- Keep a tool result within `limit` characters: drop per-step knowledge, then early path steps,
+and otherwise replace it with an error that names the limit. Resource reads pass unchanged. -/
 def compactReply (body : String) (limit : Nat := resultCharLimit) : String :=
   if body.length ≤ limit then body else
   match Json.parse body with
   | .error _ => body
   | .ok reply =>
+    if isResourceReply reply then body else
     let a := (dropHolds reply).compress
     if a.length ≤ limit then a else
     let b := (keepLastSteps (dropHolds reply)).compress
