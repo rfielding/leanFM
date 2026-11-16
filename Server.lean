@@ -310,6 +310,15 @@ def sessionGeneratedImplementationResponse (request : String) : IO Response := d
         let body ← readTextOrElse (sessionGeneratedImplementationPath sessionId) defaultGeneratedImplementationLean
         pure <| response 200 "text/plain; charset=utf-8" body
 
+/-- The request target with its query string, e.g. /tools/logs?log=serve&lines=50. -/
+def requestTarget (request : String) : String :=
+  match request.splitOn "\r\n" with
+  | firstLine :: _ =>
+      match firstLine.splitOn " " with
+      | _method :: target :: _ => target
+      | _ => "/"
+  | _ => "/"
+
 def responseBody (path : String) (request : String) : IO Response := do
   if path.startsWith "/renders/" && path.endsWith ".svg" then
     let name := ((path.drop "/renders/".length).dropEnd ".svg".length).toString
@@ -378,6 +387,9 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/post_review.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.postReviewGraphDot
   | "/tasks.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.taskGraphDot
   | "/assembled.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.assembledGraphDot
+  | "/tools/logs" => do
+      let (status, contentType, body) ← LeanFM.ServerLogs.httpAnswer (requestTarget request)
+      pure <| response status contentType body ["Cache-Control: no-store"]
   | "/health" => pure <| response 200 "text/plain; charset=utf-8" "ok\n"
   | _ => pure <| response 404 "text/plain; charset=utf-8" "not found\n"
 
@@ -582,6 +594,8 @@ def main : IO Unit := do
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (bindAddr port)
   server.listen 128
+  -- bound to 127.0.0.1 only: logs are the local user's own (GET /tools/logs, MCP server_logs)
+  LeanFM.ServerLogs.enable
   IO.println s!"LeanFM server listening on http://127.0.0.1:{port}"
   serveLoop server
 

@@ -127,7 +127,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     expectText("native MDP graph renders", byId.results, "Decision process under the supplied policy");
     expectText("terminal mass is visible", byId.results, "Terminal probability total: 1");
     if (!byId.results.all().some(n => n.tag === "svg")) throw new Error("MDP SVG missing");
-    button(byId.editor, "MDP diagram").click(); await wait(120);
+    button(byId.editor, "Decision process").click(); await wait(120);
     const sent = hostSent.filter(m => m.method === "tools/call" && m.params.name === "session_mdp").pop();
     if (sent?.params.arguments.overlay?.name !== "test-layer") throw new Error("MDP redraw lost overlay");
   }
@@ -157,19 +157,10 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   expectText("a role with several steps is shown choosing", byId.walk, "Desk chooses");
   expectText("the roles waiting are named", byId.walk, "Member, Librarian wait");
   button(byId.walk, "Undo").click(); await wait(120);
-  // the sketch: click two lifelines, label the message, and it is added to the protocol text
-  const lanes = byId.editor.all().filter((n) => n.attrs && n.attrs["data-role"]);
-  if (lanes.length < 2) throw new Error("the sketch shows no lifelines");
-  const before = byId.editor.all().find((n) => n.tag === "textarea").value;
-  lanes[0].click(); await wait(20); lanes[1].click(); await wait(20);
-  const labelIn = byId.editor.all().find((n) => n.tag === "input" && n.dataset && n.dataset.field === "label");
-  if (!labelIn) throw new Error("the sketch asks for no label");
-  labelIn.value = "Ping";
-  button(byId.editor, "Add").click(); await wait(120);
-  const after = byId.editor.all().find((n) => n.tag === "textarea").value;
-  if (!after.includes(`Ping from ${lanes[0].attrs["data-role"]} to ${lanes[1].attrs["data-role"]};`) || after.length <= before.length)
-    throw new Error("the sketch did not add its message to the text");
-  console.log("ok: the sketch adds a message by clicking two lifelines");
+  // the view is read-only: no sketching by clicking lifelines, no Add button
+  if (byId.editor.all().some((n) => n.attrs && n.attrs["data-role"])) throw new Error("the read-only view still offers the sketch");
+  if (buttons(byId.editor).some((b) => b.textContent === "Add")) throw new Error("the read-only view still offers Add");
+  console.log("ok: the view is read-only: no sketch");
   button(byId.walk, "Close").click(); await wait(50);
   if (byId.walk.children.length) throw new Error("Close leaves the walk-through open");
   console.log("ok: undo and close work");
@@ -207,29 +198,48 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     console.log("ok: the navigation reaches each role, the payloads and a dataset");
   }
 
-  // the tree: drawn on a canvas, folded, opened by keys, a node's source and a protocol's diagram beside it
+  // the tree: a list of rows like a file explorer, folded, opened by its arrows and keys, a node's
+  // source and its protocol's diagram beside it
   if (R.explore && R.exploreFocus) {
     await show(R.explore);
-    const cv = byId.results.all().find((n) => n.tag === "canvas" && n.className.includes("tree"));
-    if (!cv) throw new Error("the tree is not drawn on a canvas");
+    if (byId.results.all().some((n) => n.tag === "canvas" && n.className.includes("tree"))) throw new Error("the tree is still a canvas");
+    const list = byId.results.all().find((n) => n.className.split(" ").includes("ftree"));
+    if (!list) throw new Error("the tree is not a list");
     await wait(80);
+    const rows = () => list.children.filter((n) => n.className.split(" ").includes("frow"));
+    const sel = () => rows().find((r) => r.className.includes("sel"));
     expectText("the tree selects the main protocol at the start", byId.results, "the main protocol");
     expectText("the selected node shows its source lines", byId.results, "Source");
-    for (const key of ["ArrowDown", "Enter", "ArrowRight", "ArrowLeft", "+", "-", "0", "ArrowUp"]) { cv.dispatch("keydown", { key }); await wait(30); }
-    button(byId.results, "Open one more level").click(); await wait(350);
-    button(byId.results, "Close all").click(); await wait(350);
-    button(byId.results, "Fit").click(); await wait(30);
-    cv.dispatch("wheel", { deltaY: -100, clientX: 100, clientY: 100 });
-    cv.dispatch("pointerdown", { clientX: 100, clientY: 100 }); cv.dispatch("pointermove", { clientX: 160, clientY: 140 }); cv.dispatch("pointerup", {});
-    await wait(30);
-    button(byId.results, "Sequence diagram of Lending").click(); await wait(150);
+    const n0 = rows().length;
+    if (!sel() || rows()[0] !== sel()) throw new Error("the first row is not the selected root");
+    // the first closed folder opens with its arrow, and closes again with Left
+    const folder = rows().find((r) => r.getAttribute("aria-expanded") === "false");
+    if (!folder) throw new Error("no closed folder to open");
+    folder.children.find((c) => c.className === "twisty").click(); await wait(30);
+    if (rows().length <= n0) throw new Error("the arrow did not open the folder");
+    if (sel().getAttribute("aria-expanded") !== "true") throw new Error("the opened folder is not selected and open");
+    list.dispatch("keydown", { key: "ArrowLeft" }); await wait(30);
+    if (rows().length !== n0) throw new Error("Left did not close the folder");
+    for (const key of ["ArrowDown", "ArrowRight", "ArrowRight", "ArrowUp", "End", "Home", "Enter", "Enter"]) { list.dispatch("keydown", { key }); await wait(30); }
+    rows()[1].click(); await wait(30);
+    if (sel() !== rows()[1]) throw new Error("a click did not select the row");
+    button(byId.results, "Open one more level").click(); await wait(50);
+    if (rows().length <= n0) throw new Error("Open one more level opened nothing");
+    button(byId.results, "Close all").click(); await wait(50);
+    if (rows().length !== n0) throw new Error("Close all left folders open");
+    // an included protocol's row draws that protocol's diagram
+    button(byId.results, "Open one more level").click(); await wait(50);
+    button(byId.results, "Open one more level").click(); await wait(50);
+    const inc = rows().find((r) => /include|definition/.test(r.textContent) && r.textContent.includes("Lending"));
+    if (inc) { inc.click(); await wait(150); }
     const asked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_explore").pop();
-    if (asked?.params.arguments.focus !== "Lending") throw new Error("the diagram button did not ask for that protocol");
+    if (!asked?.params.arguments.focus) throw new Error("selecting a protocol did not ask for its diagram");
     if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("the protocol's diagram is not drawn");
     if (!button(byId.editor, "Tree").attrs.class.includes("on")) throw new Error("the Tree view is not marked current");
-    console.log("ok: the tree opens, closes, pans, zooms and shows a protocol's diagram");
+    console.log("ok: the tree lists like a file explorer, opens, closes, moves by keys and shows a protocol's diagram");
     // walking the grammar from the main protocol: the global machine grows, the tree lights the step
     await show(R.explore); await wait(80);
+    button(byId.results, "Close all").click(); await wait(50);   // the tree kept the last selection; back to the root
     button(byId.results, "Walk the grammar").click(); await wait(150);
     expectText("the grammar walk starts", byId.results, "Walk the grammar: the global state machine");
     const machine = byId.results.all().find((n) => n.tag === "canvas" && n.className.includes("machine"));

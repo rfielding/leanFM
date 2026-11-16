@@ -4,7 +4,7 @@ import LeanFM.Session.Global
 /-! The protocol as a tree to browse (clause selfhost.session.explorer): the main protocol's
 structure (included protocols, choices, parallel branches, loops, independent sessions, messages and
 events), every protocol the text defines, and the roles, each node with the lines of the text it
-comes from. The view draws the tree on a canvas, folded at the start, and shows a node's source and,
+comes from. The view lists the tree like a file explorer, folded at the start, and shows a node's source and,
 on request, LeanFM's diagram of a protocol or a role.
 
 Only LeanFM computes the tree and the line ranges; the view lays them out and shows the text lines it

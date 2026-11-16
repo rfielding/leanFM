@@ -7,6 +7,7 @@ import LeanFM.MCPView
 import LeanFM.SessionView
 import LeanFM.SessionTools
 import LeanFM.CheckMetrics
+import LeanFM.ServerLogs
 
 namespace LeanFM.MCP
 
@@ -32,9 +33,11 @@ def instructions : String :=
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
   "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference. " ++
   "For interactions between roles (services, clients, actors, APIs), design a session type and check it with " ++
-  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, show one role's view (its diagram, OpenAPI and payloads) with session_actor, generate a large dataset to see how sessions distribute with session_dataset, browse a protocol's tree of included protocols, branches and roles on a canvas with session_explore (example goserver is a whole specification to show), generate code to implement it with session_skeleton, writing the protocol in " ++
+  "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, show one role's view (its diagram, OpenAPI and payloads) with session_actor, generate a large dataset to see how sessions distribute with session_dataset, browse a protocol's tree of included protocols, branches and roles like a file explorer with session_explore (example goserver is a whole specification to show), generate code to implement it with session_skeleton, writing the protocol in " ++
   "LeanFM protocol syntax as the lean argument (leanfm://language/session-reference). Show people the diagrams and streams these tools " ++
-  "generate rather than drawing interaction diagrams by hand."
+  "generate rather than drawing interaction diagrams by hand. " ++
+  "When a LeanFM tool, view or server fails, and server_logs is listed, read the logs with it (no log argument " ++
+  "lists them) before asking the user to paste a log."
 
 def ok (id result : Json) : Response :=
   { status := 200
@@ -302,7 +305,7 @@ def toolDefinitions : Array Json := #[
       ("sessions", Json.mkObj [("type", "integer"), ("description", Json.str "sessions to generate, 1 to 10000 (default 1000)")]),
       ("seed", Json.mkObj [("type", "integer")])] []),
   tool "session_explore" "Browse a protocol as a tree"
-    "Answer a protocol as a tree to browse, drawn by the view on a canvas, folded at the start: the main protocol's structure (each included protocol as a node with its own lines, choices naming the role that decides, their branches, parallel branches, loops, independent sessions, messages and events), the roles (open one for its view) and every protocol the text defines, each node with the lines of the text it comes from. Click a node to open it, drag to pan, wheel to zoom; a node shows its source, a protocol's sequence diagram (focus) or a role's view (session_actor). With focus: Name, answers the sequence diagram of protocol Name as the text defines it. Use example: \"goserver\" to browse the GoServer specification LeanFM carries."
+    "Answer a protocol as a tree to browse, listed by the view like a file explorer, folded at the start: the main protocol's structure (each included protocol as a node with its own lines, choices naming the role that decides, their branches, parallel branches, loops, independent sessions, messages and events), the roles (open one for its view) and every protocol the text defines, each node with the lines of the text it comes from. Click a row to see it, click its arrow or double click to open it; a node shows its source, a protocol's sequence diagram (focus) or a role's view (session_actor). With focus: Name, answers the sequence diagram of protocol Name as the text defines it. Use example: \"goserver\" to browse the GoServer specification LeanFM carries."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"),
       ("focus", stringSchema "optional: a protocol the text defines, to draw its sequence diagram"),
       ("states", stringSchema "optional: a role, to answer its state machine; with focus, the role's state machine in that protocol"),
@@ -326,6 +329,24 @@ def withExampleArgument (tool : Json) : Json :=
 
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
 def tools : Array Json := toolDefinitions.map (withSessionView ∘ withLogicView ∘ withExampleArgument)
+
+/-- Listed only where `LeanFM.ServerLogs.enabled` is on: leanfm-mcp --stdio and leanfm-server on
+127.0.0.1, never the hosted HTTP endpoint unless LEANFM_MCP_LOGS=1 (LeanFM/ServerLogs.lean). -/
+def serverLogsTool : Json :=
+  tool "server_logs" "Read LeanFM's and Claude Desktop's logs"
+    ("Read the end of a log, to diagnose a failure yourself instead of asking the user to paste it. Without log, list the logs with " ++
+     "their paths, sizes and last change. Logs: desktop-mcp (Claude Desktop's log of this MCP server: messages, " ++
+     "disconnects, its standard error), desktop-mcp-all, desktop-main (Claude Desktop restarts), serve (make serve output), " ++
+     "server, diagnostics (JSON lines). Times in the answer are UTC. Tokens and API keys are redacted. Read-only.")
+    (schema [("log", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ServerLogs.names.map Json.str).toArray),
+        ("description", Json.str "which log; omit to list them")]),
+      ("lines", Json.mkObj [("type", "integer"), ("description", Json.str s!"newest lines to return, 1 to {LeanFM.ServerLogs.maxLines} (default {LeanFM.ServerLogs.defaultLines})")]),
+      ("grep", stringSchema "optional: only lines containing this text, ignoring case")] [])
+
+/-- The tools listed on this host. -/
+def listedTools : IO (Array Json) := do
+  if ← LeanFM.ServerLogs.enabled.get then return tools.push serverLogsTool
+  return tools
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
 `logicSummaryLimit` characters. The full answer is only in structuredContent. -/
@@ -463,10 +484,16 @@ def dispatchJson (request : Json) : IO Response := do
       | .ok uri => match ← resourceContents uri with
         | .ok content => pure <| ok id <| Json.mkObj [("contents", Json.arr #[content])]
         | .error err => pure <| rpcError id (-32602) err
-  | "tools/list" => pure <| ok id <| Json.mkObj [("tools", Json.arr tools)]
+  | "tools/list" => pure <| ok id <| Json.mkObj [("tools", Json.arr (← listedTools))]
   | "tools/call" =>
       match stringField params "name" with
       | .error err => pure <| rpcError id (-32602) err
+      | .ok "server_logs" =>
+        match ← LeanFM.ServerLogs.query ((field params "arguments").toOption.getD (Json.mkObj [])) with
+        | .ok (text, body) =>
+          let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
+          pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
+        | .error err => pure <| rpcError id (-32602) err
       | .ok name =>
         let t0 ← IO.monoNanosNow
         let result := toolResult name ((field params "arguments").toOption.getD (Json.mkObj []))

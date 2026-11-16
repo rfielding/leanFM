@@ -2406,8 +2406,8 @@ instance plays its own role, and a fresh actor belongs to one session only.
 - `session_explore {lean | example, focus?}`: the protocol as a tree to browse: the main protocol's
   structure (included protocols, choices and branches, parallel branches, loops, sessions, messages
   and events), the roles and every protocol defined, each node with the lines it comes from. The
-  view draws it on a canvas, folded at the start: click to open, drag to pan, wheel to zoom, and
-  a node shows its source, a protocol's sequence diagram or a role's view. With `focus: Name`, the
+  view lists it like a file explorer, folded at the start: click a row to see it, click its arrow
+  or double click to open it, and a node shows its source, a protocol's sequence diagram or a role's view. With `focus: Name`, the
   sequence diagram of the protocol Name the text defines.
 
 - Every session tool also takes `example` instead of `lean`: the name of a protocol LeanFM carries

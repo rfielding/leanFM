@@ -9,7 +9,8 @@ HTTP configuration comes from the environment; see deploy/mcp/README.md.
 
   leanfm-mcp                         HTTP on LEANFM_MCP_BIND:LEANFM_MCP_PORT (default 127.0.0.1:8090)
   leanfm-mcp --stdio [--root DIR]    MCP on standard input and output; DIR is the LeanFM checkout
-                                     whose book and specifications the resources read -/
+                                     whose book and specifications the resources read
+  server_logs is served with --stdio, and over HTTP only when LEANFM_MCP_LOGS=1 -/
 
 open Std
 open Std.Net
@@ -82,7 +83,11 @@ partial def serveLoop (cfg : HostConfig) (limits : Limits) (server : TcpServer) 
 /-- One message per line until standard input ends. Standard output carries only replies. -/
 partial def stdioLoop (stdin stdout stderr : IO.FS.Stream) : IO Unit := do
   let line ← stdin.getLine
-  if line.isEmpty then return
+  if line.isEmpty then
+    -- Claude Desktop copies standard error into mcp-server-leanfm.log, so the reason is on record
+    stderr.putStrLn "leanfm-mcp: standard input ended, exiting"
+    stderr.flush
+    return
   let reply ← try stdioReply line
     catch err =>
       stderr.putStrLn s!"internal error: {err}"
@@ -114,6 +119,8 @@ def serveStdio (root : Option String) : IO UInt32 := do
       stderr.putStrLn s!"--root {dir} is not a directory"
       return 2
     IO.Process.setCurrentDir dir
+  -- a child process of the user's own client may read the user's own logs (LeanFM/ServerLogs.lean)
+  LeanFM.ServerLogs.enable
   stderr.putStrLn s!"leanfm-mcp on standard input and output; resources read from {← IO.currentDir}"
   stderr.flush
   stdioLoop (← IO.getStdin) (← IO.getStdout) stderr
@@ -124,6 +131,8 @@ def serveHttp : IO Unit := do
   let some addr := IPv4Addr.ofString cfg.bind
     | throw <| IO.userError s!"LEANFM_MCP_BIND must be an IPv4 address, not {cfg.bind}"
   let limits ← Limits.new
+  -- logs stay private on a hosted endpoint unless its operator opts in
+  if (← IO.getEnv "LEANFM_MCP_LOGS").map (·.trimAscii.toString) == some "1" then LeanFM.ServerLogs.enable
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (SocketAddress.v4 { addr, port := UInt16.ofNat cfg.port })
   server.listen 128

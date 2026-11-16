@@ -258,7 +258,7 @@ def main : IO Unit := do
   let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
   assertContains "MCP session design prompt ends at session_conform" promptGot.body "session_conform"
   assertContains "MCP session view edits through tools/call" shtml "\"tools/call\""
-  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\", \"session_explore\"], MAX_EDIT_BYTES = 65536"
+  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\", \"session_explore\", \"session_review\", \"session_ctl\", \"session_sla\", \"session_instances\", \"session_skeleton\"], MAX_EDIT_BYTES = 65536"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new
@@ -413,3 +413,25 @@ def main : IO Unit := do
     assertContains s!"MCP lists {uri}" listed.body uri
     assertContains s!"MCP reads {uri}" r.body "\"contents\""
   assertContains "MCP instructions point at LeanFM's own requirements" initialized.body "SelfHosting.lean"
+  -- server_logs (LeanFM/ServerLogs.lean): off and unlisted until the executable turns it on
+  let offList ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":70,\"method\":\"tools/list\"}"
+  expect "MCP does not list server_logs on a host that has not enabled it" (!offList.body.contains "\"server_logs\"")
+  let offCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":71,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{\"log\":\"serve\"}}}"
+  expect "MCP refuses server_logs where it is off" (offCall.body.contains "server_logs is off on this host" && !offCall.body.contains "\"lines\"")
+  LeanFM.ServerLogs.enable
+  let onList ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":72,\"method\":\"tools/list\"}"
+  expect "MCP lists server_logs once enabled" (onList.body.contains "\"name\":\"server_logs\"")
+  let idx ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":73,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{}}}"
+  expect "MCP server_logs without log lists the logs it can show" (idx.body.contains "desktop-mcp" && idx.body.contains "logs/serve.log")
+  let trav ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":74,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{\"log\":\"../../etc/passwd\"}}}"
+  expect "MCP server_logs refuses a path, naming the logs it serves" (trav.body.contains "log must be one of desktop-mcp" && !trav.body.contains "root:")
+  let zero ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":75,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{\"log\":\"serve\",\"lines\":0}}}"
+  expect "MCP server_logs refuses lines outside 1 to 2000" (zero.body.contains "lines must be between 1 and 2000")
+  let serve ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":76,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{\"log\":\"serve\",\"lines\":5}}}"
+  expect "MCP server_logs answers a named log within the result limit" (serve.body.contains "\"log\":\"serve\"" && serve.body.length < 100000)
+  expect "server_logs redacts bearer tokens, API keys and token= values"
+    (LeanFM.ServerLogs.redactLine "Authorization: Bearer abc123 key=sk-ABCDEFGHIJKLMNOPQRSTUV token=s3cret token=none"
+      == "Authorization: Bearer [redacted] [redacted] token=[redacted] token=none")
+  expect "server_logs prints times as UTC" (LeanFM.ServerLogs.isoUtc 1794853518 == "2026-11-16T18:25:18Z")
+  let (st, _, _) ← LeanFM.ServerLogs.httpAnswer "/tools/logs?log=..%2F..%2Fetc%2Fpasswd"
+  expect "GET /tools/logs refuses a path with 400" (st == 400)
