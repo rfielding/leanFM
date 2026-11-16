@@ -985,16 +985,22 @@ function table(head, rows) {
 // ---- one role's view --------------------------------------------------------------------------
 function actorPanels(body) {
   const out = [], pr = body.projection || {}, role = String(body.role || "");
+  // a role's view opens on its state machine, drawn on canvas; the text forms fold below it
+  if (IDENT.test(role) && typeof pr.error !== "string") {
+    const fsm = el("div");
+    out.push(panel("State machine of " + role + ": click a state, take a transition", fsm));
+    askInto(fsm, "session_explore", { states: role }, machineView);
+  }
   const box = el("div");
   if (typeof pr.error === "string") box.appendChild(el("p", "err", "No local type: " + pr.error));
   if (typeof pr.typestate === "string") box.appendChild(el("pre", "", pr.typestate));
   if (typeof pr.local === "string") { box.appendChild(el("h3", "", "local type")); box.appendChild(el("pre", "", pr.local)); }
-  out.push(panel(role + ": typestate and local type", box));
+  out.push(foldPanel(role + ": typestate and local type (text)", box, typeof pr.error === "string"));
   const ms = Array.isArray(body.messages) ? body.messages : [];
-  out.push(panel("What " + role + " sends and receives", ms.length
+  out.push(foldPanel("What " + role + " sends and receives (" + ms.length + ")", ms.length
     ? table(["message", "direction", "peer", "route", "status", "payload field"],
         ms.map((m) => [m.label, m.direction, m.peer, m.route, m.status, m.field]))
-    : el("p", "meta", role + " takes part in no message.")));
+    : el("p", "meta", role + " takes part in no message."), false));
   const calls = Array.isArray(body.calls) ? body.calls : [];
   if (calls.length) out.push(panel("Routes " + role + " calls", table(["route", "request", "on"], calls.map((c) => [c.route, c.label, c.peer]))));
   if (typeof body.openapiYaml === "string") out.push(panel("OpenAPI 3.1 that " + role + " serves (YAML)", codeBox(body.openapiYaml)));
@@ -1066,6 +1072,9 @@ const TREE_INK = { protocol: "amber", definition: "amber", include: "amber", def
   role: "good", choice: "cyan", branch: "dim", par: "cyan", join: "cyan", rec: "cyan", continue: "dim",
   sessions: "cyan", message: "arrow", event: "arrow" };
 let treeGen = 0;
+// what the person had open, selected and where they had panned, so that the tree LeanFM gives back
+// after an edit opens the same way and the selected node's drawing is drawn again from the new text
+let treeKeep = null;
 function sourceBox(lean, first, last) {
   const lines = String(lean || "").split("\n");
   const a = Math.max(1, num(first)), b = Math.min(lines.length, Math.max(a, num(last) || a), a + MAX_SOURCE - 1);
@@ -1099,6 +1108,12 @@ function treePanels(body) {
   for (const n of N) byId.set(n.id, { n, kids: [], open: false, x: 0, y: 0, tx: 0, ty: 0, w: 0, seen: false });
   let root = null;
   for (const n of N) { const t = byId.get(n.id); if (Number.isInteger(n.parent) && byId.has(n.parent)) byId.get(n.parent).kids.push(t); else if (!root) root = t; }
+  // a node's key is its path of kinds and labels (a repeated sibling counted), stable across edits
+  (function keyOf(t, prefix) {
+    const seen = new Map();
+    for (const k of t.kids) { const base = k.n.kind + ":" + k.n.label, i = seen.get(base) || 0; seen.set(base, i + 1); keyOf(k, prefix + "/" + base + "#" + i); }
+    t.key = prefix;
+  })(root || { kids: [] }, "");
   const wrap = el("div");
   if (!root) { wrap.appendChild(el("p", "meta", "No tree in this result.")); return [wrap]; }
   root.open = true;
@@ -1120,7 +1135,13 @@ function treePanels(body) {
   recolor();
   const ROW = 34, PADX = 12, GAPX = 56;
   function visible() { const out = []; (function go(t, d) { t.depth = d; out.push(t); if (t.open) for (const k of t.kids) go(k, d + 1); })(root, 0); return out; }
+  function keep() {
+    if (gen !== treeGen) return;
+    const open = new Set(); for (const t of byId.values()) if (t.open) open.add(t.key);
+    treeKeep = { open, sel: sel ? sel.key : "", zoom, panX, panY };
+  }
   function layout(animate) {
+    keep();
     const vis = visible();
     ctx.font = "14px system-ui, sans-serif";
     const colW = [];
@@ -1184,10 +1205,10 @@ function treePanels(body) {
     const vis = visible(); if (!vis.length || !W) return;
     const maxX = Math.max(...vis.map((t) => t.tx + t.w)), maxY = Math.max(...vis.map((t) => t.ty + 24));
     zoom = Math.max(0.2, Math.min(1.5, Math.min((W - 48) / Math.max(1, maxX), (H - 48) / Math.max(1, maxY))));
-    panX = 24; panY = 24; draw();
+    panX = 24; panY = 24; draw(); keep();
   }
   function show(t) {
-    sel = t; draw();
+    sel = t; draw(); keep();
     const n = t.n, box = el("div");
     const head = el("div", "head"); head.appendChild(el("span", "tool", n.label)); head.appendChild(el("span", "badge other", n.kind));
     box.appendChild(head);
@@ -1219,9 +1240,11 @@ function treePanels(body) {
       acts.appendChild(b);
     }
     if (n.kind === "role") {
+      // a picked role is drawn as its state machine at once; the button draws it again
       const sm = el("button", "", "State machine of " + n.label);
       sm.addEventListener("click", () => askInto(out, "session_explore", { states: n.label }, machineView));
       acts.appendChild(sm);
+      if (IDENT.test(String(n.label))) setTimeout(() => askInto(out, "session_explore", { states: n.label }, machineView), 0);
     }
     if (n.kind === "protocol") {
       const w = el("button", "", "Walk the grammar");
@@ -1270,7 +1293,7 @@ function treePanels(body) {
     if (Math.abs(dx) + Math.abs(dy) > 4) { drag.moved = true; cv.className = "tree dragging"; }
     if (drag.moved) { panX = drag.px + dx; panY = drag.py + dy; draw(); }
   });
-  const end = () => { cv.className = "tree"; setTimeout(() => { drag = null; }, 0); };
+  const end = () => { cv.className = "tree"; if (drag && drag.moved) keep(); setTimeout(() => { drag = null; }, 0); };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointerleave", end);
   // as in an element viewer: a click on a node selects it (and draws it below); only its +N / -
   // badge at the right end opens or closes it; a double click or Enter also opens or closes it
@@ -1290,7 +1313,7 @@ function treePanels(body) {
     ev.preventDefault();
     const r = cv.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
     const z = Math.max(0.2, Math.min(4, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15)));
-    panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw();
+    panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw(); keep();
   }, { passive: false });
   cv.addEventListener("keydown", (ev) => {
     // left and right move along the tree's depth (left to the parent, right into the first child,
@@ -1314,7 +1337,15 @@ function treePanels(body) {
     layout(true);
   });
   closeB.addEventListener("click", () => { for (const t of byId.values()) t.open = false; root.open = true; layout(true); show(root); });
-  setTimeout(() => { resize(); layout(false); show(root); }, 0);
+  setTimeout(() => {
+    resize();
+    let start = root;
+    if (treeKeep) {
+      for (const t of byId.values()) { t.open = t === root || treeKeep.open.has(t.key); if (t.key === treeKeep.sel) start = t; }
+      zoom = treeKeep.zoom; panX = treeKeep.panX; panY = treeKeep.panY;
+    }
+    layout(false); show(start);
+  }, 0);
   const out = [panel("Tree: click to open, drag to pan, wheel to zoom", wrap), panel("Selected", detail), walkPanel];
   if (num(body.treeOmitted)) out.push(el("p", "more", `${num(body.treeOmitted)} more nodes left out by LeanFM`));
   return out;
@@ -1337,7 +1368,7 @@ function payloadView(r) {
 // ---- a state machine on canvas: layered from the start state, a token that moves -----------------
 // states: names; edges: {from, to, label, kind}; LeanFM gives both, the view lays them out.
 function graphView(opts) {
-  const gen = ++treeGen;
+  // (it must not bump treeGen: that stopped the tree beside it from drawing, panning and zooming)
   const wrap = el("div"), cv = el("canvas", "machine"); cv.tabIndex = 0;
   cv.setAttribute("aria-label", opts.aria || "State machine. Drag to pan, wheel to zoom, click a state to select it; its transitions are buttons below.");
   const info = el("p", "meta"), moves = el("div", "moves");

@@ -257,7 +257,7 @@ def lineCol (src : String) (pos : String.Pos.Raw) : Nat × Nat := Id.run do
   let mut line := 1
   let mut col := 1
   let mut i : String.Pos.Raw := 0
-  while i.byteIdx < pos.byteIdx && !src.atEnd i do
+  while i.byteIdx < pos.byteIdx && !String.Pos.Raw.atEnd src i do
     if String.Pos.Raw.get src i == '\n' then line := line + 1; col := 1 else col := col + 1
     i := String.Pos.Raw.next src i
   return (line, col)

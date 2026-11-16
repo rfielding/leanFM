@@ -37,12 +37,12 @@ def condFn : ParserFn := fun c s => Id.run do
   let mut i := start
   let mut depth : Nat := 0
   let mut inStr := false
-  while !input.atEnd i do
+  while !String.Pos.Raw.atEnd input i do
     let ch := String.Pos.Raw.get input i
     if inStr then
       if ch == '\\' then
         i := String.Pos.Raw.next input i
-        if input.atEnd i then break
+        if String.Pos.Raw.atEnd input i then break
       else if ch == '"' then inStr := false
     else if ch == '"' then inStr := true
     else if ch == ';' && depth == 0 then break
@@ -51,7 +51,7 @@ def condFn : ParserFn := fun c s => Id.run do
       if depth == 0 then return s.mkErrorAt "a balanced condition (this bracket is never opened)" i
       depth := depth - 1
     i := String.Pos.Raw.next input i
-  if input.atEnd i then return s.mkErrorAt "a where condition ending with ';'" start
+  if String.Pos.Raw.atEnd input i then return s.mkErrorAt "a where condition ending with ';'" start
   let text := String.Pos.Raw.extract input start i
   if text.trimAscii.isEmpty then return s.mkErrorAt "a condition after where" start
   let info := SourceInfo.original "".toRawSubstring start "".toRawSubstring i
@@ -237,7 +237,7 @@ def runWith (env : Environment) (base : TokenTable) (p : Parser) (what : String)
   match s.errorMsg with
   | some e => throw s!"line {pos.line}, column {pos.column + 1}: {e}"
   | none =>
-    if !text.atEnd s.pos then throw s!"line {pos.line}, column {pos.column + 1}: expected {what}"
+    if !String.Pos.Raw.atEnd text s.pos then throw s!"line {pos.line}, column {pos.column + 1}: expected {what}"
     return s.stxStack.back
 
 /- The tools parse with Lean's built-in token table and no environment at all. An environment
