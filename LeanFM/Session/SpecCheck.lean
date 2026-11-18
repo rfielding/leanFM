@@ -38,11 +38,18 @@ def toJson : Prop' → Json
 
 end Prop'
 
+/-- The checker's bounds for a protocol's own state graph: Global.stateGraph already stopped at
+Conform.graphMaxStates states, so the draft and its model may be as large as that graph. The public
+check_ctl tool keeps its smaller bounds for drafts a client sends. -/
+def sessionBounds : LeanFM.Logic.Bounds :=
+  { maxDraftStates := Conform.graphMaxStates, maxDraftTransitions := 20 * Conform.graphMaxStates,
+    maxModelNodes := 20 * Conform.graphMaxStates }
+
 /-- A CTL formula (the logic tools' JSON) decided over an inline task (their draft form: states,
 initial, terminals, transitions): the checker's answer, with `report` naming the path's messages in
 order. -/
 def checkDraft (name : String) (draft formula : Json) : Except String Json := do
-  let answer <- LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)])
+  let answer <- LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)]) sessionBounds
   let reading := (answer.getObjValAs? String "reading").toOption.getD ""
   -- the path in words: the messages in order, and where a lasso repeats
   let evidence := (answer.getObjVal? "evidence").toOption.getD Json.null

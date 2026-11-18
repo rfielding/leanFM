@@ -10,12 +10,14 @@
     --good: #4ade80; --bad: #f87171; --amber: #fbbf24; --cyan: #67e8f9;
     --ink-bg: #0b0f14; --ink-fg: #e5e7eb; --ink-line: #4b5563; --ink-arrow: #93c5fd;
     --ink-frame: #fbbf24; --ink-muted: #9ca3af; --ink-actFill: #1f2937; --ink-hl: #f472b6;
+    --stage: #111111; --req: #60a5fa; --rep: #4ade80; --life: #64748b;
   }
   :root[data-theme="light"] {
     --bg: #ffffff; --panel: #f4f5f7; --edge: #d5dae1; --fg: #1d2430; --dim: #5d6876;
     --good: #15803d; --bad: #b91c1c; --amber: #b45309; --cyan: #0e7490;
     --ink-bg: #ffffff; --ink-fg: #111827; --ink-line: #9ca3af; --ink-arrow: #1d4ed8;
     --ink-frame: #b45309; --ink-muted: #4b5563; --ink-actFill: #f3f4f6; --ink-hl: #be185d;
+    --stage: #fbfaf7; --req: #1d4ed8; --rep: #15803d; --life: #94a3b8;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--fg);
@@ -32,6 +34,7 @@
   ul { margin: 0; padding-left: 18px; }
   li { margin: 2px 0; }
   .issue { color: var(--bad); }
+  .y-key { color: var(--ink-arrow); } .y-str { color: var(--rep); } .y-lit { color: var(--amber); } .y-dash { color: var(--dim); }
   .scroll { overflow-x: auto; }
   .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -45,13 +48,43 @@
   button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
   input[type=range] { flex: 1; min-width: 120px; accent-color: var(--amber); }
   .pos { color: var(--dim); font: 13px ui-monospace, Menlo, monospace; }
-  .evbox { max-height: 16em; overflow-y: auto; }
-  .evlist { margin: 0; padding-left: 3em; font: 14px/1.6 ui-monospace, Menlo, monospace; }
-  .evlist li { cursor: pointer; color: var(--dim); }
-  .evlist li.mine { color: var(--fg); }
-  .evlist li.mine::marker { color: var(--amber); }
-  .evlist li.mine::before { content: "● "; color: var(--amber); }
-  .evlist li.on { background: var(--panel); outline: 2px solid var(--amber); color: var(--fg); }
+  .stage { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 10px; height: 560px; }
+  :root[data-mode="fullscreen"] .stage { height: calc(100vh - 230px); min-height: 560px; }
+  .sessbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .sessbar button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
+  .sessbar button.on { border-color: var(--amber); border-width: 2px; color: var(--amber); font-weight: 600; }
+  .evrow .ses[title], .evrow .sid[title] { cursor: pointer; text-decoration: underline dotted; }
+  .evrow > span { flex: none; }
+  .evrow .sid { color: var(--cyan); }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+  .sizebar { display: flex; align-items: center; gap: 6px; }
+  .sizebar button { font-weight: 700; min-width: 2.6em; }
+  .fsbtn { border-color: var(--ink-arrow); }
+  .fsbtn[hidden] { display: none; }
+  .seq { overflow: auto; height: 100%; min-width: 0; background: var(--stage); border-radius: 8px; }
+  .seq .spacer { position: relative; }
+  .seq, .evlog, .json { scrollbar-color: var(--life) var(--stage); }
+  .seq::-webkit-scrollbar, .evlog::-webkit-scrollbar, .json::-webkit-scrollbar { width: 12px; height: 12px; }
+  .seq::-webkit-scrollbar-thumb, .evlog::-webkit-scrollbar-thumb, .json::-webkit-scrollbar-thumb { background: var(--life); border-radius: 6px; border: 3px solid var(--stage); }
+  .seq::-webkit-scrollbar-track, .evlog::-webkit-scrollbar-track, .json::-webkit-scrollbar-track, .seq::-webkit-scrollbar-corner { background: var(--stage); }
+  .seq canvas { position: sticky; top: 0; left: 0; border-radius: 0; background: var(--stage); }
+  .side { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; height: 100%; }
+  .cap { margin: 0; font-size: 12px; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+  .evlog { position: relative; flex: 1 1 55%; min-height: 0; overflow: auto; background: var(--stage); border-radius: 8px; padding: 6px 0;
+    font: 13px/1.8 ui-monospace, "DejaVu Sans Mono", Menlo, monospace; }
+  .evrow { display: flex; gap: .9em; padding: 0 10px; white-space: nowrap; cursor: pointer; color: var(--req); }
+  .evrow .eid, .evrow .ses { color: var(--dim); }
+  .evrow .pri, .evrow .rt { color: var(--dim); }
+  .evrow.rep { color: var(--rep); } .evrow.bad { color: var(--bad); } .evrow.act { color: var(--amber); }
+  .evrow.future { opacity: .25; }
+  .evrow.on { background: rgba(251, 191, 36, .16); box-shadow: inset 3px 0 0 var(--amber); }
+  .evrow.on .eid { color: var(--amber); }
+  .evrow.mine .eid::before { content: "● "; color: var(--amber); }
+  .evrow:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+  .json { margin: 0; flex: 1 1 45%; min-height: 0; overflow: auto; background: var(--stage); border-radius: 8px;
+    padding: 8px 12px; font: 13px/1.55 ui-monospace, "DejaVu Sans Mono", Menlo, monospace; white-space: pre; color: var(--fg); }
+  .json .k { color: var(--cyan); } .json .s { color: var(--rep); } .json .n { color: var(--amber); }
+  .json .l { color: var(--bad); } .json .p { color: var(--dim); }
   canvas { display: block; width: 100%; height: 420px; background: var(--panel); border-radius: 8px; }
   .detail { font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--fg); white-space: pre-wrap; }
   .meta, .more { color: var(--dim); font-size: 13px; }
@@ -117,7 +150,7 @@
 // text nodes, SVG geometry built with createElementNS, and canvas drawing. No network.
 const MAX_SHAPES = 4000, MAX_EVENTS = 600, MAX_ITEMS = 64;
 // The editor may call only these tools, one call at a time, with text that parses as JSON.
-const EDIT_TOOLS = ["session_check", "session_simulate", "session_mdp", "session_actor", "session_dataset", "session_types", "session_explore", "session_review", "session_ctl", "session_sla", "session_instances", "session_skeleton"], MAX_EDIT_BYTES = 65536, EDIT_PAUSE_MS = 700;
+const EDIT_TOOLS = ["session_check", "session_simulate", "session_mdp", "session_actor", "session_dataset", "session_types", "session_explore", "session_review", "session_ctl", "session_sla", "session_instances", "session_skeleton", "session_openapi"], MAX_EDIT_BYTES = 65536, EDIT_PAUSE_MS = 700;
 // A dataset is generated by LeanFM and only its summary comes back; at most MAX_DATASET sessions.
 const MAX_DATASET = 10000, MAX_LABEL = 96;
 // The tree lists at most MAX_TREE nodes and shows at most MAX_SOURCE lines of a node's source.
@@ -167,7 +200,59 @@ window.addEventListener("message", (event) => {
   }
 });
 
+// ---- text size: A- and A+ scale everything the view shows (text, diagrams, canvases) with CSS zoom
+// on the view's parts, not on the host; the bar itself stays at full size. Canvases work in their own
+// unzoomed units and draw at pxRatio() so they stay sharp; pointer positions are divided by uiScale.
+// The size is kept in the view's local storage when the host allows it.
+const UI_SCALES = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
+let uiScale = 1;
+function pxRatio() { return (window.devicePixelRatio || 1) * uiScale; }
+function applyScale(s) {
+  uiScale = UI_SCALES.includes(s) ? s : 1;
+  for (const part of [editorBox, walkBox, results]) part.style.zoom = String(uiScale);
+  if (sizeLabel) sizeLabel.textContent = Math.round(uiScale * 100) + "%";
+  try { window.localStorage.setItem("leanfm-ui-scale", String(uiScale)); } catch (_) {}
+  setTimeout(reportSize, 0);
+}
+let sizeLabel = null;
+function sizeBar() {
+  const box = el("div", "sizebar"), down = el("button", "", "A-"), up = el("button", "", "A+");
+  sizeLabel = el("span", "pos", "100%");
+  down.setAttribute("aria-label", "Smaller text and drawings"); up.setAttribute("aria-label", "Larger text and drawings");
+  const stepBy = (d) => { const i = UI_SCALES.indexOf(uiScale); applyScale(UI_SCALES[Math.max(0, Math.min(UI_SCALES.length - 1, (i < 0 ? 5 : i) + d))]); };
+  down.addEventListener("click", () => stepBy(-1)); up.addEventListener("click", () => stepBy(1));
+  box.append(down, sizeLabel, up);
+  return box;
+}
+
+// ---- full screen: the host may offer to show the view in its side panel or full screen --------
+// A button asks for it (the host grants it only right after a click in the view) and asks again to
+// come back; the button shows only when the host offers full screen. The mode shown is the one the
+// host reports, never the one asked for.
+let displayMode = "inline";
+const fsBtn = el("button", "fsbtn", "Full screen");
+fsBtn.hidden = true;
+fsBtn.setAttribute("aria-label", "Show the view full screen");
+const topbar = el("div", "topbar");
+topbar.append(sizeBar(), fsBtn);
+app.insertBefore ? app.insertBefore(topbar, app.firstChild) : app.appendChild(topbar);
+try { const saved = Number(window.localStorage.getItem("leanfm-ui-scale")); if (UI_SCALES.includes(saved)) applyScale(saved); } catch (_) {}
+function setMode(m) {
+  if (m !== "inline" && m !== "fullscreen") return;
+  displayMode = m;
+  document.documentElement.dataset.mode = m;
+  fsBtn.textContent = m === "fullscreen" ? "Back to the conversation" : "Full screen";
+  fsBtn.setAttribute("aria-label", m === "fullscreen" ? "Return the view to the conversation" : "Show the view full screen");
+  reportSize();
+}
+fsBtn.addEventListener("click", async () => {
+  const want = displayMode === "fullscreen" ? "inline" : "fullscreen";
+  try { const r = await rpc("ui/request-display-mode", { mode: want }, 5000); setMode(r && r.mode); }
+  catch (_) { fsBtn.title = "The host did not change the view's size."; }
+});
 function theme(ctx) {
+  if (ctx && Array.isArray(ctx.availableDisplayModes)) fsBtn.hidden = !ctx.availableDisplayModes.includes("fullscreen");
+  if (ctx && typeof ctx.displayMode === "string") setMode(ctx.displayMode);
   if (ctx && (ctx.theme === "light" || ctx.theme === "dark")) {
     document.documentElement.dataset.theme = ctx.theme;
     if (anim) anim.recolor();
@@ -180,7 +265,7 @@ async function connect() {
     try {
       const result = await rpc("ui/initialize", {
         appInfo: { name: "leanfm-session-view", version: "1.0.0" },
-        appCapabilities: { availableDisplayModes: ["inline"] },
+        appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
         protocolVersion: "2026-01-26" }, delay);
       theme(result && result.hostContext);
       notify("ui/notifications/initialized", {});
@@ -504,7 +589,7 @@ function diagram(model, opts) {
     if (!scrolled && firstLit !== null && select.length) {
       scrolled = true;
       const y = map(firstLit);
-      setTimeout(() => { try { if (scroll.scrollHeight > scroll.clientHeight) scroll.scrollTop = Math.max(0, y - 80); else if (svg.scrollIntoView) { const r = svg.getBoundingClientRect(); window.scrollBy(0, r.top + y - 120); } } catch (_) {} }, 0);
+      setTimeout(() => { try { if (scroll.scrollHeight > scroll.clientHeight) scroll.scrollTop = Math.max(0, y - 80); else if (svg.scrollIntoView) { const r = svg.getBoundingClientRect(); window.scrollBy(0, r.top + y * uiScale - 120); } } catch (_) {} }, 0);
     }
     if (model.shapes.length > MAX_SHAPES) scroll.appendChild(el("p", "more", `${model.shapes.length - MAX_SHAPES} more shapes not drawn`));
     // the state machines of the ref frames shown as states, under the diagram
@@ -525,7 +610,117 @@ function diagram(model, opts) {
 }
 
 // ---- the event stream on canvas -------------------------------------------------------------
+// Drawn like the trace in the Kerberos video: a near-black stage, dashed slate lifelines, requests
+// in blue, replies in green, refusals in red, local events in gold, each arrow labelled with its
+// event id. Beside it the stream as a log, one monospaced row per event (id, session, from → to,
+// message, route, its prior events), and under the log the current event as JSON, as LeanFM sent it.
+// The drawing is a window on the whole stream, scrolled both ways: one row per event down, a column
+// per role across, wide enough for the longest label. While the stream plays the window follows the
+// newest event, until the user scrolls it; Play, a step or a click on the log follows again.
 let anim = null, animGen = 0;
+// The JSON text of one value, coloured by token; built from text nodes only.
+function jsonView(value) {
+  const pre = el("pre", "json");
+  const text = JSON.stringify(value, null, 2) || "null";
+  const re = /("(?:\\.|[^"\\])*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b|([{}\[\],])/g;
+  let at = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > at) pre.appendChild(document.createTextNode(text.slice(at, m.index)));
+    if (m[1] !== undefined && m[2] !== undefined) { pre.appendChild(el("span", "k", m[1])); pre.appendChild(el("span", "p", m[2])); }
+    else if (m[1] !== undefined) pre.appendChild(el("span", "s", m[1]));
+    else if (m[3] !== undefined) pre.appendChild(el("span", "n", m[3]));
+    else if (m[4] !== undefined) pre.appendChild(el("span", "l", m[4]));
+    else pre.appendChild(el("span", "p", m[5]));
+    at = re.lastIndex;
+  }
+  if (at < text.length) pre.appendChild(document.createTextNode(text.slice(at)));
+  return pre;
+}
+// ---- the stream by session: a bar with every session and its event count; picking one plays only
+// that session's events, renumbered as positions in the smaller stream (a session's links stay in it)
+// while each keeps its own id, and its JSON is shown exactly as LeanFM sent it.
+const ORIGINAL = new WeakMap();
+// The sessionId a message carries in its example fields, if any.
+function sidOf(e) { return e && e.fields && typeof e.fields === "object" && typeof e.fields.sessionId === "string" ? e.fields.sessionId : null; }
+function sessionBody(body, keepIt) {
+  const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
+  const keep = [], pos = new Map();
+  E.forEach((e, i) => { if (keepIt(e)) { pos.set(i, keep.length); keep.push(e); } });
+  const at = (x) => (Number.isInteger(x) && pos.has(x)) ? pos.get(x) : null;
+  const events = keep.map((e) => {
+    const c = Object.assign({}, e, { prior: (e.prior || []).map(at).filter((x) => x !== null), cause: at(e.cause), answers: at(e.answers) });
+    ORIGINAL.set(c, e);
+    return c;
+  });
+  return Object.assign({}, body, { events });
+}
+function streamView(body) {
+  const box = el("div"), bar = el("div", "sessbar"), stage = el("div");
+  const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
+  const counts = new Map();
+  for (const e of E) counts.set(num(e.session), (counts.get(num(e.session)) || 0) + 1);
+  const ids = [...counts.keys()].sort((a, b) => a - b);
+  const buttons = new Map(), sidButtons = new Map();
+  const sids = new Map();
+  for (const e of E) { const v = sidOf(e); if (v !== null) sids.set(v, (sids.get(v) || 0) + 1); }
+  const opts = { onSession: (s) => pick(s), onSid: (v) => pickSid(v) };
+  function lit(s, v) {
+    for (const [k, b] of buttons) b.className = (v === null && k === s) ? "on" : "";
+    for (const [k, b] of sidButtons) b.className = k === v ? "on" : "";
+    if (sel) sel.value = s === null ? "all" : String(s);
+  }
+  function pick(s) {
+    lit(s, null);
+    stage.replaceChildren(s === null ? animation(body, opts) : animation(sessionBody(body, (e) => num(e.session) === s), Object.assign({ start: 0 }, opts)));
+    reportSize();
+  }
+  // a person's messages across every run they took part in: the sessionId in the message fields
+  // (a response carries no sessionId, so it comes with the request it answers or was caused by)
+  function pickSid(v) {
+    lit(null, v);
+    const mine = new Set();
+    E.forEach((e, i) => {
+      const up = [e.answers, e.cause].filter((x) => Number.isInteger(x));
+      if (sidOf(e) === v || (sidOf(e) === null && up.some((x) => mine.has(x)))) mine.add(i);
+    });
+    const at = new Map(E.map((e, i) => [e, i]));
+    stage.replaceChildren(animation(sessionBody(body, (e) => mine.has(at.get(e))), Object.assign({ start: 0 }, opts)));
+    reportSize();
+  }
+  bar.appendChild(el("span", "cap", "Runs"));
+  let sel = null;
+  if (ids.length <= 16) {
+    const all = el("button", "on", `all · ${E.length}`); all.addEventListener("click", () => pick(null)); buttons.set(null, all); bar.appendChild(all);
+    for (const s of ids) {
+      const b = el("button", "", `#${s} · ${counts.get(s)}`);
+      b.setAttribute("aria-label", `Session ${s}, ${counts.get(s)} events`);
+      b.addEventListener("click", () => pick(s)); buttons.set(s, b); bar.appendChild(b);
+    }
+  } else {
+    sel = el("select");
+    const o = el("option", "", `all sessions · ${E.length} events`); o.value = "all"; sel.appendChild(o);
+    for (const s of ids) { const p = el("option", "", `#${s} · ${counts.get(s)} events`); p.value = String(s); sel.appendChild(p); }
+    sel.addEventListener("change", () => pick(sel.value === "all" ? null : num(sel.value)));
+    bar.appendChild(sel);
+  }
+  bar.appendChild(el("span", "pos", "click a #n in the log to pick its run"));
+  box.appendChild(bar);
+  if (sids.size) {
+    const bar2 = el("div", "sessbar");
+    bar2.appendChild(el("span", "cap", "sessionId"));
+    for (const v of [...sids.keys()].sort().slice(0, MAX_ITEMS)) {
+      const b = el("button", "", `${v} · ${sids.get(v)}`);
+      b.setAttribute("aria-label", `Messages with sessionId ${v}, ${sids.get(v)} of them`);
+      b.addEventListener("click", () => pickSid(v)); sidButtons.set(v, b); bar2.appendChild(b);
+    }
+    bar2.appendChild(el("span", "pos", "the person in the message fields; click one in the log too"));
+    box.appendChild(bar2);
+  }
+  box.appendChild(stage);
+  stage.appendChild(animation(body, opts));
+  return box;
+}
+
 function animation(body, opts) {
   opts = opts || {};
   const gen = ++animGen;
@@ -544,56 +739,108 @@ function animation(body, opts) {
   const scrub = el("input"); scrub.type = "range"; scrub.min = "0"; scrub.max = String(N - 1); scrub.step = "1";
   scrub.setAttribute("aria-label", "Position in the stream");
   // simple by default: only the newest arrows are labelled, no prior links until an event is selected
-  const detailBtn = el("button", "", "More detail");
-  detailBtn.setAttribute("aria-pressed", "false");
+  const detailBtn = el("button", "", "Less detail");
+  detailBtn.setAttribute("aria-pressed", "true");
   controls.append(play, back, fwd, speedSel, detailBtn, scrub);
   const pos = el("div", "pos");
-  const selBox = el("div", "detail");
-  wrap.append(cv, controls, pos);
-  // the events as a list beside the drawing: click one to go to it; the current one is lit
-  const rows = [];
-  if (opts.list) {
-    const ol = el("ol", "evlist");
-    E.forEach((e, i) => {
-      const touches = opts.focus && (String(e.src) === opts.focus || String(e.dst) === opts.focus);
-      const li = el("li", touches ? "mine" : "", e.act ? `${e.src}: ${e.label}` : `${e.src} → ${e.dst}: ${e.label}` + (e.status != null ? ` (${e.status})` : ""));
-      li.tabIndex = 0;
-      const go = () => { setPlay(false); p = i + 0.999; };
-      li.addEventListener("click", go);
-      li.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
-      rows.push(li); ol.appendChild(li);
-    });
-    const box = el("div", "scroll evbox"); box.appendChild(ol);
-    wrap.appendChild(panel("Events" + (opts.focus ? " (" + opts.focus + "'s marked ●)" : "") + ": click one to go to it", box));
-  }
-  wrap.appendChild(panel("Selected event", selBox));
+
+  const idx = (x) => (Number.isInteger(x) && x >= 0 && x < N) ? x : null;
+  const eid = (i) => "e" + String(num(E[i].id)).padStart(3, "0");
+  const kind = (e) => e.act ? "act" : (e.status != null && num(e.status) >= 400) ? "bad" : e.answers != null ? "rep" : "req";
+
+  // the log beside the drawing: one row per event, the current one lit, later ones faint
+  const log = el("div", "evlog");
+  log.setAttribute("role", "list");
+  log.setAttribute("aria-label", "Event log: click an event to go to it");
+  const rows = [], base = [];
+  E.forEach((e, i) => {
+    const mine = opts.focus && (String(e.src) === opts.focus || String(e.dst) === opts.focus);
+    const cls = "evrow " + kind(e) + (mine ? " mine" : "");
+    const row = el("div", cls + " future");
+    row.setAttribute("role", "listitem"); row.tabIndex = 0;
+    const pri = (e.prior || []).map(idx).filter((j) => j !== null).map(eid);
+    const ses = el("span", "ses", "#" + num(e.session));
+    if (typeof opts.onSession === "function") {
+      ses.title = "Show only session #" + num(e.session);
+      ses.addEventListener("click", (ev) => { if (ev.stopPropagation) ev.stopPropagation(); opts.onSession(num(e.session)); });
+    }
+    const sv = sidOf(ORIGINAL.get(e) || e), sid = el("span", "sid", sv === null ? "" : sv);
+    if (sv !== null && typeof opts.onSid === "function") {
+      sid.title = "Show only the messages of " + sv;
+      sid.addEventListener("click", (ev) => { if (ev.stopPropagation) ev.stopPropagation(); opts.onSid(sv); });
+    }
+    row.append(el("span", "eid", eid(i)), ses, sid,
+      el("span", "", e.act ? `${e.src}  ${e.label}` : `${e.src} → ${e.dst}  ${e.label}` + (e.status != null && num(e.status) >= 400 ? "  " + e.status : "")),
+      el("span", "pri", pri.length ? "← " + pri.join(",") : ""),
+      el("span", "rt", e.route ? String(e.route) : ""));
+    const go = () => { setPlay(false); sel = null; shown = -1; follow = true; p = i + 0.999; };
+    row.addEventListener("click", go);
+    row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    rows.push(row); base.push(cls); log.appendChild(row);
+  });
+  const jsonCap = el("p", "cap", "Event");
+  const jsonBox = el("div");
+  jsonBox.style.display = "contents";
+  const side = el("div", "side");
+  side.append(el("p", "cap", "Event log" + (opts.focus ? " (" + opts.focus + "'s marked ●)" : "") + ": click one to go to it"), log, jsonCap, jsonBox);
+  // the drawing scrolls: a spacer as big as the whole diagram, the canvas stuck to the visible part
+  const seq = el("div", "seq"), spacer = el("div", "spacer");
+  spacer.appendChild(cv); seq.appendChild(spacer);
+  seq.setAttribute("aria-label", "Interaction diagram of the stream; scroll to see all of it");
+  const stage = el("div", "stage");
+  stage.append(seq, side);
+  wrap.append(stage, controls, pos);
 
   const ctx = cv.getContext("2d");
-  let W = 0, H = 0, colors = {};
+  let W = 0, H = 0, colors = {}, sx = 0, sy = 0, follow = true, setTop = -1, gap = 200;
   function recolor() {
     const css = getComputedStyle(document.documentElement);
-    for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan"]) colors[k] = css.getPropertyValue("--" + k).trim();
+    for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan", "bad", "stage", "req", "rep", "life"]) colors[k] = css.getPropertyValue("--" + k).trim();
   }
   recolor();
-  function resize() {
-    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-    W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const MARGIN = 70;
+  // the gap between lifelines: room for the longest label the current detail level writes
+  function measure() {
+    ctx.font = MONO;
+    let w = 0;
+    for (let i = 0; i < N; i++) if (!E[i].act) w = Math.max(w, num(ctx.measureText(label(E[i], i)).width), num(ctx.measureText(under(E[i])).width));
+    gap = Math.max(170, Math.min(460, w + 40));
   }
-  if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(cv);
+  const fullW = () => Math.max(W, 2 * MARGIN + Math.max(0, roles.length - 1) * gap);
+  const fullH = () => TOP + N * ROW() + 40;
+  function layout() {
+    spacer.style.width = Math.round(fullW()) + "px"; spacer.style.height = Math.round(fullH()) + "px";
+  }
+  function resize() {
+    const r = seq.getBoundingClientRect(), dpr = pxRatio();
+    W = num(seq.clientWidth) || r.width / uiScale; H = num(seq.clientHeight) || r.height / uiScale;
+    cv.style.width = W + "px"; cv.style.height = H + "px";
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    measure(); layout();
+  }
+  if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(seq);
+  // a scroll the view did not make is the user's: stop following until asked again
+  seq.addEventListener("scroll", () => {
+    if (setTop >= 0 && Math.abs(num(seq.scrollTop) - setTop) > 2) follow = false;
+  });
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let p = opts.start != null ? Math.min(N - 1, num(opts.start)) + 0.999 : Math.min(N - 1, 12), playing = !reduce && !opts.paused, speed = 4, sel = null, detail = false;
-  const HEAD = 48, LABELLED = 4;
-  const ROW = () => detail ? 30 : 42;
-  const xs = () => { const m = Math.min(80, W * 0.12); return roles.map((_, i) => roles.length === 1 ? W / 2 : m + i * (W - 2 * m) / (roles.length - 1)); };
+  let p = opts.start != null ? Math.min(N - 1, num(opts.start)) + 0.999 : Math.min(N - 1, 12), playing = !reduce && !opts.paused, speed = 4, sel = null, detail = true;
+  const HEAD = 50, TOP = HEAD + 26, LABELLED = 12;
+  const ROW = () => detail ? 48 : 40;
+  const MONO = "13px ui-monospace, 'DejaVu Sans Mono', Menlo, monospace";
+  // positions on the screen: the whole diagram's coordinates less the scroll
+  const xs = () => { const w = fullW(); return roles.map((_, i) => (roles.length === 1 ? w / 2 : MARGIN + i * (w - 2 * MARGIN) / (roles.length - 1)) - sx); };
   const xOf = (X, r) => { const i = roles.indexOf(String(r)); return i < 0 ? 0 : X[i]; };
-  const nowY = () => H - 26;
-  const yOf = (i) => nowY() - (p - i) * ROW();
-  const hue = (s) => (num(s) * 137.508) % 360;
-  const col = (s, a) => `hsla(${hue(s)}, 70%, ${document.documentElement.dataset.theme === "light" ? 38 : 68}%, ${a === undefined ? 1 : a})`;
-  const idx = (x) => (Number.isInteger(x) && x >= 0 && x < N) ? x : null;
-  const label = (e) => detail ? String(e.label) + (e.route ? " · " + e.route : "") + (e.status != null ? " · " + e.status : "")
-    : String(e.label) + (e.status != null && num(e.status) >= 400 ? " · " + e.status : "");
+  const yOf = (i) => TOP + i * ROW() - sy;
+  const tint = (e) => ({ act: colors.amber, bad: colors.bad, rep: colors.rep, req: colors.req })[kind(e)];
+  // an arrow's words in two lines, so lifelines need only half the room a single long label needs:
+  // above it the event id and message, below it (with more detail) the route and status
+  const label = (e, i) => eid(i) + " " + String(e.label) + (!detail && e.status != null && num(e.status) >= 400 ? " · " + e.status : "");
+  const under = (e) => detail ? [e.route, e.status].filter((x) => x != null && x !== "").map(String).join(" · ") : "";
+  function haloText(t, x, y) {
+    ctx.lineWidth = 4; ctx.strokeStyle = colors.stage; ctx.lineJoin = "round"; ctx.strokeText(t, x, y); ctx.fillText(t, x, y);
+  }
   function ancestors(id) {
     const out = new Set(), stack = (E[id].prior || []).map(idx).filter((x) => x !== null);
     while (stack.length) { const a = stack.pop(); if (!out.has(a)) { out.add(a); for (const q of (E[a].prior || [])) { const j = idx(q); if (j !== null) stack.push(j); } } }
@@ -601,15 +848,20 @@ function animation(body, opts) {
   }
   function draw() {
     if (!W) return;
+    if (follow) {
+      const top = Math.max(0, Math.min(fullH() - H, TOP + p * ROW() - H + 70));
+      seq.scrollTop = top; setTop = num(seq.scrollTop) || top;
+    }
+    sx = num(seq.scrollLeft); sy = num(seq.scrollTop);
     const X = xs();
-    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = colors.stage; ctx.fillRect(0, 0, W, H);
     const k = Math.floor(p), frac = p - k;
-    const lo = Math.max(0, Math.floor(p - (nowY() - HEAD) / ROW()) - 1);
+    const lo = Math.max(0, Math.floor((sy - TOP) / ROW()) - 1), hi = Math.min(k, Math.ceil((sy + H - TOP) / ROW()) + 1);
     const anc = sel !== null ? ancestors(sel) : null;
-    ctx.strokeStyle = colors.edge; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = colors.life; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
     for (const x of X) { ctx.beginPath(); ctx.moveTo(x, HEAD); ctx.lineTo(x, H); ctx.stroke(); }
     ctx.setLineDash([]);
-    for (let i = lo; i <= k; i++) {
+    for (let i = lo; i <= hi; i++) {
       const e = E[i];
       if (!detail && !(anc && (i === sel || anc.has(i)))) continue;  // simple: only the selected event's history
       for (const q of (e.prior || [])) {
@@ -617,11 +869,11 @@ function animation(body, opts) {
         const pa = E[a];
         const shared = [e.src, e.dst].find((r) => r === pa.src || r === pa.dst);
         const hot = anc && (i === sel || anc.has(i)) && anc.has(a);
-        ctx.strokeStyle = hot ? colors.amber : col(e.session, 0.35); ctx.lineWidth = hot ? 3 : 1.5;
+        ctx.strokeStyle = hot ? colors.amber : colors.life; ctx.globalAlpha = hot ? 1 : 0.6; ctx.lineWidth = hot ? 3 : 1.5;
         ctx.beginPath();
         if (shared !== undefined) { const x = xOf(X, shared) + ((num(e.session) % 5) - 2) * 3; ctx.moveTo(x, yOf(a)); ctx.lineTo(x, yOf(i)); }
         else { ctx.moveTo((xOf(X, pa.src) + xOf(X, pa.dst)) / 2, yOf(a)); ctx.lineTo((xOf(X, e.src) + xOf(X, e.dst)) / 2, yOf(i)); }
-        ctx.stroke();
+        ctx.stroke(); ctx.globalAlpha = 1;
       }
     }
     if (sel !== null && sel <= k) {
@@ -632,62 +884,60 @@ function animation(body, opts) {
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 - 40, y1, x2 - 40, y2, x2, y2); ctx.stroke(); ctx.setLineDash([]);
       }
     }
-    ctx.font = "13px system-ui, sans-serif"; ctx.textBaseline = "alphabetic";
-    for (let i = lo; i <= k && i < N; i++) {
+    ctx.font = MONO; ctx.textBaseline = "alphabetic";
+    for (let i = lo; i <= hi && i < N; i++) {
       const e = E[i], y = yOf(i);
       if (y < HEAD - ROW()) continue;
       const recent = detail || k - i < LABELLED || i === sel || (anc && anc.has(i));
-      ctx.globalAlpha = recent ? 1 : 0.35;
-      const c = i === sel ? colors.amber : col(e.session);
+      const c = i === sel ? colors.amber : tint(e);
       const t = i === k && !reduce ? Math.min(1, frac * 1.6) : 1, ease = 1 - Math.pow(1 - t, 3);
       if (e.act) {
-        const x = xOf(X, e.src), w = ctx.measureText(String(e.label)).width + 20;
-        ctx.globalAlpha = 0.3 + 0.7 * ease; ctx.fillStyle = colors.panel; ctx.strokeStyle = c; ctx.lineWidth = i === sel ? 3 : 1.5;
+        const x = xOf(X, e.src), w = ctx.measureText(label(e, i)).width + 20;
+        ctx.globalAlpha = (recent ? 1 : 0.4) * (0.3 + 0.7 * ease); ctx.fillStyle = colors.stage; ctx.strokeStyle = c; ctx.lineWidth = i === sel ? 3 : 1.5;
         ctx.beginPath(); ctx.rect(x - w / 2, y - 12, w, 22); ctx.fill(); ctx.stroke();
-        if (recent) { ctx.fillStyle = colors.fg; ctx.textAlign = "center"; ctx.fillText(String(e.label), x, y + 4); }
+        if (recent) { ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(label(e, i), x, y + 4); }
         ctx.globalAlpha = 1;
       } else {
         const x1 = xOf(X, e.src), x2 = xOf(X, e.dst), dir = Math.sign(x2 - x1) || 1, xe = x1 + (x2 - x1) * ease;
-        ctx.globalAlpha = recent ? 1 : 0.35;
-        ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3.5 : recent ? 2.5 : 2;
+        ctx.globalAlpha = recent ? 1 : 0.4;
+        ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3.5 : 2.5;
         ctx.setLineDash(e.answers != null ? [7, 5] : []);
-        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 6, y); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(xe, y); ctx.lineTo(xe - dir * 10, y - 5); ctx.lineTo(xe - dir * 10, y + 5); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 8, y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(xe, y); ctx.lineTo(xe - dir * 12, y - 6); ctx.lineTo(xe - dir * 12, y + 6); ctx.closePath(); ctx.fill();
         if (recent) {
-          ctx.globalAlpha = Math.max(0.25, ease); ctx.fillStyle = colors.fg; ctx.textAlign = "center";
-          ctx.fillText(label(e), (x1 + x2) / 2, y - 6);
+          ctx.globalAlpha = Math.max(0.25, ease); ctx.fillStyle = c; ctx.textAlign = "center";
+          haloText(label(e, i), (x1 + x2) / 2, y - 7);
+          const u = under(e);
+          if (u) haloText(u, (x1 + x2) / 2, y + 18);
         }
         ctx.globalAlpha = 1;
       }
-      if (detail) { ctx.textAlign = "left"; ctx.fillStyle = col(e.session); ctx.fillText("#" + num(e.session), 6, y + 4); }
+      if (detail) {  // the session number stays at the left edge, on its own ground, as the drawing scrolls
+        const tag = "#" + num(e.session), tw = num(ctx.measureText(tag).width);
+        ctx.textAlign = "left"; ctx.fillStyle = colors.stage; ctx.fillRect(2, y - 9, tw + 8, 18);
+        ctx.fillStyle = colors.dim; ctx.fillText(tag, 6, y + 4);
+      }
     }
-    ctx.fillStyle = colors.panel; ctx.fillRect(0, 0, W, HEAD);
-    ctx.font = "600 14px system-ui, sans-serif"; ctx.textAlign = "center";
-    X.forEach((x, i) => { ctx.fillStyle = roles[i] === opts.focus ? colors.amber : colors.fg; ctx.fillText(roles[i], x, 30); });
+    ctx.fillStyle = colors.stage; ctx.fillRect(0, 0, W, HEAD);
+    ctx.font = "600 16px 'Noto Serif', 'DejaVu Serif', Georgia, serif"; ctx.textAlign = "center";
+    X.forEach((x, i) => { ctx.fillStyle = roles[i] === opts.focus ? colors.amber : colors.fg; ctx.fillText(roles[i], x, 32); });
   }
-  let shown = -1;
+  let shown = -1, lit = -1;
   function panelUpdate() {
     const k = Math.floor(p);
     scrub.value = String(k);
-    pos.textContent = `event ${k + 1} of ${N} · ${num(E[k].time)} ${body.timeUnit || "steps"}`;
-    const id = sel !== null ? sel : k;
-    if (rows.length && rows.lit !== k) {
-      if (rows.lit != null && rows[rows.lit]) rows[rows.lit].classList.remove("on");
-      if (rows[k]) { rows[k].classList.add("on"); rows[k].scrollIntoView && rows[k].scrollIntoView({ block: "nearest" }); }
-      rows.lit = k;
+    pos.textContent = `${eid(k)} · event ${k + 1} of ${N} · ${num(E[k].time)} ${body.timeUnit || "steps"}`;
+    if (lit !== k) {
+      rows.forEach((row, i) => { row.className = base[i] + (i === k ? " on" : i > k ? " future" : ""); });
+      const row = rows[k], top = row && row.offsetTop;
+      if (Number.isFinite(top) && Number.isFinite(log.clientHeight)) log.scrollTop = Math.max(0, top - log.clientHeight / 2);
+      lit = k;
     }
+    const id = sel !== null ? sel : k;
     if (id === shown) return;
     shown = id;
-    const e = E[id];
-    const ref = (x) => { const j = idx(x); return j === null ? "—" : `${j} (${E[j].label})`; };
-    selBox.textContent = [
-      `event    ${num(e.id)} at ${num(e.time)} ${body.timeUnit || "steps"}, session #${num(e.session)}`,
-      `message  ${e.msgId ? e.msgId + ": " : ""}${e.label}`,
-      `from→to  ${e.act ? e.src + " (event)" : e.src + " → " + e.dst}`,
-      `route    ${e.route || "—"}   status ${e.status != null ? e.status : "—"}`,
-      `prior    ${(e.prior || []).length ? (e.prior || []).map(ref).join(", ") : "none: first in its session"}`,
-      `cause    ${ref(e.cause)}`,
-      `answers  ${ref(e.answers)}`].join("\n");
+    jsonCap.textContent = (sel !== null ? "Selected event " : "Event ") + eid(id) + " as JSON";
+    jsonBox.replaceChildren(jsonView(ORIGINAL.get(E[id]) || E[id]));
   }
   let prev = performance.now();
   function tick(now) {
@@ -698,18 +948,19 @@ function animation(body, opts) {
     requestAnimationFrame(tick);
   }
   const setPlay = (v) => { playing = v; play.textContent = v ? "Pause" : "Play"; };
-  play.addEventListener("click", () => { if (!playing && p >= N - 1) p = 0; setPlay(!playing); });
-  const step = (d) => { setPlay(false); p = Math.max(0, Math.min(N - 1, Math.floor(p) + d)) + 0.999; };
+  play.addEventListener("click", () => { if (!playing && p >= N - 1) p = 0; follow = true; setPlay(!playing); });
+  const step = (d) => { setPlay(false); follow = true; p = Math.max(0, Math.min(N - 1, Math.floor(p) + d)) + 0.999; };
   back.addEventListener("click", () => step(-1));
   fwd.addEventListener("click", () => step(1));
   speedSel.addEventListener("change", () => { speed = num(speedSel.value) || 4; });
   detailBtn.addEventListener("click", () => {
     detail = !detail; detailBtn.textContent = detail ? "Less detail" : "More detail";
     detailBtn.setAttribute("aria-pressed", String(detail));
+    measure(); layout();
   });
-  scrub.addEventListener("input", () => { setPlay(false); p = num(scrub.value) + 0.999; });
+  scrub.addEventListener("input", () => { setPlay(false); follow = true; p = num(scrub.value) + 0.999; });
   cv.addEventListener("click", (ev) => {
-    const r = cv.getBoundingClientRect(), y = ev.clientY - r.top, i = Math.round(p - (nowY() - y) / ROW());
+    const r = cv.getBoundingClientRect(), y = (ev.clientY - r.top) / uiScale, i = Math.round((y + sy - TOP) / ROW());
     if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW() / 2) { sel = sel === i ? null : i; shown = -1; }
   });
   cv.addEventListener("keydown", (ev) => {
@@ -790,7 +1041,7 @@ function render(body) {
     }
     parts.push(panel("Deadline monitoring", ul));
   }
-  if (Array.isArray(body.events)) parts.push(panel("Event stream", animation(body)));
+  if (Array.isArray(body.events)) parts.push(panel("Event stream", streamView(body)));
   if (body.tool === "session_actor") parts.push(...actorPanels(body));
   if (body.tool === "session_dataset") parts.push(...datasetPanels(body));
   if (body.tool === "session_explore" && Array.isArray(body.tree)) parts.push(...treePanels(body));
@@ -820,7 +1071,11 @@ function render(body) {
     if (props.length) box.appendChild(table(["formula", "for", "verdict", "why"], props.slice(0, MAX_ITEMS).map((v) => [JSON.stringify(v.formula), v.scope, v.verdict, v.reading])));
     parts.push(panel("Instances interleaved", box));
   }
-  if (body.tool === "session_openapi" && typeof body.code === "string") parts.push(panel("OpenAPI 3.1 for " + String(body.role || ""), codeBox(body.code)));
+  const oaTag = (lang) => lang === "yaml" ? " (YAML)" : lang === "json" ? " (JSON)" : "";
+  if (body.tool === "session_openapi" && typeof body.code === "string") parts.push(panel("OpenAPI 3.1 for " + String(body.role || "") + oaTag(body.language), codeBox(body.code, body.language)));
+  if (body.tool === "session_openapi" && Array.isArray(body.documents))
+    for (const d of body.documents.slice(0, MAX_ITEMS))
+      if (d && typeof d.code === "string") parts.push(panel("OpenAPI 3.1 that " + String(d.role || "") + " serves" + oaTag(d.language) + ": " + String(d.reading || ""), codeBox(d.code, d.language)));
   if (body.diagram) parts.push(panel(body.diagramKind === "mdp" ? "Decision process under the supplied policy"
     : body.tool === "session_actor" ? "Sequence diagram: only the steps " + String(body.role) + " takes part in"
     : "Sequence diagram, generated from the protocol", diagram(body.diagram)));
@@ -939,6 +1194,7 @@ function schedule() {
   timer = setTimeout(() => {
     const v = currentView();
     if (v === "walk") { stepWalk(); return; }
+    if (v === "openapi") { openapiAll(); return; }
     if (!v) { say("Edited. Click Dataset to generate it again from the new text."); return; }
     run(...v);
   }, EDIT_PAUSE_MS);
@@ -969,6 +1225,92 @@ async function run(name, extra) {
   }
 }
 
+// Animate: LeanFM runs ten sessions with a seed. A role that only takes part on some branches (the
+// Bot in GoServer plays only if the game has a turn) is missing from some seeds' streams, so the view
+// tries up to ANIM_TRIES seeds and keeps the first stream in which every role sends or receives; the
+// reading says which seed and how many were tried. Every stream shown is still LeanFM's, unaltered.
+const ANIM_TRIES = 8;
+function everyRoleIn(body) {
+  const seen = new Set();
+  for (const e of (Array.isArray(body.events) ? body.events : [])) { seen.add(String(e.src)); if (!e.act) seen.add(String(e.dst)); }
+  return (Array.isArray(body.roles) ? body.roles : []).every((r) => seen.has(String(r)));
+}
+async function animate() {
+  if (!text) return;
+  if (!canCall) { say("This host does not let the view call tools; ask Claude to run session_simulate on the protocol.", "bad"); return; }
+  const source = text.value;
+  if (!source.trim()) { say("The protocol is empty.", "bad"); return; }
+  if (new Blob([source]).size > MAX_EDIT_BYTES) { say("The protocol is over 64 KiB.", "bad"); return; }
+  if (inFlight) { again = ["session_simulate", { instances: 10, seed: Date.now() % 100000 }]; return; }
+  inFlight = true; say("Generating…");
+  const base = Date.now() % 100000;
+  try {
+    let body = null, tried = 0, all = false;
+    while (tried < ANIM_TRIES) {
+      const seed = (base + tried * 7919) % 100000;
+      tried++;
+      const result = await rpc("tools/call", { name: "session_simulate", arguments: Object.assign({ lean: source }, currentOverlay ? { overlay: currentOverlay } : {}, { instances: 10, seed }) }, 30000);
+      if (result && result.isError) {
+        const b = result.structuredContent;
+        say(String((b && b.reason) || "LeanFM rejected the protocol."), "bad"); rebuildNav(navRoles); return;
+      }
+      const b = result && result.structuredContent;
+      if (!b || typeof b !== "object") break;
+      body = b; animSeed = seed;
+      if (everyRoleIn(b)) { all = true; break; }
+    }
+    if (!body) { say("The host returned no result.", "bad"); return; }
+    const note = all ? (tried > 1 ? ` Seed ${animSeed} is the first of ${tried} seeds tried in which every role takes part.` : "")
+      : ` In none of the ${tried} seeds tried did every role take part.`;
+    body.reading = String(body.reading || "") + note;
+    render(body); say(String(body.reading), "good");
+  } catch (e) {
+    if (e && (e.code === -32601 || e.message === "timeout")) canCall = false;
+    say(canCall ? "The run failed: " + String((e && e.message) || e) : "This host does not let the view call tools; ask Claude to run session_simulate on the protocol.", "bad");
+  } finally {
+    inFlight = false;
+    if (again) { const [n, x] = again; again = null; run(n, x); }
+  }
+}
+
+// OpenAPI: LeanFM answers one role at a time, so the view asks for every role and shows the
+// documents of the roles that serve at least one routed request, each as LeanFM wrote it.
+async function openapiAll() {
+  if (!text) return;
+  if (!canCall) { say("This host does not let the view call tools; ask Claude to run session_openapi on the protocol.", "bad"); return; }
+  const source = text.value;
+  if (!source.trim()) { say("The protocol is empty.", "bad"); return; }
+  if (new Blob([source]).size > MAX_EDIT_BYTES) { say("The protocol is over 64 KiB.", "bad"); return; }
+  if (inFlight) return;
+  const roles = navRoles.filter((r) => IDENT_NAV.test(r)).slice(0, MAX_ITEMS);
+  if (!roles.length) { say("No roles to ask about yet; check the protocol first.", "bad"); return; }
+  inFlight = true; say("Generating…");
+  try {
+    const documents = [], none = [];
+    let name = "";
+    for (const role of roles) {
+      const result = await rpc("tools/call", { name: "session_openapi", arguments: { lean: source, role } }, 30000);
+      const b = result && result.structuredContent;
+      if (result && result.isError) { say(String((b && b.reason) || "LeanFM rejected the protocol."), "bad"); rebuildNav(navRoles); return; }
+      if (!b || typeof b !== "object") continue;
+      name = String(b.name || name);
+      const ops = b.openapi && b.openapi.paths && typeof b.openapi.paths === "object" ? Object.keys(b.openapi.paths).length : (/[1-9]\d* operation/.test(String(b.reading)) ? 1 : 0);
+      if (ops > 0) documents.push({ role, code: String(b.code || ""), language: String(b.language || ""), reading: String(b.reading || "").replace(/^[^:]*: /, "") });
+      else none.push(role);
+    }
+    const reading = `${name}: OpenAPI 3.1 for ${documents.length ? documents.map((d) => d.role).join(", ") : "no role"}` +
+      (none.length ? `; ${none.join(", ")} serve${none.length === 1 ? "s" : ""} no routed request` : "");
+    render({ tool: "session_openapi", verdict: documents.length ? "generated" : "answered", reading, documents, roles: navRoles });
+    say(reading, "good");
+  } catch (e) {
+    if (e && (e.code === -32601 || e.message === "timeout")) canCall = false;
+    say(canCall ? "The request failed: " + String((e && e.message) || e) : "This host does not let the view call tools; ask Claude to run session_openapi on the protocol.", "bad");
+  } finally {
+    inFlight = false;
+    if (again) { const [n, x] = again; again = null; run(n, x); }
+  }
+}
+
 // ---- navigation: every view of the protocol, one click each ---------------------------------
 // Each button asks LeanFM for that view of the text in the editor; nothing here derives a view.
 // The button of the view being shown is lit, and an edit regenerates that view.
@@ -992,13 +1334,14 @@ function currentView() {
   if (k === "instances") return ["session_instances"];
   if (k === "ctl") { const f = parsedFormula(); return f ? ["session_ctl", { formula: f }] : ["session_check"]; }
   if (k === "walk") return "walk";
+  if (k === "openapi") return "openapi";
   if (k === "dataset") return null;
   return ["session_check"];
 }
 function syncNav(body) {
   const t = String(body.tool || ""), was = navActive;
   const keys = { session_explore: "tree", session_dataset: "dataset", session_types: "types", session_check: "whole", session_diagram: "whole",
-    session_review: "review", session_simulate: "animate", session_mdp: "mdp", session_sla: "sla", session_instances: "instances", session_ctl: "ctl" };
+    session_review: "review", session_simulate: "animate", session_openapi: "openapi", session_mdp: "mdp", session_sla: "sla", session_instances: "instances", session_ctl: "ctl" };
   if (t === "session_actor" && typeof body.role === "string") navActive = "role:" + body.role;
   else if (t === "session_skeleton") navActive = "skel:" + String(body.language || "python");
   else if (keys[t]) navActive = keys[t];
@@ -1020,7 +1363,8 @@ function rebuildNav(roles) {
     btn("whole", "Whole protocol", "Check the whole protocol: its sequence diagram and every role's local type", () => run("session_check")),
     btn("tree", "Tree", "Browse the protocol as a tree: included protocols, branches, loops, sessions, messages and roles", () => run("session_explore")),
     btn("review", "Review", "Run every check that applies and list findings, each with an edit to try", () => run("session_review")),
-    btn("types", "Protobuf", "The message types and envelope as protobuf, and the session as a Lean module", () => run("session_types")) ];
+    btn("types", "Protobuf", "The message types and envelope as protobuf, and the session as a Lean module", () => run("session_types")),
+    btn("openapi", "OpenAPI", "The HTTP interface each role serves, as OpenAPI 3.1: one operation per route, with its request and responses", () => openapiAll()) ];
   const roleBtns = [];
   for (const r of navRoles)
     if (IDENT_NAV.test(r))
@@ -1034,7 +1378,7 @@ function rebuildNav(roles) {
     count.value = String(datasetSize);
   });
   const behaviour = [
-    btn("animate", "Animate 10 sessions", "Run ten sessions and animate their event stream", () => { animSeed = Date.now() % 100000; run("session_simulate", { instances: 10, seed: animSeed }); }),
+    btn("animate", "Animate 10 sessions", "Run ten sessions and animate their event stream", () => { animate(); }),
     btn("walk", "Walk through", "Walk through one session step by step, choosing each message", () => { walkEvents = []; stepWalk(); }),
     btn("mdp", "Decision process", "The session as a decision tree or Markov chain under its probabilities: outcomes, expected visits and balances", () => run("session_mdp")),
     btn("dataset", "Dataset", "Generate this many sessions and chart how they are distributed",
@@ -1072,13 +1416,76 @@ function drawPropForm() {
   area.addEventListener("input", () => { ctlFormula = area.value; });
   decide.addEventListener("click", () => { ctlFormula = area.value; runCtl(); });
   const line = el("div", "controls"); line.append(sel, decide);
-  form.append(el("p", "meta", 'JSON CTL over {"after": "Label"} (a message or event just happened) and "terminal" (the session ended). In the Tree, a message has buttons that fill this in.'), area, line);
+  form.append(propBuilder(area), el("p", "meta", 'JSON CTL over {"after": "Label"} (a message or event just happened) and "terminal" (the session ended). In the Tree, a message has buttons that fill this in.'), area, line);
   propBox.replaceChildren(form);
+}
+// Properties built from the protocol's own messages: a pattern and one or two message labels fill in
+// the formula, which LeanFM decides. The labels are read from the protocol text in the editor (each
+// "Label from A to B" and "Label at A"); only the list to choose from comes from the text.
+const PROP_PATTERNS = [
+  ["A can happen", false, (a) => ({ EF: { after: a } })],
+  ["A always happens", false, (a) => ({ AF: { after: a } })],
+  ["A never happens", false, (a) => ({ AG: { not: { after: a } } })],
+  ["after A, the session can still end", false, (a) => ({ AG: { implies: [{ after: a }, { EF: "terminal" }] } })],
+  ["after A, B always follows", true, (a, b) => ({ AG: { implies: [{ after: a }, { AF: { after: b } }] } })],
+  ["after A, B can still happen", true, (a, b) => ({ AG: { implies: [{ after: a }, { EF: { after: b } }] } })],
+  ["after A, B never happens", true, (a, b) => ({ AG: { implies: [{ after: a }, { AG: { not: { after: b } } }] } })],
+  ["B only after A (never before it)", true, (a, b) => ({ not: { EU: [{ not: { after: a } }, { after: b }] } })] ];
+function protocolLabels() {
+  const src = text ? String(text.value) : "", seen = new Set();
+  const re = /(?:^|[;{}\s])(?:[A-Za-z_][A-Za-z0-9_]*\s*:\s*)?([A-Z][A-Za-z0-9_]*)\s+(?:from\s+[A-Za-z_][A-Za-z0-9_]*\s+to\s+[A-Za-z_][A-Za-z0-9_]*|at\s+[A-Za-z_][A-Za-z0-9_]*\s*;)/g;
+  let m;
+  while ((m = re.exec(src)) !== null && seen.size < 400) seen.add(m[1]);
+  return [...seen].sort();
+}
+function propBuilder(area) {
+  const box = el("div", "controls"), labels = protocolLabels();
+  const pat = el("select"), a = el("select"), b = el("select"), go = el("button", "", "Decide this");
+  pat.setAttribute("aria-label", "The kind of property"); a.setAttribute("aria-label", "Message A"); b.setAttribute("aria-label", "Message B");
+  PROP_PATTERNS.forEach(([name], i) => { const o = el("option", "", name); o.value = String(i); pat.appendChild(o); });
+  for (const l of labels) { const o1 = el("option", "", l); o1.value = l; a.appendChild(o1); const o2 = el("option", "", l); o2.value = l; b.appendChild(o2); }
+  if (labels.length > 1) b.value = labels[1];
+  const shape = () => { const p = PROP_PATTERNS[num(pat.value)]; b.hidden = !(p && p[1]); };
+  pat.addEventListener("change", shape); shape();
+  go.addEventListener("click", () => {
+    const p = PROP_PATTERNS[num(pat.value)];
+    if (!p || !a.value || (p[1] && !b.value)) { say("Pick the messages first.", "bad"); return; }
+    area.value = ctlFormula = JSON.stringify(p[2](a.value, b.value));
+    runCtl();
+  });
+  if (!labels.length) { box.append(el("span", "meta", "No messages found in the protocol text to build a property from.")); return box; }
+  box.append(el("span", "cap", "Property"), pat, el("span", "meta", "A"), a, el("span", "meta", "B"), b, go);
+  return box;
 }
 
 // ---- code: shown as text, with a button that selects it (and copies it where the host allows) --
-function codeBox(text) {
-  const box = el("div"), pre = el("pre", "", text), tools = el("div", "code-tools"), sel = el("button", "", "Select all");
+// YAML coloured line by line: keys, quoted strings, numbers and booleans, list dashes. Spans and text
+// nodes only (no HTML is parsed), so nothing in a label or route can change the page.
+function yamlPre(text) {
+  const pre = el("pre");
+  const span = (cls, t) => { const s = document.createElement("span"); s.className = cls; s.textContent = t; return s; };
+  const value = (v) => {
+    const t = v.trim();
+    if (!t) return document.createTextNode(v);
+    if (/^".*"$/.test(t)) return span("y-str", v);
+    if (/^(-?\d+(\.\d+)?|true|false|null|\{\}|\[\])$/.test(t)) return span("y-lit", v);
+    return document.createTextNode(v);
+  };
+  for (const line of String(text).split("\n")) {
+    const m = /^(\s*)(- )?("(?:[^"\\]|\\.)*"|[A-Za-z_][\w$.-]*|\$ref)(:)(.*)$/.exec(line);
+    const dash = /^(\s*)(- )(.*)$/.exec(line);
+    if (m) {
+      pre.append(document.createTextNode(m[1]));
+      if (m[2]) pre.append(span("y-dash", m[2]));
+      pre.append(span("y-key", m[3]), document.createTextNode(m[4]), value(m[5]));
+    } else if (dash) pre.append(document.createTextNode(dash[1]), span("y-dash", dash[2]), value(dash[3]));
+    else pre.append(document.createTextNode(line));
+    pre.append(document.createTextNode("\n"));
+  }
+  return pre;
+}
+function codeBox(text, language) {
+  const box = el("div"), pre = language === "yaml" ? yamlPre(text) : el("pre", "", text), tools = el("div", "code-tools"), sel = el("button", "", "Select all");
   sel.addEventListener("click", () => {
     const range = document.createRange(); range.selectNodeContents(pre);
     const s = window.getSelection(); s.removeAllRanges(); s.addRange(range);
@@ -1121,7 +1528,7 @@ function actorPanels(body) {
     : el("p", "meta", role + " takes part in no message."), false));
   const calls = Array.isArray(body.calls) ? body.calls : [];
   if (calls.length) out.push(panel("Routes " + role + " calls", table(["route", "request", "on"], calls.map((c) => [c.route, c.label, c.peer]))));
-  if (typeof body.openapiYaml === "string") out.push(panel("OpenAPI 3.1 that " + role + " serves (YAML)", codeBox(body.openapiYaml)));
+  if (typeof body.openapiYaml === "string") out.push(panel("OpenAPI 3.1 that " + role + " serves (YAML)", codeBox(body.openapiYaml, "yaml")));
   else if (body.openapi && typeof body.openapi.error === "string") out.push(panel("OpenAPI", el("p", "err", body.openapi.error)));
   if (typeof body.proto === "string") out.push(panel("Payloads (protobuf; " + role + "'s messages keep these field numbers)", codeBox(body.proto)));
   else if (body.proto && typeof body.proto.error === "string") out.push(panel("Payloads", el("p", "err", body.proto.error)));
@@ -1523,7 +1930,7 @@ function graphView(opts) {
   }
   function draw() {
     if (!W) return;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = pxRatio();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = colors.bg || "#000"; ctx.fillRect(0, 0, W, H);
     ctx.translate(panX, panY); ctx.scale(zoom, zoom);
@@ -1561,7 +1968,7 @@ function graphView(opts) {
     info.textContent = `${states.length} states, ${edges.length} transitions` + (hidden > 0 ? `; showing the ${pos.size} within ${FOCUS_RADIUS} steps of ${cur} (${hidden} hidden)` : "") +
       (cur !== null ? `; current: ${opts.nameOf ? opts.nameOf(cur) : cur}` + (finals.has(cur) ? " (may end here)" : "") : "");
   }
-  function resize() { const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); draw(); }
+  function resize() { const r = cv.getBoundingClientRect(), dpr = pxRatio(); W = r.width / uiScale; H = r.height / uiScale; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); draw(); }
   if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(cv);
   function listMoves() {
     const outs = edges.filter((e) => e.from === cur);
@@ -1589,16 +1996,16 @@ function graphView(opts) {
   };
   let drag = null;
   cv.addEventListener("pointerdown", (ev) => { drag = { x: ev.clientX, y: ev.clientY, px: panX, py: panY, moved: false }; });
-  cv.addEventListener("pointermove", (ev) => { if (!drag) return; const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+  cv.addEventListener("pointermove", (ev) => { if (!drag) return; const dx = (ev.clientX - drag.x) / uiScale, dy = (ev.clientY - drag.y) / uiScale;
     if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; if (drag.moved) { panX = drag.px + dx; panY = drag.py + dy; draw(); } });
   const end = () => { setTimeout(() => { drag = null; }, 0); };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointerleave", end);
   cv.addEventListener("click", (ev) => {
     if (drag && drag.moved) return;
-    const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left - panX) / zoom, y = (ev.clientY - r.top - panY) / zoom;
+    const r = cv.getBoundingClientRect(), x = ((ev.clientX - r.left) / uiScale - panX) / zoom, y = ((ev.clientY - r.top) / uiScale - panY) / zoom;
     for (const [s, p] of pos) if ((x - p.x) ** 2 + (y - p.y) ** 2 <= R * R && !opts.walk) { cur = s; layout(true); listMoves(); return; }
   });
-  cv.addEventListener("wheel", (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+  cv.addEventListener("wheel", (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), mx = (ev.clientX - r.left) / uiScale, my = (ev.clientY - r.top) / uiScale;
     const z = Math.max(0.2, Math.min(4, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15))); panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw(); }, { passive: false });
   cv.addEventListener("keydown", (ev) => {
     if (ev.key === "+" || ev.key === "=") { zoom = Math.min(4, zoom * 1.2); draw(); }

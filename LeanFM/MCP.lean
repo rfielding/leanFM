@@ -375,6 +375,17 @@ def logicResult (name : String) (outcome : LeanFM.Logic.ToolOutcome) : Json :=
     | .error _ => match body.getObjValAs? String "report" with
       | .ok report => if report.isEmpty then logicSummary name body else logicSummary name body ++ "\n\n" ++ report
       | .error _ => logicSummary name body
+  -- the reply carries the text and the structured answer together, and the host refuses a reply
+  -- over its limit; when generated code would be sent twice and that is too much, the protocol
+  -- text's echo goes first, then the code leaves the text and stays in structuredContent, which
+  -- the view draws from
+  let over (t : String) (b : Json) : Bool := t.length + b.compress.length > LeanFM.SessionTools.limits.maxResult
+  let body := if over text body && body.getObjValD "lean" != Json.null then body.setObjVal! "lean" Json.null else body
+  let text := match body.getObjValAs? String "code" with
+    | .ok code => if over text body then
+        logicSummary name body ++ s!"\n\nThe {(body.getObjValAs? String "language").toOption.getD "generated"} document ({code.length} characters) is too large to send twice: it is in structuredContent, and the view shows it."
+      else text
+    | .error _ => text
   Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]),
     ("structuredContent", body), ("isError", isError)]
 

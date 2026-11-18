@@ -1,3 +1,5 @@
+import Std.Data.HashMap
+import Std.Data.HashSet
 import LeanFM.Session.Global
 import LeanFM.Session.Where
 
@@ -112,6 +114,34 @@ partial def key : Global String → String
   | .var n => s!"v({n})"
   | .sessions b k => "s[" ++ key b ++ "]" ++ key k
   | .box n b k => s!"b({n})[" ++ key b ++ "]" ++ key k
+
+/-- A residual protocol with every loop directly inside a loop of the same name collapsed: the inner
+loop shadows the outer, so `rec L { rec L { b } }` behaves as `rec L { b }`. Stepping into a loop
+leaves exactly that nesting, so without this a walk that goes round a loop once would not be named as
+the state it started from. -/
+partial def collapseLoops : Global String → Global String
+  | .loop n b => match collapseLoops b with
+    | .loop m inner => if m == n then .loop n inner else .loop n (.loop m inner)
+    | b' => .loop n b'
+  | .msg i k => .msg i (collapseLoops k)
+  | .act r l k => .act r l (collapseLoops k)
+  | .choice bs => .choice (bs.map collapseLoops)
+  | .par bs k => .par (bs.map collapseLoops) (collapseLoops k)
+  | .join n bs k => .join n (bs.map collapseLoops) (collapseLoops k)
+  | .sessions b k => .sessions (collapseLoops b) (collapseLoops k)
+  | .box n b k => .box n (collapseLoops b) (collapseLoops k)
+  | other => other
+
+/-- The name of a protocol state: the residual protocol (loops collapsed) and the set of names it has
+bound. Only the names count, and in no order: each pass of a loop binds a name to a new event and is
+still the same state, and two interleavings that bound the same names reach the same state. Keyed by
+the order of binding, one session of GoServer looked unbounded (over 100,000 states); keyed by the set,
+it has 7,558. Global.stateGraph and session_next both name states with this. -/
+def graphKey (st : State) : String :=
+  key (collapseLoops st.g) ++ "|" ++ toString ((st.bind.map (·.1)).eraseDups.mergeSort (· ≤ ·))
+
+/-- The most states one session's graph may have before a check stops and says it was not checked. -/
+def graphMaxStates : Nat := 20000
 
 def stateKey (s : State) : String := key s.g ++ "|" ++ toString (s.bind.map fun (a, b) => a ++ "=" ++ b)
 
@@ -318,36 +348,42 @@ structure StateGraph where
   /-- source, target, step -/
   edges     : List (String × String × Conform.NextStep)
 
-def Global.stateGraph (g : Global String) (maxNodes : Nat := 2000) : Except String StateGraph := Id.run do
+def Global.stateGraph (g : Global String) (maxNodes : Nat := Conform.graphMaxStates) : Except String StateGraph := Id.run do
   let body := Conform.inlineNested (match g with | .sessions b _ => b | other => other)
-  let keyOf (st : Conform.State) := Conform.key st.g ++ "|" ++ toString (st.bind.map (·.1))
-  let mut names : List (String × String) := [(keyOf { g := body, bind := [] }, "s0")]
-  let mut queue : List Conform.State := [{ g := body, bind := [] }]
-  let mut edges : List (String × String × Conform.NextStep) := []
-  let mut terminals : List String := []
+  -- hash maps and an array queue: the search is linear in states and steps, so the bound can be large
+  let start : Conform.State := { g := body, bind := [] }
+  let mut names : Std.HashMap String Nat := (({} : Std.HashMap String Nat).insert (Conform.graphKey start) 0)
+  let mut queue : Array Conform.State := #[start]
+  let mut head := 0
+  let mut seen : Std.HashSet (Nat × Nat × String) := {}
+  let mut edges : Array (String × String × Conform.NextStep) := #[]
+  let mut terminals : Array String := #[]
   let mut fresh := 0
-  while !queue.isEmpty do
-    let st := queue.head!
-    queue := queue.tail!
-    let src := (names.lookup (keyOf st)).getD "?"
-    if Conform.nullable st.g then terminals := terminals ++ [src]
+  while head < queue.size do
+    let st := queue[head]!
+    let srcN := head
+    head := head + 1
+    let src := s!"s{srcN}"
+    if Conform.nullable st.g then terminals := terminals.push src
     for n in (Conform.nextOf st.bind 32 st.g).eraseDups do
       fresh := fresh + 1
       let e : LogEvent := { id := s!"g{fresh}", src := n.src, dst := n.dst, label := n.label, cause := n.cause, isAct := n.isAct }
       for st' in Conform.step e 64 false st do
-        let k := keyOf st'
-        let dst ← match names.lookup k with
+        let k := Conform.graphKey st'
+        let dstN ← match names.get? k with
           | some d => pure d
           | none =>
-            if names.length ≥ maxNodes then
+            if names.size ≥ maxNodes then
               return .error s!"more than {maxNodes} protocol states; the property was not checked"
-            let d := s!"s{names.length}"
-            names := names ++ [(k, d)]
-            queue := queue ++ [st']
+            let d := names.size
+            names := names.insert k d
+            queue := queue.push st'
             pure d
-        if !edges.any (fun (a, b, m) => a == src && b == dst && m == n) then
-          edges := edges ++ [(src, dst, n)]
-  return .ok { states := names.map (·.2), terminals, edges }
+        let ek := (srcN, dstN, s!"{n.label}|{n.src}|{n.dst}|{n.isAct}|{n.cause.getD ""}")
+        if !seen.contains ek then
+          seen := seen.insert ek
+          edges := edges.push (src, s!"s{dstN}", n)
+  return .ok { states := (List.range names.size).map (s!"s{·}"), terminals := terminals.toList, edges := edges.toList }
 
 /-- Check a log against the protocol, session by session, in the order sessions first appear.
 With `sessions { body }` at the top, each session is checked against the body, or, when it does

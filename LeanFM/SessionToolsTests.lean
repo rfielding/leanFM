@@ -135,6 +135,25 @@ def sim (extra : String) := call simulate (withProtocol placeOrder extra)
 #guard (field (sim r#", "seed": 7, "instances": 20"#) "sessions") == toJson 20
 #guard (sim r#", "seed": 7"#).toOption.map (·.compress) == (sim r#", "seed": 7"#).toOption.map (·.compress)
 #guard verdict (sim r#", "instances": 201"#) == "rejected"
+-- GoServer's lobby loop, once its fuel is spent, leaves through the challenge, so every run starts
+-- the game and finishes it, and for some seeds the server asks the bot to play
+def goSim (seed : Nat) : String :=
+  ((simulate (Json.mkObj [("example", "goserver"), ("instances", toJson (10 : Nat)), ("seed", toJson seed)])).toOption.map
+    fun j => (j.getObjValD "events").compress).getD ""
+#guard (List.range 8).all fun s => (goSim (s + 1)).contains "\"label\":\"Finished\""
+#guard (List.range 8).any fun s => (goSim (s + 1)).contains "\"src\":\"Bot\""
+-- each simulated GoServer message carries example fields that satisfy its where clause: the
+-- requests carry a person's sessionId, and the stream, fed back with its fields, conforms
+def goEvents (seed : Nat) : Json :=
+  ((simulate (Json.mkObj [("example", "goserver"), ("instances", toJson (10 : Nat)), ("seed", toJson seed)])).toOption.map
+    (·.getObjValD "events")).getD Json.null
+#guard (goEvents 1).compress.contains "\"sessionId\":\"sess-1\""
+#guard (goEvents 1).compress.contains "\"fields\":{"
+#guard (List.range 3).all fun s =>
+  verdict (conform (Json.mkObj [("example", "goserver"), ("events", goEvents (s + 1))])) == "conforms"
+-- a where clause that is not equalities leaves the stream without fields rather than inventing them
+def ltText : String := "structure Ask where\n  n : Nat\n  deriving TypeName\nstructure Tell where\n  n : Nat\n  deriving TypeName\nprotocol Lt (A, B) {\n  q: Ask from A to B;\n  t: Tell from B to A cause q where t.n > q.n;\n}\n"
+#guard !((simulate (Json.mkObj [("lean", Json.str ltText)])).toOption.map (·.compress.contains "\"fields\"")).getD true
 #guard verdict (sim r#", "maxEvents": 601"#) == "rejected"
 def big := sim r#", "seed": 3, "instances": 200, "maxEvents": 600, "spread": 400"#
 #guard (big.toOption.map (·.compress.length)).getD 0 ≤ limits.maxResult
@@ -501,6 +520,10 @@ def opsOf (r : Except String Json) : List String :=
 #guard opsOf (api signIn "App") == ["get /callback", "get /login"]
 #guard (((((field (api signIn "App") "openapi").getObjValD "paths").getObjValD "/callback").getObjValD "get").getObjValD "responses").compress.contains "\"401\":{\"content\""
 #guard ((field (api signIn "App") "openapi").getObjValAs? String "openapi").toOption == some "3.1.0"
+-- the document in code is YAML, block style, one key per line
+#guard ((api signIn "App").toOption.bind (fun j => (j.getObjValAs? String "language").toOption)) == some "yaml"
+#guard ((api signIn "App").toOption.bind (fun j => (j.getObjValAs? String "code").toOption)).map (·.startsWith "openapi: \"3.1.0\"\n") == some true
+#guard ((api signIn "App").toOption.bind (fun j => (j.getObjValAs? String "code").toOption)).map (fun c => decide ((c.splitOn "\n").length > 20)) == some true
 -- a POST carries its request's label as its body; a request without a status gets a default response
 #guard opsOf (api tripSequential "Flights") == ["post /seats/confirmations", "delete /seats/holds", "post /seats/holds"]
 #guard ((((field (api tripSequential "Flights") "openapi").getObjValD "paths").getObjValD "/seats/holds").getObjValD "post").compress.contains "\"requestBody\""

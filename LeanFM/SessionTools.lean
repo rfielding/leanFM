@@ -1069,6 +1069,102 @@ partial def hasSessions : Global String → Bool
   | .box _ b k => hasSessions b || hasSessions k
   | .var _ | .done => false
 
+/-! ## Example contents for simulated messages (clause selfhost.session.events) -/
+
+/-- The sessionId a simulated session carries: session 0 (the main protocol) is `sess-1`, and every
+other session belongs to one of three people, chosen from the seed and the session number. -/
+def simSessionId (seed session : Nat) : String :=
+  if session == 0 then "sess-1" else s!"sess-{(seed + session * 2654435761) % 3 + 1}"
+
+/-- A `where` literal as a logged field: integers as decimal strings, as the protobuf JSON mapping
+writes them and conformance reads them. -/
+def whereJson : Session.Where.Value → Json
+  | .num q => if q.den == 1 then Json.str (toString q.num) else Json.str s!"{q.num}/{q.den}"
+  | .str s => Json.str s
+  | .bool b => Json.bool b
+
+/-- Set field `f` to `v`, keeping the fields' order (a field not yet there is added at the end). -/
+def setField (fs : List (String × Json)) (f : String) (v : Json) : List (String × Json) :=
+  if fs.any (·.1 == f) then fs.map fun (k, w) => if k == f then (k, v) else (k, w) else fs ++ [(f, v)]
+
+/-- Make a `where` clause true by filling the fields of message `me`: `me.f = other.g` copies,
+`me.f = literal` sets, `and` does both, `or` the first branch that can be done. `none` for any
+other clause, so nothing is invented that the clause would reject. -/
+partial def fillWhere (me : String) (look : String → Option (List (String × Json)))
+    (fs : List (String × Json)) : Session.Where.Expr → Option (List (String × Json))
+  | .bin "and" a b => do
+    let fs ← fillWhere me look fs a
+    fillWhere me look fs b
+  | .bin "or" a b => (fillWhere me look fs a) <|> (fillWhere me look fs b)
+  | .bin "=" l r =>
+    let valueOf : Session.Where.Expr → Option Json := fun
+      | .lit v => some (whereJson v)
+      | .path y [g] => if y == me then fs.lookup g else (look y).bind (·.lookup g)
+      | _ => none
+    match l, r with
+    | .path x [f], .path y [g] =>
+      if x == me then (valueOf r).map (setField fs f)
+      else if y == me then (valueOf l).map (setField fs g) else none
+    | .path x [f], _ => if x == me then (valueOf r).map (setField fs f) else none
+    | _, .path y [g] => if y == me then (valueOf l).map (setField fs g) else none
+    | _, _ => none
+  | _ => none
+
+/-- Example contents for every message of a simulated stream, as the `fields` conformance reads:
+`sessionId` names the person (simSessionId), `requestId` counts requests, other strings and
+numbers are small examples, nested messages are their example, and each message's `where` clause
+is then made true by copying fields from the message it names or setting literals (fillWhere).
+`none` when the text declares no message types, or when some clause in the stream is not of that
+form, so the stream keeps no contents rather than contents its protocol would reject. -/
+def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
+    Option (Array (List (String × Json))) := Id.run do
+  if p.types.isEmpty then return none
+  let labels := (p.global.messages.map (·.label)).eraseDups
+  let ms := (Session.Types.complete p.types labels).toOption.getD []
+  let inters := p.global.messages
+  let mut out : Array (List (String × Json)) := #[]
+  let mut latest : List ((Nat × String) × Nat) := []
+  let mut req := 0
+  for e in evs do
+    if e.isAct then
+      out := out.push []
+      continue
+    let decl := ((ms.find? (·.name == e.label)).map (·.fields)).getD []
+    let mut fs : List (String × Json) := []
+    for f in decl do
+      -- a secret is never logged, so the stream carries none (conformance refuses one)
+      if Session.Types.isSecret f.name then continue
+      let v : Json := match f.ty with
+        | .str => if f.name == "sessionId" then Json.str (simSessionId seed e.session)
+                  else Json.str s!"{f.name}-{e.session % 3 + 1}"
+        | .nat | .int => if f.name == "requestId" then Json.str (toString (req + 1))
+                         else Json.str (toString (e.id % 7 + 1))
+        | .bool => Json.bool false
+        | t => Session.Types.Ty.example p.types 4 t
+      fs := fs ++ [(f.name, v)]
+    if decl.any (·.name == "requestId") then req := req + 1
+    -- the same label, roles and id can appear in several places with different clauses (GoServer
+    -- rejects many requests with `x: RequestRejected`), so the message it answers picks the place
+    let causeId : Option String := (e.cause.bind (evs[·]?)).bind (·.msgId)
+    let same := fun (i : Interaction String) => i.label == e.label && i.src == e.src && i.dst == e.dst && i.id == e.msgId
+    let inter := match inters.find? (fun i => same i && i.cause == causeId) with
+      | some i => some i
+      | none => inters.find? same
+    if let some i := inter then
+      if let some g := i.guard then
+        let some me := i.id | return none
+        let .ok ex := Session.Where.parse g.text | return none
+        let soFar := out
+        let look (y : String) : Option (List (String × Json)) :=
+          (latest.lookup (e.session, y)).bind fun j => soFar[j]?
+        match fillWhere me look fs ex with
+        | some filled => fs := filled
+        | none => return none
+    if let some m := e.msgId then
+      latest := ((e.session, m), out.size) :: latest.filter (·.1 != (e.session, m))
+    out := out.push fs
+  return some out
+
 def simulate (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let seed ← natArg args "seed" 1 4294967295
@@ -1111,13 +1207,21 @@ def simulate (args : Json) : Except String Json := do
   let g := if hasSessions p.global then p.global else .sessions p.global .done
   let evs := g.simulate seed instances spread loops maxEvents
   let sessions := (evs.toList.map (·.session)).eraseDups.length
+  -- each message with example contents that satisfy its where clause, when they can be made so
+  let filled := simFields p seed evs
+  let evJson := match filled with
+    | some fs => (evs.zip fs).map fun (e, f) => if e.isAct then eventJson e else (eventJson e).setObjVal! "fields" (Json.mkObj f)
+    | none => evs.map eventJson
+  let contents := match filled with
+    | some _ => "; each message carries example fields (sessionId names one of three people) that satisfy its where clause"
+    | none => ""
   return fit <| Json.mkObj
     [ ("tool", "session_simulate"), ("verdict", "generated")
-    , ("reading", s!"{p.name}: {evs.size} events from {sessions} session{if sessions == 1 then "" else "s"} (seed {seed})")
+    , ("reading", Json.str (s!"{p.name}: {evs.size} events from {sessions} session{if sessions == 1 then "" else "s"} (seed {seed})" ++ contents))
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("seed", seed), ("instances", instances), ("sessions", sessions)
-    , ("tsUnit", "ns"), ("events", Json.arr (stampNs (evs.map eventJson)))
+    , ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson))
     , ("diagram", diagramJson p) ]
 
 /-- A logged event: the fields session_simulate writes (src, dst, act) or from/to; ids, sessions and
@@ -1348,23 +1452,6 @@ def spans (args : Json) : Except String Json := do
     ("spans", Json.arr ((reports.take 200).map spanJson).toArray), ("timelines", Json.arr (timelines.take 20).toArray),
     ("issues", Json.arr ((issues.take 64).map Json.str).toArray), ("lean", Json.str p.lean)]
 
-/-- A residual protocol with every loop directly inside a loop of the same name collapsed: the inner
-loop shadows the outer, so `rec L { rec L { b } }` behaves as `rec L { b }`. Stepping into a loop
-leaves exactly that nesting, so without this a walk that goes round a loop once would not be named as
-the state it started from. -/
-partial def collapseLoops : Global String → Global String
-  | .loop n b => match collapseLoops b with
-    | .loop m inner => if m == n then .loop n inner else .loop n (.loop m inner)
-    | b' => .loop n b'
-  | .msg i k => .msg i (collapseLoops k)
-  | .act r l k => .act r l (collapseLoops k)
-  | .choice bs => .choice (bs.map collapseLoops)
-  | .par bs k => .par (bs.map collapseLoops) (collapseLoops k)
-  | .join n bs k => .join n (bs.map collapseLoops) (collapseLoops k)
-  | .sessions b k => .sessions (collapseLoops b) (collapseLoops k)
-  | .box n b k => .box n (collapseLoops b) (collapseLoops k)
-  | other => other
-
 /-- What may happen next in one session: the walk-through in the view calls this after each step. -/
 def next (args : Json) : Except String Json := do
   let p ← parseProtocol args
@@ -1388,9 +1475,8 @@ def next (args : Json) : Except String Json := do
     -- (a loop's start again), so a view can draw a revisit as a cycle (selfhost.session.explorer)
     let body := Conform.inlineNested (match p.global with | .sessions b _ => b | other => other)
     let stateId := match Conform.statesAfter body evs with
-      -- keyed as Global.stateGraph keys a state: the residual protocol and the ids it has bound,
-      -- by name only (each pass of a loop binds an id to a new event, and is still the same state)
-      | .ok sts => s!"q{(String.intercalate ";" (((sts.map fun st => Conform.key (collapseLoops st.g) ++ "|" ++ toString ((st.bind.map (·.1)).eraseDups.mergeSort (· ≤ ·))).eraseDups).mergeSort (· ≤ ·))).hash}"
+      -- named as Global.stateGraph names a state (Conform.graphKey)
+      | .ok sts => s!"q{(String.intercalate ";" (((sts.map Conform.graphKey).eraseDups).mergeSort (· ≤ ·))).hash}"
       | .error _ => ""
     let verdict := if steps.isEmpty then (if canEnd then "finished" else "stuck") else "running"
     let what := match steps.length with
@@ -1524,6 +1610,30 @@ def ctl (args : Json) : Except String Json := do
   return answer.setObjVal! "tool" (Json.str "session_ctl")
     |>.setObjVal! "lean" (Json.str p.lean)
 
+/-- JSON as YAML in block style: keys and strings in JSON's double quotes (valid YAML), so nothing
+in a label, route or description can change the document's structure. -/
+partial def yaml (j : Json) (ind : String := "") : String :=
+  let key (k : String) : String :=
+    if !k.isEmpty && k.toList.all (fun c => c.isAlphanum || c == '_') && (k.toList.head?.map Char.isAlpha).getD false
+    then k else (Json.str k).compress
+  match j with
+  | .obj kvs =>
+    if kvs.size == 0 then "{}" else
+    "\n".intercalate (kvs.toList.map fun (k, v) => match v with
+      | .obj o => if o.size == 0 then s!"{ind}{key k}: \{}" else s!"{ind}{key k}:\n" ++ yaml v (ind ++ "  ")
+      | .arr a => if a.size == 0 then s!"{ind}{key k}: []" else s!"{ind}{key k}:\n" ++ yaml v (ind ++ "  ")
+      | _ => s!"{ind}{key k}: {yaml v}")
+  | .arr a =>
+    if a.size == 0 then "[]" else
+    "\n".intercalate (a.toList.map fun v => match v with
+      | .obj o => if o.size == 0 then s!"{ind}- \{}" else
+          let inner := yaml v (ind ++ "  ")
+          s!"{ind}- " ++ (inner.drop (ind.length + 2)).toString
+      | .arr _ => s!"{ind}-\n" ++ yaml v (ind ++ "  ")
+      | _ => s!"{ind}- {yaml v}")
+  | .str t => (Json.str t).compress
+  | other => other.compress
+
 /-- A role's HTTP interface: the requests it receives with their routes, as OpenAPI 3.1. -/
 def openapi (args : Json) : Except String Json := do
   let p ← parseProtocol args
@@ -1536,17 +1646,26 @@ def openapi (args : Json) : Except String Json := do
     | .obj kvs => kvs.toList.foldl (fun n (_, v) => n + (match v with | .obj ms => ms.size | _ => 0)) 0
     | _ => 0
   let note := if unrouted.isEmpty then "" else s!"; {unrouted.length} request{if unrouted.length == 1 then "" else "s"} without a route left out"
-  -- the document goes in code (which the text content repeats); a large one goes once, compact,
-  -- without the structured copy, so a whole server's interface fits the result limit
-  let large := doc.pretty.length > 20000
-  let code := if large then doc.compress else doc.pretty
+  -- the document goes in code as YAML (block style, the way OpenAPI documents are usually read and
+  -- served), which the text content repeats; a large one goes once, without the structured copy,
+  -- so a whole server's interface fits the result limit; only a document too large even for that
+  -- falls back to compact JSON
+  -- OpenAPI documents are read top down: the version and info first, then paths, then components
+  let order := ["openapi", "info", "jsonSchemaDialect", "servers", "paths", "components"]
+  let kvs := match doc with | .obj o => o.toList | _ => []
+  let ordered := (order.filterMap fun k => (kvs.lookup k).map (k, ·)) ++ kvs.filter (fun (k, _) => !order.contains k)
+  let docYaml := "\n".intercalate (ordered.map fun (k, v) => yaml (Json.mkObj [(k, v)])) ++ "\n"
+  let large := docYaml.length > 20000
+  let tooLarge := docYaml.length > limits.maxResult - 10000
+  let (code, language) := if tooLarge then (doc.compress, "json") else (docYaml, "yaml")
   let head : List (String × Json) := [("tool", Json.str "session_openapi"), ("verdict", Json.str "generated"),
     ("name", Json.str p.name), ("role", Json.str role),
     ("reading", Json.str (s!"{p.name}: OpenAPI 3.1 for {role}, {ops} operation{if ops == 1 then "" else "s"}{note}" ++
-      (if large then "; the document is in code, compact (too large to send twice)" else "")))]
+      (if tooLarge then "; the document is in code, compact JSON (too large for YAML)"
+       else if large then "; the document is in code as YAML (too large to send twice)" else "")))]
   let docPart : List (String × Json) := if large then [] else [("openapi", doc)]
   let tail : List (String × Json) := [("unrouted", Json.arr (unrouted.map Json.str).toArray),
-    ("language", Json.str "json"), ("code", Json.str code), ("lean", Json.str p.lean)]
+    ("language", Json.str language), ("code", Json.str code), ("lean", Json.str p.lean)]
   return fit <| Json.mkObj (head ++ docPart ++ tail)
 
 /-- The message types as protobuf, Lean structures and JSON schemas (selfhost.session.types). -/
@@ -1571,30 +1690,6 @@ def types (args : Json) : Except String Json := do
     ("language", "protobuf"), ("code", Json.str proto), ("lean", Json.str p.lean)]
 
 /-! ## The files a session type generates (selfhost.session.files) -/
-
-/-- JSON as YAML in block style: keys and strings in JSON's double quotes (valid YAML), so nothing
-in a label, route or description can change the document's structure. -/
-partial def yaml (j : Json) (ind : String := "") : String :=
-  let key (k : String) : String :=
-    if !k.isEmpty && k.toList.all (fun c => c.isAlphanum || c == '_') && (k.toList.head?.map Char.isAlpha).getD false
-    then k else (Json.str k).compress
-  match j with
-  | .obj kvs =>
-    if kvs.size == 0 then "{}" else
-    "\n".intercalate (kvs.toList.map fun (k, v) => match v with
-      | .obj o => if o.size == 0 then s!"{ind}{key k}: \{}" else s!"{ind}{key k}:\n" ++ yaml v (ind ++ "  ")
-      | .arr a => if a.size == 0 then s!"{ind}{key k}: []" else s!"{ind}{key k}:\n" ++ yaml v (ind ++ "  ")
-      | _ => s!"{ind}{key k}: {yaml v}")
-  | .arr a =>
-    if a.size == 0 then "[]" else
-    "\n".intercalate (a.toList.map fun v => match v with
-      | .obj o => if o.size == 0 then s!"{ind}- \{}" else
-          let inner := yaml v (ind ++ "  ")
-          s!"{ind}- " ++ (inner.drop (ind.length + 2)).toString
-      | .arr _ => s!"{ind}-\n" ++ yaml v (ind ++ "  ")
-      | _ => s!"{ind}- {yaml v}")
-  | .str t => (Json.str t).compress
-  | other => other.compress
 
 /-- A role's name as a file name: lower case letters, digits, _ and -; anything else is refused, so
 no role can name a path outside the directory. -/
@@ -2369,7 +2464,10 @@ instance plays its own role, and a fresh actor belongs to one session only.
 - `session_simulate {lean, seed?, instances?, spread?, loops?, maxEvents?}`: a seeded event stream.
   Each event has prior (what it happened after, per role, plus join ends), cause, and answers (the
   request it responds to). The view animates it. A protocol without `sessions` runs as `instances`
-  concurrent copies.
+  concurrent copies. When the text declares message types, each message also carries example
+  `fields`: sessionId names one of three people, requestId counts requests, and every `where`
+  clause holds (a response copies the fields it must equal); a clause that is not equalities
+  leaves the stream without fields.
 
 - `session_conform {lean, events, allowIncomplete?}`: check what a running program logged against
   the protocol. Log one event per message sent, `{\"id\": \"e7\", \"session\": \"42\", \"from\": \"Shop\",

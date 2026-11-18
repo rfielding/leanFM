@@ -1,3 +1,5 @@
+import Std.Data.HashMap
+import Std.Data.HashSet
 import LeanFM.Session.Http
 import LeanFM.Session.Calls
 import LeanFM.Session.Conform
@@ -75,39 +77,50 @@ def suggestHttp (msg : String) : String :=
 /-- From a session's state graph: states from which no terminal state can be reached, each with
 the steps that lead to it. -/
 def neverEnds (g : StateGraph) : List (List String) := Id.run do
-  -- states that can still finish: terminals, and everything with an edge into them
-  let mut canFinish := g.terminals
-  let mut changed := true
-  while changed do
-    changed := false
-    for (a, b, _) in g.edges do
-      if canFinish.contains b && !canFinish.contains a then
-        canFinish := a :: canFinish
-        changed := true
-  let doomed := g.states.filter (!canFinish.contains ·)
+  -- states that can still finish: terminals, and backwards along edges from them (one pass over a
+  -- reverse index, so it stays linear for graphs of thousands of states)
+  let mut preds : Std.HashMap String (Array String) := {}
+  let mut succs : Std.HashMap String (Array (String × String)) := {}
+  for (a, b, n) in g.edges do
+    preds := preds.insert b ((preds.getD b #[]).push a)
+    succs := succs.insert a ((succs.getD a #[]).push (b, n.label))
+  let mut canFinish : Std.HashSet String := {}
+  let mut stack : Array String := #[]
+  for t in g.terminals do
+    if !canFinish.contains t then
+      canFinish := canFinish.insert t
+      stack := stack.push t
+  while !stack.isEmpty do
+    let s := stack.back!
+    stack := stack.pop
+    for p in preds.getD s #[] do
+      if !canFinish.contains p then
+        canFinish := canFinish.insert p
+        stack := stack.push p
+  let doomed : Std.HashSet String := g.states.foldl (fun acc s => if canFinish.contains s then acc else acc.insert s) {}
   if doomed.isEmpty then return []
-  -- shortest steps from s0 to the first doomed state
-  let mut parent : List (String × (String × String)) := []
-  let mut seen := ["s0"]
-  let mut frontier := ["s0"]
+  -- shortest steps from s0 to the first doomed state, breadth first
+  let mut parent : Std.HashMap String (String × String) := {}
+  let mut seen : Std.HashSet String := ({} : Std.HashSet String).insert "s0"
+  let mut queue : Array String := #["s0"]
+  let mut head := 0
   let mut hit : Option String := if doomed.contains "s0" then some "s0" else none
-  while hit.isNone && !frontier.isEmpty do
-    let mut next := []
-    for s in frontier do
-      for (a, b, n) in g.edges do
-        if a == s && !seen.contains b then
-          seen := b :: seen
-          parent := (b, (a, n.label)) :: parent
-          next := next ++ [b]
-          if hit.isNone && doomed.contains b then hit := some b
-    frontier := next
+  while hit.isNone && head < queue.size do
+    let s := queue[head]!
+    head := head + 1
+    for (b, label) in succs.getD s #[] do
+      if hit.isNone && !seen.contains b then
+        seen := seen.insert b
+        parent := parent.insert b (s, label)
+        queue := queue.push b
+        if doomed.contains b then hit := some b
   match hit with
   | none => return []
   | some d =>
     let mut path : List String := []
     let mut cur := d
     for _ in [0:g.states.length] do
-      match parent.lookup cur with
+      match parent.get? cur with
       | some (p, l) => path := l :: path; cur := p
       | none => break
     return [path]

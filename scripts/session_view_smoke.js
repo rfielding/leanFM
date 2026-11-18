@@ -270,8 +270,9 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   await show(R.simulate);
   await wait(400);
   expectText("session_simulate result shows the event stream", byId.results, "Event stream");
-  button(byId.results, "More detail").click(); await wait(100);
+  // the stream opens with more detail on: the button offers less, then more again
   button(byId.results, "Less detail").click(); await wait(100);
+  button(byId.results, "More detail").click(); await wait(100);
   console.log("ok: the animation runs and its detail toggle works");
 
   await show(R.conform);

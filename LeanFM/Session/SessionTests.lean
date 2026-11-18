@@ -462,6 +462,30 @@ def idOf (evs : Array (Event Role)) (l : String) : Nat := ((evs.toList.find? (·
 
 -- a loop repeats at most its fuel, then ends
 #guard ((transfer.simulate (seed := 1) (loops := 2)).toList.filter (·.label == "Data")).length ≤ 3
+-- a spent loop is left through the branch that leaves it: every run of Transfer ends with LastAck
+#guard (List.range 12).all fun seed => ((transfer.simulate (seed := seed) (loops := 2)).toList.any (·.label == "LastAck"))
+-- each loop has its own fuel: a loop after a spent one still runs, and the run reaches its end
+protocol TwoLoops (Sender, Receiver) {
+  rec First {
+    choice {
+      A from Sender to Receiver;
+      continue First;
+    } or {
+      EndA from Sender to Receiver;
+    }
+  }
+  rec Second {
+    choice {
+      B from Sender to Receiver;
+      continue Second;
+    } or {
+      EndB from Sender to Receiver;
+    }
+  }
+}
+def twoLoops : Global Role := TwoLoops .sender .receiver
+#guard (List.range 12).all fun seed => ((twoLoops.simulate (seed := seed) (loops := 1)).toList.any (·.label == "EndB"))
+#guard (List.range 12).all fun seed => ((twoLoops.simulate (seed := seed) (loops := 1)).toList.filter (·.label == "B")).length ≤ 1
 
 -- strings are escaped in the JSON
 #guard jsonString "a\"b\\c\n" == "\"a\\\"b\\\\c\\n\""

@@ -251,14 +251,24 @@ def main : IO Unit := do
   assertContains "MCP session view reports its size" shtml "\"ui/notifications/size-changed\""
   assertContains "MCP session view builds SVG elements, not markup" shtml "createElementNS"
   assertContains "MCP session view bounds the drawing" shtml "MAX_SHAPES = 4000, MAX_EVENTS = 600"
-  assertContains "MCP session view starts the animation simple" shtml "detail = false"
+  assertContains "MCP session view starts the animation in full detail" shtml "detail = true"
+  assertContains "MCP session view scrolls the animation both ways" shtml ".seq { overflow: auto;"
+  assertContains "MCP session view tries seeds until every role takes part" shtml "const ANIM_TRIES = 8;"
+  assertContains "MCP session view offers full screen" shtml "availableDisplayModes: [\"inline\", \"fullscreen\"]"
+  assertContains "MCP session view asks the host for full screen" shtml "\"ui/request-display-mode\""
+  assertContains "MCP session view plays one session alone" shtml "function sessionBody(body, keepIt)"
+  assertContains "MCP session view plays one person's messages by sessionId" shtml "function pickSid(v)"
+  assertContains "MCP session view shows every role's OpenAPI" shtml "async function openapiAll()"
+  assertContains "MCP session view shows OpenAPI as coloured YAML" shtml "function yamlPre(text)"
+  assertContains "MCP session view builds properties from the protocol's messages" shtml "const PROP_PATTERNS = ["
+  assertContains "MCP session view scales its text and drawings" shtml "const UI_SCALES = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];"
   assertContains "MCP session view offers the walk-through" shtml "const WALK_TOOL = \"session_next\", MAX_WALK = 200;"
   let promptsListed ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":35,\"method\":\"prompts/list\"}"
   assertContains "MCP offers the session design prompt" promptsListed.body "design_with_session_types"
   let promptGot ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":36,\"method\":\"prompts/get\",\"params\":{\"name\":\"design_with_session_types\"}}"
   assertContains "MCP session design prompt ends at session_conform" promptGot.body "session_conform"
   assertContains "MCP session view edits through tools/call" shtml "\"tools/call\""
-  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\", \"session_explore\", \"session_review\", \"session_ctl\", \"session_sla\", \"session_instances\", \"session_skeleton\"], MAX_EDIT_BYTES = 65536"
+  assertContains "MCP session view calls only the session tools, bounded" shtml "const EDIT_TOOLS = [\"session_check\", \"session_simulate\", \"session_mdp\", \"session_actor\", \"session_dataset\", \"session_types\", \"session_explore\", \"session_review\", \"session_ctl\", \"session_sla\", \"session_instances\", \"session_skeleton\", \"session_openapi\"], MAX_EDIT_BYTES = 65536"
   -- The hosted endpoint (clause selfhost.mcp.hosting).
   let cfg : HostConfig := { burst := 3, ratePerMinute := 60, maxInflight := 1 }
   let limits ← Limits.new
@@ -395,7 +405,13 @@ def main : IO Unit := do
   let srv ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":55,\"method\":\"tools/call\",\"params\":{\"name\":\"session_actor\",\"arguments\":{\"example\":\"goserver\",\"role\":\"Server\"}}}"
   expect "MCP session_actor of GoServer's Server serves 14 routes within the result limit, naming what it left out" (srv.body.contains "serves 14 routes" && srv.body.contains "the same document is in openapiYaml" && compactReply srv.body == srv.body)
   let rv ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":56,\"method\":\"tools/call\",\"params\":{\"name\":\"session_review\",\"arguments\":{\"example\":\"goserver\"}}}"
-  expect "MCP session_review of GoServer checks HTTP and says liveness was not checked: partial, never clean" (rv.body.contains "\"verdict\":\"partial\"" && rv.body.contains "HTTP from 14 routed requests" && rv.body.contains "not checked: liveness")
+  expect "MCP session_review of GoServer checks HTTP and liveness over its whole state graph: clean" (rv.body.contains "\"verdict\":\"clean\"" && rv.body.contains "HTTP from 14 routed requests, liveness" && !rv.body.contains "not checked")
+  -- GoServer's properties are decided, not skipped: its state graph is 6617 states once a state is
+  -- keyed by the set of names it bound (keyed by their order it looked unbounded)
+  let gEf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"EF\":{\"after\":\"PlayMove\"}}}}}"
+  expect "MCP session_ctl proves PlayMove can happen in GoServer, over 6617 states, with a witness path" (gEf.body.contains "\"verdict\":\"proved\"" && gEf.body.contains "\"states\":6617" && gEf.body.contains "StartGame -> GameStarted -> PlayMove")
+  let gAf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"AF\":{\"after\":\"PlayMove\"}}}}}"
+  expect "MCP session_ctl disproves that PlayMove always happens in GoServer, with a counterexample that loops" (gAf.body.contains "\"verdict\":\"disproved\"" && gAf.body.contains "counterexample:" && gAf.body.contains "then repeats from")
   let exBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"../../etc/passwd\"}}}"
   expect "MCP refuses an example LeanFM does not carry, naming the ones it does" (exBad.body.contains "example must be one of goserver" && !exBad.body.contains "root:")
   let exBoth ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":43,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"ride\",\"lean\":\"protocol P (A, B) { X from A to B; }\"}}}"

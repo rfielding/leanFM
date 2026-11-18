@@ -1,3 +1,5 @@
+import Std.Data.HashMap
+import Std.Data.HashSet
 import Lean.Data.Json
 import LeanFM.Artifacts
 import LeanFM.LLMGenerated.SelfHosting
@@ -392,18 +394,18 @@ def strings (j : Json) (what : String) (limit : Nat) : Except String (List Strin
       | none => .error s!"{what} entries are strings"
   | _ => throw s!"{what} is an array of strings"
 
-def parseDraft (j : Json) : Except String TaskModel := do
+def parseDraft (j : Json) (b : Bounds := bounds) : Except String TaskModel := do
   let field := fun (k : String) => (j.getObjVal? k).toOption
-  let states ← strings ((field "states").getD (Json.arr #[])) "states" bounds.maxDraftStates
+  let states ← strings ((field "states").getD (Json.arr #[])) "states" b.maxDraftStates
   if states.isEmpty then throw "a draft task needs states"
   let initial ← match (field "initial").bind str? with
     | some s => pure s
     | none => throw "a draft task needs a string initial state"
-  let terminals ← strings ((field "terminals").getD (Json.arr #[])) "terminals" bounds.maxDraftStates
+  let terminals ← strings ((field "terminals").getD (Json.arr #[])) "terminals" b.maxDraftStates
   let transitions ← match field "transitions" with
     | some (.arr items) =>
-      if items.size > bounds.maxDraftTransitions then
-        throw s!"draft has {items.size} transitions; the bound is {bounds.maxDraftTransitions}"
+      if items.size > b.maxDraftTransitions then
+        throw s!"draft has {items.size} transitions; the bound is {b.maxDraftTransitions}"
       items.toList.mapM fun t => do
         let g := fun (k : String) => match (t.getObjVal? k).toOption.bind str? with
           | some v => checkString ("transition." ++ k) v
@@ -420,16 +422,17 @@ def parseDraft (j : Json) : Except String TaskModel := do
         return tr
     | some _ => throw "transitions is an array"
     | none => pure []
-  let unknown := ([initial] ++ terminals ++ transitions.flatMap (fun t => [t.src, t.dst])).filter (!states.contains ·)
+  let declared : Std.HashSet String := states.foldl (·.insert ·) {}
+  let unknown := ([initial] ++ terminals ++ transitions.flatMap (fun t => [t.src, t.dst])).filter (!declared.contains ·)
   if let some s := unknown.head? then throw s!"draft refers to undeclared state \"{s}\""
   let knowers ← match field "knowledge" with
     | some (.obj kvs) =>
-      if kvs.size > bounds.maxPredicates then throw s!"knowledge declares {kvs.size} actors; the bound is {bounds.maxPredicates}"
+      if kvs.size > b.maxPredicates then throw s!"knowledge declares {kvs.size} actors; the bound is {b.maxPredicates}"
       kvs.toList.mapM fun (actor, decl) => do
         let actor ← checkString "knowledge actor" actor
         let initial ← match (decl.getObjVal? "initial").toOption with
           | some (.arr items) =>
-            if items.size > bounds.maxPredicates then throw s!"{actor}'s initial knowledge has {items.size} terms; the bound is {bounds.maxPredicates}"
+            if items.size > b.maxPredicates then throw s!"{actor}'s initial knowledge has {items.size} terms; the bound is {b.maxPredicates}"
             items.toList.mapM boundedTerm
           | some _ => throw "initial is an array of terms"
           | none => pure []
@@ -440,12 +443,12 @@ def parseDraft (j : Json) : Except String TaskModel := do
   let id := ((field "id").bind str?).getD "draft"
   return { id, states, initial, terminals, transitions, canonical := false, knowers }
 
-def resolveTask (j : Json) : Except String TaskModel :=
+def resolveTask (j : Json) (b : Bounds := bounds) : Except String TaskModel :=
   match j with
   | .str id => match canonicalTasks.find? (·.id == id) with
     | some t => .ok (ofRequirement t)
     | none => .error s!"unknown canonical task \"{id.take 60}\"; known tasks: {", ".intercalate (canonicalTasks.map (·.id))}"
-  | .obj _ => parseDraft j
+  | .obj _ => parseDraft j b
   | _ => .error "task is a canonical task id string or an inline draft object"
 
 def TaskModel.messages (t : TaskModel) : List String := (t.transitions.map (·.message)).eraseDups
@@ -493,22 +496,34 @@ structure Model where
   deadlocks : List String
 deriving Inhabited
 
-def nodeIndex (nodes : Array Node) (n : Node) : Option Nat := nodes.findIdx? (· == n)
+/-- A node's identity as a string, for the index: equal exactly when the nodes are equal. -/
+def nodeKey (n : Node) : String :=
+  -- most models track no knowledge and no claims: then a node is its state and last message
+  if n.knowledge.all (·.isEmpty) && n.claims.isEmpty then
+    s!"{n.knowledge.length}\u0001{n.state}\u0001{n.message.getD "\u0002"}"
+  else reprStr n
 
-/-- Breadth-first construction; `none` when the node bound is exceeded. -/
-def buildModel (t : TaskModel) : Option Model := Id.run do
+/-- Breadth-first construction; `none` when the node bound is exceeded. Transitions are indexed by
+their source and nodes by their key, so building is linear in the model, not quadratic. -/
+def buildModel (t : TaskModel) (b : Bounds := bounds) : Option Model := Id.run do
   let start := t.knowers.map fun (_, init, _) => canonTerms (LeanFM.Session.Knowledge.analz init)
-  let mut nodes : Array Node := #[{ state := t.initial, message := none, knowledge := start }]
+  let first : Node := { state := t.initial, message := none, knowledge := start }
+  let mut nodes : Array Node := #[first]
+  let mut index : Std.HashMap String Nat := (({} : Std.HashMap String Nat).insert (nodeKey first) 0)
+  let mut bySrc : Std.HashMap String (Array Transition) := {}
+  for tr in t.transitions do
+    bySrc := bySrc.insert tr.src ((bySrc.getD tr.src #[]).push tr)
+  let terminals : Std.HashSet String := t.terminals.foldl (·.insert ·) {}
   let mut succ : Array (Array Nat) := #[]
   let mut deadlocks : List String := []
   let mut i := 0
-  let mut fuel := bounds.maxModelNodes + 1
+  let mut fuel := b.maxModelNodes + 1
   while i < nodes.size && fuel > 0 do
     fuel := fuel - 1
     let n := nodes[i]!
-    let outs := t.transitions.filter (·.src == n.state)
-    let stutter := t.terminals.contains n.state || outs.isEmpty
-    if outs.isEmpty && !t.terminals.contains n.state && !deadlocks.contains n.state then
+    let outs := (bySrc.getD n.state #[]).toList
+    let stutter := terminals.contains n.state || outs.isEmpty
+    if outs.isEmpty && !terminals.contains n.state && !deadlocks.contains n.state then
       deadlocks := deadlocks ++ [n.state]
     let mut next : Array Nat := #[]
     if stutter then
@@ -519,10 +534,12 @@ def buildModel (t : TaskModel) : Option Model := Id.run do
           | some c => if n.claims.contains c then n.claims else (c :: n.claims).mergeSort (· ≤ ·)
           | none => n.claims
         let m : Node := { state := tr.dst, message := some tr.message, knowledge := t.learnOn tr n.knowledge, claims }
-        match nodeIndex nodes m with
+        let k := nodeKey m
+        match index.get? k with
         | some j => if !next.contains j then next := next.push j
         | none =>
-          if nodes.size >= bounds.maxModelNodes then return none
+          if nodes.size >= b.maxModelNodes then return none
+          index := index.insert k nodes.size
           nodes := nodes.push m
           next := next.push (nodes.size - 1)
     succ := succ.push next
@@ -775,14 +792,14 @@ def explainFormula (args : Json) : ToolOutcome := do
     , ("unobservableAtoms", Json.arr ((unobservableIn f).map Json.str).toArray)
     , ("lints", Json.arr ((lints f sentence).map Json.str).toArray) ]
 
-def checkCtl (args : Json) : ToolOutcome := do
+def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
   let tj ← match (args.getObjVal? "task").toOption with
     | some j => pure j
     | none => throw "check_ctl needs a task (canonical id or inline draft)"
   let fj ← match (args.getObjVal? "formula").toOption with
     | some j => pure j
     | none => throw "check_ctl needs a formula"
-  let t ← resolveTask tj
+  let t ← resolveTask tj b
   let f ← parseBounded fj
   let unknown := unknownAtoms t f
   if !unknown.isEmpty then
@@ -799,10 +816,10 @@ def checkCtl (args : Json) : ToolOutcome := do
     return verdictJson "check_ctl" "unknown" f.reading <| common ++
       [("unobservableAtoms", Json.arr (unobservable.map Json.str).toArray),
        ("evidence", Json.mkObj [("kind", "none"), ("note", "the task model cannot decide these atoms; run classify_requirement to restate them over events")])]
-  match buildModel t with
+  match buildModel t b with
   | none =>
     return verdictJson "check_ctl" "resource-limit" f.reading <| common ++
-      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the reachable model exceeds {bounds.maxModelNodes} nodes; nothing was proved")])]
+      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the reachable model exceeds {b.maxModelNodes} nodes; nothing was proved")])]
   | some m =>
     let holds := Model.get (Model.sat m f) 0
     let ev := evidence m 0 holds f

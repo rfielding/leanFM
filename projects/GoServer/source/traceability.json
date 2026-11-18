@@ -531,6 +531,28 @@
         "TestReviewTreeAfterTheFinish",
         "book_tour.py"
       ]
+    },
+    {
+      "requirements": [
+        "property:API discovery",
+        "proof:the served OpenAPI document routes exactly what the session type routes",
+        "negative:discovery is read-only and never names another host"
+      ],
+      "files": [
+        "spec/SessionPanel.lean",
+        "source/cmd/demo/main.go",
+        "source/cmd/demo/static/session/openapi.yaml"
+      ],
+      "symbols": [
+        "Project.SessionPanel.main",
+        "apiCatalog",
+        "writeJSONAs",
+        "openAPIYAML"
+      ],
+      "tests": [
+        "TestOpenAPIAndAPICatalog",
+        "TestSessionTypeRoutesAreServedOnlyWithPost"
+      ]
     }
   ],
   "limits": "Handicaps, persistence of rooms and games, SGF export, push transport and protobuf byte conformance of the JSON harness remain outside this change. Analysis gating is enforced by the provided browser, not by the server."

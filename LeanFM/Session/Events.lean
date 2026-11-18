@@ -18,7 +18,10 @@ is one interleaved stream of events, each carrying
 
 Negative requirements: an event never links (through prior, cause or answers) to a later event or
 to another session's event; a session never contains a message its protocol does not allow; a loop
-never unrolls without bound (each thread has a fuel of loop iterations, then its loop ends as done).
+never unrolls without bound (each loop has a fuel of repetitions, renewed each time the loop is
+entered); a run never stops at a loop whose fuel is spent while a branch could leave it (once the
+fuel is spent, a choice takes a branch that leaves the loop when there is one, so the run goes on to
+the rest of the protocol).
 -/
 
 namespace LeanFM.Session
@@ -48,7 +51,10 @@ structure Thread (R : Type) where
   env     : List (String × Global R)
   join    : Option Nat
   start   : Nat
+  /-- How many times each loop may repeat, given to a loop each time it is entered. -/
   fuel    : Nat
+  /-- The repetitions left to each loop the thread is in, by name. -/
+  fuels   : List (String × Nat) := []
   /-- The last event this thread emitted. -/
   lastEv  : Option Nat := none
   /-- Events its next event must follow besides the roles' own timelines: the ends of the branches
@@ -69,6 +75,7 @@ structure Join (R : Type) where
   env     : List (String × Global R)
   parent  : Option Nat
   fuel    : Nat
+  fuels   : List (String × Nat) := []
   ends    : List Nat := []
 
 structure St (R : Type) where
@@ -135,9 +142,20 @@ def finish (t : Thread R) : M R Unit := do
   if jn.done ≥ jn.need && !jn.fired then
     set { s with joins := s.joins.set! j { jn with fired := true } }
     spawn { session := jn.session, g := jn.k, env := jn.env, join := jn.parent, start := s.clock,
-            fuel := jn.fuel, after := jn.ends.eraseDups }
+            fuel := jn.fuel, fuels := jn.fuels, after := jn.ends.eraseDups }
   else
     set { s with joins := s.joins.set! j jn }
+
+/-- Whether a run of `g` can end, or go on past it, without repeating a loop named in `spent`. -/
+partial def leaves (spent : List String) : Global R → Bool
+  | .done => true
+  | .var n => !spent.contains n
+  | .msg _ k | .act _ _ k => leaves spent k
+  | .choice bs => bs.any (leaves spent)
+  | .par bs k | .join _ bs k => bs.all (leaves spent) && leaves spent k
+  | .box _ b k => leaves spent b && leaves spent k
+  | .loop _ b => leaves spent b
+  | .sessions b k => leaves spent b && leaves spent k
 
 /-- Advance a thread to its next event, or to its end. Returns true when it emitted an event. -/
 partial def step [DecidableEq R] [ToString R] (instances spread : Nat) (t : Thread R) : M R Bool := do
@@ -152,18 +170,23 @@ partial def step [DecidableEq R] [ToString R] (instances spread : Nat) (t : Thre
       spawn { t with g := k, lastEv := some id, after := [] }
       return true
   | .choice bs =>
-      let i ← rand bs.length
-      step instances spread { t with g := bs.getD i .done }
+      -- a loop whose fuel is spent is left through a branch that leaves it, when there is one
+      let spent := t.fuels.filterMap fun (n, f) => if f == 0 then some n else none
+      let open_ := if spent.isEmpty then bs else bs.filter (leaves spent)
+      let opts := if open_.isEmpty then bs else open_
+      let i ← rand opts.length
+      step instances spread { t with g := opts.getD i .done }
   | .box _ b k => step instances spread { t with g := Global.andThen b k }
-  | .loop n b => step instances spread { t with g := b, env := (n, .loop n b) :: t.env }
+  | .loop n b => step instances spread { t with g := b, env := (n, .loop n b) :: t.env,
+                                                fuels := (n, t.fuel) :: t.fuels.filter (·.1 != n) }
   | .var n =>
-      match t.env.lookup n, t.fuel with
-      | some l, f + 1 => step instances spread { t with g := l, fuel := f }
+      match t.env.lookup n, t.fuels.lookup n with
+      | some (.loop _ b), some (f + 1) => step instances spread { t with g := b, fuels := (n, f) :: t.fuels.filter (·.1 != n) }
       | _, _ => step instances spread { t with g := .done }
   | .par bs k | .join _ bs k =>
       let need := match t.g with | .join n _ _ => n | _ => bs.length
       let j ← newJoin { need, done := 0, fired := false, k, session := t.session, env := t.env,
-                        parent := t.join, fuel := t.fuel }
+                        parent := t.join, fuel := t.fuel, fuels := t.fuels }
       if bs.isEmpty then finish { t with join := some j }
       let s ← get
       for b in bs do
@@ -171,7 +194,7 @@ partial def step [DecidableEq R] [ToString R] (instances spread : Nat) (t : Thre
       return false
   | .sessions b k =>
       let j ← newJoin { need := instances, done := 0, fired := false, k, session := t.session,
-                        env := t.env, parent := t.join, fuel := t.fuel }
+                        env := t.env, parent := t.join, fuel := t.fuel, fuels := t.fuels }
       if instances == 0 then finish { t with join := some j }
       for _ in [0:instances] do
         let delay ← rand (spread + 1)
@@ -203,7 +226,8 @@ partial def run [DecidableEq R] [ToString R] (instances spread maxEvents : Nat) 
 end Sim
 
 /-- An event stream of `g`. `instances` is how many sessions each `sessions` block starts, `spread`
-how many steps their starts are spread over, `loops` how many times a thread may repeat a loop. -/
+how many steps their starts are spread over, `loops` how many times each loop may repeat each time
+it is entered. -/
 def Global.simulate [DecidableEq R] [ToString R] (g : Global R) (seed : Nat := 1)
     (instances : Nat := 8) (spread : Nat := 40) (loops : Nat := 4) (maxEvents : Nat := 10000) :
     Array (Event R) :=
