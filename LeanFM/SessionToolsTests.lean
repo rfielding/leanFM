@@ -524,6 +524,16 @@ def opsOf (r : Except String Json) : List String :=
 #guard ((api signIn "App").toOption.bind (fun j => (j.getObjValAs? String "language").toOption)) == some "yaml"
 #guard ((api signIn "App").toOption.bind (fun j => (j.getObjValAs? String "code").toOption)).map (·.startsWith "openapi: \"3.1.0\"\n") == some true
 #guard ((api signIn "App").toOption.bind (fun j => (j.getObjValAs? String "code").toOption)).map (fun c => decide ((c.splitOn "\n").length > 20)) == some true
+-- every included request protocol of GoServer names its request q: each route still answers only
+-- its own responses, not every response to any q
+def goApi : Json := match parseProtocol (Json.mkObj [("example", "goserver")]) with
+  | .ok p => match p.global.openApi p.name "Server" p.types with | .ok (d, _) => d | .error _ => Json.null
+  | .error _ => Json.null
+def goReplies (path : String) : String :=
+  ((((goApi.getObjValD "paths").getObjValD path).getObjValD "post").getObjValD "responses").getObjValD "200"
+    |>.getObjValD "description" |>.getStr? |>.toOption.getD ""
+#guard goReplies "/api/create_game" == "GameCreated or RequestRejected"
+#guard goReplies "/api/enter_room" == "RoomEntered or RequestRejected"
 -- a POST carries its request's label as its body; a request without a status gets a default response
 #guard opsOf (api tripSequential "Flights") == ["post /seats/confirmations", "delete /seats/holds", "post /seats/holds"]
 #guard ((((field (api tripSequential "Flights") "openapi").getObjValD "paths").getObjValD "/seats/holds").getObjValD "post").compress.contains "\"requestBody\""

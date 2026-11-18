@@ -102,6 +102,17 @@ def find (env : Env) (name : String) : Option Message := env.find? (·.name == n
 /-- The fields a label carries: its structure's, or none when no structure has that name. -/
 def fieldsOf (env : Env) (label : String) : List Field := ((find env label).map (·.fields)).getD []
 
+/-- The secret fields a message carries, as paths (`card.number_secr`), nested structures included. -/
+partial def secretPaths (env : Env) (label : String) (fuel : Nat := 16) : List String :=
+  match fuel with
+  | 0 => []
+  | fuel + 1 => (fieldsOf env label).flatMap fun f =>
+    if isSecret f.name then [f.name] else
+    let inner := match f.ty with
+      | .msg m | .opt (.msg m) | .list (.msg m) => secretPaths env m fuel
+      | _ => []
+    inner.map (f.name ++ "." ++ ·)
+
 def fieldNames (env : Env) (label : String) : String :=
   match fieldsOf env label with
   | [] => s!"{label} carries no fields; declare them, as in structure {label} where amount : Nat"
@@ -259,7 +270,8 @@ def checkFields (env : Env) (label : String) (isAct : Bool) (fields : List (Stri
   if isAct then throw s!"{label} is an event, and events carry no fields"
   for (k, v) in fields do
     let path := k.splitOn "."
-    if let some s := path.find? isSecret then throw s!"the log carries the secret {label}.{k} ({s}); secrets are never logged"
+    -- a log may carry secrets (such a log is sensitive); a secret sent across the network is what
+    -- session_review reports, with a counterexample
     let t ← leaf env label path
     match t, v with
     | .nat, .num _ | .nat, .str _ | .int, .num _ | .int, .str _ =>

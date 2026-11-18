@@ -1132,8 +1132,6 @@ def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
     let decl := ((ms.find? (·.name == e.label)).map (·.fields)).getD []
     let mut fs : List (String × Json) := []
     for f in decl do
-      -- a secret is never logged, so the stream carries none (conformance refuses one)
-      if Session.Types.isSecret f.name then continue
       let v : Json := match f.ty with
         | .str => if f.name == "sessionId" then Json.str (simSessionId seed e.session)
                   else Json.str s!"{f.name}-{e.session % 3 + 1}"

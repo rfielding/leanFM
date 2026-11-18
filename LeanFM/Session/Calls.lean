@@ -88,7 +88,49 @@ def parent (ms : List (Classified R)) (m : Interaction R) : Option String :=
 
 end Calls
 
-def Global.calls [DecidableEq R] [ToString R] (g : Global R) : List (Call R) :=
+/-- Each message id made to name the message it names where it stands. A protocol may reuse an
+id in many places (GoServer's included request protocols each call their request `q`), and
+`classify` reads ids, so without this every response to any `q` answered every `q`. A message's
+id becomes `id#Label`, and a cause is renamed to the message its id names in scope: the nearest
+one before it on its path. The same message copied into several branches keeps one name. -/
+partial def Global.scopeIds (g : Global R) (scope : List (String × String) := []) : Global R :=
+  let rename (i : Interaction R) : Interaction R × List (String × String) :=
+    let id' := i.id.map fun x => s!"{x}#{i.label}"
+    let cause' := i.cause.map fun c => (scope.lookup c).getD c
+    let scope' := match i.id, id' with
+      | some x, some y => (x, y) :: scope
+      | _, _ => scope
+    ({ i with id := id', cause := cause' }, scope')
+  -- the ids a branch binds, for what follows the branches
+  let rec bound : Global R → List (String × String)
+    | .msg i k => (match i.id with | some x => [(x, s!"{x}#{i.label}")] | none => []) ++ bound k
+    | .act _ _ k => bound k
+    | .choice bs => bs.flatMap bound
+    | .par bs k | .join _ bs k => bs.flatMap bound ++ bound k
+    | .loop _ b => bound b
+    | .sessions b k | .box _ b k => bound b ++ bound k
+    | .var _ | .done => []
+  match g with
+  | .msg i k => let (i', sc) := rename i; .msg i' (Global.scopeIds k sc)
+  | .act r l k => .act r l (Global.scopeIds k scope)
+  | .choice bs => .choice (bs.map (Global.scopeIds · scope))
+  | .par bs k => .par (bs.map (Global.scopeIds · scope)) (Global.scopeIds k (bs.flatMap bound ++ scope))
+  | .join n bs k => .join n (bs.map (Global.scopeIds · scope)) (Global.scopeIds k (bs.flatMap bound ++ scope))
+  | .loop n b => .loop n (Global.scopeIds b scope)
+  | .sessions b k => .sessions (Global.scopeIds b scope) (Global.scopeIds k scope)
+  | .box n b k => .box n (Global.scopeIds b scope) (Global.scopeIds k scope)
+  | .var n => .var n
+  | .done => .done
+
+/-- An id as written, without the `#Label` that `scopeIds` gave it. -/
+def Calls.written (i : Interaction R) : Interaction R :=
+  { i with id := i.id.map (fun x => (x.splitOn "#").head!), cause := i.cause.map (fun x => (x.splitOn "#").head!) }
+
+partial def Call.written (c : Call R) : Call R :=
+  { request := Calls.written c.request, responses := c.responses.map Calls.written, nested := c.nested.map Call.written }
+
+def Global.calls [DecidableEq R] [ToString R] (g0 : Global R) : List (Call R) :=
+  let g := g0.scopeIds
   let ms := g.classify
   let requests := (ms.filter (·.answers.isNone)).map (·.msg)
   let rec build (fuel : Nat) (under : Option String) : List (Call R) :=
@@ -99,7 +141,7 @@ def Global.calls [DecidableEq R] [ToString R] (g : Global R) : List (Call R) :=
         { request := r
           responses := match r.id with | some id => Calls.responsesOf ms id | none => []
           nested := match r.id with | some id => build fuel (some id) | none => [] }
-  build 16 none
+  (build 16 none).map Call.written
 
 def Interaction.withStatus (i : Interaction R) : String :=
   i.label ++ (match i.status with | some s => s!" {s}" | none => "")
