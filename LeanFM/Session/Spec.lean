@@ -1,5 +1,6 @@
 import LeanFM.CTL
 import LeanFM.Session.Physics
+import LeanFM.Session.Calls
 
 /-!
 # Requirements: properties, assumptions and what each channel handles
@@ -78,7 +79,7 @@ protocol on that channel does not handle. -/
 def issues (s : Spec R) : List String :=
   -- atoms may name messages of the protocol or events its physics adds, such as timers
   let labels := s.global.labels ++ s.physics.timers.map (·.label)
-  s.global.issues s.roles ++
+  s.global.issues s.roles ++ s.global.httpIssues ++
   (s.properties.flatMap Prop'.atoms |>.filter (fun a => !labels.contains a)).map
     (fun a => s!"property mentions {a}, which the protocol never sends") ++
   ((s.physics.used s.global).flatMap (fun (a, b, cs) =>

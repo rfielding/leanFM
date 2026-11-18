@@ -17,6 +17,7 @@ import LeanFM.Session.Decision
 import LeanFM.Session.Chain
 import LeanFM.Session.Sla
 import LeanFM.Session.Conform
+import LeanFM.Session.Linked
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
 import LeanFM.Session.Evolution
@@ -687,7 +688,7 @@ def fit (body : Json) : Json := Id.run do
 def check (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let g := p.global
-  let issues := g.issues p.roles
+  let issues := g.issues p.roles ++ g.httpIssues
   let calls ← mayCallPairs args
   let plain ← notHttpPairs args
   -- every channel is HTTP except those between the roles of a notHttp pair (either direction)
@@ -1110,6 +1111,43 @@ partial def fillWhere (me : String) (look : String → Option (List (String × J
     | _, _ => none
   | _ => none
 
+/-- Make a message's constraint fields hold in its example contents: a bound on one field
+(`amount >= 5`, `quantity <= 100`, `0 < n`) moves the field to the nearest value that keeps it,
+`and` does both. `none` when the constraints still fail, so no stream carries contents its
+constructors would reject. -/
+def fillConstraints (m : Session.Types.Message) (fs : List (String × Json)) : Option (List (String × Json)) := Id.run do
+  let toV : Json -> Session.Where.Value := fun
+    | Json.str t => match t.toInt? with
+      | some n => Session.Where.Value.num n
+      | none => Session.Where.Value.str t
+    | Json.num n => Session.Where.Value.num ((n.mantissa : Rat) / ((10 ^ n.exponent : Nat) : Rat))
+    | Json.bool b => Session.Where.Value.bool b
+    | _ => Session.Where.Value.str ""
+  let rec bounds : Session.Where.Expr -> List (String × String × Int)
+    | .bin "and" a b => bounds a ++ bounds b
+    | .bin op (.path x []) (.lit (.num q)) => if q.den == 1 then [(x, op, q.num)] else []
+    | .bin op (.lit (.num q)) (.path x []) =>
+      let flip := match op with | "<" => ">" | "<=" => ">=" | ">" => "<" | ">=" => "<=" | o => o
+      if q.den == 1 then [(x, flip, q.num)] else []
+    | _ => []
+  let mut fs := fs
+  for _ in [0:3] do
+    match Session.Types.brokenConstraint m (fs.map fun (k, v) => (k, toV v)) with
+    | none => return some fs
+    | some (c, _) =>
+      let .ok ex := Session.Where.parse c.text | return none
+      for (x, op, n) in bounds ex do
+        let num? : Session.Where.Value -> Option Int := fun
+          | Session.Where.Value.num q => some q.num
+          | _ => none
+        let cur := ((fs.lookup x).bind fun v => num? (toV v)).getD 0
+        let ok := match op with
+          | "<" => cur < n | "<=" => cur <= n | ">" => cur > n | ">=" => cur >= n | "=" => cur == n | _ => true
+        if !ok then
+          let v := match op with | "<" => n - 1 | "<=" => n | ">" => n + 1 | ">=" => n | _ => n
+          fs := setField fs x (Json.str (toString v))
+  return none
+
 /-- Example contents for every message of a simulated stream, as the `fields` conformance reads:
 `sessionId` names the person (simSessionId), `requestId` counts requests, other strings and
 numbers are small examples, nested messages are their example, and each message's `where` clause
@@ -1156,6 +1194,11 @@ def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
         let look (y : String) : Option (List (String × Json)) :=
           (latest.lookup (e.session, y)).bind fun j => soFar[j]?
         match fillWhere me look fs ex with
+        | some filled => fs := filled
+        | none => return none
+    if let some m := ms.find? (·.name == e.label) then
+      if !m.constraints.isEmpty then
+        match fillConstraints m fs with
         | some filled => fs := filled
         | none => return none
     if let some m := e.msgId then
@@ -1328,6 +1371,17 @@ def deadlineReports (p : Protocol) (args : Json) (evs : List LogEvent) : Except 
     return Json.mkObj [("session", id), ("report", report)]
   return toJson result
 
+/-- session_conform's answer for a log that is not linked: every dangling link, nothing replayed. -/
+def danglingAnswer (p : Protocol) (args : Json) (dangling : List String) : Json :=
+  let n := dangling.length
+  Json.mkObj
+    [ ("tool", "session_conform"), ("verdict", "violates")
+    , ("reading", s!"{p.name}: {n} link{if n == 1 then "" else "s"} name{if n == 1 then "s" else ""} an event that is not in the log; first: {dangling.headD ""}")
+    , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray), ("lean", p.lean)
+    , ("protocol", args.getObjValD "protocol")
+    , ("issues", Json.arr ((dangling.take 64).map Json.str).toArray)
+    , ("unchecked", Json.arr #[]), ("sessions", Json.arr #[]), ("diagram", diagramJson p) ]
+
 def conform (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let evs ← match args.getObjVal? "events" with
@@ -1335,6 +1389,12 @@ def conform (args : Json) : Except String Json := do
         if a.size > maxLogEvents then throw s!"at most {maxLogEvents} events"
         a.toList.mapM logEvent
     | _ => throw "events must be an array of logged events {id, session?, from, to, label, cause?} (or {id, at, label, act: true})"
+  -- a log is read only once it is a Linked log: every prev and cause names one of its events.
+  -- One that is not is reported with every dangling link and not replayed.
+  let linked ← match Linked.check evs with
+    | .ok l => pure l
+    | .error dangling => return fit (danglingAnswer p args dangling)
+  let evs := linked.events
   -- a logged event's fields are fields of its message, of their declared types (selfhost.session.types)
   for e in evs do
     if let .error why := Session.Types.checkFields p.types e.label e.isAct e.fields then
@@ -1373,7 +1433,11 @@ def conform (args : Json) : Except String Json := do
           else some s!"session {sid}, event {e.id}: the session key {x}.{f} is {shown}, so this session's events must name session {shown}, not {sid}"
   let bad := results.filter (·.problem.isSome)
   let incomplete := results.filter (!·.complete)
-  let keyProblems := versionIssues ++ linkProblems ++ keyProblems
+  -- a logged message its constructor could never have made breaks the protocol's types
+  -- (selfhost.session.constructors)
+  let constraintProblems := evs.filterMap fun e =>
+    (Session.Types.constraintProblem p.types e.label e.fields).map fun why => s!"session {e.session}, event {e.id}: {why}"
+  let keyProblems := versionIssues ++ linkProblems ++ constraintProblems ++ keyProblems
   let verdict := if bad.isEmpty && keyProblems.isEmpty then "conforms" else "violates"
   let problems := (bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}") ++ keyProblems
   let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
@@ -1413,7 +1477,8 @@ def spans (args : Json) : Except String Json := do
   for e in evs do
     for r in (if e.isAct then [e.src] else [e.src, e.dst]) do
       if !p.roles.contains r then throw s!"event {e.id}: {r} is not a role of {p.name}; its roles are {", ".intercalate p.roles}"
-  let linkProblems := (Actors.check evs).map fun (e, why) => s!"event {e}: {why}"
+  let dangling := match Linked.check evs with | .error ps => ps | .ok _ => []
+  let linkProblems := dangling ++ (Actors.check evs).map fun (e, why) => s!"event {e}: {why}"
   let ordered := Actors.linearize evs
   let byId := ordered.map fun e => (e.id, e)
   let all := Spans.spans ordered

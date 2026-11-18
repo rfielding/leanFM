@@ -114,12 +114,12 @@ def shopApi := openapi (args order [("role", "Shop")])
   | .ok j => ((((j.getObjValD "openapi").getObjValD "components").getObjValD "schemas").getObjValD "CreateOrder").compress ==
       "{\"additionalProperties\":false,\"description\":\"What the client orders.\",\"properties\":{\"item\":{\"type\":\"string\"},\"quantity\":{\"minimum\":0,\"type\":\"integer\"}},\"required\":[\"item\",\"quantity\"],\"title\":\"CreateOrder\",\"type\":\"object\"}"
   | .error _ => false)
--- skeletons: a dataclass or interface per message, and send methods take it
+-- skeletons: an immutable dataclass or interface per message, and send methods take it
 def code (lang : String) : String := str (skeleton (args order [("language", Json.str lang)])) "code"
-#guard has (code "python") "@dataclass\nclass Pay:\n    \"\"\"The client pays; the card number is a secret, never logged.\"\"\"\n    amount: int\n    card_secr: str"
+#guard has (code "python") "@dataclass(frozen=True)\nclass Pay:\n    \"\"\"The client pays; the card number is a secret, never logged.\"\"\"\n    amount: int\n    card_secr: str"
 #guard has (code "python") "def send_pay(self, body: Pay):"
 #guard has (code "python") "def send_sold_out(self, body: Optional[SoldOut] = None):"
-#guard has (code "typescript") "export interface Pay {\n  amount: bigint;\n  card_secr: string;\n}"
+#guard has (code "typescript") "export interface Pay {\n  readonly amount: bigint;\n  readonly card_secr: string;\n}"
 #guard has (code "typescript") "sendPay(body: Pay): "
 #guard has (code "typescript") "export type SoldOut = Record<string, never>;"
 -- a message type may not take the name of a class the module defines

@@ -655,8 +655,24 @@ both); `structure Name` is empty. The doc comment before it documents it. -/
 def structureDecl (doc : Option Syntax) (stx : Syntax) : R Types.Message := do
   let mname ← name stx[1] "the structure's name"
   let mut fields : Array Types.Field := #[]
+  let mut constraints : Array Types.Constraint := #[]
   for f in ofKind `LeanFM.Session.Grammar.field stx[2] do
     let ft := f[2]
+    if ft.getKind == `LeanFM.Session.Grammar.constraintField then
+      let text := ft[0].getAtomVal
+      let names := f[0].getArgs
+      if names.size != 1 then failAt f "a constraint field has one name"
+      let cname ← name names[0]! "a constraint's name"
+      -- in the condition language, a bare name is a field of this structure
+      let checkable ← match Where.parse text with
+        | .ok ex =>
+          for (x, _) in ex.paths do
+            if !(fields.any (·.name == x)) then
+              failAt ft s!"structure {mname}: constraint {cname} reads {x}, which is not a field declared before it"
+          pure true
+        | .error _ => pure false
+      constraints := constraints.push { name := cname, text, checkable }
+      continue
     let tn ← name ft[0] "a type, such as Nat, String or a structure's name"
     let ty ← if ft[1].isIdent then do
         let inner ← name ft[1] s!"the type the {tn} holds"
@@ -672,7 +688,11 @@ def structureDecl (doc : Option Syntax) (stx : Syntax) : R Types.Message := do
       let raw := ((d[1].getAtomVal.dropEnd 2).toString)
       " ".intercalate ((raw.split Char.isWhitespace).toList.map (·.toString) |>.filter (· != ""))
     | none => ""
-  return { name := mname, fields := fields.toList, doc := docText }
+  let (ctor, priv) := match (ofKind `LeanFM.Session.Grammar.ctorLine stx[2])[0]? with
+    | some cl => ((identsIn cl).back?.map (·.getId.toString) |>.getD "mk", cl[0].getNumArgs > 0)
+    | none => ("", false)
+  return { name := mname, fields := fields.toList, doc := docText, constraints := constraints.toList,
+           ctor, privateCtor := priv }
 
 open Lean (Syntax) in
 /-- One protocol (`protocolBody`): its name, roles and statements, bounded loops unrolled. -/
@@ -743,6 +763,9 @@ def fileDefs (stx : Syntax) : R (List Def) := do
     let doc := opt item[0] 0
     let body := item[1]
     let k := body.getKind
+    if k == `LeanFM.Session.Grammar.leanDecl then
+      -- a theorem or definition about the messages: Lean checks it when the file is elaborated
+      continue
     if k == `LeanFM.Session.Grammar.structureBody then
       if !defs.isEmpty then failAt body "structures come before the protocols that use them"
       if (← get).types.size ≥ Types.maxMessages then failAt body s!"at most {Types.maxMessages} structures"
@@ -1116,8 +1139,10 @@ def write (defs : List Def) : String := "\n\n".intercalate (defs.map Def.write)
 
 /-- A message type as the parser reads it. -/
 def writeType (m : Types.Message) : String :=
+  let ctor := if m.ctor.isEmpty then [] else [s!"  {if m.privateCtor then "private " else ""}{m.ctor} ::"]
+  let body := ctor ++ m.fields.map (fun f => s!"  {f.name} : {f.ty.render}") ++ m.constraints.map (fun c => s!"  {c.name} : {c.text}")
   (if m.doc.isEmpty then "" else s!"/-- {m.doc} -/\n") ++ "structure " ++ m.name ++
-    (if m.fields.isEmpty then "" else " where\n" ++ "\n".intercalate (m.fields.map fun f => s!"  {f.name} : {f.ty.render}"))
+    (if body.isEmpty then "" else " where\n" ++ "\n".intercalate body)
 
 /-- The header that makes protocol text a Lean file (selfhost.session.lean-syntax). -/
 def header : String := "import LeanFM.Session.Syntax\n\n"

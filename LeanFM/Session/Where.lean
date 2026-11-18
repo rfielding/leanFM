@@ -9,9 +9,9 @@ happened, mismatched types, division by zero, text outside this language) is `un
 reason, never silently true.
 
 Grammar, loosest first:
-  or  := and (("or" | "||" | "∨") and)*
-  and := not (("and" | "&&" | "∧") not)*
-  not := ("not" | "!" | "¬") not | cmp
+  or  := and (("or" | "||" | "∨" | "\\/") and)*
+  and := not (("and" | "&&" | "∧" | "/\\") not)*
+  not := ("not" | "Not" | "!" | "¬") not | cmp
   cmp := sum (("=" | "==" | "!=" | "≠" | "<" | "<=" | "≤" | ">" | ">=" | "≥") sum)?
   sum := prod (("+" | "-") prod)*
   prod := unary (("*" | "/") unary)*
@@ -65,7 +65,7 @@ partial def lexString (cs : List Char) (acc : String := "") : Option (String × 
   | c :: rest => lexString rest (acc.push c)
   | [] => none
 
-def symbols : List String := ["==", "!=", "<=", ">=", "&&", "||", "≠", "≤", "≥", "∧", "∨", "¬", "=", "<", ">", "+", "-", "*", "/", "(", ")", ".", "!"]
+def symbols : List String := ["/\\", "\\/", "==", "!=", "<=", ">=", "&&", "||", "≠", "≤", "≥", "∧", "∨", "¬", "=", "<", ">", "+", "-", "*", "/", "(", ")", ".", "!"]
 
 partial def lex (cs : List Char) (acc : Array Tok := #[]) : Except String (Array Tok) :=
   match cs with
@@ -114,19 +114,19 @@ partial def pOr : Parse Expr := do
   let mut e ← pAnd
   repeat
     let t ← peek
-    if (isWord t ["or"]).isSome || (isSym t ["||", "∨"]).isSome then advance; e := .bin "or" e (← pAnd) else break
+    if (isWord t ["or"]).isSome || (isSym t ["||", "∨", "\\/"]).isSome then advance; e := .bin "or" e (← pAnd) else break
   return e
 
 partial def pAnd : Parse Expr := do
   let mut e ← pNot
   repeat
     let t ← peek
-    if (isWord t ["and"]).isSome || (isSym t ["&&", "∧"]).isSome then advance; e := .bin "and" e (← pNot) else break
+    if (isWord t ["and"]).isSome || (isSym t ["&&", "∧", "/\\"]).isSome then advance; e := .bin "and" e (← pNot) else break
   return e
 
 partial def pNot : Parse Expr := do
   let t ← peek
-  if (isWord t ["not"]).isSome || (isSym t ["!", "¬"]).isSome then advance; return .not (← pNot)
+  if (isWord t ["not", "Not"]).isSome || (isSym t ["!", "¬"]).isSome then advance; return .not (← pNot)
   pCmp
 
 partial def pCmp : Parse Expr := do

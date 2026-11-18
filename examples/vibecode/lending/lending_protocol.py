@@ -253,41 +253,41 @@ class Server:
         return self._then(self._ep)
 # The message types (selfhost.session.types): send methods take these; received bodies are these.
 
-@dataclass
+@dataclass(frozen=True)
 class Borrow:
     """The book a member asks to borrow."""
     book: str
 
-@dataclass
+@dataclass(frozen=True)
 class Hold:
     """The Desk asks the Librarian to approve a hold on the book."""
     book: str
 
-@dataclass
+@dataclass(frozen=True)
 class Return:
     book: str
 
-@dataclass
+@dataclass(frozen=True)
 class Lent:
     pass
 
-@dataclass
+@dataclass(frozen=True)
 class Returned:
     pass
 
-@dataclass
+@dataclass(frozen=True)
 class Approved:
     pass
 
-@dataclass
+@dataclass(frozen=True)
 class Waitlisted:
     pass
 
-@dataclass
+@dataclass(frozen=True)
 class Denied:
     pass
 
-@dataclass
+@dataclass(frozen=True)
 class Refused:
     pass
 

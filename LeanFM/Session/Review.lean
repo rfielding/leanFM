@@ -133,7 +133,7 @@ and a protocol over its bound (GoServer's parallel sessions interleave into more
 is reported as not checked rather than stopping the review, so the structure, HTTP and role checks
 still answer. -/
 def Global.reviewAll (g : Global String) (roles : List String) : List Finding × List String := Id.run do
-  let core := (g.issues roles).map fun m => { kind := "structure", message := m, suggestion := suggestCore m : Finding }
+  let core := (g.issues roles ++ g.httpIssues).map fun m => { kind := "structure", message := m, suggestion := suggestCore m : Finding }
   -- HTTP where the protocol says so: routes mark requests
   let msgs := g.messages
   let routed := (msgs.filter (·.route.isSome)).map fun i => (i.src, i.dst)

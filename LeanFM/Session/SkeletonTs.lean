@@ -395,8 +395,14 @@ def tsMessage (m : Types.Message) : String :=
   let doc := if m.doc.isEmpty then [] else [s!"/** {m.doc} */"]
   let name := Types.protoName m.name
   if m.fields.isEmpty then "\n".intercalate (doc ++ [s!"export type {name} = Record<string, never>;"])
-  else "\n".intercalate (doc ++ [s!"export interface {name} \{"] ++
-    m.fields.map (fun f => s!"  {f.name}{match f.ty with | .opt _ => "?" | _ => ""}: {tsType f.ty};") ++ ["}"])
+  else
+    let checks := m.checks
+    let check := if checks.isEmpty then [] else
+      ["", s!"/** Refuses a {name} its constructor could not make. */", s!"export function check{name}(m: {name}): {name} \{"] ++
+      checks.map (fun (n, t, ex) => s!"  if (!{Types.tsCond ex}) throw new ProtocolError({Skeleton.lit s!"{m.name}.{n} does not hold: {t}"});") ++
+      ["  return m;", "}"]
+    "\n".intercalate (doc ++ [s!"export interface {name} \{"] ++
+      m.fields.map (fun f => s!"  readonly {f.name}{match f.ty with | .opt _ => "?" | _ => ""}: {tsType f.ty};") ++ ["}"] ++ check)
 
 open Skeleton in
 /-- The protocol as a TypeScript module: the runtime, then every role's states as classes. -/

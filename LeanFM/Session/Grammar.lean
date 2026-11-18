@@ -61,6 +61,67 @@ def cond : Parser := { fn := condFn }
 @[combinator_formatter cond] def cond.formatter : Formatter := pure ()
 @[combinator_parenthesizer cond] def cond.parenthesizer : Parenthesizer := pure ()
 
+/-! ## Constraint fields and Lean declarations -/
+
+/-- The operators that make a field's type a proposition about the structure's own fields. -/
+def constraintOps : List String := ["<=", ">=", "<", ">", "=", "\u2260", "\u2264", "\u2265", "\u2227", "\u2228", "\u00ac", "/\\", "\\/", "!="]
+
+/-- A constraint field's proposition: the rest of the line (outside brackets), when it holds an
+operator, such as `amount <= 10000`. A plain type name is not a constraint, so the field parser
+falls back to a type. -/
+def constraintFn : ParserFn := fun c s => Id.run do
+  let input := c.inputString
+  let start := s.pos
+  let mut i := start
+  let mut depth : Nat := 0
+  while !String.Pos.Raw.atEnd input i do
+    let ch := String.Pos.Raw.get input i
+    if ch == '\n' && depth == 0 then break
+    if ch == '-' && String.Pos.Raw.get input (String.Pos.Raw.next input i) == '-' && depth == 0 then break
+    if ch == '(' || ch == '[' then depth := depth + 1
+    if (ch == ')' || ch == ']') && depth > 0 then depth := depth - 1
+    i := String.Pos.Raw.next input i
+  let text := (String.Pos.Raw.extract input start i).trimAscii.toString
+  -- `y : Nat := 3` is a default value (refused elsewhere), not a proposition
+  if text.isEmpty || (text.splitOn ":=").length > 1 || !(constraintOps.any (text.contains ·)) then
+    return s.mkErrorAt "a proposition about this structure's fields, such as amount <= 10000" start
+  let info := SourceInfo.original "".toRawSubstring start "".toRawSubstring i
+  -- a token takes the whitespace after it; this raw text must too, or the next token fails
+  return whitespace c (s.setPos i |>.pushSyntax (Syntax.atom info text))
+
+def constraint : Parser := { fn := constraintFn }
+@[combinator_formatter constraint] def constraint.formatter : Formatter := pure ()
+@[combinator_parenthesizer constraint] def constraint.parenthesizer : Parenthesizer := pure ()
+
+/-- Words that start a Lean declaration the tools carry but do not read: theorems and definitions
+about the messages (smart constructors, encodings, proofs), which Lean checks when the file is
+elaborated. -/
+def leanDeclWords : List String :=
+  ["theorem", "def", "instance", "abbrev", "example", "lemma", "private", "protected", "noncomputable",
+   "open", "namespace", "end", "section", "attribute", "@["]
+-- `#eval`, `#guard` and other commands are not here: in a protocol they are an error, never carried
+
+/-- A Lean declaration, kept as text: from one of `leanDeclWords` to the next line that starts in
+column 0. Its continuation lines are indented, as Lean code is. -/
+def leanDeclFn : ParserFn := fun c s => Id.run do
+  let input := c.inputString
+  let start := s.pos
+  let rest := (String.Pos.Raw.extract input start input.rawEndPos)
+  if !(leanDeclWords.any fun w => rest.startsWith (w ++ " ") || rest.startsWith (w ++ "\n") || (w == "@[" && rest.startsWith w)) then
+    return s.mkErrorAt "a Lean declaration" start
+  let mut i := start
+  while !String.Pos.Raw.atEnd input i do
+    let ch := String.Pos.Raw.get input i
+    i := String.Pos.Raw.next input i
+    if ch == '\n' && !String.Pos.Raw.atEnd input i then
+      let nx := String.Pos.Raw.get input i
+      if !(nx == ' ' || nx == '\t' || nx == '\n' || nx == '\r') then break
+  let text := String.Pos.Raw.extract input start i
+  let info := SourceInfo.original "".toRawSubstring start "".toRawSubstring i
+  return whitespace c (s.setPos i |>.pushSyntax (Syntax.atom info text))
+
+def leanDecl : Parser := node `LeanFM.Session.Grammar.leanDecl { fn := leanDeclFn }
+
 /-! ## Annotations: numbers, durations, amounts and times -/
 
 def frac : Parser := node `LeanFM.Session.Grammar.frac (numLit >> optional ("/" >> numLit))
@@ -191,15 +252,20 @@ def fieldTypeFn : ParserFn := fun c s =>
 def fieldType : Parser := { fn := fieldTypeFn }
 
 def field : Parser := node `LeanFM.Session.Grammar.field
-  (many1 ident >> ":" >> fieldType >> notFollowedBy ":=" "default values (:=); they are not part of a message type")
+  (many1 ident >> ":" >> (node `LeanFM.Session.Grammar.constraintField (atomic constraint) <|> fieldType) >>
+    notFollowedBy ":=" "default values (:=); they are not part of a message type")
+/-- `mk ::` or `private mk ::`: the structure's constructor, private when only a smart constructor
+(a function that checks, then builds) may make one. -/
+def ctorLine : Parser := node `LeanFM.Session.Grammar.ctorLine
+  (atomic (optional "private " >> ident >> " ::"))
 def structureBody : Parser := node `LeanFM.Session.Grammar.structureBody
-  ("structure " >> ident >> optional ("where" >> many field) >> optional ("deriving" >> sepBy1 ident ","))
+  ("structure " >> ident >> optional ("where" >> optional ctorLine >> many field) >> optional ("deriving" >> sepBy1 ident ","))
 
 /-- A file as the tools read it: the Lean header, then structures, protocols and requirements. -/
 def file : Parser := node `LeanFM.Session.Grammar.file
   (many (node `LeanFM.Session.Grammar.import ("import " >> ident)) >>
     many (node `LeanFM.Session.Grammar.item (optional Command.docComment >>
-      (structureBody <|> protocolBody <|> requireBody <|> systemBody))) >>
+      (structureBody <|> protocolBody <|> requireBody <|> systemBody <|> leanDecl))) >>
     notFollowedBy (Command.moduleDoc) "module doc comment (/-! -/); use -- comments")
 
 /-! ## Running the grammar on text -/

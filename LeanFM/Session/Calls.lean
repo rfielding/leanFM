@@ -143,6 +143,26 @@ def Global.calls [DecidableEq R] [ToString R] (g0 : Global R) : List (Call R) :=
           nested := match r.id with | some id => build fuel (some id) | none => [] }
   (build 16 none).map Call.written
 
+/-- HTTP shape, where the fields say it. A message with a status is a response, so its cause
+chain reaches the request it answers (a message from its receiver to its sender); a message with a
+route is a request, so it answers nothing. The request a status answers need not have a route:
+`SendCode from Auth to Sms` answered by `Queued ... status 202` is a call over some other transport.
+A protocol with neither routes nor statuses has nothing to check. -/
+def Global.httpIssues [DecidableEq R] [ToString R] (g : Global R) : List String :=
+  let ms := g.scopeIds.classify
+  let label (id : String) := ((ms.find? (·.msg.id == some id)).map (·.msg.label)).getD id
+  let responses := ms.flatMap fun c =>
+    let m := c.msg
+    match m.status, c.answers with
+    | some s, none =>
+      [s!"{m.label} has status {s}, so it is a response, but no request from {m.dst} to {m.src} is up its cause chain; give it the request it answers as its cause"]
+    | _, _ => []
+  let requests := ms.flatMap fun c => match c.msg.route, c.answers with
+    | some rt, some r =>
+      [s!"{c.msg.label} has route {rt}, so it is a request, but its cause chain makes it a response to {label r}"]
+    | _, _ => []
+  (responses ++ requests).eraseDups
+
 def Interaction.withStatus (i : Interaction R) : String :=
   i.label ++ (match i.status with | some s => s!" {s}" | none => "")
 

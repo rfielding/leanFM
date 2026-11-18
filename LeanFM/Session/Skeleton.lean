@@ -480,7 +480,12 @@ def pyMessage (m : Types.Message) : String :=
   let doc := if m.doc.isEmpty then [] else [s!"    \"\"\"{m.doc}\"\"\""]
   let body := if m.fields.isEmpty && doc.isEmpty then ["    pass"]
     else doc ++ m.fields.map fun f => s!"    {f.name}: {pyType f.ty}"
-  "\n".intercalate (["@dataclass", s!"class {Types.protoName m.name}:"] ++ body)
+  -- messages are observed facts: frozen, and a constraint that fails refuses to construct one
+  let checks := m.checks
+  let post := if checks.isEmpty then [] else
+    ["", "    def __post_init__(self) -> None:"] ++ checks.map fun (n, t, ex) =>
+      s!"        if not {Types.pyCond ex}:\n            raise ValueError({Skeleton.lit s!"{m.name}.{n} does not hold: {t}"})"
+  "\n".intercalate (["@dataclass(frozen=True)", s!"class {Types.protoName m.name}:"] ++ body ++ post)
 
 open Skeleton in
 /-- The protocol as a Python module: the runtime, then every role's states as classes. -/

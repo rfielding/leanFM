@@ -246,16 +246,16 @@ export class Server<S extends State, T extends State> {
 
 /** The book a member asks to borrow. */
 export interface Borrow {
-  book: string;
+  readonly book: string;
 }
 
 /** The Desk asks the Librarian to approve a hold on the book. */
 export interface Hold {
-  book: string;
+  readonly book: string;
 }
 
 export interface Return {
-  book: string;
+  readonly book: string;
 }
 
 export type Lent = Record<string, never>;

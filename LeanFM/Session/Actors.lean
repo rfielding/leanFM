@@ -73,9 +73,10 @@ def check (evs : List LogEvent) : List (String × String) := Id.run do
   for e in evs do
     if seen.contains e.id then out := out ++ [(e.id, s!"event id {e.id} appears twice")]
     seen := e.id :: seen
+    -- a prev or cause that names no event is Linked.check's to report
     if let some p := e.prev then
       match byId.lookup p with
-      | none => out := out ++ [(e.id, s!"prev {p} is not an event of the log")]
+      | none => pure ()
       | some q =>
         if p == e.id then out := out ++ [(e.id, "an event cannot be its own prev")]
         else if src q != src e then
