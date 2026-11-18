@@ -158,6 +158,36 @@ partial def conditions : List Stmt → List (String × String)
     | .bounded _ _ b o => conditions b ++ conditions o
     | _ => []) ++ conditions rest
 
+/-- Every message's label and where condition in a body, each with the ids in scope where it
+stands: its own id, then the messages before it on its path, nearest first. A protocol may reuse
+an id in another place (GoServer names many messages `a` or `x`), so a condition reads the
+message its id names there, not every message the id names anywhere. After a choice or parallel
+branches, an id bound in a branch names any of the labels the branches gave it. -/
+partial def scopedConditions (scope : List (String × List String)) :
+    List Stmt → List (String × String × List (String × List String)) × List (String × List String)
+  | [] => ([], scope)
+  | s :: rest =>
+    let (here, scope') : List (String × String × List (String × List String)) × List (String × List String) :=
+      match s with
+      | .msg id label _ _ _ _ _ g =>
+        let sc := match id with | some x => (x, [label]) :: scope | none => scope
+        ((match g with | some t => [(label, t, sc)] | none => []), sc)
+      | .timed _ m | .valued _ m => scopedConditions scope [m]
+      | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs =>
+        let outs := bs.map (scopedConditions scope)
+        let bound := outs.flatMap fun (_, sc) => (sc.take (sc.length - scope.length))
+        let names := (bound.map (·.1)).eraseDups
+        let merged := names.map fun x => (x, (bound.filter (·.1 == x) |>.flatMap (·.2)).eraseDups)
+        (outs.flatMap (·.1), merged ++ scope)
+      | .loop _ b | .sessions b => scopedConditions scope b
+      | .bounded _ _ b o =>
+        let (c1, sc1) := scopedConditions scope b
+        let (c2, _) := scopedConditions sc1 o
+        (c1 ++ c2, sc1)
+      | _ => ([], scope)
+    let (more, final) := scopedConditions scope' rest
+    (here ++ more, final)
+
 /-- Rename the ids in `ids` (and causes and time references to them) with suffix `sfx`. -/
 partial def renameIds (ids : List String) (sfx : String) : List Stmt → List Stmt
   | [] => []
@@ -933,8 +963,10 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
   Types.check env
   for d in defs do
     let ids := idLabels d.body
-    let labelsOf (x : String) : List String := ((ids.filter (·.1 == x)).map (·.2)).eraseDups
-    for (label, text) in conditions d.body do
+    -- an id not in scope (bound later in a loop, say) falls back to every label it has
+    let everywhere (x : String) : List String := ((ids.filter (·.1 == x)).map (·.2)).eraseDups
+    for (label, text, scope) in (scopedConditions [] d.body).1 do
+      let labelsOf (x : String) : List String := (scope.lookup x).getD (everywhere x)
       match Types.checkCondition env labelsOf text with
       | .ok _ => pure ()
       | .error e => throw s!"in {d.name}, {label}: {e}"

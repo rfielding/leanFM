@@ -1634,6 +1634,14 @@ partial def yaml (j : Json) (ind : String := "") : String :=
   | .str t => (Json.str t).compress
   | other => other.compress
 
+/-- An OpenAPI document as YAML, read top down: the version and info first, then paths, then
+components (a Json object keeps its keys sorted, which would put components first). -/
+def openApiYaml (doc : Json) : String :=
+  let order := ["openapi", "info", "jsonSchemaDialect", "servers", "paths", "components"]
+  let kvs := match doc with | .obj o => o.toList | _ => []
+  let ordered := (order.filterMap fun k => (kvs.lookup k).map (k, ·)) ++ kvs.filter (fun (k, _) => !order.contains k)
+  "\n".intercalate (ordered.map fun (k, v) => yaml (Json.mkObj [(k, v)]))
+
 /-- A role's HTTP interface: the requests it receives with their routes, as OpenAPI 3.1. -/
 def openapi (args : Json) : Except String Json := do
   let p ← parseProtocol args
@@ -1650,11 +1658,7 @@ def openapi (args : Json) : Except String Json := do
   -- served), which the text content repeats; a large one goes once, without the structured copy,
   -- so a whole server's interface fits the result limit; only a document too large even for that
   -- falls back to compact JSON
-  -- OpenAPI documents are read top down: the version and info first, then paths, then components
-  let order := ["openapi", "info", "jsonSchemaDialect", "servers", "paths", "components"]
-  let kvs := match doc with | .obj o => o.toList | _ => []
-  let ordered := (order.filterMap fun k => (kvs.lookup k).map (k, ·)) ++ kvs.filter (fun (k, _) => !order.contains k)
-  let docYaml := "\n".intercalate (ordered.map fun (k, v) => yaml (Json.mkObj [(k, v)])) ++ "\n"
+  let docYaml := openApiYaml doc ++ "\n"
   let large := docYaml.length > 20000
   let tooLarge := docYaml.length > limits.maxResult - 10000
   let (code, language) := if tooLarge then (doc.compress, "json") else (docYaml, "yaml")
