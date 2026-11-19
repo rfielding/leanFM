@@ -54,7 +54,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check
+check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -229,3 +229,7 @@ ui-snapshots:
 .PHONY: sandbox-check
 sandbox-check:
 	python3 scripts/chatui_sandbox_check.py
+
+.PHONY: constructors-check
+constructors-check:
+	lake env lean ./ConstructorsExample.lean

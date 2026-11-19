@@ -39,6 +39,8 @@
   .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button.fold { font-size: 12px; padding: 1px 8px; margin: 2px 0 4px; }
+  .hidden-note { font-size: 12px; margin: 2px 0 4px; }
+  .hidden-note button { font-size: 12px; padding: 0 6px; }
   button.foldhead { display: flex; width: 100%; align-items: center; gap: 8px; text-align: left; margin: 0 0 6px;
     padding: 4px 8px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg); border-color: var(--ink-arrow); }
   button.foldhead .hint { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--dim); }
@@ -53,9 +55,7 @@
   .sessbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
   .sessbar button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
   .sessbar button.on { border-color: var(--amber); border-width: 2px; color: var(--amber); font-weight: 600; }
-  .evrow .ses[title], .evrow .sid[title] { cursor: pointer; text-decoration: underline dotted; }
   .evrow > span { flex: none; }
-  .evrow .sid { color: var(--cyan); }
   .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
   .sizebar { display: flex; align-items: center; gap: 6px; }
   .sizebar button { font-weight: 700; min-width: 2.6em; }
@@ -140,6 +140,24 @@
   .src { counter-reset: none; }
   .src .ln { color: var(--dim); user-select: none; display: inline-block; min-width: 3.5em; }
   details > summary { cursor: pointer; color: var(--dim); }
+  /* the navigator: the distillation chain chat, book, requirements, code; dark in either theme */
+  .stagenav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-radius: 8px;
+    background: #0b0f14; color: #eceae6; border: 1px solid #263445; }
+  .stagenav .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .stagenav button, .stagenav select { background: #16202b; color: #eceae6; border: 1px solid #263445; }
+  .stagenav button.on { border-color: #fbbf24; border-width: 2px; color: #fbbf24; font-weight: 600; }
+  .stagenav .arrow { color: #9aa6b2; padding: 0 2px; }
+  .stagenav label { color: #9aa6b2; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .chatlog { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; }
+  .chatmsg { border-left: 3px solid var(--edge); padding: 2px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .chatmsg.user { border-left-color: var(--amber); }
+  .chatmsg.assistant { border-left-color: var(--cyan); }
+  .chatmsg .who { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; display: block; }
+  .ctl-notation { font-size: 1.25em; font-weight: 600; white-space: pre-wrap; margin: 4px 0; }
+  .bookpage { display: block; width: 100%; max-width: 1000px; height: auto; margin: 0 auto; border-radius: 4px; background: #fff; }
+  .codegrid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 10px; }
+  .codegrid pre.filetext { max-height: 70vh; overflow: auto; }
+  .frow .links { color: var(--amber); font-size: 12px; margin-left: 6px; }
 </style>
 </head>
 <body>
@@ -348,7 +366,12 @@ function collapsible(what, child) {
 // activation bars shorten instead of breaking. An included protocol (ref) starts folded; a click on
 // a frame's header folds or opens it; "states" on a ref frame folds it and shows its roles' state
 // machines below; a click on an actor shows that actor's state machine in the protocol drawn.
-const FRAME_HEAD = 26, FRAME_FOOT = 6;
+// Calls fold too (clause selfhost.session.diagram.folds): LeanFM lists every request with its
+// responses and the span between them; a folded call is one double-headed arrow from caller to
+// callee, and calls at depth 2 and below start folded. A role whose every message is folded away
+// loses its lifeline and column and is named in a "hidden:" note whose names open it again.
+// Folding and eliding change only what is drawn: the shapes and calls LeanFM sent stay as they are.
+const FRAME_HEAD = 26, FRAME_FOOT = 6, CALL_ROW = 30;
 function rolesOfProtocol(name) {
   const src = text ? text.value : "";
   const re = new RegExp("protocol\\s+" + name.replace(/[.]/g, "\\.") + "\\s*\\(([^)]*)\\)");
@@ -371,6 +394,15 @@ function diagram(model, opts) {
     frames.push(f);
   }
   frames.sort((a, b) => (a.y - b.y) || (b.h - a.h));
+  // the calls, lanes and rows LeanFM gives for folding and eliding; nothing here derives them
+  const calls = (Array.isArray(model.calls) ? model.calls : []).slice(0, MAX_SHAPES).filter((c) => c && typeof c === "object").map((c) => ({
+    top: num(c.top), y: num(c.y), bottom: num(c.bottom), depth: num(c.depth), caller: String(c.caller || ""), callee: String(c.callee || ""),
+    label: String(c.label || ""), roles: Array.isArray(c.roles) ? c.roles.map(String) : [], open: num(c.depth) < 2 }));
+  const lanes = (Array.isArray(model.lanes) ? model.lanes : []).filter((l) => l && typeof l.role === "string").map((l) => ({ role: l.role, x: num(l.x) }));
+  const colW = num(model.colW);
+  const steps = (Array.isArray(model.steps) ? model.steps : []).slice(0, MAX_SHAPES).filter((t) => t && typeof t === "object")
+    .map((t) => ({ y: num(t.y), roles: [String(t.src || ""), String(t.dst || "")] }));
+  const laneX = (role) => { const l = lanes.find((q) => q.role === role); return l ? l.x : 0; };
   // ---- the source each drawn part comes from, as the explorer's tree finds it: within the protocol
   // that owns the part (the innermost included protocol around it, else the one drawn), the next
   // line, in drawing order, that has the part's message ("Label from"), event ("Label at") or
@@ -428,19 +460,22 @@ function diagram(model, opts) {
   let select = Array.isArray(opts.select) ? opts.select : [];
   const lit = (rg) => !!rg && select.some((q) => q.protocol === rg.protocol && q.first <= rg.last && q.last >= rg.first && !(rg.first < q.first && rg.last > q.last && items.some((o) => o.frame && o.range === rg)));
   const openAround = () => {
-    for (const it of items) if (!it.frame && lit(it.range)) for (const f of frames) if (it.y > f.y && it.y < f.y + f.h) f.mode = "open";
+    for (const it of items) if (!it.frame && lit(it.range)) {
+      for (const f of frames) if (it.y > f.y && it.y < f.y + f.h) f.mode = "open";
+      for (const c of calls) if (it.y > c.top && it.y <= c.bottom) c.open = true;
+    }
   };
   openAround();
   let scrolled = false;
-  const body = el("div"), scroll = el("div", "scroll"), below = el("div");
-  body.append(scroll, below);
+  const body = el("div"), scroll = el("div", "scroll"), below = el("div"), hiddenBox = el("div", "controls hidden-note");
+  body.append(hiddenBox, scroll, below);
   const box = collapsible("interaction diagram", body);
   // jumping into an included protocol: the caller may take it (the tree selects that protocol);
   // otherwise this drawing is replaced by the included protocol's own, with a trail back
   const trail = [], crumbs = el("div", "controls crumbs"), holder = el("div");
   const enter = typeof opts.onEnter === "function" ? opts.onEnter : (name) => { trail.push(name); goTo(); };
   function goTo() {
-    if (!trail.length) { body.replaceChildren(scroll, below); render(); return; }
+    if (!trail.length) { body.replaceChildren(hiddenBox, scroll, below); render(); return; }
     const names = [opts.focus || "whole protocol"].concat(trail);
     crumbs.replaceChildren(el("span", "meta", "In:"));
     names.forEach((nm, i) => {
@@ -465,24 +500,61 @@ function diagram(model, opts) {
     return pnl;
   };
   function render() {
-    // the folded regions: inside the header of each folded frame that no folded frame contains
-    const folded = [];
+    // the folded regions: inside the header of each folded frame, and each folded call from its
+    // request to its last response (one row kept for the call's arrow); only regions no taken
+    // region contains, so the regions taken never overlap
+    const cand = [];
     for (const f of frames) {
       if (f.mode === "open") continue;
       const a = f.y + FRAME_HEAD, b = f.y + f.h - FRAME_FOOT;
-      if (b <= a || folded.some((r) => a >= r.a && b <= r.b)) continue;
-      folded.push({ a, b, f, steps: 0 });
+      if (b > a) cand.push({ a, b, keep: 0, lo: f.y, hi: f.y + f.h, f, steps: 0, incl: false });
     }
-    const inside = (y) => folded.find((r) => y > r.a && y < r.b);
-    const map = (y) => { let d = 0; for (const r of folded) { if (y >= r.b) d += r.b - r.a; else if (y > r.a) d += y - r.a; } return y - d; };
-    const lift = folded.reduce((d, r) => d + (r.b - r.a), 0), h = h0 - lift;
-    const svg = sv("svg", { viewBox: `0 0 ${w} ${h}`, width: w, height: h, role: "img",
+    for (const c of calls) if (!c.open && c.bottom > c.top + CALL_ROW) cand.push({ a: c.top, b: c.bottom, keep: CALL_ROW, lo: c.top, hi: c.bottom, c, steps: 0, incl: true });
+    cand.sort((p, q) => (p.lo - q.lo) || ((q.hi - q.lo) - (p.hi - p.lo)));
+    const folded = [];
+    for (const r of cand) if (!folded.some((o) => r.lo >= o.lo && r.hi <= o.hi)) folded.push(r);
+    const inside = (y) => folded.find((r) => y > r.a && (r.incl ? y <= r.b : y < r.b));
+    const map = (y) => {
+      let d = 0;
+      for (const r of folded) { const k = r.a + r.keep; if (y >= r.b) d += r.b - k; else if (y > k) d += y - k; }
+      return y - d;
+    };
+    const lift = folded.reduce((d, r) => d + (r.b - r.a - r.keep), 0), h = h0 - lift;
+    // the roles left with no message outside a folded region (and not an end of a folded call
+    // drawn) are elided: their columns are cut out of x; when that would be every role, none is
+    const used = new Set(), seen = new Set();
+    for (const t of steps) { t.roles.forEach((r) => used.add(r)); if (!inside(t.y)) t.roles.forEach((r) => seen.add(r)); }
+    for (const r of folded) if (r.c) { seen.add(r.c.caller); seen.add(r.c.callee); }
+    let hidden = colW > 0 ? lanes.filter((l) => used.has(l.role) && !seen.has(l.role)) : [];
+    if (!lanes.some((l) => used.has(l.role) && seen.has(l.role))) hidden = [];
+    const hiddenSet = new Set(hidden.map((l) => l.role));
+    const firstVis = lanes.findIndex((l) => !hiddenSet.has(l.role));
+    let lastVis = -1; lanes.forEach((l, i) => { if (!hiddenSet.has(l.role)) lastVis = i; });
+    const cuts = hidden.map((l) => { const i = lanes.indexOf(l); return i < firstVis ? [l.x, l.x + colW] : i > lastVis ? [l.x - colW, l.x] : [l.x - colW / 2, l.x + colW / 2]; });
+    const mapX = (x) => { let d = 0; for (const [a, b] of cuts) { if (x >= b) d += b - a; else if (x > a) d += x - a; } return x - d; };
+    const onHidden = (cx) => hidden.some((l) => Math.abs(l.x - cx) < 2);
+    const wd = Math.max(1, w - colW * hidden.length);
+    hiddenBox.replaceChildren();
+    if (hidden.length) {
+      hiddenBox.appendChild(el("span", "meta", "hidden:"));
+      for (const l of hidden) {
+        const b = el("button", "", l.role);
+        b.setAttribute("aria-label", "Show " + l.role + ": open the folded calls and frames that use it");
+        b.addEventListener("click", () => {
+          for (const c of calls) if (c.roles.includes(l.role)) c.open = true;
+          for (const f of frames) if (f.mode !== "open" && steps.some((t) => t.roles.includes(l.role) && t.y > f.y && t.y < f.y + f.h)) f.mode = "open";
+          render();
+        });
+        hiddenBox.appendChild(b);
+      }
+    }
+    const svg = sv("svg", { viewBox: `0 0 ${wd} ${h}`, width: wd, height: h, role: "img",
       "aria-label": "Diagram generated by LeanFM. Frame headers and actors are clickable.", "font-family": "system-ui, sans-serif" });
     const defs = sv("defs", {});
     const marker = sv("marker", { id: "head", viewBox: "0 0 10 10", refX: 10, refY: 5, markerUnits: "userSpaceOnUse", markerWidth: 12, markerHeight: 12, orient: "auto-start-reverse" });
     marker.appendChild(sv("path", { d: "M0 0 L10 5 L0 10 z", fill: "var(--ink-arrow)" }));
     defs.appendChild(marker); svg.appendChild(defs);
-    svg.appendChild(sv("rect", { width: w, height: h, fill: "var(--ink-bg)" }));
+    svg.appendChild(sv("rect", { width: wd, height: h, fill: "var(--ink-bg)" }));
     const hlShapes = new Set();
     for (const it of items) if (!it.frame && lit(it.range)) { hlShapes.add(it.shape); hlShapes.add(it.label); }
     let firstLit = null;
@@ -494,12 +566,17 @@ function diagram(model, opts) {
         const y1 = num(s.y), y2 = y1 + num(s.h);
         if (inside(y1) && inside(y2) && inside(y1) === inside(y2)) continue;
         const my1 = map(y1), my2 = map(y2);
-        svg.appendChild(sv("rect", Object.assign({}, cls, { x: num(s.x), y: my1, width: num(s.w), height: Math.max(0, my2 - my1),
+        const isFrame = typeof s.cls === "string" && s.cls.startsWith("frame ");
+        if (s.cls === "role" && onHidden(num(s.x) + num(s.w) / 2)) continue;
+        const rx = isFrame ? mapX(num(s.x)) : mapX(num(s.x) + num(s.w) / 2) - num(s.w) / 2;
+        const rw = isFrame ? mapX(num(s.x) + num(s.w)) - rx : num(s.w);
+        svg.appendChild(sv("rect", Object.assign({}, cls, { x: rx, y: my1, width: rw, height: Math.max(0, my2 - my1),
           rx: num(s.rx), fill: ink(s.fill), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) }, hl ? { "stroke-width": 3 } : {})));
       } else if (s.k === "line") {
         const y1 = num(s.y1), y2 = num(s.y2);
         if (inside(y1) && inside(y2)) { if (/msg/.test(s.cls || "")) inside(y1).steps++; continue; }
-        const a = Object.assign({}, cls, { x1: num(s.x1), y1: map(y1), x2: num(s.x2), y2: map(y2), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
+        if (s.cls === "lifeline" && onHidden(num(s.x1))) continue;
+        const a = Object.assign({}, cls, { x1: mapX(num(s.x1)), y1: map(y1), x2: mapX(num(s.x2)), y2: map(y2), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
         if (s.width) a["stroke-width"] = num(s.width);
         if (hl) a["stroke-width"] = 3.5;
         if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
@@ -511,14 +588,15 @@ function diagram(model, opts) {
         if (!m) continue;
         const y = Number(m[2]);
         if (inside(y)) { if (/msg/.test(s.cls || "")) inside(y).steps++; continue; }
-        const a = Object.assign({}, cls, { d: `M${m[1]} ${map(y)}${m[3]}`, fill: ink(s.fill), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
+        const a = Object.assign({}, cls, { d: `M${mapX(Number(m[1]))} ${map(y)}${m[3]}`, fill: ink(s.fill), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
         if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
         if (s.arrow === true) { a["marker-end"] = "url(#head)"; a["stroke-width"] = 2.5; }
         svg.appendChild(sv("path", a));
       } else if (s.k === "text") {
         const y = num(s.y);
         if (inside(y)) continue;
-        const a = Object.assign({}, cls, { x: num(s.x), y: map(y), "text-anchor": ["start", "middle", "end"].includes(s.anchor) ? s.anchor : "middle",
+        if (s.cls === "boxed" && onHidden(num(s.x))) continue;
+        const a = Object.assign({}, cls, { x: mapX(num(s.x)), y: map(y), "text-anchor": ["start", "middle", "end"].includes(s.anchor) ? s.anchor : "middle",
           fill: hl ? "var(--ink-hl)" : ink(s.fill), "font-size": num(s.size) || 12 });
         if (s.cls !== "boxed") Object.assign(a, { stroke: "var(--ink-bg)", "stroke-width": 4, "stroke-linejoin": "round", "paint-order": "stroke" });
         if (s.bold === true || hl) a["font-weight"] = "bold";
@@ -527,8 +605,8 @@ function diagram(model, opts) {
     }
     for (const f of frames) {
       if (!lit(f.range) || inside(f.y)) continue;
-      const t = map(f.y), b = map(f.y + f.h);
-      svg.appendChild(sv("rect", { x: f.x - 2, y: t - 2, width: f.w + 4, height: b - t + 4, fill: "var(--ink-hl)", "fill-opacity": 0.07, stroke: "var(--ink-hl)", "stroke-width": 2 }));
+      const t = map(f.y), b = map(f.y + f.h), fx = mapX(f.x), fw = mapX(f.x + f.w) - fx;
+      svg.appendChild(sv("rect", { x: fx - 2, y: t - 2, width: fw + 4, height: b - t + 4, fill: "var(--ink-hl)", "fill-opacity": 0.07, stroke: "var(--ink-hl)", "stroke-width": 2 }));
       if (firstLit === null || f.y < firstLit) firstLit = f.y;
     }
     // controls drawn over the diagram: frame headers, the states link of a ref frame, the actors
@@ -539,10 +617,12 @@ function diagram(model, opts) {
       r.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onClick(); } });
       svg.appendChild(r);
     };
-    for (const f of frames) {
-      const top = map(f.y);
-      if (inside(f.y)) continue;
-      const shut = folded.find((r) => r.f === f);
+    for (const f0 of frames) {
+      const top = map(f0.y);
+      if (inside(f0.y)) continue;
+      const shut = folded.find((r) => r.f === f0);
+      // the header's controls, at the frame's drawn x (columns of hidden roles cut out)
+      const f = Object.assign({}, f0, { x: mapX(f0.x), w: mapX(f0.x + f0.w) - mapX(f0.x) });
       if (f.mode !== "open") {
         const note = f.mode === "states" ? "◆ states below" : `▸ ${shut ? shut.steps : 0} step${shut && shut.steps === 1 ? "" : "s"} hidden`;
         svg.appendChild(sv("text", { x: f.x + f.w - (f.kind === "ref" ? 74 + 7 * (f.name.length + 5) : 10), y: top + 13, "text-anchor": "end", fill: "var(--ink-frame)", "font-size": 11,
@@ -551,13 +631,13 @@ function diagram(model, opts) {
       const what = (f.kind === "ref" ? "included protocol " : f.kind + " frame ") + (f.name || "");
       const ow = f.kind === "ref" && f.name ? 7 * (f.name.length + 5) : 0;  // the "open Name" link's width
       hot(f.x, top, f.w - (f.kind === "ref" ? 66 + ow : 0), 20, (f.mode === "open" ? "Fold " : "Show the interaction of ") + what,
-        () => { f.mode = f.mode === "open" ? "hidden" : "open"; pick(f.range, what); render(); });
+        () => { f0.mode = f0.mode === "open" ? "hidden" : "open"; pick(f0.range, what); render(); });
       if (f.kind === "ref" && f.name) {
         const on = f.mode === "states";
         svg.appendChild(sv("text", { x: f.x + f.w - 8, y: top + 13, "text-anchor": "end", fill: "var(--ink-arrow)", "font-size": 11,
           "text-decoration": "underline", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, on ? "interaction" : "states"));
         hot(f.x + f.w - 60, top, 60, 20, (on ? "Show the interaction of " : "Show the state machines of ") + f.name,
-          () => { f.mode = on ? "open" : "states"; render(); });
+          () => { f0.mode = on ? "open" : "states"; render(); });
         svg.appendChild(sv("text", { x: f.x + f.w - 66, y: top + 13, "text-anchor": "end", fill: "var(--ink-arrow)", "font-size": 11, "font-weight": "bold",
           "text-decoration": "underline", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, "open " + f.name));
         hot(f.x + f.w - 66 - ow, top, ow, 20, "Open " + f.name + " as its own diagram", () => enter(f.name));
@@ -568,18 +648,42 @@ function diagram(model, opts) {
       const s = it.shape, y = it.y;
       if (inside(y)) continue;
       const xs = s.k === "line" ? [num(s.x1), num(s.x2)] : s.k === "rect" ? [num(s.x), num(s.x) + num(s.w)] : [num((String(s.d).match(/^M\s*(-?[0-9.]+)/) || [])[1]), num((String(s.d).match(/^M\s*(-?[0-9.]+)/) || [])[1]) + 46];
-      const x0 = Math.min(...xs), x1 = Math.max(...xs);
+      const x0 = mapX(Math.min(...xs)), x1 = mapX(Math.max(...xs));
       hot(x0, map(y) - 16, Math.max(24, x1 - x0), 22, "Source of " + it.what, () => { pick(it.range, it.what); render(); });
+    }
+    // folded calls: one arrow from caller to callee with heads at both ends, a click opens it;
+    // an open call that is drawn has a ▾ at its request that folds it
+    for (const r of folded) {
+      if (!r.c) continue;
+      const c = r.c, y = map(c.top) + CALL_ROW, x1 = mapX(laneX(c.caller)), x2 = mapX(laneX(c.callee));
+      const label = "▸ " + c.label;
+      if (x1 === x2) {
+        svg.appendChild(sv("path", { class: "msg fold", d: `M${x1} ${y - 8} h40 v16 h-40`, fill: "none", stroke: "var(--ink-arrow)", "stroke-width": 2.5, "marker-end": "url(#head)", "marker-start": "url(#head)" }));
+        svg.appendChild(sv("text", { x: x1 + 46, y: y + 4, "text-anchor": "start", fill: "var(--ink-arrow)", "font-size": 12, "font-weight": "bold", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, label));
+      } else {
+        svg.appendChild(sv("line", { class: "msg fold", x1, y1: y, x2, y2: y, stroke: "var(--ink-arrow)", "stroke-width": 2.5, "marker-end": "url(#head)", "marker-start": "url(#head)" }));
+        svg.appendChild(sv("text", { x: (x1 + x2) / 2, y: y - 6, "text-anchor": "middle", fill: "var(--ink-arrow)", "font-size": 12, "font-weight": "bold", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, label));
+      }
+      const lo = Math.min(x1, x2), wide = Math.max(46, Math.abs(x2 - x1));
+      hot(lo, y - 20, wide, 26, "Open the call " + c.label, () => { c.open = true; render(); });
+    }
+    for (const c of calls) {
+      if (!c.open || inside(c.y)) continue;
+      const y = map(c.y), xc = mapX(laneX(c.caller)), xe = mapX(laneX(c.callee)), x = xe >= xc ? xc - 16 : xc + 4;
+      svg.appendChild(sv("text", { x: x + 6, y: y + 4, "text-anchor": "middle", fill: "var(--ink-frame)", "font-size": 12, stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, "▾"));
+      hot(x - 2, y - 9, 16, 16, "Fold the call " + c.label, () => { c.open = false; render(); });
     }
     for (const s of shapes) {
       if (s.k !== "rect" || s.cls !== "role") continue;
-      const cx = num(s.x) + num(s.w) / 2;
-      const nameShape = shapes.find((t) => t.k === "text" && t.cls === "boxed" && Math.abs(num(t.x) - cx) < 2 && num(t.y) > num(s.y) && num(t.y) < num(s.y) + num(s.h) + 2);
+      const cx0 = num(s.x) + num(s.w) / 2;
+      if (onHidden(cx0)) continue;
+      const cx = mapX(cx0);
+      const nameShape = shapes.find((t) => t.k === "text" && t.cls === "boxed" && Math.abs(num(t.x) - cx0) < 2 && num(t.y) > num(s.y) && num(t.y) < num(s.y) + num(s.h) + 2);
       const role = nameShape && typeof nameShape.text === "string" ? nameShape.text : "";
       if (!role) continue;
       svg.appendChild(sv("text", { x: cx, y: map(num(s.y)) + num(s.h) + 13, "text-anchor": "middle", fill: "var(--ink-arrow)", "font-size": 11,
         "text-decoration": "underline", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, "states"));
-      hot(num(s.x), map(num(s.y)), num(s.w), num(s.h) + 16, "State machine of " + role + (opts.focus ? " in " + opts.focus : ""), () => {
+      hot(cx - num(s.w) / 2, map(num(s.y)), num(s.w), num(s.h) + 16, "State machine of " + role + (opts.focus ? " in " + opts.focus : ""), () => {
         below.replaceChildren(machinesOf("", opts.focus || null, [role]));
         reportSize();
       });
@@ -636,88 +740,105 @@ function jsonView(value) {
   if (at < text.length) pre.appendChild(document.createTextNode(text.slice(at)));
   return pre;
 }
-// ---- the stream by session: a bar with every session and its event count; picking one plays only
-// that session's events, renumbered as positions in the smaller stream (a session's links stay in it)
-// while each keeps its own id, and its JSON is shown exactly as LeanFM sent it.
+// ---- the stream by session (clause selfhost.session.derived-sessions): LeanFM derives the sessions
+// from the protocol's where-clause equations and the events' cause and prior links; the bar has
+// all, one button per derived session (its key and event count) and the unattributed events.
+// Picking one plays only those events, renumbered as positions in the smaller stream (their links
+// stay in it) while each keeps its own id, and the roles left with no event are hidden and named.
+// The simulated session number stays in the log as a cross-check, never a filter.
 const ORIGINAL = new WeakMap();
-// The sessionId a message carries in its example fields, if any.
-function sidOf(e) { return e && e.fields && typeof e.fields === "object" && typeof e.fields.sessionId === "string" ? e.fields.sessionId : null; }
+// Each event with a cause as an interval from its cause's row to its own, in the first lane whose
+// last interval ended before it starts (outer ones first), so overlapping brackets sit side by side.
+function causeLanes(E, idx) {
+  const spans = [];
+  E.forEach((e, i) => { const c = idx(e.cause); if (c !== null && c < i) spans.push({ c, i }); });
+  spans.sort((a, b) => (a.c - b.c) || (b.i - a.i));
+  const ends = [];
+  for (const sp of spans) {
+    let lane = ends.findIndex((end) => end < sp.c);
+    if (lane < 0) { lane = ends.length; ends.push(0); }
+    ends[lane] = sp.i; sp.lane = lane;
+  }
+  return { spans, lanes: ends.length };
+}
+// An event's thread: itself and every event its prior links reach, backwards and forwards.
+function threadOf(E, idx, start) {
+  const kids = E.map(() => []);
+  E.forEach((e, i) => { for (const q of (e.prior || [])) { const a = idx(q); if (a !== null) kids[a].push(i); } });
+  const reach = (next) => {
+    const got = new Set([start]), stack = [start];
+    while (stack.length) for (const j of next(stack.pop())) if (!got.has(j)) { got.add(j); stack.push(j); }
+    return got;
+  };
+  const back = reach((i) => (E[i].prior || []).map(idx).filter((j) => j !== null)), fwd = reach((i) => kids[i]);
+  return new Set([...back, ...fwd]);
+}
 function sessionBody(body, keepIt) {
   const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
   const keep = [], pos = new Map();
-  E.forEach((e, i) => { if (keepIt(e)) { pos.set(i, keep.length); keep.push(e); } });
-  const at = (x) => (Number.isInteger(x) && pos.has(x)) ? pos.get(x) : null;
+  E.forEach((e, i) => { if (keepIt(e, i)) { pos.set(i, keep.length); keep.push(e); } });
+  // links name events by id (a chain's stream numbers from 1): the kept events keep their ids, and
+  // a link to an event left out is dropped
+  const kept = new Set(keep.map((e) => num(e.id)));
+  const at = (x) => Number.isInteger(x) && kept.has(x) ? x : null;
   const events = keep.map((e) => {
     const c = Object.assign({}, e, { prior: (e.prior || []).map(at).filter((x) => x !== null), cause: at(e.cause), answers: at(e.answers) });
     ORIGINAL.set(c, e);
     return c;
   });
-  return Object.assign({}, body, { events });
+  const roles = (Array.isArray(body.roles) ? body.roles.map(String) : []);
+  const used = new Set(); for (const e of events) { used.add(String(e.src)); used.add(String(e.dst)); }
+  const live = roles.filter((r) => used.has(r));
+  return Object.assign({}, body, { events, roles: live.length ? live : roles, hiddenRoles: live.length ? roles.filter((r) => !used.has(r)) : [] });
 }
 function streamView(body) {
-  const box = el("div"), bar = el("div", "sessbar"), stage = el("div");
+  const box = el("div"), bar = el("div", "sessbar"), stage = el("div"), note = el("p", "meta");
   const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
-  const counts = new Map();
-  for (const e of E) counts.set(num(e.session), (counts.get(num(e.session)) || 0) + 1);
-  const ids = [...counts.keys()].sort((a, b) => a - b);
-  const buttons = new Map(), sidButtons = new Map();
-  const sids = new Map();
-  for (const e of E) { const v = sidOf(e); if (v !== null) sids.set(v, (sids.get(v) || 0) + 1); }
-  const opts = { onSession: (s) => pick(s), onSid: (v) => pickSid(v) };
-  function lit(s, v) {
-    for (const [k, b] of buttons) b.className = (v === null && k === s) ? "on" : "";
-    for (const [k, b] of sidButtons) b.className = k === v ? "on" : "";
-    if (sel) sel.value = s === null ? "all" : String(s);
-  }
-  function pick(s) {
-    lit(s, null);
-    stage.replaceChildren(s === null ? animation(body, opts) : animation(sessionBody(body, (e) => num(e.session) === s), Object.assign({ start: 0 }, opts)));
+  const d = body.derivedSessions && typeof body.derivedSessions === "object" ? body.derivedSessions : null;
+  const idxs = (xs) => new Set((Array.isArray(xs) ? xs : []).filter((x) => Number.isInteger(x) && x >= 0 && x < E.length));
+  const sessions = d && Array.isArray(d.sessions) ? d.sessions.slice(0, MAX_DATASET).filter((x) => x && typeof x === "object") : [];
+  const unattributed = idxs(d && d.unattributed);
+  const buttons = [];
+  let current = null;
+  // a click on an event focuses on its thread: only the events its prior links reach either way
+  const onFocus = (ids, selId) => {
+    const sub = sessionBody(body, (e) => ids.has(num(e.id)));
+    const hidden = Array.isArray(sub.hiddenRoles) ? sub.hiddenRoles : [];
+    const back = el("button", "", "Show all events");
+    back.addEventListener("click", () => current ? show(...current) : show("All events", null, buttons[0]));
+    note.replaceChildren(el("span", "", `Thread of ${"e" + String(selId).padStart(3, "0")}: ${sub.events.length} events linked through prior` + (hidden.length ? " · hidden: " + hidden.join(", ") : "") + " "), back);
+    stage.replaceChildren(animation(sub, { start: sub.events.length - 1, paused: true, select: selId, onFocus }));
+    reportSize();
+  };
+  function show(which, keep, btn) {
+    current = [which, keep, btn];
+    for (const b of buttons) b.className = b === btn ? "on" : "";
+    const sub = keep ? sessionBody(body, (_, i) => keep.has(i)) : body;
+    const hidden = Array.isArray(sub.hiddenRoles) ? sub.hiddenRoles : [];
+    note.textContent = which + (hidden.length ? " · hidden: " + hidden.join(", ") : "");
+    stage.replaceChildren(keep ? animation(sub, { start: 0, onFocus }) : animation(body, { onFocus }));
     reportSize();
   }
-  // a person's messages across every run they took part in: the sessionId in the message fields
-  // (a response carries no sessionId, so it comes with the request it answers or was caused by)
-  function pickSid(v) {
-    lit(null, v);
-    const mine = new Set();
-    E.forEach((e, i) => {
-      const up = [e.answers, e.cause].filter((x) => Number.isInteger(x));
-      if (sidOf(e) === v || (sidOf(e) === null && up.some((x) => mine.has(x)))) mine.add(i);
-    });
-    const at = new Map(E.map((e, i) => [e, i]));
-    stage.replaceChildren(animation(sessionBody(body, (e) => mine.has(at.get(e))), Object.assign({ start: 0 }, opts)));
-    reportSize();
-  }
-  bar.appendChild(el("span", "cap", "Runs"));
-  let sel = null;
-  if (ids.length <= 16) {
-    const all = el("button", "on", `all · ${E.length}`); all.addEventListener("click", () => pick(null)); buttons.set(null, all); bar.appendChild(all);
-    for (const s of ids) {
-      const b = el("button", "", `#${s} · ${counts.get(s)}`);
-      b.setAttribute("aria-label", `Session ${s}, ${counts.get(s)} events`);
-      b.addEventListener("click", () => pick(s)); buttons.set(s, b); bar.appendChild(b);
-    }
-  } else {
-    sel = el("select");
-    const o = el("option", "", `all sessions · ${E.length} events`); o.value = "all"; sel.appendChild(o);
-    for (const s of ids) { const p = el("option", "", `#${s} · ${counts.get(s)} events`); p.value = String(s); sel.appendChild(p); }
-    sel.addEventListener("change", () => pick(sel.value === "all" ? null : num(sel.value)));
-    bar.appendChild(sel);
-  }
-  bar.appendChild(el("span", "pos", "click a #n in the log to pick its run"));
+  bar.appendChild(el("span", "cap", "Sessions"));
+  const all = el("button", "on", `all · ${E.length}`);
+  all.addEventListener("click", () => show("All events", null, all)); buttons.push(all); bar.appendChild(all);
+  const add = (label, aria, keep, which) => {
+    const b = el("button", "", label);
+    b.setAttribute("aria-label", aria);
+    b.addEventListener("click", () => show(which, keep, b)); buttons.push(b); bar.appendChild(b);
+  };
+  sessions.slice(0, MAX_ITEMS).forEach((x) => {
+    const key = String(x.key || "").slice(0, MAX_LABEL), keep = idxs(x.events);
+    add(`${key} · ${keep.size}`, `Session ${key}, ${keep.size} events`, keep,
+      `Session ${key}: ${keep.size} events` + (Array.isArray(x.simulated) ? ` (simulated session${x.simulated.length === 1 ? "" : "s"} ${x.simulated.join(", ")})` : "") +
+      (x.joinedBy ? `; joined because ${String(x.joinedBy)}` : ""));
+  });
+  if (unattributed.size) add(`unattributed · ${unattributed.size}`, `${unattributed.size} events no where clause or link places in a session`, unattributed,
+    `${unattributed.size} unattributed events: no where-clause equation and no cause or prior link places them in a session`);
   box.appendChild(bar);
-  if (sids.size) {
-    const bar2 = el("div", "sessbar");
-    bar2.appendChild(el("span", "cap", "sessionId"));
-    for (const v of [...sids.keys()].sort().slice(0, MAX_ITEMS)) {
-      const b = el("button", "", `${v} · ${sids.get(v)}`);
-      b.setAttribute("aria-label", `Messages with sessionId ${v}, ${sids.get(v)} of them`);
-      b.addEventListener("click", () => pickSid(v)); sidButtons.set(v, b); bar2.appendChild(b);
-    }
-    bar2.appendChild(el("span", "pos", "the person in the message fields; click one in the log too"));
-    box.appendChild(bar2);
-  }
-  box.appendChild(stage);
-  stage.appendChild(animation(body, opts));
+  box.appendChild(el("p", "meta", d && d.reading ? String(d.reading) : "LeanFM derived no sessions for this stream."));
+  box.append(note, stage);
+  stage.appendChild(animation(body, { onFocus }));
   return box;
 }
 
@@ -730,7 +851,7 @@ function animation(body, opts) {
   const wrap = el("div");
   if (!N || !roles.length) { wrap.appendChild(el("p", "meta", "No events.")); return wrap; }
   const cv = el("canvas"); cv.tabIndex = 0;
-  cv.setAttribute("aria-label", "Animated event stream. Space plays or pauses, arrows step, click an event to trace it.");
+  cv.setAttribute("aria-label", "Animated event stream. Space plays or pauses, arrows step, click an event to focus on its thread.");
   const controls = el("div", "controls");
   const play = el("button", "", "Pause"), back = el("button", "", "◀"), fwd = el("button", "", "▶");
   back.setAttribute("aria-label", "Step back"); fwd.setAttribute("aria-label", "Step forward");
@@ -744,7 +865,10 @@ function animation(body, opts) {
   controls.append(play, back, fwd, speedSel, detailBtn, scrub);
   const pos = el("div", "pos");
 
-  const idx = (x) => (Number.isInteger(x) && x >= 0 && x < N) ? x : null;
+  // links name events by id, never by position
+  const byId = new Map(E.map((e, i) => [num(e.id), i]));
+  const idx = (x) => (Number.isInteger(x) && byId.has(x)) ? byId.get(x) : null;
+  const brackets = causeLanes(E, idx);
   const eid = (i) => "e" + String(num(E[i].id)).padStart(3, "0");
   const kind = (e) => e.act ? "act" : (e.status != null && num(e.status) >= 400) ? "bad" : e.answers != null ? "rep" : "req";
 
@@ -759,17 +883,10 @@ function animation(body, opts) {
     const row = el("div", cls + " future");
     row.setAttribute("role", "listitem"); row.tabIndex = 0;
     const pri = (e.prior || []).map(idx).filter((j) => j !== null).map(eid);
+    // the simulated session number: a cross-check on the derived sessions, not a filter
     const ses = el("span", "ses", "#" + num(e.session));
-    if (typeof opts.onSession === "function") {
-      ses.title = "Show only session #" + num(e.session);
-      ses.addEventListener("click", (ev) => { if (ev.stopPropagation) ev.stopPropagation(); opts.onSession(num(e.session)); });
-    }
-    const sv = sidOf(ORIGINAL.get(e) || e), sid = el("span", "sid", sv === null ? "" : sv);
-    if (sv !== null && typeof opts.onSid === "function") {
-      sid.title = "Show only the messages of " + sv;
-      sid.addEventListener("click", (ev) => { if (ev.stopPropagation) ev.stopPropagation(); opts.onSid(sv); });
-    }
-    row.append(el("span", "eid", eid(i)), ses, sid,
+    ses.title = "simulated session " + num(e.session);
+    row.append(el("span", "eid", eid(i)), ses,
       el("span", "", e.act ? `${e.src}  ${e.label}` : `${e.src} → ${e.dst}  ${e.label}` + (e.status != null && num(e.status) >= 400 ? "  " + e.status : "")),
       el("span", "pri", pri.length ? "← " + pri.join(",") : ""),
       el("span", "rt", e.route ? String(e.route) : ""));
@@ -806,7 +923,8 @@ function animation(body, opts) {
     for (let i = 0; i < N; i++) if (!E[i].act) w = Math.max(w, num(ctx.measureText(label(E[i], i)).width), num(ctx.measureText(under(E[i])).width));
     gap = Math.max(170, Math.min(460, w + 40));
   }
-  const fullW = () => Math.max(W, 2 * MARGIN + Math.max(0, roles.length - 1) * gap);
+  const GUTTER = brackets.lanes ? 40 + 10 * Math.min(brackets.lanes, 24) : 0;
+  const fullW = () => Math.max(W, 2 * MARGIN + Math.max(0, roles.length - 1) * gap + GUTTER);
   const fullH = () => TOP + N * ROW() + 40;
   function layout() {
     spacer.style.width = Math.round(fullW()) + "px"; spacer.style.height = Math.round(fullH()) + "px";
@@ -826,11 +944,12 @@ function animation(body, opts) {
   });
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let p = opts.start != null ? Math.min(N - 1, num(opts.start)) + 0.999 : Math.min(N - 1, 12), playing = !reduce && !opts.paused, speed = 4, sel = null, detail = true;
+  if (opts.select != null && idx(num(opts.select)) !== null) sel = idx(num(opts.select));
   const HEAD = 50, TOP = HEAD + 26, LABELLED = 12;
   const ROW = () => detail ? 48 : 40;
   const MONO = "13px ui-monospace, 'DejaVu Sans Mono', Menlo, monospace";
   // positions on the screen: the whole diagram's coordinates less the scroll
-  const xs = () => { const w = fullW(); return roles.map((_, i) => (roles.length === 1 ? w / 2 : MARGIN + i * (w - 2 * MARGIN) / (roles.length - 1)) - sx); };
+  const xs = () => { const w = fullW() - GUTTER; return roles.map((_, i) => (roles.length === 1 ? w / 2 : MARGIN + i * (w - 2 * MARGIN) / (roles.length - 1)) - sx); };
   const xOf = (X, r) => { const i = roles.indexOf(String(r)); return i < 0 ? 0 : X[i]; };
   const yOf = (i) => TOP + i * ROW() - sy;
   const tint = (e) => ({ act: colors.amber, bad: colors.bad, rep: colors.rep, req: colors.req })[kind(e)];
@@ -841,11 +960,8 @@ function animation(body, opts) {
   function haloText(t, x, y) {
     ctx.lineWidth = 4; ctx.strokeStyle = colors.stage; ctx.lineJoin = "round"; ctx.strokeText(t, x, y); ctx.fillText(t, x, y);
   }
-  function ancestors(id) {
-    const out = new Set(), stack = (E[id].prior || []).map(idx).filter((x) => x !== null);
-    while (stack.length) { const a = stack.pop(); if (!out.has(a)) { out.add(a); for (const q of (E[a].prior || [])) { const j = idx(q); if (j !== null) stack.push(j); } } }
-    return out;
-  }
+  // the selected event's thread: what its prior links reach either way
+  function ancestors(id) { const t = threadOf(E, idx, id); t.delete(id); return t; }
   function draw() {
     if (!W) return;
     if (follow) {
@@ -876,6 +992,17 @@ function animation(body, opts) {
         ctx.stroke(); ctx.globalAlpha = 1;
       }
     }
+    // a bracket per cause, from the cause's row to the event's, in its lane in the gutter
+    const gx = Math.max(...X) + 40;
+    for (const sp of brackets.spans) {
+      if (sp.i > k || sp.c > hi || sp.i < lo) continue;
+      const hot = sel !== null && (sp.i === sel || sp.c === sel || (anc && anc.has(sp.i) && anc.has(sp.c)));
+      if (!detail && !hot) continue;
+      const x = gx + 10 * Math.min(sp.lane, 23), y1 = yOf(sp.c), y2 = yOf(sp.i);
+      ctx.strokeStyle = hot ? colors.amber : colors.cyan; ctx.globalAlpha = hot ? 1 : (sel !== null ? 0.3 : 0.6); ctx.lineWidth = hot ? 2.5 : 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 6, y1); ctx.lineTo(x, y1); ctx.lineTo(x, y2); ctx.lineTo(x - 6, y2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     if (sel !== null && sel <= k) {
       const c = idx(E[sel].cause);
       if (c !== null && c >= lo) {
@@ -888,7 +1015,8 @@ function animation(body, opts) {
     for (let i = lo; i <= hi && i < N; i++) {
       const e = E[i], y = yOf(i);
       if (y < HEAD - ROW()) continue;
-      const recent = detail || k - i < LABELLED || i === sel || (anc && anc.has(i));
+      const inThread = !anc || i === sel || anc.has(i);
+      const recent = inThread && (detail || k - i < LABELLED || i === sel || !!anc);
       const c = i === sel ? colors.amber : tint(e);
       const t = i === k && !reduce ? Math.min(1, frac * 1.6) : 1, ease = 1 - Math.pow(1 - t, 3);
       if (e.act) {
@@ -961,7 +1089,11 @@ function animation(body, opts) {
   scrub.addEventListener("input", () => { setPlay(false); follow = true; p = num(scrub.value) + 0.999; });
   cv.addEventListener("click", (ev) => {
     const r = cv.getBoundingClientRect(), y = (ev.clientY - r.top) / uiScale, i = Math.round((y + sy - TOP) / ROW());
-    if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW() / 2) { sel = sel === i ? null : i; shown = -1; }
+    if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW() / 2) {
+      // focus on the clicked event's thread when the stream can; otherwise select it
+      if (typeof opts.onFocus === "function") { opts.onFocus(new Set([...threadOf(E, idx, i)].map((j) => num(E[j].id))), num(E[i].id)); return; }
+      sel = sel === i ? null : i; shown = -1;
+    }
   });
   cv.addEventListener("keydown", (ev) => {
     if (ev.key === " ") { ev.preventDefault(); setPlay(!playing); }
@@ -979,6 +1111,7 @@ function animation(body, opts) {
 function show(result) {
   const body = result && result.structuredContent;
   if (!body || typeof body !== "object") { status("The result has no content to show.", true); return; }
+  if (body.tool === "project_view") { stageView(body); return; }
   currentOverlay = body.overlay || null;
   if (typeof body.lean === "string") editor(body.lean);
   render(body);
@@ -1170,7 +1303,10 @@ function rolesOf(src) {
   return rs.length ? rs : ["A", "B"];
 }
 function editor(lean) {
-  if (text || typeof lean !== "string") return;  // the editor keeps what the person typed
+  if (typeof lean !== "string") return;
+  // the source is read-only, so a different protocol (one opened from the navigator) replaces it,
+  // and every view below then works on the protocol being looked at
+  if (text) { if (text.value === lean) return; text.value = lean; rebuildNav(rolesOf(lean)); return; }
   // read-only: the protocol is shown, never edited here; every view is reached by clicking
   const area = el("textarea");
   area.spellcheck = false; area.readOnly = true;
@@ -1241,7 +1377,7 @@ async function animate() {
   const source = text.value;
   if (!source.trim()) { say("The protocol is empty.", "bad"); return; }
   if (new Blob([source]).size > MAX_EDIT_BYTES) { say("The protocol is over 64 KiB.", "bad"); return; }
-  if (inFlight) { again = ["session_simulate", { instances: 10, seed: Date.now() % 100000 }]; return; }
+  if (inFlight) { again = ["session_simulate", { instances: animSessions, maxEvents: MAX_EVENTS, seed: Date.now() % 100000 }]; return; }
   inFlight = true; say("Generating…");
   const base = Date.now() % 100000;
   try {
@@ -1249,7 +1385,7 @@ async function animate() {
     while (tried < ANIM_TRIES) {
       const seed = (base + tried * 7919) % 100000;
       tried++;
-      const result = await rpc("tools/call", { name: "session_simulate", arguments: Object.assign({ lean: source }, currentOverlay ? { overlay: currentOverlay } : {}, { instances: 10, seed }) }, 30000);
+      const result = await rpc("tools/call", { name: "session_simulate", arguments: Object.assign({ lean: source }, currentOverlay ? { overlay: currentOverlay } : {}, { instances: animSessions, maxEvents: MAX_EVENTS, seed }) }, 30000);
       if (result && result.isError) {
         const b = result.structuredContent;
         say(String((b && b.reason) || "LeanFM rejected the protocol."), "bad"); rebuildNav(navRoles); return;
@@ -1314,12 +1450,13 @@ async function openapiAll() {
 // ---- navigation: every view of the protocol, one click each ---------------------------------
 // Each button asks LeanFM for that view of the text in the editor; nothing here derives a view.
 // The button of the view being shown is lit, and an edit regenerates that view.
-let navBox = null, propBox = null, navActive = "whole", navRoles = [], datasetSize = 1000, animSeed = 1;
+let navBox = null, propBox = null, navActive = "whole", navRoles = [], datasetSize = 1000, animSeed = 1, animSessions = 10;
+const MAX_ANIM_SESSIONS = 200;
 const CTL_PRESETS = [
   ["Every session can always still end", { AG: { EF: "terminal" } }],
   ["Every session ends", { AF: "terminal" }],
   ["Some session ends", { EF: "terminal" }] ];
-let ctlFormula = JSON.stringify(CTL_PRESETS[0][1]);
+let ctlFormula = JSON.stringify(CTL_PRESETS[0][1], null, 2);
 function parsedFormula() { try { const f = JSON.parse(ctlFormula); return f && (typeof f === "object" || typeof f === "string") ? f : null; } catch (e) { return null; } }
 function currentView() {
   const k = navActive;
@@ -1328,7 +1465,7 @@ function currentView() {
   if (k === "types") return ["session_types"];
   if (k === "tree") return ["session_explore"];
   if (k === "review") return ["session_review"];
-  if (k === "animate") return ["session_simulate", { instances: 10, seed: animSeed }];
+  if (k === "animate") return ["session_simulate", { instances: animSessions, maxEvents: MAX_EVENTS, seed: animSeed }];
   if (k === "mdp") return ["session_mdp"];
   if (k === "sla") return ["session_sla"];
   if (k === "instances") return ["session_instances"];
@@ -1377,8 +1514,16 @@ function rebuildNav(roles) {
     datasetSize = Number.isFinite(v) ? Math.min(MAX_DATASET, Math.max(1, v)) : 1000;
     count.value = String(datasetSize);
   });
+  const animCount = el("input");
+  animCount.type = "number"; animCount.min = "1"; animCount.max = String(MAX_ANIM_SESSIONS); animCount.value = String(animSessions);
+  animCount.setAttribute("aria-label", "How many sessions Animate generates, 1 to " + MAX_ANIM_SESSIONS);
+  animCount.addEventListener("change", () => {
+    const v = Math.floor(Number(animCount.value));
+    animSessions = Number.isFinite(v) ? Math.min(MAX_ANIM_SESSIONS, Math.max(1, v)) : 10;
+    animCount.value = String(animSessions);
+  });
   const behaviour = [
-    btn("animate", "Animate 10 sessions", "Run ten sessions and animate their event stream", () => { animate(); }),
+    btn("animate", "Animate", "Run this many sessions (at most 600 events) and animate their event stream", () => { animate(); }), animCount, el("span", "meta", "sessions"),
     btn("walk", "Walk through", "Walk through one session step by step, choosing each message", () => { walkEvents = []; stepWalk(); }),
     btn("mdp", "Decision process", "The session as a decision tree or Markov chain under its probabilities: outcomes, expected visits and balances", () => run("session_mdp")),
     btn("dataset", "Dataset", "Generate this many sessions and chart how they are distributed",
@@ -1412,7 +1557,7 @@ function drawPropForm() {
   area.spellcheck = false; area.value = ctlFormula;
   area.setAttribute("aria-label", 'The property as JSON CTL over {"after": "Label"} and "terminal"');
   const decide = el("button", "", "Decide");
-  sel.addEventListener("change", () => { const p = CTL_PRESETS[Number(sel.value)]; if (p) { area.value = ctlFormula = JSON.stringify(p[1]); runCtl(); } });
+  sel.addEventListener("change", () => { const p = CTL_PRESETS[Number(sel.value)]; if (p) { area.value = ctlFormula = JSON.stringify(p[1], null, 2); runCtl(); } });
   area.addEventListener("input", () => { ctlFormula = area.value; });
   decide.addEventListener("click", () => { ctlFormula = area.value; runCtl(); });
   const line = el("div", "controls"); line.append(sel, decide);
@@ -1450,7 +1595,7 @@ function propBuilder(area) {
   go.addEventListener("click", () => {
     const p = PROP_PATTERNS[num(pat.value)];
     if (!p || !a.value || (p[1] && !b.value)) { say("Pick the messages first.", "bad"); return; }
-    area.value = ctlFormula = JSON.stringify(p[2](a.value, b.value));
+    area.value = ctlFormula = JSON.stringify(p[2](a.value, b.value), null, 2);
     runCtl();
   });
   if (!labels.length) { box.append(el("span", "meta", "No messages found in the protocol text to build a property from.")); return box; }
@@ -1738,7 +1883,7 @@ function treePanels(body) {
       for (const [q, f] of messageQuestions(n.message)) {
         const b = el("button", "", q);
         b.setAttribute("aria-label", q + " Decided over one session by session_ctl.");
-        b.addEventListener("click", () => { ctlFormula = JSON.stringify(f); askInto(payloadOut, "session_ctl", { formula: f }, (r) => { const d = el("div"); d.append(...ctlPanels(r)); return d; }); });
+        b.addEventListener("click", () => { ctlFormula = JSON.stringify(f, null, 2); askInto(payloadOut, "session_ctl", { formula: f }, (r) => { const d = el("div"); d.append(...ctlPanels(r)); return d; }); });
         acts.appendChild(b);
       }
     }
@@ -1828,7 +1973,10 @@ function treePanels(body) {
 // ---- a CTL verdict: the formula read back, and the path that proves or breaks it ----------------
 function ctlPanels(r) {
   const out = [], box = el("div");
-  if (r.formula !== undefined) box.appendChild(el("pre", "", JSON.stringify(r.formula)));
+  // the property as LeanFM wrote it in CTL symbols, its plain reading, and the JSON behind a fold
+  if (typeof r.notation === "string") box.appendChild(el("pre", "ctl-notation", r.notation));
+  if (typeof r.reading === "string") box.appendChild(el("p", "meta", r.reading));
+  if (r.formula !== undefined) box.appendChild(foldPanel("Formula (JSON)", el("pre", "", JSON.stringify(r.formula, null, 2)), false));
   const ev = r.evidence && typeof r.evidence === "object" ? r.evidence : null;
   const steps = ev && Array.isArray(ev.path) ? ev.path.slice(0, MAX_ITEMS).map((n) => (n && typeof n.message === "string") ? n.message : null).filter((m) => m !== null) : [];
   if (steps.length) {
@@ -2296,7 +2444,312 @@ function drawWalk(body) {
   reportSize();
 }
 
-connect();
+// ---- the navigator (clause selfhost.mcp.session.navigator): chat -> book -> requirements -> code
+// for the project picked beside it, LeanFM by default. Every stage comes from project_view, read-only,
+// through the same one-call-at-a-time rule as the editor. The chat stage has no input: the
+// conversation happens in the agent (Claude Desktop, Claude Code, Codex), not here.
+const NAV_TOOL = "project_view", STAGES = ["chat", "book", "requirements", "code"], MAX_ROWS = 2000;
+const nav = { project: "LeanFM", projects: ["LeanFM"], stage: null, page: 1, dark: true, codeOpen: new Set(), code: null };
+const stageBar = el("nav", "stagenav");
+stageBar.setAttribute("aria-label", "Distillation chain");
+app.insertBefore ? app.insertBefore(stageBar, app.firstChild) : app.appendChild(stageBar);
+function drawStageBar() {
+  const chain = el("div", "chain");
+  STAGES.forEach((st, i) => {
+    if (i) chain.appendChild(el("span", "arrow", "→"));
+    const b = el("button", nav.stage === st ? "on" : "", st);
+    b.setAttribute("aria-label", "Show the " + st + " stage of " + nav.project);
+    b.addEventListener("click", () => openStage(st, {}));
+    chain.appendChild(b);
+  });
+  const label = el("label", "", "project");
+  const pick = el("select");
+  pick.setAttribute("aria-label", "Project");
+  for (const name of nav.projects) { const o = el("option", "", name); o.value = name; if (name === nav.project) o.selected = true; pick.appendChild(o); }
+  pick.value = nav.project;
+  pick.addEventListener("change", () => { nav.project = String(pick.value); nav.page = 1; nav.codeOpen = new Set(); nav.code = null; openStage(nav.stage || "chat", {}); });
+  label.appendChild(pick);
+  stageBar.replaceChildren(chain, label);
+}
+drawStageBar();
+async function navCall(args, quiet) {
+  if (!canCall) { if (!quiet) status("This host does not let the view call tools; ask Claude to run project_view.", true); return null; }
+  if (inFlight) { await new Promise((r) => setTimeout(r, 150)); return navCall(args, quiet); }
+  inFlight = true;
+  try {
+    const result = await rpc("tools/call", { name: NAV_TOOL, arguments: args }, 60000);
+    const body = result && result.structuredContent;
+    if (result && result.isError) { if (!quiet) status(String((body && body.reason) || "LeanFM refused."), true); return null; }
+    return body && typeof body === "object" ? body : null;
+  } catch (e) {
+    if (!quiet) status("project_view failed: " + String((e && e.message) || e), true);
+    return null;
+  } finally {
+    inFlight = false;
+    if (again) { const [n, x] = again; again = null; run(n, x); }
+  }
+}
+function openStage(stage, extra) {
+  if (!STAGES.includes(stage)) return;
+  nav.stage = stage; drawStageBar();
+  const args = { project: nav.project, stage };
+  if (stage === "book") { args.page = nav.page; args.theme = nav.dark ? "dark" : "light"; }
+  if (extra && typeof extra.file === "string") args.file = extra.file;
+  if (extra && typeof extra.section === "string") args.section = extra.section;
+  if (extra && typeof extra.task === "string") args.task = extra.task;
+  if (extra && Number.isInteger(extra.offset) && extra.offset > 0) args.offset = extra.offset;
+  if (stage === "code" && !args.file && !args.offset) nav.code = null;
+  status("Asking LeanFM for the " + stage + " of " + nav.project + "…");
+  navCall(args, false).then((body) => { if (body) stageView(body); });
+}
+function stageHead(body, what) {
+  const head = el("div", "head");
+  head.append(el("span", "tool", String(body.project || nav.project) + " · " + what), el("span", "badge ok", "read-only"));
+  if (typeof body.file === "string" && body.file) head.appendChild(el("span", "meta", body.file));
+  return head;
+}
+function stageView(body) {
+  anim = null;
+  if (Array.isArray(body.projects) && body.projects.length) nav.projects = body.projects.slice(0, 200).map(String);
+  if (typeof body.project === "string") nav.project = body.project;
+  if (STAGES.includes(body.stage)) nav.stage = body.stage;
+  drawStageBar();
+  if (!STAGES.includes(body.stage)) { reportSize(); return; }
+  // a stage replaces the protocol editor and the walk-through; a protocol opened from requirements brings them back
+  if (timer) { clearTimeout(timer); timer = null; }
+  text = null; editStatus = null;
+  editorBox.replaceChildren(); walkBox.replaceChildren();
+  const parts = body.stage === "chat" ? chatStage(body) : body.stage === "book" ? bookStage(body)
+    : body.stage === "requirements" ? requirementsStage(body) : codeStage(body);
+  results.replaceChildren(...parts);
+  reportSize();
+}
+function chatStage(body) {
+  const parts = [stageHead(body, "chat")];
+  parts.push(el("p", "reading", String(body.where || "")));
+  const msgs = Array.isArray(body.messages) ? body.messages.slice(-200) : [];
+  if (msgs.length) {
+    const log = el("div", "chatlog");
+    for (const m of msgs) {
+      const role = String((m && m.role) || "");
+      const row = el("div", "chatmsg " + (role === "user" ? "user" : role === "assistant" ? "assistant" : ""));
+      row.appendChild(el("span", "who", role + (m.model ? " · " + String(m.model) : "")));
+      row.appendChild(document.createTextNode(String((m && m.text) || "")));
+      log.appendChild(row);
+    }
+    const off = Number.isInteger(body.offset) ? body.offset : 0;
+    parts.push(panel("Saved conversation (" + msgs.length + (off ? ", " + off + " newer skipped" : " newest") + (body.shown > msgs.length ? " of " + body.shown : "") + ")", log));
+    const more = el("div", "controls");
+    if (Number.isInteger(body.older)) { const b = el("button", "", "◀ Older messages"); b.addEventListener("click", () => openStage("chat", { offset: body.older })); more.appendChild(b); }
+    if (off) { const b = el("button", "", "Newest ▶"); b.addEventListener("click", () => openStage("chat", {})); more.appendChild(b); }
+    if (more.children && more.children.length) parts.push(more);
+  }
+  return parts;
+}
+function bookStage(body) {
+  const parts = [stageHead(body, "book")];
+  if (body.found === false) { parts.push(el("p", "err", String(body.reason || "This project has no book."))); return parts; }
+  const pages = Number(body.pages) || 0, page = Number(body.page) || 1;
+  nav.page = page;
+  const prev = el("button", "", "◀ Previous"), next = el("button", "", "Next ▶"), pos = el("span", "pos", "page " + page + " of " + pages);
+  const light = el("button", nav.dark ? "" : "on", "Light PDF"), dark = el("button", nav.dark ? "on" : "", "Dark PDF");
+  prev.disabled = page <= 1; next.disabled = page >= pages;
+  prev.addEventListener("click", () => { nav.page = Math.max(1, page - 1); openStage("book", {}); });
+  next.addEventListener("click", () => { nav.page = Math.min(pages, page + 1); openStage("book", {}); });
+  light.addEventListener("click", () => { nav.dark = false; openStage("book", {}); });
+  dark.addEventListener("click", () => { nav.dark = true; openStage("book", {}); });
+  const controls = el("div", "controls"); controls.append(prev, pos, next, light, dark);
+  parts.push(controls);
+  const data = body.image && typeof body.image.data === "string" ? body.image.data : "";
+  // only base64 characters, under one of two fixed image types: the data URL cannot carry anything else
+  const mime = body.image && ["image/png", "image/jpeg"].includes(body.image.mimeType) ? body.image.mimeType : null;
+  if (data && /^[A-Za-z0-9+/]+=*$/.test(data) && mime) {
+    const img = el("img", "bookpage");
+    img.setAttribute("alt", "Page " + page + " of the " + String(body.project || "") + " book");
+    img.setAttribute("src", "data:" + mime + ";base64," + data);
+    img.addEventListener("load", reportSize);
+    parts.push(img);
+  } else parts.push(el("p", "err", "LeanFM returned no page image."));
+  return parts;
+}
+// requirements come a section at a time (the sections and their counts first) and a page at a time,
+// so no answer outgrows the host's limit; a task's row opens its transitions, properties or where_
+function requirementsStage(body) {
+  const parts = [stageHead(body, "requirements")];
+  const crumbs = el("div", "controls");
+  const toSections = el("button", body.section ? "" : "on", "Sections");
+  toSections.addEventListener("click", () => openStage("requirements", {}));
+  crumbs.appendChild(toSections);
+  if (typeof body.task === "string") {
+    const t = el("button", "", "Tasks"); t.addEventListener("click", () => openStage("requirements", { section: "tasks" })); crumbs.appendChild(t);
+  }
+  parts.push(crumbs);
+  if (typeof body.lean === "string") { parts.push(panel(String(body.file || "protocol"), el("pre", "filetext", body.lean))); return parts; }
+  if (Array.isArray(body.sections)) {
+    const row = el("div", "controls");
+    for (const x of body.sections.slice(0, MAX_ITEMS)) {
+      const name = String((x && x.name) || ""), n = num(x && x.count);
+      const b = el("button", "", `${name} (${n}${x && x.cut ? "+" : ""})`);
+      b.setAttribute("aria-label", `Open the ${name} section: ${n} items`);
+      b.addEventListener("click", () => openStage("requirements", { section: name }));
+      row.appendChild(b);
+    }
+    parts.push(panel("Sections of " + String(body.file || "the requirements"), row));
+    return parts;
+  }
+  const pg = body.page && typeof body.page === "object" ? body.page : {};
+  const items = Array.isArray(pg.items) ? pg.items.slice(0, MAX_ROWS) : [];
+  const off = num(pg.offset), total = num(pg.total), sec = String(body.section || "");
+  const what = sec + (typeof body.task === "string" ? " of " + body.task : "");
+  const box = el("div");
+  if (!items.length) box.appendChild(el("p", "meta", "Nothing in " + what + "."));
+  if (sec === "tasks") {
+    for (const t of items) {
+      const row = el("div", "controls");
+      row.appendChild(el("strong", "", `${t.title || t.id} (${t.id})`));
+      for (const [k, label] of [["transitions", "transitions"], ["properties", "properties · CTL"], ["constraints", "where_"]]) {
+        const b = el("button", "", `${num(t[k])} ${label}`);
+        b.disabled = !num(t[k]);
+        b.addEventListener("click", () => openStage("requirements", { section: k, task: String(t.id) }));
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+    }
+  } else if (sec === "transitions") {
+    const ul = el("ul");
+    for (const x of items) ul.appendChild(el("li", "", `${x.src} → ${x.dst}: ${x.message}` + (x.source_actor ? `  (${x.source_actor} → ${x.destination_actor})` : "")));
+    box.appendChild(ul);
+  } else if (sec === "properties") {
+    for (const pr of items) { box.appendChild(el("strong", "", String(pr.name || ""))); box.appendChild(el("pre", "", String(pr.formula || pr.expression || ""))); box.appendChild(el("p", "meta", String(pr.mode || "") + " · " + String(pr.origin || "") + (pr.cut ? " · cut" : ""))); }
+  } else if (sec === "constraints") {
+    for (const c of items) { box.appendChild(el("strong", "", "where_ " + String(c.id || ""))); box.appendChild(el("pre", "", String(c.formula || c.predicate || ""))); }
+  } else if (sec === "clauses") {
+    for (const c of items) {
+      const d = el("details"), sm = el("summary", "", `${c.id} [${c.status}] · ${c.area}`);
+      d.append(sm, el("p", "detail", String(c.requirement || "") + (c.cut ? " (cut)" : "")));
+      box.appendChild(d);
+    }
+  } else if (sec === "protocols") {
+    const plist = el("div", "ftree");
+    for (const f of items) {
+      const row = el("div", "frow"); row.tabIndex = 0;
+      row.append(el("span", "fmark", "§"), el("span", "fname", String(f)), el("span", "fkind", "open: tree, diagram, animation"));
+      const go = () => openProtocol(String(f));
+      row.addEventListener("click", go);
+      row.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
+      plist.appendChild(row);
+    }
+    box.appendChild(plist);
+  }
+  const pager = el("div", "controls");
+  pager.appendChild(el("span", "pos", items.length ? `${off + 1} to ${off + items.length} of ${total}` : `0 of ${total}`));
+  const again = (o) => openStage("requirements", Object.assign({ section: sec, offset: o }, typeof body.task === "string" ? { task: body.task } : {}));
+  if (off > 0) { const b = el("button", "", "First page"); b.addEventListener("click", () => again(0)); pager.appendChild(b); }
+  if (Number.isInteger(pg.next)) { const b = el("button", "", "Next page ▶"); b.addEventListener("click", () => again(pg.next)); pager.appendChild(b); }
+  parts.push(panel(what.charAt(0).toUpperCase() + what.slice(1), box), pager);
+  return parts;
+}
+async function openProtocol(file) {
+  // the server reads the one file itself: the view never carries a project's text to load it
+  status("Loading " + file + "…");
+  if (inFlight) await new Promise((r) => setTimeout(r, 150));
+  inFlight = true;
+  try {
+    const result = await rpc("tools/call", { name: "session_explore", arguments: { project: nav.project, file } }, 30000);
+    const sbody = result && result.structuredContent;
+    if (result && result.isError) status(file + ": " + String((sbody && sbody.reason) || "LeanFM refused the protocol."), true);
+    else { nav.stage = "requirements"; drawStageBar(); show(result); say(file + " is open: Whole protocol draws its interaction diagram, Animate plays its event stream.", "good"); }
+  } catch (e) { status("session_explore failed: " + String((e && e.message) || e), true); }
+  finally { inFlight = false; }
+}
+// the source tree comes a page of files at a time: the view asks for each next page in turn (at most
+// MAX_ROWS files) and keeps the listing; a picked file's text comes a page at a time too
+function codeStage(body) {
+  const parts = [stageHead(body, "code")];
+  const project = String(body.project || nav.project);
+  if (body.page && typeof body.page === "object") {
+    const pg = body.page, got = (Array.isArray(pg.items) ? pg.items : []).filter((f) => f && typeof f.path === "string");
+    if (num(pg.offset) > 0 && nav.code && nav.code.project === project) nav.code.files = nav.code.files.concat(got).slice(0, MAX_ROWS);
+    else nav.code = { project, files: got.slice(0, MAX_ROWS), mappings: Array.isArray(body.mappings) ? body.mappings.slice(0, MAX_ROWS) : [], root: body.root, from: body.file, selected: null };
+    nav.code.next = Number.isInteger(pg.next) ? pg.next : null;
+    nav.code.total = num(pg.total); nav.code.cut = !!body.filesCut;
+    if (nav.code.next !== null && nav.code.files.length < MAX_ROWS) {
+      const at = nav.code.next;
+      setTimeout(() => navCall({ project, stage: "code", offset: at }, true).then((b) => { if (b && b.stage === "code" && nav.stage === "code") stageView(b); }), 0);
+    }
+  }
+  if (body.selected && typeof body.selected === "object") {
+    if (!nav.code || nav.code.project !== project) nav.code = { project, files: [], mappings: [], root: body.root, from: body.file, next: null, total: 0 };
+    nav.code.selected = body.selected;
+  }
+  const code = nav.code && nav.code.project === project ? nav.code : { files: [], mappings: [], next: null, total: 0, selected: null };
+  const files = code.files;
+  // the tree: directories fold, files show how many traceability mappings name them
+  const tree = { dirs: new Map(), files: [] };
+  for (const f of files) {
+    const path = String(f.path || ""), segs = path.split("/");
+    let node = tree;
+    for (const d of segs.slice(0, -1)) { if (!node.dirs.has(d)) node.dirs.set(d, { dirs: new Map(), files: [] }); node = node.dirs.get(d); }
+    node.files.push({ name: segs[segs.length - 1], path, links: Array.isArray(f.links) ? f.links : [] });
+  }
+  const list = el("div", "ftree");
+  const sel = code.selected;
+  const selPath = sel && typeof sel.path === "string" ? sel.path : "";
+  // the picked file's folders are open
+  selPath.split("/").slice(0, -1).reduce((acc, d) => { const k = acc + d + "/"; nav.codeOpen.add(k); return k; }, "");
+  const draw = () => {
+    list.replaceChildren();
+    const walk = (node, prefix, depth) => {
+      for (const [d, kid] of [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const key = prefix + d + "/", open = nav.codeOpen.has(key);
+        const row = el("div", "frow"); row.style.paddingLeft = (10 + depth * 16) + "px"; row.tabIndex = 0;
+        row.setAttribute("aria-expanded", String(open));
+        row.append(el("span", "twisty", open ? "▾" : "▸"), el("span", "fname", d + "/"));
+        row.addEventListener("click", () => { if (open) nav.codeOpen.delete(key); else nav.codeOpen.add(key); draw(); reportSize(); });
+        list.appendChild(row);
+        if (open) walk(kid, key, depth + 1);
+      }
+      for (const f of node.files) {
+        const row = el("div", "frow" + (f.path === selPath ? " sel" : "")); row.style.paddingLeft = (28 + depth * 16) + "px"; row.tabIndex = 0;
+        row.append(el("span", "fname", f.name));
+        if (f.links.length) row.appendChild(el("span", "links", "↔ " + f.links.length));
+        const go = () => openStage("code", { file: f.path });
+        row.addEventListener("click", go);
+        row.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
+        list.appendChild(row);
+      }
+    };
+    walk(tree, "", 0);
+  };
+  draw();
+  const side = el("div");
+  if (sel && typeof sel.text === "string") {
+    const maps = Array.isArray(sel.mappings) ? sel.mappings : [];
+    const mbox = el("div");
+    for (const m of maps.slice(0, MAX_ITEMS)) {
+      if (!m || typeof m !== "object") continue;
+      const d = el("details"); d.open = maps.length <= 3;
+      d.appendChild(el("summary", "", String(m.name || "mapping") + " · " + (Array.isArray(m.requirements) ? m.requirements.slice(0, 4).join(", ") : "")));
+      const add = (label, xs) => { if (Array.isArray(xs) && xs.length) { d.appendChild(el("h3", "", label)); const ul = el("ul"); xs.slice(0, MAX_ITEMS).forEach((x) => ul.appendChild(el("li", "", String(x)))); d.appendChild(ul); } };
+      add("Requirements", m.requirements); add("Files", m.files); add("Symbols", m.symbols); add("Tests", m.tests);
+      mbox.appendChild(d);
+    }
+    side.appendChild(panel("Traceability for " + selPath + " (" + maps.length + ")", maps.length ? mbox : el("p", "meta", "No mapping names this file.")));
+    const off = num(sel.offset), total = num(sel.total), text = String(sel.text);
+    const pre = el("pre", "filetext", text);
+    const pager = el("div", "controls");
+    pager.appendChild(el("span", "pos", `characters ${off + 1} to ${off + text.length} of ${total}` + (sel.cut ? " (the first 256 KiB)" : "")));
+    if (off > 0) { const b = el("button", "", "First page"); b.addEventListener("click", () => openStage("code", { file: selPath })); pager.appendChild(b); }
+    if (Number.isInteger(sel.next)) { const b = el("button", "", "Next page ▶"); b.addEventListener("click", () => openStage("code", { file: selPath, offset: sel.next })); pager.appendChild(b); }
+    const fileBox = el("div"); fileBox.append(pager, pre);
+    side.appendChild(panel(selPath, fileBox));
+  } else side.appendChild(el("p", "meta", `${files.length}${code.next !== null ? " of " + code.total + " (loading)" : code.cut ? "+" : ""} files, ${code.mappings.length} traceability mappings from ${code.from || body.file || "none"}. Pick a file to see its text and the requirements it implements.`));
+  const grid = el("div", "codegrid"); grid.append(panel("Source" + (code.root ? " · " + code.root + "/" : ""), list), side);
+  parts.push(grid);
+  return parts;
+}
+
+connect().then(() => navCall({}, true)).then((body) => { if (body) stageView(body); });
 </script>
 </body>
 </html>

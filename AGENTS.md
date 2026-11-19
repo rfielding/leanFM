@@ -65,11 +65,34 @@ conforming existing code, edit the source tree, add or update tests, and run the
 repository checks. Missing or contradictory durable information is a reason to
 return to specification, not permission to guess from chat history.
 
-The command-line steps an agent wants the user to run for the current request go in
-`./update` at the project root, rewritten for each request: changes to protected files such
-as the Makefile, and staging new files. Keep each step safe to run again, never commit or
-push from it, and do not ask the user to paste commands instead. `./update` is in
-`.gitignore` and is never added to git.
+An agent with a shell in this repository does its own work: it edits any file, the Makefile
+included, and runs the builds, tests and checks itself, then reports what passed. It never
+commits or pushes, and never asks the user to commit or push so that something can be checked:
+everything is checked in the working tree, and the user reviews the diff and commits.
+
+The agent stages its work with `git add`, because only the agent knows which new files belong.
+It stages source, specifications, tests, and the generated outputs meant to be read in git (the
+dark book PDF, generated views and reports the book or README points at). It does not stage
+build byproducts (Lake output, LaTeX intermediates, caches, logs); when such a file shows up
+untracked and is not yet ignored, it adds a rule to `.gitignore` instead. Before finishing it
+reports `git status --short` so the user sees exactly what is staged.
+
+LeanFM is developed with the LeanFM method. A change to LeanFM starts in its own requirements
+(`LeanFM/LLMGenerated/SelfHosting.lean`), then the implementation mapping
+(`SessionImplementation.lean`, `McpLogicImplementation.lean`), then the source, each checked
+with LeanFM's own tools (the MCP server from `make serve`) before the next.
+
+LeanFM's own specification is the default example for testing the MCP session-type viewer
+(session_explore and the other views): the distillation chain from the book through
+`SelfHosting.lean` and the implementation mappings to the source, and LeanFM's own protocols
+(MCP client and server, the tools it serves). Other projects such as GoServer are secondary
+examples. If a view cannot show LeanFM yet, that gap is the work to do, not a reason to switch
+examples.
+
+Only steps the agent's environment refuses (a sandbox that cannot write a file or run a
+command) go in `./update` at the project root, rewritten for each request. Keep each step safe
+to run again, never commit or push from it, and do not ask the user to paste commands instead.
+`./update` is in `.gitignore` and is never added to git.
 
 Useful repository commands:
 

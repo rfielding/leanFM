@@ -94,10 +94,25 @@ function host(msg) {
     const answer = name === "session_next" ? R.next[Math.min(nextCalls++, R.next.length - 1)]
       : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp
       : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types
-      : name === "session_explore" ? (msg.params.arguments && msg.params.arguments.focus ? R.exploreFocus : R.explore) : null;
+      : name === "session_explore" ? (msg.params.arguments && msg.params.arguments.focus ? R.exploreFocus : R.explore)
+      : name === "project_view" && R.projectView ? projectViewAnswer(msg.params.arguments || {}) : null;
     if (answer) deliver({ jsonrpc: "2.0", id: msg.id, result: answer });
     else deliver({ jsonrpc: "2.0", id: msg.id, error: { code: -32601, message: "unexpected tool " + name } });
   } else if (msg.id !== undefined && msg.method) deliver({ jsonrpc: "2.0", id: msg.id, result: {} });
+}
+
+// project_view answers from RESULTS.json's projectView: {list, chat, book, requirements, sections: {tasks,
+// protocols, clauses, properties, transitions}, protocol, code: [every page of the listing], codeFile}
+function projectViewAnswer(a) {
+  const P = R.projectView;
+  if (!a.stage) return P.list;
+  if (a.stage === "requirements") return a.file ? P.protocol : a.section ? P.sections[a.section] || null : P.requirements;
+  if (a.stage === "code") {
+    if (a.file) return P.codeFile;
+    const off = a.offset || 0;
+    return P.code.find((pg) => (pg.structuredContent.page.offset || 0) === off) || null;
+  }
+  return P[a.stage] || null;
 }
 
 // an error thrown from a promise or timer in the view is a failure, reported plainly
@@ -122,6 +137,17 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   console.log("ok: the view completes the MCP Apps handshake");
 
   await show(R.check);
+  {
+    const box = byId.editor.all().find((n) => n.tag === "input" && String(n.attrs["aria-label"] || "").startsWith("How many sessions Animate"));
+    if (!box) throw new Error("no session count beside Animate");
+    box.value = "500"; box.dispatch("change"); await wait(10);
+    if (box.value !== "200") throw new Error("the Animate count is not clamped to 200");
+    box.value = "3"; box.dispatch("change"); await wait(10);
+    button(byId.editor, "Animate").click(); await wait(200);
+    const sent = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_simulate").pop();
+    if (sent?.params.arguments.instances !== 3 || sent?.params.arguments.maxEvents !== 600) throw new Error("Animate did not send the chosen number of sessions");
+    console.log("ok: Animate generates the number of sessions set beside it, clamped to 1..200");
+  }
   if (R.mdp) {
     await show(R.mdp);
     expectText("native MDP graph renders", byId.results, "Decision process under the supplied policy");
@@ -135,7 +161,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     await show(R.timed);
     expectText("timed layer renders", byId.results, "Generation assumptions");
     expectText("deadline monitoring renders", byId.results, "fulfilled");
-    button(byId.editor, "Animate 10 sessions").click(); await wait(120);
+    button(byId.editor, "Animate").click(); await wait(120);
     const sent = hostSent.filter(m => m.method === "tools/call" && m.params.name === "session_simulate").pop();
     if (sent?.params.arguments.overlay?.name !== "test-layer")
       throw new Error("editor lost the external overlay");
@@ -179,7 +205,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     expectText("a role's view shows the payloads", byId.results, "Payloads (protobuf");
     if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("no SVG drawn for the role's view");
     if (!button(byId.editor, "Member").attrs.class.includes("on")) throw new Error("the role's button is not marked as the current view");
-    const count = byId.editor.all().find((n) => n.tag === "input" && n.attrs.type === "number");
+    const count = byId.editor.all().find((n) => n.tag === "input" && n.attrs.type === "number" && String(n.attrs["aria-label"] || "").includes("dataset"));
     if (!count) throw new Error("no dataset size field");
     count.value = "99999"; count.dispatch("change");
     if (count.value !== "10000") throw new Error("the dataset size is not capped at 10000");
@@ -274,14 +300,86 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   button(byId.results, "Less detail").click(); await wait(100);
   button(byId.results, "More detail").click(); await wait(100);
   console.log("ok: the animation runs and its detail toggle works");
+  // clicking an event focuses on its thread: only the events its prior links reach either way stay,
+  // and the roles left without an event are named as hidden; Show all events brings the rest back
+  {
+    const E = R.simulate.structuredContent.events;
+    const posOf = new Map(E.map((e, i) => [e.id, i]));
+    const kids = E.map(() => []);
+    E.forEach((e, i) => (e.prior || []).forEach((q) => { if (posOf.has(q)) kids[posOf.get(q)].push(i); }));
+    const reach = (start, next) => { const got = new Set([start]), st = [start]; while (st.length) for (const j of next(st.pop())) if (!got.has(j)) { got.add(j); st.push(j); } return got; };
+    const pickAt = 2;
+    const want = new Set([...reach(pickAt, (i) => (E[i].prior || []).filter((q) => posOf.has(q)).map((q) => posOf.get(q))), ...reach(pickAt, (i) => kids[i])]);
+    const rowsNow = () => byId.results.all().filter((n) => n.className.split(" ").includes("evrow"));
+    const cv = root.all().find((n) => n.tag === "canvas");
+    const before = rowsNow().length;
+    // rows are 48 px apart in full detail, the first at 76 px
+    cv.dispatch("click", { clientX: 100, clientY: 76 + pickAt * 48 }); await wait(200);
+    if (rowsNow().length !== want.size) throw new Error(`focusing on event ${pickAt} shows ${rowsNow().length} events, its thread has ${want.size}`);
+    expectText("a focused thread says whose it is", byId.results, "Thread of e");
+    button(byId.results, "Show all events").click(); await wait(200);
+    if (rowsNow().length !== before) throw new Error("Show all events did not bring the stream back");
+    console.log(`ok: clicking an event focuses on its thread (${want.size} of ${before} events) and Show all events brings the rest back`);
+  }
+  // the derived sessions (clause selfhost.session.derived-sessions): one button per session LeanFM
+  // derived; picking one shows only its events in the log
+  {
+    const d = R.simulate.structuredContent.derivedSessions;
+    if (!d || !Array.isArray(d.sessions) || !d.sessions.length) throw new Error("session_simulate derived no sessions");
+    const first = d.sessions[0];
+    const sb = buttons(byId.results).find((b) => b.textContent === `${first.key} · ${first.count}`);
+    if (!sb) throw new Error("no button for the derived session " + first.key + "; have: " + buttons(byId.results).map((b) => b.textContent).join(" | "));
+    const rowsNow = () => byId.results.all().filter((n) => n.className.split(" ").includes("evrow"));
+    const before = rowsNow().length;
+    sb.click(); await wait(200);
+    if (rowsNow().length !== first.count) throw new Error(`picking ${first.key} shows ${rowsNow().length} events, not its ${first.count} (of ${before})`);
+    expectText("a picked session says which it is", byId.results, "Session " + first.key);
+    button(byId.results, `all · ${R.simulate.structuredContent.events.length}`).click(); await wait(200);
+    if (rowsNow().length !== before) throw new Error("all does not bring every event back");
+    console.log("ok: the stream filters to one derived session and back to all");
+  }
 
   await show(R.conform);
   expectText("session_conform shows where the run breaks the protocol", byId.results, "Where the run breaks the protocol");
   await show(R.diagram);
   expectText("session_diagram result renders", byId.results, "Sequence diagram");
+  // calls fold (clause selfhost.session.diagram.folds): depth 2 and below start folded; folding the
+  // top call hides the role used only inside it, and its name in the hidden note brings it back
+  {
+    const svgAll = () => byId.results.all();
+    const hotNamed = (prefix) => svgAll().filter((n) => n.tag === "rect" && String(n.attrs["aria-label"] || "").startsWith(prefix));
+    const calls = R.diagram.structuredContent.diagram.calls;
+    const deep = calls.filter((c) => c.depth >= 2);
+    if (!deep.length) throw new Error("the lending diagram has no nested call to fold");
+    if (hotNamed("Open the call").length !== deep.length) throw new Error(`${hotNamed("Open the call").length} folded calls drawn, expected ${deep.length}`);
+    for (const c of deep) if (!svgAll().some((n) => n.tag === "text" && n.textContent === "▸ " + c.label)) throw new Error("no folded arrow labelled " + c.label);
+    console.log("ok: calls at depth 2 and below start folded, each drawn as one labelled arrow");
+    const shapesBefore = JSON.stringify(R.diagram.structuredContent.diagram.shapes);
+    hotNamed("Open the call")[0].dispatch("click", { stopPropagation() {} }); await wait(30);
+    if (hotNamed("Open the call").length !== deep.length - 1) throw new Error("opening a call did not open it");
+    hotNamed("Fold the call " + deep[0].label)[0].dispatch("click", { stopPropagation() {} }); await wait(30);
+    if (hotNamed("Open the call").length !== deep.length) throw new Error("the ▾ control did not fold the call again");
+    const lifelines = () => svgAll().filter((n) => n.tag === "line" && n.attrs.class === "lifeline").length;
+    const lanes = R.diagram.structuredContent.diagram.lanes.length;
+    if (lifelines() !== lanes) throw new Error(`${lifelines()} lifelines with the top call open, expected ${lanes}`);
+    const top = calls.find((c) => c.depth === 1);
+    hotNamed("Fold the call " + top.label)[0].dispatch("click", { stopPropagation() {} }); await wait(30);
+    const note = svgAll().find((n) => String(n.className).includes("hidden-note"));
+    const gone = R.diagram.structuredContent.diagram.lanes.map((l) => l.role).filter((r) => r !== top.caller && r !== top.callee);
+    if (!note || !note.textContent.startsWith("hidden:")) throw new Error("folding the top call hides no role");
+    for (const r of gone) if (!buttons(note).some((b) => b.textContent === r)) throw new Error(r + " is not in the hidden note");
+    if (lifelines() !== lanes - gone.length) throw new Error(`${lifelines()} lifelines with ${gone.join(", ")} hidden`);
+    console.log("ok: a role used only inside a folded call loses its lifeline and is named in the hidden note");
+    button(note, gone[0]).click(); await wait(30);
+    if (lifelines() !== lanes || note.textContent.includes(gone[0])) throw new Error("clicking a hidden name did not bring it back");
+    if (JSON.stringify(R.diagram.structuredContent.diagram.shapes) !== shapesBefore) throw new Error("folding changed the shapes LeanFM sent");
+    console.log("ok: a hidden role's name opens its calls again, and the shapes are unchanged");
+  }
   if (R.ctl) {
     await show(R.ctl);
     expectText("session_ctl shows its counterexample path", byId.results, "Counterexample: the steps that break it");
+    // the property reads as CTL symbols, not as JSON
+    expectText("session_ctl heads the property with its CTL notation", byId.results, "AG (Approved → AG ¬Waitlisted)");
   }
   if (R.compat) {
     await show(R.compat);
@@ -289,6 +387,79 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   }
   await show(R.skeleton);
   expectText("session_skeleton result renders its reading", byId.results, "typestate as classes");
+
+  // the navigator (clause selfhost.mcp.session.navigator): chat -> book -> requirements -> code, LeanFM first
+  if (R.projectView) {
+    const bar = root.all().find((n) => n.tag === "nav" && n.className.includes("stagenav"));
+    if (!bar) throw new Error("no navigator bar");
+    const order = buttons(bar).map((b) => b.textContent).join(" ");
+    if (order !== "chat book requirements code") throw new Error("the navigator's stages are " + order);
+    const pick = bar.all().find((n) => n.tag === "select");
+    if (!pick || !pick.children.some((o) => o.textContent === "LeanFM") || pick.value !== "LeanFM") throw new Error("the project picker does not default to LeanFM");
+    if (!pick.children.some((o) => o.textContent === "GoServer")) throw new Error("the project picker does not list GoServer from project_view");
+    console.log("ok: the navigator shows chat, book, requirements, code and a project picker defaulting to LeanFM");
+    const navSent = () => hostSent.filter((m) => m.method === "tools/call" && m.params.name === "project_view").pop();
+    button(bar, "chat").click(); await wait(200);
+    if (navSent()?.params.arguments.stage !== "chat" || navSent()?.params.arguments.project !== "LeanFM") throw new Error("chat did not ask project_view for LeanFM's chat");
+    expectText("the chat stage says where the conversation happens", byId.results, "happens in the agent");
+    for (const box of [byId.results, byId.editor, byId.walk])
+      if (box.all().some((n) => n.tag === "textarea" || n.tag === "input" || n.tag === "form")) throw new Error("the chat stage offers an input");
+    console.log("ok: the chat stage has no input");
+    button(bar, "book").click(); await wait(200);
+    const img = byId.results.all().find((n) => n.tag === "img");
+    if (!img || !/^data:image\/(png;base64,iVBOR|jpeg;base64,\/9j\/)/.test(String(img.attrs.src || ""))) throw new Error("the book stage draws no PNG or JPEG page");
+    expectText("the book stage says which page", byId.results, "page 2 of");
+    button(byId.results, "Next ▶").click(); await wait(200);
+    if (navSent()?.params.arguments.page !== 3) throw new Error("Next did not ask for the next page");
+    button(bar, "requirements").click(); await wait(200);
+    const sectionButton = (name) => buttons(byId.results).find((b) => b.textContent.startsWith(name + " ("));
+    for (const name of ["tasks", "clauses", "protocols"]) if (!sectionButton(name)) throw new Error("the requirements stage has no " + name + " section");
+    if (byId.results.textContent.includes("selfhost_workflow")) throw new Error("the requirements overview carries the tasks themselves");
+    console.log("ok: the requirements stage lists its sections with their counts, not the items");
+    sectionButton("tasks").click(); await wait(200);
+    if (navSent()?.params.arguments.section !== "tasks") throw new Error("the tasks section was not asked for");
+    expectText("the tasks section lists LeanFM's workflow task", byId.results, "selfhost_workflow");
+    const propsButton = buttons(byId.results).find((b) => b.textContent.endsWith("properties · CTL") && !b.disabled);
+    propsButton.click(); await wait(200);
+    if (navSent()?.params.arguments.section !== "properties" || !navSent()?.params.arguments.task) throw new Error("a task's properties were not asked for with the task");
+    expectText("a task's properties show their CTL", byId.results, "AG ¬(");
+    button(byId.results, "Sections").click(); await wait(200);
+    sectionButton("clauses").click(); await wait(200);
+    expectText("the clauses section shows a page of clauses", byId.results, "selfhost.revision");
+    button(byId.results, "Next page ▶");
+    console.log("ok: the clauses section offers its next page");
+    button(byId.results, "Sections").click(); await wait(200);
+    sectionButton("protocols").click(); await wait(200);
+    const prow = byId.results.all().find((n) => n.className.split(" ").includes("frow"));
+    if (!prow) throw new Error("no protocol row");
+    prow.click(); await wait(300);
+    // (the tree then asks for its focus diagram with the text it got back, a later call)
+    const explored = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_explore" && m.params.arguments.file).pop();
+    // the server reads the file: the view sends the project and the file, never the text
+    if (!explored || !explored.params.arguments.file || explored.params.arguments.project !== "LeanFM" || "lean" in explored.params.arguments)
+      throw new Error("the protocol was not opened in session_explore by project and file: " + JSON.stringify(explored && explored.params.arguments).slice(0, 200));
+    if (!byId.results.all().some((n) => n.className.split(" ").includes("ftree"))) throw new Error("the protocol's tree is not shown");
+    console.log("ok: a protocol from the requirements stage opens in the tree");
+    // the opened protocol replaces the one shown, so Animate and Whole protocol work on it
+    const area = byId.editor.all().find((n) => n.tag === "textarea");
+    if (!area || area.value !== R.explore.structuredContent.lean) throw new Error("the protocol opened from the navigator did not replace the source the views use");
+    expectText("the view says where the diagram and the animation are", byId.editor, "Animate plays its event stream");
+    button(bar, "code").click(); await wait(900);
+    expectText("the code stage shows the source tree", byId.results, "traceability mappings");
+    const offsets = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "project_view" && m.params.arguments.stage === "code").map((m) => m.params.arguments.offset || 0);
+    if (R.projectView.code.length > 1 && !offsets.includes(R.projectView.code[1].structuredContent.page.offset)) throw new Error("the view did not ask for the listing's next page");
+    console.log(`ok: the code stage asked for every page of the listing (${offsets.length} pages)`);
+    const dir = byId.results.all().find((n) => n.className.split(" ").includes("frow") && n.textContent.includes("LeanFM/"));
+    if (!dir) throw new Error("no LeanFM/ folder in the source tree");
+    dir.click(); await wait(50);
+    const frow = byId.results.all().find((n) => n.className.split(" ").includes("frow") && n.textContent.startsWith("ProjectView.lean"));
+    if (!frow) throw new Error("no ProjectView.lean row after opening LeanFM/");
+    frow.click(); await wait(200);
+    if (navSent()?.params.arguments.file !== "LeanFM/ProjectView.lean") throw new Error("a file row did not ask for that file");
+    expectText("a picked file shows its traceability", byId.results, "Traceability for LeanFM/ProjectView.lean");
+    expectText("a picked file shows the clause it implements", byId.results, "clause:selfhost.mcp.session.navigator");
+    console.log("ok: the code stage opens a file with its traceability");
+  }
 
   for (const t of timers) clearTimeout(t);
   if (errors.length) { console.error("the view threw:\n" + errors.join("\n")); process.exit(1); }

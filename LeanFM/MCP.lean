@@ -8,6 +8,7 @@ import LeanFM.SessionView
 import LeanFM.SessionTools
 import LeanFM.CheckMetrics
 import LeanFM.ServerLogs
+import LeanFM.ProjectView
 
 namespace LeanFM.MCP
 
@@ -325,7 +326,9 @@ def withExampleArgument (tool : Json) : Json :=
   if !name.startsWith "session_" || !(props.getObjVal? "lean").isOk then tool else
   let ex := Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.SessionTools.exampleNames.map Json.str).toArray),
     ("description", Json.str "instead of lean: a protocol LeanFM carries (goserver is the GoServer specification)")]
-  tool.setObjVal! "inputSchema" (input.setObjVal! "properties" (props.setObjVal! "example" ex))
+  let project := Json.mkObj [("type", "string"), ("description", Json.str "with file, instead of lean: a project project_view lists (default LeanFM)")]
+  let file := Json.mkObj [("type", "string"), ("description", Json.str "instead of lean: one protocol file of the project, as project_view stage requirements section protocols lists it (LeanFM's own protocol is LeanFM/LLMGenerated/LeanFM.leanfm); the file is read on the server, one file per call")]
+  tool.setObjVal! "inputSchema" (input.setObjVal! "properties" (((props.setObjVal! "example" ex).setObjVal! "project" project).setObjVal! "file" file))
 
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
 def tools : Array Json := toolDefinitions.map (withSessionView ∘ withLogicView ∘ withExampleArgument)
@@ -343,9 +346,31 @@ def serverLogsTool : Json :=
       ("lines", Json.mkObj [("type", "integer"), ("description", Json.str s!"newest lines to return, 1 to {LeanFM.ServerLogs.maxLines} (default {LeanFM.ServerLogs.defaultLines})")]),
       ("grep", stringSchema "optional: only lines containing this text, ignoring case")] [])
 
+/-- The session view's navigator: one stage of one project, read-only (clause
+selfhost.mcp.session.navigator, LeanFM/ProjectView.lean). Listed exactly where server_logs is. -/
+def projectViewTool : Json :=
+  withSessionView <| tool "project_view" "Show a project's chat, book, requirements or code"
+    ("Show one stage of a project's distillation chain in the session view: chat (a page of its saved conversation log " ++
+     "from the newest, or where the conversation happens), book (one page of its PDF as an image), requirements " ++
+     "(without section, the sections and their counts; section tasks, clauses or protocols, or transitions, properties " ++
+     "or constraints of one task, a page at a time from offset; with file, one protocol's text) or code (a page of its " ++
+     "source tree with traceability mappings; with file, a page of one file's text and its mappings). Every answer is " ++
+     s!"under {LeanFM.ProjectView.maxAnswerChars} characters; follow next or older for more. Without stage, only the project " ++
+     "names. Projects: LeanFM (default) and each projects/ child with a manifest. Read-only.")
+    (schema [("project", stringSchema "a project name from the list (default LeanFM)"),
+      ("stage", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ProjectView.stages.map Json.str).toArray),
+        ("description", Json.str "which stage; omit to list the projects")]),
+      ("page", Json.mkObj [("type", "integer"), ("description", Json.str "book: the page to show (default 1)")]),
+      ("theme", stringSchema "book: dark (default) or light"),
+      ("file", stringSchema "requirements: a listed protocol file; code: a listed source file"),
+      ("section", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ProjectView.sections.map Json.str).toArray),
+        ("description", Json.str "requirements: which section to page; transitions, properties and constraints need task")]),
+      ("task", stringSchema "requirements: a task id from section tasks"),
+      ("offset", Json.mkObj [("type", "integer"), ("description", Json.str "the first item (or, for a file's text, character; for chat, messages back from the newest) of the page: the next or older value of the previous answer")])] [])
+
 /-- The tools listed on this host. -/
 def listedTools : IO (Array Json) := do
-  if ← LeanFM.ServerLogs.enabled.get then return tools.push serverLogsTool
+  if ← LeanFM.ServerLogs.enabled.get then return (tools.push serverLogsTool).push projectViewTool
   return tools
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
@@ -505,9 +530,21 @@ def dispatchJson (request : Json) : IO Response := do
           let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
           pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
         | .error err => pure <| rpcError id (-32602) err
+      | .ok "project_view" =>
+        match ← LeanFM.ProjectView.query ((field params "arguments").toOption.getD (Json.mkObj [])) with
+        | .ok (text, body) =>
+          let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
+          pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
+        | .error err => pure <| rpcError id (-32602) err
       | .ok name =>
         let t0 ← IO.monoNanosNow
-        let result := toolResult name ((field params "arguments").toOption.getD (Json.mkObj []))
+        let args := (field params "arguments").toOption.getD (Json.mkObj [])
+        -- a session tool may name a project's protocol file instead of carrying its text
+        let result ← if name.startsWith "session_" then do
+            match ← LeanFM.ProjectView.protocolArgs args with
+            | .ok args => pure (toolResult name args)
+            | .error e => pure (.ok (logicResult name (.error e)))
+          else pure (toolResult name args)
         let t1 ← IO.monoNanosNow
         -- recorded after the answer is computed, so it can neither change nor fail it (selfhost.mcp.metrics)
         LeanFM.CheckMetrics.checkStats.modify (·.record listedToolNames name result (t1 - t0))

@@ -48,8 +48,23 @@ partial def toCTL (m : Model) : Formula → LeanFM.CTL Nat
   | .ew a b => .ew (toCTL m a) (toCTL m b) | .aw a b => .aw (toCTL m a) (toCTL m b)
   | _ => .atom fun _ => false
 
+def notationOf (j : String) : String := ((parseBounded (parseJ j)).toOption.map Formula.symbols).getD "?"
+
 def main : IO Unit := do
   -- logic-formula-ast
+  -- CTL notation: one legible line, parentheses only around binary operands
+  for (j, want) in [
+      ("{\"AG\": {\"implies\": [{\"after\": \"Pay\"}, {\"AF\": {\"after\": \"Receipt\"}}]}}", "AG (Pay → AF Receipt)"),
+      ("{\"AG\": {\"not\": {\"after\": \"Pay\"}}}", "AG ¬Pay"),
+      ("{\"not\": {\"EU\": [{\"not\": {\"after\": \"A\"}}, {\"after\": \"B\"}]}}", "¬E[¬A U B]"),
+      ("{\"AW\": [{\"at\": \"s\"}, \"terminal\"]}", "A[@s W terminal]"),
+      ("{\"EF\": {\"and\": [{\"after\": \"A\"}, {\"or\": [{\"after\": \"B\"}, {\"after\": \"C\"}]}]}}", "EF (A ∧ (B ∨ C))"),
+      ("{\"never\": {\"after\": \"Charge\"}}", "never Charge")] do
+    let got := notationOf j
+    expect s!"notation {want}" (got == want)
+  expect "explain_formula answers the notation"
+    (match call "explain_formula" "{\"formula\": {\"AG\": {\"not\": {\"after\": \"Pay\"}}}}" with
+     | .ok j => (j.getObjValD "notation") == Json.str "AG ¬Pay" | .error _ => false)
   for op in ["EX", "AX", "EF", "AF", "EG", "AG", "never", "not"] do
     expect s!"parses {op}" ((parseBounded (parseJ s!"\{\"{op}\": \"terminal\"}")).toOption.isSome)
   for op in ["EU", "AU", "EW", "AW", "implies", "stronglyImplies"] do

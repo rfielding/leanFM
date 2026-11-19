@@ -162,6 +162,45 @@ partial def paren (f : Formula) : String :=
   if f.isAtomic then reading f else "(" ++ reading f ++ ")"
 end
 
+mutual
+/-- The formula in CTL symbols, one line a person reads instead of the JSON: an after atom is its
+message label, temporal operators are prefixes (AG, EF, ...) or brackets (E[a U b]), and
+parentheses appear only around a binary operand. -/
+partial def symbols : Formula → String
+  | tt => "true"
+  | ff => "false"
+  | atState s => "@" ++ s
+  | after m => m
+  | terminal => "terminal"
+  | field m n v => m ++ "." ++ n ++ " = " ++ v
+  | predicate t => "\"" ++ t ++ "\""
+  | derived n => n
+  | unsupported op => op
+  | knows a t => "K_" ++ a ++ " " ++ t.render
+  | claimed c => c
+  | not f => "¬" ++ symbolsArg f
+  | and fs => " ∧ ".intercalate (fs.map symbolsArg)
+  | or fs => " ∨ ".intercalate (fs.map symbolsArg)
+  | implies a b => symbolsArg a ++ " → " ++ symbolsArg b
+  | stronglyImplies a b => symbolsArg a ++ " ⇒ " ++ symbolsArg b
+  | never f => "never " ++ symbolsArg f
+  | ex f => "EX " ++ symbolsArg f
+  | ax f => "AX " ++ symbolsArg f
+  | ef f => "EF " ++ symbolsArg f
+  | af f => "AF " ++ symbolsArg f
+  | eg f => "EG " ++ symbolsArg f
+  | ag f => "AG " ++ symbolsArg f
+  | eu a b => "E[" ++ symbols a ++ " U " ++ symbols b ++ "]"
+  | au a b => "A[" ++ symbols a ++ " U " ++ symbols b ++ "]"
+  | ew a b => "E[" ++ symbols a ++ " W " ++ symbols b ++ "]"
+  | aw a b => "A[" ++ symbols a ++ " W " ++ symbols b ++ "]"
+/-- An operand: parenthesized only when it is a binary connective (and, or, implies). -/
+partial def symbolsArg (f : Formula) : String :=
+  match f with
+  | and (_ :: _ :: _) | or (_ :: _ :: _) | implies .. | stronglyImplies .. | field .. => "(" ++ symbols f ++ ")"
+  | _ => symbols f
+end
+
 /-- Negation pushed inward through the CTL dualities. -/
 partial def negate : Formula → Formula
   | tt => ff
@@ -784,8 +823,8 @@ def explainFormula (args : Json) : ToolOutcome := do
     | none => pure []
   let neg := f.negate
   return verdictJson "explain_formula" "explained" f.reading
-    [ ("formula", f.toJson), ("mode", Formula.mode f)
-    , ("negation", Json.mkObj [("formula", neg.toJson), ("reading", neg.reading)])
+    [ ("formula", f.toJson), ("notation", f.symbols), ("mode", Formula.mode f)
+    , ("negation", Json.mkObj [("formula", neg.toJson), ("notation", neg.symbols), ("reading", neg.reading)])
     , ("typingErrors", Json.arr #[])
     , ("unknownAtoms", Json.arr (unknown.map Json.str).toArray)
     , ("unsupportedOperators", Json.arr ((unsupportedIn f).map Json.str).toArray)
@@ -805,7 +844,7 @@ def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
   if !unknown.isEmpty then
     throw ("formula names atoms the task does not declare: " ++ "; ".intercalate unknown)
   let common : List (String × Json) :=
-    [("task", t.id), ("formula", f.toJson), ("mode", Formula.mode f), ("terminalConvention", terminalConvention)]
+    [("task", t.id), ("formula", f.toJson), ("notation", f.symbols), ("mode", Formula.mode f), ("terminalConvention", terminalConvention)]
   let unsupported := unsupportedIn f
   if !unsupported.isEmpty then
     return verdictJson "check_ctl" "unsupported" f.reading <| common ++

@@ -9,6 +9,196 @@ def assertContains (label haystack needle : String) : IO Unit :=
   if haystack.contains needle then IO.println s!"ok: {label}"
   else throw <| IO.userError s!"{label}: expected {needle}"
 
+/-- The navigator's stages for the view's smoke test (clause selfhost.mcp.session.navigator),
+answered as project_view would, with the switch still off. -/
+def projectViewResults : IO Json := do
+  let pv (args : List (String × Json)) : IO Json := do
+    match ← LeanFM.ProjectView.answer (Json.mkObj args) with
+    | .ok (text, body) => pure (Json.mkObj [("content", Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]), ("structuredContent", body)])
+    | .error e => throw <| IO.userError s!"project_view {Json.mkObj args |>.compress}: {e}"
+  let protocols ← pv [("stage", "requirements"), ("section", "protocols")]
+  let firstProtocol := (((((protocols.getObjValD "structuredContent").getObjValD "page").getObjValD "items").getArr?).toOption.getD #[])[0]?.getD (Json.str "")
+  -- every page of the code listing, as the view asks for them in turn
+  let mut codePages : Array Json := #[]
+  let mut offset : Option Nat := some 0
+  while offset.isSome && codePages.size < 30 do
+    let pg ← pv [("stage", "code"), ("offset", toJson offset.get!)]
+    codePages := codePages.push pg
+    offset := (((pg.getObjValD "structuredContent").getObjValD "page").getObjValAs? Nat "next").toOption
+  return Json.mkObj [
+    ("list", ← pv []), ("chat", ← pv [("stage", "chat")]), ("book", ← pv [("stage", "book"), ("page", (2 : Nat))]),
+    ("requirements", ← pv [("stage", "requirements")]),
+    ("sections", Json.mkObj [("tasks", ← pv [("stage", "requirements"), ("section", "tasks")]), ("protocols", protocols),
+      ("clauses", ← pv [("stage", "requirements"), ("section", "clauses")]),
+      ("properties", ← pv [("stage", "requirements"), ("section", "properties"), ("task", "selfhost_workflow")]),
+      ("transitions", ← pv [("stage", "requirements"), ("section", "transitions"), ("task", "selfhost_workflow")])]),
+    ("protocol", ← pv [("stage", "requirements"), ("file", firstProtocol)]),
+    ("code", Json.arr codePages), ("codeFile", ← pv [("stage", "code"), ("file", "LeanFM/ProjectView.lean")])]
+
+/-- project_view is unlisted and refused while the switch is off, as server_logs is. -/
+def projectViewOffTests (offList : String) : IO Unit := do
+  let expect (label : String) (ok : Bool) : IO Unit :=
+    if ok then IO.println s!"ok: {label}" else throw <| IO.userError s!"failed: {label}"
+  expect "MCP does not list project_view on a host that has not enabled it" (!offList.contains "\"project_view\"")
+  let pvOff ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":77,\"method\":\"tools/call\",\"params\":{\"name\":\"project_view\",\"arguments\":{\"stage\":\"chat\"}}}"
+  expect "MCP refuses project_view where it is off" (pvOff.body.contains "project_view is off on this host")
+
+/-- Session tools load a project's protocol a file at a time (clause selfhost.mcp.session.project-files).
+LeanFM and GoServer are committed, so every protocol file either lists must load through
+`{project, file}` and check cleanly (session_check answers, not rejected); LeanFM's own protocol has
+no review findings. Refusals: a file not listed, a path out of the root, a project not listed,
+file together with lean, and project and file while project_view is off. -/
+def projectFilesOffTests : IO Unit := do
+  let r ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":90,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"project\":\"LeanFM\",\"file\":\"LeanFM/LLMGenerated/LeanFM.leanfm\"}}}"
+  if r.body.contains "is off on this host" && r.body.contains "\"isError\":true" then IO.println "ok: a session tool reads no project file while project_view is off"
+  else throw <| IO.userError s!"failed: project file read while off: {r.body.take 300}"
+
+def projectFilesTests : IO Unit := do
+  let expect (label : String) (ok : Bool) : IO Unit :=
+    if ok then IO.println s!"ok: {label}" else throw <| IO.userError s!"failed: {label}"
+  let call (tool : String) (args : Json) : IO Json := do
+    let req := Json.mkObj [("jsonrpc", "2.0"), ("id", (91 : Nat)), ("method", "tools/call"),
+      ("params", Json.mkObj [("name", Json.str tool), ("arguments", args)])]
+    let r ← dispatch req.compress
+    match Json.parse r.body with
+    | .ok j => pure (j.getObjValD "result")
+    | .error e => throw <| IO.userError s!"{tool}: unparsable answer {e}"
+  let rejected (j : Json) : Bool := (j.getObjValAs? Bool "isError").toOption.getD false
+  let reason (j : Json) : String := ((j.getObjValD "structuredContent").getObjValAs? String "reason").toOption.getD ""
+  for project in ["LeanFM", "GoServer"] do
+    let mut files : Array String := #[]
+    let mut offset : Option Nat := some 0
+    while offset.isSome && files.size < 2000 do
+      let .ok (_, body) ← LeanFM.ProjectView.answer (Json.mkObj [("project", Json.str project), ("stage", "requirements"),
+        ("section", "protocols"), ("offset", toJson offset.get!)]) | throw <| IO.userError s!"{project}: protocols not listed"
+      let pg := body.getObjValD "page"
+      files := files ++ (((pg.getObjValD "items").getArr?).toOption.getD #[]).filterMap (·.getStr?.toOption)
+      offset := (pg.getObjValAs? Nat "next").toOption
+    expect s!"{project} lists protocol files" (!files.isEmpty)
+    for f in files do
+      let r ← call "session_check" (Json.mkObj [("project", Json.str project), ("file", Json.str f)])
+      if rejected r then throw <| IO.userError s!"failed: {project} {f} does not load cleanly: {reason r}"
+    IO.println s!"ok: every one of the {files.size} {project} protocol files loads through project and file and checks"
+  let ps ← LeanFM.ProjectView.projects
+  let some lean := ps[0]? | throw <| IO.userError "no LeanFM project"
+  let files ← LeanFM.ProjectView.protocolFiles lean
+  expect "LeanFM lists its own protocol first" (files.1[0]? == some "LeanFM/LLMGenerated/LeanFM.leanfm")
+  let own ← call "session_review" (Json.mkObj [("project", "LeanFM"), ("file", "LeanFM/LLMGenerated/LeanFM.leanfm")])
+  expect "LeanFM's own protocol reviews with no findings"
+    (!rejected own && (((own.getObjValD "structuredContent").getObjValAs? String "reading").toOption.getD "").contains "no findings")
+  let ex ← call "session_explore" (Json.mkObj [("project", "LeanFM"), ("file", "LeanFM/LLMGenerated/LeanFM.leanfm")])
+  expect "session_explore opens LeanFM's own protocol by project and file" (!rejected ex && ex.compress.contains "LeanFMMcp")
+  for (label, args, needle) in [
+      ("a file that is not a listed protocol", Json.mkObj [("file", "LeanFM.lean")], "protocol files listed"),
+      ("a path out of the root", Json.mkObj [("project", "GoServer"), ("file", "../../LeanFM/LLMGenerated/LeanFM.leanfm")], "protocol files listed"),
+      ("an absolute path", Json.mkObj [("file", "/etc/passwd")], "protocol files listed"),
+      ("a project not listed", Json.mkObj [("project", "projects/GoServer"), ("file", "x.leanfm")], "project must be one of"),
+      ("file together with lean", Json.mkObj [("file", "LeanFM/LLMGenerated/LeanFM.leanfm"), ("lean", "protocol P (A, B) { M from A to B; }")], "not both"),
+      ("project without file", Json.mkObj [("project", "GoServer")], "file must be")] do
+    let r ← call "session_check" args
+    expect s!"a session tool refuses {label}" (rejected r && (reason r).contains needle)
+
+/-- project_view (LeanFM/ProjectView.lean, clause selfhost.mcp.session.navigator): the navigator's
+stages, read-only, inside each project root. Runs with the switch on. -/
+def projectViewTests : IO Unit := do
+  let expect (label : String) (ok : Bool) : IO Unit :=
+    if ok then IO.println s!"ok: {label}" else throw <| IO.userError s!"failed: {label}"
+  let pvList ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":78,\"method\":\"tools/list\"}"
+  expect "MCP lists project_view once enabled, drawn by the session view"
+    (pvList.body.contains "\"name\":\"project_view\"" && LeanFM.MCP.projectViewTool.compress.contains "ui://leanfm/session-view")
+  let pvCall (args : String) : IO String := do
+    let r ← dispatch ("{\"jsonrpc\":\"2.0\",\"id\":79,\"method\":\"tools/call\",\"params\":{\"name\":\"project_view\",\"arguments\":" ++ args ++ "}}")
+    pure r.body
+  let names ← pvCall "{}"
+  expect "project_view lists LeanFM first and the projects with a manifest"
+    (names.contains "\"projects\":[\"LeanFM\",\"GoServer\"" && names.contains "PaxosKV")
+  for bad in ["projects/GoServer", "../GoServer", "/etc", "GoServer/.."] do
+    let r ← pvCall ("{\"project\":\"" ++ bad ++ "\",\"stage\":\"chat\"}")
+    expect s!"project_view refuses the project {bad}" (r.contains "project must be one of LeanFM")
+  let extra ← pvCall "{\"stage\":\"chat\",\"message\":\"hello\"}"
+  expect "project_view takes no message argument" (extra.contains "message is not one of them")
+  let lchat ← pvCall "{\"stage\":\"chat\"}"
+  expect "project_view chat for LeanFM says where the conversation happens" (lchat.contains "happens in the agent" && lchat.contains "\"found\":false")
+  let gchat ← pvCall "{\"project\":\"GoServer\",\"stage\":\"chat\"}"
+  expect "project_view chat for GoServer decodes its saved messages" (gchat.contains "\"role\":\"user\"" && gchat.contains "\"found\":true")
+  expect "project_view decodes base64 both ways" (String.fromUTF8! (LeanFM.ProjectView.base64Decode (LeanFM.ProjectView.base64Encode "key=sk-ABC é".toUTF8)) == "key=sk-ABC é")
+  let lbook ← pvCall "{\"stage\":\"book\",\"page\":3}"
+  expect "project_view book returns a page image of at most 48000 bytes and the page count"
+    ((lbook.contains "\"mimeType\":\"image/png\"" || lbook.contains "\"mimeType\":\"image/jpeg\"") && lbook.contains "\"data\":\"" &&
+      lbook.contains "\"page\":3" && lbook.contains "\"pages\":" && lbook.length < LeanFM.ProjectView.maxAnswerChars)
+  let lbook2 ← pvCall "{\"stage\":\"book\",\"page\":3}"
+  expect "project_view book answers a page again from its cache, without a render" (lbook2.contains "\"cached\":true")
+  let slow ← LeanFM.ProjectView.runBounded "sleep" #["5"] 300
+  expect "a render that outlives its limit is killed and refused" (match slow with | .error e => e.contains "ran longer" | .ok _ => false)
+  -- every stage and section answers under the bound, for LeanFM and for GoServer
+  for proj in ["LeanFM", "GoServer"] do
+    for args in ["\"stage\":\"chat\"", "\"stage\":\"requirements\"", "\"stage\":\"code\"", "\"stage\":\"book\"",
+        "\"stage\":\"requirements\",\"section\":\"tasks\"", "\"stage\":\"requirements\",\"section\":\"clauses\"",
+        "\"stage\":\"requirements\",\"section\":\"protocols\""] do
+      let r ← pvCall ("{\"project\":\"" ++ proj ++ "\"," ++ args ++ "}")
+      expect s!"project_view {proj} \{{args}} answers under {LeanFM.ProjectView.maxAnswerChars} characters"
+        (r.length < LeanFM.ProjectView.maxAnswerChars + 200 && !r.contains "\"error\"")
+  let big := Json.mkObj [("text", Json.str ("".pushn 'x' 80000))]
+  expect "an answer built over the bound is refused, naming it"
+    (match LeanFM.ProjectView.bounded "t" "" big with | .error e => e.contains "70000-character bound" | .ok _ => false)
+  expect "an item over 8000 characters is cut and marked"
+    (let c := LeanFM.ProjectView.fitItem big; c.compress.length < 8100 && c.getObjValD "cut" == Json.bool true)
+  let lreq ← pvCall "{\"stage\":\"requirements\"}"
+  expect "project_view requirements for LeanFM lists its sections with counts"
+    (lreq.contains "\"sections\"" && lreq.contains "\"name\":\"tasks\"" && lreq.contains "\"name\":\"clauses\"" && lreq.contains "\"name\":\"protocols\"" && !lreq.contains "selfhost_workflow")
+  let ltasks ← pvCall "{\"stage\":\"requirements\",\"section\":\"tasks\"}"
+  expect "project_view's tasks page carries the workflow task" (ltasks.contains "selfhost_workflow" && ltasks.contains "\"transitions\":")
+  let lprops ← pvCall "{\"stage\":\"requirements\",\"section\":\"properties\",\"task\":\"selfhost_workflow\"}"
+  expect "the workflow's properties page has its CTL formulas and a never proof" (lprops.contains "AF (" && lprops.contains "AG ¬(" && lprops.contains "\"mode\":\"never\"")
+  -- a task with where_ constraints, found from the tasks page
+  let tasksJson := ((((← IO.ofExcept (Json.parse ltasks)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValD "items"
+  let withWhere := ((tasksJson.getArr?).toOption.getD #[]).find? fun t => ((t.getObjValAs? Nat "constraints").toOption.getD 0) > 0
+  match withWhere.bind (fun t => (t.getObjValAs? String "id").toOption) with
+  | some id =>
+    let lwhere ← pvCall ("{\"stage\":\"requirements\",\"section\":\"constraints\",\"task\":\"" ++ id ++ "\"}")
+    expect s!"the constraints page of {id} has where_ constraints" (lwhere.contains "\"origin\":\"where_\"")
+  | none => throw <| IO.userError "no LeanFM task has where_ constraints"
+  -- the clauses, page by page through next, reach the navigator clause
+  let mut found := false
+  let mut off : Option Nat := some 0
+  let mut pages := 0
+  while off.isSome && pages < 10 && !found do
+    let r ← pvCall ("{\"stage\":\"requirements\",\"section\":\"clauses\",\"offset\":" ++ toString off.get! ++ "}")
+    found := r.contains "selfhost.mcp.session.navigator"
+    off := (((((← IO.ofExcept (Json.parse r)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValAs? Nat "next").toOption
+    pages := pages + 1
+  expect s!"the clauses pages reach the navigator clause through next ({pages} pages)" (found && pages > 1)
+  let noTask ← pvCall "{\"stage\":\"requirements\",\"section\":\"transitions\"}"
+  expect "a task's section without task is refused" (noTask.contains "needs task")
+  let badTask ← pvCall "{\"stage\":\"requirements\",\"section\":\"transitions\",\"task\":\"nope\"}"
+  expect "an unknown task is refused" (badTask.contains "task must be the id of one of")
+  let greq ← pvCall "{\"project\":\"GoServer\",\"stage\":\"requirements\",\"section\":\"protocols\"}"
+  expect "project_view requirements for GoServer reads spec/tasks.json and lists its protocol" (greq.contains "spec/tasks.json" && greq.contains "goserver.leanfm")
+  let lcode ← pvCall "{\"stage\":\"code\"}"
+  expect "project_view code for LeanFM pages its files and names the navigator mapping"
+    (lcode.contains "\"next\":100" && lcode.contains "\"name\":\"session-navigator\"" && lcode.contains "clause:selfhost.mcp.session.navigator")
+  expect "project_view code for LeanFM leaves the other projects out" (!lcode.contains "\"path\":\"projects/")
+  let lfile ← pvCall "{\"stage\":\"code\",\"file\":\"LeanFM/SessionView.html\"}"
+  expect "a large file's text comes a page at a time with its mappings"
+    (lfile.contains "\"next\":40000" && lfile.contains "\"selected\"" && lfile.contains "\"tests\":" && lfile.length < LeanFM.ProjectView.maxAnswerChars)
+  for bad in ["../../etc/passwd", "/etc/passwd", "projects/GoServer/source/server.go", "LeanFM/../../etc/passwd"] do
+    let r ← pvCall ("{\"stage\":\"code\",\"file\":\"" ++ bad ++ "\"}")
+    expect s!"project_view code refuses the file {bad}" (r.contains "file must be one of" && !r.contains "root:")
+  let badProto ← pvCall "{\"stage\":\"requirements\",\"file\":\"Makefile\"}"
+  expect "project_view requirements refuses a file that is not a listed protocol" (badProto.contains "file must be one of")
+  let gfile ← pvCall "{\"project\":\"GoServer\",\"stage\":\"code\",\"file\":\"source/server.go\"}"
+  expect "project_view code for GoServer shows a file with its traceability" (gfile.contains "\"selected\"" && gfile.contains "grammar:create_room")
+  -- a symlink out of a project root is never read
+  IO.FS.createDirAll ".cache/tests/pvroot"
+  let link : System.FilePath := ".cache/tests/pvroot/escape"
+  if ← link.pathExists then IO.FS.removeFile link
+  discard <| IO.Process.output { cmd := "ln", args := #["-s", "/etc", link.toString] }
+  let tp : LeanFM.ProjectView.Project := { name := "t", root := ".cache/tests/pvroot", real := ← IO.FS.realPath ".cache/tests/pvroot", manifest := Json.mkObj [], isLeanFM := false }
+  expect "project_view refuses a symlink out of the project root" ((← LeanFM.ProjectView.inside tp "escape/hostname").isNone && (← LeanFM.ProjectView.inside tp "escape").isNone)
+  let (walked, _) ← LeanFM.ProjectView.walk tp "" ["conf", ""]
+  expect "project_view never lists files through a symlink out of the root" walked.isEmpty
+
+set_option maxRecDepth 4096 in
 def main : IO Unit := do
   let initialized ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"
   assertContains "MCP initialization supplies durable book instructions" initialized.body "durable agent context"
@@ -233,6 +423,9 @@ def main : IO Unit := do
     ("exploreStates", ← callTool "session_explore" [("states", "Desk")]),
     ("exploreMessage", ← callTool "session_explore" [("message", "Borrow")]),
     ("next", Json.arr #[← callTool "session_next" [], ← callTool "session_next" [("events", borrow)]])]
+  assertContains "session_simulate derives the stream's sessions" (results.getObjValD "simulate").compress "\"derivedSessions\""
+  assertContains "the session tools' diagrams carry their calls for folding" (results.getObjValD "check").compress "\"calls\":[{"
+  let results := results.setObjVal! "projectView" (← projectViewResults)
   IO.FS.writeFile ".cache/tests/session-view.html" shtml
   IO.FS.writeFile ".cache/tests/session-view-results.json" results.compress
   let smoke ← IO.Process.output { cmd := "node", args := #["scripts/session_view_smoke.js",
@@ -257,7 +450,8 @@ def main : IO Unit := do
   assertContains "MCP session view offers full screen" shtml "availableDisplayModes: [\"inline\", \"fullscreen\"]"
   assertContains "MCP session view asks the host for full screen" shtml "\"ui/request-display-mode\""
   assertContains "MCP session view plays one session alone" shtml "function sessionBody(body, keepIt)"
-  assertContains "MCP session view plays one person's messages by sessionId" shtml "function pickSid(v)"
+  assertContains "MCP session view picks sessions derived by LeanFM, not read from the events" shtml "body.derivedSessions"
+  assertContains "MCP session view folds calls and elides the roles they hide" shtml "CALL_ROW = 30"
   assertContains "MCP session view shows every role's OpenAPI" shtml "async function openapiAll()"
   assertContains "MCP session view shows OpenAPI as coloured YAML" shtml "function yamlPre(text)"
   assertContains "MCP session view builds properties from the protocol's messages" shtml "const PROP_PATTERNS = ["
@@ -410,6 +604,7 @@ def main : IO Unit := do
   -- keyed by the set of names it bound (keyed by their order it looked unbounded)
   let gEf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"EF\":{\"after\":\"PlayMove\"}}}}}"
   expect "MCP session_ctl proves PlayMove can happen in GoServer, over 5249 states, with a witness path" (gEf.body.contains "\"verdict\":\"proved\"" && gEf.body.contains "\"states\":5249" && gEf.body.contains "StartGame -> GameStarted -> PlayMove")
+  expect "MCP session_ctl answers the formula in CTL notation" (gEf.body.contains "\"notation\":\"EF PlayMove\"")
   let gAf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"AF\":{\"after\":\"PlayMove\"}}}}}"
   expect "MCP session_ctl disproves that PlayMove always happens in GoServer, with a counterexample that loops" (gAf.body.contains "\"verdict\":\"disproved\"" && gAf.body.contains "counterexample:" && gAf.body.contains "then repeats from")
   let exBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"../../etc/passwd\"}}}"
@@ -434,7 +629,11 @@ def main : IO Unit := do
   expect "MCP does not list server_logs on a host that has not enabled it" (!offList.body.contains "\"server_logs\"")
   let offCall ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":71,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{\"log\":\"serve\"}}}"
   expect "MCP refuses server_logs where it is off" (offCall.body.contains "server_logs is off on this host" && !offCall.body.contains "\"lines\"")
+  projectViewOffTests offList.body
+  projectFilesOffTests
   LeanFM.ServerLogs.enable
+  projectViewTests
+  projectFilesTests
   let onList ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":72,\"method\":\"tools/list\"}"
   expect "MCP lists server_logs once enabled" (onList.body.contains "\"name\":\"server_logs\"")
   let idx ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":73,\"method\":\"tools/call\",\"params\":{\"name\":\"server_logs\",\"arguments\":{}}}"

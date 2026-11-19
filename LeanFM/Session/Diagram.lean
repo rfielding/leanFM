@@ -105,6 +105,39 @@ end Shape
 
 namespace Diagram
 
+/-- One drawn row: an arrow or an action box (clause selfhost.session.diagram.folds). `top` is the
+cursor before the row, `y` its arrow (or box), `bottom` the cursor after its label, guard and note.
+`scope` names the branch or body it was drawn in; `answers` the request a reply answers. -/
+structure Row where
+  id      : Option String
+  label   : String
+  status  : Option Nat
+  src     : String
+  dst     : String
+  top     : Nat
+  y       : Nat
+  bottom  : Nat
+  scope   : Nat
+  answers : Option String
+  isAct   : Bool
+  deriving Repr
+
+/-- A call the view can fold: a request and the last reply to it in the same scope, with what lies
+between them. Folding is drawing only: these are read from the rows, never fed back into a check. -/
+structure Fold where
+  request  : String
+  caller   : String
+  callee   : String
+  reqLabel : String
+  /-- The responses' labels with their statuses, in drawing order, joined by ` | `. -/
+  resLabel : String
+  top      : Nat
+  y        : Nat
+  bottom   : Nat
+  depth    : Nat
+  roles    : List String
+  deriving Repr
+
 structure St (R : Type) where
   y     : Nat := 70
   out   : Array Shape := #[]
@@ -125,6 +158,14 @@ structure St (R : Type) where
   /-- Session keys, (message id, field) (selfhost.session.envelope): a sessions block whose body
   holds the id is captioned with its key. -/
   keys : List (String × String) := []
+  /-- Rows drawn so far, and the scope being drawn in (a fresh number per branch and body). -/
+  rows : Array Row := #[]
+  scope : Nat := 0
+  scopes : Nat := 0
+  /-- Each scope with its parent scope and the frame it is a branch or body of; each frame's end. -/
+  scopeInfo : Array (Nat × Nat × Nat) := #[]
+  frames : Nat := 0
+  frameEnds : Array (Nat × Nat) := #[]
 
 abbrev M (R : Type) := StateM (St R)
 
@@ -150,6 +191,25 @@ def xOf [DecidableEq R] (roles : List R) (r : R) : M R Nat := do
   return xAt (← get).colW roles r
 
 def emit (s : Shape) : M R Unit := modify fun st => { st with out := st.out.push s }
+
+/-- A fresh frame number, for the scopes of its branches or body. -/
+def newFrame : M R Nat := do
+  let st ← get
+  set { st with frames := st.frames + 1 }
+  return st.frames + 1
+
+/-- The frame ends here (the cursor after its bottom edge). -/
+def closeFrame (fid : Nat) : M R Unit := modify fun st => { st with frameEnds := st.frameEnds.push (fid, st.y) }
+
+/-- Enter a fresh scope, a branch or body of frame `fid`; returns the one to restore. -/
+def enterScope (fid : Nat) : M R Nat := do
+  let st ← get
+  set { st with scopes := st.scopes + 1, scope := st.scopes + 1, scopeInfo := st.scopeInfo.push (st.scopes + 1, st.scope, fid) }
+  return st.scope
+
+def leaveScope (saved : Nat) : M R Unit := modify fun st => { st with scope := saved }
+
+def pushRow (r : Row) : M R Unit := modify fun st => { st with rows := st.rows.push r }
 def adv (n : Nat) : M R Unit := modify fun st => { st with y := st.y + n }
 def getY : M R Nat := return (← get).y
 
@@ -218,7 +278,8 @@ def nextNote : M R String := do
   set { st with noteIx := st.noteIx + 1 }
   return (st.notes[st.noteIx]?).getD ""
 
-def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
+def arrow [DecidableEq R] [ToString R] (roles : List R) (i : Interaction R) : M R Unit := do
+  let rowTop ← getY
   adv 30
   modify fun st => { st with fresh := false }
   let note ← nextNote
@@ -254,6 +315,10 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
     adv 16
   if let some id := i.id then
     modify fun st => { st with sent := (id, i.src, i.dst, i.cause, reply) :: st.sent }
+  let rowBottom ← getY
+  let sc := (← get).scope
+  let row : Row := { id := i.id, label := i.label, status := i.status, src := toString i.src, dst := toString i.dst, top := rowTop, y := y, bottom := rowBottom, scope := sc, answers := answered, isAct := false }
+  pushRow row
   -- a call is an activation bar on the callee, from its request down to its response; a
   -- response in another branch of a choice gets a bar from where its branch began, so a bar
   -- never runs through a branch the call is not in. A call made while the callee is still busy
@@ -278,7 +343,8 @@ def arrow [DecidableEq R] (roles : List R) (i : Interaction R) : M R Unit := do
         let busy := (st.bars.filter fun b => b.2.1 == i.dst && b.2.2.2.1 == b.2.2.2.2).length
         { st with bars := st.bars ++ [(id, i.dst, busy, y, y)] }
 
-def act [DecidableEq R] (roles : List R) (r : R) (label : String) : M R Unit := do
+def act [DecidableEq R] [ToString R] (roles : List R) (r : R) (label : String) : M R Unit := do
+  let rowTop ← getY
   adv 12
   modify fun st => { st with fresh := false }
   let note ← nextNote
@@ -291,6 +357,10 @@ def act [DecidableEq R] (roles : List R) (r : R) (label : String) : M R Unit := 
   if note != "" then
     emit (text x (y + 40) note "middle" .frame 11 (cls := "note"))
     adv 16
+  let rowBottom ← getY
+  let sc := (← get).scope
+  let row : Row := { id := none, label := label, status := none, src := toString r, dst := toString r, top := rowTop, y := y + 12, bottom := rowBottom, scope := sc, answers := none, isAct := true }
+  pushRow row
 
 partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
     Global R → M R Unit
@@ -310,6 +380,7 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
         | .ok r => s!"{r} decides"
         | .error _ => "race: no single role decides"
       let top ← frameTop roles.length d "alt" caption
+      let fid ← newFrame
       -- a branch whose first message carries a where condition is selected by it: the condition
       -- is that operand's guard, drawn at its top as UML does, and not repeated under the arrow
       let mut firstB := true
@@ -327,22 +398,33 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
             emit (text (x0 + 6) y s!"[{g}]" "start" .frame 11 (cls := "guard"))
         else divider roles.length d ((guard.map id).getD "")
         firstB := false
+        let saved ← enterScope fid
         draw roles (d + 1) body
+        leaveScope saved
       frameBottom roles.length d top "alt"
+      closeFrame fid
   | .par bs k => do
       let top ← frameTop roles.length d "par" ""
-      branches roles d bs ""
+      let fid ← newFrame
+      branches roles d bs "" fid
       frameBottom roles.length d top "par"
+      closeFrame fid
       draw roles d k
   | .join need bs k => do
       let top ← frameTop roles.length d "par" s!"any {need} of {bs.length}"
-      branches roles d bs ""
+      let fid ← newFrame
+      branches roles d bs "" fid
       frameBottom roles.length d top "join"
+      closeFrame fid
       draw roles d k
   | .loop name body => do
       let top ← frameTop roles.length d "loop" name
+      let fid ← newFrame
+      let saved ← enterScope fid
       draw roles (d + 1) body
+      leaveScope saved
       frameBottom roles.length d top "loop"
+      closeFrame fid
   | .sessions body k => do
       -- a keyed block is one session per value of its key: one sign-in per state
       let ids := ownIds body
@@ -350,22 +432,32 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
         | some (x, f) => s!"one session per {x}.{f}"
         | none => "one session per request"
       let top ← frameTop roles.length d "loop" caption
+      let fid ← newFrame
+      let saved ← enterScope fid
       draw roles (d + 1) body
+      leaveScope saved
       frameBottom roles.length d top "sessions"
+      closeFrame fid
       draw roles d k
   | .box name body k => do
       let top ← frameTop roles.length d "ref" name
+      let fid ← newFrame
+      let saved ← enterScope fid
       draw roles (d + 1) body
+      leaveScope saved
       frameBottom roles.length d top "ref"
+      closeFrame fid
       draw roles d k
 where
-  branches (roles : List R) (d : Nat) (bs : List (Global R)) (cap : String) :
+  branches (roles : List R) (d : Nat) (bs : List (Global R)) (cap : String) (fid : Nat) :
       M R Unit := do
     let mut firstB := true
     for b in bs do
       if !firstB then divider roles.length (d) cap
       firstB := false
+      let saved ← enterScope fid
       draw roles (d + 1) b
+      leaveScope saved
 
 end Diagram
 
@@ -393,6 +485,39 @@ def columnWidth {R : Type} (g : Global R) : Nat :=
   let widest := (messagesOf g).foldl (fun m i => max m (labelText i).length) 0
   max minColW (min maxColW (7 * widest + 36))
 
+/-- The calls of the drawn rows (clause selfhost.session.diagram.folds): each request with an id and
+the replies to it drawn below it in its own scope or one nested in it. A reply in the request's
+scope ends the span at its own row; a reply inside a frame that opens below the request (a choice
+of responses, a loop) ends it at that frame's end, so a fold never cuts a frame. -/
+def callsOf (rows : Array Row) (scopeInfo : Array (Nat × Nat × Nat)) (frameEnds : Array (Nat × Nat)) :
+    Array Fold := Id.run do
+  -- where a reply in scope `q` ends a call made in scope `r`: climb from q to the child of r
+  let endOf (r : Nat) (reply : Row) : Option Nat := Id.run do
+    if reply.scope == r then return some reply.bottom
+    let mut q := reply.scope
+    for _ in [0:256] do
+      let some (_, parent, fid) := scopeInfo.find? (·.1 == q) | return none
+      if parent == r then return (frameEnds.find? (·.1 == fid)).map (·.2)
+      q := parent
+    return none
+  let mut out : Array (Row × Nat × List Row) := #[]
+  for r in rows do
+    if r.isAct || r.answers.isSome then continue
+    let some x := r.id | continue
+    let replies := rows.filter fun q => q.answers == some x && q.y > r.y
+    let ends := replies.filterMap fun q => (endOf r.scope q).map (q, ·)
+    if ends.isEmpty then continue
+    out := out.push (r, ends.foldl (fun m (_, e) => max m e) 0, (ends.map (·.1)).toList)
+  let spans := out.map fun (r, b, _) => (r.top, b)
+  return out.map fun (r, b, replies) =>
+    let depth := 1 + (spans.filter fun (t, b') => t ≤ r.top && b ≤ b' && (t, b') != (r.top, b)).size
+    let inside := rows.filter fun w => r.top ≤ w.top && w.bottom ≤ b
+    let roles := inside.foldl (fun acc w => (if acc.contains w.src then acc else acc ++ [w.src]) |>
+      fun a => if a.contains w.dst then a else a ++ [w.dst]) ([] : List String)
+    let names := replies.map fun q => q.label ++ (match q.status with | some n => s!" {n}" | none => "")
+    let names := names.foldl (fun acc n => if acc.contains n then acc else acc ++ [n]) []
+    ({ request := (r.id.getD ""), caller := r.src, callee := r.dst, reqLabel := r.label, resLabel := " | ".intercalate names, top := r.top, y := r.y, bottom := b, depth := depth, roles := roles } : Fold)
+
 end Diagram
 
 /-- A drawn diagram: its size and its shapes, in drawing order. -/
@@ -400,6 +525,12 @@ structure DiagramModel where
   width  : Nat
   height : Nat
   shapes : Array Shape
+  /-- For folding and eliding in a view (clause selfhost.session.diagram.folds); empty for drawings
+  that are not sequence diagrams. -/
+  colW   : Nat := 0
+  lanes  : List (String × Nat) := []
+  steps  : Array Diagram.Row := #[]
+  calls  : Array Diagram.Fold := #[]
   deriving Repr
 
 /-- The shapes of a sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
@@ -427,7 +558,9 @@ def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : Lis
   let legend := footer.zipIdx.map fun (line, i) =>
     Diagram.text (width / 2) (height + 6 + i * 20) line "middle" .frame 13 (cls := "legend")
   { width, height := height + footer.length * 20 + (if footer.isEmpty then 0 else 16),
-    shapes := (titleEl ++ heads ++ bars).toArray ++ st.out ++ legend.toArray }
+    shapes := (titleEl ++ heads ++ bars).toArray ++ st.out ++ legend.toArray,
+    colW := cw, lanes := roles.map fun r => (toString r, Diagram.xAt cw roles r),
+    steps := st.rows, calls := Diagram.callsOf st.rows st.scopeInfo st.frameEnds }
 
 /-- The model written out as SVG text in a theme. -/
 def DiagramModel.svg (m : DiagramModel) (t : DiagramTheme := .dark) : String :=

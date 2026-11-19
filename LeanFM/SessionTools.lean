@@ -26,6 +26,7 @@ import LeanFM.Session.Review
 import LeanFM.Session.ActorView
 import LeanFM.Session.Dataset
 import LeanFM.Session.Outline
+import LeanFM.Session.Derived
 import LeanFM.Logic
 
 /-!
@@ -458,6 +459,19 @@ def shapeJson : Shape → Json
       ("y", y), ("anchor", anchor), ("fill", fill.name), ("size", size), ("bold", bold),
       ("text", content)]
 
+/-- A sequence diagram for a view: its shapes, and for folding and eliding (clause
+selfhost.session.diagram.folds) its lanes, rows and calls. The shapes are the same either way. -/
+def modelJson (m : DiagramModel) : Json :=
+  Json.mkObj [("width", m.width), ("height", m.height), ("shapes", Json.arr (m.shapes.map shapeJson)),
+    ("colW", m.colW),
+    ("lanes", Json.arr (m.lanes.map fun (r, x) => Json.mkObj [("role", r), ("x", x)]).toArray),
+    ("steps", Json.arr (m.steps.map fun w => Json.mkObj [("top", w.top), ("y", w.y), ("bottom", w.bottom),
+      ("src", w.src), ("dst", w.dst)])),
+    ("calls", Json.arr (m.calls.map fun c => Json.mkObj [("request", c.request), ("caller", c.caller),
+      ("callee", c.callee), ("label", Json.str s!"{c.reqLabel} -> {c.resLabel}"),
+      ("top", c.top), ("y", c.y), ("bottom", c.bottom), ("depth", c.depth),
+      ("roles", Json.arr (c.roles.map Json.str).toArray)]))]
+
 /-! ## Annotations on the sequence diagram: probabilities, amounts, delays, expected counts -/
 
 namespace Annotate
@@ -571,10 +585,7 @@ def annotatedModel (p : Protocol) : DiagramModel := Id.run do
   let (order, plain) := Annotate.strip g
   return plain.diagramModel p.roles p.name (order.toArray.map fun k => (full[k]?).getD "") footer p.keys
 
-def diagramJson (p : Protocol) : Json :=
-  let m := annotatedModel p
-  Json.mkObj [("width", m.width), ("height", m.height),
-    ("shapes", Json.arr (m.shapes.map shapeJson))]
+def diagramJson (p : Protocol) : Json := modelJson (annotatedModel p)
 
 def themeOf (args : Json) : DiagramTheme :=
   match (args.getObjValAs? String "theme").toOption with
@@ -1206,6 +1217,13 @@ def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
     out := out.push fs
   return some out
 
+/-- The stream's sessions derived from the protocol's where-clause equations and the events' cause
+and prior links (clause selfhost.session.derived-sessions); the simulated session numbers are only
+a cross-check. -/
+def derivedJson (p : Protocol) (events : Array Json) : Json :=
+  let guards := p.global.messages.filterMap fun i => i.guard.map (·.text)
+  (Derived.group (Derived.equations guards) (events.map Derived.Ev.ofJson)).json
+
 def simulate (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let seed ← natArg args "seed" 1 4294967295
@@ -1230,7 +1248,7 @@ def simulate (args : Json) : Except String Json := do
          ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
          ("seed", seed), ("instances", instances), ("sessions", instances),
          ("ended", toJson (g.ended.map fun (sid, e) => Json.mkObj [("session", sid), ("ended", e)])),
-         ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson)), ("diagram", diagramJson p)]
+         ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson)), ("derivedSessions", derivedJson p evJson), ("diagram", diagramJson p)]
   if let some layer := p.generative then
     if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before timed generation"
     if (args.getObjVal? "spread").isOk || (args.getObjVal? "loops").isOk then
@@ -1243,6 +1261,7 @@ def simulate (args : Json) : Except String Json := do
        ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
        ("seed", seed), ("instances", instances), ("sessions", instances),
        ("tsUnit", "ns"), ("events", Json.arr (stampNs (generated.events.map eventJson))), ("deadlineReports", toJson generated.reports),
+       ("derivedSessions", derivedJson p (generated.events.map eventJson)),
        ("diagram", diagramJson p)]
   -- a protocol without a sessions block runs as `instances` concurrent copies of itself
   let g := if hasSessions p.global then p.global else .sessions p.global .done
@@ -1263,6 +1282,7 @@ def simulate (args : Json) : Except String Json := do
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("seed", seed), ("instances", instances), ("sessions", sessions)
     , ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson))
+    , ("derivedSessions", derivedJson p evJson)
     , ("diagram", diagramJson p) ]
 
 /-- A logged event: the fields session_simulate writes (src, dst, act) or from/to; ids, sessions and
@@ -2030,7 +2050,7 @@ def actor (args : Json) : Except String Json := do
     , ("openapi", served), ("openapiYaml", servedYaml)
     , ("proto", proto)
     , ("svg", model.svg (themeOf args))
-    , ("diagram", Json.mkObj [("width", model.width), ("height", model.height), ("shapes", Json.arr (model.shapes.map shapeJson))])
+    , ("diagram", modelJson model)
     , ("provenance", Json.mkObj
         [ ("question", Json.str s!"What does {role} send, receive and serve in {p.name}, and with whom?")
         , ("eventSource", "the protocol text")
@@ -2217,7 +2237,7 @@ def explore (args : Json) : Except String Json := do
       , ("reading", s!"{name}: sequence diagram of {messageCount q.global} messages across {q.roles.length} lifelines (lines {d.first} to {d.last})")
       , ("name", p.name), ("roles", Json.arr (q.roles.map Json.str).toArray), ("first", toJson d.first), ("last", toJson d.last)
       , ("svg", m.svg (themeOf args))
-      , ("diagram", Json.mkObj [("width", m.width), ("height", m.height), ("shapes", Json.arr (m.shapes.map shapeJson))]) ]
+      , ("diagram", modelJson m) ]
   | none =>
     let load := p.roles.map fun r =>
       let rows := ActorView.rows p.global r

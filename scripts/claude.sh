@@ -26,4 +26,9 @@ export CLAUDE_CONFIG_DIR="$state_root"
 export CLAUDE_CODE_TMPDIR="$temp_root"
 export TMPDIR="$temp_root"
 cd -- "$project_root"
+# Use the Claude subscription login, not a stray API key from the environment.
+# Opt out with LEANFM_CLAUDE_USE_API_KEY=1.
+if [ "${LEANFM_CLAUDE_USE_API_KEY:-}" != "1" ]; then
+  unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+fi
 exec claude "$@"

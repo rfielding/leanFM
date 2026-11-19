@@ -531,4 +531,35 @@ def problemOf (log : List LogEvent) (incomplete := false) : String :=
 -- and an event in the wrong place without a cause is not allowed there
 #guard (problemOf ([run3[0]!, run3[0]!] |>.set 1 { run3[0]! with id := "x1" })).contains "is not allowed here"
 
+/-! ## selfhost.session.diagram.folds: every call is a fold the view can close -/
+
+def checkoutModel := checkout.diagramModel roles3
+#guard checkoutModel.calls.toList.map (fun c => (c.request, c.caller, c.callee, c.reqLabel, c.resLabel, c.depth)) ==
+  [("o", "Client", "Shop", "Order", "Quote 201 | SoldOut 409", 1),
+   ("p", "Client", "Shop", "Pay", "Receipt 200 | Refused 402", 2),
+   ("v", "Shop", "Bank", "Verify", "Hold | Declined", 3)]
+-- a nested call lies inside its parent's span
+#guard checkoutModel.calls.all fun c => checkoutModel.calls.all fun d =>
+  d.depth != c.depth + 1 || (checkoutModel.calls.any fun e => e.top ≤ d.top && d.bottom ≤ e.bottom && e.depth == d.depth - 1)
+/-- Every fold holds its request's row and every frame it touches whole, so closing it never cuts a frame. -/
+def foldsWhole (m : DiagramModel) : Bool :=
+  let frames := m.shapes.toList.filterMap fun
+    | .rect c _ y _ h _ _ _ => if c.startsWith "frame " then some (y, y + h) else none
+    | _ => none
+  m.calls.all fun c =>
+    (m.steps.any fun w => w.y == c.y && w.top == c.top) &&
+    frames.all fun (a, b) => b < c.top || a > c.bottom || (c.top ≤ a && b ≤ c.bottom) || (a ≤ c.top && c.bottom ≤ b)
+#guard foldsWhole checkoutModel
+#guard foldsWhole (purchase.diagramModel roles3)
+#guard foldsWhole ((PurchaseHttp Role.client Role.shop Role.bank).diagramModel roles3)
+#guard foldsWhole (replicatedOrder.diagramModel [.client, .primary, .r1, .r2, .r3])
+-- PurchaseHttp's Pay and Confirm are calls of their own inside Order's span, Verify inside Confirm's
+#guard ((PurchaseHttp Role.client Role.shop Role.bank).diagramModel roles3).calls.toList.map (fun c => (c.request, c.resLabel, c.depth)) ==
+  [("o", "Quote | SoldOut", 1), ("p", "Receipt", 2), ("c", "Shipped", 2), ("v", "Paid", 3)]
+-- one step per drawn arrow and action box; the folding data leaves the shapes as they were
+#guard checkoutModel.steps.size == (checkoutModel.shapes.toList.filter fun
+  | .line c .. | .path c .. => c.startsWith "msg" | .rect c .. => c == "act" | _ => false).length
+#guard (checkoutModel.svg) == checkout.diagram roles3
+#guard checkoutModel.lanes == [("Client", 90), ("Shop", 90 + checkoutModel.colW), ("Bank", 90 + 2 * checkoutModel.colW)]
+
 end LeanFM.Session.SessionTests

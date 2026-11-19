@@ -1,0 +1,80 @@
+import LeanFM.Session.Syntax
+
+/-- LeanFM's own MCP protocol (clause selfhost.mcp.session.project-files): the agent (Claude Desktop,
+    Claude Code, Codex) and the MCP Apps view both reach the LeanFM server only through the host, and
+    the server reads a project piecemeal from the project's root (Disk). The view loads one bounded
+    answer at a time: the stage, then a section or a page of it, then one protocol file, which a
+    session tool reads by project and file instead of carrying its text. -/
+structure Open where
+  project : String
+  stage : String
+
+structure Page where
+  project : String
+  section : String
+  offset : Nat
+
+structure Load where
+  project : String
+  file : String
+
+protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
+  i: Initialize from Host to Server route "POST /mcp";
+  Initialized from Server to Host cause i status 200;
+  l: ListTools from Host to Server route "POST /mcp";
+  Tools from Server to Host cause l status 200;
+  rec Ask {
+    choice {
+      o: Open from Agent to Host;
+      v: ProjectView from Host to Server cause o route "POST /mcp";
+      sessions { r: ReadRoot from Server to Disk; Listing from Disk to Server cause r; }
+      choice {
+        Shown from Server to Host cause v status 200;
+        Render from Host to View cause o;
+        sessions {
+          rec Browse {
+            choice {
+              p: Page from View to Host;
+              pv: ProjectView from Host to Server cause p route "POST /mcp";
+              sessions { rp: ReadPage from Server to Disk; Items from Disk to Server cause rp; }
+              choice {
+                PageShown from Server to Host cause pv status 200;
+                Paged from Host to View cause p;
+                continue Browse;
+              } or {
+                OverBound from Server to Host cause pv status 413;
+                Refused from Host to View cause p;
+                continue Browse;
+              }
+            } or {
+              f: Load from View to Host;
+              st: SessionTool from Host to Server cause f route "POST /mcp";
+              sessions { rf: ReadFile from Server to Disk; FileText from Disk to Server cause rf; }
+              choice {
+                Checked from Server to Host cause st status 200;
+                Drawn from Host to View cause f;
+                continue Browse;
+              } or {
+                NotListed from Server to Host cause st status 403;
+                Refused from Host to View cause f;
+                continue Browse;
+              }
+            } or {
+              Close from View to Host;
+            }
+          }
+        }
+        Done from Host to Agent cause o;
+        continue Ask;
+      } or {
+        TooLarge from Server to Host cause v status 413;
+        Failed from Host to Agent cause o;
+        continue Ask;
+      }
+    } or {
+      Quit from Agent to Host;
+      b: Bye from Host to Server route "POST /mcp";
+      ByeDone from Server to Host cause b status 200;
+    }
+  }
+}
