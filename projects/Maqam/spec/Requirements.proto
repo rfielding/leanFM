@@ -1,0 +1,52 @@
+syntax = "proto3";
+package leanfm.maqam;
+// maqam-live exchanges these values in-process (crossbeam channels, atomics,
+// files); this schema types them for LeanFM's checks and views. It is not a
+// network protocol. Every occurrence is wrapped in an ordering envelope: empty
+// prior_ids marks a minimal event; cause_id names the request it answers.
+
+message ScenarioEvent {
+  string id = 1;
+  repeated string prior_ids = 2;
+  string cause_id = 3;
+  string session = 4;
+  string src = 5;
+  string dst = 6;
+  uint64 time_at = 7;
+  string message_type = 8;
+  bytes message_payload = 9;
+}
+
+message CommandLine { string line = 1; }
+message Rejected { string reason = 1; }
+message Shown { string message = 1; }
+message AudioCmd { string kind = 1; uint64 entry_id = 2; string source = 3; }
+message Position { uint64 phrase_id = 1; uint32 subdivision = 2; uint32 plays = 3; uint64 latency_us = 4; }
+message PhraseStart { uint64 entry_id = 1; uint32 repeat = 2; }
+message JumpTaken { uint64 entry_id = 1; uint64 target_id = 2; uint32 pass = 3; }
+message JumpExhausted { uint64 entry_id = 1; uint64 next_id = 2; }
+message ControlApplied { uint64 entry_id = 1; string control = 2; }
+message SaveSession { string path = 1; string text = 2; }
+message LoadSession { string path = 1; }
+message SessionText { string text = 1; }
+message SessionError { string reason = 1; }
+message Loaded { string path = 1; uint32 entries = 2; }
+message LoadFailed { uint32 line = 1; string reason = 2; }
+message Render { uint32 cycles = 1; }
+message Encode { string wav = 1; string staged = 2; }
+message Encoded { string staged = 1; }
+message EncodeFailed { string log = 1; }
+message WriteMp4 { string path = 1; }
+message RecordSaved { string path = 1; }
+message RecordFailed { string reason = 1; }
+message Ask { string provider = 1; string prompt = 2; string score = 3; }
+message ToolCommands { string commands = 1; }
+message Answer { string text = 1; }
+message LlmError { string reason = 1; }
+message Applied { uint32 count = 1; }
+message RolledBack { string reason = 1; }
+message Download { string url = 1; string name = 2; }
+message ModelBytes { string name = 1; uint64 bytes = 2; }
+message DownloadFailed { string reason = 1; }
+message CacheWrite { string name = 1; }
+message NamLoaded { string name = 1; uint32 sample_rate = 2; }

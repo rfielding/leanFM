@@ -1,0 +1,28 @@
+[package]
+name = "maqam-live"
+version = "1.1.0"
+edition = "2021"
+default-run = "maqam-live"
+description = "Live-coding terminal sequencer for Arabic maqam music, built on just intonation"
+license = "MIT"
+
+[dependencies]
+cpal              = "0.15"
+ratatui           = "0.28"
+crossterm         = "0.28"
+crossbeam-channel = "0.5"
+anyhow            = "1.0"
+contracts         = "0.6"
+nam-rs            = "0.4"
+ureq              = { version = "2.12", features = ["json"] }
+serde_json        = "1.0"
+sha2              = "0.10"
+base64            = "0.22"
+getrandom         = "0.2"
+# Keep ureq's URL/idna tree compatible with rust-toolchain.toml's Rust 1.85.
+url               = "=2.5.4"
+idna              = "=1.0.3"
+idna_adapter      = "=1.1.0"
+
+[target.'cfg(windows)'.dependencies]
+# cpal uses WASAPI on Windows - no extra deps needed

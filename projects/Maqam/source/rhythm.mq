@@ -1,0 +1,15 @@
+MAQAM_SESSION_V3
+S|7|2
+Y|15|sym on drive 0.25 amount 0.025
+V|1|vcf kanun cut 200 res 0.9 drive 1 wave tri
+V|14|vcf kanun cut +10t res +0.01t drive 1 wave tri
+B|4|120
+P|0|1|d bayati, a hijaz 33262
+P|3|1|a hijaz, d bayati 664
+B|5|240
+P|6|4|d bayati 4444 r
+P|9|4|f nahawand 332332 r
+P|10|4|a saba, c hijaz 44332332 r
+B|12|180
+P|13|1|c hijaz, a saba 332332332332
+J|8|7|4

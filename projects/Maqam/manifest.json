@@ -1,0 +1,16 @@
+{
+  "project_id": "35150bde7d5c3ea2",
+  "display_name": "Maqam",
+  "root": ".",
+  "book": "book/main.pdf",
+  "dark_book": "book/main-dark.pdf",
+  "book_source": "book/main.tex",
+  "requirements": "spec/Requirements.lean",
+  "protobuf": "spec/Requirements.proto",
+  "implementation": "spec/Implementation.lean",
+  "tasks": "spec/tasks.json",
+  "source": "source/",
+  "evidence": "reports/",
+  "upstream": "https://github.com/rfielding/maqam",
+  "upstream_revision": "c80b35dfccc8d6c6ff396b60d595b6bb96447ccc"
+}

@@ -1,0 +1,12 @@
+MAQAM_SESSION_V3
+B|0|220
+V|1|vcf kanun cut 10 res 0.65 drive 1 wave squ
+V|2|vcf kanun cut +15t res +0.25t drive 2 wave saw
+V|8|vcf bass cut 300 res 0.25 drive 3 wave tri
+V|10|vcf bass cut +12t res +0.3t drive 3 wave tri
+P|3|1|g bayati, b- hijaz 44444
+J|4|3|3
+P|5|1|b- hijaz, d saba, d zaba 6644
+J|6|3|8
+J|11|0|2
+T|9|stop

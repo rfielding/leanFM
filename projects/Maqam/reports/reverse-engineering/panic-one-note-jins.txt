@@ -1,0 +1,9 @@
+$ maqam-live "create Zz 1/1" -- "d zz 4"   (upstream c80b35d, release build)
+> create Zz 1/1
+created jins Zz
+> d zz 4
+
+thread 'main' panicked at /rustc/4d91de4e48198da2e33413efdcd9cd2cc0c46688/library/core/src/cmp.rs:1031:9:
+assertion failed: min <= max
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+exit status: 0

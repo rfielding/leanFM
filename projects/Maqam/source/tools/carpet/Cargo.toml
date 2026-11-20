@@ -1,0 +1,12 @@
+[package]
+name = "maqam_carpet"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+
+[dependencies]
+anyhow = "=1.0.95"
+clap = { version = "=4.5.27", features = ["derive"] }
+image = { version = "=0.24.9", default-features = false, features = ["png"] }
+imageproc = "=0.23.0"
+ab_glyph = "=0.2.29"

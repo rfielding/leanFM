@@ -1,0 +1,14 @@
+MAQAM_SESSION_V3
+create saba2 1/1 13/12 6/5 5/4
+B|0|180
+Y|11|sym on
+Y|12|sym harmony octave 0.25
+V|10|vcf all cut 2400 res 0.65 drive 0.75
+S|1|1
+P|2|3|d bayati, f hijaz 4444 r
+P|4|1|a saba, c hijaz
+P|5|1|a saba2, c hijaz
+J|6|4|4
+P|7|1|g rast 664664
+J|8|7|4
+J|9|0|4

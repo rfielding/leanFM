@@ -1,0 +1,126 @@
+import LeanFM.Session.Syntax
+
+/-- maqam-live, reverse-engineered from upstream c80b35d (see book chapter "Reverse
+    engineering"). The Performer types command lines into the App (the TUI and main thread);
+    the App owns the authoritative timeline and sends AudioCmd values on a bounded channel
+    (512) to the Audio callback, which sequences, synthesizes and mixes in real time and never
+    answers on that channel: it publishes position and meters through atomics, which the App
+    reads every frame (Position). Recording, LLM requests, NAM downloads and TONE3000 login
+    each run on their own worker thread and answer the App on a bounded(1) channel, so the TUI
+    and the audio never wait for them. Disk is the working directory (sessions, .nam cache,
+    recordings); Ffmpeg is the external encoder; Llm is OpenAI or Anthropic; Web is any
+    http(s) host a NAM pin, a search or TONE3000 names. -/
+structure Command where
+  line : String
+
+structure Phrase where
+  id : Nat
+  source : String
+
+structure Audio where
+  kind : String
+
+structure Saved where
+  path : String
+
+structure Prompt where
+  provider : String
+  text : String
+
+structure Commands where
+  count : Nat
+
+structure Fetch where
+  url : String
+  name : String
+
+protocol MaqamLive (Performer, App, Audio, Recorder, Ffmpeg, Llm, Web, Disk) {
+  rec Live {
+    choice {
+      -- a timeline edit: the App updates its timeline first, then tells the audio
+      c: Command from Performer to App;
+      choice {
+        sessions { Phrase from App to Audio; Position from Audio to App; }
+        Shown from App to Performer cause c;
+        continue Live;
+      } or {
+        Rejected from App to Performer cause c;
+        continue Live;
+      }
+    } or {
+      -- save or load a session: MAQAM_SESSION_V3 text in the working directory
+      s: Session from Performer to App;
+      w: ReadOrWrite from App to Disk cause s;
+      choice {
+        Done from Disk to App cause w;
+        sessions { Resync from App to Audio; }
+        Loaded from App to Performer cause s;
+        continue Live;
+      } or {
+        Failed from Disk to App cause w;
+        LoadFailed from App to Performer cause s;
+        continue Live;
+      }
+    } or {
+      -- record: an offline render on a worker thread, encoded by ffmpeg
+      m: Record from Performer to App;
+      r: Render from App to Recorder cause m;
+      e: Encode from Recorder to Ffmpeg cause r;
+      choice {
+        Encoded from Ffmpeg to Recorder cause e;
+        mp: WriteMp4 from Recorder to Disk cause r;
+        Written from Disk to Recorder cause mp;
+        Saved from Recorder to App cause r;
+        RecordDone from App to Performer cause m;
+        continue Live;
+      } or {
+        EncodeFailed from Ffmpeg to Recorder cause e;
+        RenderFailed from Recorder to App cause r;
+        RecordFailed from App to Performer cause m;
+        continue Live;
+      }
+    } or {
+      -- an LLM edit: commands come back as a tool call, are checked, then applied or rolled back
+      p: Prompt from Performer to App;
+      q: Ask from App to Llm cause p;
+      choice {
+        Commands from Llm to App cause q;
+        choice {
+          sessions { Apply from App to Audio; }
+          Applied from App to Performer cause p;
+          continue Live;
+        } or {
+          RolledBack from App to Performer cause p;
+          continue Live;
+        }
+      } or {
+        Answer from Llm to App cause q;
+        Explained from App to Performer cause p;
+        continue Live;
+      } or {
+        LlmFailed from Llm to App cause q;
+        AskFailed from App to Performer cause p;
+        continue Live;
+      }
+    } or {
+      -- a NAM capture: downloaded into the cache, then loaded on the live input
+      n: Fetch from Performer to App;
+      g: Download from App to Web cause n;
+      choice {
+        Model from Web to App cause g;
+        k: CacheWrite from App to Disk cause n;
+        Cached from Disk to App cause k;
+        sessions { NamModel from App to Audio; }
+        NamLoaded from App to Performer cause n;
+        continue Live;
+      } or {
+        DownloadFailed from Web to App cause g;
+        NamFailed from App to Performer cause n;
+        continue Live;
+      }
+    } or {
+      Quit from Performer to App;
+      sessions { Stop from App to Audio; }
+    }
+  }
+}

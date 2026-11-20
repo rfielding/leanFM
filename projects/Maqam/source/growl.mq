@@ -1,0 +1,19 @@
+MAQAM_SESSION_V3
+create bayati2 8/9 1/1 12/11 32/27 4/3 3/2
+create hijaz2 8/9 1/1 15/14 6/5 4/3 3/2
+create saba2 8/9 1/1 13/12 6/5 5/4 11/8 3/2
+N|13|nam tone3000 1577 as marshall_jcm800
+N|14|nam gain 0.25
+N|15|nam input right
+B|0|180
+Y|8|sym off
+Y|12|sym harmony root 0.50 third 0.25 fifth 0.10 octave 0.15
+Y|9|sym kanun decay 0.995 drive 1
+V|11|vcf off
+S|1|2
+P|2|3|g hijaz 4444
+P|4|1|g bayati 332332
+P|5|1|g saba, b- saba 664
+J|6|5|4
+J|7|0|4
+T|10|stop
