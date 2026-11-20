@@ -1,0 +1,15 @@
+MAQAM_SESSION_V3
+N|13|nam tone3000 57838 as deizel_high_gain
+N|14|nam gain 1
+N|15|nam input right
+F|16|flanger rate 0.28 depth 0.8 delay 2.5 feedback 0.55 mix 0.1
+B|4|120
+V|8|vcf bass cut 100 res 0.98 drive 2
+V|9|vcf kanun cut 500 res 0.98 drive 1
+V|17|vcf off
+Y|1|sym mic decay 0.999 drive 2 amount 1
+Y|10|sym kanun decay 0.99 drive 0.5 amount 0.25
+Y|11|sym on
+Y|12|sym harmony root 0.50 third 0.25 fifth 0.25
+P|0|1|d bayati, a bayati 4444
+P|6|1|a bayati, e bayati 332332

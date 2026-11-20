@@ -3,7 +3,7 @@
 # Requires the LeanFM installation two directories up (`make build` there).
 LEANFM := $(abspath ../..)
 
-.PHONY: all check spec-check app-check book compare clean
+.PHONY: all check spec-check app-check zig-check book compare clean
 
 all: check book
 
@@ -20,6 +20,10 @@ spec-check:
 app-check:
 	$(MAKE) -C impl/rust/source check
 
+# zig build and test of the Zig port; needs only zig 0.17 and libasound2-dev, never the Rust tree.
+zig-check:
+	$(MAKE) -C impl/zig/source check
+
 book:
 	$(MAKE) -C book
 
@@ -31,8 +35,9 @@ book:
 compare:
 	python3 scripts/compare.py $(COMPARE_ARGS)
 
-check: spec-check app-check
+check: spec-check app-check zig-check
 
 clean:
 	$(MAKE) -C book clean
 	$(MAKE) -C impl/rust/source clean
+	$(MAKE) -C impl/zig/source clean

@@ -1,0 +1,13 @@
+MAQAM_SESSION_V3
+create bright 1/1 13/12 12/11 11/10 10/9 9/8 8/7 7/6 6/5 5/4 4/3 3/2
+B|4|120
+V|8|vcf bass cut 1000 res 0.98 drive 2
+V|9|vcf kanun cut 800 res 0.98 drive 1 wave saw
+Y|11|sym on
+Y|1|sym mic decay 0.9999 drive 0.75 amount 0.5
+Y|10|sym kanun decay 0.99 drive 0.5 amount 0.25
+Y|14|sym drums decay 0.99 drive 0.5 amount 1
+P|12|1|d bright 864332
+J|13|12|3
+P|0|1|d saba, a bayati 4444
+P|6|1|a bayati, e bayati 332332

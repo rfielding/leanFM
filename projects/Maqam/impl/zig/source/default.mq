@@ -1,0 +1,23 @@
+MAQAM_SESSION_V3
+V|28|vcf drums off
+Y|33|sym on decay 0.999 drive 1 amount 0.99
+Y|38|sym harmony root 0.50 third 0.25 fifth 0.10 octave 0.15
+Y|34|sym kanun decay 0.995 drive 1.5 amount 0.3
+Y|35|sym bass decay 0.995 drive 1.5 amount 0.3
+V|21|vcf bass cut 1000 res 0.98 drive 1.25 wave squ
+V|22|vcf kanun cut 1000 res 0.9 drive 1 wave saw
+V|31|vcf bass cut +12t res +0.3t drive 1.24 wave saw
+V|36|vcf mic cut 1200 res 0.6 drive 2
+V|29|vcf kanun cut +12t res +0.2t drive 1.24 wave saw
+V|37|vcf cut 1000 res 0.9 drive 1
+F|39|flanger rate 0.22 depth 0.65 delay 2.5 feedback 0.25 mix 0.18
+B|4|180
+P|1|1|d bayati 4444
+J|2|4|3
+P|3|1|c rast 332332
+J|17|4|3
+P|24|4|d hijaz, a hijaz 664
+P|26|4|a hijaz, d hijaz 332332
+P|27|4|f saba 62332 r
+J|25|28|4
+T|30|stop

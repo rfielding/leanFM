@@ -1,0 +1,9 @@
+zig-out/
+.zig-cache/
+.nam/
+.globals.ml
+.tone3000-auth.json
+maqam-*.mp4
+*.partial.mp4
+render.wav
+period.jsonl

@@ -1,0 +1,115 @@
+% Included by main.tex. One specification, two implementations.
+\chapter{Implementations and how they compare}\label{ch:compare}
+
+The requirements in Chapter~\ref{ch:tasks} and the specification files fix what
+Maqam does; they say nothing about the language. \path{manifest.json} lists two
+implementations of the same specification, each mapped to it by its own
+\path{impl/<name>/Implementation.lean} and checked by \cmd{make spec-check}.
+
+\begin{description}
+  \item[\path{impl/rust/source}] the upstream Rust, the reference the
+  requirements were distilled from. Built with \cmd{cargo}.
+  \item[\path{impl/zig/source}] a port to Zig 0.17. It needs only the Zig
+  compiler and the ALSA development headers (\cmd{libasound2-dev}); ffmpeg is
+  needed at run time for \cmd{m} (recording), as upstream.
+\end{description}
+
+\section{Building the Zig implementation on its own}
+Nothing under \path{impl/rust/} is read, built or linked by the Zig build
+(proof \emph{Implementations stand alone}). The bundled \path{.mq} sessions are
+copied into \path{impl/zig/source} because they are inputs of the
+specification, not of the Rust build. From \path{impl/zig/source}:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\cmd{make} & build \path{zig-out/bin/maqam-live} (ReleaseFast)\\
+\cmd{make check} & build and run every module's tests\\
+\cmd{make render SESSION=default.mq} & offline render to \path{render.wav}\\
+\cmd{make bench SESSION=default.mq NAM=x.nam} & the real-time bench at 64 frames\\
+\cmd{make run} & the terminal app\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent From the project root \cmd{make zig-check} does the same as
+\cmd{make check} there, and \cmd{make check} runs the specification check and
+both implementations' checks.
+
+\section{How the Zig is arranged}
+Each Rust module has a Zig module of the same name and role; types keep their
+Rust names and functions become camelCase (\path{impl/zig/source/PORTING.md}).
+
+\begin{longtable}{lll}
+\toprule
+Rust & Zig & role\\
+\midrule
+\endhead
+\texttt{tuning.rs} & \texttt{tuning.zig} & pitches, ajnas, the 5-limit lattice\\
+\texttt{command.rs} & \texttt{command.zig} & the command language and its messages\\
+\texttt{sequencer.rs}, \texttt{synth.rs} & same names & phrases, bars, walks, voices\\
+\texttt{session\_v3.rs} + loaders in \texttt{app.rs} & \texttt{session.zig} & MAQAM\_SESSION\_V3/V2/V1\\
+\texttt{fx.rs}, \texttt{vcf.rs}, \texttt{analog.rs}, \texttt{sympathetics.rs} & same names & the signal chain\\
+crate \texttt{nam-rs} 0.4 & \texttt{nam.zig} & NAM WaveNet (A1, A2), LSTM, slimmable\\
+\texttt{audio.rs} + \texttt{cpal} & \texttt{audio.zig}, \texttt{device.zig} & the engine and ALSA\\
+\texttt{record\_old.rs}, \texttt{carpet.rs} & \texttt{record.zig}, \texttt{carpet.zig}, \texttt{png.zig} & the MP4 recorder\\
+\texttt{app.rs} & \texttt{app.zig}, \texttt{net.zig} & the App and its workers\\
+\texttt{ui.rs} + \texttt{ratatui} & \texttt{ui.zig}, \texttt{term.zig} & the terminal UI\\
+crossbeam channels, main.rs statics & \texttt{channel.zig}, \texttt{shared.zig} & lock-free rings, atomics\\
+--- & \texttt{eventlog.zig}, \texttt{wav.zig} & the comparison hooks\\
+\bottomrule
+\end{longtable}
+
+The audio thread in the Zig never allocates, frees or locks. The App sends
+pointers to phrases and models on a 512-slot lock-free ring; the engine sends
+what it no longer uses back on a second ring and the App frees it. Upstream's
+mutex-guarded jump-counter map is a fixed table of atomics.
+
+\section{Where the Zig differs on purpose}
+Messages, ranges, session files and commands are the same. The differences are
+the requirements the Rust does not meet (Chapter~\ref{ch:gaps}):
+
+\begin{itemize}
+  \item A phrase whose combined scale has fewer than three notes is rejected
+  with a message instead of panicking (\cmd{create Zz 1/1}, \cmd{d zz 4}).
+  \item Inputs that loop forever or crash upstream are handled: a non-ASCII
+  value token, deeply nested \cmd{edit}/\cmd{insert}, an infinite or zero
+  frequency in the tuning lattice or the sympathetic strings, and NAM files
+  that make \texttt{nam-rs} index out of bounds.
+  \item Jins name ties resolve alphabetically instead of by hash order, so
+  \cmd{d bay} always means the same jins.
+  \item Bounds: repeats at most \texttt{r20}, jump times at most 10000, the
+  timeline at most 4096 rows, LLM responses at most 4\,MiB, NAM downloads at
+  most 256\,MiB, NAM files at most 64\,MiB, LLM context at most 16
+  exchanges, line history at most 1000 lines, recordings at most 600\,s, and
+  the voice lists, jump counters and garbage queues fixed in advance.
+  \item A recording that fails leaves no \path{.partial.mp4} and no temporary
+  layers; after an ffmpeg failure only the \path{maqam-ffmpeg.log} the message
+  points to is kept.
+  \item Every NAM cache name is sanitized; tests never reach the network or
+  open a browser.
+  \item The \cmd{nam gain} help text says 0..11, the range the parser accepts.
+  \item MIDI clock in and out (\cmd{clockin}, \cmd{clockout}), which the
+  specification does not mention, answer that MIDI is not available.
+  \item The audio thread locks its memory and asks for real-time scheduling
+  before its loop, and the live device counts every underrun and shows it in
+  the header; upstream recovers from an underrun silently.
+  \item One regression: Zig 0.17's HTTP client has no request timeouts, where
+  upstream gives up after 30\,s (LLM) and 120\,s (downloads). Only the worker
+  thread waits; the audio and the terminal stay live.
+  \item The comparison hooks (\cmd{--render}, \cmd{--bench},
+  \texttt{MAQAM\_EVENT\_LOG}) exist.
+\end{itemize}
+
+\section{Measuring them the same way}
+\cmd{make compare} in the project root runs each implementation's
+\cmd{check}, \cmd{render} (twice, to test determinism) and \cmd{bench}, checks
+the event log against protocol \texttt{MaqamLive} with LeanFM's
+\texttt{session\_conform}, checks every block of the bench's \texttt{AudioPeriod}
+stream (exactly, and its conformance; Section~\ref{sec:deadline}), null-tests each render against the default
+implementation's, and writes \path{reports/compare/}. A target an
+implementation does not provide is reported as \emph{not provided}, never as a
+pass; upstream Rust provides no hooks, so its render and bench columns say so.
+
+\IfFileExists{../reports/compare/summary.tex}{\input{../reports/compare/summary.tex}}{%
+\noindent Run \cmd{make compare} to fill this section with measurements.}

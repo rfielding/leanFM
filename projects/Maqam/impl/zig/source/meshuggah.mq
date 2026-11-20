@@ -1,0 +1,16 @@
+MAQAM_SESSION_V3
+B|1|180
+S|4|0.5
+Y|16|sym on decay 0.99 drive 1 amount 0.25
+Y|21|sym harmony root 0.50 third 0.00 fifth 0.00 octave 0.50
+V|22|vcf cut 2100 res 0.8 drive 0.75
+P|0|2|g bayati, d hijaz 3232
+P|3|1|g bayati, a hijaz 64
+J|5|1|8
+P|9|1|d saba 333
+P|10|1|c rast 33
+P|11|1|f hijaz 333
+P|12|1|a saba 222
+J|7|9|4
+J|8|1|4
+T|23|stop

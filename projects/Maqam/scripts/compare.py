@@ -11,8 +11,11 @@ For each implementation impl/<name>/ this measures what spec/Requirements.lean m
   default implementation's render (the null test: peak and RMS of the difference in dBFS);
 * events: the event log that render wrote (MAQAM_EVENT_LOG) checked with LeanFM's session_conform
   against protocol MaqamLive, asked of the running LeanFM server (make serve in the LeanFM root);
-* bench: `make -C <source> bench SESSION=... SECONDS=... NAM=...` prints one JSON line with the
-  callback times and deadline misses at 64 frames and 48 kHz;
+* bench: `make -C <source> bench SESSION=... SECONDS=... NAM=... PERIOD_LOG=...` prints one JSON line
+  with the callback times and deadline misses at 64 frames and 48 kHz, and writes the AudioPeriod
+  stream (one session per block). Every block of it is checked here: exactly, in integers (Played
+  iff (Block - Pull) * rate <= frames * 10^9, and the label must agree), and against protocol
+  AudioPeriod (spec/AudioPeriod.leanfm) with session_conform, in chunks under the MCP size limit;
 * size: lines of source (comments included), excluding build output.
 
 A target an implementation's Makefile does not have is reported as "not provided", never as a
@@ -153,6 +156,42 @@ def conform(events_path):
             "events": len(events), "detail": content.get("reason") or content.get("problems")}
 
 
+def period_check(log_path, frames=64, rate=48000):
+    """Every block of an AudioPeriod stream: the deadline judged exactly, then conformance."""
+    events = [json.loads(line) for line in log_path.read_text().splitlines() if line.strip()]
+    blocks = {}
+    for e in events:
+        blocks.setdefault(e["session"], {})[e["label"]] = int(e["ts"])
+    late, wrong_label, incomplete = [], 0, 0
+    for k, b in blocks.items():
+        if "Pull" not in b or "Block" not in b or not ("Played" in b or "Skipped" in b):
+            incomplete += 1
+            continue
+        on_time = (b["Block"] - b["Pull"]) * rate <= frames * 10**9
+        if on_time != ("Played" in b):
+            wrong_label += 1
+        if not on_time:
+            late.append(int(k))
+    result = {"blocks": len(blocks), "late": len(late), "first_late": sorted(late)[:10],
+              "label_disagrees": wrong_label, "incomplete": incomplete}
+    lean = (ROOT / "spec" / "AudioPeriod.leanfm").read_text()
+    verdicts = {}
+    for i in range(0, len(events), 450):  # 150 blocks per call stays under 64 KiB of arguments
+        body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "session_conform",
+                           "arguments": {"lean": lean, "events": events[i:i + 450]}}}).encode()
+        request = urllib.request.Request(URL, data=body, headers={"Content-Type": "application/json", "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                reply = json.loads(response.read())["result"]
+        except (urllib.error.URLError, OSError) as error:
+            result["conformance"] = "not checked: LeanFM server unreachable (make serve): " + str(error)
+            return result
+        verdict = "error" if reply.get("isError") else reply.get("structuredContent", {}).get("verdict", "unknown")
+        verdicts[verdict] = verdicts.get(verdict, 0) + 1
+    result["conformance"] = "conforms" if set(verdicts) == {"conforms"} else verdicts
+    return result
+
+
 def source_lines(source):
     total = 0
     for path in source.rglob("*"):
@@ -165,16 +204,25 @@ def source_lines(source):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--session", default="impl/rust/source/default.mq")
+    parser.add_argument("--session", default="", help="default: default.mq of the default implementation, else of any")
     parser.add_argument("--cycles", type=int, default=2)
     parser.add_argument("--rate", type=int, default=48000)
     parser.add_argument("--seconds", type=int, default=30)
     parser.add_argument("--nam", default="")
     parser.add_argument("--only", default="")
     options = parser.parse_args()
-    session = inside(options.session)
     listed, default = implementations()
     only = {name for name in options.only.split(",") if name}
+    if not options.session:
+        # The bundled sessions are inputs of the specification; each implementation carries a copy,
+        # so the comparison works whichever implementations are present.
+        found = [item["source"].rstrip("/") + "/default.mq" for item in listed
+                 if (not only or item["name"] in only) and (ROOT / item["source"] / "default.mq").is_file()]
+        if not found:
+            raise SystemExit("no default.mq in any implementation; pass --session")
+        options.session = found[0]
+    session = inside(options.session)
+    nam = str(inside(options.nam)) if options.nam else ""  # make runs in each source directory
     validation_path = ROOT / "reports/specification-check/validation.json"
     validation = json.loads(validation_path.read_text()) if validation_path.is_file() else {}
     OUT.mkdir(parents=True, exist_ok=True)
@@ -221,13 +269,17 @@ def main():
         else:
             result["render"] = "not provided"
         if has_target(source, "bench"):
+            period_log = out / "period.jsonl"
+            if period_log.exists():
+                period_log.unlink()
             code, seconds, stdout = make(source, "bench", {"SESSION": session, "SECONDS": options.seconds,
-                                                            "NAM": options.nam}, out / "bench.log")
+                                                            "NAM": nam, "PERIOD_LOG": period_log}, out / "bench.log")
             lines = [line for line in stdout.splitlines() if line.startswith("{")]
             try:
                 result["bench"] = json.loads(lines[-1]) if code == 0 and lines else {"passed": False}
             except json.JSONDecodeError:
                 result["bench"] = {"passed": False, "reason": "bench did not print a JSON line"}
+            result["periods"] = period_check(period_log) if period_log.is_file() else {"status": "no AudioPeriod stream written"}
         else:
             result["bench"] = "not provided"
         results[name] = result
@@ -236,6 +288,7 @@ def main():
                "implementations": results}
     (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     (OUT / "summary.md").write_text(markdown(summary))
+    (OUT / "summary.tex").write_text(latex(summary))
     print((OUT / "summary.md").read_text())
 
 
@@ -247,13 +300,63 @@ def cell(value):
     return str(value)
 
 
+def tex(text):
+    for a, b in (("\\", "\\textbackslash{}"), ("&", "\\&"), ("%", "\\%"), ("$", "\\$"), ("#", "\\#"),
+                 ("_", "\\_"), ("{", "\\{"), ("}", "\\}"), ("~", "\\textasciitilde{}"), ("^", "\\textasciicircum{}")):
+        text = text.replace(a, b)
+    return text
+
+
+def latex(summary):
+    """The same measurements as summary.md, for the book (book/implementations.tex inputs it)."""
+    lines = ["% Generated by scripts/compare.py; do not edit.",
+             "\\noindent Measured by \\cmd{make compare}: session \\path{" + summary["session"] + "}, " +
+             str(summary["cycles"]) + " cycles at " + str(summary["rate"]) + "\\,Hz; bench " +
+             str(summary["bench_seconds"]) + "\\,s of 64-frame blocks at 48\\,kHz with the sympathetic strings and the reverb" +
+             (", NAM \\path{" + summary["nam"] + "}" if summary["nam"] else "") + ".", "",
+             "\\begin{longtable}{lp{0.78\\linewidth}}", "\\toprule"]
+    for name, result in summary["implementations"].items():
+        lines.append("\\multicolumn{2}{l}{\\textbf{" + tex(name) + (" (default)" if result["default"] else "") + "}}\\\\")
+        render = result.get("render", "")
+        if isinstance(render, dict):
+            render_text = ("pass, " + str(render.get("seconds")) + " s" if render.get("passed") else "FAIL") + \
+                (", deterministic" if render.get("deterministic") else "")
+        else:
+            render_text = str(render)
+        events = result.get("events", {})
+        bench = result.get("bench", "")
+        if isinstance(bench, dict) and "callbacks" in bench:
+            bench_text = "{} blocks, {} deadline misses; p50 {} us, p99 {} us, max {} us; slack {} us; scheduling {}, memory {}".format(
+                bench["callbacks"], bench["deadline_misses"], round(bench["callback_p50_us"]), round(bench["callback_p99_us"]),
+                round(bench["callback_max_us"]), round(bench.get("slack_min_us", 0)), bench.get("realtime", "?"),
+                "locked" if bench.get("memory_locked") else "not locked")
+        else:
+            bench_text = cell(bench)
+        for key, value in (("specification", str(result["spec"])), ("check", cell(result.get("check", ""))),
+                           ("render", render_text),
+                           ("event log", str(events.get("status", "")) if isinstance(events, dict) else str(events)),
+                           ("bench", bench_text), ("every block", period_text(result.get("periods"))),
+                           ("source lines", str(result.get("source_lines", "")))):
+            lines.append(tex(key) + " & " + tex(value) + "\\\\")
+        lines.append("\\midrule")
+    lines += ["\\bottomrule", "\\end{longtable}", ""]
+    return "\n".join(lines)
+
+
+def period_text(periods):
+    if not isinstance(periods, dict) or "blocks" not in periods:
+        return cell(periods) if periods else "not provided"
+    return "{} of {} late, {} labels disagree; AudioPeriod: {}".format(
+        periods["late"], periods["blocks"], periods["label_disagrees"], cell(periods.get("conformance", "")))
+
+
 def markdown(summary):
     rows = ["# Implementations of the Maqam specification", "",
             "Session " + summary["session"] + ", " + str(summary["cycles"]) + " cycles at " + str(summary["rate"]) +
             " Hz; bench " + str(summary["bench_seconds"]) + " s at 64 frames, 48 kHz" +
             (", NAM " + summary["nam"] if summary["nam"] else "") + ".", "",
-            "| implementation | spec | check | render | null test | events | bench | source lines |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+            "| implementation | spec | check | render | null test | events | bench | every block | source lines |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for name, result in summary["implementations"].items():
         render = result.get("render", "")
         null = ""
@@ -269,7 +372,8 @@ def markdown(summary):
         rows.append("| " + " | ".join([name + (" (default)" if result["default"] else ""), str(result["spec"]),
                                         cell(result.get("check", "")), cell(render), null,
                                         str(events.get("status", "")) if isinstance(events, dict) else str(events),
-                                        cell(result.get("bench", "")), str(result.get("source_lines", ""))]) + " |")
+                                        cell(result.get("bench", "")), period_text(result.get("periods")),
+                                        str(result.get("source_lines", ""))]) + " |")
     return "\n".join(rows) + "\n"
 
 

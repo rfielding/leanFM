@@ -1,0 +1,357 @@
+\documentclass[11pt,oneside]{book}
+\usepackage{underscore}
+\usepackage[margin=1in]{geometry}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{booktabs}
+\ifdefined\darkmode\pagecolor[HTML]{091117}\color[HTML]{F0EDE4}\def\viewtheme{dark}\else\def\viewtheme{light}\fi
+\graphicspath{{../renders/}}
+\newcommand{\cmd}[1]{\texttt{#1}}
+\newcommand{\fig}[2]{\IfFileExists{../renders/#1}{\includegraphics[#2]{#1}}{\fbox{\parbox{0.8\linewidth}{Run \texttt{make views} to derive \path{renders/#1}.}}}}
+\title{Maqam\\[0.5em]\large A live-coding terminal sequencer for just-intonation maqam,\\one specification and two implementations}
+\author{Project team}
+\date{\today}
+\begin{document}
+\frontmatter
+\maketitle
+\tableofcontents
+\mainmatter
+
+% ---------------------------------------------------------------------------
+\chapter{What Maqam is}
+maqam-live is a real-time terminal instrument for Arabic maqam music tuned in
+just intonation. A performer types short phrases into a command box: a root, a
+\emph{jins} (a scale fragment such as bayati or hijaz) and a rhythm written as
+digits. Each phrase becomes a row of a timeline that the audio thread plays in
+a loop. Control rows change tempo, sustain, filters and effects in no time;
+jump rows repeat sections a counted number of times. The same timeline is saved
+as a text session file, rendered offline to an MP4, edited by an LLM under a
+checked allowlist, and run against a live guitar or microphone input through a
+Neural Amp Modeler capture and a bank of sympathetic strings tuned by the score.
+
+This project carries the upstream program (\path{rfielding/maqam}, revision
+\texttt{c80b35d}) as a LeanFM project. Its record is this book together with
+\path{spec/Requirements.lean} (the observable requirements, reverse-engineered
+from the upstream source and documents), \path{spec/Requirements.proto} (the
+typed messages), \path{spec/Maqam.leanfm} (the session type of the running
+system) and one implementation mapping per implementation:
+
+\begin{itemize}
+  \item \path{impl/rust/} — the upstream Rust, the reference the requirements
+  were distilled from, and the default implementation;
+  \item \path{impl/zig/} — a port to Zig, built, tested and run without the Rust.
+\end{itemize}
+
+Both are held to the same requirements. Review and acceptance happen in git;
+chat histories are disposable.
+
+\section{Running it}
+From the project root:
+\begin{itemize}
+  \item \cmd{make spec-check} compiles the requirements and every
+  implementation mapping in LeanFM's sandbox, validates each mapping against the
+  one specification and regenerates \path{spec/tasks.json}.
+  \item \cmd{make app-check} builds and tests the default (Rust) implementation;
+  \cmd{make zig-check} builds and tests the Zig one. Neither touches the other's
+  directory.
+  \item \cmd{make compare} measures every implementation the same way
+  (Chapter~\ref{ch:compare}).
+  \item \cmd{make views} derives the figures of this book from the
+  specification; \cmd{make book} rebuilds it in light and dark copies.
+\end{itemize}
+
+Either implementation runs as a terminal app with no arguments, or runs the
+commands given as arguments (separated by \cmd{--}) without opening the
+terminal UI, for example \cmd{maqam-live "load default.mq" -- "m 1"}.
+
+% ---------------------------------------------------------------------------
+\chapter{The music}
+\section{Jins, maqam and just intonation}
+A jins is a short scale fragment given as exact frequency ratios $p/q$ from its
+root. The built-in ajnas (nahawand, bayati, hijaz, rast, kurd, saba, ajam,
+nikriz, suznak, jiharkah, zamzam, zabal and others) can be abbreviated to an
+unambiguous prefix; \cmd{create <Name> <p/q>...} adds a custom jins, which is
+saved with the session. A comma stacks ajnas into one scale:
+\cmd{d bayati, a nahawand 332}.
+
+Roots are the letters \cmd{c d e f g a b}, with \cmd{+} or \cmd{-} for sharper
+or flatter oud-lattice positions. Every root is snapped to a D-based oud
+lattice (D4 = 293.6648\,Hz), and every phrase frequency is that root times one
+of its jins ratios: the property \emph{Just intonation}.
+\cmd{tuneto <pitch>} rebases the lattice so that pitch sounds at its 12-TET
+frequency (A4 = 440\,Hz); it is live state, kept in \path{.globals.ml}, never in
+a session.
+
+\section{Rhythm and timing}
+A rhythm is a string of non-zero digits, each a group size. The first
+subdivision of a group is a kick, the rest snares: \cmd{332} is
+\texttt{X..X..X.}. One digit unit is an eighth note, $60/(2\cdot\mathit{bpm})$
+seconds. A phrase without a rhythm inherits the last one. \cmd{r<N>} repeats a
+phrase $N$ times (at most 20).
+
+\section{The signal chain}
+In each audio callback the voices of the playing phrases, the sub-bass and the
+drums are mixed with the live input (through the NAM capture when one is
+loaded), the sympathetic strings excited by that input and tuned to the current
+phrase, the per-instrument VCF bank and the effects (flanger, chorus, reverb,
+delay, ping-pong), then soft-clipped and clamped to $[-1,1]$: the required
+proof \emph{Output is bounded}. Each implementation's mapping names the code of
+this mix loop.
+
+% ---------------------------------------------------------------------------
+\chapter{The command language}\label{ch:commands}
+A line is split on \cmd{;} (no escaping) and each part is one command. A parse
+or range error is shown and stops the rest of the line; nothing it would have
+changed is changed (\emph{A rejected command changes nothing}).
+\cmd{clockin} and \cmd{clockout} are taken before the parser. A line whose text
+before the first \cmd{:} is \cmd{chatgpt}, \cmd{gpt}, \cmd{openai},
+\cmd{claude} or \cmd{anthropic} is a prompt for an LLM (Chapter~\ref{ch:tasks}).
+
+\begin{longtable}{p{0.36\linewidth}p{0.58\linewidth}}
+\toprule
+Command & Meaning\\
+\midrule
+\cmd{<root> <jins> [rhythm] [, <root> <jins>] [rN]} & a phrase row\\
+\cmd{j <id|start> [times|always]} & jump back to a row; \cmd{times} passes, then fall through\\
+\cmd{j <ok> else <fail> [times]} & branch on counter success or exhaustion\\
+\cmd{i <id> <cmd>}, \cmd{edit <id> <cmd>} & insert before a row, replace a row\\
+\cmd{x <id>...}, \cmd{up}/\cmd{down <id>}, \cmd{rot} & delete, move, rotate rows (ids stay)\\
+\cmd{z [id|start]}, \cmd{start}, \cmd{pause}, \cmd{stop} & playback and the stop row\\
+\cmd{bpm}, \cmd{s}/\cmd{sus} & tempo and sustain rows\\
+\cmd{vol}, \cmd{tuneto} & live volume and tuning (never saved in a session)\\
+\cmd{vcf}/\cmd{cut}/\cmd{res}/\cmd{drive} & per-instrument filter rows\\
+\cmd{flanger}, \cmd{chorus}, \cmd{reverb}, \cmd{delay}, \cmd{pingpong}, \cmd{fx off} & effect rows\\
+\cmd{sym ...} & sympathetic strings (harmony, decay, gain, per-source partitions)\\
+\cmd{nam ...} & NAM captures: import, pin, search, gain, input, off\\
+\cmd{save [path]}, \cmd{load <path>}, \cmd{ls} & sessions\\
+\cmd{m[N]} & record $N$ cycles to an MP4\\
+\cmd{create <Name> <p/q>...}, \cmd{delete <Name>} & custom ajnas\\
+\cmd{audition}, \cmd{clear}, \cmd{?}/\cmd{help}, \cmd{q}/\cmd{quit} & the rest\\
+\bottomrule
+\end{longtable}
+
+Numeric values may be absolute, \cmd{+n}, \cmd{-n}, \cmd{*k} or \cmd{/k}, or a
+per-tick step \cmd{nt}; \cmd{+0} stops a tick. Out-of-range values are rejected
+with a message naming the range:
+
+\begin{longtable}{p{0.36\linewidth}p{0.58\linewidth}}
+\toprule
+Setting & Range\\
+\midrule
+bpm & 20..400 (default 120)\\
+sustain & 0.05..10\,s (default 1.25)\\
+vol & 0..2\\
+vcf cutoff, resonance, drive & 10..22000\,Hz (at most 0.45 of the sample rate), 0..0.98, 0.1..12\\
+flanger rate, depth, delay, feedback, mix & 0.01..8\,Hz, 0..1, 0.1..10\,ms, $-0.95$..0.95, 0..1\\
+chorus delay; reverb decay & 5..35\,ms; 0..0.98\\
+delay time, feedback & 0.01..2\,s, 0..0.95\\
+sym decay, gain, interval ratio & 0.9..0.99999 per ms (default 0.999), 0..512 (default 2), 1/4..4, at most 8 intervals\\
+nam gain & 0..11\\
+\bottomrule
+\end{longtable}
+
+Entry ids are stable: insert, delete, move and rotate never renumber an
+existing id, and jumps name ids, not positions (\emph{Entry ids are stable}).
+
+% ---------------------------------------------------------------------------
+\chapter{Sessions}
+\cmd{save} writes a \texttt{MAQAM\_SESSION\_V3} file: a header line, a
+\cmd{create} line per custom jins, then one record per timeline row in order:
+
+\begin{center}\begin{tabular}{ll}
+\toprule
+Record & Row\\
+\midrule
+\texttt{P|id|repeat|src} & phrase\\
+\texttt{J|id|target|times}, \texttt{J|id|target|fail|times} & jump\\
+\texttt{B|id|bpm}, \texttt{S|id|sustain} & tempo, sustain\\
+\texttt{V|id|vcf}, \texttt{F|id|fx}, \texttt{N|id|nam}, \texttt{Y|id|sym} & filter, effects, NAM, sympathetic strings\\
+\texttt{T|id|stop} & stop\\
+\bottomrule
+\end{tabular}\end{center}
+
+\verb!\!, \verb!|! and newline are escaped. V1 and V2 files still load, with
+sequential ids. \cmd{load} rebuilds the audio from the timeline (Clear, the
+start settings, then every entry) and reports a failure with its line number.
+\emph{Session round trip}: loading a saved timeline gives the same entries,
+ids, sources and custom ajnas; \cmd{vol} and \cmd{tuneto} are never in a
+session.
+
+% ---------------------------------------------------------------------------
+\chapter{How the system works}\label{ch:tasks}
+Eight actors take part: the \emph{Performer} at the terminal, the \emph{App}
+(the timeline, the command dispatch and the workers), the \emph{Audio} output
+callback, the \emph{Recorder} and the \emph{Ffmpeg} process it starts, an
+\emph{Llm} provider, the \emph{Web} (NAM captures, search, TONE3000) and the
+\emph{Disk}. The App owns the timeline; the Audio thread only receives
+commands over a bounded channel (512 commands) and publishes its position
+through atomics, so the callback never blocks (\emph{The audio callback never
+blocks}).
+
+\section{The whole protocol}
+Figure~\ref{fig:protocol} is LeanFM's sequence diagram of protocol
+\texttt{MaqamLive} in \path{spec/Maqam.leanfm}, generated by
+\texttt{session\_diagram}; LeanFM's session view animates it and checks event
+logs against it.
+
+\begin{figure}[htbp]\centering
+\fig{maqam-live-\viewtheme.pdf}{height=0.82\textheight,keepaspectratio}
+\caption{Protocol MaqamLive (generated).}\label{fig:protocol}
+\end{figure}
+
+\section{The tasks}
+Each task is a state machine derived from the requirements' grammars
+(\path{spec/tasks.json}).
+
+\begin{description}
+  \item[live\_edit] A command line is parsed; a rejection is shown and changes
+  nothing, otherwise the App changes its timeline first and then tells the
+  audio (\emph{Timeline first, audio second}).
+  \item[timeline\_playback] The callback walks the rows: a phrase plays its
+  repeats, a control applies in no time (\emph{Controls take no time}), a jump
+  row counts passes — \cmd{j X N} passes it $N$ times: $N-1$ jumps taken, then
+  one exhausted that resets its counter; \cmd{always} never exhausts
+  (\emph{Jump passes}).
+  \item[session\_save\_load] Load reads the whole file, then either rebuilds the
+  audio and reports the row count, or reports the failing line.
+  \item[record\_mp4] The timeline is rendered offline, encoded by ffmpeg
+  (\texttt{nice -n 10}, one retry without subtitles) into a staged
+  \path{.partial.mp4} that is renamed to \path{./maqam-<secs>.mp4}; a failed
+  recording leaves no partial file. ffmpeg missing from PATH is reported with
+  what to install.
+  \item[llm\_edit] \cmd{chatgpt:} or \cmd{claude:} asks the provider with the
+  language reference and the score as context. Returned tool commands are
+  applied only when every one parses and is on the allowlist; otherwise none is,
+  and any failure while applying restores the previous score
+  (\emph{LLM commands are checked before any is applied}). The LLM can never
+  save, load, record, play, quit or change \cmd{vol} or \cmd{tuneto}.
+  \item[nam\_fetch] A capture is downloaded into \path{<name>.nam.part},
+  renamed into the cache (\path{./.nam} or \texttt{MAQAM\_NAM\_CACHE\_DIR})
+  when complete, and only then loaded onto the live input (\emph{A download is
+  cached before it is loaded}); cache names are sanitized so no write leaves
+  the cache.
+\end{description}
+
+\begin{figure}[htbp]\centering
+\fig{live_edit.pdf}{width=0.45\linewidth}\hfill\fig{timeline_playback.pdf}{width=0.45\linewidth}\\[1em]
+\fig{session_save_load.pdf}{width=0.45\linewidth}\hfill\fig{record_mp4.pdf}{width=0.45\linewidth}\\[1em]
+\fig{llm_edit.pdf}{width=0.45\linewidth}\hfill\fig{nam_fetch.pdf}{width=0.45\linewidth}
+\caption{The six tasks' state machines, derived from \texttt{spec/tasks.json}.}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\chapter{Requirements}
+\section{Positive invariants}
+Always: a rejected command changes nothing; the timeline changes before the
+audio is told; entry ids are stable; jump passes count as above; controls take
+no time; every frequency is just; a session round-trips; LLM commands are all
+checked before any is applied; a download is cached before it is loaded; with
+\texttt{MAQAM\_EVENT\_LOG} set every message of \texttt{MaqamLive} the app takes
+part in is logged once, in order, conforming to the protocol; the offline render
+is deterministic; every audio block is on time (Section~\ref{sec:deadline}).
+
+\section{Negative requirements}
+Never: the LLM saves, loads, records or plays; a failed recording leaves a
+partial MP4; the audio callback blocks; the audio thread waits on the kernel (a
+page fault in the callback, or normal priority where real-time is allowed); a
+buffer skip that is not counted and shown; an output sample outside $[-1,1]$; an
+input that crashes the app; a secret (API key, TONE3000 token) in a session, the
+terminal, the LLM context, a recording or a log; a cache write outside the
+cache; tests that open a browser or reach the network; a skipped block at 64
+frames and 48\,kHz with NAM, the strings and the reverb on; an event log
+field the protocol does not declare; and one implementation that reads, builds
+or links another's directory or needs another language's toolchain
+(\emph{Implementations stand alone}).
+
+\section{The audio deadline is hard}\label{sec:deadline}
+\emph{Eventually} is not enough for audio. A callback that finishes 10\,ms late
+satisfies ``eventually the block is ready'' and is still a gap the listener
+hears. The requirement is a bounded one, and it repeats forever, on the
+device's clock: the device releases block $k$ at $t_0 + k\,P$ with
+$P = 64/48000$\,s $= 1333.3\,\mu$s, whether the audio is ready or not, and
+plays it only if it was handed over before $t_0 + (k+1)\,P$; otherwise it skips
+it. A bounded deadline is a safety property: a miss is seen at a finite time,
+so it can be checked block by block from a log, not only argued.
+
+Protocol \texttt{AudioPeriod} (\path{spec/AudioPeriod.leanfm}) states one
+period: \texttt{Pull} from the device, \texttt{Block} from the audio, then the
+device decides \texttt{Played} or \texttt{Skipped}. Each block is its own
+session, so a run of the bench is a stream of independent trials and one
+\texttt{Skipped} anywhere breaks \emph{No missed audio deadline}. The verdict
+is exact, in integers: $(\mathit{Block}-\mathit{Pull}) \cdot 48000 \le 64
+\cdot 10^9$\,ns. Every block counts: the maximum, never a percentile.
+
+On time means woken on time as well as rendered in time, and that puts two
+more requirements on the audio thread: it never takes a page fault in the
+callback, and it runs with real-time priority where the machine allows it
+(\emph{The audio thread never waits on the kernel}). The Zig bench found both:
+at normal priority one release was 3.2\,ms late, and the first block after a
+load took 916 page faults (1\,ms), each a skip. With memory locked and
+real-time scheduling (RealtimeKit), three runs of 7500 blocks had none late.
+On the live device a skip is never silent: each underrun is counted and shown
+in red in the header.
+
+\section{Hooks every implementation provides}
+\begin{itemize}
+  \item \textbf{Event log}: with \texttt{MAQAM\_EVENT\_LOG=<path>}, one JSON
+  object per line for each message of \texttt{MaqamLive} the app takes part in:
+  \texttt{\{ts, session, from, to, label, cause, fields\}}, \texttt{ts} in
+  nanoseconds of one monotonic clock, \texttt{cause} the \texttt{ts} of the
+  event the protocol names as its cause, only the declared fields, integers as
+  decimal strings. Unset, nothing is written.
+  \item \textbf{Offline render}: \cmd{maqam-live --render <session.mq> --cycles
+  <n> --rate <hz> --wav <out.wav>} writes 32-bit float mono WAV without opening
+  audio devices or the terminal UI, the same samples on every run.
+  \item \textbf{Bench}: \cmd{maqam-live --bench <session.mq> --seconds <s>
+  --frames 64 --rate 48000 [--nam <capture.nam>] [--period-log <path>]} runs
+  the live audio path against a null device with the strings and the reverb on.
+  The null device is the clock: it releases each block on the period grid, the
+  bench waits for each release, and times the block from release to hand-over,
+  with real-time scheduling and locked memory where allowed. It prints one JSON
+  line \texttt{\{frames, rate, callbacks, deadline\_misses, callback\_p50\_us,
+  callback\_p99\_us, callback\_max\_us, release\_late\_max\_us, slack\_min\_us,
+  realtime, memory\_locked\}}, and with \cmd{--period-log} writes the
+  \texttt{AudioPeriod} stream after the run.
+\end{itemize}
+
+\IfFileExists{implementations.tex}{\input{implementations.tex}}{}
+
+% ---------------------------------------------------------------------------
+\chapter{Known gaps}\label{ch:gaps}
+These are counterexamples to the requirements in the upstream Rust
+(\path{impl/rust}); the requirements still forbid them, and the Zig
+implementation avoids each.
+
+\begin{description}
+  \item[A one-note jins panics] \cmd{create Zz 1/1} then \cmd{d zz 4} panics in
+  \texttt{build\_phrase} (\texttt{clamp} with min $>$ max)
+  (\path{reports/reverse-engineering/panic-one-note-jins.txt}). Breaks
+  \emph{No input crashes the app}.
+  \item[An unsanitized cache name] A \cmd{nam tone3000} name read from a loaded
+  \path{.mq} reaches the cache path without sanitizing. Breaks \emph{Cache
+  writes stay in the cache}.
+  \item[A test that reaches out] Loading the bundled \path{nama2.mq} in a test
+  starts the TONE3000 login and runs \texttt{xdg-open}. Breaks \emph{Tests do
+  not reach out}.
+  \item[Reverb stutters at 64 frames] The reverb misses deadlines at 64-frame
+  buffers. Breaks \emph{No missed audio deadline}.
+  \item[No comparison hooks] The upstream binary has no \cmd{--render},
+  \cmd{--bench} or event log.
+  \item[Unbounded] Timeline length, phrase repeats, jump times, the recording
+  buffer, LLM history and NAM download size are not bounded upstream.
+\end{description}
+
+\chapter{Where the documents and the code disagree}
+Recording does not reuse the live path: it has its own mix loop at a fixed
+44.1\,kHz without the sympathetic strings, NAM, microphone or \cmd{vol},
+peak-normalizes to 0.9 and assumes 0.25\,s subdivisions when spawning voices.
+NAM rows are saved (\texttt{N|}) although the upstream documents call NAM live
+state. The upstream \path{docs/session-v3.md} lists only B, S, P, J, T. The
+reverb uses two of its four taps. The NAM gain range is 0..11 in the parser but
+0..8 in its help text, and the README writes Saba's endpoint as 80/64 where the
+code says 5/4. Where code and documents disagree the requirements follow the
+code, so every implementation behaves as the upstream code does.
+
+\end{document}

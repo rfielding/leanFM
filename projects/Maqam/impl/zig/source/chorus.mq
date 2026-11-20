@@ -1,0 +1,10 @@
+MAQAM_SESSION_V3
+S|11|1.5
+Y|8|sym on decay 0.995 drive 2
+V|4|vcf kanun cut 1000 res 0.9 drive 1 wave saw
+V|9|vcf kanun cut +25t res +0.2t drive 2 wave saw
+F|12|chorus rate 0.7 depth 0.55 delay 18 mix 0.1
+P|0|1|d bayati, a zamzam 4444
+J|1|0|3
+P|2|1|c rast, a bayati 332332
+J|3|0|4

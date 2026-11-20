@@ -1,0 +1,26 @@
+import LeanFM.Session.Syntax
+
+/-- One period of the audio output: the hard deadline behind "No missed audio deadline" and
+    "Every block is on time" (spec/Requirements.lean). The output device releases block k at
+    t0 + k * P, P = frames / rate (64 / 48000 s = 1333.3 us), whether or not the audio is ready:
+    the device is the clock, and the audio cannot make it wait. The audio renders the block and
+    hands it over; the device then plays it, if it arrived before release + P, or skips it (an
+    underrun: the listener hears a gap). Each block is its own session (its index is the session
+    id), so a stream of blocks is a stream of independent trials and a single Skipped anywhere is
+    a counterexample. "Eventually Block" is not the requirement: a block that arrives after its
+    period is Skipped however soon after it arrives.
+
+    Timestamps (ts, nanoseconds of one monotonic clock): Pull is the release, Block the moment
+    the rendered block was handed over, Played or Skipped one nanosecond after Block. The device's
+    verdict is exactly: Played iff Block.ts - Pull.ts <= P (in integers, (Block.ts - Pull.ts) *
+    rate <= frames * 10^9). The bench (--bench ... --period-log <path>) writes this stream after
+    the run from preallocated arrays, never from the audio thread. -/
+protocol AudioPeriod (Device, Audio) {
+  p: Pull from Device to Audio;
+  b: Block from Audio to Device cause p;
+  choice {
+    Played from Device to Audio cause b;
+  } or {
+    Skipped from Device to Audio cause b;
+  }
+}
