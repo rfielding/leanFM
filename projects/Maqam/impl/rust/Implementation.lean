@@ -4,7 +4,8 @@ import LeanFM.Artifacts
 # maqam-live: implementation mapping (as found in the upstream Rust source)
 
 Each actor and message of `spec/Requirements.lean` is mapped to the Rust that realizes it in
-`source/` (upstream revision c80b35d). This records the implementation as it is; where it falls
+`impl/rust/source/` (upstream revision c80b35d). This is the project's default implementation;
+`manifest.json` lists the others, each checked against the same requirements. This records the implementation as it is; where it falls
 short of a requirement, the book's "Known gaps" chapter names the requirement, the code and the
 counterexample.
 -/
@@ -21,16 +22,16 @@ def implementation : ImplementationSpec :=
   { requirementId := "maqam.visible_behavior"
   , target := .rust
   , moduleName := "maqam-live"
-  , outputDirectory := "source/"
+  , outputDirectory := "impl/rust/source/"
   , actors :=
-      [ actor "Performer" "terminal keyboard (crossterm events)" "source/src/ui.rs" "actor:Performer"
-      , actor "App" "app::App (timeline, command dispatch, sessions, workers)" "source/src/app.rs" "actor:App"
-      , actor "Audio" "cpal output callback in audio::start_audio (sequencer, voices, VCF bank, FX, sympathetics, NAM)" "source/src/audio.rs" "actor:Audio"
-      , actor "Recorder" "record::record_cycle (delegates to record_old.rs) on a spawned thread" "source/src/record_old.rs" "actor:Recorder"
-      , actor "Ffmpeg" "nice -n 10 ffmpeg, argv only (no shell)" "source/src/record_old.rs" "actor:Ffmpeg"
-      , actor "Llm" "OpenAI chat/completions or Anthropic messages via ureq on a spawned thread" "source/src/app.rs" "actor:Llm"
-      , actor "Web" "ureq GET of NAM capture URLs, DuckDuckGo search and the TONE3000 API" "source/src/app.rs" "actor:Web"
-      , actor "Disk" "the working directory: .mq sessions, .nam cache, .globals.ml, maqam-<secs>.mp4" "source/src/session_v3.rs" "actor:Disk" ]
+      [ actor "Performer" "terminal keyboard (crossterm events)" "impl/rust/source/src/ui.rs" "actor:Performer"
+      , actor "App" "app::App (timeline, command dispatch, sessions, workers)" "impl/rust/source/src/app.rs" "actor:App"
+      , actor "Audio" "cpal output callback in audio::start_audio (sequencer, voices, VCF bank, FX, sympathetics, NAM)" "impl/rust/source/src/audio.rs" "actor:Audio"
+      , actor "Recorder" "record::record_cycle (delegates to record_old.rs) on a spawned thread" "impl/rust/source/src/record_old.rs" "actor:Recorder"
+      , actor "Ffmpeg" "nice -n 10 ffmpeg, argv only (no shell)" "impl/rust/source/src/record_old.rs" "actor:Ffmpeg"
+      , actor "Llm" "OpenAI chat/completions or Anthropic messages via ureq on a spawned thread" "impl/rust/source/src/app.rs" "actor:Llm"
+      , actor "Web" "ureq GET of NAM capture URLs, DuckDuckGo search and the TONE3000 API" "impl/rust/source/src/app.rs" "actor:Web"
+      , actor "Disk" "the working directory: .mq sessions, .nam cache, .globals.ml, maqam-<secs>.mp4" "impl/rust/source/src/session_v3.rs" "actor:Disk" ]
   , messages :=
       [ chan "CommandLine" "String" "crossterm key events -> App::handle_command" "message:CommandLine" "One Enter submits one line; ';' splits it into commands."
       , chan "Rejected" "String (\"✗ ...\")" "App::message" "message:Rejected" "Parse and range errors are shown and stop the remaining parts of the line."

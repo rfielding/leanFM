@@ -11,6 +11,7 @@
     --ink-bg: #0b0f14; --ink-fg: #e5e7eb; --ink-line: #4b5563; --ink-arrow: #93c5fd;
     --ink-frame: #fbbf24; --ink-muted: #9ca3af; --ink-actFill: #1f2937; --ink-hl: #f472b6;
     --stage: #111111; --req: #60a5fa; --rep: #4ade80; --life: #64748b;
+    color-scheme: dark;
   }
   :root[data-theme="light"] {
     --bg: #ffffff; --panel: #f4f5f7; --edge: #d5dae1; --fg: #1d2430; --dim: #5d6876;
@@ -18,6 +19,7 @@
     --ink-bg: #ffffff; --ink-fg: #111827; --ink-line: #9ca3af; --ink-arrow: #1d4ed8;
     --ink-frame: #b45309; --ink-muted: #4b5563; --ink-actFill: #f3f4f6; --ink-hl: #be185d;
     --stage: #fbfaf7; --req: #1d4ed8; --rep: #15803d; --life: #94a3b8;
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--fg);
@@ -112,6 +114,11 @@
   .sketch-hint { font-size: 14px; color: var(--dim); margin: 6px 0 0; }
   .nav { display: flex; flex-direction: column; gap: 6px; }
   .nav .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .nav .tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--edge); margin-bottom: 8px; }
+  .nav .tab { border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--dim);
+    padding: 5px 14px; margin-bottom: -1px; }
+  .nav .tab.lit { color: var(--fg); }
+  .nav .tab.on { background: var(--panel); color: var(--amber); border-color: var(--edge); border-width: 1px; border-bottom: 0; font-weight: 600; }
   .nav .group { min-width: 6.5em; color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
   .propform { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .propform textarea { min-height: 3.5em; font: 13px ui-monospace, Menlo, monospace; }
@@ -143,10 +150,27 @@
   /* the navigator: the distillation chain chat, book, requirements, code; dark in either theme */
   .stagenav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-radius: 8px;
     background: #0b0f14; color: #eceae6; border: 1px solid #263445; }
-  .stagenav .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .stagenav { flex-direction: column; align-items: stretch; }
+  .stagenav .chain, .stagenav .picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+  .stagenav .chain button { font-size: 16px; padding: 4px 16px; }
   .stagenav button, .stagenav select { background: #16202b; color: #eceae6; border: 1px solid #263445; }
+  /* the open list of a select is drawn by the browser: without these it keeps the system's light
+     background and highlight under the select's light text, which cannot be read */
+  option { background: var(--panel); color: var(--fg); }
+  option:checked { background: var(--edge); color: var(--fg); }
+  .stagenav select { color-scheme: dark; }
+  .stagenav option { background: #16202b; color: #eceae6; }
+  .stagenav option:checked { background: #263445; color: #fbbf24; }
   .stagenav button.on { border-color: #fbbf24; border-width: 2px; color: #fbbf24; font-weight: 600; }
   .stagenav .arrow { color: #9aa6b2; padding: 0 2px; }
+  /* the stages and, nested under spec, explorer or index: tabs like the views bar's */
+  .stagenav .tabs { gap: 2px; border-bottom: 1px solid #263445; }
+  .stagenav .tabs button.tab { background: transparent; color: #9aa6b2; border: 1px solid transparent; border-bottom: 0;
+    border-radius: 6px 6px 0 0; margin-bottom: -1px; font-weight: 400; }
+  .stagenav .tabs button.tab:hover { color: #eceae6; }
+  .stagenav .tabs button.tab.on { background: #16202b; color: #fbbf24; border-color: #263445; border-width: 1px; border-bottom: 0; font-weight: 600; }
+  .stagenav .specrow { margin-left: 18px; }
+  .stagenav .specrow button.tab { font-size: 14px; padding: 3px 12px; }
   .stagenav label { color: #9aa6b2; font-size: 13px; display: flex; align-items: center; gap: 6px; }
   .chatlog { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; }
   .chatmsg { border-left: 3px solid var(--edge); padding: 2px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -157,6 +181,8 @@
   .bookpage { display: block; width: 100%; max-width: 1000px; height: auto; margin: 0 auto; border-radius: 4px; background: #fff; }
   .codegrid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr); gap: 10px; }
   .codegrid pre.filetext { max-height: 70vh; overflow: auto; }
+  /* text pages wrap to the window so nothing needs sideways scrolling at any zoom */
+  pre.filetext { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
   .frow .links { color: var(--amber); font-size: 12px; margin-left: 6px; }
 </style>
 </head>
@@ -269,7 +295,9 @@ fsBtn.addEventListener("click", async () => {
   catch (_) { fsBtn.title = "The host did not change the view's size."; }
 });
 function theme(ctx) {
-  if (ctx && Array.isArray(ctx.availableDisplayModes)) fsBtn.hidden = !ctx.availableDisplayModes.includes("fullscreen");
+  // the button switches between two modes, so it shows only when the host offers both
+  if (ctx && Array.isArray(ctx.availableDisplayModes))
+    fsBtn.hidden = !(ctx.availableDisplayModes.includes("fullscreen") && ctx.availableDisplayModes.includes("inline"));
   if (ctx && typeof ctx.displayMode === "string") setMode(ctx.displayMode);
   if (ctx && (ctx.theme === "light" || ctx.theme === "dark")) {
     document.documentElement.dataset.theme = ctx.theme;
@@ -1318,7 +1346,7 @@ function editor(lean) {
   navBox.setAttribute("role", "toolbar");
   navBox.setAttribute("aria-label", "Views of the protocol");
   propBox = el("div");
-  const views = panel("Views: click one", navBox);
+  const views = panel("Views", navBox);
   views.append(propBox, editStatus);
   rebuildNav(rolesOf(area.value));
   editorBox.replaceChildren(views, foldPanel("Protocol source (Lean, read-only)", area, false));
@@ -1450,6 +1478,17 @@ async function openapiAll() {
 // ---- navigation: every view of the protocol, one click each ---------------------------------
 // Each button asks LeanFM for that view of the text in the editor; nothing here derives a view.
 // The button of the view being shown is lit, and an edit regenerates that view.
+// the views bar is nested tabs: a group tab row, then the views of the one group shown; navLast keeps
+// the view last looked at in each group so going back to a group opens it again
+const NAV_GROUPS = [["structure", "Structure"], ["roles", "Roles"], ["behaviour", "Behaviour"], ["properties", "Properties"], ["code", "Code"]];
+function navGroupOf(key) {
+  if (key.startsWith("role:")) return "roles";
+  if (key.startsWith("skel:")) return "code";
+  if (["animate", "walk", "mdp", "dataset"].includes(key)) return "behaviour";
+  if (["ctl", "sla", "instances"].includes(key)) return "properties";
+  return "structure";
+}
+let navGroup = "structure", navLast = { structure: "whole" }, navGo = {};
 let navBox = null, propBox = null, navActive = "whole", navRoles = [], datasetSize = 1000, animSeed = 1, animSessions = 10;
 const MAX_ANIM_SESSIONS = 200;
 const CTL_PRESETS = [
@@ -1482,6 +1521,7 @@ function syncNav(body) {
   if (t === "session_actor" && typeof body.role === "string") navActive = "role:" + body.role;
   else if (t === "session_skeleton") navActive = "skel:" + String(body.language || "python");
   else if (keys[t]) navActive = keys[t];
+  if (navActive !== was) { navGroup = navGroupOf(navActive); navLast[navGroup] = navActive; }
   if (Array.isArray(body.roles) && body.roles.length && typeof body.roles[0] === "string") rebuildNav(body.roles.filter((r) => typeof r === "string"));
   else if (was !== navActive) rebuildNav(navRoles);
 }
@@ -1492,7 +1532,8 @@ function rebuildNav(roles) {
     const b = el("button", key === navActive ? "on" : "", label);
     b.setAttribute("aria-label", aria);
     b.setAttribute("aria-pressed", key === navActive ? "true" : "false");
-    b.addEventListener("click", () => { navActive = key; rebuildNav(navRoles); go(); });
+    navGo[key] = go;
+    b.addEventListener("click", () => { navActive = key; navGroup = navGroupOf(key); navLast[navGroup] = key; rebuildNav(navRoles); go(); });
     return b;
   };
   const row = (name, items) => { const r = el("div", "row"); r.append(el("span", "group", name), ...items); return r; };
@@ -1535,8 +1576,27 @@ function rebuildNav(roles) {
   const code = [
     btn("skel:python", "Python skeleton", "Each role's typestate as Python classes", () => run("session_skeleton", { language: "python" })),
     btn("skel:typescript", "TypeScript skeleton", "Each role's typestate as TypeScript classes; a step its state does not allow does not type-check", () => run("session_skeleton", { language: "typescript" })) ];
-  navBox.replaceChildren(row("Structure", structure), row("Roles", roleBtns.length ? roleBtns : [el("span", "meta", "none named")]),
-    row("Behaviour", behaviour), row("Properties", properties), row("Code", code));
+  const groups = { structure, roles: roleBtns.length ? roleBtns : [el("span", "meta", "none named")], behaviour, properties, code };
+  const tabs = el("div", "tabs");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Kinds of view");
+  for (const [g, label] of NAV_GROUPS) {
+    const t = el("button", "tab" + (g === navGroup ? " on" : "") + (g === navGroupOf(navActive) ? " lit" : ""), label);
+    t.setAttribute("role", "tab");
+    t.setAttribute("aria-selected", g === navGroup ? "true" : "false");
+    t.addEventListener("click", () => {
+      navGroup = g;
+      const last = navLast[g];
+      // back to a group: open the view last looked at there (a dataset is generated only when asked)
+      if (last && last !== navActive && last !== "dataset" && navGo[last]) { navActive = last; rebuildNav(navRoles); navGo[last](); }
+      else rebuildNav(navRoles);
+    });
+    tabs.appendChild(t);
+  }
+  const shown = el("div", "row tabpanel");
+  shown.setAttribute("role", "tabpanel");
+  shown.append(...groups[navGroup]);
+  navBox.replaceChildren(tabs, shown);
   if (navActive === "ctl") drawPropForm(); else if (propBox) propBox.replaceChildren();
 }
 const IDENT_NAV = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -2448,28 +2508,72 @@ function drawWalk(body) {
 // for the project picked beside it, LeanFM by default. Every stage comes from project_view, read-only,
 // through the same one-call-at-a-time rule as the editor. The chat stage has no input: the
 // conversation happens in the agent (Claude Desktop, Claude Code, Codex), not here.
-const NAV_TOOL = "project_view", STAGES = ["chat", "book", "requirements", "code"], MAX_ROWS = 2000;
-const nav = { project: "LeanFM", projects: ["LeanFM"], stage: null, page: 1, dark: true, codeOpen: new Set(), code: null };
+const NAV_TOOL = "project_view", STAGES = ["chat", "book", "requirements", "impl", "code"], MAX_ROWS = 2000;
+// what the bar offers, in the project's own order: its book, its specification, the picked
+// implementation's mapping and that implementation's code (chat stays with the agent)
+const NAV_BUTTONS = [["book", "book"], ["spec", "requirements"], ["impl", "impl"], ["code", "code"]];
+const nav = { project: "LeanFM", projects: ["LeanFM"], impl: null, impls: [], stage: null, page: 1, dark: true, codeOpen: new Set(), code: null,
+  // the spec stage lands in the explorer on the specification's primary protocol; the index (its
+  // files, protocols and derived sections) is one click away on the row under the bar
+  specView: "explore", primary: null };
 const stageBar = el("nav", "stagenav");
 stageBar.setAttribute("aria-label", "Distillation chain");
 app.insertBefore ? app.insertBefore(stageBar, app.firstChild) : app.appendChild(stageBar);
 function drawStageBar() {
-  const chain = el("div", "chain");
-  STAGES.forEach((st, i) => {
-    if (i) chain.appendChild(el("span", "arrow", "→"));
-    const b = el("button", nav.stage === st ? "on" : "", st);
-    b.setAttribute("aria-label", "Show the " + st + " stage of " + nav.project);
-    b.addEventListener("click", () => openStage(st, {}));
+  const chain = el("div", "chain tabs");
+  chain.setAttribute("role", "tablist");
+  chain.setAttribute("aria-label", "Stages of " + nav.project);
+  for (const [label, st] of NAV_BUTTONS) {
+    const b = el("button", "tab" + (nav.stage === st ? " on" : ""), label);
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", nav.stage === st ? "true" : "false");
+    b.setAttribute("aria-label", "Show the " + label + " of " + nav.project);
+    b.addEventListener("click", () => { if (st === "requirements") nav.specView = "explore"; openStage(st, {}); });
     chain.appendChild(b);
-  });
+  }
+  // only on the spec stage: the explorer of the primary protocol, or the specification's index
+  let sub = null;
+  if (nav.stage === "requirements") {
+    sub = el("div", "chain specrow tabs");
+    sub.setAttribute("role", "tablist");
+    sub.setAttribute("aria-label", "The specification: explorer or index");
+    if (nav.primary) {
+      const x = el("button", "tab" + (nav.specView === "explore" ? " on" : ""), "explorer · " + nav.primary.split("/").pop());
+      x.setAttribute("role", "tab");
+      x.setAttribute("aria-selected", nav.specView === "explore" ? "true" : "false");
+      x.setAttribute("aria-label", "Open " + nav.primary + " in the explorer: tree, diagram, animation");
+      x.addEventListener("click", () => { nav.specView = "explore"; openProtocol(nav.primary); });
+      sub.appendChild(x);
+    }
+    const ix = el("button", "tab" + (nav.specView === "index" ? " on" : ""), "files & sections");
+    ix.setAttribute("role", "tab");
+    ix.setAttribute("aria-selected", nav.specView === "index" ? "true" : "false");
+    ix.setAttribute("aria-label", "Show the specification's files, protocols and derived sections");
+    ix.addEventListener("click", () => { nav.specView = "index"; openStage("requirements", {}); });
+    sub.appendChild(ix);
+  }
+  const picks = el("div", "picks");
   const label = el("label", "", "project");
   const pick = el("select");
   pick.setAttribute("aria-label", "Project");
   for (const name of nav.projects) { const o = el("option", "", name); o.value = name; if (name === nav.project) o.selected = true; pick.appendChild(o); }
   pick.value = nav.project;
-  pick.addEventListener("change", () => { nav.project = String(pick.value); nav.page = 1; nav.codeOpen = new Set(); nav.code = null; openStage(nav.stage || "chat", {}); });
+  pick.addEventListener("change", () => { nav.project = String(pick.value); nav.primary = null; nav.specView = "explore"; nav.impl = null; nav.impls = []; nav.page = 1; nav.codeOpen = new Set(); nav.code = null; openStage(nav.stage || "chat", {}); });
   label.appendChild(pick);
-  stageBar.replaceChildren(chain, label);
+  picks.appendChild(label);
+  // a project with several implementations of its one specification: the implementation-dependent
+  // stage (code) shows the one picked here, the manifest's default until another is picked
+  if (nav.impls.length > 1) {
+    const ilabel = el("label", "", "implementation");
+    const ipick = el("select");
+    ipick.setAttribute("aria-label", "Implementation");
+    for (const name of nav.impls) { const o = el("option", "", name); o.value = name; if (name === nav.impl) o.selected = true; ipick.appendChild(o); }
+    if (nav.impl) ipick.value = nav.impl;
+    ipick.addEventListener("change", () => { nav.impl = String(ipick.value); nav.codeOpen = new Set(); nav.code = null; if (nav.stage === "code" || nav.stage === "impl") openStage(nav.stage, {}); else drawStageBar(); });
+    ilabel.appendChild(ipick);
+    picks.appendChild(ilabel);
+  }
+  if (sub) stageBar.replaceChildren(picks, chain, sub); else stageBar.replaceChildren(picks, chain);
 }
 drawStageBar();
 async function navCall(args, quiet) {
@@ -2493,6 +2597,7 @@ function openStage(stage, extra) {
   if (!STAGES.includes(stage)) return;
   nav.stage = stage; drawStageBar();
   const args = { project: nav.project, stage };
+  if ((stage === "code" || stage === "impl") && nav.impl && nav.impls.includes(nav.impl)) args.impl = nav.impl;
   if (stage === "book") { args.page = nav.page; args.theme = nav.dark ? "dark" : "light"; }
   if (extra && typeof extra.file === "string") args.file = extra.file;
   if (extra && typeof extra.section === "string") args.section = extra.section;
@@ -2509,9 +2614,15 @@ function stageHead(body, what) {
   return head;
 }
 function stageView(body) {
-  anim = null;
   if (Array.isArray(body.projects) && body.projects.length) nav.projects = body.projects.slice(0, 200).map(String);
+  // the project list asked for at start-up must not undo a stage already shown (a host or the
+  // standalone page may deliver that stage first): it only refreshes the list of projects
+  if (!STAGES.includes(body.stage) && nav.stage !== null) { drawStageBar(); return; }
+  anim = null;
   if (typeof body.project === "string") nav.project = body.project;
+  if (Array.isArray(body.implementations)) nav.impls = body.implementations.slice(0, 16).map(String);
+  if (typeof body.implementation === "string" && nav.impls.includes(body.implementation)) nav.impl = body.implementation;
+  else if (!nav.impls.includes(nav.impl)) nav.impl = null;
   if (STAGES.includes(body.stage)) nav.stage = body.stage;
   drawStageBar();
   if (!STAGES.includes(body.stage)) { reportSize(); return; }
@@ -2519,10 +2630,16 @@ function stageView(body) {
   if (timer) { clearTimeout(timer); timer = null; }
   text = null; editStatus = null;
   editorBox.replaceChildren(); walkBox.replaceChildren();
+  const overview = body.stage === "requirements" && Array.isArray(body.sections);
+  if (overview) nav.primary = typeof body.primary === "string" && body.primary ? body.primary : null;
+  if (overview && !nav.primary) nav.specView = "index";
+  drawStageBar();
   const parts = body.stage === "chat" ? chatStage(body) : body.stage === "book" ? bookStage(body)
-    : body.stage === "requirements" ? requirementsStage(body) : codeStage(body);
+    : body.stage === "requirements" ? requirementsStage(body) : body.stage === "impl" ? implStage(body) : codeStage(body);
   results.replaceChildren(...parts);
   reportSize();
+  // entering the spec stage lands in the explorer: the index just drawn stays if the protocol fails
+  if (overview && nav.primary && nav.specView === "explore") openProtocol(nav.primary);
 }
 function chatStage(body) {
   const parts = [stageHead(body, "chat")];
@@ -2574,18 +2691,82 @@ function bookStage(body) {
 }
 // requirements come a section at a time (the sections and their counts first) and a page at a time,
 // so no answer outgrows the host's limit; a task's row opens its transitions, properties or where_
+// a page of a file's text with first, previous and next page buttons
+function textPanel(title, sel, again) {
+  const off = num(sel.offset), total = num(sel.total);
+  const box = el("div");
+  box.appendChild(el("pre", "filetext", String(sel.text || "")));
+  const pager = el("div", "controls");
+  pager.appendChild(el("span", "pos", total ? `characters ${off + 1} to ${Math.min(total, off + String(sel.text || "").length)} of ${total}` : "empty"));
+  if (off > 0) { const b = el("button", "", "First page"); b.addEventListener("click", () => again(0)); pager.appendChild(b); }
+  if (Number.isInteger(sel.next)) { const b = el("button", "", "Next page ▶"); b.addEventListener("click", () => again(sel.next)); pager.appendChild(b); }
+  box.appendChild(pager);
+  return panel(title, box);
+}
+// the implementation mapping: the picked implementation's Implementation.lean, with its check
+// against the one specification and the errors the check listed (a port's to-do list)
+function implStage(body) {
+  const impl = typeof body.implementation === "string" ? body.implementation : null;
+  const parts = [stageHead(body, impl ? "impl · " + impl : "impl")];
+  if (body.found === false) { parts.push(el("p", "meta", "No implementation mapping file " + String(body.file || "") + " yet.")); return parts; }
+  const ck = body.check && typeof body.check === "object" ? body.check : null;
+  if (ck) {
+    const ok = ck.status === "validated";
+    const line = el("p", "meta", (impl || "default") + (impl && impl === body.defaultImplementation ? " (default)" : "") + ": " + String(ck.status) +
+      (typeof ck.target === "string" ? ", target " + ck.target : "") + ", " + num(ck.errors) + " errors against the one specification (" + String(ck.file || "") + ")");
+    line.appendChild(el("span", "badge " + (ok ? "ok" : "issues"), ok ? "validated" : String(ck.status)));
+    parts.push(line);
+    const errs = Array.isArray(ck.errorList) ? ck.errorList.slice(0, MAX_ITEMS) : [];
+    if (errs.length) {
+      const ul = el("ul");
+      for (const e of errs) ul.appendChild(el("li", "", String(e)));
+      parts.push(panel("What the check found (" + num(ck.errors) + ")", ul));
+    }
+  }
+  const sel = body.selected && typeof body.selected === "object" ? body.selected : null;
+  if (sel) parts.push(textPanel(String(body.file || "mapping"), sel, (o) => openStage("impl", { offset: o })));
+  return parts;
+}
 function requirementsStage(body) {
-  const parts = [stageHead(body, "requirements")];
+  const parts = [stageHead(body, "spec")];
   const crumbs = el("div", "controls");
-  const toSections = el("button", body.section ? "" : "on", "Sections");
-  toSections.addEventListener("click", () => openStage("requirements", {}));
+  const toSections = el("button", body.section || body.selected ? "" : "on", "Index");
+  toSections.addEventListener("click", () => { nav.specView = "index"; openStage("requirements", {}); });
   crumbs.appendChild(toSections);
   if (typeof body.task === "string") {
     const t = el("button", "", "Tasks"); t.addEventListener("click", () => openStage("requirements", { section: "tasks" })); crumbs.appendChild(t);
   }
   parts.push(crumbs);
   if (typeof body.lean === "string") { parts.push(panel(String(body.file || "protocol"), el("pre", "filetext", body.lean))); return parts; }
+  if (body.selected && typeof body.selected === "object") {
+    const f = String(body.file || "");
+    parts.push(textPanel(f, body.selected, (o) => openStage("requirements", { file: f, offset: o })));
+    return parts;
+  }
   if (Array.isArray(body.sections)) {
+    // the specification's files and protocols first: one click to their text or their tree
+    const files = Array.isArray(body.files) ? body.files.slice(0, MAX_ITEMS).map(String) : [];
+    const protos = Array.isArray(body.protocolFiles) ? body.protocolFiles.slice(0, MAX_ITEMS).map(String) : [];
+    if (files.length || protos.length) {
+      const flist = el("div", "ftree");
+      for (const f of files) {
+        const row = el("div", "frow"); row.tabIndex = 0;
+        row.append(el("span", "fmark", "¶"), el("span", "fname", f), el("span", "fkind", "read the text"));
+        const go = () => openStage("requirements", { file: f });
+        row.addEventListener("click", go);
+        row.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
+        flist.appendChild(row);
+      }
+      for (const f of protos) {
+        const row = el("div", "frow"); row.tabIndex = 0;
+        row.append(el("span", "fmark", "§"), el("span", "fname", f), el("span", "fkind", "open: tree, diagram, animation"));
+        const go = () => openProtocol(f);
+        row.addEventListener("click", go);
+        row.addEventListener("keydown", (ev) => { if (ev.key === "Enter") go(); });
+        flist.appendChild(row);
+      }
+      parts.push(panel("The specification of " + String(body.project || nav.project), flist));
+    }
     const row = el("div", "controls");
     for (const x of body.sections.slice(0, MAX_ITEMS)) {
       const name = String((x && x.name) || ""), n = num(x && x.count);
@@ -2594,7 +2775,7 @@ function requirementsStage(body) {
       b.addEventListener("click", () => openStage("requirements", { section: name }));
       row.appendChild(b);
     }
-    parts.push(panel("Sections of " + String(body.file || "the requirements"), row));
+    parts.push(panel("Derived from " + String(body.file || "the requirements") + ": tasks with their state machines and CTL, clauses, every protocol", row));
     return parts;
   }
   const pg = body.page && typeof body.page === "object" ? body.page : {};
@@ -2658,15 +2839,24 @@ async function openProtocol(file) {
     const result = await rpc("tools/call", { name: "session_explore", arguments: { project: nav.project, file } }, 30000);
     const sbody = result && result.structuredContent;
     if (result && result.isError) status(file + ": " + String((sbody && sbody.reason) || "LeanFM refused the protocol."), true);
-    else { nav.stage = "requirements"; drawStageBar(); show(result); say(file + " is open: Whole protocol draws its interaction diagram, Animate plays its event stream.", "good"); }
+    else { nav.stage = "requirements"; nav.specView = file === nav.primary ? "explore" : "index"; drawStageBar(); show(result); say(file + " is open: Whole protocol draws its interaction diagram, Animate plays its event stream.", "good"); }
   } catch (e) { status("session_explore failed: " + String((e && e.message) || e), true); }
   finally { inFlight = false; }
 }
 // the source tree comes a page of files at a time: the view asks for each next page in turn (at most
 // MAX_ROWS files) and keeps the listing; a picked file's text comes a page at a time too
 function codeStage(body) {
-  const parts = [stageHead(body, "code")];
-  const project = String(body.project || nav.project);
+  const impl = typeof body.implementation === "string" ? body.implementation : null;
+  const parts = [stageHead(body, impl ? "code · " + impl : "code")];
+  if (impl && body.check && typeof body.check === "object") {
+    const ck = body.check, ok = ck.status === "validated";
+    const line = el("p", "meta", impl + (impl === body.defaultImplementation ? " (default)" : "") + ": " + String(ck.status) +
+      (typeof ck.target === "string" ? ", target " + ck.target : "") + (num(ck.errors) ? ", " + num(ck.errors) + " unbound actors or messages" : "") +
+      " against the one specification (" + String(ck.file || "") + ")");
+    line.appendChild(el("span", "badge " + (ok ? "ok" : "issues"), ok ? "validated" : String(ck.status)));
+    parts.push(line);
+  }
+  const project = String(body.project || nav.project) + (impl ? "#" + impl : "");
   if (body.page && typeof body.page === "object") {
     const pg = body.page, got = (Array.isArray(pg.items) ? pg.items : []).filter((f) => f && typeof f.path === "string");
     if (num(pg.offset) > 0 && nav.code && nav.code.project === project) nav.code.files = nav.code.files.concat(got).slice(0, MAX_ROWS);
@@ -2675,7 +2865,9 @@ function codeStage(body) {
     nav.code.total = num(pg.total); nav.code.cut = !!body.filesCut;
     if (nav.code.next !== null && nav.code.files.length < MAX_ROWS) {
       const at = nav.code.next;
-      setTimeout(() => navCall({ project, stage: "code", offset: at }, true).then((b) => { if (b && b.stage === "code" && nav.stage === "code") stageView(b); }), 0);
+      const more = { project: String(body.project || nav.project), stage: "code", offset: at };
+      if (impl) more.impl = impl;
+      setTimeout(() => navCall(more, true).then((b) => { if (b && b.stage === "code" && nav.stage === "code") stageView(b); }), 0);
     }
   }
   if (body.selected && typeof body.selected === "object") {

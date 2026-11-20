@@ -12,8 +12,23 @@ open Lean
 def sessionViewUri : String := "ui://leanfm/session-view"
 def sessionViewHtml : String := include_str "SessionView.html"
 
+/-- The session view in a whole browser window (clause selfhost.mcp.session.standalone): a host page
+served by make serve at /view that frames the view (served at /view/app) with scripts only, answers
+its MCP Apps handshake as a full-screen host, forwards its tools/call to /mcp for the view's tools only,
+and opens on project_view for the project, stage and impl in the address. -/
+def sessionHostHtml : String := include_str "SessionHost.html"
+
+def sessionHostPolicy : String :=
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; frame-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'"
+
+def sessionAppPolicy : String :=
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+
 /-- The tools whose results the session view draws. -/
 def sessionViewTools : List String := ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_ctl", "session_compat", "session_actor", "session_dataset", "session_openapi", "session_types", "session_explore", "session_review", "session_sla", "session_instances", "session_skeleton", "project_view"]
+
+/-- The tools the standalone host page forwards: the ones the view draws, and session_next. -/
+def sessionHostTools : List String := sessionViewTools ++ ["session_next"]
 
 def sessionViewToolMeta : Json :=
   Json.mkObj [("ui", Json.mkObj [("resourceUri", sessionViewUri)])]

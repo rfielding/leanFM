@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from chatui_specification_fixture import REQUIREMENTS, PROTO
+from chatui_specification_fixture import REQUIREMENTS, PROTO, IMPLEMENTATION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -153,6 +153,72 @@ class Specification(unittest.TestCase):
     def test_prose_only_implementation_cannot_validate_as_typed_mapping(self):
         (self.root / "spec/Implementation.lean").write_text("-- Implement a server with bounded queues.\n")
         self.assertIn("unknown identifier", self.run_check(implementation="Fixture.implementation", ok=False).stderr.lower())
+
+
+    def write_implementations(self, implementations, default):
+        """implementations: name -> (Lean text or None, source directory)."""
+        listed = []
+        for name, (text, source) in implementations.items():
+            path = "impl/" + name + "/Implementation.lean"
+            if text is not None:
+                (self.root / "impl" / name).mkdir(parents=True, exist_ok=True)
+                (self.root / path).write_text(text)
+            listed.append({"name": name, "implementation": path, "source": source})
+        (self.root / "manifest.json").write_text(json.dumps({"implementations": listed, "default_implementation": default}))
+
+    def implementation_for(self, target, directory):
+        return IMPLEMENTATION.replace("target := .go", "target := ." + target).replace(
+            'outputDirectory := "source"', 'outputDirectory := "' + directory + '"')
+
+    def test_every_listed_implementation_is_checked_against_the_same_requirements(self):
+        self.write_implementations({"rust": (self.implementation_for("rust", "impl/rust/source"), "impl/rust/source/"),
+                                    "zig": (self.implementation_for("zig", "impl/zig/source"), "impl/zig/source/")}, "rust")
+        result = self.run_check(implementation="Fixture.implementation")
+        self.assertIn("implementation rust (default): validated, target rust", result.stdout)
+        self.assertIn("implementation zig: validated, target zig", result.stdout)
+        report = json.loads((self.root / "reports/specification-check/validation.json").read_text())
+        self.assertEqual(report["default_implementation"], "rust")
+        self.assertEqual(list(report["implementations"]), ["rust", "zig"])
+        self.assertEqual(report["implementations"]["zig"]["target"], "zig")
+        self.assertIn("impl/zig/Implementation.lean", report["artifacts"])
+
+    def test_a_port_in_progress_is_reported_but_never_blocks_the_specification(self):
+        broken = self.implementation_for("zig", "impl/zig/source").replace(
+            "spec.actors.map", "(spec.actors.filter (· != \"Client\")).map")
+        self.write_implementations({"rust": (self.implementation_for("rust", "impl/rust/source"), "impl/rust/source/"),
+                                    "zig": (broken, "impl/zig/source/"),
+                                    "mojo": ("def broken : Nat := false\n", "impl/mojo/source/")}, "rust")
+        result = self.run_check(implementation="Fixture.implementation")
+        report = json.loads((self.root / "reports/specification-check/validation.json").read_text())
+        self.assertEqual(report["implementations"]["zig"]["status"], "invalid")
+        self.assertIn("implementation has no actor binding: Client", report["implementations"]["zig"]["errors"])
+        self.assertEqual(report["implementations"]["mojo"]["status"], "does_not_compile")
+        self.assertIn("implementation zig: invalid", result.stdout)
+        self.assertTrue((self.root / "spec/tasks.json").is_file())
+
+    def test_the_default_implementation_must_validate_and_match_its_source(self):
+        self.run_check()
+        before = (self.root / "spec/tasks.json").read_bytes()
+        self.write_implementations({"rust": (self.implementation_for("rust", "impl/rust/source"), "impl/rust/source/"),
+                                    "zig": (self.implementation_for("zig", "impl/zig/source"), "impl/zig/source/")}, "zig")
+        (self.root / "impl/zig/Implementation.lean").write_text(self.implementation_for("zig", "source"))
+        self.assertIn("is not the manifest source", self.run_check(implementation="Fixture.implementation", ok=False).stderr)
+        self.assertEqual(before, (self.root / "spec/tasks.json").read_bytes())
+
+    def test_malformed_implementation_lists_are_refused(self):
+        good = self.implementation_for("rust", "impl/rust/source")
+        for listed, default in [([{"name": "Rust", "implementation": "impl/rust/Implementation.lean", "source": "impl/rust/source/"}], "Rust"),
+                                ([{"name": "rust", "implementation": "../Implementation.lean", "source": "impl/rust/source/"}], "rust"),
+                                ([{"name": "rust", "implementation": "impl/rust/Implementation.lean", "source": "../elsewhere"}], "rust"),
+                                ([{"name": "rust", "implementation": "impl/my-rust/Implementation.lean", "source": "impl/rust/source/"}], "rust"),
+                                ([{"name": "rust", "implementation": "impl/rust/Implementation.lean", "source": "impl/rust/source/"}], "zig"),
+                                ([{"name": "rust", "implementation": "impl/rust/Implementation.lean", "source": "impl/rust/source/"}] * 2, "rust"),
+                                ([], "rust")]:
+            with self.subTest(listed=listed, default=default):
+                (self.root / "impl/rust").mkdir(parents=True, exist_ok=True)
+                (self.root / "impl/rust/Implementation.lean").write_text(good)
+                (self.root / "manifest.json").write_text(json.dumps({"implementations": listed, "default_implementation": default}))
+                self.run_check(implementation="Fixture.implementation", ok=False)
 
 
 if __name__ == "__main__":

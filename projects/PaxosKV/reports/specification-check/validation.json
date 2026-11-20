@@ -2,6 +2,18 @@
   "status": "validated",
   "requirement": "Project.Requirements.requirements",
   "implementation": "Project.Implementation.implementation",
+  "default_implementation": "default",
+  "implementations": {
+    "default": {
+      "implementation": "spec/Implementation.lean",
+      "source": "source/",
+      "module": "spec.Implementation",
+      "default": true,
+      "status": "validated",
+      "target": "go",
+      "errors": []
+    }
+  },
   "prompt": "Make the selected project's current specification usable in ChatUI",
   "question": "Does the canonical typed specification validate and yield its own task views?",
   "event_source": "spec/Requirements.lean and spec/Requirements.proto",

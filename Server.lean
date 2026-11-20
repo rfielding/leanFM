@@ -460,7 +460,13 @@ def responseForRequest (request : String) : IO Response := do
       return byteResponse preview.status preview.contentType (preview.bodyBytes.getD preview.body.toUTF8) preview.headers
   if path != "/health" && !(← LeanFM.ChatUI.Server.admittedWorkspaceRequest method request) then
     return response 403 "application/json; charset=utf-8" "{\"error\":\"The request Host or Origin is not admitted.\"}\n"
-  if path == "/mcp" then
+  if method == "GET" && (path == "/view" || path == "/view/") then
+    pure <| response 200 "text/html; charset=utf-8" LeanFM.MCP.sessionHostHtml
+      ["Content-Security-Policy: " ++ LeanFM.MCP.sessionHostPolicy, "Cache-Control: no-store", "X-Content-Type-Options: nosniff"]
+  else if method == "GET" && path == "/view/app" then
+    pure <| response 200 "text/html; charset=utf-8" LeanFM.MCP.sessionViewHtml
+      ["Content-Security-Policy: " ++ LeanFM.MCP.sessionAppPolicy, "Cache-Control: no-store", "X-Content-Type-Options: nosniff"]
+  else if path == "/mcp" then
     if method == "POST" then
       let mcpResponse ← LeanFM.MCP.dispatch (requestBody request)
       pure <| response mcpResponse.status "application/json; charset=utf-8" mcpResponse.body

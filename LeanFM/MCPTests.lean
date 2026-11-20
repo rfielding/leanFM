@@ -33,7 +33,11 @@ def projectViewResults : IO Json := do
       ("properties", ← pv [("stage", "requirements"), ("section", "properties"), ("task", "selfhost_workflow")]),
       ("transitions", ← pv [("stage", "requirements"), ("section", "transitions"), ("task", "selfhost_workflow")])]),
     ("protocol", ← pv [("stage", "requirements"), ("file", firstProtocol)]),
-    ("code", Json.arr codePages), ("codeFile", ← pv [("stage", "code"), ("file", "LeanFM/ProjectView.lean")])]
+    ("specFile", ← pv [("stage", "requirements"), ("file", "LeanFM/LLMGenerated/SelfHosting.lean")]),
+    ("impl", ← pv [("stage", "impl")]),
+    ("code", Json.arr codePages), ("codeFile", ← pv [("stage", "code"), ("file", "LeanFM/ProjectView.lean")]),
+    ("maqam", Json.mkObj [("rust", ← pv [("project", "Maqam"), ("stage", "code")]),
+      ("zig", ← pv [("project", "Maqam"), ("stage", "code"), ("impl", "zig")])])]
 
 /-- project_view is unlisted and refused while the switch is off, as server_logs is. -/
 def projectViewOffTests (offList : String) : IO Unit := do
@@ -188,6 +192,46 @@ def projectViewTests : IO Unit := do
   expect "project_view requirements refuses a file that is not a listed protocol" (badProto.contains "file must be one of")
   let gfile ← pvCall "{\"project\":\"GoServer\",\"stage\":\"code\",\"file\":\"source/server.go\"}"
   expect "project_view code for GoServer shows a file with its traceability" (gfile.contains "\"selected\"" && gfile.contains "grammar:create_room")
+  -- several implementations of one specification (clause selfhost.project.implementations)
+  let mlist ← pvCall "{\"project\":\"Maqam\"}"
+  expect "project_view lists Maqam's implementations and its default in every answer"
+    (mlist.contains "\"implementations\":[\"rust\",\"zig\"]" && mlist.contains "\"defaultImplementation\":\"rust\"")
+  let mrust ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\"}"
+  expect "project_view code for Maqam shows the default implementation's source"
+    (mrust.contains "\"implementation\":\"rust\"" && mrust.contains "\"root\":\"impl/rust/source\"" && mrust.contains "impl/rust/source/src/audio.rs" && !mrust.contains "impl/zig/")
+  let mzig ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"zig\"}"
+  expect "project_view code with impl zig shows only the Zig source, its mapping and its check"
+    (mzig.contains "\"implementation\":\"zig\"" && mzig.contains "impl/zig/source/README.md" && !mzig.contains "impl/rust/" &&
+      mzig.contains "\"mapping\":\"impl/zig/Implementation.lean\"" && mzig.contains "\"check\":{")
+  let crossed ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"zig\",\"file\":\"impl/rust/source/src/audio.rs\"}"
+  expect "project_view code refuses another implementation's file" (crossed.contains "file must be one of")
+  let mspec ← pvCall "{\"project\":\"Maqam\",\"stage\":\"requirements\"}"
+  expect "the spec overview names Maqam's specification files and protocols directly"
+    (mspec.contains "\"files\":[\"spec/Requirements.lean\",\"spec/Requirements.proto\"]" && mspec.contains "spec/Maqam.leanfm")
+  expect "the spec overview names Maqam's primary protocol, which the spec stage opens in the explorer"
+    (mspec.contains "\"primary\":\"spec/Maqam.leanfm\"")
+  let lspec ← pvCall "{\"stage\":\"requirements\"}"
+  expect "LeanFM's spec overview names LeanFM.leanfm as its primary protocol"
+    (lspec.contains "\"primary\":\"LeanFM/LLMGenerated/LeanFM.leanfm\"")
+  let pspec ← pvCall "{\"project\":\"PaxosKV\",\"stage\":\"requirements\"}"
+  expect "a project without protocol files names no primary protocol, so its spec stage opens on the index"
+    (pspec.contains "\"primary\":null")
+  let mbook ← pvCall "{\"project\":\"Maqam\",\"stage\":\"book\"}"
+  expect "a book whose PDF and source are both missing says it has not been written, not that it needs building"
+    (mbook.contains "\"found\":false" && mbook.contains "\"written\":false" && mbook.contains "has not been written" && !mbook.contains "make book")
+  let mreq ← pvCall "{\"project\":\"Maqam\",\"stage\":\"requirements\",\"file\":\"spec/Requirements.lean\"}"
+  expect "the spec stage shows Requirements.lean's text a page at a time" (mreq.contains "\"selected\"" && mreq.contains "Observable hooks every implementation provides")
+  let mimpl ← pvCall "{\"project\":\"Maqam\",\"stage\":\"impl\",\"impl\":\"zig\"}"
+  expect "the impl stage shows the picked implementation's mapping and every error its check found"
+    (mimpl.contains "\"file\":\"impl/zig/Implementation.lean\"" && mimpl.contains "\"errorList\":[" && mimpl.contains "implementation has no actor binding: Performer")
+  let mimplR ← pvCall "{\"project\":\"Maqam\",\"stage\":\"impl\"}"
+  expect "the impl stage defaults to the default implementation" (mimplR.contains "\"file\":\"impl/rust/Implementation.lean\"" && mimplR.contains "\"status\":\"validated\"")
+  let badSpec ← pvCall "{\"project\":\"Maqam\",\"stage\":\"requirements\",\"file\":\"impl/rust/source/src/audio.rs\"}"
+  expect "the spec stage refuses a file that is neither a spec file nor a protocol" (badSpec.contains "file must be one of")
+  let unknownImpl ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"cobol\"}"
+  expect "project_view refuses an implementation the manifest does not list" (unknownImpl.contains "impl must be one of rust, zig")
+  let noImpls ← pvCall "{\"project\":\"GoServer\",\"stage\":\"code\",\"impl\":\"rust\"}"
+  expect "project_view refuses impl for a project that lists no implementations" (noImpls.contains "lists no implementations")
   -- a symlink out of a project root is never read
   IO.FS.createDirAll ".cache/tests/pvroot"
   let link : System.FilePath := ".cache/tests/pvroot/escape"
@@ -433,6 +477,23 @@ def main : IO Unit := do
   if smoke.exitCode != 0 then
     throw <| IO.userError s!"MCP session view fails when driven:\n{smoke.stdout}{smoke.stderr}"
   IO.println s!"ok: MCP session view runs every session tool's result, the walk-through and the animation ({(smoke.stdout.splitOn "\n").length - 1} checks)"
+  -- the view in a whole browser window (clause selfhost.mcp.session.standalone)
+  let expect (label : String) (ok : Bool) : IO Unit :=
+    if ok then IO.println s!"ok: {label}" else throw <| IO.userError s!"failed: {label}"
+  let host := LeanFM.MCP.sessionHostHtml
+  expect "the standalone page frames the view with scripts only" (host.contains "sandbox=\"allow-scripts\" src=\"/view/app\"")
+  expect "the standalone page forwards tool calls to this server's /mcp" (host.contains "fetch(\"/mcp\"")
+  expect "the standalone page offers only full screen" (host.contains "availableDisplayModes: [\"fullscreen\"]")
+  let hostListed := ((host.splitOn "const VIEW_TOOLS = [").getD 1 "").splitOn "];" |>.headD ""
+  let hostNames : List String := (hostListed.splitOn "\"").zipIdx.filterMap (fun (x, i) => if i % 2 == 1 then some x else none)
+  expect "the standalone page forwards exactly the view's tools and session_next"
+    (hostNames.length == LeanFM.MCP.sessionHostTools.length && LeanFM.MCP.sessionHostTools.all hostNames.contains)
+  for needle in ["http://", "https://", "innerHTML", "outerHTML", "eval(", "new Function", "allow-same-origin"] do
+    if host.contains needle then throw <| IO.userError s!"standalone session page: forbidden text {needle}"
+  IO.FS.writeFile ".cache/tests/session-host.js" (((host.splitOn "<script>").getD 1 "").splitOn "</script>" |>.headD "")
+  let hostCheck ← IO.Process.output { cmd := "node", args := #["--check", ".cache/tests/session-host.js"] }
+  if hostCheck.exitCode != 0 then throw <| IO.userError s!"standalone session page script does not parse:\n{hostCheck.stderr}"
+  IO.println "ok: the standalone session page's script parses"
   let sbare := shtml.replace "http://www.w3.org/2000/svg" ""
   for needle in ["http://", "https://", "src=", "href=", "fetch(", "XMLHttpRequest", "WebSocket", "EventSource",
       "import(", "innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function",

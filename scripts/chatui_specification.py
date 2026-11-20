@@ -3,7 +3,16 @@
 
 Requirement refs: web_ui_replaces_external_coding_session,
 chat_layers_mutate_only_their_artifacts, diagram_is_task_local,
-selected_project_context_drives_chat, feature_completion_pairs_positive_and_negative_invariants.
+selected_project_context_drives_chat, feature_completion_pairs_positive_and_negative_invariants,
+clause:selfhost.project.implementations.
+
+A project may carry several implementations of one specification. manifest.json lists them as
+"implementations": [{"name", "implementation", "source"}] with "default_implementation"; without
+that list the project has one implementation, "default", in spec/Implementation.lean. Every
+implementation is checked against the same RequirementSpec, one at a time in its own driver, so
+each may declare the same namespace. Only the default implementation can fail the check: another
+implementation's errors are recorded in the report, so a port in progress never blocks the
+specification or its views.
 """
 import fcntl
 import hashlib
@@ -19,6 +28,9 @@ import tempfile
 
 INSTALLATION = Path(__file__).resolve().parents[1]
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*\Z")
+IMPLEMENTATION_NAME = re.compile(r"[a-z][a-z0-9_]{0,31}\Z")
+MODULE_PART = re.compile(r"[A-Za-z_][A-Za-z_0-9]*\Z")
+MAX_IMPLEMENTATIONS = 8
 
 
 class CheckerUnavailable(ValueError):
@@ -61,6 +73,58 @@ def atomic(path, body):
         temporary.unlink(missing_ok=True)
 
 
+def implementation_entries(root, implementation):
+    """The project's implementations, default first: [{name, implementation, source, module, default}]."""
+    if not implementation:
+        return []
+    manifest_path = confined(root, "manifest.json")
+    manifest = {}
+    if manifest_path.is_file():
+        if manifest_path.stat().st_size > 1_000_000:
+            raise ValueError("oversized manifest.json")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest.json must be an object")
+    listed = manifest.get("implementations")
+    if listed is None:
+        listed = [{"name": "default", "implementation": "spec/Implementation.lean",
+                   "source": manifest.get("source", "source/")}]
+        default = "default"
+    else:
+        default = manifest.get("default_implementation")
+        if not isinstance(listed, list) or not listed or len(listed) > MAX_IMPLEMENTATIONS:
+            raise ValueError("manifest implementations must list 1 to " + str(MAX_IMPLEMENTATIONS) + " implementations")
+    entries = []
+    for item in listed:
+        if not isinstance(item, dict) or set(item) - {"name", "implementation", "source"}:
+            raise ValueError("an implementation is {name, implementation, source}")
+        name, path, source = item.get("name"), item.get("implementation"), item.get("source")
+        if not isinstance(name, str) or not IMPLEMENTATION_NAME.fullmatch(name):
+            raise ValueError("implementation name must match [a-z][a-z0-9_]*: " + repr(name))
+        if not isinstance(path, str) or not isinstance(source, str) or not path.endswith(".lean"):
+            raise ValueError("implementation " + name + " needs an implementation .lean path and a source directory")
+        parts = Path(path).with_suffix("").parts
+        if not parts or any(not MODULE_PART.fullmatch(part) for part in parts) or parts[0] in {"source", "reports"}:
+            raise ValueError("implementation " + name + ": every path component must be a Lean identifier: " + path)
+        confined(root, path)
+        confined(root, source)
+        entries.append({"name": name, "implementation": path, "source": source,
+                        "module": ".".join(parts), "default": name == default})
+    names = [entry["name"] for entry in entries]
+    modules = [entry["module"] for entry in entries]
+    if len(set(names)) != len(names) or len(set(modules)) != len(modules):
+        raise ValueError("implementation names and files must be distinct")
+    if default not in names:
+        raise ValueError("default_implementation must name a listed implementation")
+    if "spec.Requirements" in modules:
+        raise ValueError("an implementation cannot be spec/Requirements.lean")
+    return sorted(entries, key=lambda entry: not entry["default"])
+
+
+def same_directory(left, right):
+    return left.strip().strip("/") == right.strip().strip("/")
+
+
 def check(root_name, requirement, implementation="", constraints=""):
     for value in [requirement, implementation, constraints]:
         if value and not IDENTIFIER.fullmatch(value):
@@ -77,8 +141,9 @@ def check(root_name, requirement, implementation="", constraints=""):
     book = confined(root, "book/main.tex")
     if book.is_file():
         inputs.append(book)
-    if implementation:
-        inputs.append(confined(root, "spec/Implementation.lean"))
+    entries = implementation_entries(root, implementation)
+    for entry in entries:
+        inputs.append(confined(root, entry["implementation"]))
     for path in inputs:
         if not path.is_file() or path.stat().st_size > 2_000_000:
             raise ValueError("missing or oversized canonical input: " + path.name)
@@ -140,16 +205,10 @@ def check(root_name, requirement, implementation="", constraints=""):
 
             atomic(log_path, "Canonical project specification check\n")
             run(["-R", "/work", "/work/spec/Requirements.lean", "-o", sandbox_scratch + "/spec/Requirements.olean"], "requirements")
-            if implementation:
-                run(["-R", "/work", "/work/spec/Implementation.lean", "-o", sandbox_scratch + "/spec/Implementation.olean"], "implementation")
             driver = "import spec.Requirements\nimport LeanFM.ChatUI.Server\n"
-            if implementation:
-                driver += "import spec.Implementation\n"
             driver += "def main : IO Unit := do\n  let requirements : LeanFM.RequirementSpec := " + requirement + "\n"
             driver += "  let errors := LeanFM.validateRequirementSpec requirements\n"
             driver += '    ++ LeanFM.validateRequirementProtoFile requirements (include_str "/work/spec/Requirements.proto")\n'
-            if implementation:
-                driver += "    ++ LeanFM.validateImplementationSpec requirements " + implementation + "\n"
             driver += '  unless errors.isEmpty do\n    throw (IO.userError (LeanFM.joinWithNewline errors))\n'
             driver += '  if requirements.tasks.isEmpty then throw (IO.userError "No task grammar has been specified")\n'
             driver += '  IO.println (LeanFM.ChatUI.Server.tasksJson "spec/Requirements.lean" requirements ' + (constraints or "[]") + ')\n'
@@ -160,9 +219,15 @@ def check(root_name, requirement, implementation="", constraints=""):
                 raise ValueError("derived catalog is empty or invalid")
             if any(not task.get("grammar") or "missing task grammar" in task.get("interaction_mermaid", "") for task in catalog["tasks"]):
                 raise ValueError("derived catalog contains a missing task grammar")
+            implementations = {}
+            for entry in entries:
+                implementations[entry["name"]] = check_implementation(
+                    entry, requirement, implementation, run, scratch, sandbox_scratch, len(entries) > 1 or entry["name"] != "default")
             if revisions != {str(path.relative_to(root)): digest(path) for path in inputs}:
                 raise ValueError("canonical inputs changed during validation; views were not promoted")
+            default_name = entries[0]["name"] if entries else None
             report = {"status": "validated", "requirement": requirement, "implementation": implementation or None,
+                      "default_implementation": default_name, "implementations": implementations,
                       "prompt": "Make the selected project's current specification usable in ChatUI",
                       "question": "Does the canonical typed specification validate and yield its own task views?",
                       "event_source": "spec/Requirements.lean and spec/Requirements.proto",
@@ -173,8 +238,51 @@ def check(root_name, requirement, implementation="", constraints=""):
             atomic(catalog_path, json.dumps(catalog, ensure_ascii=False) + "\n")
             atomic(report_path, json.dumps(report, indent=2) + "\n")
             print("ok: canonical project specification and " + str(len(catalog["tasks"])) + " generated task views")
+            for name, result in implementations.items():
+                line = "implementation " + name + (" (default)" if result["default"] else "") + ": " + result["status"]
+                if result.get("target"):
+                    line += ", target " + result["target"]
+                print(line)
+                for error in result.get("errors", [])[:20]:
+                    print("  " + error)
             print("Catalog: spec/tasks.json; evidence: reports/specification-check/validation.json")
             print("Acceptance unchanged. This is elaboration and structural validation, not a deployed-code proof.")
+
+
+def check_implementation(entry, requirement, implementation, run, scratch, sandbox_scratch, listed):
+    """Compile one implementation and validate it against the requirements in its own driver."""
+    name, module = entry["name"], entry["module"]
+    result = {"implementation": entry["implementation"], "source": entry["source"], "module": module,
+              "default": entry["default"], "status": "validated", "target": None, "errors": []}
+    olean = Path(*module.split(".")).with_suffix(".olean")
+    (scratch / olean).parent.mkdir(parents=True, exist_ok=True)
+    try:
+        run(["-R", "/work", "/work/" + entry["implementation"], "-o", sandbox_scratch + "/" + str(olean)],
+            "implementation" if name == "default" else "implementation-" + name)
+        driver = "import spec.Requirements\nimport LeanFM.Artifacts\nimport Lean.Data.Json\nimport " + module + "\n"
+        driver += "def main : IO Unit := do\n  let requirements : LeanFM.RequirementSpec := " + requirement + "\n"
+        driver += "  let implementation : LeanFM.ImplementationSpec := " + implementation + "\n"
+        driver += "  let errors := LeanFM.validateImplementationSpec requirements implementation\n"
+        driver += "  IO.println (Lean.Json.compress (Lean.Json.mkObj [(\"target\", Lean.toJson (toString (repr implementation.target))),"
+        driver += " (\"outputDirectory\", Lean.toJson implementation.outputDirectory), (\"errors\", Lean.toJson errors)]))\n"
+        (scratch / ("Implementation-" + name + ".lean")).write_text(driver)
+        output = run(["--run", sandbox_scratch + "/Implementation-" + name + ".lean"], "validate-" + name)
+        answer = json.loads(output.strip().splitlines()[-1])
+    except ValueError as error:
+        if entry["default"]:
+            raise
+        result.update(status="does_not_compile", errors=[str(error)[-4000:]])
+        return result
+    result["target"] = str(answer.get("target", "")).rsplit(".", 1)[-1]
+    errors = [str(error) for error in answer.get("errors", [])]
+    if listed and not same_directory(answer.get("outputDirectory", ""), entry["source"]):
+        errors.append("implementation outputDirectory " + repr(answer.get("outputDirectory")) +
+                      " is not the manifest source " + repr(entry["source"]))
+    if errors:
+        if entry["default"]:
+            raise ValueError("implementation " + name + " is invalid:\n" + "\n".join(errors))
+        result.update(status="invalid", errors=errors)
+    return result
 
 
 if __name__ == "__main__":

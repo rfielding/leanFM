@@ -354,7 +354,8 @@ def projectViewTool : Json :=
      "from the newest, or where the conversation happens), book (one page of its PDF as an image), requirements " ++
      "(without section, the sections and their counts; section tasks, clauses or protocols, or transitions, properties " ++
      "or constraints of one task, a page at a time from offset; with file, one protocol's text) or code (a page of its " ++
-     "source tree with traceability mappings; with file, a page of one file's text and its mappings). Every answer is " ++
+     "source tree with traceability mappings; with file, a page of one file's text and its mappings; for a project with several " ++
+     "implementations, impl picks which one, the default otherwise). Every answer is " ++
      s!"under {LeanFM.ProjectView.maxAnswerChars} characters; follow next or older for more. Without stage, only the project " ++
      "names. Projects: LeanFM (default) and each projects/ child with a manifest. Read-only.")
     (schema [("project", stringSchema "a project name from the list (default LeanFM)"),
@@ -366,7 +367,8 @@ def projectViewTool : Json :=
       ("section", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ProjectView.sections.map Json.str).toArray),
         ("description", Json.str "requirements: which section to page; transitions, properties and constraints need task")]),
       ("task", stringSchema "requirements: a task id from section tasks"),
-      ("offset", Json.mkObj [("type", "integer"), ("description", Json.str "the first item (or, for a file's text, character; for chat, messages back from the newest) of the page: the next or older value of the previous answer")])] [])
+      ("offset", Json.mkObj [("type", "integer"), ("description", Json.str "the first item (or, for a file's text, character; for chat, messages back from the newest) of the page: the next or older value of the previous answer")]),
+      ("impl", stringSchema "code: which of the project's implementations to show (its manifest lists them; default the manifest's default_implementation); every answer lists implementations")] [])
 
 /-- The tools listed on this host. -/
 def listedTools : IO (Array Json) := do

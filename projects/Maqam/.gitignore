@@ -11,8 +11,11 @@ book/*.toc
 book/*.synctex.gz
 book/main.pdf
 spec/*.probe.lean
-source/target/
-source/.nam/
-source/.tone3000-auth.json
-source/.globals.ml
-source/maqam-*.mp4
+impl/*/source/target/
+impl/*/source/.nam/
+impl/*/source/.tone3000-auth.json
+impl/*/source/.globals.ml
+impl/*/source/maqam-*.mp4
+impl/*/source/zig-out/
+impl/*/source/.zig-cache/
+reports/compare/*/

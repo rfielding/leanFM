@@ -404,6 +404,8 @@ inductive TargetLanguage where
   | go
   | rust
   | lean
+  | zig
+  | mojo
 deriving DecidableEq, Repr
 
 /-- Traceability from generated implementation material to a durable requirement. -/
@@ -1273,7 +1275,7 @@ def leanFMImplementationReference : String :=
     , ""
     , "## ImplementationSpec"
     , "ImplementationSpec { requirementId, target, moduleName, outputDirectory, actors, messages, channels }."
-    , "requirementId must equal the RequirementSpec id. TargetLanguage is go, rust, or lean. Filenames, packages, runtime APIs, and framework choices belong here rather than in Requirements.lean."
+    , "requirementId must equal the RequirementSpec id. TargetLanguage is go, rust, lean, zig or mojo. Filenames, packages, runtime APIs, and framework choices belong here rather than in Requirements.lean."
     , ""
     , "## ActorCodegen"
     , "ActorCodegen { actor, typeName, sourceFile, justifications }. Provide exactly one binding for every requirement actor and no unknown actors."

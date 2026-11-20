@@ -54,7 +54,7 @@ def textPageChars : Nat := 40000
 def renderTimeoutMs : Nat := 10000
 def cacheSize : Nat := 64
 
-def stages : List String := ["chat", "book", "requirements", "code"]
+def stages : List String := ["chat", "book", "requirements", "impl", "code"]
 
 def chatWhere : String :=
   "The conversation happens in the agent connected to this MCP server (Claude Desktop, Claude Code, Codex), " ++
@@ -109,6 +109,55 @@ def inside (p : Project) (rel : String) : IO (Option System.FilePath) := do
 
 def manifestPath (p : Project) (key fallback : String) : String :=
   (p.manifest.getObjValAs? String key).toOption.getD fallback
+
+/-! ## Implementations (clause selfhost.project.implementations)
+
+A project's manifest may list several implementations of its one specification; the code stage
+shows one of them at a time, the default unless the caller names another with impl. -/
+
+structure Impl where
+  name : String
+  /-- the implementation mapping, e.g. impl/rust/Implementation.lean -/
+  mapping : String
+  /-- the source directory, e.g. impl/rust/source/ -/
+  source : String
+deriving Repr
+
+def validImplName (n : String) : Bool :=
+  n.length ≥ 1 && n.length ≤ 32 && (n.toList.headD ' ').isLower &&
+    n.toList.all (fun c => c.isLower || c.isDigit || c == '_')
+
+/-- The listed implementations with a valid name and source, in manifest order; none for LeanFM
+or a project without the list. -/
+def implementationsOf (p : Project) : List Impl :=
+  if p.isLeanFM then [] else
+  match p.manifest.getObjVal? "implementations" with
+  | .ok (.arr xs) => xs.toList.filterMap fun x =>
+      match (x.getObjValAs? String "name").toOption, (x.getObjValAs? String "source").toOption with
+      | some name, some source =>
+        if validImplName name then
+          some { name, source, mapping := (x.getObjValAs? String "implementation").toOption.getD "" }
+        else none
+      | _, _ => none
+  | _ => []
+
+/-- The manifest's default_implementation when it is listed, else the first listed. -/
+def defaultImplementation (p : Project) : Option Impl :=
+  let xs := implementationsOf p
+  match (p.manifest.getObjValAs? String "default_implementation").toOption.bind (fun d => xs.find? (·.name == d)) with
+  | some i => some i
+  | none => xs.head?
+
+/-- The implementation an answer shows: the one named by impl, or the default. -/
+def chooseImplementation (p : Project) (arg : Option String) : Except String (Option Impl) :=
+  let xs := implementationsOf p
+  match arg with
+  | none => .ok (defaultImplementation p)
+  | some n =>
+    if xs.isEmpty then .error s!"{p.name} lists no implementations; impl is only for a project whose manifest lists them"
+    else match xs.find? (·.name == n) with
+      | some i => .ok (some i)
+      | none => .error s!"impl must be one of {", ".intercalate (xs.map (·.name))}"
 
 /-! ## Reading -/
 
@@ -290,8 +339,13 @@ def ladder : List (String × Array String) :=
 def book (p : Project) (page : Nat) (dark : Bool) : IO (Except String Json) := do
   let rel := if dark then manifestPath p "dark_book" "book/main-dark.pdf" else manifestPath p "book" "book/main.pdf"
   let some path ← inside p rel
-    | return .ok <| Json.mkObj [("stage", "book"), ("file", rel), ("found", false),
-        ("reason", s!"{p.name} has no {rel} (build the book with make book)")]
+    | do
+        -- a missing PDF whose source is missing too has not been written, not merely not built
+        let src := manifestPath p "book_source" "book/main.tex"
+        let written := (← inside p src).isSome
+        return .ok <| Json.mkObj [("stage", "book"), ("file", rel), ("found", false), ("source", src), ("written", written),
+          ("reason", if written then s!"{p.name} has no {rel} yet: build the book from {src} with make book"
+            else s!"{p.name} has no book: neither {rel} nor its source {src} exists, so the book has not been written yet")]
   let md ← path.metadata
   let stamp := s!"{path}|{md.modified.sec}.{md.modified.nsec}"
   let pages ← match ← cacheGet (stamp ++ "|pages") with
@@ -444,6 +498,36 @@ def taskSummary (t : Json) : Json :=
     ("states", t.getObjValD "states"), ("transitions", (arrOf t "transitions").size),
     ("properties", (arrOf t "properties").size), ("constraints", (arrOf t "constraints").size)]
 
+/-- The specification's own files, shown as text: LeanFM's self-hosting requirements and their
+protobuf; for a project, its manifest's requirements and protobuf files, when they exist. -/
+def specFiles (p : Project) : IO (List String) := do
+  let candidates := if p.isLeanFM then ["LeanFM/LLMGenerated/SelfHosting.lean", "LeanFM/LLMGenerated/SelfHosting.proto"]
+    else [manifestPath p "requirements" "spec/Requirements.lean", manifestPath p "protobuf" "spec/Requirements.proto"]
+  let mut out := []
+  for f in candidates do
+    if (← inside p f).isSome && !out.contains f then out := out ++ [f]
+  return out
+
+/-- A page of one file's text from a character offset: text, offset, total, next and cut. -/
+def textPage (p : Project) (f : String) (offset : Nat) : IO (Except String Json) := do
+  let some path ← inside p f | return .error "file must stay inside the project root"
+  let (bytes, over) ← headBytes path maxFileBytes
+  let chars := (decodeLossy bytes).toList
+  let text := String.ofList ((chars.drop offset).take textPageChars)
+  let next := offset + textPageChars
+  return .ok <| Json.mkObj [("path", f), ("text", text), ("offset", offset), ("total", chars.length),
+    ("next", if next < chars.length then toJson next else Json.null), ("cut", over)]
+
+/-- The specification's primary protocol, the one the spec stage opens in the explorer: for LeanFM
+its own protocol; for a project the manifest's protocol when listed, else the first listed protocol
+file under spec/, else the first listed; none without protocol files. -/
+def primaryProtocol (p : Project) (protocols : Array String) : Option String :=
+  let listed (f : String) : Option String := if protocols.contains f then some f else none
+  if p.isLeanFM then listed "LeanFM/LLMGenerated/LeanFM.leanfm" <|> protocols[0]?
+  else
+    ((p.manifest.getObjValAs? String "protocol").toOption.bind listed)
+      <|> protocols.find? (·.startsWith "spec/") <|> protocols[0]?
+
 /-- Without a section, the sections with their counts; with one, a page of its items from
 `offset`. transitions, properties and constraints are one task's, named by `task`. -/
 def requirements (p : Project) (sectionArg : Option String) (task : Option String) (offset : Nat) :
@@ -460,10 +544,17 @@ def requirements (p : Project) (sectionArg : Option String) (task : Option Strin
     extra.foldl (fun acc (k, v) => acc.setObjVal! k v)
       (head.setObjVal! "section" name |>.setObjVal! "page" pg)
   match sectionArg with
-  | none => return .ok <| head.setObjVal! "sections" (Json.arr #[
+  | none =>
+    -- the overview names the specification's files and its first protocols directly, so the
+    -- person reaches the text in one click; the long lists stay behind their sections
+    let files ← specFiles p
+    return .ok <| head.setObjVal! "sections" (Json.arr #[
       Json.mkObj [("name", "tasks"), ("count", tasks.size)],
       Json.mkObj [("name", "clauses"), ("count", clauses.size)],
       Json.mkObj [("name", "protocols"), ("count", protocols.size), ("cut", more)]])
+      |>.setObjVal! "files" (toJson files)
+      |>.setObjVal! "protocolFiles" (toJson (protocols.toList.take 20))
+      |>.setObjVal! "primary" (match primaryProtocol p protocols with | some f => Json.str f | none => Json.null)
   | some "tasks" => return .ok (paged "tasks" (tasks.map taskSummary))
   | some "clauses" => return .ok (paged "clauses" clauses)
   | some "protocols" => return .ok (paged "protocols" (protocols.map Json.str) [("protocolsCut", toJson more)])
@@ -504,14 +595,16 @@ def projectMappings (j : Json) : List Mapping :=
     { name := s!"mapping {i + 1}", requirements := strs m "requirements", files := strs m "files",
       symbols := strs m "symbols", tests := strs m "tests" }
 
-def sourceRoot (p : Project) : String :=
+def sourceRoot (p : Project) (impl : Option Impl := none) : String :=
   if p.isLeanFM then "" else
-    let s := manifestPath p "source" "source/"
+    let s := match impl with
+      | some i => i.source
+      | none => manifestPath p "source" "source/"
     if s.endsWith "/" then (s.dropEnd 1).toString else s
 
-def mappings (p : Project) : IO (String × List Mapping) := do
+def mappings (p : Project) (impl : Option Impl := none) : IO (String × List Mapping) := do
   if p.isLeanFM then return ("LeanFM/LLMGenerated/McpLogicImplementation.lean, LeanFM/LLMGenerated/SessionImplementation.lean", leanfmMappings)
-  let rel := (if (sourceRoot p).isEmpty then "" else sourceRoot p ++ "/") ++ "traceability.json"
+  let rel := (if (sourceRoot p impl).isEmpty then "" else sourceRoot p impl ++ "/") ++ "traceability.json"
   let some path ← inside p rel | return (rel, [])
   let (bytes, over) ← headBytes path maxReadBytes
   if over then return (rel, [])
@@ -522,12 +615,50 @@ def mappings (p : Project) : IO (String × List Mapping) := do
 /-- The source files a page at a time, each with the indices of the mappings that name it, and
 the mappings by name and requirements; with `file`, a page of that file's text and its full
 mappings instead of the listing. -/
-def code (p : Project) (file : Option String) (offset : Nat) : IO (Except String Json) := do
-  let (files, more) ← walk p (sourceRoot p) sourceExtensions (if p.isLeanFM then ["projects", "book", "exports", "reports", "logs"] else [])
-  let (traceFile, ms) ← mappings p
+def implementationCheckNamed (p : Project) (name : String) (withErrors : Bool := false) : IO Json := do
+  let rel := "reports/specification-check/validation.json"
+  let some path ← inside p rel | return Json.mkObj [("status", "not checked"), ("file", rel)]
+  let (bytes, over) ← headBytes path maxReadBytes
+  if over then return Json.mkObj [("status", "not checked"), ("file", rel)]
+  match Json.parse (decodeLossy bytes) with
+  | .error _ => return Json.mkObj [("status", "not checked"), ("file", rel)]
+  | .ok j =>
+    match (j.getObjValD "implementations").getObjVal? name with
+    | .ok r =>
+      let errs := ((r.getObjValD "errors").getArr?).toOption.getD #[]
+      let base := Json.mkObj [("status", Json.str ((r.getObjValAs? String "status").toOption.getD "unknown")),
+        ("target", match (r.getObjValAs? String "target").toOption with | some t => Json.str t | none => Json.null),
+        ("errors", toJson errs.size), ("file", rel)]
+      return if withErrors then
+        base.setObjVal! "errorList" (Json.arr ((errs.toList.take 200).toArray.map fun e => Json.str (cut ((e.getStr?).toOption.getD "") 400)))
+      else base
+    | .error _ => return Json.mkObj [("status", "not checked"), ("file", rel)]
+
+def implementationCheck (p : Project) (impl : Impl) : IO Json := implementationCheckNamed p impl.name
+
+/-- The implementation mapping (impl stage): the picked implementation's Implementation.lean a page
+at a time, with its check against the specification and every error the check listed. -/
+def implStage (p : Project) (impl : Option Impl) (offset : Nat) : IO (Except String Json) := do
+  let (rel, name) := match impl with
+    | some i => (i.mapping, i.name)
+    | none => (if p.isLeanFM then "LeanFM/LLMGenerated/Implementation.lean" else manifestPath p "implementation" "spec/Implementation.lean", "default")
+  if rel.isEmpty then return .error s!"{p.name} names no implementation mapping file"
+  let some _ ← inside p rel | return .ok (Json.mkObj [("stage", "impl"), ("file", rel), ("found", false)])
+  match ← textPage p rel offset with
+  | .error e => return .error e
+  | .ok pg =>
+    let check ← if p.isLeanFM then pure Json.null else implementationCheckNamed p name true
+    return .ok <| Json.mkObj [("stage", "impl"), ("file", rel), ("found", true), ("selected", pg), ("check", check)]
+
+def code (p : Project) (file : Option String) (offset : Nat) (impl : Option Impl := none) : IO (Except String Json) := do
+  let (files, more) ← walk p (sourceRoot p impl) sourceExtensions (if p.isLeanFM then ["projects", "book", "exports", "reports", "logs"] else [])
+  let (traceFile, ms) ← mappings p impl
   let msArr := ms.toArray
   let linksOf (f : String) : Array Nat := (msArr.zipIdx.filter (fun (m, _) => m.names f)).map (·.2)
-  let head := Json.mkObj [("stage", "code"), ("file", traceFile), ("root", sourceRoot p)]
+  let head := Json.mkObj [("stage", "code"), ("file", traceFile), ("root", sourceRoot p impl)]
+  let head ← match impl with
+    | none => pure head
+    | some i => pure <| head.setObjVal! "mapping" (Json.str i.mapping) |>.setObjVal! "check" (← implementationCheck p i)
   match file with
   | none =>
     let rows := files.map fun (f : String) => Json.mkObj [("path", Json.str f), ("links", toJson (linksOf f))]
@@ -559,7 +690,7 @@ def argString (args : Json) (k : String) : Except String (Option String) :=
     | .ok s => .ok (some s)
     | .error _ => .error s!"{k} must be a string"
 
-def allowedArgs : List String := ["project", "stage", "page", "theme", "file", "section", "task", "offset"]
+def allowedArgs : List String := ["project", "stage", "page", "theme", "file", "section", "task", "offset", "impl"]
 
 /-- The host refuses a reply over its limit, so no answer longer than `maxAnswerChars` (text and
 structured content together) is sent: it is refused, naming the bound and how to narrow it. -/
@@ -586,6 +717,10 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
   let .ok themeArg := argString args "theme" | return .error "theme must be a string"
   let .ok sectionArg := argString args "section" | return .error "section must be a string"
   let .ok taskArg := argString args "task" | return .error "task must be a string"
+  let .ok implArg := argString args "impl" | return .error "impl must be a string"
+  let impl ← match chooseImplementation p implArg with
+    | .ok i => pure i
+    | .error e => return .error e
   let page := match args.getObjVal? "page" with
     | .ok v => (v.getNat?).toOption.getD 1
     | .error _ => 1
@@ -593,7 +728,10 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
     | .ok v => (v.getNat?).toOption.getD 0
     | .error _ => 0
   let head := Json.mkObj [("tool", "project_view"), ("verdict", "shown"), ("project", p.name),
-    ("projects", toJson names), ("stages", toJson stages)]
+    ("projects", toJson names), ("stages", toJson stages),
+    ("implementations", toJson ((implementationsOf p).map (·.name))),
+    ("implementation", match impl with | some i => Json.str i.name | none => Json.null),
+    ("defaultImplementation", match defaultImplementation p with | some i => Json.str i.name | none => Json.null)]
   let body ← match stage with
     | none => pure (.ok (Json.mkObj [("stage", Json.null)]))
     | some "chat" => pure (.ok (← chat p offset))
@@ -602,6 +740,11 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
       match fileArg with
       | none => requirements p sectionArg taskArg offset
       | some f =>
+        if (← specFiles p).contains f then
+          match ← textPage p f offset with
+          | .error e => pure (.error e)
+          | .ok pg => pure (.ok (Json.mkObj [("stage", "requirements"), ("file", f), ("selected", pg)]))
+        else
         let (protocols, _) ← protocolFiles p
         if !protocols.contains f then pure (.error s!"file must be one of the {p.name} protocol files listed by project_view stage requirements")
         else match ← inside p f with
@@ -612,7 +755,8 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
             if over || lean.length > textPageChars then
               pure (.error s!"{f} is larger than {textPageChars} characters, too large to open whole in the view")
             else pure (.ok (Json.mkObj [("stage", "requirements"), ("file", f), ("lean", lean)]))
-    | some "code" => code p fileArg offset
+    | some "impl" => implStage p impl offset
+    | some "code" => code p fileArg offset impl
     | some s => pure (.error s!"stage must be one of {", ".intercalate stages}, not {s}")
   match body with
   | .error e => return .error e
@@ -622,7 +766,11 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
       | _ => head
     let st := (b.getObjValAs? String "stage").toOption.getD "projects"
     let file := (b.getObjValAs? String "file").toOption.getD ""
-    let text := s!"project_view {p.name} {st}" ++ (if file.isEmpty then "" else s!" ({file})") ++
+    let implNote := match st, impl with
+      | "impl", some i => s!" [{i.name} implementation; impl switches among {", ".intercalate ((implementationsOf p).map (·.name))}]"
+      | "code", some i => s!" [{i.name} implementation{if (defaultImplementation p).map (·.name) == some i.name then ", the default" else ""}; impl switches among {", ".intercalate ((implementationsOf p).map (·.name))}]"
+      | _, _ => ""
+    let text := s!"project_view {p.name} {st}" ++ implNote ++ (if file.isEmpty then "" else s!" ({file})") ++
       (match st with
        | "chat" => if (b.getObjValAs? Bool "found").toOption.getD false then
            s!": {(((b.getObjValD "messages").getArr?).toOption.getD #[]).size} saved messages" else s!": {chatWhere}"
@@ -633,9 +781,20 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
          | some sec => s!": {sec}{match (b.getObjValAs? String "task").toOption with | some t => s!" of {t}" | none => ""}, items {(pg.getObjValAs? Nat "offset").toOption.getD 0 + 1} to {(pg.getObjValAs? Nat "offset").toOption.getD 0 + (arrOf pg "items").size} of {(pg.getObjValAs? Nat "total").toOption.getD 0}" ++
              (match (pg.getObjValAs? Nat "next").toOption with | some n => s!"; the next page is offset {n}" | none => "")
          | none => if b.getObjValD "lean" != Json.null then ": the protocol's text" else
+             if b.getObjValD "selected" != Json.null then
+               s!": characters {((b.getObjValD "selected").getObjValAs? Nat "offset").toOption.getD 0} of {((b.getObjValD "selected").getObjValAs? Nat "total").toOption.getD 0} of the specification's text" ++
+               (match ((b.getObjValD "selected").getObjValAs? Nat "next").toOption with | some n => s!"; the next page is offset {n}" | none => "") else
              ": sections " ++ ", ".intercalate ((arrOf b "sections").toList.map fun x =>
                s!"{(x.getObjValAs? String "name").toOption.getD ""} ({(x.getObjValAs? Nat "count").toOption.getD 0})") ++
              "; ask for one with section (and task for a task's transitions, properties or constraints)"
+       | "impl" =>
+         let sel := b.getObjValD "selected"
+         if sel == Json.null then ": no implementation mapping file yet" else
+         s!": characters {(sel.getObjValAs? Nat "offset").toOption.getD 0} of {(sel.getObjValAs? Nat "total").toOption.getD 0} of the mapping" ++
+           (match ((b.getObjValD "check").getObjValAs? String "status").toOption with
+            | some st => s!"; checked against the specification: {st}, {((b.getObjValD "check").getObjValAs? Nat "errors").toOption.getD 0} errors"
+            | none => "") ++
+           (match (sel.getObjValAs? Nat "next").toOption with | some n => s!"; the next page is offset {n}" | none => "")
        | "code" =>
          match b.getObjValD "selected" with
          | .null =>

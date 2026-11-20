@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LeanFM view</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0d10; color: #e6e6e6; font: 16px system-ui, sans-serif; }
+  iframe { display: block; border: 0; width: 100vw; height: 100vh; background: #0b0d10; }
+  #note { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 12px; background: #3a1010; color: #ffd0d0; display: none; }
+</style>
+</head>
+<body>
+<!-- clause selfhost.mcp.session.standalone: the session view in a whole browser window. This page is
+     the MCP Apps host: it answers the view's handshake, forwards the view's tools/call to this
+     server's /mcp (only the tools the view uses), and opens on project_view for the project, stage
+     and implementation in the address. The view runs in a sandboxed frame with scripts only. -->
+<iframe id="view" title="LeanFM session view" sandbox="allow-scripts" src="/view/app"></iframe>
+<div id="note" role="status"></div>
+<script>
+"use strict";
+const VIEW_TOOLS = ["session_check", "session_diagram", "session_mdp", "session_simulate", "session_conform", "session_ctl",
+  "session_compat", "session_actor", "session_dataset", "session_openapi", "session_types", "session_explore", "session_review",
+  "session_sla", "session_instances", "session_skeleton", "session_next", "project_view"];
+const STAGES = ["chat", "book", "requirements", "impl", "code"];
+const frame = document.getElementById("view");
+const note = document.getElementById("note");
+const query = new URLSearchParams(window.location.search);
+const theme = query.get("theme") === "light" ? "light" : "dark";
+document.documentElement.dataset.theme = theme;
+if (theme === "light") { document.body.style.background = "#ffffff"; frame.style.background = "#ffffff"; }
+let nextId = 1, opened = false;
+
+function say(text) { note.textContent = text; note.style.display = text ? "block" : "none"; }
+function toView(msg) { if (frame.contentWindow) frame.contentWindow.postMessage(msg, "*"); }
+
+async function mcp(method, params) {
+  const response = await fetch("/mcp", {
+    method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method, params })
+  });
+  if (!response.ok) throw new Error("LeanFM answered HTTP " + response.status);
+  const body = await response.json();
+  if (body.error) throw body.error;
+  return body.result;
+}
+
+function firstArguments() {
+  const args = {};
+  const project = query.get("project"), stage = query.get("stage"), impl = query.get("impl");
+  if (project && project.length <= 100) args.project = project;
+  args.stage = STAGES.includes(stage) ? stage : "requirements";
+  if (impl && /^[a-z][a-z0-9_]{0,31}$/.test(impl)) args.impl = impl;
+  return args;
+}
+
+async function openFirst() {
+  if (opened) return;
+  opened = true;
+  try {
+    const result = await mcp("tools/call", { name: "project_view", arguments: firstArguments() });
+    toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result });
+    if (result && result.isError) say(String((result.structuredContent && result.structuredContent.reason) || "LeanFM refused the first view."));
+  } catch (e) {
+    say("LeanFM did not answer: " + String((e && e.message) || e) + ". Is make serve running?");
+  }
+}
+
+window.addEventListener("message", async (event) => {
+  if (event.source !== frame.contentWindow) return;
+  const msg = event.data;
+  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return;
+  const reply = (result) => { if (msg.id !== undefined) toView({ jsonrpc: "2.0", id: msg.id, result }); };
+  const refuse = (code, message) => { if (msg.id !== undefined) toView({ jsonrpc: "2.0", id: msg.id, error: { code, message } }); };
+  switch (msg.method) {
+    case "ui/initialize":
+      reply({ protocolVersion: "2026-01-26", hostInfo: { name: "leanfm-standalone", version: "1.0.0" },
+        hostContext: { theme, displayMode: "fullscreen", availableDisplayModes: ["fullscreen"] } });
+      return;
+    case "ui/notifications/initialized":
+      openFirst();
+      return;
+    case "ui/request-display-mode":
+      reply({ mode: "fullscreen" });
+      return;
+    case "ui/notifications/size-changed":
+      return;
+    case "tools/call": {
+      const name = msg.params && msg.params.name;
+      if (!VIEW_TOOLS.includes(name)) { refuse(-32601, "this page forwards only the session view's tools"); return; }
+      try { reply(await mcp("tools/call", { name, arguments: (msg.params && msg.params.arguments) || {} })); say(""); }
+      catch (e) { refuse(-32603, String((e && e.message) || e)); say("LeanFM did not answer: " + String((e && e.message) || e)); }
+      return;
+    }
+    default:
+      if (msg.id !== undefined) refuse(-32601, "not offered by this page");
+  }
+});
+</script>
+</body>
+</html>

@@ -105,8 +105,9 @@ function host(msg) {
 // protocols, clauses, properties, transitions}, protocol, code: [every page of the listing], codeFile}
 function projectViewAnswer(a) {
   const P = R.projectView;
+  if (a.project === "Maqam" && P.maqam) return a.impl === "zig" ? P.maqam.zig : P.maqam.rust;
   if (!a.stage) return P.list;
-  if (a.stage === "requirements") return a.file ? P.protocol : a.section ? P.sections[a.section] || null : P.requirements;
+  if (a.stage === "requirements") return a.file ? (/\.(leanfm|protocol)$/.test(a.file) ? P.protocol : P.specFile) : a.section ? P.sections[a.section] || null : P.requirements;
   if (a.stage === "code") {
     if (a.file) return P.codeFile;
     const off = a.offset || 0;
@@ -126,6 +127,21 @@ const button = (under, text) => {
   if (!b) throw new Error(`no button "${text}"; have: ${buttons(under).map((n) => n.textContent).join(" | ")}`);
   return b;
 };
+// a view's button lives under its group tab: open the tab first when the view is not shown
+const VIEW_GROUP = { "Whole protocol": "Structure", "Tree": "Structure", "Review": "Structure", "Protobuf": "Structure", "OpenAPI": "Structure",
+  "Animate": "Behaviour", "Walk through": "Behaviour", "Decision process": "Behaviour", "Dataset": "Behaviour",
+  "CTL": "Properties", "Requirements (SLA)": "Properties", "Instances": "Properties", "Python skeleton": "Code", "TypeScript skeleton": "Code" };
+const tabOf = (name) => byId.editor.all().find((n) => n.tag === "button" && n.attrs.role === "tab" && n.textContent === name);
+async function view(label) {
+  const has = () => buttons(byId.editor).find((n) => n.textContent === label && n.attrs.role !== "tab");
+  if (!has()) {
+    const t = tabOf(VIEW_GROUP[label] || "Roles");
+    if (!t) throw new Error(`no group tab for the view "${label}"`);
+    t.click(); await wait(150);
+  }
+  if (!has()) throw new Error(`the view "${label}" is not under its group tab`);
+  return has();
+}
 const expectText = (label, node, needle) => { if (!node.textContent.includes(needle)) throw new Error(`${label}: "${needle}" not shown in: ${node.textContent.slice(0, 300)}`); console.log("ok: " + label); };
 const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result }); await wait(120); };
 
@@ -138,12 +154,23 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
 
   await show(R.check);
   {
+    // the views bar is nested tabs: the group tabs, then only the shown group's views
+    const tabs = byId.editor.all().filter((n) => n.tag === "button" && n.attrs.role === "tab").map((n) => n.textContent).join(" ");
+    if (tabs !== "Structure Roles Behaviour Properties Code") throw new Error("the views bar's group tabs are " + tabs);
+    if (!tabOf("Structure").attrs.class.includes("on")) throw new Error("a session_check result does not show the Structure group");
+    if (buttons(byId.editor).some((b) => b.textContent === "Animate")) throw new Error("the Behaviour views show while Structure is the shown group");
+    const before = hostSent.length;
+    tabOf("Properties").click(); await wait(100);
+    if (hostSent.slice(before).some((m) => m.method === "tools/call")) throw new Error("a group never looked at opened a view by itself");
+    if (!buttons(byId.editor).some((b) => b.textContent === "CTL")) throw new Error("the Properties tab does not show its views");
+    console.log("ok: the views bar is group tabs over the shown group's views, and a new group opens nothing by itself");
+    tabOf("Behaviour").click(); await wait(100);
     const box = byId.editor.all().find((n) => n.tag === "input" && String(n.attrs["aria-label"] || "").startsWith("How many sessions Animate"));
     if (!box) throw new Error("no session count beside Animate");
     box.value = "500"; box.dispatch("change"); await wait(10);
     if (box.value !== "200") throw new Error("the Animate count is not clamped to 200");
     box.value = "3"; box.dispatch("change"); await wait(10);
-    button(byId.editor, "Animate").click(); await wait(200);
+    (await view("Animate")).click(); await wait(200);
     const sent = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_simulate").pop();
     if (sent?.params.arguments.instances !== 3 || sent?.params.arguments.maxEvents !== 600) throw new Error("Animate did not send the chosen number of sessions");
     console.log("ok: Animate generates the number of sessions set beside it, clamped to 1..200");
@@ -153,7 +180,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     expectText("native MDP graph renders", byId.results, "Decision process under the supplied policy");
     expectText("terminal mass is visible", byId.results, "Terminal probability total: 1");
     if (!byId.results.all().some(n => n.tag === "svg")) throw new Error("MDP SVG missing");
-    button(byId.editor, "Decision process").click(); await wait(120);
+    (await view("Decision process")).click(); await wait(120);
     const sent = hostSent.filter(m => m.method === "tools/call" && m.params.name === "session_mdp").pop();
     if (sent?.params.arguments.overlay?.name !== "test-layer") throw new Error("MDP redraw lost overlay");
   }
@@ -161,7 +188,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     await show(R.timed);
     expectText("timed layer renders", byId.results, "Generation assumptions");
     expectText("deadline monitoring renders", byId.results, "fulfilled");
-    button(byId.editor, "Animate").click(); await wait(120);
+    (await view("Animate")).click(); await wait(120);
     const sent = hostSent.filter(m => m.method === "tools/call" && m.params.name === "session_simulate").pop();
     if (sent?.params.arguments.overlay?.name !== "test-layer")
       throw new Error("editor lost the external overlay");
@@ -174,7 +201,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("no SVG diagram drawn");
   console.log("ok: the diagram is drawn as SVG");
 
-  button(byId.editor, "Walk through").click(); await wait(120);
+  (await view("Walk through")).click(); await wait(120);
   expectText("the walk-through starts at the protocol's first step", byId.walk, "after 0 events");
   const first = buttons(byId.walk).find((b) => b.attrs.class && b.attrs.class.includes("step"));
   if (!first) throw new Error("the walk-through offers no step");
@@ -194,7 +221,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   // navigation: each role's view, the payloads, a dataset, and back to the whole protocol
   if (R.actor && R.dataset && R.types) {
     await show(R.check);
-    button(byId.editor, "Member").click(); await wait(150);
+    (await view("Member")).click(); await wait(150);
     const asked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_actor").pop();
     if (asked?.params.arguments.role !== "Member") throw new Error("the role button did not ask for that role's view");
     expectText("a role's view lists what it sends and receives", byId.results, "What Member sends and receives");
@@ -205,21 +232,27 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     expectText("a role's view shows the payloads", byId.results, "Payloads (protobuf");
     if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("no SVG drawn for the role's view");
     if (!button(byId.editor, "Member").attrs.class.includes("on")) throw new Error("the role's button is not marked as the current view");
+    // back to Behaviour: the view last looked at there (Walk through) opens again
+    const nexts = () => hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_next").length;
+    const nextsBefore = nexts();
+    tabOf("Behaviour").click(); await wait(200);
+    if (nexts() <= nextsBefore || !button(byId.editor, "Walk through").attrs.class.includes("on")) throw new Error("returning to Behaviour did not open Walk through again");
+    console.log("ok: returning to a group opens the view last looked at there");
     const count = byId.editor.all().find((n) => n.tag === "input" && n.attrs.type === "number" && String(n.attrs["aria-label"] || "").includes("dataset"));
     if (!count) throw new Error("no dataset size field");
     count.value = "99999"; count.dispatch("change");
     if (count.value !== "10000") throw new Error("the dataset size is not capped at 10000");
     count.value = "500"; count.dispatch("change");
-    button(byId.editor, "Dataset").click(); await wait(150);
+    (await view("Dataset")).click(); await wait(150);
     const askedData = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_dataset").pop();
     if (askedData?.params.arguments.sessions !== 500) throw new Error("the dataset button did not send the size");
     expectText("a dataset charts its paths", byId.results, "Paths taken");
     expectText("a dataset charts each role's load", byId.results, "Load per role");
     expectText("a dataset says where its numbers come from", byId.results, "Where these numbers come from");
     expectText("a dataset without probabilities says what its frequencies mean", byId.results, "describe the walker, not the system");
-    button(byId.editor, "Protobuf").click(); await wait(150);
+    (await view("Protobuf")).click(); await wait(150);
     expectText("the payloads view shows the proto file", byId.results, "Message types and envelope (protobuf)");
-    button(byId.editor, "Whole protocol").click(); await wait(150);
+    (await view("Whole protocol")).click(); await wait(150);
     expectText("back to the whole protocol", byId.results, "Sequence diagram, generated from the protocol");
     console.log("ok: the navigation reaches each role, the payloads and a dataset");
   }
@@ -261,7 +294,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     const asked = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_explore").pop();
     if (!asked?.params.arguments.focus) throw new Error("selecting a protocol did not ask for its diagram");
     if (!byId.results.all().some((n) => n.tag === "svg")) throw new Error("the protocol's diagram is not drawn");
-    if (!button(byId.editor, "Tree").attrs.class.includes("on")) throw new Error("the Tree view is not marked current");
+    if (!(await view("Tree")).attrs.class.includes("on")) throw new Error("the Tree view is not marked current");
     console.log("ok: the tree lists like a file explorer, opens, closes, moves by keys and shows a protocol's diagram");
     // walking the grammar from the main protocol: the global machine grows, the tree lights the step
     await show(R.explore); await wait(80);
@@ -388,30 +421,59 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   await show(R.skeleton);
   expectText("session_skeleton result renders its reading", byId.results, "typestate as classes");
 
-  // the navigator (clause selfhost.mcp.session.navigator): chat -> book -> requirements -> code, LeanFM first
+  // the navigator (clause selfhost.mcp.session.navigator): project and implementation, then book, spec, impl, code
   if (R.projectView) {
     const bar = root.all().find((n) => n.tag === "nav" && n.className.includes("stagenav"));
     if (!bar) throw new Error("no navigator bar");
     const order = buttons(bar).map((b) => b.textContent).join(" ");
-    if (order !== "chat book requirements code") throw new Error("the navigator's stages are " + order);
+    if (order !== "book spec impl code") throw new Error("the navigator's stages are " + order);
     const pick = bar.all().find((n) => n.tag === "select");
     if (!pick || !pick.children.some((o) => o.textContent === "LeanFM") || pick.value !== "LeanFM") throw new Error("the project picker does not default to LeanFM");
     if (!pick.children.some((o) => o.textContent === "GoServer")) throw new Error("the project picker does not list GoServer from project_view");
-    console.log("ok: the navigator shows chat, book, requirements, code and a project picker defaulting to LeanFM");
+    if (bar.children[0] !== bar.all().find((n) => n.className === "picks")) throw new Error("the pickers are not the bar's first row");
+    console.log("ok: the navigator shows the project picker first, then book, spec, impl, code");
     const navSent = () => hostSent.filter((m) => m.method === "tools/call" && m.params.name === "project_view").pop();
-    button(bar, "chat").click(); await wait(200);
-    if (navSent()?.params.arguments.stage !== "chat" || navSent()?.params.arguments.project !== "LeanFM") throw new Error("chat did not ask project_view for LeanFM's chat");
-    expectText("the chat stage says where the conversation happens", byId.results, "happens in the agent");
-    for (const box of [byId.results, byId.editor, byId.walk])
-      if (box.all().some((n) => n.tag === "textarea" || n.tag === "input" || n.tag === "form")) throw new Error("the chat stage offers an input");
-    console.log("ok: the chat stage has no input");
     button(bar, "book").click(); await wait(200);
+    if (navSent()?.params.arguments.stage !== "book" || navSent()?.params.arguments.project !== "LeanFM") throw new Error("book did not ask project_view for LeanFM's book");
     const img = byId.results.all().find((n) => n.tag === "img");
     if (!img || !/^data:image\/(png;base64,iVBOR|jpeg;base64,\/9j\/)/.test(String(img.attrs.src || ""))) throw new Error("the book stage draws no PNG or JPEG page");
     expectText("the book stage says which page", byId.results, "page 2 of");
     button(byId.results, "Next ▶").click(); await wait(200);
     if (navSent()?.params.arguments.page !== 3) throw new Error("Next did not ask for the next page");
-    button(bar, "requirements").click(); await wait(200);
+    button(bar, "spec").click(); await wait(200);
+    if (navSent()?.params.arguments.stage !== "requirements") throw new Error("spec did not ask project_view for the requirements");
+    // spec lands in the explorer on the primary protocol, not on text
+    const primary = R.projectView.requirements.structuredContent.primary;
+    if (primary !== "LeanFM/LLMGenerated/LeanFM.leanfm") throw new Error("LeanFM's spec overview names no primary protocol: " + primary);
+    await wait(300);
+    const landed = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_explore" && m.params.arguments.file).pop();
+    if (!landed || landed.params.arguments.file !== primary || landed.params.arguments.project !== "LeanFM")
+      throw new Error("the spec stage did not open its primary protocol in session_explore");
+    if (!byId.results.all().some((n) => n.className.split(" ").includes("ftree"))) throw new Error("the spec stage does not land on the protocol's tree");
+    const specRow2 = bar.all().find((n) => n.className.split(" ").includes("specrow"));
+    if (!specRow2 || !button(specRow2, "explorer · LeanFM.leanfm").className.includes("on")) throw new Error("the spec row does not mark the explorer");
+    const stageTabs = buttons(bar).filter((b) => b.attrs.role === "tab");
+    if (stageTabs.map((b) => b.textContent).slice(0, 4).join(" ") !== "book spec impl code") throw new Error("the stages are not tabs");
+    if (stageTabs.find((b) => b.textContent === "spec").attrs["aria-selected"] !== "true") throw new Error("the spec tab is not the selected stage");
+    if (specRow2.attrs.role !== "tablist" || button(specRow2, "files & sections").attrs.role !== "tab") throw new Error("explorer and index are not tabs nested under spec");
+    console.log("ok: the stages are tabs, with explorer and index as tabs nested under spec");
+    console.log("ok: the spec stage lands in the explorer on LeanFM.leanfm");
+    button(specRow2, "files & sections").click(); await wait(200);
+    if (navSent()?.params.arguments.stage !== "requirements" || navSent()?.params.arguments.file) throw new Error("files & sections did not ask for the overview");
+    const specRow = byId.results.all().find((n) => n.className.split(" ").includes("frow") && n.textContent.includes("SelfHosting.lean"));
+    if (!specRow) throw new Error("the spec stage does not list the specification's own file");
+    if (!byId.results.all().some((n) => n.className.split(" ").includes("frow") && n.textContent.includes(".leanfm"))) throw new Error("the spec stage does not list the protocols directly");
+    specRow.click(); await wait(200);
+    if (navSent()?.params.arguments.file !== "LeanFM/LLMGenerated/SelfHosting.lean") throw new Error("a spec file row did not ask for that file");
+    expectText("a spec file shows its text a page at a time", byId.results, "characters 1 to");
+    expectText("a spec file's text is the requirements", byId.results, "selfhost.revision");
+    console.log("ok: the spec stage opens the specification's own text in one click");
+    button(bar, "impl").click(); await wait(200);
+    if (navSent()?.params.arguments.stage !== "impl") throw new Error("impl did not ask project_view for the implementation mapping");
+    expectText("the impl stage shows the implementation mapping", byId.results, "LeanFM/LLMGenerated/Implementation.lean");
+    console.log("ok: the impl stage shows the implementation mapping");
+    button(bar, "spec").click(); await wait(300);
+    button(bar.all().find((n) => n.className.split(" ").includes("specrow")), "files & sections").click(); await wait(200);
     const sectionButton = (name) => buttons(byId.results).find((b) => b.textContent.startsWith(name + " ("));
     for (const name of ["tasks", "clauses", "protocols"]) if (!sectionButton(name)) throw new Error("the requirements stage has no " + name + " section");
     if (byId.results.textContent.includes("selfhost_workflow")) throw new Error("the requirements overview carries the tasks themselves");
@@ -423,12 +485,12 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     propsButton.click(); await wait(200);
     if (navSent()?.params.arguments.section !== "properties" || !navSent()?.params.arguments.task) throw new Error("a task's properties were not asked for with the task");
     expectText("a task's properties show their CTL", byId.results, "AG ¬(");
-    button(byId.results, "Sections").click(); await wait(200);
+    button(byId.results, "Index").click(); await wait(200);
     sectionButton("clauses").click(); await wait(200);
     expectText("the clauses section shows a page of clauses", byId.results, "selfhost.revision");
     button(byId.results, "Next page ▶");
     console.log("ok: the clauses section offers its next page");
-    button(byId.results, "Sections").click(); await wait(200);
+    button(byId.results, "Index").click(); await wait(200);
     sectionButton("protocols").click(); await wait(200);
     const prow = byId.results.all().find((n) => n.className.split(" ").includes("frow"));
     if (!prow) throw new Error("no protocol row");
@@ -459,6 +521,22 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     expectText("a picked file shows its traceability", byId.results, "Traceability for LeanFM/ProjectView.lean");
     expectText("a picked file shows the clause it implements", byId.results, "clause:selfhost.mcp.session.navigator");
     console.log("ok: the code stage opens a file with its traceability");
+    if (R.projectView.maqam) {
+      // a project with several implementations: an implementation picker, and code follows it
+      const pick2 = bar.all().find((n) => n.tag === "select" && n.attrs && n.attrs["aria-label"] === "Project") || bar.all().find((n) => n.tag === "select");
+      pick2.value = "Maqam"; pick2.dispatch("change"); await wait(1200);
+      const ipick = bar.all().find((n) => n.tag === "select" && n.children.some((o) => o.textContent === "zig"));
+      if (!ipick || ipick.value !== "rust") throw new Error("Maqam's code stage shows no implementation picker defaulting to rust");
+      expectText("the code stage names the implementation it shows", byId.results, "code · rust");
+      ipick.value = "zig"; ipick.dispatch("change"); await wait(300);
+      if (navSent()?.params.arguments.impl !== "zig" || navSent()?.params.arguments.stage !== "code") throw new Error("picking zig did not ask project_view for the zig code");
+      expectText("the code stage switches to the picked implementation", byId.results, "code · zig");
+      expectText("the code stage shows the implementation's check against the specification", byId.results, "against the one specification");
+      const zbar = root.all().find((n) => n.tag === "nav" && n.className.includes("stagenav"));
+      const zpick = zbar.all().find((n) => n.tag === "select" && n.children.some((o) => o.textContent === "zig"));
+      if (!zpick || zpick.value !== "zig") throw new Error("the implementation picker does not keep zig");
+      console.log("ok: an implementation picker switches the code stage between Maqam's rust and zig");
+    }
   }
 
   for (const t of timers) clearTimeout(t);
