@@ -35,7 +35,8 @@
 //! * blocks: `create`'s `max_frames`; a longer device block is processed in chunks of it.
 //!
 //! Deliberate differences from the Rust:
-//! * No cpal: the device is device.zig (ALSA at 48000 Hz / 256 frames with capture; `startLive`),
+//! * No cpal: the device is device.Output (ALSA on Linux, CoreAudio on macOS, at 48000 Hz / --bufsize
+//!   frames with capture; `startLive`),
 //!   and its input arrives per block (`input` frames of the same block; frames past `input.len` are
 //!   silence), not through a 16384-frame crossbeam queue.
 //! * Mutex `try_lock` on JUMP_COUNTERS and Vec/HashMap growth are replaced by the bounds above.
@@ -639,13 +640,15 @@ const Buffers = struct {
     sym_kanun: []f32,
     sym_drums: []f32,
     live: []f32,
+    /// The selected raw input of each sample, before NAM: the dry side of the dry mix.
+    raw: []f32,
     nam_buf: []f32,
     sym_out: []f32,
     sust: []f32,
     strike: []f32,
     sum: []f32,
     voices_empty: []bool,
-    const f32_names = .{ "dry_l", "dry_r", "bass_l", "bass_r", "kanun_l", "kanun_r", "kick_l", "kick_r", "sym_bass", "sym_kanun", "sym_drums", "live", "nam_buf", "sym_out", "sust", "strike", "sum" };
+    const f32_names = .{ "dry_l", "dry_r", "bass_l", "bass_r", "kanun_l", "kanun_r", "kick_l", "kick_r", "sym_bass", "sym_kanun", "sym_drums", "live", "raw", "nam_buf", "sym_out", "sust", "strike", "sum" };
     const n_f32 = f32_names.len;
 };
 
@@ -657,7 +660,7 @@ pub const Engine = struct {
     /// Audio -> App: what the engine released. The App is the only consumer (`collectGarbage`).
     garbage: channel.Ring(Garbage, garbage_capacity) = .{},
     shared: *Shared,
-    /// Playback delay the device reports (startLive points it at device.Alsa.latency_us).
+    /// Playback delay the device reports (startLive points it at device.Output.latency_us).
     device_delay_us: ?*const std.atomic.Value(u64) = null,
     /// T (stop) rows the sequencer has passed (the offline render ends at the first).
     stops_seen: u64 = 0,
@@ -676,10 +679,18 @@ pub const Engine = struct {
     bpm: f64 = 120.0,
     sustain: f64 = 1.25,
     vol: f32 = 1.0,
+    /// Per-bus volume after each bus's VCF, indexed by VcfTarget (all, mic, bass, kanun, kick, tanbura).
+    bus_vol: [6]f32 = @splat(1.0),
+    /// Fraction 0..1 of the raw input crossfaded into the output last (`dry <percent>` / 100).
+    dry_mix: f32 = 0.0,
+    /// Whether a live input device feeds `process` (the Rust `has_input_stream`): with one, a
+    /// block is never short-cut to silence, since the input may be heard through the dry mix.
+    has_input_stream: bool = false,
     vcf: VcfBank = .{},
     vcf_filters: FilterBank,
     fx: FxSettings = .{},
     fx_processor: FxProcessor,
+    cabinet: fx_mod.CabinetProcessor,
     paused: bool = false,
     jumps: JumpTable,
     pending_next_id: ?usize = null,
@@ -690,7 +701,6 @@ pub const Engine = struct {
     nam_enabled: bool = true,
     nam_gain: f32 = 1.0,
     nam_input: NamInput = .stereo,
-    nam_mix: f32 = 0.0,
     latency_test: ?*channel.Mailbox(LatencyResult) = null,
     latency_ms_ema: ?f64 = null,
     meter_peaks: [3]f32 = .{ 0, 0, 0 },
@@ -724,6 +734,8 @@ pub const Engine = struct {
         errdefer jumps.deinit(gpa);
         var fxp = try FxProcessor.init(gpa, sr32);
         errdefer fxp.deinit(gpa);
+        var cab = try fx_mod.CabinetProcessor.init(gpa, sr32);
+        errdefer cab.deinit(gpa);
         const pending = try gpa.alloc(Garbage, max_pending_garbage);
         errdefer gpa.free(pending);
         const slab_mem = try gpa.alignedAlloc(u8, .@"16", slab_size * slab_count);
@@ -746,6 +758,7 @@ pub const Engine = struct {
             .pans = pans,
             .vcf_filters = FilterBank.new(sr32),
             .fx_processor = fxp,
+            .cabinet = cab,
             .jumps = jumps,
             .sym = undefined,
             .pending = pending,
@@ -775,6 +788,7 @@ pub const Engine = struct {
         gpa.free(self.pans);
         self.jumps.deinit(gpa);
         self.fx_processor.deinit(gpa);
+        self.cabinet.deinit(gpa);
         gpa.free(self.pending);
         gpa.free(self.slab.mem);
         gpa.free(self.floats);
@@ -877,6 +891,7 @@ pub const Engine = struct {
             .ok => |setting| {
                 self.fx = setting;
                 self.fx_processor.setSettings(setting);
+                self.cabinet.setModel(setting.cabinet_model);
             },
             .err => {},
         }
@@ -946,6 +961,7 @@ pub const Engine = struct {
             .set_fx_settings => |v| {
                 self.fx = v;
                 self.fx_processor.setSettings(v);
+                self.cabinet.setModel(v.cabinet_model);
             },
             .set_fx => |change| self.applyFxChange(change),
             .set_nam_model => |model| {
@@ -960,10 +976,12 @@ pub const Engine = struct {
                 self.shared.nam_model_active.store(enabled and self.nam_model != null, .monotonic);
                 self.shared.nam_status.store(if (self.nam_model == null) 0 else if (enabled) 1 else 5, .monotonic);
             },
-            .set_nam_gain => |gain| self.nam_gain = fclamp(gain, 0.0, 11.0),
+            .set_nam_gain => |gain| self.nam_gain = fclamp(gain, 0.0, command.nam_gain_max),
             .set_nam_input => |route| self.nam_input = route,
             .measure_input_latency => |m| self.latency_test = m.result,
             .set_vol => |v| self.vol = v,
+            .set_bus_vol => |v| self.bus_vol[@intFromEnum(v.target)] = v.value,
+            .set_dry => |percent| self.dry_mix = fclamp(percent / 100.0, 0.0, 1.0),
             .set_paused => |p| self.paused = p,
             .set_cur_phrase => |pos| {
                 if (pos < self.phrase_len) {
@@ -1053,7 +1071,6 @@ pub const Engine = struct {
                 self.nam_enabled = false;
                 self.nam_gain = 1.0;
                 self.nam_input = .stereo;
-                self.nam_mix = 0.0;
                 self.shared.nam_model_active.store(false, .monotonic);
                 self.shared.nam_status.store(0, .monotonic);
                 self.sympathetics_enabled = false;
@@ -1063,6 +1080,7 @@ pub const Engine = struct {
                 self.vcf_filters = FilterBank.new(self.sr32);
                 self.fx = .{};
                 self.resetFxProcessor();
+                self.dry_mix = 0.0;
             },
         }
     }
@@ -1077,8 +1095,11 @@ pub const Engine = struct {
             .set_sustain => |v| self.sustain = v,
             .set_vcf => |change| self.applyVcfChange(change),
             .set_fx => |change| self.applyFxChange(change),
+            .set_vol => |v| self.vol = v,
+            .set_bus_vol => |v| self.bus_vol[@intFromEnum(v.target)] = v.value,
+            .set_dry => |percent| self.dry_mix = fclamp(percent / 100.0, 0.0, 1.0),
             .set_nam_enabled => |v| self.nam_enabled = v,
-            .set_nam_gain => |v| self.nam_gain = fclamp(v, 0.0, 11.0),
+            .set_nam_gain => |v| self.nam_gain = fclamp(v, 0.0, command.nam_gain_max),
             .set_nam_input => |v| self.nam_input = v,
             .set_sympathetics => |v| self.sympathetics_enabled = v,
             .set_sympathetic_decay => |v| self.sym.applyChange(.{ .decay = v }, &self.sympathetics_enabled),
@@ -1432,6 +1453,7 @@ pub const Engine = struct {
                 .right => in[1],
                 .stereo => (in[0] + in[1]) * 0.5,
             };
+            b.raw[j] = b.live[j];
         }
         if (have_input) self.onInput(block_frames);
         const model = self.nam_model;
@@ -1439,13 +1461,14 @@ pub const Engine = struct {
             for (a..b_end) |j| b.nam_buf[j] = b.live[j] * self.nam_gain;
             m.processBuffer(b.nam_buf[a..b_end]);
         }
-        const target_mix: f32 = if (self.nam_enabled and model != null) 1.0 else 0.0;
-        const mix_step = @min(1.0 / (self.sr32 * 0.02), 1.0);
+        // NAM on selects only the modeled input, NAM off only the clean input: never both. Then
+        // the cabinet stage, which runs every sample (bypassed while off).
+        const nam_selected = self.nam_enabled and model != null;
         for (a..b_end) |j| {
-            const dry = b.live[j];
-            const modeled = if (model != null) b.nam_buf[j] else dry;
-            self.nam_mix += fclamp(target_mix - self.nam_mix, -mix_step, mix_step);
-            const live = dry + (modeled - dry) * self.nam_mix;
+            const dry = b.raw[j];
+            const modeled = fclamp(if (model != null) b.nam_buf[j] else dry, -1.0, 1.0);
+            const selected = selectNamOutput(dry, modeled, nam_selected);
+            const live = fclamp(self.cabinet.process(selected, self.fx), -1.0, 1.0);
             b.live[j] = live;
             self.meter_peaks[2] = @max(self.meter_peaks[2], @abs(live));
         }
@@ -1453,8 +1476,8 @@ pub const Engine = struct {
         if (self.samples_since_publish >= @as(u64, self.rate) * 10) self.publishMetrics();
 
         const nam_active = self.nam_enabled and model != null;
-        const quiet = !self.fx.active() and !self.sympathetics_enabled and !self.vcf.all.enabled and
-            !self.vcf.mic.enabled and !nam_active;
+        const quiet = !self.has_input_stream and !self.fx.active() and !self.sympathetics_enabled and
+            !self.vcf.all.enabled and !self.vcf.mic.enabled and !nam_active;
         const sym_energy = quiet and self.sym.hasEnergy();
         var j = a;
         while (j < b_end) {
@@ -1465,13 +1488,13 @@ pub const Engine = struct {
                 self.vcf_filters.reset();
                 @memset(out[2 * j .. 2 * k], 0.0);
             } else {
-                self.mixRun(j, k, out, nam_active);
+                self.mixRun(j, k, out);
             }
             j = k;
         }
     }
 
-    fn mixRun(self: *Engine, a: usize, b_end: usize, out: []f32, nam_active: bool) void {
+    fn mixRun(self: *Engine, a: usize, b_end: usize, out: []f32) void {
         const b = &self.buf;
         const sym_out = b.sym_out[a..b_end];
         @memset(sym_out, 0.0);
@@ -1489,17 +1512,15 @@ pub const Engine = struct {
             var mic_r: f32 = 0;
             var tan_l: f32 = 0;
             var tan_r: f32 = 0;
-            if (nam_active) {
-                const live = b.live[j];
-                if (!v.all.enabled and v.mic.enabled) {
-                    mic_l += live;
-                    mic_r += live;
-                } else {
-                    // NAM is the live-input path. It must remain audible without requiring the
-                    // score to enable a VCF bus. The master VCF, when enabled, is applied below.
-                    dry_l += live;
-                    dry_r += live;
-                }
+            const live = b.live[j];
+            if (!v.all.enabled) {
+                // NAM on selects only modeled input; NAM off selects only clean input. Both use
+                // the same mic output bus and trim.
+                mic_l += live;
+                mic_r += live;
+            } else {
+                dry_l += live;
+                dry_r += live;
             }
             const sympathetic = sym_out[j - a];
             if (v.all.enabled) {
@@ -1514,31 +1535,34 @@ pub const Engine = struct {
             }
             var left = dry_l;
             var right = dry_r;
+            const bv = self.bus_vol;
+            var post_vcf_mic: [2]f32 = .{ 0, 0 };
             if (!v.all.enabled) {
                 if (v.mic.enabled) {
                     const o = f.mic.process(mic_l, mic_r);
-                    left += o.left;
-                    right += o.right;
+                    post_vcf_mic = .{ o.left, o.right };
+                } else {
+                    post_vcf_mic = .{ mic_l, mic_r };
                 }
                 if (v.bass.enabled) {
                     const o = f.bass.process(b.bass_l[j], b.bass_r[j]);
-                    left += o.left;
-                    right += o.right;
+                    left += o.left * bv[@intFromEnum(VcfTarget.bass)];
+                    right += o.right * bv[@intFromEnum(VcfTarget.bass)];
                 }
                 if (v.kanun.enabled) {
                     const o = f.kanun.process(b.kanun_l[j], b.kanun_r[j]);
-                    left += o.left;
-                    right += o.right;
+                    left += o.left * bv[@intFromEnum(VcfTarget.kanun)];
+                    right += o.right * bv[@intFromEnum(VcfTarget.kanun)];
                 }
                 if (v.kick.enabled) {
                     const o = f.kick.process(b.kick_l[j], b.kick_r[j]);
-                    left += o.left;
-                    right += o.right;
+                    left += o.left * bv[@intFromEnum(VcfTarget.kick)];
+                    right += o.right * bv[@intFromEnum(VcfTarget.kick)];
                 }
                 if (v.tanbura.enabled) {
                     const o = f.tanbura.process(tan_l, tan_r);
-                    left += o.left;
-                    right += o.right;
+                    left += o.left * bv[@intFromEnum(VcfTarget.tanbura)];
+                    right += o.right * bv[@intFromEnum(VcfTarget.tanbura)];
                 }
             }
             if (fx_active) {
@@ -1549,14 +1573,21 @@ pub const Engine = struct {
             const sat = analog.softClipStereo(left * self.vol, right * self.vol);
             if (v.all.enabled) {
                 const o = f.all.process(sat.left, sat.right);
-                left = fclamp(o.left, -1.0, 1.0);
-                right = fclamp(o.right, -1.0, 1.0);
+                left = fclamp(o.left * bv[@intFromEnum(VcfTarget.all)], -1.0, 1.0);
+                right = fclamp(o.right * bv[@intFromEnum(VcfTarget.all)], -1.0, 1.0);
             } else {
                 left = fclamp(sat.left, -1.0, 1.0);
                 right = fclamp(sat.right, -1.0, 1.0);
+                // The mic bus joins after the clip, so its trim is linear.
+                const mic_out = postVcfOutputStem(post_vcf_mic, self.vol, bv[@intFromEnum(VcfTarget.mic)]);
+                left = fclamp(left + mic_out[0], -1.0, 1.0);
+                right = fclamp(right + mic_out[1], -1.0, 1.0);
             }
-            out[2 * j] = left;
-            out[2 * j + 1] = right;
+            // The dry mix is applied last: its dry side is the selected raw input, untouched by
+            // NAM, VCF, FX or gain.
+            const mixed = applyDryMix(.{ left, right }, b.raw[j], self.dry_mix);
+            out[2 * j] = mixed[0];
+            out[2 * j + 1] = mixed[1];
         }
     }
 
@@ -1586,30 +1617,53 @@ pub const Engine = struct {
     }
 };
 
+/// The Rust `post_vcf_output_stem`: a bus clamped to [-1, 1], then scaled linearly.
+fn postVcfOutputStem(stem: [2]f32, master_gain: f32, output_gain: f32) [2]f32 {
+    const gain = master_gain * output_gain;
+    return .{ fclamp(stem[0], -1.0, 1.0) * gain, fclamp(stem[1], -1.0, 1.0) * gain };
+}
+
+/// The Rust `apply_dry_mix`: crossfade the processed output with the raw input.
+fn applyDryMix(processed: [2]f32, dry: f32, amount: f32) [2]f32 {
+    const a = fclamp(amount, 0.0, 1.0);
+    return .{
+        fclamp(processed[0] * (1.0 - a) + dry * a, -1.0, 1.0),
+        fclamp(processed[1] * (1.0 - a) + dry * a, -1.0, 1.0),
+    };
+}
+
+/// The Rust `select_nam_output`: an active NAM replaces the clean input; no parallel dry signal.
+fn selectNamOutput(dry: f32, modeled: f32, active: bool) f32 {
+    return if (active) modeled else dry;
+}
+
 // ── Live device ───────────────────────────────────────────────────────────────
 
 pub const Live = struct {
     gpa: Allocator,
     engine: *Engine,
-    alsa: *device.Alsa,
+    output: *device.Output,
 
-    /// Stops the device thread, then frees the engine (and everything it still holds).
+    /// Stops the device, then frees the engine (and everything it still holds).
     pub fn stop(self: *Live) void {
-        self.alsa.close(self.gpa);
+        self.output.close(self.gpa);
         self.engine.destroy(self.gpa);
     }
 };
 
-/// Opens ALSA at 48000 Hz / 256 frames with capture and runs `Engine.process` on its thread. An
-/// ALSA failure is returned (the caller falls back to command mode without playback, like run_cli).
-pub fn startLive(gpa: Allocator, io: std.Io, shared: *Shared) !Live {
-    const alsa = try device.Alsa.open(gpa, .{ .rate = 48000, .period_frames = 256, .capture = true, .underruns = &shared.underruns });
-    errdefer alsa.close(gpa);
-    const engine = try Engine.create(gpa, alsa.rate, alsa.period, shared);
+/// Opens the output device (device.Output: ALSA on Linux, CoreAudio on macOS) at 48000 Hz with a
+/// period of `bufsize` frames (`--bufsize=`, default 64; the device may choose the nearest size it
+/// supports) and capture, and runs `Engine.process` once per block. A device failure is returned
+/// (the caller falls back to command mode without playback, like run_cli).
+pub fn startLive(gpa: Allocator, io: std.Io, shared: *Shared, bufsize: u32) !Live {
+    const output = try device.Output.open(gpa, .{ .rate = 48000, .period_frames = @max(bufsize, 1), .capture = true, .underruns = &shared.underruns });
+    errdefer output.close(gpa);
+    const engine = try Engine.create(gpa, output.rate, output.period, shared);
     errdefer engine.destroy(gpa);
-    engine.device_delay_us = &alsa.latency_us;
-    try alsa.start(io, Engine.process, engine);
-    return .{ .gpa = gpa, .engine = engine, .alsa = alsa };
+    engine.device_delay_us = &output.latency_us;
+    engine.has_input_stream = output.hasInput();
+    try output.start(io, Engine.process, engine);
+    return .{ .gpa = gpa, .engine = engine, .output = output };
 }
 
 // ── Offline hooks ─────────────────────────────────────────────────────────────
@@ -1775,6 +1829,7 @@ pub fn bench(gpa: Allocator, io: std.Io, session_text: []const u8, seconds: f64,
     }
     const input = try syntheticGuitar(gpa, rate, 4.0);
     defer gpa.free(input);
+    engine.has_input_stream = true; // the bench feeds a live input, as the device would
     return device.bench(gpa, io, Engine.process, engine, frames, rate, seconds, input, trace, want_realtime);
 }
 
@@ -2132,10 +2187,12 @@ test "nam commands, input routing, meters and the latency mailbox" {
     var input: [256]Frame = undefined;
     for (&input, 0..) |*f, i| f.* = .{ 0.3 * @sin(@as(f32, @floatFromInt(i)) * 0.05), 0.0 };
     try t.send(.{ .set_nam_input = .left });
-    try t.send(.{ .set_nam_gain = 40.0 }); // clamped
+    try t.send(.{ .set_nam_gain = 400.0 }); // clamped
     t.runInput(20, &input);
-    try testing.expectEqual(@as(f32, 11.0), e.nam_gain);
-    try testing.expectEqual(@as(f32, 1.0), e.nam_mix);
+    try testing.expectEqual(@as(f32, 100.0), e.nam_gain);
+    try t.send(.{ .set_nam_gain = 40.0 });
+    t.runInput(20, &input);
+    try testing.expectEqual(@as(f32, 40.0), e.nam_gain);
     try testing.expect(t.peak() > 0.0); // NAM keeps the live input audible
     try t.send(.{ .set_nam_input = .right }); // the silent channel
     t.runInput(2, &input);
@@ -2289,4 +2346,75 @@ test "bench default.mq at 64 frames (timings printed in ReleaseFast only)" {
         std.debug.print("bench default.mq 64 frames nam={s}: callbacks={d} misses={d} p50={d:.1}us p99={d:.1}us max={d:.1}us late_start={d:.1}us slack={d:.1}us\n", .{ nam_path orelse "none", r.callbacks, r.deadline_misses, r.callback_p50_us, r.callback_p99_us, r.callback_max_us, r.release_late_max_us, r.slack_min_us });
         try testing.expectEqual(@as(u64, 0), r.deadline_misses);
     }
+}
+
+test "post_vcf_trim_is_strictly_linear" {
+    const full = postVcfOutputStem(.{ 4.0, -4.0 }, 1.0, 1.0);
+    const quiet = postVcfOutputStem(.{ 4.0, -4.0 }, 1.0, 0.125);
+    try testing.expectEqual([2]f32{ 1.0, -1.0 }, full);
+    try testing.expectApproxEqAbs(full[0] * 0.125, quiet[0], 1e-6);
+    try testing.expectApproxEqAbs(full[1] * 0.125, quiet[1], 1e-6);
+}
+
+test "active_nam_has_no_parallel_dry_signal" {
+    try testing.expectEqual(@as(f32, -0.25), selectNamOutput(0.75, -0.25, true));
+    try testing.expectEqual(@as(f32, 0.75), selectNamOutput(0.75, -0.25, false));
+}
+
+test "dry_mix_crossfades_after_all_processing" {
+    try testing.expectEqual([2]f32{ 0.8, -0.4 }, applyDryMix(.{ 0.8, -0.4 }, 0.2, 0.0));
+    try testing.expectEqual([2]f32{ 0.2, 0.2 }, applyDryMix(.{ 0.8, -0.4 }, 0.2, 1.0));
+    const half = applyDryMix(.{ 0.8, -0.4 }, 0.2, 0.5);
+    try testing.expectApproxEqAbs(@as(f32, 0.5), half[0], 1e-6);
+    try testing.expectApproxEqAbs(@as(f32, -0.1), half[1], 1e-6);
+}
+
+test "dry 100 plays the raw input alone, with or without a NAM model, and vol mic trims the input" {
+    const gpa = testing.allocator;
+    var t = try T.init(gpa);
+    defer t.deinit(gpa);
+    const e = t.engine;
+    e.has_input_stream = true;
+    var input: [256]Frame = undefined;
+    for (&input, 0..) |*f, i| f.* = .{ 0.4 * @sin(@as(f32, @floatFromInt(i)) * 0.07), 0.0 };
+    try t.send(.{ .set_nam_input = .left });
+    try t.send(.{ .set_dry = 100 });
+    t.runInput(1, &input);
+    for (0..256) |j| {
+        try testing.expectApproxEqAbs(input[j][0], t.block[2 * j], 1e-6);
+        try testing.expectApproxEqAbs(input[j][0], t.block[2 * j + 1], 1e-6);
+    }
+    const model = try nam.Model.loadFile(gpa, testing.io, "testdata/nam/tiny_wavenet_a1.nam", null);
+    try t.send(.{ .set_nam_model = model });
+    t.runInput(1, &input);
+    for (0..256) |j| try testing.expectApproxEqAbs(input[j][0], t.block[2 * j], 1e-6);
+    // dry 0: the modeled input on the mic bus, silenced by vol mic 0
+    try t.send(.{ .set_dry = 0 });
+    try t.send(.{ .set_bus_vol = .{ .target = .mic, .value = 0.0 } });
+    t.runInput(2, &input);
+    try testing.expectEqual(@as(f32, 0.0), t.peak());
+    try t.send(.{ .set_bus_vol = .{ .target = .mic, .value = 1.0 } });
+    t.runInput(2, &input);
+    try testing.expect(t.peak() > 0.0);
+    // a session reset puts the dry mix back to 0
+    try t.send(.{ .set_dry = 40 });
+    t.run(1);
+    try testing.expectApproxEqAbs(@as(f32, 0.4), e.dry_mix, 1e-6);
+    try t.send(.reset_session_state);
+    t.run(1);
+    try testing.expectEqual(@as(f32, 0.0), e.dry_mix);
+}
+
+test "the cabinet stage follows the fx settings and fx off turns it off" {
+    const gpa = testing.allocator;
+    var t = try T.init(gpa);
+    defer t.deinit(gpa);
+    const e = t.engine;
+    try t.send(.{ .set_fx = .{ .cabinet_enabled = true, .cabinet_model = .open } });
+    t.run(1);
+    try testing.expect(e.fx.cabinet_enabled);
+    try testing.expectEqual(fx_mod.CabinetModel.open, e.cabinet.model);
+    try t.send(.{ .set_fx = .{ .flanger_enabled = false, .chorus_enabled = false, .reverb_enabled = false, .delay_enabled = false, .cabinet_enabled = false } });
+    t.run(1);
+    try testing.expect(!e.fx.cabinet_enabled);
 }

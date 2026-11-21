@@ -12,7 +12,7 @@
   "source": "impl/rust/source/",
   "evidence": "reports/",
   "upstream": "https://github.com/rfielding/maqam",
-  "upstream_revision": "c80b35dfccc8d6c6ff396b60d595b6bb96447ccc",
+  "upstream_revision": "72c11f5e4287481ef70d493c1085806c416b6800",
   "implementations": [
     {
       "name": "rust",

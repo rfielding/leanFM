@@ -1,12 +1,18 @@
 //! Audio devices for the Zig implementation: ALSA output (with optional non-blocking capture for
-//! the live input) on a thread of its own, and a null device for the bench hook. Each device calls
+//! the live input) on a thread of its own on Linux, CoreAudio on macOS (coreaudio.zig), chosen at
+//! compile time as `Output`, and a null device for the bench hook. Each device calls
 //! one process function per block; that function is the "output callback" of the specification,
 //! and must not lock, allocate on the heap of other threads, touch files or the network (proof
 //! "The audio callback never blocks"). The device thread itself blocks only in the ALSA write,
 //! which is the device's clock.
 const std = @import("std");
+const builtin = @import("builtin");
 const c = @import("alsa");
 const realtime = @import("realtime.zig");
+
+/// The live output device of this operating system: open, start, stop, close, rate, period and
+/// latency_us are the same on each. The ALSA headers are only translated for Linux (build.zig).
+pub const Output = if (builtin.os.tag.isDarwin()) @import("coreaudio.zig").CoreAudio else Alsa;
 
 pub const Frame = [2]f32;
 
@@ -102,6 +108,11 @@ pub const Alsa = struct {
         if (c.snd_pcm_prepare(pcm) < 0) return error.AlsaPrepare;
     }
 
+    /// Whether a capture device feeds the live input.
+    pub fn hasInput(self: *const Alsa) bool {
+        return self.capture != null;
+    }
+
     pub fn start(self: *Alsa, io: std.Io, process: Process, ctx: *anyopaque) !void {
         self.io = io;
         self.process = process;
@@ -112,7 +123,7 @@ pub const Alsa = struct {
 
     fn run(self: *Alsa) void {
         self.memory_locked = realtime.lockMemory();
-        self.realtime = realtime.request(self.io);
+        self.realtime = realtime.request(self.io, @as(u64, self.period) * std.time.ns_per_s / self.rate);
         const frames: c.snd_pcm_uframes_t = self.period;
         while (self.running.load(.acquire)) {
             var got: usize = 0;
@@ -213,12 +224,23 @@ fn waitUntil(io: std.Io, t: u64) void {
     var now = nowNs(io);
     if (now + spin_ns < t) {
         const d = t - spin_ns - now;
-        var req: std.os.linux.timespec = .{ .sec = @intCast(d / std.time.ns_per_s), .nsec = @intCast(d % std.time.ns_per_s) };
-        _ = std.os.linux.nanosleep(&req, null);
+        sleepNs(d);
     }
     now = nowNs(io);
     while (now < t) : (now = nowNs(io)) std.atomic.spinLoopHint();
 }
+
+fn sleepNs(d: u64) void {
+    if (builtin.os.tag.isDarwin()) {
+        var req: std.c.timespec = .{ .sec = @intCast(d / std.time.ns_per_s), .nsec = @intCast(d % std.time.ns_per_s) };
+        _ = nanosleep(&req, null);
+    } else {
+        var req: std.os.linux.timespec = .{ .sec = @intCast(d / std.time.ns_per_s), .nsec = @intCast(d % std.time.ns_per_s) };
+        _ = std.os.linux.nanosleep(&req, null);
+    }
+}
+
+extern "c" fn nanosleep(req: *const std.c.timespec, rem: ?*std.c.timespec) c_int;
 
 /// The number of blocks in `seconds`: a trace passed to `bench` must hold this many.
 pub fn blocksFor(seconds: f64, frames: u32, rate: u32) usize {
@@ -239,15 +261,10 @@ pub fn bench(gpa: std.mem.Allocator, io: std.Io, process: Process, ctx: *anyopaq
     var late_start_max: u64 = 0;
     var in_pos: usize = 0;
     // Asked for before the timed loop, as the live audio thread does; back to normal after it.
-    const granted: realtime.Granted = if (want_realtime) realtime.request(io) else .none;
+    const granted: realtime.Granted = if (want_realtime) realtime.request(io, @as(u64, frames) * std.time.ns_per_s / rate) else .none;
     const locked = want_realtime and realtime.lockMemory();
-    defer if (locked) {
-        _ = std.os.linux.munlockall();
-    };
-    defer if (granted != .none) {
-        const normal: std.os.linux.sched_param = .{ .priority = 0 };
-        _ = std.os.linux.sched_setscheduler(0, .{ .mode = .NORMAL }, &normal);
-    };
+    defer if (locked) realtime.unlockMemory();
+    defer realtime.release(granted);
     const t0 = nowNs(io) + 2 * std.time.ns_per_ms;
     for (0..callbacks) |i| {
         var block_in: []const Frame = &.{};

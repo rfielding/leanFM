@@ -259,6 +259,9 @@ pub const ControlSpec = union(enum) {
     set_sustain: f64,
     set_vcf: VcfChange,
     set_fx: FxChange,
+    set_vol: f32,
+    set_bus_vol: BusVol,
+    set_dry: f32,
     set_nam_enabled: bool,
     set_nam_gain: f32,
     set_nam_input: NamInput,
@@ -267,6 +270,9 @@ pub const ControlSpec = union(enum) {
     set_sympathetic_gain: f32,
     set_sympathetic: SympatheticChange,
 };
+
+/// One bus's volume (the Rust `SetBusVol(VcfTarget, f32)`).
+pub const BusVol = struct { target: vcf.VcfTarget, value: f32 };
 
 pub const Phrase = struct {
     id: usize,
@@ -697,6 +703,8 @@ pub const AudioCmd = union(enum) {
     clear,
     reset_session_state,
     set_vol: f32,
+    set_bus_vol: BusVol,
+    set_dry: f32,
     set_paused: bool,
     set_cur_phrase: usize,
     queue_next_phrase: usize,

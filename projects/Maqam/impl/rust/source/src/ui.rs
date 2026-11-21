@@ -480,7 +480,11 @@ fn draw_phrases(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         ]);
 
         for (si, ch) in rhythm.chars().enumerate() {
-            let is_now = !app.paused && playing && si == cur_sub;
+            // `z` silences score voices but intentionally leaves the
+            // sequencer running so sympathetic strings keep following the
+            // current scale. Show that silent traversal just like audible
+            // playback.
+            let is_now = playing && si == cur_sub;
             let mut sty = Style::default().fg(state_color).bg(BG);
             if is_now {
                 sty = sty.add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
@@ -689,6 +693,9 @@ fn format_fx_status(fx: crate::fx::FxSettings) -> String {
             "delay:{:.2}/{:.2}/{:.2}",
             fx.delay_time_secs, fx.delay_feedback, fx.delay_mix
         ));
+    }
+    if fx.cabinet_enabled {
+        parts.push(format!("cab:{}/{:.2}", fx.cabinet_model.name(), fx.cabinet_mix));
     }
     if parts.is_empty() {
         "off".to_string()

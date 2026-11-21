@@ -20,7 +20,8 @@ spec-check:
 app-check:
 	$(MAKE) -C impl/rust/source check
 
-# zig build and test of the Zig port; needs only zig 0.17 and libasound2-dev, never the Rust tree.
+# zig build and test of the Zig port; needs only zig 0.17 and libasound2-dev (Linux) or the
+# Command Line Tools (macOS), never the Rust tree.
 zig-check:
 	$(MAKE) -C impl/zig/source check
 

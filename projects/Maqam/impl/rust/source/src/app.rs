@@ -18,6 +18,28 @@ use std::path::{Path, PathBuf};
 // intentionally safe to ship in desktop/client applications; never embed the secret key.
 const TONE3000_PUBLISHABLE_CLIENT_ID: &str = "t3k_pub__1tkc-W6fWSyBUgGJdHj-bqpnPtFesDA";
 
+fn volume_targets() -> [VcfTarget; 6] {
+    [
+        VcfTarget::All,
+        VcfTarget::Mic,
+        VcfTarget::Bass,
+        VcfTarget::Kanun,
+        VcfTarget::Kick,
+        VcfTarget::Tanbura,
+    ]
+}
+
+fn volume_target_index(target: VcfTarget) -> usize {
+    match target {
+        VcfTarget::All => 0,
+        VcfTarget::Mic => 1,
+        VcfTarget::Bass => 2,
+        VcfTarget::Kanun => 3,
+        VcfTarget::Kick => 4,
+        VcfTarget::Tanbura => 5,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NamDownloadProgress {
     pub name: String,
@@ -53,6 +75,8 @@ pub struct App {
     pub vcf: VcfBank,
     pub fx: FxSettings,
     pub vol: f32,
+    pub bus_vol: [f32; 6],
+    pub dry_mix: f32,
     pub tune_to: Pitch,
     pub live_nam_commands: Vec<String>,
     pub paused: bool,
@@ -97,6 +121,8 @@ impl App {
             vcf: VcfBank::default(),
             fx: FxSettings::default(),
             vol: 1.0,
+            bus_vol: [1.0; 6],
+            dry_mix: 0.0,
             tune_to: Pitch::parse("d").unwrap(),
             live_nam_commands: Vec::new(),
             paused: false,
@@ -126,6 +152,12 @@ impl App {
             app.message = Some(format!("✗ {err}"));
         }
         let _ = app.audio_tx.send(AudioCmd::SetVol(app.vol));
+        for (target, value) in volume_targets().into_iter().zip(app.bus_vol) {
+            if value != 1.0 {
+                let _ = app.audio_tx.send(AudioCmd::SetBusVol(target, value));
+            }
+        }
+        let _ = app.audio_tx.send(AudioCmd::SetDry(app.dry_mix));
         app
     }
 
@@ -551,6 +583,7 @@ impl App {
         let _ = self.audio_tx.send(AudioCmd::SetVcfBank(start_vcf));
         let _ = self.audio_tx.send(AudioCmd::SetFxSettings(start_fx));
         let _ = self.audio_tx.send(AudioCmd::SetVol(self.vol));
+        let _ = self.audio_tx.send(AudioCmd::SetDry(self.dry_mix));
         let _ = self.audio_tx.send(AudioCmd::SetPaused(self.paused));
         for p in self.phrases.iter().cloned() {
             let _ = self.audio_tx.send(AudioCmd::AddPhrase(p));
@@ -567,7 +600,7 @@ impl App {
         resolve_id_ref_in_phrases(&self.phrases, id_ref)
     }
 
-    fn insert_sym_control(&mut self, before: isize, src: String, control: ControlSpec) {
+    fn insert_timeline_control(&mut self, before: isize, src: String, control: ControlSpec) {
         let insert_pos = match self.resolve_id_ref(before) {
             Some(before_id) => self
                 .phrases
@@ -587,10 +620,10 @@ impl App {
             pos: insert_pos,
             phrase: entry,
         });
-        self.message = Some(format!("inserted sym at {insert_pos}"));
+        self.message = Some(format!("inserted control at {insert_pos}"));
     }
 
-    fn replace_sym_control(&mut self, id_ref: isize, src: String, control: ControlSpec) {
+    fn replace_timeline_control(&mut self, id_ref: isize, src: String, control: ControlSpec) {
         let Some(id) = self.resolve_id_ref(id_ref) else {
             self.message = Some(format!("✗ no phrase id {id_ref}"));
             return;
@@ -602,7 +635,7 @@ impl App {
         let entry = build_control_entry(id, src, control);
         self.phrases[pos] = entry.clone();
         let _ = self.audio_tx.send(AudioCmd::ReplacePhrase(entry));
-        self.message = Some(format!("edited {id} → sym"));
+        self.message = Some(format!("edited {id} → control"));
     }
 
     fn insert_nam_control(&mut self, before: isize, command: NamCommand) {
@@ -677,7 +710,10 @@ impl App {
                     | ControlSpec::SetSympathetic(_)
                     | ControlSpec::SetNamEnabled(_)
                     | ControlSpec::SetNamGain(_)
-                    | ControlSpec::SetNamInput(_) => {}
+                    | ControlSpec::SetNamInput(_)
+                    | ControlSpec::SetVol(_)
+                    | ControlSpec::SetBusVol(_, _)
+                    | ControlSpec::SetDry(_) => {}
                 }
                 continue;
             }
@@ -721,6 +757,7 @@ impl App {
         let _ = self.audio_tx.send(AudioCmd::SetVcfBank(self.vcf));
         let _ = self.audio_tx.send(AudioCmd::SetFxSettings(self.fx));
         let _ = self.audio_tx.send(AudioCmd::SetVol(self.vol));
+        let _ = self.audio_tx.send(AudioCmd::SetDry(self.dry_mix));
         let _ = self.audio_tx.send(AudioCmd::SetPaused(false));
         let _ = self.audio_tx.send(AudioCmd::AddPhrase(phrase));
         let _ = self.audio_tx.send(AudioCmd::SetCurPhrase(0));
@@ -1033,8 +1070,36 @@ impl App {
 
             Cmd::InsertNam { before, command } => self.insert_nam_control(before, command),
 
+            Cmd::InsertVol { before, value } => {
+                self.insert_timeline_control(
+                    before,
+                    format!("vol {value}"),
+                    ControlSpec::SetVol(value),
+                );
+            }
+
+            Cmd::InsertBusVol {
+                before,
+                target,
+                value,
+            } => {
+                self.insert_timeline_control(
+                    before,
+                    format!("vol {} {value}", target.as_str()),
+                    ControlSpec::SetBusVol(target, value),
+                );
+            }
+
+            Cmd::InsertDry { before, percent } => {
+                self.insert_timeline_control(
+                    before,
+                    format!("dry {percent}"),
+                    ControlSpec::SetDry(percent),
+                );
+            }
+
             Cmd::InsertSympathetics { before, enabled } => {
-                self.insert_sym_control(
+                self.insert_timeline_control(
                     before,
                     if enabled { "sym on" } else { "sym off" }.into(),
                     ControlSpec::SetSympathetics(enabled),
@@ -1042,7 +1107,7 @@ impl App {
             }
 
             Cmd::InsertSympatheticDecay { before, decay } => {
-                self.insert_sym_control(
+                self.insert_timeline_control(
                     before,
                     format!("sym decay {decay}"),
                     ControlSpec::SetSympatheticDecay(decay),
@@ -1050,7 +1115,7 @@ impl App {
             }
 
             Cmd::InsertSympatheticGain { before, gain } => {
-                self.insert_sym_control(
+                self.insert_timeline_control(
                     before,
                     format!("sym drive {gain}"),
                     ControlSpec::SetSympatheticGain(gain),
@@ -1058,7 +1123,7 @@ impl App {
             }
 
             Cmd::InsertSympathetic { before, change } => {
-                self.insert_sym_control(
+                self.insert_timeline_control(
                     before,
                     sym_change_src(change),
                     ControlSpec::SetSympathetic(change),
@@ -1101,6 +1166,24 @@ impl App {
                 let _ = self.audio_tx.send(AudioCmd::SetVol(v));
                 self.message = Some(match self.save_globals() {
                     Ok(()) => format!("vol → {v:.2}"),
+                    Err(err) => format!("✗ {err}"),
+                });
+            }
+
+            Cmd::SetBusVol(target, value) => {
+                self.bus_vol[volume_target_index(target)] = value;
+                let _ = self.audio_tx.send(AudioCmd::SetBusVol(target, value));
+                self.message = Some(match self.save_globals() {
+                    Ok(()) => format!("vol {} → {value:.2}", target.as_str()),
+                    Err(err) => format!("✗ {err}"),
+                });
+            }
+
+            Cmd::SetDry(percent) => {
+                self.dry_mix = percent;
+                let _ = self.audio_tx.send(AudioCmd::SetDry(percent));
+                self.message = Some(match self.save_globals() {
+                    Ok(()) => format!("dry → {percent:.0}%  processed → {:.0}%", 100.0 - percent),
                     Err(err) => format!("✗ {err}"),
                 });
             }
@@ -1597,8 +1680,32 @@ impl App {
 
             Cmd::EditNam { id, command } => self.replace_nam_control(id, command),
 
+            Cmd::EditVol { id, value } => {
+                self.replace_timeline_control(
+                    id,
+                    format!("vol {value}"),
+                    ControlSpec::SetVol(value),
+                );
+            }
+
+            Cmd::EditBusVol { id, target, value } => {
+                self.replace_timeline_control(
+                    id,
+                    format!("vol {} {value}", target.as_str()),
+                    ControlSpec::SetBusVol(target, value),
+                );
+            }
+
+            Cmd::EditDry { id, percent } => {
+                self.replace_timeline_control(
+                    id,
+                    format!("dry {percent}"),
+                    ControlSpec::SetDry(percent),
+                );
+            }
+
             Cmd::EditSympathetics { id, enabled } => {
-                self.replace_sym_control(
+                self.replace_timeline_control(
                     id,
                     if enabled { "sym on" } else { "sym off" }.into(),
                     ControlSpec::SetSympathetics(enabled),
@@ -1606,7 +1713,7 @@ impl App {
             }
 
             Cmd::EditSympatheticDecay { id, decay } => {
-                self.replace_sym_control(
+                self.replace_timeline_control(
                     id,
                     format!("sym decay {decay}"),
                     ControlSpec::SetSympatheticDecay(decay),
@@ -1614,7 +1721,7 @@ impl App {
             }
 
             Cmd::EditSympatheticGain { id, gain } => {
-                self.replace_sym_control(
+                self.replace_timeline_control(
                     id,
                     format!("sym gain {gain}"),
                     ControlSpec::SetSympatheticGain(gain),
@@ -1622,7 +1729,7 @@ impl App {
             }
 
             Cmd::EditSympathetic { id, change } => {
-                self.replace_sym_control(
+                self.replace_timeline_control(
                     id,
                     sym_change_src(change),
                     ControlSpec::SetSympathetic(change),
@@ -2175,7 +2282,16 @@ impl App {
 
     fn save_globals(&self) -> Result<(), String> {
         let path = self.globals_path();
-        let out = format!("vol {}\ntuneto {}\n", self.vol, self.tune_to.source_token());
+        let mut out = format!("vol {}\n", self.vol);
+        for (target, value) in volume_targets().into_iter().zip(self.bus_vol) {
+            if value != 1.0 {
+                out.push_str(&format!("vol {} {}\n", target.as_str(), value));
+            }
+        }
+        if self.dry_mix != 0.0 {
+            out.push_str(&format!("dry {}\n", self.dry_mix));
+        }
+        out.push_str(&format!("tuneto {}\n", self.tune_to.source_token()));
         fs::write(&path, out).map_err(|e| {
             format!(
                 "could not write {}; check directory permissions, then try the command again: {e}",
@@ -2209,13 +2325,17 @@ impl App {
                 Cmd::SetVol(value) => {
                     self.vol = value;
                 }
+                Cmd::SetBusVol(target, value) => {
+                    self.bus_vol[volume_target_index(target)] = value;
+                }
+                Cmd::SetDry(percent) => self.dry_mix = percent,
                 Cmd::TuneTo(pitch) => {
                     self.tune_to = pitch;
                     crate::tuning::tune_to_standard_pitch(pitch);
                 }
                 _ => {
                     return Err(format!(
-                        "{} line {line_no}: globals only support vol and tuneto; remove this line or change it to vol <n> or tuneto <pitch>",
+                        "{} line {line_no}: globals only support vol, dry, and tuneto",
                         path.display()
                     ));
                 }
@@ -2519,6 +2639,25 @@ impl App {
                         ControlSpec::SetFx(change),
                     ));
                 }
+                Some("L") if fields.len() == 3 => {
+                    let parsed =
+                        command::parse(&fields[2]).map_err(|e| format!("line {line_no}: {e}"))?;
+                    let control = match parsed {
+                        Cmd::SetVol(value) => ControlSpec::SetVol(value),
+                        Cmd::SetBusVol(target, value) => ControlSpec::SetBusVol(target, value),
+                        _ => return Err(format!("line {line_no}: expected vol line")),
+                    };
+                    loaded.push(build_control_entry(id, fields[2].clone(), control));
+                }
+                Some("D") if fields.len() == 3 => {
+                    let control = match command::parse(&fields[2])
+                        .map_err(|error| format!("line {line_no}: invalid dry control: {error}"))?
+                    {
+                        Cmd::SetDry(percent) => ControlSpec::SetDry(percent),
+                        _ => return Err(format!("line {line_no}: expected dry line")),
+                    };
+                    loaded.push(build_control_entry(id, fields[2].clone(), control));
+                }
                 Some("N") if fields.len() == 3 => {
                     let parsed =
                         command::parse(&fields[2]).map_err(|e| format!("line {line_no}: {e}"))?;
@@ -2700,6 +2839,7 @@ impl App {
         let _ = self.audio_tx.send(AudioCmd::SetVcfBank(start_vcf));
         let _ = self.audio_tx.send(AudioCmd::SetFxSettings(start_fx));
         let _ = self.audio_tx.send(AudioCmd::SetVol(self.vol));
+        let _ = self.audio_tx.send(AudioCmd::SetDry(self.dry_mix));
         let _ = self.audio_tx.send(AudioCmd::SetPaused(false));
         for cmd in live_nam_audio_cmds {
             let _ = self.audio_tx.send(cmd);
@@ -2903,6 +3043,7 @@ impl App {
         let _ = self.audio_tx.send(AudioCmd::SetVcfBank(start_vcf));
         let _ = self.audio_tx.send(AudioCmd::SetFxSettings(start_fx));
         let _ = self.audio_tx.send(AudioCmd::SetVol(self.vol));
+        let _ = self.audio_tx.send(AudioCmd::SetDry(self.dry_mix));
         let _ = self.audio_tx.send(AudioCmd::SetPaused(false));
         for p in loaded {
             let _ = self.audio_tx.send(AudioCmd::AddPhrase(p));
@@ -3049,6 +3190,7 @@ impl App {
         let _ = self.audio_tx.send(AudioCmd::SetVcfBank(start_vcf));
         let _ = self.audio_tx.send(AudioCmd::SetFxSettings(start_fx));
         let _ = self.audio_tx.send(AudioCmd::SetVol(self.vol));
+        let _ = self.audio_tx.send(AudioCmd::SetDry(self.dry_mix));
         let _ = self.audio_tx.send(AudioCmd::SetPaused(false));
         for p in loaded {
             let _ = self.audio_tx.send(AudioCmd::AddPhrase(p));
@@ -3698,20 +3840,38 @@ fn prompt_with_automatic_nam_research(prompt: &str) -> Result<String, String> {
     if !llm_prompt_needs_nam_research(prompt) {
         return Ok(prompt.to_string());
     }
-    let results = find_nam_captures(prompt)?;
+    let query = prompt
+        .strip_prefix("User wants this edit:\n")
+        .and_then(|value| value.split_once("\n\n").map(|(request, _)| request))
+        .unwrap_or(prompt);
+    let results = find_nam_captures(query)?;
     Ok(format!(
-        "{prompt}\n\nmaqam-live already performed NAM capture research for this request:\n{results}\n\nUse these researched links directly. Do not tell the user to go research amp models. If there is a direct .nam URL, give the exact `nam import URL as name` command. If there are only result pages, give the best result links and explain that maqam-live could not extract a direct .nam URL from those pages."
+        "{prompt}\n\nmaqam-live already performed NAM capture research for this request:\n{results}\n\nUse a researched result directly. Prefer an exact `nam tone3000 ID as name` command when one is listed. Otherwise, if there is a direct .nam URL, use `nam pin URL as name`. Do not tell the user to browse or research amp models."
     ))
 }
 
 fn llm_prompt_needs_nam_research(prompt: &str) -> bool {
     let lower = prompt.to_ascii_lowercase();
+    let describes_amp_tone = lower.contains("tone")
+        && [
+            "distort",
+            "overdrive",
+            "fuzz",
+            "crunch",
+            "high gain",
+            "clean",
+            "bass",
+            "guitar",
+        ]
+        .iter()
+        .any(|word| lower.contains(word));
     let mentions_nam_or_amp = lower.contains(".nam")
         || lower.contains(" nam ")
         || lower.starts_with("nam ")
         || lower.contains("neural amp")
         || lower.contains("amp model")
-        || lower.contains("amp capture");
+        || lower.contains("amp capture")
+        || describes_amp_tone;
     let asks_for_discovery = [
         "find",
         "search",
@@ -3738,6 +3898,20 @@ fn llm_prompt_needs_nam_research(prompt: &str) -> bool {
 }
 
 fn find_nam_captures(query: &str) -> Result<String, String> {
+    if let Ok(results) = find_tone3000_tones(query) {
+        if !results.is_empty() {
+            let mut lines = vec![format!(
+                "TONE3000 NAM A2 results for `{query}` (portable commands ready to apply):"
+            )];
+            for tone in results {
+                lines.push(format!(
+                    "- {} — `nam tone3000 {} as {}`",
+                    tone.title, tone.id, tone.name
+                ));
+            }
+            return Ok(lines.join("\n"));
+        }
+    }
     let search_query = format!("{query} Neural Amp Modeler NAM capture download");
     let url = format!(
         "https://duckduckgo.com/html/?q={}",
@@ -3786,6 +3960,96 @@ fn find_nam_captures(query: &str) -> Result<String, String> {
         lines.push(format!("{}. {} — {}", idx + 1, result.title, result.url));
     }
     Ok(lines.join("\n"))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Tone3000SearchResult {
+    id: u64,
+    title: String,
+    name: String,
+}
+
+fn find_tone3000_tones(query: &str) -> Result<Vec<Tone3000SearchResult>, String> {
+    let token = tone3000_access_token()?;
+    let search = tone3000_search_terms(query);
+    let url = format!(
+        "https://www.tone3000.com/api/v1/tones/search?query={}&page=1&page_size=5&sort=best-match&format=nam&architecture=2",
+        url_query_encode(&search)
+    );
+    let response: serde_json::Value = ureq::get(&url)
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Content-Type", "application/json")
+        .timeout(std::time::Duration::from_secs(20))
+        .call()
+        .map_err(|err| describe_nam_search_error(err, query))?
+        .into_json()
+        .map_err(|err| format!("TONE3000 search response could not be read: {err}"))?;
+    Ok(parse_tone3000_search_results(&response))
+}
+
+fn tone3000_search_terms(query: &str) -> String {
+    let lower = query.to_ascii_lowercase();
+    let flavor = [
+        "distorted",
+        "distortion",
+        "overdrive",
+        "fuzz",
+        "crunch",
+        "high gain",
+        "clean",
+    ]
+    .into_iter()
+    .find(|term| lower.contains(term));
+    let instrument = ["bass", "guitar"]
+        .into_iter()
+        .find(|term| lower.contains(term));
+    match (flavor, instrument) {
+        (Some(flavor), Some(instrument)) => format!("{flavor} {instrument}"),
+        (Some(flavor), None) => flavor.to_string(),
+        (None, Some(instrument)) => instrument.to_string(),
+        (None, None) => query.trim().to_string(),
+    }
+}
+
+fn parse_tone3000_search_results(value: &serde_json::Value) -> Vec<Tone3000SearchResult> {
+    value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|tone| {
+            let id = tone.get("id")?.as_u64()?;
+            let title = tone
+                .get("title")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("TONE3000 tone")
+                .trim()
+                .to_string();
+            let mut name = title
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_alphanumeric() {
+                        ch.to_ascii_lowercase()
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>();
+            while name.contains("__") {
+                name = name.replace("__", "_");
+            }
+            let name = name.trim_matches('_').chars().take(40).collect::<String>();
+            Some(Tone3000SearchResult {
+                id,
+                title,
+                name: if name.is_empty() {
+                    format!("tone_{id}")
+                } else {
+                    name
+                },
+            })
+        })
+        .collect()
 }
 
 fn fetch_direct_nam_links_from_page(url: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
@@ -4030,7 +4294,23 @@ fn is_sym_command_noun(token: &str) -> bool {
 
 fn llm_prompt_is_edit_request(prompt: &str) -> bool {
     let lower = prompt.trim_start().to_ascii_lowercase();
-    lower.starts_with("let's ")
+    let discovery_with_application = ["find ", "search ", "look up ", "lookup ", "browse "]
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
+        && [
+            "set it here",
+            "use it here",
+            "load it here",
+            "apply it here",
+            "set that here",
+            "use that here",
+            "load that here",
+            "apply that here",
+        ]
+        .iter()
+        .any(|phrase| lower.contains(phrase));
+    discovery_with_application
+        || lower.starts_with("let's ")
         || lower.starts_with("lets ")
         || lower.starts_with("i need ")
         || lower.starts_with("we need ")
@@ -5550,6 +5830,7 @@ fn fx_change_src(change: command::FxChange) -> String {
         && change.chorus_enabled == Some(false)
         && change.reverb_enabled == Some(false)
         && change.delay_enabled == Some(false)
+        && change.cabinet_enabled == Some(false)
     {
         return "fx off".to_string();
     }
@@ -5630,7 +5911,11 @@ fn fx_change_src(change: command::FxChange) -> String {
             parts.push("decay".to_string());
             parts.push(value_change_src(decay));
         }
-    } else {
+    } else if change.delay_enabled.is_some()
+        || change.delay_time_secs.is_some()
+        || change.delay_feedback.is_some()
+        || change.delay_mix.is_some()
+    {
         parts.push("delay".to_string());
         if change.delay_enabled == Some(false) {
             parts.push("off".to_string());
@@ -5645,6 +5930,19 @@ fn fx_change_src(change: command::FxChange) -> String {
             parts.push(value_change_src(feedback));
         }
         if let Some(mix) = change.delay_mix {
+            parts.push("mix".to_string());
+            parts.push(value_change_src(mix));
+        }
+    } else {
+        parts.push("cab".to_string());
+        if change.cabinet_enabled == Some(false) {
+            parts.push("off".to_string());
+            return parts.join(" ");
+        }
+        if let Some(model) = change.cabinet_model {
+            parts.push(model.name().to_string());
+        }
+        if let Some(mix) = change.cabinet_mix {
             parts.push("mix".to_string());
             parts.push(value_change_src(mix));
         }
@@ -5686,7 +5984,12 @@ fn describe_fx(fx: FxSettings) -> String {
     } else {
         "delay off".to_string()
     };
-    format!("{flanger} {chorus} {rev} {delay}")
+    let cabinet = if fx.cabinet_enabled {
+        format!("cab {} {:.2}", fx.cabinet_model.name(), fx.cabinet_mix)
+    } else {
+        "cab off".to_string()
+    };
+    format!("{flanger} {chorus} {rev} {delay} {cabinet}")
 }
 
 fn describe_vcf(v: VcfSettings) -> String {
@@ -5730,7 +6033,7 @@ fn is_plain_fx_control_line(line: &str) -> bool {
     let first = line.split_whitespace().next().unwrap_or("");
     matches!(
         first.to_ascii_lowercase().as_str(),
-        "fx" | "flanger" | "flange" | "chorus" | "choir" | "reverb" | "rev" | "delay" | "pingpong"
+        "fx" | "flanger" | "flange" | "chorus" | "choir" | "reverb" | "rev" | "delay" | "pingpong" | "cab" | "cabinet"
     )
 }
 
@@ -5888,7 +6191,7 @@ mod tests {
         assert_eq!(app.phrases[2].bar.maqam_names, vec!["Locrian"]);
         assert_eq!(
             app.phrases[2].bar.ratio_strs[0],
-            "1/1 16/15 6/5 4/3 64/45 8/5 9/5"
+            "1/1 256/243 32/27 4/3 1024/729 128/81 16/9"
         );
         assert_eq!(app.phrases[3].bar.maqam_names, vec!["Diminished"]);
         assert_eq!(
@@ -6064,8 +6367,8 @@ mod tests {
             Cmd::SetNam(NamCommand::Gain(gain)) if (gain - 1.5).abs() < f32::EPSILON
         ));
         assert!(matches!(
-            command::parse("nam gain 11").unwrap(),
-            Cmd::SetNam(NamCommand::Gain(gain)) if (gain - 11.0).abs() < f32::EPSILON
+            command::parse("nam gain 100").unwrap(),
+            Cmd::SetNam(NamCommand::Gain(gain)) if (gain - 100.0).abs() < f32::EPSILON
         ));
         let parsed = command::parse("nam import metallica.nam as metallica").unwrap();
         let Cmd::SetNam(NamCommand::Import { path, name }) = parsed else {
@@ -6078,7 +6381,7 @@ mod tests {
             panic!("expected NAM load command");
         };
         assert_eq!(path, "metallica");
-        assert!(command::parse("nam gain 12").is_err());
+        assert!(command::parse("nam gain 101").is_err());
     }
 
     #[test]
@@ -6277,6 +6580,107 @@ mod tests {
             "vol 0.7\ntuneto a\n"
         );
         assert!((crate::tuning::pitch_to_hz('a', 0, 4) - 440.0).abs() < 0.0001);
+
+        let _ = fs::remove_file(&globals_path);
+        if let Some(path) = old_path {
+            std::env::set_var("MAQAM_GLOBALS_PATH", path);
+        } else {
+            std::env::remove_var("MAQAM_GLOBALS_PATH");
+        }
+    }
+
+    #[test]
+    fn targeted_volume_is_post_vcf_live_state() {
+        let _guard = session_test_lock();
+        let old_path = std::env::var("MAQAM_GLOBALS_PATH").ok();
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let globals_path = std::env::temp_dir().join(format!("maqam-bus-vol-{suffix}.ml"));
+        std::env::set_var("MAQAM_GLOBALS_PATH", &globals_path);
+
+        let (tx, rx) = bounded(16);
+        let mut app = App::new(tx);
+        while rx.try_recv().is_ok() {}
+        app.handle_command("vol mic 0.25");
+
+        assert_eq!(app.bus_vol[volume_target_index(VcfTarget::Mic)], 0.25);
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(AudioCmd::SetBusVol(VcfTarget::Mic, value)) if (value - 0.25).abs() < 0.0001
+        ));
+        assert_eq!(
+            fs::read_to_string(&globals_path).unwrap(),
+            "vol 1\nvol mic 0.25\ntuneto d\n"
+        );
+
+        let _ = fs::remove_file(&globals_path);
+        if let Some(path) = old_path {
+            std::env::set_var("MAQAM_GLOBALS_PATH", path);
+        } else {
+            std::env::remove_var("MAQAM_GLOBALS_PATH");
+        }
+    }
+
+    #[test]
+    fn targeted_volume_can_be_inserted_into_timeline() {
+        let _guard = session_test_lock();
+        let (tx, _rx) = bounded(16);
+        let mut app = App::new(tx);
+        app.handle_command("d bayati 44");
+        app.handle_command("i 0 vol mic 0.25");
+
+        assert_eq!(app.phrases[0].src, "vol mic 0.25");
+        assert!(matches!(
+            app.phrases[0].control,
+            Some(ControlSpec::SetBusVol(VcfTarget::Mic, value))
+                if (value - 0.25).abs() < 0.0001
+        ));
+        app.handle_command("edit 0 vol mic 0.25");
+
+        assert_eq!(app.phrases[1].src, "vol mic 0.25");
+        assert!(matches!(
+            app.phrases[1].control,
+            Some(ControlSpec::SetBusVol(VcfTarget::Mic, value))
+                if (value - 0.25).abs() < 0.0001
+        ));
+    }
+
+    #[test]
+    fn dry_mix_is_live_and_timeline_state() {
+        let _guard = session_test_lock();
+        let old_path = std::env::var("MAQAM_GLOBALS_PATH").ok();
+        let globals_path = std::env::temp_dir().join(format!(
+            "maqam-dry-mix-{}.ml",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::env::set_var("MAQAM_GLOBALS_PATH", &globals_path);
+        let (tx, rx) = bounded(32);
+        let mut app = App::new(tx);
+        while rx.try_recv().is_ok() {}
+
+        app.handle_command("dry 25");
+        assert_eq!(app.dry_mix, 25.0);
+        assert!(matches!(rx.try_recv(), Ok(AudioCmd::SetDry(v)) if v == 25.0));
+        assert!(fs::read_to_string(&globals_path)
+            .unwrap()
+            .contains("dry 25\n"));
+
+        app.handle_command("d bayati 44");
+        app.handle_command("i 0 dry 50");
+        assert!(matches!(
+            app.phrases[0].control,
+            Some(ControlSpec::SetDry(50.0))
+        ));
+        app.handle_command("edit 0 dry 75");
+        assert!(matches!(
+            app.phrases[1].control,
+            Some(ControlSpec::SetDry(75.0))
+        ));
 
         let _ = fs::remove_file(&globals_path);
         if let Some(path) = old_path {
@@ -6554,6 +6958,18 @@ mod tests {
     }
 
     #[test]
+    fn cabinet_commands_select_portable_impulse_responses() {
+        let Cmd::SetFx(change) = command::parse("cab modern mix=0.85").unwrap() else {
+            panic!("expected cabinet effect command");
+        };
+        let settings = command::apply_fx_change(FxSettings::default(), change).unwrap();
+        assert!(settings.cabinet_enabled);
+        assert_eq!(settings.cabinet_model, crate::fx::CabinetModel::Modern);
+        assert_eq!(settings.cabinet_mix, 0.85);
+        assert_eq!(fx_change_src(change), "cab modern mix 0.85");
+    }
+
+    #[test]
     fn jump_times_one_is_noop_and_not_added() {
         let (tx, _rx) = bounded(16);
         let mut app = App::new(tx);
@@ -6707,6 +7123,9 @@ mod tests {
         assert!(llm_prompt_is_edit_request("how do i get sympathetics?"));
         assert!(!llm_prompt_is_edit_request("can i have NAM A2?"));
         assert!(llm_prompt_is_edit_request("add NAM A2 on input"));
+        assert!(llm_prompt_is_edit_request(
+            "find any distorted bass tone and set it here"
+        ));
         assert!(!llm_prompt_is_edit_request(
             "what are the valid values for sym decay?"
         ));
@@ -6949,6 +7368,9 @@ mod tests {
         assert!(llm_prompt_needs_nam_research(
             "where can i get a Mesa amp model?"
         ));
+        assert!(llm_prompt_needs_nam_research(
+            "find any distorted bass tone and set it here"
+        ));
         assert!(!llm_prompt_needs_nam_research("how do i turn NAM off?"));
         assert!(!llm_prompt_needs_nam_research("how do i set vcf mic?"));
     }
@@ -6959,6 +7381,39 @@ mod tests {
             .expect_err("missing query should be rejected before network access");
 
         assert!(err.contains("needs a non-empty query"));
+    }
+
+    #[test]
+    fn tone3000_search_uses_tone_words_instead_of_edit_instructions() {
+        assert_eq!(
+            tone3000_search_terms("find any distorted bass tone and set it here"),
+            "distorted bass"
+        );
+        assert_eq!(tone3000_search_terms("get me a fuzz guitar"), "fuzz guitar");
+    }
+
+    #[test]
+    fn parses_tone3000_results_into_portable_command_parts() {
+        let results = parse_tone3000_search_results(&serde_json::json!({
+            "data": [{ "id": 12345, "title": "Filthy Bass / DI+Fuzz" }]
+        }));
+        assert_eq!(
+            results,
+            vec![Tone3000SearchResult {
+                id: 12345,
+                title: "Filthy Bass / DI+Fuzz".into(),
+                name: "filthy_bass_di_fuzz".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn nam_research_extracts_the_user_request_from_an_edit_prompt() {
+        let prompt = llm_edit_prompt("find any distorted bass tone and set it here");
+        let query = prompt
+            .strip_prefix("User wants this edit:\n")
+            .and_then(|value| value.split_once("\n\n").map(|(request, _)| request));
+        assert_eq!(query, Some("find any distorted bass tone and set it here"));
     }
 
     #[test]

@@ -7,7 +7,11 @@ the Zig stands alone (it never builds, links or reads anything under `impl/rust/
 Toolchain: Zig 0.17.1. Notable differences from older Zig:
 
 * `@cImport` does not exist. C headers are translated in `build.zig` (`b.addTranslateC`) and
-  imported as modules (`@import("alsa")`). Only the audio device module uses C.
+  imported as modules (`@import("alsa")`, Linux only). Only the audio device modules use C; the
+  few CoreAudio and Mach declarations macOS needs are written by hand in `coreaudio.zig` and
+  `realtime.zig` instead of translating the SDK headers.
+* Platform code branches on `builtin.os.tag` at compile time; `device.Output` is the live device
+  of the target (`device.Alsa` on Linux, `coreaudio.CoreAudio` on macOS).
 * `std.ArrayList(T)` is unmanaged: `var l: std.ArrayList(T) = .empty; try l.append(gpa, x); l.deinit(gpa);`
   The same for `std.StringHashMapUnmanaged`, `std.AutoHashMapUnmanaged`.
 * Files and processes go through `std.Io` (`std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(n))`,

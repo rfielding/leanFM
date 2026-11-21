@@ -1,4 +1,5 @@
-# maqam-live in Zig. Needs zig 0.17 and libasound2-dev; nothing outside this directory.
+# maqam-live in Zig. Needs zig 0.17 and libasound2-dev (Linux) or the Command Line Tools (macOS);
+# nothing outside this directory.
 # The targets the project's scripts/compare.py measures every implementation by:
 #   check   build and run every test
 #   render  SESSION=... CYCLES=... RATE=... WAV=...   offline render (deterministic)

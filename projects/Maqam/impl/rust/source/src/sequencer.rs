@@ -7,7 +7,7 @@ use crate::command::{FxChange, NamInput, SympatheticChange, VcfChange};
 use crate::fx::FxSettings;
 use crate::synth::{expand_degrees, zigzag_walk};
 use crate::tuning::{snap_to_oud_lattice, Maqam, Pitch};
-use crate::vcf::VcfBank;
+use crate::vcf::{VcfBank, VcfTarget};
 
 // ── Bar event ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +73,9 @@ pub enum ControlSpec {
     SetSustain(f64),
     SetVcf(VcfChange),
     SetFx(FxChange),
+    SetVol(f32),
+    SetBusVol(VcfTarget, f32),
+    SetDry(f32),
     SetNamEnabled(bool),
     SetNamGain(f32),
     SetNamInput(NamInput),
@@ -444,6 +447,8 @@ pub enum AudioCmd {
     Clear,
     ResetSessionState,
     SetVol(f32),
+    SetBusVol(VcfTarget, f32),
+    SetDry(f32),
     SetPaused(bool),
     SetCurPhrase(usize),
     QueueNextPhrase(usize),

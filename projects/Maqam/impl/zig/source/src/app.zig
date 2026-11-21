@@ -119,7 +119,9 @@ pub const Http = struct {
         return net.download(gpa, io, url, headers, file, progress);
     }
     fn realOpenBrowser(_: ?*anyopaque, gpa: Allocator, io: std.Io, url: []const u8) anyerror!void {
-        const r = try std.process.run(gpa, io, .{ .argv = &.{ "xdg-open", url } });
+        // The system's URL opener, as upstream's open_system_browser: open on macOS, xdg-open on Linux.
+        const opener = if (@import("builtin").os.tag.isDarwin()) "open" else "xdg-open";
+        const r = try std.process.run(gpa, io, .{ .argv = &.{ opener, url } });
         defer gpa.free(r.stdout);
         defer gpa.free(r.stderr);
         switch (r.term) {
@@ -254,6 +256,9 @@ const LlmRequest = struct {
     prompt: []u8,
     history: []LlmChatMessage,
     score_context: []u8,
+    /// A TONE3000 access token still valid when the request was built, for the TONE3000 search
+    /// NAM research tries first; null searches the web only.
+    tone3000_token: ?[]u8 = null,
 
     fn providerName(self: *const LlmRequest) []const u8 {
         return providerNameOf(self.provider);
@@ -266,6 +271,7 @@ const LlmRequest = struct {
         for (self.history) |m| gpa.free(m.content);
         gpa.free(self.history);
         gpa.free(self.score_context);
+        if (self.tone3000_token) |t| gpa.free(t);
     }
 };
 
@@ -385,6 +391,10 @@ pub const App = struct {
     vcf: VcfBank = .{},
     fx: FxSettings = .{},
     vol: f32 = 1.0,
+    /// Live per-bus volume, indexed by VcfTarget (all, mic, bass, kanun, drums, sym).
+    bus_vol: [6]f32 = @splat(1.0),
+    /// Live dry mix, percent 0..100.
+    dry_mix: f32 = 0.0,
     tune_to: Pitch = .{ .letter = 'd', .accidental = 0, .octave = 4 },
     live_nam_commands: std.ArrayList([]u8) = .empty,
     paused: bool = false,
@@ -448,6 +458,10 @@ pub const App = struct {
             error.OutOfMemory => return e,
         };
         try self.sendAudio(.{ .set_vol = self.vol });
+        for (self.bus_vol, 0..) |value, k| {
+            if (value != 1.0) try self.sendAudio(.{ .set_bus_vol = .{ .target = @enumFromInt(k), .value = value } });
+        }
+        try self.sendAudio(.{ .set_dry = self.dry_mix });
         return self;
     }
 
@@ -1196,6 +1210,7 @@ pub const App = struct {
         try self.sendAudio(.{ .set_vcf_bank = start.vcf });
         try self.sendAudio(.{ .set_fx_settings = start.fx });
         try self.sendAudio(.{ .set_vol = self.vol });
+        try self.sendAudio(.{ .set_dry = self.dry_mix });
         try self.sendAudio(.{ .set_paused = self.paused });
         for (self.phrases.items) |*p| try self.sendPhraseCopy(p, .add);
         if (self.phrases.items.len > 0) try self.sendAudio(.{ .set_cur_phrase = @min(target_pos, self.phrases.items.len - 1) });
@@ -1283,18 +1298,28 @@ pub const App = struct {
         return sequencer.buildControlEntry(self.gpa, id, src, control);
     }
 
-    fn insertSymControl(self: *App, before: isize, src: []const u8, control: ControlSpec) Allocator.Error!void {
+    fn insertTimelineControl(self: *App, before: isize, src: []const u8, control: ControlSpec) Allocator.Error!void {
         if (!try self.roomForEntry()) return;
         const pos = (try self.insertPos(before)) orelse return;
         const id = self.takeId();
         try self.insertEntry(pos, try self.controlEntry(id, src, control));
-        try self.setMsg("inserted sym at {d}", .{pos});
+        try self.setMsg("inserted control at {d}", .{pos});
     }
 
-    fn replaceSymControl(self: *App, id_ref: isize, src: []const u8, control: ControlSpec) Allocator.Error!void {
+    fn replaceTimelineControl(self: *App, id_ref: isize, src: []const u8, control: ControlSpec) Allocator.Error!void {
         const e = (try self.requireEntry(id_ref)) orelse return;
         try self.replaceEntry(e.pos, try self.controlEntry(e.id, src, control));
-        try self.setMsg("edited {d} → sym", .{e.id});
+        try self.setMsg("edited {d} → control", .{e.id});
+    }
+
+    /// A vol, vol <bus> or dry row: inserted before `before` or replacing `edit_id`.
+    fn levelControl(self: *App, place: union(enum) { before: isize, edit: isize }, comptime fmt: []const u8, args: anytype, control: ControlSpec) Allocator.Error!void {
+        const src = try std.fmt.allocPrint(self.gpa, fmt, args);
+        defer self.gpa.free(src);
+        switch (place) {
+            .before => |b| try self.insertTimelineControl(b, src, control),
+            .edit => |id| try self.replaceTimelineControl(id, src, control),
+        }
     }
 
     fn insertNamControl(self: *App, before: isize, cmd: NamCommand) Allocator.Error!void {
@@ -1373,6 +1398,7 @@ pub const App = struct {
         try self.sendAudio(.{ .set_vcf_bank = self.vcf });
         try self.sendAudio(.{ .set_fx_settings = self.fx });
         try self.sendAudio(.{ .set_vol = self.vol });
+        try self.sendAudio(.{ .set_dry = self.dry_mix });
         try self.sendAudio(.{ .set_paused = false });
         const h = try Phrase.create(self.gpa, phrase);
         try self.sendAudio(.{ .add_phrase = h });
@@ -1571,21 +1597,27 @@ pub const App = struct {
                 try self.setMsg("inserted {s}", .{d});
             },
             .insert_nam => |v| try self.insertNamControl(v.before, v.command),
-            .insert_sympathetics => |v| try self.insertSymControl(v.before, if (v.enabled) "sym on" else "sym off", .{ .set_sympathetics = v.enabled }),
+            .insert_vol => |v| try self.levelControl(.{ .before = v.before }, "vol {d}", .{v.value}, .{ .set_vol = v.value }),
+            .insert_bus_vol => |v| try self.levelControl(.{ .before = v.before }, "vol {s} {d}", .{ v.target.asStr(), v.value }, .{ .set_bus_vol = .{ .target = v.target, .value = v.value } }),
+            .insert_dry => |v| try self.levelControl(.{ .before = v.before }, "dry {d}", .{v.percent}, .{ .set_dry = v.percent }),
+            .edit_vol => |v| try self.levelControl(.{ .edit = v.id }, "vol {d}", .{v.value}, .{ .set_vol = v.value }),
+            .edit_bus_vol => |v| try self.levelControl(.{ .edit = v.id }, "vol {s} {d}", .{ v.target.asStr(), v.value }, .{ .set_bus_vol = .{ .target = v.target, .value = v.value } }),
+            .edit_dry => |v| try self.levelControl(.{ .edit = v.id }, "dry {d}", .{v.percent}, .{ .set_dry = v.percent }),
+            .insert_sympathetics => |v| try self.insertTimelineControl(v.before, if (v.enabled) "sym on" else "sym off", .{ .set_sympathetics = v.enabled }),
             .insert_sympathetic_decay => |v| {
                 const src = try std.fmt.allocPrint(self.gpa, "sym decay {d}", .{v.decay});
                 defer self.gpa.free(src);
-                try self.insertSymControl(v.before, src, .{ .set_sympathetic_decay = v.decay });
+                try self.insertTimelineControl(v.before, src, .{ .set_sympathetic_decay = v.decay });
             },
             .insert_sympathetic_gain => |v| {
                 const src = try std.fmt.allocPrint(self.gpa, "sym drive {d}", .{v.gain});
                 defer self.gpa.free(src);
-                try self.insertSymControl(v.before, src, .{ .set_sympathetic_gain = v.gain });
+                try self.insertTimelineControl(v.before, src, .{ .set_sympathetic_gain = v.gain });
             },
             .insert_sympathetic => |v| {
                 const src = try session.symChangeSrc(self.gpa, v.change);
                 defer self.gpa.free(src);
-                try self.insertSymControl(v.before, src, .{ .set_sympathetic = v.change });
+                try self.insertTimelineControl(v.before, src, .{ .set_sympathetic = v.change });
             },
             .toggle_pause => |v| {
                 if (v.start_id) |sid| {
@@ -1616,6 +1648,26 @@ pub const App = struct {
                     try self.setMsg("✗ {s}", .{err});
                 } else {
                     try self.setMsg("vol → {f}", .{rfix(v, 2)});
+                }
+            },
+            .set_bus_vol => |v| {
+                self.bus_vol[@intFromEnum(v.target)] = v.value;
+                try self.sendAudio(.{ .set_bus_vol = .{ .target = v.target, .value = v.value } });
+                if (try self.saveGlobals()) |err| {
+                    defer self.gpa.free(err);
+                    try self.setMsg("✗ {s}", .{err});
+                } else {
+                    try self.setMsg("vol {s} → {f}", .{ v.target.asStr(), rfix(v.value, 2) });
+                }
+            },
+            .set_dry => |percent| {
+                self.dry_mix = percent;
+                try self.sendAudio(.{ .set_dry = percent });
+                if (try self.saveGlobals()) |err| {
+                    defer self.gpa.free(err);
+                    try self.setMsg("✗ {s}", .{err});
+                } else {
+                    try self.setMsg("dry → {f}%  processed → {f}%", .{ rfix(percent, 0), rfix(100.0 - percent, 0) });
                 }
             },
             .record => |reps| try self.startRecording(reps),
@@ -1900,21 +1952,21 @@ pub const App = struct {
                 try self.setMsg("edited {d} → {s}", .{ e.id, d });
             },
             .edit_nam => |v| try self.replaceNamControl(v.id, v.command),
-            .edit_sympathetics => |v| try self.replaceSymControl(v.id, if (v.enabled) "sym on" else "sym off", .{ .set_sympathetics = v.enabled }),
+            .edit_sympathetics => |v| try self.replaceTimelineControl(v.id, if (v.enabled) "sym on" else "sym off", .{ .set_sympathetics = v.enabled }),
             .edit_sympathetic_decay => |v| {
                 const src = try std.fmt.allocPrint(self.gpa, "sym decay {d}", .{v.decay});
                 defer self.gpa.free(src);
-                try self.replaceSymControl(v.id, src, .{ .set_sympathetic_decay = v.decay });
+                try self.replaceTimelineControl(v.id, src, .{ .set_sympathetic_decay = v.decay });
             },
             .edit_sympathetic_gain => |v| {
                 const src = try std.fmt.allocPrint(self.gpa, "sym gain {d}", .{v.gain});
                 defer self.gpa.free(src);
-                try self.replaceSymControl(v.id, src, .{ .set_sympathetic_gain = v.gain });
+                try self.replaceTimelineControl(v.id, src, .{ .set_sympathetic_gain = v.gain });
             },
             .edit_sympathetic => |v| {
                 const src = try session.symChangeSrc(self.gpa, v.change);
                 defer self.gpa.free(src);
-                try self.replaceSymControl(v.id, src, .{ .set_sympathetic = v.change });
+                try self.replaceTimelineControl(v.id, src, .{ .set_sympathetic = v.change });
             },
             .delete_bars => |ids| {
                 var not_found: std.ArrayList(isize) = .empty;
@@ -2188,7 +2240,14 @@ pub const App = struct {
             .search => |v| {
                 var f: Failure = .{ .gpa = self.gpa };
                 defer f.deinit();
-                if (findNamCaptures(&f, self.http, self.gpa, self.io, v.query)) |results| {
+                var tf: Failure = .{ .gpa = self.gpa };
+                defer tf.deinit();
+                const token: ?[]u8 = self.tone3000AccessToken(&tf) catch |e| switch (e) {
+                    error.OutOfMemory => return error.OutOfMemory,
+                    else => null,
+                };
+                defer if (token) |t| self.gpa.free(t);
+                if (findNamCaptures(&f, self.http, self.gpa, self.io, v.query, token)) |results| {
                     self.setMsgOwned(results);
                 } else |e| {
                     const m = f.take(e);
@@ -2693,6 +2752,22 @@ pub const App = struct {
         return loadTone3000AuthAt(f, self.gpa, self.io, self.cwd, self.tone3000AuthPath());
     }
 
+    /// A TONE3000 access token that needs no refresh (TONE3000_ACCESS_TOKEN, or a saved login not
+    /// about to expire), or null. Never touches the network: the LLM worker gets it, and a request
+    /// without one researches NAM captures on the web only, as upstream does when its token fails.
+    fn currentTone3000Token(self: *App) Allocator.Error!?[]u8 {
+        if (self.env.get("TONE3000_ACCESS_TOKEN")) |t| return try self.gpa.dupe(u8, t);
+        var f: Failure = .{ .gpa = self.gpa };
+        defer f.deinit();
+        var auth = self.loadTone3000Auth(&f) catch |e| switch (e) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return null,
+        };
+        defer auth.deinit(self.gpa);
+        if (auth.expires_at <= unixTime(self.io) + 60) return null;
+        return try self.gpa.dupe(u8, auth.access_token);
+    }
+
     fn tone3000AccessToken(self: *App, f: *Failure) Failure.Error![]u8 {
         if (self.env.get("TONE3000_ACCESS_TOKEN")) |t| return self.gpa.dupe(u8, t);
         var auth = try self.loadTone3000Auth(f);
@@ -2750,7 +2825,8 @@ pub const App = struct {
             filled += 1;
         }
         const ctx = try self.llmScoreContext(gpa);
-        return .{ .provider = provider, .key = key, .model = model, .prompt = p, .history = history, .score_context = ctx };
+        errdefer gpa.free(ctx);
+        return .{ .provider = provider, .key = key, .model = model, .prompt = p, .history = history, .score_context = ctx, .tone3000_token = try self.currentTone3000Token() };
     }
 
     fn askLlm(self: *App, provider: LlmProvider, prompt: []const u8) Allocator.Error!void {
@@ -2989,8 +3065,15 @@ pub const App = struct {
     fn saveGlobals(self: *App) Allocator.Error!?[]u8 {
         const path = self.globalsPath();
         var buf: [3]u8 = undefined;
-        const out = try std.fmt.allocPrint(self.gpa, "vol {d}\ntuneto {s}\n", .{ self.vol, self.tune_to.sourceTokenBuf(&buf) });
-        defer self.gpa.free(out);
+        var w: std.Io.Writer.Allocating = .init(self.gpa);
+        defer w.deinit();
+        w.writer.print("vol {d}\n", .{self.vol}) catch return error.OutOfMemory;
+        for (self.bus_vol, 0..) |value, k| {
+            if (value != 1.0) w.writer.print("vol {s} {d}\n", .{ @as(VcfTarget, @enumFromInt(k)).asStr(), value }) catch return error.OutOfMemory;
+        }
+        if (self.dry_mix != 0.0) w.writer.print("dry {d}\n", .{self.dry_mix}) catch return error.OutOfMemory;
+        w.writer.print("tuneto {s}\n", .{self.tune_to.sourceTokenBuf(&buf)}) catch return error.OutOfMemory;
+        const out = w.written();
         self.cwd.writeFile(self.io, .{ .sub_path = path, .data = out }) catch |err|
             return try std.fmt.allocPrint(self.gpa, "could not write {s}; check directory permissions, then try the command again: {s}", .{ path, ioErrText(err) });
         return null;
@@ -3023,12 +3106,14 @@ pub const App = struct {
                     defer c.deinit(self.gpa);
                     switch (c) {
                         .set_vol => |v| self.vol = v,
+                        .set_bus_vol => |v| self.bus_vol[@intFromEnum(v.target)] = v.value,
+                        .set_dry => |percent| self.dry_mix = percent,
                         .tune_to => |p| {
                             self.tune_to = p;
                             tuning.tuneToStandardPitch(p);
                         },
                         else => {
-                            try self.setMsg("✗ {s} line {d}: globals only support vol and tuneto; remove this line or change it to vol <n> or tuneto <pitch>", .{ path, line_no });
+                            try self.setMsg("✗ {s} line {d}: globals only support vol, dry, and tuneto", .{ path, line_no });
                             return;
                         },
                     }
@@ -3160,6 +3245,7 @@ pub const App = struct {
         try self.sendAudio(.{ .set_vcf_bank = start.vcf });
         try self.sendAudio(.{ .set_fx_settings = start.fx });
         try self.sendAudio(.{ .set_vol = self.vol });
+        try self.sendAudio(.{ .set_dry = self.dry_mix });
         try self.sendAudio(.{ .set_paused = false });
         while (nam_cmds.items.len > 0) try self.sendAudio(nam_cmds.orderedRemove(0));
         for (self.phrases.items) |*p| try self.sendPhraseCopy(p, .add);
@@ -3429,7 +3515,7 @@ fn llmPost(f: *Failure, http: Http, gpa: Allocator, io: std.Io, req: *const LlmR
 
 /// The answer to a question (the Rust `LlmRequest::send`). Caller owns it.
 fn llmSend(f: *Failure, http: Http, gpa: Allocator, io: std.Io, req: *const LlmRequest) Failure.Error![]u8 {
-    const prompt = try promptWithAutomaticNamResearch(f, http, gpa, io, req.prompt);
+    const prompt = try promptWithAutomaticNamResearch(f, http, gpa, io, req.prompt, req.tone3000_token);
     defer gpa.free(prompt);
     switch (req.provider) {
         .chat_gpt => {
@@ -3445,7 +3531,7 @@ fn llmSend(f: *Failure, http: Http, gpa: Allocator, io: std.Io, req: *const LlmR
                 try messages.append(gpa, std.json.Stringify.valueAlloc(gpa, assistant, .{}) catch return error.OutOfMemory);
                 for (calls) |call| {
                     const id = jstrOf(jget(call, "id")) orelse return f.fail("chatgpt tool call had no id; ask again", .{});
-                    const result = try executeOpenaiLlmTool(f, http, gpa, io, call);
+                    const result = try executeOpenaiLlmTool(f, http, gpa, io, call, req.tone3000_token);
                     defer gpa.free(result);
                     var a: std.Io.Writer.Allocating = .init(gpa);
                     defer a.deinit();
@@ -3503,7 +3589,7 @@ fn llmSend(f: *Failure, http: Http, gpa: Allocator, io: std.Io, req: *const LlmR
                 defer freeList(gpa, &results);
                 for (tool_uses.items) |tu| {
                     const id = jstrOf(jget(tu, "id")) orelse return f.fail("claude NAM search tool call had no id; ask again", .{});
-                    const result = try executeAnthropicLlmTool(f, http, gpa, io, tu);
+                    const result = try executeAnthropicLlmTool(f, http, gpa, io, tu, req.tone3000_token);
                     defer gpa.free(result);
                     var a: std.Io.Writer.Allocating = .init(gpa);
                     defer a.deinit();
@@ -3577,7 +3663,7 @@ fn writeUserResults(w: *std.Io.Writer, results: []const []u8) !void {
 
 /// The commands of an edit (the Rust `LlmRequest::send_edit`). Caller owns them.
 fn llmSendEdit(f: *Failure, http: Http, gpa: Allocator, io: std.Io, req: *const LlmRequest) Failure.Error![][]u8 {
-    const prompt = try promptWithAutomaticNamResearch(f, http, gpa, io, req.prompt);
+    const prompt = try promptWithAutomaticNamResearch(f, http, gpa, io, req.prompt, req.tone3000_token);
     defer gpa.free(prompt);
     switch (req.provider) {
         .chat_gpt => {
@@ -3644,7 +3730,7 @@ fn extractToolCommands(f: *Failure, gpa: Allocator, input: Value) Failure.Error!
     return out.toOwnedSlice(gpa);
 }
 
-fn executeOpenaiLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, call: Value) Failure.Error![]u8 {
+fn executeOpenaiLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, call: Value, token: ?[]const u8) Failure.Error![]u8 {
     const name = jstrOf(jgetOpt(jget(call, "function"), "name")) orelse return f.fail("chatgpt tool call had no function name; ask again", .{});
     const arguments = jstrOf(jgetOpt(jget(call, "function"), "arguments")) orelse return f.fail("chatgpt tool call had no arguments; ask again", .{});
     var input = std.json.parseFromSlice(Value, gpa, arguments, .{}) catch |err| {
@@ -3652,30 +3738,40 @@ fn executeOpenaiLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, cal
         return f.fail("chatgpt tool arguments were not valid JSON: {s}; ask again", .{@errorName(err)});
     };
     defer input.deinit();
-    return executeLlmTool(f, http, gpa, io, name, input.value);
+    return executeLlmTool(f, http, gpa, io, name, input.value, token);
 }
 
-fn executeAnthropicLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, tool_use: Value) Failure.Error![]u8 {
+fn executeAnthropicLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, tool_use: Value, token: ?[]const u8) Failure.Error![]u8 {
     const name = jstrOf(jget(tool_use, "name")) orelse return f.fail("claude tool call had no name; ask again", .{});
     const input = jget(tool_use, "input") orelse return f.fail("claude tool call had no input; ask again", .{});
-    return executeLlmTool(f, http, gpa, io, name, input);
+    return executeLlmTool(f, http, gpa, io, name, input, token);
 }
 
-fn executeLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, name: []const u8, input: Value) Failure.Error![]u8 {
+fn executeLlmTool(f: *Failure, http: Http, gpa: Allocator, io: std.Io, name: []const u8, input: Value, token: ?[]const u8) Failure.Error![]u8 {
     if (std.mem.eql(u8, name, "find_nam_captures")) {
         const q = jstrOf(jget(input, "query")) orelse "";
         const query = rs.trim(q);
         if (query.len == 0) return f.fail("find_nam_captures needs a non-empty query; ask for a specific amp, artist, or tone", .{});
-        return findNamCaptures(f, http, gpa, io, query);
+        return findNamCaptures(f, http, gpa, io, query, token);
     }
     return f.fail("unknown LLM tool `{s}`; ask again using maqam-live tools only", .{name});
 }
 
-fn promptWithAutomaticNamResearch(f: *Failure, http: Http, gpa: Allocator, io: std.Io, prompt: []const u8) Failure.Error![]u8 {
+fn promptWithAutomaticNamResearch(f: *Failure, http: Http, gpa: Allocator, io: std.Io, prompt: []const u8, token: ?[]const u8) Failure.Error![]u8 {
     if (!llmPromptNeedsNamResearch(prompt)) return gpa.dupe(u8, prompt);
-    const results = try findNamCaptures(f, http, gpa, io, prompt);
+    const results = try findNamCaptures(f, http, gpa, io, namResearchQuery(prompt), token);
     defer gpa.free(results);
-    return std.fmt.allocPrint(gpa, "{s}\n\nmaqam-live already performed NAM capture research for this request:\n{s}\n\nUse these researched links directly. Do not tell the user to go research amp models. If there is a direct .nam URL, give the exact `nam import URL as name` command. If there are only result pages, give the best result links and explain that maqam-live could not extract a direct .nam URL from those pages.", .{ prompt, results });
+    return std.fmt.allocPrint(gpa, "{s}\n\nmaqam-live already performed NAM capture research for this request:\n{s}\n\nUse a researched result directly. Prefer an exact `nam tone3000 ID as name` command when one is listed. Otherwise, if there is a direct .nam URL, use `nam pin URL as name`. Do not tell the user to browse or research amp models.", .{ prompt, results });
+}
+
+/// What to search for: the user's request alone when the prompt is an edit request wrapped with the
+/// score ("User wants this edit:\n<request>\n\n..."), otherwise the whole prompt.
+fn namResearchQuery(prompt: []const u8) []const u8 {
+    const prefix = "User wants this edit:\n";
+    if (!std.mem.startsWith(u8, prompt, prefix)) return prompt;
+    const rest = prompt[prefix.len..];
+    const end = std.mem.indexOf(u8, rest, "\n\n") orelse return prompt;
+    return rest[0..end];
 }
 
 fn containsLower(lower: []const u8, needle: []const u8) bool {
@@ -3685,8 +3781,15 @@ fn containsLower(lower: []const u8, needle: []const u8) bool {
 fn llmPromptNeedsNamResearch(prompt: []const u8) bool {
     var buf: [4096]u8 = undefined;
     const lower = asciiLowerBuf(prompt, &buf);
+    var describes_amp_tone = false;
+    if (containsLower(lower, "tone")) {
+        for ([_][]const u8{ "distort", "overdrive", "fuzz", "crunch", "high gain", "clean", "bass", "guitar" }) |w| {
+            if (containsLower(lower, w)) describes_amp_tone = true;
+        }
+    }
     const mentions = containsLower(lower, ".nam") or containsLower(lower, " nam ") or std.mem.startsWith(u8, lower, "nam ") or
-        containsLower(lower, "neural amp") or containsLower(lower, "amp model") or containsLower(lower, "amp capture");
+        containsLower(lower, "neural amp") or containsLower(lower, "amp model") or containsLower(lower, "amp capture") or
+        describes_amp_tone;
     const needles = [_][]const u8{ "find", "search", "browse", "download", "add", "use", "common", "get me", "look up", "lookup", "where can i get", "where do i get", "metallica", "mesa", "marshall", "5150", "soldano", "rectifier" };
     var asks = false;
     for (needles) |n| if (containsLower(lower, n)) {
@@ -3717,7 +3820,21 @@ fn freeResults(gpa: Allocator, list: *std.ArrayList(SearchResult)) void {
     list.deinit(gpa);
 }
 
-fn findNamCaptures(f: *Failure, http: Http, gpa: Allocator, io: std.Io, query: []const u8) Failure.Error![]u8 {
+fn findNamCaptures(f: *Failure, http: Http, gpa: Allocator, io: std.Io, query: []const u8, token: ?[]const u8) Failure.Error![]u8 {
+    // TONE3000 first (NAM A2 captures with ready commands); any failure falls through to the web.
+    if (token) |t| {
+        if (findTone3000Tones(http, gpa, io, t, query)) |found| {
+            var tones = found;
+            defer freeTones(gpa, &tones);
+            if (tones.items.len > 0) {
+                var out: std.ArrayList(u8) = .empty;
+                errdefer out.deinit(gpa);
+                try out.print(gpa, "TONE3000 NAM A2 results for `{s}` (portable commands ready to apply):", .{query});
+                for (tones.items) |tone| try out.print(gpa, "\n- {s} — `nam tone3000 {d} as {s}`", .{ tone.title, tone.id, tone.name });
+                return out.toOwnedSlice(gpa);
+            }
+        } else |err| if (err == error.OutOfMemory) return error.OutOfMemory;
+    }
     const search_query = try std.fmt.allocPrint(gpa, "{s} Neural Amp Modeler NAM capture download", .{query});
     defer gpa.free(search_query);
     const enc = try qenc(gpa, search_query);
@@ -3770,6 +3887,95 @@ fn findNamCaptures(f: *Failure, http: Http, gpa: Allocator, io: std.Io, query: [
     try out.print(gpa, "Real search results for `{s}`:\nUse a direct .nam URL with `nam import URL as name`; if a result is a page, open it and copy the .nam download URL.", .{query});
     for (results.items, 0..) |r, i| try out.print(gpa, "\n{d}. {s} — {s}", .{ i + 1, r.title, r.url });
     return out.toOwnedSlice(gpa);
+}
+
+const Tone3000SearchResult = struct {
+    id: u64,
+    title: []u8,
+    name: []u8,
+    fn deinit(self: Tone3000SearchResult, gpa: Allocator) void {
+        gpa.free(self.title);
+        gpa.free(self.name);
+    }
+};
+
+fn freeTones(gpa: Allocator, list: *std.ArrayList(Tone3000SearchResult)) void {
+    for (list.items) |t| t.deinit(gpa);
+    list.deinit(gpa);
+}
+
+/// The Rust `find_tone3000_tones`: the five best NAM A2 matches for the query's tone words.
+fn findTone3000Tones(http: Http, gpa: Allocator, io: std.Io, token: []const u8, query: []const u8) !std.ArrayList(Tone3000SearchResult) {
+    const terms = try tone3000SearchTerms(gpa, query);
+    defer gpa.free(terms);
+    const enc = try qenc(gpa, terms);
+    defer gpa.free(enc);
+    const url = try std.fmt.allocPrint(gpa, "https://www.tone3000.com/api/v1/tones/search?query={s}&page=1&page_size=5&sort=best-match&format=nam&architecture=2", .{enc});
+    defer gpa.free(url);
+    const auth = try std.fmt.allocPrint(gpa, "Bearer {s}", .{token});
+    defer gpa.free(auth);
+    var f: Failure = .{ .gpa = gpa };
+    defer f.deinit();
+    var parsed = try httpJson(&f, http, gpa, io, .GET, url, &.{ .{ .name = "Authorization", .value = auth }, .{ .name = "Content-Type", .value = "application/json" } }, null, "TONE3000 search response could not be read");
+    defer parsed.deinit();
+    return parseTone3000SearchResults(gpa, parsed.value);
+}
+
+/// The Rust `tone3000_search_terms`: a flavor and an instrument word from the query when it has
+/// them ("find any distorted bass tone and set it here" -> "distorted bass"), else the query.
+/// Caller owns the result.
+fn tone3000SearchTerms(gpa: Allocator, query: []const u8) Allocator.Error![]u8 {
+    var buf: [4096]u8 = undefined;
+    const lower = asciiLowerBuf(query, &buf);
+    var flavor: ?[]const u8 = null;
+    for ([_][]const u8{ "distorted", "distortion", "overdrive", "fuzz", "crunch", "high gain", "clean" }) |t| {
+        if (containsLower(lower, t)) {
+            flavor = t;
+            break;
+        }
+    }
+    var instrument: ?[]const u8 = null;
+    for ([_][]const u8{ "bass", "guitar" }) |t| {
+        if (containsLower(lower, t)) {
+            instrument = t;
+            break;
+        }
+    }
+    if (flavor) |fl| {
+        if (instrument) |in| return std.fmt.allocPrint(gpa, "{s} {s}", .{ fl, in });
+        return gpa.dupe(u8, fl);
+    }
+    if (instrument) |in| return gpa.dupe(u8, in);
+    return gpa.dupe(u8, rs.trim(query));
+}
+
+/// The Rust `parse_tone3000_search_results`: id, trimmed title, and a cache name made of its
+/// lowercase ASCII letters and digits with every other character as one '_', runs of '_'
+/// collapsed, trimmed of '_', at most 40 characters ("tone_<id>" when nothing is left).
+fn parseTone3000SearchResults(gpa: Allocator, value: Value) Allocator.Error!std.ArrayList(Tone3000SearchResult) {
+    var out: std.ArrayList(Tone3000SearchResult) = .empty;
+    errdefer freeTones(gpa, &out);
+    const data = jarrOf(jget(value, "data")) orelse return out;
+    for (data) |tone| {
+        const id = ju64Of(jget(tone, "id")) orelse continue;
+        const title_src = rs.trim(jstrOf(jget(tone, "title")) orelse "TONE3000 tone");
+        const title = try gpa.dupe(u8, title_src);
+        errdefer gpa.free(title);
+        var name: std.ArrayList(u8) = .empty;
+        defer name.deinit(gpa);
+        var it = (std.unicode.Utf8View.init(title_src) catch std.unicode.Utf8View.initUnchecked(title_src)).iterator();
+        while (it.nextCodepoint()) |cp| {
+            const ch: u8 = if (cp < 128 and std.ascii.isAlphanumeric(@intCast(cp))) std.ascii.toLower(@intCast(cp)) else '_';
+            if (ch == '_' and name.items.len > 0 and name.items[name.items.len - 1] == '_') continue;
+            try name.append(gpa, ch);
+        }
+        const trimmed = std.mem.trim(u8, name.items, "_");
+        const short = trimmed[0..@min(trimmed.len, 40)];
+        const final = if (short.len == 0) try std.fmt.allocPrint(gpa, "tone_{d}", .{id}) else try gpa.dupe(u8, short);
+        errdefer gpa.free(final);
+        try out.append(gpa, .{ .id = id, .title = title, .name = final });
+    }
+    return out;
 }
 
 fn fetchDirectNamLinksFromPage(gpa: Allocator, http: Http, io: std.Io, url: []const u8, limit: usize) !std.ArrayList(SearchResult) {
@@ -4020,6 +4226,16 @@ fn llmPromptIsEditRequest(prompt: []const u8) bool {
     const t_start = trimStartRust(prompt);
     const lw = asciiLowerBuf(t_start, &lower2_buf);
     _ = lower;
+    // "find ... and set it here": discovery the user wants applied.
+    var discovery = false;
+    for ([_][]const u8{ "find ", "search ", "look up ", "lookup ", "browse " }) |p| {
+        if (std.mem.startsWith(u8, lw, p)) discovery = true;
+    }
+    if (discovery) {
+        for ([_][]const u8{ "set it here", "use it here", "load it here", "apply it here", "set that here", "use that here", "load that here", "apply that here" }) |phrase| {
+            if (containsLower(lw, phrase)) return true;
+        }
+    }
     for (prefixes) |p| if (std.mem.startsWith(u8, lw, p)) return true;
     return llmPromptIsHowToAction(lw);
 }
@@ -4962,6 +5178,9 @@ pub fn describeFx(gpa: Allocator, s: FxSettings) Allocator.Error![]u8 {
     if (s.delay_enabled) {
         try out.print(gpa, " delay {f}s/{f}/{f}", .{ rfix(s.delay_time_secs, 2), rfix(s.delay_feedback, 2), rfix(s.delay_mix, 2) });
     } else try out.appendSlice(gpa, " delay off");
+    if (s.cabinet_enabled) {
+        try out.print(gpa, " cab {s} {f}", .{ s.cabinet_model.name(), rfix(s.cabinet_mix, 2) });
+    } else try out.appendSlice(gpa, " cab off");
     return out.toOwnedSlice(gpa);
 }
 
@@ -5375,7 +5594,7 @@ test "western mode names parse as builtin jins" {
     try testing.expectEqualStrings("1/1 9/8 5/4 4/3 3/2 5/3 15/8", ps[0].bar.ratio_strs[0]);
     try testing.expectEqualStrings("Dorian", ps[1].bar.maqam_names[0]);
     try testing.expectEqualStrings("Locrian", ps[2].bar.maqam_names[0]);
-    try testing.expectEqualStrings("1/1 16/15 6/5 4/3 64/45 8/5 9/5", ps[2].bar.ratio_strs[0]);
+    try testing.expectEqualStrings("1/1 256/243 32/27 4/3 1024/729 128/81 16/9", ps[2].bar.ratio_strs[0]);
     try testing.expectEqualStrings("Diminished", ps[3].bar.maqam_names[0]);
     try testing.expectEqualStrings("1/1 9/8 6/5 4/3 64/45 8/5 5/3 15/8", ps[3].bar.ratio_strs[0]);
 }
@@ -5590,10 +5809,139 @@ test "globals load on startup" {
     try testing.expectApproxEqAbs(@as(f64, 440.0), tuning.pitchToHz('a', 0, 4), 0.0001);
 }
 
+test "targeted_volume_is_post_vcf_live_state" {
+    const r = try Rig.init(.{ .env = &.{.{ "MAQAM_GLOBALS_PATH", "g.ml" }} });
+    defer r.deinit();
+    r.clearSent();
+    try r.cmd("vol mic 0.25");
+    try expectMsg(r, "vol mic → 0.25");
+    try testing.expectEqual(@as(f32, 0.25), r.app.bus_vol[@intFromEnum(VcfTarget.mic)]);
+    try testing.expect(r.sent(.set_bus_vol));
+    const a = try r.read("g.ml");
+    defer r.gpa.free(a);
+    try testing.expectEqualStrings("vol 1\nvol mic 0.25\ntuneto d\n", a);
+}
+
+test "dry_mix_is_live_and_timeline_state" {
+    const r = try Rig.init(.{ .env = &.{.{ "MAQAM_GLOBALS_PATH", "g.ml" }} });
+    defer r.deinit();
+    r.clearSent();
+    try r.cmd("dry 25");
+    try expectMsg(r, "dry → 25%  processed → 75%");
+    try testing.expectEqual(@as(f32, 25), r.app.dry_mix);
+    try testing.expect(r.sent(.set_dry));
+    const g = try r.read("g.ml");
+    defer r.gpa.free(g);
+    try testing.expect(std.mem.indexOf(u8, g, "dry 25\n") != null);
+
+    try r.cmd("d bayati 44");
+    try r.cmd("i 0 dry 50");
+    try expectMsg(r, "inserted control at 0");
+    try testing.expectEqual(@as(f32, 50), r.app.phrases.items[0].control.?.set_dry);
+    try r.cmd("edit 0 dry 75");
+    try testing.expectEqual(@as(f32, 75), r.app.phrases.items[1].control.?.set_dry);
+}
+
+test "targeted_volume_can_be_inserted_into_timeline" {
+    const r = try Rig.init(.{});
+    defer r.deinit();
+    try r.cmd("d bayati 44");
+    try r.cmd("i 0 vol mic 0.25");
+    try testing.expectEqualStrings("vol mic 0.25", r.app.phrases.items[0].src);
+    const c0 = r.app.phrases.items[0].control.?.set_bus_vol;
+    try testing.expectEqual(VcfTarget.mic, c0.target);
+    try r.cmd("edit 0 vol mic 0.25");
+    try expectMsg(r, "edited 0 → control");
+    try testing.expectEqualStrings("vol mic 0.25", r.app.phrases.items[1].src);
+}
+
+test "live levels load from globals and are sent at startup" {
+    const r = try Rig.init(.{ .files = &.{.{ ".globals.ml", "vol 1\nvol bass 2\ndry 10\ntuneto d\n" }} });
+    defer r.deinit();
+    try testing.expectEqual(@as(f32, 2), r.app.bus_vol[@intFromEnum(VcfTarget.bass)]);
+    try testing.expectEqual(@as(f32, 10), r.app.dry_mix);
+    try testing.expect(r.sent(.set_bus_vol));
+    try testing.expect(r.sent(.set_dry));
+}
+
+test "vol and dry rows round-trip through a session" {
+    const r = try Rig.init(.{});
+    defer r.deinit();
+    try r.loadV3("L|20|vol mic 1\nD|25|dry 50\nL|3|vol 1.5\nP|27|1|d bayati 44332\n");
+    var buf: [8]usize = undefined;
+    try testing.expectEqualSlices(usize, &.{ 20, 25, 3, 27 }, r.ids(&buf));
+    try testing.expectEqual(@as(f32, 50), r.app.phrases.items[1].control.?.set_dry);
+    try testing.expectEqual(@as(f32, 1.5), r.app.phrases.items[2].control.?.set_vol);
+    try r.cmd("save out.mq");
+    const saved = try r.read("out.mq");
+    defer r.gpa.free(saved);
+    try testing.expect(std.mem.indexOf(u8, saved, "L|20|vol mic 1\nD|25|dry 50\nL|3|vol 1.5\nP|27|1|d bayati 44332\n") != null);
+}
+
+test "a malformed vol or dry row names its line" {
+    const r = try Rig.init(.{});
+    defer r.deinit();
+    const e1 = (try r.app.loadSessionText("MAQAM_SESSION_V3\nD|1|dry 200\n", .{})).?;
+    defer r.gpa.free(e1);
+    try testing.expectEqualStrings("line 2: invalid dry control: dry 200 out of range 0–100", e1);
+    const e2 = (try r.app.loadSessionText("MAQAM_SESSION_V3\nL|1|bpm 90\n", .{})).?;
+    defer r.gpa.free(e2);
+    try testing.expectEqualStrings("line 2: expected vol line", e2);
+}
+
+test "tone3000_search_uses_tone_words_instead_of_edit_instructions" {
+    const gpa = testing.allocator;
+    const a = try tone3000SearchTerms(gpa, "find any distorted bass tone and set it here");
+    defer gpa.free(a);
+    try testing.expectEqualStrings("distorted bass", a);
+    const b = try tone3000SearchTerms(gpa, "get me a fuzz guitar");
+    defer gpa.free(b);
+    try testing.expectEqualStrings("fuzz guitar", b);
+    const c = try tone3000SearchTerms(gpa, "  plexi  ");
+    defer gpa.free(c);
+    try testing.expectEqualStrings("plexi", c);
+}
+
+test "tone3000 search results become cache names and ready commands" {
+    const gpa = testing.allocator;
+    var p = try std.json.parseFromSlice(Value, gpa,
+        \\{"data":[{"id":45809,"title":"  Ampeg SVT-CL (Bass Head)!  "},{"id":7,"title":"---"},{"title":"no id"},{"id":9}]}
+    , .{});
+    defer p.deinit();
+    var list = try parseTone3000SearchResults(gpa, p.value);
+    defer freeTones(gpa, &list);
+    try testing.expectEqual(@as(usize, 3), list.items.len);
+    try testing.expectEqualStrings("Ampeg SVT-CL (Bass Head)!", list.items[0].title);
+    try testing.expectEqualStrings("ampeg_svt_cl_bass_head", list.items[0].name);
+    try testing.expectEqualStrings("tone_7", list.items[1].name);
+    try testing.expectEqualStrings("TONE3000 tone", list.items[2].title);
+    try testing.expectEqualStrings("tone3000_tone", list.items[2].name);
+}
+
+test "find and set it here is an edit request that needs NAM research" {
+    try testing.expect(llmPromptIsEditRequest("find any distorted bass tone and set it here"));
+    try testing.expect(llmPromptNeedsNamResearch("find any distorted bass tone and set it here"));
+    try testing.expectEqualStrings("give me a clean tone", namResearchQuery("User wants this edit:\ngive me a clean tone\n\nscore..."));
+    try testing.expectEqualStrings("plain", namResearchQuery("plain"));
+}
+
+test "cabinet commands are effect rows with their own source text" {
+    const gpa = testing.allocator;
+    const a = try session.fxChangeSrc(gpa, .{ .cabinet_enabled = true, .cabinet_model = .modern, .cabinet_mix = .{ .set = 0.85 } });
+    defer gpa.free(a);
+    try testing.expectEqualStrings("cab modern mix 0.85", a);
+    const b = try session.fxChangeSrc(gpa, .{ .cabinet_enabled = false });
+    defer gpa.free(b);
+    try testing.expectEqualStrings("cab off", b);
+    const d = try describeFx(gpa, .{ .cabinet_enabled = true, .cabinet_model = .open, .cabinet_mix = 1.0 });
+    defer gpa.free(d);
+    try testing.expect(std.mem.endsWith(u8, d, " cab open 1.00"));
+}
+
 test "bad globals lines are reported" {
     const r = try Rig.init(.{ .files = &.{.{ ".globals.ml", "vol 0.5\nbpm 90\n" }} });
     defer r.deinit();
-    try expectMsg(r, "✗ .globals.ml line 2: globals only support vol and tuneto; remove this line or change it to vol <n> or tuneto <pitch>");
+    try expectMsg(r, "✗ .globals.ml line 2: globals only support vol, dry, and tuneto");
 }
 
 test "loads legacy and vcf control lines under v3 header" {
@@ -6009,7 +6357,7 @@ test "nam tool requires a query" {
     defer p.deinit();
     var f: Failure = .{ .gpa = gpa };
     defer f.deinit();
-    const e = executeLlmTool(&f, Http.offline, gpa, testing.io, "find_nam_captures", p.value);
+    const e = executeLlmTool(&f, Http.offline, gpa, testing.io, "find_nam_captures", p.value, null);
     try testing.expectError(error.Fail, e);
     try testing.expect(std.mem.indexOf(u8, f.msg.?, "needs a non-empty query") != null);
 }

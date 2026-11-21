@@ -19,6 +19,9 @@
 //!   command instead of queueing it for nobody (the Rust kept a receiver alive that never read).
 //! * The main thread frees what the audio thread hands back on the garbage ring (App.tick, and
 //!   App.deinit before the engine stops); the Rust freed it on the audio thread.
+//! * `--bufsize=<frames>` (default 64, upstream 72c11f5) is taken out of the arguments before
+//!   anything else and asks the device for that period; the Rust also prints "Requested buffer
+//!   size: Fixed(n)" on stdout, which is not copied (command mode's stdout carries only its result).
 //! * NO_COLOR is not consulted at all: the UI always writes truecolor (the Rust removed NO_COLOR
 //!   and forced color output).
 const std = @import("std");
@@ -48,7 +51,10 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const io = init.io;
     const argv = try init.minimal.args.toSlice(init.arena.allocator());
-    const args = if (argv.len > 0) argv[1..] else argv;
+    const all_args = if (argv.len > 0) argv[1..] else argv;
+    const split = try takeBufsize(init.arena.allocator(), io, all_args);
+    const args = split.rest;
+    const bufsize = split.bufsize;
 
     if (args.len > 0 and std.mem.eql(u8, args[0], "--render")) std.process.exit(runRender(gpa, io, init.environ_map, args));
     if (args.len > 0 and std.mem.eql(u8, args[0], "--bench")) std.process.exit(runBench(gpa, io, args));
@@ -65,11 +71,11 @@ pub fn main(init: std.process.Init) !void {
             for (commands) |c| gpa.free(c);
             gpa.free(commands);
         }
-        try runCli(gpa, io, init.environ_map, shared, &log, commands);
+        try runCli(gpa, io, init.environ_map, shared, &log, commands, bufsize);
         return;
     }
 
-    var live = audio.startLive(gpa, io, shared) catch |err| {
+    var live = audio.startLive(gpa, io, shared, bufsize) catch |err| {
         eprint(io, "maqam-live: audio output unavailable ({s}); run maqam-live in an environment with an audio device\n", .{@errorName(err)});
         std.process.exit(1);
     };
@@ -84,6 +90,35 @@ pub fn main(init: std.process.Init) !void {
     });
     defer app.deinit();
     try ui.run(app, io);
+}
+
+/// The audio buffer size when no `--bufsize=` is given (the Rust `audio_bufsize`).
+pub const default_bufsize: u32 = 64;
+
+const BufsizeSplit = struct { bufsize: u32, rest: []const [:0]const u8 };
+
+/// Every `--bufsize=<n>` argument (the last one that parses wins, as upstream) taken out of `args`.
+/// One that does not parse is reported as upstream does and otherwise ignored.
+fn takeBufsize(arena: Allocator, io: std.Io, args: []const [:0]const u8) Allocator.Error!BufsizeSplit {
+    var bufsize = default_bufsize;
+    var rest: std.ArrayList([:0]const u8) = .empty;
+    for (args) |arg| {
+        if (!std.mem.startsWith(u8, arg, "--bufsize=")) {
+            try rest.append(arena, arg);
+            continue;
+        }
+        const value = std.mem.trim(u8, arg["--bufsize=".len..], " \t\r\n");
+        if (std.fmt.parseInt(u32, value, 10)) |n| {
+            bufsize = n;
+        } else |err| {
+            const why = switch (err) {
+                error.Overflow => if (value.len > 0 and value[0] == '-') "invalid digit found in string" else "number too large to fit in target type",
+                error.InvalidCharacter => if (value.len == 0) "cannot parse integer from empty string" else "invalid digit found in string",
+            };
+            print(io, "Failed to parse: {s}\n", .{why});
+        }
+    }
+    return .{ .bufsize = bufsize, .rest = rest.items };
 }
 
 /// record.recordCycle with the App's result type.
@@ -117,8 +152,8 @@ fn cliCommands(gpa: Allocator, args: []const [:0]const u8) ![][]u8 {
 
 /// Command mode (the Rust `run_cli`): each command's message on stderr, then the recording path
 /// (after waiting for it) or the last message on stdout.
-fn runCli(gpa: Allocator, io: std.Io, env: *const std.process.Environ.Map, shared: *Shared, log: *eventlog.EventLog, commands: []const []const u8) !void {
-    var live: ?audio.Live = audio.startLive(gpa, io, shared) catch |err| blk: {
+fn runCli(gpa: Allocator, io: std.Io, env: *const std.process.Environ.Map, shared: *Shared, log: *eventlog.EventLog, commands: []const []const u8, bufsize: u32) !void {
+    var live: ?audio.Live = audio.startLive(gpa, io, shared, bufsize) catch |err| blk: {
         eprint(io, "audio output unavailable ({s}); continuing command mode without live playback\n", .{@errorName(err)});
         eprint(io, "to hear live playback, run maqam-live in an environment with an audio device\n", .{});
         break :blk null;

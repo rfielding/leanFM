@@ -472,7 +472,9 @@ fn drawPhrases(gpa: Allocator, app: *const App, screen: *Screen, area: Rect) All
         var it = std.unicode.Utf8View.initUnchecked(rhythm).iterator();
         var si: usize = 0;
         while (it.nextCodepointSlice()) |ch| : (si += 1) {
-            const is_now = !app.paused and playing and si == cur_sub;
+            // `z` silences score voices but leaves the sequencer running so the sympathetic
+            // strings keep following the current scale: show that silent traversal like playback.
+            const is_now = playing and si == cur_sub;
             line.put(ch, .{ .fg = state_color, .bg = BG, .bold = is_now });
         }
         const ratios = try phrase.pitchRatiosDisplay(gpa);
@@ -643,6 +645,10 @@ fn formatFxStatus(gpa: Allocator, f: fx.FxSettings) Allocator.Error![]u8 {
     if (f.delay_enabled) {
         if (out.items.len > 0) try out.append(gpa, ' ');
         try out.print(gpa, "delay:{f}/{f}/{f}", .{ rfix(f.delay_time_secs, 2), rfix(f.delay_feedback, 2), rfix(f.delay_mix, 2) });
+    }
+    if (f.cabinet_enabled) {
+        if (out.items.len > 0) try out.append(gpa, ' ');
+        try out.print(gpa, "cab:{s}/{f}", .{ f.cabinet_model.name(), rfix(f.cabinet_mix, 2) });
     }
     if (out.items.len == 0) try out.appendSlice(gpa, "off");
     return out.toOwnedSlice(gpa);

@@ -14,9 +14,9 @@ terminal HUD.
 
 ## Demo
 
-[![Play the maqam-live demo](maqam-demo-v2.png)](https://cdn.jsdelivr.net/gh/rfielding/maqam@main/maqam-demo-v2.mp4)
+[![View the maqam-live demo on Instagram](maqam-demo-v2.png)](https://www.instagram.com/p/DcMV6ffxtca/)
 
-[Play the demo MP4](https://cdn.jsdelivr.net/gh/rfielding/maqam@main/maqam-demo-v2.mp4)
+[View the demo on Instagram](https://www.instagram.com/p/DcMV6ffxtca/)
 
 ## Build
 
@@ -269,7 +269,7 @@ nam tone3000 <tone-id> as <name>
 nam login
 nam logout
                   pin a canonical TONE3000 tone and load its A2 model
-nam gain <n>      set NAM input gain before the amp model (0..11)
+nam gain <n>      set NAM input gain before the amp model (0..100)
 nam input left|right|stereo
                   select channel 1, channel 2, or an equal mono mix
 nam latency left|right
@@ -296,7 +296,7 @@ refreshed automatically; `nam logout` removes it. `TONE3000_ACCESS_TOKEN` remain
 available for headless use, and `TONE3000_CLIENT_ID` can override the bundled
 publishable client ID during development. An authenticated maqam-live resolves and downloads its A2 model via
 the authenticated TONE3000 API.
-The input chain is selected input -> NAM -> `vcf mic` or `vcf all`. `stereo`
+The input chain is selected input -> NAM -> cabinet IR -> `vcf mic` or `vcf all`. `stereo`
 mixes both hardware channels equally before the mono NAM model. Referenced
 captures are cached in `./.nam` by default, or in `MAQAM_NAM_CACHE_DIR` when
 set. The cache directory is created automatically when listing, importing, or
@@ -322,6 +322,9 @@ bpm <n|+n|-n|*k|/k>                  tempo, range 20..400
 s <n|+n|-n|*k|/k>                    sustain seconds, range 0.05..10
 sus <n|+n|-n|*k|/k>                  same as s
 vol <n>                              live volume multiplier, range 0..2
+vol <all|mic|bass|kanun|drums|sym> <n>
+                                     post-VCF bus volume, range 0..2
+dry <0..100>                         percent totally dry input (0 = processed, 100 = dry)
 tuneto <pitch>                       live tuning reference, e.g. tuneto c or tuneto b-
 ```
 
@@ -333,6 +336,7 @@ bpm *2
 s 1.5
 s *0.8
 vol 0.8
+vol mic 0.25
 ```
 
 `vol` and `tuneto` are live-only settings. They are not saved in sessions, and
@@ -387,7 +391,7 @@ Relative changes only affect the parameter named. Tick changes such as
 
 ### FX
 
-Flanger, chorus, reverb, and ping-pong delay use the same named-parameter and
+Flanger, chorus, reverb, ping-pong delay, and cabinet IR use the same named-parameter and
 relative-change rules as VCF. They are off by default.
 
 ```text
@@ -404,6 +408,8 @@ delay on
 delay off
 delay time=<0.01..2> feedback=<0..0.95> mix=<0..1>
 pingpong time=<0.01..2> feedback=<0..0.95> mix=<0..1>
+cab <vintage|modern|open> mix=<0..1>
+cab off
 fx off
 ```
 
@@ -413,6 +419,10 @@ Examples:
 flanger rate=0.18 depth=0.8 delay=2.5 feedback=0.55 mix=0.35
 chorus rate=0.7 depth=0.55 delay=18 mix=0.32
 reverb mix=0.25 decay=0.7
+cab vintage
+cab modern mix=0.85
+cab open mix=1
+cab off
 pingpong time=0.33 feedback=0.45 mix=0.2
 delay mix=+0.1
 delay feedback=+0.01t
@@ -420,7 +430,9 @@ delay feedback=+0
 fx off
 ```
 
-Modulation, delay, and reverb are more expensive than the VCF in the real-time callback.
+The three built-in cabinet responses are short FIRs, so `.mq` files remain portable
+without separate IR assets. Modulation, delay, reverb, and cabinet convolution are
+more expensive than the VCF in the real-time callback.
 For heavy sessions, prefer `cargo run --release` or a built release binary.
 
 ### Sessions
@@ -519,14 +531,14 @@ clockout <device>      send MIDI clock at current BPM
 | Suznak | `1/1 9/8 27/22 4/3 3/2` | Rast lower |
 | Jiharkah | `1/1 9/8 5/4 4/3 3/2` | Ajam lower |
 | Major | `1/1 9/8 5/4 4/3 3/2 5/3 15/8` | 5-limit Ionian |
-| Ionian | `1/1 9/8 5/4 4/3 3/2 5/3 15/8` | Major alias |
-| Dorian | `1/1 9/8 6/5 4/3 3/2 5/3 9/5` | Minor third, major sixth |
-| Phrygian | `1/1 16/15 6/5 4/3 3/2 8/5 9/5` | Flat second |
-| Lydian | `1/1 9/8 5/4 45/32 3/2 5/3 15/8` | Sharp fourth |
-| Mixolydian | `1/1 9/8 5/4 4/3 3/2 5/3 9/5` | Major third, minor seventh |
-| Minor | `1/1 9/8 6/5 4/3 3/2 8/5 9/5` | 5-limit Aeolian |
-| Aeolian | `1/1 9/8 6/5 4/3 3/2 8/5 9/5` | Natural minor alias |
-| Locrian | `1/1 16/15 6/5 4/3 64/45 8/5 9/5` | Flat fifth |
+| Ionian | `1/1 9/8 81/64 4/3 3/2 27/16 243/128` | Pythagorean |
+| Dorian | `1/1 9/8 32/27 4/3 3/2 27/16 16/9` | Pythagorean |
+| Phrygian | `1/1 256/243 32/27 4/3 3/2 128/81 16/9` | Pythagorean |
+| Lydian | `1/1 9/8 81/64 729/512 3/2 27/16 243/128` | Pythagorean |
+| Mixolydian | `1/1 9/8 81/64 4/3 3/2 27/16 16/9` | Pythagorean |
+| Minor | `1/1 9/8 32/27 4/3 3/2 27/16 16/9` | Pythagorean minor used by `practice.mq` |
+| Aeolian | `1/1 9/8 32/27 4/3 3/2 128/81 16/9` | Pythagorean |
+| Locrian | `1/1 256/243 32/27 4/3 1024/729 128/81 16/9` | Pythagorean |
 | Diminished | `1/1 9/8 6/5 4/3 64/45 8/5 5/3 15/8` | Octatonic whole-half |
 
 ## Example

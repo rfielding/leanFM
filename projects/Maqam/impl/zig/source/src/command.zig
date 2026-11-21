@@ -18,8 +18,8 @@
 //!   without bound; the Rust overflows its stack on a long enough line.
 //!
 //! Following the specification's ranges where the Rust disagrees with itself: the NAM gain range is
-//! 0..11 (as the Rust parser and the specification say), so the `nam gain` help metadata reads
-//! "range 0..11" and the non-number rejection reads "bad NAM gain '<v>'; type a number from 0 to 11"
+//! 0..100 (as the Rust parser and the specification say), so the `nam gain` help metadata reads
+//! "range 0..100" and the non-number rejection reads "bad NAM gain '<v>'; type a number from 0 to 100"
 //! (the Rust says 8 in both places).
 const std = @import("std");
 const Allocator = std.mem.Allocator;
@@ -313,6 +313,9 @@ pub const VcfChange = struct {
     wave: ?VcoWave = null,
 };
 
+/// The largest `nam gain` (the Rust `NAM_GAIN_MAX`).
+pub const nam_gain_max: f32 = 100.0;
+
 pub const FxChange = struct {
     flanger_enabled: ?bool = null,
     flanger_rate_hz: ?ValueChange = null,
@@ -332,6 +335,9 @@ pub const FxChange = struct {
     delay_time_secs: ?ValueChange = null,
     delay_feedback: ?ValueChange = null,
     delay_mix: ?ValueChange = null,
+    cabinet_enabled: ?bool = null,
+    cabinet_model: ?fx.CabinetModel = null,
+    cabinet_mix: ?ValueChange = null,
 };
 
 pub const SympatheticChange = struct {
@@ -798,7 +804,7 @@ const NAM_PARAMETERS = [_]CommandParameterMetadata{
         .values = &.{},
         .units = "",
         .lower = 0.0,
-        .upper = 11.0, // spec range nam gain 0..11 (the Rust help text says 8)
+        .upper = nam_gain_max, // spec range nam gain 0..100 (the Rust help text says 8)
         .typical = "0.5..2",
         .notes = &.{"use this to control how hard the amp model is driven"},
     },
@@ -824,7 +830,7 @@ pub const NAM_METADATA: CommandMetadata = .{
     .first_parameter = "load",
     .notes = &.{
         "NAM is live input state and is not saved in .mq files",
-        "the chain is mic input -> NAM -> vcf mic or vcf all -> output",
+        "the chain is mic input -> NAM -> cabinet IR -> vcf mic or vcf all -> output",
         "cached captures live under ./.nam unless MAQAM_NAM_CACHE_DIR is set",
         "NAM models have an expected sample rate; set the audio device to that rate if the model sounds wrong",
     },
@@ -985,12 +991,17 @@ pub const LANGUAGE_PATTERNS = [_]LanguagePatternMetadata{
         .notes = &.{"`pingpong` is accepted as an alias for delay"},
     },
     .{
+        .syntax = "cab <vintage|modern|open> [mix <0..1>] | cab off",
+        .description = "apply a portable cabinet impulse response after the live NAM amp",
+        .notes = &.{"vintage is a warm 4x12, modern is a tight 4x12, and open is an open-back 1x12"},
+    },
+    .{
         .syntax = "fx off",
-        .description = "turn reverb and delay off",
+        .description = "turn all effects and the cabinet stage off",
         .notes = &.{},
     },
     .{
-        .syntax = "nam login | nam logout | nam tone3000 ID as name | nam pin URL as name | nam import FILENAME.nam [as name] | nam input left|right|stereo | nam latency left|right | nam search <query> | nam <name|FILENAME.nam|URL> | nam load <name|FILENAME.nam|URL> | nam ls | nam off | nam gain <0..11>",
+        .syntax = "nam login | nam logout | nam tone3000 ID as name | nam pin URL as name | nam import FILENAME.nam [as name] | nam input left|right|stereo | nam latency left|right | nam search <query> | nam <name|FILENAME.nam|URL> | nam load <name|FILENAME.nam|URL> | nam ls | nam off | nam gain <0..100>",
         .description = "cache, load, list, or bypass Neural Amp Modeler A1/A2 captures on live mic input",
         .notes = &.{
             "`nam pin URL as name` writes an unambiguous downloadable dependency into the loaded .mq file",
@@ -1224,6 +1235,9 @@ pub const Cmd = union(enum) {
     insert_sustain: struct { before: isize, change: ValueChange },
     insert_vcf: struct { before: isize, change: VcfChange },
     insert_fx: struct { before: isize, change: FxChange },
+    insert_vol: struct { before: isize, value: f32 },
+    insert_bus_vol: struct { before: isize, target: VcfTarget, value: f32 },
+    insert_dry: struct { before: isize, percent: f32 },
     insert_nam: struct { before: isize, command: NamCommand },
     insert_sympathetics: struct { before: isize, enabled: bool },
     insert_sympathetic_decay: struct { before: isize, decay: f32 },
@@ -1237,6 +1251,9 @@ pub const Cmd = union(enum) {
     edit_sustain: struct { id: isize, change: ValueChange },
     edit_vcf: struct { id: isize, change: VcfChange },
     edit_fx: struct { id: isize, change: FxChange },
+    edit_vol: struct { id: isize, value: f32 },
+    edit_bus_vol: struct { id: isize, target: VcfTarget, value: f32 },
+    edit_dry: struct { id: isize, percent: f32 },
     edit_nam: struct { id: isize, command: NamCommand },
     edit_sympathetics: struct { id: isize, enabled: bool },
     edit_sympathetic_decay: struct { id: isize, decay: f32 },
@@ -1257,6 +1274,8 @@ pub const Cmd = union(enum) {
     set_fx: FxChange,
     set_nam: NamCommand,
     set_vol: f32,
+    set_bus_vol: struct { target: VcfTarget, value: f32 },
+    set_dry: f32,
     record: usize,
     toggle_pause: struct { start_id: ?isize },
     list_jins,
@@ -1461,6 +1480,9 @@ fn parseInner(c: *Ctx, raw: []const u8, depth: usize) Error!Cmd {
             .set_sustain => |v| .{ .edit_sustain = .{ .id = id, .change = v } },
             .set_vcf => |v| .{ .edit_vcf = .{ .id = id, .change = v } },
             .set_fx => |v| .{ .edit_fx = .{ .id = id, .change = v } },
+            .set_vol => |v| .{ .edit_vol = .{ .id = id, .value = v } },
+            .set_bus_vol => |v| .{ .edit_bus_vol = .{ .id = id, .target = v.target, .value = v.value } },
+            .set_dry => |v| .{ .edit_dry = .{ .id = id, .percent = v } },
             .set_nam => |v| .{ .edit_nam = .{ .id = id, .command = v } },
             .sympathetics => |v| .{ .edit_sympathetics = .{ .id = id, .enabled = v } },
             .sympathetic_decay => |v| .{ .edit_sympathetic_decay = .{ .id = id, .decay = v } },
@@ -1506,6 +1528,9 @@ fn parseInner(c: *Ctx, raw: []const u8, depth: usize) Error!Cmd {
             .set_sustain => |v| .{ .insert_sustain = .{ .before = before, .change = v } },
             .set_vcf => |v| .{ .insert_vcf = .{ .before = before, .change = v } },
             .set_fx => |v| .{ .insert_fx = .{ .before = before, .change = v } },
+            .set_vol => |v| .{ .insert_vol = .{ .before = before, .value = v } },
+            .set_bus_vol => |v| .{ .insert_bus_vol = .{ .before = before, .target = v.target, .value = v.value } },
+            .set_dry => |v| .{ .insert_dry = .{ .before = before, .percent = v } },
             .set_nam => |v| .{ .insert_nam = .{ .before = before, .command = v } },
             .sympathetics => |v| .{ .insert_sympathetics = .{ .before = before, .enabled = v } },
             .sympathetic_decay => |v| .{ .insert_sympathetic_decay = .{ .before = before, .decay = v } },
@@ -1547,7 +1572,7 @@ fn parseInner(c: *Ctx, raw: []const u8, depth: usize) Error!Cmd {
     }
 
     // ── FX ───────────────────────────────────────────────────────────────
-    if (isAl(al, &.{ "fx", "flanger", "flange", "chorus", "choir", "reverb", "rev", "delay", "pingpong" }) and digits.len == 0) {
+    if (isAl(al, &.{ "fx", "flanger", "flange", "chorus", "choir", "reverb", "rev", "delay", "pingpong", "cab", "cabinet" }) and digits.len == 0) {
         return .{ .set_fx = try parseFxChange(c, input) };
     }
 
@@ -1558,12 +1583,34 @@ fn parseInner(c: *Ctx, raw: []const u8, depth: usize) Error!Cmd {
 
     // ── VOL ───────────────────────────────────────────────────────────────
     if (isAl(al, &.{"vol"})) {
+        const nargs = countTokens(input) - 1;
+        if (nargs == 2) {
+            const t = nthToken(input, 1).?;
+            const v = nthToken(input, 2).?;
+            const target = VcfTarget.parse(t) orelse
+                return c.reject("unknown volume target '{s}'; use all, mic, bass, kanun, drums, or sym", .{t});
+            const n = parseFloatRust(f32, v) orelse return c.reject("bad volume '{s}'", .{v});
+            if (!inRange(f32, n, 0.0, 2.0)) return c.reject("vol {s} {f} out of range 0–2", .{ target.asStr(), rf(n) });
+            return .{ .set_bus_vol = .{ .target = target, .value = n } };
+        }
         const n: f32 = if (digits.len != 0)
             parseFloatRust(f32, digits) orelse 1.0
-        else
-            parseFloatRust(f32, nthToken(input, 1) orelse "") orelse 1.0;
+        else switch (nargs) {
+            0 => 1.0,
+            1 => parseFloatRust(f32, nthToken(input, 1).?) orelse return c.reject("bad volume '{s}'", .{nthToken(input, 1).?}),
+            else => return c.rejectStatic("usage: vol <0..2> | vol <all|mic|bass|kanun|drums|sym> <0..2>"),
+        };
         if (!inRange(f32, n, 0.0, 2.0)) return c.reject("vol {f} out of range 0–2", .{rf(n)});
         return .{ .set_vol = n };
+    }
+
+    // ── DRY/WET INPUT MIX ────────────────────────────────────────────────
+    if (isAl(al, &.{"dry"})) {
+        const value = nthToken(input, 1) orelse return c.rejectStatic("usage: dry <0..100>");
+        const percent = parseFloatRust(f32, std.mem.trimEnd(u8, value, "%")) orelse
+            return c.reject("bad dry percentage '{s}'", .{value});
+        if (!inRange(f32, percent, 0.0, 100.0)) return c.reject("dry {f} out of range 0–100", .{rf(percent)});
+        return .{ .set_dry = percent };
     }
 
     // ── DELETE: x<N> [N …] ───────────────────────────────────────────────
@@ -1668,7 +1715,7 @@ fn parseSpecList(c: *Ctx, text: []const u8) Error![]JinsSpec {
 }
 
 fn parseNam(c: *Ctx, input: []const u8) Error!NamCommand {
-    const usage = "usage: nam <cached-name|FILENAME.nam|URL> | nam import <FILENAME.nam|URL> [as name] | nam ls | nam off | nam gain <0..11>";
+    const usage = "usage: nam <cached-name|FILENAME.nam|URL> | nam import <FILENAME.nam|URL> [as name] | nam ls | nam off | nam gain <0..100>";
     const so = splitOnceWs(input) orelse return c.rejectStatic(usage);
     const rest = trim(so.b);
     if (rest.len == 0) return c.rejectStatic(usage);
@@ -1729,11 +1776,11 @@ fn parseNam(c: *Ctx, input: []const u8) Error!NamCommand {
         return .{ .tone3000 = .{ .tone_id = tone_id, .name = try c.dupe(nthToken(rest, 3).?) } };
     }
     if (ieq(sub, "gain") or ieq(sub, "drive")) {
-        const value = toks.next() orelse return c.rejectStatic("usage: nam gain <0..11>; type a number after nam gain");
+        const value = toks.next() orelse return c.rejectStatic("usage: nam gain <0..100>; type a number after nam gain");
         const gain = parseFloatRust(f32, value) orelse
-            return c.reject("bad NAM gain '{s}'; type a number from 0 to 11", .{value});
-        if (!inRange(f32, gain, 0.0, 11.0))
-            return c.reject("NAM gain {f} out of range 0..11; use nam gain <0..11>", .{rf(gain)});
+            return c.reject("bad NAM gain '{s}'; type a number from 0 to 100", .{value});
+        if (!inRange(f32, gain, 0.0, nam_gain_max))
+            return c.reject("NAM gain {f} out of range 0..100; use nam gain <0..100>", .{rf(gain)});
         return .{ .gain = gain };
     }
     if (ieq(sub, "input") or ieq(sub, "in")) {
@@ -2197,7 +2244,7 @@ fn applyVcfChangeInner(c: *Ctx, bank: VcfBank, change: VcfChange) Error!VcfSetti
 // ── fx ────────────────────────────────────────────────────────────────────────
 
 fn parseFxChange(c: *Ctx, input: []const u8) Error!FxChange {
-    const usage = "usage: flanger rate=<hz> depth=<0..1> delay=<ms> feedback=<-0.95..0.95> mix=<0..1> | chorus rate=<hz> depth=<0..1> delay=<ms> mix=<0..1> | reverb mix=<0..1> decay=<0..0.98> | delay time=<secs> feedback=<0..0.95> mix=<0..1> | fx off";
+    const usage = "usage: flanger ... | chorus ... | reverb ... | delay ... | cab <vintage|modern|open> [mix=<0..1>] | cab off | fx off";
     var toks = Tokens.init(input);
     const head = toks.next() orelse "";
     var list: std.ArrayList([]const u8) = .empty;
@@ -2212,6 +2259,7 @@ fn parseFxChange(c: *Ctx, input: []const u8) Error!FxChange {
             out.chorus_enabled = false;
             out.reverb_enabled = false;
             out.delay_enabled = false;
+            out.cabinet_enabled = false;
             return out;
         }
         return c.rejectStatic(usage);
@@ -2221,32 +2269,41 @@ fn parseFxChange(c: *Ctx, input: []const u8) Error!FxChange {
     const is_chorus = eqlAnyIgnoreCase(head, &.{ "chorus", "choir" });
     const is_reverb = eqlAnyIgnoreCase(head, &.{ "reverb", "rev" });
     const is_delay = eqlAnyIgnoreCase(head, &.{ "delay", "pingpong" });
-    if (!is_flanger and !is_chorus and !is_reverb and !is_delay) return c.rejectStatic(usage);
+    const is_cabinet = eqlAnyIgnoreCase(head, &.{ "cab", "cabinet" });
+    if (!is_flanger and !is_chorus and !is_reverb and !is_delay and !is_cabinet) return c.rejectStatic(usage);
 
     const setEnabled = struct {
-        fn f(o: *FxChange, fl: bool, ch: bool, rv: bool, on: bool) void {
+        fn f(o: *FxChange, fl: bool, ch: bool, rv: bool, dl: bool, on: bool) void {
             if (fl) {
                 o.flanger_enabled = on;
             } else if (ch) {
                 o.chorus_enabled = on;
             } else if (rv) {
                 o.reverb_enabled = on;
-            } else {
+            } else if (dl) {
                 o.delay_enabled = on;
+            } else {
+                o.cabinet_enabled = on;
             }
         }
     }.f;
     if (rest.len == 1 and std.ascii.eqlIgnoreCase(rest[0], "off")) {
-        setEnabled(&out, is_flanger, is_chorus, is_reverb, false);
+        setEnabled(&out, is_flanger, is_chorus, is_reverb, is_delay, false);
         return out;
     }
     if (rest.len == 0 or (rest.len == 1 and std.ascii.eqlIgnoreCase(rest[0], "on"))) {
-        setEnabled(&out, is_flanger, is_chorus, is_reverb, true);
+        setEnabled(&out, is_flanger, is_chorus, is_reverb, is_delay, true);
         return out;
     }
-    setEnabled(&out, is_flanger, is_chorus, is_reverb, true);
+    setEnabled(&out, is_flanger, is_chorus, is_reverb, is_delay, true);
 
     var i: usize = 0;
+    // A cabinet's first word may name its model (case-sensitive "mix" is a parameter, as upstream).
+    if (is_cabinet and std.mem.indexOfScalar(u8, rest[0], '=') == null and !std.mem.eql(u8, rest[0], "mix")) {
+        out.cabinet_model = fx.CabinetModel.parse(rest[0]) orelse
+            return c.reject("unknown cabinet '{s}'; use vintage, modern, or open", .{rest[0]});
+        i = 1;
+    }
     while (i < rest.len) {
         const tok = rest[i];
         var name: []const u8 = undefined;
@@ -2294,6 +2351,8 @@ fn parseFxChange(c: *Ctx, input: []const u8) Error!FxChange {
             out.delay_feedback = change;
         } else if (is_delay and is(name, &.{"mix"})) {
             out.delay_mix = change;
+        } else if (is_cabinet and is(name, &.{"mix"})) {
+            out.cabinet_mix = change;
         } else {
             return c.rejectLower("unknown fx parameter '{s}'", name);
         }
@@ -2318,6 +2377,8 @@ fn applyFxChangeInner(c: *Ctx, current: FxSettings, change: FxChange) Error!FxSe
     if (change.chorus_enabled) |e| next.chorus_enabled = e;
     if (change.reverb_enabled) |e| next.reverb_enabled = e;
     if (change.delay_enabled) |e| next.delay_enabled = e;
+    if (change.cabinet_enabled) |e| next.cabinet_enabled = e;
+    if (change.cabinet_model) |m| next.cabinet_model = m;
     try applyFxValue(c, &next.flanger_rate_hz, &next.flanger_rate_step_per_tick, change.flanger_rate_hz);
     try applyFxValue(c, &next.flanger_depth, &next.flanger_depth_step_per_tick, change.flanger_depth);
     try applyFxValue(c, &next.flanger_delay_ms, &next.flanger_delay_step_per_tick, change.flanger_delay_ms);
@@ -2332,6 +2393,9 @@ fn applyFxChangeInner(c: *Ctx, current: FxSettings, change: FxChange) Error!FxSe
     try applyFxValue(c, &next.delay_time_secs, &next.delay_time_step_per_tick, change.delay_time_secs);
     try applyFxValue(c, &next.delay_feedback, &next.delay_feedback_step_per_tick, change.delay_feedback);
     try applyFxValue(c, &next.delay_mix, &next.delay_mix_step_per_tick, change.delay_mix);
+    // The cabinet mix has no per-tick step; a step is computed and dropped, as upstream.
+    var unused_cabinet_step: f32 = 0.0;
+    try applyFxValue(c, &next.cabinet_mix, &unused_cabinet_step, change.cabinet_mix);
     return validateFx(c, next);
 }
 
@@ -2364,6 +2428,8 @@ fn validateFx(c: *Ctx, n: FxSettings) Error!FxSettings {
         return c.reject("delay feedback {f} out of range 0..0.95", .{rf(n.delay_feedback)});
     if (!inRange(f32, n.delay_mix, 0.0, 1.0))
         return c.reject("delay mix {f} out of range 0..1", .{rf(n.delay_mix)});
+    if (!inRange(f32, n.cabinet_mix, 0.0, 1.0))
+        return c.reject("cabinet mix {f} out of range 0..1", .{rf(n.cabinet_mix)});
     return n;
 }
 
@@ -2682,7 +2748,7 @@ test "reorder and delete" {
 }
 
 test "vol" {
-    const cases = [_]struct { []const u8, f32 }{ .{ "vol 1.5", 1.5 }, .{ "vol", 1.0 }, .{ "vol abc", 1.0 }, .{ "vol0.5", 0.5 }, .{ "vol 2", 2.0 } };
+    const cases = [_]struct { []const u8, f32 }{ .{ "vol 1.5", 1.5 }, .{ "vol", 1.0 }, .{ "vol0.5", 0.5 }, .{ "vol 2", 2.0 } };
     for (cases) |e| {
         const r = try ok(e[0]);
         defer r.deinit(ta);
@@ -2945,7 +3011,7 @@ test "fx parsing and application" {
         try expectVc(.{ .set = 0.3 }, r.ok.set_fx.delay_feedback);
         try expectVc(.{ .tick = 0.1 }, r.ok.set_fx.delay_mix);
     }
-    const u = "usage: flanger rate=<hz> depth=<0..1> delay=<ms> feedback=<-0.95..0.95> mix=<0..1> | chorus rate=<hz> depth=<0..1> delay=<ms> mix=<0..1> | reverb mix=<0..1> decay=<0..0.98> | delay time=<secs> feedback=<0..0.95> mix=<0..1> | fx off";
+    const u = "usage: flanger ... | chorus ... | reverb ... | delay ... | cab <vintage|modern|open> [mix=<0..1>] | cab off | fx off";
     try expectErr("fx", u);
     try expectErr("fx on", u);
     try expectErr("chorus rate", u);
@@ -3073,7 +3139,7 @@ test "sym parsing" {
 }
 
 test "nam parsing" {
-    const u = "usage: nam <cached-name|FILENAME.nam|URL> | nam import <FILENAME.nam|URL> [as name] | nam ls | nam off | nam gain <0..11>";
+    const u = "usage: nam <cached-name|FILENAME.nam|URL> | nam import <FILENAME.nam|URL> [as name] | nam ls | nam off | nam gain <0..100>";
     try expectErr("nam", u);
     try expectErr("nam   ", u);
     const simple = [_]struct { []const u8, NamCommand }{
@@ -3113,10 +3179,10 @@ test "nam parsing" {
     try expectErr("nam pin", "usage: nam pin <direct-.nam-URL> as <name>");
     try expectErr("nam t3k abc as amp", "TONE3000 tone ID must be a number");
     try expectErr("nam tone3000 1 2", "usage: nam tone3000 <tone-id> as <name>");
-    try expectErr("nam gain 12", "NAM gain 12 out of range 0..11; use nam gain <0..11>");
-    try expectErr("nam gain -1", "NAM gain -1 out of range 0..11; use nam gain <0..11>");
-    try expectErr("nam gain x", "bad NAM gain 'x'; type a number from 0 to 11");
-    try expectErr("nam gain", "usage: nam gain <0..11>; type a number after nam gain");
+    try expectErr("nam gain 101", "NAM gain 101 out of range 0..100; use nam gain <0..100>");
+    try expectErr("nam gain -1", "NAM gain -1 out of range 0..100; use nam gain <0..100>");
+    try expectErr("nam gain x", "bad NAM gain 'x'; type a number from 0 to 100");
+    try expectErr("nam gain", "usage: nam gain <0..100>; type a number after nam gain");
     try expectErr("nam input x", "usage: nam input <left|right|stereo>");
     try expectErr("nam latency stereo", "usage: nam latency <left|right>");
     try expectErr("nam search", "usage: nam search <amp, artist, or tone>; describe the capture to find");
@@ -3133,7 +3199,7 @@ test "language reference and metadata" {
     try testing.expect(std.mem.indexOf(u8, text, "  - `up` (aliases: interval, transpose): multiply sympathetic resonator target strings upward by an ideal interval ratio; values unison|second|third|fourth|fifth|sixth|seventh|octave; range 0.25..4 ratio;") != null);
     try testing.expect(std.mem.endsWith(u8, text, "  note: NAM models have an expected sample rate; set the audio device to that rate if the model sounds wrong\n"));
 
-    try testing.expect(std.mem.indexOf(u8, text, "  - `gain` (aliases: drive): input gain before the NAM model; range 0..11; typical 0.5..2;") != null);
+    try testing.expect(std.mem.indexOf(u8, text, "  - `gain` (aliases: drive): input gain before the NAM model; range 0..100; typical 0.5..2;") != null);
     try testing.expectEqualStrings("vcf", commandMetadata("FILTER").?.name);
     try testing.expectEqualStrings("nam", commandMetadata("nam").?.name);
     try testing.expect(commandMetadata("bogus") == null);
@@ -3221,4 +3287,76 @@ test "random lines never crash or leak" {
         }
         r.deinit(ta);
     }
+}
+
+test "vol per bus, dry and their timeline forms" {
+    const gpa = testing.allocator;
+    {
+        const r = try parse(gpa, "vol mic 0.25");
+        defer r.deinit(gpa);
+        try testing.expectEqual(VcfTarget.mic, r.ok.set_bus_vol.target);
+        try testing.expectEqual(@as(f32, 0.25), r.ok.set_bus_vol.value);
+    }
+    {
+        const r = try parse(gpa, "vol drums 2");
+        defer r.deinit(gpa);
+        try testing.expectEqual(VcfTarget.kick, r.ok.set_bus_vol.target);
+    }
+    try expectErr("vol abc", "bad volume 'abc'");
+    try expectErr("vol mic x", "bad volume 'x'");
+    try expectErr("vol guitar 1", "unknown volume target 'guitar'; use all, mic, bass, kanun, drums, or sym");
+    try expectErr("vol mic 3", "vol mic 3 out of range 0–2");
+    try expectErr("vol a b c", "usage: vol <0..2> | vol <all|mic|bass|kanun|drums|sym> <0..2>");
+    {
+        const r = try parse(gpa, "dry 25%");
+        defer r.deinit(gpa);
+        try testing.expectEqual(@as(f32, 25), r.ok.set_dry);
+    }
+    try expectErr("dry", "usage: dry <0..100>");
+    try expectErr("dry lots", "bad dry percentage 'lots'");
+    try expectErr("dry 101", "dry 101 out of range 0–100");
+    {
+        const r = try parse(gpa, "i 0 vol mic 0.25");
+        defer r.deinit(gpa);
+        try testing.expectEqual(VcfTarget.mic, r.ok.insert_bus_vol.target);
+        try testing.expectEqual(@as(isize, 0), r.ok.insert_bus_vol.before);
+    }
+    {
+        const r = try parse(gpa, "edit 3 dry 75");
+        defer r.deinit(gpa);
+        try testing.expectEqual(@as(f32, 75), r.ok.edit_dry.percent);
+    }
+    {
+        const r = try parse(gpa, "i 2 vol 1.5");
+        defer r.deinit(gpa);
+        try testing.expectEqual(@as(f32, 1.5), r.ok.insert_vol.value);
+    }
+}
+
+test "cabinet_commands_select_portable_impulse_responses" {
+    const gpa = testing.allocator;
+    const r = try parse(gpa, "cab modern mix=0.85");
+    defer r.deinit(gpa);
+    const change = r.ok.set_fx;
+    const applied = try applyFxChange(gpa, FxSettings.default(), change);
+    try testing.expect(applied.ok.cabinet_enabled);
+    try testing.expectEqual(fx.CabinetModel.modern, applied.ok.cabinet_model);
+    try testing.expectEqual(@as(f32, 0.85), applied.ok.cabinet_mix);
+    {
+        const off = try parse(gpa, "fx off");
+        defer off.deinit(gpa);
+        try testing.expectEqual(@as(?bool, false), off.ok.set_fx.cabinet_enabled);
+    }
+    {
+        const on = try parse(gpa, "cabinet");
+        defer on.deinit(gpa);
+        try testing.expectEqual(@as(?bool, true), on.ok.set_fx.cabinet_enabled);
+        try testing.expectEqual(@as(?fx.CabinetModel, null), on.ok.set_fx.cabinet_model);
+    }
+    try expectErr("cab 8x10", "unknown cabinet '8x10'; use vintage, modern, or open");
+    const too_much = try parse(gpa, "cab open mix 2");
+    defer too_much.deinit(gpa);
+    const bad = try applyFxChange(gpa, FxSettings.default(), too_much.ok.set_fx);
+    defer gpa.free(bad.err);
+    try testing.expectEqualStrings("cabinet mix 2 out of range 0..1", bad.err);
 }

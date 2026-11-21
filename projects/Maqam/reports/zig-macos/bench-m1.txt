@@ -1,0 +1,32 @@
+Zig implementation on macOS: bench and live device, 2026-11-21
+Machine: Apple M1 (4 performance + 4 efficiency cores), macOS 15 (Darwin 24.3), Zig 0.17.1,
+an interactive desktop session with other applications running. Build: zig build --release.
+
+make bench SESSION=default.mq SECONDS=10 [NAM=testdata/nam/marshall_jcm800.nam]
+64-frame blocks at 48 kHz (period 1333.3 us), 7500 blocks per run, realtime "mach"
+(time-constraint policy: period 1333 us, computation 667 us, constraint 1333 us),
+memory_locked false (macOS has no mlockall).
+
+  NAM            misses  callback_p50_us  callback_max_us  release_late_max_us
+  jcm800              1           753.2           1477.0                144.0
+  jcm800              1               -           1402.0                111.3
+  jcm800             11               -           1868.5                535.5
+  none                2           504.0           1864.4                531.8
+  none                0           499.0            909.8                 24.3
+
+  With computation raised to 3/4 of the period (jcm800, three runs): 3, 5 and 9 misses,
+  release_late_max_us 156 to 496; no better, so the policy keeps half the period.
+
+Every miss comes with a late release (the thread woken up to 0.5 ms after its release); the
+median block renders in 38% (no NAM) to 56% (jcm800) of the period. This is the Known gap
+"Late wake-ups on macOS" in book/main.tex.
+
+Live device (device.Output = coreaudio.CoreAudio), driven for 3 s with a silent process function:
+  opened rate 48000, period 256 frames, latency 8354 us (buffer + device latency + safety offset),
+  default input device open; 564 callbacks, 144384 frames (3 s = 144000), largest block 256,
+  144128 input frames received, 0 skips counted.
+
+maqam-live load default.mq (command mode) opened the live device and the engine and exited 0;
+the terminal UI drew its frame in a pseudo-terminal and quit on q.
+zig build test: 221 passed, 1 skipped (a release-only timing test), including the new coreaudio
+tests and the macOS time-constraint grant-and-release test.

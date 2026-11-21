@@ -8,6 +8,7 @@ test {
     _ = @import("net.zig");
     _ = @import("device.zig");
     _ = @import("realtime.zig");
+    _ = @import("coreaudio.zig");
     _ = @import("tuning.zig");
     _ = @import("fx.zig");
     _ = @import("vcf.zig");

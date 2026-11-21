@@ -1,0 +1,23 @@
+MAQAM_SESSION_V3
+N|18|nam tone3000 45896 as mesaboogie
+N|15|nam gain 8
+N|16|nam input right
+B|4|120
+V|8|vcf bass cut 100 res 0.98 drive 2
+L|30|vol bass 2
+V|9|vcf kanun cut 500 res 0.98 drive 1 wave saw
+L|27|vol kanun 2
+Y|10|sym kanun decay 0.99 drive 0.5 amount 1
+V|19|vcf mic cut 10000 res 0.1 drive 2
+Y|1|sym mic decay 0.999 drive 1 amount 1
+L|26|vol mic 0.25
+Y|11|sym on
+Y|12|sym harmony root 0.50 third 0.25 fifth 0.25
+P|20|1|d bayati 4323
+P|22|1|a kurd 23
+P|21|1|g nahawand 23
+J|23|20|2
+P|24|1|f saba 232323
+P|25|1|c rast 43
+J|28|20|4
+T|29|stop

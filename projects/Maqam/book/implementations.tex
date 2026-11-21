@@ -9,9 +9,11 @@ implementations of the same specification, each mapped to it by its own
 \begin{description}
   \item[\path{impl/rust/source}] the upstream Rust, the reference the
   requirements were distilled from. Built with \cmd{cargo}.
-  \item[\path{impl/zig/source}] a port to Zig 0.17. It needs only the Zig
-  compiler and the ALSA development headers (\cmd{libasound2-dev}); ffmpeg is
-  needed at run time for \cmd{m} (recording), as upstream.
+  \item[\path{impl/zig/source}] a port to Zig 0.17 that runs on Linux and
+  macOS. On Linux it needs only the Zig compiler and the ALSA development
+  headers (\cmd{libasound2-dev}); on macOS only the Zig compiler and the
+  system's CoreAudio, with the Command Line Tools' SDK. ffmpeg is needed at run
+  time for \cmd{m} (recording), as upstream.
 \end{description}
 
 \section{Building the Zig implementation on its own}
@@ -32,6 +34,36 @@ specification, not of the Rust build. From \path{impl/zig/source}:
 \end{tabular}
 \end{center}
 
+\section{One device per operating system}
+The engine never knows which device drives it: \texttt{device.Output} is the
+ALSA device on Linux and the CoreAudio device on macOS, chosen when the program
+is compiled, and each calls \texttt{audio.Engine.process} once per block. They
+differ in who keeps time. ALSA is written to: the device thread renders a block
+and blocks in the write until the hardware has room. CoreAudio pulls: it calls
+the output callback on its own real-time thread when it needs a block, and a
+second, input-only unit hands the captured frames to that callback through a
+lock-free ring. The requirements on the callback are the same on both.
+
+The controls behind \emph{The audio thread never waits on the kernel} and
+\emph{A buffer skip is never silent} are the operating system's:
+
+\begin{center}
+\begin{tabular}{p{0.24\linewidth}p{0.33\linewidth}p{0.33\linewidth}}
+\toprule
+ & Linux (ALSA) & macOS (CoreAudio)\\
+\midrule
+real-time scheduling & \texttt{SCHED\_FIFO}, else RealtimeKit (\texttt{fifo}, \texttt{rtkit}) & the Mach time-constraint policy (\texttt{mach}); CoreAudio's own I/O thread already has it\\
+no page faults & \texttt{mlockall}, current and future mappings & no \texttt{mlockall} on macOS (\texttt{memory\_locked} false): the callback's buffers are written once before the device starts\\
+a skip is counted & the write returns \texttt{-EPIPE} & the device's sample time jumps past the frames handed over\\
+opening a URL & \cmd{xdg-open} & \cmd{open}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent On macOS the terminal running \cmd{maqam-live} needs microphone
+permission for the live input; without it the app plays with no input, as on a
+Linux machine with no capture device.
+
 \noindent From the project root \cmd{make zig-check} does the same as
 \cmd{make check} there, and \cmd{make check} runs the specification check and
 both implementations' checks.
@@ -51,7 +83,7 @@ Rust & Zig & role\\
 \texttt{session\_v3.rs} + loaders in \texttt{app.rs} & \texttt{session.zig} & MAQAM\_SESSION\_V3/V2/V1\\
 \texttt{fx.rs}, \texttt{vcf.rs}, \texttt{analog.rs}, \texttt{sympathetics.rs} & same names & the signal chain\\
 crate \texttt{nam-rs} 0.4 & \texttt{nam.zig} & NAM WaveNet (A1, A2), LSTM, slimmable\\
-\texttt{audio.rs} + \texttt{cpal} & \texttt{audio.zig}, \texttt{device.zig} & the engine and ALSA\\
+\texttt{audio.rs} + \texttt{cpal} & \texttt{audio.zig}, \texttt{device.zig}, \texttt{coreaudio.zig} & the engine, ALSA and CoreAudio\\
 \texttt{record\_old.rs}, \texttt{carpet.rs} & \texttt{record.zig}, \texttt{carpet.zig}, \texttt{png.zig} & the MP4 recorder\\
 \texttt{app.rs} & \texttt{app.zig}, \texttt{net.zig} & the App and its workers\\
 \texttt{ui.rs} + \texttt{ratatui} & \texttt{ui.zig}, \texttt{term.zig} & the terminal UI\\
@@ -88,11 +120,10 @@ the requirements the Rust does not meet (Chapter~\ref{ch:gaps}):
   points to is kept.
   \item Every NAM cache name is sanitized; tests never reach the network or
   open a browser.
-  \item The \cmd{nam gain} help text says 0..11, the range the parser accepts.
   \item MIDI clock in and out (\cmd{clockin}, \cmd{clockout}), which the
   specification does not mention, answer that MIDI is not available.
-  \item The audio thread locks its memory and asks for real-time scheduling
-  before its loop, and the live device counts every underrun and shows it in
+  \item The audio thread locks its memory (Linux) and asks for real-time
+  scheduling before its loop, and the live device counts every underrun and shows it in
   the header; upstream recovers from an underrun silently.
   \item One regression: Zig 0.17's HTTP client has no request timeouts, where
   upstream gives up after 30\,s (LLM) and 120\,s (downloads). Only the worker

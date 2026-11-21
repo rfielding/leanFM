@@ -1,0 +1,23 @@
+MAQAM_SESSION_V3
+create bayati2 8/9 1/1 12/11 32/27 4/3 3/2
+create hijaz2 8/9 1/1 15/14 6/5 4/3 3/2
+create saba2 8/9 1/1 13/12 6/5 5/4 11/8 3/2
+N|26|nam tone3000 41179 as jcm800_2203x
+N|14|nam gain 1
+N|15|nam input right
+B|0|180
+S|1|2
+Y|8|sym on
+Y|12|sym harmony root 0.50 third 0.25 fifth 0.10 octave 0.15
+Y|9|sym kanun decay 0.995 drive 2
+Y|20|sym mic decay 0.999 drive 3
+V|19|vcf cut 3000 res 0.98 drive 1
+F|22|flanger rate 0.2 depth 0.15 delay 2 feedback 0.4 mix 0.25
+L|18|vol kanun 2
+L|23|vol mic 1
+D|31|dry 10
+P|28|1|d bayati 44422
+J|27|28|3
+P|5|1|d saba, b- saba 664
+J|30|5|4
+J|29|26|4

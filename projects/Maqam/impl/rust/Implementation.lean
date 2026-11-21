@@ -4,7 +4,7 @@ import LeanFM.Artifacts
 # maqam-live: implementation mapping (as found in the upstream Rust source)
 
 Each actor and message of `spec/Requirements.lean` is mapped to the Rust that realizes it in
-`impl/rust/source/` (upstream revision c80b35d). This is the project's default implementation;
+`impl/rust/source/` (upstream revision 72c11f5). This is the project's default implementation;
 `manifest.json` lists the others, each checked against the same requirements. This records the implementation as it is; where it falls
 short of a requirement, the book's "Known gaps" chapter names the requirement, the code and the
 counterexample.

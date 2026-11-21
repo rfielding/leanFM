@@ -1,10 +1,13 @@
 //! Port of maqam-live `src/fx.rs`: the post-amp effect settings (flanger, chorus, reverb, ping-pong
-//! delay with per-tick steps) and the stereo `FxProcessor`.
+//! delay with per-tick steps, the cabinet stage), the stereo `FxProcessor` and the mono
+//! `CabinetProcessor` on the live input.
 //!
 //! The processor owns its delay lines: `FxProcessor.init(gpa, sample_rate)` allocates them and
 //! `deinit(gpa)` frees them; `process` never allocates. Float clamps and float-to-index casts follow
 //! Rust semantics (a NaN passes through `clamp`; `as usize` saturates), so no input can trap.
-//! No deliberate behavioral differences from the Rust.
+//! One deliberate difference: `CabinetProcessor` computes the three impulse responses in `init`, so
+//! `setModel` (called from the output callback) never allocates; upstream rebuilds the response and
+//! resizes its history there (book: Known gaps). The samples it produces are the same.
 const std = @import("std");
 
 const TAU: f32 = std.math.tau;
@@ -24,6 +27,28 @@ fn toUsize(x: f32) usize {
     if (x >= @as(f32, @floatFromInt(std.math.maxInt(usize)))) return std.math.maxInt(usize);
     return @intFromFloat(x);
 }
+
+pub const CabinetModel = enum {
+    vintage,
+    modern,
+    open,
+
+    pub fn parse(value: []const u8) ?CabinetModel {
+        const eq = std.ascii.eqlIgnoreCase;
+        if (eq(value, "vintage") or eq(value, "4x12")) return .vintage;
+        if (eq(value, "modern") or eq(value, "tight")) return .modern;
+        if (eq(value, "open") or eq(value, "1x12") or eq(value, "open-back")) return .open;
+        return null;
+    }
+
+    pub fn name(self: CabinetModel) []const u8 {
+        return switch (self) {
+            .vintage => "vintage",
+            .modern => "modern",
+            .open => "open",
+        };
+    }
+};
 
 pub const FxSettings = struct {
     flanger_enabled: bool = false,
@@ -58,6 +83,9 @@ pub const FxSettings = struct {
     delay_time_step_per_tick: f32 = 0.0,
     delay_feedback_step_per_tick: f32 = 0.0,
     delay_mix_step_per_tick: f32 = 0.0,
+    cabinet_enabled: bool = false,
+    cabinet_model: CabinetModel = .vintage,
+    cabinet_mix: f32 = 1.0,
 
     /// The Rust `FxSettings::default()`.
     pub fn default() FxSettings {
@@ -286,6 +314,97 @@ pub const FxProcessor = struct {
     }
 };
 
+/// A short FIR cabinet stage on the live input (the Rust `CabinetProcessor`). All three impulse
+/// responses and the longest history are allocated by `init`; `setModel` and `process` never
+/// allocate.
+pub const CabinetProcessor = struct {
+    impulses: [3][]f32,
+    history_buf: []f32,
+    /// The active model's history: `history_buf[0..impulses[model].len]`.
+    history: []f32,
+    pos: usize = 0,
+    model: CabinetModel = .vintage,
+
+    pub fn init(gpa: std.mem.Allocator, sample_rate: f32) error{OutOfMemory}!CabinetProcessor {
+        var impulses: [3][]f32 = undefined;
+        var made: usize = 0;
+        errdefer for (impulses[0..made]) |imp| gpa.free(imp);
+        var longest: usize = 0;
+        inline for (.{ CabinetModel.vintage, CabinetModel.modern, CabinetModel.open }, 0..) |m, k| {
+            impulses[k] = try cabinetImpulse(gpa, m, sample_rate);
+            made += 1;
+            longest = @max(longest, impulses[k].len);
+        }
+        const buf = try zeroed(gpa, longest);
+        return .{ .impulses = impulses, .history_buf = buf, .history = buf[0..impulses[0].len] };
+    }
+
+    pub fn deinit(self: *CabinetProcessor, gpa: std.mem.Allocator) void {
+        for (self.impulses) |imp| gpa.free(imp);
+        gpa.free(self.history_buf);
+    }
+
+    fn impulse(self: *const CabinetProcessor) []const f32 {
+        return self.impulses[@intFromEnum(self.model)];
+    }
+
+    /// Selects a model; a new model starts from silence, as upstream's `set_model`.
+    pub fn setModel(self: *CabinetProcessor, model: CabinetModel) void {
+        if (self.model == model) return;
+        self.model = model;
+        self.history = self.history_buf[0..self.impulse().len];
+        @memset(self.history, 0.0);
+        self.pos = 0;
+    }
+
+    pub fn process(self: *CabinetProcessor, input: f32, settings: FxSettings) f32 {
+        if (!settings.cabinet_enabled) return input;
+        self.history[self.pos] = input;
+        var wet: f32 = 0.0;
+        var read = self.pos;
+        for (self.impulse()) |coefficient| {
+            wet += self.history[read] * coefficient;
+            read = if (read == 0) self.history.len - 1 else read - 1;
+        }
+        self.pos = (self.pos + 1) % self.history.len;
+        return input * (1.0 - settings.cabinet_mix) + wet * settings.cabinet_mix;
+    }
+};
+
+/// The Rust `cabinet_impulse`: a damped resonance through a one-pole low-pass and high-pass,
+/// faded out over the 6 ms response and peak-normalized. Caller owns the result.
+fn cabinetImpulse(gpa: std.mem.Allocator, model: CabinetModel, sample_rate: f32) error{OutOfMemory}![]f32 {
+    const p: [4]f32 = switch (model) {
+        .vintage => .{ 85.0, 5_200.0, 115.0, 32.0 },
+        .modern => .{ 105.0, 6_400.0, 145.0, 42.0 },
+        .open => .{ 70.0, 7_200.0, 92.0, 25.0 },
+    };
+    const low_hz = p[0];
+    const high_hz = p[1];
+    const resonance = p[2];
+    const damping = p[3];
+    const sr = @max(sample_rate, 8_000.0);
+    const len = std.math.clamp(toUsize(@round(sr * 0.006)), 64, 384);
+    const out = try gpa.alloc(f32, len);
+    var previous_lp: f32 = 0.0;
+    const lp_alpha = 1.0 - @exp(-2.0 * PI * high_hz / sr);
+    const hp_decay = @exp(-2.0 * PI * low_hz / sr);
+    var hp_state: f32 = 0.0;
+    for (out, 0..) |*o, n| {
+        const t = @as(f32, @floatFromInt(n)) / sr;
+        const delta: f32 = if (n == 0) 1.0 else 0.0;
+        const excitation = delta + @sin(2.0 * PI * resonance * t) * @exp(-damping * t) * 0.22;
+        previous_lp += lp_alpha * (excitation - previous_lp);
+        const high_passed = previous_lp - hp_state;
+        hp_state = previous_lp + hp_decay * high_passed;
+        o.* = high_passed * @exp(-70.0 * t);
+    }
+    var peak: f32 = 1e-6;
+    for (out) |v| peak = @max(peak, @abs(v));
+    for (out) |*v| v.* /= peak;
+    return out;
+}
+
 fn zeroed(gpa: std.mem.Allocator, n: usize) error{OutOfMemory}![]f32 {
     const buf = try gpa.alloc(f32, n);
     @memset(buf, 0.0);
@@ -341,4 +460,36 @@ test "reverb and pingpong stay bounded and settings advance within range" {
     settings.advanceTick();
     try std.testing.expectEqual(@as(f32, 0.98), settings.reverb_decay);
     try std.testing.expectEqual(@as(f32, 0.01), settings.delay_time_secs);
+}
+
+test "cabinet_is_bypassed_or_convolves_without_allocating" {
+    var cabinet = try CabinetProcessor.init(std.testing.allocator, 48_000.0);
+    defer cabinet.deinit(std.testing.allocator);
+    var settings = FxSettings.default();
+    try std.testing.expectEqual(@as(f32, 0.25), cabinet.process(0.25, settings));
+
+    settings.cabinet_enabled = true;
+    settings.cabinet_mix = 1.0;
+    const first = cabinet.process(1.0, settings);
+    const tail = cabinet.process(0.0, settings);
+    try std.testing.expect(std.math.isFinite(first) and @abs(first) > 0.01);
+    try std.testing.expect(std.math.isFinite(tail) and @abs(tail) > 0.0001);
+}
+
+test "a cabinet model change starts from silence and needs no allocation" {
+    var cabinet = try CabinetProcessor.init(std.testing.allocator, 48_000.0);
+    defer cabinet.deinit(std.testing.allocator);
+    var settings = FxSettings.default();
+    settings.cabinet_enabled = true;
+    _ = cabinet.process(1.0, settings);
+    // 6 ms at 48 kHz is 288 taps for every model; the response is peak-normalized
+    try std.testing.expectEqual(@as(usize, 288), cabinet.history.len);
+    var peak: f32 = 0;
+    for (cabinet.impulse()) |v| peak = @max(peak, @abs(v));
+    try std.testing.expectApproxEqAbs(@as(f32, 1.0), peak, 1e-6);
+    cabinet.setModel(.modern);
+    try std.testing.expectEqual(@as(usize, 0), cabinet.pos);
+    for (cabinet.history) |h| try std.testing.expectEqual(@as(f32, 0), h);
+    try std.testing.expectEqual(CabinetModel.open, CabinetModel.parse("1X12").?);
+    try std.testing.expectEqual(@as(?CabinetModel, null), CabinetModel.parse("8x10"));
 }

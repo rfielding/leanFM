@@ -415,7 +415,7 @@ pub fn buildPlan(
                         .err => |m| gpa.free(m),
                     }
                 },
-                .set_sympathetics, .set_sympathetic_decay, .set_sympathetic_gain, .set_sympathetic, .set_nam_enabled, .set_nam_gain, .set_nam_input => {},
+                .set_sympathetics, .set_sympathetic_decay, .set_sympathetic_gain, .set_sympathetic, .set_nam_enabled, .set_nam_gain, .set_nam_input, .set_vol, .set_bus_vol, .set_dry => {},
             }
             cur += 1;
             continue;

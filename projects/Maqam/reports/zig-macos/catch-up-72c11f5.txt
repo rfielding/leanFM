@@ -1,0 +1,35 @@
+Catching the specification and the Zig implementation up to upstream 72c11f5, 2026-11-21
+Upstream https://github.com/rfielding/maqam moved 30 commits past the snapshot c80b35d. impl/rust/source
+now holds 72c11f5 (same exclusions as before: .github, the demo mp4, the project's own Makefile).
+
+What changed upstream and is now required (spec/Requirements.lean, book/main.tex):
+  - vol <bus> <0..2> (all, mic, bass, kanun, drums, sym), dry <0..100>, both live (.globals.ml) and,
+    through i/edit, timeline rows saved as L|id|vol and D|id|dry
+  - cab vintage|modern|open [mix 0..1] / cab off, a cabinet FIR stage after NAM; fx off turns it off
+  - NAM on selects only the modeled input (no parallel clean signal); the mic bus is trimmed linearly
+    after the clip; the dry mix is applied last
+  - nam gain 0..100 (help text still says 0..8: recorded under doc disagreements)
+  - the church modes (Minor, Ionian, Dorian, ...) are Pythagorean
+  - --bufsize=<frames>, default 64 (the commit message says 256)
+  - live input backlog bounded (new never-requirement "Live input never lags behind a backlog")
+  - LLM NAM research tries TONE3000 search first; "find ... and set it here" is an edit request
+
+Reported failures, before and after (Zig, macOS, MAQAM_GLOBALS_PATH=/dev/null):
+  bassbayati.mq   before: "✗ load failed: line 15: malformed V3 record" (L|20|vol mic 1)
+                  after:  loads; downloads TONE3000 tone 45809 as ampeg_svt_cl_bass_head
+  practice.mq     before: upstream's file failed the same way; the bundled copy was the old file
+                  after:  loads; the bundled copy is upstream's; d minor uses 32/27 27/16 16/9
+
+All 20 bundled sessions load in the Zig. db.mq, bayati.mq and practice.mq end with "? for help"
+instead of "loaded session": their N|..|nam on row is a load of a model named "on". The upstream
+Rust release binary at 72c11f5 prints exactly the same for db.mq and practice.mq.
+
+Zig checks: zig build test 241 passed, 1 skipped (a release-only timing test); renders of
+practice.mq, bassbayati.mq and default.mq identical on two runs; bench (default.mq, jcm800, 64
+frames) 1 of 7500 blocks late (the macOS Known gap); live CoreAudio at 64 frames for 3 s: 2258
+callbacks, 144512 frames, input received, 0 skips, 4354 us output latency.
+
+Rust checks: cargo build --release succeeds. cargo test --release --offline (make app-check) never
+finishes: app::tests::bundled_v3_sessions_load blocks on a full 32-slot channel while holding
+session_test_lock; 18 of 77 tests had passed and the rest waited behind the lock for 25 minutes
+before the run was stopped. Book Known gap "The tests deadlock".

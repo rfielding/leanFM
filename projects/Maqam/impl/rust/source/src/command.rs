@@ -1,10 +1,11 @@
 // command.rs — mini-language parser
 
-use crate::fx::FxSettings;
+use crate::fx::{CabinetModel, FxSettings};
 use crate::tuning::{Maqam, Pitch};
 use crate::vcf::{VcfBank, VcfSettings, VcfTarget, VcoWave};
 
 pub const START_REF: isize = isize::MIN;
+pub const NAM_GAIN_MAX: f32 = 100.0;
 
 pub struct JinsSpec {
     pub src: String,
@@ -43,6 +44,9 @@ pub struct FxChange {
     pub delay_time_secs: Option<ValueChange>,
     pub delay_feedback: Option<ValueChange>,
     pub delay_mix: Option<ValueChange>,
+    pub cabinet_enabled: Option<bool>,
+    pub cabinet_model: Option<CabinetModel>,
+    pub cabinet_mix: Option<ValueChange>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -527,7 +531,7 @@ pub const NAM_METADATA: CommandMetadata = CommandMetadata {
     first_parameter: "load",
     notes: &[
         "NAM is live input state and is not saved in .mq files",
-        "the chain is mic input -> NAM -> vcf mic or vcf all -> output",
+        "the chain is mic input -> NAM -> cabinet IR -> vcf mic or vcf all -> output",
         "cached captures live under ./.nam unless MAQAM_NAM_CACHE_DIR is set",
         "NAM models have an expected sample rate; set the audio device to that rate if the model sounds wrong",
     ],
@@ -688,12 +692,17 @@ pub const LANGUAGE_PATTERNS: &[LanguagePatternMetadata] = &[
         notes: &["`pingpong` is accepted as an alias for delay"],
     },
     LanguagePatternMetadata {
+        syntax: "cab <vintage|modern|open> [mix <0..1>] | cab off",
+        description: "apply a portable cabinet impulse response after the live NAM amp",
+        notes: &["vintage is a warm 4x12, modern is a tight 4x12, and open is an open-back 1x12"],
+    },
+    LanguagePatternMetadata {
         syntax: "fx off",
-        description: "turn reverb and delay off",
+        description: "turn all effects and the cabinet stage off",
         notes: &[],
     },
     LanguagePatternMetadata {
-        syntax: "nam login | nam logout | nam tone3000 ID as name | nam pin URL as name | nam import FILENAME.nam [as name] | nam input left|right|stereo | nam latency left|right | nam search <query> | nam <name|FILENAME.nam|URL> | nam load <name|FILENAME.nam|URL> | nam ls | nam off | nam gain <0..11>",
+        syntax: "nam login | nam logout | nam tone3000 ID as name | nam pin URL as name | nam import FILENAME.nam [as name] | nam input left|right|stereo | nam latency left|right | nam search <query> | nam <name|FILENAME.nam|URL> | nam load <name|FILENAME.nam|URL> | nam ls | nam off | nam gain <0..100>",
         description: "cache, load, list, or bypass Neural Amp Modeler A1/A2 captures on live mic input",
         notes: &[
             "`nam pin URL as name` writes an unambiguous downloadable dependency into the loaded .mq file",
@@ -952,6 +961,19 @@ pub enum Cmd {
         before: isize,
         change: FxChange,
     },
+    InsertVol {
+        before: isize,
+        value: f32,
+    },
+    InsertBusVol {
+        before: isize,
+        target: VcfTarget,
+        value: f32,
+    },
+    InsertDry {
+        before: isize,
+        percent: f32,
+    },
     InsertNam {
         before: isize,
         command: NamCommand,
@@ -1002,6 +1024,19 @@ pub enum Cmd {
         id: isize,
         change: FxChange,
     },
+    EditVol {
+        id: isize,
+        value: f32,
+    },
+    EditBusVol {
+        id: isize,
+        target: VcfTarget,
+        value: f32,
+    },
+    EditDry {
+        id: isize,
+        percent: f32,
+    },
     EditNam {
         id: isize,
         command: NamCommand,
@@ -1042,6 +1077,8 @@ pub enum Cmd {
     SetFx(FxChange),
     SetNam(NamCommand),
     SetVol(f32),
+    SetBusVol(VcfTarget, f32),
+    SetDry(f32),
     Record(usize),
     TogglePause {
         start_id: Option<isize>,
@@ -1287,6 +1324,9 @@ pub fn parse(raw: &str) -> Result<Cmd, String> {
             Cmd::SetSustain(change) => Ok(Cmd::EditSustain { id, change }),
             Cmd::SetVcf(change) => Ok(Cmd::EditVcf { id, change }),
             Cmd::SetFx(change) => Ok(Cmd::EditFx { id, change }),
+            Cmd::SetVol(value) => Ok(Cmd::EditVol { id, value }),
+            Cmd::SetBusVol(target, value) => Ok(Cmd::EditBusVol { id, target, value }),
+            Cmd::SetDry(percent) => Ok(Cmd::EditDry { id, percent }),
             Cmd::SetNam(command) => Ok(Cmd::EditNam { id, command }),
             Cmd::Sympathetics(enabled) => Ok(Cmd::EditSympathetics { id, enabled }),
             Cmd::SympatheticDecay(decay) => Ok(Cmd::EditSympatheticDecay { id, decay }),
@@ -1355,6 +1395,13 @@ pub fn parse(raw: &str) -> Result<Cmd, String> {
             Cmd::SetSustain(change) => Ok(Cmd::InsertSustain { before, change }),
             Cmd::SetVcf(change) => Ok(Cmd::InsertVcf { before, change }),
             Cmd::SetFx(change) => Ok(Cmd::InsertFx { before, change }),
+            Cmd::SetVol(value) => Ok(Cmd::InsertVol { before, value }),
+            Cmd::SetBusVol(target, value) => Ok(Cmd::InsertBusVol {
+                before,
+                target,
+                value,
+            }),
+            Cmd::SetDry(percent) => Ok(Cmd::InsertDry { before, percent }),
             Cmd::SetNam(command) => Ok(Cmd::InsertNam { before, command }),
             Cmd::Sympathetics(enabled) => Ok(Cmd::InsertSympathetics { before, enabled }),
             Cmd::SympatheticDecay(decay) => Ok(Cmd::InsertSympatheticDecay { before, decay }),
@@ -1408,7 +1455,7 @@ pub fn parse(raw: &str) -> Result<Cmd, String> {
     // ── FX ───────────────────────────────────────────────────────────────
     if matches!(
         al.as_str(),
-        "fx" | "flanger" | "flange" | "chorus" | "choir" | "reverb" | "rev" | "delay" | "pingpong"
+        "fx" | "flanger" | "flange" | "chorus" | "choir" | "reverb" | "rev" | "delay" | "pingpong" | "cab" | "cabinet"
     ) && digits.is_empty()
     {
         return Ok(Cmd::SetFx(parse_fx_change(input)?));
@@ -1420,7 +1467,7 @@ pub fn parse(raw: &str) -> Result<Cmd, String> {
             .split_once(char::is_whitespace)
             .map(|(_, rest)| rest.trim())
             .filter(|s| !s.is_empty())
-            .ok_or("usage: nam <cached-name|FILENAME.nam|URL> | nam import <FILENAME.nam|URL> [as name] | nam ls | nam off | nam gain <0..11>")?;
+            .ok_or("usage: nam <cached-name|FILENAME.nam|URL> | nam import <FILENAME.nam|URL> [as name] | nam ls | nam off | nam gain <0..100>")?;
         let mut toks = rest.split_whitespace();
         match toks.next().unwrap_or("").to_ascii_lowercase().as_str() {
             "login" => return Ok(Cmd::SetNam(NamCommand::Login)),
@@ -1502,13 +1549,13 @@ pub fn parse(raw: &str) -> Result<Cmd, String> {
             "gain" | "drive" => {
                 let value = toks
                     .next()
-                    .ok_or("usage: nam gain <0..11>; type a number after nam gain")?;
+                    .ok_or("usage: nam gain <0..100>; type a number after nam gain")?;
                 let gain = value
                     .parse::<f32>()
                     .map_err(|_| format!("bad NAM gain '{value}'; type a number from 0 to 8"))?;
-                if !(0.0..=11.0).contains(&gain) {
+                if !(0.0..=NAM_GAIN_MAX).contains(&gain) {
                     return Err(format!(
-                        "NAM gain {gain} out of range 0..11; use nam gain <0..11>"
+                        "NAM gain {gain} out of range 0..100; use nam gain <0..100>"
                     ));
                 }
                 return Ok(Cmd::SetNam(NamCommand::Gain(gain)));
@@ -1550,19 +1597,55 @@ pub fn parse(raw: &str) -> Result<Cmd, String> {
 
     // ── VOL ───────────────────────────────────────────────────────────────
     if al == "vol" {
+        let args: Vec<&str> = input.split_whitespace().skip(1).collect();
+        if args.len() == 2 {
+            let target = VcfTarget::parse(args[0]).ok_or_else(|| {
+                format!(
+                    "unknown volume target '{}'; use all, mic, bass, kanun, drums, or sym",
+                    args[0]
+                )
+            })?;
+            let n: f32 = args[1]
+                .parse()
+                .map_err(|_| format!("bad volume '{}'", args[1]))?;
+            if !(0.0..=2.0).contains(&n) {
+                return Err(format!("vol {} {n} out of range 0–2", target.as_str()));
+            }
+            return Ok(Cmd::SetBusVol(target, n));
+        }
         let n: f32 = if !digits.is_empty() {
             digits.parse().unwrap_or(1.0)
         } else {
-            input
-                .split_whitespace()
-                .nth(1)
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(1.0)
+            match args.as_slice() {
+                [] => 1.0,
+                [value] => value.parse().map_err(|_| format!("bad volume '{value}'"))?,
+                _ => {
+                    return Err(
+                        "usage: vol <0..2> | vol <all|mic|bass|kanun|drums|sym> <0..2>".into(),
+                    )
+                }
+            }
         };
         if !(0.0..=2.0).contains(&n) {
             return Err(format!("vol {n} out of range 0–2"));
         }
         return Ok(Cmd::SetVol(n));
+    }
+
+    // ── DRY/WET INPUT MIX ────────────────────────────────────────────────
+    if al == "dry" {
+        let value = input
+            .split_whitespace()
+            .nth(1)
+            .ok_or("usage: dry <0..100>")?;
+        let percent: f32 = value
+            .trim_end_matches('%')
+            .parse()
+            .map_err(|_| format!("bad dry percentage '{value}'"))?;
+        if !(0.0..=100.0).contains(&percent) {
+            return Err(format!("dry {percent} out of range 0–100"));
+        }
+        return Ok(Cmd::SetDry(percent));
     }
 
     // ── DELETE: x<N> [N …] ───────────────────────────────────────────────
@@ -2234,7 +2317,7 @@ pub fn apply_vcf_change(current: VcfBank, change: VcfChange) -> Result<VcfSettin
 }
 
 fn parse_fx_change(input: &str) -> Result<FxChange, String> {
-    let usage = "usage: flanger rate=<hz> depth=<0..1> delay=<ms> feedback=<-0.95..0.95> mix=<0..1> | chorus rate=<hz> depth=<0..1> delay=<ms> mix=<0..1> | reverb mix=<0..1> decay=<0..0.98> | delay time=<secs> feedback=<0..0.95> mix=<0..1> | fx off";
+    let usage = "usage: flanger ... | chorus ... | reverb ... | delay ... | cab <vintage|modern|open> [mix=<0..1>] | cab off | fx off";
     let mut toks = input.split_whitespace();
     let head = toks.next().unwrap_or("").to_ascii_lowercase();
     let rest: Vec<&str> = toks.collect();
@@ -2246,6 +2329,7 @@ fn parse_fx_change(input: &str) -> Result<FxChange, String> {
             out.chorus_enabled = Some(false);
             out.reverb_enabled = Some(false);
             out.delay_enabled = Some(false);
+            out.cabinet_enabled = Some(false);
             return Ok(out);
         }
         return Err(usage.into());
@@ -2255,7 +2339,8 @@ fn parse_fx_change(input: &str) -> Result<FxChange, String> {
     let is_chorus = matches!(head.as_str(), "chorus" | "choir");
     let is_reverb = matches!(head.as_str(), "reverb" | "rev");
     let is_delay = matches!(head.as_str(), "delay" | "pingpong");
-    if !is_flanger && !is_chorus && !is_reverb && !is_delay {
+    let is_cabinet = matches!(head.as_str(), "cab" | "cabinet");
+    if !is_flanger && !is_chorus && !is_reverb && !is_delay && !is_cabinet {
         return Err(usage.into());
     }
     if rest.len() == 1 && rest[0].eq_ignore_ascii_case("off") {
@@ -2265,8 +2350,10 @@ fn parse_fx_change(input: &str) -> Result<FxChange, String> {
             out.chorus_enabled = Some(false);
         } else if is_reverb {
             out.reverb_enabled = Some(false);
-        } else {
+        } else if is_delay {
             out.delay_enabled = Some(false);
+        } else {
+            out.cabinet_enabled = Some(false);
         }
         return Ok(out);
     }
@@ -2277,8 +2364,10 @@ fn parse_fx_change(input: &str) -> Result<FxChange, String> {
             out.chorus_enabled = Some(true);
         } else if is_reverb {
             out.reverb_enabled = Some(true);
-        } else {
+        } else if is_delay {
             out.delay_enabled = Some(true);
+        } else {
+            out.cabinet_enabled = Some(true);
         }
         return Ok(out);
     }
@@ -2289,8 +2378,17 @@ fn parse_fx_change(input: &str) -> Result<FxChange, String> {
         out.chorus_enabled = Some(true);
     } else if is_reverb {
         out.reverb_enabled = Some(true);
-    } else {
+    } else if is_delay {
         out.delay_enabled = Some(true);
+    } else {
+        out.cabinet_enabled = Some(true);
+    }
+
+    let mut rest = rest;
+    if is_cabinet && !rest.is_empty() && !rest[0].contains('=') && !matches!(rest[0], "mix") {
+        out.cabinet_model = CabinetModel::parse(rest[0]);
+        if out.cabinet_model.is_none() { return Err(format!("unknown cabinet '{}'; use vintage, modern, or open", rest[0])); }
+        rest.remove(0);
     }
 
     let mut i = 0usize;
@@ -2320,6 +2418,7 @@ fn parse_fx_change(input: &str) -> Result<FxChange, String> {
             "time" | "t" | "secs" | "seconds" if is_delay => out.delay_time_secs = Some(change),
             "feedback" | "fb" if is_delay => out.delay_feedback = Some(change),
             "mix" if is_delay => out.delay_mix = Some(change),
+            "mix" if is_cabinet => out.cabinet_mix = Some(change),
             _ => return Err(format!("unknown fx parameter '{name}'")),
         }
         i += 1;
@@ -2341,6 +2440,8 @@ pub fn apply_fx_change(current: FxSettings, change: FxChange) -> Result<FxSettin
     if let Some(enabled) = change.delay_enabled {
         next.delay_enabled = enabled;
     }
+    if let Some(enabled) = change.cabinet_enabled { next.cabinet_enabled = enabled; }
+    if let Some(model) = change.cabinet_model { next.cabinet_model = model; }
     apply_fx_value(
         &mut next.flanger_rate_hz,
         &mut next.flanger_rate_step_per_tick,
@@ -2410,6 +2511,12 @@ pub fn apply_fx_change(current: FxSettings, change: FxChange) -> Result<FxSettin
         &mut next.delay_mix,
         &mut next.delay_mix_step_per_tick,
         change.delay_mix,
+    )?;
+    let mut unused_cabinet_step = 0.0;
+    apply_fx_value(
+        &mut next.cabinet_mix,
+        &mut unused_cabinet_step,
+        change.cabinet_mix,
     )?;
     validate_fx(next)
 }
@@ -2503,6 +2610,9 @@ fn validate_fx(next: FxSettings) -> Result<FxSettings, String> {
     }
     if !(0.0..=1.0).contains(&next.delay_mix) {
         return Err(format!("delay mix {} out of range 0..1", next.delay_mix));
+    }
+    if !(0.0..=1.0).contains(&next.cabinet_mix) {
+        return Err(format!("cabinet mix {} out of range 0..1", next.cabinet_mix));
     }
     Ok(next)
 }

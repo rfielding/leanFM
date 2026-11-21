@@ -160,14 +160,14 @@ const DEFAULTS = [_]Default{
     .{ .name = "Suznak", .ratios = &.{ r(1, 1), r(9, 8), r(27, 22), r(4, 3), r(3, 2) } },
     .{ .name = "Jiharkah", .ratios = &.{ r(1, 1), r(9, 8), r(5, 4), r(4, 3), r(3, 2) } },
     .{ .name = "Major", .ratios = &.{ r(1, 1), r(9, 8), r(5, 4), r(4, 3), r(3, 2), r(5, 3), r(15, 8) } },
-    .{ .name = "Ionian", .ratios = &.{ r(1, 1), r(9, 8), r(5, 4), r(4, 3), r(3, 2), r(5, 3), r(15, 8) } },
-    .{ .name = "Dorian", .ratios = &.{ r(1, 1), r(9, 8), r(6, 5), r(4, 3), r(3, 2), r(5, 3), r(9, 5) } },
-    .{ .name = "Phrygian", .ratios = &.{ r(1, 1), r(16, 15), r(6, 5), r(4, 3), r(3, 2), r(8, 5), r(9, 5) } },
-    .{ .name = "Lydian", .ratios = &.{ r(1, 1), r(9, 8), r(5, 4), r(45, 32), r(3, 2), r(5, 3), r(15, 8) } },
-    .{ .name = "Mixolydian", .ratios = &.{ r(1, 1), r(9, 8), r(5, 4), r(4, 3), r(3, 2), r(5, 3), r(9, 5) } },
-    .{ .name = "Minor", .ratios = &.{ r(1, 1), r(9, 8), r(6, 5), r(4, 3), r(3, 2), r(8, 5), r(9, 5) } },
-    .{ .name = "Aeolian", .ratios = &.{ r(1, 1), r(9, 8), r(6, 5), r(4, 3), r(3, 2), r(8, 5), r(9, 5) } },
-    .{ .name = "Locrian", .ratios = &.{ r(1, 1), r(16, 15), r(6, 5), r(4, 3), r(64, 45), r(8, 5), r(9, 5) } },
+    .{ .name = "Ionian", .ratios = &.{ r(1, 1), r(9, 8), r(81, 64), r(4, 3), r(3, 2), r(27, 16), r(243, 128) } },
+    .{ .name = "Dorian", .ratios = &.{ r(1, 1), r(9, 8), r(32, 27), r(4, 3), r(3, 2), r(27, 16), r(16, 9) } },
+    .{ .name = "Phrygian", .ratios = &.{ r(1, 1), r(256, 243), r(32, 27), r(4, 3), r(3, 2), r(128, 81), r(16, 9) } },
+    .{ .name = "Lydian", .ratios = &.{ r(1, 1), r(9, 8), r(81, 64), r(729, 512), r(3, 2), r(27, 16), r(243, 128) } },
+    .{ .name = "Mixolydian", .ratios = &.{ r(1, 1), r(9, 8), r(81, 64), r(4, 3), r(3, 2), r(27, 16), r(16, 9) } },
+    .{ .name = "Minor", .ratios = &.{ r(1, 1), r(9, 8), r(32, 27), r(4, 3), r(3, 2), r(27, 16), r(16, 9) } },
+    .{ .name = "Aeolian", .ratios = &.{ r(1, 1), r(9, 8), r(32, 27), r(4, 3), r(3, 2), r(128, 81), r(16, 9) } },
+    .{ .name = "Locrian", .ratios = &.{ r(1, 1), r(256, 243), r(32, 27), r(4, 3), r(1024, 729), r(128, 81), r(16, 9) } },
     .{ .name = "Diminished", .ratios = &.{ r(1, 1), r(9, 8), r(6, 5), r(4, 3), r(64, 45), r(8, 5), r(5, 3), r(15, 8) } },
 };
 
@@ -598,8 +598,15 @@ test "zamzam_is_a_builtin_jins" {
 
 test "western_modes_are_builtin_jins" {
     try testing.expect(ratiosEql(defaultRatios("Major").?, &.{ r(1, 1), r(9, 8), r(5, 4), r(4, 3), r(3, 2), r(5, 3), r(15, 8) }));
-    try testing.expect(ratiosEql(defaultRatios("Minor").?, &.{ r(1, 1), r(9, 8), r(6, 5), r(4, 3), r(3, 2), r(8, 5), r(9, 5) }));
-    try testing.expect(ratiosEql(defaultRatios("Locrian").?, &.{ r(1, 1), r(16, 15), r(6, 5), r(4, 3), r(64, 45), r(8, 5), r(9, 5) }));
+    try testing.expect(ratiosEql(defaultRatios("Minor").?, &.{ r(1, 1), r(9, 8), r(32, 27), r(4, 3), r(3, 2), r(27, 16), r(16, 9) }));
+    try testing.expect(ratiosEql(defaultRatios("Locrian").?, &.{ r(1, 1), r(256, 243), r(32, 27), r(4, 3), r(1024, 729), r(128, 81), r(16, 9) }));
+    // The church modes are Pythagorean (upstream a2cdac8).
+    try testing.expect(std.meta.eql(defaultRatios("Ionian").?[2], r(81, 64)));
+    try testing.expect(std.meta.eql(defaultRatios("Dorian").?[2], r(32, 27)));
+    try testing.expect(std.meta.eql(defaultRatios("Phrygian").?[1], r(256, 243)));
+    try testing.expect(std.meta.eql(defaultRatios("Lydian").?[3], r(729, 512)));
+    try testing.expect(std.meta.eql(defaultRatios("Mixolydian").?[6], r(16, 9)));
+    try testing.expect(std.meta.eql(defaultRatios("Aeolian").?[5], r(128, 81)));
     try testing.expect(ratiosEql(defaultRatios("Diminished").?, &.{ r(1, 1), r(9, 8), r(6, 5), r(4, 3), r(64, 45), r(8, 5), r(5, 3), r(15, 8) }));
 }
 

@@ -11,7 +11,7 @@ use crossbeam_channel::Receiver;
 use crate::command::{
     NamInput, SympatheticChange, SympatheticHarmony, SympatheticTarget, VcfChange,
 };
-use crate::fx::{FxProcessor, FxSettings};
+use crate::fx::{CabinetProcessor, FxProcessor, FxSettings};
 use crate::sequencer::{AudioCmd, ControlSpec, Phrase, SubdivEvent};
 use crate::sympathetics::SympatheticStrings;
 use crate::synth::{
@@ -19,6 +19,8 @@ use crate::synth::{
 };
 
 use crate::vcf::{MoogLadder, VcfBank, VcfSettings, VcfTarget};
+
+use cpal::{BufferSize, StreamConfig};
 
 // ── Playback state ────────────────────────────────────────────────────────────
 
@@ -64,6 +66,9 @@ enum PendingControl {
     Sustain(f64),
     Vcf(VcfChange),
     Fx(crate::command::FxChange),
+    Vol(f32),
+    BusVol(VcfTarget, f32),
+    Dry(f32),
     NamEnabled(bool),
     NamGain(f32),
     NamInput(NamInput),
@@ -386,36 +391,120 @@ pub struct AudioStreams {
     _input: Option<cpal::Stream>,
 }
 
-pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
+pub fn start_audio(rx: Receiver<AudioCmd>, bufsize: u32) -> anyhow::Result<AudioStreams> {
     let host = cpal::default_host();
     let device = host
         .default_output_device()
         .ok_or_else(|| anyhow::anyhow!("no audio output device"))?;
-    let cfg = device.default_output_config()?;
-    let sr = cfg.sample_rate().0 as f64;
-    let ch = cfg.channels() as usize;
+    let defcfg = device.default_output_config()?;
+    let sr = defcfg.sample_rate().0 as f64;
+    let ch = defcfg.channels() as usize;
+
+    // Inspect the hardware's supported buffer limits
+    let supported_range = defcfg.buffer_size();
+
+    // Clamp the target size so it stays within safe hardware boundaries
+    let chosen_size = match supported_range {
+        cpal::SupportedBufferSize::Range { min, max } => {
+            bufsize.clamp(*min, *max)
+        }
+        cpal::SupportedBufferSize::Unknown => bufsize,
+    };
+
+    // Build the configuration
+    let cfg = StreamConfig {
+        channels: defcfg.channels(),
+        sample_rate: defcfg.sample_rate(),
+        buffer_size: BufferSize::Fixed(chosen_size),
+    };
+
+    println!("Requested buffer size: {:?}", cfg.buffer_size);
+
     let (input_tx, input_rx) =
         crossbeam_channel::bounded::<(cpal::StreamInstant, [f32; 2])>(16_384);
+    // Largest input callback seen, in frames. If the hardware ignores the
+    // requested buffer and delivers bigger chunks, the backlog limit grows to
+    // match so trimming never starves the output.
+    let input_chunk_frames = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let input_chunk_frames_writer = input_chunk_frames.clone();
     let input_stream = host.default_input_device().and_then(|input_device| {
         let input_config = input_device.default_input_config().ok()?;
         if input_config.sample_format() != cpal::SampleFormat::F32 {
             return None;
         }
         let input_channels = input_config.channels() as usize;
-        let stream = input_device
-            .build_input_stream(
-                &input_config.into(),
-                move |data: &[f32], info| {
+        // Run the input at the output's sample rate and the same small buffer.
+        // The default input config uses the system's (large) default buffer and
+        // may run at a different rate, which makes the input queue grow.
+        let input_bufsize = match input_config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => chosen_size.clamp(*min, *max),
+            cpal::SupportedBufferSize::Unknown => chosen_size,
+        };
+        let rate_supported = input_device
+            .supported_input_configs()
+            .map(|mut ranges| {
+                ranges.any(|r| {
+                    r.channels() == input_config.channels()
+                        && r.sample_format() == cpal::SampleFormat::F32
+                        && r.min_sample_rate() <= defcfg.sample_rate()
+                        && r.max_sample_rate() >= defcfg.sample_rate()
+                })
+            })
+            .unwrap_or(false);
+        let input_rate = if rate_supported {
+            defcfg.sample_rate()
+        } else {
+            input_config.sample_rate()
+        };
+        if input_rate != defcfg.sample_rate() {
+            eprintln!(
+                "warning: input runs at {} Hz but output at {} Hz; use the same \
+                 interface for input and output, at the same rate in Audio MIDI Setup",
+                input_rate.0,
+                defcfg.sample_rate().0
+            );
+        }
+        let input_cfg = StreamConfig {
+            channels: input_config.channels(),
+            sample_rate: input_rate,
+            buffer_size: BufferSize::Fixed(input_bufsize),
+        };
+        let make_callback = {
+            let input_tx = input_tx.clone();
+            let writer = input_chunk_frames_writer.clone();
+            move || {
+                let input_tx = input_tx.clone();
+                let writer = writer.clone();
+                move |data: &[f32], info: &cpal::InputCallbackInfo| {
                     let captured_at = info.timestamp().capture;
+                    writer.store(
+                        data.len() / input_channels.max(1),
+                        std::sync::atomic::Ordering::Relaxed,
+                    );
                     for frame in data.chunks(input_channels.max(1)) {
                         let left = frame.first().copied().unwrap_or(0.0);
                         let right = frame.get(1).copied().unwrap_or(left);
                         let _ = input_tx.try_send((captured_at, [left, right]));
                     }
-                },
-                |_error| {},
-                None,
-            )
+                }
+            }
+        };
+        // Prefer the small fixed buffer; if the device refuses it, fall back to
+        // its default config rather than losing input entirely.
+        let stream = input_device
+            .build_input_stream(&input_cfg, make_callback(), |_error| {}, None)
+            .or_else(|err| {
+                eprintln!(
+                    "warning: input rejected {} frames at {} Hz ({err}); using device default",
+                    input_bufsize, input_rate.0
+                );
+                input_device.build_input_stream(
+                    &input_config.config(),
+                    make_callback(),
+                    |_error| {},
+                    None,
+                )
+            })
             .ok()?;
         stream.play().ok()?;
         Some(stream)
@@ -427,10 +516,13 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
     let mut bpm = 120.0f64;
     let mut sustain = 1.25f64;
     let mut vol = 1.0f32;
+    let mut bus_vol = [1.0f32; 6];
+    let mut dry_mix = 0.0f32;
     let mut vcf = VcfBank::default();
     let mut vcf_filters = FilterBank::new(sr as f32);
     let mut fx = FxSettings::default();
     let mut fx_processor = FxProcessor::new(sr as f32);
+    let mut cabinet_processor = CabinetProcessor::new(sr as f32);
     let mut paused = false;
     let mut jump_counters: std::collections::HashMap<usize, usize> =
         std::collections::HashMap::new();
@@ -442,16 +534,26 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
     let mut nam_enabled = true;
     let mut nam_gain = 1.0f32;
     let mut nam_input = NamInput::Stereo;
-    let mut nam_mix = 0.0f32;
     let mut latency_test: Option<crossbeam_channel::Sender<Result<f64, String>>> = None;
     let mut latency_ms_ema: Option<f64> = None;
     let mut meter_peaks = [0.0f32; 3];
     let mut last_metrics_publish = std::time::Instant::now();
+    let has_input_stream = input_stream.is_some();
 
     let stream = device.build_output_stream(
         &cfg.into(),
         move |data: &mut [f32], info| {
             let playback_at = info.timestamp().playback;
+            // ── keep live input latency bounded ────────────────────────────
+            // If input frames pile up (startup, a slow callback, clock drift),
+            // drop the oldest so the guitar never lags by more than a few
+            // buffers instead of up to the queue's full capacity.
+            let out_frames = data.len() / ch.max(1);
+            let in_frames = input_chunk_frames.load(std::sync::atomic::Ordering::Relaxed);
+            let max_input_backlog = (out_frames * 3).max(in_frames + out_frames);
+            while input_rx.len() > max_input_backlog {
+                let _ = input_rx.try_recv();
+            }
             // ── drain commands ─────────────────────────────────────────────
             while let Ok(cmd) = rx.try_recv() {
                 match cmd {
@@ -490,11 +592,13 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                     AudioCmd::SetFxSettings(v) => {
                         fx = v;
                         fx_processor.set_settings(v);
+                        cabinet_processor.set_model(v.cabinet_model, sr as f32);
                     }
                     AudioCmd::SetFx(change) => {
                         if let Ok(setting) = crate::command::apply_fx_change(fx, change) {
                             fx = setting;
                             fx_processor.set_settings(setting);
+                            cabinet_processor.set_model(setting.cabinet_model, sr as f32);
                         }
                     }
                     AudioCmd::SetNamModel(model) => {
@@ -525,7 +629,7 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                         );
                     }
                     AudioCmd::SetNamGain(gain) => {
-                        nam_gain = gain.clamp(0.0, 11.0);
+                        nam_gain = gain.clamp(0.0, crate::command::NAM_GAIN_MAX);
                     }
                     AudioCmd::SetNamInput(route) => nam_input = route,
                     AudioCmd::MeasureInputLatency { input, result_tx } => {
@@ -535,6 +639,10 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                     AudioCmd::SetVol(v) => {
                         vol = v;
                     }
+                    AudioCmd::SetBusVol(target, value) => {
+                        bus_vol[volume_target_index(target)] = value;
+                    }
+                    AudioCmd::SetDry(percent) => dry_mix = (percent / 100.0).clamp(0.0, 1.0),
                     AudioCmd::SetPaused(p) => {
                         paused = p;
                     }
@@ -649,7 +757,6 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                         nam_enabled = false;
                         nam_gain = 1.0;
                         nam_input = NamInput::Stereo;
-                        nam_mix = 0.0;
                         crate::NAM_MODEL_ACTIVE.store(false, std::sync::atomic::Ordering::Relaxed);
                         crate::NAM_STATUS.store(0, std::sync::atomic::Ordering::Relaxed);
                         sympathetics_enabled = false;
@@ -659,6 +766,7 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                         vcf_filters = FilterBank::new(sr as f32);
                         fx = FxSettings::default();
                         fx_processor = FxProcessor::new(sr as f32);
+                        dry_mix = 0.0;
                     }
                 }
             }
@@ -695,8 +803,15 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                                 fx_processor.set_settings(setting);
                             }
                         }
+                        PendingControl::Vol(value) => vol = value,
+                        PendingControl::BusVol(target, value) => {
+                            bus_vol[volume_target_index(target)] = value;
+                        }
+                        PendingControl::Dry(percent) => dry_mix = (percent / 100.0).clamp(0.0, 1.0),
                         PendingControl::NamEnabled(enabled) => nam_enabled = enabled,
-                        PendingControl::NamGain(gain) => nam_gain = gain.clamp(0.0, 11.0),
+                        PendingControl::NamGain(gain) => {
+                            nam_gain = gain.clamp(0.0, crate::command::NAM_GAIN_MAX)
+                        }
                         PendingControl::NamInput(route) => nam_input = route,
                         PendingControl::Sympathetics(enabled) => {
                             sympathetics_enabled = enabled;
@@ -805,15 +920,11 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                 let modeled_input = nam_model
                     .as_mut()
                     .map(|model| model.process_sample(dry_input * nam_gain))
-                    .unwrap_or(dry_input);
-                let target_mix = if nam_enabled && nam_model.is_some() {
-                    1.0
-                } else {
-                    0.0
-                };
-                let mix_step = (1.0 / (sr as f32 * 0.02)).min(1.0);
-                nam_mix += (target_mix - nam_mix).clamp(-mix_step, mix_step);
-                let live_input = dry_input + (modeled_input - dry_input) * nam_mix;
+                    .unwrap_or(dry_input)
+                    .clamp(-1.0, 1.0);
+                let live_input =
+                    select_nam_output(dry_input, modeled_input, nam_enabled && nam_model.is_some());
+                let live_input = cabinet_processor.process(live_input, fx).clamp(-1.0, 1.0);
                 meter_peaks[2] = meter_peaks[2].max(live_input.abs());
                 if last_metrics_publish.elapsed() >= std::time::Duration::from_secs(10) {
                     if let Some(latency_ms) = latency_ms_ema {
@@ -839,7 +950,8 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                     last_metrics_publish = std::time::Instant::now();
                 }
                 let nam_active = nam_enabled && nam_model.is_some();
-                if voices.is_empty()
+                if !has_input_stream
+                    && voices.is_empty()
                     && !fx.active()
                     && !sympathetics_enabled
                     && !sympathetics.has_energy()
@@ -853,7 +965,6 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                     }
                     continue;
                 }
-
                 let (mut dry_left, mut dry_right) = (0f32, 0f32);
                 let (mut mic_left, mut mic_right) = (0f32, 0f32);
                 let (mut bass_left, mut bass_right) = (0f32, 0f32);
@@ -933,17 +1044,14 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                     // ringing strings still decay into the output.
                     sympathetics.process(false, 0.0, 0.0, 0.0, 0.0)
                 };
-                if nam_active {
-                    if !vcf.all.enabled && vcf.mic.enabled {
-                        mic_left += live_input;
-                        mic_right += live_input;
-                    } else {
-                        // NAM is the live-input path. It must remain audible
-                        // without requiring the score to enable a VCF bus.
-                        // The master VCF, when enabled, is applied below.
-                        dry_left += live_input;
-                        dry_right += live_input;
-                    }
+                if !vcf.all.enabled {
+                    // NAM on selects only modeled input; NAM off selects only
+                    // clean input. Both use the same mic output bus and trim.
+                    mic_left += live_input;
+                    mic_right += live_input;
+                } else {
+                    dry_left += live_input;
+                    dry_right += live_input;
                 }
                 if vcf.all.enabled {
                     dry_left += sympathetic;
@@ -956,31 +1064,33 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                     dry_right += sympathetic;
                 }
                 let (mut left, mut right) = (dry_left, dry_right);
+                let mut post_vcf_mic = (0.0f32, 0.0f32);
                 if !vcf.all.enabled {
                     if vcf.mic.enabled {
                         let filtered = vcf_filters.mic.process(mic_left, mic_right);
-                        left += filtered.0;
-                        right += filtered.1;
+                        post_vcf_mic = filtered;
+                    } else {
+                        post_vcf_mic = (mic_left, mic_right);
                     }
                     if vcf.bass.enabled {
                         let filtered = vcf_filters.bass.process(bass_left, bass_right);
-                        left += filtered.0;
-                        right += filtered.1;
+                        left += filtered.0 * bus_vol[volume_target_index(VcfTarget::Bass)];
+                        right += filtered.1 * bus_vol[volume_target_index(VcfTarget::Bass)];
                     }
                     if vcf.kanun.enabled {
                         let filtered = vcf_filters.kanun.process(kanun_left, kanun_right);
-                        left += filtered.0;
-                        right += filtered.1;
+                        left += filtered.0 * bus_vol[volume_target_index(VcfTarget::Kanun)];
+                        right += filtered.1 * bus_vol[volume_target_index(VcfTarget::Kanun)];
                     }
                     if vcf.kick.enabled {
                         let filtered = vcf_filters.kick.process(kick_left, kick_right);
-                        left += filtered.0;
-                        right += filtered.1;
+                        left += filtered.0 * bus_vol[volume_target_index(VcfTarget::Kick)];
+                        right += filtered.1 * bus_vol[volume_target_index(VcfTarget::Kick)];
                     }
                     if vcf.tanbura.enabled {
                         let filtered = vcf_filters.tanbura.process(tanbura_left, tanbura_right);
-                        left += filtered.0;
-                        right += filtered.1;
+                        left += filtered.0 * bus_vol[volume_target_index(VcfTarget::Tanbura)];
+                        right += filtered.1 * bus_vol[volume_target_index(VcfTarget::Tanbura)];
                     }
                 }
                 if fx.active() {
@@ -991,12 +1101,24 @@ pub fn start_audio(rx: Receiver<AudioCmd>) -> anyhow::Result<AudioStreams> {
                 let saturated = crate::analog::soft_clip_stereo(left * vol, right * vol);
                 if vcf.all.enabled {
                     let filtered = vcf_filters.all.process(saturated.0, saturated.1);
-                    left = filtered.0.clamp(-1.0, 1.0);
-                    right = filtered.1.clamp(-1.0, 1.0);
+                    left = (filtered.0 * bus_vol[volume_target_index(VcfTarget::All)])
+                        .clamp(-1.0, 1.0);
+                    right = (filtered.1 * bus_vol[volume_target_index(VcfTarget::All)])
+                        .clamp(-1.0, 1.0);
                 } else {
                     left = saturated.0.clamp(-1.0, 1.0);
                     right = saturated.1.clamp(-1.0, 1.0);
                 }
+                if !vcf.all.enabled {
+                    let mic_gain = bus_vol[volume_target_index(VcfTarget::Mic)];
+                    let mic_output = post_vcf_output_stem(post_vcf_mic, vol, mic_gain);
+                    left = (left + mic_output.0).clamp(-1.0, 1.0);
+                    right = (right + mic_output.1).clamp(-1.0, 1.0);
+                }
+
+                // Global dry mix is applied last: the dry side is the selected
+                // original interface input, untouched by NAM, VCF, FX, or gain.
+                (left, right) = apply_dry_mix((left, right), dry_input, dry_mix);
 
                 if frame.len() >= 2 {
                     frame[0] = left;
@@ -1088,6 +1210,9 @@ fn tick_sequencer(
                 ControlSpec::SetSustain(v) => PendingControl::Sustain(v),
                 ControlSpec::SetVcf(v) => PendingControl::Vcf(v),
                 ControlSpec::SetFx(v) => PendingControl::Fx(v),
+                ControlSpec::SetVol(v) => PendingControl::Vol(v),
+                ControlSpec::SetBusVol(target, value) => PendingControl::BusVol(target, value),
+                ControlSpec::SetDry(percent) => PendingControl::Dry(percent),
                 ControlSpec::SetNamEnabled(v) => PendingControl::NamEnabled(v),
                 ControlSpec::SetNamGain(v) => PendingControl::NamGain(v),
                 ControlSpec::SetNamInput(v) => PendingControl::NamInput(v),
@@ -1235,9 +1360,68 @@ fn vcf_target_for_kind(kind: VoiceKind) -> Option<VcfTarget> {
     }
 }
 
+fn volume_target_index(target: VcfTarget) -> usize {
+    match target {
+        VcfTarget::All => 0,
+        VcfTarget::Mic => 1,
+        VcfTarget::Bass => 2,
+        VcfTarget::Kanun => 3,
+        VcfTarget::Kick => 4,
+        VcfTarget::Tanbura => 5,
+    }
+}
+
+fn post_vcf_output_stem(stem: (f32, f32), master_gain: f32, output_gain: f32) -> (f32, f32) {
+    let gain = master_gain * output_gain;
+    (
+        stem.0.clamp(-1.0, 1.0) * gain,
+        stem.1.clamp(-1.0, 1.0) * gain,
+    )
+}
+
+fn apply_dry_mix(processed: (f32, f32), dry: f32, amount: f32) -> (f32, f32) {
+    let amount = amount.clamp(0.0, 1.0);
+    (
+        (processed.0 * (1.0 - amount) + dry * amount).clamp(-1.0, 1.0),
+        (processed.1 * (1.0 - amount) + dry * amount).clamp(-1.0, 1.0),
+    )
+}
+
+fn select_nam_output(dry: f32, modeled: f32, active: bool) -> f32 {
+    if active {
+        modeled
+    } else {
+        dry
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn post_vcf_trim_is_strictly_linear() {
+        let full = post_vcf_output_stem((4.0, -4.0), 1.0, 1.0);
+        let quiet = post_vcf_output_stem((4.0, -4.0), 1.0, 0.125);
+        assert_eq!(full, (1.0, -1.0));
+        assert!((quiet.0 - full.0 * 0.125).abs() < 1e-6);
+        assert!((quiet.1 - full.1 * 0.125).abs() < 1e-6);
+    }
+
+    #[test]
+    fn active_nam_has_no_parallel_dry_signal() {
+        assert_eq!(select_nam_output(0.75, -0.25, true), -0.25);
+        assert_eq!(select_nam_output(0.75, -0.25, false), 0.75);
+    }
+
+    #[test]
+    fn dry_mix_crossfades_after_all_processing() {
+        assert_eq!(apply_dry_mix((0.8, -0.4), 0.2, 0.0), (0.8, -0.4));
+        assert_eq!(apply_dry_mix((0.8, -0.4), 0.2, 1.0), (0.2, 0.2));
+        let half = apply_dry_mix((0.8, -0.4), 0.2, 0.5);
+        assert!((half.0 - 0.5).abs() < 1e-6);
+        assert!((half.1 + 0.1).abs() < 1e-6);
+    }
     use crate::command::{SympatheticHarmony, SympatheticHarmonyComponent};
 
     #[test]

@@ -166,10 +166,12 @@ pub fn serializeSessionV3(gpa: Allocator, phrases: []const Phrase) Allocator.Err
                     try printFloat(&out, gpa, v);
                     try out.append(gpa, '\n');
                 },
-                .set_vcf, .set_fx, .set_nam_enabled, .set_nam_gain, .set_nam_input, .set_sympathetics, .set_sympathetic_decay, .set_sympathetic_gain, .set_sympathetic => {
+                .set_vcf, .set_fx, .set_vol, .set_bus_vol, .set_dry, .set_nam_enabled, .set_nam_gain, .set_nam_input, .set_sympathetics, .set_sympathetic_decay, .set_sympathetic_gain, .set_sympathetic => {
                     const tag: u8 = switch (ctrl) {
                         .set_vcf => 'V',
                         .set_fx => 'F',
+                        .set_vol, .set_bus_vol => 'L',
+                        .set_dry => 'D',
                         .set_nam_enabled, .set_nam_gain, .set_nam_input => 'N',
                         else => 'Y',
                     };
@@ -380,7 +382,7 @@ fn printParams(out: *std.ArrayList(u8), gpa: Allocator, params: []const struct {
 
 pub fn fxChangeSrc(gpa: Allocator, change: command.FxChange) Allocator.Error![]u8 {
     if (change.flanger_enabled == false and change.chorus_enabled == false and
-        change.reverb_enabled == false and change.delay_enabled == false)
+        change.reverb_enabled == false and change.delay_enabled == false and change.cabinet_enabled == false)
         return gpa.dupe(u8, "fx off");
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(gpa);
@@ -415,7 +417,7 @@ pub fn fxChangeSrc(gpa: Allocator, change: command.FxChange) Allocator.Error![]u
             return out.toOwnedSlice(gpa);
         }
         try printParams(&out, gpa, &.{ .{ "mix", c.reverb_mix }, .{ "decay", c.reverb_decay } });
-    } else {
+    } else if (c.delay_enabled != null or c.delay_time_secs != null or c.delay_feedback != null or c.delay_mix != null) {
         try out.appendSlice(gpa, "delay");
         if (c.delay_enabled == false) {
             try out.appendSlice(gpa, " off");
@@ -424,6 +426,17 @@ pub fn fxChangeSrc(gpa: Allocator, change: command.FxChange) Allocator.Error![]u
         try printParams(&out, gpa, &.{
             .{ "time", c.delay_time_secs }, .{ "feedback", c.delay_feedback }, .{ "mix", c.delay_mix },
         });
+    } else {
+        try out.appendSlice(gpa, "cab");
+        if (c.cabinet_enabled == false) {
+            try out.appendSlice(gpa, " off");
+            return out.toOwnedSlice(gpa);
+        }
+        if (c.cabinet_model) |m| {
+            try out.append(gpa, ' ');
+            try out.appendSlice(gpa, m.name());
+        }
+        try printParams(&out, gpa, &.{.{ "mix", c.cabinet_mix }});
     }
     return out.toOwnedSlice(gpa);
 }
@@ -534,7 +547,7 @@ pub fn isPlainVcfControlLine(line: []const u8) bool {
 }
 
 pub fn isPlainFxControlLine(line: []const u8) bool {
-    return firstWordIs(line, &.{ "fx", "flanger", "flange", "chorus", "choir", "reverb", "rev", "delay", "pingpong" });
+    return firstWordIs(line, &.{ "fx", "flanger", "flange", "chorus", "choir", "reverb", "rev", "delay", "pingpong", "cab", "cabinet" });
 }
 
 pub fn isPlainControlLine(line: []const u8) bool {
@@ -975,6 +988,29 @@ fn v3Body(l: *Loader, lines: []const []const u8) Error!Loaded {
                 .set_fx => |c| try l.fxChange(line_no, id, c),
                 else => return l.fail("line {d}: expected fx line", .{line_no}),
             }
+        } else if (std.mem.eql(u8, kind, "L") and n == 3) {
+            const parsed = try l.parse(line_no, fields[2]);
+            defer parsed.deinit(gpa);
+            const control: ControlSpec = switch (parsed) {
+                .set_vol => |v| .{ .set_vol = v },
+                .set_bus_vol => |v| .{ .set_bus_vol = .{ .target = v.target, .value = v.value } },
+                else => return l.fail("line {d}: expected vol line", .{line_no}),
+            };
+            try l.pushControl(id, fields[2], control);
+        } else if (std.mem.eql(u8, kind, "D") and n == 3) {
+            const parsed = switch (try command.parse(gpa, fields[2])) {
+                .ok => |c| c,
+                .err => |m| {
+                    defer gpa.free(m);
+                    return l.fail("line {d}: invalid dry control: {s}", .{ line_no, m });
+                },
+            };
+            defer parsed.deinit(gpa);
+            const control: ControlSpec = switch (parsed) {
+                .set_dry => |v| .{ .set_dry = v },
+                else => return l.fail("line {d}: expected dry line", .{line_no}),
+            };
+            try l.pushControl(id, fields[2], control);
         } else if (std.mem.eql(u8, kind, "N") and n == 3) {
             const parsed = try l.parse(line_no, fields[2]);
             defer parsed.deinit(gpa);
@@ -1511,7 +1547,7 @@ test "change sources" {
     const f1 = try fxChangeSrc(gpa, .{ .reverb_mix = .{ .set = 0.3 } });
     defer gpa.free(f1);
     try testing.expectEqualStrings("reverb mix 0.3", f1);
-    const f2 = try fxChangeSrc(gpa, .{ .flanger_enabled = false, .chorus_enabled = false, .reverb_enabled = false, .delay_enabled = false });
+    const f2 = try fxChangeSrc(gpa, .{ .flanger_enabled = false, .chorus_enabled = false, .reverb_enabled = false, .delay_enabled = false, .cabinet_enabled = false });
     defer gpa.free(f2);
     try testing.expectEqualStrings("fx off", f2);
     const int1 = try symIntervalName(gpa, 3.0 / 2.0);

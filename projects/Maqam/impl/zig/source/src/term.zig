@@ -1,7 +1,11 @@
 //! The terminal: raw mode on the alternate screen, keys read with a timeout, the window size, and a
 //! cell grid redrawn as one write per frame. It stands in for crossterm/ratatui in the Rust.
 const std = @import("std");
+const builtin = @import("builtin");
 const posix = std.posix;
+
+const is_linux = builtin.os.tag == .linux;
+extern "c" fn ioctl(fd: c_int, request: c_ulong, ...) c_int;
 
 pub const Key = union(enum) {
     char: u21,
@@ -68,7 +72,11 @@ pub const Terminal = struct {
 
     pub fn refreshSize(self: *Terminal) void {
         var ws: posix.winsize = undefined;
-        if (std.os.linux.ioctl(posix.STDOUT_FILENO, std.os.linux.T.IOCGWINSZ, @intFromPtr(&ws)) == 0 and ws.col > 0 and ws.row > 0) {
+        const ok = if (is_linux)
+            std.os.linux.ioctl(posix.STDOUT_FILENO, std.os.linux.T.IOCGWINSZ, @intFromPtr(&ws)) == 0
+        else
+            ioctl(posix.STDOUT_FILENO, std.c.T.IOCGWINSZ, &ws) == 0;
+        if (ok and ws.col > 0 and ws.row > 0) {
             self.width = ws.col;
             self.height = ws.row;
         }
@@ -78,10 +86,17 @@ pub const Terminal = struct {
         _ = self;
         var off: usize = 0;
         while (off < bytes.len) {
-            const rc = std.os.linux.write(posix.STDOUT_FILENO, bytes[off..].ptr, bytes.len - off);
-            if (std.os.linux.errno(rc) == .INTR) continue;
-            if (std.os.linux.errno(rc) != .SUCCESS or rc == 0) return;
-            off += rc;
+            if (is_linux) {
+                const rc = std.os.linux.write(posix.STDOUT_FILENO, bytes[off..].ptr, bytes.len - off);
+                if (std.os.linux.errno(rc) == .INTR) continue;
+                if (std.os.linux.errno(rc) != .SUCCESS or rc == 0) return;
+                off += rc;
+            } else {
+                const rc = std.c.write(posix.STDOUT_FILENO, bytes[off..].ptr, bytes.len - off);
+                if (rc < 0 and std.c.errno(rc) == .INTR) continue;
+                if (rc <= 0) return;
+                off += @intCast(rc);
+            }
         }
     }
 
