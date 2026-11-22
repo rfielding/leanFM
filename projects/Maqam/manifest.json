@@ -9,6 +9,7 @@
   "protobuf": "spec/Requirements.proto",
   "implementation": "impl/zig/Implementation.lean",
   "tasks": "spec/tasks.json",
+  "protocol": "spec/Maqam.leanfm",
   "source": "impl/zig/source/",
   "evidence": "reports/",
   "upstream": "https://github.com/rfielding/maqam",

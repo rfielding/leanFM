@@ -7,6 +7,8 @@ import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Proto
 import LeanFM.Session.SpecCheck
+import LeanFM.Session.Suggest
+import LeanFM.Session.LogSessions
 import LeanFM.Session.Actors
 import LeanFM.Session.Spans
 import LeanFM.Session.Instances
@@ -1402,6 +1404,16 @@ def danglingAnswer (p : Protocol) (args : Json) (dangling : List String) : Json 
     , ("issues", Json.arr ((dangling.take 64).map Json.str).toArray)
     , ("unchecked", Json.arr #[]), ("sessions", Json.arr #[]), ("diagram", diagramJson p) ]
 
+/-- The secret field paths a log carries (a segment ending in _secr), each once with the first event
+carrying it: information that the log is sensitive, never a reason to refuse it (selfhost.session.conform). -/
+def secretFields (evs : List LogEvent) : Json := Id.run do
+  let mut seen : List (String × String) := []
+  for e in evs do
+    for (k, _) in e.fields do
+      if (k.splitOn ".").any Session.Types.isSecret && !seen.any (·.1 == k) then
+        seen := seen ++ [(k, e.id)]
+  return Json.arr (seen.map fun (k, id) => Json.mkObj [("field", Json.str k), ("event", Json.str id)]).toArray
+
 def conform (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let evs ← match args.getObjVal? "events" with
@@ -1415,6 +1427,25 @@ def conform (args : Json) : Except String Json := do
     | .ok l => pure l
     | .error dangling => return fit (danglingAnswer p args dangling)
   let evs := linked.events
+  -- sessions are named on every event, or on none and derived from causes and the declared session
+  -- key, never from prev or a where equation (selfhost.session.log-sessions)
+  let raw := match args.getObjVal? "events" with | .ok (.arr a) => a.toList | _ => []
+  let hasSession := raw.map fun j => (j.getObjVal? "session").toOption.isSome
+  let named : Bool := hasSession.all (· == true)
+  if !named && hasSession.any (· == true) then
+    throw "name a session on every event or on none: with none, LeanFM derives the sessions from causes and the declared session key"
+  let logKeys := p.keys.map fun (x, f) =>
+    ({ labels := (p.global.messages.filter (·.id == some x)).map (·.label), field := f } : LogSessions.Key)
+  let starts := match p.global.stateGraph with
+    | .ok g => ((g.edges.filter (·.1 == "s0")).map (·.2.2.label)).eraseDups
+    | .error _ => p.global.messages.map (·.label)
+  let derived := LogSessions.derive evs.toArray logKeys starts named
+  let crossProblems : List String := bif named then LogSessions.crossCheck evs.toArray logKeys else []
+  let placeProblems : List String := bif named then [] else LogSessions.unattributedProblems evs.toArray derived
+  let streamEvs := LogSessions.stream evs.toArray derived named
+  -- an event the log cannot place stays in the log (links to it still resolve), alone in a session
+  let evs := bif named then evs else evs.zipIdx.map fun (e, i) =>
+    { e with session := (derived.sessionOf[i]!).getD s!"unplaced {e.id}" }
   -- a logged event's fields are fields of its message, of their declared types (selfhost.session.types)
   for e in evs do
     if let .error why := Session.Types.checkFields p.types e.label e.isAct e.fields then
@@ -1457,7 +1488,10 @@ def conform (args : Json) : Except String Json := do
   -- (selfhost.session.constructors)
   let constraintProblems := evs.filterMap fun e =>
     (Session.Types.constraintProblem p.types e.label e.fields).map fun why => s!"session {e.session}, event {e.id}: {why}"
-  let keyProblems := versionIssues ++ linkProblems ++ constraintProblems ++ keyProblems
+  -- a derived session is formed by its key, so the key check applies only to a log that names sessions
+  let keyChecked : List String := match named with | true => keyProblems | false => []
+  let keyProblems : List String := versionIssues ++ linkProblems ++ constraintProblems ++ keyChecked ++
+    crossProblems ++ placeProblems
   let verdict := if bad.isEmpty && keyProblems.isEmpty then "conforms" else "violates"
   let problems := (bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}") ++ keyProblems
   let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"
@@ -1474,7 +1508,7 @@ def conform (args : Json) : Except String Json := do
     else s!"{p.name}: {bad.length} of {results.length} sessions break the protocol; first: {problems.head!}"
   let deadlines ← if bad.isEmpty && keyProblems.isEmpty then deadlineReports p args evs else pure Json.null
   return fit <| Json.mkObj
-    [ ("tool", "session_conform"), ("deadlineReports", deadlines), ("verdict", verdict), ("reading", reading), ("name", p.name)
+    [ ("tool", "session_conform"), ("secretFields", secretFields evs), ("deadlineReports", deadlines), ("verdict", verdict), ("reading", reading), ("name", p.name)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("issues", Json.arr ((problems.take 64).map Json.str).toArray)
@@ -1483,6 +1517,7 @@ def conform (args : Json) : Except String Json := do
         [("session", r.session), ("events", r.events), ("complete", r.complete),
          ("unchecked", toJson (r.unchecked.map fun (e, why) => s!"{e}: {why}")),
          ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
+    , ("derivedSessions", derived.json named), ("events", Json.arr streamEvs)
     , ("diagram", diagramJson p) ]
 
 /-- Calls, their two views, timelines and critical paths of a log (selfhost.session.timelines,
@@ -1685,13 +1720,28 @@ logic tools' checker as an inline task, so `{"after": "Charge"}` holds in the st
 just reached, and the answer carries a witness or counterexample path. -/
 def ctl (args : Json) : Except String Json := do
   let p ← parseProtocol args
-  let formula ← match args.getObjVal? "formula" with
-    | .ok f => pure f
-    | .error _ => throw "formula is required: a JSON CTL formula, such as {\"never\": {\"after\": \"Charge\"}}"
-  -- the same check as a Lean Spec's properties (Spec.check): one checker, one answer
-  let answer ← p.global.checkFormula p.name formula
-  return answer.setObjVal! "tool" (Json.str "session_ctl")
-    |>.setObjVal! "lean" (Json.str p.lean)
+  -- the secret field paths each label carries, for the secret atom (asked, never imposed)
+  let secretsOf := fun (label : String) => Session.Types.secretPaths p.types label
+  match args.getObjVal? "formula" with
+  | .ok formula =>
+    -- the same check as a Lean Spec's properties (Spec.check): one checker, one answer
+    let answer ← p.global.checkFormula p.name formula secretsOf
+    return answer.setObjVal! "tool" (Json.str "session_ctl")
+      |>.setObjVal! "lean" (Json.str p.lean)
+  | .error _ =>
+    -- no formula: properties built from this protocol, each decided (selfhost.session.properties)
+    let ss ← p.global.suggestions p.name p.roles secretsOf
+    let rows := ss.map fun (n, f, a) => match a with
+      | .ok ans =>
+        let get := fun (k : String) => (ans.getObjValAs? String k).toOption.getD ""
+        Json.mkObj [("name", Json.str n), ("formula", f), ("notation", Json.str (get "notation")),
+          ("verdict", Json.str (get "verdict")), ("reading", Json.str (get "reading")), ("report", Json.str (get "report"))]
+      | .error e => Json.mkObj [("name", Json.str n), ("formula", f), ("verdict", "not checked"), ("reading", Json.str e)]
+    let proved := (rows.filter fun r => (r.getObjValAs? String "verdict").toOption == some "proved").length
+    return fit <| Json.mkObj
+      [ ("tool", "session_ctl"), ("verdict", "suggested")
+      , ("reading", Json.str s!"{p.name}: {rows.length} properties suggested from the protocol, {proved} proved; pass one as formula to decide it with its path")
+      , ("suggestions", Json.arr rows.toArray), ("name", Json.str p.name), ("lean", Json.str p.lean) ]
 
 /-- JSON as YAML in block style: keys and strings in JSON's double quotes (valid YAML), so nothing
 in a label, route or description can change the document's structure. -/
@@ -2442,7 +2492,8 @@ A message whose label names a structure carries it; one whose label names none c
 so does an event. Field types are `Nat`, `Int`, `String`, `Bool`, another structure,
 or `List T` / `Option T` of one of those. Fields are numbered in the order written, which is their
 protobuf number, so add new fields at the end. `deriving ...` is accepted and ignored. A name ending
-in `_secr` is a secret. `session_types` writes the types as protobuf, as Lean structures with JSON
+in `_secr` is a secret: a mark protocol tests may ask about (session_ctl's `secret` atom), not a rule;
+a condition may read one and a log may carry one (session_conform lists them as `secretFields`). `session_types` writes the types as protobuf, as Lean structures with JSON
 conversions, and as JSON schemas; `session_openapi` and `session_skeleton` use the same types.
 
 ## The event envelope
@@ -2466,14 +2517,13 @@ run by conformance, never compiled. The language: field paths over message ids (
 `p.address.city` through a nested structure), numbers (exact), strings, `true`, `false`,
 `= != < <= > >=`, `+ - * /`, `and`, `or`, `not`, parentheses. It must type-check against the message
 types: each path names a declared single field (not a list or a whole structure), both sides
-of a comparison have the same type, and the whole is true or false. A condition may not read a
-secret, because the fields conditions read are logged. At run time conformance evaluates it over the
+of a comparison have the same type, and the whole is true or false. At run time conformance evaluates it over the
 `fields` each event logs: `{\"id\": \"e3\", \"label\": \"Pay\", ..., \"fields\": {\"amount\": 12}}`. A false
 condition means the message does not match (a guard selects among branches by data), and the problem
 names the condition and the values it read. One that cannot be decided (a field missing from the log,
 a message not yet in the session, division by zero) is reported as unchecked, never as satisfied.
-Logged fields must be fields of the event's message, of their declared types, and never secrets: a
-log that breaks this is refused, naming the event. Generated code logs exactly the fields conditions
+Logged fields must be fields of the event's message, of their declared types: a log that breaks this
+is refused, naming the event. A log may carry secrets; the answer's `secretFields` names each one. Generated code logs exactly the fields conditions
 read, and nothing else of a body.
 
 ## Versions
@@ -2614,7 +2664,10 @@ instance plays its own role, and a fresh actor belongs to one session only.
 - `session_ctl {lean, formula}`: a CTL formula over one session, decided on the protocol's state
   graph by the same checker as check_ctl, with a witness or counterexample path. Atoms:
   `{\"after\": \"Label\"}` (a Label message or event has just happened) and `\"terminal\"` (the session
-  has ended). Rules the structure does not show belong here, for example:
+  has ended), and `{\"secret\": {from?, to?, field?}}` (the step just taken carried a field ending in
+  `_secr`; ask it when the project needs secrecy, such as no secret ever reaching Log:
+  `{\"AG\": {\"not\": {\"secret\": {\"to\": \"Log\"}}}}`). Without a formula it suggests up to 12
+  properties built from the protocol, each decided. Rules the structure does not show belong here, for example:
   never charge after no seat, `{\"AG\": {\"implies\": [{\"after\": \"NoSeat\"}, {\"AG\": {\"not\": {\"after\": \"Charge\"}}}]}}`;
   every held seat is confirmed or released, `{\"AG\": {\"implies\": [{\"after\": \"SeatHeld\"}, {\"AF\": {\"or\":
   [{\"after\": \"SeatConfirmed\"}, {\"after\": \"SeatReleased\"}]}}]}}`; every session ends, `{\"AF\": \"terminal\"}`.

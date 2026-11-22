@@ -62,8 +62,8 @@ def typed (cond : String) : String :=
 #guard has (typed "o.item > 3") "compares two numbers or two strings"
 -- a message whose label names no structure carries nothing
 #guard has (typed "p.amount = d.amount") "Charged carries no fields"
--- the fields conditions read are logged, so a condition may not read a secret
-#guard has (typed "p.card_secr = \"4242\"") "may not read a secret"
+-- a condition may read a secret: the _secr mark is a question protocol tests ask, not a rule
+#guard typed "p.card_secr = \"4242\"" == ""
 -- a list, or a whole nested structure, is not a single value
 #guard refuses (nested.replace "s.to.city = \"Oslo\"" "s.items = \"x\"") "is a list"
 #guard refuses (nested.replace "s.to.city = \"Oslo\"" "s.to = \"x\"") "is a Address"
@@ -90,6 +90,11 @@ def log (quote pay : Json) : Except String Json := conform (args order [("allowI
 #guard has (reason (log (json% {price: 10.5}) (json% {amount: 10}))) "is not a whole number"
 #guard has (reason (log (json% {price: -1}) (json% {amount: 10}))) "Quote.price is a Nat, and the log has -1"
 #guard str (log (json% {price: 10}) (json% {amount: 10, card_secr: "4242"})) "verdict" == "conforms"
+-- a log may carry a secret; the answer names each secret field once, with the first event carrying it
+def secretFieldsOf (r : Except String Json) : String := match r with
+  | .ok j => (j.getObjValD "secretFields").compress | .error e => e
+#guard secretFieldsOf (log (json% {price: 10}) (json% {amount: 10, card_secr: "4242"})) == "[{\"event\":\"e3\",\"field\":\"card_secr\"}]"
+#guard secretFieldsOf (log (json% {price: 10}) (json% {amount: 10})) == "[]"
 #guard has (reason (conform (args order [("allowIncomplete", Json.bool true), ("events", Json.arr #[
   ev "e1" "CreateOrder" "Client" "Shop" none (some (json% {item: "tea", quantity: 2})),
   ev "e2" "SoldOut" "Shop" "Client" (some "e1") (some (json% {why: "none"}))])]))) "SoldOut has no field why; SoldOut carries no fields"

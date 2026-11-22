@@ -57,6 +57,9 @@ inductive Variant where
 def name (n : String) : Pat := .lit (.atom n)
 def na := Msg.atom "na"
 def nb := Msg.atom "nb"
+/-- Bob's nonce in the declared protocol, named as a secret: a name ending in _secr is the only mark, so
+`knows(Ivo, nb_secr)` is a question LeanFM accepts and `knows(Ivo, nb)` is not. -/
+def nbSecr := Msg.atom "nb_secr"
 def ni := Msg.atom "ni"
 
 --@begin Roles
@@ -73,19 +76,19 @@ def alice (v : Variant) : Role := { name := "Alice", steps :=
 def bob (v : Variant) : Role := { name := "Bob", steps :=
   [ .recv (.enc (.pk (name "B")) (.tuple [.var "m", .var "x"]))
   , .send (.var "x") (.enc (.pk (.var "x")) (match v with
-      | .original => .tuple [.var "m", .lit nb]
-      | .lowe => .tuple [.var "m", .lit nb, name "B"]))
-  , .recv (.enc (.pk (name "B")) (.lit nb))
+      | .original => .tuple [.var "m", .lit nbSecr]
+      | .lowe => .tuple [.var "m", .lit nbSecr, name "B"]))
+  , .recv (.enc (.pk (name "B")) (.lit nbSecr))
   , .claim "commit" [name "B", .var "x"] ] }
 
 def declared (v : Variant) : Protocol :=
   { attacker := "Ivo"
   , attackerKnows := [.atom "A", .atom "B", .atom "I", .pk "A", .pk "B", .pk "I", .sk "I", ni]
-  , domain := [na, nb, ni]
+  , domain := [na, nbSecr, ni]
   , domains := [("x", [.atom "A", .atom "B", .atom "I"])]
   , roles := [alice v, bob v]
   , flags :=
-    [ ⟨"SecrecyBreach", fun w => w.claimed "commit" [.atom "B", .atom "A"] && w.knows nb⟩
+    [ ⟨"SecrecyBreach", fun w => w.claimed "commit" [.atom "B", .atom "A"] && w.knows nbSecr⟩
     , ⟨"Impersonation", fun w => w.claimed "commit" [.atom "B", .atom "A"] && !w.claimed "running" [.atom "A", .atom "B"]⟩
     , ⟨"HonestRun", fun w => w.claimed "commit" [.atom "B", .atom "A"] && w.claimed "finished" [.atom "A", .atom "B"]⟩ ] }
 --@end Roles
@@ -105,7 +108,7 @@ Bob's nonce. -/
 def secrecyByKnows : Json :=
   Json.mkObj [("never", Json.mkObj [("and", Json.arr #[
     Json.mkObj [("claimed", "commit(B, A)")],
-    Json.mkObj [("knows", Json.mkObj [("actor", "Ivo"), ("term", termJson nb)])]])])]
+    Json.mkObj [("knows", Json.mkObj [("actor", "Ivo"), ("term", termJson nbSecr)])]])])]
 
 def original := (declared .original).explore
 def lowe := (declared .lowe).explore
@@ -298,7 +301,7 @@ def writeBook : IO Unit := do
   let numbered := (attack.zipIdx.map fun (l, i) => s!"{i + 1}. {l}")
   IO.FS.writeFile (out ++ "ns-attack.tex") (listing ("\n".intercalate numbered))
   IO.FS.writeFile (out ++ "ns-attack-diagram.tex")
-    (LeanFM.MDPDiagram.renderInteractionTeX ["Alice", "Ivo", "Bob"] (diagram (declared .original) nb attack))
+    (LeanFM.MDPDiagram.renderInteractionTeX ["Alice", "Ivo", "Bob"] (diagram (declared .original) nbSecr attack))
   IO.FS.writeFile (out ++ "ns-reflection-roles.tex") (listing (block src "Reflection"))
   IO.FS.writeFile (out ++ "ns-defender.tex") (listing (block src "Defender"))
   let tt := fun (t : String) => "\\texttt{" ++ tex t ++ "}"
@@ -339,7 +342,7 @@ def writeBook : IO Unit := do
     "\\begin{tabular}{p{0.52\\textwidth}ll}\n\\toprule\n" ++
     s!"LeanFM \\texttt\{check\\_ctl} & 1978 ({original.states.size} states) & Lowe ({lowe.states.size} states) \\\\\n\\midrule\n" ++
     "\n".intercalate ((formulas.map fun (_, r, f) => row r f) ++
-      [row "the same secrecy, as \\texttt{never (claimed commit(B, A) and knows(Ivo, nb))}" secrecyByKnows]) ++
+      [row "the same secrecy, as \\texttt{never (claimed commit(B, A) and knows(Ivo, nb\\_secr))}" secrecyByKnows]) ++
     "\n\\bottomrule\n\\end{tabular}\n"
 
 end NeedhamSchroeder

@@ -36,8 +36,8 @@ def projectViewResults : IO Json := do
     ("specFile", ← pv [("stage", "requirements"), ("file", "LeanFM/LLMGenerated/SelfHosting.lean")]),
     ("impl", ← pv [("stage", "impl")]),
     ("code", Json.arr codePages), ("codeFile", ← pv [("stage", "code"), ("file", "LeanFM/ProjectView.lean")]),
-    ("maqam", Json.mkObj [("rust", ← pv [("project", "Maqam"), ("stage", "code")]),
-      ("zig", ← pv [("project", "Maqam"), ("stage", "code"), ("impl", "zig")])])]
+    ("maqam", Json.mkObj [("zig", ← pv [("project", "Maqam"), ("stage", "code")]),
+      ("rust", ← pv [("project", "Maqam"), ("stage", "code"), ("impl", "rust")])])]
 
 /-- project_view is unlisted and refused while the switch is off, as server_logs is. -/
 def projectViewOffTests (offList : String) : IO Unit := do
@@ -195,14 +195,14 @@ def projectViewTests : IO Unit := do
   -- several implementations of one specification (clause selfhost.project.implementations)
   let mlist ← pvCall "{\"project\":\"Maqam\"}"
   expect "project_view lists Maqam's implementations and its default in every answer"
-    (mlist.contains "\"implementations\":[\"rust\",\"zig\"]" && mlist.contains "\"defaultImplementation\":\"rust\"")
-  let mrust ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\"}"
-  expect "project_view code for Maqam shows the default implementation's source"
-    (mrust.contains "\"implementation\":\"rust\"" && mrust.contains "\"root\":\"impl/rust/source\"" && mrust.contains "impl/rust/source/src/audio.rs" && !mrust.contains "impl/zig/")
-  let mzig ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"zig\"}"
-  expect "project_view code with impl zig shows only the Zig source, its mapping and its check"
+    (mlist.contains "\"implementations\":[\"rust\",\"zig\"]" && mlist.contains "\"defaultImplementation\":\"zig\"")
+  let mzig ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\"}"
+  expect "project_view code for Maqam shows the default implementation's source, its mapping and its check"
     (mzig.contains "\"implementation\":\"zig\"" && mzig.contains "impl/zig/source/README.md" && !mzig.contains "impl/rust/" &&
       mzig.contains "\"mapping\":\"impl/zig/Implementation.lean\"" && mzig.contains "\"check\":{")
+  let mrust ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"rust\"}"
+  expect "project_view code with impl rust shows only the Rust source"
+    (mrust.contains "\"implementation\":\"rust\"" && mrust.contains "\"root\":\"impl/rust/source\"" && mrust.contains "impl/rust/source/src/audio.rs" && !mrust.contains "impl/zig/")
   let crossed ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"zig\",\"file\":\"impl/rust/source/src/audio.rs\"}"
   expect "project_view code refuses another implementation's file" (crossed.contains "file must be one of")
   let mspec ← pvCall "{\"project\":\"Maqam\",\"stage\":\"requirements\"}"
@@ -217,15 +217,24 @@ def projectViewTests : IO Unit := do
   expect "a project without protocol files names no primary protocol, so its spec stage opens on the index"
     (pspec.contains "\"primary\":null")
   let mbook ← pvCall "{\"project\":\"Maqam\",\"stage\":\"book\"}"
+  expect "a project's written book is found" (mbook.contains "\"found\":true" && mbook.contains "\"file\":\"book/main-dark.pdf\"")
+  -- every project in the checkout has a book now, so the unwritten case is a temporary empty root
+  let tmp : System.FilePath := s!"/tmp/leanfm-unwritten-book-{← IO.monoNanosNow}"
+  IO.FS.createDirAll tmp
+  let unwritten ← LeanFM.ProjectView.book { name := "Unwritten", root := tmp, real := tmp, manifest := Json.mkObj [], isLeanFM := false } 1 true
+  IO.FS.removeDirAll tmp
+  let ub := match unwritten with | .ok j => j.compress | .error e => e
   expect "a book whose PDF and source are both missing says it has not been written, not that it needs building"
-    (mbook.contains "\"found\":false" && mbook.contains "\"written\":false" && mbook.contains "has not been written" && !mbook.contains "make book")
+    (ub.contains "\"found\":false" && ub.contains "\"written\":false" && ub.contains "has not been written" && !ub.contains "make book")
   let mreq ← pvCall "{\"project\":\"Maqam\",\"stage\":\"requirements\",\"file\":\"spec/Requirements.lean\"}"
   expect "the spec stage shows Requirements.lean's text a page at a time" (mreq.contains "\"selected\"" && mreq.contains "Observable hooks every implementation provides")
   let mimpl ← pvCall "{\"project\":\"Maqam\",\"stage\":\"impl\",\"impl\":\"zig\"}"
-  expect "the impl stage shows the picked implementation's mapping and every error its check found"
-    (mimpl.contains "\"file\":\"impl/zig/Implementation.lean\"" && mimpl.contains "\"errorList\":[" && mimpl.contains "implementation has no actor binding: Performer")
-  let mimplR ← pvCall "{\"project\":\"Maqam\",\"stage\":\"impl\"}"
-  expect "the impl stage defaults to the default implementation" (mimplR.contains "\"file\":\"impl/rust/Implementation.lean\"" && mimplR.contains "\"status\":\"validated\"")
+  expect "the impl stage shows the picked implementation's mapping and its check, with every error it found"
+    (mimpl.contains "\"file\":\"impl/zig/Implementation.lean\"" && mimpl.contains "\"errorList\":[]" && mimpl.contains "\"status\":\"validated\"")
+  let mimplR ← pvCall "{\"project\":\"Maqam\",\"stage\":\"impl\",\"impl\":\"rust\"}"
+  expect "the impl stage switches to another implementation" (mimplR.contains "\"file\":\"impl/rust/Implementation.lean\"" && mimplR.contains "\"status\":\"validated\"")
+  let mimplD ← pvCall "{\"project\":\"Maqam\",\"stage\":\"impl\"}"
+  expect "the impl stage defaults to the default implementation" (mimplD.contains "\"file\":\"impl/zig/Implementation.lean\"")
   let badSpec ← pvCall "{\"project\":\"Maqam\",\"stage\":\"requirements\",\"file\":\"impl/rust/source/src/audio.rs\"}"
   expect "the spec stage refuses a file that is neither a spec file nor a protocol" (badSpec.contains "file must be one of")
   let unknownImpl ← pvCall "{\"project\":\"Maqam\",\"stage\":\"code\",\"impl\":\"cobol\"}"
@@ -283,9 +292,12 @@ def main : IO Unit := do
   let reasm ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/call\",\"params\":{\"name\":\"check_reassembly\",\"arguments\":{\"signature\":\"AB\"}}}"
   assertContains "MCP check_reassembly finds an evasion with defaults" reasm.body "\"verdict\":\"disproved\""
   assertContains "MCP check_reassembly lists the segments" reasm.body "{\"data\":\"AB\",\"offset\":\"0\"}"
-  let proto ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"check_protocol\",\"arguments\":{\"roles\":[{\"name\":\"Alice\",\"steps\":[{\"send\":{\"to\":{\"atom\":\"Bob\"},\"message\":{\"atom\":\"secret\"}}}]}],\"attacker\":{\"name\":\"Ivo\"},\"formula\":{\"never\":{\"knows\":{\"actor\":\"Ivo\",\"term\":{\"atom\":\"secret\"}}}}}}}"
+  let proto ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"check_protocol\",\"arguments\":{\"roles\":[{\"name\":\"Alice\",\"steps\":[{\"send\":{\"to\":{\"atom\":\"Bob\"},\"message\":{\"atom\":\"pin_secr\"}}}]}],\"attacker\":{\"name\":\"Ivo\"},\"formula\":{\"never\":{\"knows\":{\"actor\":\"Ivo\",\"term\":{\"atom\":\"pin_secr\"}}}}}}}"
   assertContains "MCP check_protocol finds a plaintext leak" proto.body "\"verdict\":\"disproved\""
-  assertContains "MCP check_protocol shows the send to its addressee, via the attacker" proto.body "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"secret\",\"to\":\"Bob\",\"via\":\"Ivo\"}"
+  -- a knows atom asks about a marked secret only: the same question about an unmarked atom is refused
+  let unmarked ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"check_protocol\",\"arguments\":{\"roles\":[{\"name\":\"Alice\",\"steps\":[{\"send\":{\"to\":{\"atom\":\"Bob\"},\"message\":{\"atom\":\"pin\"}}}]}],\"attacker\":{\"name\":\"Ivo\"},\"formula\":{\"never\":{\"knows\":{\"actor\":\"Ivo\",\"term\":{\"atom\":\"pin\"}}}}}}}"
+  assertContains "MCP check_protocol refuses a knows question about an unmarked term" unmarked.body "pin, which is not marked secret"
+  assertContains "MCP check_protocol shows the send to its addressee, via the attacker" proto.body "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"pin_secr\",\"to\":\"Bob\",\"via\":\"Ivo\"}"
   -- The answer appears once, as structuredContent; the text block is a one-line summary, not a copy.
   let summaryOf (label body : String) : IO String := do
     let json ← IO.ofExcept (Json.parse body)
@@ -298,7 +310,7 @@ def main : IO Unit := do
     IO.println s!"ok: {label}"
     return text
   let protoText ← summaryOf "MCP check_protocol text is a summary, not a second copy" proto.body
-  assertContains "MCP check_protocol summary gives verdict and reading" protoText "check_protocol disproved: on every path, never Ivo can derive secret"
+  assertContains "MCP check_protocol summary gives verdict and reading" protoText "check_protocol disproved: on every path, never Ivo can derive pin_secr"
   let badText ← summaryOf "MCP rejection text is a summary" bad.body
   assertContains "MCP rejection summary gives the reason" badText "rejected: "
   let ctlText ← summaryOf "MCP check_ctl text is a summary" ctl.body

@@ -501,9 +501,10 @@ def pathOf (r : Except String Json) : List String :=
 #guard verdict (prop tripSequential r#"{"AG": {"implies": [{"after": "SeatHeld"}, {"AF": {"or": [{"after": "SeatConfirmed"}, {"after": "SeatReleased"}]}}]}}"#) == "proved"
 #guard verdict (prop tripSequential r#"{"AF": "terminal"}"#) == "proved"
 #guard verdict (check ((leanArgs tripSequential).setObjVal! "mayCall" (parse! "[[\"Traveler\",\"Agency\"],[\"Agency\",\"Flights\"],[\"Agency\",\"Hotels\"],[\"Agency\",\"Payments\"]]"))) == "ok"
--- negative: an unknown label and a missing formula are rejected, not answered
+-- negative: an unknown label is rejected, not answered
 #guard (reason (prop tripSequential r#"{"never": {"after": "Teleport"}}"#)).contains "unknown message Teleport"
-#guard (reason (ctl (leanArgs tripSequential))).startsWith "formula is required"
+-- without a formula, session_ctl suggests properties built from the protocol, each decided
+#guard verdict (ctl (leanArgs tripSequential)) == "suggested"
 
 /-! ## session_openapi: a role's HTTP interface -/
 

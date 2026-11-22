@@ -671,17 +671,20 @@ matters to no one. So a declaration marks what must stay secret, and the mark is
 the question: \emph{the attacker never derives this, on any path}. That is
 \texttt{AG not knows(Ivo, s)}, decided once for each marked secret.
 
-There are two ways to mark a secret. A name ending in \texttt{\_secr} marks an
-atom or key by name: \texttt{passwd\_secr}, or a fresh \texttt{na\_secr}, whose
-copies in later sessions are secrets too. Any other term, compound ones included,
-is listed in \texttt{secrets}. The distinction matters for hashes. A hash hides
-its input, so \texttt{h(passwd\_secr)} reveals nothing about the password, and
-the hash is not secret merely because its input is. But a server that accepts
-the hash in place of the password has made the hash a password. It must be
-marked, and listing \texttt{\{hash: \{atom: passwd\_secr\}\}} does that.
+There is one way to mark a secret: its name ends in \texttt{\_secr}. That marks
+an atom or key, \texttt{passwd\_secr}, or a fresh \texttt{na\_secr}, whose copies
+in later sessions are secrets too. One mark is what makes a wrong question
+visible. \texttt{EF knows(Ivo, p)} asks about something nobody declared secret,
+so LeanFM refuses it; \texttt{EF knows(Ivo, p\_secr)} is the question. The rule
+matters for hashes. A hash hides its input, so \texttt{h(passwd\_secr)} reveals
+nothing about the password, and the hash is not secret merely because its input
+is. But a server that accepts the hash in place of the password has made the
+hash a password, and a password gets a secret's name: the client sends
+\texttt{hpasswd\_secr} where it would send \texttt{h(passwd\_secr)}.
 
-Here is a password login where the client sends the hash of its password, first
-in clear, then sealed under the server's public key:
+Here is a password login three ways: the client sends the hash of its password,
+then the hash the server accepts, \texttt{hpasswd\_secr}, in clear and sealed
+under the server's public key:
 
 \begin{center}
 \input{generated/secrets-login.tex}
@@ -691,10 +694,10 @@ in clear, then sealed under the server's public key:
 \input{generated/secrets-protectors.tex}
 \end{quote}
 
-In clear, the password stays secret and the hash leaks, which is exactly the
-pass-the-hash attack: Ivo replays what he saw. The leak comes with the path and
-the message on the wire. Sealed, both are kept, and the answer names what keeps
-them: \texttt{sk(Server)}, because every ciphertext that carries a secret is only
+The hash keeps the password secret. But the hash the server accepts leaks in
+clear, which is exactly the pass-the-hash attack: Ivo replays what he saw. The
+leak comes with the path and the message on the wire. Sealed, it is kept, and
+the answer names what keeps it: \texttt{sk(Server)}, because every ciphertext that carries a secret is only
 as safe as its opening key. A leak of that key would be a leak of the password.
 The last line is a warning from a one-line declaration that sends a
 \texttt{session\_token}. A name that looks secret but carries no mark is

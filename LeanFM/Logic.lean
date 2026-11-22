@@ -70,6 +70,9 @@ inductive Formula where
   | knows (actor : String) (term : LeanFM.Session.Knowledge.Msg)
   /-- some role has made this claim, such as `commit(B, A)`, on the path to this state -/
   | claimed (claim : String)
+  /-- the step just taken carried a secret field (a path ending in `_secr`), from `sender` to
+  `receiver` and named `field` when they are given -/
+  | secret (sender receiver field : Option String)
   | not (f : Formula)
   | and (fs : List Formula)
   | or (fs : List Formula)
@@ -108,6 +111,7 @@ partial def toJson : Formula → Json
   | unsupported op => Json.mkObj [(op, Json.null)]
   | knows a t => Json.mkObj [("knows", Json.mkObj [("actor", Json.str a), ("term", LeanFM.Session.Attack.termJson t)])]
   | claimed c => Json.mkObj [("claimed", Json.str c)]
+  | secret a b f => Json.mkObj [("secret", Json.mkObj ((a.toList.map (("from", Json.str ·))) ++ (b.toList.map (("to", Json.str ·))) ++ (f.toList.map (("field", Json.str ·)))))]
   | not f => Json.mkObj [("not", toJson f)]
   | and fs => Json.mkObj [("and", Json.arr (fs.map toJson).toArray)]
   | or fs => Json.mkObj [("or", Json.arr (fs.map toJson).toArray)]
@@ -126,7 +130,7 @@ partial def toJson : Formula → Json
   | aw a b => Json.mkObj [("AW", Json.arr #[toJson a, toJson b])]
 
 def isAtomic : Formula → Bool
-  | tt | ff | atState _ | after _ | terminal | field .. | predicate _ | derived _ | unsupported _ | knows .. | claimed _ => true
+  | tt | ff | atState _ | after _ | terminal | field .. | predicate _ | derived _ | unsupported _ | knows .. | claimed _ | secret .. => true
   | _ => false
 
 mutual
@@ -142,6 +146,8 @@ partial def reading : Formula → String
   | unsupported op => "the " ++ op ++ " modality holds (not supported by these tools yet)"
   | knows a t => a ++ " can derive " ++ t.render
   | claimed c => "the claim " ++ c ++ " has been made"
+  | secret a b f => "a secret" ++ (match f with | some x => " " ++ x | none => "") ++ " was just sent" ++
+      (match a with | some x => " by " ++ x | none => "") ++ (match b with | some x => " to " ++ x | none => "")
   | not f => "it is not the case that " ++ paren f
   | and fs => " and ".intercalate (fs.map paren)
   | or fs => " or ".intercalate (fs.map paren)
@@ -178,6 +184,8 @@ partial def symbols : Formula → String
   | unsupported op => op
   | knows a t => "K_" ++ a ++ " " ++ t.render
   | claimed c => c
+  | secret a b f => "secret" ++ (match f with | some x => "(" ++ x ++ ")" | none => "") ++
+      (if a.isNone && b.isNone then "" else " " ++ a.getD "" ++ "→" ++ b.getD "")
   | not f => "¬" ++ symbolsArg f
   | and fs => " ∧ ".intercalate (fs.map symbolsArg)
   | or fs => " ∨ ".intercalate (fs.map symbolsArg)
@@ -360,6 +368,19 @@ partial def parseFormula (j : Json) (depth : Nat := 0) : Except String Formula :
           | some t => boundedTerm t
           | none => throw "knows needs a term"
         return .knows actor term
+      | "secret" =>
+        match arg with
+        | .obj kvs =>
+          if let some (k, _) := kvs.toList.find? (fun (k, _) => !["from", "to", "field"].contains k) then
+            throw s!"secret takes only from, to and field, not {k.take 40}"
+          let opt := fun (k : String) => do
+            match (arg.getObjVal? k).toOption with
+            | none => pure none
+            | some v => match str? v with
+              | some x => some <$> checkString ("secret." ++ k) x
+              | none => throw s!"secret.{k} is a string"
+          return .secret (← opt "from") (← opt "to") (← opt "field")
+        | _ => throw "secret takes an object {from?, to?, field?}; {} means any secret"
       | "field" =>
         let get := fun (k : String) => match (arg.getObjVal? k).toOption.bind str? with
           | some v => checkString ("field." ++ k) v
@@ -401,6 +422,8 @@ structure Transition where
   term : Option LeanFM.Session.Knowledge.Msg := none
   /-- a claim this transition makes, for `claimed` atoms -/
   claim : Option String := none
+  /-- the secret field paths its message carries, for `secret` atoms -/
+  secrets : List String := []
 deriving Repr, Inhabited
 
 structure TaskModel where
@@ -456,8 +479,11 @@ def parseDraft (j : Json) (b : Bounds := bounds) : Except String TaskModel := do
         let claim ← match opt "claim" with
           | some c => some <$> checkString "transition.claim" c
           | none => pure none
+        let secrets ← match (t.getObjVal? "secrets").toOption with
+          | some j => strings j "transition.secrets" b.maxPredicates
+          | none => pure []
         let tr : Transition := { src := ← g "src", dst := ← g "dst", message := ← g "message"
-                               , sender := opt "from", receiver := opt "to", term, claim }
+                               , sender := opt "from", receiver := opt "to", term, claim, secrets }
         return tr
     | some _ => throw "transitions is an array"
     | none => pure []
@@ -479,6 +505,8 @@ def parseDraft (j : Json) (b : Bounds := bounds) : Except String TaskModel := do
         return (actor, initial, seesAll)
     | some _ => throw "knowledge maps each actor to {initial, seesAll}"
     | none => pure []
+  if (field "secrets").isSome then
+    throw "a draft marks no secrets in a list: name each secret with _secr (nb_secr), and knows asks about it by that name"
   let id := ((field "id").bind str?).getD "draft"
   return { id, states, initial, terminals, transitions, canonical := false, knowers }
 
@@ -492,6 +520,23 @@ def resolveTask (j : Json) (b : Bounds := bounds) : Except String TaskModel :=
 
 def TaskModel.messages (t : TaskModel) : List String := (t.transitions.map (·.message)).eraseDups
 
+/-- A name ending in _secr, a session copy (`na_secr#2`) included. -/
+def markedName (n : String) : Bool := ((n.splitOn "#").headD n).endsWith "_secr"
+
+/-- Whether a knows atom may ask about `v`: it carries an atom or key whose name ends in _secr, the only
+mark (selfhost.mcp.logic.secrets). -/
+partial def termMarked (v : LeanFM.Session.Knowledge.Msg) : Bool :=
+  let rec names : LeanFM.Session.Knowledge.Msg → List String
+    | .atom n | .key n => [n]
+    | .pk _ | .sk _ => []
+    | .pair a b | .enc a b => names a ++ names b
+    | .hash b => names b
+  (names v).any markedName
+
+/-- Whether a secret field path is the one a secret atom names: the whole path, or its last segment. -/
+def secretPathNames (field path : String) : Bool :=
+  path == field || path.endsWith ("." ++ field)
+
 def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
   (f.atoms.filterMap fun
     | .atState s => if t.states.contains s then none else some ("unknown state " ++ s)
@@ -499,8 +544,21 @@ def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
     | .field m _ _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .claimed c => if t.transitions.any (·.claim == some c) then none
         else some ("no transition of task " ++ t.id ++ " makes the claim " ++ c)
-    | .knows a _ => if t.knowers.any (·.1 == a) then none
-        else some ("actor " ++ a ++ " has no declared knowledge in task " ++ t.id ++ "; add it to the draft's knowledge field")
+    | .knows a v => if !t.knowers.any (·.1 == a) then
+          some ("actor " ++ a ++ " has no declared knowledge in task " ++ t.id ++ "; add it to the draft's knowledge field")
+        -- asking whether an actor knows a term is a secrecy question; marking the term asks it
+        else if termMarked v then none
+        else some ("knows asks about " ++ v.render ++ ", which is not marked secret: name it with _secr (" ++
+          (match v with | .atom n | .key n => n ++ "_secr" | _ => "a name inside it") ++ "), the only way to mark a secret, then ask")
+    | .secret a b f =>
+      let carrying := t.transitions.filter (!·.secrets.isEmpty)
+      if carrying.isEmpty then some ("no transition of task " ++ t.id ++ " carries a secret field (a field path ending in _secr), so a secret atom would hold nowhere")
+      else if let some x := f.filter (fun x => !carrying.any (·.secrets.any (secretPathNames x))) then
+        some ("no transition of task " ++ t.id ++ " carries a secret field " ++ x)
+      -- a role that exists but never handles a secret is a question the check answers, not an error
+      else if let some x := (a.toList ++ b.toList).find? (fun x => !t.transitions.any (fun tr => tr.sender == some x || tr.receiver == some x)) then
+        some ("task " ++ t.id ++ " has no role " ++ x ++ " (no transition sends or receives as " ++ x ++ ")")
+      else none
     | _ => none).eraseDups
 
 /-! ## Kripke structure -/
@@ -513,6 +571,10 @@ structure Node where
   knowledge : List (List LeanFM.Session.Knowledge.Msg) := []
   /-- the claims made on the path here, in one order -/
   claims : List String := []
+  /-- the step that reached this node: its sender, receiver and the secret paths it carried -/
+  sender : Option String := none
+  receiver : Option String := none
+  secrets : List String := []
 deriving Repr, BEq, Inhabited
 
 def canonTerms (K : List LeanFM.Session.Knowledge.Msg) : List LeanFM.Session.Knowledge.Msg :=
@@ -538,7 +600,7 @@ deriving Inhabited
 /-- A node's identity as a string, for the index: equal exactly when the nodes are equal. -/
 def nodeKey (n : Node) : String :=
   -- most models track no knowledge and no claims: then a node is its state and last message
-  if n.knowledge.all (·.isEmpty) && n.claims.isEmpty then
+  if n.knowledge.all (·.isEmpty) && n.claims.isEmpty && n.secrets.isEmpty then
     s!"{n.knowledge.length}\u0001{n.state}\u0001{n.message.getD "\u0002"}"
   else reprStr n
 
@@ -572,7 +634,11 @@ def buildModel (t : TaskModel) (b : Bounds := bounds) : Option Model := Id.run d
         let claims := match tr.claim with
           | some c => if n.claims.contains c then n.claims else (c :: n.claims).mergeSort (· ≤ ·)
           | none => n.claims
-        let m : Node := { state := tr.dst, message := some tr.message, knowledge := t.learnOn tr n.knowledge, claims }
+        -- the sender and receiver distinguish nodes only for steps that carry a secret, so a
+        -- model without secrets keeps its size
+        let m : Node := { state := tr.dst, message := some tr.message, knowledge := t.learnOn tr n.knowledge, claims
+                        , sender := if tr.secrets.isEmpty then none else tr.sender
+                        , receiver := if tr.secrets.isEmpty then none else tr.receiver, secrets := tr.secrets }
         let k := nodeKey m
         match index.get? k with
         | some j => if !next.contains j then next := next.push j
@@ -619,6 +685,9 @@ partial def sat (m : Model) : Formula → Array Bool
   | .after msg => m.nodes.map (·.message == some msg)
   | .terminal => m.nodes.map (fun n => m.task.terminals.contains n.state)
   | .claimed c => m.nodes.map (·.claims.contains c)
+  | .secret a b f => m.nodes.map fun n =>
+      !n.secrets.isEmpty && (a.all (n.sender == some ·)) && (b.all (n.receiver == some ·)) &&
+      (f.all fun x => n.secrets.any (secretPathNames x))
   | .knows a v =>
     match m.task.knowers.findIdx? (·.1 == a) with
     | some k => m.nodes.map fun n => LeanFM.Session.Knowledge.knows (n.knowledge[k]?.getD []) v
@@ -1084,6 +1153,7 @@ def classifyAtom (task : Option TaskModel) : Formula → Json
     let ok := task.map (·.transitions.any (·.claim == some c)) |>.getD true
     Json.mkObj [("atom", "claimed " ++ c), ("class", if ok then "observable" else "unknown name"),
       ("reason", if ok then "a claim made by a transition on the path" else "no transition of the task makes this claim")]
+  | .secret .. => Json.mkObj [("atom", "secret"), ("class", "observable"), ("reason", "a secret field (named _secr) on the message just delivered")]
   | .knows a v =>
     let declared := task.map (·.knowers.any (·.1 == a)) |>.getD false
     Json.mkObj [("atom", a ++ " knows " ++ v.render), ("class", if declared then "observable" else "derived"),
@@ -1612,25 +1682,17 @@ def _root_.LeanFM.Session.Attack.Protocol.check (p : LeanFM.Session.Attack.Proto
 small model; the tool always uses `bounds.maxModelNodes`. -/
 def checkProtocolWith (limit : Nat) (args : Json) : ToolOutcome := do
   let p ← parseProtocol args
-  -- secrets: marked by name (_secr) or listed; each is a question (selfhost.mcp.logic.secrets)
-  let listed ← match (args.getObjVal? "secrets").toOption with
-    | none => pure []
-    | some (.arr items) =>
-      if items.size > maxSecrets then throw s!"secrets lists {items.size} terms; the bound is {maxSecrets}"
-      items.toList.mapM boundedTerm
-    | some _ => throw "secrets is an array of terms"
-  let names := (protocolTerms p).flatMap msgNames
-  for t in listed do
-    unless (msgNames t).any names.contains do
-      throw s!"secret {t.render} uses no name of the protocol, so its check would pass vacuously"
-  let secrets := (namedSecrets p ++ listed).eraseDups
+  -- secrets: marked by name (_secr), the only mark; each is a question (selfhost.mcp.logic.secrets)
+  if (args.getObjVal? "secrets").toOption.isSome then
+    throw "secrets is not an argument: name each secret with _secr (passwd_secr; a hash a server accepts in place of the password as hpasswd_secr)"
+  let secrets := namedSecrets p
   if secrets.length > maxSecrets then
     throw s!"the protocol marks {secrets.length} secrets; the bound is {maxSecrets}"
   let f? ← match (args.getObjVal? "formula").toOption with
     | some fj => some <$> parseBounded fj
     | none => pure none
   if f?.isNone && secrets.isEmpty then
-    throw "check_protocol needs a formula or a secret (a name ending in _secr, or a term in secrets)"
+    throw "check_protocol needs a formula or a secret (a name ending in _secr)"
   let m := p.explore limit
   let size : List (String × Json) := [("states", toJson m.states.size), ("transitions", toJson m.edges.length)]
   let draft := p.draft m "protocol"
@@ -1641,9 +1703,7 @@ def checkProtocolWith (limit : Nat) (args : Json) : ToolOutcome := do
     (p.replayWire path).map LeanFM.Session.Attack.Hop.toJson
   let secretResults : List (String × Json) := secrets.map fun s =>
     let base := [("term", Json.str s.render), ("json", LeanFM.Session.Attack.termJson s),
-      ("marked", Json.str (match s with
-        | .atom n | .key n => if secretName n then "by name" else "listed"
-        | _ => "listed"))]
+      ("marked", Json.str "by name")]
     if m.truncated then ("resource-limit", Json.mkObj (base ++ [("verdict", Json.str "resource-limit")]))
     else
       let q := Json.mkObj [("AG", Json.mkObj [("not", Json.mkObj [("knows", Json.mkObj [("actor", Json.str p.attacker), ("term", LeanFM.Session.Attack.termJson s)])])])]
@@ -1656,7 +1716,7 @@ def checkProtocolWith (limit : Nat) (args : Json) : ToolOutcome := do
         | _ => ("resource-limit", Json.mkObj (base ++ [("verdict", Json.str "resource-limit")]))
       | .error e => ("resource-limit", Json.mkObj (base ++ [("verdict", Json.str "resource-limit"), ("reason", Json.str e)]))
   let warnings := (secretLint p secrets).map fun n =>
-    s!"{n} looks secret but is not marked: name it {n}_secr or list it in secrets, or it is not checked"
+    s!"{n} looks secret but is not marked: name it {n}_secr, or it is not checked"
   let extras : List (String × Json) :=
     (if secrets.isEmpty then [] else
       [("secrets", Json.arr (secretResults.map (·.2)).toArray),
@@ -1762,7 +1822,8 @@ def reference : String := String.intercalate "\n"
   , "| `{\"field\": {\"message\": \"M\", \"name\": \"f\", \"value\": \"v\"}}` | last message M had f = v (observable in traces; not in task models) |"
   , "| `{\"derived\": \"name\"}` | a declared reducer, policy or knowledge predicate |"
   , "| `{\"claimed\": \"commit(B, A)\"}` | some transition on the path made this claim (drafts with claims, and check_protocol) |"
-  , "| `{\"knows\": {\"actor\": \"Ivo\", \"term\": t}}` | the actor can derive term t from what reached it on the path (observable when the draft declares the actor's knowledge; terms as in the knows tool) |"
+  , "| `{\"secret\": {\"from\": \"A\", \"to\": \"B\", \"field\": \"card_secr\"}}` | the step just taken carried a secret field (a path ending in _secr), from A to B and named card_secr; each key is optional and `{}` is any secret (drafts whose transitions carry secrets, and session_ctl, which reads them from the message types). Secrecy is a question a protocol test asks, not a rule: `{\"AG\": {\"not\": {\"secret\": {\"to\": \"Log\"}}}}` |"
+  , "| `{\"knows\": {\"actor\": \"Ivo\", \"term\": t}}` | the actor can derive term t from what reached it on the path (observable when the draft declares the actor's knowledge; terms as in the knows tool). t must carry a name ending in _secr, the only way to mark a secret: knows(Ivo, nb) is refused, knows(Ivo, nb_secr) is the question |"
   , "| `{\"predicate\": \"text\"}` | free text: never observable; classify it first |"
   , "| `{\"not\": f}`, `{\"and\": [..]}`, `{\"or\": [..]}`, `{\"implies\": [a, b]}` | Boolean |"
   , "| `{\"stronglyImplies\": [a, b]}` | EF a and AG(a -> b): non-vacuous always |"
@@ -1784,7 +1845,7 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## check_protocol"
   , ""
-  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, ...; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula, secrets ([terms]). A name ending in _secr marks a secret, and so does a term in secrets: each is the question never knows(attacker, secret), answered kept, leaked or resource-limit, with the keys that protect it and warnings for names that look secret but are unmarked; with secrets the formula is optional. A hash hides its input, so mark a hash too when a server accepts it in place of the password."
+  , "Arguments: roles ([{name, steps, sessions?}]; sessions 1 to 4, default 1, every session a thread named name, name#2, ...; at most 8 threads in all), attacker ({name, knows: [terms]}), domain ([terms] for received variables), domains ({var: [terms]}), formula. A name ending in _secr is the only way to mark a secret: each is the question never knows(attacker, secret), answered kept, leaked or resource-limit, with the keys that protect it and warnings for names that look secret but are unmarked; with secrets the formula is optional. A hash hides its input, so a hash a server accepts in place of the password is its own secret, named so (hpasswd_secr)."
   , ""
   , "Steps: `{\"choose\": {\"var\": x, \"values\": [terms]}}`, `{\"send\": {\"to\": p, \"message\": p}}`, `{\"recv\": p}`, `{\"claim\": {\"name\": n, \"args\": [p]}}`, `{\"fresh\": x}` (binds x to a value new in this session: x in the first, x#2 in the second; no two roles make the same fresh variable, and the attacker may not already know it). A domain that holds a fresh value also holds its copies in other sessions. Patterns are terms with `{\"var\": x}` anywhere; `pk` and `sk` take a name or a pattern."
   , ""

@@ -66,19 +66,37 @@ def checkDraft (name : String) (draft formula : Json) : Except String Json := do
   return answer |>.setObjVal! "report" (Json.str report)
     |>.setObjVal! "reading" (Json.str s!"{name}: {reading}")
 
-/-- A CTL formula (the logic tools' JSON) decided over one session of a protocol: the checker's
-answer, with `report` naming the path's messages in order and `states` the graph's size. -/
-def Global.checkFormula (g : Global String) (name : String) (formula : Json) : Except String Json := do
+/-- One session of a protocol as the logic tools' inline task (their draft form): one transition per
+step of Global.stateGraph, with its message, roles and the secret field paths `secretsOf` gives its
+label (none unless asked: the secret atom is a question a project's tests ask, not a rule). -/
+def Global.draft (g : Global String) (name : String) (secretsOf : String → List String := fun _ => []) :
+    Except String (Json × Nat) := do
   let graph ← g.stateGraph
   let transition (e : String × String × Conform.NextStep) : Json :=
     let (a, b, n) := e
+    let secrets := if n.isAct then [] else secretsOf n.label
     Json.mkObj ([("src", Json.str a), ("dst", Json.str b), ("message", Json.str n.label), ("from", Json.str n.src)] ++
-      (if n.isAct then [] else [("to", Json.str n.dst)]))
+      (if n.isAct then [] else [("to", Json.str n.dst)]) ++
+      (if secrets.isEmpty then [] else [("secrets", Json.arr (secrets.map Json.str).toArray)]))
   let draft := Json.mkObj [("id", Json.str name), ("states", Json.arr (graph.states.map Json.str).toArray),
     ("initial", "s0"), ("terminals", Json.arr (graph.terminals.map Json.str).toArray),
     ("transitions", Json.arr (graph.edges.map transition).toArray)]
+  return (draft, graph.states.length)
+
+/-- A CTL formula (the logic tools' JSON) decided over one session of a protocol: the checker's
+answer, with `report` naming the path's messages in order and `states` the graph's size. -/
+def Global.checkFormula (g : Global String) (name : String) (formula : Json)
+    (secretsOf : String → List String := fun _ => []) : Except String Json := do
+  let (draft, states) ← g.draft name secretsOf
   let answer ← checkDraft name draft formula
-  return answer.setObjVal! "states" (toJson graph.states.length)
+  return answer.setObjVal! "states" (toJson states)
+
+/-- Several formulas over one session, the state graph built once; each answer as checkFormula's,
+or the error that formula gave. -/
+def Global.checkFormulas (g : Global String) (name : String) (formulas : List Json)
+    (secretsOf : String → List String := fun _ => []) : Except String (List (Except String Json)) := do
+  let (draft, states) ← g.draft name secretsOf
+  return formulas.map fun f => (checkDraft name draft f).map (·.setObjVal! "states" (toJson states))
 
 namespace Spec
 variable {R : Type} [DecidableEq R] [ToString R]

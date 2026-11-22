@@ -216,8 +216,8 @@ partial def typeOf (env : Env) (labelsOf : String → List String) : Expr → Ex
     let ls := labelsOf x
     if ls.isEmpty then throw s!"{x} is not a message id of this protocol"
     if f.isEmpty then throw s!"{x} is a whole message; read one of its fields, as in {x}.amount"
-    if let some s := f.find? isSecret then
-      throw s!"{x}.{".".intercalate f} reads the secret {s}: the fields conditions read are logged, so a condition may not read a secret"
+    -- a condition may read a secret: the _secr mark is a question protocol tests ask (session_ctl's
+    -- secret atom), not a rule every project keeps
     let mut found : Option Base := none
     for l in ls do
       let b := (← leaf env l f).base

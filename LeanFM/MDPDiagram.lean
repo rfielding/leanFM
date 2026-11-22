@@ -63,6 +63,11 @@ def actorX (actors : List String) (actor : String) : Nat :=
   | some i => i * 6
   | none => 0
 
+/-- Underscores made safe for TeX text: callers escape braces themselves, but a label such as
+`{na, nb_secr}pk(A)` carries a bare `_`; one already written `\_` is kept. -/
+def escapeUnderscores (s : String) : String :=
+  ((s.replace "\\_" "\u0000").replace "_" "\\_").replace "\u0000" "\\_"
+
 /-- Reusable interaction rendering. Message direction is drawn as an arrow and
 never encoded as an implication-like line of prose. -/
 def renderInteractionTeX (actors : List String) (messages : List InteractionMessage) : String :=
@@ -70,14 +75,14 @@ def renderInteractionTeX (actors : List String) (messages : List InteractionMess
   "\\begin{tikzpicture}[actor/.style={draw=diagramink,text=diagramink,fill=diagramsurface,rounded corners,minimum width=2.3cm,minimum height=7mm,font=\\small},message/.style={->,>=Stealth,draw=leanblue,thick}]\n" ++
   String.join ((actors.zipIdx).map fun (actor, i) =>
     let x := i * 6
-    "\\node[actor] (a" ++ toString i ++ ") at (" ++ toString x ++ ",0) {" ++ actor ++ "};\n" ++
+    "\\node[actor] (a" ++ toString i ++ ") at (" ++ toString x ++ ",0) {" ++ escapeUnderscores actor ++ "};\n" ++
     "\\draw[dashed,draw=diagramink] (a" ++ toString i ++ ".south) -- ++(0,-" ++ toString (messages.length + 1) ++ ");\n") ++
   String.join ((messages.zipIdx).map fun (message, i) =>
     let src := actors.findIdx? (fun actor => actor == message.src) |>.getD 0
     let dst := actors.findIdx? (fun actor => actor == message.dst) |>.getD 0
     let y := i + 1
     "\\draw[message] (" ++ toString (src * 6) ++ ",-" ++ toString y ++ ") -- node[above,fill=pagebackground,text=diagramink,font=\\scriptsize] {" ++
-      message.label ++ "} (" ++ toString (dst * 6) ++ ",-" ++ toString y ++ ");\n") ++
+      escapeUnderscores message.label ++ "} (" ++ toString (dst * 6) ++ ",-" ++ toString y ++ ");\n") ++
   "\\end{tikzpicture}\n"
 
 /-- Reusable probability-mass bar chart. Weights are shown relative to their

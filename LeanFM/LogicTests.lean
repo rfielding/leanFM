@@ -17,6 +17,8 @@ def verdictOf (o : ToolOutcome) : String :=
   | .ok j => (j.getObjValD "verdict").getStr?.toOption.getD "?"
   | .error _ => "rejected"
 
+def has (s part : String) : Bool := (s.splitOn part).length > 1
+
 def reasonOf (o : ToolOutcome) : String := match o with | .error r => r | .ok _ => ""
 
 def call (tool args : String) : ToolOutcome := (run tool (parseJ args)).getD (.error "no tool")
@@ -222,51 +224,61 @@ def main : IO Unit := do
   expect "knows: an unknown event is rejected" (verdictOf (ask lowe "e9" none) == "rejected")
   -- logic-knows-atom: knowledge as a state label inside check_ctl
   let nsDraft := fun (lowe : Bool) =>
-    let m2 := if lowe then json% {tuple: [$(at_ "na"), $(at_ "nb"), $(at_ "B")]} else json% {tuple: [$(at_ "na"), $(at_ "nb")]}
+    let m2 := if lowe then json% {tuple: [$(at_ "na"), $(at_ "nb_secr"), $(at_ "B")]} else json% {tuple: [$(at_ "na"), $(at_ "nb_secr")]}
     let tr := fun (src dst msg frm to_ : String) (t : Json) =>
       json% {src: $(src), dst: $(dst), message: $(msg), «from»: $(frm), to: $(to_), term: $(t)}
     -- Alice talks to Ivo; Ivo replays her message to Bob. With Lowe's fix Alice refuses Bob's
     -- reply, because it names Bob and she chose Ivo.
     let toAlice := if lowe then [tr "s3" "refused" "AliceRefuses" "Alice" "Alice" (at_ "refused"),
         -- Bob's last step is still declared; nothing reaches it
-        tr "s4" "done" "BobFinishes" "Ivo" "Bob" (enc (pkT "B") (at_ "nb"))]
-      else [tr "s3" "s4" "AliceAnswers" "Alice" "Ivo" (enc (pkT "I") (at_ "nb")),
-            tr "s4" "done" "BobFinishes" "Ivo" "Bob" (enc (pkT "B") (at_ "nb"))]
+        tr "s4" "done" "BobFinishes" "Ivo" "Bob" (enc (pkT "B") (at_ "nb_secr"))]
+      else [tr "s3" "s4" "AliceAnswers" "Alice" "Ivo" (enc (pkT "I") (at_ "nb_secr")),
+            tr "s4" "done" "BobFinishes" "Ivo" "Bob" (enc (pkT "B") (at_ "nb_secr"))]
     json% {id: "ns", states: ["s0", "s1", "s2", "s3", "s4", "done", "refused"], initial: "s0",
            terminals: ["done", "refused"],
            transitions: $([tr "s0" "s1" "AliceToIvo" "Alice" "Ivo" (enc (pkT "I") (json% {tuple: [$(at_ "na"), $(at_ "A")]})),
                            tr "s1" "s2" "IvoAsAlice" "Ivo" "Bob" (enc (pkT "B") (json% {tuple: [$(at_ "na"), $(at_ "A")]})),
                            tr "s2" "s3" "BobReplies" "Bob" "Alice" (enc (pkT "A") m2)] ++ toAlice),
            knowledge: {Net: {initial: $(ivo), seesAll: true}}}
-  let breach := json% {never: {and: [{after: "BobFinishes"}, {knows: {actor: "Net", term: {atom: "nb"}}}]}}
+  let breach := json% {never: {and: [{after: "BobFinishes"}, {knows: {actor: "Net", term: {atom: "nb_secr"}}}]}}
   let nsRes := call "check_ctl" ((Json.mkObj [("task", nsDraft false), ("formula", breach)]).compress)
   expect "knows atom: the 1978 protocol leaks Bob's nonce" (verdictOf nsRes == "disproved")
   expect "knows atom: the counterexample shows the network holding nb" (match nsRes with
-    | .ok j => ((lastStep (.ok j)).getObjValD "holds").compress.contains "\"nb\"" | _ => false)
+    | .ok j => ((lastStep (.ok j)).getObjValD "holds").compress.contains "\"nb_secr\"" | _ => false)
   expect "knows atom: with Lowe's fix the leak is gone"
     (verdictOf (call "check_ctl" ((Json.mkObj [("task", nsDraft true), ("formula", breach)]).compress)) == "proved")
   -- one state, two histories: reached with and without a leak, it is two nodes of the model
   let fork := json% {id: "fork", states: ["s0", "s1", "s2"], initial: "s0", terminals: ["s2"],
     transitions: [{src: "s0", dst: "s1", message: "Leak", «from»: "X", to: "Eve", term: {key: "k"}},
                   {src: "s0", dst: "s1", message: "Quiet", «from»: "X", to: "Y", term: {key: "k"}},
-                  {src: "s1", dst: "s2", message: "Sealed", «from»: "X", to: "Eve", term: {enc: {key: {key: "k"}, body: {atom: "s"}}}}],
+                  {src: "s1", dst: "s2", message: "Sealed", «from»: "X", to: "Eve", term: {enc: {key: {key: "k"}, body: {atom: "s_secr"}}}}],
     knowledge: {Eve: {initial: []}}}
   let at2 := fun (f : Json) => verdictOf (call "check_ctl" ((Json.mkObj [("task", fork), ("formula", f)]).compress))
   expect "knows atom: some history reaches the end knowing s"
-    (at2 (json% {EF: {and: [{"at": "s2"}, {knows: {actor: "Eve", term: {atom: "s"}}}]}}) == "proved")
+    (at2 (json% {EF: {and: [{"at": "s2"}, {knows: {actor: "Eve", term: {atom: "s_secr"}}}]}}) == "proved")
   expect "knows atom: another reaches it without knowing s"
-    (at2 (json% {EF: {and: [{"at": "s2"}, {not: {knows: {actor: "Eve", term: {atom: "s"}}}}]}}) == "proved")
+    (at2 (json% {EF: {and: [{"at": "s2"}, {not: {knows: {actor: "Eve", term: {atom: "s_secr"}}}}]}}) == "proved")
   expect "knows atom: so it is not true on every path"
-    (at2 (json% {AG: {implies: [{"at": "s2"}, {knows: {actor: "Eve", term: {atom: "s"}}}]}}) == "disproved")
+    (at2 (json% {AG: {implies: [{"at": "s2"}, {knows: {actor: "Eve", term: {atom: "s_secr"}}}]}}) == "disproved")
+  -- asking whether an actor knows a term is a secrecy question: the term must be marked first
+  let unmarked := fun (f : Json) => call "check_ctl" ((Json.mkObj [("task", fork), ("formula", f)]).compress)
+  expect "knows atom: a term not named _secr is rejected, naming the _secr name to give it"
+    (verdictOf (unmarked (json% {EF: {knows: {actor: "Eve", term: {key: "k"}}}})) == "rejected" &&
+     has (reasonOf (unmarked (json% {EF: {knows: {actor: "Eve", term: {key: "k"}}}}))) "k, which is not marked secret: name it with _secr (k_secr)")
+  expect "knows atom: a name ending in _secr is marked, inside a compound term too"
+    (verdictOf (unmarked (json% {EF: {knows: {actor: "Eve", term: {hash: {atom: "pw_secr"}}}}})) == "disproved" &&
+     at2 (json% {EF: {knows: {actor: "Eve", term: {pair: [{atom: "s_secr"}, {key: "k"}]}}}}) == "proved")
+  expect "knows atom: a draft cannot mark secrets in a list; naming is the only mark"
+    (has (reasonOf (call "check_ctl" ((Json.mkObj [("task", fork.setObjVal! "secrets" (json% [{atom: "s_secr"}])), ("formula", json% {EF: "terminal"})]).compress))) "name each secret with _secr")
   expect "knows atom: an undeclared actor is rejected"
-    (at2 (json% {EF: {knows: {actor: "Mallory", term: {atom: "s"}}}}) == "rejected")
+    (at2 (json% {EF: {knows: {actor: "Mallory", term: {atom: "s_secr"}}}}) == "rejected")
   expect "knows atom: canonical tasks declare no knowledge"
     (verdictOf (call "check_ctl" "{\"task\": \"mcp_logic_consult\", \"formula\": {\"EF\": {\"knows\": {\"actor\": \"Agent\", \"term\": {\"atom\": \"x\"}}}}}") == "rejected")
   -- logic-protocol: Needham-Schroeder declared as data, the attacker generated
   let v := fun (x : String) => json% {var: $(x)}
   let encP := fun (k b : Json) => json% {enc: {key: $(k), body: $(b)}}
   let nsRoles := fun (lowe : Bool) =>
-    let reply := if lowe then json% {tuple: [$(v "m"), $(at_ "nb"), $(at_ "B")]} else json% {tuple: [$(v "m"), $(at_ "nb")]}
+    let reply := if lowe then json% {tuple: [$(v "m"), $(at_ "nb_secr"), $(at_ "B")]} else json% {tuple: [$(v "m"), $(at_ "nb_secr")]}
     let expect2 := if lowe then json% {tuple: [$(at_ "na"), $(v "n"), $(v "peer")]} else json% {tuple: [$(at_ "na"), $(v "n")]}
     json% [
       {name: "Alice", steps: [
@@ -279,15 +291,15 @@ def main : IO Unit := do
       {name: "Bob", steps: [
         {recv: $(encP (pkT "B") (json% {tuple: [$(v "m"), $(v "x")]}))},
         {send: {to: $(v "x"), message: $(encP (json% {pk: $(v "x")}) reply)}},
-        {recv: $(encP (pkT "B") (at_ "nb"))},
+        {recv: $(encP (pkT "B") (at_ "nb_secr"))},
         {claim: {name: "commit", args: [$(at_ "B"), $(v "x")]}}]}]
   let nsArgs := fun (lowe : Bool) (f : Json) => Json.mkObj
     [ ("roles", nsRoles lowe)
     , ("attacker", json% {name: "Ivo", knows: [$(at_ "A"), $(at_ "B"), $(at_ "I"), $(pkT "A"), $(pkT "B"), $(pkT "I"), {sk: "I"}, $(at_ "ni")]})
-    , ("domain", json% [$(at_ "na"), $(at_ "nb"), $(at_ "ni")])
+    , ("domain", json% [$(at_ "na"), $(at_ "nb_secr"), $(at_ "ni")])
     , ("domains", json% {x: [$(at_ "A"), $(at_ "B"), $(at_ "I")]})
     , ("formula", f) ]
-  let secrecy := json% {never: {and: [{claimed: "commit(B, A)"}, {knows: {actor: "Ivo", term: {atom: "nb"}}}]}}
+  let secrecy := json% {never: {and: [{claimed: "commit(B, A)"}, {knows: {actor: "Ivo", term: {atom: "nb_secr"}}}]}}
   let agreement := json% {never: {and: [{claimed: "commit(B, A)"}, {not: {claimed: "running(A, B)"}}]}}
   let proto := fun (lowe : Bool) (f : Json) => (run "check_protocol" (nsArgs lowe f)).getD (.error "no tool")
   let attack := proto false secrecy
@@ -296,7 +308,7 @@ def main : IO Unit := do
     | .ok j => let w := (j.getObjValD "wire").compress
                w.contains "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"{na, A}pk(I)\",\"to\":\"I\",\"via\":\"Ivo\"}" &&
                w.contains "{\"event\":\"recv\",\"from\":\"Ivo\",\"term\":\"{na, A}pk(B)\",\"to\":\"Bob\"}" &&
-               w.contains "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"{nb}pk(I)\",\"to\":\"I\",\"via\":\"Ivo\"}"
+               w.contains "{\"event\":\"send\",\"from\":\"Alice\",\"term\":\"{nb_secr}pk(I)\",\"to\":\"I\",\"via\":\"Ivo\"}"
     | _ => false)
   expect "check_protocol: every wire hop agrees with its evidence event" (match attack with
     | .ok j =>
@@ -318,8 +330,7 @@ def main : IO Unit := do
   -- secrets (decision logic-secrets): nb_secr marked by name, no formula
   let secretNs := fun (lowe : Bool) =>
     let j := nsArgs lowe (json% {EF: true})
-    let txt := ((match j with | .obj kvs => Json.obj (kvs.erase "formula") | o => o).compress).replace "\"nb\"" "\"nb_secr\""
-    (run "check_protocol" ((Json.parse txt).toOption.getD Json.null)).getD (.error "no tool")
+    (run "check_protocol" (match j with | .obj kvs => Json.obj (kvs.erase "formula") | o => o)).getD (.error "no tool")
   let leakedNb := fun (o : ToolOutcome) => match o with
     | .ok j => (j.getObjValD "secrets").compress.contains "\"term\":\"nb_secr\"" && (j.getObjValD "secrets").compress.contains "\"verdict\":\"leaked\""
     | _ => false
@@ -464,4 +475,27 @@ def main : IO Unit := do
   expect "knows: a dangling reference is rejected" (verdictOf (ask [ev "e1" "A" "Ivo" ["e0"] (at_ "x")] "e1" none) == "rejected")
   expect "oversized arguments rejected"
     (verdictOf ((run "explain_formula" (Json.mkObj [("formula", Json.str (String.ofList (List.replicate 70000 'x')))])).getD (.error "")) == "rejected")
+  -- the secret atom over a draft (decision logic-ctl-model): a transition carries secret field paths
+  let secretDraft := json% {states: ["s0", "s1", "s2", "s3"], initial: "s0", terminals: ["s3"],
+    transitions: [{src: "s0", dst: "s1", message: "Login", "from": "App", to: "Idp", secrets: ["password_secr"]},
+                  {src: "s1", dst: "s2", message: "Token", "from": "Idp", to: "App", secrets: ["grant.token_secr"]},
+                  {src: "s2", dst: "s3", message: "Audit", "from": "App", to: "Log"}]}
+  let sec := fun (f : Json) => (run "check_ctl" (Json.mkObj [("task", secretDraft), ("formula", f)])).getD (.error "no tool")
+  expect "secret: EF secret is proved" (verdictOf (sec (json% {EF: {secret: {}}})) == "proved")
+  expect "secret: AG not secret is disproved at the first step that carries one"
+    (verdictOf (sec (json% {AG: {not: {secret: {}}}})) == "disproved" && (lastStep (sec (json% {AG: {not: {secret: {}}}}))).getObjValD "message" == "Login")
+  expect "secret: no secret ever reaches Log" (verdictOf (sec (json% {AG: {not: {secret: {to: "Log"}}}})) == "proved")
+  expect "secret: from and to tell the steps apart"
+    (verdictOf (sec (json% {EF: {secret: {"from": "Idp", to: "App"}}})) == "proved" &&
+     verdictOf (sec (json% {EF: {secret: {"from": "Idp", to: "App", field: "password_secr"}}})) == "disproved")
+  expect "secret: a field matches the whole path or its last segment"
+    (verdictOf (sec (json% {EF: {secret: {field: "token_secr"}}})) == "proved" &&
+     verdictOf (sec (json% {EF: {secret: {field: "grant.token_secr"}}})) == "proved")
+  expect "secret: the notation shows field and roles" (notationOf "{\"AG\": {\"not\": {\"secret\": {\"field\": \"password_secr\", \"to\": \"Idp\"}}}}" == "AG ¬secret(password_secr) →Idp")
+  expect "secret: an absent field is rejected" (has (reasonOf (sec (json% {EF: {secret: {field: "pin_secr"}}}))) "carries a secret field pin_secr")
+  expect "secret: an unknown role is rejected" (has (reasonOf (sec (json% {EF: {secret: {to: "Bank"}}}))) "has no role Bank")
+  expect "secret: a draft without secrets rejects any secret atom"
+    (has (reasonOf ((run "check_ctl" (json% {task: {states: ["a", "b"], initial: "a", terminals: ["b"], transitions: [{src: "a", dst: "b", message: "M"}]},
+      formula: {EF: {secret: {}}}})).getD (.error ""))) "carries a secret field")
+  expect "secret: an unknown key is rejected" (verdictOf (sec (json% {EF: {secret: {who: "x"}}})) == "rejected")
   IO.println "ok: all LeanFM.Logic tests passed"

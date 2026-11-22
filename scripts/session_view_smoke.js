@@ -105,7 +105,7 @@ function host(msg) {
 // protocols, clauses, properties, transitions}, protocol, code: [every page of the listing], codeFile}
 function projectViewAnswer(a) {
   const P = R.projectView;
-  if (a.project === "Maqam" && P.maqam) return a.impl === "zig" ? P.maqam.zig : P.maqam.rust;
+  if (a.project === "Maqam" && P.maqam) return a.impl === "rust" ? P.maqam.rust : P.maqam.zig;
   if (!a.stage) return P.list;
   if (a.stage === "requirements") return a.file ? (/\.(leanfm|protocol)$/.test(a.file) ? P.protocol : P.specFile) : a.section ? P.sections[a.section] || null : P.requirements;
   if (a.stage === "code") {
@@ -525,16 +525,16 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
       // a project with several implementations: an implementation picker, and code follows it
       const pick2 = bar.all().find((n) => n.tag === "select" && n.attrs && n.attrs["aria-label"] === "Project") || bar.all().find((n) => n.tag === "select");
       pick2.value = "Maqam"; pick2.dispatch("change"); await wait(1200);
-      const ipick = bar.all().find((n) => n.tag === "select" && n.children.some((o) => o.textContent === "zig"));
-      if (!ipick || ipick.value !== "rust") throw new Error("Maqam's code stage shows no implementation picker defaulting to rust");
-      expectText("the code stage names the implementation it shows", byId.results, "code · rust");
-      ipick.value = "zig"; ipick.dispatch("change"); await wait(300);
-      if (navSent()?.params.arguments.impl !== "zig" || navSent()?.params.arguments.stage !== "code") throw new Error("picking zig did not ask project_view for the zig code");
-      expectText("the code stage switches to the picked implementation", byId.results, "code · zig");
+      const ipick = bar.all().find((n) => n.tag === "select" && n.children.some((o) => o.textContent === "rust"));
+      if (!ipick || ipick.value !== "zig") throw new Error("Maqam's code stage shows no implementation picker defaulting to zig");
+      expectText("the code stage names the implementation it shows", byId.results, "code · zig");
       expectText("the code stage shows the implementation's check against the specification", byId.results, "against the one specification");
+      ipick.value = "rust"; ipick.dispatch("change"); await wait(300);
+      if (navSent()?.params.arguments.impl !== "rust" || navSent()?.params.arguments.stage !== "code") throw new Error("picking rust did not ask project_view for the rust code");
+      expectText("the code stage switches to the picked implementation", byId.results, "code · rust");
       const zbar = root.all().find((n) => n.tag === "nav" && n.className.includes("stagenav"));
-      const zpick = zbar.all().find((n) => n.tag === "select" && n.children.some((o) => o.textContent === "zig"));
-      if (!zpick || zpick.value !== "zig") throw new Error("the implementation picker does not keep zig");
+      const zpick = zbar.all().find((n) => n.tag === "select" && n.children.some((o) => o.textContent === "rust"));
+      if (!zpick || zpick.value !== "rust") throw new Error("the implementation picker does not keep rust");
       console.log("ok: an implementation picker switches the code stage between Maqam's rust and zig");
     }
   }

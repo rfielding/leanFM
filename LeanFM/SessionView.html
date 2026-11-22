@@ -861,8 +861,10 @@ function streamView(body) {
       `Session ${key}: ${keep.size} events` + (Array.isArray(x.simulated) ? ` (simulated session${x.simulated.length === 1 ? "" : "s"} ${x.simulated.join(", ")})` : "") +
       (x.joinedBy ? `; joined because ${String(x.joinedBy)}` : ""));
   });
-  if (unattributed.size) add(`unattributed · ${unattributed.size}`, `${unattributed.size} events no where clause or link places in a session`, unattributed,
-    `${unattributed.size} unattributed events: no where-clause equation and no cause or prior link places them in a session`);
+  // the reason comes from LeanFM's reading: for a simulated stream, equations and links; for a log,
+  // causes and the declared session key (selfhost.session.log-sessions)
+  if (unattributed.size) add(`unattributed · ${unattributed.size}`, `${unattributed.size} events nothing places in a session`, unattributed,
+    `${unattributed.size} unattributed events: nothing the protocol declares places them in a session` + (d && d.reading ? ` (${String(d.reading)})` : ""));
   box.appendChild(bar);
   box.appendChild(el("p", "meta", d && d.reading ? String(d.reading) : "LeanFM derived no sessions for this stream."));
   box.append(note, stage);
@@ -1491,11 +1493,10 @@ function navGroupOf(key) {
 let navGroup = "structure", navLast = { structure: "whole" }, navGo = {};
 let navBox = null, propBox = null, navActive = "whole", navRoles = [], datasetSize = 1000, animSeed = 1, animSessions = 10;
 const MAX_ANIM_SESSIONS = 200;
-const CTL_PRESETS = [
-  ["Every session can always still end", { AG: { EF: "terminal" } }],
-  ["Every session ends", { AF: "terminal" }],
-  ["Some session ends", { EF: "terminal" }] ];
-let ctlFormula = JSON.stringify(CTL_PRESETS[0][1], null, 2);
+// no fixed presets: session_ctl without a formula suggests properties built from the protocol shown,
+// each decided, and the form lists them (selfhost.mcp.session.view)
+let ctlSuggestions = [];
+let ctlFormula = "";
 function parsedFormula() { try { const f = JSON.parse(ctlFormula); return f && (typeof f === "object" || typeof f === "string") ? f : null; } catch (e) { return null; } }
 function currentView() {
   const k = navActive;
@@ -1508,7 +1509,7 @@ function currentView() {
   if (k === "mdp") return ["session_mdp"];
   if (k === "sla") return ["session_sla"];
   if (k === "instances") return ["session_instances"];
-  if (k === "ctl") { const f = parsedFormula(); return f ? ["session_ctl", { formula: f }] : ["session_check"]; }
+  if (k === "ctl") { const f = parsedFormula(); return f ? ["session_ctl", { formula: f }] : ["session_ctl", {}]; }
   if (k === "walk") return "walk";
   if (k === "openapi") return "openapi";
   if (k === "dataset") return null;
@@ -1601,6 +1602,7 @@ function rebuildNav(roles) {
 }
 const IDENT_NAV = /^[A-Za-z_][A-Za-z0-9_]*$/;
 function runCtl() {
+  if (!ctlFormula.trim()) { run("session_ctl", {}); return; }
   const f = parsedFormula();
   if (!f) { say("The formula is not valid JSON.", "bad"); return; }
   run("session_ctl", { formula: f });
@@ -1611,17 +1613,17 @@ function drawPropForm() {
   const form = el("div", "propform");
   const sel = el("select");
   sel.setAttribute("aria-label", "A property to start from");
-  sel.appendChild(el("option", "", "Start from a preset…"));
-  CTL_PRESETS.forEach(([name], i) => { const o = el("option", "", name); o.value = String(i); sel.appendChild(o); });
+  sel.appendChild(el("option", "", ctlSuggestions.length ? "Start from a property suggested for this protocol…" : "Suggestions appear once the protocol is checked…"));
+  ctlSuggestions.forEach((sg, i) => { const o = el("option", "", String(sg.name || "") + " — " + String(sg.verdict || "")); o.value = String(i); sel.appendChild(o); });
   const area = el("textarea");
   area.spellcheck = false; area.value = ctlFormula;
   area.setAttribute("aria-label", 'The property as JSON CTL over {"after": "Label"} and "terminal"');
   const decide = el("button", "", "Decide");
-  sel.addEventListener("change", () => { const p = CTL_PRESETS[Number(sel.value)]; if (p) { area.value = ctlFormula = JSON.stringify(p[1], null, 2); runCtl(); } });
+  sel.addEventListener("change", () => { const p = ctlSuggestions[Number(sel.value)]; if (p && p.formula !== undefined) { area.value = ctlFormula = JSON.stringify(p.formula, null, 2); runCtl(); } });
   area.addEventListener("input", () => { ctlFormula = area.value; });
   decide.addEventListener("click", () => { ctlFormula = area.value; runCtl(); });
   const line = el("div", "controls"); line.append(sel, decide);
-  form.append(propBuilder(area), el("p", "meta", 'JSON CTL over {"after": "Label"} (a message or event just happened) and "terminal" (the session ended). In the Tree, a message has buttons that fill this in.'), area, line);
+  form.append(propBuilder(area), el("p", "meta", 'JSON CTL over {"after": "Label"} (a message or event just happened), "terminal" (the session ended) and {"secret": {"to": "Role"}} (a field ending in _secr was just sent; ask it when the project needs secrecy). Empty, Decide lists the properties suggested for this protocol. In the Tree, a message has buttons that fill this in.'), area, line);
   propBox.replaceChildren(form);
 }
 // Properties built from the protocol's own messages: a pattern and one or two message labels fill in
@@ -2033,6 +2035,15 @@ function treePanels(body) {
 // ---- a CTL verdict: the formula read back, and the path that proves or breaks it ----------------
 function ctlPanels(r) {
   const out = [], box = el("div");
+  // no formula: the properties suggested for this protocol, each decided; picking one decides it again
+  if (Array.isArray(r.suggestions)) {
+    ctlSuggestions = r.suggestions.slice(0, MAX_ITEMS).filter((sg) => sg && typeof sg === "object");
+    if (typeof r.reading === "string") box.appendChild(el("p", "meta", r.reading));
+    box.appendChild(table(["property", "CTL", "verdict", "path"], ctlSuggestions.map((sg) => [sg.name, sg.notation, sg.verdict, sg.report || sg.reading])));
+    out.push(panel("Properties suggested for this protocol", box));
+    if (navActive === "ctl") drawPropForm();
+    return out;
+  }
   // the property as LeanFM wrote it in CTL symbols, its plain reading, and the JSON behind a fold
   if (typeof r.notation === "string") box.appendChild(el("pre", "ctl-notation", r.notation));
   if (typeof r.reading === "string") box.appendChild(el("p", "meta", r.reading));

@@ -74,10 +74,11 @@ def natKeyed := keyed.replace "caller : String" "caller : Nat"
 -- generated code logs the key with its message, as it logs what conditions read
 #guard has (str (skeleton (args keyed)) "code") "READS = {\"a\": [\"caller\"]}"
 
--- negative: the key must be a Nat or String field of a message of its block, and not a secret
+-- negative: the key must be a Nat or String field of a message of its block (a secret one is allowed:
+-- the _secr mark is a question protocol tests ask, not a rule)
 #guard has (reason (check (args (keyed.replace "sessions by a.caller" "sessions by z.caller")))) "z is not the id of a message of this sessions block"
 #guard has (reason (check (args (keyed.replace "caller : String" "caller : Bool")))) "a session key is a Nat or String field"
-#guard has (reason (check (args (keyed.replace "caller : String" "caller_secr : String" |>.replace "a.caller" "a.caller_secr")))) "may not be a secret"
+#guard reason (check (args (keyed.replace "caller : String" "caller_secr : String" |>.replace "a.caller" "a.caller_secr"))) == ""
 #guard has (reason (check (args (keyed.replace "a.caller" "a.name")))) "Ask has no field name"
 
 /-! The envelope as protobuf -/

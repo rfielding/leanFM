@@ -993,12 +993,12 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
       match Types.checkCondition env labelsOf text with
       | .ok _ => pure ()
       | .error e => throw s!"in {d.name}, {label}: {e}"
-  -- a session key is a Nat or String field of its message, and not a secret
+  -- a session key is a Nat or String field of its message (a secret one too: the _secr mark is a
+  -- question protocol tests ask, not a rule)
   let allIds := defs.flatMap fun d => idLabels d.body
   for (x, f) in st.keys do
     let some (_, label) := allIds.find? (·.1 == x)
       | throw s!"sessions by {x}.{f}: {x} is not a message id of the text"
-    if (f.splitOn ".").any Types.isSecret then throw s!"sessions by {x}.{f}: a session key is logged with every event, so it may not be a secret"
     match Types.leaf env label (f.splitOn ".") with
     | .ok .nat | .ok .str => pure ()
     | .ok t => throw s!"sessions by {x}.{f}: a session key is a Nat or String field, and {label}.{f} is {t.render}"
