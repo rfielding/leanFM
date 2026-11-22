@@ -765,7 +765,7 @@ pub fn start_audio(rx: Receiver<AudioCmd>, bufsize: u32) -> anyhow::Result<Audio
                         vcf = VcfBank::default();
                         vcf_filters = FilterBank::new(sr as f32);
                         fx = FxSettings::default();
-                        fx_processor = FxProcessor::new(sr as f32);
+                        fx_processor.reset();
                         dry_mix = 0.0;
                     }
                 }

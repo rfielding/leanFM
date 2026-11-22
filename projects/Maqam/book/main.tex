@@ -109,8 +109,11 @@ clamped to $[-1,1]$: the required proof \emph{Output is bounded}. Each
 implementation's mapping names the code of this mix loop.
 
 \section{The reverb}\label{sec:reverb}
-The reverb is the specification's own, not upstream's (Known gaps): every
-implementation computes the same one, so renders agree. Its commands, ranges
+The reverb is the specification's own, not upstream's: upstream's was two
+feedback echoes (29 and 41\,ms, two of its four taps) writing into one shared
+buffer, clamped to $[-1,1]$ inside the loop, with no damping or diffusion, so it
+rang at about 34 and 24\,Hz and distorted loud tails. Both implementations,
+the Rust snapshot included, compute the same replacement, so renders agree. Its commands, ranges
 and defaults are upstream's (\cmd{reverb mix 0..1 decay 0..0.98}). Decay $d$
 sets the time the tail takes to fall 60\,dB, $T_{60} = 0.25 \cdot 16^{d/0.98}$\,s:
 0.25\,s at 0, 1.6\,s at the default 0.65, 4\,s at 0.98. Each channel first
@@ -391,13 +394,6 @@ implementation avoids each.
   not reach out}.
   \item[Reverb stutters at 64 frames] The reverb misses deadlines at 64-frame
   buffers. Breaks \emph{No missed audio deadline}.
-  \item[The reverb is two echoes] Upstream's reverb is two feedback echoes (29
-  and 41\,ms, two of its four taps) that write into one shared buffer, clamped
-  to $[-1,1]$ inside the loop, with no damping or diffusion: it rings at about
-  34 and 24\,Hz and their harmonics and distorts loud tails. Breaks \emph{The
-  reverb never distorts or rings}, \emph{The reverb never muddies the low end}
-  and \emph{The reverb is dense and wide}. The specification replaces it
-  (Section~\ref{sec:reverb}).
   \item[A cabinet change allocates in the callback] Changing the cabinet model
   rebuilds its impulse response and resizes its history inside the output
   callback (\texttt{CabinetProcessor::set\_model}); the allocator may take a
@@ -408,7 +404,10 @@ implementation avoids each.
   commands than that (\texttt{SetDry} among them since revision
   \texttt{72c11f5}), so the send blocks forever while the test holds the
   session lock, and every test that takes the lock waits behind it:
-  \cmd{make app-check} never finishes
+  \cmd{make app-check} never finishes. \texttt{recording\_errors\_appear\_in\_response\_area}
+  never finishes either, before and after the reverb change; with both skipped
+  and one test at a time, the other 80 pass. Run in parallel, tests fail
+  together behind the shared session lock
   (\path{reports/zig-macos/catch-up-72c11f5.txt}).
   \item[No comparison hooks] The upstream binary has no \cmd{--render},
   \cmd{--bench} or event log.

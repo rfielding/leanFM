@@ -219,7 +219,9 @@ Defines `FxSettings` and `FxProcessor`.
 FX are global post-mix processors:
 
 - ping-pong delay
-- compact feedback reverb
+- the specification's reverb (spec/Requirements.lean, markdown `reverb`): high-passed,
+  diffused input into an eight-line damped feedback delay network; it replaces upstream's
+  two clamped echoes
 
 Both are off by default. `advance_tick` applies per-tick automation. The
 processor has a fast bypass path when neither effect is enabled.
