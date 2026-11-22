@@ -9,7 +9,7 @@ implementations of the same specification, each mapped to it by its own
 \begin{description}
   \item[\path{impl/rust/source}] the upstream Rust, the reference the
   requirements were distilled from. Built with \cmd{cargo}.
-  \item[\path{impl/zig/source}] a port to Zig 0.17 that runs on Linux and
+  \item[\path{impl/zig/source}] the default implementation, a port to Zig 0.17 that runs on Linux and
   macOS. On Linux it needs only the Zig compiler and the ALSA development
   headers (\cmd{libasound2-dev}); on macOS only the Zig compiler and the
   system's CoreAudio, with the Command Line Tools' SDK. ffmpeg is needed at run
@@ -102,6 +102,9 @@ Messages, ranges, session files and commands are the same. The differences are
 the requirements the Rust does not meet (Chapter~\ref{ch:gaps}):
 
 \begin{itemize}
+  \item The reverb is the specification's (Section~\ref{sec:reverb}), not a port
+  of upstream's two clamped echoes: a diffused eight-line tank with damping, a
+  high-passed input and no clamp inside the loop.
   \item A phrase whose combined scale has fewer than three notes is rejected
   with a message instead of panicking (\cmd{create Zz 1/1}, \cmd{d zz 4}).
   \item Inputs that loop forever or crash upstream are handled: a non-ASCII

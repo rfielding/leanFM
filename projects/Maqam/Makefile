@@ -1,5 +1,5 @@
 # Maqam project: specification checks, each implementation's build and tests, and the book.
-# The implementations are listed in manifest.json (impl/<name>/); rust is the default.
+# The implementations are listed in manifest.json (impl/<name>/); zig is the default.
 # Requires the LeanFM installation two directories up (`make build` there).
 LEANFM := $(abspath ../..)
 
@@ -10,7 +10,7 @@ all: check book
 # Canonical LeanFM project check: compiles spec/Requirements.lean and every
 # impl/<name>/Implementation.lean in the sandbox, validates each against the
 # same requirements and the proto, and derives spec/tasks.json. Only the
-# default implementation (rust) can fail it; the others are reported.
+# default implementation (zig) can fail it; the others are reported.
 spec-check:
 	cd $(LEANFM) && python3 scripts/chatui_specification.py $(CURDIR) \
 	  Project.Requirements.requirements Project.Implementation.implementation

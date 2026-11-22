@@ -139,10 +139,7 @@ pub const FxProcessor = struct {
     chorus_r: []f32,
     chorus_pos: usize,
     chorus_phase: f32,
-    rev_l: []f32,
-    rev_r: []f32,
-    rev_pos: [4]usize,
-    rev_len: [4]usize,
+    reverb: Reverb,
 
     /// The Rust `FxProcessor::new`. Free with `deinit`.
     pub fn init(gpa: std.mem.Allocator, sample_rate_in: f32) error{OutOfMemory}!FxProcessor {
@@ -150,7 +147,6 @@ pub const FxProcessor = struct {
         const max_delay = toUsize(@ceil(sample_rate * 2.0)) +| 1;
         const max_flanger = toUsize(@ceil(sample_rate * 0.025)) +| 4;
         const max_chorus = toUsize(@ceil(sample_rate * 0.060)) +| 4;
-        const reverb_len = toUsize(@ceil(sample_rate * 0.19)) +| 1;
         const delay_l = try zeroed(gpa, max_delay);
         errdefer gpa.free(delay_l);
         const delay_r = try zeroed(gpa, max_delay);
@@ -163,9 +159,7 @@ pub const FxProcessor = struct {
         errdefer gpa.free(chorus_l);
         const chorus_r = try zeroed(gpa, max_chorus);
         errdefer gpa.free(chorus_r);
-        const rev_l = try zeroed(gpa, reverb_len);
-        errdefer gpa.free(rev_l);
-        const rev_r = try zeroed(gpa, reverb_len);
+        const reverb = try Reverb.init(gpa, sample_rate);
         var fx: FxProcessor = .{
             .settings = .{},
             .sample_rate = sample_rate,
@@ -181,10 +175,7 @@ pub const FxProcessor = struct {
             .chorus_r = chorus_r,
             .chorus_pos = 0,
             .chorus_phase = 0.0,
-            .rev_l = rev_l,
-            .rev_r = rev_r,
-            .rev_pos = .{ 0, 0, 0, 0 },
-            .rev_len = .{ 1, 1, 1, 1 },
+            .reverb = reverb,
         };
         fx.recomputeCachedLengths();
         return fx;
@@ -197,8 +188,7 @@ pub const FxProcessor = struct {
         gpa.free(self.flanger_r);
         gpa.free(self.chorus_l);
         gpa.free(self.chorus_r);
-        gpa.free(self.rev_l);
-        gpa.free(self.rev_r);
+        self.reverb.deinit(gpa);
         self.* = undefined;
     }
 
@@ -208,7 +198,10 @@ pub const FxProcessor = struct {
     }
 
     pub fn process(self: *FxProcessor, left: f32, right: f32) Stereo {
-        if (!self.settings.active()) return .{ .left = left, .right = right };
+        if (!self.settings.active()) {
+            self.reverb.running = false; // off, even though processReverb is skipped
+            return .{ .left = left, .right = right };
+        }
         const a = self.processFlanger(left, right);
         const b = self.processChorus(a.left, a.right);
         const c = self.processPingpong(b.left, b.right);
@@ -221,12 +214,22 @@ pub const FxProcessor = struct {
             1.0,
             @floatFromInt(self.delay_l.len - 1),
         ));
-        const taps = [4]f32{ 0.029, 0.041, 0.053, 0.071 };
-        const hi = @max(self.rev_l.len -| 1, 1);
-        for (taps, 0..) |tap, i| {
-            self.rev_len[i] = std.math.clamp(toUsize(@round(self.sample_rate * tap)), 1, hi);
-            self.rev_pos[i] %= self.rev_len[i];
+        self.reverb.setDecay(self.settings.reverb_decay);
+    }
+
+    /// Silences every effect's memory and returns to the default settings (the engine's Clear).
+    pub fn reset(self: *FxProcessor) void {
+        inline for (.{ "delay_l", "delay_r", "flanger_l", "flanger_r", "chorus_l", "chorus_r" }) |name| {
+            @memset(@field(self, name), 0.0);
         }
+        self.delay_pos = 0;
+        self.delay_samples = 1;
+        self.flanger_pos = 0;
+        self.flanger_phase = 0.0;
+        self.chorus_pos = 0;
+        self.chorus_phase = 0.0;
+        self.reverb.clear();
+        self.setSettings(.{});
     }
 
     fn processFlanger(self: *FxProcessor, left: f32, right: f32) Stereo {
@@ -287,30 +290,197 @@ pub const FxProcessor = struct {
         };
     }
 
+    /// The specification's reverb (markdown `reverb`), not upstream's: the wet signal from
+    /// `Reverb`, crossfaded by mix; this final clamp is the reverb's only one.
     fn processReverb(self: *FxProcessor, left: f32, right: f32) Stereo {
-        if (!self.settings.reverb_enabled) return .{ .left = left, .right = right };
-        const s = self.settings;
-        var wet_l: f32 = 0.0;
-        var wet_r: f32 = 0.0;
-        // As upstream: only two of the four taps are used.
-        for (0..2) |i| {
-            const len = self.rev_len[i];
-            const pos = self.rev_pos[i];
-            const fb_l = self.rev_l[pos];
-            const fb_r = self.rev_r[pos];
-            wet_l += fb_l;
-            wet_r += fb_r;
-            self.rev_l[pos] = fclamp(left + fb_r * s.reverb_decay, -1.0, 1.0);
-            self.rev_r[pos] = fclamp(right + fb_l * s.reverb_decay, -1.0, 1.0);
-            self.rev_pos[i] = if (pos + 1 >= len) 0 else pos + 1;
+        if (!self.settings.reverb_enabled) {
+            self.reverb.running = false;
+            return .{ .left = left, .right = right };
         }
-        wet_l *= 0.5;
-        wet_r *= 0.5;
+        const s = self.settings;
+        if (!self.reverb.running) {
+            self.reverb.clear();
+            self.reverb.running = true;
+        }
+        // Per-tick decay steps change settings.reverb_decay; setDecay returns at once if unchanged.
+        self.reverb.setDecay(s.reverb_decay);
+        const wet = self.reverb.process(left, right);
         const dry = 1.0 - s.reverb_mix;
         return .{
-            .left = fclamp(left * dry + wet_l * s.reverb_mix, -1.0, 1.0),
-            .right = fclamp(right * dry + wet_r * s.reverb_mix, -1.0, 1.0),
+            .left = fclamp(left * dry + wet.left * s.reverb_mix, -1.0, 1.0),
+            .right = fclamp(right * dry + wet.right * s.reverb_mix, -1.0, 1.0),
         };
+    }
+};
+
+/// Every value written into reverb state below this magnitude becomes 0 (no subnormal floats).
+const flush_below: f32 = 1e-15;
+
+fn flush(x: f32) f32 {
+    return if (@abs(x) < flush_below) 0.0 else x;
+}
+
+/// The decay-to-T60 map of the specification: 0.25 s at decay 0, 4 s at 0.98.
+pub fn reverbT60(decay: f32) f32 {
+    return 0.25 * std.math.pow(f32, 16.0, decay / 0.98);
+}
+
+/// The specification's reverb (spec/Requirements.lean, markdown `reverb`): two one-pole
+/// high-passes at 120 Hz and four allpass diffusers per channel, then an eight-line tank with a
+/// Householder feedback matrix, per-line decay gains and a one-pole damping low-pass at 5 kHz.
+/// `process` returns the wet pair only; it is linear (no clamp) and never allocates. All delay
+/// memory is one buffer allocated by `init`, cut into disjoint lines.
+pub const Reverb = struct {
+    pub const line_ms = [8]f32{ 29.7, 37.1, 41.1, 43.7, 53.3, 59.9, 67.7, 73.3 };
+    pub const allpass_ms = [4]f32{ 4.77, 3.59, 12.73, 9.31 };
+    pub const right_stretch: f32 = 1.07;
+    pub const allpass_gain: f32 = 0.6;
+    pub const highpass_hz: f32 = 120.0;
+    pub const damping_hz: f32 = 5000.0;
+
+    const V = @Vector(8, f32);
+    /// Lanes fed by the left input (even lines); the others are fed by the right.
+    const even: @Vector(8, bool) = .{ true, false, true, false, true, false, true, false };
+
+    /// A delay of `buf.len` samples: `buf[pos]` is the sample written `buf.len` samples ago.
+    const Line = struct {
+        buf: []f32,
+        pos: usize = 0,
+
+        inline fn read(self: *const Line) f32 {
+            return self.buf[self.pos];
+        }
+
+        inline fn write(self: *Line, v: f32) void {
+            self.buf[self.pos] = v;
+            self.pos = if (self.pos + 1 >= self.buf.len) 0 else self.pos + 1;
+        }
+    };
+
+    storage: []f32,
+    lines: [8]Line,
+    allpasses: [2][4]Line,
+    /// Damped line outputs z_i.
+    z: V = @splat(0.0),
+    /// Per channel: input of stage 1, output of stage 1, output of stage 2 (stage 2's input is
+    /// stage 1's output, so x', y1', y2').
+    hp: [2][3]f32 = .{ .{ 0, 0, 0 }, .{ 0, 0, 0 } },
+    gains: V = @splat(0.0),
+    wet_gain: f32 = 0.0,
+    decay: f32 = std.math.nan(f32),
+    hp_a: f32,
+    damp_c: f32,
+    sample_rate: f32,
+    /// Whether it ran in the previous sample; turning it on clears it first.
+    running: bool = false,
+
+    fn samples(ms: f32, sample_rate: f32) usize {
+        return @max(toUsize(@round(ms * sample_rate / 1000.0)), 1);
+    }
+
+    pub fn init(gpa: std.mem.Allocator, sample_rate_in: f32) error{OutOfMemory}!Reverb {
+        const sr = @max(sample_rate_in, 1.0);
+        var total: usize = 0;
+        for (line_ms) |ms| total += samples(ms, sr);
+        for (allpass_ms) |ms| total += samples(ms, sr) + samples(ms * right_stretch, sr);
+        const storage = try zeroed(gpa, total);
+        var at: usize = 0;
+        var r: Reverb = .{
+            .storage = storage,
+            .lines = undefined,
+            .allpasses = undefined,
+            .hp_a = @exp(-2.0 * PI * highpass_hz / sr),
+            .damp_c = 1.0 - @exp(-2.0 * PI * damping_hz / sr),
+            .sample_rate = sr,
+        };
+        for (line_ms, 0..) |ms, i| {
+            const n = samples(ms, sr);
+            r.lines[i] = .{ .buf = storage[at..][0..n] };
+            at += n;
+        }
+        for (allpass_ms, 0..) |ms, k| {
+            inline for (.{ 1.0, right_stretch }, 0..) |stretch, ch| {
+                const n = samples(ms * stretch, sr);
+                r.allpasses[ch][k] = .{ .buf = storage[at..][0..n] };
+                at += n;
+            }
+        }
+        std.debug.assert(at == total);
+        r.setDecay(0.65);
+        return r;
+    }
+
+    pub fn deinit(self: *Reverb, gpa: std.mem.Allocator) void {
+        gpa.free(self.storage);
+        self.* = undefined;
+    }
+
+    /// Silence: no tail, no filter memory. Never allocates.
+    pub fn clear(self: *Reverb) void {
+        @memset(self.storage, 0.0);
+        for (&self.lines) |*l| l.pos = 0;
+        for (&self.allpasses) |*chan| for (chan) |*a| {
+            a.pos = 0;
+        };
+        self.z = @splat(0.0);
+        self.hp = .{ .{ 0, 0, 0 }, .{ 0, 0, 0 } };
+    }
+
+    /// Recomputes the per-line gains and the wet gain for `decay`; returns at once if unchanged.
+    pub fn setDecay(self: *Reverb, decay: f32) void {
+        if (decay == self.decay) return;
+        self.decay = decay;
+        const t60 = reverbT60(fclamp(decay, 0.0, 0.98));
+        var gains: [8]f32 = undefined;
+        for (self.lines, &gains) |l, *g| {
+            const d: f32 = @floatFromInt(l.buf.len);
+            g.* = std.math.pow(f32, 10.0, -3.0 * d / (self.sample_rate * t60));
+        }
+        self.gains = gains;
+        self.wet_gain = 0.6 / @sqrt(t60);
+    }
+
+    fn highpass(self: *Reverb, ch: usize, x: f32) f32 {
+        const h = &self.hp[ch];
+        const y1 = flush(self.hp_a * (h[1] + x - h[0]));
+        const y2 = flush(self.hp_a * (h[2] + y1 - h[1]));
+        h[0] = flush(x);
+        h[1] = y1;
+        h[2] = y2;
+        return y2;
+    }
+
+    fn diffuse(self: *Reverb, ch: usize, x: f32) f32 {
+        var v = x;
+        for (&self.allpasses[ch]) |*a| {
+            const b = a.read();
+            const w = v + allpass_gain * b;
+            v = b - allpass_gain * w;
+            a.write(flush(w));
+        }
+        return v;
+    }
+
+    /// One stereo sample in, the wet pair out.
+    pub fn process(self: *Reverb, left: f32, right: f32) Stereo {
+        const il = self.diffuse(0, self.highpass(0, left));
+        const ir = self.diffuse(1, self.highpass(1, right));
+        var s: V = undefined;
+        inline for (0..8) |i| s[i] = self.lines[i].read();
+        const zero: V = @splat(0.0);
+        const tiny: V = @splat(flush_below);
+        var z = self.z + @as(V, @splat(self.damp_c)) * (self.gains * s - self.z);
+        z = @select(f32, @abs(z) < tiny, zero, z);
+        self.z = z;
+        const mean: V = @splat(@reduce(.Add, z) * 0.25);
+        const inject = @select(f32, even, @as(V, @splat(il)), @as(V, @splat(ir)));
+        var fb = z - mean + inject;
+        fb = @select(f32, @abs(fb) < tiny, zero, fb);
+        inline for (0..8) |i| self.lines[i].write(fb[i]);
+        const evens = @select(f32, even, z, zero);
+        const sum_l = @reduce(.Add, evens);
+        const sum_r = @reduce(.Add, z) - sum_l;
+        return .{ .left = self.wet_gain * sum_l, .right = self.wet_gain * sum_r };
     }
 };
 
@@ -460,6 +630,174 @@ test "reverb and pingpong stay bounded and settings advance within range" {
     settings.advanceTick();
     try std.testing.expectEqual(@as(f32, 0.98), settings.reverb_decay);
     try std.testing.expectEqual(@as(f32, 0.01), settings.delay_time_secs);
+}
+
+/// The wet impulse response of a fresh reverb (`amp` into both channels at sample 0).
+fn reverbImpulse(gpa: std.mem.Allocator, sr: f32, decay: f32, amp: f32, n: usize) ![2][]f32 {
+    var r = try Reverb.init(gpa, sr);
+    defer r.deinit(gpa);
+    r.setDecay(decay);
+    const l = try gpa.alloc(f32, n);
+    errdefer gpa.free(l);
+    const rr = try gpa.alloc(f32, n);
+    for (0..n) |t| {
+        const x: f32 = if (t == 0) amp else 0.0;
+        const w = r.process(x, x);
+        l[t] = w.left;
+        rr[t] = w.right;
+    }
+    return .{ l, rr };
+}
+
+fn rmsOf(xs: []const f32) f64 {
+    var acc: f64 = 0;
+    for (xs) |x| acc += @as(f64, x) * x;
+    return @sqrt(acc / @as(f64, @floatFromInt(@max(xs.len, 1))));
+}
+
+fn dbOf(ratio: f64) f64 {
+    return 20.0 * std.math.log10(@max(ratio, 1e-30));
+}
+
+test "reverb tail follows its decay" {
+    const gpa = std.testing.allocator;
+    const sr: f32 = 48_000.0;
+    const w: usize = 2400; // 50 ms
+    for ([_]f32{ 0.0, 0.65 }) |decay| {
+        const t60 = reverbT60(decay);
+        const n = toUsize(sr * t60 * 1.5) + w + 1;
+        const ir = try reverbImpulse(gpa, sr, decay, 1.0, n);
+        defer gpa.free(ir[0]);
+        defer gpa.free(ir[1]);
+        const early = rmsOf(ir[0][1440..][0..w]); // 30..80 ms
+        const half = rmsOf(ir[0][toUsize(sr * t60 * 0.5)..][0..w]);
+        const late = rmsOf(ir[0][toUsize(sr * t60 * 1.5)..][0..w]);
+        try std.testing.expect(dbOf(late / early) <= -60.0);
+        try std.testing.expect(dbOf(half / early) > -60.0);
+    }
+    try std.testing.expectApproxEqAbs(@as(f32, 0.25), reverbT60(0.0), 1e-6);
+    try std.testing.expectApproxEqAbs(@as(f32, 4.0), reverbT60(0.98), 1e-5);
+}
+
+test "reverb is dense and wide" {
+    const gpa = std.testing.allocator;
+    const ir = try reverbImpulse(gpa, 48_000.0, 0.65, 1.0, 9600);
+    defer gpa.free(ir[0]);
+    defer gpa.free(ir[1]);
+    const l = ir[0][4800..9600];
+    const r = ir[1][4800..9600];
+    for (l, r) |a, b| try std.testing.expect(a != 0.0 and b != 0.0);
+    var ml: f64 = 0;
+    var mr: f64 = 0;
+    for (l, r) |a, b| {
+        ml += a;
+        mr += b;
+    }
+    ml /= @floatFromInt(l.len);
+    mr /= @floatFromInt(r.len);
+    var sab: f64 = 0;
+    var saa: f64 = 0;
+    var sbb: f64 = 0;
+    for (l, r) |a, b| {
+        const da = a - ml;
+        const db = b - mr;
+        sab += da * db;
+        saa += da * da;
+        sbb += db * db;
+    }
+    const rho = sab / @sqrt(saa * sbb);
+    try std.testing.expect(@abs(rho) < 0.3);
+}
+
+test "reverb is linear" {
+    const gpa = std.testing.allocator;
+    const full = try reverbImpulse(gpa, 48_000.0, 0.98, 1.0, 24_000);
+    defer gpa.free(full[0]);
+    defer gpa.free(full[1]);
+    const half = try reverbImpulse(gpa, 48_000.0, 0.98, 0.5, 24_000);
+    defer gpa.free(half[0]);
+    defer gpa.free(half[1]);
+    var peak: f32 = 0;
+    for (full[0], half[0], full[1], half[1]) |a, b, c, d| {
+        peak = @max(peak, @abs(a));
+        // Halving the input halves every sample (exactly, up to rounding and the flush to 0).
+        try std.testing.expectApproxEqAbs(a * 0.5, b, 1e-6 + @abs(a) * 1e-5);
+        try std.testing.expectApproxEqAbs(c * 0.5, d, 1e-6 + @abs(c) * 1e-5);
+    }
+    try std.testing.expect(peak > 0.01);
+    var r = try Reverb.init(gpa, 48_000.0);
+    defer r.deinit(gpa);
+    r.setDecay(0.98);
+    const gains: [8]f32 = r.gains;
+    for (gains) |g| try std.testing.expect(g > 0.0 and g < 1.0);
+    // The lines and allpasses are disjoint slices of one buffer.
+    var covered: usize = 0;
+    for (r.lines) |l| covered += l.buf.len;
+    for (r.allpasses) |chan| for (chan) |a| {
+        covered += a.buf.len;
+    };
+    try std.testing.expectEqual(r.storage.len, covered);
+}
+
+test "reverb keeps the low end dry" {
+    const gpa = std.testing.allocator;
+    const sr: f32 = 48_000.0;
+    var levels: [2]f64 = undefined;
+    for ([_]f32{ 40.0, 1000.0 }, 0..) |hz, k| {
+        var r = try Reverb.init(gpa, sr);
+        defer r.deinit(gpa);
+        r.setDecay(0.65);
+        var acc: f64 = 0;
+        const n: usize = 48_000;
+        for (0..n) |t| {
+            const x = 0.5 * @sin(2.0 * PI * hz * @as(f32, @floatFromInt(t)) / sr);
+            const w = r.process(x, x);
+            if (t >= n / 2) acc += @as(f64, w.left) * w.left;
+        }
+        levels[k] = @sqrt(acc / @as(f64, n / 2));
+    }
+    try std.testing.expect(dbOf(levels[0] / levels[1]) <= -12.0);
+}
+
+test "reverb state fades to exact zero" {
+    const gpa = std.testing.allocator;
+    var r = try Reverb.init(gpa, 48_000.0);
+    defer r.deinit(gpa);
+    r.setDecay(0.0);
+    _ = r.process(1.0, -1.0);
+    for (0..48_000 * 4) |_| _ = r.process(0.0, 0.0);
+    for (r.storage) |v| try std.testing.expect(v == 0.0 or @abs(v) >= flush_below);
+    const z: [8]f32 = r.z;
+    for (z) |v| try std.testing.expect(v == 0.0 or @abs(v) >= flush_below);
+    for (r.hp) |h| for (h) |v| try std.testing.expect(v == 0.0 or @abs(v) >= flush_below);
+    // After 4 s at T60 = 0.25 s (-960 dB) everything has been flushed.
+    for (r.storage) |v| try std.testing.expectEqual(@as(f32, 0.0), v);
+}
+
+test "turning the reverb on starts from silence" {
+    var fx = try FxProcessor.init(std.testing.allocator, 48_000.0);
+    defer fx.deinit(std.testing.allocator);
+    var settings = FxSettings.default();
+    settings.reverb_enabled = true;
+    settings.reverb_mix = 1.0;
+    settings.reverb_decay = 0.98;
+    fx.setSettings(settings);
+    _ = fx.process(1.0, 1.0);
+    for (0..4800) |_| _ = fx.process(0.0, 0.0);
+    try std.testing.expect(@abs(fx.process(0.0, 0.0).left) > 1e-4); // a tail is ringing
+    settings.reverb_enabled = false;
+    fx.setSettings(settings);
+    _ = fx.process(0.0, 0.0);
+    settings.reverb_enabled = true;
+    fx.setSettings(settings);
+    for (0..4800) |_| try std.testing.expectEqual(@as(f32, 0.0), fx.process(0.0, 0.0).left);
+    // The Clear before a load silences it too.
+    _ = fx.process(1.0, 1.0);
+    for (0..4800) |_| _ = fx.process(0.0, 0.0);
+    fx.reset();
+    settings.reverb_enabled = true;
+    fx.setSettings(settings);
+    for (0..4800) |_| try std.testing.expectEqual(@as(f32, 0.0), fx.process(0.0, 0.0).right);
 }
 
 test "cabinet_is_bypassed_or_convolves_without_allocating" {

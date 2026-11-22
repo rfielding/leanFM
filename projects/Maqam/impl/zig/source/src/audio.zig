@@ -898,19 +898,7 @@ pub const Engine = struct {
     }
 
     fn resetFxProcessor(self: *Engine) void {
-        const p = &self.fx_processor;
-        inline for (.{ "delay_l", "delay_r", "flanger_l", "flanger_r", "chorus_l", "chorus_r", "rev_l", "rev_r" }) |name| {
-            @memset(@field(p, name), 0.0);
-        }
-        p.delay_pos = 0;
-        p.delay_samples = 1;
-        p.flanger_pos = 0;
-        p.flanger_phase = 0.0;
-        p.chorus_pos = 0;
-        p.chorus_phase = 0.0;
-        p.rev_pos = .{ 0, 0, 0, 0 };
-        p.rev_len = .{ 1, 1, 1, 1 };
-        p.setSettings(.{});
+        self.fx_processor.reset();
     }
 
     fn insertAt(self: *Engine, pos: usize, pp: PlayingPhrase) void {
@@ -2241,7 +2229,7 @@ test "reset_session_state restores the defaults and hands the model back" {
     try testing.expectEqual(@as(f32, 2.0), e.sym.mic.strings.input_gain);
     try testing.expect(!e.vcf.all.enabled);
     try testing.expect(!e.fx.active());
-    for (e.fx_processor.rev_l) |x| try testing.expectEqual(@as(f32, 0.0), x);
+    for (e.fx_processor.reverb.storage) |x| try testing.expectEqual(@as(f32, 0.0), x);
     try testing.expectEqual(@as(usize, 1), e.garbage.len());
 }
 

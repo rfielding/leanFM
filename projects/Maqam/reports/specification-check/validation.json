@@ -2,24 +2,24 @@
   "status": "validated",
   "requirement": "Project.Requirements.requirements",
   "implementation": "Project.Implementation.implementation",
-  "default_implementation": "rust",
+  "default_implementation": "zig",
   "implementations": {
-    "rust": {
-      "implementation": "impl/rust/Implementation.lean",
-      "source": "impl/rust/source/",
-      "module": "impl.rust.Implementation",
-      "default": true,
-      "status": "validated",
-      "target": "rust",
-      "errors": []
-    },
     "zig": {
       "implementation": "impl/zig/Implementation.lean",
       "source": "impl/zig/source/",
       "module": "impl.zig.Implementation",
-      "default": false,
+      "default": true,
       "status": "validated",
       "target": "zig",
+      "errors": []
+    },
+    "rust": {
+      "implementation": "impl/rust/Implementation.lean",
+      "source": "impl/rust/source/",
+      "module": "impl.rust.Implementation",
+      "default": false,
+      "status": "validated",
+      "target": "rust",
       "errors": []
     }
   },
@@ -30,11 +30,11 @@
   "unit": "task grammars",
   "boundary": ".",
   "artifacts": {
-    "spec/Requirements.lean": "7a7b8b87d2e312c5cb9dde538e491a759f34fd52a922ca202a45ee63745cb18e",
+    "spec/Requirements.lean": "cbb2982119a71fac0fb1548e06673271c6f9f873ca0d246a6ca6ef4b63fd3777",
     "spec/Requirements.proto": "df60bd819312ad2f71adc11a07e787a2fa79200605652e2ce7cf491fe5951663",
-    "book/main.tex": "37bc5389b9c90b20001bd382397aeda01222918e3eb46eb5c7cbb532f0990ff7",
-    "impl/rust/Implementation.lean": "9fa28fb532bf6013944b8b36ea534de1759aa9e92acfd64ff53617b421a5aa2e",
-    "impl/zig/Implementation.lean": "df71d81da6275abc3f26e4cb84f1be048193c9a795906fbfabe6acc0f004ec95"
+    "book/main.tex": "b016ecd27549cefdefd303bc128f0a69d80c7ce181492e34c6baabc46eba5df7",
+    "impl/zig/Implementation.lean": "93cd864e9cf0c7ec5f6313c84a4677f9dbb7b296adf6280794b238b702d42c3f",
+    "impl/rust/Implementation.lean": "02bccda7f123b9c603fce81f5e1145f92527d937bc56a752d55f0168ee9b25a9"
   },
   "task_count": 6,
   "acceptance": "unchanged"

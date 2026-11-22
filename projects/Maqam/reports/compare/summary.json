@@ -1,35 +1,23 @@
 {
-  "session": "impl/rust/source/default.mq",
+  "session": "impl/zig/source/default.mq",
   "cycles": 2,
   "rate": 48000,
-  "bench_seconds": 10,
+  "bench_seconds": 30,
   "nam": "impl/zig/source/testdata/nam/marshall_jcm800.nam",
-  "default_implementation": "rust",
+  "default_implementation": "zig",
   "implementations": {
-    "rust": {
-      "default": true,
-      "source": "impl/rust/source/",
-      "spec": "validated",
-      "source_lines": 20156,
-      "check": {
-        "passed": true,
-        "seconds": 0.2
-      },
-      "render": "not provided",
-      "bench": "not provided"
-    },
     "zig": {
-      "default": false,
+      "default": true,
       "source": "impl/zig/source/",
       "spec": "validated",
-      "source_lines": 25743,
+      "source_lines": 27572,
       "check": {
         "passed": true,
         "seconds": 0.1
       },
       "render": {
         "passed": true,
-        "seconds": 14.7,
+        "seconds": 14.8,
         "deterministic": true
       },
       "events": {
@@ -40,18 +28,18 @@
       "bench": {
         "frames": 64,
         "rate": 48000,
-        "callbacks": 7500,
+        "callbacks": 22500,
         "deadline_misses": 0,
-        "callback_p50_us": 214.04,
-        "callback_p99_us": 293.053,
-        "callback_max_us": 837.794,
-        "release_late_max_us": 130.722,
-        "slack_min_us": 495.5393333333333,
+        "callback_p50_us": 217.852,
+        "callback_p99_us": 301.111,
+        "callback_max_us": 791.174,
+        "release_late_max_us": 321.015,
+        "slack_min_us": 542.1593333333333,
         "realtime": "rtkit",
         "memory_locked": true
       },
       "periods": {
-        "blocks": 7500,
+        "blocks": 22500,
         "late": 0,
         "first_late": [],
         "label_disagrees": 0,

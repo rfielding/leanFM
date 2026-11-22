@@ -7,9 +7,9 @@
   "book_source": "book/main.tex",
   "requirements": "spec/Requirements.lean",
   "protobuf": "spec/Requirements.proto",
-  "implementation": "impl/rust/Implementation.lean",
+  "implementation": "impl/zig/Implementation.lean",
   "tasks": "spec/tasks.json",
-  "source": "impl/rust/source/",
+  "source": "impl/zig/source/",
   "evidence": "reports/",
   "upstream": "https://github.com/rfielding/maqam",
   "upstream_revision": "72c11f5e4287481ef70d493c1085806c416b6800",
@@ -25,5 +25,5 @@
       "source": "impl/zig/source/"
     }
   ],
-  "default_implementation": "rust"
+  "default_implementation": "zig"
 }

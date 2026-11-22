@@ -39,9 +39,10 @@ typed messages), \path{spec/Maqam.leanfm} (the session type of the running
 system) and one implementation mapping per implementation:
 
 \begin{itemize}
+  \item \path{impl/zig/} — a port to Zig, built, tested and run without the
+  Rust: the default implementation and the reference for further ports;
   \item \path{impl/rust/} — the upstream Rust, the reference the requirements
-  were distilled from, and the default implementation;
-  \item \path{impl/zig/} — a port to Zig, built, tested and run without the Rust.
+  were distilled from.
 \end{itemize}
 
 Both are held to the same requirements. Review and acceptance happen in git;
@@ -53,8 +54,8 @@ From the project root:
   \item \cmd{make spec-check} compiles the requirements and every
   implementation mapping in LeanFM's sandbox, validates each mapping against the
   one specification and regenerates \path{spec/tasks.json}.
-  \item \cmd{make app-check} builds and tests the default (Rust) implementation;
-  \cmd{make zig-check} builds and tests the Zig one. Neither touches the other's
+  \item \cmd{make zig-check} builds and tests the default (Zig) implementation;
+  \cmd{make app-check} builds and tests the Rust one. Neither touches the other's
   directory.
   \item \cmd{make compare} measures every implementation the same way
   (Chapter~\ref{ch:compare}).
@@ -106,6 +107,28 @@ input and tuned to the current phrase, the per-instrument VCF bank and the
 effects (flanger, chorus, reverb, delay, ping-pong), then soft-clipped and
 clamped to $[-1,1]$: the required proof \emph{Output is bounded}. Each
 implementation's mapping names the code of this mix loop.
+
+\section{The reverb}\label{sec:reverb}
+The reverb is the specification's own, not upstream's (Known gaps): every
+implementation computes the same one, so renders agree. Its commands, ranges
+and defaults are upstream's (\cmd{reverb mix 0..1 decay 0..0.98}). Decay $d$
+sets the time the tail takes to fall 60\,dB, $T_{60} = 0.25 \cdot 16^{d/0.98}$\,s:
+0.25\,s at 0, 1.6\,s at the default 0.65, 4\,s at 0.98. Each channel first
+passes two one-pole high-pass stages at 120\,Hz, so a bass's fundamentals stay
+dry and the tail sits above them, then four allpass diffusers (4.77, 3.59,
+12.73, 9.31\,ms; the right channel's 1.07 times longer), which smear an attack
+into a dense wash from the first milliseconds. The tank is eight delay lines
+(29.7 to 73.3\,ms) mixed by an orthogonal Householder matrix; each line loses
+the gain that makes it fall 60\,dB in $T_{60}$ and is damped by a one-pole
+low-pass at 5\,kHz, so the highs fade before the lows, as in a room. The left
+input feeds the even lines and the right the odd lines; the left output sums
+the even lines and the right the odd ones, which leaves them uncorrelated and
+wide. The wet sum is scaled by $0.6/\sqrt{T_{60}}$ so \cmd{mix} means the same
+at every decay. Nothing inside the reverb clamps: the only clamp is the final
+one on the output (\emph{The reverb never distorts or rings}), and state that
+fades below $10^{-15}$ is set to zero, so a fading tail never slows a block
+with subnormal floats. The full definition is the markdown section
+\texttt{reverb} of \path{spec/Requirements.lean}.
 
 The live input takes one path. With NAM on and a capture loaded only the
 modeled signal goes on, with no clean signal beside it; with NAM off the clean
@@ -274,7 +297,9 @@ no time; every frequency is just; a session round-trips; LLM commands are all
 checked before any is applied; a download is cached before it is loaded; with
 \texttt{MAQAM\_EVENT\_LOG} set every message of \texttt{MaqamLive} the app takes
 part in is logged once, in order, conforming to the protocol; the offline render
-is deterministic; every audio block is on time (Section~\ref{sec:deadline}).
+is deterministic; every audio block is on time (Section~\ref{sec:deadline});
+the reverb's tail falls 60\,dB in its $T_{60}$, is dense from 100\,ms on and
+is uncorrelated between left and right (Section~\ref{sec:reverb}).
 
 \section{Negative requirements}
 Never: the LLM saves, loads, records or plays; a failed recording leaves a
@@ -285,7 +310,9 @@ input that crashes the app; a secret (API key, TONE3000 token) in a session, the
 terminal, the LLM context, a recording or a log; a cache write outside the
 cache; tests that open a browser or reach the network; a skipped block at 64
 frames and 48\,kHz with NAM, the strings and the reverb on; an event log
-field the protocol does not declare; and one implementation that reads, builds
+field the protocol does not declare; a reverb that clips or rings inside its
+loop, muddies a 40\,Hz note (less than 12\,dB below a 1\,kHz one) or leaves
+subnormal floats in its state; and one implementation that reads, builds
 or links another's directory or needs another language's toolchain
 (\emph{Implementations stand alone}).
 
@@ -364,6 +391,13 @@ implementation avoids each.
   not reach out}.
   \item[Reverb stutters at 64 frames] The reverb misses deadlines at 64-frame
   buffers. Breaks \emph{No missed audio deadline}.
+  \item[The reverb is two echoes] Upstream's reverb is two feedback echoes (29
+  and 41\,ms, two of its four taps) that write into one shared buffer, clamped
+  to $[-1,1]$ inside the loop, with no damping or diffusion: it rings at about
+  34 and 24\,Hz and their harmonics and distorts loud tails. Breaks \emph{The
+  reverb never distorts or rings}, \emph{The reverb never muddies the low end}
+  and \emph{The reverb is dense and wide}. The specification replaces it
+  (Section~\ref{sec:reverb}).
   \item[A cabinet change allocates in the callback] Changing the cabinet model
   rebuilds its impulse response and resizes its history inside the output
   callback (\texttt{CabinetProcessor::set\_model}); the allocator may take a
@@ -399,8 +433,9 @@ Recording does not reuse the live path: it has its own mix loop at a fixed
 44.1\,kHz without the sympathetic strings, NAM, microphone or \cmd{vol},
 peak-normalizes to 0.9 and assumes 0.25\,s subdivisions when spawning voices.
 NAM rows are saved (\texttt{N|}) although the upstream documents call NAM live
-state. The upstream \path{docs/session-v3.md} lists only B, S, P, J, T. The
-reverb uses two of its four taps. The README writes Saba's endpoint as 80/64
+state. The upstream \path{docs/session-v3.md} lists only B, S, P, J, T. Upstream's
+reverb, which uses two of its four taps, is not followed: the specification
+replaces it (Section~\ref{sec:reverb}). The README writes Saba's endpoint as 80/64
 where the code says 5/4, and the commit that added \cmd{--bufsize} says its
 default is 256 where the code uses 64. Where code and documents disagree the requirements follow the
 code, so every implementation behaves as the upstream code does.
