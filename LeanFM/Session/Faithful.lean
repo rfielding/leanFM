@@ -236,7 +236,7 @@ def rules (t : Typestates) : List (String × Formula) :=
   let ns := names t
   ("start", ns[t.final[0]!]!) :: (List.range t.count).map fun c =>
     let nexts := (t.next[c]!).toList.map (ns[·]!)
-    (s!"typestate {c} ({labelText (t.labelOf c)})", .ag (.implies ns[c]! (.and (nexts.map .ex ++ [.ax (.or nexts)]))))
+    (s!"typestate {c}: {labelText (t.labelOf c)}", .ag (.implies ns[c]! (.and (nexts.map .ex ++ [.ax (.or nexts)]))))
 
 /-- The checker model of a draft (the logic tools' inline task form). -/
 def modelOfDraft (draft : Json) (b : Bounds := LeanFM.Session.sessionBounds) : Except String LGraph := do

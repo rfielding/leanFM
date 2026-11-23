@@ -1,0 +1,175 @@
+\chapter{Global Types}\label{ch:global}
+
+A LeanFM protocol is a \emph{global type}: one description of a conversation among
+named roles, written from no participant's point of view. This chapter introduces the
+language through two protocols that recur throughout the book. Every later chapter
+reduces what is written here to CTL, so each construct is introduced with the question
+it raises for the reduction.
+
+\section{A request with two answers}
+
+The smallest interesting protocol is a request with more than one possible answer.
+A browser asks for an image; the server returns it or says it is not there.
+
+\input{generated/ctl-images.tex}
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Interaction diagram of Images. Message from Browser to Server: GetImage. Then one of two alternatives. Message from Server to Browser: Image status 200. Or message from Server to Browser: NotFound status 404.}{\ThemedDiagram{width=.58\textwidth}{ctl-images}}
+\caption{The Images protocol as LeanFM draws it (\texttt{session\_diagram}).}
+\label{fig:images}
+\end{figure}
+
+Read it line by line.
+
+\begin{itemize}
+\item \texttt{protocol Images (Browser, Server)} declares the roles. A role is a
+  part in the conversation, not a machine; one process may play several roles, and
+  many processes may play the same role in different sessions.
+\item \texttt{g: GetImage from Browser to Server} is a \emph{message}: a label, a
+  sender and a receiver. The label names a structure declared above it, so the message
+  carries an \texttt{id}. The prefix \texttt{g:} names this occurrence so later
+  messages can refer to it.
+\item \texttt{route "GET /images/\{id\}"} and \texttt{status 200} say how the message
+  travels when the conversation is HTTP. They do not change the order of the
+  conversation; they change the interface LeanFM generates.
+\item \texttt{cause g} says the answer answers \emph{that} request. A cause is an
+  edge between two events of one run, not between two labels; it is what lets a log
+  with many interleaved requests be read back as separate conversations.
+\item \texttt{choice \{ \ldots\ \} or \{ \ldots\ \}} offers alternatives. The role that
+  sends the first message of a branch makes the choice, here the server.
+\item \texttt{where i.id = g.id} is a condition on the data: the image returned is the
+  one asked for. Chapter~\ref{ch:where} gives where clauses their own chapter.
+\end{itemize}
+
+The question this protocol raises for the reduction is the one in the cover formula:
+after the request, \emph{both} answers must be possible, \emph{one} of them must come
+next, and \emph{nothing else} may. Chapter~\ref{ch:faithful} turns exactly that sentence
+into CTL.
+
+\section{Three roles, nested choices, a secret}
+
+A purchase involves a client, a shop and a bank, and it can go wrong in two places.
+
+\input{generated/ctl-placeorder.tex}
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Interaction diagram of PlaceOrder. Message from Client to Shop: CreateOrder. Then either: message from Shop to Client: Quote; message from Client to Shop: Pay; message from Shop to Bank: Charge; then either message from Bank to Shop: Charged and message from Shop to Client: Receipt or message from Bank to Shop: Declined and message from Shop to Client: PaymentDeclined. Or: message from Shop to Client: SoldOut.}{\ThemedDiagram{width=.8\textwidth}{ctl-placeorder}}
+\caption{PlaceOrder: a choice nested inside a choice, and a payment whose amount must match the quote.}
+\label{fig:placeorder}
+\end{figure}
+
+Three things are new. A choice can sit inside a branch of another choice. A field
+whose name ends in \texttt{\_secr} is a \emph{secret}: LeanFM can ask where secrets
+travel (the \texttt{secret} atom of Chapter~\ref{ch:checker}), and a project decides
+whether to forbid, for example, that a card number ever reaches a log. And the where
+clause \texttt{p.amount = q.price} relates two messages of the same run: what the
+client pays is what the shop quoted.
+
+\section{The constructs}
+
+The rest of the language adds repetition, concurrency and composition. Each construct
+appears here with the smallest protocol that shows it; Chapter~\ref{ch:constructs}
+gives each one's reduction and what it costs.
+
+\paragraph{Loops.} \texttt{rec L \{ \ldots\ continue L; \}} repeats a body.
+A loop that may end offers a branch without \texttt{continue}.
+
+\input{generated/ctl-construct-loop.tex}
+
+\paragraph{Bounded loops.} \texttt{rec Try at most 3 \{ \ldots\ \} otherwise \{ \ldots\ \}}
+repeats at most three times and then takes the \texttt{otherwise} block. LeanFM unrolls
+it as soon as the text is read, so nothing later sees a counter; the counter becomes
+three copies of the body. That makes bounded loops cheap to write and, as
+Chapter~\ref{ch:constructs} shows, expensive to name in CTL.
+
+\input{generated/ctl-construct-bounded-loop.tex}
+
+\paragraph{Parallel composition.} \texttt{par \{ \ldots\ \} and \{ \ldots\ \}} runs
+branches whose messages interleave in any order. Each branch is a conversation of its
+own; the protocol says nothing about how they interleave, so every interleaving is
+allowed.
+
+\input{generated/ctl-construct-parallel.tex}
+
+\paragraph{Sessions.} \texttt{sessions \{ \ldots\ \}} marks a block that may run any
+number of times beside the rest, each run a session of its own: a lobby where any
+number of games are going on at once.
+
+\section{Including one protocol in another}\label{sec:include}
+
+\texttt{include} is how a protocol is assembled from smaller ones. It means exactly
+\emph{paste the other protocol's body here}, after two substitutions: its roles are
+renamed to roles of the includer, and the fields it was promised are renamed to fields
+the includer already has. Here a site lets a customer log in, place an order, and log
+out; placing an order is a protocol of its own.
+
+\input{generated/ctl-include.tex}
+
+Read the two new pieces of syntax as a function definition and a call.
+\begin{itemize}
+\item \texttt{protocol Order (Client, Shop) given token} is the definition.
+  \texttt{Client} and \texttt{Shop} are its parameters for roles. \texttt{given token}
+  is a parameter for data: Order does not create the session id it runs under; whoever
+  includes it must hand one in, and Order calls it \texttt{token}.
+\item \texttt{include Order Customer Store with token = sid} is the call. The roles are
+  passed by position, so Order's \texttt{Client} is played by \texttt{Customer} and its
+  \texttt{Shop} by \texttt{Store}. \texttt{with token = sid} passes the data: the field
+  Order calls \texttt{token} is the \texttt{sid} that \texttt{LoggedIn} minted. When
+  the names already agree, \texttt{with sid} is short for \texttt{with sid = sid}.
+\end{itemize}
+
+So Site is the same protocol as this one, written out by hand, in which the order's
+messages carry the field under the site's name \texttt{sid} instead of \texttt{token}:
+
+\input{generated/ctl-include-pasted.tex}
+
+That is not an informal claim. LeanFM decides it by comparing the two (the faithfulness
+check of Chapter~\ref{ch:faithful}):
+
+\input{generated/ctl-include-faithful.tex}
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Interaction diagram of Site. Login from Customer to Store and LoggedIn back. Then a box labelled Order with token bound to sid containing Create from Customer to Store and Made back. Then Logout from Customer to Store and Bye back.}{\ThemedDiagram{width=.5\textwidth}{ctl-include}}
+\caption{Site as LeanFM draws it: the included protocol is a box, labelled with how the id is passed in.}
+\label{fig:include}
+\end{figure}
+
+Three things follow. Nothing in the reduction to CTL needs to know about
+\texttt{include}: by the time a state graph is built, the included body is in place.
+LeanFM checks the call like a type checker checks a function call: an included
+protocol that is \texttt{given} a field must be passed it, the field passed must be in
+scope and have the same type, and a field may be passed only once. And inside
+\texttt{sessions \{ \ldots\ \}}, \texttt{include} is how one id becomes many sessions:
+\texttt{sessions \{ include Order Customer Store with token = sid; \}} lets one login
+place any number of orders, each its own session, each told apart by the
+\texttt{orderId} its \texttt{Made} mints. GoServer's lobby includes its game this way,
+and the game includes a seat (Chapter~\ref{ch:where}).
+
+\section{The rest of the language}
+
+\paragraph{Events.} \texttt{Finished at Server} is an event: something one role does
+that no other role receives. Events order the conversation like messages do and
+appear in CTL as \texttt{after(Finished)}.
+
+\paragraph{What else a protocol may say.} A choice may name what drives it
+(\texttt{choice at Server using declared("IsBusy")}) and give branch probabilities;
+a message may say how long it takes (\texttt{after 50 ms}); a \texttt{require} block
+may promise deadlines and fractions over observation periods; a \texttt{system} block
+may run several sessions over shared, serial servers. These are LeanFM's extensions
+for performance and deployment. They change the questions one can ask, not the
+conversation's order, and this book, which is about order, sets them aside.
+
+\section{A protocol is a set of runs}
+
+Formally, a global type denotes the set of its \emph{runs}: the finite and infinite
+sequences of messages and events it allows, each with the causes and field values
+that make it a run of this protocol. The semantics LeanFM implements is operational.
+A state is the part of the protocol still to be played, its \emph{residual}, together
+with the ids already bound; a step plays one message the residual allows next; the
+session may end where the residual can be empty. Chapter~\ref{ch:checker} builds the
+graph of these states and makes it the model CTL is evaluated over. Before that,
+Chapter~\ref{ch:projection} asks whether the roles, each seeing only its own messages,
+can play a protocol at all.

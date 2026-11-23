@@ -1,0 +1,117 @@
+\chapter{The Checker Model}\label{ch:checker}
+
+To reduce a protocol to CTL we need the structure CTL is evaluated over. This chapter
+defines it precisely: the protocol's state graph, the Kripke structure built on it, the
+atoms, and the semantics of the operators. Everything in the next three chapters is
+stated over these definitions, and LeanFM implements them as written
+(\texttt{Global.stateGraph} and \texttt{Logic.buildModel}).
+
+\section{The state graph}
+
+\begin{definition}[State graph]\label{def:stategraph}
+The \emph{state graph} of a protocol $P$ is $G_P = (S, s_0, \Delta, F)$ where
+\begin{itemize}
+\item a state $s \in S$ is a residual of $P$ (the part still to be played, with loops
+  collapsed) together with the set of ids it has bound;
+\item $s_0$ is $P$ itself with nothing bound;
+\item $(s, \ell, s') \in \Delta$ when $\ell$ is a message or event the residual of $s$
+  allows next and $s'$ is the residual after it;
+\item $F \subseteq S$ holds the states where the session may end (the residual can be
+  empty).
+\end{itemize}
+\end{definition}
+
+States are named by their residual and the \emph{set} of names bound, not the order in
+which they were bound. Two interleavings that reach the same residual with the same
+names are the same state; without this, interleaved branches would make every
+protocol with \texttt{par} look larger than it is. Nested sessions are played once in
+place. The graph is built breadth first and is bounded (20{,}000 states).
+
+\section{The Kripke structure}
+
+CTL is evaluated over states that carry atomic propositions. A message is a step, not
+a state, so the structure LeanFM uses remembers, in each node, the step that reached it.
+
+\begin{definition}[Checker model]\label{def:model}
+The \emph{checker model} of $P$ is $M_P = (N, n_0, \to, L)$ where
+\begin{itemize}
+\item $N$ is the set of pairs $(s, m)$, $s \in S$ and $m$ the label of the step that
+  reached $s$ (none at the start), reachable from $n_0 = (s_0, \bot)$;
+\item a node whose state is in $F$, or whose state has no step, has exactly one
+  successor, itself: it \emph{stutters}; every other node $(s, m)$ has the successors
+  $(s', m')$ with $(s, m', s') \in \Delta$;
+\item $L(s, m) = (m, [s \in F])$: the node's last message and whether the session may
+  end there.
+\end{itemize}
+\end{definition}
+
+The stutter makes $\to$ total, so every path is infinite and $\mathsf{AF}$ and
+$\mathsf{AG}$ mean what they mean in textbook CTL \citep{clarke1986automatic}. A node
+reached by a message is labelled by that message, and a node is identified by its
+state \emph{and} its label, so the model can be larger than the state graph: one state
+reached by two different messages is two nodes.
+
+\begin{definition}[Atoms]\label{def:atoms}
+At a node $n$ with $L(n) = (m, e)$:
+$\mathsf{after}(\ell)$ holds iff $m = \ell$; $\mathsf{end}$ holds iff $e$;
+$\mathsf{secret}(A, B, f)$ holds iff the step that reached $n$ carried a field ending in
+\texttt{\_secr} (named $f$ when $f$ is given) from $A$ to $B$ (when they are given).
+\end{definition}
+
+LeanFM writes $\mathsf{end}$ as \texttt{terminal}. The atoms say only what the last step
+was and whether the session may stop. Everything else, in particular which typestate a
+node is in, must be expressed with temporal operators, and that is the subject of
+Chapter~\ref{ch:faithful}.
+
+\section{CTL}
+
+\begin{definition}[CTL]\label{def:ctl}
+Formulas are
+$\varphi ::= \top \mid \bot \mid a \mid \neg\varphi \mid \varphi\wedge\varphi \mid
+\varphi\vee\varphi \mid \mathsf{EX}\,\varphi \mid \mathsf{AX}\,\varphi \mid
+\mathsf{E}[\varphi\,\mathsf{U}\,\varphi] \mid \mathsf{A}[\varphi\,\mathsf{U}\,\varphi]
+\mid \mathsf{EG}\,\varphi$
+over atoms $a$. At a node $n$ of a total model:
+$n \models \mathsf{EX}\,\varphi$ iff some successor satisfies $\varphi$;
+$n \models \mathsf{AX}\,\varphi$ iff every successor does;
+$n \models \mathsf{E}[\varphi\,\mathsf{U}\,\psi]$ iff some path from $n$ reaches a
+$\psi$-node through $\varphi$-nodes;
+$n \models \mathsf{A}[\varphi\,\mathsf{U}\,\psi]$ iff every path does;
+$n \models \mathsf{EG}\,\varphi$ iff some path stays in $\varphi$ forever.
+A model satisfies $\varphi$ when its start node does.
+\end{definition}
+
+The rest are abbreviations, and LeanFM rewrites them into the core before it evaluates:
+$\mathsf{EF}\,\varphi = \mathsf{E}[\top\,\mathsf{U}\,\varphi]$,
+$\mathsf{AF}\,\varphi = \mathsf{A}[\top\,\mathsf{U}\,\varphi]$,
+$\mathsf{AG}\,\varphi = \neg\mathsf{EF}\,\neg\varphi$,
+$\mathsf{never}\,\varphi = \mathsf{AG}\,\neg\varphi$,
+$\varphi\rightarrow\psi = \neg\varphi\vee\psi$,
+$\mathsf{E}[\varphi\,\mathsf{W}\,\psi] = \mathsf{E}[\varphi\,\mathsf{U}\,\psi]\vee\mathsf{EG}\,\varphi$,
+$\mathsf{A}[\varphi\,\mathsf{W}\,\psi] = \neg\mathsf{E}[\neg\psi\,\mathsf{U}\,(\neg\varphi\wedge\neg\psi)]$,
+and the non-vacuous implication
+$\varphi \Rightarrow \psi = \mathsf{EF}\,\varphi \wedge \mathsf{AG}(\varphi\rightarrow\psi)$.
+
+\section{Bisimulation}
+
+The notion of sameness CTL respects is bisimulation \citep{hennessy1985algebraic}.
+
+\begin{definition}[Bisimulation]\label{def:bisim}
+Let $M = (N, n_0, \to, L)$ and $M' = (N', n_0', \to', L')$ be total labelled graphs. A
+relation $B \subseteq N \times N'$ is a \emph{bisimulation} when every $(n, n') \in B$
+has $L(n) = L'(n')$, every step $n \to m$ is matched by some $n' \to' m'$ with
+$(m, m') \in B$, and every step $n' \to' m'$ is matched by some $n \to m$ with
+$(m, m') \in B$. $M$ and $M'$ are \emph{bisimilar}, $M \sim M'$, when some bisimulation
+contains $(n_0, n_0')$. Two nodes of one model are bisimilar, $n \sim m$, when some
+bisimulation of the model with itself contains $(n, m)$.
+\end{definition}
+
+\begin{theorem}[\citet{browne1988characterizing}]\label{thm:bcg}
+Bisimilar nodes satisfy the same CTL formulas. Conversely, for finite models, two nodes
+that satisfy the same CTL formulas are bisimilar.
+\end{theorem}
+
+The first half is a routine induction on formulas. Its consequence is the ceiling for
+everything in this book: no set of CTL formulas can tell apart two systems that are
+bisimilar. The best a translation into CTL can do is characterise a protocol
+\emph{up to} bisimulation. The next chapter does exactly that.

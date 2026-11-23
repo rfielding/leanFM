@@ -1,0 +1,20 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call check_ctl
+{"task":
+ {"transitions":
+  [{"src": "s0", "message": "a", "dst": "s1"},
+   {"src": "s1", "message": "b", "dst": "s0"},
+   {"src": "s1", "message": "c", "dst": "s2"}],
+  "terminals": ["s2"],
+  "states": ["s0", "s1", "s2"],
+  "initial": "s0",
+  "id": "loopy"},
+ "formula": "(and #1=(EF (after c)) (AG (implies (after a) #1#)))"}
+
+answer (excerpt)
+{"verdict": "proved",
+ "reading":
+ "(it is possible that eventually c was just delivered) and (on every path, always (if a was just delivered then (it is possible that eventually c was j ...",
+ "reachableNodes": 4,
+ "notation": "EF c ∧ AG (a → EF c)"}
+\end{lstlisting}

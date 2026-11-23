@@ -102,7 +102,7 @@ selected event as JSON.*
 | Security | `check_protocol` (attacks on a security protocol), `check_reassembly` (stream-reassembly evasions) |
 | Projects | `project_view`, `requirements_interrogation`, `code_generation_prompt`, `validate_generated_artifacts`, `classify_requirement`, `server_logs` |
 
-The full list, with every argument, is generated into the book's appendix *The MCP Tools* from the
+The full list, with every argument, is generated into the book's chapter *Asking LeanFM* from the
 server's own tool list.
 
 ---
@@ -165,41 +165,37 @@ orders in turn: a thread runs through many sessions, and a session through many 
 
 ## The book in brief
 
-The [book](book/main.pdf) (128 pages; [dark](book/main-dark.pdf)) is the record of what LeanFM is.
-Every listing, diagram and verdict in Part I comes from LeanFM, through the same functions its tools
-call.
+The [book](book/main.pdf) (50 pages; [dark](book/main-dark.pdf)), *Session Types as CTL*, shows
+that a multiparty session type is exactly a set of CTL formulas, one per state the conversation can
+be in, and proves it. Every listing, typestate graph, rule, table and MCP answer in it is generated
+by `CtlBookExample.lean` through the same functions LeanFM's tools call.
 
-**Part I, the language.**
-- *The Protocol Is the Program*: who writes it (mostly an LLM, checked by LeanFM), a protocol, its
-  message types and statements, and the rule that only what crosses a boundary is specified. The
-  language starts from multiparty session types and adds stated assumptions, time and value,
-  promises, temporal questions and attackers.
-- *What a Protocol Means*: the two rules every protocol keeps; projection, what each role owes;
-  calls.
-- *Assumptions and Promises*: probabilities on choices nobody else can see, time, amounts and
-  rates, and promises judged over observation periods.
-- *Questions You Ask a Protocol*: CTL operators read as necessarily and possibly, answered with
-  paths; what an answer costs; properties in the Lean file; who can know what; whether two versions
-  work together.
-- *An Execution Is an Event Stream*: events and their envelope, conformance, actors, links
-  (`prev`, `cause`) and clocks, instances, versions, state in the stream, promises on a stream.
+**Part I, the protocol language.**
+- *Global Types*: roles, messages, causes, choices, loops, bounded loops, `par`, `sessions` and
+  `include`, on a request with two answers (`GET /images`: 200 or 404) and a three-party purchase.
+- *Projection and Well-Formedness*: each role's local type, and the two ways a protocol is
+  unplayable (a race, a role that cannot tell).
+- *Where Clauses, Identity and Logs*: conditions on data, sessions derived from causes and marks,
+  GoServer's games and seats as sessions that fork and join, and where clauses as the wire form of
+  `prev` and `cause`.
 
-**Part II, what a protocol generates.** Diagrams, the code each role is written on, interfaces
-(protobuf, OpenAPI), requirements and an implementation mapping reviewed in git, and building
-software from a protocol; then *feature completion as positive and negative proof*: each feature as
-an always property and its forbidden behaviours, stability before security, and the completion
-ledger.
+**Part II, from session types to CTL.**
+- *The Checker Model*: the state graph, the Kripke structure, the atoms, CTL and bisimulation.
+- *Faithful CTL*: typestates as bisimulation classes, a characteristic formula naming each, and the
+  theorem: a system satisfies the faithful rules if and only if it is bisimilar to the protocol,
+  which no CTL can improve on.
+- *Construct by Construct*: what each construct costs in typestates and lookahead; hidden counters;
+  `par` as a product; sessions decomposing it; deterministic typestates, `prev`, and the linear
+  walk, with its proof.
+- *Deciding It*: faithfulness as one bisimulation check, CTL evaluated over a hash-consed DAG in
+  O(distinct subformulas x model), formulas that share, and the protocols in this repository.
 
-**Part III, worked examples.**
-- *The Bakery*: declared and measured rates.
-- *TFTP and the Sorcerer's Apprentice*: declared channel physics, and why liveness needs fairness.
-- *Signing In over HTTP*: OAuth, a forged callback, and what it generates.
-- *A Legal Example*: lawful, right, known, required.
-- *Protocol Exercises*: roles, attackers and knowledge, ending with Needham–Schroeder, checked.
-
-**Appendices.** The MCP tools and how a consultation travels; LeanFM's own web-server protocol;
-and the bootstrap contract every new project follows (one exclusive project root, three layers
-reviewed in git).
+**Part III, the LeanFM MCP server.**
+- *Asking LeanFM*: connecting Claude Desktop, the tools, and real request/answer pairs for
+  `session_check`, `session_ctl` (formulas, suggestions, faithful rules, faithfulness),
+  `session_next`, `check_ctl` with shared formulas, `session_conform` and `session_openapi`.
+- *Case Studies*: GoServer, IslandUploads (where the hidden state is, and how `prev` removes it),
+  and LeanFM's own protocol.
 
 ## Sessions, threads and CTL
 

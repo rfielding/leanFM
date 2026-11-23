@@ -1,0 +1,13 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Poll (A, B) {
+  rec L {
+    choice {
+      q: Ask from A to B;
+      Answer from B to A cause q;
+      continue L;
+    } or {
+      Bye from A to B;
+    }
+  }
+}
+\end{lstlisting}

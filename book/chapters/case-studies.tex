@@ -1,0 +1,92 @@
+\chapter{Case Studies}\label{ch:cases}
+
+Three systems in this repository show the reduction at work on protocols nobody wrote
+to be small: a multiplayer game server, a file store replicated across islands that may
+be cut off from each other for a day, and LeanFM's own MCP protocol. The measurements
+not generated for this book come from the experiments in
+\texttt{reports/ctl-translation/faithful}, which carry their scripts.
+
+\section{GoServer: sessions that fork and join}
+
+GoServer's protocol is the composition Chapter~\ref{ch:where} described: sign-in mints a
+person's session; listing the room's games is polled beside the lobby; a game runs as a
+session of its own; a seat belongs to both a person and a game and runs four kinds of
+request side by side.
+
+\paragraph{Size comes from products.} As one model, GoServer has 39{,}497 checker nodes
+and 1{,}604 typestates, with lookahead $2$ (Table~\ref{tab:corpus}). Almost all of it is
+interleaving: the polling branch beside the lobby, and the seat's four child sessions.
+Checked one session at a time (Proposition~\ref{prop:sessions}), every GoServer protocol
+has lookahead $0$ except the seat, which keeps its own \texttt{par}: 941 nodes, 412
+typestates, lookahead $1$.
+
+\paragraph{A real log.} Two people signing in, one creating a game, both taking seats
+and moving (Chapter~\ref{ch:where}): 24 events, no session ids, seven sessions derived,
+the game a child of its creator's session, every seat and move a join of a person and
+the game. The log conforms.
+
+\paragraph{Faithfulness.} GoServer's typestates are not deterministic, so LeanFM decides
+faithfulness by refinement: the protocol against itself in 1.42\,s through the server,
+and a copy whose refused sign-in falls through to the room caught in the same time, with
+the path to the difference (Chapter~\ref{ch:deciding}).
+
+\section{IslandUploads: where the hidden state is}
+
+IslandUploads stores files on islands that keep accepting writes while partitioned and
+replicate once healed. Its ten request--response protocols (upload, update, feed,
+download, the replication pulls, derived jobs, a forwarding door and a websocket) are
+small: nine have lookahead $0$ with three to nine typestates each, and the websocket,
+whose two directions are independent, has 38 typestates and lookahead $1$. Mutation
+over their graphs caught every one of 792 changed copies and flagged none of 400
+bisimilar ones.
+
+Its architecture models are different. They describe the whole system: two islands, a
+partition that starts and heals, commits, pulls across the link, feed order, import
+lanes, conflict policy and retries. Here the lookahead reaches $5$ and $6$, and the
+rules, written as trees, total about $6\times 10^9$ nodes for the unordered
+replication model, against $14{,}757$ distinct subformulas. The reason is the one
+Chapter~\ref{ch:constructs} found in bounded loops: the messages do not say what they
+carry. After \texttt{PullAtoB}, which writes island B now holds depends on everything
+before it, and a formula can only recover that by looking ahead.
+
+The experiments measured each remedy on the cursor-based replication design
+(typestates as LeanFM computes them, rules as Definition~\ref{def:rules} writes them):
+
+\begin{center}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+What each message carries & Lookahead & Rules as trees \\
+\midrule
+labels only, as written & 5 & $7.1\times 10^{8}$ nodes \\
+the timeout also names its direction & 5 & $1.4\times 10^{9}$ nodes \\
+each pull also names the records it delivered & 2 & $1.7\times 10^{6}$ nodes \\
+a prev pointer, so each typestate is read off the chain & 0 & $59{,}502$ nodes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Payload fields shorten the lookahead but cannot remove it: one message on a
+shared timeline cannot say what the other island has done. A prev pointer removes it:
+every rule becomes the one-step shape, total size is linear in the model's steps, and
+faithfulness is decided by the walk of Theorem~\ref{thm:walk}, which on GoServer's graph
+with prev labels took 17\,ms in the experiments. That is the design lesson of this book
+in one table: \emph{a protocol whose messages carry their place in it is cheap to check
+exactly.}
+
+\section{LeanFM's own protocol}
+
+LeanFM is developed with LeanFM, and its MCP protocol (\texttt{LeanFM.leanfm}: an agent, its host, the view, the
+server and the disk; initialising, listing tools, calling a session tool and drawing its
+answer, paging through project files, and closing) is the first thing
+its own tools are tested on. It has 101 checker nodes, 33 typestates and lookahead $1$,
+and the faithfulness check agrees with itself:
+
+\input{generated/ctl-leanfm-self.tex}
+
+Its tests check the whole chain of this book on it. Every one of its 34 faithful rules
+is proved by \texttt{session\_ctl} over the protocol. Over more than a hundred broken
+copies of its graph (each step dropped, and steps sent to other states, relabelled and
+added) the walk says ``faithful'' exactly when the CTL checker proves every rule, and the
+walk and the refinement agree on every copy. That is Theorem~\ref{thm:faithful},
+Theorem~\ref{thm:walk} and Proposition~\ref{prop:refine} checked against each other, on
+the protocol of the tool that checks them.

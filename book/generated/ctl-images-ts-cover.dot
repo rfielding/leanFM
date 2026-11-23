@@ -1,0 +1,16 @@
+digraph T {
+  rankdir=LR; bgcolor="#1e3a5e"; nodesep=0.25; ranksep=0.45; margin=0.1;
+  node [shape=box, style="rounded,filled", color="#e2b94b", fillcolor="#1e3a5e", fontcolor="#e2b94b", fontname="Helvetica", fontsize=11, penwidth=1.3, height=0.32];
+  edge [color="#e2b94b", arrowsize=0.7, penwidth=1.2];
+  s [shape=point, width=0.08, color="#e2b94b"];
+  s -> t0;
+  t0 [label="start"];
+  t1 [label="GetImage"];
+  t2 [label="Image", peripheries=2];
+  t3 [label="NotFound", peripheries=2];
+  t0 -> t1;
+  t1 -> t2;
+  t1 -> t3;
+  t2 -> t2;
+  t3 -> t3;
+}

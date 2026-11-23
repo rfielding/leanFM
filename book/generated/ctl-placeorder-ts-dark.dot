@@ -1,0 +1,29 @@
+digraph T {
+  rankdir=LR; bgcolor="#121214"; nodesep=0.25; ranksep=0.45; margin=0.1;
+  node [shape=box, style="rounded,filled", color="#e8e8eb", fillcolor="#22242a", fontcolor="#e8e8eb", fontname="Helvetica", fontsize=11, penwidth=1.3, height=0.32];
+  edge [color="#e8e8eb", arrowsize=0.7, penwidth=1.2];
+  s [shape=point, width=0.08, color="#e8e8eb"];
+  s -> t0;
+  t0 [label="start"];
+  t1 [label="CreateOrder"];
+  t2 [label="Quote"];
+  t3 [label="SoldOut", peripheries=2];
+  t4 [label="Pay"];
+  t5 [label="Charge"];
+  t6 [label="Charged"];
+  t7 [label="Declined"];
+  t8 [label="Receipt", peripheries=2];
+  t9 [label="PaymentDeclined", peripheries=2];
+  t0 -> t1;
+  t1 -> t2;
+  t1 -> t3;
+  t2 -> t4;
+  t3 -> t3;
+  t4 -> t5;
+  t5 -> t6;
+  t5 -> t7;
+  t6 -> t8;
+  t7 -> t9;
+  t8 -> t8;
+  t9 -> t9;
+}

@@ -1,0 +1,43 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+-- Client
+send CreateOrder to Shop;
+offer {
+  receive Quote from Shop;
+  send Pay to Shop;
+  offer {
+    receive Receipt from Shop;
+  } or {
+    receive PaymentDeclined from Shop;
+  }
+} or {
+  receive SoldOut from Shop;
+}
+
+-- Shop
+receive CreateOrder from Client;
+select {
+  send Quote to Client;
+  receive Pay from Client;
+  send Charge to Bank;
+  offer {
+    receive Charged from Bank;
+    send Receipt to Client;
+  } or {
+    receive Declined from Bank;
+    send PaymentDeclined to Client;
+  }
+} or {
+  send SoldOut to Client;
+}
+
+-- Bank
+offer {
+  receive Charge from Shop;
+  select {
+    send Charged to Shop;
+  } or {
+    send Declined to Shop;
+  }
+} or {
+}
+\end{lstlisting}

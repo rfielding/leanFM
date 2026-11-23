@@ -1,0 +1,110 @@
+\chapter{Where Clauses, Identity and Logs}\label{ch:where}
+
+A session type is abstract: it says \emph{GetImage, then Image or NotFound}. A
+running system sends bytes that carry ids, amounts and tokens. Where clauses are the
+bridge. They state, in the protocol, the relations between field values that make a
+sequence of messages one conversation and not a coincidence of labels. This chapter
+shows the three jobs they do (data conditions, identity and correlation) and then the
+division of labour the rest of the book relies on: CTL decides the order of messages,
+and where clauses decide the values that implement that order.
+
+\section{Conditions on data}
+
+A where clause on a message is a condition over that message's fields and the fields
+of earlier messages it names. PlaceOrder requires \texttt{p.amount = q.price}. Given a
+log, \texttt{session\_conform} replays it against the protocol and evaluates every
+where clause on the values the log carries. Here the client pays 12 against a quote
+of 10:
+
+\input{generated/ctl-where-log.tex}
+\input{generated/ctl-where.tex}
+
+The order of the three messages is one the protocol allows. The data is not. A
+where clause is therefore a second, independent check on a run: the first asks whether
+the labels form a path of the protocol, the second whether the values along that path
+satisfy its conditions.
+
+\begin{definition}[Conformance]\label{def:conform}
+A log $e_1 e_2 \ldots e_k$ \emph{conforms} to a protocol when (control) the sequence of
+its labels, with their causes, is a path from the start of the protocol's state graph,
+and (data) for each $e_i$ every where clause on its message holds of the field values
+of $e_i$ and of the earlier events its clause names, as the causes and bound ids
+identify them.
+\end{definition}
+
+\section{Identity: telling sessions apart}
+
+A real log interleaves many sessions, and most logs do not say which session an event
+belongs to. LeanFM derives sessions from the protocol: a \texttt{cause} joins an answer
+to its request, and fields the protocol marks as identities join the events that carry
+the same value. Two image requests interleaved, with no session ids at all:
+
+\input{generated/ctl-interleaved-log.tex}
+\input{generated/ctl-interleaved.tex}
+
+The causes are enough. In general the derivation is a union-find over the log: each
+cause joins two events, each declared key joins the events that carry its value, and
+each resulting group is checked as its own run. Two events are never joined because
+their payloads happen to be equal; only the protocol's marks join them.
+
+\paragraph{Marks.} A field's type says what it does for identity. A field of type
+\texttt{Fresh String} mints a new session id; \texttt{Link String} names an existing
+one; \texttt{Header}, \texttt{PathParam} and \texttt{QueryParam} say where it travels
+on the wire. A protocol that is \texttt{given sessionId} runs inside a session minted
+elsewhere; including it \texttt{with sessionId} binds that field to the caller's.
+
+\section{Sessions that fork and join}
+
+GoServer is a multiplayer Go server in this repository. A person signs in, which mints
+a session; a game runs as a session of its own; a seat at a game belongs to both the
+person and the game.
+
+\input{generated/ctl-goserver-gamep.tex}
+\input{generated/ctl-goserver-seatp.tex}
+
+The game is \texttt{given sessionId}, the person's, so it is a child of that person's
+session. A seat is \texttt{given sessionId gameId}: it names two sessions that are not
+parent and child, so it is a \emph{join}. LeanFM reads that shape from the text alone
+and checks a real log of two people playing against it:
+
+\input{generated/ctl-goserver-conform.tex}
+
+The log carries no session ids. LeanFM found the two people's sessions, the game as a
+child of the first person's session, and each seat and move as a join of a person and
+the game. Three sessions are still running when the log ends, which is why the call
+passes \texttt{allowIncomplete}.
+
+\section{Where clauses implement prev and cause}
+
+In a diagram, a message's place in the conversation is drawn: an arrow below another
+arrow. On the wire nothing is drawn. Each message has to carry enough to say where it
+belongs, and that is what where clauses state:
+
+\begin{itemize}
+\item \texttt{cause g} with \texttt{where i.id = g.id} says the image answers
+  \emph{this} request. On the wire the answer repeats the request's identity
+  (a request id, a stream id, the tuple of a TCP connection).
+\item A message's \emph{prev} is the message before it in the same thread. A message
+  that carries a pointer to its predecessor carries its own place in the protocol: its
+  typestate is its predecessor's typestate after one step.
+\end{itemize}
+
+No where clause needs to mention prev explicitly. The message itself carries the
+pointer, and the log reader follows it. Chapter~\ref{ch:constructs} shows why this
+matters for checking: with prev, a typestate never has to be inferred from what may
+happen later; it is read off the chain. That one property turns the cost of checking
+from quadratic to linear.
+
+\section{The division of labour}
+
+Part~\ref{part:ctl} reduces the protocol's \emph{control}, the order and branching of
+labels, to CTL. Values are abstracted: the model knows that an Image follows a
+GetImage, not which image. Where clauses carry the values. The two meet in
+Definition~\ref{def:conform}: a run conforms when its labels form a path of the model
+the CTL rules characterise, and its values satisfy the where clauses along that path.
+
+A where clause that selects a branch, such as \texttt{where o.total >= 100} on one
+branch and \texttt{o.total < 100} on the other, is drawn as that branch's guard. In the
+CTL of the control it appears as an ordinary choice: both branches are possible as far
+as order goes, and the guard decides which one a given run takes. The guard is checked
+on the values; the order is checked by CTL.

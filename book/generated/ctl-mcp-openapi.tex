@@ -1,0 +1,32 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+paths:
+  "/images/{id}":
+    get:
+      operationId: "GetImage"
+      parameters:
+        - in: "query"
+          name: "id"
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/Image"
+          description: "Image"
+        "404":
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/NotFound"
+          description: "NotFound"
+      summary: "GetImage from Browser"
+components:
+  schemas:
+    GetImage:
+      additionalProperties: false
+      properties:
+        id:
+\end{lstlisting}

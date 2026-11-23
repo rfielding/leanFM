@@ -1,0 +1,16 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+start
+  ¬(GetImage ∨ Image ∨ NotFound) ∧ ¬terminal
+
+typestate 0: (start)
+  AG ((¬(GetImage ∨ Image ∨ NotFound) ∧ ¬terminal) → (EX (GetImage ∧ ¬terminal) ∧ AX (GetImage ∧ ¬terminal)))
+
+typestate 1: GetImage
+  AG ((GetImage ∧ ¬terminal) → (EX (Image ∧ terminal) ∧ EX (NotFound ∧ terminal) ∧ AX ((Image ∧ terminal) ∨ (NotFound ∧ terminal))))
+
+typestate 2: Image (may end)
+  AG ((Image ∧ terminal) → (EX (Image ∧ terminal) ∧ AX (Image ∧ terminal)))
+
+typestate 3: NotFound (may end)
+  AG ((NotFound ∧ terminal) → (EX (NotFound ∧ terminal) ∧ AX (NotFound ∧ terminal)))
+\end{lstlisting}

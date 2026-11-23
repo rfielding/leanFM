@@ -1,0 +1,11 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Both (A, B, C) {
+  par {
+    q: Ask from A to B;
+    Answer from B to A cause q;
+  } and {
+    r: Ask2 from A to C;
+    Answer2 from C to A cause r;
+  }
+}
+\end{lstlisting}

@@ -1,0 +1,11 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Blind (Client, Shop, Bank) {
+  h: Hold from Client to Bank;
+  choice {
+    Capture from Shop to Bank;
+    Ship from Shop to Client;
+  } or {
+    SoldOut from Shop to Client;
+  }
+}
+\end{lstlisting}

@@ -1,0 +1,14 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_ctl
+{"lean": "protocol Images ...",
+ "faithful": {"lean": "protocol Images ... (no NotFound branch)"}}
+
+answer (excerpt)
+{"verdict": "unfaithful",
+ "reading":
+ "Images: the candidate (3 nodes) is not faithful to the protocol (4 typestates), decided by walk: after GetImage, the protocol allows Image (may end), NotFound (may end) and the candidate Image (may end)",
+ "protocolNext": ["Image (may end)", "NotFound (may end)"],
+ "path": ["GetImage"],
+ "method": "walk",
+ "candidateNext": ["Image (may end)"]}
+\end{lstlisting}

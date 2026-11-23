@@ -1,0 +1,10 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Site (Customer, Store) {
+  l: Login from Customer to Store;
+  LoggedIn from Store to Customer cause l;
+  c: Create from Customer to Store;
+  Made from Store to Customer cause c;
+  o: Logout from Customer to Store;
+  Bye from Store to Customer cause o;
+}
+\end{lstlisting}

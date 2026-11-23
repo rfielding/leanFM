@@ -1,0 +1,73 @@
+\chapter{Reference}\label{ch:reference}
+
+\section{Protocol text}
+
+\begin{center}
+\begin{tabular}{@{}p{.43\textwidth}p{.52\textwidth}@{}}
+\toprule
+Form & Meaning \\
+\midrule
+\texttt{protocol P (A, B, ...) \{ ... \}} & a global type over roles \\
+\texttt{protocol P (A, B) given x y \{ ... \}} & played inside sessions minted elsewhere; \texttt{x}, \texttt{y} are bound by the includer \\
+\texttt{structure M where f : T} & the fields message \texttt{M} carries \\
+\texttt{id: M from A to B;} & a message; \texttt{id} names this occurrence \\
+\quad\texttt{route "GET /p/\{x\}"}, \texttt{status 200} & how it travels over HTTP \\
+\quad\texttt{cause id} & it answers the event \texttt{id} \\
+\quad\texttt{where c} & a condition on fields of this and earlier messages \\
+\quad\texttt{after 50 ms} & how long it takes \\
+\texttt{E at A;} & an event performed by \texttt{A} \\
+\texttt{choice \{ ... \} or \{ ... \}} & alternatives; the sender of a branch's first message decides \\
+\texttt{choice at A using declared("X") \{ probability 9/10: ... \}} & a choice with its driver and weights \\
+\texttt{rec L \{ ... continue L; \}} & a loop \\
+\texttt{rec L at most N \{ ... \} otherwise \{ ... \}} & a bounded loop, unrolled when read \\
+\texttt{par \{ ... \} and \{ ... \}} & interleaved branches \\
+\texttt{sessions \{ ... \}}, \texttt{sessions by a.f \{ ... \}} & a block run as any number of sessions, optionally keyed \\
+\texttt{include P A B with x, y;} & play \texttt{P} in place with roles and fields bound \\
+\texttt{Fresh T}, \texttt{Link T}; \texttt{Header}, \texttt{PathParam}, \texttt{QueryParam} & identity marks on field types \\
+field names ending \texttt{\_secr} & secrets \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Formulas}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Meaning & JSON & S-expression \\
+\midrule
+constants & \texttt{true}, \texttt{false} & \texttt{true}, \texttt{false} \\
+last message & \texttt{\{"after": "M"\}} & \texttt{(after M)} \\
+may end & \texttt{"terminal"} & \texttt{terminal} \\
+secret carried & \texttt{\{"secret": \{"to": "Log"\}\}} & \texttt{(secret to Log)} \\
+state of a draft & \texttt{\{"at": "s"\}} & \texttt{(at s)} \\
+Boolean & \texttt{not}, \texttt{and}, \texttt{or}, \texttt{implies} & the same, prefix \\
+non-vacuous always & \texttt{\{"stronglyImplies": [a, b]\}} & \texttt{(stronglyImplies a b)} \\
+next & \texttt{EX}, \texttt{AX} & \texttt{(EX f)}, \texttt{(AX f)} \\
+eventually, always & \texttt{EF}, \texttt{AF}, \texttt{EG}, \texttt{AG}, \texttt{never} & \texttt{(AG f)} and so on \\
+until, unless & \texttt{\{"AU": [a, b]\}}, \texttt{EU}, \texttt{AW}, \texttt{EW} & \texttt{(AU a b)} and so on \\
+shared part & --- & \texttt{\#1=f} \ldots\ \texttt{\#1\#} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Tool arguments used in this book}
+
+\begin{center}
+\begin{tabular}{@{}p{.3\textwidth}p{.65\textwidth}@{}}
+\toprule
+Call & Answers \\
+\midrule
+\texttt{session\_check \{lean\}} & projections, issues \\
+\texttt{session\_ctl \{lean, formula\}} & proved or disproved, with a path \\
+\texttt{session\_ctl \{lean\}} & up to 12 suggested properties, each decided \\
+\texttt{session\_ctl \{lean, faithful: "rules"\}} & typestates, lookahead, rules \\
+\texttt{session\_ctl \{lean, faithful: \{task | lean\}\}} & faithful or unfaithful, method, path to the difference \\
+\texttt{session\_conform \{lean, events\}} & conforms or violates, derived sessions, where-clause failures \\
+\texttt{session\_next \{lean, events\}} & the steps allowed next \\
+\texttt{session\_diagram \{lean, theme\}} & the interaction diagram as SVG \\
+\texttt{session\_openapi \{lean, role\}} & the role's HTTP interface \\
+\texttt{check\_ctl \{task, formula\}} & a formula over an inline draft \\
+\bottomrule
+\end{tabular}
+\end{center}

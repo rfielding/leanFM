@@ -1,0 +1,15 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Retry (A, B) {
+  rec Try at most 3 {
+    q: Ask from A to B;
+    choice {
+      Ok from B to A cause q;
+    } or {
+      Busy from B to A cause q;
+      continue Try;
+    }
+  } otherwise {
+    GiveUp from A to B;
+  }
+}
+\end{lstlisting}

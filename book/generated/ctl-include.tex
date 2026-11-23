@@ -1,0 +1,14 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Order (Client, Shop) given token {
+  c: Create from Client to Shop;
+  Made from Shop to Client cause c;
+}
+
+protocol Site (Customer, Store) {
+  l: Login from Customer to Store;
+  LoggedIn from Store to Customer cause l;
+  include Order Customer Store with token = sid;
+  o: Logout from Customer to Store;
+  Bye from Store to Customer cause o;
+}
+\end{lstlisting}

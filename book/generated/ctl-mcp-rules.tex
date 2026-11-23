@@ -1,0 +1,39 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_ctl
+{"lean": "protocol Images ...", "faithful": "rules"}
+
+answer (excerpt)
+{"verdict": "rules",
+ "typestates": 4,
+ "rules":
+ [{"subformulas": 8,
+   "notation": "¬(GetImage ∨ Image ∨ NotFound) ∧ ¬terminal",
+   "name": "start",
+   "formula":
+   "(and (not (or (after GetImage) (after Image) (after NotFound))) (not terminal))"},
+  {"subformulas": 15,
+   "notation":
+   "AG ((¬(GetImage ∨ Image ∨ NotFound) ∧ ¬terminal) → (EX (GetImage ∧ ¬terminal) ∧ AX (GetImage ∧ ¬terminal)))",
+   "name": "typestate 0: (start)",
+   "formula":
+   "(AG (implies (and (not (or (after GetImage) (after Image) (after NotFound))) #0=(not terminal)) (and (EX #1=(and (after GetImage) #0#)) (AX (or #1#)))))"},
+  {"subformulas": 15,
+   "notation":
+   "AG ((GetImage ∧ ¬terminal) → (EX (Image ∧ terminal) ∧ EX (NotFound ∧ terminal) ∧ AX ((Image ∧ terminal) ∨ (NotFound ∧ terminal))))",
+   "name": "typestate 1: GetImage",
+   "formula":
+   "(AG (implies (and (after GetImage) (not terminal)) (and (EX #0=(and (after Image) terminal)) (EX #1=(and (after NotFound) terminal)) (AX (or #0# #1#)))))"},
+  {"subformulas": 9,
+   "notation": "AG ((Image ∧ terminal) → (EX (Image ∧ terminal) ∧ AX (Image ∧ terminal)))",
+   "name": "typestate 2: Image (may end)",
+   "formula": "(AG (implies #0=(and (after Image) terminal) (and (EX #0#) (AX (or #0#)))))"},
+  {"subformulas": 9,
+   "notation":
+   "AG ((NotFound ∧ terminal) → (EX (NotFound ∧ terminal) ∧ AX (NotFound ∧ terminal)))",
+   "name": "typestate 3: NotFound (may end)",
+   "formula":
+   "(AG (implies #0=(and (after NotFound) terminal) (and (EX #0#) (AX (or #0#)))))"}],
+ "ruleCount": 5,
+ "lookahead": 0,
+ "deterministic": true}
+\end{lstlisting}

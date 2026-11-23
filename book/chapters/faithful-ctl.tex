@@ -1,0 +1,242 @@
+\chapter{Faithful CTL}\label{ch:faithful}
+
+This chapter turns a protocol into CTL formulas that say exactly what the protocol
+allows: in each state the conversation can be in, each next state is possible and
+nothing else is. It proves that a system satisfies the formulas if and only if it is
+bisimilar to the protocol, which by Theorem~\ref{thm:bcg} is the most any CTL can say.
+
+\section{Reading CTL}
+
+CTL talks about a conversation as a tree of possible futures. Standing at one moment of
+the conversation, the next message could be one of several; after each of those, again
+one of several; and so on. A CTL formula is a statement made at one moment about that
+tree. This chapter needs only six pieces, and each has a plain reading.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+written & read it as \\
+\midrule
+$\after{GetImage}$ & the message that just happened was GetImage \\
+$\term$ & the conversation is allowed to stop here \\
+$\EX\,\varphi$ & \emph{some} possible next step leads to a moment where $\varphi$ \\
+$\AX\,\varphi$ & \emph{every} possible next step leads to a moment where $\varphi$ \\
+$\AG\,\varphi$ & $\varphi$ holds at every moment the conversation can ever reach \\
+$\varphi\rightarrow\psi$ & whenever $\varphi$, also $\psi$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+$\wedge$ is ``and'', $\vee$ is ``or'', $\neg$ is ``not''. Chapter~\ref{ch:checker} gives
+the same definitions formally; this table is all the next section uses.
+
+\section{The idea, on one request}
+
+Take Images (Chapter~\ref{ch:global}): a browser sends GetImage, and the server answers
+with an Image or a NotFound, and that is the whole conversation. Stand at the moment
+just after GetImage. Three things are true there, and each is one line of CTL.
+
+\begin{center}
+\begin{tabular}{@{}lp{.36\textwidth}@{}}
+\toprule
+CTL & in words \\
+\midrule
+$\EX(\after{Image}\wedge\term)$ & an Image \emph{can} come next, and then the conversation may stop \\
+$\EX(\after{NotFound}\wedge\term)$ & a NotFound \emph{can} come next, and then it may stop \\
+$\AX\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)$ & \emph{whatever} comes next is one of those two; nothing else can \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The first two lines rule out a server that never sends one of the answers (say, one
+that cannot say 404). The third rules out a server that sends anything else (say, a
+redirect, or nothing at all). Together they say: after the request, exactly these two
+answers are possible.
+
+That statement is about one moment. To make it a rule about the whole conversation,
+say \emph{when} it applies: ``at every moment at which the last message was GetImage
+and the conversation may not stop yet, those three lines hold.''
+\begin{align*}
+\AG\Big(\after{GetImage}\wedge\neg\term\ \rightarrow\ 
+  &\EX(\after{Image}\wedge\term)\wedge\EX(\after{NotFound}\wedge\term)\\
+  {}\wedge{}&\AX\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)\Big)
+\end{align*}
+Write one such rule for every moment the protocol can be in, add one saying where it
+starts, and the rules together say \emph{everything} the protocol says: what may happen
+next at every point, and what may not. The rest of this chapter proves that, and does
+the one part that is harder than it looks. Here the moment ``just after GetImage'' was
+easy to name: the last message says it. In a larger protocol the same last message can
+be heard at two different points (an Ack after the first request and an Ack after the
+second), and the rule must tell them apart by what can still happen. That is what
+typestates and their names are for.
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Typestate graph of Images: start then GetImage then either Image or NotFound each with a double border because the session may end there and a loop for the stutter.}{\Typestates[.62\textwidth]{ctl-images}}
+\caption{The four moments of Images, as LeanFM computes them. A double border marks a moment where the conversation may stop; its loop says nothing more happens.}
+\label{fig:images-ts}
+\end{figure}
+
+\section{Typestates}
+
+A \emph{typestate} is a state of the protocol as far as any observer can tell.
+Formally it is a class of nodes of the checker model under bisimulation
+(Definition~\ref{def:bisim}).
+
+\begin{definition}[Refinement rounds]\label{def:rounds}
+For nodes of $M_P$, let $n \approx_0 m$ iff $L(n) = L(m)$, and
+$n \approx_{k+1} m$ iff $n \approx_k m$ and
+$\{[n']_k : n \to n'\} = \{[m']_k : m \to m'\}$, where $[x]_k$ is the class of $x$ under
+$\approx_k$. Each $\approx_{k+1}$ refines $\approx_k$, so on a finite model the sequence
+becomes constant at some least $K$. The classes of $\approx_K$ are the
+\emph{typestates} of $P$, and $K$ is its \emph{lookahead}.
+\end{definition}
+
+\begin{lemma}\label{lem:rounds}
+$\approx_K$ is bisimilarity on $M_P$.
+\end{lemma}
+
+\begin{proof}
+$\approx_K$ is a bisimulation: related nodes have equal labels (it refines
+$\approx_0$), and since $\approx_{K+1} = \approx_K$, related nodes reach the same set
+of $\approx_K$-classes, so each step of one is matched by a step of the other into the
+same class. Conversely every bisimulation $B$ is contained in each $\approx_k$, by
+induction on $k$: $B$ relates only equally labelled nodes, and if $B \subseteq
+\approx_k$ then $B$-related nodes reach the same $\approx_k$-classes, so they are
+$\approx_{k+1}$-related.
+\end{proof}
+
+The lookahead measures how far ahead one must look to tell two typestates apart. When
+it is $0$, the last message and whether the session may end already determine the
+typestate. Images has lookahead $0$ (Figure~\ref{fig:images-ts}).
+
+
+\section{Naming a typestate}
+
+\begin{definition}[Characteristic formulas]\label{def:chi}
+For each class $C$ of $\approx_k$, define $\chi^k_C$ by induction on $k$. With $L(C) =
+(m, e)$ the common label of its nodes,
+\[
+\chi^0_C = \alpha(m) \wedge \beta(e),\qquad
+\alpha(m) = \begin{cases}\after{m} & m \neq \bot\\ \neg\bigvee_{\ell}\after{\ell} & m = \bot\end{cases},\qquad
+\beta(e) = \begin{cases}\term & e\\ \neg\term & \neg e\end{cases}
+\]
+and, writing $S_C$ for the set of $\approx_k$-classes the nodes of a class $C$ of
+$\approx_{k+1}$ step into,
+\[
+\chi^{k+1}_C = \chi^0_{C} \wedge \bigwedge_{D \in S_C} \EX\,\chi^k_D \wedge
+\AX\bigvee_{D \in S_C} \chi^k_D .
+\]
+\end{definition}
+
+\begin{lemma}[Each node satisfies its name]\label{lem:own}
+Every node $n$ of $M_P$ satisfies $\chi^k_{[n]_k}$, for every $k$.
+\end{lemma}
+
+\begin{proof}
+By induction on $k$. For $k = 0$, $n$ has its own label. For $k + 1$, each successor
+$n'$ of $n$ lies in some $D \in S_{[n]_{k+1}}$ and satisfies $\chi^k_D$ by induction,
+which gives the $\AX$ conjunct; and each $D \in S_{[n]_{k+1}}$ contains a successor of
+$n$, because all nodes of a $\approx_{k+1}$-class step into the same classes, which
+gives the $\EX$ conjuncts.
+\end{proof}
+
+\begin{lemma}[Names exclude each other]\label{lem:exclusive}
+For distinct classes $C \neq D$ of $\approx_k$, no node of any total labelled graph
+satisfies both $\chi^k_C$ and $\chi^k_D$.
+\end{lemma}
+
+\begin{proof}
+By induction on $k$. For $k = 0$, distinct classes have distinct labels and $\chi^0$
+fixes the label. For $k + 1$: if $C$ and $D$ have different labels, the $\chi^0$
+conjuncts conflict. Otherwise $S_C \neq S_D$; say $E \in S_C \setminus S_D$. A node
+satisfying $\chi^{k+1}_C$ has a successor $w \models \chi^k_E$; satisfying
+$\chi^{k+1}_D$ as well, $w \models \chi^k_F$ for some $F \in S_D$, so $F \neq E$,
+contradicting the induction hypothesis.
+\end{proof}
+
+So in any system, a state satisfies at most one typestate's name. Names of typestates
+with lookahead $0$ are a label and an ending; names that need lookahead $k$ say, $k$
+steps deep, what may follow.
+
+\section{The rules}
+
+\begin{definition}[Faithful rules]\label{def:rules}
+With $K$ the lookahead and $\chi_C = \chi^K_C$, the \emph{faithful rules} of $P$ are
+\[
+\Rules_P = \{\chi_{[n_0]}\} \cup \Big\{\ \AG\big(\chi_C \rightarrow
+  \textstyle\bigwedge_{D \in S_C}\EX\,\chi_D \wedge \AX\bigvee_{D\in S_C}\chi_D\big)
+  \ :\ C \text{ a typestate}\Big\}
+\]
+where $S_C$ is now the set of typestates the nodes of $C$ step into.
+\end{definition}
+
+\begin{theorem}[Faithfulness]\label{thm:faithful}
+Let $M'$ be any finite total labelled graph with start $v_0$. Then
+$M' \models \Rules_P$ if and only if $M' \sim M_P$.
+\end{theorem}
+
+\begin{proof}
+($\Leftarrow$) $M_P \models \Rules_P$: the start rule holds by Lemma~\ref{lem:own}, and
+at any node $n$ of typestate $C$ the successors of $n$ lie exactly in the typestates of
+$S_C$ (Lemma~\ref{lem:rounds}: $\approx_K$ is stable), each satisfies its own name
+(Lemma~\ref{lem:own}), so both conjuncts of $C$'s rule hold at $n$. By
+Theorem~\ref{thm:bcg}, every $M' \sim M_P$ satisfies the same formulas.
+
+($\Rightarrow$) Let $B = \{(v, n) : v \text{ reachable from } v_0 \text{ in } M',\ v
+\models \chi_{[n]}\}$. Then $(v_0, n_0) \in B$ by the start rule. Let $(v, n) \in B$ with
+$[n] = C$. Labels agree, since $\chi_C$ fixes the label. Because $v$ is reachable and
+$C$'s rule is under $\AG$, $v$ satisfies its consequent. Forth: if $v \to v'$, the
+$\AX$ conjunct gives $v' \models \chi_D$ for some $D \in S_C$; some successor $n'$ of
+$n$ lies in $D$, and $(v', n') \in B$. Back: if $n \to n'$ with $[n'] = D \in S_C$,
+the $\EX\,\chi_D$ conjunct gives a successor $v'$ of $v$ with $v' \models \chi_D$, so
+$(v', n') \in B$. Hence $B$ is a bisimulation containing $(v_0, n_0)$.
+\end{proof}
+
+\begin{corollary}\label{cor:best}
+No set of CTL formulas distinguishes more systems from $P$ than $\Rules_P$ does. Every
+CTL property of the protocol holds of every system that satisfies $\Rules_P$.
+\end{corollary}
+
+\begin{proof}
+A system $M'$ that satisfies $\Rules_P$ is bisimilar to $M_P$ (Theorem~\ref{thm:faithful})
+and so satisfies exactly the CTL formulas $M_P$ does (Theorem~\ref{thm:bcg}). A system
+that does not satisfy $\Rules_P$ fails a CTL formula that $M_P$ satisfies.
+\end{proof}
+
+\section{The rules of Images}
+
+LeanFM writes the rules with \texttt{session\_ctl} and \texttt{faithful: "rules"}. For
+Images, with lookahead $0$, every name is a label and an ending:
+
+\input{generated/ctl-images-rules.tex}
+
+Typestate~1 is the sentence this chapter began with. The rules of the two ended
+typestates are their stutter: once an answer has arrived, nothing else happens.
+
+\section{A larger protocol}
+
+PlaceOrder has \input{generated/ctl-placeorder-counts.tex}\unskip. Its typestate graph is again
+computed rather than drawn.
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Typestate graph of PlaceOrder: start CreateOrder then Quote or SoldOut; after Quote Pay Charge then Charged and Receipt or Declined and PaymentDeclined. Receipt PaymentDeclined and SoldOut have double borders and stutter loops.}{\Typestates{ctl-placeorder}}
+\caption{The ten typestates of PlaceOrder.}
+\label{fig:placeorder-ts}
+\end{figure}
+
+\input{generated/ctl-placeorder-rules.tex}
+
+\section{What the theorem buys}
+
+Corollary~\ref{cor:best} turns every property one could ask of the protocol into a
+consequence of eleven formulas. For example, every request is answered:
+\[
+\AG\big(\after{CreateOrder} \rightarrow \AF(\after{Receipt}\vee\after{PaymentDeclined}\vee\after{SoldOut})\big)
+\]
+holds of PlaceOrder, so it holds of every system bisimilar to it, and need not be
+stated separately. Properties that are \emph{not} consequences of the protocol, such as
+a rule a project adds (``no refund before a charge''), are stated in the same logic and
+checked against the same model. Chapter~\ref{ch:mcp} shows both kinds of question asked
+of LeanFM.

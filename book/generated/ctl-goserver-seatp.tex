@@ -1,0 +1,20 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol SeatP (Person, Server) given sessionId gameId {
+  include TakeSeatP Person Server with sessionId, gameId;
+  par {
+    sessions { include PlayMoveP Person Server with sessionId, gameId; }
+  } and {
+    sessions { include SetAutopilotP Person Server with sessionId, gameId; }
+  } and {
+    sessions {
+      choice {
+        include ProposeMergeP Person Server with sessionId, gameId;
+      } or {
+        include RespondMergeP Person Server with sessionId, gameId;
+      }
+    }
+  } and {
+    sessions { include GameStateP Person Server with sessionId, gameId; }
+  }
+}
+\end{lstlisting}

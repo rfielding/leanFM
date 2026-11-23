@@ -1,0 +1,7 @@
+prompt: completely rewrite the book: a much deeper focus on multiparty session types, reducing them to pure CTL, easily diagrammed, with proofs; less repetition; deep on the protocol language, how it reduces to CTL and fits with where clauses; detailed examples of the MCP server.
+question: what does a LeanFM protocol say, what CTL does it reduce to, and how does an agent use the MCP server to ask?
+eventSource: examples/sessions/*.leanfm, LeanFM/LLMGenerated/LeanFM.leanfm, projects/GoServer (protocol and events/two-persons.json), reports/ctl-translation/faithful/islanduploads.leanfm, projects/Maqam/spec/Maqam.leanfm, and the small protocols and logs written in CtlBookExample.lean
+reducer: LeanFM.SessionTools (check, diagram, conform, ctl with formula and faithful, next, openapi), LeanFM.Logic (check_ctl), LeanFM.Session.Faithful (typestates, rules, compare)
+unit: checker nodes, typestates (bisimulation classes), rounds of refinement (lookahead), rules, events
+boundary: one session of each protocol
+generator: CtlBookExample.lean, then scripts/svg_to_pdf.py for the diagrams

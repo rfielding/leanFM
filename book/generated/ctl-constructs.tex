@@ -1,0 +1,11 @@
+\begin{tabular}{@{}llrrrl@{}}
+\toprule
+Construct & Example & Nodes & Typestates & Lookahead & Deterministic \\
+\midrule
+sequence & a request and its answer & 3 & 3 & 0 & yes \\
+choice & an answer of two kinds & 4 & 4 & 0 & yes \\
+loop & ask again until done & 5 & 4 & 0 & yes \\
+bounded loop & at most three tries & 11 & 9 & 4 & yes \\
+parallel & two independent requests & 13 & 13 & 1 & yes \\
+\bottomrule
+\end{tabular}

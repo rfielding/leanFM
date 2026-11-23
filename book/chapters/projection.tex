@@ -1,0 +1,60 @@
+\chapter{Projection and Well-Formedness}\label{ch:projection}
+
+A global type is written from nobody's point of view, but it is played by roles that
+each see only their own messages. \emph{Projection} computes what each role must do;
+\emph{well-formedness} asks whether the roles, acting only on what they see, can
+together produce exactly the runs the global type allows
+\citep{honda2008multiparty,denielou2012communicating}. A protocol that is not
+well-formed cannot be implemented faithfully by any set of processes, so there is no
+point reducing it to CTL. LeanFM checks it first, with \texttt{session\_check}.
+
+\section{Local types}
+
+Projecting PlaceOrder onto each role keeps that role's sends and receives and turns
+each choice into a \emph{select} (the role decides) or an \emph{offer} (the role is
+told).
+
+\input{generated/ctl-placeorder-locals.tex}
+
+The bank's projection shows what projection is for. The bank takes no part in the
+sold-out branch, so its local type offers that branch as empty: from the bank's point
+of view the session may end without a word. The shop's projection is the only one with
+a \texttt{select}: it alone decides. The check reports nothing to fix.
+
+\input{generated/ctl-placeorder-check.tex}
+
+\section{What makes a protocol unplayable}
+
+LeanFM refuses two kinds of protocol, and each refusal names the problem.
+
+\paragraph{No one decides.} If two different roles start the branches of a choice,
+nothing stops both from acting at once. The two roles race, and the run that results
+may be in neither branch.
+
+\input{generated/ctl-race.tex}
+\input{generated/ctl-race-issues.tex}
+
+\paragraph{Someone cannot tell.} If a role behaves differently in two branches but
+receives nothing that tells it which branch was taken, it must guess. Here the bank
+should accept a capture in one branch and nothing in the other, yet no message tells
+the bank which one it is in.
+
+\input{generated/ctl-blind.tex}
+\input{generated/ctl-blind-issues.tex}
+
+\section{Why well-formedness comes first}
+
+These two conditions are what make the reduction of Part~\ref{part:ctl} meaningful. The
+CTL formulas of Chapter~\ref{ch:faithful} describe the global behaviour: which messages
+may follow which. A system of processes produces global behaviour by each process
+following its own local type. If the protocol is well-formed, the processes together
+produce exactly the protocol's runs, and checking the system against the formulas
+checks each process against its role. If it is not, the formulas describe a behaviour
+no system of processes produces, and a faithful implementation does not exist.
+
+Well-formedness here is the \emph{knowledge of choice} condition of multiparty session
+types: every role that behaves differently after a choice learns which branch was
+taken before it has to act \citep{honda2008multiparty}. LeanFM checks it syntactically
+on the global type. Horlings and Jongmans check related sanity conditions as CTL over
+the protocol's state space \citep{horlings2021dcjlint}; the reduction in this book
+goes the other way, from the protocol to the whole of its behaviour as CTL.

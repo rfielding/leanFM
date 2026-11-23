@@ -1,0 +1,12 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_next
+{"lean": "protocol PlaceOrder ...",
+ "events": [{"to": "Shop", "label": "CreateOrder", "id": "e1", "from": "Client"}]}
+
+answer (excerpt)
+{"verdict": "running",
+ "reading": "PlaceOrder: after 1 event, 2 steps may happen next",
+ "next":
+ [{"to": "Client", "label": "Quote", "from": "Shop", "cause": "e1"},
+  {"to": "Client", "label": "SoldOut", "from": "Shop", "cause": "e1"}]}
+\end{lstlisting}

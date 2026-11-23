@@ -1,0 +1,178 @@
+\chapter{Construct by Construct}\label{ch:constructs}
+
+Theorem~\ref{thm:faithful} holds for any protocol, but what the rules look like, and
+how much they cost, depends on the constructs the protocol uses. This chapter takes
+the constructs of Chapter~\ref{ch:global} one at a time. The measure throughout is the
+lookahead $K$ of Definition~\ref{def:rounds}: with $K = 0$ every typestate is named by
+its last message and ending, and every rule is the one-step shape of Images; each step
+of lookahead nests the names one $\EX$/$\AX$ level deeper.
+
+\begin{table}[ht]
+\centering
+\input{generated/ctl-constructs.tex}
+\caption{Each construct's smallest protocol: checker nodes, typestates, lookahead, and
+whether its typestates are deterministic (Definition~\ref{def:det}).}
+\label{tab:constructs}
+\end{table}
+
+\section{Sequence and choice}
+
+A sequence $m_1; m_2$ contributes one typestate per message. A choice contributes one
+typestate per first message of a branch, and its rule has one $\EX$ per branch and one
+$\AX$ over all of them. As long as no label occurs at two places that behave
+differently, the last message names the typestate, and $K = 0$. A \texttt{cause} adds
+nothing to the control: it records which request an answer answers, which matters for
+logs (Chapter~\ref{ch:where}), not for the order of labels in one session.
+
+\begin{proposition}[Every request is answered]\label{prop:answered}
+If in a protocol every path from a request $q$ reaches one of its answers
+$r_1, \ldots, r_j$, then every system satisfying $\Rules_P$ satisfies
+$\AG(\after{q} \rightarrow \AF\bigvee_i \after{r_i})$.
+\end{proposition}
+
+\begin{proof}
+The formula holds of $M_P$ by assumption; apply Corollary~\ref{cor:best}.
+\end{proof}
+
+The proposition is typical: in this setting, properties of a protocol are not axioms to
+be added but consequences to be derived. Chapter~\ref{ch:mcp} shows LeanFM proposing
+such properties and deciding each.
+
+\section{Loops}
+
+A loop's body is played again from its start. The node reached by the last message of
+one iteration and the node reached by the same message in the next are the same
+typestate, so a loop adds no typestates beyond its body's. The polling protocol of
+Chapter~\ref{ch:global} has five checker nodes and four typestates; two nodes merge
+because they behave alike.
+
+\section{Bounded loops: a hidden counter}
+
+A bounded loop is unrolled into copies of its body, so it carries a counter the labels
+do not show. In Retry, three typestates are reached by Ask, one per try, and three by
+Busy. They differ only in how many tries remain, which is visible only by looking
+ahead: after the third Busy the next step is GiveUp, not Ask.
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Typestate graph of Retry: start then Ask then Ok or Busy; after Busy Ask again up to three times; after the third Busy GiveUp. Ok and GiveUp have double borders.}{\Typestates{ctl-retry}}
+\caption{Retry's nine typestates. Three are reached by Ask and three by Busy; only the future tells them apart.}
+\label{fig:retry-ts}
+\end{figure}
+
+The lookahead is $4$, and the names grow with it. As a tree, a name repeats its
+sub-names at every branch; as a DAG, each sub-name is written once:
+
+\input{generated/ctl-retry-sizes.tex}
+
+\noindent Written with LeanFM's s-expression labels, which share a part instead of
+repeating it, the name of the start typestate is short:
+
+\input{generated/ctl-retry-start.tex}
+
+The general shape: a counter of size $c$ costs lookahead about $c$, and tree size
+exponential in it, while the distinct subformulas stay linear. Chapter~\ref{ch:deciding}
+makes that the basis of the checker.
+
+\section{Parallel composition}
+
+\texttt{par} interleaves its branches, so its checker model is a product: a node
+records where each branch is. The last message says only which branch moved last,
+and nothing about where the other branch is.
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Typestate graph of Both: two independent request and answer pairs interleaved in every order thirteen typestates.}{\Typestates{ctl-parallel}}
+\caption{Two independent requests interleaved: thirteen typestates, lookahead 1. This is the graph on the cover.}
+\label{fig:parallel-ts}
+\end{figure}
+
+Two request--answer pairs, three typestates each when alone, give thirteen when
+interleaved, and lookahead $1$. In general a product of $b$ branches with $t$
+typestates each has up to $t^b$ typestates. This is the real source of size in
+practice: GoServer's 1{,}604 typestates come from polling the game list beside the
+lobby, and from a seat's four child sessions running side by side.
+
+\section{Sessions decompose a product}
+
+A product is large because one global model must remember every branch at once. A
+log does not have to. Each message of a session carries its session's identity
+(Chapter~\ref{ch:where}), so a log of interleaved sessions splits into one run per
+session, and each run is checked against its own protocol's rules.
+
+\begin{proposition}[Checking per session]\label{prop:sessions}
+Let a protocol run $p$ independent sessions of protocols $P_1, \ldots, P_p$ side by
+side, with no message belonging to two of them. A log conforms to the composition if
+and only if, split by session identity, each session's events conform to its
+$P_i$.
+\end{proposition}
+
+\begin{proof}
+The composition's runs are exactly the interleavings of runs of the $P_i$, because the
+branches share no messages and the interleaving is unconstrained. Splitting by
+identity recovers each session's subsequence; the log is an interleaving of runs of
+the $P_i$ exactly when each subsequence is a run of its $P_i$.
+\end{proof}
+
+The cost is then the sum of the sessions' sizes, not their product. GoServer's
+protocols checked one session at a time all have lookahead $0$ except the seat, which
+keeps its own \texttt{par}. Joins, a session that belongs to two others, are not
+independent, and LeanFM accepts a join only where the text writes one.
+
+\section{Determinism and prev}
+
+\begin{definition}[Deterministic typestates]\label{def:det}
+The typestates of $P$ are \emph{deterministic} when no typestate steps into two
+different typestates with the same label.
+\end{definition}
+
+With deterministic typestates, the typestate of a node is a function of its
+predecessor's typestate and its own label. That is exactly what a message carrying a
+prev pointer provides on the wire: walking the chain forward, each message's typestate
+is computed from the one before. A candidate system can then be checked in one pass.
+
+\begin{theorem}[The walk]\label{thm:walk}
+Let $P$ have deterministic typestates and let $M'$ be a total labelled graph. Pair
+$v_0$ with $[n_0]$, and walk $M'$ breadth first, pairing each successor $v'$ of a
+paired $v$ (paired with $C$) with the unique $D \in S_C$ whose label is $L'(v')$. If at
+every paired $v$ the label of $v$ is that of $C$ and the labels of $v$'s successors are
+exactly those of $S_C$, and no node is paired twice with different typestates, then
+$M' \sim M_P$; otherwise $M' \not\sim M_P$. The walk examines each step of $M'$ once.
+\end{theorem}
+
+\begin{proof}
+If the walk succeeds, the pairing is a bisimulation between the reachable part of $M'$
+and $M_P$'s typestates: labels agree at each pair; each step of $v$ is matched by the
+step of $C$ into the paired class; each step of $C$, into $D \in S_C$, is matched by a
+step of $v$ with $D$'s label, which the walk paired with $D$. Since $\approx_K$ is
+bisimilarity (Lemma~\ref{lem:rounds}), $M' \sim M_P$.
+Conversely suppose $M' \sim M_P$ via some bisimulation $B$. By induction along the
+walk, every pair $(v, C)$ it makes has $v$ bisimilar to the nodes of $C$: true at the
+start; and if $v \sim C$, a successor $v'$ is bisimilar to some successor of $C$'s
+nodes with the same label, which by determinism lies in the unique $D$ the walk
+chooses. Bisimilar nodes have equal labels and equal sets of successor labels, so no
+check fails, and since bisimilar nodes lie in one class, no node is paired with two.
+\end{proof}
+
+When the typestates are not deterministic, as in GoServer, where two interleaved
+sessions can each produce the same label, LeanFM decides faithfulness by refinement
+over both models together instead (Chapter~\ref{ch:deciding}).
+
+\section{Where clauses in the reduction}
+
+The reduction abstracts values, so a where clause contributes nothing to the control
+rules; Chapter~\ref{ch:where} checks it on the run. Two kinds of where clause
+nonetheless change what the rules say.
+
+\begin{itemize}
+\item A clause that \emph{correlates} (\texttt{i.id = g.id}, an echoed request id)
+  defines identity. It decides which events form one session, and so which runs the
+  rules are applied to (Proposition~\ref{prop:sessions}).
+\item A clause that \emph{guards} a branch (\texttt{o.total >= 100}) restricts, on a
+  given run, which of the branches the rules allow may be taken. The rule of the
+  typestate before the choice still names both branches as possible; the guard is
+  checked on the values.
+\end{itemize}
+
+In both cases the protocol's control is pure CTL, and the data is checked where the
+data is.

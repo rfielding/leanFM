@@ -1,96 +1,132 @@
-\chapter{The MCP Tools}
-\label{ch:mcp-tools}
+\chapter{Asking LeanFM}\label{ch:mcp}
 
-\index{MCP}
-The LeanFM server speaks the Model Context Protocol at \texttt{/mcp}. An agent
-that connects is given the language reference as a resource and these tools, every
-one read-only: none changes a file, and none runs submitted text as code. The
-table is generated from the server's own tool list, so it is the list an agent
-sees.
+Everything in Parts~\ref{part:language} and~\ref{part:ctl} is available to an agent
+through LeanFM's server, which speaks the Model Context Protocol (MCP). This chapter
+connects Claude to it and then works through the questions of the book as an agent asks
+them: each section shows the request the agent sends and an excerpt of the answer
+LeanFM returns, exactly as generated. The answers are shortened only where a string or
+list is long; nothing is rewritten.
 
+\section{Connecting}
+
+The server runs locally. For Claude Desktop it runs over standard input and output, so
+it needs no port and no key:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+lake build leanfm-mcp
+python3 scripts/claude_desktop_config.py --root "$PWD" --install
+\end{lstlisting}
+The script adds a \texttt{leanfm} entry to Claude Desktop's configuration that starts
+\texttt{leanfm-mcp} in the repository. After a restart, Claude lists the tools below and
+reads the language references the server publishes as resources:
 \begin{center}
-\small
-\input{generated/lang-mcp-tools.tex}
+\texttt{leanfm://language/session-reference}\\
+\texttt{leanfm://language/logic-reference}
 \end{center}
+The same tools are served over HTTP by \texttt{make serve}, at
+\texttt{http://127.0.0.1:8080/mcp}, for clients that connect by URL.
 
-The session tools take a protocol as the \texttt{lean} argument, the text of
-Chapter~\ref{ch:language}. Every answer carries a one-line reading for people and
-the whole result as structured content, and the server's \texttt{/metrics} counts
-each call by tool and verdict, with its time and model size.
+A conversation with an agent then has a fixed shape. The person describes what the
+software must do; the agent writes a protocol and checks it; LeanFM answers with
+verdicts, paths and diagrams; the person pushes back; the protocol changes. Only after
+the protocol says what was meant is code written, and the code is then checked against
+the protocol's logs.
 
-\section{How a consultation travels}
+\section{The tools}
 
-\index{Model Context Protocol!consultation}
-An agent first reads durable context, the book, the canonical requirements and the
-language references, and then calls tools. Both diagrams are generated from
-LeanFM's own requirements.
+\input{generated/ctl-mcp-tools.tex}
 
-\begin{figure}[htbp]
-\centering
-\resizebox{\textwidth}{!}{\input{generated/mcp-interaction.tex}}
-\caption{An agent obtains durable project context and deterministic evidence
-through MCP. Source: \texttt{LeanFM.MCP}; reducer and provenance:
-\texttt{book/generated/mcp-interaction-provenance.txt}.}
-\label{fig:mcp-interaction}
-\end{figure}
+The session tools take a protocol as \texttt{lean} (LeanFM protocol text), as
+\texttt{example} (a protocol the server carries, such as \texttt{goserver}) or as
+\texttt{file} (a protocol file of the project). The logic tools take a \texttt{task}:
+a canonical id or an inline draft of states and transitions.
 
-A logic consultation is one request answered by exactly one of two outcomes: a
-verdict carrying its evidence, or a rejection naming the input fault.
+\section{Is the protocol playable?}
 
-\begin{figure}[htbp]
-\centering
-\resizebox{0.85\textwidth}{!}{\input{generated/mcp-logic-interaction.tex}}
-\caption{An agent consults LeanFM about a formula, trace or requirement. Source:
-\texttt{logicGrammar} in the self-hosting requirements; provenance:
-\texttt{book/generated/mcp-logic-interaction-provenance.txt}.}
-\label{fig:mcp-logic-interaction}
-\end{figure}
+The first call on any new protocol is \texttt{session\_check}: projection and
+well-formedness (Chapter~\ref{ch:projection}).
 
-These requests and responses are produced by running \texttt{LeanFM.Logic} while
-the book is built, so they cannot drift from the implementation:
+\input{generated/ctl-mcp-check.tex}
+
+\section{Does a property hold?}
+
+\texttt{session\_ctl} with a \texttt{formula} decides it over the protocol's checker
+model (Chapter~\ref{ch:checker}). The formula may be JSON or an s-expression. Every
+image request is answered:
+
+\input{generated/ctl-mcp-ctl.tex}
+
+A property that does not hold comes back with the path that breaks it. The server is
+not obliged to answer with an image:
+
+\input{generated/ctl-mcp-ctl-disproved.tex}
+
+Order is a property too. No NotFound comes before the request it answers:
+
+\input{generated/ctl-mcp-ctl-order.tex}
+
+\section{What should I ask?}
+
+Without a formula, \texttt{session\_ctl} builds properties from the protocol and decides
+each. For PlaceOrder:
+
+\input{generated/ctl-mcp-suggest.tex}
+
+Two are disproved, and both are informative. A purchase always ends, so ``some session
+can run forever'' is false, which is what was wanted. ``No secret is ever sent'' is
+false because the client sends its card number to the shop and the shop to the bank: a
+project that must keep card numbers away from some role states that rule instead, for
+example $\AG\neg\mathsf{secret}(\textit{to}: \textit{Log})$, and LeanFM decides it the
+same way. A suggestion is a question the protocol answers, not a rule it must keep.
+
+\section{The protocol as CTL}
+
+\texttt{faithful: "rules"} answers the typestates, the lookahead and the faithful rules
+of Chapter~\ref{ch:faithful}, each as an s-expression with its shared parts labelled and,
+when it is small, in CTL notation:
+
+\input{generated/ctl-mcp-rules.tex}
+
+\section{Is this implementation faithful?}
+
+\texttt{faithful} with a \texttt{task} (a draft of states and transitions, for example
+one reconstructed from an implementation) or \texttt{lean} (another protocol text)
+decides faithfulness as one bisimulation check and, when it fails, names where:
+
+\input{generated/ctl-mcp-faithful.tex}
+
+\section{What may happen next?}
+
+\texttt{session\_next} takes the events of one session so far and lists every step the
+protocol allows next, with the event each must name as its cause. It is what a server
+uses to decide whether to accept an incoming message.
+
+\input{generated/ctl-mcp-next.tex}
+
+\section{A formula with shared parts}
+
+\texttt{check\_ctl} decides a formula over an inline draft. Written as an s-expression,
+a part used twice is written once:
+
+\input{generated/ctl-mcp-checkctl.tex}
+
+\section{Does this log follow the protocol?}
+
+\texttt{session\_conform} replays a log, derives its sessions when the log does not name
+them, and checks the where clauses on the values (Chapter~\ref{ch:where}):
+
+\input{generated/ctl-mcp-conform.tex}
+
+\section{What interface does it imply?}
+
+A protocol whose messages carry routes and statuses implies an HTTP interface.
+\texttt{session\_openapi} writes it for one role; this is the server's side of Images:
+
+\input{generated/ctl-mcp-openapi.tex}
+
+\section{The logic tools}
+
+The logic tools work on drafts and traces rather than protocol text: they explain a
+formula, classify a requirement as observable or not, check a trace of events with
+causes, and say what an actor can derive from the messages it has seen.
 
 \input{generated/mcp-logic-examples.tex}
-
-\section{The explorer inside Claude}
-\label{sec:mcp-explorer}
-
-\index{MCP!Claude Desktop}
-The session tools declare an MCP Apps view, so a host that renders MCP Apps (Claude Desktop,
-claude.ai) draws their answers inline, and the view is an explorer as well as a picture. It keeps
-the protocol text in an editor that LeanFM rechecks after each pause, with a navigation bar:
-\emph{Whole protocol} (\texttt{session\_check}); one button per role (\texttt{session\_actor}),
-showing that role's typestate, a sequence diagram of only the steps it takes part in, its
-messages with their payload field numbers, the OpenAPI document it serves and the proto file;
-\emph{Protobuf} (\texttt{session\_types}); and \emph{Dataset} (\texttt{session\_dataset}),
-which generates up to 10000 sessions and charts how they are distributed over paths, messages,
-each role's load, lengths and durations. A protocol with probabilities is sampled by its weights;
-one without is walked, each allowed step or the end equally likely, and the chart says that those
-frequencies describe the walker rather than the system. Every bar is a count LeanFM returned,
-listed with its provenance. When nearly every session interleaves its parallel branches in an order
-of its own, as GoServer's do, the answer says so and the view charts the messages first.
-
-\emph{Tree} (\texttt{session\_explore}) is the specification as an object browser opens it: a
-canvas with only the main protocol open, its children folded. A click (or Enter) opens a node, with
-the move animated; dragging pans, the wheel zooms, arrow keys move the selection. Each included
-protocol is a node carrying its own definition's lines, each choice names the role that decides,
-and the roles and every protocol the text defines hang beside the main structure. The selected node
-shows its source lines, and a button asks LeanFM for that protocol's sequence diagram or that role's
-view. A message opens into what crosses the wire: an example JSON body, its JSON schema and its
-protobuf message. A role opens into its state machine, drawn on a canvas, where a token moves along
-each transition taken. From the main protocol, \emph{Walk the grammar} grows the global state
-machine one step at a time: \texttt{session\_next} names the state the walk is in and the steps
-allowed next, a state reached again is the same node (so a loop closes), and only the explored part is
-drawn, which keeps a specification too large to show in full explorable. A chat client cannot send a file, so the session tools also take \texttt{example}, the name
-of a specification LeanFM carries: \texttt{example: "goserver"} browses the GoServer
-specification's 18 protocols, and \texttt{session\_dataset} on it generates 10000 sessions,
-about 320000 events, in a few seconds.
-
-None of these tools calls a model. Started by Claude Desktop as a child process
-(\texttt{leanfm-mcp --stdio}, set up by \texttt{scripts/claude\_desktop\_config.py}), LeanFM
-needs no API key, no port and no authentication; Claude's own turns belong to the Claude
-subscription. The same executable over HTTP (\texttt{deploy/mcp/README.md}) serves a public host
-behind TLS, which claude.ai and the mobile apps reach as a custom connector.
-
-The full server, with the chat UI, listens only on loopback. A deployment that exposes it to a
-network must add authentication and authorization first; \texttt{leanfm-mcp}, which holds no user
-data and only computes, is limited by rate and concurrency instead.

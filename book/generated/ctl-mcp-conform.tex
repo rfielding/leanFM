@@ -1,0 +1,26 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_conform
+{"lean": "protocol Images ...",
+ "events":
+ [{"to": "Server", "label": "GetImage", "id": "a1", "from": "Browser", "fields": {"id": "cat"}},
+  {"to": "Server", "label": "GetImage", "id": "b1", "from": "Browser", "fields": {"id": "dog"}},
+  {"to": "Browser", "label": "NotFound", "id": "b2", "from": "Server", "cause": "b1"},
+  {"to": "Browser",
+   "label": "Image",
+   "id": "a2",
+   "from": "Server",
+   "fields": {"id": "cat", "bytes": "..."},
+   "cause": "a1"}]}
+
+answer (excerpt)
+{"verdict": "conforms",
+ "reading": "Images: 4 events in 2 sessions follow the protocol",
+ "derivedSessions":
+ {"unattributed": [],
+  "sessions":
+  [{"key": "chain from a1", "events": [0, 3], "count": 2},
+   {"key": "chain from b1", "events": [1, 2], "count": 2}],
+  "reading":
+  "2 sessions derived from causes and the declared session key; the log names no sessions",
+  "omitted": 0}}
+\end{lstlisting}

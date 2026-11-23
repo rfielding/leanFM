@@ -1,0 +1,9 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol Race (Client, Shop) {
+  choice {
+    Cancel from Client to Shop;
+  } or {
+    Ship from Shop to Client;
+  }
+}
+\end{lstlisting}

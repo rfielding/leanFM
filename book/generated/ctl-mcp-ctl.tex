@@ -1,0 +1,13 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_ctl
+{"lean": "protocol Images ...",
+ "formula": "(AG (implies (after GetImage) (AF (or (after Image) (after NotFound)))))"}
+
+answer (excerpt)
+{"verdict": "proved",
+ "states": 4,
+ "report": "",
+ "reading":
+ "Images: on every path, always (if GetImage was just delivered then (on every path, eventually (Image was just delivered or NotFound was just delivered ...",
+ "notation": "AG (GetImage → AF (Image ∨ NotFound))"}
+\end{lstlisting}

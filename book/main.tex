@@ -33,6 +33,7 @@
 \usepackage{tagpdf}
 \tagpdfsetup{activate-all,interwordspace=true}
 \usepackage{amsmath,amssymb,mathtools}
+\usepackage{amsthm}
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{enumitem}
@@ -81,8 +82,8 @@
 }
 
 \hypersetup{
-  pdftitle={LeanFM Software Engineering},
-  pdfauthor={Rob Fielding and ChatGPT}
+  pdftitle={Session Types as CTL},
+  pdfauthor={Rob Fielding and Claude Opus 5.5}
 }
 
 \makeindex[intoc,title=Index]
@@ -208,85 +209,29 @@
   showstringspaces=false
 }
 
-\newcommand{\OAuthInteractionDiagram}[3]{%
-\begin{tikzpicture}[>=Latex,actor/.style={draw,rounded corners,minimum width=2.15cm,
-  minimum height=.65cm,fill=#3,text=#1,draw=#1,font=\small},
-  message/.style={->,thick,draw=#1,text=#1},
-  production/.style={draw=#1,rounded corners,very thick},
-  alternative/.style={draw=#1,rounded corners,thick}]
-  \node[actor] (browser) at (0,0) {Browser};
-  \node[actor] (app) at (3.5,0) {Application};
-  \node[actor] (auth) at (7,0) {Authorization};
-  \node[actor] (resource) at (10.5,0) {Resource};
-  \foreach \x in {browser,app,auth,resource}
-    \draw[dashed,draw=#1] (\x.south) -- ++(0,-14.10);
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[chapter]
+\theoremstyle{plain}
+\newtheorem{theorem}[definition]{Theorem}
+\newtheorem{lemma}[definition]{Lemma}
+\newtheorem{proposition}[definition]{Proposition}
+\newtheorem{corollary}[definition]{Corollary}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
 
-  \draw[production] (-.8,-.75) rectangle (11.35,-3.45);
-  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.55,-.75) {Production: application request and redirect};
-  \draw[message] (browser.center |- 0,-2.00) -- node[above,font=\scriptsize]{application request(resource)} (app.center |- 0,-2.00);
-  \draw[message] (app.center |- 0,-2.85) -- node[above,font=\scriptsize]{redirect(state)} (browser.center |- 0,-2.85);
+% CTL in running text
+\newcommand{\AG}{\mathsf{AG}\,}
+\newcommand{\AF}{\mathsf{AF}\,}
+\newcommand{\AX}{\mathsf{AX}\,}
+\newcommand{\EX}{\mathsf{EX}\,}
+\newcommand{\EF}{\mathsf{EF}\,}
+\newcommand{\EG}{\mathsf{EG}\,}
+\newcommand{\after}[1]{\mathsf{after}(\mathit{#1})}
+\newcommand{\term}{\mathsf{end}}
+\newcommand{\Rules}{\mathcal{R}}
 
-  \draw[production] (-.8,-3.70) rectangle (11.35,-10.45);
-  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.55,-3.70) {Production: authorize and decide};
-  \draw[message] (browser.center |- 0,-4.95) -- node[above,font=\scriptsize]{authorize(state)} (auth.center |- 0,-4.95);
-  \node[draw=#1,rounded corners,fill=#2,text=#1,font=\scriptsize,
-    minimum width=5.6cm,minimum height=.55cm]
-    at (3.5,-5.65) {authenticate resource owner};
-
-  \draw[alternative] (-.55,-6.15) rectangle (11.10,-8.05);
-  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.30,-6.15) {Alternative: authorization granted};
-  \draw[message] (auth.center |- 0,-7.35) -- node[above,font=\scriptsize]{code(state, code)} (browser.center |- 0,-7.35);
-  \draw[message] (browser.center |- 0,-7.85) -- node[above,font=\scriptsize]{callback(state, code)} (app.center |- 0,-7.85);
-
-  \draw[alternative] (-.55,-8.25) rectangle (11.10,-10.20);
-  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.30,-8.25) {Alternative: authorization denied};
-  \draw[message] (auth.center |- 0,-9.45) -- node[above,font=\scriptsize]{error(state, access\_denied)} (browser.center |- 0,-9.45);
-  \draw[message] (browser.center |- 0,-10.00) -- node[above,font=\scriptsize]{error callback(state)} (app.center |- 0,-10.00);
-
-  \draw[production] (-.8,-10.70) rectangle (11.35,-14.35);
-  \node[anchor=north west,fill=#2,text=#1,inner xsep=4pt,font=\small\bfseries]
-    at (-.55,-10.70) {After granted: exchange and fetch};
-  \draw[message] (app.center |- 0,-12.00) -- node[above,font=\scriptsize]{token request(code)} (auth.center |- 0,-12.00);
-  \draw[message] (auth.center |- 0,-12.50) -- node[above,font=\scriptsize]{token issued(token)} (app.center |- 0,-12.50);
-  \draw[message] (app.center |- 0,-13.00) -- node[above,font=\scriptsize]{resource request(token)} (resource.center |- 0,-13.00);
-  \draw[message] (resource.center |- 0,-13.50) -- node[above,font=\scriptsize]{resource returned(profile)} (app.center |- 0,-13.50);
-  \draw[message] (app.center |- 0,-14.00) -- node[above,font=\scriptsize]{application response(profile)} (browser.center |- 0,-14.00);
-\end{tikzpicture}%
-}
-
-\newcommand{\OAuthOverviewDiagram}[3]{%
-\begin{tikzpicture}[>=Latex,actor/.style={draw=#1,rounded corners,minimum width=2.15cm,
-  minimum height=.65cm,fill=#3,text=#1,font=\small},
-  production/.style={draw=#1,rounded corners,very thick,fill=#2,text=#1}]
-  \node[actor] (browser) at (0,0) {Browser};
-  \node[actor] (app) at (3.5,0) {Application};
-  \node[actor] (auth) at (7,0) {Authorization};
-  \node[actor] (resource) at (10.5,0) {Resource};
-  \foreach \x in {browser,app,auth,resource}
-    \draw[dashed,draw=#1] (\x.south) -- ++(0,-6.15);
-
-  \draw[production] (-.65,-1.00) rectangle (4.15,-2.15);
-  \node[text=#1,font=\bfseries,align=center] at (1.75,-1.57)
-    {application request\\and redirect};
-
-  \draw[production] (-.65,-2.65) rectangle (7.80,-3.80);
-  \node[text=#1,font=\bfseries,align=center] at (3.58,-3.22)
-    {authorize and decide\\[.15em]\scriptsize granted $\mid$ denied};
-
-  \draw[production] (2.85,-4.30) rectangle (11.15,-5.55);
-  \node[text=#1,font=\bfseries,align=center] at (7.00,-4.92)
-    {after granted: exchange code\\and fetch resource};
-
-  \draw[->,very thick,draw=#1] (1.75,-2.15) -- (1.75,-2.65);
-  \draw[->,very thick,draw=#1] (3.58,-3.80) -- node[right,text=#1,font=\scriptsize]{granted} (3.58,-4.30);
-\end{tikzpicture}%
-}
-
-\input{generated/bakery-stats.tex}
+% A typestate graph LeanFM derived (generated/NAME-ts-THEME.pdf, laid out by Graphviz)
+\newcommand{\Typestates}[2][.92\textwidth]{\ThemedDiagram{width=#1,height=.42\textheight,keepaspectratio}{#2-ts}}
 
 \begin{document}
 \pagenumbering{gobble}
@@ -294,21 +239,27 @@
 \begin{tikzpicture}[remember picture,overlay]
   \fill[covernavy]
     (current page.south west) rectangle (current page.north east);
-  % Reuse the book's original interaction drawing. Only its palette changes;
-  % title and author text remain outside the drawing, never over its contents.
+  % The cover is the book's subject: a typestate graph LeanFM derived from a protocol
+  % (generated/ctl-parallel-ts-cover.dot: two requests interleaved, thirteen typestates) and the rule one typestate must keep.
   \node[inner sep=0pt]
-    at ([yshift=-1.0cm]current page.center)
-    {\resizebox{.68\paperwidth}{!}{\OAuthInteractionDiagram{leangold}{covernavy}{covernavy}}};
-  \node[anchor=north west,text width=.82\paperwidth,align=left]
-    at ([xshift=1.35cm,yshift=-.75cm]current page.north west)
-    {\color{leangold}\fontsize{27}{31}\selectfont\bfseries
-      L\(\boldsymbol{\exists\forall}\)NFM Software Engineering\\[.4em]
-     \fontsize{15}{19}\selectfont\mdseries
-      The protocol is the program};
+    at ([yshift=-.4cm]current page.center)
+    {\includegraphics[width=.86\paperwidth,height=.5\paperheight,keepaspectratio]{generated/ctl-parallel-ts-cover.pdf}};
+  \node[anchor=north west,text width=.84\paperwidth,align=left]
+    at ([xshift=1.35cm,yshift=-.85cm]current page.north west)
+    {\color{leangold}\fontsize{30}{34}\selectfont\bfseries
+      Session Types as CTL\\[.45em]
+     \fontsize{14}{18}\selectfont\mdseries
+      Multiparty protocols, the temporal logic that says exactly what they allow,\\
+      and the L\(\boldsymbol{\exists\forall}\)NFM server that checks both};
+  \node[anchor=south west,text width=.84\paperwidth,align=left]
+    at ([xshift=1.35cm,yshift=3.2cm]current page.south west)
+    {\color{leangold}\normalsize
+      $\AG\big(\after{GetImage} \rightarrow \EX \after{Image} \wedge \EX \after{NotFound}$\\
+      $\qquad\qquad\wedge\ \AX(\after{Image} \vee \after{NotFound})\big)$};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
-    {\color{leangold}\Large Rob Fielding and ChatGPT\\[.35em]
-     \normalsize Working draft---\today};
+    {\color{leangold}\Large Rob Fielding and Claude Opus 5.5\\[.35em]
+     \normalsize Second edition, rewritten---\today};
 \end{tikzpicture}
 \end{titlepage}
 \frontmatter
@@ -316,72 +267,55 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-LeanFM is a programming language whose programs are protocols. A protocol names
-the roles in a conversation, the messages between them and their order, who
-decides at each choice, what is assumed about decisions nobody else can see, and
-what the system promises. Everything else in a LeanFM project is generated from
-the protocol or checked against it: the diagrams people read, the requirements
-and implementation mapping reviewed in git, the interfaces, the code each role is
-written on, and the verdicts on what the running system logs.
+A multiparty session type is one global description of a conversation: who sends
+what to whom, in what order, and where the conversation branches
+\citep{honda2008multiparty}. This book shows that such a description is exactly a
+set of formulas of computation tree logic (CTL), one formula for each state the
+conversation can be in, and that the reduction is precise: a system satisfies the
+formulas if and only if it behaves as the protocol says, up to the only notion of
+sameness CTL can see. That gives one language for two jobs. The protocol is easy to
+write and easy to draw; the formulas are easy to check, combine and extend. Every
+rule the structure does not show is added in the same logic.
 
-Most LeanFM is written by an LLM. A person says in ordinary words what the
-software must do; the model writes the protocol; LeanFM checks it and shows what
-it means, as diagrams, obligations, witnesses and counterexamples. The person
-pushes back, the protocol changes, the pictures change with it, and only then is
-code written. The model learns the language from LeanFM itself: its server speaks
-the Model Context Protocol and hands any agent that connects the language
-reference and the tools.
+The book has three parts. Part~\ref{part:language} is the protocol language of
+LeanFM: global types, their projection onto each role, and the where clauses that
+tie messages to the data that implements them. Part~\ref{part:ctl} reduces a
+protocol to CTL, proves the reduction faithful, takes it construct by construct,
+and shows how to decide it in time close to linear. Part~\ref{part:mcp} is the
+LeanFM server: an agent such as Claude connects to it over the Model Context
+Protocol and asks every question in this book, with the answers shown as they
+arrive.
 
-The language starts from multiparty session types, one global description of a
-conversation from which each role's obligations are derived
-\citep{honda2008multiparty}. To that it adds stated assumptions on hidden
-decisions, time and value on messages, promises judged over observation periods,
-temporal questions answered with paths, and attackers who see every channel.
-
-\section*{How to read this book}
-
-Part~I is the language: what a protocol says (Chapter~\ref{ch:language}), what it
-means (Chapter~\ref{ch:meaning}), its assumptions and promises
-(Chapter~\ref{ch:assumptions}), the questions you can ask it
-(Chapter~\ref{ch:questions}), and executions as event streams
-(Chapter~\ref{ch:execution}). Part~II is what a protocol generates and how the
-outputs are reviewed. Part~III works examples end to end: a bakery with declared
-and measured rates, TFTP and its physics, OAuth, a legal settlement, and security
-protocols. The appendices list the MCP tools and the server's own protocol, and
-define how a new project is set up.
-
-Every listing, diagram and verdict in Part~I comes from LeanFM, through the same
-functions its tools call; the generator is named beside each. What LeanFM does not
-yet do is listed in \texttt{CRITIQUE.md}. The source is public \citep{leanfmrepo}.
+Every listing, diagram, table and answer in this book comes from LeanFM, through
+the same functions its tools call; the generator, \texttt{CtlBookExample.lean},
+names its inputs in a provenance file beside what it writes. The proofs are on paper.
+LeanFM's tests check the implementation against them: the evaluator against the
+fixpoint semantics on every operator, and the faithfulness check against the CTL
+checker on broken copies of real protocols. The source is public
+\citep{leanfmrepo}.
 
 \tableofcontents
 
 \mainmatter
-\part{The LeanFM Language}
-\include{chapters/lang-protocol}
-\include{chapters/lang-meaning}
-\include{chapters/lang-assumptions}
-\include{chapters/lang-questions}
-\include{chapters/lang-execution}
+\part{The Protocol Language}\label{part:language}
+\include{chapters/global-types}
+\include{chapters/projection}
+\include{chapters/where-clauses}
 
-\part{What a Protocol Generates}
-\include{chapters/lang-generated}
-\include{chapters/feature-discipline}
+\part{From Session Types to CTL}\label{part:ctl}
+\include{chapters/checker-model}
+\include{chapters/faithful-ctl}
+\include{chapters/constructs}
+\include{chapters/deciding}
 
-\part{Worked Examples}
-\include{chapters/bakery-example}
-\include{chapters/tftp-physics}
-\include{chapters/oauth-example}
-\include{chapters/legal-example}
-\include{chapters/csp-exercises}
+\part{The LeanFM MCP Server}\label{part:mcp}
+\include{chapters/mcp-tools}
+\include{chapters/case-studies}
 
 \appendix
-\include{chapters/mcp-tools}
-\include{chapters/web-protocol}
-\include{chapters/bootstrap-contract}
+\include{chapters/reference}
 
 \backmatter
-\include{chapters/referenced-books}
 \bibliographystyle{plainnat}
 \bibliography{references}
 \addcontentsline{toc}{chapter}{Bibliography}
