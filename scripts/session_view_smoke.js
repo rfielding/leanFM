@@ -315,6 +315,10 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
   if (R.exploreStates && R.exploreMessage) {
     await show(R.exploreStates); await wait(80);
     expectText("a role's state machine is drawn", byId.results, "State machine of Desk");
+    // LeanFM's layout is drawn as given (selfhost.session.layout): boxes named by what just happened
+    if (!R.exploreStates.structuredContent || !R.exploreStates.structuredContent.layout) throw new Error("session_explore states carries no layout");
+    expectText("the state machine is drawn from LeanFM's layout", byId.results, "laid out by LeanFM");
+    expectText("a state is named by what just happened", byId.results, "current: start");
     if (!byId.results.all().some((n) => n.tag === "canvas" && n.className.includes("machine"))) throw new Error("the state machine is not a canvas");
     const t = buttons(byId.results).find((b) => b.textContent.includes(" → "));
     if (!t) throw new Error("the state machine offers no transition");

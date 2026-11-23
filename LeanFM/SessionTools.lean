@@ -30,6 +30,7 @@ import LeanFM.Session.ActorView
 import LeanFM.Session.Dataset
 import LeanFM.Session.Outline
 import LeanFM.Session.Derived
+import LeanFM.Session.Layout
 import LeanFM.Logic
 
 /-!
@@ -2370,6 +2371,10 @@ def explore (args : Json) : Except String Json := do
       , ("reading", s!"{p.name} as {role}: a state machine of {states.length} states and {edges.size} transitions, from its typestate")
       , ("start", Json.str start), ("finals", Json.arr (finals.map Json.str).toArray)
       , ("states", Json.arr (states.map Json.str).toArray), ("edges", Json.arr edges)
+      -- laid out on the server, as the book draws typestates (selfhost.session.layout)
+      , ("layout", (Session.Layout.machineJson states start finals (edges.toList.map fun e =>
+          let g := fun (k : String) => (e.getObjValAs? String k).toOption.getD ""
+          (g "from", g "to", g "label", g "kind"))).getD Json.null)
       , ("typestate", Json.str l.typestate) ]
   match focused with
   | some (q, d) =>

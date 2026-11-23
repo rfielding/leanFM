@@ -40,6 +40,8 @@
   .issue { color: var(--bad); }
   .y-key { color: var(--ink-arrow); } .y-str { color: var(--rep); } .y-lit { color: var(--amber); } .y-dash { color: var(--dim); }
   .scroll { overflow-x: auto; }
+  /* full screen: every drawing shrinks to the window's width, however small that makes it */
+  :root[data-mode="fullscreen"] .scroll > svg, :root[data-mode="fullscreen"] .scroll > img { max-width: 100%; height: auto; }
   .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button.fold { font-size: 12px; padding: 1px 8px; margin: 2px 0 4px; }
@@ -258,7 +260,7 @@ window.addEventListener("message", (event) => {
 // on the view's parts, not on the host; the bar itself stays at full size. Canvases work in their own
 // unzoomed units and draw at pxRatio() so they stay sharp; pointer positions are divided by uiScale.
 // The size is kept in the view's local storage when the host allows it.
-const UI_SCALES = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
+const UI_SCALES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.5];
 let uiScale = 1;
 function pxRatio() { return (window.devicePixelRatio || 1) * uiScale; }
 function applyScale(s) {
@@ -273,7 +275,7 @@ function sizeBar() {
   const box = el("div", "sizebar"), down = el("button", "", "A-"), up = el("button", "", "A+");
   sizeLabel = el("span", "pos", "100%");
   down.setAttribute("aria-label", "Smaller text and drawings"); up.setAttribute("aria-label", "Larger text and drawings");
-  const stepBy = (d) => { const i = UI_SCALES.indexOf(uiScale); applyScale(UI_SCALES[Math.max(0, Math.min(UI_SCALES.length - 1, (i < 0 ? 5 : i) + d))]); };
+  const stepBy = (d) => { const i = UI_SCALES.indexOf(uiScale); applyScale(UI_SCALES[Math.max(0, Math.min(UI_SCALES.length - 1, (i < 0 ? UI_SCALES.indexOf(1) : i) + d))]); };
   down.addEventListener("click", () => stepBy(-1)); up.addEventListener("click", () => stepBy(1));
   box.append(down, sizeLabel, up);
   return box;
@@ -2208,6 +2210,8 @@ function graphView(opts) {
   const ctx = cv.getContext("2d");
   let W = 0, H = 0, colors = {}, zoom = 1, panX = 30, panY = 30;
   let states = [], edges = [], start = null, finals = new Set(), cur = null, pos = new Map(), token = null, layoutGen = 0;
+  // boxes: LeanFM's own layout (selfhost.session.layout), drawn as given; without it the view lays out circles
+  let boxes = null;
   function recolor() {
     const css = getComputedStyle(document.documentElement);
     for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan", "good", "bg", "bad"]) colors[k] = css.getPropertyValue("--" + k).trim();
@@ -2224,7 +2228,14 @@ function graphView(opts) {
     }
     return keep;
   }
+  function follow(target) {
+    const c = target.get(cur);
+    if (c && W) { const sx = panX + c.x * zoom, sy = panY + c.y * zoom;
+      if (sx < 40 || sx > W - 160) panX = W / 2 - c.x * zoom;
+      if (sy < 40 || sy > H - 60) panY = H / 3 - c.y * zoom; }
+  }
   function layout(animate) {
+    if (boxes) { const target = new Map(); for (const [s, b] of boxes) target.set(s, { x: b.x, y: b.y }); if (animate) follow(target); pos = target; draw(); return; }
     const vis = shown(), root = vis.has(start) ? start : cur;
     const depth = new Map([[root, 0]]), order = [root];
     for (let i = 0; i < order.length; i++) for (const e of edges)
@@ -2254,11 +2265,20 @@ function graphView(opts) {
   function ends(e) {
     const a = pos.get(e.from), b = pos.get(e.to);
     if (!a || !b) return null;
+    if (boxes && e.route) {
+      if (e.route.self || e.from === e.to) return { a, b, self: true, box: boxes.get(e.from) };
+      const pts = (e.route.points || []).map((p) => ({ x: num(p[0]), y: num(p[1]) }));
+      if (pts.length >= 2) { const len = [0]; for (let i = 1; i < pts.length; i++) len.push(len[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)); return { a, b, pts, len }; }
+    }
     if (e.from === e.to) return { a, b, self: true };
     const back = b.x <= a.x, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 + (back ? 60 + Math.abs(a.x - b.x) * 0.15 : 0);
     return { a, b, c: { x: mx, y: my } };
   }
   function at(g, t) {
+    if (g.pts) { const L = g.len[g.len.length - 1] * t; let i = 1; while (i < g.len.length - 1 && g.len[i] < L) i++;
+      const seg = g.len[i] - g.len[i - 1] || 1, k = Math.max(0, Math.min(1, (L - g.len[i - 1]) / seg));
+      return { x: g.pts[i - 1].x + (g.pts[i].x - g.pts[i - 1].x) * k, y: g.pts[i - 1].y + (g.pts[i].y - g.pts[i - 1].y) * k }; }
+    if (g.self && g.box) { const ang = t * 2 * Math.PI; return { x: g.a.x + Math.sin(ang) * 16, y: g.a.y - g.box.h / 2 - 14 - Math.cos(ang) * 10 }; }
     if (g.self) { const ang = t * 2 * Math.PI; return { x: g.a.x + Math.sin(ang) * 18, y: g.a.y - R - 18 + Math.cos(ang) * -18 + 18 }; }
     const u = 1 - t;
     return { x: u * u * g.a.x + 2 * u * t * g.c.x + t * t * g.b.x, y: u * u * g.a.y + 2 * u * t * g.c.y + t * t * g.b.y };
@@ -2270,6 +2290,7 @@ function graphView(opts) {
     ctx.fillStyle = colors.bg || "#000"; ctx.fillRect(0, 0, W, H);
     ctx.translate(panX, panY); ctx.scale(zoom, zoom);
     ctx.font = "13px system-ui, sans-serif"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+    if (boxes) { drawBoxes(); return; }
     const few = edges.length <= 40;
     for (const e of edges) {
       const g = ends(e); if (!g) continue;
@@ -2303,13 +2324,64 @@ function graphView(opts) {
     info.textContent = `${states.length} states, ${edges.length} transitions` + (hidden > 0 ? `; showing the ${pos.size} within ${FOCUS_RADIUS} steps of ${cur} (${hidden} hidden)` : "") +
       (cur !== null ? `; current: ${opts.nameOf ? opts.nameOf(cur) : cur}` + (finals.has(cur) ? " (may end here)" : "") : "");
   }
-  function resize() { const r = cv.getBoundingClientRect(), dpr = pxRatio(); W = r.width / uiScale; H = r.height / uiScale; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); draw(); }
+  // the book's typestate style: rounded boxes named by what just happened, a double border where the
+  // session may end, edges along LeanFM's routes with one style per kind
+  function rounded(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function drawBoxes() {
+    ctx.font = "12px system-ui, sans-serif";
+    for (const e of edges) {
+      const g = ends(e); if (!g) continue;
+      const hot = e.from === cur, msg = e.kind === "send" || e.kind === "receive" || e.kind === "event";
+      ctx.strokeStyle = hot ? colors.amber : (e.kind === "receive" ? colors.cyan : msg ? colors.fg : colors.dim);
+      ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = hot ? 2.2 : 1.2; ctx.setLineDash(msg ? [] : [5, 4]);
+      let tip, dir;
+      ctx.beginPath();
+      if (g.self) { const b = g.box, cx = g.a.x, top = g.a.y - b.h / 2; ctx.moveTo(cx - 10, top); ctx.bezierCurveTo(cx - 24, top - 30, cx + 24, top - 30, cx + 10, top); tip = { x: cx + 10, y: top }; dir = Math.PI / 2 + 0.5; }
+      else {
+        const p = g.pts; ctx.moveTo(p[0].x, p[0].y);
+        if (p.length === 2) { const dx = (p[1].x - p[0].x) / 2; ctx.bezierCurveTo(p[0].x + dx, p[0].y, p[1].x - dx, p[1].y, p[1].x, p[1].y); dir = dx >= 0 ? 0 : Math.PI; }
+        else { for (let i = 1; i < p.length - 1; i++) { const mx = (p[i].x + p[i + 1].x) / 2, my = (p[i].y + p[i + 1].y) / 2; ctx.quadraticCurveTo(p[i].x, p[i].y, mx, my); }
+          const q = p[p.length - 1], r = p[p.length - 2]; ctx.lineTo(q.x, q.y); dir = Math.atan2(q.y - r.y, q.x - r.x); }
+        tip = p[p.length - 1];
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x - 8 * Math.cos(dir - 0.4), tip.y - 8 * Math.sin(dir - 0.4)); ctx.lineTo(tip.x - 8 * Math.cos(dir + 0.4), tip.y - 8 * Math.sin(dir + 0.4)); ctx.fill();
+      // a structural step (each session, then, branch, join) is named on its edge; a message names its target box
+      if (!msg && e.label && g.pts) { const m = at(g, 0.5); ctx.fillStyle = hot ? colors.amber : colors.dim; ctx.fillText(String(e.label).slice(0, 24), m.x, m.y - 8); }
+    }
+    for (const [s, b] of boxes) {
+      const x = b.x - b.w / 2, y = b.y - b.h / 2, isCur = s === cur;
+      ctx.fillStyle = isCur ? colors.amber : colors.panel; ctx.strokeStyle = s === start ? colors.amber : colors.fg; ctx.lineWidth = isCur ? 2.5 : 1.3;
+      rounded(x, y, b.w, b.h, 8); ctx.fill(); ctx.stroke();
+      if (b.ends) { rounded(x + 3, y + 3, b.w - 6, b.h - 6, 6); ctx.stroke(); }
+      ctx.fillStyle = isCur ? colors.bg : colors.fg; ctx.fillText(b.label, b.x, b.y);
+    }
+    if (token) { ctx.fillStyle = colors.amber; ctx.beginPath(); ctx.arc(token.x, token.y, 6, 0, 2 * Math.PI); ctx.fill(); }
+    info.textContent = `${states.length} states, ${edges.length} transitions, laid out by LeanFM` +
+      (cur !== null ? `; current: ${nameOf(cur)}` + (finals.has(cur) ? " (may end here)" : "") : "");
+  }
+  // the whole drawing fits the width once the canvas has one; the canvas is as tall as the drawing needs
+  let fit = null, userZoomed = false;
+  function applyFit() {
+    if (!fit || !W || userZoomed) return;
+    // fitted to what can be seen: the canvas may be wider than the window when something beside it is
+    const seen = Math.min(W, ((document.documentElement.clientWidth || W * uiScale) / uiScale) - 40);
+    zoom = Math.max(0.02, Math.min(1, (seen - 20) / Math.max(1, fit.w))); panX = 10; panY = 10;
+    const want = Math.round(Math.max(140, Math.min(640, fit.h * zoom + 24)) * uiScale) + "px";
+    if (cv.style.height !== want) cv.style.height = want;
+    draw();
+  }
+  function nameOf(s) { return opts.nameOf ? opts.nameOf(s) : boxes && boxes.has(s) ? boxes.get(s).label : s; }
+  function resize() { const r = cv.getBoundingClientRect(), dpr = pxRatio(); W = r.width / uiScale; H = r.height / uiScale; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); draw(); applyFit(); }
   if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(cv);
   function listMoves() {
     const outs = edges.filter((e) => e.from === cur);
     moves.replaceChildren();
     for (const e of outs) {
-      const b = el("button", "", (e.label || e.kind) + " → " + (opts.nameOf ? opts.nameOf(e.to) : e.to));
+      const b = el("button", "", (e.label || e.kind) + " → " + nameOf(e.to));
       b.addEventListener("click", () => (opts.onMove ? opts.onMove(e) : api.move(e)));
       moves.appendChild(b);
     }
@@ -2318,7 +2390,16 @@ function graphView(opts) {
   }
   const api = {
     el: wrap,
-    set(st, ed, s0, fin, c) { states = st.slice(0, MAX_STATES); edges = ed.filter((e) => states.includes(e.from) && states.includes(e.to)); start = s0; finals = new Set(fin || []); cur = c === undefined ? s0 : c; layout(false); listMoves(); },
+    set(st, ed, s0, fin, c, lay) { states = st.slice(0, MAX_STATES); edges = ed.filter((e) => states.includes(e.from) && states.includes(e.to)); start = s0; finals = new Set(fin || []); cur = c === undefined ? s0 : c;
+      boxes = null; fit = null;
+      if (lay && Array.isArray(lay.nodes)) {
+        boxes = new Map();
+        for (const n of lay.nodes.slice(0, MAX_STATES)) boxes.set(String(n.id), { x: num(n.x), y: num(n.y), w: num(n.w), h: num(n.h), label: String(n.label).slice(0, MAX_LABEL), ends: n.ends === true });
+        if (!states.every((s) => boxes.has(s))) boxes = null;
+        // the whole drawing fits the width; the canvas is as tall as the drawing needs
+        if (boxes) { fit = { w: num(lay.width), h: num(lay.height) }; userZoomed = false; applyFit(); }
+      }
+      layout(false); listMoves(); },
     move(e) {
       const g = ends(e), t0 = performance.now(), D = 450;
       const done = () => { token = null; cur = e.to; layout(true); listMoves(); if (opts.onArrive) opts.onArrive(e); };
@@ -2332,20 +2413,21 @@ function graphView(opts) {
   let drag = null;
   cv.addEventListener("pointerdown", (ev) => { drag = { x: ev.clientX, y: ev.clientY, px: panX, py: panY, moved: false }; });
   cv.addEventListener("pointermove", (ev) => { if (!drag) return; const dx = (ev.clientX - drag.x) / uiScale, dy = (ev.clientY - drag.y) / uiScale;
-    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; if (drag.moved) { panX = drag.px + dx; panY = drag.py + dy; draw(); } });
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; if (drag.moved) { userZoomed = true; panX = drag.px + dx; panY = drag.py + dy; draw(); } });
   const end = () => { setTimeout(() => { drag = null; }, 0); };
   cv.addEventListener("pointerup", end); cv.addEventListener("pointerleave", end);
   cv.addEventListener("click", (ev) => {
     if (drag && drag.moved) return;
     const r = cv.getBoundingClientRect(), x = ((ev.clientX - r.left) / uiScale - panX) / zoom, y = ((ev.clientY - r.top) / uiScale - panY) / zoom;
+    if (boxes) { for (const [s, b] of boxes) if (Math.abs(x - b.x) <= b.w / 2 && Math.abs(y - b.y) <= b.h / 2 && !opts.walk) { cur = s; layout(true); listMoves(); return; } return; }
     for (const [s, p] of pos) if ((x - p.x) ** 2 + (y - p.y) ** 2 <= R * R && !opts.walk) { cur = s; layout(true); listMoves(); return; }
   });
   cv.addEventListener("wheel", (ev) => { ev.preventDefault(); const r = cv.getBoundingClientRect(), mx = (ev.clientX - r.left) / uiScale, my = (ev.clientY - r.top) / uiScale;
-    const z = Math.max(0.2, Math.min(4, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15))); panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw(); }, { passive: false });
+    userZoomed = true; const z = Math.max(0.02, Math.min(4, zoom * (ev.deltaY < 0 ? 1.15 : 1 / 1.15))); panX = mx - (mx - panX) * (z / zoom); panY = my - (my - panY) * (z / zoom); zoom = z; draw(); }, { passive: false });
   cv.addEventListener("keydown", (ev) => {
-    if (ev.key === "+" || ev.key === "=") { zoom = Math.min(4, zoom * 1.2); draw(); }
-    else if (ev.key === "-") { zoom = Math.max(0.2, zoom / 1.2); draw(); }
-    else if (ev.key === "0") { zoom = 1; panX = 30; panY = 30; draw(); }
+    if (ev.key === "+" || ev.key === "=") { userZoomed = true; zoom = Math.min(4, zoom * 1.2); draw(); }
+    else if (ev.key === "-") { userZoomed = true; zoom = Math.max(0.02, zoom / 1.2); draw(); }
+    else if (ev.key === "0") { if (fit) { userZoomed = false; applyFit(); } else { zoom = 1; panX = 30; panY = 30; draw(); } }
     else return;
     ev.preventDefault();
   });
@@ -2355,8 +2437,9 @@ function graphView(opts) {
 function machineView(r) {
   const inner = el("div"), box = collapsible("state machine" + (r.role ? " of " + String(r.role) : ""), inner);
   const g = graphView({ aria: "State machine of " + String(r.role) + ". Its transitions from the current state are buttons below the drawing." });
-  g.set((r.states || []).map(String), (Array.isArray(r.edges) ? r.edges : []).map((e) => ({ from: String(e.from), to: String(e.to), label: String(e.label || ""), kind: String(e.kind || "") })),
-    String(r.start || "S0"), (r.finals || []).map(String));
+  const routes = r.layout && Array.isArray(r.layout.edges) ? r.layout.edges : [];
+  g.set((r.states || []).map(String), (Array.isArray(r.edges) ? r.edges : []).map((e, i) => ({ from: String(e.from), to: String(e.to), label: String(e.label || ""), kind: String(e.kind || ""), route: routes[i] || null })),
+    String(r.start || "S0"), (r.finals || []).map(String), undefined, r.layout || null);
   inner.appendChild(g.el);
   if (typeof r.typestate === "string") { const d = el("details"); d.appendChild(el("summary", "", "Typestate API")); d.appendChild(el("pre", "", r.typestate)); inner.appendChild(d); }
   return box;
