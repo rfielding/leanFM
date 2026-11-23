@@ -1,0 +1,9 @@
+{
+ "place_formulas": 40,
+ "place_seconds": 0.05766582489013672,
+ "goserver_states": 3988,
+ "goserver_one_formula_s": 0.20389032363891602,
+ "goserver_parse_s": 0.020210742950439453,
+ "goserver_batch_s": 0.5600666999816895,
+ "goserver_batch_n": 12
+}

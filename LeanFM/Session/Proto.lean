@@ -92,6 +92,21 @@ def scalar (t : String) : Option Ty :=
   else if t == "bool" then some .bool
   else none
 
+/-- A trailing comment on a field's line read as its identity mark and placement, as LeanFM writes
+them (`string session_id = 1; // fresh, header`; selfhost.session.identity.marks): only the words
+fresh or link and header, path or query, comma separated. Any other comment is only a comment
+(none); two marks or two placements are refused. -/
+def markComment (d : String) : Except String (Option (Mark × Place)) := do
+  let words := (d.splitOn ",").map (·.trimAscii.toString)
+  let markW (w : String) : Option Mark := match w with | "fresh" => some .fresh | "link" => some .link | _ => none
+  let placeW (w : String) : Option Place := match w with | "header" => some .header | "path" => some .path | "query" => some .query | _ => none
+  if words.isEmpty || words.any (fun w => (markW w).isNone && (placeW w).isNone) then return none
+  let marks := words.filterMap markW
+  let places := words.filterMap placeW
+  if marks.length > 1 then throw s!"the mark comment // {d} names two marks; a field is fresh or link"
+  if places.length > 1 then throw s!"the mark comment // {d} names two placements; a field travels in one place"
+  return some (marks.headD .plain, places.headD .body)
+
 /-- The messages of a proto3 file, as message types. -/
 def ofProto (text : String) : Except String Env := do
   if text.utf8ByteSize > maxBytes then throw s!"the .proto is over {maxBytes} bytes"
@@ -145,11 +160,21 @@ def ofProto (text : String) : Except String Env := do
               | (.sym '[', _) :: r6 => (r6.dropWhile (fun (p : Tok × Nat) => p.1 != Tok.sym ']')).drop 1
               | _ => r4
             match r5 with
-            | (.sym ';', _) :: r6 =>
+            | (.sym ';', semi) :: r6 =>
               let ty := if wrap == "list" then Ty.list base else if wrap == "opt" then Ty.opt base else base
               let j := jsonName f
-              fields := fields.push { name := j, ty, number := n, protoName := if j == f then "" else f }
-              body := r6
+              -- a trailing comment on the same line may carry the field's mark and placement
+              let (mp, r7) ← match r6 with
+                | (.doc d, ln) :: r7 =>
+                  if ln != semi then pure (none, r6) else
+                  match markComment d with
+                  | .ok (some m) => pure (some m, r7)
+                  | .ok none => pure (none, r6)
+                  | .error e => throw s!".proto line {ln}: {name}.{f}: {e}"
+                | _ => pure (none, r6)
+              let (mark, place) := mp.getD (.plain, .body)
+              fields := fields.push { name := j, ty, number := n, protoName := if j == f then "" else f, mark, place }
+              body := r7
             | _ => fail l2 s!"{name}.{f}: expected ';'"
           | _ => fail l2 s!"{name}: expected a field, such as uint64 price = 1;"
         | (_, l2) :: _ => fail l2 s!"{name}: expected a field or '}'"

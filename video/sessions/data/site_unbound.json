@@ -1,0 +1,12 @@
+{
+ "tool": "session_check",
+ "arguments": {
+  "lean": "structure Login where\n  user : String\nstructure LoggedIn where\n  sid : Header (Fresh String)\nstructure Create where\n  token : Header (Link String)\n  item : String\nstructure Made where\n  token : Header (Link String)\n  orderId : Fresh String\nstructure Get where\n  token : Header (Link String)\n  orderId : PathParam (Link String)\nstructure Got where\n  orderId : Link String\nstructure Logout where\n  sid : Header (Link String)\nprotocol Order (Client, Shop) given token {\n  c: Create from Client to Shop;\n  Made from Shop to Client cause c;\n  g: Get from Client to Shop;\n  Got from Shop to Client cause g;\n}\nprotocol Site (Client, Shop) {\n  l: Login from Client to Shop;\n  LoggedIn from Shop to Client cause l;\n  sessions { include Order Client Shop; }\n  o: Logout from Client to Shop;\n  Bye from Shop to Client cause o;\n}"
+ },
+ "text": "session_check rejected: in Site, statement 3, statement 1: include Order: Order is given token, so bind it to a field in scope: include Order Client Shop with token",
+ "result": {
+  "reason": "in Site, statement 3, statement 1: include Order: Order is given token, so bind it to a field in scope: include Order Client Shop with token",
+  "tool": "session_check",
+  "verdict": "rejected"
+ }
+}

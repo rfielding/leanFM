@@ -1,0 +1,1032 @@
+{
+ "tool": "session_conform",
+ "arguments": {
+  "lean": "structure Login where\n  user : String\nstructure LoggedIn where\n  sid : Header (Fresh String)\nstructure Create where\n  token : Header (Link String)\n  item : String\nstructure Made where\n  token : Header (Link String)\n  orderId : Fresh String\nstructure Get where\n  token : Header (Link String)\n  orderId : PathParam (Link String)\nstructure Got where\n  orderId : Link String\nstructure Logout where\n  sid : Header (Link String)\nprotocol Order (Client, Shop) given token {\n  c: Create from Client to Shop;\n  Made from Shop to Client cause c;\n  g: Get from Client to Shop;\n  Got from Shop to Client cause g;\n}\nprotocol Site (Client, Shop) {\n  l: Login from Client to Shop;\n  LoggedIn from Shop to Client cause l;\n  sessions { include Order Client Shop with token = sid; }\n  o: Logout from Client to Shop;\n  Bye from Shop to Client cause o;\n}",
+  "events": [
+   {
+    "id": "l1",
+    "label": "Login",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "user": "u"
+    }
+   },
+   {
+    "id": "i1",
+    "label": "LoggedIn",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "l1",
+    "headers": {
+     "sid": "s1"
+    }
+   },
+   {
+    "id": "l2",
+    "label": "Login",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "user": "u"
+    }
+   },
+   {
+    "id": "i2",
+    "label": "LoggedIn",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "l2",
+    "headers": {
+     "sid": "s2"
+    }
+   },
+   {
+    "id": "c1",
+    "label": "Create",
+    "from": "Client",
+    "to": "Shop",
+    "headers": {
+     "token": "s1"
+    },
+    "body": {
+     "item": "tea"
+    }
+   },
+   {
+    "id": "c2",
+    "label": "Create",
+    "from": "Client",
+    "to": "Shop",
+    "headers": {
+     "token": "s2"
+    },
+    "body": {
+     "item": "tea"
+    }
+   },
+   {
+    "id": "m2",
+    "label": "Made",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "c2",
+    "headers": {
+     "token": "s2"
+    },
+    "body": {
+     "orderId": "o2"
+    }
+   },
+   {
+    "id": "m1",
+    "label": "Made",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "c1",
+    "headers": {
+     "token": "s1"
+    },
+    "body": {
+     "orderId": "o1"
+    }
+   },
+   {
+    "id": "g1",
+    "label": "Get",
+    "from": "Client",
+    "to": "Shop",
+    "headers": {
+     "token": "s1"
+    },
+    "path": {
+     "orderId": "o1"
+    }
+   },
+   {
+    "id": "g2",
+    "label": "Get",
+    "from": "Client",
+    "to": "Shop",
+    "headers": {
+     "token": "s2"
+    },
+    "path": {
+     "orderId": "o2"
+    }
+   },
+   {
+    "id": "t2",
+    "label": "Got",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "g2",
+    "body": {
+     "orderId": "o2"
+    }
+   },
+   {
+    "id": "t1",
+    "label": "Got",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "g1",
+    "body": {
+     "orderId": "o1"
+    }
+   },
+   {
+    "id": "x1",
+    "label": "Logout",
+    "from": "Client",
+    "to": "Shop",
+    "headers": {
+     "sid": "s1"
+    }
+   },
+   {
+    "id": "b1",
+    "label": "Bye",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "x1"
+   },
+   {
+    "id": "x2",
+    "label": "Logout",
+    "from": "Client",
+    "to": "Shop",
+    "headers": {
+     "sid": "s2"
+    }
+   },
+   {
+    "id": "b2",
+    "label": "Bye",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "x2"
+   }
+  ]
+ },
+ "text": "session_conform conforms: Site: 16 events in 4 sessions follow the protocol",
+ "result": {
+  "deadlineReports": null,
+  "derivedSessions": {
+   "omitted": 0,
+   "reading": "4 sessions derived from causes and the declared session key; the log names no sessions",
+   "sessions": [
+    {
+     "count": 4,
+     "events": [
+      0,
+      1,
+      12,
+      13
+     ],
+     "key": "chain from l1"
+    },
+    {
+     "count": 4,
+     "events": [
+      2,
+      3,
+      14,
+      15
+     ],
+     "key": "chain from l2"
+    },
+    {
+     "count": 4,
+     "events": [
+      4,
+      7,
+      8,
+      11
+     ],
+     "key": "chain from c1",
+     "parent": "chain from l1"
+    },
+    {
+     "count": 4,
+     "events": [
+      5,
+      6,
+      9,
+      10
+     ],
+     "key": "chain from c2",
+     "parent": "chain from l2"
+    }
+   ],
+   "unattributed": []
+  },
+  "diagram": {
+   "calls": [
+    {
+     "bottom": 130,
+     "callee": "Shop",
+     "caller": "Client",
+     "depth": 1,
+     "label": "Login -> LoggedIn",
+     "request": "l",
+     "roles": [
+      "Client",
+      "Shop"
+     ],
+     "top": 70,
+     "y": 100
+    },
+    {
+     "bottom": 242,
+     "callee": "Shop",
+     "caller": "Client",
+     "depth": 1,
+     "label": "Create -> Made",
+     "request": "c",
+     "roles": [
+      "Client",
+      "Shop"
+     ],
+     "top": 182,
+     "y": 212
+    },
+    {
+     "bottom": 302,
+     "callee": "Shop",
+     "caller": "Client",
+     "depth": 1,
+     "label": "Get -> Got",
+     "request": "g",
+     "roles": [
+      "Client",
+      "Shop"
+     ],
+     "top": 242,
+     "y": 272
+    },
+    {
+     "bottom": 406,
+     "callee": "Shop",
+     "caller": "Client",
+     "depth": 1,
+     "label": "Logout -> Bye",
+     "request": "o",
+     "roles": [
+      "Client",
+      "Shop"
+     ],
+     "top": 346,
+     "y": 376
+    }
+   ],
+   "colW": 180,
+   "height": 476,
+   "lanes": [
+    {
+     "role": "Client",
+     "x": 90
+    },
+    {
+     "role": "Shop",
+     "x": 270
+    }
+   ],
+   "shapes": [
+    {
+     "anchor": "start",
+     "bold": false,
+     "cls": "",
+     "fill": "muted",
+     "k": "text",
+     "size": 11,
+     "text": "Site",
+     "x": 10,
+     "y": 14
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 72,
+     "x": 54,
+     "y": 20
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Client",
+     "x": 90,
+     "y": 39
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 72,
+     "x": 54,
+     "y": 436
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Client",
+     "x": 90,
+     "y": 455
+    },
+    {
+     "arrow": false,
+     "cls": "lifeline",
+     "dash": "4 4",
+     "k": "line",
+     "stroke": "line",
+     "width": "",
+     "x1": 90,
+     "x2": 90,
+     "y1": 48,
+     "y2": 436
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 56,
+     "x": 242,
+     "y": 20
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Shop",
+     "x": 270,
+     "y": 39
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 56,
+     "x": 242,
+     "y": 436
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Shop",
+     "x": 270,
+     "y": 455
+    },
+    {
+     "arrow": false,
+     "cls": "lifeline",
+     "dash": "4 4",
+     "k": "line",
+     "stroke": "line",
+     "width": "",
+     "x1": 270,
+     "x2": 270,
+     "y1": 48,
+     "y2": 436
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 265,
+     "y": 100
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 265,
+     "y": 212
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 265,
+     "y": 272
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 265,
+     "y": 376
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 270,
+     "y1": 100,
+     "y2": 100
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "l: Login",
+     "x": 180,
+     "y": 94
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 270,
+     "x2": 90,
+     "y1": 130,
+     "y2": 130
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "LoggedIn",
+     "x": 180,
+     "y": 124
+    },
+    {
+     "arrow": false,
+     "cls": "",
+     "d": "M20 144 h42 v12 l-6 6 h-36 z",
+     "dash": "",
+     "fill": "bg",
+     "k": "path",
+     "stroke": "frame"
+    },
+    {
+     "anchor": "start",
+     "bold": true,
+     "cls": "",
+     "fill": "frame",
+     "k": "text",
+     "size": 11,
+     "text": "loop",
+     "x": 25,
+     "y": 157
+    },
+    {
+     "anchor": "start",
+     "bold": false,
+     "cls": "",
+     "fill": "frame",
+     "k": "text",
+     "size": 11,
+     "text": "[one session per request]",
+     "x": 70,
+     "y": 157
+    },
+    {
+     "arrow": false,
+     "cls": "",
+     "d": "M28 174 h34 v12 l-6 6 h-28 z",
+     "dash": "",
+     "fill": "bg",
+     "k": "path",
+     "stroke": "frame"
+    },
+    {
+     "anchor": "start",
+     "bold": true,
+     "cls": "",
+     "fill": "frame",
+     "k": "text",
+     "size": 11,
+     "text": "ref",
+     "x": 33,
+     "y": 187
+    },
+    {
+     "anchor": "start",
+     "bold": false,
+     "cls": "",
+     "fill": "frame",
+     "k": "text",
+     "size": 11,
+     "text": "[Order with token = sid]",
+     "x": 70,
+     "y": 187
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 270,
+     "y1": 212,
+     "y2": 212
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "c: Create",
+     "x": 180,
+     "y": 206
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 270,
+     "x2": 90,
+     "y1": 242,
+     "y2": 242
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Made",
+     "x": 180,
+     "y": 236
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 270,
+     "y1": 272,
+     "y2": 272
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "g: Get",
+     "x": 180,
+     "y": 266
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 270,
+     "x2": 90,
+     "y1": 302,
+     "y2": 302
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Got",
+     "x": 180,
+     "y": 296
+    },
+    {
+     "cls": "frame ref",
+     "fill": "none",
+     "h": 140,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "frame",
+     "w": 304,
+     "x": 28,
+     "y": 174
+    },
+    {
+     "cls": "frame sessions",
+     "fill": "none",
+     "h": 192,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "frame",
+     "w": 320,
+     "x": 20,
+     "y": 144
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 270,
+     "y1": 376,
+     "y2": 376
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "o: Logout",
+     "x": 180,
+     "y": 370
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 270,
+     "x2": 90,
+     "y1": 406,
+     "y2": 406
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Bye",
+     "x": 180,
+     "y": 400
+    }
+   ],
+   "steps": [
+    {
+     "bottom": 100,
+     "dst": "Shop",
+     "src": "Client",
+     "top": 70,
+     "y": 100
+    },
+    {
+     "bottom": 130,
+     "dst": "Client",
+     "src": "Shop",
+     "top": 100,
+     "y": 130
+    },
+    {
+     "bottom": 212,
+     "dst": "Shop",
+     "src": "Client",
+     "top": 182,
+     "y": 212
+    },
+    {
+     "bottom": 242,
+     "dst": "Client",
+     "src": "Shop",
+     "top": 212,
+     "y": 242
+    },
+    {
+     "bottom": 272,
+     "dst": "Shop",
+     "src": "Client",
+     "top": 242,
+     "y": 272
+    },
+    {
+     "bottom": 302,
+     "dst": "Client",
+     "src": "Shop",
+     "top": 272,
+     "y": 302
+    },
+    {
+     "bottom": 376,
+     "dst": "Shop",
+     "src": "Client",
+     "top": 346,
+     "y": 376
+    },
+    {
+     "bottom": 406,
+     "dst": "Client",
+     "src": "Shop",
+     "top": 376,
+     "y": 406
+    }
+   ],
+   "width": 360
+  },
+  "events": [
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 1,
+    "label": "Login",
+    "logId": "l1",
+    "prior": [],
+    "session": "chain from l1",
+    "src": "Client",
+    "thread": "Client@chain from l1"
+   },
+   {
+    "act": false,
+    "cause": 1,
+    "dst": "Client",
+    "id": 2,
+    "label": "LoggedIn",
+    "logId": "i1",
+    "prior": [],
+    "session": "chain from l1",
+    "src": "Shop",
+    "thread": "Shop@chain from l1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 3,
+    "label": "Login",
+    "logId": "l2",
+    "prior": [],
+    "session": "chain from l2",
+    "src": "Client",
+    "thread": "Client@chain from l2"
+   },
+   {
+    "act": false,
+    "cause": 3,
+    "dst": "Client",
+    "id": 4,
+    "label": "LoggedIn",
+    "logId": "i2",
+    "prior": [],
+    "session": "chain from l2",
+    "src": "Shop",
+    "thread": "Shop@chain from l2"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 5,
+    "label": "Create",
+    "logId": "c1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Client",
+    "thread": "Client@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 6,
+    "label": "Create",
+    "logId": "c2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Client",
+    "thread": "Client@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": 6,
+    "dst": "Client",
+    "id": 7,
+    "label": "Made",
+    "logId": "m2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Shop",
+    "thread": "Shop@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": 5,
+    "dst": "Client",
+    "id": 8,
+    "label": "Made",
+    "logId": "m1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Shop",
+    "thread": "Shop@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 9,
+    "label": "Get",
+    "logId": "g1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Client",
+    "thread": "Client@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 10,
+    "label": "Get",
+    "logId": "g2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Client",
+    "thread": "Client@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": 10,
+    "dst": "Client",
+    "id": 11,
+    "label": "Got",
+    "logId": "t2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Shop",
+    "thread": "Shop@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": 9,
+    "dst": "Client",
+    "id": 12,
+    "label": "Got",
+    "logId": "t1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Shop",
+    "thread": "Shop@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 13,
+    "label": "Logout",
+    "logId": "x1",
+    "prior": [],
+    "session": "chain from l1",
+    "src": "Client",
+    "thread": "Client@chain from l1"
+   },
+   {
+    "act": false,
+    "cause": 13,
+    "dst": "Client",
+    "id": 14,
+    "label": "Bye",
+    "logId": "b1",
+    "prior": [],
+    "session": "chain from l1",
+    "src": "Shop",
+    "thread": "Shop@chain from l1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Shop",
+    "id": 15,
+    "label": "Logout",
+    "logId": "x2",
+    "prior": [],
+    "session": "chain from l2",
+    "src": "Client",
+    "thread": "Client@chain from l2"
+   },
+   {
+    "act": false,
+    "cause": 15,
+    "dst": "Client",
+    "id": 16,
+    "label": "Bye",
+    "logId": "b2",
+    "prior": [],
+    "session": "chain from l2",
+    "src": "Shop",
+    "thread": "Shop@chain from l2"
+   }
+  ],
+  "generative": null,
+  "issues": [],
+  "lean": "structure Login where\n  user : String\nstructure LoggedIn where\n  sid : Header (Fresh String)\nstructure Create where\n  token : Header (Link String)\n  item : String\nstructure Made where\n  token : Header (Link String)\n  orderId : Fresh String\nstructure Get where\n  token : Header (Link String)\n  orderId : PathParam (Link String)\nstructure Got where\n  orderId : Link String\nstructure Logout where\n  sid : Header (Link String)\nprotocol Order (Client, Shop) given token {\n  c: Create from Client to Shop;\n  Made from Shop to Client cause c;\n  g: Get from Client to Shop;\n  Got from Shop to Client cause g;\n}\nprotocol Site (Client, Shop) {\n  l: Login from Client to Shop;\n  LoggedIn from Shop to Client cause l;\n  sessions { include Order Client Shop with token = sid; }\n  o: Logout from Client to Shop;\n  Bye from Shop to Client cause o;\n}",
+  "name": "Site",
+  "overlay": null,
+  "protocol": null,
+  "reading": "Site: 16 events in 4 sessions follow the protocol",
+  "roles": [
+   "Client",
+   "Shop"
+  ],
+  "secretFields": [],
+  "sessions": [
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from l1",
+    "unchecked": []
+   },
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from l2",
+    "unchecked": []
+   },
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c1",
+    "unchecked": []
+   },
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c2",
+    "unchecked": []
+   }
+  ],
+  "tool": "session_conform",
+  "unchecked": [],
+  "verdict": "conforms"
+ }
+}

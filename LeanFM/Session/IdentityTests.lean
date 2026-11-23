@@ -171,7 +171,9 @@ def notes (r : Except String Json) : String := match r with | .ok j => (j.getObj
 #guard has (reason (check (a (site.replace " with token = sid;" ";")))) "include Order: Order is given token, so bind it to a field in scope"
 #guard has (reason (check (a (site.replace "with token = sid" "with token = sid, cart")))) "include Order with cart: Order is not given cart; it is given token"
 #guard has (reason (check (a (site.replace "with token = sid" "with token = sid, token")))) "include Order binds token twice"
-#guard has (reason (check (a (site.replace "with token = sid" "with token = user")))) "include Order with token = user: user is not in scope"
+#guard has (reason (check (a (site.replace "with token = sid" "with token = cart")))) "include Order with token = cart: cart is not in scope"
+-- a plain field of an earlier message is a reference that may be bound (a gameId picked from a listing)
+#guard reason (check (a (site.replace "with token = sid" "with token = user"))) == ""
 #guard has (reason (check (a ((site.replace "sid : Header (Fresh String)" "sid : Header (Fresh Nat)").replace "sid : Header (Link String)" "sid : Header (Link Nat)")))) "include Order with token = sid: Order's token is String, but sid is Nat"
 #guard has (reason (check (a (site.replace "structure Made where\n  token : Header (Link String)" "structure Made where\n  token : Header (Fresh String)")))) "Made.token is Fresh, but Order is given token by whoever includes it"
 #guard has (reason (check (a (site.replace "  l: Login from Client to Shop;\n  LoggedIn from Shop to Client cause l;\n  sessions" "  sessions")))) "sid is not in scope"
@@ -191,28 +193,196 @@ def untold := "protocol Lend (M, D) { sessions { b: Borrow from M to D; Lent fro
 def sevn (id label : String) (fromClient : Bool) (cause : Option String) (extra : List (String × Json)) : Json :=
   evn id label (if fromClient then "Client" else "Shop") (if fromClient then "Shop" else "Client") cause extra
 def hdr (k v : String) : Json := Json.mkObj [(k, Json.str v)]
-def login (n s : String) : List Json :=
-  [sevn s!"l{n}" "Login" true none [("body", json% {user: "u"})], sevn s!"i{n}" "LoggedIn" false (some s!"l{n}") [("headers", hdr "sid" s)]]
+def login (n s : String) (k : String := "sid") : List Json :=
+  [sevn s!"l{n}" "Login" true none [("body", json% {user: "u"})], sevn s!"i{n}" "LoggedIn" false (some s!"l{n}") [("headers", hdr k s)]]
 def task (n s o : String) (tok : String := s) : List Json :=
   [ sevn s!"c{n}" "Create" true none [("headers", hdr "token" tok), ("body", json% {item: "tea"})]
   , sevn s!"m{n}" "Made" false (some s!"c{n}") [("headers", hdr "token" tok), ("body", hdr "orderId" o)]
   , sevn s!"g{n}" "Get" true none [("headers", hdr "token" tok), ("path", hdr "orderId" o)]
   , sevn s!"t{n}" "Got" false (some s!"g{n}") [("body", hdr "orderId" o)] ]
-def logout (n s : String) : List Json :=
-  [sevn s!"o{n}" "Logout" true none [("headers", hdr "sid" s)], sevn s!"b{n}" "Bye" false (some s!"o{n}") []]
-def siteRun (evs : List Json) : Except String Json := conform (a site [("events", Json.arr evs.toArray)])
--- one login running two orders, then logging out: one session, every task message linked to it
--- (replaying each order as its own child session is selfhost.session.identity.graph; here the
--- marks place every event, with no identity problem)
-#guard (fun t => !has t "Link" && !has t "join") (issues (siteRun (login "1" "s1" ++ task "1" "s1" "o1" ++ task "2" "s1" "o2" ++ logout "1" "s1")))
-#guard keys (siteRun (login "1" "s1" ++ task "1" "s1" "o1" ++ task "2" "s1" "o2" ++ logout "1" "s1")) == [("chain from l1", 12)]
--- two logins interleaved: two sessions
-#guard (keys (siteRun (login "1" "s1" ++ login "2" "s2" ++ task "1" "s1" "o1" ++ task "2" "s2" "o2" ++ logout "1" "s1" ++ logout "2" "s2"))).map (·.2) == [8, 8]
--- negative: an order task carrying another login's token links two live sessions, and is reported
-#guard has (issues (siteRun (login "1" "s1" ++ login "2" "s2" ++ task "1" "s1" "o1" ++
-  [sevn "gx" "Get" true none [("headers", hdr "token" "s2"), ("path", hdr "orderId" "o1")]]))) "event gx (Get) links sid=s2 and orderId=o1, which are different live sessions"
+def logout (n s : String) (k : String := "sid") : List Json :=
+  [sevn s!"x{n}" "Logout" true none [("headers", hdr k s)], sevn s!"b{n}" "Bye" false (some s!"x{n}") []]
+def siteRun (evs : List Json) (text : String := site) : Except String Json :=
+  conform (a text [("events", Json.arr evs.toArray)])
+/-- each derived session's key and its parent's key -/
+def parents (r : Except String Json) : List (String × String) := match r with
+  | .ok j => match (j.getObjValD "derivedSessions").getObjValD "sessions" with
+    | .arr xs => xs.toList.map fun x => ((x.getObjValAs? String "key").toOption.getD "", (x.getObjValAs? String "parent").toOption.getD "")
+    | _ => []
+  | .error _ => []
+
+/-! Child sessions from given and with (selfhost.session.identity.children) -/
+
+-- one login running two orders, then logging out: the login keeps its own four messages, each order
+-- is a child session naming it as parent, and every session follows the protocol
+def oneLogin := login "1" "s1" ++ task "1" "s1" "o1" ++ task "2" "s1" "o2" ++ logout "1" "s1"
+#guard out (siteRun oneLogin) "verdict" == "conforms"
+#guard keys (siteRun oneLogin) == [("chain from l1", 4), ("chain from c1", 4), ("chain from c2", 4)]
+#guard parents (siteRun oneLogin) == [("chain from l1", ""), ("chain from c1", "chain from l1"), ("chain from c2", "chain from l1")]
+-- two logins interleaved, each running an order: four sessions, each order under its own login
+def twoLogins := login "1" "s1" ++ login "2" "s2" ++ task "1" "s1" "o1" ++ task "2" "s2" "o2" ++ logout "1" "s1" ++ logout "2" "s2"
+#guard out (siteRun twoLogins) "verdict" == "conforms"
+#guard parents (siteRun twoLogins) == [("chain from l1", ""), ("chain from l2", ""), ("chain from c1", "chain from l1"), ("chain from c2", "chain from l2")]
+-- an order's orderId is freed when the order ends: a second order minting it again conforms
+#guard out (siteRun (login "1" "s1" ++ task "1" "s1" "o7" ++ task "2" "s1" "o7" ++ logout "1" "s1")) "verdict" == "conforms"
+-- with token under its own name derives children as with token = sid does
+def siteSame := ((site.replace "  sid : Header" "  token : Header").replace " with token = sid;" " with token;")
+#guard reason (check (a siteSame)) == ""
+#guard parents (siteRun (login "1" "s1" "token" ++ task "1" "s1" "o1" ++ logout "1" "s1" "token") siteSame) ==
+  [("chain from l1", ""), ("chain from c1", "chain from l1")]
+-- negative: an order message carrying another login's token names a second parent, is reported
+-- naming both sessions, and stays in its order's session
+def crossed := login "1" "s1" ++ login "2" "s2" ++ (task "1" "s1" "o1").take 2 ++
+  [sevn "gx" "Get" true none [("headers", hdr "token" "s2"), ("path", hdr "orderId" "o1")]]
+#guard has (issues (siteRun crossed)) "event gx (Get) carries token=s2, naming session chain from l2 as its parent, but its session chain from c1 is a child of chain from l1"
+#guard keys (siteRun crossed) == [("chain from l1", 2), ("chain from l2", 2), ("chain from c1", 3)]
 -- negative: a token no login minted
 #guard has (issues (siteRun (login "1" "s1" ++ task "1" "s1" "o1" "s9"))) "event c1 (Create) carries the Link sid=s9, but no live session minted sid=s9"
+-- negative: after logout the login's sid is freed, so a task carrying it names no live session
+#guard has (issues (siteRun (login "1" "s1" ++ logout "1" "s1" ++ task "1" "s1" "o1"))) "event c1 (Create) carries the Link sid=s1, but no live session minted sid=s1"
+
+-- an include in sequence continues its includer's session: a given Link there joins, it names no parent
+def siteSeq := site.replace "  sessions { include Order Client Shop with token = sid; }" "  include Order Client Shop with token = sid;"
+#guard reason (check (a siteSeq)) == ""
+#guard out (siteRun (login "1" "s1" ++ task "1" "s1" "o1" ++ logout "1" "s1") siteSeq) "verdict" == "conforms"
+#guard parents (siteRun (login "1" "s1" ++ task "1" "s1" "o1" ++ logout "1" "s1") siteSeq) == [("chain from l1", "")]
+
+/-! Threads: an actor's own order, its prev chain (selfhost.mcp.session.view) -/
+
+/-- An event from one actor to another, with the sender's previous send as prev. -/
+def aev (id label src dst : String) (cause prev : Option String) (extra : List (String × Json)) : Json :=
+  Json.mkObj ([("id", Json.str id), ("label", Json.str label), ("from", Json.str src), ("to", Json.str dst)] ++
+    (cause.map fun c => [("cause", Json.str c)]).getD [] ++ (prev.map fun c => [("prev", Json.str c)]).getD [] ++ extra)
+def oid (o : String) : List (String × Json) := [("headers", hdr "orderId" o)]
+-- one server thread Api/a1 serves two orders in turn: its prev chain runs through both sessions
+def served : List Json :=
+  [ aev "c1" "CreateOrder" "Client/c1" "Api/a1" none none [("body", json% {item: "tea"})]
+  , aev "c2" "CreateOrder" "Client/c2" "Api/a1" none none [("body", json% {item: "tea"})]
+  , aev "k1" "Created" "Api/a1" "Client/c1" (some "c1") none (oid "o1")
+  , aev "k2" "Created" "Api/a1" "Client/c2" (some "c2") (some "k1") (oid "o2")
+  , aev "g2" "GetOrder" "Client/c2" "Api/a1" none (some "c2") [("path", hdr "orderId" "o2"), ("query", json% {verbose: false})]
+  , aev "g1" "GetOrder" "Client/c1" "Api/a1" none (some "c1") [("path", hdr "orderId" "o1"), ("query", json% {verbose: false})]
+  , aev "r2" "Order" "Api/a1" "Client/c2" (some "g2") (some "k2") [("body", json% {orderId: "o2", item: "tea"})]
+  , aev "r1" "Order" "Api/a1" "Client/c1" (some "g1") (some "r2") [("body", json% {orderId: "o1", item: "tea"})] ]
+def threadsOf (r : Except String Json) : List String := match r with
+  | .ok j => match j.getObjValD "events" with
+    | .arr xs => xs.toList.map fun x => (x.getObjValAs? String "thread").toOption.getD ""
+    | _ => []
+  | .error e => [e]
+#guard out (run served) "verdict" == "conforms"
+-- prev orders the server's thread; it never joins the two orders it served
+#guard keys (run served) == [("chain from c1", 4), ("chain from c2", 4)]
+#guard threadsOf (run served) == ["Client/c1", "Client/c2", "Api/a1", "Api/a1", "Client/c2", "Client/c1", "Api/a1", "Api/a1"]
+-- every stream event names its actors, so each instance is its own lifeline
+def actorsOf (r : Except String Json) : List (String × String) := match r with
+  | .ok j => match j.getObjValD "events" with
+    | .arr xs => xs.toList.map fun x => ((x.getObjValAs? String "srcActor").toOption.getD "", (x.getObjValAs? String "dstActor").toOption.getD "")
+    | _ => []
+  | .error e => [(e, "")]
+#guard (actorsOf (run served)).take 3 == [("Client/c1", "Api/a1"), ("Client/c2", "Api/a1"), ("Api/a1", "Client/c1")]
+-- a log naming only roles: its actors are the roles
+#guard (actorsOf (run two)).take 1 == [("Client", "Api")]
+-- a log naming only roles: each role is its own thread in each session
+#guard (threadsOf (run two)).take 3 == ["Client@chain from c1", "Client@chain from c2", "Api@chain from c2"]
+
+/-! Joins: a play belongs to its player and to its game (selfhost.session.identity.joins) -/
+
+/-- A person signs in; then creates a game (a session of its own, minting gameId, live until it is over), or finds one
+(a plain gameId: a reference, not a membership) and plays in it, given both ids. -/
+def games := "structure Login where
+  user : String
+structure In where
+  sid : Header (Fresh String)
+structure Make where
+  sid : Header (Link String)
+structure Made where
+  gameId : Fresh String
+structure Find where
+  sid : Header (Link String)
+structure Found where
+  gameId : String
+structure Move where
+  sid : Header (Link String)
+  gameId : Link String
+structure Moved where
+  gameId : Link String
+protocol Game (P, S) given sid {
+  m: Make from P to S;
+  Made from S to P cause m;
+  rec Turns {
+    choice {
+      Tick at S;
+      continue Turns;
+    } or {
+      Over at S;
+    }
+  }
+}
+protocol Play (P, S) given sid gameId {
+  v: Move from P to S;
+  Moved from S to P cause v;
+}
+protocol Lobby (P, S) {
+  l: Login from P to S;
+  In from S to P cause l;
+  choice {
+    sessions { include Game P S with sid; }
+  } or {
+    f: Find from P to S;
+    Found from S to P cause f;
+    sessions { include Play P S with sid, gameId; }
+  }
+}"
+def gev (id label : String) (toS : Bool) (cause : Option String) (fs : List (String × Json)) : Json :=
+  Json.mkObj ([("id", Json.str id), ("label", Json.str label), ("from", Json.str (if toS then "P" else "S")),
+    ("to", Json.str (if toS then "S" else "P"))] ++ (cause.map fun c => [("cause", Json.str c)]).getD [] ++ [("fields", Json.mkObj fs)])
+def gs (v : String) : Json := Json.str v
+-- p1 creates game g1; p2 finds it and plays in it
+def gameLog (gid : String := "g1") : List Json :=
+  [ gev "l1" "Login" true none [("user", gs "a")], gev "i1" "In" false (some "l1") [("sid", gs "s1")]
+  , gev "l2" "Login" true none [("user", gs "b")], gev "i2" "In" false (some "l2") [("sid", gs "s2")]
+  , gev "m1" "Make" true none [("sid", gs "s1")], gev "d1" "Made" false (some "m1") [("gameId", gs "g1")]
+  , gev "f2" "Find" true none [("sid", gs "s2")], gev "n2" "Found" false (some "f2") [("gameId", gs "g1")]
+  , gev "v2" "Move" true none [("sid", gs "s2"), ("gameId", gs gid)], gev "o2" "Moved" false (some "v2") [("gameId", gs gid)] ]
+def gamesRun (evs : List Json) : Except String Json :=
+  conform (a games [("events", Json.arr evs.toArray), ("allowIncomplete", Json.bool true)])
+def parentsAll (r : Except String Json) : List (String × List String) := match r with
+  | .ok j => match (j.getObjValD "derivedSessions").getObjValD "sessions" with
+    | .arr xs => xs.toList.map fun x => ((x.getObjValAs? String "key").toOption.getD "",
+        match x.getObjValD "parents" with
+        | .arr ps => ps.toList.filterMap (·.getStr?.toOption)
+        | _ => ((x.getObjValAs? String "parent").toOption.toList))
+    | _ => []
+  | .error _ => []
+#guard reason (check (a games)) == ""
+#guard out (gamesRun (gameLog)) "verdict" == "conforms"
+-- the game is a child of its creator; the play joins its player and the game; the listing stays with p2
+#guard parentsAll (gamesRun (gameLog)) ==
+  [("chain from l1", []), ("chain from l2", []), ("chain from m1", ["chain from l1"]), ("chain from v2", ["chain from l2", "chain from m1"])]
+#guard keys (gamesRun (gameLog)) == [("chain from l1", 2), ("chain from l2", 4), ("chain from m1", 2), ("chain from v2", 2)]
+-- negative: a play naming a game no session minted is a problem
+#guard has (issues (gamesRun (gameLog "g9"))) "carries the Link gameId=g9, but no live session minted gameId=g9"
+
+/-! GoServer: sign-in mints the person's session; a game is a session its players join (projects/GoServer) -/
+
+/-- Two people sign in and enter the lobby; person 1 starts a game (a session of its own); both pick
+it and take a seat, person 1 starts the game, and each asks for its state; interleaved, no session
+ids: projects/GoServer/events/two-persons.json. -/
+def goTwo : Json := (Json.parse (include_str "../../projects/GoServer/events/two-persons.json")).toOption.getD Json.null
+def goRun (evs : Json) : Except String Json :=
+  conform (Json.mkObj [("example", "goserver"), ("events", evs), ("allowIncomplete", Json.bool true)])
+#guard out (goRun goTwo) "verdict" == "conforms"
+-- GoServer one game, two players: each person's session holds only their own requests; the game is
+-- a child of its creator; each seat and each game-state request joins its person and the game
+#guard parentsAll (goRun goTwo) ==
+  [("chain from i1", []), ("chain from i2", []), ("chain from c1", ["chain from i1"]),
+   ("chain from t1", ["chain from i1", "chain from c1"]), ("chain from t2", ["chain from i2", "chain from c1"]),
+   ("chain from q1", ["chain from i1", "chain from c1"]), ("chain from q2", ["chain from i2", "chain from c1"])]
+#guard (keys (goRun goTwo)).take 3 == [("chain from i1", 6), ("chain from i2", 6), ("chain from c1", 4)]
+-- GoServer unknown sessionId: a request carrying a sessionId no sign-in issued is a problem
+#guard has (issues (goRun ((Json.parse ((include_str "../../projects/GoServer/events/two-persons.json").replace "\"sessionId\": \"s2\",\n   \"gameId\": \"g1\",\n   \"requestId\": \"26\"" "\"sessionId\": \"s9\",\n   \"gameId\": \"g1\",\n   \"requestId\": \"26\"")).toOption.getD Json.null))) "carries the Link sessionId=s9, but no live session minted sessionId=s9"
+-- GoServer unknown game: a request naming a game no live session created is a problem
+#guard has (issues (goRun ((Json.parse ((include_str "../../projects/GoServer/events/two-persons.json").replace "\"sessionId\": \"s2\",\n   \"gameId\": \"g1\",\n   \"requestId\": \"26\"" "\"sessionId\": \"s2\",\n   \"gameId\": \"g7\",\n   \"requestId\": \"26\"")).toOption.getD Json.null))) "carries the Link gameId=g7, but no live session minted gameId=g7"
 
 /-! sessions by: the key is freed when its session terminates (selfhost.session.identity.scopes) -/
 

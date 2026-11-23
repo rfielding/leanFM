@@ -1,0 +1,581 @@
+{
+ "tool": "session_conform",
+ "arguments": {
+  "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+  "events": [
+   {
+    "id": "c1",
+    "label": "CreateOrder",
+    "from": "Client/c1",
+    "to": "Api/a1",
+    "body": {
+     "item": "tea"
+    }
+   },
+   {
+    "id": "c2",
+    "label": "CreateOrder",
+    "from": "Client/c2",
+    "to": "Api/a1",
+    "body": {
+     "item": "tea"
+    }
+   },
+   {
+    "id": "k1",
+    "label": "Created",
+    "from": "Api/a1",
+    "to": "Client/c1",
+    "cause": "c1",
+    "headers": {
+     "orderId": "o1"
+    }
+   },
+   {
+    "id": "k2",
+    "label": "Created",
+    "from": "Api/a1",
+    "to": "Client/c2",
+    "cause": "c2",
+    "headers": {
+     "orderId": "o2"
+    },
+    "prev": "k1"
+   },
+   {
+    "id": "g2",
+    "label": "GetOrder",
+    "from": "Client/c2",
+    "to": "Api/a1",
+    "path": {
+     "orderId": "o2"
+    },
+    "query": {
+     "verbose": false
+    },
+    "prev": "c2"
+   },
+   {
+    "id": "g1",
+    "label": "GetOrder",
+    "from": "Client/c1",
+    "to": "Api/a1",
+    "path": {
+     "orderId": "o1"
+    },
+    "query": {
+     "verbose": false
+    },
+    "prev": "c1"
+   },
+   {
+    "id": "r2",
+    "label": "Order",
+    "from": "Api/a1",
+    "to": "Client/c2",
+    "cause": "g2",
+    "body": {
+     "orderId": "o2",
+     "item": "tea"
+    },
+    "prev": "k2"
+   },
+   {
+    "id": "r1",
+    "label": "Order",
+    "from": "Api/a1",
+    "to": "Client/c1",
+    "cause": "g1",
+    "body": {
+     "orderId": "o1",
+     "item": "tea"
+    },
+    "prev": "r2"
+   }
+  ]
+ },
+ "text": "session_conform conforms: Orders: 8 events in 2 sessions follow the protocol",
+ "result": {
+  "deadlineReports": null,
+  "derivedSessions": {
+   "omitted": 0,
+   "reading": "2 sessions derived from causes and the declared session key; the log names no sessions",
+   "sessions": [
+    {
+     "count": 4,
+     "events": [
+      0,
+      2,
+      5,
+      7
+     ],
+     "key": "chain from c1"
+    },
+    {
+     "count": 4,
+     "events": [
+      1,
+      3,
+      4,
+      6
+     ],
+     "key": "chain from c2"
+    }
+   ],
+   "unattributed": []
+  },
+  "diagram": {
+   "calls": [
+    {
+     "bottom": 130,
+     "callee": "Api",
+     "caller": "Client",
+     "depth": 1,
+     "label": "CreateOrder -> Created 201",
+     "request": "c",
+     "roles": [
+      "Client",
+      "Api"
+     ],
+     "top": 70,
+     "y": 100
+    },
+    {
+     "bottom": 190,
+     "callee": "Api",
+     "caller": "Client",
+     "depth": 1,
+     "label": "GetOrder -> Order 200",
+     "request": "g",
+     "roles": [
+      "Client",
+      "Api"
+     ],
+     "top": 130,
+     "y": 160
+    }
+   ],
+   "colW": 281,
+   "height": 260,
+   "lanes": [
+    {
+     "role": "Client",
+     "x": 90
+    },
+    {
+     "role": "Api",
+     "x": 371
+    }
+   ],
+   "shapes": [
+    {
+     "anchor": "start",
+     "bold": false,
+     "cls": "",
+     "fill": "muted",
+     "k": "text",
+     "size": 11,
+     "text": "Orders",
+     "x": 10,
+     "y": 14
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 72,
+     "x": 54,
+     "y": 20
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Client",
+     "x": 90,
+     "y": 39
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 72,
+     "x": 54,
+     "y": 220
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Client",
+     "x": 90,
+     "y": 239
+    },
+    {
+     "arrow": false,
+     "cls": "lifeline",
+     "dash": "4 4",
+     "k": "line",
+     "stroke": "line",
+     "width": "",
+     "x1": 90,
+     "x2": 90,
+     "y1": 48,
+     "y2": 220
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 48,
+     "x": 347,
+     "y": 20
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Api",
+     "x": 371,
+     "y": 39
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 48,
+     "x": 347,
+     "y": 220
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Api",
+     "x": 371,
+     "y": 239
+    },
+    {
+     "arrow": false,
+     "cls": "lifeline",
+     "dash": "4 4",
+     "k": "line",
+     "stroke": "line",
+     "width": "",
+     "x1": 371,
+     "x2": 371,
+     "y1": 48,
+     "y2": 220
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 366,
+     "y": 100
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 366,
+     "y": 160
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 371,
+     "y1": 100,
+     "y2": 100
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "c: CreateOrder - POST /orders",
+     "x": 230,
+     "y": 94
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 371,
+     "x2": 90,
+     "y1": 130,
+     "y2": 130
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Created - 201",
+     "x": 230,
+     "y": 124
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 371,
+     "y1": 160,
+     "y2": 160
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "g: GetOrder - GET /orders/{orderId}",
+     "x": 230,
+     "y": 154
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 371,
+     "x2": 90,
+     "y1": 190,
+     "y2": 190
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Order - 200",
+     "x": 230,
+     "y": 184
+    }
+   ],
+   "steps": [
+    {
+     "bottom": 100,
+     "dst": "Api",
+     "src": "Client",
+     "top": 70,
+     "y": 100
+    },
+    {
+     "bottom": 130,
+     "dst": "Client",
+     "src": "Api",
+     "top": 100,
+     "y": 130
+    },
+    {
+     "bottom": 160,
+     "dst": "Api",
+     "src": "Client",
+     "top": 130,
+     "y": 160
+    },
+    {
+     "bottom": 190,
+     "dst": "Client",
+     "src": "Api",
+     "top": 160,
+     "y": 190
+    }
+   ],
+   "width": 461
+  },
+  "events": [
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "id": 1,
+    "label": "CreateOrder",
+    "logId": "c1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Client",
+    "thread": "Client/c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "id": 2,
+    "label": "CreateOrder",
+    "logId": "c2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Client",
+    "thread": "Client/c2"
+   },
+   {
+    "act": false,
+    "cause": 1,
+    "dst": "Client",
+    "id": 3,
+    "label": "Created",
+    "logId": "k1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Api",
+    "thread": "Api/a1"
+   },
+   {
+    "act": false,
+    "cause": 2,
+    "dst": "Client",
+    "id": 4,
+    "label": "Created",
+    "logId": "k2",
+    "prior": [
+     3
+    ],
+    "session": "chain from c2",
+    "src": "Api",
+    "thread": "Api/a1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "id": 5,
+    "label": "GetOrder",
+    "logId": "g2",
+    "prior": [
+     2
+    ],
+    "session": "chain from c2",
+    "src": "Client",
+    "thread": "Client/c2"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "id": 6,
+    "label": "GetOrder",
+    "logId": "g1",
+    "prior": [
+     1
+    ],
+    "session": "chain from c1",
+    "src": "Client",
+    "thread": "Client/c1"
+   },
+   {
+    "act": false,
+    "cause": 5,
+    "dst": "Client",
+    "id": 7,
+    "label": "Order",
+    "logId": "r2",
+    "prior": [
+     4
+    ],
+    "session": "chain from c2",
+    "src": "Api",
+    "thread": "Api/a1"
+   },
+   {
+    "act": false,
+    "cause": 6,
+    "dst": "Client",
+    "id": 8,
+    "label": "Order",
+    "logId": "r1",
+    "prior": [
+     7
+    ],
+    "session": "chain from c1",
+    "src": "Api",
+    "thread": "Api/a1"
+   }
+  ],
+  "generative": null,
+  "issues": [],
+  "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+  "name": "Orders",
+  "overlay": null,
+  "protocol": null,
+  "reading": "Orders: 8 events in 2 sessions follow the protocol",
+  "roles": [
+   "Client",
+   "Api"
+  ],
+  "secretFields": [],
+  "sessions": [
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c1",
+    "unchecked": []
+   },
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c2",
+    "unchecked": []
+   }
+  ],
+  "tool": "session_conform",
+  "unchecked": [],
+  "verdict": "conforms"
+ }
+}

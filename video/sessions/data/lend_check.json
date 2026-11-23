@@ -1,0 +1,375 @@
+{
+ "tool": "session_check",
+ "arguments": {
+  "lean": "protocol Lend (M, D) { sessions { b: Borrow from M to D; Lent from D to M cause b; Return from M to D; } }"
+ },
+ "text": "session_check ok: Lend: no issues; 2 roles, 3 messages, 2 top-level calls",
+ "result": {
+  "calls": [
+   {
+    "from": "M",
+    "id": "b",
+    "label": "Borrow",
+    "nested": [],
+    "responses": [
+     {
+      "label": "Lent",
+      "status": null
+     }
+    ],
+    "route": null,
+    "to": "D"
+   },
+   {
+    "from": "M",
+    "id": null,
+    "label": "Return",
+    "nested": [],
+    "responses": [],
+    "route": null,
+    "to": "D"
+   }
+  ],
+  "callsText": "b: Borrow  M -> D\n  returns Lent\nReturn  M -> D\n  returns no reply",
+  "diagram": {
+   "calls": [
+    {
+     "bottom": 152,
+     "callee": "D",
+     "caller": "M",
+     "depth": 1,
+     "label": "Borrow -> Lent",
+     "request": "b",
+     "roles": [
+      "M",
+      "D"
+     ],
+     "top": 92,
+     "y": 122
+    }
+   ],
+   "colW": 180,
+   "height": 274,
+   "lanes": [
+    {
+     "role": "M",
+     "x": 90
+    },
+    {
+     "role": "D",
+     "x": 270
+    }
+   ],
+   "shapes": [
+    {
+     "anchor": "start",
+     "bold": false,
+     "cls": "",
+     "fill": "muted",
+     "k": "text",
+     "size": 11,
+     "text": "Lend",
+     "x": 10,
+     "y": 14
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 32,
+     "x": 74,
+     "y": 20
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "M",
+     "x": 90,
+     "y": 39
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 32,
+     "x": 74,
+     "y": 234
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "M",
+     "x": 90,
+     "y": 253
+    },
+    {
+     "arrow": false,
+     "cls": "lifeline",
+     "dash": "4 4",
+     "k": "line",
+     "stroke": "line",
+     "width": "",
+     "x1": 90,
+     "x2": 90,
+     "y1": 48,
+     "y2": 234
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 32,
+     "x": 254,
+     "y": 20
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "D",
+     "x": 270,
+     "y": 39
+    },
+    {
+     "cls": "role",
+     "fill": "actFill",
+     "h": 28,
+     "k": "rect",
+     "rx": 4,
+     "stroke": "fg",
+     "w": 32,
+     "x": 254,
+     "y": 234
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "boxed",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "D",
+     "x": 270,
+     "y": 253
+    },
+    {
+     "arrow": false,
+     "cls": "lifeline",
+     "dash": "4 4",
+     "k": "line",
+     "stroke": "line",
+     "width": "",
+     "x1": 270,
+     "x2": 270,
+     "y1": 48,
+     "y2": 234
+    },
+    {
+     "cls": "activation",
+     "fill": "actFill",
+     "h": 30,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "arrow",
+     "w": 10,
+     "x": 265,
+     "y": 122
+    },
+    {
+     "arrow": false,
+     "cls": "",
+     "d": "M20 84 h42 v12 l-6 6 h-36 z",
+     "dash": "",
+     "fill": "bg",
+     "k": "path",
+     "stroke": "frame"
+    },
+    {
+     "anchor": "start",
+     "bold": true,
+     "cls": "",
+     "fill": "frame",
+     "k": "text",
+     "size": 11,
+     "text": "loop",
+     "x": 25,
+     "y": 97
+    },
+    {
+     "anchor": "start",
+     "bold": false,
+     "cls": "",
+     "fill": "frame",
+     "k": "text",
+     "size": 11,
+     "text": "[one session per request]",
+     "x": 70,
+     "y": 97
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 270,
+     "y1": 122,
+     "y2": 122
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "b: Borrow",
+     "x": 180,
+     "y": 116
+    },
+    {
+     "arrow": true,
+     "cls": "msg reply",
+     "dash": "6 4",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 270,
+     "x2": 90,
+     "y1": 152,
+     "y2": 152
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Lent",
+     "x": 180,
+     "y": 146
+    },
+    {
+     "arrow": true,
+     "cls": "msg",
+     "dash": "",
+     "k": "line",
+     "stroke": "arrow",
+     "width": "2.5",
+     "x1": 90,
+     "x2": 270,
+     "y1": 182,
+     "y2": 182
+    },
+    {
+     "anchor": "middle",
+     "bold": false,
+     "cls": "",
+     "fill": "fg",
+     "k": "text",
+     "size": 12,
+     "text": "Return",
+     "x": 180,
+     "y": 176
+    },
+    {
+     "cls": "frame sessions",
+     "fill": "none",
+     "h": 110,
+     "k": "rect",
+     "rx": 0,
+     "stroke": "frame",
+     "w": 320,
+     "x": 20,
+     "y": 84
+    }
+   ],
+   "steps": [
+    {
+     "bottom": 122,
+     "dst": "D",
+     "src": "M",
+     "top": 92,
+     "y": 122
+    },
+    {
+     "bottom": 152,
+     "dst": "M",
+     "src": "D",
+     "top": 122,
+     "y": 152
+    },
+    {
+     "bottom": 182,
+     "dst": "D",
+     "src": "M",
+     "top": 152,
+     "y": 182
+    }
+   ],
+   "width": 360
+  },
+  "generative": null,
+  "httpCuts": null,
+  "identity": [
+   "in Lend: the copies of sessions { ... } run at once and cannot be told apart: Return names no cause and carries no Link to an id the copy mints; mint one on an answer (orderId : Fresh String) and carry it on Return as a Link, name the message Return answers as its cause, or write sessions by"
+  ],
+  "issues": [],
+  "lean": "protocol Lend (M, D) { sessions { b: Borrow from M to D; Lent from D to M cause b; Return from M to D; } }",
+  "limits": {
+   "maxBranches": 16,
+   "maxDepth": 24,
+   "maxEvents": 600,
+   "maxInstances": 200,
+   "maxLoops": 8,
+   "maxRoles": 12,
+   "maxSpread": 5000,
+   "maxSteps": 200,
+   "maxString": 200
+  },
+  "name": "Lend",
+  "overlay": null,
+  "projections": {
+   "D": {
+    "local": "sessions {\n  receive Borrow from M;\n  send Lent to M;\n  receive Return from M;\n}",
+    "typestate": "start : S0\nS0.serve() : many S1 then End\nS1.receive() : Borrow -> S2    -- from M\nS2.sendLent(m : Lent) : S3    -- to M\nS3.receive() : Return -> End    -- from M"
+   },
+   "M": {
+    "local": "sessions {\n  send Borrow to D;\n  receive Lent from D;\n  send Return to D;\n}",
+    "typestate": "start : S0\nS0.serve() : many S1 then End\nS1.sendBorrow(m : Borrow) : S2    -- to D\nS2.receive() : Lent -> S3    -- from D\nS3.sendReturn(m : Return) : End    -- to D"
+   }
+  },
+  "protocol": null,
+  "reading": "Lend: no issues; 2 roles, 3 messages, 2 top-level calls",
+  "roles": [
+   "M",
+   "D"
+  ],
+  "tool": "session_check",
+  "types": [],
+  "verdict": "ok"
+ }
+}

@@ -1,0 +1,4602 @@
+{
+ "deadlineReports": null,
+ "derivedSessions": {
+  "omitted": 0,
+  "reading": "85 sessions derived from causes and the declared session key; the log names no sessions",
+  "sessions": [
+   {
+    "count": 6,
+    "events": [
+     0,
+     1,
+     2,
+     3,
+     35,
+     39
+    ],
+    "key": "chain from q0"
+   },
+   {
+    "count": 2,
+    "events": [
+     4,
+     6
+    ],
+    "key": "chain from q2",
+    "parent": "chain from q0"
+   },
+   {
+    "count": 2,
+    "events": [
+     5,
+     7
+    ],
+    "key": "chain from q3",
+    "parent": "chain from q0"
+   },
+   {
+    "count": 6,
+    "events": [
+     8,
+     9,
+     10,
+     12,
+     48,
+     50
+    ],
+    "key": "chain from q4"
+   },
+   {
+    "count": 2,
+    "events": [
+     11,
+     14
+    ],
+    "key": "chain from q6",
+    "parent": "chain from q4"
+   },
+   {
+    "count": 2,
+    "events": [
+     13,
+     15
+    ],
+    "key": "chain from q7",
+    "parent": "chain from q4"
+   },
+   {
+    "count": 6,
+    "events": [
+     16,
+     17,
+     18,
+     21,
+     58,
+     59
+    ],
+    "key": "chain from q8"
+   },
+   {
+    "count": 2,
+    "events": [
+     19,
+     22
+    ],
+    "key": "chain from q10",
+    "parent": "chain from q8"
+   },
+   {
+    "count": 2,
+    "events": [
+     20,
+     23
+    ],
+    "key": "chain from q11",
+    "parent": "chain from q8"
+   },
+   {
+    "count": 6,
+    "events": [
+     24,
+     25,
+     26,
+     28,
+     68,
+     69
+    ],
+    "key": "chain from q12"
+   },
+   {
+    "count": 2,
+    "events": [
+     27,
+     30
+    ],
+    "key": "chain from q14",
+    "parent": "chain from q12"
+   },
+   {
+    "count": 2,
+    "events": [
+     29,
+     31
+    ],
+    "key": "chain from q15",
+    "parent": "chain from q12"
+   },
+   {
+    "count": 4,
+    "events": [
+     32,
+     34,
+     76,
+     78
+    ],
+    "key": "chain from q16",
+    "parent": "chain from q0"
+   },
+   {
+    "count": 2,
+    "events": [
+     33,
+     36
+    ],
+    "key": "chain from q17",
+    "parent": "chain from q0"
+   },
+   {
+    "count": 2,
+    "events": [
+     37,
+     40
+    ],
+    "key": "chain from q19",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     38,
+     41
+    ],
+    "key": "chain from q20",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     42,
+     43
+    ],
+    "key": "chain from q21",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     44,
+     45
+    ],
+    "key": "chain from q22",
+    "parent": "chain from q0"
+   },
+   {
+    "count": 2,
+    "events": [
+     46,
+     47
+    ],
+    "key": "chain from q23",
+    "parent": "chain from q4"
+   },
+   {
+    "count": 2,
+    "events": [
+     49,
+     51
+    ],
+    "key": "chain from q25",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     52,
+     54
+    ],
+    "key": "chain from q26",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     53,
+     55
+    ],
+    "key": "chain from q27",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     56,
+     57
+    ],
+    "key": "chain from q28",
+    "parent": "chain from q8"
+   },
+   {
+    "count": 2,
+    "events": [
+     60,
+     61
+    ],
+    "key": "chain from q30",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     62,
+     64
+    ],
+    "key": "chain from q31",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     63,
+     65
+    ],
+    "key": "chain from q32",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     66,
+     67
+    ],
+    "key": "chain from q33",
+    "parent": "chain from q12"
+   },
+   {
+    "count": 2,
+    "events": [
+     70,
+     71
+    ],
+    "key": "chain from q35",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     72,
+     74
+    ],
+    "key": "chain from q36",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     73,
+     75
+    ],
+    "key": "chain from q37",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     77,
+     79
+    ],
+    "key": "chain from q39",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 6,
+    "events": [
+     80,
+     81,
+     82,
+     83,
+     109,
+     113
+    ],
+    "key": "chain from q40"
+   },
+   {
+    "count": 2,
+    "events": [
+     84,
+     86
+    ],
+    "key": "chain from q42",
+    "parent": "chain from q40"
+   },
+   {
+    "count": 2,
+    "events": [
+     85,
+     87
+    ],
+    "key": "chain from q43",
+    "parent": "chain from q40"
+   },
+   {
+    "count": 6,
+    "events": [
+     88,
+     89,
+     91,
+     94,
+     163,
+     165
+    ],
+    "key": "chain from q44"
+   },
+   {
+    "count": 2,
+    "events": [
+     90,
+     93
+    ],
+    "key": "chain from q45",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     92,
+     96
+    ],
+    "key": "chain from q47",
+    "parent": "chain from q44"
+   },
+   {
+    "count": 2,
+    "events": [
+     95,
+     97
+    ],
+    "key": "chain from q48",
+    "parent": "chain from q44"
+   },
+   {
+    "count": 6,
+    "events": [
+     98,
+     99,
+     100,
+     101,
+     178,
+     179
+    ],
+    "key": "chain from q49"
+   },
+   {
+    "count": 2,
+    "events": [
+     102,
+     104
+    ],
+    "key": "chain from q51",
+    "parent": "chain from q49"
+   },
+   {
+    "count": 2,
+    "events": [
+     103,
+     105
+    ],
+    "key": "chain from q52",
+    "parent": "chain from q49"
+   },
+   {
+    "count": 4,
+    "events": [
+     106,
+     108,
+     186,
+     188
+    ],
+    "key": "chain from q53",
+    "parent": "chain from q40"
+   },
+   {
+    "count": 2,
+    "events": [
+     107,
+     110
+    ],
+    "key": "chain from q54",
+    "parent": "chain from q40"
+   },
+   {
+    "count": 2,
+    "events": [
+     111,
+     114
+    ],
+    "key": "chain from q56",
+    "parent": "chain from q40",
+    "parents": [
+     "chain from q40",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     112,
+     115
+    ],
+    "key": "chain from q57",
+    "parent": "chain from q40",
+    "parents": [
+     "chain from q40",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     116,
+     117
+    ],
+    "key": "chain from q58",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     118,
+     119
+    ],
+    "key": "chain from q59",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     120,
+     121
+    ],
+    "key": "chain from q60",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     122,
+     123
+    ],
+    "key": "chain from q61",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     124,
+     125
+    ],
+    "key": "chain from q62",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     126,
+     127
+    ],
+    "key": "chain from q63",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     128,
+     129
+    ],
+    "key": "chain from q64",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     130,
+     131
+    ],
+    "key": "chain from q65",
+    "parent": "chain from q0"
+   },
+   {
+    "count": 2,
+    "events": [
+     132,
+     133
+    ],
+    "key": "chain from q66",
+    "parent": "chain from q4"
+   },
+   {
+    "count": 2,
+    "events": [
+     134,
+     135
+    ],
+    "key": "chain from q67",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     136,
+     137
+    ],
+    "key": "chain from q68",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     138,
+     139
+    ],
+    "key": "chain from q69",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     140,
+     141
+    ],
+    "key": "chain from q70",
+    "parent": "chain from q8"
+   },
+   {
+    "count": 2,
+    "events": [
+     142,
+     143
+    ],
+    "key": "chain from q71",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     144,
+     145
+    ],
+    "key": "chain from q72",
+    "parent": "chain from q40",
+    "parents": [
+     "chain from q40",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     146,
+     147
+    ],
+    "key": "chain from q73",
+    "parent": "chain from q12"
+   },
+   {
+    "count": 2,
+    "events": [
+     148,
+     149
+    ],
+    "key": "chain from q74",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     150,
+     151
+    ],
+    "key": "chain from q75",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     152,
+     153
+    ],
+    "key": "chain from q76",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     154,
+     155
+    ],
+    "key": "chain from q77",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     156,
+     157
+    ],
+    "key": "chain from q78",
+    "parent": "chain from q40"
+   },
+   {
+    "count": 2,
+    "events": [
+     158,
+     159
+    ],
+    "key": "chain from q79",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     160,
+     161
+    ],
+    "key": "chain from q80",
+    "parent": "chain from q44"
+   },
+   {
+    "count": 2,
+    "events": [
+     162,
+     164
+    ],
+    "key": "chain from q81",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     166,
+     167
+    ],
+    "key": "chain from q83",
+    "parent": "chain from q44",
+    "parents": [
+     "chain from q44",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     168,
+     169
+    ],
+    "key": "chain from q84",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     170,
+     172
+    ],
+    "key": "chain from q85",
+    "parent": "chain from q44",
+    "parents": [
+     "chain from q44",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     171,
+     173
+    ],
+    "key": "chain from q86",
+    "parent": "chain from q44",
+    "parents": [
+     "chain from q44",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     174,
+     175
+    ],
+    "key": "chain from q87",
+    "parent": "chain from q49"
+   },
+   {
+    "count": 2,
+    "events": [
+     176,
+     177
+    ],
+    "key": "chain from q88",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     180,
+     181
+    ],
+    "key": "chain from q90",
+    "parent": "chain from q49",
+    "parents": [
+     "chain from q49",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     182,
+     184
+    ],
+    "key": "chain from q91",
+    "parent": "chain from q49",
+    "parents": [
+     "chain from q49",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     183,
+     185
+    ],
+    "key": "chain from q92",
+    "parent": "chain from q49",
+    "parents": [
+     "chain from q49",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     187,
+     189
+    ],
+    "key": "chain from q94",
+    "parent": "chain from q40",
+    "parents": [
+     "chain from q40",
+     "chain from q53"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     190,
+     191
+    ],
+    "key": "chain from q95",
+    "parent": "chain from q12",
+    "parents": [
+     "chain from q12",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     192,
+     193
+    ],
+    "key": "chain from q96",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     194,
+     195
+    ],
+    "key": "chain from q97",
+    "parent": "chain from q4",
+    "parents": [
+     "chain from q4",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 2,
+    "events": [
+     196,
+     197
+    ],
+    "key": "chain from q98",
+    "parent": "chain from q8",
+    "parents": [
+     "chain from q8",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 1,
+    "events": [
+     198
+    ],
+    "key": "chain from q99",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   },
+   {
+    "count": 1,
+    "events": [
+     199
+    ],
+    "key": "chain from q100",
+    "parent": "chain from q0",
+    "parents": [
+     "chain from q0",
+     "chain from q16"
+    ]
+   }
+  ],
+  "unattributed": []
+ },
+ "diagram": null,
+ "events": [
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 1,
+   "label": "IssueSession",
+   "logId": "q0",
+   "prior": [],
+   "session": "chain from q0",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 1,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 2,
+   "label": "SessionIssued",
+   "logId": "a0",
+   "prior": [],
+   "session": "chain from q0",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 3,
+   "label": "EnterRoom",
+   "logId": "q1",
+   "prior": [
+    1
+   ],
+   "session": "chain from q0",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 3,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 4,
+   "label": "RoomEntered",
+   "logId": "a1",
+   "prior": [],
+   "session": "chain from q0",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 5,
+   "label": "ListGames",
+   "logId": "q2",
+   "prior": [
+    3
+   ],
+   "session": "chain from q2",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 6,
+   "label": "ListGames",
+   "logId": "q3",
+   "prior": [
+    5
+   ],
+   "session": "chain from q3",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 5,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 7,
+   "label": "GamesListed",
+   "logId": "a2",
+   "prior": [],
+   "session": "chain from q2",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 6,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 8,
+   "label": "GamesListed",
+   "logId": "a3",
+   "prior": [],
+   "session": "chain from q3",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 9,
+   "label": "IssueSession",
+   "logId": "q4",
+   "prior": [],
+   "session": "chain from q4",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 9,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 10,
+   "label": "SessionIssued",
+   "logId": "a4",
+   "prior": [],
+   "session": "chain from q4",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 11,
+   "label": "EnterRoom",
+   "logId": "q5",
+   "prior": [
+    9
+   ],
+   "session": "chain from q4",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 12,
+   "label": "ListGames",
+   "logId": "q6",
+   "prior": [
+    11
+   ],
+   "session": "chain from q6",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 11,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 13,
+   "label": "RoomEntered",
+   "logId": "a5",
+   "prior": [],
+   "session": "chain from q4",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 14,
+   "label": "ListGames",
+   "logId": "q7",
+   "prior": [
+    12
+   ],
+   "session": "chain from q7",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 12,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 15,
+   "label": "GamesListed",
+   "logId": "a6",
+   "prior": [],
+   "session": "chain from q6",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 14,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 16,
+   "label": "GamesListed",
+   "logId": "a7",
+   "prior": [],
+   "session": "chain from q7",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 17,
+   "label": "IssueSession",
+   "logId": "q8",
+   "prior": [],
+   "session": "chain from q8",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 17,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 18,
+   "label": "SessionIssued",
+   "logId": "a8",
+   "prior": [],
+   "session": "chain from q8",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 19,
+   "label": "EnterRoom",
+   "logId": "q9",
+   "prior": [
+    17
+   ],
+   "session": "chain from q8",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 20,
+   "label": "ListGames",
+   "logId": "q10",
+   "prior": [
+    19
+   ],
+   "session": "chain from q10",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 21,
+   "label": "ListGames",
+   "logId": "q11",
+   "prior": [
+    20
+   ],
+   "session": "chain from q11",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 19,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 22,
+   "label": "RoomEntered",
+   "logId": "a9",
+   "prior": [],
+   "session": "chain from q8",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 20,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 23,
+   "label": "GamesListed",
+   "logId": "a10",
+   "prior": [],
+   "session": "chain from q10",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 21,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 24,
+   "label": "GamesListed",
+   "logId": "a11",
+   "prior": [],
+   "session": "chain from q11",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 25,
+   "label": "IssueSession",
+   "logId": "q12",
+   "prior": [],
+   "session": "chain from q12",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 25,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 26,
+   "label": "SessionIssued",
+   "logId": "a12",
+   "prior": [],
+   "session": "chain from q12",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 27,
+   "label": "EnterRoom",
+   "logId": "q13",
+   "prior": [
+    25
+   ],
+   "session": "chain from q12",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 28,
+   "label": "ListGames",
+   "logId": "q14",
+   "prior": [
+    27
+   ],
+   "session": "chain from q14",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 27,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 29,
+   "label": "RoomEntered",
+   "logId": "a13",
+   "prior": [],
+   "session": "chain from q12",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 30,
+   "label": "ListGames",
+   "logId": "q15",
+   "prior": [
+    28
+   ],
+   "session": "chain from q15",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 28,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 31,
+   "label": "GamesListed",
+   "logId": "a14",
+   "prior": [],
+   "session": "chain from q14",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 30,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 32,
+   "label": "GamesListed",
+   "logId": "a15",
+   "prior": [],
+   "session": "chain from q15",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 33,
+   "label": "CreateGame",
+   "logId": "q16",
+   "prior": [
+    6
+   ],
+   "session": "chain from q16",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 34,
+   "label": "ListGames",
+   "logId": "q17",
+   "prior": [
+    33
+   ],
+   "session": "chain from q17",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 33,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 35,
+   "label": "GameCreated",
+   "logId": "a16",
+   "prior": [],
+   "session": "chain from q16",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 36,
+   "label": "JoinGame",
+   "logId": "q18",
+   "prior": [
+    34
+   ],
+   "session": "chain from q0",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 34,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 37,
+   "label": "GamesListed",
+   "logId": "a17",
+   "prior": [],
+   "session": "chain from q17",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 38,
+   "label": "TakeSeat",
+   "logId": "q19",
+   "prior": [
+    36
+   ],
+   "session": "chain from q19",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 39,
+   "label": "GetGameState",
+   "logId": "q20",
+   "prior": [
+    38
+   ],
+   "session": "chain from q20",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 36,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 40,
+   "label": "GameJoined",
+   "logId": "a18",
+   "prior": [],
+   "session": "chain from q0",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 38,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 41,
+   "label": "SeatTaken",
+   "logId": "a19",
+   "prior": [],
+   "session": "chain from q19",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 39,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 42,
+   "label": "GameState",
+   "logId": "a20",
+   "prior": [],
+   "session": "chain from q20",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 43,
+   "label": "GetGameState",
+   "logId": "q21",
+   "prior": [
+    39
+   ],
+   "session": "chain from q21",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 43,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 44,
+   "label": "GameState",
+   "logId": "a21",
+   "prior": [],
+   "session": "chain from q21",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 45,
+   "label": "ListGames",
+   "logId": "q22",
+   "prior": [
+    43
+   ],
+   "session": "chain from q22",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 45,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 46,
+   "label": "GamesListed",
+   "logId": "a22",
+   "prior": [],
+   "session": "chain from q22",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 47,
+   "label": "ListGames",
+   "logId": "q23",
+   "prior": [
+    14
+   ],
+   "session": "chain from q23",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 47,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 48,
+   "label": "GamesListed",
+   "logId": "a23",
+   "prior": [],
+   "session": "chain from q23",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 49,
+   "label": "JoinGame",
+   "logId": "q24",
+   "prior": [
+    47
+   ],
+   "session": "chain from q4",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 50,
+   "label": "GetGameState",
+   "logId": "q25",
+   "prior": [
+    49
+   ],
+   "session": "chain from q25",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 49,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 51,
+   "label": "GameJoined",
+   "logId": "a24",
+   "prior": [],
+   "session": "chain from q4",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 50,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 52,
+   "label": "GameState",
+   "logId": "a25",
+   "prior": [],
+   "session": "chain from q25",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 53,
+   "label": "TakeSeat",
+   "logId": "q26",
+   "prior": [
+    50
+   ],
+   "session": "chain from q26",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 54,
+   "label": "GetGameState",
+   "logId": "q27",
+   "prior": [
+    53
+   ],
+   "session": "chain from q27",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 53,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 55,
+   "label": "SeatTaken",
+   "logId": "a26",
+   "prior": [],
+   "session": "chain from q26",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 54,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 56,
+   "label": "GameState",
+   "logId": "a27",
+   "prior": [],
+   "session": "chain from q27",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 57,
+   "label": "ListGames",
+   "logId": "q28",
+   "prior": [
+    21
+   ],
+   "session": "chain from q28",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 57,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 58,
+   "label": "GamesListed",
+   "logId": "a28",
+   "prior": [],
+   "session": "chain from q28",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 59,
+   "label": "JoinGame",
+   "logId": "q29",
+   "prior": [
+    57
+   ],
+   "session": "chain from q8",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 59,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 60,
+   "label": "GameJoined",
+   "logId": "a29",
+   "prior": [],
+   "session": "chain from q8",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 61,
+   "label": "GetGameState",
+   "logId": "q30",
+   "prior": [
+    59
+   ],
+   "session": "chain from q30",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 61,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 62,
+   "label": "GameState",
+   "logId": "a30",
+   "prior": [],
+   "session": "chain from q30",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 63,
+   "label": "TakeSeat",
+   "logId": "q31",
+   "prior": [
+    61
+   ],
+   "session": "chain from q31",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 64,
+   "label": "GetGameState",
+   "logId": "q32",
+   "prior": [
+    63
+   ],
+   "session": "chain from q32",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 63,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 65,
+   "label": "SeatTaken",
+   "logId": "a31",
+   "prior": [],
+   "session": "chain from q31",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 64,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 66,
+   "label": "GameState",
+   "logId": "a32",
+   "prior": [],
+   "session": "chain from q32",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 67,
+   "label": "ListGames",
+   "logId": "q33",
+   "prior": [
+    30
+   ],
+   "session": "chain from q33",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 67,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 68,
+   "label": "GamesListed",
+   "logId": "a33",
+   "prior": [],
+   "session": "chain from q33",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 69,
+   "label": "JoinGame",
+   "logId": "q34",
+   "prior": [
+    67
+   ],
+   "session": "chain from q12",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 69,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 70,
+   "label": "GameJoined",
+   "logId": "a34",
+   "prior": [],
+   "session": "chain from q12",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 71,
+   "label": "GetGameState",
+   "logId": "q35",
+   "prior": [
+    69
+   ],
+   "session": "chain from q35",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 71,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 72,
+   "label": "GameState",
+   "logId": "a35",
+   "prior": [],
+   "session": "chain from q35",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 73,
+   "label": "TakeSeat",
+   "logId": "q36",
+   "prior": [
+    71
+   ],
+   "session": "chain from q36",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 74,
+   "label": "GetGameState",
+   "logId": "q37",
+   "prior": [
+    73
+   ],
+   "session": "chain from q37",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 73,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 75,
+   "label": "SeatTaken",
+   "logId": "a36",
+   "prior": [],
+   "session": "chain from q36",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 74,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 76,
+   "label": "GameState",
+   "logId": "a37",
+   "prior": [],
+   "session": "chain from q37",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 77,
+   "label": "StartGame",
+   "logId": "q38",
+   "prior": [
+    45
+   ],
+   "session": "chain from q16",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 78,
+   "label": "GetGameState",
+   "logId": "q39",
+   "prior": [
+    77
+   ],
+   "session": "chain from q39",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 77,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 79,
+   "label": "GameStarted",
+   "logId": "a38",
+   "prior": [],
+   "session": "chain from q16",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 78,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 80,
+   "label": "GameState",
+   "logId": "a39",
+   "prior": [],
+   "session": "chain from q39",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 81,
+   "label": "IssueSession",
+   "logId": "q40",
+   "prior": [],
+   "session": "chain from q40",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 81,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 82,
+   "label": "SessionIssued",
+   "logId": "a40",
+   "prior": [],
+   "session": "chain from q40",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 83,
+   "label": "EnterRoom",
+   "logId": "q41",
+   "prior": [
+    81
+   ],
+   "session": "chain from q40",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 83,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 84,
+   "label": "RoomEntered",
+   "logId": "a41",
+   "prior": [],
+   "session": "chain from q40",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 85,
+   "label": "ListGames",
+   "logId": "q42",
+   "prior": [
+    83
+   ],
+   "session": "chain from q42",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 86,
+   "label": "ListGames",
+   "logId": "q43",
+   "prior": [
+    85
+   ],
+   "session": "chain from q43",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 85,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 87,
+   "label": "GamesListed",
+   "logId": "a42",
+   "prior": [],
+   "session": "chain from q42",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 86,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 88,
+   "label": "GamesListed",
+   "logId": "a43",
+   "prior": [],
+   "session": "chain from q43",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 89,
+   "label": "IssueSession",
+   "logId": "q44",
+   "prior": [],
+   "session": "chain from q44",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 89,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 90,
+   "label": "SessionIssued",
+   "logId": "a44",
+   "prior": [],
+   "session": "chain from q44",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 91,
+   "label": "GetGameState",
+   "logId": "q45",
+   "prior": [
+    78
+   ],
+   "session": "chain from q45",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 92,
+   "label": "EnterRoom",
+   "logId": "q46",
+   "prior": [
+    89
+   ],
+   "session": "chain from q44",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 93,
+   "label": "ListGames",
+   "logId": "q47",
+   "prior": [
+    92
+   ],
+   "session": "chain from q47",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 91,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 94,
+   "label": "GameState",
+   "logId": "a45",
+   "prior": [],
+   "session": "chain from q45",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 92,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 95,
+   "label": "RoomEntered",
+   "logId": "a46",
+   "prior": [],
+   "session": "chain from q44",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 96,
+   "label": "ListGames",
+   "logId": "q48",
+   "prior": [
+    93
+   ],
+   "session": "chain from q48",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 93,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 97,
+   "label": "GamesListed",
+   "logId": "a47",
+   "prior": [],
+   "session": "chain from q47",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 96,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 98,
+   "label": "GamesListed",
+   "logId": "a48",
+   "prior": [],
+   "session": "chain from q48",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 99,
+   "label": "IssueSession",
+   "logId": "q49",
+   "prior": [],
+   "session": "chain from q49",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 99,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 100,
+   "label": "SessionIssued",
+   "logId": "a49",
+   "prior": [],
+   "session": "chain from q49",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 101,
+   "label": "EnterRoom",
+   "logId": "q50",
+   "prior": [
+    99
+   ],
+   "session": "chain from q49",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 101,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 102,
+   "label": "RoomEntered",
+   "logId": "a50",
+   "prior": [],
+   "session": "chain from q49",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 103,
+   "label": "ListGames",
+   "logId": "q51",
+   "prior": [
+    101
+   ],
+   "session": "chain from q51",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 104,
+   "label": "ListGames",
+   "logId": "q52",
+   "prior": [
+    103
+   ],
+   "session": "chain from q52",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 103,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 105,
+   "label": "GamesListed",
+   "logId": "a51",
+   "prior": [],
+   "session": "chain from q51",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 104,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 106,
+   "label": "GamesListed",
+   "logId": "a52",
+   "prior": [],
+   "session": "chain from q52",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 107,
+   "label": "CreateGame",
+   "logId": "q53",
+   "prior": [
+    86
+   ],
+   "session": "chain from q53",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 108,
+   "label": "ListGames",
+   "logId": "q54",
+   "prior": [
+    107
+   ],
+   "session": "chain from q54",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 107,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 109,
+   "label": "GameCreated",
+   "logId": "a53",
+   "prior": [],
+   "session": "chain from q53",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 110,
+   "label": "JoinGame",
+   "logId": "q55",
+   "prior": [
+    108
+   ],
+   "session": "chain from q40",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 108,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 111,
+   "label": "GamesListed",
+   "logId": "a54",
+   "prior": [],
+   "session": "chain from q54",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 112,
+   "label": "TakeSeat",
+   "logId": "q56",
+   "prior": [
+    110
+   ],
+   "session": "chain from q56",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 113,
+   "label": "GetGameState",
+   "logId": "q57",
+   "prior": [
+    112
+   ],
+   "session": "chain from q57",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 110,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 114,
+   "label": "GameJoined",
+   "logId": "a55",
+   "prior": [],
+   "session": "chain from q40",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 112,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 115,
+   "label": "SeatTaken",
+   "logId": "a56",
+   "prior": [],
+   "session": "chain from q56",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 113,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 116,
+   "label": "GameState",
+   "logId": "a57",
+   "prior": [],
+   "session": "chain from q57",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 117,
+   "label": "GetGameState",
+   "logId": "q58",
+   "prior": [
+    91
+   ],
+   "session": "chain from q58",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 117,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 118,
+   "label": "GameState",
+   "logId": "a58",
+   "prior": [],
+   "session": "chain from q58",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 119,
+   "label": "GetGameState",
+   "logId": "q59",
+   "prior": [
+    54
+   ],
+   "session": "chain from q59",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 119,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 120,
+   "label": "GameState",
+   "logId": "a59",
+   "prior": [],
+   "session": "chain from q59",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 121,
+   "label": "GetGameState",
+   "logId": "q60",
+   "prior": [
+    64
+   ],
+   "session": "chain from q60",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 121,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 122,
+   "label": "GameState",
+   "logId": "a60",
+   "prior": [],
+   "session": "chain from q60",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 123,
+   "label": "GetGameState",
+   "logId": "q61",
+   "prior": [
+    74
+   ],
+   "session": "chain from q61",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 123,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 124,
+   "label": "GameState",
+   "logId": "a61",
+   "prior": [],
+   "session": "chain from q61",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 125,
+   "label": "GetGameState",
+   "logId": "q62",
+   "prior": [
+    117
+   ],
+   "session": "chain from q62",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 125,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 126,
+   "label": "GameState",
+   "logId": "a62",
+   "prior": [],
+   "session": "chain from q62",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 127,
+   "label": "GetGameState",
+   "logId": "q63",
+   "prior": [
+    119
+   ],
+   "session": "chain from q63",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 127,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 128,
+   "label": "GameState",
+   "logId": "a63",
+   "prior": [],
+   "session": "chain from q63",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 129,
+   "label": "GetGameState",
+   "logId": "q64",
+   "prior": [
+    121
+   ],
+   "session": "chain from q64",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 129,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 130,
+   "label": "GameState",
+   "logId": "a64",
+   "prior": [],
+   "session": "chain from q64",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 131,
+   "label": "ListGames",
+   "logId": "q65",
+   "prior": [
+    125
+   ],
+   "session": "chain from q65",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 131,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 132,
+   "label": "GamesListed",
+   "logId": "a65",
+   "prior": [],
+   "session": "chain from q65",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 133,
+   "label": "ListGames",
+   "logId": "q66",
+   "prior": [
+    127
+   ],
+   "session": "chain from q66",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 133,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 134,
+   "label": "GamesListed",
+   "logId": "a66",
+   "prior": [],
+   "session": "chain from q66",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 135,
+   "label": "GetGameState",
+   "logId": "q67",
+   "prior": [
+    123
+   ],
+   "session": "chain from q67",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 135,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 136,
+   "label": "GameState",
+   "logId": "a67",
+   "prior": [],
+   "session": "chain from q67",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 137,
+   "label": "GetGameState",
+   "logId": "q68",
+   "prior": [
+    131
+   ],
+   "session": "chain from q68",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 137,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 138,
+   "label": "GameState",
+   "logId": "a68",
+   "prior": [],
+   "session": "chain from q68",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 139,
+   "label": "GetGameState",
+   "logId": "q69",
+   "prior": [
+    133
+   ],
+   "session": "chain from q69",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 139,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 140,
+   "label": "GameState",
+   "logId": "a69",
+   "prior": [],
+   "session": "chain from q69",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 141,
+   "label": "ListGames",
+   "logId": "q70",
+   "prior": [
+    129
+   ],
+   "session": "chain from q70",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 141,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 142,
+   "label": "GamesListed",
+   "logId": "a70",
+   "prior": [],
+   "session": "chain from q70",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 143,
+   "label": "GetGameState",
+   "logId": "q71",
+   "prior": [
+    141
+   ],
+   "session": "chain from q71",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 143,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 144,
+   "label": "GameState",
+   "logId": "a71",
+   "prior": [],
+   "session": "chain from q71",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 145,
+   "label": "GetGameState",
+   "logId": "q72",
+   "prior": [
+    113
+   ],
+   "session": "chain from q72",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 145,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 146,
+   "label": "GameState",
+   "logId": "a72",
+   "prior": [],
+   "session": "chain from q72",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 147,
+   "label": "ListGames",
+   "logId": "q73",
+   "prior": [
+    135
+   ],
+   "session": "chain from q73",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 147,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 148,
+   "label": "GamesListed",
+   "logId": "a73",
+   "prior": [],
+   "session": "chain from q73",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 149,
+   "label": "GetGameState",
+   "logId": "q74",
+   "prior": [
+    147
+   ],
+   "session": "chain from q74",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 149,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 150,
+   "label": "GameState",
+   "logId": "a74",
+   "prior": [],
+   "session": "chain from q74",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 151,
+   "label": "GetGameState",
+   "logId": "q75",
+   "prior": [
+    137
+   ],
+   "session": "chain from q75",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 151,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 152,
+   "label": "GameState",
+   "logId": "a75",
+   "prior": [],
+   "session": "chain from q75",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 153,
+   "label": "GetGameState",
+   "logId": "q76",
+   "prior": [
+    139
+   ],
+   "session": "chain from q76",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 153,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 154,
+   "label": "GameState",
+   "logId": "a76",
+   "prior": [],
+   "session": "chain from q76",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 155,
+   "label": "GetGameState",
+   "logId": "q77",
+   "prior": [
+    143
+   ],
+   "session": "chain from q77",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 155,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 156,
+   "label": "GameState",
+   "logId": "a77",
+   "prior": [],
+   "session": "chain from q77",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 157,
+   "label": "ListGames",
+   "logId": "q78",
+   "prior": [
+    145
+   ],
+   "session": "chain from q78",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 157,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 158,
+   "label": "GamesListed",
+   "logId": "a78",
+   "prior": [],
+   "session": "chain from q78",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 159,
+   "label": "GetGameState",
+   "logId": "q79",
+   "prior": [
+    149
+   ],
+   "session": "chain from q79",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 159,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 160,
+   "label": "GameState",
+   "logId": "a79",
+   "prior": [],
+   "session": "chain from q79",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 161,
+   "label": "ListGames",
+   "logId": "q80",
+   "prior": [
+    96
+   ],
+   "session": "chain from q80",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 161,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 162,
+   "label": "GamesListed",
+   "logId": "a80",
+   "prior": [],
+   "session": "chain from q80",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 163,
+   "label": "GetGameState",
+   "logId": "q81",
+   "prior": [
+    151
+   ],
+   "session": "chain from q81",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 164,
+   "label": "JoinGame",
+   "logId": "q82",
+   "prior": [
+    161
+   ],
+   "session": "chain from q44",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 163,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 165,
+   "label": "GameState",
+   "logId": "a81",
+   "prior": [],
+   "session": "chain from q81",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 164,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 166,
+   "label": "GameJoined",
+   "logId": "a82",
+   "prior": [],
+   "session": "chain from q44",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 167,
+   "label": "GetGameState",
+   "logId": "q83",
+   "prior": [
+    164
+   ],
+   "session": "chain from q83",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 167,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 168,
+   "label": "GameState",
+   "logId": "a83",
+   "prior": [],
+   "session": "chain from q83",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 169,
+   "label": "GetGameState",
+   "logId": "q84",
+   "prior": [
+    153
+   ],
+   "session": "chain from q84",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 169,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 170,
+   "label": "GameState",
+   "logId": "a84",
+   "prior": [],
+   "session": "chain from q84",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 171,
+   "label": "TakeSeat",
+   "logId": "q85",
+   "prior": [
+    167
+   ],
+   "session": "chain from q85",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 172,
+   "label": "GetGameState",
+   "logId": "q86",
+   "prior": [
+    171
+   ],
+   "session": "chain from q86",
+   "src": "Person",
+   "srcActor": "Person/finn",
+   "thread": "Person/finn"
+  },
+  {
+   "act": false,
+   "cause": 171,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 173,
+   "label": "SeatTaken",
+   "logId": "a85",
+   "prior": [],
+   "session": "chain from q85",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 172,
+   "dst": "Person",
+   "dstActor": "Person/finn",
+   "id": 174,
+   "label": "GameState",
+   "logId": "a86",
+   "prior": [],
+   "session": "chain from q86",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 175,
+   "label": "ListGames",
+   "logId": "q87",
+   "prior": [
+    104
+   ],
+   "session": "chain from q87",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 175,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 176,
+   "label": "GamesListed",
+   "logId": "a87",
+   "prior": [],
+   "session": "chain from q87",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 177,
+   "label": "GetGameState",
+   "logId": "q88",
+   "prior": [
+    155
+   ],
+   "session": "chain from q88",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 177,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 178,
+   "label": "GameState",
+   "logId": "a88",
+   "prior": [],
+   "session": "chain from q88",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 179,
+   "label": "JoinGame",
+   "logId": "q89",
+   "prior": [
+    175
+   ],
+   "session": "chain from q49",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 179,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 180,
+   "label": "GameJoined",
+   "logId": "a89",
+   "prior": [],
+   "session": "chain from q49",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 181,
+   "label": "GetGameState",
+   "logId": "q90",
+   "prior": [
+    179
+   ],
+   "session": "chain from q90",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 181,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 182,
+   "label": "GameState",
+   "logId": "a90",
+   "prior": [],
+   "session": "chain from q90",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 183,
+   "label": "TakeSeat",
+   "logId": "q91",
+   "prior": [
+    181
+   ],
+   "session": "chain from q91",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 184,
+   "label": "GetGameState",
+   "logId": "q92",
+   "prior": [
+    183
+   ],
+   "session": "chain from q92",
+   "src": "Person",
+   "srcActor": "Person/gus",
+   "thread": "Person/gus"
+  },
+  {
+   "act": false,
+   "cause": 183,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 185,
+   "label": "SeatTaken",
+   "logId": "a91",
+   "prior": [],
+   "session": "chain from q91",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 184,
+   "dst": "Person",
+   "dstActor": "Person/gus",
+   "id": 186,
+   "label": "GameState",
+   "logId": "a92",
+   "prior": [],
+   "session": "chain from q92",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 187,
+   "label": "StartGame",
+   "logId": "q93",
+   "prior": [
+    157
+   ],
+   "session": "chain from q53",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 188,
+   "label": "GetGameState",
+   "logId": "q94",
+   "prior": [
+    187
+   ],
+   "session": "chain from q94",
+   "src": "Person",
+   "srcActor": "Person/eve",
+   "thread": "Person/eve"
+  },
+  {
+   "act": false,
+   "cause": 187,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 189,
+   "label": "GameStarted",
+   "logId": "a93",
+   "prior": [],
+   "session": "chain from q53",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": 188,
+   "dst": "Person",
+   "dstActor": "Person/eve",
+   "id": 190,
+   "label": "GameState",
+   "logId": "a94",
+   "prior": [],
+   "session": "chain from q94",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 191,
+   "label": "GetGameState",
+   "logId": "q95",
+   "prior": [
+    159
+   ],
+   "session": "chain from q95",
+   "src": "Person",
+   "srcActor": "Person/dee",
+   "thread": "Person/dee"
+  },
+  {
+   "act": false,
+   "cause": 191,
+   "dst": "Person",
+   "dstActor": "Person/dee",
+   "id": 192,
+   "label": "GameState",
+   "logId": "a95",
+   "prior": [],
+   "session": "chain from q95",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 193,
+   "label": "GetGameState",
+   "logId": "q96",
+   "prior": [
+    163
+   ],
+   "session": "chain from q96",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": 193,
+   "dst": "Person",
+   "dstActor": "Person/ana",
+   "id": 194,
+   "label": "GameState",
+   "logId": "a96",
+   "prior": [],
+   "session": "chain from q96",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 195,
+   "label": "GetGameState",
+   "logId": "q97",
+   "prior": [
+    169
+   ],
+   "session": "chain from q97",
+   "src": "Person",
+   "srcActor": "Person/ben",
+   "thread": "Person/ben"
+  },
+  {
+   "act": false,
+   "cause": 195,
+   "dst": "Person",
+   "dstActor": "Person/ben",
+   "id": 196,
+   "label": "GameState",
+   "logId": "a97",
+   "prior": [],
+   "session": "chain from q97",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 197,
+   "label": "GetGameState",
+   "logId": "q98",
+   "prior": [
+    177
+   ],
+   "session": "chain from q98",
+   "src": "Person",
+   "srcActor": "Person/cy",
+   "thread": "Person/cy"
+  },
+  {
+   "act": false,
+   "cause": 197,
+   "dst": "Person",
+   "dstActor": "Person/cy",
+   "id": 198,
+   "label": "GameState",
+   "logId": "a98",
+   "prior": [],
+   "session": "chain from q98",
+   "src": "Server",
+   "srcActor": "Server/s",
+   "thread": "Server/s"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 199,
+   "label": "PlayMove",
+   "logId": "q99",
+   "prior": [
+    193
+   ],
+   "session": "chain from q99",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Server",
+   "dstActor": "Server/s",
+   "id": 200,
+   "label": "GetGameState",
+   "logId": "q100",
+   "prior": [
+    199
+   ],
+   "session": "chain from q100",
+   "src": "Person",
+   "srcActor": "Person/ana",
+   "thread": "Person/ana"
+  }
+ ],
+ "generative": null,
+ "issues": [],
+ "lean": null,
+ "name": "GoServer",
+ "omitted": [
+  "lean (the protocol text you sent, or the example you named)",
+  "diagram"
+ ],
+ "overlay": null,
+ "protocol": null,
+ "reading": "GoServer: 200 events in 85 sessions follow the protocol; 11 still running",
+ "roles": [
+  "Person",
+  "Server",
+  "Bot"
+ ],
+ "secretFields": [],
+ "sessions": [
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q0",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q2",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q3",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q4",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q6",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q7",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q8",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q10",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q11",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q12",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q14",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q15",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 4,
+   "problem": null,
+   "session": "chain from q16",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q17",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q19",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q20",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q21",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q22",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q23",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q25",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q26",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q27",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q28",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q30",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q31",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q32",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q33",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q35",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q36",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q37",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q39",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q40",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q42",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q43",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q44",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q45",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q47",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q48",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 6,
+   "problem": null,
+   "session": "chain from q49",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q51",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q52",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 4,
+   "problem": null,
+   "session": "chain from q53",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q54",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q56",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q57",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q58",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q59",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q60",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q61",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q62",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q63",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q64",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q65",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q66",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q67",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q68",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q69",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q70",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q71",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q72",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q73",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q74",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q75",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q76",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q77",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q78",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q79",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q80",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q81",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q83",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q84",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q85",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q86",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q87",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q88",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q90",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q91",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q92",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q94",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q95",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q96",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q97",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 2,
+   "problem": null,
+   "session": "chain from q98",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 1,
+   "problem": null,
+   "session": "chain from q99",
+   "unchecked": []
+  },
+  {
+   "complete": false,
+   "events": 1,
+   "problem": null,
+   "session": "chain from q100",
+   "unchecked": []
+  }
+ ],
+ "tool": "session_conform",
+ "unchecked": [],
+ "verdict": "conforms"
+}

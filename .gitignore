@@ -83,3 +83,6 @@ __pycache__/
 
 # the per-request command script agents write for the user (never committed)
 /update
+video/sessions/build/
+video/ctl/build/
+video/goserver/build/

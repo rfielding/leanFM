@@ -431,6 +431,70 @@ func TestSessionPanelMatchesTheSpec(t *testing.T) {
 // Every route the session type declares (route "POST /api/..." in spec/Session.lean, carried into
 // the generated static/session/goserver.leanfm) is served by this handler with POST, and refused
 // with 405 for any other method: the spec and the server agree on the HTTP interface.
+// The session type names the person's session in every log: sign-in mints sessionId, every
+// request carries it as a Link, and each request protocol run beside the game is given it, so
+// LeanFM separates a log without session ids into one session per person.
+func TestSessionTypeNamesThePersonsSession(t *testing.T) {
+	raw, err := os.ReadFile("static/session/goserver.leanfm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !regexp.MustCompile(`structure SessionIssued where\n(?:  .*\n)*?  sessionId : Fresh String`).MatchString(text) {
+		t.Fatal("SessionIssued must mint sessionId (Fresh String)")
+	}
+	// negative: no message carries an unmarked sessionId, so none is placed by guesswork
+	if regexp.MustCompile(`(?m)^  sessionId : String$`).MatchString(text) {
+		t.Fatal("a message carries sessionId unmarked; every request must carry it as Link String")
+	}
+	for _, m := range []string{"EnterRoom", "CreateGame", "PlayMove", "SetAutopilot", "GetGameState", "ProposeMerge", "RespondMerge"} {
+		if !regexp.MustCompile(`structure ` + m + ` where\n(?:  .*\n)*?  sessionId : Link String`).MatchString(text) {
+			t.Fatalf("%s must carry sessionId as Link String", m)
+		}
+	}
+	for _, p := range []string{"CreateRoomP", "ListGamesP", "RoomChatP"} {
+		if !strings.Contains(text, "include "+p+" Person Server with sessionId;") {
+			t.Fatalf("%s must be included with sessionId", p)
+		}
+	}
+	if !strings.Contains(text, "sessions { include GameP Person Server Bot with sessionId; }") {
+		t.Fatal("a game must run in a sessions block, given the creator's sessionId")
+	}
+}
+
+// A game is a session its players join: GameCreated mints gameId, the game's session holds its
+// challenge and turns, and every seat and game request is given both sessionId and gameId.
+func TestSessionTypeRunsGamesAsSessions(t *testing.T) {
+	raw, err := os.ReadFile("static/session/goserver.leanfm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !regexp.MustCompile(`structure GameCreated where\n(?:  .*\n)*?  gameId : Fresh String`).MatchString(text) {
+		t.Fatal("GameCreated must mint gameId (Fresh String)")
+	}
+	// a picked game is only a reference: JoinGame and GameJoined carry gameId unmarked
+	for _, m := range []string{"JoinGame", "GameJoined"} {
+		if !regexp.MustCompile(`structure ` + m + ` where\n(?:  .*\n)*?  gameId : String\n`).MatchString(text) {
+			t.Fatalf("%s must carry gameId as a plain reference", m)
+		}
+	}
+	// negative: the turns carry only the game's id, so they never land in a person's session
+	for _, m := range []string{"BotTurn", "BotMoveChosen"} {
+		if regexp.MustCompile(`structure ` + m + ` where\n(?:  .*\n)*?  sessionId :`).MatchString(text) {
+			t.Fatalf("%s must not carry a person's sessionId", m)
+		}
+	}
+	for _, p := range []string{"TakeSeatP", "PlayMoveP", "SetAutopilotP", "ProposeMergeP", "RespondMergeP", "GameStateP", "SeatP"} {
+		if !strings.Contains(text, "protocol "+p+" (Person, Server) given sessionId gameId {") {
+			t.Fatalf("%s must be given sessionId and gameId", p)
+		}
+		if !strings.Contains(text, "include "+p+" Person Server with sessionId, gameId;") {
+			t.Fatalf("%s must be included with sessionId, gameId", p)
+		}
+	}
+}
+
 func TestSessionTypeRoutesAreServedOnlyWithPost(t *testing.T) {
 	text, err := os.ReadFile("static/session/goserver.leanfm")
 	if err != nil {

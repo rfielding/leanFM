@@ -47,6 +47,10 @@ structure Session where
   events      : Array Nat
   /-- the session names its events carry in the log (a cross-check; empty when the log names none) -/
   logSessions : List String
+  /-- the session whose id the text binds into this one (selfhost.session.identity.children) -/
+  parent      : Option String := none
+  /-- every parent: one for a child, two or more for a join (selfhost.session.identity.joins) -/
+  parents     : List String := []
   deriving Repr, Inhabited
 
 structure Result where
@@ -67,6 +71,9 @@ structure Marked where
   /-- the Fresh field a Link names: its own name, or the field an include binds it to
   (selfhost.session.identity.scopes) -/
   target : String := field
+  /-- a Link the field's protocol is given by an include: it names the parent session, never joins it
+  (selfhost.session.identity.children) -/
+  parent : Bool := false
   deriving Repr, Inhabited
 
 /-- The key labels (field=value) an event carries. -/
@@ -87,6 +94,8 @@ def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (name
   -- each live (field, value) and the position that minted it (selfhost.session.identity.checks)
   let mut live : List ((String × String) × Nat) := []
   let mut problems : Array String := #[]
+  -- each parent Link: (position, the position that minted its value, field, value)
+  let mut parentRefs : Array (Nat × Nat × String × String) := #[]
   for i in [0:n] do
     let e := evs[i]!
     if let some c := e.cause then
@@ -108,8 +117,20 @@ def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (name
         else parent := Derived.union parent i j
       | none => first := ((k, v), i) :: first
     let valuesOf (m : Types.Mark) : List (String × String) :=
-      (marked.filter fun x => x.label == e.label && x.mark == m).filterMap fun x =>
+      (marked.filter fun x => x.label == e.label && x.mark == m && !x.parent).filterMap fun x =>
         (e.fields.lookup x.field).map fun v => (if m == .link then x.target else x.field, shown v)
+    -- a given Link names the parent: checked live as every Link is, recorded, never joined
+    for x in marked.filter fun x => x.label == e.label && x.mark == .link && x.parent do
+      if let some val := e.fields.lookup x.field then
+        let v := shown val
+        grown := grown.set! i true
+        match live.lookup (x.target, v) with
+        | some j =>
+          if terminated (sessionBefore parent j) then
+            live := live.filter (·.1 != (x.target, v))
+            problems := problems.push s!"event {e.id} ({e.label}) carries the Link {x.target}={v}, but no live session minted {x.target}={v}: it was never minted, or its session has ended and freed it"
+          else parentRefs := parentRefs.push (i, j, x.field, v)
+        | none => problems := problems.push s!"event {e.id} ({e.label}) carries the Link {x.target}={v}, but no live session minted {x.target}={v}: it was never minted, or its session has ended and freed it"
     -- a Link joins the live session that minted its value; two different sessions are a join;
     -- a session that has terminated has freed its value, so it no longer names it
     let mut roots : List (Nat × String × String) := []
@@ -150,7 +171,8 @@ def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (name
   let mut unattributed : Array Nat := #[]
   let mut sessionOf : Array (Option String) := Array.replicate n none
   let mut used : List String := []
-  for (_, xs) in groups do
+  let mut nameOf : List (Nat × String) := []
+  for (root, xs) in groups do
     let lone := xs.size == 1 && !grown[xs[0]!]!
     if lone && !starts.contains evs[xs[0]!]!.label then
       unattributed := unattributed.push xs[0]!
@@ -159,9 +181,31 @@ def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (name
     let base := if labels.isEmpty then s!"chain from {evs[xs[0]!]!.id}" else ", ".intercalate labels
     let name := if used.contains base then s!"{base} #{sessions.size + 1}" else base
     used := name :: used
+    nameOf := (root, name) :: nameOf
     for i in xs do sessionOf := sessionOf.set! i (some name)
     let logs := if named then (xs.toList.map fun i => evs[i]!.session).eraseDups else []
     sessions := sessions.push { name, events := xs, logSessions := logs }
+  -- each session's parent: the sessions its given Links name (selfhost.session.identity.children)
+  let rootOf (p : Array Nat) (i : Nat) : Nat := (Derived.find p i).1
+  for si in [0:sessions.size] do
+    let s := sessions[si]!
+    let refs := parentRefs.toList.filter fun (i, _, _, _) => s.events.contains i
+    let named := refs.map fun (i, j, f, v) => (i, (nameOf.lookup (rootOf parent j)).getD evs[j]!.id, f, v)
+    -- one field naming two sessions is a problem; different fields naming different sessions are a
+    -- join, which the include wrote by binding both (selfhost.session.identity.joins)
+    let fieldsInOrder := (named.map fun (_, _, f, _) => f).eraseDups
+    let mut parents : List String := []
+    for fld in fieldsInOrder do
+      let mine := named.filter fun (_, _, f, _) => f == fld
+      match mine with
+      | [] => pure ()
+      | (_, p, _, _) :: _ =>
+        unless parents.contains p do parents := parents ++ [p]
+        for (i, q, f, v) in mine do
+          if q != p then
+            problems := problems.push s!"event {evs[i]!.id} ({evs[i]!.label}) carries {f}={v}, naming session {q} as its parent, but its session {s.name} is a child of {p}: a task's parent is the session whose id the include binds, so one task cannot belong to two"
+    unless parents.isEmpty do
+      sessions := sessions.set! si { s with parent := parents.head?, parents }
   return { sessions := sessions.extract 0 maxSessions, omitted := sessions.size - min sessions.size maxSessions,
            unattributed, sessionOf, problems }
 
@@ -196,8 +240,14 @@ numbers), each event's session its log session or else its derived one. -/
 def stream (evs : Array LogEvent) (r : Result) (named : Bool) : Array Json :=
   let pos (id : String) : Option Nat := (evs.findIdx? (·.id == id)).map (· + 1)
   evs.zipIdx.map fun (e, i) =>
+    let session := if named then e.session else (r.sessionOf[i]!).getD "unattributed"
     Json.mkObj [("id", toJson (i + 1)), ("logId", Json.str e.id),
-      ("session", Json.str (if named then e.session else (r.sessionOf[i]!).getD "unattributed")),
+      ("session", Json.str session),
+      -- the thread: the actor that sent it, whose own order its prev links make (selfhost.mcp.session.view)
+      ("thread", Json.str (if e.srcActor.isEmpty then s!"{e.src}@{session}" else e.srcActor)),
+      -- the actors, so each instance is its own lifeline (selfhost.mcp.session.view)
+      ("srcActor", Json.str (if e.srcActor.isEmpty then e.src else e.srcActor)),
+      ("dstActor", Json.str (if e.dstActor.isEmpty then e.dst else e.dstActor)),
       ("prior", Json.arr ((e.prev.bind pos).toList.map toJson).toArray), ("cause", toJson (e.cause.bind pos)),
       ("src", Json.str e.src), ("dst", Json.str e.dst), ("label", Json.str e.label), ("act", Json.bool e.isAct)]
 
@@ -205,7 +255,9 @@ def stream (evs : Array LogEvent) (r : Result) (named : Bool) : Array Json :=
 def Result.json (r : Result) (named : Bool) : Json :=
   Json.mkObj [
     ("sessions", Json.arr (r.sessions.map fun s => Json.mkObj ([("key", Json.str s.name), ("count", toJson s.events.size),
-      ("events", toJson s.events)] ++ (if named then [("logSessions", toJson s.logSessions)] else [])))),
+      ("events", toJson s.events)] ++ (if named then [("logSessions", toJson s.logSessions)] else []) ++
+      (s.parent.map fun p => [("parent", Json.str p)]).getD [] ++
+      (if s.parents.length > 1 then [("parents", toJson s.parents)] else [])))),
     ("omitted", toJson r.omitted), ("unattributed", toJson r.unattributed),
     ("reading", Json.str (s!"{r.sessions.size + r.omitted} sessions derived from causes and the declared session key" ++
       (if r.unattributed.isEmpty then "" else s!"; {r.unattributed.size} events the log cannot place") ++

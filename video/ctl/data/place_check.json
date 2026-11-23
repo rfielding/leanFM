@@ -1,0 +1,840 @@
+{
+ "calls": [
+  {
+   "from": "Client",
+   "id": "o",
+   "label": "CreateOrder",
+   "nested": [],
+   "responses": [
+    {
+     "label": "Quote",
+     "status": 201
+    },
+    {
+     "label": "SoldOut",
+     "status": 409
+    }
+   ],
+   "route": "POST /orders",
+   "to": "Shop"
+  },
+  {
+   "from": "Client",
+   "id": "p",
+   "label": "Pay",
+   "nested": [
+    {
+     "from": "Shop",
+     "id": "c",
+     "label": "Charge",
+     "nested": [],
+     "responses": [
+      {
+       "label": "Charged",
+       "status": null
+      },
+      {
+       "label": "Declined",
+       "status": null
+      }
+     ],
+     "route": null,
+     "to": "Bank"
+    }
+   ],
+   "responses": [
+    {
+     "label": "Receipt",
+     "status": 200
+    },
+    {
+     "label": "PaymentDeclined",
+     "status": 402
+    }
+   ],
+   "route": null,
+   "to": "Shop"
+  }
+ ],
+ "callsText": "o: CreateOrder  Client -> Shop  POST /orders\n  returns Quote 201 | SoldOut 409\np: Pay  Client -> Shop\n  returns Receipt 200 | PaymentDeclined 402\n    c: Charge  Shop -> Bank\n      returns Charged | Declined",
+ "diagram": {
+  "calls": [
+   {
+    "bottom": 482,
+    "callee": "Shop",
+    "caller": "Client",
+    "depth": 1,
+    "label": "CreateOrder -> Quote 201 | SoldOut 409",
+    "request": "o",
+    "roles": [
+     "Client",
+     "Shop",
+     "Bank"
+    ],
+    "top": 70,
+    "y": 100
+   },
+   {
+    "bottom": 412,
+    "callee": "Shop",
+    "caller": "Client",
+    "depth": 2,
+    "label": "Pay -> Receipt 200 | PaymentDeclined 402",
+    "request": "p",
+    "roles": [
+     "Client",
+     "Shop",
+     "Bank"
+    ],
+    "top": 152,
+    "y": 182
+   },
+   {
+    "bottom": 412,
+    "callee": "Bank",
+    "caller": "Shop",
+    "depth": 3,
+    "label": "Charge -> Charged | Declined",
+    "request": "c",
+    "roles": [
+     "Shop",
+     "Bank",
+     "Client"
+    ],
+    "top": 200,
+    "y": 230
+   }
+  ],
+  "colW": 239,
+  "height": 552,
+  "lanes": [
+   {
+    "role": "Client",
+    "x": 90
+   },
+   {
+    "role": "Shop",
+    "x": 329
+   },
+   {
+    "role": "Bank",
+    "x": 568
+   }
+  ],
+  "shapes": [
+   {
+    "anchor": "start",
+    "bold": false,
+    "cls": "",
+    "fill": "muted",
+    "k": "text",
+    "size": 11,
+    "text": "PlaceOrder",
+    "x": 10,
+    "y": 14
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 72,
+    "x": 54,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Client",
+    "x": 90,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 72,
+    "x": 54,
+    "y": 512
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Client",
+    "x": 90,
+    "y": 531
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 90,
+    "x2": 90,
+    "y1": 48,
+    "y2": 512
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 56,
+    "x": 301,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Shop",
+    "x": 329,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 56,
+    "x": 301,
+    "y": 512
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Shop",
+    "x": 329,
+    "y": 531
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 329,
+    "x2": 329,
+    "y1": 48,
+    "y2": 512
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 56,
+    "x": 540,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Bank",
+    "x": 568,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 56,
+    "x": 540,
+    "y": 512
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Bank",
+    "x": 568,
+    "y": 531
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 568,
+    "x2": 568,
+    "y1": 48,
+    "y2": 512
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 52,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 324,
+    "y": 100
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 130,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 324,
+    "y": 182
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 52,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 563,
+    "y": 230
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 36,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 563,
+    "y": 324
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 66,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 324,
+    "y": 324
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 36,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 324,
+    "y": 424
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 90,
+    "x2": 329,
+    "y1": 100,
+    "y2": 100
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "o: CreateOrder - POST /orders",
+    "x": 209,
+    "y": 94
+   },
+   {
+    "arrow": false,
+    "cls": "",
+    "d": "M20 114 h34 v12 l-6 6 h-28 z",
+    "dash": "",
+    "fill": "bg",
+    "k": "path",
+    "stroke": "frame"
+   },
+   {
+    "anchor": "start",
+    "bold": true,
+    "cls": "",
+    "fill": "frame",
+    "k": "text",
+    "size": 11,
+    "text": "alt",
+    "x": 25,
+    "y": 127
+   },
+   {
+    "anchor": "start",
+    "bold": false,
+    "cls": "",
+    "fill": "frame",
+    "k": "text",
+    "size": 11,
+    "text": "[Shop decides]",
+    "x": 62,
+    "y": 127
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 329,
+    "x2": 90,
+    "y1": 152,
+    "y2": 152
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "q: Quote - 201",
+    "x": 209,
+    "y": 146
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 90,
+    "x2": 329,
+    "y1": 182,
+    "y2": 182
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "p: Pay",
+    "x": 209,
+    "y": 176
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "guard",
+    "fill": "muted",
+    "k": "text",
+    "size": 11,
+    "text": "[p.amount = q.price]",
+    "x": 209,
+    "y": 196
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 329,
+    "x2": 568,
+    "y1": 230,
+    "y2": 230
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "c: Charge",
+    "x": 448,
+    "y": 224
+   },
+   {
+    "arrow": false,
+    "cls": "",
+    "d": "M28 244 h34 v12 l-6 6 h-28 z",
+    "dash": "",
+    "fill": "bg",
+    "k": "path",
+    "stroke": "frame"
+   },
+   {
+    "anchor": "start",
+    "bold": true,
+    "cls": "",
+    "fill": "frame",
+    "k": "text",
+    "size": 11,
+    "text": "alt",
+    "x": 33,
+    "y": 257
+   },
+   {
+    "anchor": "start",
+    "bold": false,
+    "cls": "",
+    "fill": "frame",
+    "k": "text",
+    "size": 11,
+    "text": "[Bank decides]",
+    "x": 70,
+    "y": 257
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 568,
+    "x2": 329,
+    "y1": 282,
+    "y2": 282
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "d: Charged",
+    "x": 448,
+    "y": 276
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 329,
+    "x2": 90,
+    "y1": 312,
+    "y2": 312
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Receipt - 200",
+    "x": 209,
+    "y": 306
+   },
+   {
+    "arrow": false,
+    "cls": "",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "frame",
+    "width": "",
+    "x1": 28,
+    "x2": 630,
+    "y1": 324,
+    "y2": 324
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 568,
+    "x2": 329,
+    "y1": 360,
+    "y2": 360
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "x: Declined",
+    "x": 448,
+    "y": 354
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 329,
+    "x2": 90,
+    "y1": 390,
+    "y2": 390
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "PaymentDeclined - 402",
+    "x": 209,
+    "y": 384
+   },
+   {
+    "cls": "frame alt",
+    "fill": "none",
+    "h": 158,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "frame",
+    "w": 602,
+    "x": 28,
+    "y": 244
+   },
+   {
+    "arrow": false,
+    "cls": "",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "frame",
+    "width": "",
+    "x1": 20,
+    "x2": 638,
+    "y1": 424,
+    "y2": 424
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 329,
+    "x2": 90,
+    "y1": 460,
+    "y2": 460
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "SoldOut - 409",
+    "x": 209,
+    "y": 454
+   },
+   {
+    "cls": "frame alt",
+    "fill": "none",
+    "h": 358,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "frame",
+    "w": 618,
+    "x": 20,
+    "y": 114
+   }
+  ],
+  "steps": [
+   {
+    "bottom": 100,
+    "dst": "Shop",
+    "src": "Client",
+    "top": 70,
+    "y": 100
+   },
+   {
+    "bottom": 152,
+    "dst": "Client",
+    "src": "Shop",
+    "top": 122,
+    "y": 152
+   },
+   {
+    "bottom": 200,
+    "dst": "Shop",
+    "src": "Client",
+    "top": 152,
+    "y": 182
+   },
+   {
+    "bottom": 230,
+    "dst": "Bank",
+    "src": "Shop",
+    "top": 200,
+    "y": 230
+   },
+   {
+    "bottom": 282,
+    "dst": "Shop",
+    "src": "Bank",
+    "top": 252,
+    "y": 282
+   },
+   {
+    "bottom": 312,
+    "dst": "Client",
+    "src": "Shop",
+    "top": 282,
+    "y": 312
+   },
+   {
+    "bottom": 360,
+    "dst": "Shop",
+    "src": "Bank",
+    "top": 330,
+    "y": 360
+   },
+   {
+    "bottom": 390,
+    "dst": "Client",
+    "src": "Shop",
+    "top": 360,
+    "y": 390
+   },
+   {
+    "bottom": 460,
+    "dst": "Client",
+    "src": "Shop",
+    "top": 430,
+    "y": 460
+   }
+  ],
+  "width": 658
+ },
+ "generative": null,
+ "httpCuts": null,
+ "identity": [],
+ "issues": [],
+ "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+ "limits": {
+  "maxBranches": 16,
+  "maxDepth": 24,
+  "maxEvents": 600,
+  "maxInstances": 200,
+  "maxLoops": 8,
+  "maxRoles": 12,
+  "maxSpread": 5000,
+  "maxSteps": 200,
+  "maxString": 200
+ },
+ "name": "PlaceOrder",
+ "overlay": null,
+ "projections": {
+  "Bank": {
+   "local": "offer {\n  receive Charge from Shop;\n  select {\n    send Charged to Shop;\n  } or {\n    send Declined to Shop;\n  }\n} or {\n}",
+   "typestate": "start : S0\nS0.receive() : Charge -> S1 (from Shop) | nothing -> End\nS1.sendCharged(m : Charged) : End    -- to Shop\nS1.sendDeclined(m : Declined) : End    -- to Shop"
+  },
+  "Client": {
+   "local": "send CreateOrder to Shop;\noffer {\n  receive Quote from Shop;\n  send Pay to Shop;\n  offer {\n    receive Receipt from Shop;\n  } or {\n    receive PaymentDeclined from Shop;\n  }\n} or {\n  receive SoldOut from Shop;\n}",
+   "typestate": "start : S0\nS0.sendCreateOrder(m : CreateOrder) : S1    -- to Shop\nS1.receive() : Quote -> S2 (from Shop) | SoldOut -> End (from Shop)\nS2.sendPay(m : Pay) : S3    -- to Shop\nS3.receive() : Receipt -> End (from Shop) | PaymentDeclined -> End (from Shop)"
+  },
+  "Shop": {
+   "local": "receive CreateOrder from Client;\nselect {\n  send Quote to Client;\n  receive Pay from Client;\n  send Charge to Bank;\n  offer {\n    receive Charged from Bank;\n    send Receipt to Client;\n  } or {\n    receive Declined from Bank;\n    send PaymentDeclined to Client;\n  }\n} or {\n  send SoldOut to Client;\n}",
+   "typestate": "start : S0\nS0.receive() : CreateOrder -> S1    -- from Client\nS1.sendQuote(m : Quote) : S2    -- to Client\nS1.sendSoldOut(m : SoldOut) : End    -- to Client\nS2.receive() : Pay -> S3    -- from Client\nS3.sendCharge(m : Charge) : S4    -- to Bank\nS4.receive() : Charged -> S5 (from Bank) | Declined -> S6 (from Bank)\nS5.sendReceipt(m : Receipt) : End    -- to Client\nS6.sendPaymentDeclined(m : PaymentDeclined) : End    -- to Client"
+  }
+ },
+ "protocol": null,
+ "reading": "PlaceOrder: no issues; 3 roles, 9 messages, 2 top-level calls",
+ "roles": [
+  "Client",
+  "Shop",
+  "Bank"
+ ],
+ "tool": "session_check",
+ "types": [
+  {
+   "fields": [
+    "item : String",
+    "quantity : Nat"
+   ],
+   "name": "CreateOrder"
+  },
+  {
+   "fields": [
+    "price : Nat"
+   ],
+   "name": "Quote"
+  },
+  {
+   "fields": [
+    "amount : Nat",
+    "card_secr : String"
+   ],
+   "name": "Pay"
+  },
+  {
+   "fields": [
+    "amount : Nat",
+    "card_secr : String"
+   ],
+   "name": "Charge"
+  },
+  {
+   "fields": [
+    "amount : Nat"
+   ],
+   "name": "Receipt"
+  }
+ ],
+ "verdict": "ok"
+}

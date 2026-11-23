@@ -965,6 +965,8 @@ structure Parsed where
   /-- each Link field an include renames, (label, field) to the Fresh field it names
   (selfhost.session.identity.scopes: token bound to sid names the session that minted sid) -/
   linkTargets : List ((String × String) × String) := []
+  /-- the given Links that name a parent session (selfhost.session.identity.children) -/
+  parentLinks : List (String × String) := []
   /-- sessions bodies whose copies cannot be told apart, each with its fix (selfhost.session.identity.scopes) -/
   identityNotes : List String := []
   /-- the labels of every protocol in the text, the main one's and the earlier ones' -/
@@ -1092,9 +1094,9 @@ partial def scopeCheck (env : Types.Env) (defs : List Def) (keyIds : List String
           let some inc := latest defs n | pure (seen, [])
           let incLabels := deepLabels defs fuel inc.body
           for (g, x) in binds do
-            let inScope := d.givens.contains x || seen.any fun l => (fieldsOf env l).any fun f => f.name == x && f.mark != .plain
+            let inScope := d.givens.contains x || seen.any fun l => (fieldsOf env l).any fun f => f.name == x
             if !inScope then
-              throw s!"in {d.name}: include {n} with {Global.showBinds [(g, x)]}: {x} is not in scope; no message before the include carries {x} as Fresh or Link, and {d.name} is not given {x}"
+              throw s!"in {d.name}: include {n} with {Global.showBinds [(g, x)]}: {x} is not in scope; no message before the include carries {x}, and {d.name} is not given {x}"
             let gTys := (incLabels.flatMap fun l => (fieldsOf env l).filter (·.name == g)).map (·.ty)
             match typeOf seen x, gTys.head? with
             | some tx, some tg =>
@@ -1123,25 +1125,56 @@ where
     | some (l, _) =>
       return some s!"in {d.name}: the copies of sessions \{ ... } run at once and cannot be told apart: {l} names no cause and carries no Link to an id the copy mints; mint one on an answer (orderId : Fresh String) and carry it on {l} as a Link, name the message {l} answers as its cause, or write sessions by"
 
-/-- Each Link field an include renames, through every level of include from `d` with `ren` (given
-field to the field it stands for in the main protocol): (label, field) to that field. -/
-partial def linkTargetsOf (env : Types.Env) (defs : List Def) (fuel : Nat) (ren : List (String × String)) (d : Def) :
-    List ((String × String) × String) :=
-  let rec go (fuel : Nat) (ren : List (String × String)) : List Stmt → List ((String × String) × String)
+/- Each Link field an include binds, renamed or under its own name, through every level of include
+from `d` with `ren` (given field to the field it stands for in the main protocol): (label, field) to
+that field. These are the given Links: they name the parent session (selfhost.session.identity.children). -/
+/-- The fewest sessions blocks a protocol body enters before a message of it mints field `x`
+(Fresh), not looking into includes. -/
+partial def freshDepth (env : Types.Env) (x : String) (depth : Nat := 0) : List Stmt → Option Nat
+  | [] => none
+  | s :: rest =>
+    let here : Option Nat := match s with
+      | .msg _ label .. => if (fieldsOf env label).any (fun f => f.name == x && f.mark == .fresh) then some depth else none
+      | .timed _ m | .valued _ m => freshDepth env x depth [m]
+      | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => (bs.filterMap (freshDepth env x depth)).min?
+      | .loop _ b => freshDepth env x depth b
+      | .sessions b => freshDepth env x (depth + 1) b
+      | .bounded _ _ b o => [freshDepth env x depth b, freshDepth env x depth o].filterMap id |>.min?
+      | _ => none
+    match here, freshDepth env x depth rest with
+    | some a, some b => some (min a b)
+    | some a, none => some a
+    | none, b => b
+
+partial def linkTargetsOfDepth (env : Types.Env) (defs : List Def) (fuel : Nat) (ren : List (String × String × Nat)) (d : Def) :
+    List ((String × String) × String × Bool) :=
+  -- depth: the sessions blocks entered so far (through includes); each binding remembers the depth
+  -- its value was minted at: where the includer mints it, or its own binding when it is given
+  let rec go (fuel depth base : Nat) (cur : List Stmt) (ren : List (String × String × Nat)) : List Stmt → List ((String × String) × String × Bool)
     | [] => []
     | s :: rest => (match s with
       | .msg _ label .. =>
         ((fieldsOf env label).filter (·.mark == .link)).filterMap fun f =>
-          (ren.lookup f.name).bind fun t => if t == f.name then none else some ((label, f.name), t)
-      | .timed _ m | .valued _ m => go fuel ren [m]
-      | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (go fuel ren)
-      | .loop _ b | .sessions b => go fuel ren b
-      | .bounded _ _ b o => go fuel ren b ++ go fuel ren o
+          (ren.lookup f.name).map fun (t, minted) => ((label, f.name), t, depth > minted)
+      | .timed _ m | .valued _ m => go fuel depth base cur ren [m]
+      | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (go fuel depth base cur ren)
+      | .loop _ b => go fuel depth base cur ren b
+      | .sessions b => go fuel (depth + 1) base cur ren b
+      | .bounded _ _ b o => go fuel depth base cur ren b ++ go fuel depth base cur ren o
       | .incl n _ binds => match fuel, latest defs n with
-        | f + 1, some inc => go f (binds.map fun (g, x) => (g, (ren.lookup x).getD x)) inc.body
+        | f + 1, some inc =>
+          -- a field the includer neither mints nor is given is a reference read from another session
+          -- (a gameId picked from a listing): its value was minted outside the includer's body
+          let bound := binds.map fun (g, x) => (g, (ren.lookup x).getD (x, base + (freshDepth env x 0 cur).getD 0))
+          go f depth depth inc.body bound inc.body
         | _, _ => []
-      | _ => []) ++ go fuel ren rest
-  go fuel ren d.body
+      | _ => []) ++ go fuel depth base cur ren rest
+  go fuel 0 0 d.body ren d.body
+
+/-- The given Links as (label, field) to the field they stand for (selfhost.session.identity.scopes). -/
+def linkTargetsOf (env : Types.Env) (defs : List Def) (fuel : Nat) (ren : List (String × String)) (d : Def) :
+    List ((String × String) × String) :=
+  (linkTargetsOfDepth env defs fuel (ren.map fun (g, x) => (g, x, 0)) d).map fun (k, t, _) => (k, t)
 
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
 (selfhost.session.proto); the text may then not declare structures of its own. -/
@@ -1179,6 +1212,9 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
     identityNotes := identityNotes ++ (← scopeCheck env (defs.take i) keyIds defs[i]!)
   let targets := (linkTargetsOf env earlier (defs.length + 1) [] main).foldl
     (fun acc (k, t) => if acc.any (·.1 == k) then acc else acc ++ [(k, t)]) []
+  -- the given Links that cross a sessions block entered after their value was minted name a parent
+  -- (selfhost.session.identity.children)
+  let parentLinks := ((linkTargetsOfDepth env earlier (defs.length + 1) [] main).filterMap fun (k, _, p) => if p then some k else none).eraseDups
   for d in defs do
     let ids := idLabels d.body
     -- an id not in scope (bound later in a loop, say) falls back to every label it has
@@ -1213,7 +1249,7 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
       pure (defs[i]!.version, defs[i]!.roles, gi)
     return some (nm, vs)
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
-           requires := st.requires.toList, types := env, keys := st.keys.toList, linkTargets := targets, identityNotes,
+           requires := st.requires.toList, types := env, keys := st.keys.toList, linkTargets := targets, parentLinks, identityNotes,
            allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList,
            version := main.version, versioned }
 

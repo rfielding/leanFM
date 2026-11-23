@@ -38,7 +38,7 @@ partial def protocolRegions (lines : List String) (acc : Array String := #[]) (i
 def leanStructure (m : Types.Message) : String :=
   let doc := if m.doc.isEmpty then [] else [s!"/-- {m.doc} -/"]
   "\n".intercalate (doc ++ (if m.fields.isEmpty then [s!"structure {m.name} where deriving TypeName"] else
-    [s!"structure {m.name} where"] ++ m.fields.map (fun f => s!"  {f.name} : {f.ty.render}") ++ ["  deriving TypeName"]))
+    [s!"structure {m.name} where"] ++ m.fields.map (fun f => s!"  {f.name} : {f.render}") ++ ["  deriving TypeName"]))
 
 def main : IO UInt32 := do
   let src ← IO.FS.readFile s!"{root}/Session.lean"

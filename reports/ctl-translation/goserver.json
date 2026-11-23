@@ -1,0 +1,1235 @@
+{
+ "example": "goserver",
+ "seconds": 55.16115713119507,
+ "formulas": [
+  {
+   "rule": "start",
+   "name": "every session starts with IssueSession",
+   "ctl": "AX IssueSession",
+   "formula": {
+    "AX": {
+     "after": "IssueSession"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "cause",
+   "name": "every IssueSession is answered (SessionIssued or SignInRefused)",
+   "ctl": "AG (IssueSession \u2192 AF (SessionIssued \u2228 SignInRefused))",
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "IssueSession"
+      },
+      {
+       "AF": {
+        "or": [
+         {
+          "after": "SessionIssued"
+         },
+         {
+          "after": "SignInRefused"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "succession",
+   "name": "after IssueSession comes SessionIssued or SignInRefused",
+   "ctl": "AG (IssueSession \u2192 AX (SessionIssued \u2228 SignInRefused))",
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "IssueSession"
+      },
+      {
+       "AX": {
+        "or": [
+         {
+          "after": "SessionIssued"
+         },
+         {
+          "after": "SignInRefused"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SessionIssued before IssueSession",
+   "ctl": "\u00acE[\u00acIssueSession U SessionIssued]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "IssueSession"
+       }
+      },
+      {
+       "after": "SessionIssued"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SignInRefused before IssueSession",
+   "ctl": "\u00acE[\u00acIssueSession U SignInRefused]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "IssueSession"
+       }
+      },
+      {
+       "after": "SignInRefused"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "succession",
+   "name": "after SessionIssued comes EnterRoom",
+   "ctl": "AG (SessionIssued \u2192 AX EnterRoom)",
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "SessionIssued"
+      },
+      {
+       "AX": {
+        "after": "EnterRoom"
+       }
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no EnterRoom before SessionIssued",
+   "ctl": "\u00acE[\u00acSessionIssued U EnterRoom]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "SessionIssued"
+       }
+      },
+      {
+       "after": "EnterRoom"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "cause",
+   "name": "every EnterRoom is answered (RequestRejected or RoomEntered)",
+   "ctl": "AG (EnterRoom \u2192 AF (RequestRejected \u2228 RoomEntered))",
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "EnterRoom"
+      },
+      {
+       "AF": {
+        "or": [
+         {
+          "after": "RequestRejected"
+         },
+         {
+          "after": "RoomEntered"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "succession",
+   "name": "after EnterRoom comes RequestRejected or RoomEntered",
+   "ctl": "AG (EnterRoom \u2192 AX (RequestRejected \u2228 RoomEntered))",
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "EnterRoom"
+      },
+      {
+       "AX": {
+        "or": [
+         {
+          "after": "RequestRejected"
+         },
+         {
+          "after": "RoomEntered"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no RoomEntered before EnterRoom",
+   "ctl": "\u00acE[\u00acEnterRoom U RoomEntered]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "EnterRoom"
+       }
+      },
+      {
+       "after": "RoomEntered"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "succession",
+   "name": "after RoomEntered comes CreateGame or CreateRoom or JoinGame or ListGames or SendRoomChat or SignOut",
+   "ctl": "AG (RoomEntered \u2192 AX (CreateGame \u2228 CreateRoom \u2228 JoinGame \u2228 ListGames \u2228 SendRoomChat \u2228 SignOut))",
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "RoomEntered"
+      },
+      {
+       "AX": {
+        "or": [
+         {
+          "after": "CreateGame"
+         },
+         {
+          "after": "CreateRoom"
+         },
+         {
+          "after": "JoinGame"
+         },
+         {
+          "after": "ListGames"
+         },
+         {
+          "after": "SendRoomChat"
+         },
+         {
+          "after": "SignOut"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no CreateGame before RoomEntered",
+   "ctl": "\u00acE[\u00acRoomEntered U CreateGame]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RoomEntered"
+       }
+      },
+      {
+       "after": "CreateGame"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no CreateRoom before RoomEntered",
+   "ctl": "\u00acE[\u00acRoomEntered U CreateRoom]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RoomEntered"
+       }
+      },
+      {
+       "after": "CreateRoom"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no JoinGame before RoomEntered",
+   "ctl": "\u00acE[\u00acRoomEntered U JoinGame]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RoomEntered"
+       }
+      },
+      {
+       "after": "JoinGame"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no ListGames before RoomEntered",
+   "ctl": "\u00acE[\u00acRoomEntered U ListGames]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RoomEntered"
+       }
+      },
+      {
+       "after": "ListGames"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SendRoomChat before RoomEntered",
+   "ctl": "\u00acE[\u00acRoomEntered U SendRoomChat]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RoomEntered"
+       }
+      },
+      {
+       "after": "SendRoomChat"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SignOut before RoomEntered",
+   "ctl": "\u00acE[\u00acRoomEntered U SignOut]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RoomEntered"
+       }
+      },
+      {
+       "after": "SignOut"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no GamesListed before ListGames",
+   "ctl": "\u00acE[\u00acListGames U GamesListed]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "ListGames"
+       }
+      },
+      {
+       "after": "GamesListed"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no RoomCreated before CreateRoom",
+   "ctl": "\u00acE[\u00acCreateRoom U RoomCreated]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "CreateRoom"
+       }
+      },
+      {
+       "after": "RoomCreated"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no RoomChat before SendRoomChat",
+   "ctl": "\u00acE[\u00acSendRoomChat U RoomChat]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "SendRoomChat"
+       }
+      },
+      {
+       "after": "RoomChat"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no GameCreated before CreateGame",
+   "ctl": "\u00acE[\u00acCreateGame U GameCreated]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "CreateGame"
+       }
+      },
+      {
+       "after": "GameCreated"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no LeaveSeat before GameCreated",
+   "ctl": "\u00acE[\u00acGameCreated U LeaveSeat]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "GameCreated"
+       }
+      },
+      {
+       "after": "LeaveSeat"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SetSeatPlan before GameCreated",
+   "ctl": "\u00acE[\u00acGameCreated U SetSeatPlan]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "GameCreated"
+       }
+      },
+      {
+       "after": "SetSeatPlan"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no StartGame before GameCreated",
+   "ctl": "\u00acE[\u00acGameCreated U StartGame]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "GameCreated"
+       }
+      },
+      {
+       "after": "StartGame"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SeatPlanSet before SetSeatPlan",
+   "ctl": "\u00acE[\u00acSetSeatPlan U SeatPlanSet]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "SetSeatPlan"
+       }
+      },
+      {
+       "after": "SeatPlanSet"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SeatLeft before LeaveSeat",
+   "ctl": "\u00acE[\u00acLeaveSeat U SeatLeft]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "LeaveSeat"
+       }
+      },
+      {
+       "after": "SeatLeft"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no GameStarted before StartGame",
+   "ctl": "\u00acE[\u00acStartGame U GameStarted]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "StartGame"
+       }
+      },
+      {
+       "after": "GameStarted"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no BotMoveChosen before BotTurn",
+   "ctl": "\u00acE[\u00acBotTurn U BotMoveChosen]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "BotTurn"
+       }
+      },
+      {
+       "after": "BotMoveChosen"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no Applied before BotMoveChosen",
+   "ctl": "\u00acE[\u00acBotMoveChosen U Applied]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "BotMoveChosen"
+       }
+      },
+      {
+       "after": "Applied"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no Stale before BotMoveChosen",
+   "ctl": "\u00acE[\u00acBotMoveChosen U Stale]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "BotMoveChosen"
+       }
+      },
+      {
+       "after": "Stale"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no GameJoined before JoinGame",
+   "ctl": "\u00acE[\u00acJoinGame U GameJoined]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "JoinGame"
+       }
+      },
+      {
+       "after": "GameJoined"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no MovePlayed before PlayMove",
+   "ctl": "\u00acE[\u00acPlayMove U MovePlayed]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "PlayMove"
+       }
+      },
+      {
+       "after": "MovePlayed"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no AutopilotSet before SetAutopilot",
+   "ctl": "\u00acE[\u00acSetAutopilot U AutopilotSet]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "SetAutopilot"
+       }
+      },
+      {
+       "after": "AutopilotSet"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no MergeProposed before ProposeMerge",
+   "ctl": "\u00acE[\u00acProposeMerge U MergeProposed]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "ProposeMerge"
+       }
+      },
+      {
+       "after": "MergeProposed"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no MergeResponded before RespondMerge",
+   "ctl": "\u00acE[\u00acRespondMerge U MergeResponded]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "RespondMerge"
+       }
+      },
+      {
+       "after": "MergeResponded"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no GameState before GetGameState",
+   "ctl": "\u00acE[\u00acGetGameState U GameState]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "GetGameState"
+       }
+      },
+      {
+       "after": "GameState"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "order",
+   "name": "no SignedOut before SignOut",
+   "ctl": "\u00acE[\u00acSignOut U SignedOut]",
+   "formula": {
+    "not": {
+     "EU": [
+      {
+       "not": {
+        "after": "SignOut"
+       }
+      },
+      {
+       "after": "SignedOut"
+      }
+     ]
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "Applied can happen",
+   "ctl": "EF Applied",
+   "formula": {
+    "EF": {
+     "after": "Applied"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "AutopilotSet can happen",
+   "ctl": "EF AutopilotSet",
+   "formula": {
+    "EF": {
+     "after": "AutopilotSet"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "BotMoveChosen can happen",
+   "ctl": "EF BotMoveChosen",
+   "formula": {
+    "EF": {
+     "after": "BotMoveChosen"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "BotTurn can happen",
+   "ctl": "EF BotTurn",
+   "formula": {
+    "EF": {
+     "after": "BotTurn"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "ClockRanOut can happen",
+   "ctl": "EF ClockRanOut",
+   "formula": {
+    "EF": {
+     "after": "ClockRanOut"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "CreateGame can happen",
+   "ctl": "EF CreateGame",
+   "formula": {
+    "EF": {
+     "after": "CreateGame"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "CreateRoom can happen",
+   "ctl": "EF CreateRoom",
+   "formula": {
+    "EF": {
+     "after": "CreateRoom"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "EnterRoom can happen",
+   "ctl": "EF EnterRoom",
+   "formula": {
+    "EF": {
+     "after": "EnterRoom"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "Finished can happen",
+   "ctl": "EF Finished",
+   "formula": {
+    "EF": {
+     "after": "Finished"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "GameCreated can happen",
+   "ctl": "EF GameCreated",
+   "formula": {
+    "EF": {
+     "after": "GameCreated"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "GameJoined can happen",
+   "ctl": "EF GameJoined",
+   "formula": {
+    "EF": {
+     "after": "GameJoined"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "GameStarted can happen",
+   "ctl": "EF GameStarted",
+   "formula": {
+    "EF": {
+     "after": "GameStarted"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "GameState can happen",
+   "ctl": "EF GameState",
+   "formula": {
+    "EF": {
+     "after": "GameState"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "GamesListed can happen",
+   "ctl": "EF GamesListed",
+   "formula": {
+    "EF": {
+     "after": "GamesListed"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "GetGameState can happen",
+   "ctl": "EF GetGameState",
+   "formula": {
+    "EF": {
+     "after": "GetGameState"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "IssueSession can happen",
+   "ctl": "EF IssueSession",
+   "formula": {
+    "EF": {
+     "after": "IssueSession"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "JoinGame can happen",
+   "ctl": "EF JoinGame",
+   "formula": {
+    "EF": {
+     "after": "JoinGame"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "LeaveSeat can happen",
+   "ctl": "EF LeaveSeat",
+   "formula": {
+    "EF": {
+     "after": "LeaveSeat"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "ListGames can happen",
+   "ctl": "EF ListGames",
+   "formula": {
+    "EF": {
+     "after": "ListGames"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "MergeProposed can happen",
+   "ctl": "EF MergeProposed",
+   "formula": {
+    "EF": {
+     "after": "MergeProposed"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "MergeResponded can happen",
+   "ctl": "EF MergeResponded",
+   "formula": {
+    "EF": {
+     "after": "MergeResponded"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "MovePlayed can happen",
+   "ctl": "EF MovePlayed",
+   "formula": {
+    "EF": {
+     "after": "MovePlayed"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "Passed can happen",
+   "ctl": "EF Passed",
+   "formula": {
+    "EF": {
+     "after": "Passed"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "PlayMove can happen",
+   "ctl": "EF PlayMove",
+   "formula": {
+    "EF": {
+     "after": "PlayMove"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "ProposeMerge can happen",
+   "ctl": "EF ProposeMerge",
+   "formula": {
+    "EF": {
+     "after": "ProposeMerge"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "RespondMerge can happen",
+   "ctl": "EF RespondMerge",
+   "formula": {
+    "EF": {
+     "after": "RespondMerge"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "RoomChat can happen",
+   "ctl": "EF RoomChat",
+   "formula": {
+    "EF": {
+     "after": "RoomChat"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "RoomCreated can happen",
+   "ctl": "EF RoomCreated",
+   "formula": {
+    "EF": {
+     "after": "RoomCreated"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "RoomEntered can happen",
+   "ctl": "EF RoomEntered",
+   "formula": {
+    "EF": {
+     "after": "RoomEntered"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SeatLeft can happen",
+   "ctl": "EF SeatLeft",
+   "formula": {
+    "EF": {
+     "after": "SeatLeft"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SeatPlanSet can happen",
+   "ctl": "EF SeatPlanSet",
+   "formula": {
+    "EF": {
+     "after": "SeatPlanSet"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SendRoomChat can happen",
+   "ctl": "EF SendRoomChat",
+   "formula": {
+    "EF": {
+     "after": "SendRoomChat"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SessionIssued can happen",
+   "ctl": "EF SessionIssued",
+   "formula": {
+    "EF": {
+     "after": "SessionIssued"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SetAutopilot can happen",
+   "ctl": "EF SetAutopilot",
+   "formula": {
+    "EF": {
+     "after": "SetAutopilot"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SetSeatPlan can happen",
+   "ctl": "EF SetSeatPlan",
+   "formula": {
+    "EF": {
+     "after": "SetSeatPlan"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SignInRefused can happen",
+   "ctl": "EF SignInRefused",
+   "formula": {
+    "EF": {
+     "after": "SignInRefused"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SignOut can happen",
+   "ctl": "EF SignOut",
+   "formula": {
+    "EF": {
+     "after": "SignOut"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "SignedOut can happen",
+   "ctl": "EF SignedOut",
+   "formula": {
+    "EF": {
+     "after": "SignedOut"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "Stale can happen",
+   "ctl": "EF Stale",
+   "formula": {
+    "EF": {
+     "after": "Stale"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "possible",
+   "name": "StartGame can happen",
+   "ctl": "EF StartGame",
+   "formula": {
+    "EF": {
+     "after": "StartGame"
+    }
+   },
+   "verdict": "proved"
+  },
+  {
+   "rule": "end",
+   "name": "from every state, the session can still end",
+   "ctl": "AG EF terminal",
+   "formula": {
+    "AG": {
+     "EF": "terminal"
+    }
+   },
+   "verdict": "proved"
+  }
+ ]
+}

@@ -25,7 +25,7 @@ instance : ToString Role := ⟨fun | .person => "Person" | .server => "Server" |
 -- Generated from spec/Requirements.proto by spec/SessionTypes.lean; regenerate it rather than editing.
 -- Fields carry their protobuf JSON names, as the Go server sends them.
 structure EnterRoom where
-  sessionId : String
+  sessionId : Link String
   roomId : String
   requestId : Nat
   deriving TypeName
@@ -38,7 +38,7 @@ structure RoomEntered where
 
 structure ListGames where
   roomId : String
-  sessionId : String
+  sessionId : Link String
   requestId : Nat
   deriving TypeName
 
@@ -58,8 +58,20 @@ structure GamesListed where
   roomId : String
   deriving TypeName
 
+structure JoinGame where
+  sessionId : Link String
+  gameId : String
+  requestId : Nat
+  deriving TypeName
+
+structure GameJoined where
+  gameId : String
+  participants : List String
+  requestId : Nat
+  deriving TypeName
+
 structure SendRoomChat where
-  sessionId : String
+  sessionId : Link String
   roomId : String
   body : String
   requestId : Nat
@@ -81,7 +93,7 @@ structure RequestRejected where
   deriving TypeName
 
 structure CreateRoom where
-  sessionId : String
+  sessionId : Link String
   roomName : String
   requestId : Nat
   deriving TypeName
@@ -98,7 +110,7 @@ structure SeatPlan where
   deriving TypeName
 
 structure CreateGame where
-  sessionId : String
+  sessionId : Link String
   roomId : String
   gameName : String
   boardSize : Nat
@@ -115,7 +127,7 @@ structure CreateGame where
   deriving TypeName
 
 structure GameCreated where
-  gameId : String
+  gameId : Fresh String
   roomId : String
   creator : String
   status : String
@@ -134,8 +146,8 @@ structure GameCreated where
   deriving TypeName
 
 structure SetSeatPlan where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   seat : Nat
   controller : String
   team : Nat
@@ -143,7 +155,7 @@ structure SetSeatPlan where
   deriving TypeName
 
 structure SeatPlanSet where
-  gameId : String
+  gameId : Link String
   seat : Nat
   controller : String
   team : Nat
@@ -151,33 +163,33 @@ structure SeatPlanSet where
   deriving TypeName
 
 structure TakeSeat where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   seat : Nat
   requestId : Nat
   deriving TypeName
 
 structure SeatTaken where
-  gameId : String
+  gameId : Link String
   seat : Nat
   requestId : Nat
   deriving TypeName
 
 structure LeaveSeat where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   requestId : Nat
   deriving TypeName
 
 structure SeatLeft where
-  gameId : String
+  gameId : Link String
   seat : Nat
   requestId : Nat
   deriving TypeName
 
 structure StartGame where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   requestId : Nat
   deriving TypeName
 
@@ -196,28 +208,28 @@ structure SeatView where
   deriving TypeName
 
 structure GameStarted where
-  gameId : String
+  gameId : Link String
   seats : List SeatView
   requestId : Nat
   deriving TypeName
 
 structure SetAutopilot where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   on : Bool
   requestId : Nat
   deriving TypeName
 
 structure AutopilotSet where
-  gameId : String
+  gameId : Link String
   seat : Nat
   on : Bool
   requestId : Nat
   deriving TypeName
 
 structure PlayMove where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   moveNo : Nat
   kind : String
   x : Nat
@@ -226,7 +238,7 @@ structure PlayMove where
   deriving TypeName
 
 structure MovePlayed where
-  gameId : String
+  gameId : Link String
   moveNo : Nat
   seat : Nat
   kind : String
@@ -239,14 +251,14 @@ structure MovePlayed where
   deriving TypeName
 
 structure ProposeMerge where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   otherTeam : Nat
   requestId : Nat
   deriving TypeName
 
 structure MergeProposed where
-  gameId : String
+  gameId : Link String
   proposalId : Nat
   teamA : Nat
   teamB : Nat
@@ -254,23 +266,23 @@ structure MergeProposed where
   deriving TypeName
 
 structure RespondMerge where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   proposalId : Nat
   accept : Bool
   requestId : Nat
   deriving TypeName
 
 structure MergeResponded where
-  gameId : String
+  gameId : Link String
   proposalId : Nat
   status : String
   requestId : Nat
   deriving TypeName
 
 structure GetGameState where
-  sessionId : String
-  gameId : String
+  sessionId : Link String
+  gameId : Link String
   sinceMove : Nat
   requestId : Nat
   sinceReview : Nat
@@ -339,7 +351,7 @@ structure ReviewNode where
   deriving TypeName
 
 structure GameState where
-  gameId : String
+  gameId : Link String
   gameName : String
   status : String
   creator : String
@@ -368,7 +380,7 @@ structure GameState where
   deriving TypeName
 
 structure BotTurn where
-  gameId : String
+  gameId : Link String
   turnSeq : Nat
   seat : Nat
   moveNo : Nat
@@ -376,7 +388,7 @@ structure BotTurn where
   deriving TypeName
 
 structure BotMoveChosen where
-  gameId : String
+  gameId : Link String
   turnSeq : Nat
   kind : String
   x : Nat
@@ -385,33 +397,60 @@ structure BotMoveChosen where
   deriving TypeName
 
 structure BotMovePlayed where
-  gameId : String
+  gameId : Link String
   record : MoveRecord
   deriving TypeName
 
 structure TurnTimedOut where
-  gameId : String
+  gameId : Link String
   moveNo : Nat
   seat : Nat
   deriving TypeName
 
 structure AutoPassed where
-  gameId : String
+  gameId : Link String
   moveNo : Nat
   seat : Nat
   deriving TypeName
 
 structure TeamsMerged where
-  gameId : String
+  gameId : Link String
   proposalId : Nat
   team : Nat
   seats : List Nat
   deriving TypeName
 
 structure MergeWithdrawn where
-  gameId : String
+  gameId : Link String
   proposalId : Nat
   reason : String
+  deriving TypeName
+
+structure IssueSession where
+  identity : String
+  password : String
+  requestId : Nat
+  deriving TypeName
+
+structure SessionIssued where
+  sessionId : Fresh String
+  identity : String
+  claimed : Bool
+  requestId : Nat
+  deriving TypeName
+
+/-- A refused sign-in: a wrong password, a claimed name, or too many attempts (HTTP 401 or 429). -/
+structure SignInRefused where
+  error : String
+  deriving TypeName
+
+structure SignOut where
+  sessionId : Link String
+  requestId : Nat
+  deriving TypeName
+
+structure SignedOut where
+  requestId : Nat
   deriving TypeName
 
 structure Applied where deriving TypeName
@@ -428,7 +467,7 @@ structure Finished where deriving TypeName
 /-! ## Rooms -/
 
 --@begin Rooms
-protocol CreateRoomP (Person, Server) {
+protocol CreateRoomP (Person, Server) given sessionId {
   q: CreateRoom from Person to Server route "POST /api/create_room";
   choice {
     a: RoomCreated from Server to Person cause q status 200 where a.requestId = q.requestId;
@@ -447,7 +486,7 @@ protocol EnterRoomP (Person, Server) {
   }
 }
 
-protocol ListGamesP (Person, Server) {
+protocol ListGamesP (Person, Server) given sessionId {
   q: ListGames from Person to Server route "POST /api/list_games";
   choice {
     a: GamesListed from Server to Person cause q status 200
@@ -457,7 +496,7 @@ protocol ListGamesP (Person, Server) {
   }
 }
 
-protocol RoomChatP (Person, Server) {
+protocol RoomChatP (Person, Server) given sessionId {
   q: SendRoomChat from Person to Server route "POST /api/send_room_chat";
   choice {
     a: RoomChat from Server to Person cause q status 200 where a.requestId = q.requestId;
@@ -479,7 +518,7 @@ protocol CreateGameP (Person, Server) {
   }
 }
 
-protocol TakeSeatP (Person, Server) {
+protocol TakeSeatP (Person, Server) given sessionId gameId {
   q: TakeSeat from Person to Server route "POST /api/take_seat";
   choice {
     a: SeatTaken from Server to Person cause q status 200 where a.requestId = q.requestId;
@@ -500,7 +539,7 @@ protocol StartGameP (Person, Server) {
 /-- After GameCreated, before the start: the creator plans seats, people take and leave them,
 and anyone in the room may watch. The phase ends only when StartGame is accepted; a rejected
 StartGame (seats not filled, not the creator) leaves the challenge open. -/
-protocol Challenge (Person, Server) {
+protocol Challenge (Person, Server) given sessionId gameId {
   rec Open {
     choice {
       p: SetSeatPlan from Person to Server route "POST /api/set_seat_plan";
@@ -511,7 +550,7 @@ protocol Challenge (Person, Server) {
       }
       continue Open;
     } or {
-      include TakeSeatP Person Server;
+      include TakeSeatP Person Server with sessionId, gameId;
       continue Open;
     } or {
       l: LeaveSeat from Person to Server route "POST /api/leave_seat";
@@ -539,7 +578,7 @@ protocol Challenge (Person, Server) {
 --@begin Play
 /-- A person's move is a request in its own session. The server answers it, or refuses it:
 not this person's turn, a stale move number, the seat's byo-yomi clock already run out. -/
-protocol PlayMoveP (Person, Server) {
+protocol PlayMoveP (Person, Server) given sessionId gameId {
   m: PlayMove from Person to Server route "POST /api/play_move";
   choice {
     p: MovePlayed from Server to Person cause m status 200
@@ -599,12 +638,21 @@ protocol TurnPushed (Person, Server, Bot) {
     AutoPassed from Server to Person;
   }
 }
+/-- Autopilot for one's own seat, a request in its own session. -/
+protocol SetAutopilotP (Person, Server) given sessionId gameId {
+  a: SetAutopilot from Person to Server route "POST /api/set_autopilot";
+  choice {
+    AutopilotSet from Server to Person cause a status 200;
+  } or {
+    RequestRejected from Server to Person cause a status 200;
+  }
+}
 --@end Play
 
 /-! ## Teams -/
 
 --@begin Teams
-protocol ProposeMergeP (Person, Server) {
+protocol ProposeMergeP (Person, Server) given sessionId gameId {
   q: ProposeMerge from Person to Server route "POST /api/propose_merge";
   choice {
     a: MergeProposed from Server to Person cause q status 200 where a.requestId = q.requestId;
@@ -631,7 +679,7 @@ protocol RespondMergeNaive (Person, Server) {
 
 /-- One answer to a proposal. The response says where the proposal stands: still pending,
 merged (this was the last acceptance) or withdrawn (a decline, or a team changed). -/
-protocol RespondMergeP (Person, Server) {
+protocol RespondMergeP (Person, Server) given sessionId gameId {
   q: RespondMerge from Person to Server route "POST /api/respond_merge";
   choice {
     a: MergeResponded from Server to Person cause q status 200
@@ -646,7 +694,7 @@ protocol RespondMergeP (Person, Server) {
 /-! ## Watching -/
 
 --@begin Watch
-protocol GameStateP (Person, Server) {
+protocol GameStateP (Person, Server) given sessionId gameId {
   q: GetGameState from Person to Server route "POST /api/game_state";
   choice {
     a: GameState from Server to Person cause q status 200 where a.requestId = q.requestId;
@@ -659,11 +707,64 @@ protocol GameStateP (Person, Server) {
 /-! ## The whole project -/
 
 --@begin GoServer
-/-- GoServer, all of it. A person enters a room (a rejected entry is retried); in the room they
-create rooms, list games and chat; a rejected CreateGame returns to the room, an accepted one
-opens a challenge that runs to its start; then the server plays turn after turn until the game
-finishes, while any number of independent request sessions run beside it. -/
+/-- One game, a session of its own: its creator's CreateGame, answered by GameCreated, which mints the
+game's id; then the challenge, run by the creator, and the server's turns until the game finishes.
+A rejected CreateGame ends it. -/
+protocol GameP (Person, Server, Bot) given sessionId {
+  g: CreateGame from Person to Server route "POST /api/create_game";
+  choice {
+    c: GameCreated from Server to Person cause g status 200 where c.requestId = g.requestId;
+    include Challenge Person Server with sessionId, gameId;
+    rec Turns {
+      choice {
+        include Turn Server Bot;
+        continue Turns;
+      } or {
+        Finished at Server;
+      }
+    }
+  } or {
+    x: RequestRejected from Server to Person cause g status 200 where x.requestId = g.requestId;
+  }
+}
+
+/-- A person's place in a game they picked: taking a seat, then any number of independent requests,
+each its own session given both the person's session and the game, so each belongs to both. -/
+protocol SeatP (Person, Server) given sessionId gameId {
+  include TakeSeatP Person Server with sessionId, gameId;
+  par {
+    sessions { include PlayMoveP Person Server with sessionId, gameId; }
+  } and {
+    sessions { include SetAutopilotP Person Server with sessionId, gameId; }
+  } and {
+    sessions {
+      choice {
+        include ProposeMergeP Person Server with sessionId, gameId;
+      } or {
+        include RespondMergeP Person Server with sessionId, gameId;
+      }
+    }
+  } and {
+    sessions { include GameStateP Person Server with sessionId, gameId; }
+  }
+}
+
+/-- GoServer, one person's part of it. A person signs in, which mints the session every later request
+carries (a refused sign-in, a wrong password, a claimed name or a throttled name, is retried); then
+enters a room (a rejected entry is retried). Listing the room's games runs beside everything else, as the
+browser polls it. In the room they create rooms and chat;
+start a game, which runs as a session of its own beside the lobby; or pick a game (its id only a
+reference) and take part in it, also beside the lobby; or sign out, which ends their session. -/
 protocol GoServer (Person, Server, Bot) {
+  rec SignIn {
+    i: IssueSession from Person to Server route "POST /api/issue_session";
+    choice {
+      SessionIssued from Server to Person cause i status 200;
+    } or {
+      SignInRefused from Server to Person cause i status 401;
+      continue SignIn;
+    }
+  }
   rec Enter {
     e: EnterRoom from Person to Server route "POST /api/enter_room";
     choice {
@@ -674,57 +775,34 @@ protocol GoServer (Person, Server, Bot) {
       continue Enter;
     }
   }
+  par {
+    sessions { include ListGamesP Person Server with sessionId; }
+  } and {
   rec Lobby {
     choice {
-      include CreateRoomP Person Server;
+      include CreateRoomP Person Server with sessionId;
       continue Lobby;
     } or {
-      include ListGamesP Person Server;
+      include RoomChatP Person Server with sessionId;
       continue Lobby;
     } or {
-      include RoomChatP Person Server;
+      sessions { include GameP Person Server Bot with sessionId; }
       continue Lobby;
     } or {
-      g: CreateGame from Person to Server route "POST /api/create_game";
+      j: JoinGame from Person to Server route "POST /api/join_game";
       choice {
-        c: GameCreated from Server to Person cause g status 200 where c.requestId = g.requestId;
-        include Challenge Person Server;
+        GameJoined from Server to Person cause j status 200;
+        sessions { include SeatP Person Server with sessionId, gameId; }
+        continue Lobby;
       } or {
-        x: RequestRejected from Server to Person cause g status 200 where x.requestId = g.requestId;
+        RequestRejected from Server to Person cause j status 200;
         continue Lobby;
       }
+    } or {
+      o: SignOut from Person to Server route "POST /api/sign_out";
+      SignedOut from Server to Person cause o status 200;
     }
   }
-  par {
-    rec Turns {
-      choice {
-        include Turn Server Bot;
-        continue Turns;
-      } or {
-        Finished at Server;
-      }
-    }
-  } and {
-    sessions { include PlayMoveP Person Server; }
-  } and {
-    sessions {
-      a: SetAutopilot from Person to Server route "POST /api/set_autopilot";
-      choice {
-        AutopilotSet from Server to Person cause a status 200;
-      } or {
-        RequestRejected from Server to Person cause a status 200;
-      }
-    }
-  } and {
-    sessions {
-      choice {
-        include ProposeMergeP Person Server;
-      } or {
-        include RespondMergeP Person Server;
-      }
-    }
-  } and {
-    sessions { include GameStateP Person Server; }
   }
 }
 --@end GoServer

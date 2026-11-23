@@ -246,6 +246,7 @@ structure Protocol where
   keys : List (String × String) := []
   /-- Link fields an include renames, (label, field) to the Fresh field named (selfhost.session.identity.scopes) -/
   linkTargets : List ((String × String) × String) := []
+  parentLinks : List (String × String) := []
   /-- sessions bodies whose copies cannot be told apart (selfhost.session.identity.scopes) -/
   identityNotes : List String := []
   /-- the main protocol's version, 0 when it has none (selfhost.session.versions) -/
@@ -372,7 +373,7 @@ def protoTypes (args : Json) : Except String (Option Session.Types.Env) := do
 phone) can name one: `example: "goserver"` instead of `lean` (clause selfhost.session.explorer). A
 fixed list of names: no argument names a path, and nothing is read from disk. Lake does not track
 include_str, so after one of these files changes, MCPTests (which compares each with its file)
-fails until this module is rebuilt. -/
+fails until this module is rebuilt (GoServer's now starts at sign-in, runs each game as a session its players join, and polls its game list beside the lobby). -/
 def examples : List (String × String × String) :=
   [ ("goserver", "projects/GoServer/source/cmd/demo/static/session/goserver.leanfm",
       include_str "../projects/GoServer/source/cmd/demo/static/session/goserver.leanfm")
@@ -410,7 +411,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
     -- a version without a clean upgrade path from the one before is refused, as the Lean
     -- elaborator refuses it (selfhost.session.versions)
     let upgrades <- Versions.check r
-    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := <- generativeLayer r.body r.roles args, types := r.types, keys := r.keys, linkTargets := r.linkTargets, identityNotes := r.identityNotes,
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := <- generativeLayer r.body r.roles args, types := r.types, keys := r.keys, linkTargets := r.linkTargets, parentLinks := r.parentLinks, identityNotes := r.identityNotes,
              version := r.version, versions := (r.versioned.lookup r.name).getD [], upgrades,
              labelHistory := Versions.labelHistory r }
   let p ← match args.getObjVal? "protocol" with
@@ -440,7 +441,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
   -- the echoed text is a whole Lean file (selfhost.session.lean-syntax)
   let text := Text.header ++ typesText ++ ToText.write name roles js
   let parsed ← Text.parse text (← protoTypes args)
-  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys, linkTargets := parsed.linkTargets, identityNotes := parsed.identityNotes }
+  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys, linkTargets := parsed.linkTargets, parentLinks := parsed.parentLinks, identityNotes := parsed.identityNotes }
 
 /-! ## Results -/
 
@@ -599,7 +600,7 @@ def themeOf (args : Json) : DiagramTheme :=
   | _ => .dark
 
 def eventJson (e : Event String) : Json :=
-  Json.mkObj [("id", e.id), ("session", e.session), ("time", e.time),
+  Json.mkObj [("id", e.id), ("session", e.session), ("thread", Json.str s!"{e.src}@{e.session}"), ("time", e.time),
     ("prior", Json.arr (e.prior.map toJson).toArray), ("cause", toJson e.cause),
     ("answers", toJson e.answers), ("src", e.src), ("dst", e.dst), ("label", e.label),
     ("msgId", toJson e.msgId), ("route", toJson e.route), ("status", toJson e.status),
@@ -1183,6 +1184,8 @@ def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
   let mut out : Array (List (String × Json)) := #[]
   let mut latest : List ((Nat × String) × Nat) := []
   let mut req := 0
+  -- the value each marked field last minted, by name: a Link carries it (selfhost.session.identity.marks)
+  let mut minted : List (String × Json) := []
   for e in evs do
     if e.isAct then
       out := out.push []
@@ -1190,7 +1193,11 @@ def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
     let decl := ((ms.find? (·.name == e.label)).map (·.fields)).getD []
     let mut fs : List (String × Json) := []
     for f in decl do
-      let v : Json := match f.ty with
+      let target := (p.linkTargets.lookup (e.label, f.name)).getD f.name
+      let v : Json := if f.mark == .fresh then
+          Json.str (if f.name == "sessionId" then s!"sess-{e.session + 1}" else s!"{f.name}-{e.id}")
+        else if f.mark == .link && (minted.lookup target).isSome then (minted.lookup target).get!
+        else match f.ty with
         | .str => if f.name == "sessionId" then Json.str (simSessionId seed e.session)
                   else Json.str s!"{f.name}-{e.session % 3 + 1}"
         | .nat | .int => if f.name == "requestId" then Json.str (toString (req + 1))
@@ -1198,6 +1205,7 @@ def simFields (p : Protocol) (seed : Nat) (evs : Array (Event String)) :
         | .bool => Json.bool false
         | t => Session.Types.Ty.example p.types 4 t
       fs := fs ++ [(f.name, v)]
+      if f.mark == .fresh then minted := (f.name, v) :: minted.filter (·.1 != f.name)
     if decl.any (·.name == "requestId") then req := req + 1
     -- the same label, roles and id can appear in several places with different clauses (GoServer
     -- rejects many requests with `x: RequestRejected`), so the message it answers picks the place
@@ -1454,10 +1462,19 @@ def conform (args : Json) : Except String Json := do
   -- (selfhost.session.identity.scopes)
   let marked := p.types.flatMap fun m => (m.fields.filter (·.mark != .plain)).map fun f =>
     ({ label := m.name, field := f.name, mark := f.mark,
-       target := (p.linkTargets.lookup (m.name, f.name)).getD f.name } : LogSessions.Marked)
-  let terminated := fun (sofar : List Session.LogEvent) => match p.global.next sofar with
+       target := (p.linkTargets.lookup (m.name, f.name)).getD f.name,
+       parent := f.mark == .link && p.parentLinks.contains (m.name, f.name) } : LogSessions.Marked)
+  -- a session has ended when the body it fits allows no further step: the protocol's body, or a
+  -- sessions block nested in it at any depth (a child session; selfhost.session.identity.children)
+  let body := match p.global with | .sessions b _ => b | other => other
+  let terminated := fun (sofar : List Session.LogEvent) =>
+    match p.global.next sofar with
     | .ok (steps, _) => steps.isEmpty
-    | .error _ => false
+    | .error _ => match body.nextOwn sofar with
+      | .ok steps => steps.isEmpty
+      | .error _ => match (Global.allNestedSessions body).findSome? (fun g => (g.nextOwn sofar).toOption) with
+        | some steps => steps.isEmpty
+        | none => false
   let derived := LogSessions.derive evs.toArray logKeys starts named marked terminated
   let crossProblems : List String := bif named then LogSessions.crossCheck evs.toArray logKeys else []
   let placeProblems : List String := bif named then [] else LogSessions.unattributedProblems evs.toArray derived

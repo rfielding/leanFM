@@ -1,0 +1,281 @@
+[
+ {
+  "id": "i1",
+  "label": "IssueSession",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "identity": "person1",
+   "password": "",
+   "requestId": "11"
+  }
+ },
+ {
+  "id": "i2",
+  "label": "IssueSession",
+  "from": "Person/p2",
+  "to": "Server/s",
+  "fields": {
+   "identity": "person2",
+   "password": "",
+   "requestId": "21"
+  }
+ },
+ {
+  "id": "k1",
+  "label": "SessionIssued",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "i1",
+  "fields": {
+   "sessionId": "s1",
+   "identity": "person1",
+   "claimed": false,
+   "requestId": "11"
+  }
+ },
+ {
+  "id": "k2",
+  "label": "SessionIssued",
+  "from": "Server/s",
+  "to": "Person/p2",
+  "cause": "i2",
+  "fields": {
+   "sessionId": "s2",
+   "identity": "person2",
+   "claimed": false,
+   "requestId": "21"
+  }
+ },
+ {
+  "id": "e1",
+  "label": "EnterRoom",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s1",
+   "roomId": "lobby",
+   "requestId": "12"
+  },
+  "prev": "i1"
+ },
+ {
+  "id": "e2",
+  "label": "EnterRoom",
+  "from": "Person/p2",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s2",
+   "roomId": "lobby",
+   "requestId": "22"
+  },
+  "prev": "i2"
+ },
+ {
+  "id": "r1",
+  "label": "RoomEntered",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "e1",
+  "fields": {
+   "roomId": "lobby",
+   "requestId": "12"
+  }
+ },
+ {
+  "id": "r2",
+  "label": "RoomEntered",
+  "from": "Server/s",
+  "to": "Person/p2",
+  "cause": "e2",
+  "fields": {
+   "roomId": "lobby",
+   "requestId": "22"
+  }
+ },
+ {
+  "id": "c1",
+  "label": "CreateGame",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s1",
+   "roomId": "lobby",
+   "requestId": "13"
+  },
+  "prev": "e1"
+ },
+ {
+  "id": "g1",
+  "label": "GameCreated",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "c1",
+  "fields": {
+   "gameId": "g1",
+   "roomId": "lobby",
+   "requestId": "13"
+  }
+ },
+ {
+  "id": "j1",
+  "label": "JoinGame",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s1",
+   "gameId": "g1",
+   "requestId": "14"
+  },
+  "prev": "c1"
+ },
+ {
+  "id": "j2",
+  "label": "JoinGame",
+  "from": "Person/p2",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s2",
+   "gameId": "g1",
+   "requestId": "24"
+  },
+  "prev": "e2"
+ },
+ {
+  "id": "n1",
+  "label": "GameJoined",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "j1",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "14"
+  }
+ },
+ {
+  "id": "n2",
+  "label": "GameJoined",
+  "from": "Server/s",
+  "to": "Person/p2",
+  "cause": "j2",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "24"
+  }
+ },
+ {
+  "id": "t1",
+  "label": "TakeSeat",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s1",
+   "gameId": "g1",
+   "requestId": "15"
+  },
+  "prev": "j1"
+ },
+ {
+  "id": "t2",
+  "label": "TakeSeat",
+  "from": "Person/p2",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s2",
+   "gameId": "g1",
+   "requestId": "25"
+  },
+  "prev": "j2"
+ },
+ {
+  "id": "a1",
+  "label": "SeatTaken",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "t1",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "15"
+  }
+ },
+ {
+  "id": "a2",
+  "label": "SeatTaken",
+  "from": "Server/s",
+  "to": "Person/p2",
+  "cause": "t2",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "25"
+  }
+ },
+ {
+  "id": "x1",
+  "label": "StartGame",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s1",
+   "gameId": "g1",
+   "requestId": "17"
+  },
+  "prev": "t1"
+ },
+ {
+  "id": "y1",
+  "label": "GameStarted",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "x1",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "17"
+  }
+ },
+ {
+  "id": "q1",
+  "label": "GetGameState",
+  "from": "Person/p1",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s1",
+   "gameId": "g1",
+   "requestId": "16"
+  },
+  "prev": "x1"
+ },
+ {
+  "id": "q2",
+  "label": "GetGameState",
+  "from": "Person/p2",
+  "to": "Server/s",
+  "fields": {
+   "sessionId": "s2",
+   "gameId": "g1",
+   "requestId": "26"
+  },
+  "prev": "t2"
+ },
+ {
+  "id": "w1",
+  "label": "GameState",
+  "from": "Server/s",
+  "to": "Person/p1",
+  "cause": "q1",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "16"
+  }
+ },
+ {
+  "id": "w2",
+  "label": "GameState",
+  "from": "Server/s",
+  "to": "Person/p2",
+  "cause": "q2",
+  "fields": {
+   "gameId": "g1",
+   "requestId": "26"
+  }
+ }
+]

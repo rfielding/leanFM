@@ -1,0 +1,2476 @@
+{
+ "source": "data/traffic.json, recorded by play.py from seven browsers",
+ "reducer": "session tokens replaced by s1, s2, ... (equal tokens equal); route to request label and its answers from goserver.leanfm; a rejection (code and task) is RequestRejected; each answer's cause is its request, each person's requests are chained by prev in the order they were sent; only sessionId, gameId, requestId and roomId are logged",
+ "findings": {
+  "SessionIssued names the minted id 'session' on the wire; the spec names it sessionId (read as sessionId here)": 7,
+  "routes the session type does not model, left out": {
+   "/api/room_history": 107,
+   "/api/game_history": 94
+  }
+ },
+ "events": 1458,
+ "window": 200,
+ "log": [
+  {
+   "id": "q0",
+   "label": "IssueSession",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430863498000000",
+   "fields": {}
+  },
+  {
+   "id": "a0",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q0",
+   "ts": "1795430863500000001",
+   "fields": {
+    "sessionId": "s1"
+   }
+  },
+  {
+   "id": "q1",
+   "label": "EnterRoom",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430863508000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424001",
+    "roomId": "lobby"
+   },
+   "prev": "q0"
+  },
+  {
+   "id": "a1",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q1",
+   "ts": "1795430863509000001",
+   "fields": {
+    "requestId": "1795430863424001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q2",
+   "label": "ListGames",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430863510000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424002",
+    "roomId": "lobby"
+   },
+   "prev": "q1"
+  },
+  {
+   "id": "q3",
+   "label": "ListGames",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430863510000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424003",
+    "roomId": "lobby"
+   },
+   "prev": "q2"
+  },
+  {
+   "id": "a2",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q2",
+   "ts": "1795430863511000001",
+   "fields": {
+    "requestId": "1795430863424002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a3",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q3",
+   "ts": "1795430863513000001",
+   "fields": {
+    "requestId": "1795430863424003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q4",
+   "label": "IssueSession",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430863719000000",
+   "fields": {}
+  },
+  {
+   "id": "a4",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q4",
+   "ts": "1795430863723000001",
+   "fields": {
+    "sessionId": "s2"
+   }
+  },
+  {
+   "id": "q5",
+   "label": "EnterRoom",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430863730000000",
+   "fields": {
+    "sessionId": "s2",
+    "requestId": "1795430863640001",
+    "roomId": "lobby"
+   },
+   "prev": "q4"
+  },
+  {
+   "id": "q6",
+   "label": "ListGames",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430863732000000",
+   "fields": {
+    "sessionId": "s2",
+    "requestId": "1795430863640002",
+    "roomId": "lobby"
+   },
+   "prev": "q5"
+  },
+  {
+   "id": "a5",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q5",
+   "ts": "1795430863732000001",
+   "fields": {
+    "requestId": "1795430863640001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q7",
+   "label": "ListGames",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430863733000000",
+   "fields": {
+    "sessionId": "s2",
+    "requestId": "1795430863640003",
+    "roomId": "lobby"
+   },
+   "prev": "q6"
+  },
+  {
+   "id": "a6",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q6",
+   "ts": "1795430863733000001",
+   "fields": {
+    "requestId": "1795430863640002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a7",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q7",
+   "ts": "1795430863735000001",
+   "fields": {
+    "requestId": "1795430863640003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q8",
+   "label": "IssueSession",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430863946000000",
+   "fields": {}
+  },
+  {
+   "id": "a8",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q8",
+   "ts": "1795430863951000001",
+   "fields": {
+    "sessionId": "s3"
+   }
+  },
+  {
+   "id": "q9",
+   "label": "EnterRoom",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430863957000000",
+   "fields": {
+    "sessionId": "s3",
+    "requestId": "1795430863869001",
+    "roomId": "lobby"
+   },
+   "prev": "q8"
+  },
+  {
+   "id": "q10",
+   "label": "ListGames",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430863959000000",
+   "fields": {
+    "sessionId": "s3",
+    "requestId": "1795430863869002",
+    "roomId": "lobby"
+   },
+   "prev": "q9"
+  },
+  {
+   "id": "q11",
+   "label": "ListGames",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430863959000000",
+   "fields": {
+    "sessionId": "s3",
+    "requestId": "1795430863869003",
+    "roomId": "lobby"
+   },
+   "prev": "q10"
+  },
+  {
+   "id": "a9",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q9",
+   "ts": "1795430863959000001",
+   "fields": {
+    "requestId": "1795430863869001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a10",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q10",
+   "ts": "1795430863960000001",
+   "fields": {
+    "requestId": "1795430863869002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a11",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q11",
+   "ts": "1795430863962000001",
+   "fields": {
+    "requestId": "1795430863869003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q12",
+   "label": "IssueSession",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430864167000000",
+   "fields": {}
+  },
+  {
+   "id": "a12",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q12",
+   "ts": "1795430864172000001",
+   "fields": {
+    "sessionId": "s4"
+   }
+  },
+  {
+   "id": "q13",
+   "label": "EnterRoom",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430864180000000",
+   "fields": {
+    "sessionId": "s4",
+    "requestId": "1795430864092001",
+    "roomId": "lobby"
+   },
+   "prev": "q12"
+  },
+  {
+   "id": "q14",
+   "label": "ListGames",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430864182000000",
+   "fields": {
+    "sessionId": "s4",
+    "requestId": "1795430864092002",
+    "roomId": "lobby"
+   },
+   "prev": "q13"
+  },
+  {
+   "id": "a13",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q13",
+   "ts": "1795430864182000001",
+   "fields": {
+    "requestId": "1795430864092001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q15",
+   "label": "ListGames",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430864183000000",
+   "fields": {
+    "sessionId": "s4",
+    "requestId": "1795430864092003",
+    "roomId": "lobby"
+   },
+   "prev": "q14"
+  },
+  {
+   "id": "a14",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q14",
+   "ts": "1795430864183000001",
+   "fields": {
+    "requestId": "1795430864092002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a15",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q15",
+   "ts": "1795430864185000001",
+   "fields": {
+    "requestId": "1795430864092003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q16",
+   "label": "CreateGame",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430864260000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424004",
+    "roomId": "lobby"
+   },
+   "prev": "q3"
+  },
+  {
+   "id": "q17",
+   "label": "ListGames",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430864262000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424005",
+    "roomId": "lobby"
+   },
+   "prev": "q16"
+  },
+  {
+   "id": "a16",
+   "label": "GameCreated",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q16",
+   "ts": "1795430864262000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q18",
+   "label": "JoinGame",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430864263000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424006"
+   },
+   "prev": "q17"
+  },
+  {
+   "id": "a17",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q17",
+   "ts": "1795430864263000001",
+   "fields": {
+    "requestId": "1795430863424005",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q19",
+   "label": "TakeSeat",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430864264000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424007"
+   },
+   "prev": "q18"
+  },
+  {
+   "id": "q20",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430864264000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424008"
+   },
+   "prev": "q19"
+  },
+  {
+   "id": "a18",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q18",
+   "ts": "1795430864264000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424006"
+   }
+  },
+  {
+   "id": "a19",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q19",
+   "ts": "1795430864274000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424007"
+   }
+  },
+  {
+   "id": "a20",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q20",
+   "ts": "1795430864275000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424008"
+   }
+  },
+  {
+   "id": "q21",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430865776000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424009"
+   },
+   "prev": "q20"
+  },
+  {
+   "id": "a21",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q21",
+   "ts": "1795430865778000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424009"
+   }
+  },
+  {
+   "id": "q22",
+   "label": "ListGames",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430866013000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424010",
+    "roomId": "lobby"
+   },
+   "prev": "q21"
+  },
+  {
+   "id": "a22",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q22",
+   "ts": "1795430866015000001",
+   "fields": {
+    "requestId": "1795430863424010",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q23",
+   "label": "ListGames",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430866235000000",
+   "fields": {
+    "sessionId": "s2",
+    "requestId": "1795430863640004",
+    "roomId": "lobby"
+   },
+   "prev": "q7"
+  },
+  {
+   "id": "a23",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q23",
+   "ts": "1795430866238000001",
+   "fields": {
+    "requestId": "1795430863640004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q24",
+   "label": "JoinGame",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430866307000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640005"
+   },
+   "prev": "q23"
+  },
+  {
+   "id": "q25",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430866310000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640006"
+   },
+   "prev": "q24"
+  },
+  {
+   "id": "a24",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q24",
+   "ts": "1795430866310000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640005"
+   }
+  },
+  {
+   "id": "a25",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q25",
+   "ts": "1795430866327000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640006"
+   }
+  },
+  {
+   "id": "q26",
+   "label": "TakeSeat",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430866392000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640007"
+   },
+   "prev": "q25"
+  },
+  {
+   "id": "q27",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430866395000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640008"
+   },
+   "prev": "q26"
+  },
+  {
+   "id": "a26",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q26",
+   "ts": "1795430866395000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640007"
+   }
+  },
+  {
+   "id": "a27",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q27",
+   "ts": "1795430866400000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640008"
+   }
+  },
+  {
+   "id": "q28",
+   "label": "ListGames",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430866463000000",
+   "fields": {
+    "sessionId": "s3",
+    "requestId": "1795430863869004",
+    "roomId": "lobby"
+   },
+   "prev": "q11"
+  },
+  {
+   "id": "a28",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q28",
+   "ts": "1795430866465000001",
+   "fields": {
+    "requestId": "1795430863869004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q29",
+   "label": "JoinGame",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430866478000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869005"
+   },
+   "prev": "q28"
+  },
+  {
+   "id": "a29",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q29",
+   "ts": "1795430866480000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869005"
+   }
+  },
+  {
+   "id": "q30",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430866481000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869006"
+   },
+   "prev": "q29"
+  },
+  {
+   "id": "a30",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q30",
+   "ts": "1795430866493000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869006"
+   }
+  },
+  {
+   "id": "q31",
+   "label": "TakeSeat",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430866563000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869007"
+   },
+   "prev": "q30"
+  },
+  {
+   "id": "q32",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430866566000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869008"
+   },
+   "prev": "q31"
+  },
+  {
+   "id": "a31",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q31",
+   "ts": "1795430866566000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869007"
+   }
+  },
+  {
+   "id": "a32",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q32",
+   "ts": "1795430866569000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869008"
+   }
+  },
+  {
+   "id": "q33",
+   "label": "ListGames",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430866687000000",
+   "fields": {
+    "sessionId": "s4",
+    "requestId": "1795430864092004",
+    "roomId": "lobby"
+   },
+   "prev": "q15"
+  },
+  {
+   "id": "a33",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q33",
+   "ts": "1795430866689000001",
+   "fields": {
+    "requestId": "1795430864092004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q34",
+   "label": "JoinGame",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430866732000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092005"
+   },
+   "prev": "q33"
+  },
+  {
+   "id": "a34",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q34",
+   "ts": "1795430866734000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092005"
+   }
+  },
+  {
+   "id": "q35",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430866735000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092006"
+   },
+   "prev": "q34"
+  },
+  {
+   "id": "a35",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q35",
+   "ts": "1795430866748000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092006"
+   }
+  },
+  {
+   "id": "q36",
+   "label": "TakeSeat",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430866818000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092007"
+   },
+   "prev": "q35"
+  },
+  {
+   "id": "q37",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430866821000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092008"
+   },
+   "prev": "q36"
+  },
+  {
+   "id": "a36",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q36",
+   "ts": "1795430866821000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092007"
+   }
+  },
+  {
+   "id": "a37",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q37",
+   "ts": "1795430866823000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092008"
+   }
+  },
+  {
+   "id": "q38",
+   "label": "StartGame",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430866904000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424011"
+   },
+   "prev": "q22"
+  },
+  {
+   "id": "q39",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430866906000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424012"
+   },
+   "prev": "q38"
+  },
+  {
+   "id": "a38",
+   "label": "GameStarted",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q38",
+   "ts": "1795430866906000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424011"
+   }
+  },
+  {
+   "id": "a39",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q39",
+   "ts": "1795430866912000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424012"
+   }
+  },
+  {
+   "id": "q40",
+   "label": "IssueSession",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867048000000",
+   "fields": {}
+  },
+  {
+   "id": "a40",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q40",
+   "ts": "1795430867051000001",
+   "fields": {
+    "sessionId": "s5"
+   }
+  },
+  {
+   "id": "q41",
+   "label": "EnterRoom",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867058000000",
+   "fields": {
+    "sessionId": "s5",
+    "requestId": "1795430866971001",
+    "roomId": "lobby"
+   },
+   "prev": "q40"
+  },
+  {
+   "id": "a41",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q41",
+   "ts": "1795430867059000001",
+   "fields": {
+    "requestId": "1795430866971001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q42",
+   "label": "ListGames",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867060000000",
+   "fields": {
+    "sessionId": "s5",
+    "requestId": "1795430866971002",
+    "roomId": "lobby"
+   },
+   "prev": "q41"
+  },
+  {
+   "id": "q43",
+   "label": "ListGames",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867060000000",
+   "fields": {
+    "sessionId": "s5",
+    "requestId": "1795430866971003",
+    "roomId": "lobby"
+   },
+   "prev": "q42"
+  },
+  {
+   "id": "a42",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q42",
+   "ts": "1795430867060000001",
+   "fields": {
+    "requestId": "1795430866971002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a43",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q43",
+   "ts": "1795430867063000001",
+   "fields": {
+    "requestId": "1795430866971003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q44",
+   "label": "IssueSession",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430867270000000",
+   "fields": {}
+  },
+  {
+   "id": "a44",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q44",
+   "ts": "1795430867274000001",
+   "fields": {
+    "sessionId": "s6"
+   }
+  },
+  {
+   "id": "q45",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430867279000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424013"
+   },
+   "prev": "q39"
+  },
+  {
+   "id": "q46",
+   "label": "EnterRoom",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430867279000000",
+   "fields": {
+    "sessionId": "s6",
+    "requestId": "1795430867193001",
+    "roomId": "lobby"
+   },
+   "prev": "q44"
+  },
+  {
+   "id": "q47",
+   "label": "ListGames",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430867281000000",
+   "fields": {
+    "sessionId": "s6",
+    "requestId": "1795430867193002",
+    "roomId": "lobby"
+   },
+   "prev": "q46"
+  },
+  {
+   "id": "a45",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q45",
+   "ts": "1795430867281000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424013"
+   }
+  },
+  {
+   "id": "a46",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q46",
+   "ts": "1795430867281000001",
+   "fields": {
+    "requestId": "1795430867193001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q48",
+   "label": "ListGames",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430867282000000",
+   "fields": {
+    "sessionId": "s6",
+    "requestId": "1795430867193003",
+    "roomId": "lobby"
+   },
+   "prev": "q47"
+  },
+  {
+   "id": "a47",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q47",
+   "ts": "1795430867283000001",
+   "fields": {
+    "requestId": "1795430867193002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a48",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q48",
+   "ts": "1795430867285000001",
+   "fields": {
+    "requestId": "1795430867193003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q49",
+   "label": "IssueSession",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430867491000000",
+   "fields": {}
+  },
+  {
+   "id": "a49",
+   "label": "SessionIssued",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q49",
+   "ts": "1795430867496000001",
+   "fields": {
+    "sessionId": "s7"
+   }
+  },
+  {
+   "id": "q50",
+   "label": "EnterRoom",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430867502000000",
+   "fields": {
+    "sessionId": "s7",
+    "requestId": "1795430867414001",
+    "roomId": "lobby"
+   },
+   "prev": "q49"
+  },
+  {
+   "id": "a50",
+   "label": "RoomEntered",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q50",
+   "ts": "1795430867503000001",
+   "fields": {
+    "requestId": "1795430867414001",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q51",
+   "label": "ListGames",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430867504000000",
+   "fields": {
+    "sessionId": "s7",
+    "requestId": "1795430867414002",
+    "roomId": "lobby"
+   },
+   "prev": "q50"
+  },
+  {
+   "id": "q52",
+   "label": "ListGames",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430867504000000",
+   "fields": {
+    "sessionId": "s7",
+    "requestId": "1795430867414003",
+    "roomId": "lobby"
+   },
+   "prev": "q51"
+  },
+  {
+   "id": "a51",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q51",
+   "ts": "1795430867505000001",
+   "fields": {
+    "requestId": "1795430867414002",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "a52",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q52",
+   "ts": "1795430867506000001",
+   "fields": {
+    "requestId": "1795430867414003",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q53",
+   "label": "CreateGame",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867587000000",
+   "fields": {
+    "sessionId": "s5",
+    "requestId": "1795430866971004",
+    "roomId": "lobby"
+   },
+   "prev": "q43"
+  },
+  {
+   "id": "q54",
+   "label": "ListGames",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867589000000",
+   "fields": {
+    "sessionId": "s5",
+    "requestId": "1795430866971005",
+    "roomId": "lobby"
+   },
+   "prev": "q53"
+  },
+  {
+   "id": "a53",
+   "label": "GameCreated",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q53",
+   "ts": "1795430867589000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q55",
+   "label": "JoinGame",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867590000000",
+   "fields": {
+    "sessionId": "s5",
+    "gameId": "game-2",
+    "requestId": "1795430866971006"
+   },
+   "prev": "q54"
+  },
+  {
+   "id": "a54",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q54",
+   "ts": "1795430867590000001",
+   "fields": {
+    "requestId": "1795430866971005",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q56",
+   "label": "TakeSeat",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867592000000",
+   "fields": {
+    "sessionId": "s5",
+    "gameId": "game-2",
+    "requestId": "1795430866971007"
+   },
+   "prev": "q55"
+  },
+  {
+   "id": "q57",
+   "label": "GetGameState",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430867592000000",
+   "fields": {
+    "sessionId": "s5",
+    "gameId": "game-2",
+    "requestId": "1795430866971008"
+   },
+   "prev": "q56"
+  },
+  {
+   "id": "a55",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q55",
+   "ts": "1795430867592000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971006"
+   }
+  },
+  {
+   "id": "a56",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q56",
+   "ts": "1795430867605000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971007"
+   }
+  },
+  {
+   "id": "a57",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q57",
+   "ts": "1795430867605000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971008"
+   }
+  },
+  {
+   "id": "q58",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430867783000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424014"
+   },
+   "prev": "q45"
+  },
+  {
+   "id": "a58",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q58",
+   "ts": "1795430867785000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424014"
+   }
+  },
+  {
+   "id": "q59",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430867828000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640009"
+   },
+   "prev": "q27"
+  },
+  {
+   "id": "a59",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q59",
+   "ts": "1795430867831000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640009"
+   }
+  },
+  {
+   "id": "q60",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430867994000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869009"
+   },
+   "prev": "q32"
+  },
+  {
+   "id": "a60",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q60",
+   "ts": "1795430867997000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869009"
+   }
+  },
+  {
+   "id": "q61",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430868252000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092009"
+   },
+   "prev": "q37"
+  },
+  {
+   "id": "a61",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q61",
+   "ts": "1795430868254000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092009"
+   }
+  },
+  {
+   "id": "q62",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430868287000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424015"
+   },
+   "prev": "q58"
+  },
+  {
+   "id": "a62",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q62",
+   "ts": "1795430868289000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424015"
+   }
+  },
+  {
+   "id": "q63",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430868339000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640010"
+   },
+   "prev": "q59"
+  },
+  {
+   "id": "a63",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q63",
+   "ts": "1795430868342000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640010"
+   }
+  },
+  {
+   "id": "q64",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430868505000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869010"
+   },
+   "prev": "q60"
+  },
+  {
+   "id": "a64",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q64",
+   "ts": "1795430868507000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869010"
+   }
+  },
+  {
+   "id": "q65",
+   "label": "ListGames",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430868516000000",
+   "fields": {
+    "sessionId": "s1",
+    "requestId": "1795430863424016",
+    "roomId": "lobby"
+   },
+   "prev": "q62"
+  },
+  {
+   "id": "a65",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q65",
+   "ts": "1795430868518000001",
+   "fields": {
+    "requestId": "1795430863424016",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q66",
+   "label": "ListGames",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430868740000000",
+   "fields": {
+    "sessionId": "s2",
+    "requestId": "1795430863640011",
+    "roomId": "lobby"
+   },
+   "prev": "q63"
+  },
+  {
+   "id": "a66",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q66",
+   "ts": "1795430868742000001",
+   "fields": {
+    "requestId": "1795430863640011",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q67",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430868762000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092010"
+   },
+   "prev": "q61"
+  },
+  {
+   "id": "a67",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q67",
+   "ts": "1795430868765000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092010"
+   }
+  },
+  {
+   "id": "q68",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430868791000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424017"
+   },
+   "prev": "q65"
+  },
+  {
+   "id": "a68",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q68",
+   "ts": "1795430868792000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424017"
+   }
+  },
+  {
+   "id": "q69",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430868844000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640012"
+   },
+   "prev": "q66"
+  },
+  {
+   "id": "a69",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q69",
+   "ts": "1795430868846000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640012"
+   }
+  },
+  {
+   "id": "q70",
+   "label": "ListGames",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430868966000000",
+   "fields": {
+    "sessionId": "s3",
+    "requestId": "1795430863869011",
+    "roomId": "lobby"
+   },
+   "prev": "q64"
+  },
+  {
+   "id": "a70",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q70",
+   "ts": "1795430868969000001",
+   "fields": {
+    "requestId": "1795430863869011",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q71",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430869009000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869012"
+   },
+   "prev": "q70"
+  },
+  {
+   "id": "a71",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q71",
+   "ts": "1795430869010000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869012"
+   }
+  },
+  {
+   "id": "q72",
+   "label": "GetGameState",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430869106000000",
+   "fields": {
+    "sessionId": "s5",
+    "gameId": "game-2",
+    "requestId": "1795430866971009"
+   },
+   "prev": "q57"
+  },
+  {
+   "id": "a72",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q72",
+   "ts": "1795430869109000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971009"
+   }
+  },
+  {
+   "id": "q73",
+   "label": "ListGames",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430869190000000",
+   "fields": {
+    "sessionId": "s4",
+    "requestId": "1795430864092011",
+    "roomId": "lobby"
+   },
+   "prev": "q67"
+  },
+  {
+   "id": "a73",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q73",
+   "ts": "1795430869192000001",
+   "fields": {
+    "requestId": "1795430864092011",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q74",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430869266000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092012"
+   },
+   "prev": "q73"
+  },
+  {
+   "id": "a74",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q74",
+   "ts": "1795430869268000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092012"
+   }
+  },
+  {
+   "id": "q75",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430869293000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424018"
+   },
+   "prev": "q68"
+  },
+  {
+   "id": "a75",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q75",
+   "ts": "1795430869295000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424018"
+   }
+  },
+  {
+   "id": "q76",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430869347000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640013"
+   },
+   "prev": "q69"
+  },
+  {
+   "id": "a76",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q76",
+   "ts": "1795430869350000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640013"
+   }
+  },
+  {
+   "id": "q77",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430869512000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869013"
+   },
+   "prev": "q71"
+  },
+  {
+   "id": "a77",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q77",
+   "ts": "1795430869514000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869013"
+   }
+  },
+  {
+   "id": "q78",
+   "label": "ListGames",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430869563000000",
+   "fields": {
+    "sessionId": "s5",
+    "requestId": "1795430866971010",
+    "roomId": "lobby"
+   },
+   "prev": "q72"
+  },
+  {
+   "id": "a78",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q78",
+   "ts": "1795430869565000001",
+   "fields": {
+    "requestId": "1795430866971010",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q79",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430869769000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092013"
+   },
+   "prev": "q74"
+  },
+  {
+   "id": "a79",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q79",
+   "ts": "1795430869772000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092013"
+   }
+  },
+  {
+   "id": "q80",
+   "label": "ListGames",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430869785000000",
+   "fields": {
+    "sessionId": "s6",
+    "requestId": "1795430867193004",
+    "roomId": "lobby"
+   },
+   "prev": "q48"
+  },
+  {
+   "id": "a80",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q80",
+   "ts": "1795430869787000001",
+   "fields": {
+    "requestId": "1795430867193004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q81",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430869795000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424019"
+   },
+   "prev": "q75"
+  },
+  {
+   "id": "q82",
+   "label": "JoinGame",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430869797000000",
+   "fields": {
+    "sessionId": "s6",
+    "gameId": "game-2",
+    "requestId": "1795430867193005"
+   },
+   "prev": "q80"
+  },
+  {
+   "id": "a81",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q81",
+   "ts": "1795430869798000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424019"
+   }
+  },
+  {
+   "id": "a82",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q82",
+   "ts": "1795430869799000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867193005"
+   }
+  },
+  {
+   "id": "q83",
+   "label": "GetGameState",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430869800000000",
+   "fields": {
+    "sessionId": "s6",
+    "gameId": "game-2",
+    "requestId": "1795430867193006"
+   },
+   "prev": "q82"
+  },
+  {
+   "id": "a83",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q83",
+   "ts": "1795430869805000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867193006"
+   }
+  },
+  {
+   "id": "q84",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430869851000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640014"
+   },
+   "prev": "q76"
+  },
+  {
+   "id": "a84",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q84",
+   "ts": "1795430869853000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640014"
+   }
+  },
+  {
+   "id": "q85",
+   "label": "TakeSeat",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430869882000000",
+   "fields": {
+    "sessionId": "s6",
+    "gameId": "game-2",
+    "requestId": "1795430867193007"
+   },
+   "prev": "q83"
+  },
+  {
+   "id": "q86",
+   "label": "GetGameState",
+   "from": "Person/finn",
+   "to": "Server/s",
+   "ts": "1795430869885000000",
+   "fields": {
+    "sessionId": "s6",
+    "gameId": "game-2",
+    "requestId": "1795430867193008"
+   },
+   "prev": "q85"
+  },
+  {
+   "id": "a85",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q85",
+   "ts": "1795430869885000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867193007"
+   }
+  },
+  {
+   "id": "a86",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/finn",
+   "cause": "q86",
+   "ts": "1795430869891000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867193008"
+   }
+  },
+  {
+   "id": "q87",
+   "label": "ListGames",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430870007000000",
+   "fields": {
+    "sessionId": "s7",
+    "requestId": "1795430867414004",
+    "roomId": "lobby"
+   },
+   "prev": "q52"
+  },
+  {
+   "id": "a87",
+   "label": "GamesListed",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q87",
+   "ts": "1795430870010000001",
+   "fields": {
+    "requestId": "1795430867414004",
+    "roomId": "lobby"
+   }
+  },
+  {
+   "id": "q88",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430870016000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869014"
+   },
+   "prev": "q77"
+  },
+  {
+   "id": "a88",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q88",
+   "ts": "1795430870017000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869014"
+   }
+  },
+  {
+   "id": "q89",
+   "label": "JoinGame",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430870052000000",
+   "fields": {
+    "sessionId": "s7",
+    "gameId": "game-2",
+    "requestId": "1795430867414005"
+   },
+   "prev": "q87"
+  },
+  {
+   "id": "a89",
+   "label": "GameJoined",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q89",
+   "ts": "1795430870054000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867414005"
+   }
+  },
+  {
+   "id": "q90",
+   "label": "GetGameState",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430870055000000",
+   "fields": {
+    "sessionId": "s7",
+    "gameId": "game-2",
+    "requestId": "1795430867414006"
+   },
+   "prev": "q89"
+  },
+  {
+   "id": "a90",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q90",
+   "ts": "1795430870067000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867414006"
+   }
+  },
+  {
+   "id": "q91",
+   "label": "TakeSeat",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430870137000000",
+   "fields": {
+    "sessionId": "s7",
+    "gameId": "game-2",
+    "requestId": "1795430867414007"
+   },
+   "prev": "q90"
+  },
+  {
+   "id": "q92",
+   "label": "GetGameState",
+   "from": "Person/gus",
+   "to": "Server/s",
+   "ts": "1795430870140000000",
+   "fields": {
+    "sessionId": "s7",
+    "gameId": "game-2",
+    "requestId": "1795430867414008"
+   },
+   "prev": "q91"
+  },
+  {
+   "id": "a91",
+   "label": "SeatTaken",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q91",
+   "ts": "1795430870140000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867414007"
+   }
+  },
+  {
+   "id": "a92",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/gus",
+   "cause": "q92",
+   "ts": "1795430870146000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430867414008"
+   }
+  },
+  {
+   "id": "q93",
+   "label": "StartGame",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430870223000000",
+   "fields": {
+    "sessionId": "s5",
+    "gameId": "game-2",
+    "requestId": "1795430866971011"
+   },
+   "prev": "q78"
+  },
+  {
+   "id": "q94",
+   "label": "GetGameState",
+   "from": "Person/eve",
+   "to": "Server/s",
+   "ts": "1795430870226000000",
+   "fields": {
+    "sessionId": "s5",
+    "gameId": "game-2",
+    "requestId": "1795430866971012"
+   },
+   "prev": "q93"
+  },
+  {
+   "id": "a93",
+   "label": "GameStarted",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q93",
+   "ts": "1795430870226000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971011"
+   }
+  },
+  {
+   "id": "a94",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/eve",
+   "cause": "q94",
+   "ts": "1795430870229000001",
+   "fields": {
+    "gameId": "game-2",
+    "requestId": "1795430866971012"
+   }
+  },
+  {
+   "id": "q95",
+   "label": "GetGameState",
+   "from": "Person/dee",
+   "to": "Server/s",
+   "ts": "1795430870273000000",
+   "fields": {
+    "sessionId": "s4",
+    "gameId": "game-1",
+    "requestId": "1795430864092014"
+   },
+   "prev": "q79"
+  },
+  {
+   "id": "a95",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/dee",
+   "cause": "q95",
+   "ts": "1795430870275000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430864092014"
+   }
+  },
+  {
+   "id": "q96",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430870299000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424020"
+   },
+   "prev": "q81"
+  },
+  {
+   "id": "a96",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ana",
+   "cause": "q96",
+   "ts": "1795430870301000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863424020"
+   }
+  },
+  {
+   "id": "q97",
+   "label": "GetGameState",
+   "from": "Person/ben",
+   "to": "Server/s",
+   "ts": "1795430870354000000",
+   "fields": {
+    "sessionId": "s2",
+    "gameId": "game-1",
+    "requestId": "1795430863640015"
+   },
+   "prev": "q84"
+  },
+  {
+   "id": "a97",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/ben",
+   "cause": "q97",
+   "ts": "1795430870356000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863640015"
+   }
+  },
+  {
+   "id": "q98",
+   "label": "GetGameState",
+   "from": "Person/cy",
+   "to": "Server/s",
+   "ts": "1795430870519000000",
+   "fields": {
+    "sessionId": "s3",
+    "gameId": "game-1",
+    "requestId": "1795430863869015"
+   },
+   "prev": "q88"
+  },
+  {
+   "id": "a98",
+   "label": "GameState",
+   "from": "Server/s",
+   "to": "Person/cy",
+   "cause": "q98",
+   "ts": "1795430870521000001",
+   "fields": {
+    "gameId": "game-1",
+    "requestId": "1795430863869015"
+   }
+  },
+  {
+   "id": "q99",
+   "label": "PlayMove",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430870584000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424021"
+   },
+   "prev": "q96"
+  },
+  {
+   "id": "q100",
+   "label": "GetGameState",
+   "from": "Person/ana",
+   "to": "Server/s",
+   "ts": "1795430870586000000",
+   "fields": {
+    "sessionId": "s1",
+    "gameId": "game-1",
+    "requestId": "1795430863424022"
+   },
+   "prev": "q99"
+  }
+ ]
+}

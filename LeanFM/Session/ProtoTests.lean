@@ -36,6 +36,20 @@ def mixed := "syntax = \"proto3\";\nmessage Ship {\n  int64 delta = 3;\n  repeat
 #guard has ((Types.proto ((Proto.ofProto mixed).toOption.getD []) ["Ship"] "p").toOption.getD "") "  optional uint64 floor = 7;"
 
 def refuses (text part : String) : Bool := match Proto.ofProto text with | .error e => has e part | .ok _ => false
+
+/-! Identity marks travel as a trailing comment, as LeanFM writes them (selfhost.session.identity.marks) -/
+def marked := "syntax = \"proto3\";\nmessage Issued {\n  string session_id = 1; // fresh, header\n  string name = 2; // the person's name\n  string game_id = 3; // fresh\n}\nmessage Play {\n  string session_id = 1; // link\n  string game_id = 2; // link, path\n}"
+def marksOf (text : String) : List (String × String × String) :=
+  ((Proto.ofProto text).toOption.getD []).flatMap fun m => m.fields.map fun f => (m.name ++ "." ++ f.name, f.mark.name, f.place.name)
+#guard marksOf marked == [("Issued.sessionId", "fresh", "header"), ("Issued.name", "plain", "body"), ("Issued.gameId", "fresh", "body"),
+  ("Play.sessionId", "link", "body"), ("Play.gameId", "link", "path")]
+-- the .proto LeanFM writes back carries the same marks, and reads back as them
+#guard marksOf ((((Types.proto ((Proto.ofProto marked).toOption.getD []) ["Issued", "Play"] "p").toOption.getD "").splitOn "// The event envelope").head!) == marksOf marked
+-- negative: two marks or two placements in one comment are refused
+#guard refuses (marked.replace "// fresh, header" "// fresh, link") "names two marks"
+#guard refuses (marked.replace "// link, path" "// path, query") "names two placements"
+-- a comment on the next line is not a mark
+#guard (marksOf (marked.replace "string name = 2; // the person's name" "string name = 2;\n  // link")).contains ("Issued.name", "plain", "body")
 -- negative: inexact, untyped or unread constructs, numbers outside protobuf's range, and anything
 -- outside the given text are refused
 #guard refuses "syntax = \"proto3\";\nmessage M { double x = 1; }" "not exact"
@@ -115,6 +129,7 @@ def goEnv := (Proto.ofProto goProto).toOption.getD []
 #guard has ((Types.proto goEnv ["RoomCreated"] "p").toOption.getD "") "  uint64 request_id = 2;"
 -- the session-type panel's text, with the Types region generated from the proto, checks: every
 -- where condition reads whole, typed messages
+-- GoServer's panel text, with its sign-in, game sessions, seats and polled game list (rebuilt when it changes)
 def goPanel := include_str "../../projects/GoServer/source/cmd/demo/static/session/goserver.leanfm"
 #guard (Text.parse goPanel) matches .ok _
 #guard has (reason (check (Json.mkObj [("lean", Json.str (goPanel.replace "where a.requestId = q.requestId;" "where a.requestID = q.requestId;"))]))) "has no field requestID"

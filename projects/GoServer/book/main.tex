@@ -112,6 +112,34 @@ same ID. A duplicate mutation returns the earlier result; reusing an ID with a
 different body is rejected. A rejected or overloaded request changes nothing
 and discloses no other person's identity or session.
 
+\section{Sessions in a log}
+The session type says which events of a log belong together, so a log of the
+server needs no session ids to be read. It starts at sign-in:
+\texttt{SessionIssued} mints the person's \texttt{sessionId}, marked
+\emph{fresh} in \path{spec/Requirements.proto}, and every later request carries
+it, marked \emph{link}. The requests that run beside a game (moves, autopilot,
+merges, game state) are protocols of their own, each \emph{given}
+\texttt{sessionId} by the include that runs it. So LeanFM separates a log into one
+session per person, with each of those requests a child session of the person's
+session; a request carrying a \texttt{sessionId} no live sign-in issued is
+reported, never guessed into a session.
+
+A game is a session too. \texttt{GameCreated} mints its \texttt{gameId}
+(\emph{fresh}), and the game's session holds its challenge and its turns, run by
+the server and its bots. A person joins a game by picking it
+(\texttt{JoinGame}, whose \texttt{gameId} is only a reference) and taking a
+seat; the seat, and every move, autopilot switch, merge and game-state request
+made from it, is \emph{given} both the person's \texttt{sessionId} and the
+game's \texttt{gameId}. Each of those requests is a \emph{join}: it belongs to
+the person and to the game at once. So a log of two games of four players reads
+as two game sessions, each joined by its four players' requests, and every
+person's session holds only that person's own requests.
+The browser lists the room's games while it does anything else (it polls), so
+listing games is a session of its own beside the lobby, not a step of it: a
+recorded run of two games (four people on 11×11, three on 9×9) showed every
+browser asking for the list while its previous request was still unanswered,
+and the session type now says so.
+
 % ---------------------------------------------------------------------------
 \chapter{N-player Go rules}
 \section{Board, turns and captures}
@@ -537,6 +565,14 @@ its evidence under \path{reports/}.
   server; anyone may sign in with a claimed name's password, so the password is
   the account.
   \item Protobuf byte conformance of the JSON harness.
+  \item The sign-in answer names the minted session \texttt{session} on the
+  wire, where the session type's \texttt{SessionIssued} names it
+  \texttt{sessionId}, and it carries no \texttt{requestId}. The polled
+  \texttt{room\_history} and \texttt{game\_history} are served but are not in
+  the session type.
+  \item A game's session ends when it finishes, so reading or reviewing a
+  finished game is outside the session type: in a log, such a request names no
+  live game session and is reported.
   \item Server-side enforcement of the analysis rule for seated players, which
   is impossible by nature for public positions.
 \end{itemize}

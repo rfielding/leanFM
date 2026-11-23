@@ -8,7 +8,7 @@ namespace GoServer
 
 /-- Candidate Lab-parity revision; previous accepted revisions remain protected. Points are 0-based x (column, left to right) and y (row, top to bottom). -/
 structure ListRooms where
-  sessionId : String
+  sessionId : String -- link
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
@@ -18,7 +18,7 @@ structure RoomsListed where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure EnterRoom where
-  sessionId : String
+  sessionId : String -- link
   roomId : String
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
@@ -31,7 +31,7 @@ structure RoomEntered where
 
 structure ListGames where
   roomId : String
-  sessionId : String
+  sessionId : String -- link
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
@@ -52,7 +52,7 @@ structure GamesListed where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure JoinGame where
-  sessionId : String
+  sessionId : String -- link
   gameId : String
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
@@ -64,7 +64,7 @@ structure GameJoined where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SendRoomChat where
-  sessionId : String
+  sessionId : String -- link
   roomId : String
   body : String
   requestId : Nat
@@ -79,15 +79,15 @@ structure RoomChat where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SendGameChat where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   body : String
   requestId : Nat
   node : String
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GameChat where
-  gameId : String
+  gameId : String -- link
   sender : String
   body : String
   timeMs : Int
@@ -103,7 +103,7 @@ structure RequestRejected where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure CreateRoom where
-  sessionId : String
+  sessionId : String -- link
   roomName : String
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
@@ -120,7 +120,7 @@ structure SeatPlan where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure CreateGame where
-  sessionId : String
+  sessionId : String -- link
   roomId : String
   gameName : String
   boardSize : Nat
@@ -137,7 +137,7 @@ structure CreateGame where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GameCreated where
-  gameId : String
+  gameId : String -- fresh
   roomId : String
   creator : String
   status : String
@@ -156,8 +156,8 @@ structure GameCreated where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SetSeatPlan where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   seat : Nat
   controller : String
   team : Nat
@@ -165,7 +165,7 @@ structure SetSeatPlan where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SeatPlanSet where
-  gameId : String
+  gameId : String -- link
   seat : Nat
   controller : String
   team : Nat
@@ -173,33 +173,33 @@ structure SeatPlanSet where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure TakeSeat where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   seat : Nat
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SeatTaken where
-  gameId : String
+  gameId : String -- link
   seat : Nat
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure LeaveSeat where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SeatLeft where
-  gameId : String
+  gameId : String -- link
   seat : Nat
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure StartGame where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
@@ -218,28 +218,28 @@ structure SeatView where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GameStarted where
-  gameId : String
+  gameId : String -- link
   seats : List SeatView
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SetAutopilot where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   on : Bool
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure AutopilotSet where
-  gameId : String
+  gameId : String -- link
   seat : Nat
   on : Bool
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure PlayMove where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   moveNo : Nat
   kind : String
   x : Nat
@@ -248,7 +248,7 @@ structure PlayMove where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure MovePlayed where
-  gameId : String
+  gameId : String -- link
   moveNo : Nat
   seat : Nat
   kind : String
@@ -261,14 +261,14 @@ structure MovePlayed where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure ProposeMerge where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   otherTeam : Nat
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure MergeProposed where
-  gameId : String
+  gameId : String -- link
   proposalId : Nat
   teamA : Nat
   teamB : Nat
@@ -276,23 +276,23 @@ structure MergeProposed where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure RespondMerge where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   proposalId : Nat
   accept : Bool
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure MergeResponded where
-  gameId : String
+  gameId : String -- link
   proposalId : Nat
   status : String
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GetGameState where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   sinceMove : Nat
   requestId : Nat
   sinceReview : Nat
@@ -361,7 +361,7 @@ structure ReviewNode where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GameState where
-  gameId : String
+  gameId : String -- link
   gameName : String
   status : String
   creator : String
@@ -390,7 +390,7 @@ structure GameState where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure BotTurn where
-  gameId : String
+  gameId : String -- link
   turnSeq : Nat
   seat : Nat
   moveNo : Nat
@@ -398,7 +398,7 @@ structure BotTurn where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure BotMoveChosen where
-  gameId : String
+  gameId : String -- link
   turnSeq : Nat
   kind : String
   x : Nat
@@ -407,37 +407,37 @@ structure BotMoveChosen where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure BotMovePlayed where
-  gameId : String
+  gameId : String -- link
   record : MoveRecord
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure TurnTimedOut where
-  gameId : String
+  gameId : String -- link
   moveNo : Nat
   seat : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure AutoPassed where
-  gameId : String
+  gameId : String -- link
   moveNo : Nat
   seat : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure TeamsMerged where
-  gameId : String
+  gameId : String -- link
   proposalId : Nat
   team : Nat
   seats : List Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure MergeWithdrawn where
-  gameId : String
+  gameId : String -- link
   proposalId : Nat
   reason : String
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GameFinished where
-  gameId : String
+  gameId : String -- link
   winners : List Nat
   endReason : String
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
@@ -449,10 +449,15 @@ structure IssueSession where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SessionIssued where
-  sessionId : String
+  sessionId : String -- fresh
   identity : String
   claimed : Bool
   requestId : Nat
+  deriving Repr, BEq, Lean.ToJson, Lean.FromJson
+
+/-- A refused sign-in: a wrong password, a claimed name, or too many attempts (HTTP 401 or 429). -/
+structure SignInRefused where
+  error : String
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure ClaimName where
@@ -481,7 +486,7 @@ structure PasswordChanged where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure SignOut where
-  sessionId : String
+  sessionId : String -- link
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
@@ -490,7 +495,7 @@ structure SignedOut where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure GetRanking where
-  sessionId : String
+  sessionId : String -- link
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
@@ -521,8 +526,8 @@ structure NameReleased where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure AddReviewMove where
-  sessionId : String
-  gameId : String
+  sessionId : String -- link
+  gameId : String -- link
   parent : String
   kind : String
   x : Nat
@@ -531,7 +536,7 @@ structure AddReviewMove where
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
 
 structure ReviewMoveAdded where
-  gameId : String
+  gameId : String -- link
   node : ReviewNode
   requestId : Nat
   deriving Repr, BEq, Lean.ToJson, Lean.FromJson
@@ -545,13 +550,15 @@ inductive Role where
 
 /-- What an event carries: one message of the protocol, or an event a role performs alone. -/
 inductive Payload where
+  | issueSession (m : IssueSession)
+  | sessionIssued (m : SessionIssued)
   | enterRoom (m : EnterRoom)
   | roomEntered (m : RoomEntered)
+  | listGames (m : ListGames)
+  | gamesListed (m : GamesListed)
   | requestRejected (m : RequestRejected)
   | createRoom (m : CreateRoom)
   | roomCreated (m : RoomCreated)
-  | listGames (m : ListGames)
-  | gamesListed (m : GamesListed)
   | sendRoomChat (m : SendRoomChat)
   | roomChat (m : RoomChat)
   | createGame (m : CreateGame)
@@ -566,6 +573,8 @@ inductive Payload where
   | gameStarted (m : GameStarted)
   | botTurn (m : BotTurn)
   | botMoveChosen (m : BotMoveChosen)
+  | joinGame (m : JoinGame)
+  | gameJoined (m : GameJoined)
   | playMove (m : PlayMove)
   | movePlayed (m : MovePlayed)
   | setAutopilot (m : SetAutopilot)
@@ -576,6 +585,9 @@ inductive Payload where
   | mergeResponded (m : MergeResponded)
   | getGameState (m : GetGameState)
   | gameState (m : GameState)
+  | signOut (m : SignOut)
+  | signedOut (m : SignedOut)
+  | signInRefused (m : SignInRefused)
   | applied
   | stale
   | clockRanOut
@@ -623,28 +635,28 @@ def admits (e : Event) : Bool := e.protocol == protocolName && acceptedVersions.
 namespace Bot
 
 inductive State where
-  | s0
   | s1
   | s2
   | s3
+  | s4
   | done
   deriving Repr, BEq, DecidableEq
 
-def start : State := .s0
+def start : State := .s1
 
 /-- The step an event takes Bot from a state, where the protocol allows it. -/
 def step : State -> Event -> Option State
-  | .s0, { src := .server, dst := .bot, payload := .botTurn _, .. } => some .s3
-  | .s1, { src := .server, dst := .bot, payload := .botTurn _, .. } => some .s3
-  | .s2, { src := .server, dst := .bot, payload := .botTurn _, .. } => some .s3
-  | .s3, { src := .bot, dst := .server, payload := .botMoveChosen _, .. } => some .s2
+  | .s1, { src := .server, dst := .bot, payload := .botTurn _, .. } => some .s4
+  | .s2, { src := .server, dst := .bot, payload := .botTurn _, .. } => some .s4
+  | .s3, { src := .server, dst := .bot, payload := .botTurn _, .. } => some .s4
+  | .s4, { src := .bot, dst := .server, payload := .botMoveChosen _, .. } => some .s3
   | _, _ => none
 
 /-- Whether the session may end here. -/
 def final : State -> Bool
-  | .s0 => true
   | .s1 => true
   | .s2 => true
+  | .s3 => true
   | .done => true
   | _ => false
 

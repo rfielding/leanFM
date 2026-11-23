@@ -350,6 +350,10 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     cv.dispatch("click", { clientX: 100, clientY: 76 + pickAt * 48 }); await wait(200);
     if (rowsNow().length !== want.size) throw new Error(`focusing on event ${pickAt} shows ${rowsNow().length} events, its thread has ${want.size}`);
     expectText("a focused thread says whose it is", byId.results, "Thread of e");
+    // the focus frames the sessions its events formed: the note names each session with a shown event
+    const ds = (R.simulate.structuredContent.derivedSessions || {}).sessions || [];
+    const framedKeys = ds.filter((x) => (x.events || []).some((i) => want.has(i))).map((x) => String(x.key));
+    if (framedKeys.length) expectText("a focus names the sessions it frames", byId.results, "in sessions " + framedKeys[0]);
     button(byId.results, "Show all events").click(); await wait(200);
     if (rowsNow().length !== before) throw new Error("Show all events did not bring the stream back");
     console.log(`ok: clicking an event focuses on its thread (${want.size} of ${before} events) and Show all events brings the rest back`);
@@ -366,9 +370,28 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     const before = rowsNow().length;
     sb.click(); await wait(200);
     if (rowsNow().length !== first.count) throw new Error(`picking ${first.key} shows ${rowsNow().length} events, not its ${first.count} (of ${before})`);
+    // each thread (an actor's own order, named by LeanFM on every event) has its own colour, kept
+    // when one session is picked, with a legend naming the threads
+    const threads = [...new Set(R.simulate.structuredContent.events.map((e) => e.thread))];
+    if (threads.some((t) => typeof t !== "string")) throw new Error("a simulated event names no thread");
+    expectText("the threads have a legend", byId.results, "Threads");
+    if (!rowsNow().every((r) => r.className.split(" ").includes("thr"))) throw new Error("a row of the picked session is not drawn in its thread's colour");
+    const legend = byId.results.all().find((n) => n.className === "threads");
+    if (!legend || !legend.children.some((c) => c.className === "thr thr0" && c.textContent === threads[0])) throw new Error("the legend does not name the first thread in the first colour");
+    console.log("ok: each thread is drawn in its own colour, with a legend, kept when a session is picked");
     expectText("a picked session says which it is", byId.results, "Session " + first.key);
     button(byId.results, `all · ${R.simulate.structuredContent.events.length}`).click(); await wait(200);
     if (rowsNow().length !== before) throw new Error("all does not bring every event back");
+    // the highlight lights one session in the whole stream: every event stays, the others are faded
+    const hl = byId.results.all().find((n) => n.tag === "select" && n.attrs["aria-label"] === "Highlight one session or thread");
+    if (!hl) throw new Error("no highlight select beside the session bar");
+    hl.value = "s:0"; hl.dispatch("change"); await wait(200);
+    if (rowsNow().length !== before) throw new Error(`highlighting a session removed events: ${rowsNow().length} of ${before}`);
+    const unlit = rowsNow().filter((r) => r.className.split(" ").includes("unlit")).length;
+    if (unlit !== before - first.count) throw new Error(`highlighting ${first.key} fades ${unlit} rows, not the ${before - first.count} outside it`);
+    hl.value = ""; hl.dispatch("change"); await wait(200);
+    if (rowsNow().some((r) => r.className.split(" ").includes("unlit"))) throw new Error("highlight none still fades rows");
+    console.log("ok: a highlight lights one session in the whole stream, fading the rest without removing any");
     console.log("ok: the stream filters to one derived session and back to all");
   }
 

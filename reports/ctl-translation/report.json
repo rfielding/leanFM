@@ -1,0 +1,1135 @@
+{
+ "Orders": {
+  "formulas": [
+   {
+    "rule": "start",
+    "name": "every session starts with CreateOrder",
+    "formula": {
+     "AX": {
+      "after": "CreateOrder"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after CreateOrder comes Created",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "CreateOrder"
+       },
+       {
+        "AX": {
+         "after": "Created"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Created before CreateOrder",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "CreateOrder"
+        }
+       },
+       {
+        "after": "Created"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after Created comes GetOrder",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Created"
+       },
+       {
+        "AX": {
+         "after": "GetOrder"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no GetOrder before Created",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Created"
+        }
+       },
+       {
+        "after": "GetOrder"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after GetOrder comes Order",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "GetOrder"
+       },
+       {
+        "AX": {
+         "after": "Order"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Order before GetOrder",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "GetOrder"
+        }
+       },
+       {
+        "after": "Order"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Created before its request CreateOrder",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "CreateOrder"
+        }
+       },
+       {
+        "after": "Created"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every CreateOrder is answered (Created)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "CreateOrder"
+       },
+       {
+        "AF": {
+         "after": "Created"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Order before its request GetOrder",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "GetOrder"
+        }
+       },
+       {
+        "after": "Order"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every GetOrder is answered (Order)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "GetOrder"
+       },
+       {
+        "AF": {
+         "after": "Order"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "CreateOrder can happen",
+    "formula": {
+     "EF": {
+      "after": "CreateOrder"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Created can happen",
+    "formula": {
+     "EF": {
+      "after": "Created"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "GetOrder can happen",
+    "formula": {
+     "EF": {
+      "after": "GetOrder"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Order can happen",
+    "formula": {
+     "EF": {
+      "after": "Order"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "end",
+    "name": "after Order the session may end",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Order"
+       },
+       "terminal"
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "end",
+    "name": "every session ends",
+    "formula": {
+     "AF": "terminal"
+    },
+    "verdict": "proved"
+   }
+  ],
+  "variants": [
+   {
+    "name": "swapped (GetOrder first)",
+    "failed": [
+     "every session starts with CreateOrder",
+     "after Created comes GetOrder",
+     "no GetOrder before Created",
+     "after Order the session may end"
+    ]
+   },
+   {
+    "name": "extra message at the end",
+    "failed": [
+     "after Order the session may end"
+    ]
+   },
+   {
+    "name": "GetOrder dropped",
+    "failed": [
+     "after Created comes GetOrder",
+     "no GetOrder before Created",
+     "after GetOrder comes Order",
+     "no Order before GetOrder",
+     "no Order before its request GetOrder",
+     "every GetOrder is answered (Order)",
+     "GetOrder can happen",
+     "Order can happen",
+     "after Order the session may end"
+    ]
+   },
+   {
+    "name": "GetOrder repeated in a loop",
+    "failed": [
+     "after Order the session may end",
+     "every session ends"
+    ]
+   }
+  ]
+ },
+ "PlaceOrder": {
+  "formulas": [
+   {
+    "rule": "start",
+    "name": "every session starts with CreateOrder",
+    "formula": {
+     "AX": {
+      "after": "CreateOrder"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after CreateOrder comes Quote or SoldOut",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "CreateOrder"
+       },
+       {
+        "AX": {
+         "or": [
+          {
+           "after": "Quote"
+          },
+          {
+           "after": "SoldOut"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Quote or SoldOut before CreateOrder",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "CreateOrder"
+        }
+       },
+       {
+        "or": [
+         {
+          "after": "Quote"
+         },
+         {
+          "after": "SoldOut"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after Quote comes Pay",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Quote"
+       },
+       {
+        "AX": {
+         "after": "Pay"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Pay before Quote",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Quote"
+        }
+       },
+       {
+        "after": "Pay"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after Pay comes Charge",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Pay"
+       },
+       {
+        "AX": {
+         "after": "Charge"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Charge before Pay",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Pay"
+        }
+       },
+       {
+        "after": "Charge"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after Charge comes Charged or Declined",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Charge"
+       },
+       {
+        "AX": {
+         "or": [
+          {
+           "after": "Charged"
+          },
+          {
+           "after": "Declined"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Charged or Declined before Charge",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Charge"
+        }
+       },
+       {
+        "or": [
+         {
+          "after": "Charged"
+         },
+         {
+          "after": "Declined"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after Charged comes Receipt",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Charged"
+       },
+       {
+        "AX": {
+         "after": "Receipt"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no Receipt before Charged",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Charged"
+        }
+       },
+       {
+        "after": "Receipt"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "choice",
+    "name": "after Charged, never Declined or PaymentDeclined",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Charged"
+       },
+       {
+        "AG": {
+         "not": {
+          "or": [
+           {
+            "after": "Declined"
+           },
+           {
+            "after": "PaymentDeclined"
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "succession",
+    "name": "after Declined comes PaymentDeclined",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Declined"
+       },
+       {
+        "AX": {
+         "after": "PaymentDeclined"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "order",
+    "name": "no PaymentDeclined before Declined",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Declined"
+        }
+       },
+       {
+        "after": "PaymentDeclined"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "choice",
+    "name": "after Declined, never Charged or Receipt",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Declined"
+       },
+       {
+        "AG": {
+         "not": {
+          "or": [
+           {
+            "after": "Charged"
+           },
+           {
+            "after": "Receipt"
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "choice",
+    "name": "after Quote, never SoldOut",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Quote"
+       },
+       {
+        "AG": {
+         "not": {
+          "after": "SoldOut"
+         }
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "choice",
+    "name": "after SoldOut, never Charge or Charged or Declined or Pay or PaymentDeclined or Quote or Receipt",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "SoldOut"
+       },
+       {
+        "AG": {
+         "not": {
+          "or": [
+           {
+            "after": "Charge"
+           },
+           {
+            "after": "Charged"
+           },
+           {
+            "after": "Declined"
+           },
+           {
+            "after": "Pay"
+           },
+           {
+            "after": "PaymentDeclined"
+           },
+           {
+            "after": "Quote"
+           },
+           {
+            "after": "Receipt"
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Quote or SoldOut before its request CreateOrder",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "CreateOrder"
+        }
+       },
+       {
+        "or": [
+         {
+          "after": "Quote"
+         },
+         {
+          "after": "SoldOut"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every CreateOrder is answered (Quote or SoldOut)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "CreateOrder"
+       },
+       {
+        "AF": {
+         "or": [
+          {
+           "after": "Quote"
+          },
+          {
+           "after": "SoldOut"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Pay before its request Quote",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Quote"
+        }
+       },
+       {
+        "after": "Pay"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every Quote is answered (Pay)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Quote"
+       },
+       {
+        "AF": {
+         "after": "Pay"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Charge before its request Pay",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Pay"
+        }
+       },
+       {
+        "after": "Charge"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every Pay is answered (Charge)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Pay"
+       },
+       {
+        "AF": {
+         "after": "Charge"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Charged or Declined before its request Charge",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Charge"
+        }
+       },
+       {
+        "or": [
+         {
+          "after": "Charged"
+         },
+         {
+          "after": "Declined"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every Charge is answered (Charged or Declined)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Charge"
+       },
+       {
+        "AF": {
+         "or": [
+          {
+           "after": "Charged"
+          },
+          {
+           "after": "Declined"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no Receipt before its request Charged",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Charged"
+        }
+       },
+       {
+        "after": "Receipt"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every Charged is answered (Receipt)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Charged"
+       },
+       {
+        "AF": {
+         "after": "Receipt"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "no PaymentDeclined before its request Declined",
+    "formula": {
+     "not": {
+      "EU": [
+       {
+        "not": {
+         "after": "Declined"
+        }
+       },
+       {
+        "after": "PaymentDeclined"
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "cause",
+    "name": "every Declined is answered (PaymentDeclined)",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "after": "Declined"
+       },
+       {
+        "AF": {
+         "after": "PaymentDeclined"
+        }
+       }
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Charge can happen",
+    "formula": {
+     "EF": {
+      "after": "Charge"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Charged can happen",
+    "formula": {
+     "EF": {
+      "after": "Charged"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "CreateOrder can happen",
+    "formula": {
+     "EF": {
+      "after": "CreateOrder"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Declined can happen",
+    "formula": {
+     "EF": {
+      "after": "Declined"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Pay can happen",
+    "formula": {
+     "EF": {
+      "after": "Pay"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "PaymentDeclined can happen",
+    "formula": {
+     "EF": {
+      "after": "PaymentDeclined"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Quote can happen",
+    "formula": {
+     "EF": {
+      "after": "Quote"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "Receipt can happen",
+    "formula": {
+     "EF": {
+      "after": "Receipt"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "possible",
+    "name": "SoldOut can happen",
+    "formula": {
+     "EF": {
+      "after": "SoldOut"
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "end",
+    "name": "after PaymentDeclined or Receipt or SoldOut the session may end",
+    "formula": {
+     "AG": {
+      "implies": [
+       {
+        "or": [
+         {
+          "after": "PaymentDeclined"
+         },
+         {
+          "after": "Receipt"
+         },
+         {
+          "after": "SoldOut"
+         }
+        ]
+       },
+       "terminal"
+      ]
+     }
+    },
+    "verdict": "proved"
+   },
+   {
+    "rule": "end",
+    "name": "every session ends",
+    "formula": {
+     "AF": "terminal"
+    },
+    "verdict": "proved"
+   }
+  ],
+  "variants": [
+   {
+    "name": "no SoldOut branch",
+    "failed": [
+     "after CreateOrder comes Quote or SoldOut",
+     "no Quote or SoldOut before CreateOrder",
+     "after Quote, never SoldOut",
+     "after SoldOut, never Charge or Charged or Declined or Pay or PaymentDeclined or Quote or Receipt",
+     "no Quote or SoldOut before its request CreateOrder",
+     "every CreateOrder is answered (Quote or SoldOut)",
+     "SoldOut can happen",
+     "after PaymentDeclined or Receipt or SoldOut the session may end"
+    ]
+   },
+   {
+    "name": "outcomes swapped",
+    "failed": [
+     "after Charged comes Receipt",
+     "no Receipt before Charged",
+     "after Charged, never Declined or PaymentDeclined",
+     "after Declined comes PaymentDeclined",
+     "no PaymentDeclined before Declined",
+     "after Declined, never Charged or Receipt",
+     "no Receipt before its request Charged",
+     "every Charged is answered (Receipt)",
+     "no PaymentDeclined before its request Declined",
+     "every Declined is answered (PaymentDeclined)"
+    ]
+   },
+   {
+    "name": "bank skipped",
+    "failed": [
+     "after Pay comes Charge",
+     "no Charge before Pay",
+     "after Charge comes Charged or Declined",
+     "no Charged or Declined before Charge",
+     "after Charged comes Receipt",
+     "no Receipt before Charged",
+     "after Charged, never Declined or PaymentDeclined",
+     "after Declined comes PaymentDeclined",
+     "no PaymentDeclined before Declined",
+     "after Declined, never Charged or Receipt",
+     "after SoldOut, never Charge or Charged or Declined or Pay or PaymentDeclined or Quote or Receipt",
+     "no Charge before its request Pay",
+     "every Pay is answered (Charge)",
+     "no Charged or Declined before its request Charge",
+     "every Charge is answered (Charged or Declined)",
+     "no Receipt before its request Charged",
+     "every Charged is answered (Receipt)",
+     "no PaymentDeclined before its request Declined",
+     "every Declined is answered (PaymentDeclined)",
+     "Charge can happen",
+     "Charged can happen",
+     "Declined can happen",
+     "PaymentDeclined can happen",
+     "after PaymentDeclined or Receipt or SoldOut the session may end"
+    ]
+   }
+  ]
+ }
+}

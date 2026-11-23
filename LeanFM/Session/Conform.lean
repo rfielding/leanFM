@@ -339,6 +339,13 @@ def Global.next (g : Global String) (log : List LogEvent) : Except String (List 
   let steps := (states.flatMap fun st => Conform.nextOf st.bind 32 st.g).eraseDups
   return (steps, states.any (Conform.nullable ·.g))
 
+/-- What may happen next in one session after `log`, its nested `sessions` blocks left to their own
+sessions, as conformance replays them: a parent whose children are sessions of their own
+(selfhost.session.identity.children). -/
+def Global.nextOwn (g : Global String) (log : List LogEvent) : Except String (List Conform.NextStep) := do
+  let states ← Conform.statesAfter g log
+  return (states.flatMap fun st => Conform.nextOf st.bind 32 st.g).eraseDups
+
 /-- One session of a protocol as a state graph, for temporal properties: the states conformance
 explores (residual global types with their bindings, nested `sessions` played once in place), every
 step between them, and the states where the session may end. At most `maxNodes` states. -/
@@ -385,6 +392,11 @@ def Global.stateGraph (g : Global String) (maxNodes : Nat := Conform.graphMaxSta
           edges := edges.push (src, s!"s{dstN}", n)
   return .ok { states := (List.range names.size).map (s!"s{·}"), terminals := terminals.toList, edges := edges.toList }
 
+/-- The bodies of the sessions blocks nested in `g` at any depth, outermost first: the scopes a child
+session can be replayed against (selfhost.session.identity.children). -/
+partial def Global.allNestedSessions (g : Global String) : List (Global String) :=
+  (Global.nestedSessions g).flatMap fun b => b :: Global.allNestedSessions b
+
 /-- Check a log against the protocol, session by session, in the order sessions first appear.
 With `sessions { body }` at the top, each session is checked against the body, or, when it does
 not fit the body, against a `sessions` block nested in it (a service's own session). -/
@@ -392,7 +404,7 @@ def Global.conforms (g : Global String) (log : List LogEvent) (allowIncomplete :
     List Conform.SessionResult :=
   let body := match g with | .sessions b _ => b | other => other
   -- a session of a nested sessions block (a service's own session) is checked against that block
-  let nested := Global.nestedSessions body
+  let nested := Global.allNestedSessions body
   let ids := (log.map (·.session)).eraseDups
   ids.map fun sid =>
     let evs := log.filter (·.session == sid)

@@ -1,0 +1,4 @@
+{
+ "text": "protocol PlayMoveP (Person, Server) given sessionId gameId {\n  m: PlayMove from Person to Server route \"POST /api/play_move\";\n  choice {\n    p: MovePlayed from Server to Person cause m status 200\n       where p.requestId = m.requestId \u2227 p.moveNo = m.moveNo;\n  } or {\n    x: RequestRejected from Server to Person cause m status 200 where x.requestId = m.requestId;\n  }\n}\n",
+ "source": "projects/GoServer/source/cmd/demo/static/session/goserver.leanfm"
+}

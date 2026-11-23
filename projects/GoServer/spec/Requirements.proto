@@ -3,7 +3,7 @@ package project.requirements;
 // Candidate Lab-parity revision; previous accepted revisions remain protected.
 // Points are 0-based x (column, left to right) and y (row, top to bottom).
 message ListRooms {
-  string session_id = 1;
+  string session_id = 1; // link
   uint64 request_id = 2;
 }
 message RoomsListed {
@@ -11,7 +11,7 @@ message RoomsListed {
   uint64 request_id = 2;
 }
 message EnterRoom {
-  string session_id = 1;
+  string session_id = 1; // link
   string room_id = 2;
   uint64 request_id = 3;
 }
@@ -22,7 +22,7 @@ message RoomEntered {
 }
 message ListGames {
   string room_id = 1;
-  string session_id = 2;
+  string session_id = 2; // link
   uint64 request_id = 3;
 }
 message GamesListed {
@@ -31,7 +31,7 @@ message GamesListed {
   string room_id = 3;
 }
 message JoinGame {
-  string session_id = 1;
+  string session_id = 1; // link
   string game_id = 2;
   uint64 request_id = 3;
 }
@@ -41,7 +41,7 @@ message GameJoined {
   uint64 request_id = 3;
 }
 message SendRoomChat {
-  string session_id = 1;
+  string session_id = 1; // link
   string room_id = 2;
   string body = 3;
   uint64 request_id = 4;
@@ -54,14 +54,14 @@ message RoomChat {
   uint64 request_id = 5;
 }
 message SendGameChat {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   string body = 3;
   uint64 request_id = 4;
   string node = 5;
 }
 message GameChat {
-  string game_id = 1;
+  string game_id = 1; // link
   string sender = 2;
   string body = 3;
   int64 time_ms = 4;
@@ -74,11 +74,15 @@ message RequestRejected {
   string task = 3;
   string scope_id = 4;
 }
-message CreateRoom { string session_id = 1; string room_name = 2; uint64 request_id = 3; }
+message CreateRoom {
+  string session_id = 1; // link
+  string room_name = 2;
+  uint64 request_id = 3;
+}
 message RoomCreated { string room_id = 1; uint64 request_id = 2; }
 message GameListed { string game_id = 1; string creator = 2; string status = 3; string game_name = 4; uint32 board_size = 5; uint32 seats = 6; uint32 seats_filled = 7; }
 message CreateGame {
-  string session_id = 1;
+  string session_id = 1; // link
   string room_id = 2;
   string game_name = 3;
   uint32 board_size = 4;
@@ -94,7 +98,7 @@ message CreateGame {
   uint32 byoyomi_periods = 14;
 }
 message GameCreated {
-  string game_id = 1;
+  string game_id = 1; // fresh
   string room_id = 2;
   string creator = 3;
   string status = 4;
@@ -112,66 +116,66 @@ message GameCreated {
   uint32 byoyomi_periods = 16;
 }
 message SetSeatPlan {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint32 seat = 3;
   string controller = 4;
   uint32 team = 5;
   uint64 request_id = 6;
 }
 message SeatPlanSet {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 seat = 2;
   string controller = 3;
   uint32 team = 4;
   uint64 request_id = 5;
 }
 message TakeSeat {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint32 seat = 3;
   uint64 request_id = 4;
 }
 message SeatTaken {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 seat = 2;
   uint64 request_id = 3;
 }
 message LeaveSeat {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint64 request_id = 3;
 }
 message SeatLeft {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 seat = 2;
   uint64 request_id = 3;
 }
 message StartGame {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint64 request_id = 3;
 }
 message GameStarted {
-  string game_id = 1;
+  string game_id = 1; // link
   repeated SeatView seats = 2;
   uint64 request_id = 3;
 }
 message SetAutopilot {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   bool on = 3;
   uint64 request_id = 4;
 }
 message AutopilotSet {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 seat = 2;
   bool on = 3;
   uint64 request_id = 4;
 }
 message PlayMove {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint32 move_no = 3;
   string kind = 4;
   uint32 x = 5;
@@ -179,7 +183,7 @@ message PlayMove {
   uint64 request_id = 7;
 }
 message MovePlayed {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 move_no = 2;
   uint32 seat = 3;
   string kind = 4;
@@ -191,40 +195,40 @@ message MovePlayed {
   uint32 suicide = 10;
 }
 message ProposeMerge {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint32 other_team = 3;
   uint64 request_id = 4;
 }
 message MergeProposed {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 proposal_id = 2;
   uint32 team_a = 3;
   uint32 team_b = 4;
   uint64 request_id = 5;
 }
 message RespondMerge {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint32 proposal_id = 3;
   bool accept = 4;
   uint64 request_id = 5;
 }
 message MergeResponded {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 proposal_id = 2;
   string status = 3;
   uint64 request_id = 4;
 }
 message GetGameState {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   uint32 since_move = 3;
   uint64 request_id = 4;
   uint32 since_review = 5;
 }
 message GameState {
-  string game_id = 1;
+  string game_id = 1; // link
   string game_name = 2;
   string status = 3;
   string creator = 4;
@@ -252,14 +256,14 @@ message GameState {
   uint32 review_count = 26;
 }
 message BotTurn {
-  string game_id = 1;
+  string game_id = 1; // link
   uint64 turn_seq = 2;
   uint32 seat = 3;
   uint32 move_no = 4;
   uint64 budget_ms = 5;
 }
 message BotMoveChosen {
-  string game_id = 1;
+  string game_id = 1; // link
   uint64 turn_seq = 2;
   string kind = 3;
   uint32 x = 4;
@@ -267,32 +271,32 @@ message BotMoveChosen {
   SearchSummary search = 6;
 }
 message BotMovePlayed {
-  string game_id = 1;
+  string game_id = 1; // link
   MoveRecord record = 2;
 }
 message TurnTimedOut {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 move_no = 2;
   uint32 seat = 3;
 }
 message AutoPassed {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 move_no = 2;
   uint32 seat = 3;
 }
 message TeamsMerged {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 proposal_id = 2;
   uint32 team = 3;
   repeated uint32 seats = 4;
 }
 message MergeWithdrawn {
-  string game_id = 1;
+  string game_id = 1; // link
   uint32 proposal_id = 2;
   string reason = 3;
 }
 message GameFinished {
-  string game_id = 1;
+  string game_id = 1; // link
   repeated uint32 winners = 2;
   string end_reason = 3;
 }
@@ -366,10 +370,14 @@ message IssueSession {
   uint64 request_id = 3;
 }
 message SessionIssued {
-  string session_id = 1;
+  string session_id = 1; // fresh
   string identity = 2;
   bool claimed = 3;
   uint64 request_id = 4;
+}
+// A refused sign-in: a wrong password, a claimed name, or too many attempts (HTTP 401 or 429).
+message SignInRefused {
+  string error = 1;
 }
 message ClaimName {
   string identity = 1;
@@ -393,14 +401,14 @@ message PasswordChanged {
   uint64 request_id = 3;
 }
 message SignOut {
-  string session_id = 1;
+  string session_id = 1; // link
   uint64 request_id = 2;
 }
 message SignedOut {
   uint64 request_id = 1;
 }
 message GetRanking {
-  string session_id = 1;
+  string session_id = 1; // link
   uint64 request_id = 2;
 }
 message RankEntry { uint32 rank = 1; string player = 2; string kind = 3; int32 rating = 4; uint32 games = 5; uint32 firsts = 6; }
@@ -420,8 +428,8 @@ message NameReleased {
 }
 message ReviewNode { string id = 1; string parent = 2; string kind = 3; uint32 x = 4; uint32 y = 5; uint32 seat = 6; string author = 7; int64 time_ms = 8; }
 message AddReviewMove {
-  string session_id = 1;
-  string game_id = 2;
+  string session_id = 1; // link
+  string game_id = 2; // link
   string parent = 3;
   string kind = 4;
   uint32 x = 5;
@@ -429,7 +437,7 @@ message AddReviewMove {
   uint64 request_id = 7;
 }
 message ReviewMoveAdded {
-  string game_id = 1;
+  string game_id = 1; // link
   ReviewNode node = 2;
   uint64 request_id = 3;
 }

@@ -135,12 +135,13 @@ def sim (extra : String) := call simulate (withProtocol placeOrder extra)
 #guard (field (sim r#", "seed": 7, "instances": 20"#) "sessions") == toJson 20
 #guard (sim r#", "seed": 7"#).toOption.map (·.compress) == (sim r#", "seed": 7"#).toOption.map (·.compress)
 #guard verdict (sim r#", "instances": 201"#) == "rejected"
--- GoServer's lobby loop, once its fuel is spent, leaves through the challenge, so every run starts
--- the game and finishes it, and for some seeds the server asks the bot to play
+-- GoServer's lobby loop ends at sign-out; a game runs as a session of its own beside the lobby, so
+-- some runs start a game and finish it, and for some seeds the server asks the bot to play
 def goSim (seed : Nat) : String :=
   ((simulate (Json.mkObj [("example", "goserver"), ("instances", toJson (10 : Nat)), ("seed", toJson seed)])).toOption.map
     fun j => (j.getObjValD "events").compress).getD ""
-#guard (List.range 8).all fun s => (goSim (s + 1)).contains "\"label\":\"Finished\""
+#guard (List.range 8).any fun s => (goSim (s + 1)).contains "\"label\":\"Finished\""
+#guard (List.range 8).all fun s => (goSim (s + 1)).contains "\"label\":\"IssueSession\""
 #guard (List.range 8).any fun s => (goSim (s + 1)).contains "\"src\":\"Bot\""
 -- each simulated GoServer message carries example fields that satisfy its where clause: the
 -- requests carry a person's sessionId, and the stream, fed back with its fields, conforms
@@ -149,8 +150,14 @@ def goEvents (seed : Nat) : Json :=
     (·.getObjValD "events")).getD Json.null
 #guard (goEvents 1).compress.contains "\"sessionId\":\"sess-1\""
 #guard (goEvents 1).compress.contains "\"fields\":{"
-#guard (List.range 3).all fun s =>
-  verdict (conform (Json.mkObj [("example", "goserver"), ("events", goEvents (s + 1))])) == "conforms"
+-- every stream small enough to send back conforms (conform itself refuses arguments over 64 KiB, and
+-- that refusal is what decides which streams fit), and most streams fit
+def goAnswer (s : Nat) : String := match conform (Json.mkObj [("example", "goserver"), ("events", goEvents s)]) with
+  | .ok j => (j.getObjValAs? String "verdict").toOption.getD "?"
+  | .error e => e
+def goFits : List Nat := ((List.range 6).map (· + 1)).filter fun s => !(goAnswer s).startsWith "arguments exceed"
+#guard goFits.length ≥ 3
+#guard goFits.all fun s => goAnswer s == "conforms"
 -- a where clause that is not equalities leaves the stream without fields rather than inventing them
 def ltText : String := "structure Ask where\n  n : Nat\n  deriving TypeName\nstructure Tell where\n  n : Nat\n  deriving TypeName\nprotocol Lt (A, B) {\n  q: Ask from A to B;\n  t: Tell from B to A cause q where t.n > q.n;\n}\n"
 #guard !((simulate (Json.mkObj [("lean", Json.str ltText)])).toOption.map (·.compress.contains "\"fields\"")).getD true

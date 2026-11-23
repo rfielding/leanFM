@@ -1,0 +1,329 @@
+{
+ "diagram": {
+  "calls": [
+   {
+    "bottom": 130,
+    "callee": "Api",
+    "caller": "Client",
+    "depth": 1,
+    "label": "CreateOrder -> Created 201",
+    "request": "c",
+    "roles": [
+     "Client",
+     "Api"
+    ],
+    "top": 70,
+    "y": 100
+   },
+   {
+    "bottom": 190,
+    "callee": "Api",
+    "caller": "Client",
+    "depth": 1,
+    "label": "GetOrder -> Order 200",
+    "request": "g",
+    "roles": [
+     "Client",
+     "Api"
+    ],
+    "top": 130,
+    "y": 160
+   }
+  ],
+  "colW": 281,
+  "height": 260,
+  "lanes": [
+   {
+    "role": "Client",
+    "x": 90
+   },
+   {
+    "role": "Api",
+    "x": 371
+   }
+  ],
+  "shapes": [
+   {
+    "anchor": "start",
+    "bold": false,
+    "cls": "",
+    "fill": "muted",
+    "k": "text",
+    "size": 11,
+    "text": "Orders",
+    "x": 10,
+    "y": 14
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 72,
+    "x": 54,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Client",
+    "x": 90,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 72,
+    "x": 54,
+    "y": 220
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Client",
+    "x": 90,
+    "y": 239
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 90,
+    "x2": 90,
+    "y1": 48,
+    "y2": 220
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 48,
+    "x": 347,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Api",
+    "x": 371,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 48,
+    "x": 347,
+    "y": 220
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Api",
+    "x": 371,
+    "y": 239
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 371,
+    "x2": 371,
+    "y1": 48,
+    "y2": 220
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 30,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 366,
+    "y": 100
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 30,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 366,
+    "y": 160
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 90,
+    "x2": 371,
+    "y1": 100,
+    "y2": 100
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "c: CreateOrder - POST /orders",
+    "x": 230,
+    "y": 94
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 371,
+    "x2": 90,
+    "y1": 130,
+    "y2": 130
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Created - 201",
+    "x": 230,
+    "y": 124
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 90,
+    "x2": 371,
+    "y1": 160,
+    "y2": 160
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "g: GetOrder - GET /orders/{orderId}",
+    "x": 230,
+    "y": 154
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 371,
+    "x2": 90,
+    "y1": 190,
+    "y2": 190
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Order - 200",
+    "x": 230,
+    "y": 184
+   }
+  ],
+  "steps": [
+   {
+    "bottom": 100,
+    "dst": "Api",
+    "src": "Client",
+    "top": 70,
+    "y": 100
+   },
+   {
+    "bottom": 130,
+    "dst": "Client",
+    "src": "Api",
+    "top": 100,
+    "y": 130
+   },
+   {
+    "bottom": 160,
+    "dst": "Api",
+    "src": "Client",
+    "top": 130,
+    "y": 160
+   },
+   {
+    "bottom": 190,
+    "dst": "Client",
+    "src": "Api",
+    "top": 160,
+    "y": 190
+   }
+  ],
+  "width": 461
+ },
+ "generative": null,
+ "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+ "name": "Orders",
+ "overlay": null,
+ "protocol": null,
+ "reading": "Orders: sequence diagram of 4 messages across 2 lifelines",
+ "roles": [
+  "Client",
+  "Api"
+ ],
+ "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"461\" height=\"260\" viewBox=\"0 0 461 260\" font-family=\"ui-sans-serif, system-ui, sans-serif\"><defs><marker id=\"head\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerUnits=\"userSpaceOnUse\" markerWidth=\"12\" markerHeight=\"12\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"#93c5fd\"/></marker></defs><rect width=\"100%\" height=\"100%\" fill=\"#111111\"/><text x=\"10\" y=\"14\" text-anchor=\"start\" fill=\"#9ca3af\" font-size=\"11\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">Orders</text><rect class=\"role\" x=\"54\" y=\"20\" width=\"72\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"90\" y=\"39\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Client</text><rect class=\"role\" x=\"54\" y=\"220\" width=\"72\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"90\" y=\"239\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Client</text><line class=\"lifeline\" x1=\"90\" y1=\"48\" x2=\"90\" y2=\"220\" stroke=\"#4b5563\" stroke-dasharray=\"4 4\"/><rect class=\"role\" x=\"347\" y=\"20\" width=\"48\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"371\" y=\"39\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Api</text><rect class=\"role\" x=\"347\" y=\"220\" width=\"48\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"371\" y=\"239\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Api</text><line class=\"lifeline\" x1=\"371\" y1=\"48\" x2=\"371\" y2=\"220\" stroke=\"#4b5563\" stroke-dasharray=\"4 4\"/><rect class=\"activation\" x=\"366\" y=\"100\" width=\"10\" height=\"30\" fill=\"#1f2937\" stroke=\"#93c5fd\"/><rect class=\"activation\" x=\"366\" y=\"160\" width=\"10\" height=\"30\" fill=\"#1f2937\" stroke=\"#93c5fd\"/><line class=\"msg\" x1=\"90\" y1=\"100\" x2=\"371\" y2=\"100\" stroke=\"#93c5fd\" stroke-width=\"2.5\" marker-end=\"url(#head)\"/><text x=\"230\" y=\"94\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">c: CreateOrder - POST /orders</text><line class=\"msg reply\" x1=\"371\" y1=\"130\" x2=\"90\" y2=\"130\" stroke=\"#93c5fd\" stroke-width=\"2.5\" stroke-dasharray=\"6 4\" marker-end=\"url(#head)\"/><text x=\"230\" y=\"124\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">Created - 201</text><line class=\"msg\" x1=\"90\" y1=\"160\" x2=\"371\" y2=\"160\" stroke=\"#93c5fd\" stroke-width=\"2.5\" marker-end=\"url(#head)\"/><text x=\"230\" y=\"154\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">g: GetOrder - GET /orders/{orderId}</text><line class=\"msg reply\" x1=\"371\" y1=\"190\" x2=\"90\" y2=\"190\" stroke=\"#93c5fd\" stroke-width=\"2.5\" stroke-dasharray=\"6 4\" marker-end=\"url(#head)\"/><text x=\"230\" y=\"184\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">Order - 200</text></svg>",
+ "tool": "session_diagram",
+ "verdict": "drawn"
+}

@@ -2,6 +2,18 @@
   "status": "validated",
   "requirement": "Project.Requirements.requirements",
   "implementation": "Project.Implementation.implementation",
+  "default_implementation": "default",
+  "implementations": {
+    "default": {
+      "implementation": "spec/Implementation.lean",
+      "source": "source/",
+      "module": "spec.Implementation",
+      "default": true,
+      "status": "validated",
+      "target": "go",
+      "errors": []
+    }
+  },
   "prompt": "Make the selected project's current specification usable in ChatUI",
   "question": "Does the canonical typed specification validate and yield its own task views?",
   "event_source": "spec/Requirements.lean and spec/Requirements.proto",
@@ -9,10 +21,10 @@
   "unit": "task grammars",
   "boundary": ".",
   "artifacts": {
-    "spec/Requirements.lean": "d55342543774ef9df6ff95df0ea5289c030ed18016a18aa029e3fc660fb4c04c",
-    "spec/Requirements.proto": "20cd146200fa5f3243f7958eee0e83ba0b67a8aa00a175ea3dd0d969528df1d9",
-    "book/main.tex": "2457f019f6ce660a083a4031e8595c89e2a1bbe8e0900089d7d18daf75317047",
-    "spec/Implementation.lean": "5ad38ff65ec683cd77a51f0944bfdf6bd556e6b6c73668c0c2058ef0634463f1"
+    "spec/Requirements.lean": "de40ced9f61f44f1453e20318135d25f9df994e1842a98c0b962f110a14870f3",
+    "spec/Requirements.proto": "fcbeea0a99b6bc1f0ef0add2ae0974f576c33f509bd690e25a3652ccafc3c4c8",
+    "book/main.tex": "ef23b8b4ee9c3376a2637b80fda2aa4e7bcbfd7b10aa5728c90384f2b7a04423",
+    "spec/Implementation.lean": "038af0f563d17eb3b75d4d8d48e0a6033c3ccd3009905d1b18e2586dc031e54e"
   },
   "task_count": 28,
   "acceptance": "unchanged"

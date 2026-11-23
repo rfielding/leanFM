@@ -553,6 +553,49 @@
         "TestOpenAPIAndAPICatalog",
         "TestSessionTypeRoutesAreServedOnlyWithPost"
       ]
+    },
+    {
+      "requirements": [
+        "property:sign_in names the person's session in every log",
+        "proof:a session is never guessed from a log"
+      ],
+      "files": [
+        "spec/Requirements.proto",
+        "spec/Session.lean",
+        "spec/SessionTypes.lean",
+        "source/cmd/demo/static/session/goserver.leanfm"
+      ],
+      "symbols": [
+        "SessionIssued.session_id",
+        "GoServer.SignIn",
+        "PlayMoveP given sessionId"
+      ],
+      "tests": [
+        "TestSessionTypeNamesThePersonsSession",
+        "LeanFM/Session/IdentityTests.lean: GoServer two persons",
+        "LeanFM/Session/IdentityTests.lean: GoServer unknown sessionId"
+      ]
+    },
+    {
+      "requirements": [
+        "property:a game is a session its players join",
+        "proof:a game's events never land in a person's session"
+      ],
+      "files": [
+        "spec/Requirements.proto",
+        "spec/Session.lean",
+        "source/cmd/demo/static/session/goserver.leanfm"
+      ],
+      "symbols": [
+        "GameCreated.game_id",
+        "GameP",
+        "SeatP"
+      ],
+      "tests": [
+        "TestSessionTypeRunsGamesAsSessions",
+        "LeanFM/Session/IdentityTests.lean: GoServer one game, two players",
+        "LeanFM/Session/IdentityTests.lean: GoServer unknown game"
+      ]
     }
   ],
   "limits": "Handicaps, persistence of rooms and games, SGF export, push transport and protobuf byte conformance of the JSON harness remain outside this change. Analysis gating is enforced by the provided browser, not by the server."

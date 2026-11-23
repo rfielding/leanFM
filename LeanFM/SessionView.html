@@ -11,6 +11,7 @@
     --ink-bg: #0b0f14; --ink-fg: #e5e7eb; --ink-line: #4b5563; --ink-arrow: #93c5fd;
     --ink-frame: #fbbf24; --ink-muted: #9ca3af; --ink-actFill: #1f2937; --ink-hl: #f472b6;
     --stage: #111111; --req: #60a5fa; --rep: #4ade80; --life: #64748b;
+    --t0: #34d399; --t1: #7dafff; --t2: #c4a0ff; --t3: #f472b6; --t4: #22d3ee; --t5: #a3e635; --t6: #fb923c; --t7: #e2e8f0;
     color-scheme: dark;
   }
   :root[data-theme="light"] {
@@ -19,6 +20,7 @@
     --ink-bg: #ffffff; --ink-fg: #111827; --ink-line: #9ca3af; --ink-arrow: #1d4ed8;
     --ink-frame: #b45309; --ink-muted: #4b5563; --ink-actFill: #f3f4f6; --ink-hl: #be185d;
     --stage: #fbfaf7; --req: #1d4ed8; --rep: #15803d; --life: #94a3b8;
+    --t0: #047857; --t1: #1d4ed8; --t2: #6d28d9; --t3: #be185d; --t4: #0e7490; --t5: #4d7c0f; --t6: #c2410c; --t7: #334155;
     color-scheme: light;
   }
   * { box-sizing: border-box; }
@@ -78,6 +80,14 @@
   .evrow .eid, .evrow .ses { color: var(--dim); }
   .evrow .pri, .evrow .rt { color: var(--dim); }
   .evrow.rep { color: var(--rep); } .evrow.bad { color: var(--bad); } .evrow.act { color: var(--amber); }
+  /* each derived session is a thread in its own colour (selfhost.mcp.session.view) */
+  .thr0 { --thr: var(--t0); } .thr1 { --thr: var(--t1); } .thr2 { --thr: var(--t2); } .thr3 { --thr: var(--t3); }
+  .thr4 { --thr: var(--t4); } .thr5 { --thr: var(--t5); } .thr6 { --thr: var(--t6); } .thr7 { --thr: var(--t7); }
+  .evrow.thr { color: var(--thr); } .evrow.thr.bad { color: var(--bad); } .evrow.nothr { color: var(--dim); }
+  .threads { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 8px; font: 13px ui-monospace, Menlo, monospace; }
+  .threads .thr::before { content: "■ "; color: var(--thr); } .threads .thr { color: var(--fg); }
+  .evrow.unlit { opacity: .35; }
+  .hlbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
   .evrow.future { opacity: .25; }
   .evrow.on { background: rgba(251, 191, 36, .16); box-shadow: inset 3px 0 0 var(--amber); }
   .evrow.on .eid { color: var(--amber); }
@@ -828,14 +838,36 @@ function streamView(body) {
   const unattributed = idxs(d && d.unattributed);
   const buttons = [];
   let current = null;
+  // the highlight: the ids of one session's or one thread's events, lit in the whole stream while
+  // every other event stays drawn, faded (concurrent sessions are concurrent diagrams, drawn as one)
+  let highlight = null;
+  // each thread (one actor's own order, its prev chain, as LeanFM names it) has its own colour,
+  // numbered in order of first appearance; a session filter keeps them
+  const threadNames = [];
+  for (const e of E) { const t = typeof e.thread === "string" ? e.thread.slice(0, MAX_LABEL) : null; if (t !== null && !threadNames.includes(t)) threadNames.push(t); }
+  const threadOf = threadNames.length ? (e) => typeof e.thread === "string" ? threadNames.indexOf(e.thread.slice(0, MAX_LABEL)) % 8 : -1 : null;
   // a click on an event focuses on its thread: only the events its prior links reach either way
   const onFocus = (ids, selId) => {
     const sub = sessionBody(body, (e) => ids.has(num(e.id)));
     const hidden = Array.isArray(sub.hiddenRoles) ? sub.hiddenRoles : [];
     const back = el("button", "", "Show all events");
     back.addEventListener("click", () => current ? show(...current) : show("All events", null, buttons[0]));
-    note.replaceChildren(el("span", "", `Thread of ${"e" + String(selId).padStart(3, "0")}: ${sub.events.length} events linked through prior` + (hidden.length ? " · hidden: " + hidden.join(", ") : "") + " "), back);
-    stage.replaceChildren(animation(sub, { start: sub.events.length - 1, paused: true, select: selId, onFocus }));
+    // the sessions the thread's events belong to, framed as the interaction diagrams they formed, a
+    // child inside its parent: each session's key, parent key and event ids
+    const frames = sessions.slice(0, MAX_ITEMS).map((x) => ({ key: String(x.key || "").slice(0, MAX_LABEL),
+      parent: typeof x.parent === "string" ? x.parent.slice(0, MAX_LABEL) : null,
+      parents: (Array.isArray(x.parents) ? x.parents : typeof x.parent === "string" ? [x.parent] : []).filter((q) => typeof q === "string").slice(0, 8).map((q) => q.slice(0, MAX_LABEL)),
+      ids: new Set([...idxs(x.events)].map((i) => num(E[i].id))) }));
+    const byKey = new Map(frames.map((f) => [f.key, f])), framed = [];
+    for (const f of frames) if (sub.events.some((e) => f.ids.has(num(e.id)))) {
+      // a join is framed under its first parent, and every parent is framed too
+      const stack = [f];
+      for (let n = 0; stack.length && n < 64; n++) { const g = stack.pop(); if (!g || framed.includes(g.key)) continue; framed.push(g.key); for (const q of g.parents) stack.push(byKey.get(q)); }
+    }
+    note.replaceChildren(el("span", "", `Thread of ${"e" + String(selId).padStart(3, "0")}: ${sub.events.length} events linked through prior` + (hidden.length ? " · hidden: " + hidden.join(", ") : "") +
+      (framed.length ? " · in sessions " + framed.join(", ") : "") + " "), back);
+    stage.replaceChildren(animation(sub, { start: sub.events.length - 1, paused: true, select: selId, onFocus, threadOf, highlight,
+      frames: frames.filter((f) => framed.includes(f.key)) }));
     reportSize();
   };
   function show(which, keep, btn) {
@@ -844,7 +876,7 @@ function streamView(body) {
     const sub = keep ? sessionBody(body, (_, i) => keep.has(i)) : body;
     const hidden = Array.isArray(sub.hiddenRoles) ? sub.hiddenRoles : [];
     note.textContent = which + (hidden.length ? " · hidden: " + hidden.join(", ") : "");
-    stage.replaceChildren(keep ? animation(sub, { start: 0, onFocus }) : animation(body, { onFocus }));
+    stage.replaceChildren(keep ? animation(sub, { start: 0, onFocus, threadOf, highlight }) : animation(body, { onFocus, threadOf, highlight }));
     reportSize();
   }
   bar.appendChild(el("span", "cap", "Sessions"));
@@ -866,9 +898,36 @@ function streamView(body) {
   if (unattributed.size) add(`unattributed · ${unattributed.size}`, `${unattributed.size} events nothing places in a session`, unattributed,
     `${unattributed.size} unattributed events: nothing the protocol declares places them in a session` + (d && d.reading ? ` (${String(d.reading)})` : ""));
   box.appendChild(bar);
+  // pick one session or one thread to light in the whole stream; none lights everything
+  const choices = new Map();
+  const hl = el("select");
+  hl.setAttribute("aria-label", "Highlight one session or thread");
+  const none = el("option", "", "none: every event lit"); none.value = ""; hl.appendChild(none);
+  const offer = (value, label, ids) => { const o = el("option", "", label); o.value = value; hl.appendChild(o); choices.set(value, ids); };
+  sessions.slice(0, MAX_ITEMS).forEach((x, k) => {
+    const ids = new Set([...idxs(x.events)].map((i) => num(E[i].id)));
+    offer("s:" + k, `session ${String(x.key || "").slice(0, MAX_LABEL)} · ${ids.size}`, ids);
+  });
+  threadNames.slice(0, MAX_ITEMS).forEach((t, k) => {
+    const ids = new Set(E.filter((e) => typeof e.thread === "string" && e.thread.slice(0, MAX_LABEL) === t).map((e) => num(e.id)));
+    offer("t:" + k, `thread ${t} · ${ids.size}`, ids);
+  });
+  hl.addEventListener("change", () => {
+    highlight = choices.get(String(hl.value)) || null;
+    if (current) show(...current);
+    else { stage.replaceChildren(animation(body, { onFocus, threadOf, highlight })); reportSize(); }
+  });
+  if (choices.size) { const hb = el("div", "hlbar"); hb.append(el("span", "cap", "Highlight"), hl); box.appendChild(hb); }
+  if (threadNames.length) {
+    const legend = el("div", "threads");
+    legend.appendChild(el("span", "cap", "Threads"));
+    threadNames.slice(0, MAX_ITEMS).forEach((t, k) => legend.appendChild(el("span", "thr thr" + (k % 8), t)));
+    if (threadNames.length > MAX_ITEMS) legend.appendChild(el("span", "meta", `and ${threadNames.length - MAX_ITEMS} more`));
+    box.appendChild(legend);
+  }
   box.appendChild(el("p", "meta", d && d.reading ? String(d.reading) : "LeanFM derived no sessions for this stream."));
   box.append(note, stage);
-  stage.appendChild(animation(body, { onFocus }));
+  stage.appendChild(animation(body, { onFocus, threadOf, highlight }));
   return box;
 }
 
@@ -880,6 +939,18 @@ function animation(body, opts) {
   const N = E.length;
   const wrap = el("div");
   if (!N || !roles.length) { wrap.appendChild(el("p", "meta", "No events.")); return wrap; }
+  // one lifeline per actor: each Role/instance a log names under its role, in order of first
+  // appearance; the role itself when no event names an instance of it
+  const laneOf = (e, side) => { const a = e[side + "Actor"]; return typeof a === "string" && a ? a.slice(0, MAX_LABEL) : String(e[side]); };
+  const roleOfLane = (a) => String(a).split("/")[0];
+  const lanes = (() => {
+    const seen = [];
+    for (const e of E) for (const side of ["src", "dst"]) { const a = laneOf(e, side); if (!seen.includes(a)) seen.push(a); }
+    const out = [];
+    for (const r of roles) { const mine = seen.filter((a) => roleOfLane(a) === r); if (mine.length) out.push(...mine); else out.push(r); }
+    for (const a of seen) if (!out.includes(a)) out.push(a);
+    return out;
+  })();
   const cv = el("canvas"); cv.tabIndex = 0;
   cv.setAttribute("aria-label", "Animated event stream. Space plays or pauses, arrows step, click an event to focus on its thread.");
   const controls = el("div", "controls");
@@ -899,6 +970,24 @@ function animation(body, opts) {
   const byId = new Map(E.map((e, i) => [num(e.id), i]));
   const idx = (x) => (Number.isInteger(x) && byId.has(x)) ? byId.get(x) : null;
   const brackets = causeLanes(E, idx);
+  // interaction-diagram frames around the sessions of a focus: rows of their events, a parent grown
+  // over its children, depth by ancestors, frames overlapping at one depth offset inward
+  const frameList = (() => {
+    if (!Array.isArray(opts.frames)) return [];
+    const fs = opts.frames.map((f) => ({ key: f.key, parent: f.parent, parents: Array.isArray(f.parents) ? f.parents : [], rows: E.map((e, i) => f.ids.has(num(e.id)) ? i : -1).filter((i) => i >= 0) }));
+    const byKey = new Map(fs.map((f) => [f.key, f]));
+    const up = (f) => f.parent && byKey.has(f.parent) ? byKey.get(f.parent) : null;
+    for (const f of fs) {
+      let d = 0; for (let g = up(f); g && d < 32; g = up(g)) d++;
+      f.depth = d; f.lo = f.rows.length ? Math.min(...f.rows) : Infinity; f.hi = f.rows.length ? Math.max(...f.rows) : -Infinity;
+      f.roles = new Set(); for (const i of f.rows) { f.roles.add(laneOf(E[i], "src")); f.roles.add(laneOf(E[i], "dst")); }
+    }
+    fs.sort((a, b) => b.depth - a.depth);
+    for (const f of fs) { const p = up(f); if (p) { p.lo = Math.min(p.lo, f.lo); p.hi = Math.max(p.hi, f.hi); f.roles.forEach((r) => p.roles.add(r)); } }
+    fs.sort((a, b) => a.depth - b.depth || a.lo - b.lo);
+    fs.forEach((f, k) => { f.off = fs.slice(0, k).filter((g) => g.depth === f.depth && g.lo <= f.hi && f.lo <= g.hi).length; });
+    return fs.filter((f) => f.hi >= f.lo);
+  })();
   const eid = (i) => "e" + String(num(E[i].id)).padStart(3, "0");
   const kind = (e) => e.act ? "act" : (e.status != null && num(e.status) >= 400) ? "bad" : e.answers != null ? "rep" : "req";
 
@@ -909,7 +998,9 @@ function animation(body, opts) {
   const rows = [], base = [];
   E.forEach((e, i) => {
     const mine = opts.focus && (String(e.src) === opts.focus || String(e.dst) === opts.focus);
-    const cls = "evrow " + kind(e) + (mine ? " mine" : "");
+    const th = opts.threadOf ? opts.threadOf(e) : null;
+    const cls = "evrow " + kind(e) + (mine ? " mine" : "") + (th == null ? "" : th < 0 ? " nothr" : " thr thr" + th) +
+      (opts.highlight && !opts.highlight.has(num(e.id)) ? " unlit" : "");
     const row = el("div", cls + " future");
     row.setAttribute("role", "listitem"); row.tabIndex = 0;
     const pri = (e.prior || []).map(idx).filter((j) => j !== null).map(eid);
@@ -917,7 +1008,7 @@ function animation(body, opts) {
     const ses = el("span", "ses", "#" + num(e.session));
     ses.title = "simulated session " + num(e.session);
     row.append(el("span", "eid", eid(i)), ses,
-      el("span", "", e.act ? `${e.src}  ${e.label}` : `${e.src} → ${e.dst}  ${e.label}` + (e.status != null && num(e.status) >= 400 ? "  " + e.status : "")),
+      el("span", "", e.act ? `${laneOf(e, "src")}  ${e.label}` : `${laneOf(e, "src")} → ${laneOf(e, "dst")}  ${e.label}` + (e.status != null && num(e.status) >= 400 ? "  " + e.status : "")),
       el("span", "pri", pri.length ? "← " + pri.join(",") : ""),
       el("span", "rt", e.route ? String(e.route) : ""));
     const go = () => { setPlay(false); sel = null; shown = -1; follow = true; p = i + 0.999; };
@@ -942,7 +1033,7 @@ function animation(body, opts) {
   let W = 0, H = 0, colors = {}, sx = 0, sy = 0, follow = true, setTop = -1, gap = 200;
   function recolor() {
     const css = getComputedStyle(document.documentElement);
-    for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan", "bad", "stage", "req", "rep", "life"]) colors[k] = css.getPropertyValue("--" + k).trim();
+    for (const k of ["panel", "edge", "fg", "dim", "amber", "cyan", "bad", "stage", "req", "rep", "life", "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7"]) colors[k] = css.getPropertyValue("--" + k).trim();
   }
   recolor();
   const MARGIN = 70;
@@ -954,7 +1045,7 @@ function animation(body, opts) {
     gap = Math.max(170, Math.min(460, w + 40));
   }
   const GUTTER = brackets.lanes ? 40 + 10 * Math.min(brackets.lanes, 24) : 0;
-  const fullW = () => Math.max(W, 2 * MARGIN + Math.max(0, roles.length - 1) * gap + GUTTER);
+  const fullW = () => Math.max(W, 2 * MARGIN + Math.max(0, lanes.length - 1) * gap + GUTTER);
   const fullH = () => TOP + N * ROW() + 40;
   function layout() {
     spacer.style.width = Math.round(fullW()) + "px"; spacer.style.height = Math.round(fullH()) + "px";
@@ -975,14 +1066,21 @@ function animation(body, opts) {
   const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   let p = opts.start != null ? Math.min(N - 1, num(opts.start)) + 0.999 : Math.min(N - 1, 12), playing = !reduce && !opts.paused, speed = 4, sel = null, detail = true;
   if (opts.select != null && idx(num(opts.select)) !== null) sel = idx(num(opts.select));
-  const HEAD = 50, TOP = HEAD + 26, LABELLED = 12;
+  // frames need room above the first row for the outermost tab
+  const HEAD = 50, TOP = HEAD + 26 + (frameList.length ? 10 + 8 * Math.min(4, Math.max(...frameList.map((f) => f.depth + f.off + 1))) : 0), LABELLED = 12;
   const ROW = () => detail ? 48 : 40;
   const MONO = "13px ui-monospace, 'DejaVu Sans Mono', Menlo, monospace";
   // positions on the screen: the whole diagram's coordinates less the scroll
-  const xs = () => { const w = fullW() - GUTTER; return roles.map((_, i) => (roles.length === 1 ? w / 2 : MARGIN + i * (w - 2 * MARGIN) / (roles.length - 1)) - sx); };
-  const xOf = (X, r) => { const i = roles.indexOf(String(r)); return i < 0 ? 0 : X[i]; };
+  const xs = () => { const w = fullW() - GUTTER; return lanes.map((_, i) => (lanes.length === 1 ? w / 2 : MARGIN + i * (w - 2 * MARGIN) / (lanes.length - 1)) - sx); };
+  const xOf = (X, r) => { const i = lanes.indexOf(String(r)); return i < 0 ? 0 : X[i]; };
+  const xSrc = (X, e) => xOf(X, laneOf(e, "src")), xDst = (X, e) => xOf(X, laneOf(e, "dst"));
   const yOf = (i) => TOP + i * ROW() - sy;
-  const tint = (e) => ({ act: colors.amber, bad: colors.bad, rep: colors.rep, req: colors.req })[kind(e)];
+  // an event is drawn in its thread's colour when the stream has sessions; a bad status stays an error
+  const tint = (e) => {
+    const k = kind(e), th = opts.threadOf ? opts.threadOf(e) : null;
+    if (k === "bad" || th == null) return ({ act: colors.amber, bad: colors.bad, rep: colors.rep, req: colors.req })[k];
+    return th < 0 ? colors.dim : colors["t" + th];
+  };
   // an arrow's words in two lines, so lifelines need only half the room a single long label needs:
   // above it the event id and message, below it (with more detail) the route and status
   const label = (e, i) => eid(i) + " " + String(e.label) + (!detail && e.status != null && num(e.status) >= 400 ? " · " + e.status : "");
@@ -1007,18 +1105,34 @@ function animation(body, opts) {
     ctx.strokeStyle = colors.life; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
     for (const x of X) { ctx.beginPath(); ctx.moveTo(x, HEAD); ctx.lineTo(x, H); ctx.stroke(); }
     ctx.setLineDash([]);
+    for (const f of frameList) {
+      const fx = [...f.roles].filter((r) => lanes.includes(r)).map((r) => xOf(X, r));
+      if (!fx.length) continue;
+      const pad = 44 - 10 * f.depth - 6 * f.off, x1 = Math.min(...fx) - pad, x2 = Math.max(...fx) + pad;
+      const y1 = yOf(f.lo) - 36 + 7 * f.depth + 4 * f.off, y2 = yOf(f.hi) + 20 - 5 * f.depth - 3 * f.off;
+      if (y2 < 0 || y1 > H) continue;
+      ctx.strokeStyle = colors.dim; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.9;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.font = "12px ui-monospace, 'DejaVu Sans Mono', Menlo, monospace";
+      const tab = "session " + f.key + (f.parents.length > 1 ? " · joins " + f.parents.join(", ") : ""), tw = num(ctx.measureText(tab).width) + 14;
+      ctx.fillStyle = colors.stage; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 + tw, y1); ctx.lineTo(x1 + tw, y1 + 12); ctx.lineTo(x1 + tw - 6, y1 + 18); ctx.lineTo(x1, y1 + 18); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = colors.fg; ctx.textAlign = "left"; ctx.fillText(tab, x1 + 5, y1 + 13);
+      ctx.globalAlpha = 1;
+    }
     for (let i = lo; i <= hi; i++) {
       const e = E[i];
       if (!detail && !(anc && (i === sel || anc.has(i)))) continue;  // simple: only the selected event's history
       for (const q of (e.prior || [])) {
         const a = idx(q); if (a === null || a < lo) continue;
         const pa = E[a];
-        const shared = [e.src, e.dst].find((r) => r === pa.src || r === pa.dst);
+        const pl = [laneOf(pa, "src"), laneOf(pa, "dst")];
+        const shared = [laneOf(e, "src"), laneOf(e, "dst")].find((r) => pl.includes(r));
         const hot = anc && (i === sel || anc.has(i)) && anc.has(a);
-        ctx.strokeStyle = hot ? colors.amber : colors.life; ctx.globalAlpha = hot ? 1 : 0.6; ctx.lineWidth = hot ? 3 : 1.5;
+        const faded = !!opts.highlight && !(opts.highlight.has(num(e.id)) && opts.highlight.has(num(pa.id)));
+        ctx.strokeStyle = hot ? colors.amber : colors.life; ctx.globalAlpha = hot ? 1 : faded ? 0.12 : 0.6; ctx.lineWidth = hot ? 3 : 1.5;
         ctx.beginPath();
         if (shared !== undefined) { const x = xOf(X, shared) + ((num(e.session) % 5) - 2) * 3; ctx.moveTo(x, yOf(a)); ctx.lineTo(x, yOf(i)); }
-        else { ctx.moveTo((xOf(X, pa.src) + xOf(X, pa.dst)) / 2, yOf(a)); ctx.lineTo((xOf(X, e.src) + xOf(X, e.dst)) / 2, yOf(i)); }
+        else { ctx.moveTo((xSrc(X, pa) + xDst(X, pa)) / 2, yOf(a)); ctx.lineTo((xSrc(X, e) + xDst(X, e)) / 2, yOf(i)); }
         ctx.stroke(); ctx.globalAlpha = 1;
       }
     }
@@ -1029,14 +1143,15 @@ function animation(body, opts) {
       const hot = sel !== null && (sp.i === sel || sp.c === sel || (anc && anc.has(sp.i) && anc.has(sp.c)));
       if (!detail && !hot) continue;
       const x = gx + 10 * Math.min(sp.lane, 23), y1 = yOf(sp.c), y2 = yOf(sp.i);
-      ctx.strokeStyle = hot ? colors.amber : colors.cyan; ctx.globalAlpha = hot ? 1 : (sel !== null ? 0.3 : 0.6); ctx.lineWidth = hot ? 2.5 : 1.5;
+      const faded = !!opts.highlight && !opts.highlight.has(num(E[sp.i].id));
+      ctx.strokeStyle = hot ? colors.amber : colors.cyan; ctx.globalAlpha = hot ? 1 : faded ? 0.12 : (sel !== null ? 0.3 : 0.6); ctx.lineWidth = hot ? 2.5 : 1.5;
       ctx.beginPath(); ctx.moveTo(x - 6, y1); ctx.lineTo(x, y1); ctx.lineTo(x, y2); ctx.lineTo(x - 6, y2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
     if (sel !== null && sel <= k) {
       const c = idx(E[sel].cause);
       if (c !== null && c >= lo) {
-        const x1 = xOf(X, E[c].dst), x2 = xOf(X, E[sel].src), y1 = yOf(c), y2 = yOf(sel);
+        const x1 = xDst(X, E[c]), x2 = xSrc(X, E[sel]), y1 = yOf(c), y2 = yOf(sel);
         ctx.strokeStyle = colors.cyan; ctx.lineWidth = 2.5; ctx.setLineDash([2, 4]);
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 - 40, y1, x2 - 40, y2, x2, y2); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -1046,18 +1161,19 @@ function animation(body, opts) {
       const e = E[i], y = yOf(i);
       if (y < HEAD - ROW()) continue;
       const inThread = !anc || i === sel || anc.has(i);
-      const recent = inThread && (detail || k - i < LABELLED || i === sel || !!anc);
+      const unlit = !!opts.highlight && !opts.highlight.has(num(e.id)) && i !== sel;
+      const recent = !unlit && inThread && (detail || k - i < LABELLED || i === sel || !!anc);
       const c = i === sel ? colors.amber : tint(e);
       const t = i === k && !reduce ? Math.min(1, frac * 1.6) : 1, ease = 1 - Math.pow(1 - t, 3);
       if (e.act) {
-        const x = xOf(X, e.src), w = ctx.measureText(label(e, i)).width + 20;
-        ctx.globalAlpha = (recent ? 1 : 0.4) * (0.3 + 0.7 * ease); ctx.fillStyle = colors.stage; ctx.strokeStyle = c; ctx.lineWidth = i === sel ? 3 : 1.5;
+        const x = xSrc(X, e), w = ctx.measureText(label(e, i)).width + 20;
+        ctx.globalAlpha = (unlit ? 0.15 : recent ? 1 : 0.4) * (0.3 + 0.7 * ease); ctx.fillStyle = colors.stage; ctx.strokeStyle = c; ctx.lineWidth = i === sel ? 3 : 1.5;
         ctx.beginPath(); ctx.rect(x - w / 2, y - 12, w, 22); ctx.fill(); ctx.stroke();
         if (recent) { ctx.fillStyle = c; ctx.textAlign = "center"; ctx.fillText(label(e, i), x, y + 4); }
         ctx.globalAlpha = 1;
       } else {
-        const x1 = xOf(X, e.src), x2 = xOf(X, e.dst), dir = Math.sign(x2 - x1) || 1, xe = x1 + (x2 - x1) * ease;
-        ctx.globalAlpha = recent ? 1 : 0.4;
+        const x1 = xSrc(X, e), x2 = xDst(X, e), dir = Math.sign(x2 - x1) || 1, xe = x1 + (x2 - x1) * ease;
+        ctx.globalAlpha = unlit ? 0.15 : recent ? 1 : 0.4;
         ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3.5 : 2.5;
         ctx.setLineDash(e.answers != null ? [7, 5] : []);
         ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 8, y); ctx.stroke(); ctx.setLineDash([]);
@@ -1078,7 +1194,7 @@ function animation(body, opts) {
     }
     ctx.fillStyle = colors.stage; ctx.fillRect(0, 0, W, HEAD);
     ctx.font = "600 16px 'Noto Serif', 'DejaVu Serif', Georgia, serif"; ctx.textAlign = "center";
-    X.forEach((x, i) => { ctx.fillStyle = roles[i] === opts.focus ? colors.amber : colors.fg; ctx.fillText(roles[i], x, 32); });
+    X.forEach((x, i) => { ctx.fillStyle = roleOfLane(lanes[i]) === opts.focus ? colors.amber : colors.fg; ctx.fillText(lanes[i], x, 32); });
   }
   let shown = -1, lit = -1;
   function panelUpdate() {

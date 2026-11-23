@@ -665,18 +665,18 @@ def main : IO Unit := do
     | .ok j => (((j.getObjValD "result").getObjValD "structuredContent").getObjValAs? String "state").toOption.getD ""
     | .error _ => ""
   expect "MCP session_next names the state: a loop's pass returns to it, an end does not" (stateOf n0 != "" && stateOf n0 == stateOf n1 && stateOf n0 != stateOf n2)
-  -- GoServer is an HTTP site: its session type routes 14 requests (route "POST /api/..."), so the
-  -- Server's projection is an OpenAPI document of 14 operations, and the review checks HTTP
+  -- GoServer is an HTTP site: its session type routes 17 requests (sign-in, joining a game and sign-out among them) (route "POST /api/..."), so the
+  -- Server's projection is an OpenAPI document of 17 operations, and the review checks HTTP
   let oa ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":54,\"method\":\"tools/call\",\"params\":{\"name\":\"session_openapi\",\"arguments\":{\"example\":\"goserver\",\"role\":\"Server\"}}}"
-  expect "MCP session_openapi gives GoServer's Server 14 operations within the result limit" (oa.body.contains "OpenAPI 3.1 for Server, 14 operations" && oa.body.contains "/api/play_move" && compactReply oa.body == oa.body)
+  expect "MCP session_openapi gives GoServer's Server 17 operations within the result limit" (oa.body.contains "OpenAPI 3.1 for Server, 17 operations" && oa.body.contains "/api/play_move" && compactReply oa.body == oa.body)
   let srv ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":55,\"method\":\"tools/call\",\"params\":{\"name\":\"session_actor\",\"arguments\":{\"example\":\"goserver\",\"role\":\"Server\"}}}"
-  expect "MCP session_actor of GoServer's Server serves 14 routes within the result limit, naming what it left out" (srv.body.contains "serves 14 routes" && srv.body.contains "the same document is in openapiYaml" && compactReply srv.body == srv.body)
+  expect "MCP session_actor of GoServer's Server serves 17 routes within the result limit, naming what it left out" (srv.body.contains "serves 17 routes" && srv.body.contains "the same document is in openapiYaml" && compactReply srv.body == srv.body)
   let rv ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":56,\"method\":\"tools/call\",\"params\":{\"name\":\"session_review\",\"arguments\":{\"example\":\"goserver\"}}}"
-  expect "MCP session_review of GoServer checks HTTP and liveness over its whole state graph: clean" (rv.body.contains "\"verdict\":\"clean\"" && rv.body.contains "HTTP from 14 routed requests, liveness" && !rv.body.contains "not checked")
-  -- GoServer's properties are decided, not skipped: its state graph is 5249 states once a state is
+  expect "MCP session_review of GoServer checks HTTP and liveness over its whole state graph: clean" (rv.body.contains "\"verdict\":\"clean\"" && rv.body.contains "HTTP from 17 routed requests, liveness" && !rv.body.contains "not checked")
+  -- GoServer's properties are decided, not skipped: its state graph is 10969 states (each game, seat and polled list played once in place) once a state is
   -- keyed by the set of names it bound (keyed by their order it looked unbounded)
   let gEf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"EF\":{\"after\":\"PlayMove\"}}}}}"
-  expect "MCP session_ctl proves PlayMove can happen in GoServer, over 5249 states, with a witness path" (gEf.body.contains "\"verdict\":\"proved\"" && gEf.body.contains "\"states\":5249" && gEf.body.contains "StartGame -> GameStarted -> PlayMove")
+  expect "MCP session_ctl proves PlayMove can happen in GoServer, over 10969 states, with a witness path" (gEf.body.contains "\"verdict\":\"proved\"" && gEf.body.contains "\"states\":10969" && gEf.body.contains "TakeSeat -> SeatTaken -> PlayMove")
   expect "MCP session_ctl answers the formula in CTL notation" (gEf.body.contains "\"notation\":\"EF PlayMove\"")
   let gAf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"AF\":{\"after\":\"PlayMove\"}}}}}"
   expect "MCP session_ctl disproves that PlayMove always happens in GoServer, with a counterexample that loops" (gAf.body.contains "\"verdict\":\"disproved\"" && gAf.body.contains "counterexample:" && gAf.body.contains "then repeats from")
@@ -687,7 +687,7 @@ def main : IO Unit := do
   let chk ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":44,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"goserver\"}}}"
   expect "MCP session_check of GoServer fits the result limit, saying what it left out" (chk.body.contains "\"verdict\":\"ok\"" && (chk.body.contains "projections (each role" || !chk.body.contains "\"omitted\"") && compactReply chk.body == chk.body)
   let big ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"example\":\"goserver\",\"sessions\":10000}}}"
-  expect "MCP session_dataset runs 10000 GoServer sessions within the result limit" (big.body.contains "\"sessions\":10000" && big.body.contains "parallel branches interleave" && big.body.length < 100000)
+  expect "MCP session_dataset runs 10000 GoServer sessions within the result limit" (big.body.contains "\"sessions\":10000" && big.body.contains "distinct paths" && big.body.length < 100000)
   let tooBig ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":46,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"sessions\":2000,\"lean\":\"protocol Forever (A, B) { rec L { Ping from A to B; continue L; } }\"}}}"
   expect "MCP session_dataset refuses more than 1000000 events rather than truncating" (tooBig.body.contains "would exceed 1000000 events")
   -- LeanFM's own requirements and mappings are readable resources

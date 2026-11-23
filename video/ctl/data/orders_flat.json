@@ -1,0 +1,690 @@
+{
+ "deadlineReports": null,
+ "derivedSessions": {
+  "omitted": 0,
+  "reading": "3 sessions derived from causes and the declared session key; the log names no sessions",
+  "sessions": [
+   {
+    "count": 4,
+    "events": [
+     0,
+     4,
+     7,
+     10
+    ],
+    "key": "chain from c1"
+   },
+   {
+    "count": 4,
+    "events": [
+     1,
+     2,
+     5,
+     8
+    ],
+    "key": "chain from c2"
+   },
+   {
+    "count": 4,
+    "events": [
+     3,
+     6,
+     9,
+     11
+    ],
+    "key": "chain from c3"
+   }
+  ],
+  "unattributed": []
+ },
+ "diagram": {
+  "calls": [
+   {
+    "bottom": 130,
+    "callee": "Api",
+    "caller": "Client",
+    "depth": 1,
+    "label": "CreateOrder -> Created 201",
+    "request": "c",
+    "roles": [
+     "Client",
+     "Api"
+    ],
+    "top": 70,
+    "y": 100
+   },
+   {
+    "bottom": 190,
+    "callee": "Api",
+    "caller": "Client",
+    "depth": 1,
+    "label": "GetOrder -> Order 200",
+    "request": "g",
+    "roles": [
+     "Client",
+     "Api"
+    ],
+    "top": 130,
+    "y": 160
+   }
+  ],
+  "colW": 281,
+  "height": 260,
+  "lanes": [
+   {
+    "role": "Client",
+    "x": 90
+   },
+   {
+    "role": "Api",
+    "x": 371
+   }
+  ],
+  "shapes": [
+   {
+    "anchor": "start",
+    "bold": false,
+    "cls": "",
+    "fill": "muted",
+    "k": "text",
+    "size": 11,
+    "text": "Orders",
+    "x": 10,
+    "y": 14
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 72,
+    "x": 54,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Client",
+    "x": 90,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 72,
+    "x": 54,
+    "y": 220
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Client",
+    "x": 90,
+    "y": 239
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 90,
+    "x2": 90,
+    "y1": 48,
+    "y2": 220
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 48,
+    "x": 347,
+    "y": 20
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Api",
+    "x": 371,
+    "y": 39
+   },
+   {
+    "cls": "role",
+    "fill": "actFill",
+    "h": 28,
+    "k": "rect",
+    "rx": 4,
+    "stroke": "fg",
+    "w": 48,
+    "x": 347,
+    "y": 220
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "boxed",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Api",
+    "x": 371,
+    "y": 239
+   },
+   {
+    "arrow": false,
+    "cls": "lifeline",
+    "dash": "4 4",
+    "k": "line",
+    "stroke": "line",
+    "width": "",
+    "x1": 371,
+    "x2": 371,
+    "y1": 48,
+    "y2": 220
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 30,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 366,
+    "y": 100
+   },
+   {
+    "cls": "activation",
+    "fill": "actFill",
+    "h": 30,
+    "k": "rect",
+    "rx": 0,
+    "stroke": "arrow",
+    "w": 10,
+    "x": 366,
+    "y": 160
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 90,
+    "x2": 371,
+    "y1": 100,
+    "y2": 100
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "c: CreateOrder - POST /orders",
+    "x": 230,
+    "y": 94
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 371,
+    "x2": 90,
+    "y1": 130,
+    "y2": 130
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Created - 201",
+    "x": 230,
+    "y": 124
+   },
+   {
+    "arrow": true,
+    "cls": "msg",
+    "dash": "",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 90,
+    "x2": 371,
+    "y1": 160,
+    "y2": 160
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "g: GetOrder - GET /orders/{orderId}",
+    "x": 230,
+    "y": 154
+   },
+   {
+    "arrow": true,
+    "cls": "msg reply",
+    "dash": "6 4",
+    "k": "line",
+    "stroke": "arrow",
+    "width": "2.5",
+    "x1": 371,
+    "x2": 90,
+    "y1": 190,
+    "y2": 190
+   },
+   {
+    "anchor": "middle",
+    "bold": false,
+    "cls": "",
+    "fill": "fg",
+    "k": "text",
+    "size": 12,
+    "text": "Order - 200",
+    "x": 230,
+    "y": 184
+   }
+  ],
+  "steps": [
+   {
+    "bottom": 100,
+    "dst": "Api",
+    "src": "Client",
+    "top": 70,
+    "y": 100
+   },
+   {
+    "bottom": 130,
+    "dst": "Client",
+    "src": "Api",
+    "top": 100,
+    "y": 130
+   },
+   {
+    "bottom": 160,
+    "dst": "Api",
+    "src": "Client",
+    "top": 130,
+    "y": 160
+   },
+   {
+    "bottom": 190,
+    "dst": "Client",
+    "src": "Api",
+    "top": 160,
+    "y": 190
+   }
+  ],
+  "width": 461
+ },
+ "events": [
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Api",
+   "dstActor": "Api",
+   "id": 1,
+   "label": "CreateOrder",
+   "logId": "c1",
+   "prior": [],
+   "session": "chain from c1",
+   "src": "Client",
+   "srcActor": "Client",
+   "thread": "Client@chain from c1"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Api",
+   "dstActor": "Api",
+   "id": 2,
+   "label": "CreateOrder",
+   "logId": "c2",
+   "prior": [],
+   "session": "chain from c2",
+   "src": "Client",
+   "srcActor": "Client",
+   "thread": "Client@chain from c2"
+  },
+  {
+   "act": false,
+   "cause": 2,
+   "dst": "Client",
+   "dstActor": "Client",
+   "id": 3,
+   "label": "Created",
+   "logId": "k2",
+   "prior": [],
+   "session": "chain from c2",
+   "src": "Api",
+   "srcActor": "Api",
+   "thread": "Api@chain from c2"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Api",
+   "dstActor": "Api",
+   "id": 4,
+   "label": "CreateOrder",
+   "logId": "c3",
+   "prior": [],
+   "session": "chain from c3",
+   "src": "Client",
+   "srcActor": "Client",
+   "thread": "Client@chain from c3"
+  },
+  {
+   "act": false,
+   "cause": 1,
+   "dst": "Client",
+   "dstActor": "Client",
+   "id": 5,
+   "label": "Created",
+   "logId": "k1",
+   "prior": [],
+   "session": "chain from c1",
+   "src": "Api",
+   "srcActor": "Api",
+   "thread": "Api@chain from c1"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Api",
+   "dstActor": "Api",
+   "id": 6,
+   "label": "GetOrder",
+   "logId": "g2",
+   "prior": [],
+   "session": "chain from c2",
+   "src": "Client",
+   "srcActor": "Client",
+   "thread": "Client@chain from c2"
+  },
+  {
+   "act": false,
+   "cause": 4,
+   "dst": "Client",
+   "dstActor": "Client",
+   "id": 7,
+   "label": "Created",
+   "logId": "k3",
+   "prior": [],
+   "session": "chain from c3",
+   "src": "Api",
+   "srcActor": "Api",
+   "thread": "Api@chain from c3"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Api",
+   "dstActor": "Api",
+   "id": 8,
+   "label": "GetOrder",
+   "logId": "g1",
+   "prior": [],
+   "session": "chain from c1",
+   "src": "Client",
+   "srcActor": "Client",
+   "thread": "Client@chain from c1"
+  },
+  {
+   "act": false,
+   "cause": 6,
+   "dst": "Client",
+   "dstActor": "Client",
+   "id": 9,
+   "label": "Order",
+   "logId": "r2",
+   "prior": [],
+   "session": "chain from c2",
+   "src": "Api",
+   "srcActor": "Api",
+   "thread": "Api@chain from c2"
+  },
+  {
+   "act": false,
+   "cause": null,
+   "dst": "Api",
+   "dstActor": "Api",
+   "id": 10,
+   "label": "GetOrder",
+   "logId": "g3",
+   "prior": [],
+   "session": "chain from c3",
+   "src": "Client",
+   "srcActor": "Client",
+   "thread": "Client@chain from c3"
+  },
+  {
+   "act": false,
+   "cause": 8,
+   "dst": "Client",
+   "dstActor": "Client",
+   "id": 11,
+   "label": "Order",
+   "logId": "r1",
+   "prior": [],
+   "session": "chain from c1",
+   "src": "Api",
+   "srcActor": "Api",
+   "thread": "Api@chain from c1"
+  },
+  {
+   "act": false,
+   "cause": 10,
+   "dst": "Client",
+   "dstActor": "Client",
+   "id": 12,
+   "label": "Order",
+   "logId": "r3",
+   "prior": [],
+   "session": "chain from c3",
+   "src": "Api",
+   "srcActor": "Api",
+   "thread": "Api@chain from c3"
+  }
+ ],
+ "generative": null,
+ "issues": [],
+ "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+ "name": "Orders",
+ "overlay": null,
+ "protocol": null,
+ "reading": "Orders: 12 events in 3 sessions follow the protocol",
+ "roles": [
+  "Client",
+  "Api"
+ ],
+ "secretFields": [],
+ "sessions": [
+  {
+   "complete": true,
+   "events": 4,
+   "problem": null,
+   "session": "chain from c1",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 4,
+   "problem": null,
+   "session": "chain from c2",
+   "unchecked": []
+  },
+  {
+   "complete": true,
+   "events": 4,
+   "problem": null,
+   "session": "chain from c3",
+   "unchecked": []
+  }
+ ],
+ "tool": "session_conform",
+ "unchecked": [],
+ "verdict": "conforms",
+ "events_in": [
+  {
+   "id": "c1",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Api",
+   "body": {
+    "item": "tea"
+   }
+  },
+  {
+   "id": "c2",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Api",
+   "body": {
+    "item": "tea"
+   }
+  },
+  {
+   "id": "k2",
+   "label": "Created",
+   "from": "Api",
+   "to": "Client",
+   "cause": "c2",
+   "headers": {
+    "orderId": "o2"
+   }
+  },
+  {
+   "id": "c3",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Api",
+   "body": {
+    "item": "tea"
+   }
+  },
+  {
+   "id": "k1",
+   "label": "Created",
+   "from": "Api",
+   "to": "Client",
+   "cause": "c1",
+   "headers": {
+    "orderId": "o1"
+   }
+  },
+  {
+   "id": "g2",
+   "label": "GetOrder",
+   "from": "Client",
+   "to": "Api",
+   "path": {
+    "orderId": "o2"
+   },
+   "query": {
+    "verbose": false
+   }
+  },
+  {
+   "id": "k3",
+   "label": "Created",
+   "from": "Api",
+   "to": "Client",
+   "cause": "c3",
+   "headers": {
+    "orderId": "o3"
+   }
+  },
+  {
+   "id": "g1",
+   "label": "GetOrder",
+   "from": "Client",
+   "to": "Api",
+   "path": {
+    "orderId": "o1"
+   },
+   "query": {
+    "verbose": false
+   }
+  },
+  {
+   "id": "r2",
+   "label": "Order",
+   "from": "Api",
+   "to": "Client",
+   "cause": "g2",
+   "body": {
+    "orderId": "o2",
+    "item": "tea"
+   }
+  },
+  {
+   "id": "g3",
+   "label": "GetOrder",
+   "from": "Client",
+   "to": "Api",
+   "path": {
+    "orderId": "o3"
+   },
+   "query": {
+    "verbose": false
+   }
+  },
+  {
+   "id": "r1",
+   "label": "Order",
+   "from": "Api",
+   "to": "Client",
+   "cause": "g1",
+   "body": {
+    "orderId": "o1",
+    "item": "tea"
+   }
+  },
+  {
+   "id": "r3",
+   "label": "Order",
+   "from": "Api",
+   "to": "Client",
+   "cause": "g3",
+   "body": {
+    "orderId": "o3",
+    "item": "tea"
+   }
+  }
+ ]
+}

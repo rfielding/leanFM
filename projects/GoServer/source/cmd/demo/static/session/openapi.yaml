@@ -78,6 +78,46 @@ paths:
                   - "$ref": "#/components/schemas/RequestRejected"
           description: "GameState or RequestRejected"
       summary: "GetGameState from Person"
+  "/api/issue_session":
+    post:
+      operationId: "IssueSession"
+      requestBody:
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/IssueSession"
+      responses:
+        "200":
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SessionIssued"
+          description: "SessionIssued"
+        "401":
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SignInRefused"
+          description: "SignInRefused"
+      summary: "IssueSession from Person"
+  "/api/join_game":
+    post:
+      operationId: "JoinGame"
+      requestBody:
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/JoinGame"
+      responses:
+        "200":
+          content:
+            "application/json":
+              schema:
+                oneOf:
+                  - "$ref": "#/components/schemas/GameJoined"
+                  - "$ref": "#/components/schemas/RequestRejected"
+          description: "GameJoined or RequestRejected"
+      summary: "JoinGame from Person"
   "/api/leave_seat":
     post:
       operationId: "LeaveSeat"
@@ -222,6 +262,22 @@ paths:
                   - "$ref": "#/components/schemas/RequestRejected"
           description: "SeatPlanSet or RequestRejected"
       summary: "SetSeatPlan from Person"
+  "/api/sign_out":
+    post:
+      operationId: "SignOut"
+      requestBody:
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/components/schemas/SignOut"
+      responses:
+        "200":
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/components/schemas/SignedOut"
+          description: "SignedOut"
+      summary: "SignOut from Person"
   "/api/start_game":
     post:
       operationId: "StartGame"
@@ -468,6 +524,24 @@ components:
         - "byoyomiPeriods"
       title: "GameCreated"
       type: "object"
+    GameJoined:
+      additionalProperties: false
+      properties:
+        gameId:
+          type: "string"
+        participants:
+          items:
+            type: "string"
+          type: "array"
+        requestId:
+          minimum: 0
+          type: "integer"
+      required:
+        - "gameId"
+        - "participants"
+        - "requestId"
+      title: "GameJoined"
+      type: "object"
     GameListed:
       additionalProperties: false
       properties:
@@ -669,6 +743,38 @@ components:
         - "requestId"
         - "sinceReview"
       title: "GetGameState"
+      type: "object"
+    IssueSession:
+      additionalProperties: false
+      properties:
+        identity:
+          type: "string"
+        password:
+          type: "string"
+        requestId:
+          minimum: 0
+          type: "integer"
+      required:
+        - "identity"
+        - "password"
+        - "requestId"
+      title: "IssueSession"
+      type: "object"
+    JoinGame:
+      additionalProperties: false
+      properties:
+        gameId:
+          type: "string"
+        requestId:
+          minimum: 0
+          type: "integer"
+        sessionId:
+          type: "string"
+      required:
+        - "sessionId"
+        - "gameId"
+        - "requestId"
+      title: "JoinGame"
       type: "object"
     LeaveSeat:
       additionalProperties: false
@@ -1227,6 +1333,25 @@ components:
         - "requestId"
       title: "SendRoomChat"
       type: "object"
+    SessionIssued:
+      additionalProperties: false
+      properties:
+        claimed:
+          type: "boolean"
+        identity:
+          type: "string"
+        requestId:
+          minimum: 0
+          type: "integer"
+        sessionId:
+          type: "string"
+      required:
+        - "sessionId"
+        - "identity"
+        - "claimed"
+        - "requestId"
+      title: "SessionIssued"
+      type: "object"
     SetAutopilot:
       additionalProperties: false
       properties:
@@ -1272,6 +1397,38 @@ components:
         - "team"
         - "requestId"
       title: "SetSeatPlan"
+      type: "object"
+    SignInRefused:
+      additionalProperties: false
+      properties:
+        error:
+          type: "string"
+      required:
+        - "error"
+      title: "SignInRefused"
+      type: "object"
+    SignOut:
+      additionalProperties: false
+      properties:
+        requestId:
+          minimum: 0
+          type: "integer"
+        sessionId:
+          type: "string"
+      required:
+        - "sessionId"
+        - "requestId"
+      title: "SignOut"
+      type: "object"
+    SignedOut:
+      additionalProperties: false
+      properties:
+        requestId:
+          minimum: 0
+          type: "integer"
+      required:
+        - "requestId"
+      title: "SignedOut"
       type: "object"
     StartGame:
       additionalProperties: false

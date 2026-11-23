@@ -1,0 +1,42 @@
+[
+ {
+  "name": "Orders",
+  "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+  "variants": [
+   {
+    "name": "swapped (GetOrder first)",
+    "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n}"
+   },
+   {
+    "name": "extra message at the end",
+    "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n  Thanks from Client to Api;\n}"
+   },
+   {
+    "name": "GetOrder dropped",
+    "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n}"
+   },
+   {
+    "name": "GetOrder repeated in a loop",
+    "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  rec R {\n    g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n    Order from Api to Client cause g status 200;\n    choice { continue R; } or { Done from Client to Api; }\n  }\n}"
+   }
+  ]
+ },
+ {
+  "name": "PlaceOrder",
+  "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+  "variants": [
+   {
+    "name": "no SoldOut branch",
+    "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n}\n"
+   },
+   {
+    "name": "outcomes swapped",
+    "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause d status 402;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      Receipt from Shop to Client cause x status 200;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n"
+   },
+   {
+    "name": "bank skipped",
+    "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    Receipt from Shop to Client cause p status 200;\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n"
+   }
+  ]
+ }
+]
