@@ -51,21 +51,28 @@ def call(path, fields=None, method=None):
 
 
 try:
-    for _ in range(100):
+    # Wait by the clock, not by a count of tries: a refused connection returns at once, so 100 tries
+    # were five seconds, less than a busy CI runner takes to start the server; and fail if it never
+    # answers, rather than going on to a call that can only be refused.
+    deadline = time.monotonic() + 60
+    while True:
         assert server.poll() is None, "isolated LeanFM server exited"
         try:
             urllib.request.urlopen(base + "/health", timeout=.5).close()
             break
         except (OSError, urllib.error.URLError):
-            time.sleep(.05)
+            assert time.monotonic() < deadline, "isolated LeanFM server never answered /health within 60 s"
+            time.sleep(.1)
     # The stub is independently starting alongside this fixture.
-    for _ in range(100):
+    deadline = time.monotonic() + 60
+    while True:
         try:
             request = urllib.request.Request("http://127.0.0.1:18080/v1/models", headers={"Authorization": "Bearer test-user-key"})
             urllib.request.urlopen(request, timeout=.5).close()
             break
         except (OSError, urllib.error.URLError):
-            time.sleep(.05)
+            assert time.monotonic() < deadline, "the provider stub never answered within 60 s"
+            time.sleep(.1)
     status, _ = call("/api/accounts", {"username": "reset_user", "password": "test-reset-password", "openai_api_key": "test-user-key"})
     assert status == 201, status
     status, listed = call("/api/projects")

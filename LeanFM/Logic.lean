@@ -37,6 +37,8 @@ structure Bounds where
   maxEvents : Nat := 512
   maxConcurrentPairs : Nat := 64
   maxPredicates : Nat := 64
+  /-- the truth-set bytes one evaluation may hold at once (selfhost.session.ctl-scale) -/
+  maxTruthBytes : Nat := 1073741824
 deriving Repr
 
 def bounds : Bounds := {}
@@ -47,7 +49,8 @@ def boundsJson (b : Bounds := bounds) : Json :=
     , ("maxString", toJson b.maxString), ("maxArgumentBytes", toJson b.maxArgumentBytes)
     , ("maxDraftStates", toJson b.maxDraftStates), ("maxDraftTransitions", toJson b.maxDraftTransitions)
     , ("maxModelNodes", toJson b.maxModelNodes), ("maxEvents", toJson b.maxEvents)
-    , ("maxConcurrentPairs", toJson b.maxConcurrentPairs), ("maxPredicates", toJson b.maxPredicates) ]
+    , ("maxConcurrentPairs", toJson b.maxConcurrentPairs), ("maxPredicates", toJson b.maxPredicates)
+    , ("maxTruthBytes", toJson b.maxTruthBytes) ]
 
 def terminalConvention : String :=
   "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), " ++
@@ -248,8 +251,147 @@ partial def subformulas (f : Formula) : List Formula :=
     | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => subformulas a ++ subformulas b
     | _ => []
 
-def atoms (f : Formula) : List Formula := (subformulas f).filter isAtomic
+end Formula
 
+/-! ## Shared subformulas (selfhost.session.ctl-scale)
+
+A formula as a DAG: each distinct subformula is one node, found through a hash table keyed by its
+operator, its children's node numbers and, for an atom, the atom; the key is compared in full on a
+hash match, so a collision costs a comparison and never merges two different subformulas. Node
+numbers are given children first, so the node order is an evaluation order. -/
+
+structure DagKey where
+  op : String
+  kids : Array Nat
+  atom : String
+deriving BEq, Hashable
+
+structure Dag where
+  ops : Array String := #[]
+  kids : Array (Array Nat) := #[]
+  atoms : Array (Option Formula) := #[]
+  index : Std.HashMap DagKey Nat := {}
+deriving Inhabited
+
+namespace Dag
+
+/-- A formula's operator, its children and, for an atom, the atom's identity. -/
+def shape : Formula → String × List Formula × Option String
+  | .tt => ("true", [], none)
+  | .ff => ("false", [], none)
+  | .not g => ("not", [g], none)
+  | .never g => ("never", [g], none)
+  | .ex g => ("EX", [g], none) | .ax g => ("AX", [g], none)
+  | .ef g => ("EF", [g], none) | .af g => ("AF", [g], none)
+  | .eg g => ("EG", [g], none) | .ag g => ("AG", [g], none)
+  | .and fs => ("and", fs, none)
+  | .or fs => ("or", fs, none)
+  | .implies a b => ("implies", [a, b], none)
+  | .stronglyImplies a b => ("stronglyImplies", [a, b], none)
+  | .eu a b => ("EU", [a, b], none) | .au a b => ("AU", [a, b], none)
+  | .ew a b => ("EW", [a, b], none) | .aw a b => ("AW", [a, b], none)
+  | f => ("atom", [], some (reprStr f))
+
+def size (d : Dag) : Nat := d.ops.size
+
+/-- The node for this operator over these children, made if new. -/
+def intern (d : Dag) (op : String) (kids : Array Nat) (atom : Option String) (f : Option Formula) : Dag × Nat :=
+  let key : DagKey := { op, kids, atom := atom.getD "" }
+  match d.index.get? key with
+  | some i => (d, i)
+  | none =>
+    let i := d.ops.size
+    ({ ops := d.ops.push op, kids := d.kids.push kids, atoms := d.atoms.push (if atom.isSome then f else none),
+       index := d.index.insert key i }, i)
+
+/-- The plain definition: every path to a shared part walks it again (used only for its meaning). -/
+partial def addRef (d : Dag) (f : Formula) : Dag × Nat :=
+  let (op, ks, a) := shape f
+  let (d, ids) := ks.foldl (fun (acc : Dag × Array Nat) k => let (d, i) := addRef acc.1 k; (d, acc.2.push i)) (d, #[])
+  d.intern op ids a (some f)
+
+/-- The same, walking each part shared in memory once: a part already seen at this address has its
+node already. Equal addresses are equal formulas, so the answer is addRef's. -/
+unsafe def addUnsafe (d : Dag) (f : Formula) : Dag × Nat :=
+  let rec go (st : Dag × Std.HashMap USize Nat) (f : Formula) : (Dag × Std.HashMap USize Nat) × Nat :=
+    let p := ptrAddrUnsafe f
+    match st.2.get? p with
+    | some i => (st, i)
+    | none =>
+      let (op, ks, a) := shape f
+      let (st, ids) := ks.foldl (fun (acc : (Dag × Std.HashMap USize Nat) × Array Nat) k =>
+        let (st, i) := go acc.1 k; (st, acc.2.push i)) (st, #[])
+      let (d, i) := st.1.intern op ids a (some f)
+      ((d, st.2.insert p i), i)
+  let ((d, _), i) := go (d, {}) f
+  (d, i)
+
+@[implemented_by addUnsafe]
+def add (d : Dag) (f : Formula) : Dag × Nat := addRef d f
+
+/-- The DAG of a formula; its root is the last node. -/
+def ofFormula (f : Formula) : Dag := (add {} f).1
+
+/-- The atoms, each once. -/
+def atomList (d : Dag) : List Formula := d.atoms.toList.filterMap id
+
+/-- The longest path from the root to an atom. -/
+def depth (d : Dag) : Nat := Id.run do
+  let mut h : Array Nat := #[]
+  for ks in d.kids do
+    h := h.push (1 + ks.foldl (fun m k => max m (h[k]?.getD 0)) 0)
+  return h.back?.getD 0
+
+/-- How many nodes the formula has written out as a tree, counting no further than `cap`. -/
+def treeSize (d : Dag) (cap : Nat) : Nat := Id.run do
+  let mut t : Array Nat := #[]
+  for ks in d.kids do
+    t := t.push (min cap (1 + ks.foldl (fun m k => min cap (m + t[k]?.getD 0)) 0))
+  return t.back?.getD 0
+
+/-- A name as the s-expression reader reads it: bare when it is a plain run, quoted otherwise. -/
+def nameText (s : String) : String :=
+  let plain := !s.isEmpty && s.toList.all (fun c => c.isAlphanum || "_.:/@$-".toList.contains c)
+    && !["terminal", "true", "false"].contains s
+  if plain then s else "\"" ++ (s.replace "\\" "\\\\" |>.replace "\"" "\\\"") ++ "\""
+
+def atomText : Formula → String
+  | .after m => s!"(after {nameText m})"
+  | .atState x => s!"(at {nameText x})"
+  | .claimed c => s!"(claimed {nameText c})"
+  | .terminal => "terminal"
+  | .secret a b f => "(secret" ++ (a.map (" from " ++ nameText ·)).getD "" ++ (b.map (" to " ++ nameText ·)).getD "" ++
+      (f.map (" field " ++ nameText ·)).getD "" ++ ")"
+  | .unsupported op => s!"({op} terminal)"
+  | f => nameText (reprStr f)
+
+/-- The formula as an s-expression, each part shared by two or more parents written once with a
+label #n= and referred to as #n# after (selfhost.session.ctl-sexpr). -/
+partial def toSexpr (d : Dag) : String := Id.run do
+  if d.size == 0 then return "true"
+  let mut parents : Array Nat := Array.replicate d.size 0
+  for ks in d.kids do
+    for k in ks do parents := parents.modify k (· + 1)
+  let rec go (i : Nat) (labels : Std.HashMap Nat Nat) : String × Std.HashMap Nat Nat :=
+    match labels.get? i with
+    | some n => (s!"#{n}#", labels)
+    | none =>
+      let op := d.ops[i]!
+      let shared := (parents[i]?.getD 0) ≥ 2 && op != "atom" && op != "true" && op != "false"
+      let (labels, pre) := if shared then (labels.insert i labels.size, s!"#{labels.size}=") else (labels, "")
+      if op == "atom" then (pre ++ atomText (d.atoms[i]!.getD .tt), labels)
+      else if op == "true" || op == "false" then (op, labels)
+      else
+        let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
+          let (t, l) := go k acc.2; (acc.1.push t, l)) (#[], labels)
+        (pre ++ "(" ++ " ".intercalate (op :: parts.toList) ++ ")", labels)
+  return (go (d.size - 1) {}).1
+
+end Dag
+
+namespace Formula
+/-- The atoms of a formula, each once, walking each shared part once. -/
+def atoms (f : Formula) : List Formula := (Dag.ofFormula f).atomList
 end Formula
 
 /-! ## Parsing (JSON data only) -/
@@ -327,28 +469,179 @@ def pathOperatorHint (op : String) : Option String :=
 def unsupportedOperators : List String :=
   ["K", "O", "obliged", "obligatory", "P", "permitted", "B", "believes", "Pr", "probability", "C", "common"]
 
-partial def parseFormula (j : Json) (depth : Nat := 0) : Except String Formula := do
-  if depth > bounds.maxDepth then throw s!"formula nesting exceeds depth {bounds.maxDepth}"
+/-! ### S-expressions (selfhost.session.ctl-sexpr)
+
+The reader is data only: there is no read-time evaluation and no # form but #n= and #n#. A label is
+defined when its expression is complete, so a reference inside its own expression is to a label not
+yet defined, refused: no cycle can be written. -/
+
+inductive SexprTok | lp | rp | name (s : String) | define (n : Nat) | ref (n : Nat)
+deriving Repr, BEq, Inhabited
+
+def sexprTokens (s : String) : Except String (Array SexprTok) := do
+  let cs := s.toList.toArray
+  let mut out : Array SexprTok := #[]
+  let mut i := 0
+  let plain := fun (c : Char) => c.isAlphanum || "_.:/@$-".toList.contains c
+  while i < cs.size do
+    let c := cs[i]!
+    if c.isWhitespace then i := i + 1
+    else if c == '(' then out := out.push .lp; i := i + 1
+    else if c == ')' then out := out.push .rp; i := i + 1
+    else if c == '#' then
+      let mut j := i + 1
+      let mut n := 0
+      while j < cs.size && cs[j]!.isDigit do
+        n := n * 10 + (cs[j]!.toNat - '0'.toNat); j := j + 1
+      if j == i + 1 || j >= cs.size || n > 1000000 then throw "a # form is #n= or #n#, with n a number"
+      if cs[j]! == '=' then out := out.push (.define n)
+      else if cs[j]! == '#' then out := out.push (.ref n)
+      else throw "a # form is #n= or #n#; there is no other # syntax (nothing is evaluated when read)"
+      i := j + 1
+    else if c == '"' then
+      let mut j := i + 1
+      let mut acc := ""
+      let mut closed := false
+      while j < cs.size && !closed do
+        let d := cs[j]!
+        if d == '\\' then
+          if j + 1 >= cs.size then throw "a quoted name ends inside an escape"
+          acc := acc.push cs[j+1]!; j := j + 2
+        else if d == '"' then closed := true; j := j + 1
+        else acc := acc.push d; j := j + 1
+      if !closed then throw "a quoted name is not closed"
+      out := out.push (.name acc); i := j
+    else if plain c then
+      let mut j := i
+      while j < cs.size && plain cs[j]! do j := j + 1
+      out := out.push (.name (String.mk (cs.extract i j).toList)); i := j
+    else throw s!"unexpected character {c.quote} in an s-expression formula"
+  return out
+
+structure SexprState where
+  pos : Nat := 0
+  labels : Std.HashMap Nat Formula := {}
+  nodes : Nat := 0
+
+/-- One formula from the tokens at `pos`; `depth` is the nesting so far. -/
+partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : StateT SexprState (Except String) Formula := do
+  if depth > b.maxDepth then throw s!"formula nesting exceeds depth {b.maxDepth}"
+  let st ← get
+  let next := fun () => do let st ← get; set { st with pos := st.pos + 1 }; pure (ts[st.pos]?)
+  -- reading is linear in the text, which is bounded; the size bounds are applied to the formula
+  -- read (parseShared counts distinct subformulas, parseBounded tree nodes)
+  let count := fun () => (pure () : StateT SexprState (Except String) Unit)
+  match ts[st.pos]? with
+  | some (.define n) =>
+    let _ ← next ()
+    if (← get).labels.contains n then throw s!"label #{n}= is defined twice"
+    let f ← sexprFormula ts b depth
+    modify fun st => { st with labels := st.labels.insert n f }
+    return f
+  | some (.ref n) =>
+    let _ ← next ()
+    match (← get).labels.get? n with
+    | some f => return f
+    | none => throw s!"#{n}# refers to a label not yet defined (a label is defined when its expression is complete)"
+  | some (.name "terminal") => let _ ← next (); count (); return .terminal
+  | some (.name "true") => let _ ← next (); count (); return .tt
+  | some (.name "false") => let _ ← next (); count (); return .ff
+  | some (.name x) => throw s!"bare name {(x.take 40).toString} is not a formula; write (after {(x.take 40).toString}), (at {(x.take 40).toString}) or terminal"
+  | some .rp => throw "unexpected ) in an s-expression formula"
+  | none => throw "the s-expression formula ends early"
+  | some .lp =>
+    let _ ← next ()
+    count ()
+    let op ← match ← next () with
+      | some (.name o) => pure o
+      | _ => throw "( must be followed by an operator name"
+    let rec args (acc : Array Formula) : StateT SexprState (Except String) (Array Formula) := do
+      match ts[(← get).pos]? with
+      | some .rp => let _ ← next (); return acc
+      | none => throw s!"({op} is not closed"
+      | _ => args (acc.push (← sexprFormula ts b (depth + 1)))
+    let nameArg := fun () => do
+      let x ← match ← next () with
+        | some (.name x) => checkString op x
+        | _ => throw s!"{op} takes a name"
+      match ← next () with
+      | some .rp => pure x
+      | _ => throw s!"{op} takes exactly one name"
+    match op with
+    | "after" => return .after (← nameArg ())
+    | "at" => return .atState (← nameArg ())
+    | "claimed" => return .claimed (← nameArg ())
+    | "secret" =>
+      let rec kv (fr to fi : Option String) : StateT SexprState (Except String) Formula := do
+        match ← next () with
+        | some .rp => return .secret fr to fi
+        | some (.name k) =>
+          let v ← match ← next () with
+            | some (.name v) => checkString ("secret." ++ k) v
+            | _ => throw s!"secret {k} takes a name"
+          match k with
+          | "from" => kv (some v) to fi
+          | "to" => kv fr (some v) fi
+          | "field" => kv fr to (some v)
+          | _ => throw s!"secret takes only from, to and field, not {(k.take 40).toString}"
+        | _ => throw "secret takes from, to and field followed by names"
+      kv none none none
+    | "knows" | "field" | "predicate" | "derived" =>
+      throw s!"{op} has structure the s-expression form does not carry; write it in the JSON form"
+    | _ =>
+      let xs ← args #[]
+      let need := fun (k : Nat) => if xs.size == k then pure () else throw s!"{op} takes {k} formula{if k == 1 then "" else "s"}"
+      match op with
+      | "not" => need 1; return .not xs[0]!
+      | "never" => need 1; return .never xs[0]!
+      | "EX" => need 1; return .ex xs[0]! | "AX" => need 1; return .ax xs[0]!
+      | "EF" => need 1; return .ef xs[0]! | "AF" => need 1; return .af xs[0]!
+      | "EG" => need 1; return .eg xs[0]! | "AG" => need 1; return .ag xs[0]!
+      | "and" => if xs.isEmpty then throw "and needs at least one formula" else return .and xs.toList
+      | "or" => if xs.isEmpty then throw "or needs at least one formula" else return .or xs.toList
+      | "implies" => need 2; return .implies xs[0]! xs[1]!
+      | "stronglyImplies" => need 2; return .stronglyImplies xs[0]! xs[1]!
+      | "EU" => need 2; return .eu xs[0]! xs[1]! | "AU" => need 2; return .au xs[0]! xs[1]!
+      | "EW" => need 2; return .ew xs[0]! xs[1]! | "AW" => need 2; return .aw xs[0]! xs[1]!
+      | other =>
+        if unsupportedOperators.contains other then return .unsupported other
+        match pathOperatorHint other with
+        | some hint => throw ("typing error: " ++ hint)
+        | none => throw s!"unknown operator \"{(other.take 40).toString}\"; see leanfm://language/logic-reference"
+
+/-- A formula written as an s-expression, with the caller's bounds. -/
+def parseSexpr (s : String) (b : Bounds := bounds) : Except String Formula := do
+  if s.length > b.maxArgumentBytes then throw s!"formula text exceeds {b.maxArgumentBytes} bytes"
+  let ts ← sexprTokens s
+  let (f, st) ← (sexprFormula ts b 0).run {}
+  if st.pos != ts.size then throw "text follows the formula"
+  return f
+
+partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) : Except String Formula := do
+  if depth > bnd.maxDepth then throw s!"formula nesting exceeds depth {bnd.maxDepth}"
   match j with
   | .bool true => return .tt
   | .bool false => return .ff
   | .str "terminal" => return .terminal
   | .str "true" => return .tt
   | .str "false" => return .ff
-  | .str s => throw ("bare string \"" ++ (s.take 40).toString ++ "\" is not a formula; write {\"at\": state}, {\"after\": message} or \"terminal\"")
+  | .str s =>
+    let t := s.trimAscii.toString
+    if t.startsWith "(" || t.startsWith "#" then parseSexpr s bnd else
+    throw ("bare string \"" ++ (s.take 40).toString ++ "\" is not a formula; write {\"at\": state}, {\"after\": message} or \"terminal\"")
   | .obj _ =>
     match keyValues j with
     | [(op, arg)] =>
-      let one := fun (k : Formula → Formula) => do return k (← parseFormula arg (depth + 1))
+      let one := fun (k : Formula → Formula) => do return k (← parseFormula arg (depth + 1) bnd)
       let two := fun (k : Formula → Formula → Formula) => do
         match arg with
-        | .arr #[a, b] => return k (← parseFormula a (depth + 1)) (← parseFormula b (depth + 1))
+        | .arr #[a, b] => return k (← parseFormula a (depth + 1) bnd) (← parseFormula b (depth + 1) bnd)
         | _ => throw s!"{op} takes an array of exactly two formulas"
       let many := fun (k : List Formula → Formula) => do
         match arg with
         | .arr items =>
           if items.isEmpty then throw s!"{op} needs at least one formula"
-          return k (← items.toList.mapM (parseFormula · (depth + 1)))
+          return k (← items.toList.mapM (parseFormula · (depth + 1) bnd))
         | _ => throw s!"{op} takes an array of formulas"
       let atomStr := fun (k : String → Formula) => do
         match str? arg with
@@ -404,10 +697,22 @@ partial def parseFormula (j : Json) (depth : Nat := 0) : Except String Formula :
     | _ => throw "a formula object has exactly one operator key"
   | _ => throw "a formula is a JSON object, true, false or \"terminal\""
 
-def parseBounded (j : Json) : Except String Formula := do
-  let f ← parseFormula j
-  if f.size > bounds.maxFormulaNodes then
-    throw s!"formula has {f.size} nodes; the bound is {bounds.maxFormulaNodes}"
+/-- A formula a tool writes back out as a tree (explain_formula, classify_requirement and the other
+logic tools): at most maxFormulaNodes nodes as a tree, with the caller's bounds. -/
+def parseBounded (j : Json) (b : Bounds := bounds) : Except String Formula := do
+  let f ← parseFormula j 0 b
+  let n := (Dag.ofFormula f).treeSize (b.maxFormulaNodes + 1)
+  if n > b.maxFormulaNodes then
+    throw s!"formula has {if n > b.maxFormulaNodes then s!"more than {b.maxFormulaNodes}" else toString n} nodes; the bound is {b.maxFormulaNodes}"
+  return f
+
+/-- A formula check_ctl decides (and session_ctl through it): at most maxFormulaNodes distinct
+subformulas, however large it would be as a tree (selfhost.session.ctl-scale). -/
+def parseShared (j : Json) (b : Bounds := bounds) : Except String Formula := do
+  let f ← parseFormula j 0 b
+  let n := (Dag.ofFormula f).size
+  if n > b.maxFormulaNodes then
+    throw s!"formula has {n} distinct subformulas; the bound is {b.maxFormulaNodes}"
   return f
 
 /-! ## Task models -/
@@ -677,8 +982,9 @@ def gfp (m : Model) (step : Array Bool → Array Bool) : Array Bool := Id.run do
 def existsSucc (m : Model) (z : Array Bool) (i : Nat) : Bool := (m.succ[i]?.getD #[]).any (get z ·)
 def allSucc (m : Model) (z : Array Bool) (i : Nat) : Bool := (m.succ[i]?.getD #[]).all (get z ·)
 
-/-- Satisfaction sets by explicit fixpoint labelling; only observable atoms reach here. -/
-partial def sat (m : Model) : Formula → Array Bool
+/-- Satisfaction sets by explicit fixpoint labelling, walking the formula as a tree: the meaning the
+shared evaluation below must give (tested against it), and the atoms' meaning. -/
+partial def satTree (m : Model) : Formula → Array Bool
   | .tt => m.all true
   | .ff => m.all false
   | .atState s => m.nodes.map (·.state == s)
@@ -692,27 +998,280 @@ partial def sat (m : Model) : Formula → Array Bool
     match m.task.knowers.findIdx? (·.1 == a) with
     | some k => m.nodes.map fun n => LeanFM.Session.Knowledge.knows (n.knowledge[k]?.getD []) v
     | none => m.all false
-  | .not f => (sat m f).map (!·)
-  | .and fs => fs.foldl (fun acc f => (acc.zip (sat m f)).map fun (a, b) => a && b) (m.all true)
-  | .or fs => fs.foldl (fun acc f => (acc.zip (sat m f)).map fun (a, b) => a || b) (m.all false)
-  | .implies a b => sat m (.or [.not a, b])
-  | .stronglyImplies a b => sat m (.and [.ef a, .ag (.implies a b)])
-  | .never f => sat m (.ag (.not f))
-  | .ex f => let s := sat m f; m.mapI (m.existsSucc s)
-  | .ax f => let s := sat m f; m.mapI (m.allSucc s)
-  | .ef f => sat m (.eu .tt f)
-  | .af f => sat m (.au .tt f)
-  | .eg f => let s := sat m f; m.gfp fun z => m.mapI fun i => get s i && m.existsSucc z i
-  | .ag f => (sat m (.ef (.not f))).map (!·)
+  | .not f => (satTree m f).map (!·)
+  | .and fs => fs.foldl (fun acc f => (acc.zip (satTree m f)).map fun (a, b) => a && b) (m.all true)
+  | .or fs => fs.foldl (fun acc f => (acc.zip (satTree m f)).map fun (a, b) => a || b) (m.all false)
+  | .implies a b => satTree m (.or [.not a, b])
+  | .stronglyImplies a b => satTree m (.and [.ef a, .ag (.implies a b)])
+  | .never f => satTree m (.ag (.not f))
+  | .ex f => let s := satTree m f; m.mapI (m.existsSucc s)
+  | .ax f => let s := satTree m f; m.mapI (m.allSucc s)
+  | .ef f => satTree m (.eu .tt f)
+  | .af f => satTree m (.au .tt f)
+  | .eg f => let s := satTree m f; m.gfp fun z => m.mapI fun i => get s i && m.existsSucc z i
+  | .ag f => (satTree m (.ef (.not f))).map (!·)
   | .eu a b =>
-    let sa := sat m a; let sb := sat m b
+    let sa := satTree m a; let sb := satTree m b
     m.lfp fun z => m.mapI fun i => get sb i || (get sa i && m.existsSucc z i)
   | .au a b =>
-    let sa := sat m a; let sb := sat m b
+    let sa := satTree m a; let sb := satTree m b
     m.lfp fun z => m.mapI fun i => get sb i || (get sa i && m.allSucc z i)
-  | .ew a b => sat m (.or [.eu a b, .eg a])
-  | .aw a b => (sat m (.eu (.not b) (.and [.not a, .not b]))).map (!·)
+  | .ew a b => satTree m (.or [.eu a b, .eg a])
+  | .aw a b => (satTree m (.eu (.not b) (.and [.not a, .not b]))).map (!·)
   | _ => m.all false
+
+
+/-! ### Shared evaluation (selfhost.session.ctl-scale) -/
+
+/-- The core operators every formula is rewritten into. -/
+inductive COp | tt | ff | atom | not | and | or | ex | ax | eu | au | eg
+deriving BEq, Hashable, Repr, Inhabited
+
+structure CKey where
+  op : COp
+  kids : Array Nat
+  atom : Nat
+deriving BEq, Hashable
+
+/-- The DAG over core operators: atoms point at the formula DAG's atom nodes. -/
+structure Core where
+  ops : Array COp := #[]
+  kids : Array (Array Nat) := #[]
+  atom : Array Nat := #[]
+  index : Std.HashMap CKey Nat := {}
+
+def Core.mk' (c : Core) (op : COp) (kids : Array Nat) (atom : Nat := 0) : Core × Nat :=
+  let key : CKey := { op, kids, atom }
+  match c.index.get? key with
+  | some i => (c, i)
+  | none => let i := c.ops.size
+    ({ ops := c.ops.push op, kids := c.kids.push kids, atom := c.atom.push atom, index := c.index.insert key i }, i)
+
+/-- The formula DAG rewritten into core operators, with the meanings satTree gives the derived ones;
+the root is the last node. -/
+def Core.ofDag (d : Dag) : Core × Nat := Id.run do
+  let mut c : Core := {}
+  let mut ids : Array Nat := #[]
+  let mut root := 0
+  for i in [0:d.size] do
+    let ks := (d.kids[i]!).map (ids[·]!)
+    let k0 := ks[0]?.getD 0
+    let k1 := ks[1]?.getD 0
+    let mk := fun (c : Core) (op : COp) (kids : Array Nat) => c.mk' op kids
+    let (c', r) := match d.ops[i]! with
+      | "true" => mk c .tt #[]
+      | "false" => mk c .ff #[]
+      | "atom" => c.mk' .atom #[] i
+      | "not" => mk c .not #[k0]
+      | "and" => if ks.isEmpty then mk c .tt #[] else mk c .and ks
+      | "or" => if ks.isEmpty then mk c .ff #[] else mk c .or ks
+      | "EX" => mk c .ex #[k0]
+      | "AX" => mk c .ax #[k0]
+      | "EU" => mk c .eu #[k0, k1]
+      | "AU" => mk c .au #[k0, k1]
+      | "EG" => mk c .eg #[k0]
+      | "EF" => let (c, t) := mk c .tt #[]; mk c .eu #[t, k0]
+      | "AF" => let (c, t) := mk c .tt #[]; mk c .au #[t, k0]
+      | "AG" => let (c, t) := mk c .tt #[]; let (c, n) := mk c .not #[k0]; let (c, e) := mk c .eu #[t, n]; mk c .not #[e]
+      | "never" => let (c, t) := mk c .tt #[]; let (c, e) := mk c .eu #[t, k0]; mk c .not #[e]
+      | "implies" => let (c, n) := mk c .not #[k0]; mk c .or #[n, k1]
+      | "stronglyImplies" =>
+        let (c, t) := mk c .tt #[]
+        let (c, ef) := mk c .eu #[t, k0]
+        let (c, na) := mk c .not #[k0]
+        let (c, imp) := mk c .or #[na, k1]
+        let (c, nimp) := mk c .not #[imp]
+        let (c, e) := mk c .eu #[t, nimp]
+        let (c, ag) := mk c .not #[e]
+        mk c .and #[ef, ag]
+      | "EW" => let (c, u) := mk c .eu #[k0, k1]; let (c, g) := mk c .eg #[k0]; mk c .or #[u, g]
+      | "AW" =>
+        let (c, nb) := mk c .not #[k1]
+        let (c, na) := mk c .not #[k0]
+        let (c, both) := mk c .and #[na, nb]
+        let (c, e) := mk c .eu #[nb, both]
+        mk c .not #[e]
+      | _ => mk c .ff #[]
+    c := c'
+    ids := ids.push r
+    root := r
+  return (c, root)
+
+/-- A packed bitset over the model's nodes. -/
+abbrev Bits := ByteArray
+
+def bitsNew (n : Nat) (v : Bool) : Bits := Id.run do
+  let nb := (n + 7) / 8
+  let mut b := ByteArray.mk (Array.replicate nb (if v then 255 else 0))
+  -- the bits past n stay clear, so complement and equality are exact
+  if v && n % 8 != 0 then b := b.set! (nb - 1) ((1 <<< (n % 8).toUInt8) - 1)
+  return b
+
+@[inline] def bitGet (b : Bits) (i : Nat) : Bool := ((b.get! (i / 8)) >>> (i % 8).toUInt8) &&& 1 == 1
+@[inline] def bitSet (b : Bits) (i : Nat) : Bits := b.set! (i / 8) (b.get! (i / 8) ||| (1 <<< (i % 8).toUInt8))
+
+def bitsOf (a : Array Bool) : Bits := Id.run do
+  let mut b := bitsNew a.size false
+  for i in [0:a.size] do
+    if a[i]! then b := bitSet b i
+  return b
+
+def bitsTo (b : Bits) (n : Nat) : Array Bool := (Array.range n).map (bitGet b ·)
+
+def bitsNot (b : Bits) (n : Nat) : Bits := Id.run do
+  let mut r := b
+  for i in [0:r.size] do r := r.set! i (~~~ (r.get! i))
+  if n % 8 != 0 && r.size > 0 then r := r.set! (r.size - 1) (r.get! (r.size - 1) &&& ((1 <<< (n % 8).toUInt8) - 1))
+  return r
+
+def bitsZip (a b : Bits) (f : UInt8 → UInt8 → UInt8) : Bits := Id.run do
+  let mut r := a
+  for i in [0:r.size] do r := r.set! i (f (r.get! i) (b.get! i))
+  return r
+
+/-- The model's steps as offset and target arrays, both ways. -/
+structure Csr where
+  off : Array Nat
+  tgt : Array Nat
+
+def Csr.ofSucc (succ : Array (Array Nat)) : Csr := Id.run do
+  let mut off : Array Nat := #[0]
+  let mut tgt : Array Nat := #[]
+  for ss in succ do
+    for j in ss do tgt := tgt.push j
+    off := off.push tgt.size
+  return { off, tgt }
+
+def Csr.preds (succ : Array (Array Nat)) : Csr := Id.run do
+  let n := succ.size
+  let mut cnt : Array Nat := Array.replicate (n + 1) 0
+  for ss in succ do
+    for j in ss do cnt := cnt.modify (j + 1) (· + 1)
+  for i in [0:n] do cnt := cnt.set! (i + 1) (cnt[i+1]! + cnt[i]!)
+  let off := cnt
+  let mut fill := cnt
+  let mut tgt : Array Nat := Array.replicate (off[n]!) 0
+  for i in [0:n] do
+    for j in succ[i]! do
+      tgt := tgt.set! (fill[j]!) i
+      fill := fill.modify j (· + 1)
+  return { off, tgt }
+
+/-- Evaluate a formula once over the shared DAG: each distinct subformula once, EX and AX in one pass
+over the steps, EU, AU and EG in one backward worklist pass each, every truth set freed once all
+its readers are done, and at most `b.maxTruthBytes` held at once. -/
+def satE (m : Model) (f : Formula) (b : Bounds := bounds) : Except String (Array Bool) := do
+  let n := m.size
+  let d := Dag.ofFormula f
+  let (c, root) := Core.ofDag d
+  let nb := (n + 7) / 8
+  let fwd := Csr.ofSucc m.succ
+  let bwd := Csr.preds m.succ
+  -- readers left for each core node; the root is read by the caller
+  let mut readers : Array Nat := Array.replicate c.ops.size 0
+  for ks in c.kids do
+    for k in ks do readers := readers.modify k (· + 1)
+  readers := readers.modify root (· + 1)
+  let mut sets : Array Bits := Array.replicate c.ops.size ByteArray.empty
+  let mut live := 0
+  for i in [0:c.ops.size] do
+    let ks := c.kids[i]!
+    let get := fun (k : Nat) => sets[k]!
+    let r : Bits := match c.ops[i]! with
+      | .tt => bitsNew n true
+      | .ff => bitsNew n false
+      | .atom => bitsOf (satTree m ((d.atoms[c.atom[i]!]!).getD .ff))
+      | .not => bitsNot (get ks[0]!) n
+      | .and => ks.foldl (fun acc k => bitsZip acc (get k) (· &&& ·)) (bitsNew n true)
+      | .or => ks.foldl (fun acc k => bitsZip acc (get k) (· ||| ·)) (bitsNew n false)
+      | .ex => Id.run do
+        let s := get ks[0]!
+        let mut r := bitsNew n false
+        for v in [0:n] do
+          let mut hit := false
+          for e in [fwd.off[v]!:fwd.off[v+1]!] do
+            if !hit && bitGet s (fwd.tgt[e]!) then hit := true
+          if hit then r := bitSet r v
+        return r
+      | .ax => Id.run do
+        let s := get ks[0]!
+        let mut r := bitsNew n false
+        for v in [0:n] do
+          let mut all := true
+          for e in [fwd.off[v]!:fwd.off[v+1]!] do
+            if all && !bitGet s (fwd.tgt[e]!) then all := false
+          if all then r := bitSet r v
+        return r
+      | .eu => Id.run do
+        -- backward from the b-nodes through a-nodes
+        let sa := get ks[0]!
+        let mut r := get ks[1]!
+        let mut work : Array Nat := (Array.range n).filter (bitGet r ·)
+        while !work.isEmpty do
+          let j := work.back!
+          work := work.pop
+          for e in [bwd.off[j]!:bwd.off[j+1]!] do
+            let p := bwd.tgt[e]!
+            if !bitGet r p && bitGet sa p then
+              r := bitSet r p
+              work := work.push p
+        return r
+      | .au => Id.run do
+        -- a node joins once every successor has (each step counted), when a holds there
+        let sa := get ks[0]!
+        let mut r := get ks[1]!
+        let mut left : Array Nat := (Array.range n).map fun v => fwd.off[v+1]! - fwd.off[v]!
+        let mut work : Array Nat := (Array.range n).filter (bitGet r ·)
+        while !work.isEmpty do
+          let j := work.back!
+          work := work.pop
+          for e in [bwd.off[j]!:bwd.off[j+1]!] do
+            let p := bwd.tgt[e]!
+            if !bitGet r p then
+              left := left.modify p (· - 1)
+              if left[p]! == 0 && bitGet sa p then
+                r := bitSet r p
+                work := work.push p
+        return r
+      | .eg => Id.run do
+        -- the a-nodes, removing each one left with no successor inside
+        let mut r := get ks[0]!
+        let mut inside : Array Nat := Array.replicate n 0
+        for v in [0:n] do
+          if bitGet r v then
+            for e in [fwd.off[v]!:fwd.off[v+1]!] do
+              if bitGet r (fwd.tgt[e]!) then inside := inside.modify v (· + 1)
+        let mut work : Array Nat := (Array.range n).filter fun v => bitGet r v && inside[v]! == 0
+        let mut gone := bitsNew n false
+        for v in work do gone := bitSet gone v
+        while !work.isEmpty do
+          let j := work.back!
+          work := work.pop
+          for e in [bwd.off[j]!:bwd.off[j+1]!] do
+            let p := bwd.tgt[e]!
+            if bitGet r p && !bitGet gone p then
+              inside := inside.modify p (· - 1)
+              if inside[p]! == 0 then
+                gone := bitSet gone p
+                work := work.push p
+        return bitsZip r gone (fun x g => x &&& ~~~ g)
+    live := live + nb
+    if live > b.maxTruthBytes then
+      throw s!"the check would hold more than {b.maxTruthBytes} bytes of truth sets at once ({c.ops.size} distinct subformulas over {n} nodes); nothing was proved"
+    sets := sets.set! i r
+    for k in ks do
+      readers := readers.modify k (· - 1)
+      if readers[k]! == 0 then
+        sets := sets.set! k ByteArray.empty
+        live := live - nb
+  return bitsTo (sets[root]!) n
+
+/-- Satisfaction sets: the shared evaluation (satE). Past the truth-set bound it gives no node;
+check_ctl calls satE and says the check stopped. -/
+def sat (m : Model) (f : Formula) : Array Bool :=
+  match satE m f with
+  | .ok a => a
+  | .error _ => m.all false
 
 /-- Shortest path from `start` through `allowed` nodes to a `goal` node. -/
 def bfs (m : Model) (start : Nat) (allowed goal : Nat → Bool) : Option (List Nat) := Id.run do
@@ -900,6 +1459,9 @@ def explainFormula (args : Json) : ToolOutcome := do
     , ("unobservableAtoms", Json.arr ((unobservableIn f).map Json.str).toArray)
     , ("lints", Json.arr ((lints f sentence).map Json.str).toArray) ]
 
+/-- The most nodes a formula may have, written out as a tree, for an answer to write it as one. -/
+def treeLimit : Nat := 4096
+
 def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
   let tj ← match (args.getObjVal? "task").toOption with
     | some j => pure j
@@ -908,33 +1470,44 @@ def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
     | some j => pure j
     | none => throw "check_ctl needs a formula"
   let t ← resolveTask tj b
-  let f ← parseBounded fj
+  let f ← parseShared fj b
   let unknown := unknownAtoms t f
   if !unknown.isEmpty then
     throw ("formula names atoms the task does not declare: " ++ "; ".intercalate unknown)
+  -- a formula too large to write out as a tree is given as an s-expression with its shared parts
+  -- labelled, never expanded (selfhost.session.ctl-scale)
+  let dag := Dag.ofFormula f
+  let asTree := dag.treeSize (treeLimit + 1) ≤ treeLimit
+  let reading := if asTree then f.reading else s!"a formula of {dag.size} distinct subformulas, too large to read out as a tree"
   let common : List (String × Json) :=
-    [("task", t.id), ("formula", f.toJson), ("notation", f.symbols), ("mode", Formula.mode f), ("terminalConvention", terminalConvention)]
+    [("task", t.id), ("formula", if asTree then f.toJson else Json.str dag.toSexpr),
+     ("notation", if asTree then f.symbols else dag.toSexpr), ("mode", Formula.mode f), ("terminalConvention", terminalConvention)]
   let unsupported := unsupportedIn f
   if !unsupported.isEmpty then
-    return verdictJson "check_ctl" "unsupported" f.reading <| common ++
+    return verdictJson "check_ctl" "unsupported" reading <| common ++
       [("unsupportedOperators", Json.arr (unsupported.map Json.str).toArray),
        ("evidence", Json.mkObj [("kind", "none"), ("note", "knowledge, obligation, permission and probability modalities are not evaluated by these tools yet")])]
   let unobservable := unobservableIn f
   if !unobservable.isEmpty then
-    return verdictJson "check_ctl" "unknown" f.reading <| common ++
+    return verdictJson "check_ctl" "unknown" reading <| common ++
       [("unobservableAtoms", Json.arr (unobservable.map Json.str).toArray),
        ("evidence", Json.mkObj [("kind", "none"), ("note", "the task model cannot decide these atoms; run classify_requirement to restate them over events")])]
   match buildModel t b with
   | none =>
-    return verdictJson "check_ctl" "resource-limit" f.reading <| common ++
+    return verdictJson "check_ctl" "resource-limit" reading <| common ++
       [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the reachable model exceeds {b.maxModelNodes} nodes; nothing was proved")])]
   | some m =>
-    let holds := Model.get (Model.sat m f) 0
+    match Model.satE m f b with
+    | .error e =>
+      return verdictJson "check_ctl" "resource-limit" reading <| common ++
+        [("evidence", Json.mkObj [("kind", "none"), ("note", e)])]
+    | .ok sats =>
+    let holds := Model.get sats 0
     let ev := evidence m 0 holds f
     let evJson := match ev with
       | some e => evidenceJson m e
       | none => Json.mkObj [("kind", "exhaustive"), ("note", s!"evaluated over all {m.size} reachable nodes")]
-    return verdictJson "check_ctl" (if holds then "proved" else "disproved") f.reading <| common ++
+    return verdictJson "check_ctl" (if holds then "proved" else "disproved") reading <| common ++
       [ ("reachableNodes", toJson m.size)
       , ("deadlocks", Json.arr (m.deadlocks.map Json.str).toArray)
       , ("evidence", evJson) ]
@@ -1833,6 +2406,12 @@ def reference : String := String.intercalate "\n"
   , "| `{\"AW\": [a, b]}` `{\"EW\": [a, b]}` | a unless b, b need not happen |"
   , ""
   , "Bare F, G, X, U and W are typing errors: quantify them with A (every path) or E (some path)."
+  , ""
+  , "## S-expressions"
+  , ""
+  , "Wherever a formula is read, a JSON string beginning with ( or # is an s-expression over the same operators: `(AG (implies (after Ping) (AX (or (after Pong) (after SlowPong)))))`. `(after M)`, `(at s)` and `(claimed c)` take a name; `terminal`, `true` and `false` are bare; `(secret from A to B field f)` with each pair optional. A name is letters, digits and `_ . : / @ $ -`, or a double-quoted string. A part written once may be labelled `#1=` and reused as `#1#`, so a formula with shared parts is written with each part once. The reader is data only: no other # form and nothing evaluated; a label must be defined before it is used, which rules out cycles. knows, field, predicate and derived have structure the string form does not carry: write them in JSON."
+  , ""
+  , "check_ctl evaluates a formula as its DAG: each distinct subformula once, so its size bound counts distinct subformulas, and an answer writes a formula too large to write as a tree as an s-expression with its shared parts labelled."
   , "K, O, P, B and Pr are parsed and reported as unsupported inside formulas; the knows tool decides what an actor can derive at an event of a trace."
   , ""
   , "## knows"

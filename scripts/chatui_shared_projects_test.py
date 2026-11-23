@@ -84,11 +84,14 @@ class SharedProjects(unittest.TestCase):
         initial_requests = stats()["requests"]
         with ThreadPoolExecutor(max_workers=1) as pool:
             pending = pool.submit(self.alice.chat, project, "TEST_CANCEL_AGENT", "test-model")
-            for _ in range(100):
+            # wait by the clock for the chat to reach the model, and fail if it never does
+            deadline = time.monotonic() + 30
+            while True:
                 status, current = self.anonymous.request(path + "/chat/status")
                 if current.get("stage") == "model" and stats()["requests"] > initial_requests:
                     break
-                time.sleep(.01)
+                self.assertLess(time.monotonic(), deadline, "the chat never reached the model within 30 s")
+                time.sleep(.02)
             before = stats()
             self.assertEqual(self.bob.chat(project, "must not bill", "test-model")[0], 409)
             self.assertEqual(self.anonymous.request(path + "/book", {"source": "must not replace book"})[0], 409)

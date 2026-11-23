@@ -1,520 +1,260 @@
 [![Lean Action CI](https://github.com/rfielding/leanFM/actions/workflows/lean_action_ci.yml/badge.svg?branch=main)](https://github.com/rfielding/leanFM/actions/workflows/lean_action_ci.yml)
 
-[Read the LeanFM PDF book](book/main.pdf) · [Dark PDF](book/main-dark.pdf)
-
-Lean Formal Methods, based on communicating heirarchial processes.
-=======
 # LeanFM
 
-A tiny Lean 4 formal-methods sketch for message-passing processes.
+**A programming language whose programs are protocols.**
 
-The model treats a protocol as globally observable behavior:
+[Read the book (PDF)](book/main.pdf) · [Dark PDF](book/main-dark.pdf) ·
+[Videos](#watch-it-work) · [Use it from Claude Desktop](#leanfm-in-claude-desktop)
 
-- each actor has its own observable local state machine
-- every actor has distinct observable inbound and outbound queues
-- both queues have fixed capacities
-- messages are correlated by a `(session, task)` key
-- an actor may have multiple `(session, task)` conversations in flight
-- actors take scheduled turns and run at most one step per turn
-- messages are globally visible byte envelopes
-- every message event has a shared monotonic-clock timestamp for latency calculations
-- each envelope carries `src`, `dst`, and protocol `bytes`
-- the global graph is the product observation of actor states
-- optional chance nodes support MDP-style probabilistic outcomes
-- reusable `LeanFM.MDPDiagram` renderers derive interaction diagrams, state
-  graphs, and probability charts from typed MDP projections
-- reusable `LeanFM.ReliabilityDiagram` rendering derives series/parallel/
-  threshold topology views from typed actor populations and dependency gates
-- specifications attach dwell durations to transitions or productions
-- dwell advances the event clock and supports latency, throughput, and queue metrics
-- each event has one `timeAt`; latency is computed between separate start and completion messages
-- an end message of any kind may backpoint to its start message, so overlapping attempts are paired by event identity
-- actor specifications are reusable; each finite population is a homogeneous service cluster whose instances share one actor kind and whose routing is declared as sticky, round-robin, or shard-key hash
-- non-functional rates distinguish offered, admitted, and completed work, as well as client-experienced `sum(completedWork)/sum(observationTime)` from server aggregate `sum(completedWork)/(max(end)-min(start))`; USL uses active-client population as its independent coordinate and retains server count, latency, backlog, rejection, and outstanding work
-- actor reliability contracts specify outage probability and expected MTTR; declared detectors infer availability loss/restoration from missed heartbeats, stalled inbound queues, or absent outbound progress, retaining boundary uncertainty for per-instance uptime, series/parallel/k-of-n composed service uptime, MTTR, and fixed-point failure-cascade reports
-- denial-of-service analysis ranks dependency nodes with a declared PageRank-like centrality, then checks that heuristic against minimal cut sets, quorum thresholds, stopped protocol messages, fixed-point cascades, lost task capacity, and client-visible outcomes
-- the LLM requirements interviewer plans derived properties before fixing fields; each sufficiently identified `(session, scenario)` produces its own interaction diagram and state machine plus planned line and pie/histogram derivatives
-- the baseline derived-property catalog covers latency, throughput, outcomes, queues, concurrency, reliability, infrastructure cost and least-cost supply for declared demand, financial flows (including taxes and profit/loss under a declared boundary), and waste units/cost/rate; missing inputs are marked indeterminate rather than invented
-- load-derived outputs include observed and fitted Universal Scalability Law curves, queue length paired with explicitly related latency boundaries, per-instance memory headroom with exhaustion treated as fatal, and outage impact propagated across actor interaction networks
-- every scalar metric, 2D function rendering, interaction diagram, and state machine preserves the originating prompt, the question being answered, and the event reducer; `/metrics` exports durable output IDs alongside event-informed numeric series
-- synthesized similar streams are decoded and replayed through the same named reducers, with exact-ratio comparisons against declared tolerances
-- stateless code generation uses `(book/main.pdf, Requirements.lean, Implementation.lean, Requirements.proto) -> actual code`; revision adds the existing source tree as an input and never relies on prior chat history
-- every generated code unit carries a requirement ID and justification; implementation validation rejects actor, message, or channel mappings with no durable requirement reference
-- unlike an explicit-variable state model, LeanFM primarily recognizes and generates observable event traces; protocols and persistent disk formats tend to live forever as compatibility boundaries, while internal software structure changes more chaotically and introduces a much larger state space to explore, so private implementation variables are omitted unless they change an observable requirement
-- `Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the durable memory of the requirements argument, so a new LLM session does not require the original conversation
-- a fresh agent session needs only the project root; if it contains no durable problem statement, LeanFM first asks what problem the stakeholder is trying to solve, then asks artifact-linked ambiguity questions while producing the book and advancing the two acceptance gates
-- generated scenarios round-trip through protobuf bytes without losing `prior` predecessor links; these links induce a partial order in which incomparable concurrent events may commute, but do not alone assert causation
-- correlated event streams estimate task completion probability and completed-task latency
-- scenarios may carry a parallel protobuf alphabet for concrete wire bytes
-- a BNF surface composes named interactions by sequence, choice, parallelism, guards, and references
-- explicit `mOfN` threshold joins record both the declared threshold and the concrete branch-terminal IDs that satisfied each join
-- a grammar choice resolves at the first distinguishing byte-level terminal; that terminal's source identifies the observable decision-maker, so choices do not carry a separate chooser label
-- components can be built independently and assembled into larger systems
-- CTL formulas run over the support graph
-- LeanFM uses CTL rather than LTL for executable branching checks: LTL's always/eventually describe positions along one path, while CTL combines them with `A`/`E`, read here as necessarily/possibly over legal forward continuations
-- declaring a condition `possibly` reachable means the system is prepared for it: the requirement needs a witness branch and handling plan, and implementation code must cite that possibility
-- non-vacuous strong implication is `EF p ∧ AG(p → q)`; unlike weak material implication, it requires a reachable antecedent witness and a necessary temporal relationship to the consequent
-- `p AW q` and `p EW q` are weak-until operators: `q` may never occur when `p` persists forever on every path or some path, respectively
+A protocol names the roles in a conversation, the messages between them and their order, who
+decides at each choice, what is assumed about decisions nobody else can see, and what the system
+promises. Everything else in a LeanFM project is generated from the protocol or checked against
+it: the diagrams people read, the requirements and implementation mapping reviewed in git, the
+interfaces, the code each role is written on, and the verdicts on what the running system logs.
 
-## Multimodal language direction
+Most LeanFM is written by an LLM. You say in ordinary words what the software must do; the model
+writes the protocol; LeanFM checks it and shows what it means, as diagrams, obligations, witnesses
+and counterexamples. You push back, the protocol changes, the pictures change with it, and only
+then is code written. The model learns the language from LeanFM itself: its server speaks the
+Model Context Protocol and hands any agent that connects the language reference and the tools.
 
-CTL remains the executable temporal core. The book documents actor
-knowledge (`K_a`), epistemic possibility, policy obligation (`O_a`), and permission
-(`P_a`) over explicitly distinct observation and policy relations. These describe
-what an actor knows and what a named policy requires or permits, not morality.
-Belief, strategic ability, and arbitrary modal logics are not automatically
-included. **Built-in knowledge and policy checking is deferred.** Projects may
-define these relations explicitly; no general evaluator is implemented.
-The [modelling notes](MULTIMODAL_LOGIC.md) record exact semantics,
-boundaries, and a bounded Kerberos example; the book explains
-the same design. The [Kerberos video](https://www.youtube.com/watch?v=f2efwxq8BaY)
-illustrates these modalities. Past conditions may become forward monitors only with a stated
-equivalence and concurrency boundary.
+![Two real GoServer games at once: four people on 11×11, three on 9×9](book/assets/readme/goserver-games.png)
 
-Useful nested CTL forms include `AF AG p` (eventually reach permanent safety on
-every path) and `AG AF p` (always eventually, on every future). These are not a
-complete replacement for LTL: branching quantification matters, especially for
-LTL's pathwise `F G p`.
+*Two games of N-player Go running on one server: four people on an 11×11 board, three on a
+9×9, each a real browser. LeanFM reads the traffic they make, untangles it into sessions using
+nothing but the protocol, and proves what the protocol promises
+([video](video/goserver/leanfm-goserver-live.mp4)).*
 
-Multimodal checking is not unique to LeanFM: [MCMAS](https://sail.doc.ic.ac.uk/software/mcmas/)
-already supports temporal and epistemic specifications. LeanFM's intended
-contribution is integrating explicit modal relations with byte-defined message
-grammars, event-derived views, and the book-to-specification-to-code workflow.
+---
 
-Run it with:
+## LeanFM in Claude Desktop
+
+LeanFM's MCP server runs as a child process of Claude Desktop, over standard input and output. It
+needs no API key, no port and no account: none of its tools calls a model, and Claude's own turns
+belong to your Claude subscription. Every tool is read-only: none changes a file, and none runs
+submitted text as code (protocol text is read by a parser for its grammar alone).
+
+### Set it up
 
 ```sh
-lake exe leanfm
+git clone https://github.com/rfielding/leanFM.git && cd leanFM
+lake build leanfm-mcp                       # needs elan (https://github.com/leanprover/elan)
+python3 scripts/claude_desktop_config.py --root "$PWD" --install
 ```
 
-Serve it with:
+Then quit and reopen Claude Desktop. The script adds one `leanfm` entry to
+`claude_desktop_config.json` (keeping your other servers and writing a backup first): Claude
+Desktop runs `leanfm-mcp --stdio --root <this checkout>`. Rerun `lake build leanfm-mcp` after a
+`git pull`, and restart Claude Desktop so it starts the new binary.
+
+- **LeanFM on another machine?** Build it there and install with `--ssh HOST`: Claude Desktop then
+  runs the server over ssh (`scripts/claude_desktop_config.py --help`).
+- **claude.ai or the mobile apps?** The same executable serves MCP over HTTP behind TLS as a custom
+  connector: see [`deploy/mcp/README.md`](deploy/mcp/README.md).
+
+### Things to ask
+
+- *"Use LeanFM to design a library-lending service as a session type, check it, and animate a
+  stream of 20 borrowers."*
+- *"Browse the GoServer specification (`example: goserver`) and show me how a move is answered."*
+- *"Here is a log from my server. Check it against the protocol with `session_conform` and tell me
+  which sessions break it."*
+- *"Is it possible that a payment is charged twice? Ask `session_ctl` and show me the path."*
+
+Start from the `design_with_session_types` prompt: it walks from the roles to a checked protocol,
+each role's typestate, code that logs its messages, and `session_conform` on those logs.
+
+### The explorer
+
+The session tools declare an MCP Apps view, so Claude Desktop draws their answers inline, and the
+view is an explorer as well as a picture:
+
+![The session view in Claude Desktop: a log of two logins served by one Shop thread](book/assets/readme/explorer-stream.png)
+
+*A real `session_conform` answer as the view draws it: one lifeline per actor (each browser
+instance its own), each thread in its own colour with a legend, the sessions LeanFM derived from
+the log (two logins and two orders, each order a child of its login), the event log, and the
+selected event as JSON.*
+
+- **The protocol in an editor** that LeanFM rechecks after each pause, with a sketch where clicking
+  two lifelines adds a message.
+- **Generated sequence diagrams**: frames fold and open, an included protocol opens on its own
+  diagram, and clicking an actor shows its state machine.
+- **Each role's view**: its typestate API, the steps it takes part in, the OpenAPI document it serves
+  and its payloads.
+- **The event stream, animated**: per-actor lifelines; threads (each actor's own order, its `prev`
+  chain) in colour; a highlight that lights one session or thread in the whole mashed-together
+  diagram; clicking an event focuses on its thread and frames the sessions it formed, a child inside
+  its parent.
+- **A walk-through** of one session, one allowed step at a time (`session_next`); **CTL** with
+  suggested properties built from the protocol, each decided with its path; **datasets** of up to
+  10,000 sessions charted by path, message, role load, length and duration.
+
+### The tools
+
+| Group | Tools |
+|---|---|
+| Design and check | `session_check`, `session_review`, `session_diagram`, `session_explore`, `session_actor`, `session_types`, `session_openapi`, `session_skeleton`, `session_compat` |
+| Behaviour | `session_simulate`, `session_next`, `session_dataset`, `session_mdp`, `session_sla`, `session_instances` |
+| Real runs | `session_conform` (a log against the protocol, sessions derived when the log names none), `session_spans` |
+| Questions | `session_ctl` (temporal properties, with witnesses and counterexamples), `check_ctl`, `explain_formula`, `knows` (what an actor can derive) |
+| Security | `check_protocol` (attacks on a security protocol), `check_reassembly` (stream-reassembly evasions) |
+| Projects | `project_view`, `requirements_interrogation`, `code_generation_prompt`, `validate_generated_artifacts`, `classify_requirement`, `server_logs` |
+
+The full list, with every argument, is generated into the book's appendix *The MCP Tools* from the
+server's own tool list.
+
+---
+
+## Watch it work
+
+Every frame in these videos is drawn from LeanFM's own answers, saved beside each video, never a
+hand-drawn substitute.
+
+### GoServer, live ([video](video/goserver/leanfm-goserver-live.mp4))
+
+Two real games, the traffic from seven browsers, what LeanFM found when the specification first met
+that traffic, and the protocol turned into CTL.
+
+![930 API calls from seven browsers: the flat diagram](book/assets/readme/goserver-traffic.png)
+
+*On the wire: 930 calls from seven browsers in one interleaved stream, each person's colour. This
+is the flat diagram, the union of every actor and every message.*
+
+On first contact, 7 of 58 sessions broke the protocol: every browser asks for the game list while
+its previous request is still unanswered. The browser polls; the protocol said one request at a
+time. The protocol was wrong, so it changed, and the same log now conforms.
+
+![Seven people, two games, and the joins between them](book/assets/readme/goserver-untangled.png)
+
+*Untangled with no session ids in the log: seven person sessions, two game sessions (each a child
+of its creator), and 49 joins, each seat, move and game-state request belonging to its person and
+its game at once.*
+
+![GoServer's session type as CTL, each formula beside its diagram](book/assets/readme/goserver-ctl.png)
+
+*GoServer's session type as 78 CTL formulas, every one proved over its 10,969-state graph, each
+shown beside the diagram it comes from with its messages in the formula's colour.*
+
+### Diagrams as CTL ([video](video/ctl/leanfm-diagrams-as-ctl.mp4))
+
+What does an interaction diagram mean, exactly? Turn every diagram into CTL and let a model checker
+decide it. A full diagram is one session (follow TCP stream); a flat log is many full diagrams
+drawn over one another, and only `cause` and `prev` untangle it.
+
+![PlaceOrder: forty formulas, all proved](book/assets/readme/forty-formulas.png)
+
+*PlaceOrder's structure gives forty formulas, all proved; every deliberately broken variant fails a
+named formula ([`reports/ctl-translation`](reports/ctl-translation)).*
+
+### Session separation ([video](video/sessions/leanfm-session-separation.mp4))
+
+A log rarely says which event belongs to which conversation. LeanFM separates them using only what
+the protocol declares: a cause ties an answer to its request, `Fresh` mints a session id, `Link`
+names it again, and `given`/`with` hand an included task its parent's id.
+
+![Each order is a child of the login that ran it](book/assets/readme/child-sessions.png)
+
+![Threads: each actor's own order, its prev chain](book/assets/readme/threads.png)
+
+*Children (each order a child session of its login) and threads (one server thread serving two
+orders in turn: a thread runs through many sessions, and a session through many threads).*
+
+---
+
+## The book in brief
+
+The [book](book/main.pdf) (128 pages; [dark](book/main-dark.pdf)) is the record of what LeanFM is.
+Every listing, diagram and verdict in Part I comes from LeanFM, through the same functions its tools
+call.
+
+**Part I, the language.**
+- *The Protocol Is the Program*: who writes it (mostly an LLM, checked by LeanFM), a protocol, its
+  message types and statements, and the rule that only what crosses a boundary is specified. The
+  language starts from multiparty session types and adds stated assumptions, time and value,
+  promises, temporal questions and attackers.
+- *What a Protocol Means*: the two rules every protocol keeps; projection, what each role owes;
+  calls.
+- *Assumptions and Promises*: probabilities on choices nobody else can see, time, amounts and
+  rates, and promises judged over observation periods.
+- *Questions You Ask a Protocol*: CTL operators read as necessarily and possibly, answered with
+  paths; what an answer costs; properties in the Lean file; who can know what; whether two versions
+  work together.
+- *An Execution Is an Event Stream*: events and their envelope, conformance, actors, links
+  (`prev`, `cause`) and clocks, instances, versions, state in the stream, promises on a stream.
+
+**Part II, what a protocol generates.** Diagrams, the code each role is written on, interfaces
+(protobuf, OpenAPI), requirements and an implementation mapping reviewed in git, and building
+software from a protocol; then *feature completion as positive and negative proof*: each feature as
+an always property and its forbidden behaviours, stability before security, and the completion
+ledger.
+
+**Part III, worked examples.**
+- *The Bakery*: declared and measured rates.
+- *TFTP and the Sorcerer's Apprentice*: declared channel physics, and why liveness needs fairness.
+- *Signing In over HTTP*: OAuth, a forged callback, and what it generates.
+- *A Legal Example*: lawful, right, known, required.
+- *Protocol Exercises*: roles, attackers and knowledge, ending with Needham–Schroeder, checked.
+
+**Appendices.** The MCP tools and how a consultation travels; LeanFM's own web-server protocol;
+and the bootstrap contract every new project follows (one exclusive project root, three layers
+reviewed in git).
+
+## Sessions, threads and CTL
+
+The newest work, in [`LeanFM/LLMGenerated/SelfHosting.lean`](LeanFM/LLMGenerated/SelfHosting.lean)
+(`selfhost.session.identity.*`, `selfhost.session.correlation`, `selfhost.session.ctl-translation`):
+
+- **Identity is declared in the protocol text.** `Fresh` mints a session id and `Link` names it,
+  placed in a header, path, query or body; ids are unique among open sessions and freed when their
+  session ends, like file descriptors. Marks can come from a `.proto` as trailing comments
+  (`string session_id = 1; // fresh`), so the file stays plain proto3.
+- **Nested protocols get their ids explicitly.** `protocol Order (Client, Shop) given token` and
+  `include Order Client Shop with token = sid`. A task run in a `sessions` block is a child of the
+  session that ran it; a task given two ids minted by two sessions is a join (a move belongs to its
+  player and its game).
+- **Threads and sessions are two cuts of one log.** A thread is one actor's own order (its `prev`
+  chain); a session is one protocol instance across actors.
+- **Where clauses implement the chain on the wire** (`p.requestId = m.requestId`), and channel
+  behaviour is which implicit constraints hold: a lossy or reordering channel is the same diagram
+  with fewer constraints.
+
+## Projects in this repository
+
+Each is a complete LeanFM project with its own book, requirements, implementation mapping and source:
+
+- [`projects/GoServer`](projects/GoServer): N-player Go with rooms, challenges, bots, teams, claimed
+  names and a ranking, a Go server and a React browser app. LeanFM's main example.
+- [`projects/Maqam`](projects/Maqam): a live-coding sequencer for just-intonation maqam,
+  reverse-engineered from Rust into a specification and implemented again in Zig against it.
+- [`projects/PaxosKV`](projects/PaxosKV): a three-replica Paxos key/value database
+  (`make paxos-check`).
+- [`projects/IslandUploads`](projects/IslandUploads): file uploads across islands that may be
+  partitioned for a day.
+
+## Working on LeanFM
+
+LeanFM is developed with the LeanFM method: a change starts in its own requirements
+(`LeanFM/LLMGenerated/SelfHosting.lean`), then the implementation mapping
+(`SessionImplementation.lean`, `McpLogicImplementation.lean`), then the source, each checked before
+the next. Review and acceptance happen in git. See [`AGENTS.md`](AGENTS.md) and
+[`SKILL.md`](SKILL.md).
 
 ```sh
-lake exe leanfm-server
+make check        # build everything and run every check (needs bubblewrap; see below)
+make serve        # the web server and MCP over HTTP on 127.0.0.1:8080
+make book         # the LaTeX book and its dark copy
+make go-toolchain # the checksum-pinned Go toolchain under .toolchains/
+make http-check   # check the live server's routes after make serve
 ```
 
-Common development commands:
-
-```sh
-make go-toolchain # install the checksum-pinned Go toolchain under .toolchains/
-make check       # build, evaluate generated requirement validation, and emit diagrams
-make serve       # run the web server on 127.0.0.1:8080
-make chatui-check # required BYOK ChatUI, real compiler and sandbox isolation tests
-make sandbox-check # fail early if Bubblewrap/user namespaces are unavailable
-make ui-snapshots # reproduce the screenshot-backed Chat UI guide with a local provider
-make http-check  # validate live server routes after make serve
-make stop        # stop the process listening on PORT, default 8080
-make book        # build the LaTeX book, bibliography, contents, and index
-make bakery-data # deterministically regenerate 20,000 bakery order traces
-make bakery-stats # stream the bakery JSONL and derive probabilities/latencies
-```
-
-To use an existing Cursor subscription, authenticate Cursor normally, start
-LeanFM, and open this project directory in Cursor. The committed
-`.cursor/mcp.json` points Cursor Agent at LeanFM's local MCP endpoint; see
-[`CURSOR.md`](CURSOR.md). Cursor remains the authenticated and billed agent
-client, so its subscription is not entered into LeanFM as a provider API key.
-
-To use Claude Code, start LeanFM with `make serve` in one terminal and run
-`make claude` in another. The root [`CLAUDE.md`](CLAUDE.md) imports the shared
-`AGENTS.md` instructions, and [`.mcp.json`](.mcp.json) connects Claude to the
-existing local MCP endpoint. On first launch, review Claude's project trust and
-LeanFM MCP prompts; `/mcp` shows the connection in an interactive session.
-The MCP tools are read-only. Review and acceptance happen in git: LeanFM records no approvals.
-These use Claude's documented [instruction imports](https://code.claude.com/docs/en/memory)
-and [project MCP configuration](https://code.claude.com/docs/en/mcp).
-
-### Claude Desktop
-
-Claude Desktop reaches LeanFM through the MCP-only server and a small stdio bridge
-(`mcp-remote`, run with `npx`, so Node is required). On Linux or macOS, from a fresh clone:
-
-```sh
-git clone https://github.com/rfielding/leanfm.git && cd leanfm
-bash scripts/desktop-setup.sh
-```
-
-[`scripts/desktop-setup.sh`](scripts/desktop-setup.sh) installs elan if it is missing, builds
-`leanfm-mcp`, starts it on port 8090 (log and pid under `.cache/desktop/`), and adds a `leanfm`
-entry to Claude Desktop's configuration, keeping the other entries and a `.bak` of the previous
-file. Rerun it after a `git pull`, then quit and reopen Claude Desktop. Start with the
-`design_with_session_types` prompt: it walks from the roles to a checked protocol, each role's
-typestate, code that logs its messages, and `session_conform` on those logs.
-
-The same steps by hand, on macOS:
-
-```sh
-lake build leanfm-mcp
-LEANFM_MCP_PORT=8090 .lake/build/bin/leanfm-mcp &
-CFG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-python3 - "$CFG" <<'PY'
-import json, os, sys
-p = sys.argv[1]
-d = json.load(open(p)) if os.path.exists(p) else {}
-d.setdefault("mcpServers", {})["leanfm"] = {
-    "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8090/mcp"]}
-os.makedirs(os.path.dirname(p), exist_ok=True)
-json.dump(d, open(p, "w"), indent=2)
-PY
-osascript -e 'quit app "Claude"'; sleep 2; open -a Claude
-```
-
-Then design with session types in the conversation, for example: "Use LeanFM to design a
-library-lending service as a session type, check it, and animate a stream of 20 borrowers."
-`session_review`, `session_check`, `session_diagram`, `session_simulate`, `session_conform`, `session_next`, `session_ctl`, `session_openapi`, `session_compat` and `session_skeleton` take the protocol as LeanFM protocol
-text (`protocol Name (Roles) { ... }`, the same syntax as `LeanFM/Session/Syntax.lean`), read by a
-parser for that grammar alone, so nothing submitted is elaborated or run; the
-`leanfm://language/session-reference` resource documents it. Their results render inline, with the
-protocol in an editor that LeanFM rechecks as you type:
-the generated sequence diagram, each role's typestate API, the calls with routes and status
-codes, and the event stream as an animation where clicking an event traces its `prior` and
-`cause` (simple by default; More detail shows every route, status and prior link).
-Walk through (in the view, or `session_next`) plays one session a step at a time: a button for each
-message the protocol allows next, grouped by the role that sends it.
-`session_review` runs every check that applies (HTTP wherever a message has a route) and suggests an
-edit for each finding; call it after every change.
-`session_openapi` writes a role's HTTP interface (the requests it receives, with routes and
-statuses) as an OpenAPI 3.1 document to start a server or client from.
-`session_ctl` checks a rule the protocol's structure does not show, as a CTL formula over its
-messages ("never charge after no seat"), with the path that breaks it.
-`session_compat` compares two versions of a protocol and says which roles can be deployed first and
-which can stay on the old version, from the mixed systems themselves, with the steps to any
-deadlock.
-`session_skeleton` writes each role's typestate as Python or TypeScript classes whose methods are
-exactly what each state allows, so an implementation adds only its decisions and transport; in
-TypeScript a step the protocol forbids does not compile.
-`session_conform` checks a log of a running implementation (`{id, session, from, to, label,
-cause}` per message) against the protocol and says where a session first breaks it. The logic tools (`check_ctl`, `check_protocol`, `knows`, ...) render in their own view.
-
-For the whole loop on one small service (a protocol, the code generated from its typestates, an
-implementation on that code, and `session_conform` catching a plausible bug in its log), see
-[`examples/vibecode/lending`](examples/vibecode/lending/README.md); for temporal properties, the trip
-saga in [`examples/vibecode/trip`](examples/vibecode/trip/README.md); for a service in its own
-sessions, the two-factor login in [`examples/vibecode/login`](examples/vibecode/login/Login.protocol);
-for an HTTP interface as OpenAPI, the sign-in in [`examples/vibecode/signin`](examples/vibecode/signin/SignIn.protocol).
-
-The [launcher](scripts/claude.sh) keeps Claude configuration, session history,
-memory, and temporary files under the ignored `.cache/claude/` directory using
-[`CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_TMPDIR`](https://code.claude.com/docs/en/env-vars).
-It refuses state paths that resolve outside this project. It inherits an
-`ANTHROPIC_API_KEY` already supplied by your shell without copying it into the
-repository. To authenticate a subscription instead, unset that variable and run
-`bash scripts/claude.sh auth login` once. This isolated configuration does not
-reuse your global Claude login. Pass CLI options directly, for example
-`bash scripts/claude.sh --model sonnet` or `bash scripts/claude.sh mcp list`.
-
-This repository is itself a valid, self-contained LeanFM project. Its central
-Codex input is always `book/main.pdf`; `book/main-dark.pdf` is the equivalent
-low-glare rendering. A successful `make book` builds both from the same source.
-The canonical self-hosting `Requirements.lean`, `Requirements.proto`, and
-`Implementation.lean` remain together in `LeanFM/LLMGenerated/`. Copying the
-whole project directory preserves every project-owned input and stable relative
-path, so the copy can become its own repository and be opened directly in Codex.
-Use `make book-clean` to remove generated LaTeX artifacts.
-
-The canonical `Requirements.lean` now exposes `selfHostingRequirement`, composing
-the existing ChatUI product specification with a proposed revision-bound
-requirements-to-PR workflow. The Worker example remains separate. Component
-paths and pending decisions are registered in `LeanFM/LLMGenerated/SelfHosting.lean`.
-Run `make selfhost-check` to structurally validate the composition, check protobuf
-declarations, run regression tests, and regenerate [the review](SELF_HOSTING_REVIEW.md)
-with specification-derived interaction and state diagrams.
-The new workflow and language/checker clauses await requirements acceptance and
-separate implementation mappings; the repository is not yet fully one-shot-ready.
-See [the fresh-session handoff](SELF_HOSTING.md).
-
-The large quantitative example is `examples/bakery-events.jsonl`: 20,000 bakery
-orders represented as a stream of fork/join events. `examples/bakery-stats.json`
-contains reductions calculated from that file. See `BAKERY_SCENARIO.md` for the
-grammar and data contract. Quantitative examples should read this corpus or a
-reduction reproducibly derived from it instead of embedding invented percentages.
-
-`PROJECT_CHAT_EXAMPLE.md` is a complete example requirements chat in which a
-user creates one project as an inter-related set of interaction grammars. It
-shows grammar references, shared correlation fields, and prompt-derived scalar,
-2D, interaction-diagram, and state-machine outputs.
-
-The Lean HTTP server listens on:
-
-```text
-http://127.0.0.1:8080
-```
-
-The root URL is the LeanFM ChatUI. Open or create a project before logging in.
-Projects live in `projects/<project_id>/` and have no account owner. Unlock API
-keys only when sending model prompts. The server needs no `OPENAI_API_KEY` and
-will not issue a model request without the initiating caller's unlocked key.
-`LEANFM_WORKSPACE_ROOT` selects the workspace directory, defaulting to the
-server's current directory. Account records live in its private `.leanfm/accounts/`
-vault. `LEANFM_DATA_ROOT` is obsolete.
-
-After a restart, log in with your existing username and LeanFM password.
-Saved provider keys remain encrypted on disk and unlock with that password;
-the optional key fields are only for adding or replacing keys.
-
-Chat's **Attach image** button accepts PNG, JPEG, GIF, and static SVG files
-(up to four per message, 2 MiB each). Preview or remove them before sending.
-The selected LLM receives image pixels, and Resend retains the images.
-GIF input uses its first frame. Originals and normalized previews stay beneath
-the owning project root.
-
-Credential protection requires `python3 -m pip install -r scripts/chatui_requirements.txt`.
-
-The private vault contains salted password verifiers and encrypted provider
-credentials and is ignored by Git. Books, specifications, source, conversations,
-media, evidence and caches stay in their shared project root. While logged in,
-the header shows the active provider/model, a one-way key fingerprint, and the
-used and remaining local session-token safety budget. This is deliberately not
-presented as an OpenAI dollar balance: configure a provider-project spend cap as
-the authoritative monetary guardrail.
-
-`projects/` is the ordinary project workspace. Startup and new-project creation
-work with it empty or absent; provisioning uses built-in templates. The approved
-fresh start erased the old examples and experimental projects and removed `data/`
-after verifying unchanged encrypted account records. The reset result and both
-accepted revisions are recorded in `reports/shared-projects/`.
-Conversation files can also be erased between turns: ChatUI resumes from the
-selected project's durable book, requirements, protobuf, implementation mapping,
-manifest and source inventory. Missing decisions remain explicit
-gaps, not guesses from another project. `make chatui-check` tests an isolated
-installation without examples and three consecutive conversation resets.
-`make http-check` checks the running public HTTP/MCP surface without a legacy
-password cookie, then exercises account and project operations against an
-isolated server with deterministic provider fixtures. It never needs a live key.
-Guided Chat can edit and check specifications directly without returning a full
-book rewrite on every turn. Its `leanfm_reference` tool reads the live LeanFM
-language references, and `leanfm_check` compiles the selected project's named
-`RequirementSpec`, validates it, and derives the Grammar and Tasks catalog from
-the same value. Optional typed implementation mappings are checked separately.
-Executable Lean runs without network or credentials, with read-only project
-inputs and writable project-local scratch. A failed check preserves prior task
-views; changed canonical specifications cannot report success without a current
-successful check. Project memory shows whether the requirements and
-implementation specification are checked and committed. LeanFM has no approval
-step: the user reviews and commits changes with git, and recorded decisions
-remain available after clearing conversation history.
-`make chatui-browser-check` additionally exercises the actual React login,
-empty-chat continuation, Project memory and both PDF selections in Chrome
-(requires `google-chrome` and Python `websocket-client`). Sanitized evidence is
-written to `reports/chatui/`; live accounts, chats and keys are never used.
-
-Use a unique login password; phishing or reuse of that password defeats
-password-derived encryption if an attacker also obtains the credential files.
-Passwords are salted PBKDF2 verifiers. API keys use AES-256-GCM with a separate
-password-derived key and account-bound authentication. Server-memory sessions
-expire after eight hours; restart requires login. No password recovery is
-implemented: a password reset must replace the provider key. Legacy Base64 keys
-are encrypted and removed on successful password login. Already exposed keys
-must still be revoked; encryption cannot undo prior exposure. Keep the private
-`.leanfm/` vault out of version control. Each user supplies their
-own key; API usage is billed separately from a ChatGPT subscription.
-
-Endpoints:
-
-```text
-GET /          clean assistant workbench
-GET /api/projects shared project catalog, available before credential login
-POST /api/projects create a self-contained project under projects/<id>
-GET /api/projects/<id>/specification current checked revisions and git commit state
-POST /api/login unlock the caller's encrypted provider keys
-POST /api/logout lock the caller's keys while preserving the shared workspace
-GET /examples  sample dashboard with charts, graphs, and generated sources
-GET /renders/  built-in canvas diagram renders
-GET /metrics   Prometheus metrics
-GET /openapi.yaml Default OpenAPI description of LeanFM routes and generated message schemas
-GET /report    generated plain-text report
-GET /tools/conversations conversation-to-Lean-file catalog
-GET /tools/leanfm-language/reference authoritative LeanFM language reference for requirement-generation tools
-GET /tools/leanfm-language/requirements-reference authoritative RequirementSpec, protobuf, grammar, logic, and output reference
-GET /tools/leanfm-language/implementation-reference authoritative ImplementationSpec, transport, channel, and traceability reference
-GET /tools/static-assets/validate static JavaScript renderer validation
-GET /tools/generated-requirements/prompt LLM system prompt for generated requirements
-GET /tools/llm-generated/requirements/prompt canonical LLM system prompt route
-GET /tools/generated-requirements/validate generated typed Lean requirement validation
-GET /tools/llm-generated/requirements/validate canonical LLM-generated requirement validation route
-GET /tools/llm-generated/implementation/validate validates the separate software-generation plan
-GET /tools/generated-artifacts/validate validates requirements and implementation together
-GET /tools/aggregate-graph/validate typed aggregate graph data validation
-GET /generated/worker.proto protobuf schema generated from requirement messages
-GET /llm-generated/requirements.proto canonical LLM-generated protobuf schema
-GET /lean/get_docs.lean generated Lean view for a conversation
-GET /graph.dot Graphviz DOT
-GET /auth.dot  auth group DOT
-GET /assembled.dot assembled-system DOT
-GET /health    health check
-POST /mcp      read-only MCP endpoint: project context, prompts, validation, logic and session-type tools
-```
-
-The MCP endpoint treats `book/main.pdf` as durable agent context, comparable to
-a maintained section of the system prompt. It exposes only a fixed resource
-allowlist and read-only deterministic tools; it cannot mutate project files. Register a running local
-server with Codex:
-
-```sh
-codex mcp add leanfm --url http://127.0.0.1:8080/mcp
-codex mcp list
-```
-
-The bundled server binds to loopback. Add transport or reverse-proxy
-authentication before exposing `/mcp` on a network.
-
-Export DOT sources without starting the server:
-
-```sh
-lake exe leanfm-diagrams
-```
-
-Run generated requirement validation without starting the server:
-
-```sh
-lake exe leanfm-validate
-```
-
-## Reference example: PaxosKV
-
-The complete worked example lives in `projects/PaxosKV/`: a three-replica
-Paxos key/value database with a web page, its own book, typed requirements,
-implementation mapping, derived views, Go source and browser evidence. See
-`projects/PaxosKV/README.md`. From the LeanFM root, `make paxos-check` runs its
-specification check and Go tests.
-
-Generated files:
-
-```text
-diagrams/auth.dot
-diagrams/worker.dot
-diagrams/assembled.dot
-```
-
-The web UI retains interactive `<canvas>` views, but `/renders/` now primarily
-shows ordinary SVG files generated from typed Lean requirements: UML-style
-interaction diagrams per scenario, message-passing state machines, line graphs,
-and pie charts. Each image has a standalone `/renders/<name>.svg` route and is
-also emitted under `diagrams/` by `make diagrams`.
-
-`LeanFM/LLMGenerated/Requirements.lean`, `Requirements.proto`, and `Implementation.lean` are the generated artifacts. `Requirements.lean` describes observable behavior; the proto file describes values that resolve to bytes. Neither chooses a transport. `Implementation.lean` separately chooses the target language, files, runtime APIs, and how each protobuf message is carried—for example an HTTP request with a method and path, an HTTP response, an in-process channel, TCP, or a custom adapter. Validation requires the implementation plan to cover every required actor and message without redefining the requirement. Everything outside `LeanFM/LLMGenerated/` is static committed DSL/runtime code.
-
-Generated requirements are rejected as vacuous unless tasks involve multiple actors, message transitions, terminal states, temporal/property annotations, multiparty grammars, required proof obligations, and per-actor process send/receive coverage for each transition.
-
-Worked design examples:
-
-- `BROWSER_SERVER_OAUTH.md` shows a browser/server/OAuth actor set.
-- `MULTIPARTY_GRAMMAR_EXAMPLE.md` shows the CFG-like multiparty grammar style.
-- `LARGE_FILE_POLICY_SERVER.md` shows a JWT, OpenAPI, huge-file upload/download, and OPA/Rego policy server with manager handoff.
-
-The current example has three actors:
-
-```text
-Client
-Gateway
-Worker
-```
-
-It also includes a separate two-actor authorization group:
-
-```text
-Auth
-DB
-```
-
-The executable assembles the two-actor group and the three-actor group by concatenating their globally visible message grammars and composing their metric summaries.
-
-Two-actor auth group grammar:
-
-```text
-Auth->DB:[10 1]
-DB->Auth:[10 2]
-DB->Auth:[10 255]
-```
-
-Three-actor worker group grammar:
-
-```text
-Client->Gateway:[1 16]
-Gateway->Worker:[2 32]
-Worker->Gateway:[3 48]
-Worker->Gateway:[3 255]
-Gateway->Client:[4 64]
-Gateway->Client:[255]
-```
-
-Because the source is part of every message, an actor can reply to the sender by constructing a new envelope with its own `src` and the previous sender as `dst`.
-
-The executable prints:
-
-- the byte-level message grammar
-- observable actor-state and queue transitions
-- MDP choices with weights and dwell times
-- a time-weighted queue-length distribution
-- globally visible terminal traces
-- expected latency, success probability, and throughput
-- Graphviz DOT for the state machine
-- CTL results from the initial observation
-
-Queue semantics:
-
-```text
-produce with outbound space: enqueue at src outbound
-produce with outbound full: producing actor sleeps
-transport with destination inbound space: move outbound head to dst inbound
-transport with destination inbound full: transport blocks
-receive from non-empty inbound: consume and dispatch by (session, task)
-receive from empty inbound: receiving actor sleeps
-try-receive from empty inbound: return none immediately; actor remains runnable
-wake condition: the queue needed by the blocked step has capacity or data
-```
-
-Worker group capacities:
-
-```text
-Client inbound/outbound capacity: 1/1
-Gateway inbound/outbound capacity: 2/2
-Worker inbound/outbound capacity: 1/1
-```
-
-Example metrics:
-
-```text
-auth group success probability: 98/100 ~= 0.98
-auth group expected latency: 400/100 ~= 4.00
-worker group success probability: 95/100 ~= 0.95
-worker group expected latency: 900/100 ~= 9.00
-assembled system success probability: 9310/10000 ~= 0.93
-assembled system expected latency: 12820000/1000000 ~= 12.82
-assembled system throughput: 9310000000/128200000000 ~= 0.07
-```
-
-For sequential composition, the current metric rule is:
-
-```text
-P(success A;B) = P(success A) * P(success B)
-E(latency A;B) = E(latency A) + P(success A) * E(latency B)
-throughput A;B = P(success A;B) / E(latency A;B)
-```
-
-The standalone three-actor worker metrics are:
-
-```text
-expected latency: 900/100 ~= 9.00
-success probability: 95/100 ~= 0.95
-throughput: 95/900 ~= 0.10
-```
-
-The graph deliberately excludes private variables. Internal counters, retries, queues, and timers should only appear if they change an actor's observable state, a globally visible message, a probability, or a dwell time.
-
-### Chat UI sandbox dependency
-
-`make check` includes `make chatui-check`. Both require the Linux `bwrap`
-executable (the `bubblewrap` package on Ubuntu/Debian), with working user, PID
-and network namespaces. CI installs it and runs `make sandbox-check` before
-the long suite. A missing or denied sandbox is an environment failure, not a
-reason to skip isolation tests or run executable Lean on the host. A missing
-worker returns `local_checker_unavailable` and preserves the last checked views.
-
-The Chat UI screenshots and accessibility/keyboard records are in
-`book/assets/ui-tour/`, validated by `scripts/check_ui_tour.py`; the book itself
-documents the LeanFM language, not the Chat UI.
-The app bar exposes Start/Restart, Stop, and a verified served Open app link.
-Apps share `source/Makefile` targets `build`, `run`, `stop`, `test`, `check`,
-`clean`, and `serve`; `run` is foreground and `serve` aliases it. Use the
-served preview for remote access; the launch smoke test ends its test process.
+- **Claude Code**: `make claude` starts Claude with the project's history, memory and configuration
+  under `.cache/claude/`; [`.mcp.json`](.mcp.json) connects it to `make serve`'s endpoint.
+- **Cursor**: [`.cursor/mcp.json`](.cursor/mcp.json) points Cursor Agent at the same endpoint
+  ([`CURSOR.md`](CURSOR.md)).
+- **The chat UI sandbox**: `make check` includes `make chatui-check`, which needs Linux `bwrap`
+  (the `bubblewrap` package) with working user, PID and network namespaces. A missing or denied
+  sandbox is an environment failure, never a reason to skip isolation tests.
+
+What LeanFM does not yet do is listed in [`CRITIQUE.md`](CRITIQUE.md).

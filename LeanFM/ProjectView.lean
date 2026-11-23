@@ -258,15 +258,10 @@ partial def walk (p : Project) (start : String) (exts : List String) (extraSkip 
 
 /-! ## chat -/
 
-def chat (p : Project) (offset : Nat := 0) : IO Json := do
-  let rel := "conversations/main.log"
-  let some path ← inside p rel
-    | return Json.mkObj [("stage", "chat"), ("file", rel), ("found", false), ("where", chatWhere), ("messages", Json.arr #[])]
-  let (bytes, partialRead) ← LeanFM.ServerLogs.tailBytes path maxReadBytes
-  let lines := (decodeLossy bytes).splitOn "\n" |>.filter (!·.isEmpty) |>.toArray
-  let lines := if partialRead && lines.size > 1 then lines.extract 1 lines.size else lines
-  let picked := lines.extract (lines.size - min lines.size maxMessages) lines.size
-  let messages := picked.filterMap fun line =>
+/-- The messages of saved conversation log lines (id|role|base64 text|...): the text decoded, any key
+redacted and cut to maxMessageChars; a line without its three fields is dropped. -/
+def chatMessages (lines : Array String) : Array Json :=
+  lines.filterMap fun line =>
     match line.splitOn "|" with
     | id :: role :: text :: rest =>
       let decoded := decodeLossy (base64Decode text)
@@ -276,6 +271,16 @@ def chat (p : Project) (offset : Nat := 0) : IO Json := do
       some (Json.mkObj [("id", id), ("role", role), ("text", cut redacted maxMessageChars),
         ("timeMs", timeMs), ("model", model)])
     | _ => none
+
+def chat (p : Project) (offset : Nat := 0) : IO Json := do
+  let rel := "conversations/main.log"
+  let some path ← inside p rel
+    | return Json.mkObj [("stage", "chat"), ("file", rel), ("found", false), ("where", chatWhere), ("messages", Json.arr #[])]
+  let (bytes, partialRead) ← LeanFM.ServerLogs.tailBytes path maxReadBytes
+  let lines := (decodeLossy bytes).splitOn "\n" |>.filter (!·.isEmpty) |>.toArray
+  let lines := if partialRead && lines.size > 1 then lines.extract 1 lines.size else lines
+  let picked := lines.extract (lines.size - min lines.size maxMessages) lines.size
+  let messages := chatMessages picked
   -- a page counted back from the newest: skip offset, then as many as fit, shown oldest first
   let mut page : Array Json := #[]
   let mut size := 0

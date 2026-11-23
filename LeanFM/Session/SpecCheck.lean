@@ -43,7 +43,9 @@ Conform.graphMaxStates states, so the draft and its model may be as large as tha
 check_ctl tool keeps its smaller bounds for drafts a client sends. -/
 def sessionBounds : LeanFM.Logic.Bounds :=
   { maxDraftStates := Conform.graphMaxStates, maxDraftTransitions := 20 * Conform.graphMaxStates,
-    maxModelNodes := 20 * Conform.graphMaxStates }
+    maxModelNodes := 20 * Conform.graphMaxStates,
+    -- a formula is evaluated as its DAG, so the bound counts distinct subformulas (selfhost.session.ctl-scale)
+    maxFormulaNodes := 65536 }
 
 /-- A CTL formula (the logic tools' JSON) decided over an inline task (their draft form: states,
 initial, terminals, transitions): the checker's answer, with `report` naming the path's messages in

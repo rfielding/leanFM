@@ -7,6 +7,7 @@ import LeanFM.Session.Events
 import LeanFM.Session.Text
 import LeanFM.Session.Proto
 import LeanFM.Session.SpecCheck
+import LeanFM.Session.Faithful
 import LeanFM.Session.Suggest
 import LeanFM.Session.LogSessions
 import LeanFM.Session.Actors
@@ -1751,6 +1752,56 @@ def instances (args : Json) : Except String Json := do
         [("formula", v.formula), ("scope", Json.str v.scope), ("verdict", Json.str v.verdict), ("reading", Json.str v.why)]).toArray)
     , ("lean", Json.str p.lean) ]
 
+/-- The most faithful rules an answer lists; the rest are counted. -/
+def maxFaithfulRules : Nat := 64
+
+/-- session_ctl with faithful (selfhost.session.faithful): "rules" answers the protocol's typestates
+and one rule per typestate; a task (an inline draft) or lean (another protocol text) answers
+whether that model is faithful to this protocol, decided as one walk or one refinement. -/
+def faithful (p : Protocol) (fa : Json) : Except String Json := do
+  let b := Session.sessionBounds
+  let (draft, _) ← p.global.draft p.name
+  let spec ← Session.Faithful.modelOfDraft draft b
+  let t := Session.Faithful.typestates spec
+  let base : List (String × Json) :=
+    [("tool", "session_ctl"), ("name", Json.str p.name), ("nodes", toJson spec.size), ("typestates", toJson t.count),
+     ("lookahead", toJson t.lookahead), ("deterministic", Json.bool t.deterministic), ("lean", Json.str p.lean)]
+  match fa with
+  | .str "rules" =>
+    let rs := Session.Faithful.rules t
+    let shown := rs.take maxFaithfulRules
+    let row := fun (n, f) =>
+      let d := Logic.Dag.ofFormula f
+      let small := d.treeSize (Logic.treeLimit + 1) ≤ Logic.treeLimit
+      Json.mkObj ([("name", Json.str n), ("formula", Json.str d.toSexpr), ("subformulas", toJson d.size)] ++
+        (if small then [("notation", Json.str f.symbols)] else []))
+    return fit <| Json.mkObj (base ++
+      [ ("verdict", Json.str "rules")
+      , ("reading", Json.str s!"{p.name}: {t.count} typestates over {spec.size} checker nodes, lookahead {t.lookahead}; {rs.length} rules (the start and one per typestate: in it each next typestate is possible and nothing else is){if rs.length > shown.length then s!", the first {shown.length} listed" else ""}. Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol")
+      , ("rules", Json.arr (shown.map row).toArray), ("ruleCount", toJson rs.length) ])
+  | .obj _ =>
+    let cand ← match fa.getObjVal? "task", fa.getObjVal? "lean" with
+      | .ok d, _ => Session.Faithful.modelOfDraft d b
+      | _, .ok (.str text) => do
+        let q ← parseProtocol (Json.mkObj [("lean", Json.str text)])
+        let (d, _) ← q.global.draft q.name
+        Session.Faithful.modelOfDraft d b
+      | _, _ => throw "faithful is \"rules\", {task: an inline draft as check_ctl takes} or {lean: another protocol text}"
+    let v := Session.Faithful.compare spec cand
+    let whereAt := if v.path.isEmpty then "at the start" else s!"after {" -> ".intercalate v.path}"
+    let why := if v.faithful then "" else
+      s!": {whereAt}, the protocol allows {if v.protocolNext.isEmpty then "nothing" else ", ".intercalate v.protocolNext} and the candidate {if v.candidateNext.isEmpty then "nothing" else ", ".intercalate v.candidateNext}" ++
+      (if v.note.isEmpty then "" else s!" ({v.note})")
+    return Json.mkObj (base ++
+      [ ("verdict", Json.str (if v.faithful then "faithful" else "unfaithful")), ("method", Json.str v.method)
+      , ("candidateNodes", toJson cand.size)
+      , ("reading", Json.str s!"{p.name}: the candidate ({cand.size} nodes) is {if v.faithful then "faithful" else "not faithful"} to the protocol ({t.count} typestates), decided by {v.method}{why}")
+      , ("path", Json.arr (v.path.map Json.str).toArray)
+      , ("protocolNext", Json.arr (v.protocolNext.map Json.str).toArray)
+      , ("candidateNext", Json.arr (v.candidateNext.map Json.str).toArray)
+      , ("note", Json.str v.note) ])
+  | _ => throw "faithful is \"rules\", {task: an inline draft as check_ctl takes} or {lean: another protocol text}"
+
 /-- A CTL formula over one session of the protocol: the protocol's state graph handed to the
 logic tools' checker as an inline task, so `{"after": "Charge"}` holds in the state a Charge has
 just reached, and the answer carries a witness or counterexample path. -/
@@ -1758,6 +1809,8 @@ def ctl (args : Json) : Except String Json := do
   let p ← parseProtocol args
   -- the secret field paths each label carries, for the secret atom (asked, never imposed)
   let secretsOf := fun (label : String) => Session.Types.secretPaths p.types label
+  if let .ok fa := args.getObjVal? "faithful" then
+    return ← faithful p fa
   match args.getObjVal? "formula" with
   | .ok formula =>
     -- the same check as a Lean Spec's properties (Spec.check): one checker, one answer
@@ -2697,8 +2750,17 @@ instance plays its own role, and a fresh actor belongs to one session only.
   may end here (`running`, `finished`, or `violates` with the first problem). The view's walk-through
   calls it after every click.
 
+- `session_ctl {lean, faithful}`: the protocol's faithful CTL. `faithful: \"rules\"` answers its
+  typestates (its checker model's states up to bisimulation), the lookahead (how many steps a typestate
+  needs to be told from another; 0 when its last message names it) and one rule per typestate: in it,
+  each next typestate is possible and nothing else is. `faithful: {task: draft}` or `{lean: text}`
+  decides whether that model is faithful to the protocol as one bisimulation check (a walk when the
+  typestates are deterministic, a refinement otherwise), and names the shortest path to where they
+  differ.
 - `session_ctl {lean, formula}`: a CTL formula over one session, decided on the protocol's state
-  graph by the same checker as check_ctl, with a witness or counterexample path. Atoms:
+  graph by the same checker as check_ctl, with a witness or counterexample path. The formula may be
+  JSON or an s-expression string such as `(AG (implies (after Order) (AF (after Confirmed))))`, with
+  shared parts labelled `#1=` and reused as `#1#`. Atoms:
   `{\"after\": \"Label\"}` (a Label message or event has just happened) and `\"terminal\"` (the session
   has ended), and `{\"secret\": {from?, to?, field?}}` (the step just taken carried a field ending in
   `_secr`; ask it when the project needs secrecy, such as no secret ever reaching Log:

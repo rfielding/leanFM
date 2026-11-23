@@ -54,13 +54,17 @@ env = dict(os.environ, LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT=str(data),
 server = subprocess.Popen([str(ROOT / ".lake/build/bin/leanfm-server")], cwd=ROOT,
                           env=env, stdout=log, stderr=subprocess.STDOUT)
 try:
-    for _ in range(100):
+    # wait by the clock (a refused connection returns at once) and fail if it never answers
+    deadline = time.monotonic() + 60
+    while True:
         assert server.poll() is None, "fixture server exited"
         try:
             if request(other, "/health") == 200:
                 break
         except OSError:
-            time.sleep(.05)
+            pass
+        assert time.monotonic() < deadline, "fixture server never answered /health within 60 s"
+        time.sleep(.1)
     form = {"username": "multi_primary", "password": "multi provider test password"}
     assert request(BASE, "/api/login", form) == 200
     assert request(BASE, "/api/me") == 200

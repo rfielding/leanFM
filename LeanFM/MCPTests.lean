@@ -123,8 +123,19 @@ def projectViewTests : IO Unit := do
   expect "project_view takes no message argument" (extra.contains "message is not one of them")
   let lchat ← pvCall "{\"stage\":\"chat\"}"
   expect "project_view chat for LeanFM says where the conversation happens" (lchat.contains "happens in the agent" && lchat.contains "\"found\":false")
+  -- decoding a saved log needs no conversation on disk: a fixture line, its key redacted, a bad line dropped
+  let fixture := LeanFM.ProjectView.chatMessages #["m1|user|bGV0J3MgYnVpbGQgYSBnbyBzZXJ2ZXIuIG15IGtleSBpcyBzay1hYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3g=|0|0|0|0|0|1700000000000|model-x", "not a log line"]
+  expect "project_view decodes a saved conversation line and redacts its key"
+    (fixture.size == 1 && (fixture[0]!.getObjValAs? String "role").toOption == some "user" &&
+     ((fixture[0]!.getObjValAs? String "text").toOption.getD "").startsWith "let's build a go server" &&
+     !((fixture[0]!.getObjValAs? String "text").toOption.getD "").contains "sk-abcdefghijklmnopqrstuvwx")
+  -- conversations are never committed: GoServer's chat decodes its log when this checkout has one,
+  -- and otherwise says where the conversation lives (a fresh checkout, such as CI's, has none)
   let gchat ← pvCall "{\"project\":\"GoServer\",\"stage\":\"chat\"}"
-  expect "project_view chat for GoServer decodes its saved messages" (gchat.contains "\"role\":\"user\"" && gchat.contains "\"found\":true")
+  let saved ← System.FilePath.pathExists "projects/GoServer/conversations/main.log"
+  expect "project_view chat for GoServer decodes its saved log, or says where it lives without one"
+    (if saved then gchat.contains "\"role\":\"user\"" && gchat.contains "\"found\":true"
+     else gchat.contains "\"found\":false" && gchat.contains "conversations/main.log")
   expect "project_view decodes base64 both ways" (String.fromUTF8! (LeanFM.ProjectView.base64Decode (LeanFM.ProjectView.base64Encode "key=sk-ABC é".toUTF8)) == "key=sk-ABC é")
   let lbook ← pvCall "{\"stage\":\"book\",\"page\":3}"
   expect "project_view book returns a page image of at most 48000 bytes and the page count"

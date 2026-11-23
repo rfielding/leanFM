@@ -1,0 +1,878 @@
+[
+ {
+  "protocol": "BoundedRide",
+  "states": 42,
+  "steps": 44,
+  "checkerNodes": 45,
+  "typestates": 23,
+  "lookahead": 6,
+  "rules": 24,
+  "formulaTreeNodes": 139583,
+  "distinctSubformulas": 687,
+  "leanfm": {
+   "proved": 24,
+   "of": 24,
+   "ms": 2268
+  },
+  "mutants": {
+   "total": 144,
+   "changeBehaviour": 128,
+   "caught": 128,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "DepositSettlement",
+  "states": 6,
+  "steps": 5,
+  "checkerNodes": 6,
+  "typestates": 5,
+  "lookahead": 0,
+  "rules": 6,
+  "formulaTreeNodes": 130,
+  "distinctSubformulas": 50,
+  "leanfm": {
+   "proved": 6,
+   "of": 6,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 105,
+   "changeBehaviour": 81,
+   "caught": 81,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "Dispatch",
+  "states": 35,
+  "steps": 43,
+  "checkerNodes": 40,
+  "typestates": 18,
+  "lookahead": 1,
+  "rules": 19,
+  "formulaTreeNodes": 1580,
+  "distinctSubformulas": 255,
+  "leanfm": {
+   "proved": 19,
+   "of": 19,
+   "ms": 30
+  },
+  "mutants": {
+   "total": 143,
+   "changeBehaviour": 136,
+   "caught": 136,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "GS_Challenge",
+  "states": 116,
+  "steps": 256,
+  "checkerNodes": 155,
+  "typestates": 10,
+  "lookahead": 0,
+  "rules": 11,
+  "formulaTreeNodes": 455,
+  "distinctSubformulas": 118
+ },
+ {
+  "protocol": "GS_GameP",
+  "states": 199,
+  "steps": 435,
+  "checkerNodes": 318,
+  "typestates": 20,
+  "lookahead": 0,
+  "rules": 21,
+  "formulaTreeNodes": 875,
+  "distinctSubformulas": 233
+ },
+ {
+  "protocol": "GS_GameStateP",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39
+ },
+ {
+  "protocol": "GS_ListGamesP",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39
+ },
+ {
+  "protocol": "GS_PlayMoveP",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39
+ },
+ {
+  "protocol": "GS_RespondMergeP",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39
+ },
+ {
+  "protocol": "GS_SeatP",
+  "states": 284,
+  "steps": 1206,
+  "checkerNodes": 941,
+  "typestates": 412,
+  "lookahead": 1,
+  "rules": 413,
+  "formulaTreeNodes": 169340,
+  "distinctSubformulas": 6591
+ },
+ {
+  "protocol": "GS_TurnPushed",
+  "states": 6,
+  "steps": 6,
+  "checkerNodes": 7,
+  "typestates": 7,
+  "lookahead": 0,
+  "rules": 8,
+  "formulaTreeNodes": 183,
+  "distinctSubformulas": 69
+ },
+ {
+  "protocol": "IUM_feed-byDt",
+  "states": 229,
+  "steps": 309,
+  "checkerNodes": 286,
+  "typestates": 86,
+  "lookahead": 2,
+  "rules": 87,
+  "formulaTreeNodes": 46282,
+  "distinctSubformulas": 1472,
+  "leanfm": {
+   "proved": 87,
+   "of": 87,
+   "ms": 3751
+  }
+ },
+ {
+  "protocol": "IUM_feed-visibleAtBegin",
+  "states": 229,
+  "steps": 309,
+  "checkerNodes": 286,
+  "typestates": 122,
+  "lookahead": 4,
+  "rules": 123,
+  "formulaTreeNodes": 560952,
+  "distinctSubformulas": 3001
+ },
+ {
+  "protocol": "IUM_feed-visibleAtCommit",
+  "states": 56,
+  "steps": 88,
+  "checkerNodes": 76,
+  "typestates": 54,
+  "lookahead": 2,
+  "rules": 55,
+  "formulaTreeNodes": 24320,
+  "distinctSubformulas": 891,
+  "leanfm": {
+   "proved": 55,
+   "of": 55,
+   "ms": 550
+  }
+ },
+ {
+  "protocol": "IUM_lanes-contiguous",
+  "states": 32,
+  "steps": 71,
+  "checkerNodes": 59,
+  "typestates": 59,
+  "lookahead": 2,
+  "rules": 60,
+  "formulaTreeNodes": 37956,
+  "distinctSubformulas": 1018,
+  "leanfm": {
+   "proved": 60,
+   "of": 60,
+   "ms": 736
+  }
+ },
+ {
+  "protocol": "IUM_lanes-max",
+  "states": 33,
+  "steps": 72,
+  "checkerNodes": 57,
+  "typestates": 55,
+  "lookahead": 3,
+  "rules": 56,
+  "formulaTreeNodes": 128660,
+  "distinctSubformulas": 1202
+ },
+ {
+  "protocol": "IUM_policy-allHeads",
+  "states": 29,
+  "steps": 148,
+  "checkerNodes": 137,
+  "typestates": 111,
+  "lookahead": 3,
+  "rules": 112,
+  "formulaTreeNodes": 10415246,
+  "distinctSubformulas": 3834
+ },
+ {
+  "protocol": "IUM_policy-latestWins",
+  "states": 28,
+  "steps": 146,
+  "checkerNodes": 137,
+  "typestates": 129,
+  "lookahead": 3,
+  "rules": 130,
+  "formulaTreeNodes": 11317918,
+  "distinctSubformulas": 4418
+ },
+ {
+  "protocol": "IUM_repl-cursor",
+  "states": 358,
+  "steps": 1265,
+  "checkerNodes": 1108,
+  "typestates": 276,
+  "lookahead": 5,
+  "rules": 277,
+  "formulaTreeNodes": 705390766,
+  "distinctSubformulas": 11610
+ },
+ {
+  "protocol": "IUM_repl-ordered",
+  "states": 80,
+  "steps": 316,
+  "checkerNodes": 291,
+  "typestates": 237,
+  "lookahead": 5,
+  "rules": 238,
+  "formulaTreeNodes": 575264313,
+  "distinctSubformulas": 9877
+ },
+ {
+  "protocol": "IUM_repl-unordered",
+  "states": 104,
+  "steps": 412,
+  "checkerNodes": 380,
+  "typestates": 316,
+  "lookahead": 6,
+  "rules": 317,
+  "formulaTreeNodes": 5964083154,
+  "distinctSubformulas": 14757
+ },
+ {
+  "protocol": "IUM_retry-hold",
+  "states": 11,
+  "steps": 23,
+  "checkerNodes": 20,
+  "typestates": 16,
+  "lookahead": 1,
+  "rules": 17,
+  "formulaTreeNodes": 2373,
+  "distinctSubformulas": 218,
+  "leanfm": {
+   "proved": 17,
+   "of": 17,
+   "ms": 23
+  }
+ },
+ {
+  "protocol": "IUM_retry-yield",
+  "states": 23,
+  "steps": 42,
+  "checkerNodes": 41,
+  "typestates": 41,
+  "lookahead": 2,
+  "rules": 42,
+  "formulaTreeNodes": 20886,
+  "distinctSubformulas": 686,
+  "leanfm": {
+   "proved": 42,
+   "of": 42,
+   "ms": 300
+  }
+ },
+ {
+  "protocol": "IUM_sched-reserved",
+  "states": 43,
+  "steps": 65,
+  "checkerNodes": 66,
+  "typestates": 66,
+  "lookahead": 2,
+  "rules": 67,
+  "formulaTreeNodes": 17910,
+  "distinctSubformulas": 887,
+  "leanfm": {
+   "proved": 67,
+   "of": 67,
+   "ms": 372
+  }
+ },
+ {
+  "protocol": "IUM_sched-shared",
+  "states": 58,
+  "steps": 104,
+  "checkerNodes": 105,
+  "typestates": 105,
+  "lookahead": 2,
+  "rules": 106,
+  "formulaTreeNodes": 40329,
+  "distinctSubformulas": 1484,
+  "leanfm": {
+   "proved": 106,
+   "of": 106,
+   "ms": 1267
+  }
+ },
+ {
+  "protocol": "IU_Derive",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 2
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 52,
+   "caught": 52,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Download",
+  "states": 4,
+  "steps": 4,
+  "checkerNodes": 5,
+  "typestates": 5,
+  "lookahead": 0,
+  "rules": 6,
+  "formulaTreeNodes": 133,
+  "distinctSubformulas": 49,
+  "leanfm": {
+   "proved": 6,
+   "of": 6,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 104,
+   "changeBehaviour": 65,
+   "caught": 65,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Feed",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 2
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 52,
+   "caught": 52,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Forward",
+  "states": 6,
+  "steps": 5,
+  "checkerNodes": 6,
+  "typestates": 6,
+  "lookahead": 0,
+  "rules": 7,
+  "formulaTreeNodes": 152,
+  "distinctSubformulas": 59,
+  "leanfm": {
+   "proved": 7,
+   "of": 7,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 105,
+   "changeBehaviour": 84,
+   "caught": 84,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_ForwardDirect",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 96,
+  "distinctSubformulas": 39,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 0
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 68,
+   "caught": 68,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_ImportRange",
+  "states": 3,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 2
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 63,
+   "caught": 63,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_PullPage",
+  "states": 3,
+  "steps": 2,
+  "checkerNodes": 3,
+  "typestates": 3,
+  "lookahead": 0,
+  "rules": 4,
+  "formulaTreeNodes": 71,
+  "distinctSubformulas": 29,
+  "leanfm": {
+   "proved": 4,
+   "of": 4,
+   "ms": 0
+  },
+  "mutants": {
+   "total": 102,
+   "changeBehaviour": 62,
+   "caught": 62,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Replicate",
+  "states": 3,
+  "steps": 2,
+  "checkerNodes": 3,
+  "typestates": 3,
+  "lookahead": 0,
+  "rules": 4,
+  "formulaTreeNodes": 71,
+  "distinctSubformulas": 29,
+  "leanfm": {
+   "proved": 4,
+   "of": 4,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 102,
+   "changeBehaviour": 62,
+   "caught": 62,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Socket",
+  "states": 21,
+  "steps": 37,
+  "checkerNodes": 38,
+  "typestates": 38,
+  "lookahead": 1,
+  "rules": 39,
+  "formulaTreeNodes": 5998,
+  "distinctSubformulas": 491,
+  "leanfm": {
+   "proved": 39,
+   "of": 39,
+   "ms": 99
+  },
+  "mutants": {
+   "total": 137,
+   "changeBehaviour": 132,
+   "caught": 132,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Update",
+  "states": 4,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 52,
+   "caught": 52,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "IU_Upload",
+  "states": 23,
+  "steps": 27,
+  "checkerNodes": 24,
+  "typestates": 9,
+  "lookahead": 0,
+  "rules": 10,
+  "formulaTreeNodes": 276,
+  "distinctSubformulas": 93,
+  "leanfm": {
+   "proved": 10,
+   "of": 10,
+   "ms": 9
+  },
+  "mutants": {
+   "total": 127,
+   "changeBehaviour": 100,
+   "caught": 100,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "LeanFM",
+  "states": 90,
+  "steps": 106,
+  "checkerNodes": 101,
+  "typestates": 33,
+  "lookahead": 1,
+  "rules": 34,
+  "formulaTreeNodes": 3253,
+  "distinctSubformulas": 485,
+  "leanfm": {
+   "proved": 34,
+   "of": 34,
+   "ms": 126
+  },
+  "mutants": {
+   "total": 206,
+   "changeBehaviour": 202,
+   "caught": 202,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "LimitOrder",
+  "states": 12,
+  "steps": 12,
+  "checkerNodes": 12,
+  "typestates": 8,
+  "lookahead": 0,
+  "rules": 9,
+  "formulaTreeNodes": 213,
+  "distinctSubformulas": 80,
+  "leanfm": {
+   "proved": 9,
+   "of": 9,
+   "ms": 2
+  },
+  "mutants": {
+   "total": 112,
+   "changeBehaviour": 95,
+   "caught": 95,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "Loan",
+  "states": 4,
+  "steps": 5,
+  "checkerNodes": 5,
+  "typestates": 5,
+  "lookahead": 0,
+  "rules": 6,
+  "formulaTreeNodes": 150,
+  "distinctSubformulas": 52,
+  "leanfm": {
+   "proved": 6,
+   "of": 6,
+   "ms": 3
+  },
+  "mutants": {
+   "total": 105,
+   "changeBehaviour": 78,
+   "caught": 78,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "Maqam",
+  "states": 1488,
+  "steps": 2052,
+  "checkerNodes": 1849,
+  "typestates": 45,
+  "lookahead": 0,
+  "rules": 46,
+  "formulaTreeNodes": 1913,
+  "distinctSubformulas": 521,
+  "leanfm": {
+   "proved": 46,
+   "of": 46,
+   "ms": 2738
+  }
+ },
+ {
+  "protocol": "OAuth",
+  "states": 15,
+  "steps": 15,
+  "checkerNodes": 16,
+  "typestates": 15,
+  "lookahead": 0,
+  "rules": 16,
+  "formulaTreeNodes": 386,
+  "distinctSubformulas": 150,
+  "leanfm": {
+   "proved": 16,
+   "of": 16,
+   "ms": 4
+  },
+  "mutants": {
+   "total": 115,
+   "changeBehaviour": 105,
+   "caught": 105,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "Ping",
+  "states": 3,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 102,
+  "distinctSubformulas": 39,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 60,
+   "caught": 60,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "PlaceOrder",
+  "states": 10,
+  "steps": 9,
+  "checkerNodes": 10,
+  "typestates": 10,
+  "lookahead": 0,
+  "rules": 11,
+  "formulaTreeNodes": 258,
+  "distinctSubformulas": 99,
+  "leanfm": {
+   "proved": 11,
+   "of": 11,
+   "ms": 2
+  },
+  "mutants": {
+   "total": 109,
+   "changeBehaviour": 88,
+   "caught": 88,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "PricedDepositSettlement",
+  "states": 6,
+  "steps": 5,
+  "checkerNodes": 6,
+  "typestates": 5,
+  "lookahead": 0,
+  "rules": 6,
+  "formulaTreeNodes": 130,
+  "distinctSubformulas": 50,
+  "leanfm": {
+   "proved": 6,
+   "of": 6,
+   "ms": 2
+  },
+  "mutants": {
+   "total": 105,
+   "changeBehaviour": 81,
+   "caught": 81,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "RentWithRepairs",
+  "states": 5,
+  "steps": 6,
+  "checkerNodes": 7,
+  "typestates": 7,
+  "lookahead": 0,
+  "rules": 8,
+  "formulaTreeNodes": 193,
+  "distinctSubformulas": 71,
+  "leanfm": {
+   "proved": 8,
+   "of": 8,
+   "ms": 4
+  },
+  "mutants": {
+   "total": 106,
+   "changeBehaviour": 84,
+   "caught": 84,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "Rental",
+  "states": 3,
+  "steps": 2,
+  "checkerNodes": 3,
+  "typestates": 3,
+  "lookahead": 0,
+  "rules": 4,
+  "formulaTreeNodes": 71,
+  "distinctSubformulas": 29,
+  "leanfm": {
+   "proved": 4,
+   "of": 4,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 102,
+   "changeBehaviour": 62,
+   "caught": 62,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "Ride",
+  "states": 26,
+  "steps": 28,
+  "checkerNodes": 28,
+  "typestates": 16,
+  "lookahead": 0,
+  "rules": 17,
+  "formulaTreeNodes": 424,
+  "distinctSubformulas": 161,
+  "leanfm": {
+   "proved": 17,
+   "of": 17,
+   "ms": 7
+  },
+  "mutants": {
+   "total": 128,
+   "changeBehaviour": 118,
+   "caught": 118,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "UserLookup",
+  "states": 29,
+  "steps": 35,
+  "checkerNodes": 32,
+  "typestates": 21,
+  "lookahead": 0,
+  "rules": 22,
+  "formulaTreeNodes": 598,
+  "distinctSubformulas": 216,
+  "leanfm": {
+   "proved": 22,
+   "of": 22,
+   "ms": 10
+  },
+  "mutants": {
+   "total": 135,
+   "changeBehaviour": 127,
+   "caught": 127,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "WeeklyRent",
+  "states": 3,
+  "steps": 3,
+  "checkerNodes": 4,
+  "typestates": 4,
+  "lookahead": 0,
+  "rules": 5,
+  "formulaTreeNodes": 101,
+  "distinctSubformulas": 40,
+  "leanfm": {
+   "proved": 5,
+   "of": 5,
+   "ms": 1
+  },
+  "mutants": {
+   "total": 103,
+   "changeBehaviour": 78,
+   "caught": 78,
+   "bisimilarFlagged": 0
+  }
+ },
+ {
+  "protocol": "goserver",
+  "states": 10969,
+  "steps": 54914,
+  "checkerNodes": 39497,
+  "typestates": 1604,
+  "lookahead": 2,
+  "rules": 1605,
+  "formulaTreeNodes": 8834480,
+  "distinctSubformulas": 41382
+ }
+]
