@@ -168,10 +168,12 @@ partial def walk (ds : List Def) (lines : Array String) (parent : Nat) (inDef : 
     if let some c ← add { id := 0, parent := some parent, kind := "sessions", label := "sessions: any number at once", protocol := inDef } then
       walk ds lines c inDef b
     walk ds lines parent inDef k
-  | .box n b k => do
-    -- an included protocol: its own definition's lines, and its steps under it
+  | .box bn b k => do
+    -- an included protocol: its own definition's lines, and its steps under it; the box's name
+    -- carries the include's bindings (Order with token), the protocol is its first word
+    let n := Global.boxProtocol bn
     let d := ds.find? (·.name == n)
-    if let some c ← add { id := 0, parent := some parent, kind := "include", label := s!"include {n}", protocol := n,
+    if let some c ← add { id := 0, parent := some parent, kind := "include", label := s!"include {bn}", protocol := n,
                           first := d.map (·.first), last := d.map (·.last) } then
       walk ds lines c n b
     walk ds lines parent inDef k
@@ -187,7 +189,7 @@ partial def findBox (n : String) : Global String → Option (Global String)
   | .join _ bs k => (bs.findSome? (findBox n)).orElse fun _ => findBox n k
   | .loop _ b => findBox n b
   | .sessions b k => (findBox n b).orElse fun _ => findBox n k
-  | .box m b k => if m == n then some b else (findBox n b).orElse fun _ => findBox n k
+  | .box m b k => if m == n || Global.boxProtocol m == n then some b else (findBox n b).orElse fun _ => findBox n k
 
 /-- The whole tree: the main protocol (its structure), every protocol the text defines, and the
 roles with their typestate. `typestates` gives each role's typestate text or why it has none. -/

@@ -177,7 +177,10 @@ def sessions (st : Parser) : Parser := node `LeanFM.Session.Grammar.sessions
 def keyed (st : Parser) : Parser := node `LeanFM.Session.Grammar.keyed
   (atomic (W "sessions" >> W "by") >> ident >> block st)
 def cont : Parser := node `LeanFM.Session.Grammar.cont (atomic (W "continue" >> ident >> ";"))
-def incl : Parser := node `LeanFM.Session.Grammar.incl (atomic (W "include" >> ident) >> many ident >> ";")
+/-- `token` or `token = sid` after `with` (selfhost.session.identity.scopes). -/
+def binding : Parser := node `LeanFM.Session.Grammar.binding (ident >> optional ("=" >> ident))
+def incl : Parser := node `LeanFM.Session.Grammar.incl
+  (atomic (W "include" >> ident) >> many ident >> optional ("with" >> sepBy1 binding ",") >> ";")
 def clock : Parser := node `LeanFM.Session.Grammar.clock (atomic (W "clock" >> ident >> "=") >> timeRef >> ";")
 def obligation : Parser := node `LeanFM.Session.Grammar.obligation
   (atomic (W "obligation" >> ident >> W "on") >> ident >> "{" >> W "trigger" >> ident >> ";" >>
@@ -202,7 +205,8 @@ def stmt : Parser := { fn := stmtFn, info := (alternatives skip).info }
 /-! ## Protocols, requirements, structures, files -/
 
 def protocolBody : Parser := node `LeanFM.Session.Grammar.protocolBody
-  ("protocol " >> ident >> "(" >> sepBy ident "," >> ")" >> optional (W "version" >> numLit) >> block stmt)
+  ("protocol " >> ident >> "(" >> sepBy ident "," >> ")" >> optional (W "version" >> numLit) >>
+    optional (W "given" >> many1 ident) >> block stmt)
 
 def reqOpt : Parser := node `LeanFM.Session.Grammar.reqOpt
   ((W "within" >> dur) <|> (W "over" >> numLit >> ident) <|> (W "confidence" >> frac) <|>
@@ -233,17 +237,40 @@ def systemBody : Parser := node `LeanFM.Session.Grammar.systemBody
 /-- `require per q { ... }` as a Lean command. -/
 @[command_parser] def requireCmd : Parser := leading_parser requireBody
 
-/-- A field's type: a name, or `List`, `Array` or `Option` of one plain name. -/
+/-- A field's type: a name; `List`, `Array` or `Option` of one plain name; `Fresh` or `Link` of one
+plain name (selfhost.session.identity.marks); or `Header`, `PathParam` or `QueryParam` of one plain
+name or of a parenthesized mark, `Header (Link String)`. The node holds up to three names, the
+parentheses dropped: `[Header, Link, String]`, `[Link, String, -]`, `[String, -, -]`. -/
 def fieldTypeFn : ParserFn := fun c s =>
   let iniSz := s.stackSize
   let s := identFn c s
   if s.hasError then s else
-  match s.stxStack.back.getId.toString with
-  | "List" | "Array" | "Option" =>
-    let n := s.stxStack.back.getId.toString
+  let n := s.stxStack.back.getId.toString
+  let noParen (s : ParserState) : ParserState :=
+    if n == "Fresh" || n == "Link" then
+      s.mkUnexpectedError s!"'('; {n} holds one plain type, such as {n} String (a placement wraps a mark: Header ({n} String))"
+    else s.mkUnexpectedError s!"'('; {n} holds one plain type, such as {n} Nat (protobuf has no {n} of a List or Option)"
+  match n with
+  | "List" | "Array" | "Option" | "Fresh" | "Link" =>
+    let s := whitespace c s
+    if String.Pos.Raw.get c.inputString s.pos == '(' then noParen s
+    else
+    let s := identFn c s
+    if s.hasError then s.mkNode `LeanFM.Session.Grammar.fieldType iniSz
+    else (s.pushSyntax mkNullNode).mkNode `LeanFM.Session.Grammar.fieldType iniSz
+  | "Header" | "PathParam" | "QueryParam" =>
     let s := whitespace c s
     if String.Pos.Raw.get c.inputString s.pos == '(' then
-      s.mkUnexpectedError s!"'('; {n} holds one plain type, such as {n} Nat (protobuf has no {n} of a List or Option)"
+      let s := (symbolFn "(" c s)
+      if s.hasError then s.mkNode `LeanFM.Session.Grammar.fieldType iniSz else
+      let s := s.popSyntax
+      let s := identFn c s
+      if s.hasError then s.mkNode `LeanFM.Session.Grammar.fieldType iniSz else
+      let s := identFn c s
+      if s.hasError then s.mkNode `LeanFM.Session.Grammar.fieldType iniSz else
+      let s := symbolFn ")" c s
+      if s.hasError then s.mkNode `LeanFM.Session.Grammar.fieldType iniSz else
+      (s.popSyntax).mkNode `LeanFM.Session.Grammar.fieldType iniSz
     else
     let s := identFn c s
     if s.hasError then s.mkNode `LeanFM.Session.Grammar.fieldType iniSz

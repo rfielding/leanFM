@@ -58,7 +58,9 @@ inductive Stmt where
   | bounded (name : String) (n : Nat) (body : List Stmt) (otherwise : List Stmt)
   | cont (name : String)
   | sessions (body : List Stmt)
-  | incl (name : String) (args : List String)
+  /-- `include P A B with g, h = x;`: roles in order, and each given field of P bound to a field in
+  scope, as (given field, field in scope) (selfhost.session.identity.scopes) -/
+  | incl (name : String) (args : List String) (binds : List (String × String) := [])
   deriving Inhabited
 
 structure Def where
@@ -67,6 +69,8 @@ structure Def where
   body  : List Stmt
   /-- `version N` (selfhost.session.versions); 0 when the protocol has none -/
   version : Nat := 0
+  /-- `given token`: the fields its includer binds (selfhost.session.identity.scopes) -/
+  givens : List String := []
   deriving Inhabited
 
 /-- The highest version a protocol may declare. -/
@@ -589,7 +593,15 @@ partial def stmt (depth : Nat) (stx : Syntax) : R Stmt := do
   | `LeanFM.Session.Grammar.sessions => return .sessions (← block depth stx[1])
   | `LeanFM.Session.Grammar.keyed => keyedStmt depth stx
   | `LeanFM.Session.Grammar.cont => return .cont (← name stx[1] "a loop name")
-  | `LeanFM.Session.Grammar.incl => return .incl (← name stx[1] "a protocol") (← stx[2].getArgs.toList.mapM (name · "a role name"))
+  | `LeanFM.Session.Grammar.incl => do
+    let binds ← match stx[3].getArgs with
+      | #[_, bs] => (bs.getArgs.filter (·.getKind == `LeanFM.Session.Grammar.binding)).toList.mapM fun b => do
+          let g ← name b[0] "a given field"
+          match b[1].getArgs with
+          | #[_, x] => return (g, ← name x "a field in scope")
+          | _ => return (g, g)
+      | _ => pure []
+    return .incl (← name stx[1] "a protocol") (← stx[2].getArgs.toList.mapM (name · "a role name")) binds
   | `LeanFM.Session.Grammar.clock => return .clock (← name stx[1] "a clock name") (← timeRefs stx[3])
   | `LeanFM.Session.Grammar.obligation => obligationStmt stx
   | `LeanFM.Session.Grammar.accrue => accrueStmt stx
@@ -674,14 +686,27 @@ def structureDecl (doc : Option Syntax) (stx : Syntax) : R Types.Message := do
       constraints := constraints.push { name := cname, text, checkable }
       continue
     let tn ← name ft[0] "a type, such as Nat, String or a structure's name"
-    let ty ← if ft[1].isIdent then do
+    -- marks and placement (selfhost.session.identity.marks): Fresh T, Link T, Header T,
+    -- PathParam T, QueryParam T, and a placement over a mark, Header (Link T)
+    let wrappers := ["List", "Array", "Option", "Fresh", "Link", "Header", "PathParam", "QueryParam"]
+    let (ty, mark, place) ← if ft[2].isIdent then do
+        let mk ← name ft[1] "Fresh or Link"
+        let inner ← name ft[2] s!"the type {mk} holds"
+        let some pl := Types.placeOf tn | failAt ft s!"{tn} takes one plain type"
+        let some m := Types.markOf mk | failAt ft s!"{tn} ({mk} ...): inside the parentheses comes Fresh or Link, as in {tn} (Link String)"
+        if wrappers.contains inner then failAt ft s!"{mk} holds one plain type, such as {mk} String"
+        pure (Types.Ty.ofName inner, m, pl)
+      else if ft[1].isIdent then do
         let inner ← name ft[1] s!"the type the {tn} holds"
-        if ["List", "Array", "Option"].contains inner then
+        if wrappers.contains inner then
           failAt ft s!"{tn} holds one plain type, such as {tn} Nat (protobuf has no {tn} of a List or Option)"
-        pure ((if tn == "Option" then Types.Ty.opt else Types.Ty.list) (Types.Ty.ofName inner))
-      else pure (Types.Ty.ofName tn)
+        match Types.markOf tn, Types.placeOf tn with
+        | some m, _ => pure (Types.Ty.ofName inner, m, Types.Place.body)
+        | _, some pl => pure (Types.Ty.ofName inner, Types.Mark.plain, pl)
+        | _, _ => pure ((if tn == "Option" then Types.Ty.opt else Types.Ty.list) (Types.Ty.ofName inner), Types.Mark.plain, Types.Place.body)
+      else pure (Types.Ty.ofName tn, Types.Mark.plain, Types.Place.body)
     for n in f[0].getArgs do
-      fields := fields.push { name := ← name n "a field name", ty }
+      fields := fields.push { name := ← name n "a field name", ty, mark, place }
   if fields.size > Types.maxFieldsPer then failAt stx s!"structure {mname} has more than {Types.maxFieldsPer} fields"
   let docText := match doc with
     | some d =>
@@ -708,10 +733,14 @@ def protocolDef (body : Syntax) : R Def := do
       if n == 0 || n > maxVersion then failAt v s!"a version is 1 to {maxVersion}"
       pure n
     | _ => pure 0
-  let b <- block 0 body[6]
+  let gv ← match body[6].getArgs with
+    | #[_, xs] => xs.getArgs.toList.mapM (name · "a given field")
+    | _ => pure []
+  if gv.eraseDups.length != gv.length then failAt body[6] "a protocol is given each field once"
+  let b <- block 0 body[7]
   if (labelsOf b).contains pname then
     failAt body s!"protocol {pname} has a message {pname}; in Lean they would be two declarations with one name, so rename one of them"
-  return { name := pname, roles := rs, body := unroll b, version }
+  return { name := pname, roles := rs, body := unroll b, version, givens := gv }
 
 open Lean (Syntax) in
 /-- A `system` block (selfhost.session.instances), checked against the protocols defined before it
@@ -823,6 +852,7 @@ def timeExprText : String → Except String Generative.TimeExpr := readValue Gra
 
 /-! ## Building the global type -/
 
+
 structure Ctx where
   defs   : List Def
   rename : List (String × String)
@@ -892,16 +922,24 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
       if !rest.isEmpty then bfail here s!"continue {name} must be the last statement of its block"
       return .var name
     | .sessions body => return .sessions (← deeper here body) (← next ())
-    | .incl name args =>
+    | .incl name args binds =>
       let some d := latest c.defs name
         | bfail here s!"include {name}: no protocol {name} is defined before this one"
       if c.inside.contains name then bfail here s!"include {name} includes itself"
       if args.length != d.roles.length then
         bfail here s!"include {name} needs {d.roles.length} roles, not {args.length}"
+      -- every given field bound once, and nothing else (selfhost.session.identity.scopes)
+      for (g, _) in binds do
+        if !d.givens.contains g then
+          bfail here s!"include {name} with {g}: {name} is not given {g}{if d.givens.isEmpty then "" else s!"; it is given {", ".intercalate d.givens}"}"
+        if (binds.filter (·.1 == g)).length > 1 then bfail here s!"include {name} binds {g} twice"
+      for g in d.givens do
+        if !binds.any (·.1 == g) then
+          bfail here s!"include {name}: {name} is given {g}, so bind it to a field in scope: include {name} {" ".intercalate args} with {g}"
       let mapped ← args.mapM (role here)
       let body ← deeper { here with rename := d.roles.zip mapped, inside := name :: c.inside,
                                     loops := [], path := name } d.body
-      return .box name body (← next ())
+      return .box (Global.boxName name binds) body (← next ())
 
 partial def deeper (c : Ctx) (body : List Stmt) : B (Global String) := do
   if c.depth + 1 > limits.maxDepth then bfail c s!"statements are nested more than {limits.maxDepth} deep"
@@ -924,6 +962,11 @@ structure Parsed where
   types : Types.Env := []
   /-- session keys: (message id, field path) (selfhost.session.envelope) -/
   keys : List (String × String) := []
+  /-- each Link field an include renames, (label, field) to the Fresh field it names
+  (selfhost.session.identity.scopes: token bound to sid names the session that minted sid) -/
+  linkTargets : List ((String × String) × String) := []
+  /-- sessions bodies whose copies cannot be told apart, each with its fix (selfhost.session.identity.scopes) -/
+  identityNotes : List String := []
   /-- the labels of every protocol in the text, the main one's and the earlier ones' -/
   allLabels : List String := []
   /-- the text's `system` blocks (selfhost.session.instances) -/
@@ -955,6 +998,151 @@ def leanWords : List String :=
     "set_option", "show", "structure", "suffices", "syntax", "system", "then", "theorem", "universe", "unsafe",
     "variable", "where", "with", "Prop", "Sort", "Type" ]
 
+/-! ## Session identity in the text (selfhost.session.identity.scopes) -/
+
+/-- The labels of a body's messages and events, its includes' too (the newest protocol of each
+name among `defs`; a self-include is refused when the protocol is built). -/
+partial def deepLabels (defs : List Def) (fuel : Nat) : List Stmt → List String
+  | [] => []
+  | s :: rest => (match s with
+    | .msg _ label .. => [label]
+    | .event label _ => [label]
+    | .timed _ m | .valued _ m => deepLabels defs fuel [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (deepLabels defs fuel)
+    | .loop _ b | .sessions b => deepLabels defs fuel b
+    | .bounded _ _ b o => deepLabels defs fuel b ++ deepLabels defs fuel o
+    | .incl n _ _ => match fuel, latest defs n with
+      | f + 1, some d => deepLabels defs f d.body
+      | _, _ => []
+    | _ => []) ++ deepLabels defs fuel rest
+
+/-- A body's messages as (label, names a cause), its includes' too. -/
+partial def deepMsgs (defs : List Def) (fuel : Nat) : List Stmt → List (String × Bool)
+  | [] => []
+  | s :: rest => (match s with
+    | .msg _ label _ _ cause .. => [(label, cause.isSome)]
+    | .timed _ m | .valued _ m => deepMsgs defs fuel [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (deepMsgs defs fuel)
+    | .loop _ b | .sessions b => deepMsgs defs fuel b
+    | .bounded _ _ b o => deepMsgs defs fuel b ++ deepMsgs defs fuel o
+    | .incl n _ _ => match fuel, latest defs n with
+      | f + 1, some d => deepMsgs defs f d.body
+      | _, _ => []
+    | _ => []) ++ deepMsgs defs fuel rest
+
+/-- The messages a body can begin with: (labels, whether it can also begin past them, having sent
+no message). -/
+partial def firstMsgs (defs : List Def) (fuel : Nat) : List Stmt → List String × Bool
+  | [] => ([], true)
+  | s :: rest =>
+    let more (r : List String × Bool) : List String × Bool :=
+      if r.2 then let (xs, e) := firstMsgs defs fuel rest; (r.1 ++ xs, e) else r
+    match s with
+    | .msg _ label .. => ([label], false)
+    | .timed _ m | .valued _ m => more (firstMsgs defs fuel [m])
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs =>
+      let rs := bs.map (firstMsgs defs fuel)
+      more (rs.flatMap (·.1), rs.isEmpty || rs.any (·.2))
+    | .loop _ b | .sessions b => more (firstMsgs defs fuel b)
+    | .bounded _ _ b o => more (let (x, e) := firstMsgs defs fuel b; let (y, e2) := firstMsgs defs fuel o; (x ++ y, e || e2))
+    | .incl n _ _ => match fuel, latest defs n with
+      | f + 1, some d => more (firstMsgs defs f d.body)
+      | _, _ => more ([], true)
+    | .cont _ => ([], false)
+    | _ => firstMsgs defs fuel rest
+
+/-- The fields of a label's structure, or none when it declares none. -/
+def fieldsOf (env : Types.Env) (label : String) : List Types.Field :=
+  ((env.find? (·.name == label)).map (·.fields)).getD []
+
+/-- Check one protocol's identity text: no given field minted inside it, every include's bindings in
+scope and of the given field's type, and every sessions body's copies told apart. `keyIds` are the
+message ids of `sessions by` keys. -/
+partial def scopeCheck (env : Types.Env) (defs : List Def) (keyIds : List String) (d : Def) : Except String (List String) := do
+  let fuel := defs.length + 1
+  for l in deepLabels defs 0 d.body do
+    for f in fieldsOf env l do
+      if d.givens.contains f.name && f.mark == .fresh then
+        throw s!"in {d.name}: {l}.{f.name} is Fresh, but {d.name} is given {f.name} by whoever includes it; a given field is minted by the includer, so mark it Link here"
+  -- a field in scope: one this protocol is given, or a Fresh or Link field of a label seen so far
+  let typeOf (seen : List String) (x : String) : Option Types.Ty := Id.run do
+    for l in seen do
+      for f in fieldsOf env l do
+        if f.name == x && f.mark != .plain then return some f.ty
+    for l in deepLabels defs fuel d.body do
+      for f in fieldsOf env l do
+        if f.name == x && d.givens.contains x then return some f.ty
+    return none
+  -- walks in order, returning the labels seen and the identity notes
+  let rec walk (seen : List String) : List Stmt → Except String (List String × List String)
+    | [] => pure (seen, [])
+    | s :: rest => do
+      let (seen', notes) ← match s with
+        | .msg _ label .. | .event label _ => pure (seen ++ [label], [])
+        | .timed _ m | .valued _ m => walk seen [m]
+        | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => do
+          let outs ← bs.mapM (walk seen)
+          pure (seen ++ outs.flatMap (·.1), outs.flatMap (·.2))
+        | .loop _ b => walk seen b
+        | .bounded _ _ b o => do let (a, n1) ← walk seen b; let (c, n2) ← walk a o; pure (c, n1 ++ n2)
+        | .sessions b => do
+          let (a, n) ← walk seen b
+          pure (a, (sessionsNote b).toList ++ n)
+        | .incl n _ binds => do
+          let some inc := latest defs n | pure (seen, [])
+          let incLabels := deepLabels defs fuel inc.body
+          for (g, x) in binds do
+            let inScope := d.givens.contains x || seen.any fun l => (fieldsOf env l).any fun f => f.name == x && f.mark != .plain
+            if !inScope then
+              throw s!"in {d.name}: include {n} with {Global.showBinds [(g, x)]}: {x} is not in scope; no message before the include carries {x} as Fresh or Link, and {d.name} is not given {x}"
+            let gTys := (incLabels.flatMap fun l => (fieldsOf env l).filter (·.name == g)).map (·.ty)
+            match typeOf seen x, gTys.head? with
+            | some tx, some tg =>
+              if tx != tg then
+                throw s!"in {d.name}: include {n} with {Global.showBinds [(g, x)]}: {n}'s {g} is {tg.render}, but {x} is {tx.render}"
+            | _, _ => pure ()
+          pure (seen ++ incLabels, [])
+        | _ => pure (seen, [])
+      let (final, more) ← walk seen' rest
+      pure (final, notes ++ more)
+  return (← walk [] d.body).2
+where
+  /-- Why a sessions body's copies cannot be told apart, or none when they can. -/
+  sessionsNote (b : List Stmt) : Option String := Id.run do
+    let fuel := defs.length + 1
+    let msgs := deepMsgs defs fuel b
+    if msgs.length ≤ 1 then return none
+    if (declaredIds b).any keyIds.contains then return none
+    let (firsts, _) := firstMsgs defs fuel b
+    -- the ids a copy mints itself; a Link to one of them places a message in its copy
+    let minted := ((msgs.flatMap fun (l, _) => (fieldsOf env l).filter (·.mark == .fresh)).map (·.name)).eraseDups
+    let placed (l : String) (c : Bool) : Bool :=
+      c || firsts.contains l || (fieldsOf env l).any fun f => f.mark == .link && minted.contains f.name
+    match msgs.find? fun (l, c) => !placed l c with
+    | none => return none
+    | some (l, _) =>
+      return some s!"in {d.name}: the copies of sessions \{ ... } run at once and cannot be told apart: {l} names no cause and carries no Link to an id the copy mints; mint one on an answer (orderId : Fresh String) and carry it on {l} as a Link, name the message {l} answers as its cause, or write sessions by"
+
+/-- Each Link field an include renames, through every level of include from `d` with `ren` (given
+field to the field it stands for in the main protocol): (label, field) to that field. -/
+partial def linkTargetsOf (env : Types.Env) (defs : List Def) (fuel : Nat) (ren : List (String × String)) (d : Def) :
+    List ((String × String) × String) :=
+  let rec go (fuel : Nat) (ren : List (String × String)) : List Stmt → List ((String × String) × String)
+    | [] => []
+    | s :: rest => (match s with
+      | .msg _ label .. =>
+        ((fieldsOf env label).filter (·.mark == .link)).filterMap fun f =>
+          (ren.lookup f.name).bind fun t => if t == f.name then none else some ((label, f.name), t)
+      | .timed _ m | .valued _ m => go fuel ren [m]
+      | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (go fuel ren)
+      | .loop _ b | .sessions b => go fuel ren b
+      | .bounded _ _ b o => go fuel ren b ++ go fuel ren o
+      | .incl n _ binds => match fuel, latest defs n with
+        | f + 1, some inc => go f (binds.map fun (g, x) => (g, (ren.lookup x).getD x)) inc.body
+        | _, _ => []
+      | _ => []) ++ go fuel ren rest
+  go fuel ren d.body
+
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
 (selfhost.session.proto); the text may then not declare structures of its own. -/
 def parse (text : String) (types : Option Types.Env := none) : Except String Parsed := do
@@ -983,7 +1171,14 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
       if !st.types.isEmpty then throw "the message types come from the .proto, so the text may not declare structures as well"
       pure env
     | none => pure st.types.toList
-  Types.check env
+  Types.check env (defs.flatMap (·.givens))
+  -- session identity in the text (selfhost.session.identity.scopes)
+  let keyIds := st.keys.toList.map (·.1)
+  let mut identityNotes : List String := []
+  for i in [0:defs.length] do
+    identityNotes := identityNotes ++ (← scopeCheck env (defs.take i) keyIds defs[i]!)
+  let targets := (linkTargetsOf env earlier (defs.length + 1) [] main).foldl
+    (fun acc (k, t) => if acc.any (·.1 == k) then acc else acc ++ [(k, t)]) []
   for d in defs do
     let ids := idLabels d.body
     -- an id not in scope (bound later in a loop, say) falls back to every label it has
@@ -1018,7 +1213,7 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
       pure (defs[i]!.version, defs[i]!.roles, gi)
     return some (nm, vs)
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
-           requires := st.requires.toList, types := env, keys := st.keys.toList,
+           requires := st.requires.toList, types := env, keys := st.keys.toList, linkTargets := targets, identityNotes,
            allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList,
            version := main.version, versioned }
 
@@ -1127,11 +1322,13 @@ partial def writeStmt (ind : String) : Stmt → List String
   | .loop n body => [ind ++ "rec " ++ showIdent n ++ " {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
   | .cont n => [ind ++ "continue " ++ showIdent n ++ ";"]
   | .sessions body => [ind ++ "sessions {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
-  | .incl n args => [ind ++ "include " ++ showIdent n ++ String.join (args.map (" " ++ showIdent ·)) ++ ";"]
+  | .incl n args binds => [ind ++ "include " ++ showIdent n ++ String.join (args.map (" " ++ showIdent ·)) ++
+      (if binds.isEmpty then "" else " with " ++ ", ".intercalate (binds.map fun (g, x) =>
+        if g == x then showIdent g else showIdent g ++ " = " ++ showIdent x)) ++ ";"]
 end
 
 def Def.write (d : Def) : String :=
-  "\n".intercalate (s!"protocol {showIdent d.name} ({", ".intercalate (d.roles.map showIdent)}){if d.version == 0 then "" else s!" version {d.version}"} \{" ::
+  "\n".intercalate (s!"protocol {showIdent d.name} ({", ".intercalate (d.roles.map showIdent)}){if d.version == 0 then "" else s!" version {d.version}"}{if d.givens.isEmpty then "" else " given " ++ " ".intercalate (d.givens.map showIdent)} \{" ::
     writeStmts "  " d.body ++ ["}"])
 
 /-- Protocol text for definitions, earlier ones first. -/
@@ -1140,7 +1337,7 @@ def write (defs : List Def) : String := "\n\n".intercalate (defs.map Def.write)
 /-- A message type as the parser reads it. -/
 def writeType (m : Types.Message) : String :=
   let ctor := if m.ctor.isEmpty then [] else [s!"  {if m.privateCtor then "private " else ""}{m.ctor} ::"]
-  let body := ctor ++ m.fields.map (fun f => s!"  {f.name} : {f.ty.render}") ++ m.constraints.map (fun c => s!"  {c.name} : {c.text}")
+  let body := ctor ++ m.fields.map (fun f => s!"  {f.name} : {f.render}") ++ m.constraints.map (fun c => s!"  {c.name} : {c.text}")
   (if m.doc.isEmpty then "" else s!"/-- {m.doc} -/\n") ++ "structure " ++ m.name ++
     (if body.isEmpty then "" else " where\n" ++ "\n".intercalate body)
 

@@ -1,6 +1,7 @@
 import Lean.Data.Json
 import LeanFM.Session.Conform
 import LeanFM.Session.Derived
+import LeanFM.Session.Types
 
 /-!
 # Sessions of a real log (clause selfhost.session.log-sessions)
@@ -54,6 +55,18 @@ structure Result where
   unattributed : Array Nat
   /-- each position's derived session name, or none when unattributed -/
   sessionOf    : Array (Option String)
+  /-- per-value problems with the identity marks (selfhost.session.identity.checks) -/
+  problems     : Array String := #[]
+  deriving Repr, Inhabited
+
+/-- A marked field: the label whose structure carries it, its name, and its mark. -/
+structure Marked where
+  label : String
+  field : String
+  mark  : Types.Mark
+  /-- the Fresh field a Link names: its own name, or the field an include binds it to
+  (selfhost.session.identity.scopes) -/
+  target : String := field
   deriving Repr, Inhabited
 
 /-- The key labels (field=value) an event carries. -/
@@ -65,11 +78,15 @@ def keyLabels (keys : List Key) (e : LogEvent) : List (Nat × String × String) 
 /-- Derive the sessions of `evs` (in log order) from causes and declared keys. `starts` are the
 labels a session can begin with. `named` says whether the log names sessions (then each session
 lists the log sessions its events carry). -/
-def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (named : Bool) : Result := Id.run do
+def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (named : Bool)
+    (marked : List Marked := []) (terminated : List LogEvent → Bool := fun _ => false) : Result := Id.run do
   let n := evs.size
   let mut parent := Array.range n
   let mut first : List ((Nat × String) × Nat) := []
   let mut grown : Array Bool := Array.replicate n false
+  -- each live (field, value) and the position that minted it (selfhost.session.identity.checks)
+  let mut live : List ((String × String) × Nat) := []
+  let mut problems : Array String := #[]
   for i in [0:n] do
     let e := evs[i]!
     if let some c := e.cause then
@@ -77,11 +94,50 @@ def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (name
         if j != i then
           parent := Derived.union parent i j
           grown := (grown.set! i true).set! j true
+    -- the events of the session holding position j, before position i
+    let sessionBefore (parent : Array Nat) (j : Nat) : List LogEvent :=
+      let r := (Derived.find parent j).1
+      ((List.range i).filter fun k => (Derived.find parent k).1 == r).map (evs[·]!)
+    -- a key value is an id its session minted: once that session has terminated it is freed, and
+    -- the next event carrying it starts a new session (selfhost.session.identity.scopes)
     for (k, _, v) in keyLabels keys e do
       grown := grown.set! i true
       match first.lookup (k, v) with
-      | some j => parent := Derived.union parent i j
+      | some j =>
+        if terminated (sessionBefore parent j) then first := ((k, v), i) :: first.filter (·.1 != (k, v))
+        else parent := Derived.union parent i j
       | none => first := ((k, v), i) :: first
+    let valuesOf (m : Types.Mark) : List (String × String) :=
+      (marked.filter fun x => x.label == e.label && x.mark == m).filterMap fun x =>
+        (e.fields.lookup x.field).map fun v => (if m == .link then x.target else x.field, shown v)
+    -- a Link joins the live session that minted its value; two different sessions are a join;
+    -- a session that has terminated has freed its value, so it no longer names it
+    let mut roots : List (Nat × String × String) := []
+    for (f, v) in valuesOf .link do
+      grown := grown.set! i true
+      match live.lookup (f, v) with
+      | some j =>
+        if terminated (sessionBefore parent j) then
+          live := live.filter (·.1 != (f, v))
+          problems := problems.push s!"event {e.id} ({e.label}) carries the Link {f}={v}, but no live session minted {f}={v}: it was never minted, or its session has ended and freed it"
+        else
+          let (r, p') := Derived.find parent j
+          parent := p'
+          unless roots.any (·.1 == r) do roots := roots ++ [(r, f, v)]
+      | none => problems := problems.push s!"event {e.id} ({e.label}) carries the Link {f}={v}, but no live session minted {f}={v}: it was never minted, or its session has ended and freed it"
+    match roots with
+    | [(r, _, _)] => parent := Derived.union parent i r
+    | (_ :: _ :: _) => problems := problems.push s!"event {e.id} ({e.label}) links {" and ".intercalate (roots.map fun (_, f, v) => s!"{f}={v}")}, which are different live sessions: a join, which the session graph represents (selfhost.session.identity.graph), so it is not merged into either"
+    | [] => pure ()
+    -- a Fresh value starts a session; minted again while that session is live, it is a problem;
+    -- once its session has terminated the value is freed and starts a new one
+    for (f, v) in valuesOf .fresh do
+      grown := grown.set! i true
+      match live.lookup (f, v) with
+      | some j =>
+        if terminated (sessionBefore parent j) then live := ((f, v), i) :: live.filter (·.1 != (f, v))
+        else problems := problems.push s!"event {e.id} ({e.label}) mints {f}={v} again while the session {evs[j]!.id} minted it is still live: a session id is unique among open sessions"
+      | none => live := ((f, v), i) :: live
   -- groups in order of their first event
   let mut groups : Array (Nat × Array Nat) := #[]
   for i in [0:n] do
@@ -107,7 +163,7 @@ def derive (evs : Array LogEvent) (keys : List Key) (starts : List String) (name
     let logs := if named then (xs.toList.map fun i => evs[i]!.session).eraseDups else []
     sessions := sessions.push { name, events := xs, logSessions := logs }
   return { sessions := sessions.extract 0 maxSessions, omitted := sessions.size - min sessions.size maxSessions,
-           unattributed, sessionOf }
+           unattributed, sessionOf, problems }
 
 /-- For a log that names its sessions: each cause or key value joining two events the log puts in
 different sessions, as a problem naming both events, their sessions and the link. -/

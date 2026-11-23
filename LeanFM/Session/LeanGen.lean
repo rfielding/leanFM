@@ -143,7 +143,7 @@ def Global.leanModule (g : Global String) (name : String) (roles : List String) 
   let structs := ms.map fun m =>
     let doc := if m.doc.isEmpty then [] else [s!"/-- {m.doc} -/"]
     "\n".intercalate (doc ++ (if m.fields.isEmpty then [s!"structure {upper m.name}"]
-      else [s!"structure {upper m.name} where"] ++ m.fields.map (fun f => s!"  {f.name} : {f.ty.render}")) ++
+      else [s!"structure {upper m.name} where"] ++ m.fields.map (fun f => s!"  {f.name} : {f.ty.render}{f.note}")) ++
       ["  deriving Repr, BEq, Lean.ToJson, Lean.FromJson"] ++ Types.checkedLean (upper m.name) m)
   let ctors := labels.map lower ++ acts.map lower
   if ctors.eraseDups.length != ctors.length then throw "two labels have the same Lean constructor name"

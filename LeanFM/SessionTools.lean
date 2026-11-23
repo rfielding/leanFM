@@ -244,6 +244,10 @@ structure Protocol where
   types : Session.Types.Env := []
   /-- session keys, (message id, field path) (selfhost.session.envelope) -/
   keys : List (String × String) := []
+  /-- Link fields an include renames, (label, field) to the Fresh field named (selfhost.session.identity.scopes) -/
+  linkTargets : List ((String × String) × String) := []
+  /-- sessions bodies whose copies cannot be told apart (selfhost.session.identity.scopes) -/
+  identityNotes : List String := []
   /-- the main protocol's version, 0 when it has none (selfhost.session.versions) -/
   version : Nat := 0
   /-- each version of the main protocol, oldest first: (number, roles, global type); empty when
@@ -406,7 +410,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
     -- a version without a clean upgrade path from the one before is refused, as the Lean
     -- elaborator refuses it (selfhost.session.versions)
     let upgrades <- Versions.check r
-    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := <- generativeLayer r.body r.roles args, types := r.types, keys := r.keys,
+    return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := <- generativeLayer r.body r.roles args, types := r.types, keys := r.keys, linkTargets := r.linkTargets, identityNotes := r.identityNotes,
              version := r.version, versions := (r.versioned.lookup r.name).getD [], upgrades,
              labelHistory := Versions.labelHistory r }
   let p ← match args.getObjVal? "protocol" with
@@ -436,7 +440,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
   -- the echoed text is a whole Lean file (selfhost.session.lean-syntax)
   let text := Text.header ++ typesText ++ ToText.write name roles js
   let parsed ← Text.parse text (← protoTypes args)
-  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys }
+  return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys, linkTargets := parsed.linkTargets, identityNotes := parsed.identityNotes }
 
 /-! ## Results -/
 
@@ -722,8 +726,11 @@ def check (args : Json) : Except String Json := do
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("issues", Json.arr (issues.map Json.str).toArray)
+    -- sessions bodies whose copies cannot be told apart; the verdict does not depend on them
+    -- (selfhost.session.identity.scopes)
+    , ("identity", Json.arr (p.identityNotes.map Json.str).toArray)
     , ("types", Json.arr (p.types.map fun m => Json.mkObj [("name", Json.str m.name),
-        ("fields", Json.arr (m.fields.map fun f => Json.str s!"{f.name} : {f.ty.render}").toArray)]).toArray)
+        ("fields", Json.arr (m.fields.map fun f => Json.str s!"{f.name} : {f.render}").toArray)]).toArray)
     , ("httpCuts", match calls with | some _ => Json.arr (cuts.map Json.str).toArray | none => Json.null)
     , ("projections", Json.mkObj projections)
     , ("calls", Json.arr (g.calls.map callJson).toArray)
@@ -1317,7 +1324,9 @@ def logEvent (j : Json) : Except String LogEvent := do
   if !isAct && dst.isEmpty then .error s!"event {id} has no to (or dst)"
   for s in [id, label, src, dst] do
     if s.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
-  let fields := match j.getObjVal? "fields" with
+  -- a field may travel in a header, a URL parameter or the body; conformance reads them alike
+  -- (selfhost.session.identity.marks)
+  let fields := ["fields", "body", "headers", "path", "query"].flatMap fun k => match j.getObjVal? k with
     | .ok o@(.obj _) => flattenFields "" o
     | _ => []
   if fields.length > maxFields then .error s!"event {id} has {fields.length} fields; the bound is {maxFields}"
@@ -1439,7 +1448,17 @@ def conform (args : Json) : Except String Json := do
   let starts := match p.global.stateGraph with
     | .ok g => ((g.edges.filter (·.1 == "s0")).map (·.2.2.label)).eraseDups
     | .error _ => p.global.messages.map (·.label)
-  let derived := LogSessions.derive evs.toArray logKeys starts named
+  -- Fresh and Link fields name sessions; a session that allows no further step has freed its value
+  -- (selfhost.session.identity.checks)
+  -- a Link an include renames (token bound to sid) names the session that minted sid
+  -- (selfhost.session.identity.scopes)
+  let marked := p.types.flatMap fun m => (m.fields.filter (·.mark != .plain)).map fun f =>
+    ({ label := m.name, field := f.name, mark := f.mark,
+       target := (p.linkTargets.lookup (m.name, f.name)).getD f.name } : LogSessions.Marked)
+  let terminated := fun (sofar : List Session.LogEvent) => match p.global.next sofar with
+    | .ok (steps, _) => steps.isEmpty
+    | .error _ => false
+  let derived := LogSessions.derive evs.toArray logKeys starts named marked terminated
   let crossProblems : List String := bif named then LogSessions.crossCheck evs.toArray logKeys else []
   let placeProblems : List String := bif named then [] else LogSessions.unattributedProblems evs.toArray derived
   let streamEvs := LogSessions.stream evs.toArray derived named
@@ -1491,7 +1510,7 @@ def conform (args : Json) : Except String Json := do
   -- a derived session is formed by its key, so the key check applies only to a log that names sessions
   let keyChecked : List String := match named with | true => keyProblems | false => []
   let keyProblems : List String := versionIssues ++ linkProblems ++ constraintProblems ++ keyChecked ++
-    crossProblems ++ placeProblems
+    crossProblems ++ placeProblems ++ derived.problems.toList
   let verdict := if bad.isEmpty && keyProblems.isEmpty then "conforms" else "violates"
   let problems := (bad.filterMap fun r => r.problem.map fun (e, why) => s!"session {r.session}, event {e}: {why}") ++ keyProblems
   let unchecked := results.flatMap fun r => r.unchecked.map fun (e, why) => s!"session {r.session}, event {e}: {why}"

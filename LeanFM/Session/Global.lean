@@ -25,6 +25,19 @@ structure Guard where
 
 instance : Repr Guard := ⟨fun g _ => repr g.text⟩
 
+
+/-- An include's bindings as written after `with`: `token`, or `token = sid` for a renamed one. -/
+def Global.showBinds (binds : List (String × String)) : String :=
+  ", ".intercalate (binds.map fun (g, x) => if g == x then g else s!"{g} = {x}")
+
+/-- The name of an include's box: the protocol, and its bindings when it has any (`Order with
+token`), so the interaction diagram shows how ids pass into the task (selfhost.session.identity.scopes). -/
+def Global.boxName (name : String) (binds : List (String × String)) : String :=
+  if binds.isEmpty then name else s!"{name} with {Global.showBinds binds}"
+
+/-- The protocol a box is an include of: its name without the bindings. -/
+def Global.boxProtocol (n : String) : String := ((n.splitOn " with ").headD n)
+
 /-! ## Interactions and global types -/
 
 structure Interaction (R : Type) where

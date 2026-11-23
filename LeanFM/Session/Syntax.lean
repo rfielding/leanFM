@@ -5,6 +5,18 @@ import LeanFM.Session.Text
 import LeanFM.Session.System
 import LeanFM.Session.Versions
 
+/-- A field minted by the message that carries it: its value names a new session
+(selfhost.session.identity.marks). It is the value itself; the mark is read from the text. -/
+abbrev Fresh (α : Type) := α
+/-- A field naming a session minted earlier, by a `Fresh` field of its name and type. -/
+abbrev Link (α : Type) := α
+/-- A field that travels in a header, visible without reading the body. -/
+abbrev Header (α : Type) := α
+/-- A field that travels as a URL path parameter. -/
+abbrev PathParam (α : Type) := α
+/-- A field that travels as a URL query parameter. -/
+abbrev QueryParam (α : Type) := α
+
 /-!
 # The `protocol` command: a session-type file is Lean (clause selfhost.session.lean-syntax)
 
@@ -131,10 +143,11 @@ partial def gen (scope : List (String × String)) : List Text.Stmt → MacroM Te
       `(LeanFM.Session.Global.andThen (LeanFM.Session.Global.loop $(str n) $(← gen scope b)) $(← gen scope rest))
     | .cont n => `(LeanFM.Session.Global.var $(str n))
     | .sessions b => `(LeanFM.Session.Global.sessions $(← gen scope b) $(← gen scope rest))
-    | .incl p args =>
+    | .incl p args bs =>
       let as := args.toArray.map fun a => (nm a : Term)
-      -- a versioned protocol is included by its newest version, Name.vN (selfhost.session.versions)
-      let shown := (p.splitOn ".").headD p
+      -- a versioned protocol is included by its newest version, Name.vN (selfhost.session.versions);
+      -- the box shows the include's bindings (selfhost.session.identity.scopes)
+      let shown := Global.boxName ((p.splitOn ".").headD p) bs
       `(LeanFM.Session.Global.box $(str shown) ($(mkIdent p.toName) $as*) $(<- gen scope rest))
 
 /-- Read one command's syntax with `Session.Text`, against this file's source. -/
@@ -160,7 +173,7 @@ def protocolRoles (c : Name) : CommandElabM (List String) := do
 partial def includesOf : List Text.Stmt -> List String
   | [] => []
   | s :: rest => (match s with
-      | .incl p _ => [p]
+      | .incl p _ _ => [p]
       | .timed _ m | .valued _ m => includesOf [m]
       | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap includesOf
       | .loop _ b | .sessions b => includesOf b
@@ -171,7 +184,7 @@ partial def includesOf : List Text.Stmt -> List String
 partial def retarget (targets : List (Prod String String)) : List Text.Stmt -> List Text.Stmt
   | [] => []
   | s :: rest => (match s with
-      | .incl p args => .incl ((targets.lookup p).getD p) args
+      | .incl p args bs => .incl ((targets.lookup p).getD p) args bs
       | .timed t m => .timed t ((retarget targets [m]).headD m)
       | .valued a m => .valued a ((retarget targets [m]).headD m)
       | .weighted n a qs bs => .weighted n a qs (bs.map (retarget targets))

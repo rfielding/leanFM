@@ -97,18 +97,25 @@ def Global.openApi (g : Global String) (title role : String) (types : Types.Env 
               ("headers", Json.mkObj [("Location", Json.mkObj [("required", Json.bool true),
                 ("schema", Json.mkObj [("type", "string"), ("format", "uri")])])])])
           else (key, (body ls).setObjVal! "description" (Json.str (" or ".intercalate ls)))
-      -- a request without a body carries its message's single fields as query parameters
-      let params : List Json := if ["post", "put", "patch"].contains m then [] else
+      -- a field placed in a header, the path or the query is a parameter there, whatever the method
+      -- (selfhost.session.identity.marks); a request without a body carries its other single fields
+      -- as query parameters
+      let bodyless := !["post", "put", "patch"].contains m
+      let params : List Json :=
         let names := (reqs.flatMap fun l => (Types.fieldsOf types l).map (·.name)).eraseDups
         names.filterMap fun n =>
-          let tys := reqs.filterMap fun l => ((Types.fieldsOf types l).find? (·.name == n)).map (·.ty)
-          let required := reqs.all fun l => (Types.fieldsOf types l).any fun f => f.name == n &&
+          let flds := reqs.filterMap fun l => (Types.fieldsOf types l).find? (·.name == n)
+          let place := (flds.head?.map (·.place)).getD .body
+          if place == .body && !bodyless then none else
+          let loc := if place == .body then "query" else place.name
+          let tys := flds.map (·.ty)
+          let required := place == .path || reqs.all fun l => (Types.fieldsOf types l).any fun f => f.name == n &&
             (match f.ty with | .opt _ => false | _ => true)
           match tys.head? with
           | some t@(.nat) | some t@(.int) | some t@(.str) | some t@(.bool) =>
-            some (Json.mkObj [("name", Json.str n), ("in", "query"), ("required", Json.bool required), ("schema", t.schema)])
+            some (Json.mkObj [("name", Json.str n), ("in", Json.str loc), ("required", Json.bool required), ("schema", t.schema)])
           | some (.opt t) =>
-            some (Json.mkObj [("name", Json.str n), ("in", "query"), ("required", Json.bool false), ("schema", t.schema)])
+            some (Json.mkObj [("name", Json.str n), ("in", Json.str loc), ("required", Json.bool false), ("schema", t.schema)])
           | _ => none
       let srcs := (cs.map (·.request.src)).eraseDups
       let op := [("operationId", Json.str (String.join reqs)),

@@ -43,9 +43,43 @@ inductive Ty where
   | opt (t : Ty)
   deriving BEq, Repr, Inhabited
 
+/-- A field's part in session identity (selfhost.session.identity.marks): `Fresh T` is minted by the
+message that carries it and names a new session; `Link T` names a session minted earlier. -/
+inductive Mark where
+  | plain | fresh | link
+  deriving BEq, Repr, Inhabited, DecidableEq
+
+/-- Where a field travels: a header is visible to every process that handles the message without
+reading its body; path and query are URL parameters; the rest is the body. -/
+inductive Place where
+  | body | header | path | query
+  deriving BEq, Repr, Inhabited, DecidableEq
+
+def Mark.wrapper : Mark → Option String
+  | .plain => none | .fresh => some "Fresh" | .link => some "Link"
+
+def Place.wrapper : Place → Option String
+  | .body => none | .header => some "Header" | .path => some "PathParam" | .query => some "QueryParam"
+
+def Place.name : Place → String
+  | .body => "body" | .header => "header" | .path => "path" | .query => "query"
+
+def Mark.name : Mark → String
+  | .plain => "plain" | .fresh => "fresh" | .link => "link"
+
+/-- The wrapper names a field type may carry, and what each means. -/
+def markOf (w : String) : Option Mark :=
+  match w with | "Fresh" => some .fresh | "Link" => some .link | _ => none
+def placeOf (w : String) : Option Place :=
+  match w with | "Header" => some .header | "PathParam" => some .path | "QueryParam" => some .query | _ => none
+
 structure Field where
   name : String
   ty   : Ty
+  /-- Fresh, Link or neither (selfhost.session.identity.marks) -/
+  mark : Mark := .plain
+  /-- where it travels; body unless the type says Header, PathParam or QueryParam -/
+  place : Place := .body
   /-- the protobuf field number a .proto gave it; 0 when numbered by position -/
   number : Nat := 0
   /-- the field's name in the .proto when it differs from `name`, its JSON name -/
@@ -92,6 +126,19 @@ def Ty.render : Ty → String
   | .msg n => n
   | .list t => "List " ++ t.render
   | .opt t => "Option " ++ t.render
+
+/-- A field's type as protocol text writes it, marks and placement included: `Link String`,
+`Header (Link String)`, `QueryParam Nat`. -/
+def Field.render (f : Field) : String :=
+  let inner := match f.mark.wrapper with | some w => s!"{w} {f.ty.render}" | none => f.ty.render
+  match f.place.wrapper with
+  | some w => if f.mark == .plain then s!"{w} {inner}" else s!"{w} ({inner})"
+  | none => inner
+
+/-- The marks and placement as a comment for generated code, which carries plain values. -/
+def Field.note (f : Field) : String :=
+  let parts := (if f.mark == .plain then [] else [f.mark.name]) ++ (if f.place == .body then [] else [f.place.name])
+  if parts.isEmpty then "" else " -- " ++ ", ".intercalate parts
 
 /-- Words that cannot be field names in some generated language. -/
 def reserved : List String :=
@@ -157,7 +204,9 @@ partial def ordered (env : Env) : Except String (List Message) := do
   for m in env do done ← visit [] done m.name
   return done.filterMap (find env)
 
-def check (env : Env) : Except String Unit := do
+/-- `given` are the fields some protocol of the text is given (selfhost.session.identity.scopes):
+the include binds the field that mints each, so its Link needs no Fresh field of its own name. -/
+def check (env : Env) (givens : List String := []) : Except String Unit := do
   if env.length > maxMessages then throw s!"at most {maxMessages} structures"
   for m in env do
     if !isAsciiIdent m.name then throw s!"structure {m.name}: a structure's name is letters, digits and _ (it names a protobuf message)"
@@ -175,6 +224,16 @@ def check (env : Env) : Except String Unit := do
       | _ => pure ()
       for r in f.ty.refs do
         if (find env r).isNone then throw s!"{m.name}.{f.name}: {r} is not a declared structure or a built-in type (Nat, Int, String, Bool)"
+      -- identity marks and placement go on one plain value (selfhost.session.identity.marks)
+      if f.mark != .plain || f.place != .body then
+        match f.ty with
+        | .nat | .int | .str | .bool => pure ()
+        | _ => throw s!"{m.name}.{f.name}: {f.render} marks a {f.ty.render}; a Fresh, Link, Header, PathParam or QueryParam field holds one plain value (Nat, Int, String or Bool)"
+  -- a Link names a session some message mints: a Fresh field of its name and type must exist
+  for m in env do
+    for f in m.fields do
+      if f.mark == .link && !givens.contains f.name && !(env.any fun m2 => m2.fields.any fun g => g.mark == .fresh && g.name == f.name && g.ty == f.ty) then
+        throw s!"{m.name}.{f.name}: Link {f.ty.render} names a session no message mints; declare {f.name} : Fresh {f.ty.render} on the message that starts it"
   discard <| ordered env
 
 /-! ## Conditions -/
@@ -374,7 +433,8 @@ def protoScalar : Ty → String
 
 def protoField (f : Field) (n : Nat) : String :=
   let pre := match f.ty with | .list _ => "repeated " | .opt _ => "optional " | _ => ""
-  s!"  {pre}{protoScalar f.ty} {if f.protoName.isEmpty then f.name else f.protoName} = {if f.number != 0 then f.number else n};"
+  -- marks and placement travel as a comment: implementations carry plain values
+  s!"  {pre}{protoScalar f.ty} {if f.protoName.isEmpty then f.name else f.protoName} = {if f.number != 0 then f.number else n};{f.note.replace " -- " " // "}"
 
 /-- A label as a protobuf message name: letters, digits and _ only. -/
 def protoName (s : String) : String :=
@@ -502,7 +562,7 @@ def checkedLean (name : String) (m : Message) : List String :=
    s!"  if {if cs.isEmpty then "_h" else "h"} : {conj} then .ok ⟨v{proofs}⟩",
    s!"  else .error \"{name}: " ++ "; ".intercalate (cs.map fun (n, ex) => s!"{n} needs {ex.render}") ++ "\""]
 
-def leanField (f : Field) : String := s!"  {f.name} : {f.ty.render}"
+def leanField (f : Field) : String := s!"  {f.name} : {f.ty.render}{f.note}"
 
 /-- The messages as Lean structures with JSON conversions. -/
 def lean (env : Env) (labels : List String) (ns : String) : Except String String := do
