@@ -47,6 +47,24 @@ after the request, \emph{both} answers must be possible, \emph{one} of them must
 next, and \emph{nothing else} may. Chapter~\ref{ch:faithful} turns exactly that sentence
 into CTL.
 
+\section{It is already an HTTP API}\label{sec:openapi}
+
+The \texttt{route} and \texttt{status} lines make Images an HTTP interface, and LeanFM
+writes it in the standard everyone already reads: an OpenAPI~3.1 (Swagger) document
+for the Server, the role that receives requests.
+
+\input{generated/ctl-images-openapi.tex}
+
+Each request is an operation under its route; its answers are responses under their
+statuses; each message's structure is a JSON schema that admits exactly its fields.
+The \texttt{\{id\}} in the route is a path parameter. Load the document into Swagger UI
+or any OpenAPI generator and you have the server's stubs and a client, in whatever
+language those tools support. The point of this book is what the OpenAPI document
+\emph{cannot} say: that every GetImage is answered, by exactly one of these two
+responses, and nothing else. The protocol says that, and Part~\ref{part:ctl} turns it
+into CTL that can be checked. The OpenAPI document is the protocol's interface; the
+protocol is the interface plus the order.
+
 \section{Three roles, nested choices, a secret}
 
 A purchase involves a client, a shop and a bank, and it can go wrong in two places.
@@ -66,6 +84,16 @@ travel (the \texttt{secret} atom of Chapter~\ref{ch:checker}), and a project dec
 whether to forbid, for example, that a card number ever reaches a log. And the where
 clause \texttt{p.amount = q.price} relates two messages of the same run: what the
 client pays is what the shop quoted.
+
+\paragraph{Not every message is HTTP.} The shop's charge to the bank has no route:
+it may be a queue, a socket or a call inside one process. For such messages LeanFM
+writes the message types as protobuf (\texttt{session\_types}): one message per
+structure, and an \texttt{Event} envelope that carries any of them with the fields
+every log needs (who sent it, to whom, and the event it answers). So the same
+protocol drives an HTTP service, a gRPC or raw-socket one, and the log both are
+checked against.
+
+\input{generated/ctl-placeorder-proto.tex}
 
 \section{The constructs}
 

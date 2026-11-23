@@ -597,6 +597,8 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
 
 def main : IO Unit := do
   let port ← configuredPort
+  -- checked before serving, so a bad value stops the server now (selfhost.env.startup)
+  LeanFM.CallLimits.configureFromEnv
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (bindAddr port)
   server.listen 128

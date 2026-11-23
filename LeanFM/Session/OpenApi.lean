@@ -43,6 +43,13 @@ def splitRoute (route : String) : Except String (String × String) :=
     else pure (m, p)
   | _ => throw s!"route \"{route}\" is not a method and a path, such as \"POST /orders\""
 
+/-- The `{name}` segments of a path template: `/images/{id}` names `id`. -/
+def templateNames (path : String) : List String :=
+  ((path.splitOn "{").drop 1).filterMap fun part =>
+    match part.splitOn "}" with
+    | n :: _ :: _ => if n.isEmpty then none else some n
+    | _ => none
+
 /-- Every call, nested ones included. -/
 partial def flatten {R : Type} (cs : List (Call R)) : List (Call R) :=
   cs.flatMap fun c => c :: flatten c.nested
@@ -101,11 +108,15 @@ def Global.openApi (g : Global String) (title role : String) (types : Types.Env 
       -- (selfhost.session.identity.marks); a request without a body carries its other single fields
       -- as query parameters
       let bodyless := !["post", "put", "patch"].contains m
+      -- a name in the path template ({id} in /images/{id}) is a required path parameter, whatever
+      -- its field declares: OpenAPI requires it, and it cannot travel anywhere else (selfhost.session.openapi)
+      let templ := templateNames p
       let params : List Json :=
         let names := (reqs.flatMap fun l => (Types.fieldsOf types l).map (·.name)).eraseDups
-        names.filterMap fun n =>
+        let fromFields := names.filterMap fun n =>
           let flds := reqs.filterMap fun l => (Types.fieldsOf types l).find? (·.name == n)
-          let place := (flds.head?.map (·.place)).getD .body
+          let inTemplate := templ.contains n
+          let place := if inTemplate then .path else (flds.head?.map (·.place)).getD .body
           if place == .body && !bodyless then none else
           let loc := if place == .body then "query" else place.name
           let tys := flds.map (·.ty)
@@ -117,6 +128,9 @@ def Global.openApi (g : Global String) (title role : String) (types : Types.Env 
           | some (.opt t) =>
             some (Json.mkObj [("name", Json.str n), ("in", Json.str loc), ("required", Json.bool false), ("schema", t.schema)])
           | _ => none
+        let missing := (templ.filter fun n => !names.contains n).map fun n =>
+          Json.mkObj [("name", Json.str n), ("in", "path"), ("required", Json.bool true), ("schema", Json.mkObj [("type", "string")])]
+        fromFields ++ missing
       let srcs := (cs.map (·.request.src)).eraseDups
       let op := [("operationId", Json.str (String.join reqs)),
         ("summary", Json.str s!"{" or ".intercalate reqs} from {" or ".intercalate srcs}"),

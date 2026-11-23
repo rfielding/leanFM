@@ -2,6 +2,7 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 import Lean.Data.Json
 import LeanFM.Artifacts
+import LeanFM.CallLimits
 import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.Session.Knowledge
 import LeanFM.Session.Attack
@@ -39,9 +40,34 @@ structure Bounds where
   maxPredicates : Nat := 64
   /-- the truth-set bytes one evaluation may hold at once (selfhost.session.ctl-scale) -/
   maxTruthBytes : Nat := 1073741824
+  /-- the bounds of a protocol's own state graph (session_ctl), whose limits have the session names -/
+  session : Bool := false
 deriving Repr
 
 def bounds : Bounds := {}
+
+/-- The sentence a refusal by bound `which` ends with: the per-call limit and how to raise it
+(selfhost.mcp.limits). -/
+def Bounds.hint (b : Bounds) (which : String) : String :=
+  let (n, v) := match which, b.session with
+    | "formula", true => ("formulaNodes", b.maxFormulaNodes)
+    | "formula", false => ("ctlFormulaNodes", b.maxFormulaNodes)
+    | "truth", _ => ("truthBytes", b.maxTruthBytes)
+    | _, true => ("states", b.maxDraftStates)
+    | "transitions", false => ("draftTransitions", b.maxDraftTransitions)
+    | "model", false => ("modelNodes", b.maxModelNodes)
+    | _, false => ("draftStates", b.maxDraftStates)
+  "; " ++ LeanFM.CallLimits.raise n v
+
+/-- check_ctl's bounds for one call: the defaults, changed by the call's `limits`. -/
+def boundsOf (args : Json) : Bounds :=
+  let g := LeanFM.CallLimits.get args
+  { bounds with
+    maxDraftStates := (g "draftStates")
+    maxDraftTransitions := (g "draftTransitions")
+    maxModelNodes := (g "modelNodes")
+    maxFormulaNodes := (g "ctlFormulaNodes")
+    maxTruthBytes := (g "truthBytes") }
 
 def boundsJson (b : Bounds := bounds) : Json :=
   Json.mkObj
@@ -703,7 +729,7 @@ def parseBounded (j : Json) (b : Bounds := bounds) : Except String Formula := do
   let f ← parseFormula j 0 b
   let n := (Dag.ofFormula f).treeSize (b.maxFormulaNodes + 1)
   if n > b.maxFormulaNodes then
-    throw s!"formula has {if n > b.maxFormulaNodes then s!"more than {b.maxFormulaNodes}" else toString n} nodes; the bound is {b.maxFormulaNodes}"
+    throw s!"formula has {if n > b.maxFormulaNodes then s!"more than {b.maxFormulaNodes}" else toString n} nodes; the bound is {b.maxFormulaNodes}{b.hint "formula"}"
   return f
 
 /-- A formula check_ctl decides (and session_ctl through it): at most maxFormulaNodes distinct
@@ -712,7 +738,7 @@ def parseShared (j : Json) (b : Bounds := bounds) : Except String Formula := do
   let f ← parseFormula j 0 b
   let n := (Dag.ofFormula f).size
   if n > b.maxFormulaNodes then
-    throw s!"formula has {n} distinct subformulas; the bound is {b.maxFormulaNodes}"
+    throw s!"formula has {n} distinct subformulas; the bound is {b.maxFormulaNodes}{b.hint "formula"}"
   return f
 
 /-! ## Task models -/
@@ -763,7 +789,7 @@ def strings (j : Json) (what : String) (limit : Nat) : Except String (List Strin
 
 def parseDraft (j : Json) (b : Bounds := bounds) : Except String TaskModel := do
   let field := fun (k : String) => (j.getObjVal? k).toOption
-  let states ← strings ((field "states").getD (Json.arr #[])) "states" b.maxDraftStates
+  let states ← (strings ((field "states").getD (Json.arr #[])) "states" b.maxDraftStates).mapError (· ++ b.hint "states")
   if states.isEmpty then throw "a draft task needs states"
   let initial ← match (field "initial").bind str? with
     | some s => pure s
@@ -772,7 +798,7 @@ def parseDraft (j : Json) (b : Bounds := bounds) : Except String TaskModel := do
   let transitions ← match field "transitions" with
     | some (.arr items) =>
       if items.size > b.maxDraftTransitions then
-        throw s!"draft has {items.size} transitions; the bound is {b.maxDraftTransitions}"
+        throw s!"draft has {items.size} transitions; the bound is {b.maxDraftTransitions}{b.hint "transitions"}"
       items.toList.mapM fun t => do
         let g := fun (k : String) => match (t.getObjVal? k).toOption.bind str? with
           | some v => checkString ("transition." ++ k) v
@@ -1257,7 +1283,7 @@ def satE (m : Model) (f : Formula) (b : Bounds := bounds) : Except String (Array
         return bitsZip r gone (fun x g => x &&& ~~~ g)
     live := live + nb
     if live > b.maxTruthBytes then
-      throw s!"the check would hold more than {b.maxTruthBytes} bytes of truth sets at once ({c.ops.size} distinct subformulas over {n} nodes); nothing was proved"
+      throw s!"the check would hold more than {b.maxTruthBytes} bytes of truth sets at once ({c.ops.size} distinct subformulas over {n} nodes); nothing was proved{b.hint "truth"}"
     sets := sets.set! i r
     for k in ks do
       readers := readers.modify k (· - 1)
@@ -1495,7 +1521,7 @@ def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
   match buildModel t b with
   | none =>
     return verdictJson "check_ctl" "resource-limit" reading <| common ++
-      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the reachable model exceeds {b.maxModelNodes} nodes; nothing was proved")])]
+      [("evidence", Json.mkObj [("kind", "none"), ("note", s!"the reachable model exceeds {b.maxModelNodes} nodes; nothing was proved{b.hint "model"}")])]
   | some m =>
     match Model.satE m f b with
     | .error e =>
@@ -2486,7 +2512,7 @@ def run (name : String) (args : Json) : Option ToolOutcome :=
     some (.error s!"arguments exceed {bounds.maxArgumentBytes} bytes")
   else match name with
     | "explain_formula" => some (explainFormula args)
-    | "check_ctl" => some (checkCtl args)
+    | "check_ctl" => some (checkCtl args (boundsOf args))
     | "check_trace" => some (checkTrace args)
     | "classify_requirement" => some (classifyRequirement args)
     | "knows" => some (knows args)

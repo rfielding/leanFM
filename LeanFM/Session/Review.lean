@@ -132,7 +132,7 @@ open Review in
 and a protocol over its bound (GoServer's parallel sessions interleave into more than 2000 states)
 is reported as not checked rather than stopping the review, so the structure, HTTP and role checks
 still answer. -/
-def Global.reviewAll (g : Global String) (roles : List String) : List Finding × List String := Id.run do
+def Global.reviewAll (g : Global String) (roles : List String) (maxStates : Nat := Conform.graphMaxStates) : List Finding × List String := Id.run do
   let core := (g.issues roles ++ g.httpIssues).map fun m => { kind := "structure", message := m, suggestion := suggestCore m : Finding }
   -- HTTP where the protocol says so: routes mark requests
   let msgs := g.messages
@@ -146,7 +146,7 @@ def Global.reviewAll (g : Global String) (roles : List String) : List Finding ×
       (c.responses.filter (·.status.isNone)).map fun r =>
         { kind := "http", message := s!"{r.label} answers {c.request.label} ({c.request.route.getD ""}) without a status",
           suggestion := s!"Add the status it means, such as `status 200`, to {r.label}." : Finding }
-  let (graphLoops, notChecked) := match g.stateGraph with
+  let (graphLoops, notChecked) := match g.stateGraph maxStates with
     | .ok graph => (neverEnds graph, [])
     | .error why => ([], [s!"liveness (whether every session can end): {why}"])
   let loops := graphLoops.map fun path =>

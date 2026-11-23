@@ -41,17 +41,26 @@ end Prop'
 /-- The checker's bounds for a protocol's own state graph: Global.stateGraph already stopped at
 Conform.graphMaxStates states, so the draft and its model may be as large as that graph. The public
 check_ctl tool keeps its smaller bounds for drafts a client sends. -/
-def sessionBounds : LeanFM.Logic.Bounds :=
-  { maxDraftStates := Conform.graphMaxStates, maxDraftTransitions := 20 * Conform.graphMaxStates,
-    maxModelNodes := 20 * Conform.graphMaxStates,
+def sessionBoundsFor (states : Nat := Conform.graphMaxStates) (formulaNodes : Nat := 65536)
+    (truthBytes : Nat := LeanFM.Logic.bounds.maxTruthBytes) : LeanFM.Logic.Bounds :=
+  { maxDraftStates := states, maxDraftTransitions := 20 * states,
+    maxModelNodes := 20 * states,
     -- a formula is evaluated as its DAG, so the bound counts distinct subformulas (selfhost.session.ctl-scale)
-    maxFormulaNodes := 65536 }
+    maxFormulaNodes := formulaNodes, maxTruthBytes := truthBytes, session := true }
+
+def sessionBounds : LeanFM.Logic.Bounds := sessionBoundsFor
+
+/-- session_ctl's bounds for one call: the defaults, changed by the call's `limits`
+(selfhost.mcp.limits). -/
+def sessionBoundsOf (args : Lean.Json) : LeanFM.Logic.Bounds :=
+  let g := LeanFM.CallLimits.get args
+  sessionBoundsFor (g "states") (g "formulaNodes") (g "truthBytes")
 
 /-- A CTL formula (the logic tools' JSON) decided over an inline task (their draft form: states,
 initial, terminals, transitions): the checker's answer, with `report` naming the path's messages in
 order. -/
-def checkDraft (name : String) (draft formula : Json) : Except String Json := do
-  let answer <- LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)]) sessionBounds
+def checkDraft (name : String) (draft formula : Json) (b : LeanFM.Logic.Bounds := sessionBounds) : Except String Json := do
+  let answer <- LeanFM.Logic.checkCtl (Json.mkObj [("task", draft), ("formula", formula)]) b
   let reading := (answer.getObjValAs? String "reading").toOption.getD ""
   -- the path in words: the messages in order, and where a lasso repeats
   let evidence := (answer.getObjVal? "evidence").toOption.getD Json.null
@@ -71,9 +80,9 @@ def checkDraft (name : String) (draft formula : Json) : Except String Json := do
 /-- One session of a protocol as the logic tools' inline task (their draft form): one transition per
 step of Global.stateGraph, with its message, roles and the secret field paths `secretsOf` gives its
 label (none unless asked: the secret atom is a question a project's tests ask, not a rule). -/
-def Global.draft (g : Global String) (name : String) (secretsOf : String → List String := fun _ => []) :
-    Except String (Json × Nat) := do
-  let graph ← g.stateGraph
+def Global.draft (g : Global String) (name : String) (secretsOf : String → List String := fun _ => [])
+    (maxStates : Nat := Conform.graphMaxStates) : Except String (Json × Nat) := do
+  let graph ← g.stateGraph maxStates
   let transition (e : String × String × Conform.NextStep) : Json :=
     let (a, b, n) := e
     let secrets := if n.isAct then [] else secretsOf n.label
@@ -88,17 +97,17 @@ def Global.draft (g : Global String) (name : String) (secretsOf : String → Lis
 /-- A CTL formula (the logic tools' JSON) decided over one session of a protocol: the checker's
 answer, with `report` naming the path's messages in order and `states` the graph's size. -/
 def Global.checkFormula (g : Global String) (name : String) (formula : Json)
-    (secretsOf : String → List String := fun _ => []) : Except String Json := do
-  let (draft, states) ← g.draft name secretsOf
-  let answer ← checkDraft name draft formula
+    (secretsOf : String → List String := fun _ => []) (b : LeanFM.Logic.Bounds := sessionBounds) : Except String Json := do
+  let (draft, states) ← g.draft name secretsOf b.maxDraftStates
+  let answer ← checkDraft name draft formula b
   return answer.setObjVal! "states" (toJson states)
 
 /-- Several formulas over one session, the state graph built once; each answer as checkFormula's,
 or the error that formula gave. -/
 def Global.checkFormulas (g : Global String) (name : String) (formulas : List Json)
-    (secretsOf : String → List String := fun _ => []) : Except String (List (Except String Json)) := do
-  let (draft, states) ← g.draft name secretsOf
-  return formulas.map fun f => (checkDraft name draft f).map (·.setObjVal! "states" (toJson states))
+    (secretsOf : String → List String := fun _ => []) (b : LeanFM.Logic.Bounds := sessionBounds) : Except String (List (Except String Json)) := do
+  let (draft, states) ← g.draft name secretsOf b.maxDraftStates
+  return formulas.map fun f => (checkDraft name draft f b).map (·.setObjVal! "states" (toJson states))
 
 namespace Spec
 variable {R : Type} [DecidableEq R] [ToString R]

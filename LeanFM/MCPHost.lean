@@ -39,6 +39,21 @@ private def envNat (name : String) (default : Nat) : IO Nat := do
     | some n => pure n
     | none => throw <| IO.userError s!"{name} must be a decimal number"
 
+/-- A switch read at startup: absent is `default`; 0, 1, true and false are accepted; anything else
+stops the server naming the variable (selfhost.env.startup). -/
+def parseSwitch (name : String) (default : Bool) (raw : Option String) : Except String Bool :=
+  match raw with
+  | none => .ok default
+  | some raw => match raw.trimAscii.toString.toLower with
+    | "1" | "true" => .ok true
+    | "0" | "false" | "" => .ok false
+    | other => .error s!"{name} must be 0, 1, true or false, not {other}"
+
+def envSwitch (name : String) (default : Bool) : IO Bool := do
+  match parseSwitch name default (← IO.getEnv name) with
+  | .ok b => pure b
+  | .error e => throw (IO.userError e)
+
 def normalizeOrigin (o : String) : String :=
   let t := o.trimAscii.toString
   if t.endsWith "/" then (t.dropEnd 1).toString else t
@@ -60,7 +75,7 @@ def HostConfig.fromEnv : IO HostConfig := do
   let inflight ← envNat "LEANFM_MCP_MAX_INFLIGHT" d.maxInflight
   if rate == 0 || burst == 0 || inflight == 0 then
     throw <| IO.userError "LEANFM_MCP_RATE, LEANFM_MCP_BURST and LEANFM_MCP_MAX_INFLIGHT must be positive"
-  let trust := ((← IO.getEnv "LEANFM_MCP_TRUST_PROXY").map (fun v => v.trimAscii.toString == "1" || v.trimAscii.toString == "true")).getD false
+  let trust ← envSwitch "LEANFM_MCP_TRUST_PROXY" false
   pure { bind, port, origins, token, ratePerMinute := rate, burst, maxInflight := inflight, trustProxy := trust }
 
 /-- A request as the host sees it. Header names are matched without regard to case. -/

@@ -132,7 +132,7 @@ def serveHttp : IO Unit := do
     | throw <| IO.userError s!"LEANFM_MCP_BIND must be an IPv4 address, not {cfg.bind}"
   let limits ← Limits.new
   -- logs stay private on a hosted endpoint unless its operator opts in
-  if (← IO.getEnv "LEANFM_MCP_LOGS").map (·.trimAscii.toString) == some "1" then LeanFM.ServerLogs.enable
+  if ← envSwitch "LEANFM_MCP_LOGS" false then LeanFM.ServerLogs.enable
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (SocketAddress.v4 { addr, port := UInt16.ofNat cfg.port })
   server.listen 128
@@ -141,6 +141,11 @@ def serveHttp : IO Unit := do
   serveLoop cfg limits server
 
 def main (args : List String) : IO UInt32 := do
+  -- every environment variable is checked before serving, so a bad one stops the server now, not
+  -- later in its logs (selfhost.env.startup); HTTP's own variables are checked by HostConfig.fromEnv
+  try LeanFM.CallLimits.configureFromEnv catch e =>
+    IO.eprintln s!"leanfm-mcp: {e}"
+    return 2
   match parseArgs args with
   | .error why =>
       IO.eprintln s!"{why}\n{usage}"

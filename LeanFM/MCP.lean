@@ -37,6 +37,10 @@ def instructions : String :=
   "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, show one role's view (its diagram, OpenAPI and payloads) with session_actor, generate a large dataset to see how sessions distribute with session_dataset, browse a protocol's tree of included protocols, branches and roles like a file explorer with session_explore (example goserver is a whole specification to show), generate code to implement it with session_skeleton, writing the protocol in " ++
   "LeanFM protocol syntax as the lean argument (leanfm://language/session-reference). Show people the diagrams and streams these tools " ++
   "generate rather than drawing interaction diagrams by hand. " ++
+  "A limit is a warning, not a wall: when an answer says it stopped at a limit (states, logEvents, datasetEvents, formulaNodes and the others " ++
+  "listed in each tool's limits argument), and the work is worth the memory and time, call the same tool again with the optional " ++
+  "limits argument, for example {\"limits\": {\"states\": 100000}}; it applies to that call only, is capped at the operator's ceiling, " ++
+  "and the answer's limitsApplied says what was used. The limits and their defaults: " ++ LeanFM.CallLimits.listing ++ ". " ++
   "When a LeanFM tool, view or server fails, and server_logs is listed, read the logs with it (no log argument " ++
   "lists them) before asking the user to paste a log."
 
@@ -330,8 +334,28 @@ def withExampleArgument (tool : Json) : Json :=
   let file := Json.mkObj [("type", "string"), ("description", Json.str "instead of lean: one protocol file of the project, as project_view stage requirements section protocols lists it (LeanFM's own protocol is LeanFM/LLMGenerated/LeanFM.leanfm); the file is read on the server, one file per call")]
   tool.setObjVal! "inputSchema" (input.setObjVal! "properties" (((props.setObjVal! "example" ex).setObjVal! "project" project).setObjVal! "file" file))
 
+/-- Every tool takes the optional per-call `limits` argument (selfhost.mcp.limits). -/
+def withLimitsArgument (tool : Json) : Json :=
+  let input := tool.getObjValD "inputSchema"
+  let props := match input.getObjValD "properties" with | .obj _ => input.getObjValD "properties" | _ => Json.mkObj []
+  tool.setObjVal! "inputSchema" ((input.setObjVal! "type" (Json.str "object")).setObjVal! "properties" (props.setObjVal! "limits" LeanFM.CallLimits.schema))
+
+/-- An answer computed under changed limits says so: limitsApplied in its structured content and the
+warning as a line of its text (selfhost.mcp.limits). -/
+def withLimitsReport (applied : List LeanFM.CallLimits.Applied) (result : Json) : Json :=
+  if applied.isEmpty then result else
+  let report := LeanFM.CallLimits.report applied
+  let result := match result.getObjVal? "structuredContent" with
+    | .ok sc => result.setObjVal! "structuredContent" (sc.setObjVal! "limitsApplied" report)
+    | .error _ => result.setObjVal! "structuredContent" (Json.mkObj [("limitsApplied", report)])
+  match result.getObjValD "content" with
+  | .arr cs =>
+    let line := Json.mkObj [("type", "text"), ("text", Json.str (LeanFM.CallLimits.warning applied))]
+    result.setObjVal! "content" (Json.arr (cs.push line))
+  | _ => result
+
 /-- Tool definitions as listed: the logic tools the view draws carry `_meta.ui.resourceUri`. -/
-def tools : Array Json := toolDefinitions.map (withSessionView ∘ withLogicView ∘ withExampleArgument)
+def tools : Array Json := toolDefinitions.map (withLimitsArgument ∘ withSessionView ∘ withLogicView ∘ withExampleArgument)
 
 /-- Listed only where `LeanFM.ServerLogs.enabled` is on: leanfm-mcp --stdio and leanfm-server on
 127.0.0.1, never the hosted HTTP endpoint unless LEANFM_MCP_LOGS=1 (LeanFM/ServerLogs.lean). -/
@@ -545,12 +569,19 @@ def dispatchJson (request : Json) : IO Response := do
       | .ok name =>
         let t0 ← IO.monoNanosNow
         let args := (field params "arguments").toOption.getD (Json.mkObj [])
-        -- a session tool may name a project's protocol file instead of carrying its text
-        let result ← if name.startsWith "session_" then do
-            match ← LeanFM.ProjectView.protocolArgs args with
-            | .ok args => pure (toolResult name args)
-            | .error e => pure (.ok (logicResult name (.error e)))
-          else pure (toolResult name args)
+        -- the call's limits, checked and capped at the operator's ceiling before any tool runs (selfhost.mcp.limits)
+        let factor ← LeanFM.CallLimits.ceilingFactor.get
+        let result ← match LeanFM.CallLimits.validate args factor with
+          | .error e => pure (.ok (logicResult name (.error e)))
+          | .ok applied => do
+            let args := LeanFM.CallLimits.rewrite args applied
+            -- a session tool may name a project's protocol file instead of carrying its text
+            let r ← if name.startsWith "session_" then do
+                match ← LeanFM.ProjectView.protocolArgs args with
+                | .ok args => pure (toolResult name args)
+                | .error e => pure (.ok (logicResult name (.error e)))
+              else pure (toolResult name args)
+            pure (r.map (withLimitsReport applied))
         let t1 ← IO.monoNanosNow
         -- recorded after the answer is computed, so it can neither change nor fail it (selfhost.mcp.metrics)
         LeanFM.CheckMetrics.checkStats.modify (·.record listedToolNames name result (t1 - t0))

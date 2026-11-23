@@ -36,9 +36,9 @@ end Suggest
 
 open Suggest in
 /-- The suggested properties of one session of the protocol, named, at most `maxSuggestions`. -/
-def Global.suggest (g : Global String) (roles : List String) (secretsOf : String → List String := fun _ => []) :
-    Except String (List (String × Json)) := do
-  let graph ← g.stateGraph
+def Global.suggest (g : Global String) (roles : List String) (secretsOf : String → List String := fun _ => [])
+    (maxStates : Nat := Conform.graphMaxStates) : Except String (List (String × Json)) := do
+  let graph ← g.stateGraph maxStates
   let firsts := ((graph.edges.filter (·.1 == "s0")).map (·.2.2.label)).eraseDups
   let base : List (String × Json) :=
     [ ("Every session can still end from every state it reaches (no trap)", one "AG" (one "EF" (Json.str "terminal")))
@@ -74,9 +74,10 @@ def Global.suggest (g : Global String) (roles : List String) (secretsOf : String
 /-- Every suggestion decided over one built graph: name, formula and the checker's answer (its
 verdict, reading, notation and path), or the error that formula gave. -/
 def Global.suggestions (g : Global String) (name : String) (roles : List String)
-    (secretsOf : String → List String := fun _ => []) : Except String (List (String × Json × Except String Json)) := do
-  let ps ← g.suggest roles secretsOf
-  let answers ← g.checkFormulas name (ps.map (·.2)) secretsOf
+    (secretsOf : String → List String := fun _ => []) (b : LeanFM.Logic.Bounds := sessionBounds) :
+    Except String (List (String × Json × Except String Json)) := do
+  let ps ← g.suggest roles secretsOf b.maxDraftStates
+  let answers ← g.checkFormulas name (ps.map (·.2)) secretsOf b
   return (ps.zip answers).map fun ((n, f), a) => (n, f, a)
 
 end LeanFM.Session

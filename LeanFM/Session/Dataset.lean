@@ -1,5 +1,6 @@
 import Lean.Data.Json
 import Std.Data.HashMap
+import LeanFM.CallLimits
 import LeanFM.Session.Conform
 
 /-! Large generated datasets of a protocol, summarized (clause selfhost.session.dataset): many
@@ -224,13 +225,14 @@ def summary (runs : Array Run) (timeUnit : String) : Json :=
 
 /-- `sessions` walks, each added to the counts as it is made and then dropped, refusing more than
 `maxEvents` in all. -/
-def walkCounts (g : Global String) (seed sessions : Nat) (bound : Nat := maxEvents) : Except String Acc := do
-  if sessions == 0 || sessions > maxSessions then throw s!"sessions must be 1 to {maxSessions}"
+def walkCounts (g : Global String) (seed sessions : Nat) (bound : Nat := maxEvents)
+    (maxS : Nat := maxSessions) (cap : Nat := maxSessionEvents) : Except String Acc := do
+  if sessions == 0 || sessions > maxS then throw s!"sessions must be 1 to {maxS}"
   let mut a : Acc := {}
   for i in [0:sessions] do
-    let (r, _) := walk g (sessionSeed seed i)
+    let (r, _) := walk g (sessionSeed seed i) cap
     if a.events + r.steps.size > bound then
-      throw s!"the dataset would exceed {bound} events after {a.sessions} sessions; ask for fewer sessions"
+      throw s!"the dataset would exceed {bound} events after {a.sessions} sessions; ask for fewer sessions, or {LeanFM.CallLimits.raise "datasetEvents" bound}"
     a := a.add r
   return a
 

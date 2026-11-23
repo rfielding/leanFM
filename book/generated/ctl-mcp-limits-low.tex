@@ -1,0 +1,9 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_ctl
+{"limits": {"states": 5}, "lean": "protocol PlaceOrder ...", "formula": {"AF": "terminal"}}
+
+answer (excerpt)
+{"verdict": "rejected",
+ "reason":
+ "more than 5 protocol states; the property was not checked; this is the states limit (5); to allow more, call again with \"limits\": {\"states\": 10} (a warning, not a wall: raise it when the machine has the memory)"}
+\end{lstlisting}

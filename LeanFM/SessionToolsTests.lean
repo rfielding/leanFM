@@ -554,6 +554,14 @@ def goReplies (path : String) : String :=
 #guard reason (api "protocol P (A, B) { Ask from A to B route \"FETCH /x\"; }" "B") == "route \"FETCH /x\": fetch is not an HTTP method"
 #guard reason (api "protocol P (A, B) { Ask from A to B route \"GET x\"; }" "B") == "route \"GET x\": the path must start with /"
 #guard reason (api signIn "Nobody") == "Nobody is not a role of SignIn; its roles are Browser, App, Idp"
+-- a name in the path template is a required path parameter, whatever its field declares; a
+-- template name no field has is still declared (an undeclared one makes the document invalid)
+def imgApi := "structure GetImage where\n  id : String\nprotocol Images (Browser, Server) { g: GetImage from Browser to Server route \"GET /images/{id}\"; Image from Server to Browser cause g status 200; }"
+def imgParams (t : String) : String := ((((((field (api t "Server") "openapi").getObjValD "paths").getObjValD "/images/{id}").getObjValD "get").getObjValD "parameters")).compress
+#guard imgParams imgApi == "[{\"in\":\"path\",\"name\":\"id\",\"required\":true,\"schema\":{\"type\":\"string\"}}]"
+#guard imgParams (imgApi.replace "id : String" "size : Nat") == "[{\"in\":\"query\",\"name\":\"size\",\"required\":true,\"schema\":{\"minimum\":0,\"type\":\"integer\"}},{\"in\":\"path\",\"name\":\"id\",\"required\":true,\"schema\":{\"type\":\"string\"}}]"
+#guard LeanFM.Session.OpenApi.templateNames "/a/{x}/b/{y}" == ["x", "y"]
+#guard LeanFM.Session.OpenApi.templateNames "/a/{}/b{" == []
 
 /-! ## session_review: every check that applies, with an edit for each finding -/
 

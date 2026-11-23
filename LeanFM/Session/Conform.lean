@@ -2,6 +2,7 @@ import Std.Data.HashMap
 import Std.Data.HashSet
 import LeanFM.Session.Global
 import LeanFM.Session.Where
+import LeanFM.CallLimits
 
 /-!
 # Conformance: does a recorded run follow the protocol? (clause selfhost.session.conform)
@@ -381,7 +382,7 @@ def Global.stateGraph (g : Global String) (maxNodes : Nat := Conform.graphMaxSta
           | some d => pure d
           | none =>
             if names.size ≥ maxNodes then
-              return .error s!"more than {maxNodes} protocol states; the property was not checked"
+              return .error s!"more than {maxNodes} protocol states; the property was not checked; {LeanFM.CallLimits.raise "states" maxNodes}"
             let d := names.size
             names := names.insert k d
             queue := queue.push st'

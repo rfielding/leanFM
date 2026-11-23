@@ -118,10 +118,31 @@ them, and checks the where clauses on the values (Chapter~\ref{ch:where}):
 
 \section{What interface does it imply?}
 
-A protocol whose messages carry routes and statuses implies an HTTP interface.
-\texttt{session\_openapi} writes it for one role; this is the server's side of Images:
+\texttt{session\_openapi} writes the OpenAPI document of one role
+(Section~\ref{sec:openapi} shows the whole document for Images); requests without a
+route are listed as unrouted rather than guessed:
 
 \input{generated/ctl-mcp-openapi.tex}
+
+\section{When an answer stops at a limit}
+
+Every bound that can stop LeanFM's work is a named limit: \texttt{states} explored,
+\texttt{logEvents} in a log, \texttt{formulaNodes} in a formula, and the others the
+server's instructions list with their defaults. A limit is a warning, not a wall. An
+answer that stops at one names it and says how to raise it; here the limit is set
+absurdly low to show the refusal:
+
+\input{generated/ctl-mcp-limits-low.tex}
+
+Every tool takes the optional \texttt{limits} argument, for that call only. With the
+limit raised, the answer says what was used:
+
+\input{generated/ctl-mcp-limits-high.tex}
+
+The operator caps what a call may ask for with \texttt{LEANFM\_LIMIT\_CEILING}, a
+factor over each default (100 unless set), and a request past it is capped and says
+so. Like every variable the server reads, it is checked when the server starts: a
+malformed value stops the server at once rather than surfacing later in its logs.
 
 \section{The logic tools}
 

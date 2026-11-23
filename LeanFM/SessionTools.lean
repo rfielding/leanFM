@@ -1436,7 +1436,7 @@ def conform (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let evs ← match args.getObjVal? "events" with
     | .ok (.arr a) =>
-        if a.size > maxLogEvents then throw s!"at most {maxLogEvents} events"
+        if a.size > CallLimits.get args "logEvents" then throw s!"at most {CallLimits.get args "logEvents"} events; {CallLimits.raise "logEvents" (CallLimits.get args "logEvents")}"
         a.toList.mapM logEvent
     | _ => throw "events must be an array of logged events {id, session?, from, to, label, cause?} (or {id, at, label, act: true})"
   -- a log is read only once it is a Linked log: every prev and cause names one of its events.
@@ -1454,7 +1454,7 @@ def conform (args : Json) : Except String Json := do
     throw "name a session on every event or on none: with none, LeanFM derives the sessions from causes and the declared session key"
   let logKeys := p.keys.map fun (x, f) =>
     ({ labels := (p.global.messages.filter (·.id == some x)).map (·.label), field := f } : LogSessions.Key)
-  let starts := match p.global.stateGraph with
+  let starts := match p.global.stateGraph (CallLimits.get args "states") with
     | .ok g => ((g.edges.filter (·.1 == "s0")).map (·.2.2.label)).eraseDups
     | .error _ => p.global.messages.map (·.label)
   -- Fresh and Link fields name sessions; a session that allows no further step has freed its value
@@ -1563,7 +1563,7 @@ def spans (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let evs ← match args.getObjVal? "events" with
     | .ok (.arr a) =>
-        if a.size > maxLogEvents then throw s!"at most {maxLogEvents} events"
+        if a.size > CallLimits.get args "logEvents" then throw s!"at most {CallLimits.get args "logEvents"} events; {CallLimits.raise "logEvents" (CallLimits.get args "logEvents")}"
         a.toList.mapM logEvent
     | _ => throw "events must be an array of logged events {id, session?, from, to, label, cause?, prev?, sentAt?, receivedAt?}"
   for e in evs do
@@ -1758,9 +1758,10 @@ def maxFaithfulRules : Nat := 64
 /-- session_ctl with faithful (selfhost.session.faithful): "rules" answers the protocol's typestates
 and one rule per typestate; a task (an inline draft) or lean (another protocol text) answers
 whether that model is faithful to this protocol, decided as one walk or one refinement. -/
-def faithful (p : Protocol) (fa : Json) : Except String Json := do
-  let b := Session.sessionBounds
-  let (draft, _) ← p.global.draft p.name
+def faithful (p : Protocol) (fa : Json) (args : Json := Json.mkObj []) : Except String Json := do
+  let b := Session.sessionBoundsOf args
+  let maxRules := CallLimits.get args "faithfulRules"
+  let (draft, _) ← p.global.draft p.name (maxStates := b.maxDraftStates)
   let spec ← Session.Faithful.modelOfDraft draft b
   let t := Session.Faithful.typestates spec
   let base : List (String × Json) :=
@@ -1769,7 +1770,7 @@ def faithful (p : Protocol) (fa : Json) : Except String Json := do
   match fa with
   | .str "rules" =>
     let rs := Session.Faithful.rules t
-    let shown := rs.take maxFaithfulRules
+    let shown := rs.take maxRules
     let row := fun (n, f) =>
       let d := Logic.Dag.ofFormula f
       let small := d.treeSize (Logic.treeLimit + 1) ≤ Logic.treeLimit
@@ -1777,14 +1778,14 @@ def faithful (p : Protocol) (fa : Json) : Except String Json := do
         (if small then [("notation", Json.str f.symbols)] else []))
     return fit <| Json.mkObj (base ++
       [ ("verdict", Json.str "rules")
-      , ("reading", Json.str s!"{p.name}: {t.count} typestates over {spec.size} checker nodes, lookahead {t.lookahead}; {rs.length} rules (the start and one per typestate: in it each next typestate is possible and nothing else is){if rs.length > shown.length then s!", the first {shown.length} listed" else ""}. Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol")
+      , ("reading", Json.str s!"{p.name}: {t.count} typestates over {spec.size} checker nodes, lookahead {t.lookahead}; {rs.length} rules (the start and one per typestate: in it each next typestate is possible and nothing else is){if rs.length > shown.length then s!", the first {shown.length} listed ({CallLimits.raise "faithfulRules" maxRules})" else ""}. Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol")
       , ("rules", Json.arr (shown.map row).toArray), ("ruleCount", toJson rs.length) ])
   | .obj _ =>
     let cand ← match fa.getObjVal? "task", fa.getObjVal? "lean" with
       | .ok d, _ => Session.Faithful.modelOfDraft d b
       | _, .ok (.str text) => do
         let q ← parseProtocol (Json.mkObj [("lean", Json.str text)])
-        let (d, _) ← q.global.draft q.name
+        let (d, _) ← q.global.draft q.name (maxStates := b.maxDraftStates)
         Session.Faithful.modelOfDraft d b
       | _, _ => throw "faithful is \"rules\", {task: an inline draft as check_ctl takes} or {lean: another protocol text}"
     let v := Session.Faithful.compare spec cand
@@ -1810,16 +1811,16 @@ def ctl (args : Json) : Except String Json := do
   -- the secret field paths each label carries, for the secret atom (asked, never imposed)
   let secretsOf := fun (label : String) => Session.Types.secretPaths p.types label
   if let .ok fa := args.getObjVal? "faithful" then
-    return ← faithful p fa
+    return ← faithful p fa args
   match args.getObjVal? "formula" with
   | .ok formula =>
     -- the same check as a Lean Spec's properties (Spec.check): one checker, one answer
-    let answer ← p.global.checkFormula p.name formula secretsOf
+    let answer ← p.global.checkFormula p.name formula secretsOf (Session.sessionBoundsOf args)
     return answer.setObjVal! "tool" (Json.str "session_ctl")
       |>.setObjVal! "lean" (Json.str p.lean)
   | .error _ =>
     -- no formula: properties built from this protocol, each decided (selfhost.session.properties)
-    let ss ← p.global.suggestions p.name p.roles secretsOf
+    let ss ← p.global.suggestions p.name p.roles secretsOf (Session.sessionBoundsOf args)
     let rows := ss.map fun (n, f, a) => match a with
       | .ok ans =>
         let get := fun (k : String) => (ans.getObjValAs? String k).toOption.getD ""
@@ -1943,7 +1944,7 @@ def sessionFiles (args : Json) : Except String (List (String × String)) := do
 /-- Every check that applies, as findings with an edit to try for each. -/
 def review (args : Json) : Except String Json := do
   let p ← parseProtocol args
-  let (findings, notChecked) := p.global.reviewAll p.roles
+  let (findings, notChecked) := p.global.reviewAll p.roles (CallLimits.get args "states")
   let routed := (p.global.messages.filter (·.route.isSome)).length
   let scope := s!"structure, {if routed == 0 then "no HTTP (no routes)" else s!"HTTP from {routed} routed request{if routed == 1 then "" else "s"}"}, " ++
     (if notChecked.isEmpty then "liveness, " else "") ++ "roles"
@@ -2219,29 +2220,32 @@ def dataset (args : Json) : Except String Json := do
   let p ← parseProtocol args
   if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before generating a dataset (session_check lists them)"
   let seed ← natArg args "seed" 1 4294967295
-  let sessions ← natArg args "sessions" 1000 Dataset.maxSessions
-  if sessions == 0 then throw s!"sessions must be 1 to {Dataset.maxSessions}"
+  let maxSessions := CallLimits.get args "datasetSessions"
+  let maxEvents := CallLimits.get args "datasetEvents"
+  let sessionEvents := CallLimits.get args "sessionEvents"
+  let sessions ← (natArg args "sessions" (min 1000 maxSessions) maxSessions).mapError (· ++ s!"; {CallLimits.raise "datasetSessions" maxSessions}")
+  if sessions == 0 then throw s!"sessions must be 1 to {maxSessions}"
   let (acc, basis, timeUnit) ← match p.generative with
     | some layer =>
       if hasLoop layer.body then do
         let c ← Chain.analyse layer (solveAll := false)
         let mut acc : Dataset.Acc := {}
         for i in [0:sessions] do
-          let g ← Chain.generate c (Dataset.sessionSeed seed i) 1 Dataset.maxSessionEvents
+          let g ← Chain.generate c (Dataset.sessionSeed seed i) 1 sessionEvents
           let ended := g.ended.any (·.2)
-          if acc.events + g.events.size > Dataset.maxEvents then
-            throw s!"the dataset would exceed {Dataset.maxEvents} events after {acc.sessions} sessions; ask for fewer sessions"
+          if acc.events + g.events.size > maxEvents then
+            throw s!"the dataset would exceed {maxEvents} events after {acc.sessions} sessions; ask for fewer sessions, or {CallLimits.raise "datasetEvents" maxEvents}"
           acc := acc.add { steps := g.events.map datasetStep, ended, truncated := !ended }
         pure (acc, "weighted", "ms")
       else do
-        let gen ← match Generative.generate layer p.roles seed sessions Dataset.maxEvents with
+        let gen ← match Generative.generate layer p.roles seed sessions maxEvents with
           | .ok g => pure g
           | .error e => throw (if e.startsWith "generative event limit"
-              then s!"the dataset would exceed {Dataset.maxEvents} events; ask for fewer sessions" else e)
+              then s!"the dataset would exceed {maxEvents} events; ask for fewer sessions, or {CallLimits.raise "datasetEvents" maxEvents}" else e)
         let acc := (bySession gen.events).foldl (fun a (_, st) => a.add ({ steps := st, ended := true } : Dataset.Run)) ({} : Dataset.Acc)
         pure (acc, "weighted", "ms")
     | none => do
-      let acc ← Dataset.walkCounts p.global seed sessions
+      let acc ← Dataset.walkCounts p.global seed sessions maxEvents maxSessions sessionEvents
       pure (acc, "walk", "steps")
   let sum := acc.summary timeUnit
   let n := acc.sessions
@@ -2271,7 +2275,7 @@ def dataset (args : Json) : Except String Json := do
             else "Dataset.walk: Conform.nextOf and Conform.step from the start, one allowed step or the end chosen uniformly by the seeded generator"))
         , ("reducer", "group by session; count paths (labels in order), messages (label, sender, receiver), sessions containing each message, messages sent and received per role, events per session, and session duration")
         , ("unit", Json.str s!"sessions; events; duration in {timeUnit}")
-        , ("boundary", Json.str s!"{n} generated sessions, at most {Dataset.maxSessionEvents} events each and {Dataset.maxEvents} in all; the top {Dataset.maxPaths} paths and {Dataset.maxRows} messages listed, the rest counted") ]) ]))
+        , ("boundary", Json.str s!"{n} generated sessions, at most {sessionEvents} events each and {maxEvents} in all; the top {Dataset.maxPaths} paths and {Dataset.maxRows} messages listed, the rest counted") ]) ]))
 
 /-! ## The tree to browse (selfhost.session.explorer) -/
 

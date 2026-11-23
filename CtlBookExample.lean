@@ -178,6 +178,12 @@ def main : IO Unit := do
   let proj := c.getObjValD "projections"
   write "ctl-placeorder-locals.tex" (listing ("\n\n".intercalate (["Client", "Shop", "Bank"].map fun r => s!"-- {r}\n" ++ str (proj.getObjValD r) "local")))
   write "ctl-placeorder-check.tex" (listing (str c "reading"))
+  -- the standards a protocol already is: the server's HTTP API as OpenAPI, the messages as protobuf
+  let imgApi ← tool "session_openapi" (openapi (withLean images [("role", Json.str "Server")]))
+  write "ctl-images-openapi.tex" (listing (str imgApi "code"))
+  write "ctl-images-openapi-reading.tex" (str imgApi "reading")
+  let orderTypes ← tool "session_types" (types (withLean order))
+  write "ctl-placeorder-proto.tex" (listing (str orderTypes "proto"))
   let race := "protocol Race (Client, Shop) {\n  choice {\n    Cancel from Client to Shop;\n  } or {\n    Ship from Shop to Client;\n  }\n}"
   let blind := "protocol Blind (Client, Shop, Bank) {\n  h: Hold from Client to Bank;\n  choice {\n    Capture from Shop to Bank;\n    Ship from Shop to Client;\n  } or {\n    SoldOut from Shop to Client;\n  }\n}"
   for (name, text) in [("race", race), ("blind", blind)] do
@@ -301,6 +307,19 @@ def main : IO Unit := do
     rulesAns ["verdict", "typestates", "lookahead", "deterministic", "ruleCount", "rules"] 400)
   write "ctl-mcp-faithful.tex" (transcript "session_ctl" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("faithful", Json.mkObj [("lean", Json.str "protocol Images ... (no NotFound branch)")])])
     fc ["verdict", "method", "path", "protocolNext", "candidateNext", "reading"] 300)
+  -- limits: a warning, not a wall (selfhost.mcp.limits), through the MCP dispatcher as a client calls it
+  let viaMcp := fun (args : Json) => do
+    let r ← LeanFM.MCP.dispatchJson (Json.mkObj [("jsonrpc", Json.str "2.0"), ("id", toJson (1 : Nat)), ("method", Json.str "tools/call"),
+      ("params", Json.mkObj [("name", Json.str "session_ctl"), ("arguments", args)])])
+    let j ← IO.ofExcept (Json.parse r.body)
+    pure ((j.getObjValD "result").getObjValD "structuredContent")
+  let everyEnd := Json.mkObj [("AF", Json.str "terminal")]
+  let lowArgs := Json.mkObj [("lean", Json.str "protocol PlaceOrder ..."), ("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (5 : Nat))])]
+  let low ← viaMcp ((withLean order [("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (5 : Nat))])]))
+  let highArgs := Json.mkObj [("lean", Json.str "protocol PlaceOrder ..."), ("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (40000 : Nat))])]
+  let high ← viaMcp ((withLean order [("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (40000 : Nat))])]))
+  write "ctl-mcp-limits-low.tex" (transcript "session_ctl" lowArgs low ["verdict", "reason"] 400)
+  write "ctl-mcp-limits-high.tex" (transcript "session_ctl" highArgs high ["verdict", "limitsApplied"] 300)
   let nx ← tool "session_next" (next (withLean order [("events", json% [{id: "e1", «from»: "Client", to: "Shop", label: "CreateOrder"}])]))
   write "ctl-mcp-next.tex" (transcript "session_next" (Json.mkObj [("lean", Json.str "protocol PlaceOrder ..."), ("events", json% [{id: "e1", «from»: "Client", to: "Shop", label: "CreateOrder"}])])
     nx ["verdict", "reading", "next", "mayEnd"])
@@ -311,7 +330,8 @@ def main : IO Unit := do
   write "ctl-mcp-conform.tex" (transcript "session_conform" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("events", interleaved)])
     ic ["verdict", "reading", "derivedSessions"] 200)
   let api ← tool "session_openapi" (openapi (withLean images [("role", "Server")]))
-  write "ctl-mcp-openapi.tex" (listing ("\n".intercalate (((str api "code").splitOn "\n").dropWhile (· != "paths:") |>.take 30)))
+  write "ctl-mcp-openapi.tex" (transcript "session_openapi" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("role", Json.str "Server")])
+    (api.setObjVal! "code" (Json.str ("\n".intercalate ((((str api "code").splitOn "\n").take 6) ++ ["..."])))) ["verdict", "reading", "language", "unrouted", "code"] 400)
   -- every tool the server lists
   let rowsT := LeanFM.MCP.tools.toList.map fun t =>
     let req := match (t.getObjValD "inputSchema").getObjValD "required" with

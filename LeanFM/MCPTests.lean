@@ -734,3 +734,32 @@ def main : IO Unit := do
   expect "server_logs prints times as UTC" (LeanFM.ServerLogs.isoUtc 1794853518 == "2026-11-16T18:25:18Z")
   let (st, _, _) ← LeanFM.ServerLogs.httpAnswer "/tools/logs?log=..%2F..%2Fetc%2Fpasswd"
   expect "GET /tools/logs refuses a path with 400" (st == 400)
+  -- per-call limits (selfhost.mcp.limits): listed on every tool, reported when changed, capped, one call only
+  let listed ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":300,\"method\":\"tools/list\"}"
+  let listedTools := match (Json.parse listed.body).toOption.map (fun j => (j.getObjValD "result").getObjValD "tools") with
+    | some (.arr a) => a.toList | _ => []
+  expect "MCP every tool LeanFM's checks run in lists the limits argument"
+    (!listedTools.isEmpty && listedTools.all fun t =>
+      let n := (t.getObjValAs? String "name").toOption.getD ""
+      n == "server_logs" || n == "project_view" || (((t.getObjValD "inputSchema").getObjValD "properties").getObjVal? "limits").isOk)
+  expect "MCP the instructions say how to raise a limit and list the limits" (LeanFM.MCP.instructions.contains "\"limits\": {\"states\": 100000}" && LeanFM.MCP.instructions.contains "datasetEvents 1000000")
+  expect "MCP tools/list stays under the client's result limit" (listed.body.length < 100000)
+  let imagesLean := (Json.str "protocol Images (Browser, Server) {\n  g: GetImage from Browser to Server;\n  choice {\n    Image from Server to Browser cause g;\n  } or {\n    NotFound from Server to Browser cause g;\n  }\n}").compress
+  let callWith (id : Nat) (extra : String) : IO LeanFM.MCP.Response :=
+    dispatch s!"\{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"tools/call\",\"params\":\{\"name\":\"session_ctl\",\"arguments\":\{\"lean\":{imagesLean},\"formula\":\{\"AF\":\"terminal\"}{extra}}}}"
+  let raised ← callWith 301 ",\"limits\":{\"states\":40000}"
+  expect "MCP an answer under a raised limit carries limitsApplied and a warning line"
+    (raised.body.contains "\"limitsApplied\"" && raised.body.contains "limits changed for this call: states 40000 (default 20000)" && raised.body.contains "\"verdict\":\"proved\"")
+  let plain ← callWith 302 ""
+  expect "MCP one call's limits do not reach the next call" (!plain.body.contains "limitsApplied" && plain.body.contains "\"verdict\":\"proved\"")
+  let lowered ← callWith 303 ",\"limits\":{\"states\":2}"
+  expect "MCP a limit an answer runs into is named with the argument that raises it"
+    (lowered.body.contains "the states limit (2)" && lowered.body.contains "\"isError\":true")
+  let unknown ← callWith 304 ",\"limits\":{\"stats\":5}"
+  expect "MCP an unknown limit is refused naming the limits" (unknown.body.contains "unknown limit stats" && unknown.body.contains "\"isError\":true")
+  let factor ← LeanFM.CallLimits.ceilingFactor.get
+  LeanFM.CallLimits.ceilingFactor.set 2
+  let capped ← callWith 305 ",\"limits\":{\"states\":999999999}"
+  LeanFM.CallLimits.ceilingFactor.set factor
+  expect "MCP a request past the operator's ceiling is capped and says so"
+    (capped.body.contains "\"applied\":40000" && capped.body.contains "capped at the operator's ceiling")

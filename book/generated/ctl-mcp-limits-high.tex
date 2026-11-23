@@ -1,0 +1,11 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+tools/call session_ctl
+{"limits": {"states": 40000}, "lean": "protocol PlaceOrder ...", "formula": {"AF": "terminal"}}
+
+answer (excerpt)
+{"verdict": "proved",
+ "limitsApplied":
+ {"warning":
+  "limits changed for this call: states 40000 (default 20000); a raised limit trades memory and time for the answer",
+  "limits": {"states": {"requested": 40000, "applied": 40000}}}}
+\end{lstlisting}
