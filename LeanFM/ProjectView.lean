@@ -1,6 +1,7 @@
 import Lean
 import LeanFM.Artifacts
 import LeanFM.ServerLogs
+import LeanFM.RequirementCtl
 import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.LLMGenerated.McpLogicImplementation
 import LeanFM.LLMGenerated.SessionImplementation
@@ -493,7 +494,7 @@ def readTasks (p : Project) (rel : String) : IO (Except String Json) := do
     | .error e => return .error s!"{rel} is not JSON: {cut e 200}"
     | .ok j => return .ok (projectTasks j)
 
-def sections : List String := ["tasks", "clauses", "protocols", "transitions", "properties", "constraints"]
+def sections : List String := ["tasks", "requirements", "implementations", "clauses", "protocols", "transitions", "properties", "constraints"]
 
 def arrOf (j : Json) (k : String) : Array Json := ((j.getObjValD k).getArr?).toOption.getD #[]
 
@@ -533,9 +534,235 @@ def primaryProtocol (p : Project) (protocols : Array String) : Option String :=
     ((p.manifest.getObjValAs? String "protocol").toOption.bind listed)
       <|> protocols.find? (·.startsWith "spec/") <|> protocols[0]?
 
+/-! ### Requirement and implementation lists
+(clauses selfhost.requirements.list, .map and selfhost.implementations.map; decision requirement-maps) -/
+
+/-- At most this many protocol files are read for their maps, and logs of at most this many bytes. -/
+def maxMapFiles : Nat := 200
+def maxLogBytes : Nat := 1048576
+
+/-- A protocol file with its requirements map and implementation blocks, read once. -/
+structure MapFile where
+  path : String
+  text : String
+  defs : List String
+  reqMap : List (String × LeanFM.Session.Text.Pointer)
+  impls : List LeanFM.Session.Text.ImplDef
+
+/-- A protocol file an entry names, read whole: only a relative .leanfm or .protocol path the
+project lists, through `inside`, at most `maxFileBytes` and `textPageChars` characters. -/
+def readProtocolText (p : Project) (protocols : Array String) (f : String) : IO (Except String String) := do
+  unless LeanFM.LLMGenerated.SelfHosting.protocolPathOk f && protocols.contains f do
+    return .error s!"{f} is not one of the {p.name} protocol files"
+  let some path ← inside p f | return .error s!"{f} is not inside the project root"
+  let (bytes, over) ← headBytes path maxFileBytes
+  let text := decodeLossy bytes
+  if over || text.length > textPageChars then return .error s!"{f} is larger than {textPageChars} characters"
+  return .ok text
+
+/-- The protocol files a project's lists come from: for LeanFM its specification directory
+LeanFM/LLMGenerated/ (an example elsewhere is not one of LeanFM's requirements); for another
+project every listed protocol file. -/
+def specProtocols (p : Project) (protocols : Array String) : Array String :=
+  if p.isLeanFM then protocols.filter (·.startsWith "LeanFM/LLMGenerated/") else protocols
+
+/-- The files among `protocols` that carry a requirements map or an implementation block, and an
+error row for each such file that does not read. -/
+def readMapFiles (p : Project) (protocols : Array String) : IO (Array MapFile × Array Json) := do
+  let mut files := #[]
+  let mut errs := #[]
+  for f in protocols.toList.take maxMapFiles do
+    let .ok text ← readProtocolText p protocols f | continue
+    unless (text.splitOn "requirements {").length > 1 || (text.splitOn "implementation ").length > 1 do continue
+    match LeanFM.Session.Text.readMaps text with
+    | .error e =>
+      errs := errs.push (Json.mkObj [("list", "requirements"), ("id", Json.str f), ("file", Json.str f), ("kind", "error"),
+        ("viewer", "text"), ("text", Json.str e)])
+    | .ok (defs, acc) =>
+      if acc.reqMap.isNone && acc.impls.isEmpty then continue
+      files := files.push { path := f, text, defs := defs.map (·.name), reqMap := (acc.reqMap.getD #[]).toList, impls := acc.impls.toList }
+  return (files, errs)
+
+open LeanFM.Session.Text in
+def pointerFields : Pointer → List (String × Json)
+  | .protocol n => [("kind", "protocol"), ("name", Json.str n), ("viewer", "explore")]
+  | .formula n φ => [("kind", "formula"), ("name", Json.str n), ("formula", Json.str φ), ("viewer", "ctl")]
+  | .sorry_ note => [("kind", "sorry"), ("text", Json.str note), ("viewer", "text")]
+
+/-- The requirement list, unchecked: every map entry with its file, then (LeanFM) every clause as sorry. -/
+def requirementRows (p : Project) (files : Array MapFile) (errs : Array Json) (withClauses : Bool := true) : Array Json :=
+  let fromMaps := files.toList.flatMap fun mf => mf.reqMap.map fun (n, ptr) =>
+    Json.mkObj (([("list", Json.str "requirements"), ("id", Json.str n), ("file", Json.str mf.path)] : List (String × Json)) ++ pointerFields ptr)
+  let clauses := if p.isLeanFM && withClauses then LeanFM.LLMGenerated.SelfHosting.clauses.map fun c =>
+      Json.mkObj [("list", "requirements"), ("id", Json.str c.id), ("kind", "sorry"), ("clause", true), ("area", Json.str c.area),
+        ("declared", Json.str c.status), ("text", Json.str c.requirement), ("viewer", "text")]
+    else []
+  errs ++ (fromMaps ++ clauses).toArray
+
+open LeanFM.Session.Text in
+/-- The implementation list, unchecked: per block, its refinements, entries and hints. -/
+def implementationRows (files : Array MapFile) : Array Json := Id.run do
+  let mut out := #[]
+  for mf in files do
+    for d in mf.impls do
+      let base : List (String × Json) := [("list", "implementations"), ("impl", Json.str d.name), ("file", Json.str mf.path), ("of", Json.str d.of)]
+      for (P, Q) in d.refines do
+        out := out.push (Json.mkObj (base ++ [("id", Json.str s!"refines {P} by {Q}"), ("kind", "refines"), ("from", Json.str P),
+          ("by", Json.str Q), ("viewer", "text")]))
+      for (k, ev) in d.entries do
+        let fields : List (String × Json) := match ev with
+          | .conform log => [("kind", "conform"), ("log", Json.str log), ("viewer", "text")]
+          | .test t => [("kind", "test"), ("test", Json.str t), ("viewer", "text")]
+          | .pointer ptr => pointerFields ptr
+        out := out.push (Json.mkObj (base ++ [("id", Json.str k)] ++ fields))
+      for (h, i) in d.hints.zipIdx do
+        out := out.push (Json.mkObj (base ++ [("id", Json.str s!"hint {i + 1}"), ("kind", "hint"), ("text", Json.str h), ("viewer", "text")]))
+  return out
+
+/-- The file an implementation's `of` names: Module.Name is Module/Name.leanfm or .protocol, listed,
+and not the implementation's own file. -/
+def resolveOf (files : Array MapFile) (protocols : Array String) (self ofName : String) : Except String MapFile := do
+  let base := "/".intercalate (ofName.splitOn ".")
+  let some path := [base ++ ".leanfm", base ++ ".protocol"].find? protocols.contains
+    | throw s!"of {ofName}: no protocol file {base}.leanfm is listed"
+  if path == self then throw s!"of {ofName}: an implementation does not implement its own file"
+  let some mf := files.find? (·.path == path) | throw s!"of {ofName}: {path} has no requirements map"
+  return mf
+
+/-- A log named by `conform`: relative, inside the root, at most `maxLogBytes`; a JSON array of
+events or one event per line. -/
+def readLog (p : Project) (f : String) : IO (Except String Json) := do
+  let parts := f.splitOn "/"
+  if f.isEmpty || f.startsWith "/" || parts.contains ".." || parts.contains "" then
+    return .error s!"conform {f}: a log is a relative path inside the project root"
+  let some path ← inside p f | return .error s!"conform {f}: no such log inside the project root"
+  let (bytes, over) ← headBytes path maxLogBytes
+  if over then return .error s!"conform {f}: the log is over {maxLogBytes} bytes"
+  let text := decodeLossy bytes
+  match Json.parse text with
+  | .ok (.arr a) => return .ok (Json.arr a)
+  | .ok j => match j.getObjVal? "events" with
+    | .ok e => return .ok e
+    | .error _ => return .error s!"conform {f}: expected a JSON array of events"
+  | .error _ =>
+    let lines := (text.splitOn "\n").filter (!·.trimAscii.isEmpty)
+    match lines.mapM Json.parse with
+    | .ok evs => return .ok (Json.arr evs.toArray)
+    | .error e => return .error s!"conform {f}: neither a JSON array nor one event per line: {cut e 200}"
+
+open LeanFM.Session.Text LeanFM.RequirementCtl in
+/-- Check one row: a requirement converted to CTL and decided, or an implementation entry against
+the requirements its block imports. Evidence rows also carry the computed status. -/
+def checkRow (p : Project) (protocols : Array String) (files : Array MapFile) (row : Json) : IO Json := do
+  let g (k : String) := (row.getObjValAs? String k).toOption.getD ""
+  let kind := g "kind"
+  let put (c : Checked) (extra : List (String × Json) := []) : Json :=
+    (c.toFields ++ extra).foldl (fun acc (k, v) => acc.setObjVal! k v) row
+  let fileOf (path : String) := files.find? (·.path == path)
+  let ptr : Option Pointer := match kind with
+    | "protocol" => some (.protocol (g "name")) | "formula" => some (.formula (g "name") (g "formula"))
+    | "sorry" => some (.sorry_ (g "text")) | _ => none
+  if kind == "error" then return put (failed (g "text"))
+  if g "list" == "requirements" then
+    match ptr, fileOf (g "file") with
+    | some (.sorry_ t), _ => return put (sorryChecked (if (row.getObjValD "clause") == Json.bool true then "" else t))
+    | some x, some mf => return put (checkPointer mf.text x)
+    | _, _ => return put (failed "the entry's file is not read")
+  -- an implementation row
+  let some own := fileOf (g "file") | return put (failed "the implementation's file is not read")
+  match resolveOf files protocols own.path (g "of") with
+  | .error e => return put (failed e)
+  | .ok imp =>
+    let textFor (n : String) : Option String :=
+      if own.defs.contains n then some own.text else if imp.defs.contains n then some imp.text else none
+    let key := g "id"
+    let req := imp.reqMap.lookup key
+    match kind with
+    | "hint" => return put hintChecked
+    | "refines" =>
+      let P := g "from"
+      let Q := g "by"
+      unless imp.defs.contains P do return put (failed s!"refines {P}: {imp.path} defines no protocol {P}")
+      let some qt := textFor Q | return put (failed s!"refines by {Q}: no protocol {Q} here or in {imp.path}")
+      let overP := imp.reqMap.filterMap fun (n, x) => match x with | .formula q φ => if q == P then some (n, φ) else none | _ => none
+      let results := overP.map fun (n, φ) => (n, φ, checkPointer qt (.formula Q φ))
+      let bad := results.filter (·.2.2.failing)
+      let compiled : Compiled := { name := Q, ruleCount := overP.length, formulas := (overP.take shownRules) }
+      if bad.isEmpty then
+        let reading := s!"{Q} keeps all {overP.length} formula requirements over {P}"
+        return put { verdict := "refines", met := true, ctl := some compiled, reading }
+      else
+        let reading := s!"{Q} breaks {bad.length} of {overP.length} formula requirements over {P}: " ++ ", ".intercalate (bad.map (·.1))
+        return put { verdict := "broken", failing := true, ctl := some compiled, reading }
+    | _ =>
+      match req with
+      | some rp =>
+        -- evidence for an imported requirement, with the computed status
+        let rc := checkPointer imp.text rp
+        let ev ← match kind with
+          | "conform" => do pure (checkConform imp.text rp (← readLog p (g "log")))
+          | "test" => pure (testChecked (g "test"))
+          | "sorry" => pure (sorryChecked (g "text"))
+          | _ => pure (failed s!"\"{key}\" is a requirement of {imp.path}: answer it with evidence (conform, test or sorry), not with CTL of its own")
+        return put ev [("evidence", true), ("status", Json.str (status rc (some ev)))]
+      | none =>
+        match kind, ptr with
+        | "conform", _ | "test", _ => return put (failed s!"\"{key}\" is not a requirement of {imp.path}")
+        | _, some x =>
+          match pointerProtocol x with
+          | none => return put (sorryChecked (g "text"))
+          | some n =>
+            let some t := textFor n | return put (failed s!"no protocol {n} in {own.path} or {imp.path}")
+            return put (checkPointer t x)
+        | _, _ => return put (failed s!"unknown entry kind {kind}")
+
+def countWhere (rows : Array Json) (k : String) : Nat :=
+  (rows.filter fun r => r.getObjValD k == Json.bool true).size
+
+/-- The overview's two sections: entries by kind, met, sorry and failing; per implementation, the
+computed status of every requirement it imports (one it does not name counts as sorry). -/
+def listSummariesOf (p : Project) (protocols : Array String) (withClauses : Bool := true) : IO (Json × Json) := do
+  let (files, errs) ← readMapFiles p protocols
+  let rows := requirementRows p files errs withClauses
+  let checked ← rows.mapM (checkRow p protocols files)
+  let kindN (k : String) := (rows.filter fun r => (r.getObjValAs? String "kind").toOption == some k).size
+  let reqs := Json.mkObj [("name", "requirements"), ("count", rows.size),
+    ("kinds", Json.mkObj [("protocol", kindN "protocol"), ("formula", kindN "formula"), ("sorry", kindN "sorry")]),
+    ("met", countWhere checked "met"), ("sorry", countWhere checked "sorry"), ("failing", countWhere checked "failing")]
+  let irows := implementationRows files
+  let ichecked ← irows.mapM (checkRow p protocols files)
+  let impls := files.toList.flatMap fun mf => mf.impls.map fun d =>
+    let mine := ichecked.filter fun r => (r.getObjValAs? String "impl").toOption == some d.name && (r.getObjValAs? String "file").toOption == some mf.path
+    let named := mine.filterMap fun r => if r.getObjValD "evidence" == Json.bool true then (r.getObjValAs? String "status").toOption else none
+    let imported := match resolveOf files protocols mf.path d.of with | .ok imp => imp.reqMap.length | .error _ => 0
+    let st (k : String) := (named.filter (· == k)).size
+    Json.mkObj [("impl", Json.str d.name), ("file", Json.str mf.path), ("of", Json.str d.of), ("hints", d.hints.length),
+      ("failing", countWhere mine "failing"),
+      ("status", Json.mkObj [("met", st "met"), ("specified", st "specified"), ("tested", st "tested"),
+        ("sorry", st "sorry" + (imported - named.size)), ("failing", st "failing")])]
+  let implsJ := Json.mkObj [("name", "implementations"), ("count", irows.size), ("implementations", Json.arr impls.toArray),
+    ("failing", countWhere ichecked "failing"), ("sorry", countWhere ichecked "sorry")]
+  return (reqs, implsJ)
+
+/-- The overview's two sections for the project's specification files (specProtocols). -/
+def listSummaries (p : Project) (listed : Array String) : IO (Json × Json) :=
+  listSummariesOf p (specProtocols p listed)
+
+/-- A page of one list, its rows checked. -/
+def listPage (p : Project) (listed : Array String) (which : String) (offset : Nat) : IO Json := do
+  let protocols := specProtocols p listed
+  let (files, errs) ← readMapFiles p protocols
+  let rows := if which == "requirements" then requirementRows p files errs else implementationRows files
+  let pg := pageOf rows offset
+  let checked ← (arrOf pg "items").mapM (checkRow p protocols files)
+  return pg.setObjVal! "items" (Json.arr checked)
+
+def listsGoal : String :=
+  "every entry converts to CTL: a protocol to its faithful rules, a formula to itself, a hint to true; sorry does not convert yet, and a requirements conversation moves each sorry to a protocol or a formula"
+
 /-- Without a section, the sections with their counts; with one, a page of its items from
 `offset`. transitions, properties and constraints are one task's, named by `task`. -/
-def requirements (p : Project) (sectionArg : Option String) (task : Option String) (offset : Nat) :
+def «requirements» (p : Project) (sectionArg : Option String) (task : Option String) (offset : Nat) :
     IO (Except String Json) := do
   let (protocols, more) ← protocolFiles p
   let rel := if p.isLeanFM then "LeanFM/LLMGenerated/SelfHosting.lean" else manifestPath p "tasks" "spec/tasks.json"
@@ -553,8 +780,10 @@ def requirements (p : Project) (sectionArg : Option String) (task : Option Strin
     -- the overview names the specification's files and its first protocols directly, so the
     -- person reaches the text in one click; the long lists stay behind their sections
     let files ← specFiles p
+    let (reqs, impls) ← listSummaries p protocols
     return .ok <| head.setObjVal! "sections" (Json.arr #[
       Json.mkObj [("name", "tasks"), ("count", tasks.size)],
+      reqs, impls,
       Json.mkObj [("name", "clauses"), ("count", clauses.size)],
       Json.mkObj [("name", "protocols"), ("count", protocols.size), ("cut", more)]])
       |>.setObjVal! "files" (toJson files)
@@ -562,6 +791,11 @@ def requirements (p : Project) (sectionArg : Option String) (task : Option Strin
       |>.setObjVal! "primary" (match primaryProtocol p protocols with | some f => Json.str f | none => Json.null)
   | some "tasks" => return .ok (paged "tasks" (tasks.map taskSummary))
   | some "clauses" => return .ok (paged "clauses" clauses)
+  | some "requirements" | some "implementations" =>
+    -- page first, then check only the entries on this page
+    let which := sectionArg.getD "requirements"
+    let pg ← listPage p protocols which offset
+    return .ok (head.setObjVal! "section" (Json.str which) |>.setObjVal! "page" pg |>.setObjVal! "goal" (Json.str listsGoal))
   | some "protocols" => return .ok (paged "protocols" (protocols.map Json.str) [("protocolsCut", toJson more)])
   | some sec =>
     unless ["transitions", "properties", "constraints"].contains sec do
@@ -575,7 +809,7 @@ def requirements (p : Project) (sectionArg : Option String) (task : Option Strin
 
 structure Mapping where
   name : String
-  requirements : List String
+  «requirements» : List String
   files : List String
   symbols : List String
   tests : List String
@@ -590,14 +824,14 @@ def Mapping.names (m : Mapping) (file : String) : Bool :=
 
 def leanfmMappings : List Mapping :=
   (LeanFM.LLMGenerated.McpLogicImplementation.decisions ++ LeanFM.LLMGenerated.SessionImplementation.decisions).map fun d =>
-    { name := d.id, requirements := d.requirementRefs, files := d.files, symbols := [], tests := d.conformanceTests }
+    { name := d.id, «requirements» := d.requirementRefs, files := d.files, symbols := [], tests := d.conformanceTests }
 
 def projectMappings (j : Json) : List Mapping :=
   let strs (o : Json) (k : String) : List String :=
     (((o.getObjValD k).getArr?).toOption.getD #[]).toList.filterMap (·.getStr?.toOption)
   let ms := ((j.getObjValD "mappings").getArr?).toOption.getD #[]
   ms.toList.zipIdx.map fun (m, i) =>
-    { name := s!"mapping {i + 1}", requirements := strs m "requirements", files := strs m "files",
+    { name := s!"mapping {i + 1}", «requirements» := strs m "requirements", files := strs m "files",
       symbols := strs m "symbols", tests := strs m "tests" }
 
 def sourceRoot (p : Project) (impl : Option Impl := none) : String :=
@@ -743,7 +977,7 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
     | some "book" => book p page (themeArg != some "light")
     | some "requirements" =>
       match fileArg with
-      | none => requirements p sectionArg taskArg offset
+      | none => «requirements» p sectionArg taskArg offset
       | some f =>
         if (← specFiles p).contains f then
           match ← textPage p f offset with

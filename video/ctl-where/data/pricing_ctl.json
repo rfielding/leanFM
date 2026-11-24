@@ -1,0 +1,156 @@
+[
+ {
+  "formula": "(EF (after Discount))",
+  "answer": {
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256,
+    "maxTruthBytes": 1073741824
+   },
+   "deadlocks": [],
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "CreateOrder",
+      "state": "s1"
+     },
+     {
+      "message": "Discount",
+      "state": "s2"
+     }
+    ]
+   },
+   "formula": {
+    "EF": {
+     "after": "Discount"
+    }
+   },
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 100;\n  }\n}\n",
+   "mode": "possibly",
+   "notation": "EF Discount",
+   "reachableNodes": 4,
+   "reading": "Pricing: it is possible that eventually Discount was just delivered",
+   "report": "witness: CreateOrder -> Discount",
+   "states": 3,
+   "task": "Pricing",
+   "terminalConvention": "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), repeat forever: they stutter on themselves, keeping the message that reached them, so every path is infinite. after(m) holds in the state reached by delivering m; the initial state has no message.",
+   "tool": "session_ctl",
+   "verdict": "proved"
+  }
+ },
+ {
+  "formula": "(EF (after Quote))",
+  "answer": {
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256,
+    "maxTruthBytes": 1073741824
+   },
+   "deadlocks": [],
+   "evidence": {
+    "kind": "witness",
+    "path": [
+     {
+      "message": null,
+      "state": "s0"
+     },
+     {
+      "message": "CreateOrder",
+      "state": "s1"
+     },
+     {
+      "message": "Quote",
+      "state": "s2"
+     }
+    ]
+   },
+   "formula": {
+    "EF": {
+     "after": "Quote"
+    }
+   },
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 100;\n  }\n}\n",
+   "mode": "possibly",
+   "notation": "EF Quote",
+   "reachableNodes": 4,
+   "reading": "Pricing: it is possible that eventually Quote was just delivered",
+   "report": "witness: CreateOrder -> Quote",
+   "states": 3,
+   "task": "Pricing",
+   "terminalConvention": "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), repeat forever: they stutter on themselves, keeping the message that reached them, so every path is infinite. after(m) holds in the state reached by delivering m; the initial state has no message.",
+   "tool": "session_ctl",
+   "verdict": "proved"
+  }
+ },
+ {
+  "formula": "(AG (implies (after Discount) (AG (not (after Quote)))))",
+  "answer": {
+   "bounds": {
+    "maxArgumentBytes": 65536,
+    "maxConcurrentPairs": 64,
+    "maxDepth": 64,
+    "maxDraftStates": 8192,
+    "maxDraftTransitions": 16384,
+    "maxEvents": 512,
+    "maxFormulaNodes": 256,
+    "maxModelNodes": 4096,
+    "maxPredicates": 64,
+    "maxString": 256,
+    "maxTruthBytes": 1073741824
+   },
+   "deadlocks": [],
+   "evidence": {
+    "kind": "exhaustive",
+    "note": "evaluated over all 4 reachable nodes"
+   },
+   "formula": {
+    "AG": {
+     "implies": [
+      {
+       "after": "Discount"
+      },
+      {
+       "AG": {
+        "not": {
+         "after": "Quote"
+        }
+       }
+      }
+     ]
+    }
+   },
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 100;\n  }\n}\n",
+   "mode": "always",
+   "notation": "AG (Discount \u2192 AG \u00acQuote)",
+   "reachableNodes": 4,
+   "reading": "Pricing: on every path, always (if Discount was just delivered then (on every path, always (it is not the case that Quote was just delivered)))",
+   "report": "",
+   "states": 3,
+   "task": "Pricing",
+   "terminalConvention": "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), repeat forever: they stutter on themselves, keeping the message that reached them, so every path is infinite. after(m) holds in the state reached by delivering m; the initial state has no message.",
+   "tool": "session_ctl",
+   "verdict": "proved"
+  }
+ }
+]

@@ -30,6 +30,8 @@ def projectViewResults : IO Json := do
     ("requirements", ← pv [("stage", "requirements")]),
     ("sections", Json.mkObj [("tasks", ← pv [("stage", "requirements"), ("section", "tasks")]), ("protocols", protocols),
       ("clauses", ← pv [("stage", "requirements"), ("section", "clauses")]),
+      ("requirements", ← pv [("stage", "requirements"), ("section", "requirements")]),
+      ("implementations", ← pv [("stage", "requirements"), ("section", "implementations")]),
       ("properties", ← pv [("stage", "requirements"), ("section", "properties"), ("task", "selfhost_workflow")]),
       ("transitions", ← pv [("stage", "requirements"), ("section", "transitions"), ("task", "selfhost_workflow")])]),
     ("protocol", ← pv [("stage", "requirements"), ("file", firstProtocol)]),
@@ -81,7 +83,9 @@ def projectFilesTests : IO Unit := do
     expect s!"{project} lists protocol files" (!files.isEmpty)
     for f in files do
       let r ← call "session_check" (Json.mkObj [("project", Json.str project), ("file", Json.str f)])
-      if rejected r then throw <| IO.userError s!"failed: {project} {f} does not load cleanly: {reason r}"
+      -- a file holding only implementation blocks has no protocol to load, and says so
+      if rejected r && !(reason r).contains "holds only implementation blocks" then
+        throw <| IO.userError s!"failed: {project} {f} does not load cleanly: {reason r}"
     IO.println s!"ok: every one of the {files.size} {project} protocol files loads through project and file and checks"
   let ps ← LeanFM.ProjectView.projects
   let some lean := ps[0]? | throw <| IO.userError "no LeanFM project"
@@ -183,6 +187,81 @@ def projectViewTests : IO Unit := do
     off := (((((← IO.ofExcept (Json.parse r)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValAs? Nat "next").toOption
     pages := pages + 1
   expect s!"the clauses pages reach the navigator clause through next ({pages} pages)" (found && pages > 1)
+  -- the requirement and implementation lists (selfhost.requirements.list, .map, selfhost.implementations.map)
+  let overview := (((← IO.ofExcept (Json.parse lreq)).getObjValD "result").getObjValD "structuredContent").getObjValD "sections"
+  let sec (n : String) := ((overview.getArr?).toOption.getD #[]).find? fun x => (x.getObjValAs? String "name").toOption == some n
+  let nClauses := LeanFM.LLMGenerated.SelfHosting.clauses.length
+  let num (j : Option Json) (k : String) : Nat := ((j.map (·.getObjValAs? Nat k |>.toOption)).join).getD 999999
+  let rq := sec "requirements"
+  let kinds := (rq.map (·.getObjValD "kinds"))
+  expect "the overview counts LeanFM's requirements: 1 protocol, 6 formulas, the clauses as sorry, 7 met, none failing"
+    (num kinds "protocol" == 1 && num kinds "formula" == 6 && num kinds "sorry" == nClauses && num rq "met" == 7 && num rq "failing" == 0)
+  let im := sec "implementations"
+  let leanImpl := (((im.map (·.getObjValD "implementations")).map (·.getArr?.toOption.getD #[])).getD #[]).find? fun x =>
+    (x.getObjValAs? String "impl").toOption == some "Lean"
+  let st := leanImpl.map (·.getObjValD "status")
+  expect "the overview lists implementation Lean: 5 met, 2 specified, none failing, 3 hints"
+    (num st "met" == 5 && num st "specified" == 2 && num st "failing" == 0 && num leanImpl "hints" == 3)
+  let itemsOf (r : String) : IO (Array Json) := do
+    pure ((((((← IO.ofExcept (Json.parse r)).getObjValD "result").getObjValD "structuredContent").getObjValD "page").getObjValD "items").getArr?.toOption.getD #[])
+  let ritems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"requirements\"}")
+  let field (it : Json) (k : String) := (it.getObjValAs? String k).toOption.getD ""
+  let isTrue (it : Json) (k : String) := it.getObjValD k == Json.bool true
+  expect "section requirements opens the protocol in the explorer, met, with its faithful rules"
+    (ritems.any fun it => field it "kind" == "protocol" && field it "viewer" == "explore" && isTrue it "met" &&
+      field it "file" == "LeanFM/LLMGenerated/LeanFM.leanfm" && ((it.getObjValD "ctl").getObjValAs? Nat "ruleCount").toOption.getD 0 > 1)
+  expect "every formula opens in the CTL view, proved and met, its CTL the formula"
+    ((ritems.filter (field · "kind" == "formula")).size == 6 && (ritems.filter (field · "kind" == "formula")).all fun it =>
+      field it "viewer" == "ctl" && field it "verdict" == "proved" && isTrue it "met" && (it.getObjValD "ctl").compress.contains (field it "formula"))
+  expect "the clauses are sorry: never met, never failing, shown as text"
+    (ritems.any fun it => field it "id" == "selfhost.revision" && field it "kind" == "sorry" && isTrue it "sorry" &&
+      !isTrue it "met" && !isTrue it "failing" && field it "viewer" == "text")
+  let iitems ← itemsOf (← pvCall "{\"stage\":\"requirements\",\"section\":\"implementations\"}")
+  expect "section implementations: test evidence met with status met, sorry evidence specified"
+    (iitems.any (fun it => field it "kind" == "test" && field it "status" == "met") &&
+     iitems.any (fun it => field it "kind" == "sorry" && field it "status" == "specified" && isTrue it "sorry"))
+  expect "the implementation's own CTL is proved, and its hints convert to true"
+    (iitems.any (fun it => field it "id" == "Every read of the project root is answered" && field it "verdict" == "proved" && isTrue it "met") &&
+     (iitems.filter (field · "kind" == "hint")).size == 3 && (iitems.filter (field · "kind" == "hint")).all (field · "verdict" == "true"))
+  -- failing entries, through checkRow on rows the files do not carry
+  let lean ← LeanFM.ProjectView.projects
+  match lean.find? (·.isLeanFM) with
+  | some p =>
+    let (protos, _) ← LeanFM.ProjectView.protocolFiles p
+    let (files, _) ← LeanFM.ProjectView.readMapFiles p protos
+    let implRow (extra : List (String × Json)) : Json := Json.mkObj ([("list", Json.str "implementations"), ("impl", Json.str "Lean"),
+      ("file", Json.str "LeanFM/LLMGenerated/LeanFMImplementation.leanfm"), ("of", Json.str "LeanFM.LLMGenerated.LeanFM")] ++ extra)
+    let chk (r : Json) := LeanFM.ProjectView.checkRow p protos files r
+    let failing (r : Json) : IO Bool := do pure ((← chk r).getObjValD "failing" == Json.bool true)
+    expect "a disproved formula of the implementation's own is failing"
+      (← failing (implRow [("id", Json.str "x"), ("kind", Json.str "formula"), ("name", Json.str "LeanFMMcp"), ("formula", Json.str "(AG (not (after Page)))")]))
+    expect "a refinement that breaks a requirement is failing"
+      (← failing (implRow [("id", Json.str "refines"), ("kind", Json.str "refines"), ("from", Json.str "LeanFMMcp"), ("by", Json.str "Nope")]))
+    expect "evidence for a key the imported map does not have is failing"
+      (← failing (implRow [("id", Json.str "not a requirement"), ("kind", Json.str "test"), ("test", Json.str "t")]))
+    expect "own CTL for an imported requirement is failing (it needs evidence)"
+      (← failing (implRow [("id", Json.str "The session can always end"), ("kind", Json.str "formula"), ("name", Json.str "LeanFMMcp"), ("formula", Json.str "(AG (EF terminal))")]))
+    expect "an implementation of its own file is failing"
+      (← failing ((implRow [("id", Json.str "h"), ("kind", Json.str "hint"), ("text", Json.str "x")]).setObjVal! "of" (Json.str "LeanFM.LLMGenerated.LeanFMImplementation")))
+    expect "an implementation of an unlisted file is failing"
+      (← failing ((implRow [("id", Json.str "h"), ("kind", Json.str "hint"), ("text", Json.str "x")]).setObjVal! "of" (Json.str "Etc.Passwd")))
+    for log in ["/etc/passwd", "../x.json", "no/such/log.json"] do
+      expect s!"a conform log {log} outside the root or missing is failing"
+        (← failing (implRow [("id", Json.str "The MCP conversation follows LeanFMMcp"), ("kind", Json.str "conform"), ("log", Json.str log)]))
+    -- LeanFM's lists come from its specification directory; the orders example is checked on its own
+    expect "an example outside LeanFM/LLMGenerated is not one of LeanFM's requirements"
+      (!(ritems.any fun it => (field it "file").startsWith "examples/") && (LeanFM.ProjectView.specProtocols p protos).all (·.startsWith "LeanFM/LLMGenerated/"))
+    let ex := protos.filter (["examples/orders/Requirements.leanfm", "examples/orders/Implementation.leanfm"].contains ·)
+    let (_, exImpls) ← LeanFM.ProjectView.listSummariesOf p ex (withClauses := false)
+    let go := ((exImpls.getObjValD "implementations").getArr?.toOption.getD #[])[0]?.getD Json.null
+    let gst := go.getObjValD "status"
+    let gn (k : String) := (gst.getObjValAs? Nat k).toOption.getD 99
+    expect "the orders example: implementation Go has 3 met (two by conforming logs), 1 specified, 2 sorry, none failing, its refinement kept"
+      (ex.size == 2 && gn "met" == 3 && gn "specified" == 1 && gn "sorry" == 2 && gn "failing" == 0 && (exImpls.getObjValAs? Nat "failing").toOption == some 0)
+    for f in ["/etc/passwd.leanfm", "LeanFM/../../x.leanfm", "LeanFM/LLMGenerated/SelfHosting.lean", "not/listed.leanfm"] do
+      let r ← LeanFM.ProjectView.readProtocolText p protos f
+      expect s!"an entry's file {f} outside the listing is never read" (match r with | .error _ => true | .ok _ => false)
+  | none => throw <| IO.userError "no LeanFM project"
   let noTask ← pvCall "{\"stage\":\"requirements\",\"section\":\"transitions\"}"
   expect "a task's section without task is refused" (noTask.contains "needs task")
   let badTask ← pvCall "{\"stage\":\"requirements\",\"section\":\"transitions\",\"task\":\"nope\"}"

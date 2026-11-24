@@ -166,6 +166,24 @@ the prose and diagrams to the requirement, implementation and evidence
 revisions they explain. The conversation may disappear; the project directory
 must remain sufficient to resume.
 
+## Requirements and implementations are lists that convert to CTL
+
+Every requirements file ends in a map, `requirements { "name" => pointer; }`,
+where a pointer is a protocol (it converts to its faithful rules), `P ⊨ (φ)` (it
+converts to φ) or `sorry` (it does not convert yet). An implementation is a
+block `implementation Name of Module.Name { ... }` against those requirements:
+evidence for each (`conform "log"`, `test "name"`, `sorry`), CTL of its own for
+behaviour no client observes, `refines P by Q`, and `hint "..."` for choices
+such as the language, which convert to true. Keep frameworks, languages and
+unobservable behaviour out of the requirements and in an implementation.
+
+`sorry` works as in Lean: the check passes with a warning, `STRICT=1` makes it
+an error, and a requirements conversation has as its goal removing sorries by
+writing the protocol or formula, checked with `session_check` or `session_ctl`.
+Status is computed from the two lists, never declared. `make requirements-check`
+decides every entry; `project_view stage requirements` sections `requirements`
+and `implementations` list them, and the session view opens each in its viewer.
+
 ## Consolidate the vibecoded book
 
 Treat the working book as an intentionally permissive design notebook during

@@ -1,0 +1,10 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+requirements {
+  "Orders are placed as PlaceOrder says" => PlaceOrder;
+  "Every order is answered" => PlaceOrder ⊨ (AG (implies (after CreateOrder) (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut)))));
+  "Every payment is charged to the bank" => PlaceOrder ⊨ (AG (implies (after Pay) (AF (after Charge))));
+  "No receipt without a charge" => PlaceOrder ⊨ (not (EU (not (after Charged)) (after Receipt)));
+  "A sold-out order is never charged" => PlaceOrder ⊨ (AG (implies (after SoldOut) (AG (not (after Charge)))));
+  "Refunds within 30 days" => sorry "PlaceOrder has no Refund message yet";
+}
+\end{lstlisting}

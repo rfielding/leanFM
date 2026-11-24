@@ -128,6 +128,7 @@
            {∀}{{$\forall$}}1
            {←}{{$\leftarrow$}}1
            {⊢}{{$\vdash$}}1
+           {⊨}{{$\models$}}1
            {↑}{{$\uparrow$}}1
            {⟨}{{$\langle$}}1
            {⟩}{{$\rangle$}}1
@@ -267,6 +268,30 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
+This book builds a Temporal Lean: a way to state what a system must do, usually a piece of
+software, precisely enough that a machine checks it. Lean checks that a proof proves its
+statement. Temporal Lean checks statements about behaviour over time: what may happen next,
+what must eventually happen, what must never happen. The statements are written in Lean
+files, as protocols and as formulas of computation tree logic (CTL), and LeanFM, the tool
+this book describes, decides them.
+
+The parallel with Lean is the point. A requirement is a statement; an implementation is
+evidence that it holds, such as a log that conforms or a test; and a requirement no one can
+state precisely yet is \texttt{sorry}: admitted, counted and shown, never silently assumed.
+Every requirement and every implementation choice is an entry in a list, and every entry
+converts to CTL or says that it does not yet (Chapter~\ref{ch:lists}). The difference from
+Lean is the subject matter. These statements are about the runs of a system, the order of
+its messages and the choices it makes, and checking a running system means comparing what
+it did with what was required.
+
+Temporal Lean is meant to be driven by LLMs. A person argues about what the system should
+do; an LLM writes the protocols, the formulas, the implementation and its code; and LeanFM
+checks every step, so nothing the LLM writes has to be trusted. The LLM reaches LeanFM
+through the Model Context Protocol (Part~\ref{part:mcp}) and asks it the questions this book
+asks. The lists give it work: each \texttt{sorry} is a requirement still to be stated in CTL,
+each failing entry is something to fix, and the hints of an implementation tell it how to
+write the code.
+
 A multiparty session type is one global description of a conversation: who sends
 what to whom, in what order, and where the conversation branches
 \citep{honda2008multiparty}. This book shows that such a description is exactly a
@@ -277,11 +302,14 @@ sameness CTL can see. That gives one language for two jobs. The protocol is easy
 write and easy to draw; the formulas are easy to check, combine and extend. Every
 rule the structure does not show is added in the same logic.
 
-The book has three parts. Part~\ref{part:language} is the protocol language of
+The book has four parts. Part~\ref{part:language} is the protocol language of
 LeanFM: global types, their projection onto each role, and the where clauses that
 tie messages to the data that implements them. Part~\ref{part:ctl} reduces a
 protocol to CTL, proves the reduction faithful, takes it construct by construct,
-and shows how to decide it in time close to linear. Part~\ref{part:mcp} is the
+and shows how to decide it in time close to linear. Part~\ref{part:lists} puts that to
+work: a project's requirements are an actual list, and so is each implementation, and
+every entry of both converts to CTL or says plainly that it does not yet, the way
+\texttt{sorry} does in Lean. Part~\ref{part:mcp} is the
 LeanFM server: an agent such as Claude connects to it over the Model Context
 Protocol and asks every question in this book, with the answers shown as they
 arrive.
@@ -307,6 +335,9 @@ checker on broken copies of real protocols. The source is public
 \include{chapters/faithful-ctl}
 \include{chapters/constructs}
 \include{chapters/deciding}
+
+\part{Requirements and Implementations}\label{part:lists}
+\include{chapters/requirement-lists}
 
 \part{The LeanFM MCP Server}\label{part:mcp}
 \include{chapters/mcp-tools}

@@ -1,0 +1,80 @@
+{
+ "deterministic": true,
+ "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+ "lookahead": 0,
+ "name": "PlaceOrder",
+ "nodes": 10,
+ "reading": "PlaceOrder: 10 typestates over 10 checker nodes, lookahead 0; 11 rules (the start and one per typestate: in it each next typestate is possible and nothing else is). Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol",
+ "ruleCount": 11,
+ "rules": [
+  {
+   "formula": "(and (not (or (after CreateOrder) (after Quote) (after SoldOut) (after Pay) (after Charge) (after Charged) (after Declined) (after Receipt) (after PaymentDeclined))) (not terminal))",
+   "name": "start",
+   "notation": "\u00ac(CreateOrder \u2228 Quote \u2228 SoldOut \u2228 Pay \u2228 Charge \u2228 Charged \u2228 Declined \u2228 Receipt \u2228 PaymentDeclined) \u2227 \u00acterminal",
+   "subformulas": 14
+  },
+  {
+   "formula": "(AG (implies (and (not (or (after CreateOrder) (after Quote) (after SoldOut) (after Pay) (after Charge) (after Charged) (after Declined) (after Receipt) (after PaymentDeclined))) #0=(not terminal)) (and (EX #1=(and (after CreateOrder) #0#)) (AX (or #1#)))))",
+   "name": "typestate 0: (start)",
+   "notation": "AG ((\u00ac(CreateOrder \u2228 Quote \u2228 SoldOut \u2228 Pay \u2228 Charge \u2228 Charged \u2228 Declined \u2228 Receipt \u2228 PaymentDeclined) \u2227 \u00acterminal) \u2192 (EX (CreateOrder \u2227 \u00acterminal) \u2227 AX (CreateOrder \u2227 \u00acterminal)))",
+   "subformulas": 21
+  },
+  {
+   "formula": "(AG (implies (and (after CreateOrder) #0=(not terminal)) (and (EX #1=(and (after Quote) #0#)) (EX #2=(and (after SoldOut) terminal)) (AX (or #1# #2#)))))",
+   "name": "typestate 1: CreateOrder",
+   "notation": "AG ((CreateOrder \u2227 \u00acterminal) \u2192 (EX (Quote \u2227 \u00acterminal) \u2227 EX (SoldOut \u2227 terminal) \u2227 AX ((Quote \u2227 \u00acterminal) \u2228 (SoldOut \u2227 terminal))))",
+   "subformulas": 15
+  },
+  {
+   "formula": "(AG (implies (and (after Quote) #0=(not terminal)) (and (EX #1=(and (after Pay) #0#)) (AX (or #1#)))))",
+   "name": "typestate 2: Quote",
+   "notation": "AG ((Quote \u2227 \u00acterminal) \u2192 (EX (Pay \u2227 \u00acterminal) \u2227 AX (Pay \u2227 \u00acterminal)))",
+   "subformulas": 12
+  },
+  {
+   "formula": "(AG (implies #0=(and (after SoldOut) terminal) (and (EX #0#) (AX (or #0#)))))",
+   "name": "typestate 3: SoldOut (may end)",
+   "notation": "AG ((SoldOut \u2227 terminal) \u2192 (EX (SoldOut \u2227 terminal) \u2227 AX (SoldOut \u2227 terminal)))",
+   "subformulas": 9
+  },
+  {
+   "formula": "(AG (implies (and (after Pay) #0=(not terminal)) (and (EX #1=(and (after Charge) #0#)) (AX (or #1#)))))",
+   "name": "typestate 4: Pay",
+   "notation": "AG ((Pay \u2227 \u00acterminal) \u2192 (EX (Charge \u2227 \u00acterminal) \u2227 AX (Charge \u2227 \u00acterminal)))",
+   "subformulas": 12
+  },
+  {
+   "formula": "(AG (implies (and (after Charge) #0=(not terminal)) (and (EX #1=(and (after Charged) #0#)) (EX #2=(and (after Declined) #0#)) (AX (or #1# #2#)))))",
+   "name": "typestate 5: Charge",
+   "notation": "AG ((Charge \u2227 \u00acterminal) \u2192 (EX (Charged \u2227 \u00acterminal) \u2227 EX (Declined \u2227 \u00acterminal) \u2227 AX ((Charged \u2227 \u00acterminal) \u2228 (Declined \u2227 \u00acterminal))))",
+   "subformulas": 15
+  },
+  {
+   "formula": "(AG (implies (and (after Charged) (not terminal)) (and (EX #0=(and (after Receipt) terminal)) (AX (or #0#)))))",
+   "name": "typestate 6: Charged",
+   "notation": "AG ((Charged \u2227 \u00acterminal) \u2192 (EX (Receipt \u2227 terminal) \u2227 AX (Receipt \u2227 terminal)))",
+   "subformulas": 12
+  },
+  {
+   "formula": "(AG (implies (and (after Declined) (not terminal)) (and (EX #0=(and (after PaymentDeclined) terminal)) (AX (or #0#)))))",
+   "name": "typestate 7: Declined",
+   "notation": "AG ((Declined \u2227 \u00acterminal) \u2192 (EX (PaymentDeclined \u2227 terminal) \u2227 AX (PaymentDeclined \u2227 terminal)))",
+   "subformulas": 12
+  },
+  {
+   "formula": "(AG (implies #0=(and (after Receipt) terminal) (and (EX #0#) (AX (or #0#)))))",
+   "name": "typestate 8: Receipt (may end)",
+   "notation": "AG ((Receipt \u2227 terminal) \u2192 (EX (Receipt \u2227 terminal) \u2227 AX (Receipt \u2227 terminal)))",
+   "subformulas": 9
+  },
+  {
+   "formula": "(AG (implies #0=(and (after PaymentDeclined) terminal) (and (EX #0#) (AX (or #0#)))))",
+   "name": "typestate 9: PaymentDeclined (may end)",
+   "notation": "AG ((PaymentDeclined \u2227 terminal) \u2192 (EX (PaymentDeclined \u2227 terminal) \u2227 AX (PaymentDeclined \u2227 terminal)))",
+   "subformulas": 9
+  }
+ ],
+ "tool": "session_ctl",
+ "typestates": 10,
+ "verdict": "rules"
+}

@@ -30,6 +30,7 @@
   .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
   .tool { font-weight: 600; }
   .badge { border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: 13px; }
+  details.req > summary .badge { margin-left: 8px; }
   .ok { color: var(--good); } .issues { color: var(--bad); } .other { color: var(--amber); }
   .reading { margin: 0; }
   .panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 8px; padding: 10px 12px; min-width: 0; }
@@ -2985,7 +2986,17 @@ function requirementsStage(body) {
       b.addEventListener("click", () => openStage("requirements", { section: name }));
       row.appendChild(b);
     }
-    parts.push(panel("Derived from " + String(body.file || "the requirements") + ": tasks with their state machines and CTL, clauses, every protocol", row));
+    const rq = body.sections.find((x) => x && x.name === "requirements");
+    if (rq && rq.kinds) {
+      const k = rq.kinds;
+      row.appendChild(el("span", "meta", ` requirements: ${num(k.protocol)} protocol, ${num(k.formula)} formula (${num(rq.met)} met, ${num(rq.failing)} failing), ${num(k.sorry)} use sorry`));
+    }
+    const im = body.sections.find((x) => x && x.name === "implementations");
+    if (im && Array.isArray(im.implementations)) for (const i of im.implementations.slice(0, MAX_ITEMS)) {
+      const st = i.status || {};
+      row.appendChild(el("span", "meta", ` · implementation ${i.impl}: ${num(st.met)} met, ${num(st.specified)} specified, ${num(st.tested)} tested, ${num(st.sorry)} sorry, ${num(st.failing)} failing, ${num(i.hints)} hints`));
+    }
+    parts.push(panel("Derived from " + String(body.file || "the requirements") + ": the requirement and implementation lists, tasks with their state machines and CTL, clauses, every protocol", row));
     return parts;
   }
   const pg = body.page && typeof body.page === "object" ? body.page : {};
@@ -3014,6 +3025,48 @@ function requirementsStage(body) {
     for (const pr of items) { box.appendChild(el("strong", "", String(pr.name || ""))); box.appendChild(el("pre", "", String(pr.formula || pr.expression || ""))); box.appendChild(el("p", "meta", String(pr.mode || "") + " · " + String(pr.origin || "") + (pr.cut ? " · cut" : ""))); }
   } else if (sec === "constraints") {
     for (const c of items) { box.appendChild(el("strong", "", "where_ " + String(c.id || ""))); box.appendChild(el("pre", "", String(c.formula || c.predicate || ""))); }
+  } else if (sec === "requirements" || sec === "implementations") {
+    // one row per entry; every entry converts to CTL (or uses sorry), and its viewer key picks how it
+    // opens: explore (a protocol), ctl (a formula), text (sorry, a hint, evidence); unknown keys are text
+    if (typeof body.goal === "string") box.appendChild(el("p", "meta", body.goal));
+    for (const r of items) {
+      const kind = String(r.kind || ""), viewer = String(r.viewer || "text");
+      const d = el("details", "req");
+      const who = sec === "implementations" ? `${r.impl} · ` : "";
+      const sm = el("summary", "", `${who}${kind} · ${r.id}` + (r.file ? ` · ${r.file}` : "") + (r.declared ? ` [${r.declared}]` : ""));
+      const label = r.failing === true ? "failing: " + String(r.verdict || "")
+        : typeof r.status === "string" ? r.status
+        : r.met === true ? "met" : r.sorry === true ? "sorry" : String(r.verdict || "");
+      const cls = r.failing === true ? "issues" : (r.met === true || r.status === "met") ? "ok" : "";
+      sm.appendChild(el("span", "badge " + cls, label));
+      d.appendChild(sm);
+      if (r.ctl && typeof r.ctl === "object") {
+        const c = r.ctl, fs = Array.isArray(c.formulas) ? c.formulas.slice(0, MAX_ITEMS) : [];
+        if (c.protocol) d.appendChild(el("p", "meta", `Converts to ${num(c.ruleCount)} CTL formula${num(c.ruleCount) === 1 ? "" : "s"} over ${String(c.protocol)}`));
+        for (const f of fs) d.appendChild(el("pre", "ctl-notation", (f.name && f.name !== "formula" ? f.name + ": " : "") + String(f.formula || "")));
+      }
+      if (typeof r.reading === "string" && r.reading) d.appendChild(el("p", "meta", r.reading));
+      if (typeof r.log === "string") d.appendChild(el("p", "meta", "Evidence: conform " + r.log));
+      if (typeof r.test === "string") d.appendChild(el("p", "meta", "Evidence: test " + r.test));
+      const row = el("div", "controls");
+      const file = typeof r.file === "string" ? r.file : "";
+      let opens = false;
+      if (viewer === "explore" && file) {
+        opens = true;
+        const b = el("button", "", "Open " + String(r.name || file) + " in the explorer");
+        b.addEventListener("click", () => openProtocol(file));
+        row.appendChild(b);
+      } else if (viewer === "ctl" && file && typeof r.formula === "string") {
+        opens = true;
+        const b = el("button", "", "Open in the CTL view");
+        b.addEventListener("click", () => openCtl(file, r.formula));
+        row.appendChild(b);
+      } else if (typeof r.text === "string" && r.text) {
+        d.appendChild(el("p", "detail", r.text + (r.cut ? " (cut)" : "")));
+      }
+      if (opens) d.appendChild(row);
+      box.appendChild(d);
+    }
   } else if (sec === "clauses") {
     for (const c of items) {
       const d = el("details"), sm = el("summary", "", `${c.id} [${c.status}] · ${c.area}`);
@@ -3039,6 +3092,20 @@ function requirementsStage(body) {
   if (Number.isInteger(pg.next)) { const b = el("button", "", "Next page ▶"); b.addEventListener("click", () => again(pg.next)); pager.appendChild(b); }
   parts.push(panel(what.charAt(0).toUpperCase() + what.slice(1), box), pager);
   return parts;
+}
+// a ctl requirement's viewer: session_ctl on the entry's own file with its formula, so the CTL view
+// draws the notation, the reading and the path, with the protocol loaded for the other views
+async function openCtl(file, formula) {
+  status("Deciding " + formula + "…");
+  if (inFlight) await new Promise((r) => setTimeout(r, 150));
+  inFlight = true;
+  try {
+    const result = await rpc("tools/call", { name: "session_ctl", arguments: { project: nav.project, file, formula } }, 30000);
+    const sbody = result && result.structuredContent;
+    if (result && result.isError) status(file + ": " + String((sbody && sbody.reason) || "LeanFM refused the formula."), true);
+    else { nav.stage = "requirements"; nav.specView = "index"; ctlFormula = JSON.stringify(formula); drawStageBar(); show(result); say("The CTL view shows the formula over " + file + ", with its witness or counterexample path.", "good"); }
+  } catch (e) { status("session_ctl failed: " + String((e && e.message) || e), true); }
+  finally { inFlight = false; }
 }
 async function openProtocol(file) {
   // the server reads the one file itself: the view never carries a project's text to load it

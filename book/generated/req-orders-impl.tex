@@ -1,0 +1,13 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+implementation Go of examples.orders.Requirements {
+  refines PlaceOrder by ShopImpl;
+  "Orders are placed as PlaceOrder says" => conform "examples/orders/logs/order-1.json";
+  "Every order is answered" => test "shop/order_test.go: TestEveryOrderAnswered";
+  "Every payment is charged to the bank" => conform "examples/orders/logs/order-1.json";
+  "No receipt without a charge" => sorry;
+  "Stock is reserved before a quote" => ShopImpl ⊨ (not (EU (not (after Reserved)) (after Quote)));
+  "A payment is recorded before the receipt" => ShopImpl ⊨ (not (EU (not (after Recorded)) (after Receipt)));
+  hint "Implement the code as Go, with net/http and no web framework";
+  hint "Keep orders in PostgreSQL; the Db role is one transaction per message";
+}
+\end{lstlisting}

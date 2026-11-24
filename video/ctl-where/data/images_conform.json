@@ -1,0 +1,101 @@
+{
+ "name": "Content-Length 48213, body 48000 bytes",
+ "events": [
+  {
+   "id": "a1",
+   "from": "Browser",
+   "to": "Server",
+   "label": "GetImage",
+   "fields": {
+    "id": "cat"
+   }
+  },
+  {
+   "id": "a2",
+   "from": "Server",
+   "to": "Browser",
+   "label": "Image",
+   "cause": "a1",
+   "fields": {
+    "imageId": "cat",
+    "contentLength": "48213",
+    "cacheControl": "no-store",
+    "size": "48000"
+   }
+  }
+ ],
+ "answer": {
+  "deadlineReports": null,
+  "derivedSessions": {
+   "omitted": 0,
+   "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+   "sessions": [
+    {
+     "count": 2,
+     "events": [
+      0,
+      1
+     ],
+     "key": "chain from a1"
+    }
+   ],
+   "unattributed": []
+  },
+  "events": [
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Server",
+    "dstActor": "Server",
+    "id": 1,
+    "label": "GetImage",
+    "logId": "a1",
+    "prior": [],
+    "session": "chain from a1",
+    "src": "Browser",
+    "srcActor": "Browser",
+    "thread": "Browser@chain from a1"
+   },
+   {
+    "act": false,
+    "cause": 1,
+    "dst": "Browser",
+    "dstActor": "Browser",
+    "id": 2,
+    "label": "Image",
+    "logId": "a2",
+    "prior": [],
+    "session": "chain from a1",
+    "src": "Server",
+    "srcActor": "Server",
+    "thread": "Server@chain from a1"
+   }
+  ],
+  "generative": null,
+  "issues": [
+   "session chain from a1, event a2: Image.measured does not hold: contentLength = size (contentLength = 48213, size = 48000); no Image can be made with these fields"
+  ],
+  "lean": "structure GetImage where\n  id : String\n\nstructure Image where\n  imageId : Header String\n  contentLength : Header Nat\n  cacheControl : Header String\n  cached : cacheControl = \"max-age=3600\" or cacheControl = \"no-store\"\n  small : size <= 5000000\n  measured : contentLength = size\n\nprotocol Images (Browser, Server) {\n  g: GetImage from Browser to Server route \"GET /images/{id}\";\n  choice {\n    i: Image from Server to Browser cause g status 200 media \"image/png\" where i.imageId = g.id;\n  } or {\n    NotFound from Server to Browser cause g status 404;\n  }\n}\n",
+  "name": "Images",
+  "overlay": null,
+  "protocol": null,
+  "reading": "Images: 1 problem with the logged values (constraints, links, session keys, versions); first: session chain from a1, event a2: Image.measured does not hold: contentLength = size (contentLength = 48213, size = 48000); no Image can be made with these fields",
+  "roles": [
+   "Browser",
+   "Server"
+  ],
+  "secretFields": [],
+  "sessions": [
+   {
+    "complete": true,
+    "events": 2,
+    "problem": null,
+    "session": "chain from a1",
+    "unchecked": []
+   }
+  ],
+  "tool": "session_conform",
+  "unchecked": [],
+  "verdict": "violates"
+ }
+}

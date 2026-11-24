@@ -1,0 +1,39 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+refines PlaceOrder by ShopImpl
+    every formula requirement over PlaceOrder decided again over ShopImpl: ShopImpl keeps all 4 formula requirements over PlaceOrder
+    -> refines
+
+"Orders are placed as PlaceOrder says"
+    evidence: the log examples/orders/logs/order-1.json conforms to the requirement's protocol
+    -> met
+
+"Every order is answered"
+    evidence: the test shop/order_test.go: TestEveryOrderAnswered
+    -> met
+
+"Every payment is charged to the bank"
+    evidence: the log examples/orders/logs/order-1.json conforms to the requirement's protocol
+    -> met
+
+"No receipt without a charge"
+    sorry
+    -> specified
+
+"Stock is reserved before a quote"
+    ¬E[¬Reserved U Quote]
+    it is not the case that (on some path, (it is not the case that Reserved was just delivered) holds until Quote was just delivered (and Quote was just delivered does happen))
+    -> proved
+
+"A payment is recorded before the receipt"
+    ¬E[¬Recorded U Receipt]
+    it is not the case that (on some path, (it is not the case that Recorded was just delivered) holds until Receipt was just delivered (and Receipt was just delivered does happen))
+    -> proved
+
+hint 1: Implement the code as Go, with net/http and no web framework
+    claims no behaviour, converts to true
+    -> true
+
+hint 2: Keep orders in PostgreSQL; the Db role is one transaction per message
+    claims no behaviour, converts to true
+    -> true
+\end{lstlisting}

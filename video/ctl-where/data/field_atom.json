@@ -1,0 +1,48 @@
+{
+ "bounds": {
+  "maxArgumentBytes": 65536,
+  "maxConcurrentPairs": 64,
+  "maxDepth": 64,
+  "maxDraftStates": 8192,
+  "maxDraftTransitions": 16384,
+  "maxEvents": 512,
+  "maxFormulaNodes": 256,
+  "maxModelNodes": 4096,
+  "maxPredicates": 64,
+  "maxString": 256,
+  "maxTruthBytes": 1073741824
+ },
+ "evidence": {
+  "kind": "none",
+  "note": "the task model cannot decide these atoms; run classify_requirement to restate them over events"
+ },
+ "formula": {
+  "AG": {
+   "implies": [
+    {
+     "after": "Pay"
+    },
+    {
+     "field": {
+      "message": "Pay",
+      "name": "amount",
+      "value": "10"
+     }
+    }
+   ]
+  }
+ },
+ "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+ "mode": "always",
+ "notation": "AG (Pay \u2192 (Pay.amount = 10))",
+ "reading": "PlaceOrder: on every path, always (if Pay was just delivered then the last message was Pay with amount = 10)",
+ "report": "",
+ "states": 10,
+ "task": "PlaceOrder",
+ "terminalConvention": "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), repeat forever: they stutter on themselves, keeping the message that reached them, so every path is infinite. after(m) holds in the state reached by delivering m; the initial state has no message.",
+ "tool": "session_ctl",
+ "unobservableAtoms": [
+  "field Pay.amount (field values are not in the task model; check them with check_trace)"
+ ],
+ "verdict": "unknown"
+}

@@ -1,0 +1,18 @@
+import LeanFM.Session.Syntax
+
+/-- LeanFM's implementation of its own requirements (clause selfhost.implementations.map): evidence
+for each requirement of LeanFM.leanfm, CTL about what no agent observes (the server's reads of the
+project root), and hints for whoever writes the code. -/
+implementation Lean of LeanFM.LLMGenerated.LeanFM {
+  "The MCP conversation follows LeanFMMcp" => test "LeanFM/MCPTests.lean: MCP lists canonical requirements";
+  "No project view or tool before the server is initialized" => test "LeanFM/MCPTests.lean: initialize";
+  "Every page the view asks for is shown or refused" => test "LeanFM/MCPTests.lean: project_view pages";
+  "Every protocol the view loads is drawn or refused" => test "LeanFM/MCPTests.lean: session tools by project and file";
+  "A file the project does not list is refused" => test "LeanFM/MCPTests.lean: a file outside the listing is refused";
+  "The session ends only with Bye" => sorry "no test drives Bye yet";
+  "The session can always end" => sorry;
+  "Every read of the project root is answered" => LeanFMMcp ⊨ (AG (implies (after ReadPage) (AX (after Items))));
+  hint "Implement in Lean 4; the server is one executable built with lake";
+  hint "The MCP surface is read-only: no tool writes, renames or deletes a file";
+  hint "Read the project root only through ProjectView.inside, so a symlink cannot escape it";
+}

@@ -315,6 +315,30 @@ def elabSystem : CommandElab := fun stx => do
   elabCommand (<- withRef body `($[$doc:docComment]? def $n : LeanFM.Session.System :=
     { name := $(str sd.name), shared := [$shared,*], accepts := [$accepts,*] }))
 
+/-- `requirements { "name" => pointer; ... }` (selfhost.requirements.map): elaborating it checks
+every name once and every protocol a pointer names, which must be defined; nothing is defined, so
+the protocols mean what they meant. LeanFM's tools transform each entry into CTL and decide it. -/
+@[command_elab LeanFM.Session.Grammar.requirementsCmd]
+def elabRequirements : CommandElab := fun stx => do
+  let body := stx[0]
+  let mut seen : List String := []
+  for e in body[2].getArgs do
+    let n ← withRef e[0] (read (Text.reqName e[0]))
+    if seen.contains n then throwErrorAt e[0] "requirement \"{n}\" is in the map twice"
+    seen := n :: seen
+    let a := e[2][0]
+    if a.isIdent then
+      withRef a do
+        let cs <- resolveGlobalName a.getId
+        unless cs.any (fun x => x.2.isEmpty) do throwError "requirement \"{n}\": no protocol {a.getId} is defined"
+  if seen.length > Text.maxMapEntries then throwErrorAt body "a requirements map has at most {Text.maxMapEntries} entries"
+
+/-- `implementation Name of Module { ... }` (selfhost.implementations.map): elaborating it checks its
+own shape; what it names in the imported requirements is checked where a project's files are read. -/
+@[command_elab LeanFM.Session.Grammar.implementationCmd]
+def elabImplementation : CommandElab := fun stx => do
+  discard <| withRef stx[1] (read (Text.implementationDecl stx[1]))
+
 /-- A property atom naming a message by its vocabulary type, so a misspelt label is a type error:
 `sent% Dup` elaborates only if `Dup` is a type. -/
 syntax "sent% " ident : term

@@ -1,0 +1,34 @@
+{
+ "bounds": {
+  "maxArgumentBytes": 65536,
+  "maxConcurrentPairs": 64,
+  "maxDepth": 64,
+  "maxDraftStates": 8192,
+  "maxDraftTransitions": 16384,
+  "maxEvents": 512,
+  "maxFormulaNodes": 256,
+  "maxModelNodes": 4096,
+  "maxPredicates": 64,
+  "maxString": 256,
+  "maxTruthBytes": 1073741824
+ },
+ "deadlocks": [],
+ "evidence": {
+  "kind": "exhaustive",
+  "note": "evaluated over all 4 reachable nodes"
+ },
+ "formula": {
+  "AF": "terminal"
+ },
+ "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 50;\n  }\n}\n",
+ "mode": "eventually",
+ "notation": "AF terminal",
+ "reachableNodes": 4,
+ "reading": "Pricing: on every path, eventually the task has ended",
+ "report": "",
+ "states": 3,
+ "task": "Pricing",
+ "terminalConvention": "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), repeat forever: they stutter on themselves, keeping the message that reached them, so every path is infinite. after(m) holds in the state reached by delivering m; the initial state has no message.",
+ "tool": "session_ctl",
+ "verdict": "proved"
+}

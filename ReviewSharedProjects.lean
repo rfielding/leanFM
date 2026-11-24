@@ -41,14 +41,14 @@ def main : IO Unit := do
   IO.FS.writeFile (root ++ "/tasks.json")
     (LeanFM.ChatUI.Server.tasksJson "LeanFM/LLMGenerated/SharedProjects.lean (proposal)"
       proposed LeanFM.LLMGenerated.SharedProjects.constraints ++ "\n")
-  let mut implementation := "# Shared-project implementation mapping review\n\n" ++
+  let mut «implementation» := "# Shared-project implementation mapping review\n\n" ++
     "Status: separate implementation review. Exact stakeholder acceptance is recorded in acceptance.json; this document accepts neither gate.\n\n"
   for decision in LeanFM.LLMGenerated.Implementation.sharedProjectsProposal do
-    implementation := implementation ++ "## " ++ decision.id ++ "\n\n" ++ decision.decision ++
+    «implementation» := «implementation» ++ "## " ++ decision.id ++ "\n\n" ++ decision.decision ++
       "\n\nRequirement references:\n" ++ joinWithNewline (decision.requirementRefs.map ("- " ++ ·)) ++
       "\n\nFiles:\n" ++ joinWithNewline (decision.files.map ("- " ++ ·)) ++
       "\n\nRequired conformance evidence:\n" ++ joinWithNewline (decision.conformanceTests.map ("- " ++ ·)) ++ "\n\n"
-  IO.FS.writeFile (root ++ "/implementation-review.md") implementation
+  IO.FS.writeFile (root ++ "/implementation-review.md") «implementation»
   IO.FS.writeFile (root ++ "/validation.txt")
     "ok: shared-project RequirementSpec is structurally valid\nok: implementation references resolve to the requirements\ngate status: see acceptance.json; structural validation accepts neither gate\nruntime implementation and reset evidence are recorded separately\n"
   IO.println "ok: shared-project requirements, generated views and separate implementation mapping validated; see acceptance.json for gate status"

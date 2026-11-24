@@ -59,10 +59,16 @@ check: sandbox-check build validate diagrams mdp-example-check paxos-check video
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
 
-.PHONY: selfhost-check
+.PHONY: selfhost-check requirements-check
+# every requirement and implementation entry converted to CTL and decided; STRICT=1 fails on sorry too
+requirements-check:
+	lake env lean --run LeanFM/RequirementsCheck.lean $(if $(STRICT),--strict,)
+	lake env lean --run LeanFM/RequirementsCheck.lean --files examples/orders/Requirements.leanfm examples/orders/Implementation.leanfm
+
 selfhost-check:
 	lake build LeanFM.LLMGenerated.Requirements
 	lake env lean LeanFM/LLMGenerated/SelfHostingTests.lean
+	lake env lean --run LeanFM/RequirementsCheck.lean
 	lake env lean --run ReviewSelfHosting.lean
 	lake env lean --run ReviewResumableWork.lean
 	python3 scripts/chatui_work_state_test.py
@@ -203,6 +209,7 @@ book: lean
 	lake env lean --run CtlBookExample.lean
 	python3 scripts/svg_to_pdf.py book/generated/ctl-*.svg
 	for f in book/generated/ctl-*-ts-*.dot; do dot -Tpdf "$$f" -o "$${f%.dot}.pdf"; done
+	lake env lean --run RequirementListsExample.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

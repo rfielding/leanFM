@@ -1,0 +1,12 @@
+structure CreateOrder where
+  total : Nat
+structure Discount where
+  percent : Nat
+protocol Pricing (Client, Shop) {
+  o: CreateOrder from Client to Shop;
+  choice {
+    Discount from Shop to Client cause o where o.total >= 100;
+  } or {
+    Quote from Shop to Client cause o where o.total < 50;
+  }
+}

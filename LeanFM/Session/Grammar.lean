@@ -228,6 +228,62 @@ def acceptDecl : Parser := node `LeanFM.Session.Grammar.acceptDecl
 def systemBody : Parser := node `LeanFM.Session.Grammar.systemBody
   ("system " >> ident >> "{" >> many (instDecl <|> acceptDecl) >> "}")
 
+/-! ## Requirement and implementation maps (selfhost.requirements.map, selfhost.implementations.map) -/
+
+/-- A CTL formula as an s-expression: from `(` to its matching `)`, outside strings, kept as one
+atom whose value is the text; `session_ctl`'s reader parses it when the entry is checked. -/
+def sexprFn : ParserFn := fun c s => Id.run do
+  let input := c.inputString
+  let start := s.pos
+  if String.Pos.Raw.atEnd input start || String.Pos.Raw.get input start != '(' then
+    return s.mkErrorAt "a formula in parentheses, such as (AG (EF terminal))" start
+  let mut i := start
+  let mut depth : Nat := 0
+  let mut inStr := false
+  while !String.Pos.Raw.atEnd input i do
+    let ch := String.Pos.Raw.get input i
+    if inStr then
+      if ch == '\\' then
+        i := String.Pos.Raw.next input i
+        if String.Pos.Raw.atEnd input i then break
+      else if ch == '"' then inStr := false
+    else if ch == '"' then inStr := true
+    else if ch == '(' then depth := depth + 1
+    else if ch == ')' then
+      depth := depth - 1
+      if depth == 0 then
+        let stop := String.Pos.Raw.next input i
+        let info := SourceInfo.original "".toRawSubstring start "".toRawSubstring stop
+        return s.setPos stop |>.pushSyntax (Syntax.atom info (String.Pos.Raw.extract input start stop))
+    i := String.Pos.Raw.next input i
+  return s.mkErrorAt "a formula whose parentheses close" start
+
+def sexpr : Parser := { fn := sexprFn }
+@[combinator_formatter sexpr] def sexpr.formatter : Formatter := pure ()
+@[combinator_parenthesizer sexpr] def sexpr.parenthesizer : Parenthesizer := pure ()
+
+/-- What a requirement points at: `sorry` (with an optional note), a protocol, or `P ⊨ φ`. -/
+def reqPointer : Parser := node `LeanFM.Session.Grammar.reqPointer
+  ((W "sorry" >> optional strLit) <|> (ident >> optional (" ⊨ " >> sexpr)))
+/-- `"name" => pointer;` -/
+def reqEntry : Parser := node `LeanFM.Session.Grammar.reqEntry (strLit >> " => " >> reqPointer >> ";")
+def requirementsBody : Parser := node `LeanFM.Session.Grammar.requirementsBody
+  ("requirements " >> "{" >> many reqEntry >> "}")
+
+/-- Evidence for an imported requirement, or a pointer for the implementation's own CTL. -/
+def evidence : Parser := node `LeanFM.Session.Grammar.evidence
+  ((W "conform" >> strLit) <|> (W "test" >> strLit) <|> reqPointer)
+/-- One line of an implementation: `refines P by Q;`, `hint "text";` or `"name" => evidence;`. -/
+def implItem : Parser := node `LeanFM.Session.Grammar.implItem
+  ((W "refines" >> ident >> W "by" >> ident >> ";") <|> (W "hint" >> strLit >> ";") <|> (strLit >> " => " >> evidence >> ";"))
+def implementationBody : Parser := node `LeanFM.Session.Grammar.implementationBody
+  ("implementation " >> ident >> W "of" >> ident >> "{" >> many implItem >> "}")
+
+/-- `requirements { ... }` as a Lean command (checked by the tools, nothing elaborated). -/
+@[command_parser] def requirementsCmd : Parser := leading_parser requirementsBody
+/-- `implementation Name of Module { ... }` as a Lean command. -/
+@[command_parser] def implementationCmd : Parser := leading_parser optional Command.docComment >> implementationBody
+
 /-- `protocol Name (Roles) { ... }` as a Lean command (`Session.Syntax` elaborates it). -/
 @[command_parser] def protocolCmd : Parser := leading_parser optional Command.docComment >> protocolBody
 
@@ -292,7 +348,7 @@ def structureBody : Parser := node `LeanFM.Session.Grammar.structureBody
 def file : Parser := node `LeanFM.Session.Grammar.file
   (many (node `LeanFM.Session.Grammar.import ("import " >> ident)) >>
     many (node `LeanFM.Session.Grammar.item (optional Command.docComment >>
-      (structureBody <|> protocolBody <|> requireBody <|> systemBody <|> leanDecl))) >>
+      (structureBody <|> protocolBody <|> requireBody <|> systemBody <|> requirementsBody <|> implementationBody <|> leanDecl))) >>
     notFollowedBy (Command.moduleDoc) "module doc comment (/-! -/); use -- comments")
 
 /-! ## Running the grammar on text -/
@@ -346,7 +402,7 @@ private unsafe def runImpl (p : Parser) (what : String) (text : String) : Except
 @[implemented_by runImpl, never_extract] opaque run (p : Parser) (what : String) (text : String) : Except String Syntax
 
 /-- Parse protocol text: the Lean header, structures, protocols and requirements. -/
-def parseFile (text : String) : Except String Syntax := run file "structure, protocol, require or system" text
+def parseFile (text : String) : Except String Syntax := run file "structure, protocol, require, system, requirements or implementation" text
 
 /-- Parse one annotation value, such as a fraction, duration or time expression. -/
 def parseValue (p : Parser) (text : String) : Except String Syntax := run p "the end of the value" text

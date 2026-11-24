@@ -1,0 +1,29 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+"Orders are placed as PlaceOrder says"
+    the conversation is exactly PlaceOrder's: 11 faithful CTL rules, one per typestate and one for the start
+    -> ok
+
+"Every order is answered"
+    AG (CreateOrder → AF (Receipt ∨ PaymentDeclined ∨ SoldOut))
+    on every path, always (if CreateOrder was just delivered then (on every path, eventually (Receipt was just delivered or PaymentDeclined was just delivered or SoldOut was just delivered)))
+    -> proved
+
+"Every payment is charged to the bank"
+    AG (Pay → AF Charge)
+    on every path, always (if Pay was just delivered then (on every path, eventually Charge was just delivered))
+    -> proved
+
+"No receipt without a charge"
+    ¬E[¬Charged U Receipt]
+    it is not the case that (on some path, (it is not the case that Charged was just delivered) holds until Receipt was just delivered (and Receipt was just delivered does happen))
+    -> proved
+
+"A sold-out order is never charged"
+    AG (SoldOut → AG ¬Charge)
+    on every path, always (if SoldOut was just delivered then (on every path, always (it is not the case that Charge was just delivered)))
+    -> proved
+
+"Refunds within 30 days"
+    sorry: PlaceOrder has no Refund message yet
+    -> sorry
+\end{lstlisting}

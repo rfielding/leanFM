@@ -1,0 +1,7 @@
+protocol Upload (Client, Store) {
+  a: Begin from Client to Store;
+  Ack from Store to Client cause a;
+  b: Commit from Client to Store;
+  Ack from Store to Client cause b;
+  Done from Client to Store;
+}

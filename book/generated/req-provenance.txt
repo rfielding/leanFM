@@ -1,0 +1,7 @@
+prompt: every requirements file ends in a map from requirement names to pointers; implementations import requirements, add their own CTL and hints; requirements and implementations are things that convert to CTL, and sorry is what does not yet; the book's examples must say what is required
+question: what does each requirement of a small shop require, in CTL and in words, what does an implementation of it add, and which entries are met, sorry or failing?
+eventSource: examples/orders/Requirements.leanfm, examples/orders/Implementation.leanfm, examples/orders/logs/order-1.json; LeanFM/LLMGenerated/LeanFM.leanfm and LeanFMImplementation.leanfm for LeanFM's own summary
+reducer: LeanFM.ProjectView.readMapFiles, requirementRows, implementationRows, checkRow, listSummaries; LeanFM.SessionTools.ctl (notation, reading) and diagram
+unit: entries; verdicts proved, ok, sorry, true, tested, conforms; statuses met, specified, tested, sorry, failing
+boundary: the two example files; LeanFM's specification directory
+generator: RequirementListsExample.lean, then scripts/svg_to_pdf.py book/generated/req-shopimpl-*.svg

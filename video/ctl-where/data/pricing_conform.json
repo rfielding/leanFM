@@ -1,0 +1,495 @@
+[
+ {
+  "name": "total 150, Discount",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "total": 150
+    }
+   },
+   {
+    "id": "d1",
+    "label": "Discount",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1",
+    "body": {
+     "percent": 10
+    }
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 2,
+      "events": [
+       0,
+       1
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Discount",
+     "logId": "d1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [],
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 100;\n  }\n}\n",
+   "name": "Pricing",
+   "overlay": null,
+   "protocol": null,
+   "reading": "Pricing: 2 events in 1 session follow the protocol",
+   "roles": [
+    "Client",
+    "Shop"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": true,
+     "events": 2,
+     "problem": null,
+     "session": "chain from o1",
+     "unchecked": []
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [],
+   "verdict": "conforms"
+  }
+ },
+ {
+  "name": "total 50, Discount",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "total": 50
+    }
+   },
+   {
+    "id": "d1",
+    "label": "Discount",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1",
+    "body": {
+     "percent": 10
+    }
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 2,
+      "events": [
+       0,
+       1
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Discount",
+     "logId": "d1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [
+    "session chain from o1, event d1: Discount from Shop to Client breaks its condition: where o.total >= 100 is false: o.total = 50"
+   ],
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 100;\n  }\n}\n",
+   "name": "Pricing",
+   "overlay": null,
+   "protocol": null,
+   "reading": "Pricing: 1 of 1 sessions break the protocol; first: session chain from o1, event d1: Discount from Shop to Client breaks its condition: where o.total >= 100 is false: o.total = 50",
+   "roles": [
+    "Client",
+    "Shop"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": false,
+     "events": 1,
+     "problem": {
+      "event": "d1",
+      "reason": "Discount from Shop to Client breaks its condition: where o.total >= 100 is false: o.total = 50"
+     },
+     "session": "chain from o1",
+     "unchecked": []
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [],
+   "verdict": "violates"
+  }
+ },
+ {
+  "name": "total not logged",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop"
+   },
+   {
+    "id": "d1",
+    "label": "Discount",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1",
+    "body": {
+     "percent": 10
+    }
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 2,
+      "events": [
+       0,
+       1
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Discount",
+     "logId": "d1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [],
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 100;\n  }\n}\n",
+   "name": "Pricing",
+   "overlay": null,
+   "protocol": null,
+   "reading": "Pricing: 2 events in 1 session follow the protocol; 1 where condition unchecked: session chain from o1, event d1: where o.total >= 100: o.total is not in the log",
+   "roles": [
+    "Client",
+    "Shop"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": true,
+     "events": 2,
+     "problem": null,
+     "session": "chain from o1",
+     "unchecked": [
+      "d1: where o.total >= 100: o.total is not in the log"
+     ]
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [
+    "session chain from o1, event d1: where o.total >= 100: o.total is not in the log"
+   ],
+   "verdict": "conforms"
+  }
+ },
+ {
+  "name": "gap: total 70, Quote",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "total": 70
+    }
+   },
+   {
+    "id": "q1",
+    "label": "Quote",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1"
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 2,
+      "events": [
+       0,
+       1
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Quote",
+     "logId": "q1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [
+    "session chain from o1, event q1: Quote from Shop to Client breaks its condition: where o.total < 50 is false: o.total = 70"
+   ],
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 50;\n  }\n}\n",
+   "name": "Pricing",
+   "overlay": null,
+   "protocol": null,
+   "reading": "Pricing: 1 of 1 sessions break the protocol; first: session chain from o1, event q1: Quote from Shop to Client breaks its condition: where o.total < 50 is false: o.total = 70",
+   "roles": [
+    "Client",
+    "Shop"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": false,
+     "events": 1,
+     "problem": {
+      "event": "q1",
+      "reason": "Quote from Shop to Client breaks its condition: where o.total < 50 is false: o.total = 70"
+     },
+     "session": "chain from o1",
+     "unchecked": []
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [],
+   "verdict": "violates"
+  }
+ },
+ {
+  "name": "gap: total 70, Discount",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "total": 70
+    }
+   },
+   {
+    "id": "d1",
+    "label": "Discount",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1",
+    "body": {
+     "percent": 10
+    }
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 2,
+      "events": [
+       0,
+       1
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Discount",
+     "logId": "d1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [
+    "session chain from o1, event d1: Discount from Shop to Client breaks its condition: where o.total >= 100 is false: o.total = 70"
+   ],
+   "lean": "structure CreateOrder where\n  total : Nat\nstructure Discount where\n  percent : Nat\nprotocol Pricing (Client, Shop) {\n  o: CreateOrder from Client to Shop;\n  choice {\n    Discount from Shop to Client cause o where o.total >= 100;\n  } or {\n    Quote from Shop to Client cause o where o.total < 50;\n  }\n}\n",
+   "name": "Pricing",
+   "overlay": null,
+   "protocol": null,
+   "reading": "Pricing: 1 of 1 sessions break the protocol; first: session chain from o1, event d1: Discount from Shop to Client breaks its condition: where o.total >= 100 is false: o.total = 70",
+   "roles": [
+    "Client",
+    "Shop"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": false,
+     "events": 1,
+     "problem": {
+      "event": "d1",
+      "reason": "Discount from Shop to Client breaks its condition: where o.total >= 100 is false: o.total = 70"
+     },
+     "session": "chain from o1",
+     "unchecked": []
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [],
+   "verdict": "violates"
+  }
+ }
+]

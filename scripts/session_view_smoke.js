@@ -93,7 +93,7 @@ function host(msg) {
     toolCalls.push(name);
     const answer = name === "session_next" ? R.next[Math.min(nextCalls++, R.next.length - 1)]
       : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp
-      : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types
+      : name === "session_ctl" ? R.ctl : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types
       : name === "session_explore" ? (msg.params.arguments && msg.params.arguments.focus ? R.exploreFocus : R.explore)
       : name === "project_view" && R.projectView ? projectViewAnswer(msg.params.arguments || {}) : null;
     if (answer) deliver({ jsonrpc: "2.0", id: msg.id, result: answer });
@@ -102,7 +102,7 @@ function host(msg) {
 }
 
 // project_view answers from RESULTS.json's projectView: {list, chat, book, requirements, sections: {tasks,
-// protocols, clauses, properties, transitions}, protocol, code: [every page of the listing], codeFile}
+// requirements, protocols, clauses, properties, transitions}, protocol, code: [every page of the listing], codeFile}
 function projectViewAnswer(a) {
   const P = R.projectView;
   if (a.project === "Maqam" && P.maqam) return a.impl === "rust" ? P.maqam.rust : P.maqam.zig;
@@ -117,7 +117,7 @@ function projectViewAnswer(a) {
 }
 
 // an error thrown from a promise or timer in the view is a failure, reported plainly
-const fail = (e) => { console.error("the view threw: " + String(e && e.message || e)); process.exit(1); };
+const fail = (e) => { console.error("the view threw: " + String(e && e.message || e) + (process.env.SMOKE_STACK ? "\n" + (e && e.stack) : "")); process.exit(1); };
 process.on("uncaughtException", fail);
 process.on("unhandledRejection", fail);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -517,6 +517,30 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     expectText("the clauses section shows a page of clauses", byId.results, "selfhost.revision");
     button(byId.results, "Next page ▶");
     console.log("ok: the clauses section offers its next page");
+    // the requirement list: each entry opens in the viewer of its kind (selfhost.requirements.list)
+    button(byId.results, "Index").click(); await wait(200);
+    if (!byId.results.textContent.includes("use sorry") || !byId.results.textContent.includes("implementation Lean:")) throw new Error("the overview does not count the requirements by kind: " + byId.results.textContent.slice(0, 600));
+    sectionButton("requirements").click(); await wait(200);
+    if (navSent()?.params.arguments.section !== "requirements") throw new Error("the requirements section was not asked for");
+    expectText("the requirements section lists LeanFM's protocol requirement", byId.results, "protocol · The MCP conversation follows LeanFMMcp");
+    expectText("a formula requirement shows the CTL it converts to", byId.results, "(AG (EF terminal))");
+    expectText("a clause is a sorry requirement", byId.results, "sorry · selfhost.revision");
+    button(byId.results, "Open LeanFMMcp in the explorer");
+    buttons(byId.results).find((b) => b.textContent === "Open in the CTL view").click(); await wait(300);
+    const decided = hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_ctl").pop();
+    if (!decided || decided.params.arguments.project !== "LeanFM" || decided.params.arguments.file !== "LeanFM/LLMGenerated/LeanFM.leanfm" ||
+        typeof decided.params.arguments.formula !== "string" || "lean" in decided.params.arguments)
+      throw new Error("a ctl requirement did not open session_ctl by project, file and formula: " + JSON.stringify(decided && decided.params.arguments).slice(0, 200));
+    console.log("ok: the requirements section opens a protocol in the explorer and a formula in the CTL view by its file and formula");
+    button(bar, "spec").click(); await wait(300);
+    button(bar.all().find((n) => n.className.split(" ").includes("specrow")), "files & sections").click(); await wait(200);
+    sectionButton("implementations").click(); await wait(200);
+    if (navSent()?.params.arguments.section !== "implementations") throw new Error("the implementations section was not asked for");
+    expectText("the implementations section shows evidence with its status", byId.results, "Lean · test · The MCP conversation follows LeanFMMcp");
+    expectText("a hint converts to true", byId.results, "Lean · hint · hint 1");
+    console.log("ok: the implementations section lists evidence, the implementation's own CTL and its hints");
+    button(bar, "spec").click(); await wait(300);
+    button(bar.all().find((n) => n.className.split(" ").includes("specrow")), "files & sections").click(); await wait(200);
     button(byId.results, "Index").click(); await wait(200);
     sectionButton("protocols").click(); await wait(200);
     const prow = byId.results.all().find((n) => n.className.split(" ").includes("frow"));

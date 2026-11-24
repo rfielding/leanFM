@@ -1,0 +1,397 @@
+[
+ {
+  "name": "amount 10, price 10",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "item": "tea",
+     "quantity": 1
+    }
+   },
+   {
+    "id": "q1",
+    "label": "Quote",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1",
+    "body": {
+     "price": 10
+    }
+   },
+   {
+    "id": "p1",
+    "label": "Pay",
+    "from": "Client",
+    "to": "Shop",
+    "cause": "q1",
+    "body": {
+     "amount": 10
+    }
+   },
+   {
+    "id": "c1",
+    "label": "Charge",
+    "from": "Shop",
+    "to": "Bank",
+    "cause": "p1",
+    "body": {
+     "amount": 10
+    }
+   },
+   {
+    "id": "d1",
+    "label": "Charged",
+    "from": "Bank",
+    "to": "Shop",
+    "cause": "c1"
+   },
+   {
+    "id": "r1",
+    "label": "Receipt",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "d1",
+    "body": {
+     "amount": 10
+    }
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 6,
+      "events": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Quote",
+     "logId": "q1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 2,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 3,
+     "label": "Pay",
+     "logId": "p1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 3,
+     "dst": "Bank",
+     "dstActor": "Bank",
+     "id": 4,
+     "label": "Charge",
+     "logId": "c1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 4,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 5,
+     "label": "Charged",
+     "logId": "d1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Bank",
+     "srcActor": "Bank",
+     "thread": "Bank@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 5,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 6,
+     "label": "Receipt",
+     "logId": "r1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [],
+   "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+   "name": "PlaceOrder",
+   "overlay": null,
+   "protocol": null,
+   "reading": "PlaceOrder: 6 events in 1 session follow the protocol",
+   "roles": [
+    "Client",
+    "Shop",
+    "Bank"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": true,
+     "events": 6,
+     "problem": null,
+     "session": "chain from o1",
+     "unchecked": []
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [],
+   "verdict": "conforms"
+  }
+ },
+ {
+  "name": "amount 12, price 10",
+  "events": [
+   {
+    "id": "o1",
+    "label": "CreateOrder",
+    "from": "Client",
+    "to": "Shop",
+    "body": {
+     "item": "tea",
+     "quantity": 1
+    }
+   },
+   {
+    "id": "q1",
+    "label": "Quote",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "o1",
+    "body": {
+     "price": 10
+    }
+   },
+   {
+    "id": "p1",
+    "label": "Pay",
+    "from": "Client",
+    "to": "Shop",
+    "cause": "q1",
+    "body": {
+     "amount": 12
+    }
+   },
+   {
+    "id": "c1",
+    "label": "Charge",
+    "from": "Shop",
+    "to": "Bank",
+    "cause": "p1",
+    "body": {
+     "amount": 10
+    }
+   },
+   {
+    "id": "d1",
+    "label": "Charged",
+    "from": "Bank",
+    "to": "Shop",
+    "cause": "c1"
+   },
+   {
+    "id": "r1",
+    "label": "Receipt",
+    "from": "Shop",
+    "to": "Client",
+    "cause": "d1",
+    "body": {
+     "amount": 10
+    }
+   }
+  ],
+  "answer": {
+   "deadlineReports": null,
+   "derivedSessions": {
+    "omitted": 0,
+    "reading": "1 sessions derived from causes and the declared session key; the log names no sessions",
+    "sessions": [
+     {
+      "count": 6,
+      "events": [
+       0,
+       1,
+       2,
+       3,
+       4,
+       5
+      ],
+      "key": "chain from o1"
+     }
+    ],
+    "unattributed": []
+   },
+   "events": [
+    {
+     "act": false,
+     "cause": null,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 1,
+     "label": "CreateOrder",
+     "logId": "o1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 1,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 2,
+     "label": "Quote",
+     "logId": "q1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 2,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 3,
+     "label": "Pay",
+     "logId": "p1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Client",
+     "srcActor": "Client",
+     "thread": "Client@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 3,
+     "dst": "Bank",
+     "dstActor": "Bank",
+     "id": 4,
+     "label": "Charge",
+     "logId": "c1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 4,
+     "dst": "Shop",
+     "dstActor": "Shop",
+     "id": 5,
+     "label": "Charged",
+     "logId": "d1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Bank",
+     "srcActor": "Bank",
+     "thread": "Bank@chain from o1"
+    },
+    {
+     "act": false,
+     "cause": 5,
+     "dst": "Client",
+     "dstActor": "Client",
+     "id": 6,
+     "label": "Receipt",
+     "logId": "r1",
+     "prior": [],
+     "session": "chain from o1",
+     "src": "Shop",
+     "srcActor": "Shop",
+     "thread": "Shop@chain from o1"
+    }
+   ],
+   "generative": null,
+   "issues": [
+    "session chain from o1, event p1: Pay from Client to Shop breaks its condition: where p.amount = q.price is false: p.amount = 12, q.price = 10"
+   ],
+   "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+   "name": "PlaceOrder",
+   "overlay": null,
+   "protocol": null,
+   "reading": "PlaceOrder: 1 of 1 sessions break the protocol; first: session chain from o1, event p1: Pay from Client to Shop breaks its condition: where p.amount = q.price is false: p.amount = 12, q.price = 10",
+   "roles": [
+    "Client",
+    "Shop",
+    "Bank"
+   ],
+   "secretFields": [],
+   "sessions": [
+    {
+     "complete": false,
+     "events": 2,
+     "problem": {
+      "event": "p1",
+      "reason": "Pay from Client to Shop breaks its condition: where p.amount = q.price is false: p.amount = 12, q.price = 10"
+     },
+     "session": "chain from o1",
+     "unchecked": []
+    }
+   ],
+   "tool": "session_conform",
+   "unchecked": [],
+   "verdict": "violates"
+  }
+ }
+]

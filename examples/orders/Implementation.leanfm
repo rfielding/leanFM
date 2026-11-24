@@ -1,0 +1,39 @@
+import LeanFM.Session.Syntax
+
+/-- The shop as built: an API in front of a database. The database is not observable to the
+client, so it belongs here, not in the requirements. -/
+protocol ShopImpl (Client, Api, Db, Bank) {
+  o: CreateOrder from Client to Api route "POST /orders";
+  r: Reserve from Api to Db cause o;
+  choice {
+    v: Reserved from Db to Api cause r;
+    q: Quote from Api to Client cause o status 201;
+    p: Pay from Client to Api cause q;
+    c: Charge from Api to Bank cause p;
+    choice {
+      d: Charged from Bank to Api cause c;
+      w: RecordPayment from Api to Db cause d;
+      k: Recorded from Db to Api cause w;
+      Receipt from Api to Client cause d status 200;
+    } or {
+      x: Declined from Bank to Api cause c;
+      ReleaseStock from Api to Db cause x;
+      PaymentDeclined from Api to Client cause x status 402;
+    }
+  } or {
+    n: OutOfStock from Db to Api cause r;
+    SoldOut from Api to Client cause o status 409;
+  }
+}
+
+implementation Go of examples.orders.Requirements {
+  refines PlaceOrder by ShopImpl;
+  "Orders are placed as PlaceOrder says" => conform "examples/orders/logs/order-1.json";
+  "Every order is answered" => test "shop/order_test.go: TestEveryOrderAnswered";
+  "Every payment is charged to the bank" => conform "examples/orders/logs/order-1.json";
+  "No receipt without a charge" => sorry;
+  "Stock is reserved before a quote" => ShopImpl ⊨ (not (EU (not (after Reserved)) (after Quote)));
+  "A payment is recorded before the receipt" => ShopImpl ⊨ (not (EU (not (after Recorded)) (after Receipt)));
+  hint "Implement the code as Go, with net/http and no web framework";
+  hint "Keep orders in PostgreSQL; the Db role is one transaction per message";
+}

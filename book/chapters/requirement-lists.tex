@@ -1,0 +1,158 @@
+\chapter{Requirements and Implementations}\label{ch:lists}
+
+A project has an actual list of requirements, and a similar list for each of its
+implementations. Both are lists of things that convert to CTL. An entry that does not
+convert yet says so, the way \texttt{sorry} does in a Lean proof: the file still reads,
+the entry is counted and warned about, and nothing pretends it holds.
+
+This chapter follows one small shop from requirements to an implementation. Both files
+are in \texttt{examples/orders}, and every verdict below is LeanFM's.
+
+\section{What is required}
+
+A requirements file says what is required in two ways. First, by a protocol: the
+conversation the system must hold, message by message. This is PlaceOrder from
+Figure~\ref{fig:placeorder}:
+
+\input{generated/req-orders-protocol.tex}
+
+A client orders; the shop either quotes or says it is sold out; a quoted order is paid,
+the bank charges the card, and the client gets a receipt or a refusal. The payment must
+match the quote. Nothing else may happen, and every one of these paths must stay possible.
+
+Second, by properties the protocol's shape does not show at a glance. The file ends in a
+map that names every requirement and points at what it means:
+
+\input{generated/req-orders-map.tex}
+
+Each entry converts to CTL and is decided. Here is what each one requires, as the CTL
+LeanFM writes for it and as LeanFM reads that formula back, with the verdict:
+
+\input{generated/req-orders-explained.tex}
+
+A pointer is one of three kinds:
+
+\begin{center}
+\begin{tabular}{@{}lp{.62\textwidth}@{}}
+\toprule
+pointer & converts to \\
+\midrule
+\texttt{P} & the faithful rules of protocol $P$ (Chapter~\ref{ch:faithful}): exactly $P$'s conversation \\
+\texttt{P} $\models$ \texttt{($\varphi$)} & the formula $\varphi$, decided over the state graph of $P$ \\
+\texttt{sorry} & nothing yet \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A pointer to a protocol the file does not define is an error, not a sorry, as an
+unknown name is in Lean. A name appears once, and the map is the file's last item, so a
+reader always knows where the requirements are. The map changes no protocol.
+
+\section{Sorry}
+
+\texttt{sorry} is anything that does not convert to CTL yet. ``Refunds within 30 days''
+cannot: PlaceOrder has no refund message, so there is nothing for a formula to talk
+about. Writing the requirement down anyway, as a sorry, keeps it on the list.
+
+A sorry is neither true nor false. Converting it to \emph{true} would count an unwritten
+requirement as met; converting it to \emph{false} would claim it is refuted. Like Lean's
+\texttt{sorry}, it is admitted and tracked: the check passes with a warning for each one,
+and in strict mode each one is an error. Removing a sorry means adding to the protocol, here
+a Refund message and a deadline, and replacing the sorry with a formula over it. A pointer
+to a kind with no transform yet, such as an SLA block, whose claims are probabilistic, is
+a sorry too.
+
+\section{An implementation}
+
+Some things belong in a specification but not in its requirements: behaviour no client
+can observe, and choices that are not behaviour at all, such as the language or the
+database. They go in an implementation, which names the requirements it implements. A
+project may have any number of implementations against the same requirements.
+
+The Go shop puts an API in front of a database. The database is invisible to the client,
+so its protocol, ShopImpl, lives in the implementation:
+
+\input{generated/req-shopimpl.tex}
+
+\begin{figure}[ht]\centering
+\AccessibleFigure{Interaction diagram of ShopImpl. Message from Client to Api: CreateOrder. Message from Api to Db: Reserve. Then either: message from Db to Api: Reserved; message from Api to Client: Quote; message from Client to Api: Pay; message from Api to Bank: Charge; then either message from Bank to Api: Charged; message from Api to Db: RecordPayment; message from Db to Api: Recorded and message from Api to Client: Receipt or message from Bank to Api: Declined; message from Api to Db: ReleaseStock and message from Api to Client: PaymentDeclined. Or: message from Db to Api: OutOfStock; message from Api to Client: SoldOut.}{\ThemedDiagram{width=.85\textwidth}{req-shopimpl}}
+\caption{ShopImpl: the shop as built, with the database the client never sees.}
+\label{fig:shopimpl}
+\end{figure}
+
+LeanFM's projection check shaped this protocol: a first version told the database about
+a payment only when the bank accepted it, and LeanFM refused it because the database could
+not tell which way the bank had decided. ReleaseStock is the fix.
+
+The implementation's block holds three kinds of entry:
+
+\input{generated/req-orders-impl.tex}
+
+\begin{description}
+\item[Evidence] for a requirement: \texttt{conform "log"} checks a run's log against the
+requirement's protocol (Chapter~\ref{ch:where}); \texttt{test "name"} names a test the
+project's checks run; \texttt{sorry} has none yet. A name the requirements do not have is
+an error.
+\item[Its own CTL], under new names: here, that stock is reserved before a quote and a
+payment recorded before the receipt. Both are about the database, which is why they are
+not requirements. \texttt{refines PlaceOrder by ShopImpl} decides every formula requirement
+over PlaceOrder again over ShopImpl, so the implementation may add messages but may not
+break what was required.
+\item[Hints] for whoever writes the code, often an LLM: the language, the database. A
+hint claims no behaviour, so it converts to \emph{true}, honestly, and never warns.
+\end{description}
+
+What each entry means and how it stands:
+
+\input{generated/req-orders-impl-explained.tex}
+
+\section{Status is computed}
+
+Status follows from the two verdicts, so no one has to declare it:
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+requirement & evidence & status & the check \\
+\midrule
+converts and holds & passes & met & ok \\
+converts and holds & sorry or none & specified & warning \\
+sorry & passes & tested & warning \\
+sorry & sorry or none & sorry & warning \\
+fails & any & failing & error \\
+any & fails & failing & error \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A requirement an implementation does not name counts as sorry for it. The shop:
+
+\input{generated/req-orders-summary.tex}
+
+Evidence is only as strong as its kind. A conforming log carries every $\AG$ property
+proved of the protocol to that run, since the run is one of the protocol's runs; an
+$\AF$ or $\EF$ property also needs the guards of every choice to cover every value
+(Chapter~\ref{ch:where}). A test is evidence but not CTL, so a sorry requirement with a
+passing test is ``tested'', not ``met''.
+
+\section{LeanFM's own lists}
+
+LeanFM is specified the same way. Its requirements map ends
+\texttt{LeanFM/LLMGenerated/LeanFM.leanfm}, over its own MCP protocol; its implementation
+is \texttt{LeanFMImplementation.leanfm}; and the clauses of \texttt{SelfHosting.lean},
+which are still prose, join its list as sorry entries:
+
+\input{generated/req-leanfm-summary.tex}
+
+\section{The gate and the viewers}
+
+\texttt{make requirements-check} converts and decides every entry. A failing entry fails
+it; each sorry is a warning, and with \texttt{STRICT=1} an error. It checks LeanFM's
+specification directory and, with \texttt{--files}, any other files, such as this
+chapter's example.
+
+The session view lists both lists under \emph{spec}, \emph{files \& sections}. Each entry
+opens in the viewer of its kind: a protocol in the protocol explorer, a formula in the CTL
+view with its witness or counterexample path, and a sorry, a hint or a piece of evidence as
+text. A new kind of entry brings its transform and its viewer; until it has a transform it
+is a sorry.

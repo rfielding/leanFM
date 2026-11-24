@@ -1,0 +1,56 @@
+{
+ "deterministic": true,
+ "lean": "protocol Upload (Client, Store) {\n  a: Begin from Client to Store;\n  Ack from Store to Client cause a;\n  b: Commit from Client to Store;\n  Ack from Store to Client cause b;\n  Done from Client to Store;\n}\n",
+ "lookahead": 1,
+ "name": "Upload",
+ "nodes": 6,
+ "reading": "Upload: 6 typestates over 6 checker nodes, lookahead 1; 7 rules (the start and one per typestate: in it each next typestate is possible and nothing else is). Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol",
+ "ruleCount": 7,
+ "rules": [
+  {
+   "formula": "(and (and (not (or (after Begin) (after Ack) (after Commit) (after Done))) #0=(not terminal)) (EX #1=(and (after Begin) #0#)) (AX (or #1#)))",
+   "name": "start",
+   "notation": "(\u00ac(Begin \u2228 Ack \u2228 Commit \u2228 Done) \u2227 \u00acterminal) \u2227 EX (Begin \u2227 \u00acterminal) \u2227 AX (Begin \u2227 \u00acterminal)",
+   "subformulas": 14
+  },
+  {
+   "formula": "(AG (implies (and (and (not (or (after Begin) (after Ack) (after Commit) (after Done))) #0=(not terminal)) (EX #1=(and (after Begin) #0#)) (AX (or #1#))) (and (EX #2=(and #1# (EX #3=(and (after Ack) #0#)) (AX (or #3#)))) (AX (or #2#)))))",
+   "name": "typestate 0: (start)",
+   "notation": "AG (((\u00ac(Begin \u2228 Ack \u2228 Commit \u2228 Done) \u2227 \u00acterminal) \u2227 EX (Begin \u2227 \u00acterminal) \u2227 AX (Begin \u2227 \u00acterminal)) \u2192 (EX ((Begin \u2227 \u00acterminal) \u2227 EX (Ack \u2227 \u00acterminal) \u2227 AX (Ack \u2227 \u00acterminal)) \u2227 AX ((Begin \u2227 \u00acterminal) \u2227 EX (Ack \u2227 \u00acterminal) \u2227 AX (Ack \u2227 \u00acterminal))))",
+   "subformulas": 25
+  },
+  {
+   "formula": "(AG (implies (and (and (after Begin) #0=(not terminal)) (EX #1=(and (after Ack) #0#)) (AX (or #1#))) (and (EX #2=(and #1# (EX #3=(and (after Commit) #0#)) (AX (or #3#)))) (AX (or #2#)))))",
+   "name": "typestate 1: Begin",
+   "notation": "AG (((Begin \u2227 \u00acterminal) \u2227 EX (Ack \u2227 \u00acterminal) \u2227 AX (Ack \u2227 \u00acterminal)) \u2192 (EX ((Ack \u2227 \u00acterminal) \u2227 EX (Commit \u2227 \u00acterminal) \u2227 AX (Commit \u2227 \u00acterminal)) \u2227 AX ((Ack \u2227 \u00acterminal) \u2227 EX (Commit \u2227 \u00acterminal) \u2227 AX (Commit \u2227 \u00acterminal))))",
+   "subformulas": 22
+  },
+  {
+   "formula": "(AG (implies (and #0=(and (after Ack) #1=(not terminal)) (EX #2=(and (after Commit) #1#)) (AX (or #2#))) (and (EX #3=(and #2# (EX #0#) (AX (or #0#)))) (AX (or #3#)))))",
+   "name": "typestate 2: Ack",
+   "notation": "AG (((Ack \u2227 \u00acterminal) \u2227 EX (Commit \u2227 \u00acterminal) \u2227 AX (Commit \u2227 \u00acterminal)) \u2192 (EX ((Commit \u2227 \u00acterminal) \u2227 EX (Ack \u2227 \u00acterminal) \u2227 AX (Ack \u2227 \u00acterminal)) \u2227 AX ((Commit \u2227 \u00acterminal) \u2227 EX (Ack \u2227 \u00acterminal) \u2227 AX (Ack \u2227 \u00acterminal))))",
+   "subformulas": 20
+  },
+  {
+   "formula": "(AG (implies (and (and (after Commit) #0=(not terminal)) (EX #1=(and (after Ack) #0#)) (AX (or #1#))) (and (EX #2=(and #1# (EX #3=(and (after Done) terminal)) (AX (or #3#)))) (AX (or #2#)))))",
+   "name": "typestate 3: Commit",
+   "notation": "AG (((Commit \u2227 \u00acterminal) \u2227 EX (Ack \u2227 \u00acterminal) \u2227 AX (Ack \u2227 \u00acterminal)) \u2192 (EX ((Ack \u2227 \u00acterminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal)) \u2227 AX ((Ack \u2227 \u00acterminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal))))",
+   "subformulas": 22
+  },
+  {
+   "formula": "(AG (implies (and (and (after Ack) (not terminal)) #0=(EX #1=(and (after Done) terminal)) #2=(AX (or #1#))) (and (EX #3=(and #1# #0# #2#)) (AX (or #3#)))))",
+   "name": "typestate 4: Ack",
+   "notation": "AG (((Ack \u2227 \u00acterminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal)) \u2192 (EX ((Done \u2227 terminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal)) \u2227 AX ((Done \u2227 terminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal))))",
+   "subformulas": 17
+  },
+  {
+   "formula": "(AG (implies #0=(and #1=(and (after Done) terminal) (EX #1#) (AX (or #1#))) (and (EX #0#) (AX (or #0#)))))",
+   "name": "typestate 5: Done (may end)",
+   "notation": "AG (((Done \u2227 terminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal)) \u2192 (EX ((Done \u2227 terminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal)) \u2227 AX ((Done \u2227 terminal) \u2227 EX (Done \u2227 terminal) \u2227 AX (Done \u2227 terminal))))",
+   "subformulas": 13
+  }
+ ],
+ "tool": "session_ctl",
+ "typestates": 6,
+ "verdict": "rules"
+}

@@ -1,0 +1,29 @@
+{
+ "variant": "SoldOut 409 replaced by Backorder 202",
+ "answer": {
+  "candidateNext": [
+   "Quote",
+   "Backorder (may end)"
+  ],
+  "candidateNodes": 10,
+  "deterministic": true,
+  "lean": "import LeanFM.Session.Syntax\n\n/-- What the client orders. -/\nstructure CreateOrder where\n  item : String\n  quantity : Nat\n\n/-- The shop's price for the order, in cents. -/\nstructure Quote where\n  price : Nat\n\n/-- The client pays; the card number is a secret, never logged. -/\nstructure Pay where\n  amount : Nat\n  card_secr : String\n\nstructure Charge where\n  amount : Nat\n  card_secr : String\n\nstructure Receipt where\n  amount : Nat\n\n/-- Placing an order: quote, pay, charge the card. -/\nprotocol PlaceOrder (Client, Shop, Bank) {\n  o: CreateOrder from Client to Shop route \"POST /orders\";\n  choice {\n    q: Quote from Shop to Client cause o status 201;\n    p: Pay from Client to Shop cause q where p.amount = q.price;\n    c: Charge from Shop to Bank cause p;\n    choice {\n      d: Charged from Bank to Shop cause c;\n      Receipt from Shop to Client cause d status 200;\n    } or {\n      x: Declined from Bank to Shop cause c;\n      PaymentDeclined from Shop to Client cause x status 402;\n    }\n  } or {\n    SoldOut from Shop to Client cause o status 409;\n  }\n}\n",
+  "lookahead": 0,
+  "method": "walk",
+  "name": "PlaceOrder",
+  "nodes": 10,
+  "note": "",
+  "path": [
+   "CreateOrder"
+  ],
+  "protocolNext": [
+   "Quote",
+   "SoldOut (may end)"
+  ],
+  "reading": "PlaceOrder: the candidate (10 nodes) is not faithful to the protocol (10 typestates), decided by walk: after CreateOrder, the protocol allows Quote, SoldOut (may end) and the candidate Quote, Backorder (may end)",
+  "tool": "session_ctl",
+  "typestates": 10,
+  "verdict": "unfaithful"
+ },
+ "seconds": 0.0038466453552246094
+}

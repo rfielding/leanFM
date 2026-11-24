@@ -1,0 +1,379 @@
+{
+ "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+ "events": [
+  {
+   "id": "c1",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Api",
+   "body": {
+    "item": "tea"
+   }
+  },
+  {
+   "id": "c2",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Api",
+   "body": {
+    "item": "tea"
+   }
+  },
+  {
+   "id": "k2",
+   "label": "Created",
+   "from": "Api",
+   "to": "Client",
+   "cause": "c2",
+   "headers": {
+    "orderId": "o2"
+   }
+  },
+  {
+   "id": "c3",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Api",
+   "body": {
+    "item": "tea"
+   }
+  },
+  {
+   "id": "k1",
+   "label": "Created",
+   "from": "Api",
+   "to": "Client",
+   "cause": "c1",
+   "headers": {
+    "orderId": "o1"
+   }
+  },
+  {
+   "id": "g2",
+   "label": "GetOrder",
+   "from": "Client",
+   "to": "Api",
+   "path": {
+    "orderId": "o2"
+   },
+   "query": {
+    "verbose": false
+   }
+  },
+  {
+   "id": "k3",
+   "label": "Created",
+   "from": "Api",
+   "to": "Client",
+   "cause": "c3",
+   "headers": {
+    "orderId": "o3"
+   }
+  },
+  {
+   "id": "g1",
+   "label": "GetOrder",
+   "from": "Client",
+   "to": "Api",
+   "path": {
+    "orderId": "o1"
+   },
+   "query": {
+    "verbose": false
+   }
+  },
+  {
+   "id": "r2",
+   "label": "Order",
+   "from": "Api",
+   "to": "Client",
+   "cause": "g2",
+   "body": {
+    "orderId": "o2",
+    "item": "tea"
+   }
+  },
+  {
+   "id": "g3",
+   "label": "GetOrder",
+   "from": "Client",
+   "to": "Api",
+   "path": {
+    "orderId": "o3"
+   },
+   "query": {
+    "verbose": false
+   }
+  },
+  {
+   "id": "r1",
+   "label": "Order",
+   "from": "Api",
+   "to": "Client",
+   "cause": "g1",
+   "body": {
+    "orderId": "o1",
+    "item": "tea"
+   }
+  },
+  {
+   "id": "r3",
+   "label": "Order",
+   "from": "Api",
+   "to": "Client",
+   "cause": "g3",
+   "body": {
+    "orderId": "o3",
+    "item": "tea"
+   }
+  }
+ ],
+ "answer": {
+  "deadlineReports": null,
+  "derivedSessions": {
+   "omitted": 0,
+   "reading": "3 sessions derived from causes and the declared session key; the log names no sessions",
+   "sessions": [
+    {
+     "count": 4,
+     "events": [
+      0,
+      4,
+      7,
+      10
+     ],
+     "key": "chain from c1"
+    },
+    {
+     "count": 4,
+     "events": [
+      1,
+      2,
+      5,
+      8
+     ],
+     "key": "chain from c2"
+    },
+    {
+     "count": 4,
+     "events": [
+      3,
+      6,
+      9,
+      11
+     ],
+     "key": "chain from c3"
+    }
+   ],
+   "unattributed": []
+  },
+  "events": [
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "dstActor": "Api",
+    "id": 1,
+    "label": "CreateOrder",
+    "logId": "c1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Client",
+    "srcActor": "Client",
+    "thread": "Client@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "dstActor": "Api",
+    "id": 2,
+    "label": "CreateOrder",
+    "logId": "c2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Client",
+    "srcActor": "Client",
+    "thread": "Client@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": 2,
+    "dst": "Client",
+    "dstActor": "Client",
+    "id": 3,
+    "label": "Created",
+    "logId": "k2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Api",
+    "srcActor": "Api",
+    "thread": "Api@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "dstActor": "Api",
+    "id": 4,
+    "label": "CreateOrder",
+    "logId": "c3",
+    "prior": [],
+    "session": "chain from c3",
+    "src": "Client",
+    "srcActor": "Client",
+    "thread": "Client@chain from c3"
+   },
+   {
+    "act": false,
+    "cause": 1,
+    "dst": "Client",
+    "dstActor": "Client",
+    "id": 5,
+    "label": "Created",
+    "logId": "k1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Api",
+    "srcActor": "Api",
+    "thread": "Api@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "dstActor": "Api",
+    "id": 6,
+    "label": "GetOrder",
+    "logId": "g2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Client",
+    "srcActor": "Client",
+    "thread": "Client@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": 4,
+    "dst": "Client",
+    "dstActor": "Client",
+    "id": 7,
+    "label": "Created",
+    "logId": "k3",
+    "prior": [],
+    "session": "chain from c3",
+    "src": "Api",
+    "srcActor": "Api",
+    "thread": "Api@chain from c3"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "dstActor": "Api",
+    "id": 8,
+    "label": "GetOrder",
+    "logId": "g1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Client",
+    "srcActor": "Client",
+    "thread": "Client@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": 6,
+    "dst": "Client",
+    "dstActor": "Client",
+    "id": 9,
+    "label": "Order",
+    "logId": "r2",
+    "prior": [],
+    "session": "chain from c2",
+    "src": "Api",
+    "srcActor": "Api",
+    "thread": "Api@chain from c2"
+   },
+   {
+    "act": false,
+    "cause": null,
+    "dst": "Api",
+    "dstActor": "Api",
+    "id": 10,
+    "label": "GetOrder",
+    "logId": "g3",
+    "prior": [],
+    "session": "chain from c3",
+    "src": "Client",
+    "srcActor": "Client",
+    "thread": "Client@chain from c3"
+   },
+   {
+    "act": false,
+    "cause": 8,
+    "dst": "Client",
+    "dstActor": "Client",
+    "id": 11,
+    "label": "Order",
+    "logId": "r1",
+    "prior": [],
+    "session": "chain from c1",
+    "src": "Api",
+    "srcActor": "Api",
+    "thread": "Api@chain from c1"
+   },
+   {
+    "act": false,
+    "cause": 10,
+    "dst": "Client",
+    "dstActor": "Client",
+    "id": 12,
+    "label": "Order",
+    "logId": "r3",
+    "prior": [],
+    "session": "chain from c3",
+    "src": "Api",
+    "srcActor": "Api",
+    "thread": "Api@chain from c3"
+   }
+  ],
+  "generative": null,
+  "issues": [],
+  "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n  Order from Api to Client cause g status 200;\n}",
+  "name": "Orders",
+  "overlay": null,
+  "protocol": null,
+  "reading": "Orders: 12 events in 3 sessions follow the protocol",
+  "roles": [
+   "Client",
+   "Api"
+  ],
+  "secretFields": [],
+  "sessions": [
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c1",
+    "unchecked": []
+   },
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c2",
+    "unchecked": []
+   },
+   {
+    "complete": true,
+    "events": 4,
+    "problem": null,
+    "session": "chain from c3",
+    "unchecked": []
+   }
+  ],
+  "tool": "session_conform",
+  "unchecked": [],
+  "verdict": "conforms"
+ }
+}

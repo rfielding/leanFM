@@ -1,0 +1,44 @@
+{
+ "deterministic": true,
+ "lean": "structure GetImage where\n  id : String\n\nstructure Image where\n  imageId : Header String\n  contentLength : Header Nat\n  cacheControl : Header String\n  cached : cacheControl = \"max-age=3600\" or cacheControl = \"no-store\"\n  small : size <= 5000000\n  measured : contentLength = size\n\nprotocol Images (Browser, Server) {\n  g: GetImage from Browser to Server route \"GET /images/{id}\";\n  choice {\n    i: Image from Server to Browser cause g status 200 media \"image/png\" where i.imageId = g.id;\n  } or {\n    NotFound from Server to Browser cause g status 404;\n  }\n}\n",
+ "lookahead": 0,
+ "name": "Images",
+ "nodes": 4,
+ "reading": "Images: 4 typestates over 4 checker nodes, lookahead 0; 5 rules (the start and one per typestate: in it each next typestate is possible and nothing else is). Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol",
+ "ruleCount": 5,
+ "rules": [
+  {
+   "formula": "(and (not (or (after GetImage) (after Image) (after NotFound))) (not terminal))",
+   "name": "start",
+   "notation": "\u00ac(GetImage \u2228 Image \u2228 NotFound) \u2227 \u00acterminal",
+   "subformulas": 8
+  },
+  {
+   "formula": "(AG (implies (and (not (or (after GetImage) (after Image) (after NotFound))) #0=(not terminal)) (and (EX #1=(and (after GetImage) #0#)) (AX (or #1#)))))",
+   "name": "typestate 0: (start)",
+   "notation": "AG ((\u00ac(GetImage \u2228 Image \u2228 NotFound) \u2227 \u00acterminal) \u2192 (EX (GetImage \u2227 \u00acterminal) \u2227 AX (GetImage \u2227 \u00acterminal)))",
+   "subformulas": 15
+  },
+  {
+   "formula": "(AG (implies (and (after GetImage) (not terminal)) (and (EX #0=(and (after Image) terminal)) (EX #1=(and (after NotFound) terminal)) (AX (or #0# #1#)))))",
+   "name": "typestate 1: GetImage",
+   "notation": "AG ((GetImage \u2227 \u00acterminal) \u2192 (EX (Image \u2227 terminal) \u2227 EX (NotFound \u2227 terminal) \u2227 AX ((Image \u2227 terminal) \u2228 (NotFound \u2227 terminal))))",
+   "subformulas": 15
+  },
+  {
+   "formula": "(AG (implies #0=(and (after Image) terminal) (and (EX #0#) (AX (or #0#)))))",
+   "name": "typestate 2: Image (may end)",
+   "notation": "AG ((Image \u2227 terminal) \u2192 (EX (Image \u2227 terminal) \u2227 AX (Image \u2227 terminal)))",
+   "subformulas": 9
+  },
+  {
+   "formula": "(AG (implies #0=(and (after NotFound) terminal) (and (EX #0#) (AX (or #0#)))))",
+   "name": "typestate 3: NotFound (may end)",
+   "notation": "AG ((NotFound \u2227 terminal) \u2192 (EX (NotFound \u2227 terminal) \u2227 AX (NotFound \u2227 terminal)))",
+   "subformulas": 9
+  }
+ ],
+ "tool": "session_ctl",
+ "typestates": 4,
+ "verdict": "rules"
+}

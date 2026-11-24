@@ -88,6 +88,36 @@ structure SystemDef where
   accepts : List (Prod String (List (Prod Bool String)))
   deriving Inhabited, Repr
 
+/-- What a requirement points at (selfhost.requirements.map): a protocol of the file, a formula
+over one (`P ⊨ φ`, φ an s-expression), or `sorry` with an optional note. -/
+inductive Pointer where
+  | protocol (name : String)
+  | formula (name : String) (sexpr : String)
+  | sorry_ (note : String)
+  deriving Inhabited, Repr, BEq
+
+/-- An implementation entry's value (selfhost.implementations.map): evidence for an imported
+requirement, or a pointer for the implementation's own CTL. -/
+inductive Evidence where
+  | conform (log : String)
+  | test (name : String)
+  | pointer (p : Pointer)
+  deriving Inhabited, Repr, BEq
+
+/-- An `implementation Name of Module { ... }` block as written. -/
+structure ImplDef where
+  name    : String
+  of      : String
+  refines : List (String × String) := []
+  entries : List (String × Evidence) := []
+  hints   : List String := []
+  deriving Inhabited, Repr
+
+/-- At most this many entries in one requirements map or implementation block, and this long a
+requirement name. -/
+def maxMapEntries : Nat := 512
+def maxReqName : Nat := 200
+
 /-- At most this many shared instances and accepts in one system. -/
 def maxShared : Nat := 8
 def maxAccepts : Nat := 4
@@ -290,6 +320,10 @@ structure Acc where
   keys : Array (String × String) := #[]
   /-- `system` blocks after the protocols they accept (selfhost.session.instances) -/
   systems : Array SystemDef := #[]
+  /-- the file's `requirements { ... }` map, its last item (selfhost.requirements.map) -/
+  reqMap : Option (Array (String × Pointer)) := none
+  /-- `implementation` blocks (selfhost.implementations.map) -/
+  impls : Array ImplDef := #[]
 
 /-- Reading: the source (for positions and requirement texts) and what has been collected. -/
 abbrev R := ReaderT String (StateT Acc (Except String))
@@ -810,14 +844,90 @@ def systemDecl (defs : List Def) (stx : Syntax) : R SystemDef := do
   if accepts.isEmpty then failAt stx s!"system {sname} accepts nothing; add accept Protocol (fresh Role, ...);"
   return { name := sname, shared := shared.toList, accepts := accepts.toList }
 
+/-- A requirement name: a nonempty string of at most `maxReqName` characters. -/
+def reqName (stx : Lean.Syntax) : R String := do
+  let some n := stx.isStrLit? | failAt stx "a requirement name in double quotes"
+  if n.trimAscii.isEmpty then failAt stx "a requirement name must not be empty"
+  if n.length > maxReqName then failAt stx s!"a requirement name is at most {maxReqName} characters"
+  return n
+
+/-- `sorry ["note"]`, `P` or `P ⊨ φ`. -/
+def pointerOf (stx : Lean.Syntax) : R Pointer := do
+  let a := stx[0]
+  if a.isIdent then
+    let n := a.getId.toString
+    let rest := stx[1]
+    if rest.getNumArgs ≥ 2 then
+      let φ := rest[1].getAtomVal
+      if φ.length > limits.maxBytes then failAt rest "the formula is too long"
+      return .formula n φ
+    return .protocol n
+  let note := if stx[1].getNumArgs ≥ 1 then (stx[1][0].isStrLit?).getD "" else ""
+  return .sorry_ note
+
+/-- A `requirements { ... }` block: every name once, every protocol it points at defined in the file. -/
+def requirementsDecl (defs : List Def) (body : Lean.Syntax) : R (Array (String × Pointer)) := do
+  let mut out : Array (String × Pointer) := #[]
+  for e in body[2].getArgs do
+    if out.size ≥ maxMapEntries then failAt e s!"a requirements map has at most {maxMapEntries} entries"
+    let n ← reqName e[0]
+    if out.any (·.1 == n) then failAt e[0] s!"requirement \"{n}\" is in the map twice"
+    let p ← pointerOf e[2]
+    match p with
+    | .protocol q | .formula q _ =>
+      unless defs.any (·.name == q) do failAt e[2] s!"requirement \"{n}\": no protocol {q} is defined in this file"
+    | .sorry_ _ => pure ()
+    out := out.push (n, p)
+  return out
+
+/-- An `implementation Name of Module { ... }` block. What it names in the imported file is checked
+where the project's files are read (ProjectView), since one file cannot see another. -/
+def implementationDecl (body : Lean.Syntax) : R ImplDef := do
+  let n ← name body[1] "the implementation's name"
+  let of := body[3].getId.toString
+  let mut d : ImplDef := { name := n, of }
+  for it in body[5].getArgs do
+    if d.entries.length + d.hints.length + d.refines.length ≥ maxMapEntries then
+      failAt it s!"an implementation has at most {maxMapEntries} entries"
+    let a := it[0]
+    if a.isStrLit?.isSome then
+      let k ← reqName a
+      if d.entries.any (·.1 == k) then failAt a s!"\"{k}\" is in implementation {n} twice"
+      let ev := it[2]
+      let w := ev[0]
+      let v ← if w.isAtom && w.getAtomVal == "conform" then
+          match ev[1].isStrLit? with | some f => pure (Evidence.conform f) | none => failAt ev "conform \"log path\""
+        else if w.isAtom && w.getAtomVal == "test" then
+          match ev[1].isStrLit? with | some t => pure (Evidence.test t) | none => failAt ev "test \"name\""
+        else pure (Evidence.pointer (← pointerOf w))
+      d := { d with entries := d.entries ++ [(k, v)] }
+    else if a.isAtom && a.getAtomVal == "hint" then
+      let some h := it[1].isStrLit? | failAt it "hint \"text\""
+      if h.trimAscii.isEmpty then failAt it "a hint must say something"
+      d := { d with hints := d.hints ++ [h] }
+    else
+      d := { d with refines := d.refines ++ [(it[1].getId.toString, it[3].getId.toString)] }
+  return d
+
 open Lean (Syntax) in
 /-- Every protocol of a file, earlier ones first; structures and requirements are collected. -/
-def fileDefs (stx : Syntax) : R (List Def) := do
+def fileDefs (stx : Syntax) (allowNoProtocol : Bool := false) : R (List Def) := do
   let mut defs : Array Def := #[]
-  for item in stx[1].getArgs do
+  let items := stx[1].getArgs
+  for item in items do
     let doc := opt item[0] 0
     let body := item[1]
     let k := body.getKind
+    if (← get).reqMap.isSome then failAt body "the requirements map is the file's last item"
+    if k == `LeanFM.Session.Grammar.requirementsBody then
+      let m ← requirementsDecl defs.toList body
+      modify fun a => { a with reqMap := some m }
+      continue
+    if k == `LeanFM.Session.Grammar.implementationBody then
+      let d ← implementationDecl body
+      if (← get).impls.any (·.name == d.name) then failAt body s!"implementation {d.name} is defined twice"
+      modify fun a => { a with impls := a.impls.push d }
+      continue
     if k == `LeanFM.Session.Grammar.leanDecl then
       -- a theorem or definition about the messages: Lean checks it when the file is elaborated
       continue
@@ -852,7 +962,9 @@ def fileDefs (stx : Syntax) : R (List Def) := do
           failAt body s!"protocol {d.name} version {d.version} follows version {prev.version}; versions go oldest first, each higher than the one before"
       if (← get).systems.any (·.name == d.name) then failAt body s!"protocol {d.name} has the name of a system"
       defs := defs.push d
-  if defs.isEmpty then failAt stx "no protocol in the text"
+  if defs.isEmpty && !(← get).impls.isEmpty && !allowNoProtocol then
+    failAt stx "this file holds only implementation blocks (selfhost.implementations.map), no protocol; open the protocols of the requirements it implements"
+  if defs.isEmpty && (← get).impls.isEmpty then failAt stx "no protocol in the text"
   return defs.toList
 
 /-- Read protocol text with the grammar (Lean's parser, never elaborated): its protocols and what
@@ -861,6 +973,26 @@ def readText (text : String) : Except String (List Def × Acc) := do
   if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
   let stx ← Grammar.parseFile text
   (fileDefs stx |>.run text).run {}
+
+/-- Read a project file for its requirements map and implementation blocks: as `readText`, except
+that a file holding only an implementation block (it uses its requirements' protocols) is accepted. -/
+def readMaps (text : String) : Except String (List Def × Acc) := do
+  if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
+  let stx ← Grammar.parseFile text
+  (fileDefs stx true |>.run text).run {}
+
+/-- The text of `text` up to the end of its protocol `name`, so that protocol is the main one the
+session tools check (what follows it, a requirements map included, is cut). -/
+def textThrough (text name : String) : Except String String := do
+  let stx ← Grammar.parseFile text
+  let mut stop : Option String.Pos.Raw := none
+  for item in stx[1].getArgs do
+    let body := item[1]
+    if body.getKind == `LeanFM.Session.Grammar.protocolBody && body[1].getId.toString == name then
+      stop := body.getTailPos?
+  match stop with
+  | some p => return String.Pos.Raw.extract text 0 p
+  | none => throw s!"no protocol {name} is defined in the file"
 
 open Lean (Syntax) in
 /-- Read one annotation value with a grammar parser: a fraction, duration or time expression in an

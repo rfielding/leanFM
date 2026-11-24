@@ -8,7 +8,7 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 113 := by native_decide
+example : clauses.length = 116 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.session.navigator" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.context" = true := by native_decide
@@ -30,3 +30,8 @@ example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length
 example : LeanFM.LLMGenerated.SessionImplementation.errors = [] := by native_decide
 -- the session tools, their view and its navigator are specified and implemented
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.session." && c.status == "implemented")).length = 5 := by native_decide
+-- requirement lists live in the files' maps; entries name protocol files by safe relative paths
+example : ["selfhost.requirements.list", "selfhost.requirements.map", "selfhost.implementations.map"].all
+    (fun id => (clauses.map (·.id)).contains id) = true := by native_decide
+example : protocolPathOk "LeanFM/LLMGenerated/LeanFM.leanfm" = true := by native_decide
+example : ["/etc/x.leanfm", "a/../b.leanfm", "a//b.leanfm", "./a.leanfm", "x.lean", "", "a\\b.leanfm"].all (fun f => !protocolPathOk f) = true := by native_decide
