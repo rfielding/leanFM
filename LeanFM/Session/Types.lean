@@ -349,11 +349,48 @@ partial def selfify : Where.Expr -> Where.Expr
   | .bin op a b => .bin op (selfify a) (selfify b)
   | e => e
 
+/-- What a constraint calls the length of a raw body in bytes (selfhost.session.wire-constraints). -/
+def sizeName : String := "size"
+
+/-- Whether a message's constraints read the length of its raw body. -/
+def readsSize (m : Message) : Bool :=
+  !(m.fields.any (·.name == sizeName)) &&
+    m.constraints.any fun c => ((Where.parse c.text).toOption.map fun ex => ex.paths.any (·.1 == sizeName)).getD false
+
+/-- A Header field's header, in the usual HTTP form: the name split before each capital that starts
+a word (a run of capitals is one word) and at each _, each part capitalised and joined by -:
+cacheControl is Cache-Control, xRequestId is X-Request-Id, xAPIKey is X-Api-Key, id is Id. HTTP
+compares header names without regard to case (selfhost.session.wire-constraints). -/
+def headerName (field : String) : String := Id.run do
+  let cs := field.toList.toArray
+  let mut words : Array String := #[]
+  let mut cur : String := ""
+  for i in [0:cs.size] do
+    let c := cs[i]!
+    if c == '_' then
+      if !cur.isEmpty then words := words.push cur
+      cur := ""
+      continue
+    let prevLower := i > 0 && (cs[i-1]!.isLower || cs[i-1]!.isDigit)
+    let nextLower := i + 1 < cs.size && cs[i+1]!.isLower
+    let prevUpper := i > 0 && cs[i-1]!.isUpper
+    if c.isUpper && !cur.isEmpty && (prevLower || (prevUpper && nextLower)) then
+      words := words.push cur
+      cur := ""
+    cur := cur.push c
+  if !cur.isEmpty then words := words.push cur
+  return "-".intercalate (words.toList.map fun w =>
+    match w.toList with
+    | [] => ""
+    | c :: rest => String.ofList (c.toUpper :: rest.map Char.toLower))
+
 /-- A message's fields as the condition language reads them: integers sent as decimal strings
 become numbers, by the field's declared type. -/
 def constraintValues (m : Message) (fields : List (String × Value)) : List (String × Value) :=
   fields.map fun (k, v) =>
-    match ((m.fields.find? (·.name == k)).map (·.ty) : Option Ty), v with
+    -- a raw body's size is a whole number of bytes, however the log wrote it
+    let declared : Option Ty := if k == sizeName && readsSize m then some Ty.nat else (m.fields.find? (·.name == k)).map (·.ty)
+    match declared, v with
     | some Ty.nat, .str t | some Ty.int, .str t => match decimal? t with
       | some n => (k, .num n)
       | none => (k, v)
@@ -390,6 +427,12 @@ def checkFields (env : Env) (label : String) (isAct : Bool) (fields : List (Stri
   if isAct then throw s!"{label} is an event, and events carry no fields"
   for (k, v) in fields do
     let path := k.splitOn "."
+    -- a raw body's length, when its structure's constraints read it (selfhost.session.wire-constraints)
+    if k == sizeName && ((find env label).map readsSize).getD false then
+      match integer? v with
+      | .ok n => if n < 0 then throw s!"{label}.size is a length in bytes, and the log has {v.render}"
+      | .error why => throw s!"{label}.size is a length in bytes, and {why}"
+      continue
     -- a log may carry secrets (such a log is sensitive); a secret sent across the network is what
     -- session_review reports, with a counterexample
     let t ← leaf env label path
@@ -454,14 +497,22 @@ def payloadNumbers (labels : List String) (history : List String := []) : List (
 /-- The messages as a proto3 file. `history` is every label of every version of the protocol in
 order of first appearance (selfhost.session.versions): a label's payload field is its place there,
 so it keeps its number in every version, and a label the newest version dropped is reserved. -/
-def proto (env : Env) (labels : List String) (package : String) (history : List String := []) : Except String String := do
+def proto (env : Env) (labels : List String) (package : String) (history : List String := [])
+    (media : List (String × String) := []) : Except String String := do
   let ms ← complete env labels
   let names := ms.map (protoName ·.name)
   if names.eraseDups.length != names.length then throw "two labels have the same protobuf name"
+  -- a message with a media type carries its bytes after its fields (selfhost.session.types)
+  for m in ms do
+    if (media.lookup m.name).isSome && m.fields.any (·.name == "body") then
+      throw s!"{m.name} is sent as {(media.lookup m.name).getD ""}, so its bytes are its body field; rename its field body"
   let body := ms.map fun m =>
     let doc := if m.doc.isEmpty then [] else (m.doc.splitOn "\n").map ("// " ++ ·.trimAscii.toString)
+    let raw := match media.lookup m.name with
+      | some t => [s!"  bytes body = {m.fields.length + 1}; // the {t} bytes"]
+      | none => []
     "\n".intercalate (doc ++ [s!"message {protoName m.name} \{"] ++
-      (m.fields.zipIdx.map fun (f, i) => protoField f (i + 1)) ++ ["}"])
+      (m.fields.zipIdx.map fun (f, i) => protoField f (i + 1)) ++ raw ++ ["}"])
   if names.contains "Event" then throw "a message named Event would collide with the event envelope; rename it"
   -- the envelope every event travels and is logged in (selfhost.session.envelope)
   let snake (n : String) : String := String.ofList (n.toList.zipIdx.flatMap fun (c, i) =>
@@ -530,6 +581,15 @@ partial def tsCond : Where.Expr -> String
 def Message.checks (m : Message) : List (String × String × Where.Expr) :=
   m.constraints.filterMap fun c => if c.checkable then (Where.parse c.text).toOption.map (c.name, c.text, ·) else none
 
+/-- Whether a constraint reads the raw body's size rather than only fields. -/
+def Message.onSize (m : Message) (ex : Where.Expr) : Bool :=
+  !(m.fields.any (·.name == sizeName)) && ex.paths.any (·.1 == sizeName)
+
+/-- The checks generated code makes on a value's fields: those that read the body's size are checked
+on the bytes, so code built from the fields leaves them out. -/
+def Message.fieldChecks (m : Message) : List (String × String × Where.Expr) :=
+  m.checks.filter fun (_, _, ex) => !m.onSize ex
+
 /-- The bounds a constraint puts on single integer fields: (field, operator, n) for each `field op n`
 or `n op field`, through `and`. -/
 partial def simpleBounds : Where.Expr -> List (String × String × Int)
@@ -544,9 +604,11 @@ partial def simpleBounds : Where.Expr -> List (String × String × Int)
 smart constructor that checks before it builds. The wire form (with JSON) stays the plain structure;
 only a checked value can be handed on. Constraints only Lean proves are named in a comment. -/
 def checkedLean (name : String) (m : Message) : List String :=
-  let cs := m.constraints.filterMap fun c => if c.checkable then (Where.parse c.text).toOption.map (c.name, ·) else none
+  let cs := m.fieldChecks.map fun (n, _, ex) => (n, ex)
+  let onSize := m.checks.filter fun (_, _, ex) => m.onSize ex
   let leanOnly := m.constraints.filter (!·.checkable)
-  if cs.isEmpty && leanOnly.isEmpty then [] else
+  if cs.isEmpty && leanOnly.isEmpty then
+    onSize.map fun (n, t, _) => s!"-- {name}.{n} : {t} reads the body's length in bytes; check it on the bytes" else
   let props := cs.map fun (n, ex) => s!"  {n} : {leanProp "val" ex}"
   let conj := if cs.isEmpty then "True" else " /\\ ".intercalate (cs.map fun (_, ex) => leanProp "v" ex)
   let proofs := match cs.length with
@@ -555,6 +617,7 @@ def checkedLean (name : String) (m : Message) : List String :=
     | n => ", " ++ ", ".intercalate ((List.range n).map fun i =>
         if i == n - 1 then "h" ++ String.join (List.replicate (n - 1) ".2") else "h" ++ String.join (List.replicate i ".2") ++ ".1")
   [""] ++ (leanOnly.map fun c => s!"-- {name}.{c.name} : {c.text} is proved in the spec itself, by Lean") ++
+  (onSize.map fun (n, t, _) => s!"-- {name}.{n} : {t} reads the body's length in bytes; check it on the bytes") ++
   [s!"/-- A {name} its constructor checked: every constraint holds. -/",
    s!"structure {name}.Checked where", "  private mk ::", s!"  val : {name}"] ++ props ++
   ["", s!"/-- The smart constructor: check, then build; a {name} that breaks a constraint is refused. -/",
@@ -585,17 +648,50 @@ partial def Ty.schema : Ty → Lean.Json
   | .list t => Lean.Json.mkObj [("type", "array"), ("items", t.schema)]
   | .opt t => t.schema
 
-/-- A message's JSON schema: its fields, the ones that are not Option required, nothing else. -/
-def Message.schema (m : Message) : Lean.Json :=
-  let bounds := m.constraints.flatMap fun c => if c.checkable then ((Where.parse c.text).toOption.map simpleBounds).getD [] else []
-  let fieldSchema (f : Field) : Lean.Json := bounds.foldl (fun (j : Lean.Json) (x, op, n) =>
-      if x != f.name then j else match op with
+/-- A literal as JSON: a whole number, a string or true or false; nothing else is a schema value. -/
+def litJson : Where.Value → Option Lean.Json
+  | .num q => if q.den == 1 then some (Lean.toJson q.num) else none
+  | .str s => some (Lean.Json.str s)
+  | .bool b => some (Lean.Json.bool b)
+
+/-- The values a constraint fixes for one field: `field = v` as one value, `field = a or field = b`
+as several (an enum); none when it says anything else. -/
+partial def equalities : Where.Expr -> Option (String × List Lean.Json)
+  | .bin "=" (.path x []) (.lit v) | .bin "=" (.lit v) (.path x []) => (litJson v).map fun j => (x, [j])
+  | .bin "or" a b => do
+    let (x, as) ← equalities a
+    let (y, bs) ← equalities b
+    if x == y then some (x, as ++ bs) else none
+  | _ => none
+
+/-- A constraint split at `and` into its parts. -/
+partial def conjuncts : Where.Expr -> List Where.Expr
+  | .bin "and" a b => conjuncts a ++ conjuncts b
+  | e => [e]
+
+/-- The bounds a message's constraints give one field, applied to a schema: <=, <, >= and > against
+a whole number as maximum, exclusiveMaximum, minimum and exclusiveMinimum, = as const, equalities
+joined by or as enum (selfhost.session.wire-constraints). Constraints only Lean decides give none. -/
+def Message.bound (m : Message) (name : String) (base : Lean.Json) : Lean.Json :=
+  let parts := m.checks.flatMap fun (_, _, ex) => conjuncts ex
+  let ranged := (parts.flatMap simpleBounds).foldl (fun (j : Lean.Json) (x, op, n) =>
+      if x != name then j else match op with
       | "<=" => j.setObjVal! "maximum" (Lean.toJson n)
       | "<" => j.setObjVal! "exclusiveMaximum" (Lean.toJson n)
       | ">=" => j.setObjVal! "minimum" (Lean.toJson n)
       | ">" => j.setObjVal! "exclusiveMinimum" (Lean.toJson n)
-      | "=" => j.setObjVal! "const" (Lean.toJson n)
-      | _ => j) f.ty.schema
+      | _ => j) base
+  parts.foldl (fun (j : Lean.Json) e => match equalities e with
+      | some (x, [v]) => if x == name then j.setObjVal! "const" v else j
+      | some (x, vs) => if x == name then j.setObjVal! "enum" (Lean.Json.arr vs.toArray) else j
+      | none => j) ranged
+
+/-- A field's schema with the bounds its message's constraints give it. -/
+def Message.fieldSchema (m : Message) (f : Field) : Lean.Json := m.bound f.name f.ty.schema
+
+/-- A message's JSON schema: its fields, the ones that are not Option required, nothing else. -/
+def Message.schema (m : Message) : Lean.Json :=
+  let fieldSchema (f : Field) : Lean.Json := m.fieldSchema f
   let constraints := m.constraints.map fun c => Lean.Json.str s!"{c.name}: {c.text}"
   Lean.Json.mkObj ([("type", Lean.Json.str "object"), ("title", Lean.Json.str m.name),
     ("properties", Lean.Json.mkObj (m.fields.map fun f => (f.name, fieldSchema f))),

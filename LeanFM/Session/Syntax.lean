@@ -104,7 +104,7 @@ partial def gen (scope : List (String × String)) : List Text.Stmt → MacroM Te
     | .timed _ m | .valued _ m => gen scope (m :: rest)
     | .accrue _ | .clock .. | .obligation _ => gen scope rest
     | .bounded .. => Macro.throwError "a bounded loop is unrolled when it is read"
-    | .msg i l a b cause route status guard =>
+    | .msg i l a b cause route status _media guard =>
       let scope' := match i with | some x => scope ++ [(x, l)] | none => scope
       let idT ← match i with | some x => `(some $(str x)) | none => `(none)
       let causeT ← match cause with | some c => `(some $(str c)) | none => `(none)

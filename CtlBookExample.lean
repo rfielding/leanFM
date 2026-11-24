@@ -102,13 +102,17 @@ def images : String := "structure GetImage where
   id : String
 
 structure Image where
-  id : String
-  bytes : String
+  imageId : Header String
+  contentLength : Header Nat
+  cacheControl : Header String
+  cached : cacheControl = \"max-age=3600\" or cacheControl = \"no-store\"
+  small : size <= 5000000
+  measured : contentLength = size
 
 protocol Images (Browser, Server) {
   g: GetImage from Browser to Server route \"GET /images/{id}\";
   choice {
-    i: Image from Server to Browser cause g status 200 where i.id = g.id;
+    i: Image from Server to Browser cause g status 200 media \"image/png\" where i.imageId = g.id;
   } or {
     NotFound from Server to Browser cause g status 404;
   }
@@ -203,8 +207,16 @@ def main : IO Unit := do
     {id: "a1", «from»: "Browser", to: "Server", label: "GetImage", fields: {id: "cat"}},
     {id: "b1", «from»: "Browser", to: "Server", label: "GetImage", fields: {id: "dog"}},
     {id: "b2", «from»: "Server", to: "Browser", label: "NotFound", cause: "b1"},
-    {id: "a2", «from»: "Server", to: "Browser", label: "Image", cause: "a1", fields: {id: "cat", bytes: "..."}}]
+    {id: "a2", «from»: "Server", to: "Browser", label: "Image", cause: "a1", fields: {imageId: "cat"}}]
   let ic ← tool "session_conform" (conform (withLean images [("events", interleaved)]))
+  -- a raw body's size against its Content-Length header (selfhost.session.wire-constraints)
+  let wrongLength := json% [
+    {id: "a1", «from»: "Browser", to: "Server", label: "GetImage", fields: {id: "cat"}},
+    {id: "a2", «from»: "Server", to: "Browser", label: "Image", cause: "a1",
+     fields: {imageId: "cat", contentLength: "48213", cacheControl: "no-store", size: "48000"}}]
+  let wl ← tool "session_conform" (conform (withLean images [("events", wrongLength)]))
+  write "ctl-images-size-log.tex" (listing ("\n".intercalate ((match wrongLength with | .arr a => a.toList | _ => []).map Json.compress)))
+  write "ctl-images-size.tex" (listing (str wl "reading" ++ "\n" ++ "\n".intercalate (strs wl "issues")))
   write "ctl-interleaved-log.tex" (listing ("\n".intercalate ((match interleaved with | .arr a => a.toList | _ => []).map Json.compress)))
   write "ctl-interleaved.tex" (listing (str ic "reading" ++ "\n\nderived sessions:\n" ++ "\n".intercalate
     ((match (ic.getObjValD "derivedSessions").getObjValD "sessions" with | .arr a => a.toList | _ => []).map fun s => s!"  {str s "key"}: events {(s.getObjValD "events").compress}")))
@@ -269,7 +281,7 @@ def main : IO Unit := do
     rows := rows.push s!"{tex name} & {g.size} & {t.count} & {t.lookahead} & {(rules t).length} & {if t.deterministic then "yes" else "no"} \\\\"
   write "ctl-corpus.tex" ("\\begin{tabular}{@{}lrrrrl@{}}\n\\toprule\nProtocol & Nodes & Typestates & Lookahead & Rules & Deterministic \\\\\n\\midrule\n" ++ "\n".intercalate rows.toList ++ "\n\\bottomrule\n\\end{tabular}\n")
   -- faithfulness: a candidate that never answers 404, and the two branches that choose at different steps
-  let no404 := images.replace "  choice {\n    i: Image from Server to Browser cause g status 200 where i.id = g.id;\n  } or {\n    NotFound from Server to Browser cause g status 404;\n  }" "  i: Image from Server to Browser cause g status 200 where i.id = g.id;"
+  let no404 := images.replace "  choice {\n    i: Image from Server to Browser cause g status 200 media \"image/png\" where i.imageId = g.id;\n  } or {\n    NotFound from Server to Browser cause g status 404;\n  }" "  i: Image from Server to Browser cause g status 200 media \"image/png\" where i.imageId = g.id;"
   let fc ← tool "session_ctl" (ctl (withLean images [("faithful", Json.mkObj [("lean", Json.str no404)])]))
   write "ctl-images-no404.tex" (listing (str fc "reading"))
   let selfc ← tool "session_ctl" (ctl (withLean leanfm [("faithful", Json.mkObj [("lean", Json.str leanfm)])]))

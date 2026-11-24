@@ -396,7 +396,7 @@ def tsMessage (m : Types.Message) : String :=
   let name := Types.protoName m.name
   if m.fields.isEmpty then "\n".intercalate (doc ++ [s!"export type {name} = Record<string, never>;"])
   else
-    let checks := m.checks
+    let checks := m.fieldChecks
     let check := if checks.isEmpty then [] else
       ["", s!"/** Refuses a {name} its constructor could not make. */", s!"export function check{name}(m: {name}): {name} \{"] ++
       checks.map (fun (n, t, ex) => s!"  if (!{Types.tsCond ex}) throw new ProtocolError({Skeleton.lit s!"{m.name}.{n} does not hold: {t}"});") ++

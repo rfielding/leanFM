@@ -33,6 +33,15 @@ Read it line by line.
 \item \texttt{route "GET /images/\{id\}"} and \texttt{status 200} say how the message
   travels when the conversation is HTTP. They do not change the order of the
   conversation; they change the interface LeanFM generates.
+\item \texttt{media "image/png"} says the answer's body is the image itself, not JSON.
+  Image's fields are all declared \texttt{Header}, so they travel as headers beside the
+  bytes; LeanFM refuses a field that would have to be in the body. A header is named
+  from its field: \texttt{cacheControl} is \texttt{Cache-Control}, \texttt{contentLength}
+  is \texttt{Content-Length}.
+\item The three lines without a type are \emph{constraints}: propositions every Image
+  satisfies. \texttt{cached} fixes the values \texttt{Cache-Control} may take,
+  \texttt{small} bounds the image's \texttt{size} in bytes, and \texttt{measured} says the
+  \texttt{Content-Length} header tells the truth about it.
 \item \texttt{cause g} says the answer answers \emph{that} request. A cause is an
   edge between two events of one run, not between two labels; it is what lets a log
   with many interleaved requests be read back as separate conversations.
@@ -56,7 +65,15 @@ for the Server, the role that receives requests.
 \input{generated/ctl-images-openapi.tex}
 
 Each request is an operation under its route; its answers are responses under their
-statuses; each message's structure is a JSON schema that admits exactly its fields.
+statuses. The Image is \texttt{image/png} bytes of at most 5{,}000{,}000 bytes, with
+its headers and their allowed values, because the structure says so; a message without
+a media type is JSON whose schema admits exactly its fields, as NotFound is. What a
+schema cannot say, such as \texttt{measured}, LeanFM still checks on every log. Here a
+server sent a \texttt{Content-Length} that does not match the bytes:
+
+\input{generated/ctl-images-size-log.tex}
+
+\input{generated/ctl-images-size.tex}
 The \texttt{\{id\}} in the route is a path parameter. Load the document into Swagger UI
 or any OpenAPI generator and you have the server's stubs and a client, in whatever
 language those tools support. The point of this book is what the OpenAPI document

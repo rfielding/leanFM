@@ -79,7 +79,7 @@ def limitsJson : Json :=
 def stepKinds : List String := ["msg", "event", "choice", "par", "join", "rec", "continue", "sessions", "include"]
 
 def allowedKeys : String → List String
-  | "msg" => ["msg", "from", "to", "id", "cause", "route", "status", "where"]
+  | "msg" => ["msg", "from", "to", "id", "cause", "route", "status", "media", "where"]
   | "event" => ["event", "at"]
   | "choice" => ["choice"]
   | "par" => ["par"]
@@ -179,10 +179,13 @@ partial def steps (c : Ctx) (js : List Json) (index : Nat := 0) : P (Global Stri
           | .ok v => match v.getNat? with
             | .ok n => if n ≤ 999999 then pure (some n) else fail c "status is too large"
             | .error _ => fail c "status must be a natural number"
+        let media ← optString c j "media"
+        if let some m := media then
+          if !Session.Text.validMedia m then fail c s!"media \"{m}\" is not a media type: write type/subtype in lower case, such as \"image/png\""
         let guardText ← optString c j "where"
         -- a where clause in the JSON form is text: conformance interprets it, nothing runs it as code
         let guard := guardText.map fun t => ({ text := t } : Guard)
-        let i : Interaction String := { id, label, src, dst, cause, status, route, guard }
+        let i : Interaction String := { id, label, src, dst, cause, status, route, media, guard }
         return .msg i (← next ())
     | "event" =>
         let label ← reqString c j "event"
@@ -288,7 +291,8 @@ partial def listOf (roles : List String) (j : Json) (k : String) : W (List Stmt)
 partial def stmt (roles : List String) (j : Json) : W Stmt := do
   if let some l := str j "msg" then
     return .msg (str j "id") l ((str j "from").getD "") ((str j "to").getD "") (str j "cause") (str j "route")
-      ((j.getObjVal? "status").toOption.bind (·.getNat?.toOption)) (str j "where")
+      ((j.getObjVal? "status").toOption.bind (·.getNat?.toOption))
+      ((str j "media").filter Session.Text.validMedia) (str j "where")
   if let some l := str j "event" then return .event l ((str j "at").getD "")
   if (j.getObjVal? "choice").isOk then return .choice (← branchesOf roles j "choice")
   if (j.getObjVal? "par").isOk then return .par (← branchesOf roles j "par")
@@ -530,7 +534,7 @@ where
       let note := " - ".intercalate (pending.toList ++ amounts.map amountNote ++ (time.map timeNote).toList)
       modify (·.push note)
       let tagged := match core with
-        | .msg id label src dst cause route status guard => Text.Stmt.msg id (label ++ tag ++ toString k) src dst cause route status guard
+        | .msg id label src dst cause route status media guard => Text.Stmt.msg id (label ++ tag ++ toString k) src dst cause route status media guard
         | .event label role => .event (label ++ tag ++ toString k) role
         | other => other
       -- the annotations wrap the tagged step again, in the order the parser wrote them
@@ -1538,7 +1542,7 @@ def conform (args : Json) : Except String Json := do
     else if !linkProblems.isEmpty && bad.isEmpty
     then s!"{p.name}: {linkProblems.length} problem{if linkProblems.length == 1 then "" else "s"} with the log's links; first: {linkProblems.head!}"
     else if !keyProblems.isEmpty && bad.isEmpty
-    then s!"{p.name}: {keyProblems.length} session key problem{if keyProblems.length == 1 then "" else "s"}; first: {keyProblems.head!}"
+    then s!"{p.name}: {keyProblems.length} problem{if keyProblems.length == 1 then "" else "s"} with the logged values (constraints, links, session keys, versions); first: {keyProblems.head!}"
     else if bad.isEmpty
     then s!"{p.name}: {evs.length} events in {results.length} session{if results.length == 1 then "" else "s"} follow the protocol" ++
       (if incomplete.isEmpty then "" else s!"; {incomplete.length} still running") ++
@@ -1896,12 +1900,16 @@ def openapi (args : Json) : Except String Json := do
     ("language", Json.str language), ("code", Json.str code), ("lean", Json.str p.lean)]
   return fit <| Json.mkObj (head ++ docPart ++ tail)
 
+/-- Each label sent with a media type, and the type (selfhost.session.openapi). -/
+def mediaLabels (p : Protocol) : List (String × String) :=
+  (p.global.messages.filterMap fun i => i.media.map (i.label, ·)).eraseDups
+
 /-- The message types as protobuf, Lean structures and JSON schemas (selfhost.session.types). -/
 def types (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let labels := (p.global.messages.map (·.label)).eraseDups
   let pkg := Skeleton.snake p.name
-  let proto <- Session.Types.proto p.types labels pkg p.labelHistory
+  let proto <- Session.Types.proto p.types labels pkg p.labelHistory (mediaLabels p)
   let lean ← Session.Types.lean p.types labels (Skeleton.ident p.name ++ "Types")
   -- the whole session as one Lean module: payloads, envelope, and each role's states (selfhost.session.lean)
   let (leanModule, moduleNote) := match p.global.leanModule p.name p.roles p.types (p.version, p.versions.map (fun v => v.1)) with
@@ -1931,7 +1939,7 @@ Payload.proto, Payload.lean, and actors/<role>-openapi.yaml for each role that s
 def sessionFiles (args : Json) : Except String (List (String × String)) := do
   let p ← parseProtocol args
   let labels := (p.global.messages.map (·.label)).eraseDups
-  let proto <- Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory
+  let proto <- Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory (mediaLabels p)
   let (lean, _) <- p.global.leanModule p.name p.roles p.types (p.version, p.versions.map (fun v => v.1))
   let mut files := [("Payload.proto", proto), ("Payload.lean", lean)]
   for r in p.roles do
@@ -2161,7 +2169,7 @@ def actor (args : Json) : Except String Json := do
   let model := (p.global.restrict role).diagramModel lanes s!"{p.name} as {role} sees it" (keys := p.keys)
   let rows := ActorView.rows p.global role p.labelHistory
   let labels := (p.global.messages.map (·.label)).eraseDups
-  let proto := match Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory with
+  let proto := match Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory (mediaLabels p) with
     | .ok t => Json.str t
     | .error e => Json.mkObj [("error", e)]
   let (served, servedYaml) := match p.global.openApi p.name role p.types with
@@ -2312,7 +2320,7 @@ def explore (args : Json) : Except String Json := do
     let labels := (p.global.messages.map (·.label)).eraseDups
     let ms ← Session.Types.complete p.types labels
     let some m := ms.find? (·.name == label) | throw s!"{label} has no message type"
-    let proto ← Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory
+    let proto ← Session.Types.proto p.types labels (Skeleton.snake p.name) p.labelHistory (mediaLabels p)
     let field := (Session.Types.payloadNumbers labels p.labelHistory).lookup label
     let declared := (Session.Types.find p.types label).isSome
     return fit <| Json.mkObj
@@ -2873,7 +2881,7 @@ protocol PlaceOrder (Client, Shop, Bank) {
 
 | statement | meaning |
 |---|---|
-| `x: Label from A to B cause y route \"...\" status 201 where e;` | a message; `x:`, `cause`, `route`, `status` and `where` are optional; `cause y` names an earlier id, and a response's cause chain reaches its request |
+| `x: Label from A to B cause y route \"...\" status 201 media \"image/png\" where e;` | a message; `x:`, `cause`, `route`, `status`, `media` and `where` are optional; `media` says the body is raw bytes of that type instead of JSON, so the message's fields travel as `Header`, `PathParam` or `QueryParam`; `cause y` names an earlier id, and a response's cause chain reaches its request |
 | `Label at A;` | something a role does on its own |
 | `choice { ... } or { ... }` | exactly one branch happens; the role that sends the first message of every branch decides (`select` in its local type); the others learn the branch from what reaches them (`offer`) |
 | `par { ... } and { ... }` | branches run concurrently; what follows waits for all |

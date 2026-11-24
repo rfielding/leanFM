@@ -561,6 +561,57 @@ def imgParams (t : String) : String := ((((((field (api t "Server") "openapi").g
 #guard imgParams imgApi == "[{\"in\":\"path\",\"name\":\"id\",\"required\":true,\"schema\":{\"type\":\"string\"}}]"
 #guard imgParams (imgApi.replace "id : String" "size : Nat") == "[{\"in\":\"query\",\"name\":\"size\",\"required\":true,\"schema\":{\"minimum\":0,\"type\":\"integer\"}},{\"in\":\"path\",\"name\":\"id\",\"required\":true,\"schema\":{\"type\":\"string\"}}]"
 #guard LeanFM.Session.OpenApi.templateNames "/a/{x}/b/{y}" == ["x", "y"]
+-- media: a body that is not JSON (selfhost.session.openapi); its fields travel as headers
+def has (s part : String) : Bool := (s.splitOn part).length > 1
+def pngApi := "structure GetImage where\n  id : String\nstructure Image where\n  id : Header String\nprotocol Images (Browser, Server) { g: GetImage from Browser to Server route \"GET /images/{id}\"; Image from Server to Browser cause g status 200 media \"image/png\"; }"
+def pngOk := (((((field (api pngApi "Server") "openapi").getObjValD "paths").getObjValD "/images/{id}").getObjValD "get").getObjValD "responses").getObjValD "200"
+#guard (pngOk.getObjValD "content").compress == "{\"image/png\":{\"schema\":{\"contentMediaType\":\"image/png\",\"format\":\"binary\",\"type\":\"string\"}}}"
+#guard (pngOk.getObjValD "headers").compress == "{\"Id\":{\"required\":true,\"schema\":{\"type\":\"string\"}}}"
+-- wire constraints (selfhost.session.wire-constraints): header names, bounds everywhere, a body's size
+#guard [LeanFM.Session.Types.headerName "cacheControl", LeanFM.Session.Types.headerName "xRequestId", LeanFM.Session.Types.headerName "xAPIKey", LeanFM.Session.Types.headerName "id", LeanFM.Session.Types.headerName "content_length"] ==
+  ["Cache-Control", "X-Request-Id", "X-Api-Key", "Id", "Content-Length"]
+def sized := "structure GetImage where\n  id : String\n  width : QueryParam Nat\n  wide : width <= 4096\nstructure Image where\n  contentLength : Header Nat\n  cacheControl : Header String\n  cached : cacheControl = \"max-age=3600\" or cacheControl = \"no-store\"\n  small : size <= 5000000\n  measured : contentLength = size\nprotocol Images (Browser, Server) { g: GetImage from Browser to Server route \"GET /images/{id}\"; Image from Server to Browser cause g status 200 media \"image/png\"; }"
+def sizedGet := (((field (api sized "Server") "openapi").getObjValD "paths").getObjValD "/images/{id}").getObjValD "get"
+def sizedOk := (sizedGet.getObjValD "responses").getObjValD "200"
+#guard ((((sizedOk.getObjValD "content").getObjValD "image/png").getObjValD "schema").getObjValAs? Nat "maxLength").toOption == some 5000000
+#guard (((sizedOk.getObjValD "headers").getObjValD "Cache-Control").getObjValD "schema").compress == "{\"enum\":[\"max-age=3600\",\"no-store\"],\"type\":\"string\"}"
+#guard ((sizedOk.getObjValD "headers").getObjVal? "Content-Length").isOk
+#guard has (sizedGet.getObjValD "parameters").compress "{\"in\":\"query\",\"name\":\"width\",\"required\":true,\"schema\":{\"maximum\":4096,\"minimum\":0,\"type\":\"integer\"}}"
+-- a constraint that relates a header to the size stays listed where no bound expresses it
+#guard has (field (api sized "Server") "openapi").compress "measured: contentLength = size"
+-- negative: size read by a message sent without a media type
+#guard has (reason (api (sized.replace " media \"image/png\"" "") "Server")) "Image: its constraints read size, the length of a raw body, but Image is sent without a media type"
+-- the text writes media back as it read it
+#guard (match LeanFM.Session.Text.readText pngApi with | .ok (ds, _) => has (LeanFM.Session.Text.Def.write ds.getLast!) "status 200 media \"image/png\";" | .error _ => false)
+-- protobuf: the bytes follow the declared fields
+#guard has ((match types (leanArgs pngApi) with | .ok j => (j.getObjValAs? String "proto").toOption.getD "" | .error e => e)) "message Image {\n  string id = 1; // header\n  bytes body = 2; // the image/png bytes\n}"
+-- negative: a body field, a malformed media type, and one label with two media types are refused
+#guard has (reason (api (pngApi.replace "id : Header String" "id : String") "Server")) "Image.id: Image is sent as image/png, so its body is the bytes; make id a Header, PathParam or QueryParam"
+#guard has (reason (api (pngApi.replace "media \"image/png\"" "media \"Image/PNG\"") "Server")) "is not a media type"
+#guard has (reason (api (pngApi.replace "media \"image/png\"" "media \"png\"") "Server")) "is not a media type"
+#guard has (reason (api (pngApi.replace "status 200 media \"image/png\"; }" "status 200 media \"image/png\"; Image from Server to Browser status 200; }") "Server")) "Image is sent with two media types"
+-- wire constraints (selfhost.session.wire-constraints): header names, bounds wherever a field travels, a raw body's size
+#guard [Session.Types.headerName "cacheControl", Session.Types.headerName "contentLength", Session.Types.headerName "xRequestId",
+    Session.Types.headerName "xAPIKey", Session.Types.headerName "id", Session.Types.headerName "if_match"] ==
+  ["Cache-Control", "Content-Length", "X-Request-Id", "X-Api-Key", "Id", "If-Match"]
+def wireApi := "structure GetImage where\n  id : String\n  width : QueryParam Nat\n  wide : width <= 4096\n  traceId : Header String\nstructure Image where\n  imageId : Header String\n  contentLength : Header Nat\n  cacheControl : Header String\n  cached : cacheControl = \"max-age=3600\" or cacheControl = \"no-store\"\n  small : size <= 5000000 and size > 0\n  measured : contentLength = size\nprotocol Images (Browser, Server) { g: GetImage from Browser to Server route \"GET /images/{id}\"; i: Image from Server to Browser cause g status 200 media \"image/png\" where i.imageId = g.id; }"
+def wireOp := (((field (api wireApi "Server") "openapi").getObjValD "paths").getObjValD "/images/{id}").getObjValD "get"
+def wireOk := (wireOp.getObjValD "responses").getObjValD "200"
+#guard has (wireOp.getObjValD "parameters").compress "{\"in\":\"query\",\"name\":\"width\",\"required\":true,\"schema\":{\"maximum\":4096,\"minimum\":0,\"type\":\"integer\"}}"
+#guard has (wireOp.getObjValD "parameters").compress "{\"in\":\"header\",\"name\":\"Trace-Id\""
+#guard ((wireOk.getObjValD "headers").getObjValD "Cache-Control").compress == "{\"required\":true,\"schema\":{\"enum\":[\"max-age=3600\",\"no-store\"],\"type\":\"string\"}}"
+#guard (((wireOk.getObjValD "content").getObjValD "image/png").getObjValD "schema").compress == "{\"contentMediaType\":\"image/png\",\"format\":\"binary\",\"maxLength\":5000000,\"minLength\":1,\"type\":\"string\"}"
+-- a log's size is checked against the constraints; a constraint that holds passes
+def wireLog (len size : String) : Json := (leanArgs wireApi).setObjVal! "events" (Json.arr #[
+  Json.mkObj [("id", "a1"), ("from", "Browser"), ("to", "Server"), ("label", "GetImage"), ("fields", Json.mkObj [("id", "cat"), ("width", "100"), ("traceId", "t")])],
+  Json.mkObj [("id", "a2"), ("from", "Server"), ("to", "Browser"), ("label", "Image"), ("cause", "a1"),
+    ("fields", Json.mkObj [("imageId", "cat"), ("contentLength", Json.str len), ("cacheControl", "no-store"), ("size", Json.str size)])]])
+#guard has (reason (conform (wireLog "48213" "48000")) ++ (field (conform (wireLog "48213" "48000")) "reading").compress) "Image.measured does not hold"
+#guard ((conform (wireLog "48000" "48000")).toOption.bind fun j => (j.getObjValAs? String "verdict").toOption) == some "conforms"
+-- generated code checks fields, never size
+#guard !has ((match types (leanArgs wireApi) with | .ok j => (j.getObjValAs? String "leanModule").toOption.getD "" | .error e => e)) "v.size"
+-- negative: size read by a message sent without a media type
+#guard has (reason (api (wireApi.replace " media \"image/png\"" "") "Server")) "Image: its constraints read size, the length of a raw body, but Image is sent without a media type"
 #guard LeanFM.Session.OpenApi.templateNames "/a/{}/b{" == []
 
 /-! ## session_review: every check that applies, with an edit for each finding -/

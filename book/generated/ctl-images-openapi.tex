@@ -17,10 +17,30 @@ paths:
       responses:
         "200":
           content:
-            "application/json":
+            "image/png":
               schema:
-                "$ref": "#/components/schemas/Image"
+                contentMediaType: "image/png"
+                format: "binary"
+                maxLength: 5000000
+                type: "string"
           description: "Image"
+          headers:
+            "Cache-Control":
+              required: true
+              schema:
+                enum:
+                  - "max-age=3600"
+                  - "no-store"
+                type: "string"
+            "Content-Length":
+              required: true
+              schema:
+                minimum: 0
+                type: "integer"
+            "Image-Id":
+              required: true
+              schema:
+                type: "string"
         "404":
           content:
             "application/json":
@@ -42,15 +62,26 @@ components:
     Image:
       additionalProperties: false
       properties:
-        bytes:
+        cacheControl:
+          enum:
+            - "max-age=3600"
+            - "no-store"
           type: "string"
-        id:
+        contentLength:
+          minimum: 0
+          type: "integer"
+        imageId:
           type: "string"
       required:
-        - "id"
-        - "bytes"
+        - "imageId"
+        - "contentLength"
+        - "cacheControl"
       title: "Image"
       type: "object"
+      "x-leanfm-constraints":
+        - "cached: cacheControl = \"max-age=3600\" or cacheControl = \"no-store\""
+        - "small: size <= 5000000"
+        - "measured: contentLength = size"
     NotFound:
       additionalProperties: false
       properties: {}

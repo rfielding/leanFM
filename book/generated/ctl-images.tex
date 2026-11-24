@@ -3,13 +3,17 @@ structure GetImage where
   id : String
 
 structure Image where
-  id : String
-  bytes : String
+  imageId : Header String
+  contentLength : Header Nat
+  cacheControl : Header String
+  cached : cacheControl = "max-age=3600" or cacheControl = "no-store"
+  small : size <= 5000000
+  measured : contentLength = size
 
 protocol Images (Browser, Server) {
   g: GetImage from Browser to Server route "GET /images/{id}";
   choice {
-    i: Image from Server to Browser cause g status 200 where i.id = g.id;
+    i: Image from Server to Browser cause g status 200 media "image/png" where i.imageId = g.id;
   } or {
     NotFound from Server to Browser cause g status 404;
   }

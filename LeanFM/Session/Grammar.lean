@@ -154,7 +154,7 @@ def block (st : Parser) : Parser := node `LeanFM.Session.Grammar.block ("{" >> m
 def msg : Parser := node `LeanFM.Session.Grammar.msg
   (optional (atomic (ident >> ":")) >> ident >> W "from" >> ident >> W "to" >> ident >>
     optional (W "cause" >> ident) >> optional (W "route" >> strLit) >> optional (W "status" >> numLit) >>
-    optional amount >> optional timing >> optional (W "where" >> cond) >> ";")
+    optional (W "media" >> strLit) >> optional amount >> optional timing >> optional (W "where" >> cond) >> ";")
 def event : Parser := node `LeanFM.Session.Grammar.event
   (atomic (ident >> W "at") >> ident >> optional eventTiming >> ";")
 def choice (st : Parser) : Parser := node `LeanFM.Session.Grammar.choice

@@ -198,8 +198,8 @@ partial def expand (ss : List Stmt) : Except String (List Path) := do
   | s :: rest => appendPaths (← expandStmt s) (← expand rest)
 partial def expandStmt (s : Stmt) : Except String (List Path) := do
   match s with
-  | .msg id label src dst cause route status guard =>
-    let i : Interaction String := { id, label, src, dst, cause, route, status, guard := guard.map (fun text => { text }) }
+  | .msg id label src dst cause route status media guard =>
+    let i : Interaction String := { id, label, src, dst, cause, route, status, media, guard := guard.map (fun text => { text }) }
     return [{ actions := [.msg i none] }]
   | .timed _ (.event ..) => throw "after on an event is used by the chain view (view chain); the tree times messages only"
   | .accrue _ => throw "accrue needs the chain view: a rate accrues over time spent in states (view chain, or a session with rec)"

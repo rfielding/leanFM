@@ -41,6 +41,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Wait by the clock, not by a count of tries: a refused connection returns at once, so 50 tries were
+# five seconds, less than a GitHub runner takes to start the server (3.4 s on a fast desktop). Fail
+# here, with the server's log, if it exits or never answers, rather than at the next curl.
+wait_for_server() {
+  local deadline=$((SECONDS + 120))
+  until curl -fsS "$base_url/health" >/dev/null 2>&1; do
+    if ! kill -0 "$server_pid" 2>/dev/null; then
+      echo "the ChatUI server exited before answering /health" >&2
+      return 1
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "the ChatUI server did not answer /health within 120 s" >&2
+      return 1
+    fi
+    sleep 0.2
+  done
+}
+
+
 cd "$repo_root"
 # A compiler process may emit bytes that Lean's String-based process reader
 # cannot decode. The build boundary must preserve readable text, keep the real
@@ -69,10 +88,7 @@ LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 
-for _ in $(seq 1 50); do
-  curl -fsS "$base_url/health" >/dev/null 2>&1 && break
-  sleep 0.1
-done
+wait_for_server
 
 root_html="$(curl -fsS $base_url/)"
 rg -q '<div id="root"></div>' <<<"$root_html"
@@ -289,7 +305,8 @@ curl -fsS -b "$cookie_a" --data-urlencode 'prompt=TEST_REPAIR_BOOK show the requ
   "$base_url/api/projects/$project_a/chat" >"$test_root/book-repair.json" &
 book_repair_pid=$!
 repair_status_seen=false
-for _ in $(seq 1 30); do
+poll_deadline=$((SECONDS + 60))
+while (( SECONDS < poll_deadline )); do
   if curl -fsS -b "$cookie_a" "$base_url/api/projects/$project_a/chat/status" >"$test_root/book-repair-status.json" &&
       rg -q '"stage":"book-repair"' "$test_root/book-repair-status.json" &&
       rg -q '"attempt":1' "$test_root/book-repair-status.json"; then
@@ -327,7 +344,8 @@ curl -fsS -b "$cookie_b" --data-urlencode 'prompt=TEST_WRITE_SOURCE implement th
   "$base_url/api/projects/$project_b/chat" >"$test_root/source-write.json" &
 source_write_pid=$!
 live_trace_seen=false
-for _ in $(seq 1 30); do
+poll_deadline=$((SECONDS + 60))
+while (( SECONDS < poll_deadline )); do
   if curl -fsS -b "$cookie_b" "$base_url/api/projects/$project_b/chat/trace" >"$test_root/live-trace.json" &&
       rg -q 'Wrote source/main.go' "$test_root/live-trace.json"; then
     live_trace_seen=true
@@ -407,10 +425,7 @@ wait "$server_pid" || true
 LEANFM_WORKSPACE_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
-for _ in $(seq 1 50); do
-  curl -fsS $base_url/health >/dev/null 2>&1 && break
-  sleep 0.1
-done
+wait_for_server
 test "$(curl -sS -b "$cookie_a" -o /dev/null -w '%{http_code}' $base_url/api/me)" = 401
 python3 scripts/chatui_multi_provider_test.py "$base_url" "$test_root/data" --after-restart
 echo 'ok: encrypted credentials, account isolation, migration and restart invalidation'

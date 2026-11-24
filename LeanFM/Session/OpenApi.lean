@@ -88,10 +88,46 @@ def Global.openApi (g : Global String) (title role : String) (types : Types.Env 
         match acc.find? (·.1 == key) with
         | some (_, ls) => if ls.contains r.label then acc else acc.map fun (k, l) => if k == key then (k, l ++ [r.label]) else (k, l)
         | none => acc ++ [(key, [r.label])]) []
-      let body (ls : List String) : Json := match ls with
-        | [l] => jsonBody l
-        | ls => Json.mkObj [("content", Json.mkObj [("application/json", Json.mkObj [("schema",
-            Json.mkObj [("oneOf", Json.arr (ls.map ref).toArray)])])])]
+      -- a message with a media type is its bytes (selfhost.session.openapi); the others are JSON,
+      -- several of them one of their schemas
+      let mediaOf (l : String) : Option String :=
+        ((cs.flatMap fun c => c.request :: c.responses).find? (·.label == l)).bind (·.media)
+      let body (ls : List String) : Json :=
+        let raw := ls.filterMap fun l => (mediaOf l).map (l, ·)
+        let json := ls.filter fun l => (mediaOf l).isNone
+        let jsonPart : List (String × Json) := match json with
+          | [] => []
+          | [l] => [("application/json", Json.mkObj [("schema", ref l)])]
+          | ls => [("application/json", Json.mkObj [("schema", Json.mkObj [("oneOf", Json.arr (ls.map ref).toArray)])])]
+        -- a raw body's length bounds, from constraints on size, as maxLength and minLength
+        let sized (l : String) (sch : Json) : Json := match Types.find types l with
+          | none => sch
+          | some mt =>
+            let b := mt.bound Types.sizeName (Json.mkObj [])
+            let n (k : String) : Option Int := (b.getObjValAs? Int k).toOption
+            let sch := match n "maximum", n "exclusiveMaximum" with
+              | some x, _ => sch.setObjVal! "maxLength" (toJson x)
+              | none, some x => sch.setObjVal! "maxLength" (toJson (x - 1))
+              | none, none => sch
+            let sch := match n "minimum", n "exclusiveMinimum" with
+              | some x, _ => sch.setObjVal! "minLength" (toJson x)
+              | none, some x => sch.setObjVal! "minLength" (toJson (x + 1))
+              | none, none => sch
+            match n "const" with
+            | some x => (sch.setObjVal! "maxLength" (toJson x)).setObjVal! "minLength" (toJson x)
+            | none => sch
+        let rawPart := (raw.map (·.2)).eraseDups.map fun m =>
+          let base := Json.mkObj [("type", "string"), ("format", "binary"), ("contentMediaType", Json.str m)]
+          (m, Json.mkObj [("schema", (raw.filter (·.2 == m)).foldl (fun sch (l, _) => sized l sch) base)])
+        Json.mkObj [("content", Json.mkObj (jsonPart ++ rawPart))]
+      -- a response's Header fields are its headers
+      let headersOf (ls : List String) : List (String × Json) :=
+        let hs := (ls.flatMap fun l => ((Types.fieldsOf types l).filter (·.place == .header)).map (l, ·)).foldl
+          (fun acc (l, f) => if acc.any (·.2.name == f.name) then acc else acc ++ [(l, f)]) []
+        if hs.isEmpty then [] else
+          [("headers", Json.mkObj (hs.map fun (l, f) =>
+            (Types.headerName f.name, Json.mkObj [("required", Json.bool true),
+              ("schema", ((Types.find types l).map (·.fieldSchema f)).getD f.ty.schema)])))]
       -- a redirect carries its message in the Location URL's query, not in a body, as browsers follow it
       let fieldList (ls : List String) : String :=
         ", ".intercalate ((ls.flatMap fun l => (Types.fieldsOf types l).map (·.name)).eraseDups)
@@ -103,7 +139,7 @@ def Global.openApi (g : Global String) (title role : String) (types : Types.Env 
                 (if carried.isEmpty then "" else s!": the Location URL carries {carried} as query parameters"))),
               ("headers", Json.mkObj [("Location", Json.mkObj [("required", Json.bool true),
                 ("schema", Json.mkObj [("type", "string"), ("format", "uri")])])])])
-          else (key, (body ls).setObjVal! "description" (Json.str (" or ".intercalate ls)))
+          else (key, ((headersOf ls).foldl (fun j (k, v) => j.setObjVal! k v) (body ls)).setObjVal! "description" (Json.str (" or ".intercalate ls)))
       -- a field placed in a header, the path or the query is a parameter there, whatever the method
       -- (selfhost.session.identity.marks); a request without a body carries its other single fields
       -- as query parameters
@@ -122,11 +158,18 @@ def Global.openApi (g : Global String) (title role : String) (types : Types.Env 
           let tys := flds.map (·.ty)
           let required := place == .path || reqs.all fun l => (Types.fieldsOf types l).any fun f => f.name == n &&
             (match f.ty with | .opt _ => false | _ => true)
+          -- a header goes by its HTTP name; every place a field travels gets its constraints' bounds
+          -- (selfhost.session.wire-constraints)
+          let wire := if place == .header then Types.headerName n else n
+          let bounded (sch : Json) : Json :=
+            match (reqs.find? fun l => (Types.fieldsOf types l).any (·.name == n)).bind (Types.find types) with
+            | some mt => mt.bound n sch
+            | none => sch
           match tys.head? with
           | some t@(.nat) | some t@(.int) | some t@(.str) | some t@(.bool) =>
-            some (Json.mkObj [("name", Json.str n), ("in", Json.str loc), ("required", Json.bool required), ("schema", t.schema)])
+            some (Json.mkObj [("name", Json.str wire), ("in", Json.str loc), ("required", Json.bool required), ("schema", bounded t.schema)])
           | some (.opt t) =>
-            some (Json.mkObj [("name", Json.str n), ("in", Json.str loc), ("required", Json.bool false), ("schema", t.schema)])
+            some (Json.mkObj [("name", Json.str wire), ("in", Json.str loc), ("required", Json.bool false), ("schema", bounded t.schema)])
           | _ => none
         let missing := (templ.filter fun n => !names.contains n).map fun n =>
           Json.mkObj [("name", Json.str n), ("in", "path"), ("required", Json.bool true), ("schema", Json.mkObj [("type", "string")])]

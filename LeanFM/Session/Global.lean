@@ -52,6 +52,9 @@ structure Interaction (R : Type) where
   /-- The operation a request invokes (an HTTP method and path such as `POST /orders`, or a
   function name), for people and generated views; no rule reads it. -/
   route : Option String := none
+  /-- The media type of the message's body when it is not JSON (`image/png`): the body is raw
+  bytes of that type (selfhost.session.openapi); no rule reads it. -/
+  media : Option String := none
   guard : Option Guard := none
   deriving Repr
 

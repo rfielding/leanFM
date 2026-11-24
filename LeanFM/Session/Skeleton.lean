@@ -481,7 +481,7 @@ def pyMessage (m : Types.Message) : String :=
   let body := if m.fields.isEmpty && doc.isEmpty then ["    pass"]
     else doc ++ m.fields.map fun f => s!"    {f.name}: {pyType f.ty}"
   -- messages are observed facts: frozen, and a constraint that fails refuses to construct one
-  let checks := m.checks
+  let checks := m.fieldChecks
   let post := if checks.isEmpty then [] else
     ["", "    def __post_init__(self) -> None:"] ++ checks.map fun (n, t, ex) =>
       s!"        if not {Types.pyCond ex}:\n            raise ValueError({Skeleton.lit s!"{m.name}.{n} does not hold: {t}"})"

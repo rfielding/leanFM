@@ -42,7 +42,7 @@ namespace LeanFM.Session.Text
 
 inductive Stmt where
   | msg (id : Option String) (label src dst : String) (cause route : Option String)
-      (status : Option Nat) (guard : Option String)
+      (status : Option Nat) (media : Option String) (guard : Option String)
   | timed (time : Generative.TimeExpr) (message : Stmt)
   | valued (amount : Generative.Amount) (message : Stmt)
   | accrue (as : List Generative.Accrual)
@@ -151,11 +151,22 @@ partial def idLabels : List Stmt → List (String × String)
     | .bounded _ _ b o => idLabels b ++ idLabels o
     | _ => []) ++ idLabels rest
 
+/-- Every message's label with its media type, if it has one. -/
+partial def mediaOf : List Stmt → List (String × Option String)
+  | [] => []
+  | s :: rest => (match s with
+    | .msg _ label _ _ _ _ _ media _ => [(label, media)]
+    | .timed _ m | .valued _ m => mediaOf [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap mediaOf
+    | .loop _ b | .sessions b => mediaOf b
+    | .bounded _ _ b o => mediaOf b ++ mediaOf o
+    | _ => []) ++ mediaOf rest
+
 /-- Every message's label and where condition in a body. -/
 partial def conditions : List Stmt → List (String × String)
   | [] => []
   | s :: rest => (match s with
-    | .msg _ label _ _ _ _ _ (some g) => [(label, g)]
+    | .msg _ label _ _ _ _ _ _ (some g) => [(label, g)]
     | .timed _ m | .valued _ m => conditions [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap conditions
     | .loop _ b | .sessions b => conditions b
@@ -173,7 +184,7 @@ partial def scopedConditions (scope : List (String × List String)) :
   | s :: rest =>
     let (here, scope') : List (String × String × List (String × List String)) × List (String × List String) :=
       match s with
-      | .msg id label _ _ _ _ _ g =>
+      | .msg id label _ _ _ _ _ _ g =>
         let sc := match id with | some x => (x, [label]) :: scope | none => scope
         ((match g with | some t => [(label, t, sc)] | none => []), sc)
       | .timed _ m | .valued _ m => scopedConditions scope [m]
@@ -204,7 +215,7 @@ where
     | .ok e => (e.mapIds r).render
     | .error _ => text
   go : Stmt → Stmt
-    | .msg id l a b cause route status guard => .msg (id.map r) l a b (cause.map r) route status (guard.map rg)
+    | .msg id l a b cause route status media guard => .msg (id.map r) l a b (cause.map r) route status media (guard.map rg)
     | .timed t m => .timed (rt t) (go m)
     | .valued a m => .valued a (go m)
     | .clock name refs => .clock name (refs.map r)
@@ -461,6 +472,14 @@ def condText : R String := do
 
 end
 
+/-- A media type as a message's `media` names it: a lower-case type/subtype of letters, digits and
+!#$&^_.+- (the subtype may be *), at most 100 characters (selfhost.session.openapi). -/
+def validMedia (t : String) : Bool :=
+  let ok := fun (c : Char) => (c.isLower || c.isDigit || "!#$&^_.+-".contains c)
+  match t.splitOn "/" with
+  | [a, b] => t.length ≤ 100 && !a.isEmpty && !b.isEmpty && a.all ok && (b == "*" || b.all ok)
+  | _ => false
+
 open Lean (Syntax) in
 /-- A message statement. -/
 def msgStmt (stx : Syntax) : R Stmt := do
@@ -471,10 +490,16 @@ def msgStmt (stx : Syntax) : R Stmt := do
   let cause ← match opt stx[6] 1 with | some c => pure (some (← name c "a message id")) | none => pure none
   let route ← match opt stx[7] 1 with | some r => pure (some (← strVal r)) | none => pure none
   let status ← match opt stx[8] 1 with | some n => pure (some (← nat n)) | none => pure none
-  let as ← match opt stx[9] 0 with | some a => amounts a | none => pure []
-  let time ← match opt stx[10] 0 with | some t => pure (some (← timing t)) | none => pure none
-  let guard ← match opt stx[11] 1 with | some c => pure (some (← condText c)) | none => pure none
-  let message := Stmt.msg id label src dst cause route status guard
+  let media ← match opt stx[9] 1 with
+    | some m => do
+      let t ← strVal m
+      if !validMedia t then failAt m s!"media \"{t}\" is not a media type: write type/subtype in lower case, such as \"image/png\""
+      pure (some t)
+    | none => pure none
+  let as ← match opt stx[10] 0 with | some a => amounts a | none => pure []
+  let time ← match opt stx[11] 0 with | some t => pure (some (← timing t)) | none => pure none
+  let guard ← match opt stx[12] 1 with | some c => pure (some (← condText c)) | none => pure none
+  let message := Stmt.msg id label src dst cause route status media guard
   let message := as.foldl (fun m a => .valued a m) message
   return match time with | some t => .timed t message | none => message
 
@@ -679,7 +704,8 @@ def structureDecl (doc : Option Syntax) (stx : Syntax) : R Types.Message := do
       let checkable ← match Where.parse text with
         | .ok ex =>
           for (x, _) in ex.paths do
-            if !(fields.any (·.name == x)) then
+            -- size is the raw body's length in bytes (selfhost.session.wire-constraints)
+            if !(fields.any (·.name == x)) && x != Types.sizeName then
               failAt ft s!"structure {mname}: constraint {cname} reads {x}, which is not a field declared before it"
           pure true
         | .error _ => pure false
@@ -900,13 +926,13 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
       | .ok r => if r != who then bfail here "declared choice actor does not match its decider"
       | .error e => bfail here e
       return Global.andThen (.choice gs) (← next ())
-    | .msg id label src dst cause route status guard =>
+    | .msg id label src dst cause route status media guard =>
       let src' ← role here src
       let dst' ← role here dst
       let g : Option Guard := guard.map fun t => { text := t }
       let i : Interaction String :=
         { id := id, label := label, src := src', dst := dst', cause := cause, route := route,
-          status := status, guard := g }
+          status := status, media := media, guard := g }
       return .msg i (← next ())
     | .event label r => return .act (← role here r) label (← next ())
     | .choice bs => return Global.andThen (.choice (← nest here bs)) (← next ())
@@ -1205,6 +1231,18 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
       pure env
     | none => pure st.types.toList
   Types.check env (defs.flatMap (·.givens))
+  -- a message with a media type carries its body as bytes of that type, so its fields travel
+  -- outside the body, and a label means one media type everywhere (selfhost.session.openapi)
+  let msgs := defs.flatMap fun d => mediaOf d.body
+  for (label, media) in msgs do
+    if let some (_, other) := msgs.find? (fun (l, m) => l == label && m != media) then
+      throw s!"{label} is sent with two media types ({media.getD "application/json"} and {other.getD "application/json"}); give every {label} the same media"
+    if media.isNone && ((Types.find env label).map Types.readsSize).getD false then
+      throw s!"{label}: its constraints read size, the length of a raw body, but {label} is sent without a media type; send it with media \"type/subtype\" or read a field"
+    if let some m := media then
+      for f in Types.fieldsOf env label do
+        if f.place == .body then
+          throw s!"{label}.{f.name}: {label} is sent as {m}, so its body is the bytes; make {f.name} a Header, PathParam or QueryParam"
   -- session identity in the text (selfhost.session.identity.scopes)
   let keyIds := st.keys.toList.map (·.1)
   let mut identityNotes : List String := []
@@ -1307,8 +1345,8 @@ partial def writeBranches (ind kw sep : String) (bs : List (List Stmt)) : List S
 partial def writeAnnotated (ind : String) (t : Option Generative.TimeExpr) (as : List Generative.Amount) : Stmt → List String
   | .timed t' m => writeAnnotated ind (some t') as m
   | .valued a' m => writeAnnotated ind t (a' :: as) m
-  | .msg id label src dst cause route status guard =>
-    (writeStmt ind (.msg id label src dst cause route status none)).map fun line =>
+  | .msg id label src dst cause route status media guard =>
+    (writeStmt ind (.msg id label src dst cause route status media none)).map fun line =>
       (line.dropEnd 1).toString ++
         (match as with
          | [] => ""
@@ -1335,12 +1373,13 @@ partial def writeStmt (ind : String) : Stmt → List String
       (if weights.isEmpty then [] else [ind ++ "  probability " ++ (weights[i]!).text ++ ":"]) ++ writeStmts (ind ++ "  ") b
     [ind ++ "choice at " ++ showIdent actor ++ " using declared(" ++ showString name ++ ") {"] ++
       List.flatten (decorated.zipIdx |>.map fun (lines,i) => (if i == 0 then [] else [ind ++ "} or {"]) ++ lines) ++ [ind ++ "}"]
-  | .msg id label src dst cause route status guard =>
+  | .msg id label src dst cause route status media guard =>
     [ind ++ (match id with | some i => showIdent i ++ ": " | none => "") ++ showIdent label ++
       " from " ++ showIdent src ++ " to " ++ showIdent dst ++
       (match cause with | some c => " cause " ++ showIdent c | none => "") ++
       (match route with | some r => " route " ++ showString r | none => "") ++
       (match status with | some s => s!" status {s}" | none => "") ++
+      (match media with | some m => " media " ++ showString m | none => "") ++
       (match guard with | some g => " where " ++ g | none => "") ++ ";"]
   | .event label r => [ind ++ showIdent label ++ " at " ++ showIdent r ++ ";"]
   | .accrue as =>
