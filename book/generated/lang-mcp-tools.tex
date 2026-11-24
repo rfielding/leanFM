@@ -2,33 +2,33 @@
 \toprule
 Tool & What it does & Arguments (* required) \\
 \midrule
-\texttt{validate\_\allowbreak{}generated\_\allowbreak{}artifacts} & Validate generated artifacts & \texttt{} \\
-\texttt{requirements\_\allowbreak{}interrogation} & Read requirements interrogation & \texttt{} \\
-\texttt{code\_\allowbreak{}generation\_\allowbreak{}prompt} & Read one-shot implementation prompt & \texttt{} \\
-\texttt{explain\_\allowbreak{}formula} & Explain a CTL formula & \texttt{formula*, sentence, task} \\
-\texttt{check\_\allowbreak{}ctl} & Check a CTL formula against a task & \texttt{formula*, task*} \\
-\texttt{check\_\allowbreak{}trace} & Check an event trace and draw it & \texttt{drafts, events*} \\
-\texttt{classify\_\allowbreak{}requirement} & Classify requirement observability & \texttt{formula, predicates, task} \\
-\texttt{check\_\allowbreak{}protocol} & Find attacks on a security protocol & \texttt{attacker*, defender, domain, domains, formula, roles*} \\
-\texttt{check\_\allowbreak{}reassembly} & Find stream-reassembly evasions & \texttt{box, formula, host, mode, signature} \\
-\texttt{knows} & What an actor can derive & \texttt{actor*, at*, events*, initial, query, seesAll} \\
-\texttt{session\_\allowbreak{}check} & Check a session type & \texttt{example, file, lean, mayCall, notHttp, overlay, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}diagram} & Draw a session type & \texttt{example, file, lean, overlay, project, proto, protocol, theme} \\
-\texttt{session\_\allowbreak{}mdp} & Render a session decision process and terminal probabilities & \texttt{events, example, file, horizon, lean, optimize, overlay, project, proto, protocol, theme, view, walk} \\
-\texttt{session\_\allowbreak{}sla} & Check a session type's service-level requirements & \texttt{at, events, example, file, lean*, overlay, project, proto, theme} \\
-\texttt{session\_\allowbreak{}simulate} & Generate an event stream from a session type & \texttt{example, file, instances, lean, loops, maxEvents, overlay, project, proto, protocol, seed, spread} \\
-\texttt{session\_\allowbreak{}conform} & Check a recorded run against a session type & \texttt{allowIncomplete, events*, example, file, horizonMs, lean, overlay, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}spans} & Time the calls in a log, without trusting clocks across machines & \texttt{events*, example, file, lean, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}next} & What may happen next in a session & \texttt{events, example, file, lean, overlay, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}ctl} & Check a temporal property of a session type & \texttt{example, file, formula, lean, overlay, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}instances} & Find deadlocks and races between instances of a system & \texttt{example, file, instances, lean*, perInstance, project, properties, proto} \\
-\texttt{session\_\allowbreak{}review} & Review a session type design & \texttt{example, file, lean, overlay, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}openapi} & A role's HTTP interface as OpenAPI & \texttt{example, file, lean, overlay, project, proto, protocol, role*} \\
-\texttt{session\_\allowbreak{}types} & The message types as protobuf, Lean and JSON schema & \texttt{example, file, lean, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}compat} & Which roles can upgrade on their own & \texttt{example, file, lean, old, overlay, project, proto, protocol} \\
-\texttt{session\_\allowbreak{}actor} & A protocol as one role sees it & \texttt{example, file, lean, overlay, project, proto, protocol, role*, theme} \\
-\texttt{session\_\allowbreak{}dataset} & Generate many sessions and summarize them & \texttt{example, file, lean, overlay, project, proto, protocol, seed, sessions} \\
-\texttt{session\_\allowbreak{}explore} & Browse a protocol as a tree & \texttt{example, file, focus, lean, project, proto, states, theme} \\
-\texttt{session\_\allowbreak{}skeleton} & Generate code to implement a session type & \texttt{example, file, language, lean, project, proto, protocol} \\
+\texttt{validate\_\allowbreak{}generated\_\allowbreak{}artifacts} & Validate generated artifacts & \texttt{limits} \\
+\texttt{requirements\_\allowbreak{}interrogation} & Read requirements interrogation & \texttt{limits} \\
+\texttt{code\_\allowbreak{}generation\_\allowbreak{}prompt} & Read one-shot implementation prompt & \texttt{limits} \\
+\texttt{explain\_\allowbreak{}formula} & Explain a CTL formula & \texttt{formula*, limits, sentence, task} \\
+\texttt{check\_\allowbreak{}ctl} & Check a CTL formula against a task & \texttt{formula*, limits, task*} \\
+\texttt{check\_\allowbreak{}trace} & Check an event trace and draw it & \texttt{drafts, events*, limits} \\
+\texttt{classify\_\allowbreak{}requirement} & Classify requirement observability & \texttt{formula, limits, predicates, task} \\
+\texttt{check\_\allowbreak{}protocol} & Find attacks on a security protocol & \texttt{attacker*, defender, domain, domains, formula, limits, roles*} \\
+\texttt{check\_\allowbreak{}reassembly} & Find stream-reassembly evasions & \texttt{box, formula, host, limits, mode, signature} \\
+\texttt{knows} & What an actor can derive & \texttt{actor*, at*, events*, initial, limits, query, seesAll} \\
+\texttt{session\_\allowbreak{}check} & Check a session type & \texttt{example, file, lean, limits, mayCall, notHttp, overlay, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}diagram} & Draw a session type & \texttt{example, file, lean, limits, overlay, project, proto, protocol, theme} \\
+\texttt{session\_\allowbreak{}mdp} & Render a session decision process and terminal probabilities & \texttt{events, example, file, horizon, lean, limits, optimize, overlay, project, proto, protocol, theme, view, walk} \\
+\texttt{session\_\allowbreak{}sla} & Check a session type's service-level requirements & \texttt{at, events, example, file, lean*, limits, overlay, project, proto, theme} \\
+\texttt{session\_\allowbreak{}simulate} & Generate an event stream from a session type & \texttt{example, file, instances, lean, limits, loops, maxEvents, overlay, project, proto, protocol, seed, spread} \\
+\texttt{session\_\allowbreak{}conform} & Check a recorded run against a session type & \texttt{allowIncomplete, events*, example, file, horizonMs, lean, limits, overlay, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}spans} & Time the calls in a log, without trusting clocks across machines & \texttt{events*, example, file, lean, limits, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}next} & What may happen next in a session & \texttt{events, example, file, lean, limits, overlay, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}ctl} & Check a temporal property of a session type & \texttt{example, faithful, file, formula, lean, limits, overlay, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}instances} & Find deadlocks and races between instances of a system & \texttt{example, file, instances, lean*, limits, perInstance, project, properties, proto} \\
+\texttt{session\_\allowbreak{}review} & Review a session type design & \texttt{example, file, lean, limits, overlay, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}openapi} & A role's HTTP interface as OpenAPI & \texttt{example, file, lean, limits, overlay, project, proto, protocol, role*} \\
+\texttt{session\_\allowbreak{}types} & The message types as protobuf, Lean and JSON schema & \texttt{example, file, lean, limits, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}compat} & Which roles can upgrade on their own & \texttt{example, file, lean, limits, old, overlay, project, proto, protocol} \\
+\texttt{session\_\allowbreak{}actor} & A protocol as one role sees it & \texttt{example, file, lean, limits, overlay, project, proto, protocol, role*, theme} \\
+\texttt{session\_\allowbreak{}dataset} & Generate many sessions and summarize them & \texttt{example, file, lean, limits, overlay, project, proto, protocol, seed, sessions} \\
+\texttt{session\_\allowbreak{}explore} & Browse a protocol as a tree & \texttt{example, file, focus, lean, limits, project, proto, states, theme} \\
+\texttt{session\_\allowbreak{}skeleton} & Generate code to implement a session type & \texttt{example, file, language, lean, limits, project, proto, protocol} \\
 \bottomrule
 \end{tabular}

@@ -762,7 +762,7 @@ def listsGoal : String :=
 
 /-- Without a section, the sections with their counts; with one, a page of its items from
 `offset`. transitions, properties and constraints are one task's, named by `task`. -/
-def «requirements» (p : Project) (sectionArg : Option String) (task : Option String) (offset : Nat) :
+def requirements (p : Project) (sectionArg : Option String) (task : Option String) (offset : Nat) :
     IO (Except String Json) := do
   let (protocols, more) ← protocolFiles p
   let rel := if p.isLeanFM then "LeanFM/LLMGenerated/SelfHosting.lean" else manifestPath p "tasks" "spec/tasks.json"
@@ -809,7 +809,7 @@ def «requirements» (p : Project) (sectionArg : Option String) (task : Option S
 
 structure Mapping where
   name : String
-  «requirements» : List String
+  requirements : List String
   files : List String
   symbols : List String
   tests : List String
@@ -824,14 +824,14 @@ def Mapping.names (m : Mapping) (file : String) : Bool :=
 
 def leanfmMappings : List Mapping :=
   (LeanFM.LLMGenerated.McpLogicImplementation.decisions ++ LeanFM.LLMGenerated.SessionImplementation.decisions).map fun d =>
-    { name := d.id, «requirements» := d.requirementRefs, files := d.files, symbols := [], tests := d.conformanceTests }
+    { name := d.id, requirements := d.requirementRefs, files := d.files, symbols := [], tests := d.conformanceTests }
 
 def projectMappings (j : Json) : List Mapping :=
   let strs (o : Json) (k : String) : List String :=
     (((o.getObjValD k).getArr?).toOption.getD #[]).toList.filterMap (·.getStr?.toOption)
   let ms := ((j.getObjValD "mappings").getArr?).toOption.getD #[]
   ms.toList.zipIdx.map fun (m, i) =>
-    { name := s!"mapping {i + 1}", «requirements» := strs m "requirements", files := strs m "files",
+    { name := s!"mapping {i + 1}", requirements := strs m "requirements", files := strs m "files",
       symbols := strs m "symbols", tests := strs m "tests" }
 
 def sourceRoot (p : Project) (impl : Option Impl := none) : String :=
@@ -977,7 +977,7 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
     | some "book" => book p page (themeArg != some "light")
     | some "requirements" =>
       match fileArg with
-      | none => «requirements» p sectionArg taskArg offset
+      | none => requirements p sectionArg taskArg offset
       | some f =>
         if (← specFiles p).contains f then
           match ← textPage p f offset with

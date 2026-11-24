@@ -268,7 +268,7 @@ def reqPointer : Parser := node `LeanFM.Session.Grammar.reqPointer
 /-- `"name" => pointer;` -/
 def reqEntry : Parser := node `LeanFM.Session.Grammar.reqEntry (strLit >> " => " >> reqPointer >> ";")
 def requirementsBody : Parser := node `LeanFM.Session.Grammar.requirementsBody
-  ("requirements " >> "{" >> many reqEntry >> "}")
+  (nonReservedSymbol "requirements" true >> "{" >> many reqEntry >> "}")
 
 /-- Evidence for an imported requirement, or a pointer for the implementation's own CTL. -/
 def evidence : Parser := node `LeanFM.Session.Grammar.evidence
@@ -277,7 +277,7 @@ def evidence : Parser := node `LeanFM.Session.Grammar.evidence
 def implItem : Parser := node `LeanFM.Session.Grammar.implItem
   ((W "refines" >> ident >> W "by" >> ident >> ";") <|> (W "hint" >> strLit >> ";") <|> (strLit >> " => " >> evidence >> ";"))
 def implementationBody : Parser := node `LeanFM.Session.Grammar.implementationBody
-  ("implementation " >> ident >> W "of" >> ident >> "{" >> many implItem >> "}")
+  (nonReservedSymbol "implementation" true >> ident >> W "of" >> ident >> "{" >> many implItem >> "}")
 
 /-- `requirements { ... }` as a Lean command (checked by the tools, nothing elaborated). -/
 @[command_parser] def requirementsCmd : Parser := leading_parser requirementsBody

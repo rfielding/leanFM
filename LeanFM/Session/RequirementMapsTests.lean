@@ -76,3 +76,13 @@ def run (amount : Nat) : Json := Json.arr #[ev "o1" "CreateOrder" "Client" "Shop
 #guard (checkConform two (.sorry_ "") (.ok (run 10))).failing
 
 end LeanFM.Session.RequirementMapsTests
+
+-- the two block words stay identifiers in a module that imports the library, so a project's own
+-- Project.Requirements.requirements and Project.Implementation.implementation still elaborate
+namespace Project.Requirements
+def requirements : Nat := 1
+end Project.Requirements
+namespace Project.Implementation
+def implementation : Nat := 2
+end Project.Implementation
+#guard Project.Requirements.requirements + Project.Implementation.implementation == 3
