@@ -391,27 +391,63 @@ def atomText : Formula → String
   | .unsupported op => s!"({op} terminal)"
   | f => nameText (reprStr f)
 
-/-- The formula as an s-expression, each part shared by two or more parents written once with a
-label #n= and referred to as #n# after (selfhost.session.ctl-sexpr). -/
-partial def toSexpr (d : Dag) : String := Id.run do
-  if d.size == 0 then return "true"
+/-- How many parents each node has. -/
+def parentCounts (d : Dag) : Array Nat := Id.run do
   let mut parents : Array Nat := Array.replicate d.size 0
   for ks in d.kids do
     for k in ks do parents := parents.modify k (· + 1)
-  let rec go (i : Nat) (labels : Std.HashMap Nat Nat) : String × Std.HashMap Nat Nat :=
-    match labels.get? i with
-    | some n => (s!"#{n}#", labels)
-    | none =>
-      let op := d.ops[i]!
-      let shared := (parents[i]?.getD 0) ≥ 2 && op != "atom" && op != "true" && op != "false"
+  return parents
+
+/-- Node `i` on one line, threading the labels given so far (selfhost.session.ctl-sexpr). -/
+partial def flatAt (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashMap Nat Nat) :
+    String × Std.HashMap Nat Nat :=
+  match labels.get? i with
+  | some n => (s!"#{n}#", labels)
+  | none =>
+    let op := d.ops[i]!
+    let shared := (parents[i]?.getD 0) ≥ 2 && op != "atom" && op != "true" && op != "false"
+    let (labels, pre) := if shared then (labels.insert i labels.size, s!"#{labels.size}=") else (labels, "")
+    if op == "atom" then (pre ++ atomText (d.atoms[i]!.getD .tt), labels)
+    else if op == "true" || op == "false" then (op, labels)
+    else
+      let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
+        let (t, l) := flatAt d parents k acc.2; (acc.1.push t, l)) (#[], labels)
+      (pre ++ "(" ++ " ".intercalate (op :: parts.toList) ++ ")", labels)
+
+/-- The formula as an s-expression, each part shared by two or more parents written once with a
+label #n= and referred to as #n# after (selfhost.session.ctl-sexpr). -/
+def toSexpr (d : Dag) : String :=
+  if d.size == 0 then "true" else (flatAt d (parentCounts d) (d.size - 1) {}).1
+
+/-- The column sexprPretty keeps a part within when it can (selfhost.mcp.logic.explain). -/
+def sexprWidth : Nat := 72
+
+/-- `toSexpr` laid out for reading: a part that fits in `width` columns at its indentation stays on
+one line; otherwise its label and operator open a line and each argument follows on its own line,
+two spaces further in. The labels are threaded in the same order as `toSexpr`, so it reads back to
+the same formula (selfhost.mcp.logic.explain). -/
+partial def toSexprPretty (d : Dag) (width : Nat := sexprWidth) : String :=
+  if d.size == 0 then "true" else
+  let parents := parentCounts d
+  let rec go (i indent : Nat) (labels : Std.HashMap Nat Nat) : String × Std.HashMap Nat Nat :=
+    let (flat, after) := flatAt d parents i labels
+    let op := d.ops[i]!
+    if indent + flat.length ≤ width || labels.contains i || op == "atom" || op == "true" || op == "false" then
+      (flat, after)
+    else
+      let shared := (parents[i]?.getD 0) ≥ 2
       let (labels, pre) := if shared then (labels.insert i labels.size, s!"#{labels.size}=") else (labels, "")
-      if op == "atom" then (pre ++ atomText (d.atoms[i]!.getD .tt), labels)
-      else if op == "true" || op == "false" then (op, labels)
-      else
-        let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
-          let (t, l) := go k acc.2; (acc.1.push t, l)) (#[], labels)
-        (pre ++ "(" ++ " ".intercalate (op :: parts.toList) ++ ")", labels)
-  return (go (d.size - 1) {}).1
+      let pad := "".pushn ' ' (indent + 2)
+      let (body, labels) := (d.kids[i]!).foldl (fun (acc : String × Std.HashMap Nat Nat) k =>
+        let (t, l) := go k (indent + 2) acc.2; (acc.1 ++ "\n" ++ pad ++ t, l)) ("", labels)
+      (pre ++ "(" ++ op ++ body ++ ")", labels)
+  (go (d.size - 1) 0 {}).1
+
+/-- The first atom kind the s-expression form refuses, if the formula has one. -/
+def sexprBlocker (d : Dag) : Option String :=
+  d.atomList.findSome? fun
+    | .knows .. => some "knows" | .field .. => some "field"
+    | .predicate _ => some "predicate" | .derived _ => some "derived" | _ => none
 
 end Dag
 
@@ -1476,7 +1512,13 @@ def explainFormula (args : Json) : ToolOutcome := do
     | some tj => do let t ← resolveTask tj; pure (unknownAtoms t f)
     | none => pure []
   let neg := f.negate
-  return verdictJson "explain_formula" "explained" f.reading
+  -- the formula written back as an s-expression, when every atom has that form
+  let dag := Dag.ofFormula f
+  let sx : List (String × Json) := match dag.sexprBlocker with
+    | none => [("sexpr", Json.str dag.toSexpr), ("sexprPretty", Json.str dag.toSexprPretty)]
+    | some k => [("sexpr", Json.null), ("sexprPretty", Json.null),
+        ("sexprNote", Json.str s!"a {k} atom has no s-expression form; write this formula in the JSON form")]
+  return verdictJson "explain_formula" "explained" f.reading <| sx ++
     [ ("formula", f.toJson), ("notation", f.symbols), ("mode", Formula.mode f)
     , ("negation", Json.mkObj [("formula", neg.toJson), ("notation", neg.symbols), ("reading", neg.reading)])
     , ("typingErrors", Json.arr #[])
@@ -2436,6 +2478,8 @@ def reference : String := String.intercalate "\n"
   , "## S-expressions"
   , ""
   , "Wherever a formula is read, a JSON string beginning with ( or # is an s-expression over the same operators: `(AG (implies (after Ping) (AX (or (after Pong) (after SlowPong)))))`. `(after M)`, `(at s)` and `(claimed c)` take a name; `terminal`, `true` and `false` are bare; `(secret from A to B field f)` with each pair optional. A name is letters, digits and `_ . : / @ $ -`, or a double-quoted string. A part written once may be labelled `#1=` and reused as `#1#`, so a formula with shared parts is written with each part once. The reader is data only: no other # form and nothing evaluated; a label must be defined before it is used, which rules out cycles. knows, field, predicate and derived have structure the string form does not carry: write them in JSON."
+  , ""
+  , "To parse or format one, call explain_formula with the formula alone (no task): besides its reading it answers `formula` (the JSON tree), `sexpr` (the canonical one-line s-expression: single spaces, names quoted only where needed, a part shared by two or more parents written once with a label) and `sexprPretty` (the same, indented: a part that fits in 72 columns stays on one line, otherwise each argument goes on its own line two spaces in). Both read back to the same formula. A formula with a knows, field, predicate or derived atom gets null for both, with `sexprNote` saying why."
   , ""
   , "check_ctl evaluates a formula as its DAG: each distinct subformula once, so its size bound counts distinct subformulas, and an answer writes a formula too large to write as a tree as an s-expression with its shared parts labelled."
   , "K, O, P, B and Pr are parsed and reported as unsupported inside formulas; the knows tool decides what an actor can derive at an event of a trace."

@@ -52,6 +52,15 @@ partial def toCTL (m : Model) : Formula → LeanFM.CTL Nat
 
 def notationOf (j : String) : String := ((parseBounded (parseJ j)).toOption.map Formula.symbols).getD "?"
 
+/-- explain_formula's answer for a formula given as JSON (an s-expression is a JSON string). -/
+def explainOf (formula : Json) : Json :=
+  match run "explain_formula" (Json.mkObj [("formula", formula)]) with
+  | some (.ok j) => j | _ => Json.null
+def sexprOf (formula : Json) (k : String := "sexpr") : String :=
+  ((explainOf formula).getObjValAs? String k).toOption.getD "?"
+/-- The formula a text reads back to, as JSON, to compare two readings. -/
+def readsAs (t : String) : Json := ((parseBounded (Json.str t)).toOption.map Formula.toJson).getD Json.null
+
 def main : IO Unit := do
   -- logic-formula-ast
   -- CTL notation: one legible line, parentheses only around binary operands
@@ -67,6 +76,30 @@ def main : IO Unit := do
   expect "explain_formula answers the notation"
     (match call "explain_formula" "{\"formula\": {\"AG\": {\"not\": {\"after\": \"Pay\"}}}}" with
      | .ok j => (j.getObjValD "notation") == Json.str "AG ¬Pay" | .error _ => false)
+  -- explain_formula parses and formats an s-expression (selfhost.mcp.logic.explain)
+  let canon := "(AG (implies (after CreateOrder) (AF (or (after Receipt) (after SoldOut)))))"
+  let spaced := Json.str "(AG   (implies (after CreateOrder)\n   (AF (or (after Receipt) (after SoldOut)))))"
+  let asJson := parseJ "{\"AG\": {\"implies\": [{\"after\": \"CreateOrder\"}, {\"AF\": {\"or\": [{\"after\": \"Receipt\"}, {\"after\": \"SoldOut\"}]}}]}}"
+  expect "sexpr normalizes spacing" (sexprOf spaced == canon)
+  expect "sexpr of the JSON form is the same text" (sexprOf asJson == canon)
+  expect "a short formula's sexprPretty is its sexpr" (sexprOf (Json.str "(AG  (implies (after Pay) (AF (after Receipt))))") "sexprPretty" == "(AG (implies (after Pay) (AF (after Receipt))))")
+  expect "sexpr reads back to the same formula" (readsAs canon == readsAs "(AG (implies (after CreateOrder) (AF (or (after Receipt) (after SoldOut)))))" && readsAs canon != Json.null)
+  let twice := sexprOf (Json.str "(and (AF (after A)) (AF (after A)))")
+  expect "a part written twice is written once with a label" (twice == "(and #0=(AF (after A)) #0#)")
+  expect "a labelled part gives the same text" (sexprOf (Json.str "(and #7=(AF (after A)) #7#)") == twice)
+  let long := Json.str "(AG (implies (and (after CreateOrder) (after Quote) (after Pay)) (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut) (after Refunded)))))"
+  let pretty := sexprOf long "sexprPretty"
+  expect "a long formula breaks one argument per line"
+    ((pretty.splitOn "\n").length > 1 && (pretty.splitOn "\n").all (·.length ≤ 72))
+  expect "sexprPretty reads back to the same formula" (readsAs pretty == readsAs (sexprOf long) && readsAs pretty != Json.null)
+  let sharedLong := Json.str "(and #0=(AF (or (after Receipt) (after PaymentDeclined) (after SoldOut) (after Refunded))) (AG (implies (after CreateOrder) #0#)))"
+  expect "a labelled long formula's sexprPretty reads back"
+    (readsAs (sexprOf sharedLong "sexprPretty") == readsAs (sexprOf sharedLong) && readsAs (sexprOf sharedLong) != Json.null)
+  expect "a name that needs quotes stays quoted" (sexprOf (parseJ "{\"EF\": {\"after\": \"Pay now\"}}") == "(EF (after \"Pay now\"))")
+  let pred := explainOf (parseJ "{\"AG\": {\"predicate\": \"cache is consistent\"}}")
+  expect "a predicate atom has no s-expression"
+    (pred.getObjValD "sexpr" == Json.null && pred.getObjValD "sexprPretty" == Json.null &&
+     ((pred.getObjValAs? String "sexprNote").toOption.getD "").contains "predicate")
   for op in ["EX", "AX", "EF", "AF", "EG", "AG", "never", "not"] do
     expect s!"parses {op}" ((parseBounded (parseJ s!"\{\"{op}\": \"terminal\"}")).toOption.isSome)
   for op in ["EU", "AU", "EW", "AW", "implies", "stronglyImplies"] do
