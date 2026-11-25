@@ -45,15 +45,15 @@ The \emph{checker model} of $P$ is $M_P = (N, n_0, \to, L)$ where
 \end{itemize}
 \end{definition}
 
-The stutter makes $\to$ total, so every path is infinite and $\mathsf{AF}$ and
-$\mathsf{AG}$ mean what they mean in textbook CTL \citep{clarke1986automatic}. A node
+The stutter makes $\to$ total, so every path is infinite and $\mathsf{inevitably}$ and
+$\mathsf{always}$ mean what they mean in textbook CTL \citep{clarke1986automatic}. A node
 reached by a message is labelled by that message, and a node is identified by its
 state \emph{and} its label, so the model can be larger than the state graph: one state
 reached by two different messages is two nodes.
 
 \begin{definition}[Atoms]\label{def:atoms}
 At a node $n$ with $L(n) = (m, e)$:
-$\mathsf{on}(\ell)$ holds iff $m = \ell$; $\mathsf{end}$ holds iff $e$;
+$\mathsf{on}(\ell)$ holds iff $m = \ell$; $\mathsf{stop}$ holds iff $e$;
 $\mathsf{secret}(A, B, f)$ holds iff the step that reached $n$ carried a field ending in
 \texttt{\_secr} (named $f$ when $f$ is given) from $A$ to $B$ (when they are given).
 \end{definition}
@@ -62,61 +62,77 @@ So $\mathsf{on}(\ell)$ is true in the state a delivery of $\ell$ reaches, and on
 the next message: it means ``$\ell$ was just delivered'', not ``some time after $\ell$''.
 (Earlier versions of LeanFM spelled it \texttt{after}; LeanFM now refuses that spelling and names \texttt{on}.)
 
-LeanFM writes $\mathsf{end}$ as \texttt{terminal}. The atoms say only what the last step
-was and whether the session may stop. Everything else, in particular which typestate a
+The atoms say only what the last step was and whether the session may stop. Everything else, in particular which typestate a
 node is in, must be expressed with temporal operators, and that is the subject of
 Chapter~\ref{ch:faithful}.
 
 \section{CTL}
 
+A CTL formula is a statement made at one node about the tree of paths that start there.
+Formulas are built from the atoms with $\neg$, $\wedge$, $\vee$ and $\rightarrow$, two
+one-step operators, and four rules that each refer to themselves.
+
 \begin{definition}[CTL]\label{def:ctl}
-Formulas are
-$\varphi ::= \top \mid \bot \mid a \mid \neg\varphi \mid \varphi\wedge\varphi \mid
-\varphi\vee\varphi \mid \mathsf{EX}\,\varphi \mid \mathsf{AX}\,\varphi \mid
-\varphi\mathbin{\mathsf{EU}}\varphi \mid \varphi\mathbin{\mathsf{AU}}\varphi
-\mid \mathsf{EG}\,\varphi$
-over atoms $a$. At a node $n$ of a total model:
-$n \models \mathsf{EX}\,\varphi$ iff some successor satisfies $\varphi$;
-$n \models \mathsf{AX}\,\varphi$ iff every successor does;
-$n \models \varphi\mathbin{\mathsf{EU}}\psi$ iff some path from $n$ reaches a
-$\psi$-node through $\varphi$-nodes;
-$n \models \varphi\mathbin{\mathsf{AU}}\psi$ iff every path does;
-$n \models \mathsf{EG}\,\varphi$ iff some path stays in $\varphi$ forever.
-A model satisfies $\varphi$ when its start node does. Textbooks write $\varphi\mathbin{\mathsf{EU}}\psi$ as
-$\mathsf{E}[\varphi\,\mathsf{U}\,\psi]$; LeanFM writes the path quantifier and the until as one
-operator, so nothing in a formula reads as LTL.
+The two steps: $n \models \allNext\varphi$ when every successor of $n$ satisfies
+$\varphi$, and $n \models \someNext\varphi$ when some successor does.
+The four recursive rules, ``else'' being ``or'':
+\begin{align*}
+\varphi \mathbin{\mathsf{allUntil}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \allNext(\varphi \mathbin{\mathsf{allUntil}} \psi)\big)\\
+\varphi \mathbin{\mathsf{someUntil}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \someNext(\varphi \mathbin{\mathsf{someUntil}} \psi)\big)\\
+\varphi \mathbin{\mathsf{allUnless}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \allNext(\varphi \mathbin{\mathsf{allUnless}} \psi)\big)\\
+\varphi \mathbin{\mathsf{someUnless}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \someNext(\varphi \mathbin{\mathsf{someUnless}} \psi)\big)
+\end{align*}
+An \emph{until} counts only finite unfoldings of its rule: on the paths it speaks of,
+$\psi$ is reached. An \emph{unless} also counts the unfolding that goes on forever:
+$\varphi$ may hold all along and $\psi$ never come. A model satisfies a formula when its
+start node does.
 \end{definition}
 
-The rest are abbreviations, and LeanFM rewrites them into the core before it evaluates:
-$\mathsf{EF}\,\varphi = \top\mathbin{\mathsf{EU}}\varphi$,
-$\mathsf{AF}\,\varphi = \top\mathbin{\mathsf{AU}}\varphi$,
-$\mathsf{AG}\,\varphi = \neg\mathsf{EF}\,\neg\varphi$,
-$\mathsf{never}\,\varphi = \mathsf{AG}\,\neg\varphi$,
-$\varphi\rightarrow\psi = \neg\varphi\vee\psi$,
-$\varphi\mathbin{\mathsf{EW}}\psi = (\varphi\mathbin{\mathsf{EU}}\psi)\vee\mathsf{EG}\,\varphi$,
-$\varphi\mathbin{\mathsf{AW}}\psi = \neg(\neg\psi\mathbin{\mathsf{EU}}(\neg\varphi\wedge\neg\psi))$,
-the non-vacuous implication
-$\varphi \Rightarrow \psi = \mathsf{EF}\,\varphi \wedge \mathsf{AG}(\varphi\rightarrow\psi)$,
-and the functions for the shapes specifications repeat most:
-$\mathsf{outcomes}(a_1,\dots,a_n) = \mathsf{EF}\,a_1\wedge\dots\wedge\mathsf{EF}\,a_n\wedge\mathsf{AF}(a_1\vee\dots\vee a_n)$,
-each outcome possible and one of them inevitable (not $\mathsf{AF}\,a_1\vee\dots\vee\mathsf{AF}\,a_n$,
-which makes one particular outcome inevitable);
-$\mathsf{follows}(a,b_1,\dots,b_n) = \mathsf{AG}(a\rightarrow\mathsf{EX}\,b_1\wedge\dots\wedge\mathsf{EX}\,b_n\wedge\mathsf{AX}(b_1\vee\dots\vee b_n))$,
-what a faithful rule says of one typestate;
-$\mathsf{leadsTo}(a,b) = a \Rightarrow \mathsf{AF}\,b$, a response that cannot hold vacuously;
-and $\mathsf{precedes}(a,b) = \neg(\neg a\mathbin{\mathsf{EU}}b)$, no $b$ before $a$.
+Everything else is defined from these in one line:
+\begin{align*}
+\possibly\varphi &= \top \mathbin{\mathsf{someUntil}} \varphi & \inevitably\varphi &= \top \mathbin{\mathsf{allUntil}} \varphi\\
+\someAlways\varphi &= \varphi \mathbin{\mathsf{someUnless}} \bot & \always\varphi &= \varphi \mathbin{\mathsf{allUnless}} \bot\\
+\mathsf{never}\,\varphi &= \always\neg\varphi & \varphi\rightarrow\psi &= \neg\varphi\vee\psi
+\end{align*}
+$\possibly\varphi$: some path reaches $\varphi$. $\inevitably\varphi$: every path does.
+$\someAlways\varphi$: some path keeps $\varphi$ forever. $\always\varphi$: every path
+does, so $\varphi$ holds everywhere from here.
 
-A formula may also use words that read as English, each one operator with its path
-quantifier in the word: $\mathsf{possibly}$ ($\mathsf{EF}$), $\mathsf{inevitably}$
-($\mathsf{AF}$), $\mathsf{always}$ ($\mathsf{AG}$), and, where a plain word would leave the
-quantifier open, $\mathsf{all}$ or $\mathsf{some}$ in front: $\mathsf{someAlways}$
-($\mathsf{EG}$), $\mathsf{allNext}$ and $\mathsf{someNext}$ ($\mathsf{AX}$, $\mathsf{EX}$),
-and, infix, $\mathsf{allUntil}$, $\mathsf{someUntil}$, $\mathsf{allUnless}$ and
-$\mathsf{someUnless}$ ($\mathsf{AU}$, $\mathsf{EU}$, $\mathsf{AW}$, $\mathsf{EW}$). So
-\texttt{(always (implies (on Ask) (inevitably (on Reply))))} is
-$\mathsf{AG}(\mathit{Ask}\rightarrow\mathsf{AF}\,\mathit{Reply})$. LeanFM keeps a formula
-as written, and \texttt{explain\_formula} also answers it \emph{unfolded}: every word and
-function replaced by the core it means.
+The shapes specifications repeat most are functions, each defined by what it unfolds to:
+\begin{itemize}
+\item an implication that cannot hold vacuously, written \texttt{stronglyImplies},
+  \[\varphi \Rightarrow \psi = \possibly\varphi \wedge \always(\varphi\rightarrow\psi);\]
+\item each outcome possible and one of them inevitable,
+  \[\mathsf{outcomes}(a_1,\dots,a_n) = \possibly a_1\wedge\dots\wedge\possibly a_n\wedge
+  \inevitably(a_1\vee\dots\vee a_n)\]
+  (not $\inevitably a_1\vee\dots\vee\inevitably a_n$, which makes one particular outcome
+  inevitable);
+\item after $a$, exactly these may come next,
+  \[\mathsf{follows}(a,b_1,\dots,b_n) = \always\big(a\rightarrow\someNext b_1\wedge\dots\wedge
+  \someNext b_n\wedge\allNext(b_1\vee\dots\vee b_n)\big);\]
+\item $\mathsf{leadsTo}(a,b) = a \Rightarrow \inevitably b$: every $a$ is answered by a $b$;
+\item $\mathsf{precedes}(a,b) = \neg(\neg a\mathbin{\mathsf{someUntil}}b)$: no $b$ before $a$.
+\end{itemize}
+A state of the conversation has its own term, and a transition table is written with them:
+\begin{align*}
+(\mathsf{state}\ M) &= \on{M}\wedge\neg\mathsf{stop} &
+(\mathsf{state}\ M\ \mathsf{stop}) &= \on{M}\wedge\mathsf{stop}\\
+(\mathsf{transition}\ A\ B\ (C\ \mathsf{stop})) &= \mathsf{follows}(A, B, C\ \mathsf{stop}) &
+(\mathsf{final}\ A) &= \mathsf{follows}(A\ \mathsf{stop}, A\ \mathsf{stop})
+\end{align*}
+where a bare name in a transition is a state where the conversation must go on,
+$\mathsf{start}$ is the state before any message, and a final state is one where the
+conversation may stop and nothing else can happen.
+
+For readers who know the textbook terms: counting only finite unfoldings makes each until
+the \emph{least} fixpoint of its rule, and counting the infinite one too makes each unless
+the \emph{greatest}. Textbooks write $\varphi\mathbin{\mathsf{someUntil}}\psi$ as
+$\mathsf{E}[\varphi\,\mathsf{U}\,\psi]$, the steps as $\mathsf{EX}$ and $\mathsf{AX}$, and the
+derived operators as $\mathsf{EF}$, $\mathsf{AF}$, $\mathsf{EG}$, $\mathsf{AG}$
+\citep{clarke1986automatic}; LeanFM reads those letters too, and writes every formula in
+the words. \texttt{explain\_formula} answers any formula \emph{unfolded} into the steps
+and the untils, and LeanFM's tests check its evaluator against these definitions on every
+operator.
 
 \section{Bisimulation}
 

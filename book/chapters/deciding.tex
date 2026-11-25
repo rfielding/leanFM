@@ -69,22 +69,25 @@ atom, the atom itself \citep{filliatre2006hashconsing}. The key is compared in f
 every hash match, so a collision costs a comparison and never merges two different
 subformulas. A formula whose parts are already shared in memory, as the s-expression
 reader builds them from labels, is walked once per shared part, so building the DAG is
-linear in the DAG, not in the tree. Derived operators are rewritten into the core of
-Definition~\ref{def:ctl} with the abbreviations given there.
+linear in the DAG, not in the tree. Every word and function is rewritten with its one-line
+definition (Chapter~\ref{ch:checker}) into the two steps, $\mathsf{someUntil}$,
+$\mathsf{allUntil}$ and $\mathsf{someAlways}$; an unless is rewritten through
+$\varphi\mathbin{\mathsf{someUnless}}\psi = (\varphi\mathbin{\mathsf{someUntil}}\psi)\vee\someAlways\varphi$
+and $\varphi\mathbin{\mathsf{allUnless}}\psi = \neg(\neg\psi\mathbin{\mathsf{someUntil}}(\neg\varphi\wedge\neg\psi))$.
 
 \paragraph{Evaluation.} The DAG's nodes are numbered children first, and evaluated in
 that order. Each truth set is a packed bitset over the model's nodes, and the model's
 steps are held as offset and target arrays in both directions.
 \begin{itemize}
 \item $\neg$, $\wedge$, $\vee$ are word operations on bitsets.
-\item $\mathsf{EX}\,\varphi$ and $\mathsf{AX}\,\varphi$ are one pass over the steps.
-\item $\varphi\mathbin{\mathsf{EU}}\psi$ starts from the $\psi$-nodes and works
+\item $\someNext\varphi$ and $\allNext\varphi$ are one pass over the steps.
+\item $\varphi\mathbin{\mathsf{someUntil}}\psi$ starts from the $\psi$-nodes and works
   backwards: a predecessor that satisfies $\varphi$ and is not yet in the set joins it
   and is pushed on a worklist.
-\item $\varphi\mathbin{\mathsf{AU}}\psi$ keeps, per node, the number of its steps
+\item $\varphi\mathbin{\mathsf{allUntil}}\psi$ keeps, per node, the number of its steps
   not yet known to lead into the set; when it reaches zero at a $\varphi$-node, the
   node joins.
-\item $\mathsf{EG}\,\varphi$ starts from the $\varphi$-nodes and removes, by worklist,
+\item $\someAlways\varphi$ starts from the $\varphi$-nodes and removes, by worklist,
   every node left with no successor inside.
 \end{itemize}
 Each truth set is freed as soon as every node that reads it has been evaluated, and the
@@ -97,11 +100,11 @@ steps takes $O(D \cdot (n + m))$ time.
 \end{theorem}
 
 \begin{proof}
-Each DAG node is evaluated once. The Boolean operators and $\mathsf{EX}$, $\mathsf{AX}$
-take $O(n + m)$. In the $\mathsf{EU}$ worklist a node is pushed at most once, when it
+Each DAG node is evaluated once. The Boolean operators and $\someNext$, $\allNext$
+take $O(n + m)$. In the $\mathsf{someUntil}$ worklist a node is pushed at most once, when it
 joins, and each push examines that node's predecessor steps once: $O(n + m)$. In
-$\mathsf{AU}$ each step's counter is decremented at most once, when its target joins:
-$O(n + m)$. In $\mathsf{EG}$ each node is removed at most once and each removal
+$\mathsf{allUntil}$ each step's counter is decremented at most once, when its target joins:
+$O(n + m)$. In $\mathsf{someAlways}$ each node is removed at most once and each removal
 examines its predecessor steps once: $O(n + m)$.
 \end{proof}
 
