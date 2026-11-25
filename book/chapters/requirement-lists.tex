@@ -169,6 +169,12 @@ any & fails & failing & error \\
 \end{tabular}
 \end{center}
 
+A requirement \emph{fails} when its CTL does not hold or cannot be decided: a formula LeanFM
+disproves, or one naming a protocol or message that does not exist; a protocol with an issue
+\texttt{session\_check} reports. Evidence \emph{fails} when it contradicts the requirement: a
+log that does not conform, or a refinement that breaks a required formula. A test never fails
+here, since LeanFM does not run it; it can only make a requirement tested.
+
 A requirement an implementation does not name counts as sorry for it. The shop:
 
 \input{generated/req-orders-summary.tex}
