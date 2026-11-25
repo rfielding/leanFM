@@ -164,6 +164,9 @@ inductive Formula where
   | leadsTo (a b : Formula)
   /-- `b` never happens before `a` (and need not happen) -/
   | precedes (a b : Formula)
+  /-- a conversation state: just after `message`, where the conversation must go on or, with
+  `mayStop`, may stop (selfhost.mcp.logic.state) -/
+  | state (message : String) (mayStop : Bool)
   /-- a word that reads as English: `eventually f`, `a until b` (selfhost.mcp.logic.words) -/
   | word (w : Word) (fs : List Formula)
   | never (f : Formula)
@@ -204,6 +207,7 @@ partial def toJson : Formula → Json
   | ff => Json.bool false
   | atState s => Json.mkObj [("at", s)]
   | after m => Json.mkObj [("on", m)]
+  | state m b => Json.mkObj [("state", if b then Json.arr #[Json.str m, Json.str "stop"] else Json.str m)]
   | terminal => "stop"
   | field m n v => Json.mkObj [("field", Json.mkObj [("message", m), ("name", n), ("value", v)])]
   | predicate t => Json.mkObj [("predicate", t)]
@@ -245,6 +249,7 @@ partial def reading : Formula → String
   | ff => "false"
   | atState s => "the task is in state " ++ s
   | after m => m ++ " was just delivered"
+  | state m b => "the conversation is just after " ++ m ++ (if b then " and may stop" else " and must go on")
   | terminal => "the conversation may stop"
   | field m n v => "the last message was " ++ m ++ " with " ++ n ++ " = " ++ v
   | predicate t => "\"" ++ t ++ "\" holds (a predicate text, not an observable event)"
@@ -288,6 +293,7 @@ partial def symbols : Formula → String
   | ff => "false"
   | atState s => "@" ++ s
   | after m => m
+  | state m b => "state " ++ m ++ (if b then " stop" else "")
   | terminal => "stop"
   | field m n v => m ++ "." ++ n ++ " = " ++ v
   | predicate t => "\"" ++ t ++ "\""
@@ -353,6 +359,7 @@ def expand : Formula → Formula
   | leadsTo a b => stronglyImplies a (af b)
   | precedes a b => not (eu (not a) b)
   | word w fs => w.apply fs
+  | state m b => and [after m, if b then terminal else not terminal]
   | f => f
 
 /-- Negation pushed inward through the CTL dualities. -/
@@ -536,6 +543,7 @@ def retiredTerminal : String := "terminal is now stop: write stop, where the con
 
 def atomText : Formula → String
   | .after m => s!"(on {nameText m})"
+  | .state m b => s!"(state {nameText m}" ++ (if b then " stop)" else ")")
   | .atState x => s!"(at {nameText x})"
   | .claimed c => s!"(claimed {nameText c})"
   | .terminal => "stop"
@@ -895,6 +903,18 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       | _ => throw s!"{op} takes exactly one name"
     match op with
     | "on" => return .after (← nameArg ())
+    | "state" =>
+      let bad := "state takes a message and, where the conversation may stop, the word stop: (state M) or (state M stop)"
+      let m ← match ← next () with
+        | some (.name x) => checkString op x
+        | _ => throw bad
+      match ← next () with
+      | some .rp => return .state m false
+      | some (.name "stop") =>
+        match ← next () with
+        | some .rp => return .state m true
+        | _ => throw bad
+      | _ => throw bad
     | "after" => throw Dag.retiredAfter
     | "at" => return .atState (← nameArg ())
     | "claimed" => return .claimed (← nameArg ())
@@ -986,6 +1006,12 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
       match op with
       | "at" => atomStr .atState
       | "on" => atomStr .after
+      | "state" =>
+        let bad := "state takes a message, or [message, \"stop\"] where the conversation may stop"
+        match arg with
+        | .str m => return .state (← checkString op m) false
+        | .arr #[.str m, .str "stop"] => return .state (← checkString op m) true
+        | _ => throw bad
       | "after" => throw Dag.retiredAfter
       | "predicate" => atomStr .predicate
       | "derived" => atomStr .derived
@@ -1197,7 +1223,7 @@ def secretPathNames (field path : String) : Bool :=
 def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
   (f.atoms.filterMap fun
     | .atState s => if t.states.contains s then none else some ("unknown state " ++ s)
-    | .after m => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
+    | .after m | .state m _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .field m _ _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .claimed c => if t.transitions.any (·.claim == some c) then none
         else some ("no transition of task " ++ t.id ++ " makes the claim " ++ c)
@@ -1341,6 +1367,7 @@ partial def satTree (m : Model) : Formula → Array Bool
   | .ff => m.all false
   | .atState s => m.nodes.map (·.state == s)
   | .after msg => m.nodes.map (·.message == some msg)
+  | f@(.state ..) => satTree m f.expand
   | .terminal => m.nodes.map (fun n => m.task.terminals.contains n.state)
   | .claimed c => m.nodes.map (·.claims.contains c)
   | .secret a b f => m.nodes.map fun n =>

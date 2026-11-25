@@ -8,13 +8,14 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 123 := by native_decide
+example : clauses.length = 124 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.session.navigator" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.server-info" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.book.listings" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.logic.words" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.logic.on" = true := by native_decide
+example : (clauses.map (·.id)).contains "selfhost.mcp.logic.state" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.context" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.lazy" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.probability" = true := by native_decide
@@ -29,7 +30,7 @@ example : logicTask.transitions.any (fun t => t.message == "LogicInputRejected" 
 example : (spec.requiredProofs.map (·.name)).contains "Submitted logic never runs as code" = true := by native_decide
 example : LeanFM.LLMGenerated.McpLogicImplementation.errors = [] := by native_decide
 -- every logic clause is implemented, knows, protocol, reassembly and the view included
-example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 14 := by native_decide
+example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 15 := by native_decide
 -- the session-type library is specified, and every clause has a decision and a test
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length = 75 := by native_decide
 example : LeanFM.LLMGenerated.SessionImplementation.errors = [] := by native_decide

@@ -617,6 +617,21 @@ def main : IO Unit := do
      has (reasonOf (call "explain_formula" "{\"formula\": {\"AF\": \"terminal\"}}")) "terminal is now stop")
   expect "toJson writes on and stop" ((Formula.and [.after "A", .terminal]).toJson.compress == "{\"and\":[{\"on\":\"A\"},\"stop\"]}")
   expect "the readings say on delivery and may stop" ((Formula.after "A").reading == "A was just delivered" && Formula.terminal.reading == "the conversation may stop")
+  -- a conversation state is one term: (state M) must go on, (state M stop) may stop (selfhost.mcp.logic.state)
+  expect "(state A) and (state A stop) read the same in both forms"
+    (readsAs "(and (state A) (state B stop))" != Json.null &&
+     (((parseBounded (parseJ "{\"and\": [{\"state\": \"A\"}, {\"state\": [\"B\", \"stop\"]}]}")).toOption.map Formula.toJson).getD Json.null) == readsAs "(and (state A) (state B stop))")
+  expect "state is written back as written" (sexprOf (Json.str "(follows (state A) (state B stop))") == "(follows (state A) (state B stop))")
+  expect "state notation" (notationOf "{\"follows\": [{\"state\": \"A\"}, {\"state\": [\"B\", \"stop\"]}]}" == "follows(state A, state B stop)")
+  expect "(state A go) and (state) are refused"
+    ((parseBounded (Json.str "(state A go)")).toOption.isNone && (parseBounded (Json.str "(state)")).toOption.isNone &&
+     (parseBounded (parseJ "{\"state\": [\"A\", \"go\"]}")).toOption.isNone)
+  let st := "{\"states\": [\"a\", \"b\", \"c\"], \"initial\": \"a\", \"terminals\": [\"c\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"b\", \"message\": \"A\"}, {\"src\": \"b\", \"dst\": \"c\", \"message\": \"B\"}]}"
+  let onSt (f : String) := verdictOf (call "check_ctl" ("{\"task\": " ++ st ++ ", \"formula\": \"" ++ f ++ "\"}"))
+  expect "state decides as on with stop or not stop"
+    (onSt "(follows (state A) (state B stop))" == "proved" && onSt "(follows (state A) (state B))" == "disproved" &&
+     onSt "(possibly (state A))" == onSt "(possibly (and (on A) (not stop)))" && onSt "(possibly (state A stop))" == "disproved")
+  expect "a state naming an unknown message is refused" (onSt "(possibly (state Nope))" == "rejected")
   -- words that read as English and unfold to one primitive each (selfhost.mcp.logic.words)
   for (sx, js, note, prim) in [
       ("(possibly (on A))", "{\"possibly\": {\"on\": \"A\"}}", "possibly A", "(EF (on A))"),
