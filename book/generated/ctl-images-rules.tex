@@ -1,16 +1,16 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 start
-  ¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop
+  start
 
 typestate 0: (start)
-  follows(¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop, state GetImage)
+  transition(start, GetImage)
 
 typestate 1: GetImage
-  follows(state GetImage, state Image stop, state NotFound stop)
+  transition(GetImage, Image stop, NotFound stop)
 
 typestate 2: Image (may stop)
-  follows(state Image stop, state Image stop)
+  final(Image)
 
 typestate 3: NotFound (may stop)
-  follows(state NotFound stop, state NotFound stop)
+  final(NotFound)
 \end{lstlisting}

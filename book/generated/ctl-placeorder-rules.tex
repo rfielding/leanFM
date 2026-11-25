@@ -1,34 +1,34 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 start
-  ¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop
+  start
 
 typestate 0: (start)
-  follows(¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop, state CreateOrder)
+  transition(start, CreateOrder)
 
 typestate 1: CreateOrder
-  follows(state CreateOrder, state Quote, state SoldOut stop)
+  transition(CreateOrder, Quote, SoldOut stop)
 
 typestate 2: Quote
-  follows(state Quote, state Pay)
+  transition(Quote, Pay)
 
 typestate 3: SoldOut (may stop)
-  follows(state SoldOut stop, state SoldOut stop)
+  final(SoldOut)
 
 typestate 4: Pay
-  follows(state Pay, state Charge)
+  transition(Pay, Charge)
 
 typestate 5: Charge
-  follows(state Charge, state Charged, state Declined)
+  transition(Charge, Charged, Declined)
 
 typestate 6: Charged
-  follows(state Charged, state Receipt stop)
+  transition(Charged, Receipt stop)
 
 typestate 7: Declined
-  follows(state Declined, state PaymentDeclined stop)
+  transition(Declined, PaymentDeclined stop)
 
 typestate 8: Receipt (may stop)
-  follows(state Receipt stop, state Receipt stop)
+  final(Receipt)
 
 typestate 9: PaymentDeclined (may stop)
-  follows(state PaymentDeclined stop, state PaymentDeclined stop)
+  final(PaymentDeclined)
 \end{lstlisting}
