@@ -39,7 +39,7 @@ answer (excerpt)
    "readingIndented":
    "on every path, always:\n  if:\n    (#0) Image was just delivered and the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
    "notation": "always ((Image ∧ stop) → (someNext (Image ∧ stop) ∧ allNext (Image ∧ stop)))",
-   "name": "typestate 2: Image (may end)",
+   "name": "typestate 2: Image (may stop)",
    "formula":
    "(always (implies #0=(and (on Image) stop) (and (someNext #0#) (allNext (or #0#)))))"},
   {"subformulas": 9,
@@ -49,7 +49,7 @@ answer (excerpt)
    "on every path, always:\n  if:\n    (#0) NotFound was just delivered and the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
    "notation":
    "always ((NotFound ∧ stop) → (someNext (NotFound ∧ stop) ∧ allNext (NotFound ∧ stop)))",
-   "name": "typestate 3: NotFound (may end)",
+   "name": "typestate 3: NotFound (may stop)",
    "formula":
    "(always (implies #0=(and (on NotFound) stop) (and (someNext #0#) (allNext (or #0#)))))"}],
  "ruleCount": 5,

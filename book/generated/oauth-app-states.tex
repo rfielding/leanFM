@@ -28,4 +28,65 @@ def step : State -> Event -> Option State
   | .s7, { src := .app, dst := .browser, payload := .signInFailed _, .. } => some .done
   | .s8, { src := .app, dst := .browser, payload := .signInFailed _, .. } => some .done
   | _, _ => none
+
+/-- Whether the session may stop here. -/
+def final : State -> Bool
+  | .done => true
+  | _ => false
+
+/-- The events App takes part in. -/
+def involves (e : Event) : Bool := e.src == .app || e.dst == .app
+
+/-- Whether one session's events, in order, are a complete run of App. -/
+def accepts (evs : List Event) : Bool :=
+  match (evs.filter involves).foldlM step start with
+  | some s => final s
+  | none => false
+
+end App
+
+/-! Idp: its states, the typestate states of its projection. -/
+namespace Idp
+
+inductive State where
+  | s1
+  | s2
+  | s3
+  | s4
+  | s5
+  | s6
+  | done
+  deriving Repr, BEq, DecidableEq
+
+def start : State := .s1
+
+/-- The step an event takes Idp from a state, where the protocol allows it. -/
+def step : State -> Event -> Option State
+  | .s1, { src := .browser, dst := .idp, payload := .authorize _, .. } => some .s2
+  | .s2, { src := .idp, dst := .browser, payload := .loginPage _, .. } => some .s3
+  | .s3, { src := .browser, dst := .idp, payload := .credentials _, .. } => some .s4
+  | .s4, { src := .idp, dst := .browser, payload := .redirectBack _, .. } => some .s5
+  | .s4, { src := .idp, dst := .browser, payload := .deniedBack _, .. } => some .done
+  | .s5, { src := .app, dst := .idp, payload := .exchangeCode _, .. } => some .s6
+  | .s6, { src := .idp, dst := .app, payload := .tokens _, .. } => some .done
+  | .s6, { src := .idp, dst := .app, payload := .badCode _, .. } => some .done
+  | _, _ => none
+
+/-- Whether the session may stop here. -/
+def final : State -> Bool
+  | .done => true
+  | _ => false
+
+/-- The events Idp takes part in. -/
+def involves (e : Event) : Bool := e.src == .idp || e.dst == .idp
+
+/-- Whether one session's events, in order, are a complete run of Idp. -/
+def accepts (evs : List Event) : Bool :=
+  match (evs.filter involves).foldlM step start with
+  | some s => final s
+  | none => false
+
+end Idp
+
+end SignIn
 \end{lstlisting}

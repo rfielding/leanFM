@@ -8,9 +8,9 @@ typestate 0: (start)
 typestate 1: GetImage
   always ((GetImage ∧ ¬stop) → (someNext (Image ∧ stop) ∧ someNext (NotFound ∧ stop) ∧ allNext ((Image ∧ stop) ∨ (NotFound ∧ stop))))
 
-typestate 2: Image (may end)
+typestate 2: Image (may stop)
   always ((Image ∧ stop) → (someNext (Image ∧ stop) ∧ allNext (Image ∧ stop)))
 
-typestate 3: NotFound (may end)
+typestate 3: NotFound (may stop)
   always ((NotFound ∧ stop) → (someNext (NotFound ∧ stop) ∧ allNext (NotFound ∧ stop)))
 \end{lstlisting}

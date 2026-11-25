@@ -11,7 +11,7 @@ typestate 1: CreateOrder
 typestate 2: Quote
   always ((Quote ∧ ¬stop) → (someNext (Pay ∧ ¬stop) ∧ allNext (Pay ∧ ¬stop)))
 
-typestate 3: SoldOut (may end)
+typestate 3: SoldOut (may stop)
   always ((SoldOut ∧ stop) → (someNext (SoldOut ∧ stop) ∧ allNext (SoldOut ∧ stop)))
 
 typestate 4: Pay
@@ -26,9 +26,9 @@ typestate 6: Charged
 typestate 7: Declined
   always ((Declined ∧ ¬stop) → (someNext (PaymentDeclined ∧ stop) ∧ allNext (PaymentDeclined ∧ stop)))
 
-typestate 8: Receipt (may end)
+typestate 8: Receipt (may stop)
   always ((Receipt ∧ stop) → (someNext (Receipt ∧ stop) ∧ allNext (Receipt ∧ stop)))
 
-typestate 9: PaymentDeclined (may end)
+typestate 9: PaymentDeclined (may stop)
   always ((PaymentDeclined ∧ stop) → (someNext (PaymentDeclined ∧ stop) ∧ allNext (PaymentDeclined ∧ stop)))
 \end{lstlisting}
