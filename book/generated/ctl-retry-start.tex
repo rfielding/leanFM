@@ -1,3 +1,21 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
-(and (and (not (or (after Ask) (after Ok) (after Busy) (after GiveUp))) #0=(not terminal)) (EX #1=(and #2=(and (after Ask) #0#) (EX #3=(and #4=(and (after Ok) terminal) (EX #5=(and #4# #6=(EX #4#) (AX (or #4#)))) (AX (or #5#)))) (EX #7=(and #8=(and (after Busy) #0#) (EX #9=(and #2# #6# (EX #8#) (AX (or #4# #8#)))) (AX (or #9#)))) (AX (or #3# #7#)))) (AX (or #1#)))
+(and
+  (and
+    (not (or (after Ask) (after Ok) (after Busy) (after GiveUp)))
+    #0=(not terminal))
+  (EX
+    #1=(and
+      #2=(and (after Ask) #0#)
+      (EX
+        #3=(and
+          #4=(and (after Ok) terminal)
+          (EX #5=(and #4# #6=(EX #4#) (AX (or #4#))))
+          (AX (or #5#))))
+      (EX
+        #7=(and
+          #8=(and (after Busy) #0#)
+          (EX #9=(and #2# #6# (EX #8#) (AX (or #4# #8#))))
+          (AX (or #9#))))
+      (AX (or #3# #7#))))
+  (AX (or #1#)))
 \end{lstlisting}

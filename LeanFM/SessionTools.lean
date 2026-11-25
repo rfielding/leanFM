@@ -1818,7 +1818,7 @@ def faithful (p : Protocol) (fa : Json) (args : Json := Json.mkObj []) : Except 
     let row := fun (n, f) =>
       let d := Logic.Dag.ofFormula f
       let small := d.treeSize (Logic.treeLimit + 1) ≤ Logic.treeLimit
-      Json.mkObj ([("name", Json.str n), ("formula", Json.str d.toSexpr), ("subformulas", toJson d.size)] ++
+      Json.mkObj ([("name", Json.str n), ("formula", Json.str d.toSexpr), ("sexprPretty", Json.str d.toSexprPretty), ("subformulas", toJson d.size)] ++
         (if small then [("notation", Json.str f.symbols), ("readingIndented", Json.str d.toReadingIndented)] else []))
     return fit <| Json.mkObj (base ++
       [ ("verdict", Json.str "rules")

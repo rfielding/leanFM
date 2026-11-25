@@ -265,7 +265,8 @@ def main : IO Unit := do
       let lines := rs.map fun (n, f) => let d := LeanFM.Logic.Dag.ofFormula f; s!"{n}: {d.treeSize 1000000000} nodes as a tree, {d.size} distinct subformulas"
       write "ctl-retry-sizes.tex" (listing ("\n".intercalate lines))
       let start := LeanFM.Logic.Dag.ofFormula ((rs.headD ("", .tt)).2)
-      write "ctl-retry-start.tex" (listing start.toSexpr)
+      write "ctl-retry-start.tex" (listing start.toSexprPretty)
+      write "ctl-retry-start-english.tex" (listing start.toReadingIndented)
   write "ctl-constructs.tex" ("\\begin{tabular}{@{}llrrrl@{}}\n\\toprule\nConstruct & Example & Nodes & Typestates & Lookahead & Deterministic \\\\\n\\midrule\n" ++ "\n".intercalate crow.toList ++ "\n\\bottomrule\n\\end{tabular}\n")
   -- the protocols LeanFM carries
   let corpus : List (String × String) :=

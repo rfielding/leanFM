@@ -1,0 +1,40 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+all of these:
+  - all of these:
+      - it is not the case that:
+          at least one of these:
+            - Ask was just delivered
+            - Ok was just delivered
+            - Busy was just delivered
+            - GiveUp was just delivered
+      - (#0) it is not the case that the task has ended
+  - on some path, at the next step:
+      (#1) all of these:
+        - (#2) Ask was just delivered and the formula marked #0
+        - on some path, at the next step:
+            (#3) all of these:
+              - (#4) Ok was just delivered and the task has ended
+              - on some path, at the next step:
+                  (#5) all of these:
+                    - the formula marked #4
+                    - (#6) on some path, at the next step:
+                        the formula marked #4
+                    - on every path, at the next step:
+                        the formula marked #4
+              - on every path, at the next step the formula marked #5
+        - on some path, at the next step:
+            (#7) all of these:
+              - (#8) Busy was just delivered and the formula marked #0
+              - on some path, at the next step:
+                  (#9) all of these:
+                    - the formula marked #2
+                    - the formula marked #6
+                    - on some path, at the next step:
+                        the formula marked #8
+                    - on every path, at the next step:
+                        the formula marked #4 or the formula marked #8
+              - on every path, at the next step the formula marked #9
+        - on every path, at the next step:
+            the formula marked #3 or the formula marked #7
+  - on every path, at the next step the formula marked #1
+\end{lstlisting}

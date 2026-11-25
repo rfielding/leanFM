@@ -543,6 +543,12 @@ def readClauses (op : String) (ks : Array Nat) : List (String × List Nat × Boo
   | "precedes" => [("on every path, this never holds:", k 1, false), ("unless this has held at or before that point:", k 0, false)]
   | _ => [(op ++ ":", ks.toList, true)]
 
+/-- A one-part `and` or `or` says nothing its part does not: the reading goes to the part, unless the
+wrapper is itself shared (reading through it twice could repeat its part). -/
+partial def unwrap (d : Dag) (parents : Array Nat) (i : Nat) : Nat :=
+  let o := d.ops[i]!
+  if (o == "and" || o == "or") && (d.kids[i]!).size == 1 && (parents[i]?.getD 0) ≤ 1 then unwrap d parents (d.kids[i]!)[0]! else i
+
 /-- Node `i`'s English on one line, threading labels as `flatAt` does: a part with two or more
 parents is marked (#n) where it is first read, and is "the formula marked #n" after. -/
 partial def readFlat (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashMap Nat Nat) :
@@ -555,7 +561,8 @@ partial def readFlat (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.Has
     else if op == "true" || op == "false" then (op, labels)
     else
       let (labels, pre) := if (parents[i]?.getD 0) ≥ 2 then (labels.insert i labels.size, s!"(#{labels.size}) ") else (labels, "")
-      let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
+      let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k0 =>
+        let k := unwrap d parents k0
         let o := d.ops[k]!
         let plain := o == "atom" || o == "true" || o == "false" || acc.2.contains k
         let (t, l) := readFlat d parents k acc.2
@@ -579,13 +586,13 @@ partial def toReadingIndented (d : Dag) (width : Nat := sexprWidth) : String :=
       let (lines, labels) := (readClauses op d.kids[i]!).foldl
         (fun (acc : List String × Std.HashMap Nat Nat) (lead, ks, bullet) =>
           let (ls, labels) := ks.foldl (fun (acc2 : List String × Std.HashMap Nat Nat) k =>
-            let (kl, l) := go k (indent + (if bullet then 4 else 2)) acc2.2
+            let (kl, l) := go (unwrap d parents k) (indent + (if bullet then 4 else 2)) acc2.2
             let kl := if bullet then (match kl with | [] => [] | h :: t => ("  - " ++ h) :: t.map ("    " ++ ·))
               else kl.map ("  " ++ ·)
             (acc2.1 ++ kl, l)) ([], acc.2)
           (acc.1 ++ [lead] ++ ls, labels)) ([], labels)
       ((match lines with | [] => [] | h :: t => (mark ++ h) :: t), labels)
-  "\n".intercalate (go (d.size - 1) 0 {}).1
+  "\n".intercalate (go (unwrap d parents (d.size - 1)) 0 {}).1
 
 /-- The first atom kind the s-expression form refuses, if the formula has one. -/
 def sexprBlocker (d : Dag) : Option String :=
@@ -1747,7 +1754,7 @@ def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
   let reading := if asTree then f.reading else s!"a formula of {dag.size} distinct subformulas, too large to read out as a tree"
   let common : List (String × Json) :=
     [("task", t.id), ("formula", if asTree then f.toJson else Json.str dag.toSexpr),
-     ("notation", if asTree then f.symbols else dag.toSexpr), ("mode", Formula.mode f), ("terminalConvention", terminalConvention),
+     ("notation", if asTree then f.symbols else dag.toSexprPretty), ("mode", Formula.mode f), ("terminalConvention", terminalConvention),
      ("readingIndented", if dag.size ≤ treeLimit then Json.str dag.toReadingIndented else Json.null)]
   let unsupported := unsupportedIn f
   if !unsupported.isEmpty then

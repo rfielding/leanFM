@@ -755,6 +755,10 @@ def ctlOver (f : String) : Except String Json := ctl (Json.mkObj [("lean", Json.
 #guard verdict (ctlOver "(leadsTo (after Pay) (or (after Receipt) (after PaymentDeclined)))") == "proved"
 #guard verdict (ctlOver "(precedes (after Quote) (after Pay))") == "proved"
 #guard verdict (ctlOver "(precedes (after Pay) (after Quote))") == "disproved"
+-- each faithful rule is also laid out for reading, beside its one-line formula (selfhost.session.ctl-scale)
+def ruleRows : List Json := (((field (ctl (Json.mkObj [("lean", Json.str ordersProtocol), ("faithful", Json.str "rules")])) "rules").getArr?).toOption.getD #[]).toList
+#guard !ruleRows.isEmpty && ruleRows.all (fun r => (r.getObjValAs? String "sexprPretty").toOption.isSome)
+#guard ruleRows.any (fun r => ((r.getObjValAs? String "sexprPretty").toOption.getD "").contains "\n")
 -- session_ctl answers carry the indented reading (selfhost.mcp.logic.explain)
 #guard ((field (ctlOver "(leadsTo (after Pay) (after Charge))") "readingIndented").getStr?.toOption.getD "").startsWith "it is possible that eventually:"
 
