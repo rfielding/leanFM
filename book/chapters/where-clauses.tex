@@ -57,7 +57,8 @@ elsewhere; including it \texttt{with sessionId} binds that field to the caller's
 
 GoServer is a multiplayer Go server in this repository. A person signs in, which mints
 a session; a game runs as a session of its own; a seat at a game belongs to both the
-person and the game.
+person and the game. Both protocols are excerpts of GoServer's specification, which
+defines the \texttt{Challenge} and \texttt{TakeSeatP} they include.
 
 \input{generated/ctl-goserver-gamep.tex}
 \input{generated/ctl-goserver-seatp.tex}

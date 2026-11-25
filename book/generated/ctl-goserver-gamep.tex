@@ -1,4 +1,5 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+-- from projects/GoServer/source/cmd/demo/static/session/goserver.leanfm
 protocol GameP (Person, Server, Bot) given sessionId {
   g: CreateGame from Person to Server route "POST /api/create_game";
   choice {

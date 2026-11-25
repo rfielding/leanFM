@@ -1,4 +1,5 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+-- from projects/GoServer/source/cmd/demo/static/session/goserver.leanfm
 protocol SeatP (Person, Server) given sessionId gameId {
   include TakeSeatP Person Server with sessionId, gameId;
   par {

@@ -1,4 +1,17 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+structure Login where
+  user : String
+structure LoggedIn where
+  sid : Header (Fresh String)
+structure Logout where
+  sid : Header (Link String)
+structure Create where
+  token : Header (Link String)
+  item : String
+structure Made where
+  token : Header (Link String)
+  orderId : Fresh String
+
 protocol Order (Client, Shop) given token {
   c: Create from Client to Shop;
   Made from Shop to Client cause c;

@@ -148,7 +148,10 @@ number of games are going on at once.
 \emph{paste the other protocol's body here}, after two substitutions: its roles are
 renamed to roles of the includer, and the fields it was promised are renamed to fields
 the includer already has. Here a site lets a customer log in, place an order, and log
-out; placing an order is a protocol of its own.
+out; placing an order is a protocol of its own. Two field types are new:
+\texttt{Fresh} marks a value minted by that message (\texttt{LoggedIn} mints the session
+id \texttt{sid}), and \texttt{Link} a value that names one minted earlier
+(Chapter~\ref{ch:where} gives identity its own sections).
 
 \input{generated/ctl-include.tex}
 
@@ -166,7 +169,8 @@ Read the two new pieces of syntax as a function definition and a call.
 \end{itemize}
 
 So Site is the same protocol as this one, written out by hand, in which the order's
-messages carry the field under the site's name \texttt{sid} instead of \texttt{token}:
+messages carry the field under the site's name \texttt{sid} instead of \texttt{token}
+(the order's structures change accordingly):
 
 \input{generated/ctl-include-pasted.tex}
 

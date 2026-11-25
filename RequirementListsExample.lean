@@ -68,12 +68,13 @@ def main : IO Unit := do
   unless errs.isEmpty do throw (IO.userError s!"example files that do not read: {errs.size}")
   let reqText ← IO.FS.readFile reqFile
   let implText ← IO.FS.readFile implFile
-  write "req-orders-protocol.tex" (listing (between reqText "protocol PlaceOrder" (some "requirements {")))
-  write "req-orders-map.tex" (listing (between reqText "requirements {"))
+  -- every listing passes the checker as printed, or says which file it is an excerpt of (selfhost.book.listings)
+  write "req-orders-protocol.tex" (listing (between reqText "/-- What the client orders. -/" (some "requirements {")))
+  write "req-orders-map.tex" (listing (s!"-- from {reqFile}\n" ++ between reqText "requirements {"))
   write "req-shopimpl.tex" (listing (between implText "protocol ShopImpl" (some "implementation ")))
-  write "req-orders-impl.tex" (listing (between implText "implementation " (some "-- Where ShopImpl runs")))
+  write "req-orders-impl.tex" (listing (s!"-- from {implFile}\n" ++ between implText "implementation " (some "-- Where ShopImpl runs")))
   -- where ShopImpl runs: the deployment block, its view and a refused variant (selfhost.session.deployment)
-  write "req-orders-deployment.tex" (listing (between implText "deployment Production"))
+  write "req-orders-deployment.tex" (listing (s!"-- from {implFile}\n" ++ between implText "deployment Production"))
   for theme in ["light", "dark"] do
     let d ← IO.ofExcept (LeanFM.SessionTools.deployment (Json.mkObj [("lean", Json.str implText), ("theme", Json.str theme)]))
     unless g d "verdict" == "placed" do throw (IO.userError s!"the Orders deployment is not placed: {g d "reading"}")

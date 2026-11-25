@@ -49,6 +49,41 @@ def projectViewOffTests (offList : String) : IO Unit := do
   let pvOff ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":77,\"method\":\"tools/call\",\"params\":{\"name\":\"project_view\",\"arguments\":{\"stage\":\"chat\"}}}"
   expect "MCP refuses project_view where it is off" (pvOff.body.contains "project_view is off on this host")
 
+/-- server_info (clause selfhost.mcp.server-info, LeanFM/ServerInfo.lean): off, unlisted and refused, and
+serverInfo.version without a commit, until the executable turns the switch on. -/
+def serverInfoOffTests (offList : String) : IO Unit := do
+  let expect (label : String) (ok : Bool) : IO Unit :=
+    if ok then IO.println s!"ok: {label}" else throw <| IO.userError s!"failed: {label}"
+  expect "MCP does not list server_info on a host that has not enabled it" (!offList.contains "\"server_info\"")
+  let off ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":78,\"method\":\"tools/call\",\"params\":{\"name\":\"server_info\",\"arguments\":{}}}"
+  expect "MCP refuses server_info where it is off" (off.body.contains "server_info is off on this host" && !off.body.contains "\"commit\"")
+  LeanFM.ServerInfo.capture
+  let init ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":79,\"method\":\"initialize\",\"params\":{}}"
+  expect "MCP serverInfo.version names no commit where server_info is off" (init.body.contains "\"version\":\"0.1.0\"")
+
+/-- server_info once enabled and captured in the checkout: its commit is git's HEAD. -/
+def serverInfoTests : IO Unit := do
+  let expect (label : String) (ok : Bool) : IO Unit :=
+    if ok then IO.println s!"ok: {label}" else throw <| IO.userError s!"failed: {label}"
+  let list ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":80,\"method\":\"tools/list\"}"
+  expect "MCP lists server_info once enabled" (list.body.contains "\"name\":\"server_info\"")
+  let r ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":81,\"method\":\"tools/call\",\"params\":{\"name\":\"server_info\",\"arguments\":{}}}"
+  let sc := ((Json.parse r.body).toOption.getD Json.null).getObjValD "result" |>.getObjValD "structuredContent"
+  let head := ((← IO.Process.output { cmd := "git", args := #["rev-parse", "HEAD"] }).stdout.splitOn "\n").headD ""
+  let commit := (sc.getObjValAs? String "commit").toOption.getD ""
+  expect "server_info's commit is git rev-parse HEAD" (LeanFM.ServerInfo.isCommit head && commit == head)
+  expect "server_info counts changed files and is not stale" ((sc.getObjValAs? Nat "changedFiles").isOk && (sc.getObjValAs? Bool "stale").toOption == some false)
+  let init ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":82,\"method\":\"initialize\",\"params\":{}}"
+  expect "MCP serverInfo.version names the short commit where server_info is on" (init.body.contains s!"\"version\":\"0.1.0+{(head.take 12).toString}")
+  let arg ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":83,\"method\":\"tools/call\",\"params\":{\"name\":\"server_info\",\"arguments\":{\"cmd\":\"ls\"}}}"
+  expect "server_info refuses an argument" (arg.body.contains "server_info takes no arguments" && !arg.body.contains "\"commit\"")
+  expect "isCommit accepts 40 and 64 lowercase hex digits only"
+    (LeanFM.ServerInfo.isCommit (String.ofList (List.replicate 40 'a')) && LeanFM.ServerInfo.isCommit (String.ofList (List.replicate 64 '0')) &&
+     !LeanFM.ServerInfo.isCommit (String.ofList (List.replicate 39 'a')) && !LeanFM.ServerInfo.isCommit (String.ofList (List.replicate 40 'A')) &&
+     !LeanFM.ServerInfo.isCommit "main" && !LeanFM.ServerInfo.isCommit "fatal: not a git repository: /home/x/.git")
+  expect "server_info is stale only when the executable is newer than at start"
+    (LeanFM.ServerInfo.isStale 100 101 && !LeanFM.ServerInfo.isStale 100 100)
+
 /-- Session tools load a project's protocol a file at a time (clause selfhost.mcp.session.project-files).
 LeanFM and GoServer are committed, so every protocol file either lists must load through
 `{project, file}` and check cleanly (session_check answers, not rejected); LeanFM's own protocol has
@@ -799,7 +834,9 @@ def main : IO Unit := do
   expect "MCP refuses server_logs where it is off" (offCall.body.contains "server_logs is off on this host" && !offCall.body.contains "\"lines\"")
   projectViewOffTests offList.body
   projectFilesOffTests
+  serverInfoOffTests offList.body
   LeanFM.ServerLogs.enable
+  serverInfoTests
   projectViewTests
   projectFilesTests
   let onList ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":72,\"method\":\"tools/list\"}"
@@ -825,7 +862,7 @@ def main : IO Unit := do
   expect "MCP every tool LeanFM's checks run in lists the limits argument"
     (!listedTools.isEmpty && listedTools.all fun t =>
       let n := (t.getObjValAs? String "name").toOption.getD ""
-      n == "server_logs" || n == "project_view" || (((t.getObjValD "inputSchema").getObjValD "properties").getObjVal? "limits").isOk)
+      n == "server_logs" || n == "project_view" || n == "server_info" || (((t.getObjValD "inputSchema").getObjValD "properties").getObjVal? "limits").isOk)
   expect "MCP the instructions say how to raise a limit and list the limits" (LeanFM.MCP.instructions.contains "\"limits\": {\"states\": 100000}" && LeanFM.MCP.instructions.contains "datasetEvents 1000000")
   expect "MCP tools/list stays under the client's result limit" (listed.body.length < 100000)
   let imagesLean := (Json.str "protocol Images (Browser, Server) {\n  g: GetImage from Browser to Server;\n  choice {\n    Image from Server to Browser cause g;\n  } or {\n    NotFound from Server to Browser cause g;\n  }\n}").compress

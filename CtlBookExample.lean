@@ -118,20 +118,27 @@ protocol Images (Browser, Server) {
   }
 }"
 
-/-- `include`, shown on a login that mints `sid` and an order protocol that is given it as `token`. -/
-def includeStructs (tokenField : String) : String := s!"structure Login where
+/-! `include`, shown on a login that mints `sid` and an order protocol that is given it as `token`. -/
+
+/-- The site's own messages: LoggedIn mints the session id sid, Logout names it again. -/
+def siteStructs : String := "structure Login where
   user : String
 structure LoggedIn where
   sid : Header (Fresh String)
-structure Create where
+structure Logout where
+  sid : Header (Link String)
+"
+
+/-- The order's messages, carrying the session id under `tokenField`. -/
+def orderStructs (tokenField : String) : String := s!"structure Create where
   {tokenField} : Header (Link String)
   item : String
 structure Made where
   {tokenField} : Header (Link String)
   orderId : Fresh String
-structure Logout where
-  sid : Header (Link String)
 "
+
+def includeStructs (tokenField : String) : String := siteStructs ++ orderStructs tokenField
 
 def includeProtocols : String := "protocol Order (Client, Shop) given token {
   c: Create from Client to Shop;
@@ -163,10 +170,11 @@ def main : IO Unit := do
 
   /- Part I: the language -/
   -- include: the same protocol written with include and with Order's body pasted in place
-  let withInclude := includeStructs "token" ++ includeProtocols
-  let pasted := includeStructs "sid" ++ pastedProtocol
-  write "ctl-include.tex" (listing includeProtocols)
-  write "ctl-include-pasted.tex" (listing pastedProtocol)
+  let withInclude := includeStructs "token" ++ "\n" ++ includeProtocols
+  let pasted := includeStructs "sid" ++ "\n" ++ pastedProtocol
+  -- the listings show the checked text: every field the protocols name is declared in it
+  write "ctl-include.tex" (listing withInclude)
+  write "ctl-include-pasted.tex" (listing pasted)
   for theme in ["light", "dark"] do
     let d ← tool "session_diagram" (diagram (withLean withInclude [("theme", Json.str theme)]))
     write s!"ctl-include-{theme}.svg" (str d "svg")
@@ -225,8 +233,10 @@ def main : IO Unit := do
   let block := fun (name : String) =>
     let from_ := lines.dropWhile (fun l => !l.startsWith s!"protocol {name} ")
     "\n".intercalate ((from_.takeWhile (· != "}")) ++ ["}"])
-  write "ctl-goserver-gamep.tex" (listing (block "GameP"))
-  write "ctl-goserver-seatp.tex" (listing (block "SeatP"))
+  -- excerpts of a file the book checks whole say where they are from (selfhost.book.listings)
+  let goserverPath := "projects/GoServer/source/cmd/demo/static/session/goserver.leanfm"
+  write "ctl-goserver-gamep.tex" (listing (s!"-- from {goserverPath}\n" ++ block "GameP"))
+  write "ctl-goserver-seatp.tex" (listing (s!"-- from {goserverPath}\n" ++ block "SeatP"))
   let persons ← IO.FS.readFile "projects/GoServer/events/two-persons.json"
   let personsJ ← IO.ofExcept (Json.parse persons)
   let gc ← tool "session_conform" (conform (withLean goserver [("events", personsJ), ("allowIncomplete", Json.bool true)]))

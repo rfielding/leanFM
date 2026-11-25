@@ -54,7 +54,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check
+check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -214,6 +214,7 @@ book: lean
 	for f in book/generated/ctl-*-ts-*.dot; do dot -Tpdf "$$f" -o "$${f%.dot}.pdf"; done
 	lake env lean --run RequirementListsExample.lean
 	python3 scripts/svg_to_pdf.py book/generated/req-*.svg
+	lake env lean --run BookListingsCheck.lean
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check
@@ -243,6 +244,12 @@ ui-snapshots:
 .PHONY: sandbox-check
 sandbox-check:
 	python3 scripts/chatui_sandbox_check.py
+
+# Every listing of LeanFM text in the book passes the checker as printed (selfhost.book.listings).
+.PHONY: book-listings-check
+book-listings-check: build
+	lake env lean --run BookListingsCheck.lean --self-test
+	lake env lean --run BookListingsCheck.lean
 
 .PHONY: constructors-check
 constructors-check:

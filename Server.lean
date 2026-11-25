@@ -604,6 +604,7 @@ def main : IO Unit := do
   server.listen 128
   -- bound to 127.0.0.1 only: logs are the local user's own (GET /tools/logs, MCP server_logs)
   LeanFM.ServerLogs.enable
+  LeanFM.ServerInfo.capture
   IO.println s!"LeanFM server listening on http://127.0.0.1:{port}"
   serveLoop server
 

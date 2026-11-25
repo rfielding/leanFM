@@ -316,7 +316,10 @@ arrive.
 
 Every listing, diagram, table and answer in this book comes from LeanFM, through
 the same functions its tools call; the generator, \texttt{CtlBookExample.lean},
-names its inputs in a provenance file beside what it writes. The proofs are on paper.
+names its inputs in a provenance file beside what it writes. Every listing of LeanFM
+text passes LeanFM's checker as printed, so every name in it is defined in it; a listing
+whose first line is \texttt{-- from} \emph{file} is an excerpt, and the whole file is
+checked instead. The proofs are on paper.
 LeanFM's tests check the implementation against them: the evaluator against the
 fixpoint semantics on every operator, and the faithfulness check against the CTL
 checker on broken copies of real protocols. The source is public

@@ -121,6 +121,7 @@ def serveStdio (root : Option String) : IO UInt32 := do
     IO.Process.setCurrentDir dir
   -- a child process of the user's own client may read the user's own logs (LeanFM/ServerLogs.lean)
   LeanFM.ServerLogs.enable
+  LeanFM.ServerInfo.capture
   stderr.putStrLn s!"leanfm-mcp on standard input and output; resources read from {← IO.currentDir}"
   stderr.flush
   stdioLoop (← IO.getStdin) (← IO.getStdout) stderr
@@ -133,6 +134,7 @@ def serveHttp : IO Unit := do
   let limits ← Limits.new
   -- logs stay private on a hosted endpoint unless its operator opts in
   if ← envSwitch "LEANFM_MCP_LOGS" false then LeanFM.ServerLogs.enable
+  LeanFM.ServerInfo.capture
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (SocketAddress.v4 { addr, port := UInt16.ofNat cfg.port })
   server.listen 128

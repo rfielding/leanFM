@@ -8,6 +8,7 @@ import LeanFM.SessionView
 import LeanFM.SessionTools
 import LeanFM.CheckMetrics
 import LeanFM.ServerLogs
+import LeanFM.ServerInfo
 import LeanFM.ProjectView
 
 namespace LeanFM.MCP
@@ -399,9 +400,18 @@ def projectViewTool : Json :=
       ("offset", Json.mkObj [("type", "integer"), ("description", Json.str "the first item (or, for a file's text, character; for chat, messages back from the newest) of the page: the next or older value of the previous answer")]),
       ("impl", stringSchema "code: which of the project's implementations to show (its manifest lists them; default the manifest's default_implementation); every answer lists implementations")] [])
 
+/-- Which build is answering (clause selfhost.mcp.server-info, LeanFM/ServerInfo.lean). Listed exactly
+where server_logs is. -/
+def serverInfoTool : Json :=
+  tool "server_info" "Which build of LeanFM is answering"
+    ("The git commit the server started from (with how many tracked files differed from it), when it started, " ++
+     "which executable it runs and when that was built, and stale: true when the executable has been rebuilt since, " ++
+     "so the server should be restarted before trusting its answers about new code. No arguments. Read-only.")
+    (schema [] [])
+
 /-- The tools listed on this host. -/
 def listedTools : IO (Array Json) := do
-  if ← LeanFM.ServerLogs.enabled.get then return (tools.push serverLogsTool).push projectViewTool
+  if ← LeanFM.ServerLogs.enabled.get then return ((tools.push serverLogsTool).push projectViewTool).push serverInfoTool
   return tools
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
@@ -538,13 +548,14 @@ def dispatchJson (request : Json) : IO Response := do
   let params := (field request "params").toOption.getD (Json.mkObj [])
   match method with
   | "initialize" =>
+      let version ← if ← LeanFM.ServerLogs.enabled.get then LeanFM.ServerInfo.version else pure LeanFM.ServerInfo.baseVersion
       pure <| ok id <| Json.mkObj
         [("protocolVersion", protocolVersion),
          ("capabilities", Json.mkObj
            [("tools", Json.mkObj [("listChanged", false)]),
             ("resources", Json.mkObj [("subscribe", false), ("listChanged", false)]),
             ("prompts", Json.mkObj [("listChanged", false)])]),
-         ("serverInfo", Json.mkObj [("name", "leanfm"), ("version", "0.1.0")]),
+         ("serverInfo", Json.mkObj [("name", "leanfm"), ("version", Json.str version)]),
          ("instructions", instructions)]
   | "notifications/initialized" => pure { status := 202, body := "" }
   | "ping" => pure <| ok id (Json.mkObj [])
@@ -561,6 +572,13 @@ def dispatchJson (request : Json) : IO Response := do
       | .error err => pure <| rpcError id (-32602) err
       | .ok "server_logs" =>
         match ← LeanFM.ServerLogs.query ((field params "arguments").toOption.getD (Json.mkObj [])) with
+        | .ok (text, body) =>
+          let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
+          pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
+        | .error err => pure <| rpcError id (-32602) err
+      | .ok "server_info" =>
+        if !(← LeanFM.ServerLogs.enabled.get) then pure <| rpcError id (-32602) LeanFM.ServerInfo.disabledMessage else
+        match ← LeanFM.ServerInfo.answer ((field params "arguments").toOption.getD (Json.mkObj [])) with
         | .ok (text, body) =>
           let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
           pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))

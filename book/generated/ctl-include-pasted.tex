@@ -1,4 +1,17 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+structure Login where
+  user : String
+structure LoggedIn where
+  sid : Header (Fresh String)
+structure Logout where
+  sid : Header (Link String)
+structure Create where
+  sid : Header (Link String)
+  item : String
+structure Made where
+  sid : Header (Link String)
+  orderId : Fresh String
+
 protocol Site (Customer, Store) {
   l: Login from Customer to Store;
   LoggedIn from Store to Customer cause l;
