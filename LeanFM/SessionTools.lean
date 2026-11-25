@@ -13,6 +13,7 @@ import LeanFM.Session.LogSessions
 import LeanFM.Session.Actors
 import LeanFM.Session.Spans
 import LeanFM.Session.Instances
+import LeanFM.Session.Deployment
 import LeanFM.Session.Versions
 import LeanFM.Session.LeanGen
 import LeanFM.Session.Generative
@@ -1757,6 +1758,44 @@ def instances (args : Json) : Except String Json := do
         [("formula", v.formula), ("scope", Json.str v.scope), ("verdict", Json.str v.verdict), ("reading", Json.str v.why)]).toArray)
     , ("lean", Json.str p.lean) ]
 
+/-- The text's last deployment block, or the one named by `deployment`, checked against the
+protocol it places (selfhost.session.deployment): placed or refused, where each role runs, each link
+with the interface it uses and the conditions it adds, every issue, and the view. -/
+def deployment (args : Json) : Except String Json := do
+  let p <- parseProtocol args
+  let named := (args.getObjValAs? String "deployment").toOption
+  let (d, roles, g) <- Deployment.ofText p.lean named
+  let r := Deployment.check d roles g
+  let refused := r.links.filter (!·.reachable)
+  let verdict := if r.issues.isEmpty then "placed" else "refused"
+  let reading := if r.issues.isEmpty then
+      s!"{d.name}: {d.protocolName}'s {roles.length} roles placed; {r.links.length} link{if r.links.length == 1 then "" else "s"}, each through an interface its sender can reach"
+    else s!"{d.name}: {r.issues.length} issue{if r.issues.length == 1 then "" else "s"}; first: {r.issues.head!.2}"
+  let path (pl : Deployment.Placement) : String :=
+    ".".intercalate (pl.path.map fun (n, pc) => if pc == .outside then "outside" else n)
+  return Json.mkObj
+    [ ("tool", "session_deployment"), ("verdict", Json.str verdict), ("reading", Json.str reading)
+    , ("name", Json.str d.name), ("protocol", Json.str d.protocolName)
+    , ("placements", Json.arr (r.placements.map fun pl => Json.mkObj
+        [ ("role", Json.str pl.role), ("path", Json.str (path pl))
+        , ("groups", Json.arr (pl.path.map fun (n, pc) => Json.mkObj [("name", Json.str n), ("place", Json.str (Deployment.placeWord pc))]).toArray)
+        , ("interfaces", Json.arr (pl.ifaces.map fun i => Json.mkObj
+            [("scope", Json.str i.scope.name), ("name", Json.str i.name), ("kind", Json.str i.kind.name),
+             ("lineage", Json.arr (i.kind.lineage.map Json.str).toArray)]).toArray) ]).toArray)
+    , ("links", Json.arr (r.links.map fun l => Json.mkObj
+        [ ("from", Json.str l.src), ("to", Json.str l.dst), ("labels", Json.arr (l.labels.map Json.str).toArray)
+        , ("via", match l.via with | some v => Json.str v | none => Json.null), ("reachable", Json.bool l.reachable)
+        , ("conditions", Json.arr (l.conditions.map Json.str).toArray), ("note", Json.str l.why) ]).toArray)
+    , ("refused", toJson refused.length)
+    , ("issues", Json.arr (r.issues.map fun (who, t) => Json.mkObj [("role", Json.str who), ("issue", Json.str t)]).toArray)
+    , ("svg", Json.str (Deployment.svg d r (themeOf args)))
+    , ("provenance", Json.mkObj
+        [ ("question", Json.str s!"Where does each role of {d.protocolName} run, and which interface does each of its messages arrive on, with what conditions?")
+        , ("eventSource", "the protocol text and its deployment block")
+        , ("reducer", "Text.deploymentDecl into the deployment tree; Deployment.pairs over the protocol's global type (includes inlined); Deployment.check with Topology.reachable and Topology.channel")
+        , ("unit", "links: distinct sender and receiver pairs of the protocol's messages; conditions by name")
+        , ("boundary", s!"deployment {d.name} and protocol {d.protocolName}; at most {Text.maxDeployNodes} groups, roles and interfaces") ]) ]
+
 /-- The most faithful rules an answer lists; the rest are counted. -/
 def maxFaithfulRules : Nat := 64
 
@@ -2417,7 +2456,7 @@ def explore (args : Json) : Except String Json := do
           , ("unit", "nodes: protocols, frames, branches, messages and events; lines of the text")
           , ("boundary", s!"the main protocol {p.name} with every protocol it includes, the protocols defined, and the roles; at most {Outline.maxNodes} nodes") ]) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore"]
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore", "session_deployment"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -2439,6 +2478,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_actor" => some (actor args)
   | "session_dataset" => some (dataset args)
   | "session_explore" => some (explore args)
+  | "session_deployment" => some (deployment args)
   | _ => none
 
 /-! ## Reference -/
@@ -2654,6 +2694,41 @@ payloads start at 16), and a label keeps its payload number in every version; a 
 number is reserved. With a versioned protocol, `session_conform` requires every event to name one of
 its versions and checks each session against the version it names.
 
+## Deployments
+
+A protocol says who sends what, in which order; a `deployment` block, after it, says where each role
+runs. It adds no message and changes no order or nesting:
+
+```
+deployment Production of ShopImpl {
+  kind grpc refines http adds \"deadline exceeded\";   -- optional: a kind refined from a known one
+  outside { Client; }
+  island us {
+    datacenter dc1 {
+      machine m1 {
+        Api { ingress https : ingressHttps; }
+        Db { local sql : call; }
+      }
+    }
+  }
+  island eu {
+    replicated ledger { Bank { peering api : api; internal admin : api; } }
+  }
+}
+```
+
+`outside` and `island` groups are the top of the tree; `datacenter`, `machine`, `replicated` and
+`sharded` groups go inside an island. A role is written `Role;` or `Role { scope name : kind; }`,
+each role of the protocol exactly once. Scopes: `ingress` (anyone may call it), `peering` (any
+island, not outside), `internal` (the same island), `local` (the same machine). Kinds: call, queue,
+stream, http, api, ingressHttp, ingressHttps, datagram, or one declared with `kind`. Each message
+from A to B arrives on the first of B's interfaces A can reach; a role with no interfaces is
+unrestricted. Placement adds conditions for the implementation to handle: hostile from or to
+outside, partition across islands, reject into a replicated group, per-key order into a sharded
+one. A role unplaced or placed twice, a name that is not a role, an unknown kind, and a message no
+interface of its receiver lets through are errors, in Lean when the file compiles and from
+`session_deployment`, which also draws the tree with its links.
+
 ## Instances
 
 A protocol describes one conversation; a server runs many at once. A `system` block, after the
@@ -2753,6 +2828,11 @@ instance plays its own role, and a fresh actor belongs to one session only.
 
 - Every session tool also takes `example` instead of `lean`: the name of a protocol LeanFM carries
   (goserver, ride, boundedride, placeorder, lending), for a client that cannot send a file.
+
+- `session_deployment {lean, deployment?, theme?}`: the text's last `deployment` block, or the one
+  named, checked against the protocol it places: placed or refused, each role's groups and
+  interfaces, each link (sender and receiver) with the interface it uses and the conditions it adds,
+  every issue, and an SVG of the tree with the links (a refused one dashed).
 
 - `session_instances {lean, instances?, perInstance?, properties?}`: the text's last `system`
   block (see Instances below) with 1 to 4 instances of each accept interleaved (default 2, at

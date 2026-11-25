@@ -37,3 +37,23 @@ implementation Go of examples.orders.Requirements {
   hint "Implement the code as Go, with net/http and no web framework";
   hint "Keep orders in PostgreSQL; the Db role is one transaction per message";
 }
+
+-- Where ShopImpl runs: the API and its database on one machine, the bank replicated in another
+-- island. Placement adds conditions (hostile from outside, partition across islands); it adds no
+-- message, and the client cannot reach the bank or the database.
+deployment Production of ShopImpl {
+  outside { Client; }
+  island us {
+    datacenter dc1 {
+      machine m1 {
+        Api { ingress https : ingressHttps; }
+        Db { local sql : call; }
+      }
+    }
+  }
+  island eu {
+    replicated ledger {
+      Bank { peering api : api; internal admin : api; }
+    }
+  }
+}

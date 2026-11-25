@@ -213,6 +213,7 @@ book: lean
 	python3 scripts/svg_to_pdf.py book/generated/ctl-*.svg
 	for f in book/generated/ctl-*-ts-*.dot; do dot -Tpdf "$$f" -o "$${f%.dot}.pdf"; done
 	lake env lean --run RequirementListsExample.lean
+	python3 scripts/svg_to_pdf.py book/generated/req-*.svg
 	$(MAKE) -C book
 
 .PHONY: tla-toolchain tla-check

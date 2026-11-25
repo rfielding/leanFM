@@ -4,12 +4,12 @@ import LeanFM.ProjectView
 Generates the listings, diagram and tables of the book's chapter on requirement and implementation
 lists (book/chapters/requirement-lists.tex) through the functions project_view and the session tools
 call. The example is examples/orders: a requirements file (PlaceOrder and its map) and a Go
-implementation (ShopImpl, evidence, its own CTL and hints); LeanFM's own lists are summarized at the
+implementation (ShopImpl, evidence, its own CTL and hints, and where ShopImpl runs); LeanFM's own lists are summarized at the
 end. Every entry is converted to CTL and decided by ProjectView.checkRow, and every formula is
 shown with the notation and plain reading session_ctl gives. Nothing in that chapter is typed by hand.
 
 Run from the LeanFM root: lake env lean --run RequirementListsExample.lean
-then: python3 scripts/svg_to_pdf.py book/generated/req-shopimpl-*.svg
+then: python3 scripts/svg_to_pdf.py book/generated/req-*.svg
 -/
 
 namespace RequirementListsExample
@@ -71,7 +71,28 @@ def main : IO Unit := do
   write "req-orders-protocol.tex" (listing (between reqText "protocol PlaceOrder" (some "requirements {")))
   write "req-orders-map.tex" (listing (between reqText "requirements {"))
   write "req-shopimpl.tex" (listing (between implText "protocol ShopImpl" (some "implementation ")))
-  write "req-orders-impl.tex" (listing (between implText "implementation "))
+  write "req-orders-impl.tex" (listing (between implText "implementation " (some "-- Where ShopImpl runs")))
+  -- where ShopImpl runs: the deployment block, its view and a refused variant (selfhost.session.deployment)
+  write "req-orders-deployment.tex" (listing (between implText "deployment Production"))
+  for theme in ["light", "dark"] do
+    let d ← IO.ofExcept (LeanFM.SessionTools.deployment (Json.mkObj [("lean", Json.str implText), ("theme", Json.str theme)]))
+    unless g d "verdict" == "placed" do throw (IO.userError s!"the Orders deployment is not placed: {g d "reading"}")
+    write s!"req-deployment-{theme}.svg" (g d "svg")
+  -- each link with the interface it uses and the conditions it adds, as the view's legend lists them
+  let placed ← IO.ofExcept (LeanFM.SessionTools.deployment (Json.mkObj [("lean", Json.str implText)]))
+  let strs (j : Json) (k : String) : List String := ((j.getObjValD k).getArr?.toOption.getD #[]).toList.filterMap (·.getStr?.toOption)
+  let linkLine (l : Json) : String :=
+    let via := match (l.getObjValAs? String "via").toOption with | some v => v | none => "no interface declared"
+    let via := if (g l "note").startsWith "replies" then s!"{via} (replies)" else via
+    let cs := strs l "conditions"
+    s!"{g l "from"} -> {g l "to"} ({", ".intercalate (strs l "labels")})\n    {via}; {if cs.isEmpty then "adds nothing" else s!"adds {", ".intercalate cs}"}"
+  write "req-deployment-links.tex" (listing ("\n".intercalate (((placed.getObjValD "links").getArr?.toOption.getD #[]).toList.map linkLine)))
+  let bankLine := "      Bank { peering api : api; internal admin : api; }"
+  let narrowed := "      Bank { internal admin : api; }"
+  unless (implText.splitOn bankLine).length == 2 do throw (IO.userError "the Orders deployment no longer has the Bank line the book narrows")
+  let refused ← IO.ofExcept (LeanFM.SessionTools.deployment (Json.mkObj [("lean", Json.str (implText.replace bankLine narrowed))]))
+  let issues := ((refused.getObjValD "issues").getArr?.toOption.getD #[]).toList.map (g · "issue")
+  write "req-deployment-refused.tex" (listing s!"{narrowed.trimAscii}\n\nsession_deployment: {g refused "verdict"}\n{"\n".intercalate (issues.map ("  " ++ ·))}")
   for theme in ["light", "dark"] do
     let d ← IO.ofExcept (LeanFM.SessionTools.diagram (Json.mkObj [("lean", Json.str (through implText "implementation ")), ("theme", Json.str theme)]))
     write s!"req-shopimpl-{theme}.svg" (g d "svg")
@@ -99,11 +120,11 @@ def main : IO Unit := do
   write "req-provenance.txt" <| "\n".intercalate
     [ "prompt: every requirements file ends in a map from requirement names to pointers; implementations import requirements, add their own CTL and hints; requirements and implementations are things that convert to CTL, and sorry is what does not yet; the book's examples must say what is required"
     , "question: what does each requirement of a small shop require, in CTL and in words, what does an implementation of it add, and which entries are met, sorry or failing?"
-    , "eventSource: examples/orders/Requirements.leanfm, examples/orders/Implementation.leanfm, examples/orders/logs/order-1.json; LeanFM/LLMGenerated/LeanFM.leanfm and LeanFMImplementation.leanfm for LeanFM's own summary"
-    , "reducer: LeanFM.ProjectView.readMapFiles, requirementRows, implementationRows, checkRow, listSummaries; LeanFM.SessionTools.ctl (notation, reading) and diagram"
+    , "eventSource: examples/orders/Requirements.leanfm, examples/orders/Implementation.leanfm (with its deployment block), examples/orders/logs/order-1.json; LeanFM/LLMGenerated/LeanFM.leanfm and LeanFMImplementation.leanfm for LeanFM's own summary"
+    , "reducer: LeanFM.ProjectView.readMapFiles, requirementRows, implementationRows, checkRow, listSummaries; LeanFM.SessionTools.ctl (notation, reading), diagram and deployment"
     , "unit: entries; verdicts proved, ok, sorry, true, tested, conforms; statuses met, specified, tested, sorry, failing"
     , "boundary: the two example files; LeanFM's specification directory"
-    , "generator: RequirementListsExample.lean, then scripts/svg_to_pdf.py book/generated/req-shopimpl-*.svg" ] ++ "\n"
+    , "generator: RequirementListsExample.lean, then scripts/svg_to_pdf.py book/generated/req-*.svg" ] ++ "\n"
   IO.println s!"wrote {out}req-*: orders {rrows.size} requirements, {irows.size} implementation entries"
 
 end RequirementListsExample

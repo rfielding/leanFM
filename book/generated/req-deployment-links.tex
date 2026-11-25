@@ -1,0 +1,14 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+Client -> Api (CreateOrder, Pay)
+    us.Api.ingress.https; adds duplicate, reject, close, timeout, hostile
+Api -> Db (Reserve, RecordPayment, ReleaseStock)
+    us.Db.local.sql; adds nothing
+Db -> Api (Reserved, Recorded, OutOfStock)
+    us.Db.local.sql (replies); adds nothing
+Api -> Client (Quote, Receipt, PaymentDeclined, SoldOut)
+    us.Api.ingress.https (replies); adds duplicate, reject, close, timeout, hostile
+Api -> Bank (Charge)
+    eu.Bank.peering.api; adds duplicate, reject, close, timeout, partition
+Bank -> Api (Charged, Declined)
+    eu.Bank.peering.api (replies); adds duplicate, reject, close, timeout, partition
+\end{lstlisting}

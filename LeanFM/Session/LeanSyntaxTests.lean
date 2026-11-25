@@ -207,4 +207,45 @@ end Refused
 def headed := "import LeanFM.Session.Syntax\n/-- d -/\nstructure Pay where amount : Nat\nprotocol P (A, B) { Pay from A to B; }"
 #guard ((Text.parse headed).toOption.map fun p => p.types.map (·.doc)) == some ["d"]
 
+/-! ## selfhost.session.deployment: a deployment is a Lean command that checks its tree -/
+
+namespace Deployed
+
+protocol Shop (Client, Api, Bank) {
+  o: Order from Client to Api;
+  c: Charge from Api to Bank cause o;
+  Charged from Bank to Api cause c;
+  Done from Api to Client cause o;
+}
+
+-- placed: elaborates, and defines nothing
+deployment Production of Shop {
+  kind grpc refines http adds "deadline exceeded";
+  outside { Client; }
+  island us { Api { ingress https : ingressHttps; } sharded s { Bank { internal rpc : grpc; } } }
+}
+
+/-- error: Bank is a role of Shop and is not placed -/
+#guard_msgs (error) in
+deployment Missing of Shop { outside { Client; } island us { Api; } }
+
+/-- error: Api cannot send Charge to Bank: eu.Bank.internal.admin is internal, reachable only from island eu -/
+#guard_msgs (error) in
+deployment Apart of Shop { outside { Client; } island us { Api; } island eu { Bank { internal admin : api; } } }
+
+/-- error: kind soap is not built in or declared in this deployment; known: call, queue, stream, http, api, ingressHttp, ingressHttps, datagram -/
+#guard_msgs (error) in
+deployment Soap of Shop { outside { Client; } island us { Api { ingress h : soap; } Bank; } }
+
+/-- error: deployment Nowhere: no protocol Nope is defined -/
+#guard_msgs (error) in
+deployment Nowhere of Nope { outside { Client; } }
+
+-- the words stay names: deployment and kind are not reserved
+def deployment : Nat := 1
+def kind : Nat := 2
+#guard deployment + kind == 3
+
+end Deployed
+
 end LeanFM.Session.LeanSyntaxTests

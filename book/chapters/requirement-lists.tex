@@ -106,6 +106,50 @@ What each entry means and how it stands:
 
 \input{generated/req-orders-impl-explained.tex}
 
+\section{Where it runs}
+\label{sec:deployment}
+
+Where each role runs is a fact about the implementation too: the client cannot observe that the
+bank sits in another region. A \texttt{deployment} block after the protocol places each role of
+ShopImpl in a tree of islands, datacenters and machines, and gives it the interfaces messages
+arrive on:
+
+\input{generated/req-orders-deployment.tex}
+
+An interface has a scope and a kind. The scope says who may call it: \texttt{ingress} anyone,
+\texttt{peering} any island but not the outside, \texttt{internal} the same island,
+\texttt{local} the same machine. The kind is the stack it speaks, and
+\texttt{kind grpc refines http adds "deadline exceeded";} declares a new one
+(\texttt{examples/deployment/Telemetry.leanfm} does, with a sharded store). Neither word is
+reserved in Lean.
+
+Lean checks the block when the file compiles, and \texttt{session\_deployment} answers the same
+way: every role placed once, and every message arriving on an interface its sender can reach. A
+reply travels back over the link its request opened, by the rule that dashes replies in a
+sequence diagram, so the client needs no interface of its own. Each link then carries the
+conditions its kind and placement add (Figure~\ref{fig:deployment} draws them):
+
+\input{generated/req-deployment-links.tex}
+
+\begin{figure}[ht]\centering
+\AccessibleFigure{Deployment view of ShopImpl. Client is outside. Api and Db are on machine m1 in datacenter dc1 of island us. Bank is in the replicated group ledger of island eu. Six numbered links: Client to Api over us.Api.ingress.https and hostile; Api to Db and its replies over us.Db.local.sql adding nothing; Api to Client as replies over the same https link; Api to Bank over eu.Bank.peering.api with partition; and Bank's replies over it.}{\ThemedDiagram{width=\textwidth}{req-deployment}}
+\caption{Production: where ShopImpl runs, each link with its interface and conditions.}
+\label{fig:deployment}
+\end{figure}
+
+The hostile link and the partition are not errors. They are what ShopImpl meets in this
+deployment, a request from anyone and a bank that may not answer, and they are reported for the
+implementation to handle. A message no interface lets through is an error. Leaving the bank only
+its internal interface:
+
+\input{generated/req-deployment-refused.tex}
+
+Nothing in the protocol changed. A deployment adds no message and moves none; \texttt{choice},
+\texttt{par}, \texttt{include} and \texttt{sessions} mean what they meant, and a replicated
+group does not stand in for the messages of a replication protocol, which the protocol must
+still get right. So PlaceOrder says nothing about islands, and the same requirements can be met
+on one machine or across three regions.
+
 \section{Status is computed}
 
 Status follows from the two verdicts, so no one has to declare it:

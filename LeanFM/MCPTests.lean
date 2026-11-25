@@ -449,7 +449,7 @@ def main : IO Unit := do
   let protoAgain ← summaryOf "MCP check_protocol result is unchanged by the view" proto.body
   assertContains "MCP check_protocol summary is unchanged" protoAgain "check_protocol disproved"
   -- The session tools and their view (clauses selfhost.mcp.session.tools and .view).
-  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore"] do
+  for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore", "session_deployment"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"

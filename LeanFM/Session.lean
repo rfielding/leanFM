@@ -13,6 +13,7 @@ import LeanFM.Session.Text
 import LeanFM.Session.Conform
 import LeanFM.Session.System
 import LeanFM.Session.Instances
+import LeanFM.Session.Deployment
 import LeanFM.Session.Versions
 import LeanFM.Session.Skeleton
 import LeanFM.Session.SkeletonTs
@@ -44,6 +45,7 @@ Pull in only what you use:
 * `LeanFM.Session.Spec`     properties, assumptions and handled conditions
 * `LeanFM.Session.System`   systems: shared instances and the protocols accepted against them
 * `LeanFM.Session.Instances` instances interleaved: deadlocks, isolation, per-instance properties
+* `LeanFM.Session.Deployment` a protocol's roles placed in a deployment tree: links, conditions, view
 
 This module brings in all of them.
 -/

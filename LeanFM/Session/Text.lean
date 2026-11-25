@@ -2,6 +2,7 @@ import LeanFM.Session.Global
 import LeanFM.Session.GenerativeTypes
 import LeanFM.Session.Types
 import LeanFM.Session.Grammar
+import LeanFM.Session.Topology
 
 /-!
 # Protocol text, read with the grammar (clauses selfhost.mcp.session.tools, selfhost.session.lean-syntax)
@@ -87,6 +88,20 @@ structure SystemDef where
   shared  : List (Prod String (Prod String Bool))
   accepts : List (Prod String (List (Prod Bool String)))
   deriving Inhabited, Repr
+
+/-- A `deployment` block as written (selfhost.session.deployment): the protocol it places and its
+deployment tree, the roles as actors with their interfaces. -/
+structure DeploymentDef where
+  name     : String
+  protocolName : String
+  world    : List (Node String)
+
+/-- The most groups, roles and interfaces one deployment holds. -/
+def maxDeployNodes : Nat := 256
+
+/-- The interface kinds a deployment may name without declaring them. -/
+def builtinKinds : List IfaceKind :=
+  [IfaceKind.call, .queue, .stream, .http, .api, .ingressHttp, .ingressHttps, .datagram]
 
 /-- What a requirement points at (selfhost.requirements.map): a protocol of the file, a formula
 over one (`P ⊨ φ`, φ an s-expression), or `sorry` with an optional note. -/
@@ -324,6 +339,8 @@ structure Acc where
   reqMap : Option (Array (String × Pointer)) := none
   /-- `implementation` blocks (selfhost.implementations.map) -/
   impls : Array ImplDef := #[]
+  /-- `deployment` blocks after the protocols they place (selfhost.session.deployment) -/
+  deployments : Array DeploymentDef := #[]
 
 /-- Reading: the source (for positions and requirement texts) and what has been collected. -/
 abbrev R := ReaderT String (StateT Acc (Except String))
@@ -802,6 +819,83 @@ def protocolDef (body : Syntax) : R Def := do
     failAt body s!"protocol {pname} has a message {pname}; in Lean they would be two declarations with one name, so rename one of them"
   return { name := pname, roles := rs, body := unroll b, version, givens := gv }
 
+/-- A word the grammar matched with `W`: an atom, or an identifier when the word is not reserved. -/
+def word (stx : Lean.Syntax) : String := if stx.isAtom then stx.getAtomVal else stx.getId.toString
+
+open Lean (Syntax) in
+/-- The items of a deployment block or group (selfhost.session.deployment), with the kinds known so
+far and the nodes counted so far. Kinds are declared at the top, before the groups; outside and
+islands are the top of the tree and every other group is inside one; a role holds interfaces, each
+named once, of a known kind. -/
+partial def deployItems (top : Bool) (items : Array Syntax) (kinds : List IfaceKind) (count : Nat) :
+    R (List (Node String) × List IfaceKind × Nat) := do
+  let mut out : Array (Node String) := #[]
+  let mut kinds := kinds
+  let mut count := count
+  let mut tops : List String := []
+  let known (ks : List IfaceKind) : String := ", ".intercalate (ks.map (·.name))
+  for it in items do
+    count := count + 1
+    if count > maxDeployNodes then failAt it s!"a deployment holds at most {maxDeployNodes} groups, roles and interfaces"
+    let k := it.getKind
+    if k == `LeanFM.Session.Grammar.kindDecl then
+      if !top then failAt it "declare a kind at the top of the deployment, before the groups that use it"
+      let n ← name it[1] "the kind's name"
+      if kinds.any (·.name == n) then failAt it[1] s!"kind {n} is already a kind; known: {known kinds}"
+      let b ← name it[3] "the kind it refines"
+      let some base := kinds.find? (·.name == b)
+        | failAt it[3] s!"kind {b} is not built in or declared before this line; known: {known kinds}"
+      let strs (o : Syntax) : List Condition :=
+        if o.getNumArgs > 1 then o[1].getArgs.toList.filterMap (·.isStrLit?) |>.map (⟨·⟩) else []
+      kinds := kinds ++ [base.refine n (strs it[4]) (strs it[5])]
+    else if k == `LeanFM.Session.Grammar.groupDecl then
+      let w := word it[0]
+      let (gname, place, body) ← if it.getNumArgs == 4 then pure ("outside", Place.outside, it[2])
+        else do
+          let n ← name it[1] s!"the {w}'s name"
+          let p := match w with
+            | "island" => Place.island | "datacenter" => .datacenter | "machine" => .machine
+            | "replicated" => .replicated | _ => .sharded
+          pure (n, p, it[3])
+      let atTop := place == .outside || place == .island
+      if atTop && !top then failAt it s!"{w} {gname} is inside another group; outside and the islands are the top of the tree"
+      if !atTop && top then failAt it s!"{w} {gname} is at the top of the tree; put it inside an island"
+      if atTop then
+        if tops.contains gname then failAt it s!"{if place == .outside then "outside" else s!"island {gname}"} is written twice"
+        tops := gname :: tops
+      let (cs, ks, c) ← deployItems false body.getArgs kinds count
+      kinds := ks
+      count := c
+      out := out.push (.group gname place cs)
+    else
+      let r ← name it[0] "a role"
+      if top then failAt it s!"{r} is at the top of the tree; place it inside outside or an island"
+      let mut ifs : Array Iface := #[]
+      if it.getNumArgs > 2 then
+        for i in it[2].getArgs do
+          count := count + 1
+          if count > maxDeployNodes then failAt i s!"a deployment holds at most {maxDeployNodes} groups, roles and interfaces"
+          let n ← name i[1] "the interface's name"
+          if ifs.any (·.name == n) then failAt i[1] s!"{r} has two interfaces named {n}"
+          let kn ← name i[3] "the interface's kind"
+          let some kd := kinds.find? (·.name == kn)
+            | failAt i[3] s!"kind {kn} is not built in or declared in this deployment; known: {known kinds}"
+          let scope := match word i[0] with
+            | "ingress" => Scope.ingress | "peering" => .peering | "internal" => .internal | _ => .local
+          ifs := ifs.push ⟨scope, n, kd⟩
+      out := out.push (.actor r ifs.toList)
+  return (out.toList, kinds, count)
+
+open Lean (Syntax) in
+/-- A `deployment Name of P { ... }` block (selfhost.session.deployment), read into its tree. Whether
+`P` exists and whether the tree places its roles is checked by the caller and `Deployment.check`. -/
+def deploymentDecl (stx : Syntax) : R DeploymentDef := do
+  let n ← name stx[1] "the deployment's name"
+  let p ← name stx[3] "the protocol it places"
+  let (world, _, _) ← deployItems true stx[5].getArgs builtinKinds 0
+  if world.isEmpty then failAt stx s!"deployment {n} places no role; put the roles of {p} in outside or an island"
+  return { name := n, protocolName := p, world }
+
 open Lean (Syntax) in
 /-- A `system` block (selfhost.session.instances), checked against the protocols defined before it
 (`defs`: each protocol's name and roles). Every accept names an earlier protocol and gives one
@@ -943,6 +1037,12 @@ def fileDefs (stx : Syntax) (allowNoProtocol : Bool := false) : R (List Def) := 
         if (← get).requires.size ≥ 16 then failAt c "at most 16 requirements"
         let r ← requirement entry c
         modify fun a => { a with requires := a.requires.push r }
+    else if k == `LeanFM.Session.Grammar.deploymentBody then
+      let d ← deploymentDecl body
+      if (latest defs.toList d.protocolName).isNone then
+        failAt body[3] s!"deployment {d.name}: no protocol {d.protocolName} is defined before it"
+      if (← get).deployments.any (·.name == d.name) then failAt body s!"deployment {d.name} is defined twice"
+      modify fun a => { a with deployments := a.deployments.push d }
     else if k == `LeanFM.Session.Grammar.systemBody then
       if defs.isEmpty then failAt body "a system follows the protocols it accepts"
       let s <- systemDecl defs.toList body

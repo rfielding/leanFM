@@ -1,0 +1,33 @@
+import LeanFM.Session.Syntax
+
+-- Devices report readings to a gateway, which stores them and raises an alarm when the store is
+-- full. The protocol says what is said and in which order; the deployment after it says where each
+-- role runs, and so which conditions each message meets on the way.
+
+/-- A reading travels from a device through the gateway to a sharded store. -/
+protocol Telemetry (Device, Gateway, Store, Alerts) {
+  r: Reading from Device to Gateway route "POST /readings";
+  s: Save from Gateway to Store cause r;
+  choice {
+    Saved from Store to Gateway cause s;
+    Accepted from Gateway to Device cause r status 202;
+  } or {
+    Full from Store to Gateway cause s;
+    Alarm from Gateway to Alerts cause s;
+    Retry from Gateway to Device cause r status 503;
+  }
+}
+
+-- The gateway at the edge, the store sharded in the core. Gateway to Store crosses islands
+-- (partition), reaches a sharded group (per-key order) and uses grpc (deadline exceeded).
+deployment Fleet of Telemetry {
+  kind grpc refines http adds "deadline exceeded";
+  outside { Device; }
+  island edge {
+    machine gw1 { Gateway { ingress readings : ingressHttps; } }
+  }
+  island core {
+    sharded store { Store { peering save : grpc; } }
+    datacenter ops { Alerts { peering page : queue; internal admin : api; } }
+  }
+}

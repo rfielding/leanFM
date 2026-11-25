@@ -228,6 +228,38 @@ def acceptDecl : Parser := node `LeanFM.Session.Grammar.acceptDecl
 def systemBody : Parser := node `LeanFM.Session.Grammar.systemBody
   ("system " >> ident >> "{" >> many (instDecl <|> acceptDecl) >> "}")
 
+/-! ## Deployments (selfhost.session.deployment) -/
+
+/-- `ingress https : ingressHttps;`: an interface of a placed role, its scope, name and kind. -/
+def ifaceDecl : Parser := node `LeanFM.Session.Grammar.ifaceDecl
+  ((W "ingress" <|> W "peering" <|> W "internal" <|> W "local") >> ident >> " : " >> ident >> ";")
+/-- `kind grpc refines http adds "deadline exceeded";`: an interface kind refined from a known one. -/
+def kindDecl : Parser := node `LeanFM.Session.Grammar.kindDecl
+  (atomic (W "kind" >> ident >> W "refines") >> ident >> optional (W "adds" >> sepBy1 strLit ",") >>
+    optional (W "removes" >> sepBy1 strLit ",") >> ";")
+/-- `outside { ... }`, or `island us { ... }` and the other places with a name. -/
+def groupDecl (it : Parser) : Parser := node `LeanFM.Session.Grammar.groupDecl
+  ((atomic (W "outside" >> lookahead "{") >> "{" >> many it >> "}") <|>
+   (atomic ((W "island" <|> W "datacenter" <|> W "machine" <|> W "replicated" <|> W "sharded") >> ident >> lookahead "{") >>
+     "{" >> many it >> "}"))
+/-- `Role;` or `Role { interfaces }`: a role of the protocol, placed here. -/
+def roleDecl : Parser := node `LeanFM.Session.Grammar.roleDecl
+  (ident >> (";" <|> ("{" >> many ifaceDecl >> "}")))
+
+/-- Every item of a deployment, groups over `it`; keyword forms first, roles last. -/
+def deployAlternatives (it : Parser) : Parser := kindDecl <|> groupDecl it <|> roleDecl
+
+/-- One item of a deployment. -/
+partial def deployItemFn : ParserFn := fun c s => (deployAlternatives { fn := deployItemFn }).fn c s
+
+def deployItem : Parser := { fn := deployItemFn, info := (deployAlternatives skip).info }
+@[combinator_formatter deployItem] def deployItem.formatter : Formatter := pure ()
+@[combinator_parenthesizer deployItem] def deployItem.parenthesizer : Parenthesizer := pure ()
+
+/-- `deployment Name of P { ... }`; the leading word is not reserved, as `requirements`. -/
+def deploymentBody : Parser := node `LeanFM.Session.Grammar.deploymentBody
+  (nonReservedSymbol "deployment" true >> ident >> W "of" >> ident >> "{" >> many deployItem >> "}")
+
 /-! ## Requirement and implementation maps (selfhost.requirements.map, selfhost.implementations.map) -/
 
 /-- A CTL formula as an s-expression: from `(` to its matching `)`, outside strings, kept as one
@@ -290,6 +322,9 @@ def implementationBody : Parser := node `LeanFM.Session.Grammar.implementationBo
 /-- `system Name { instance ...; accept ...; }` as a Lean command (selfhost.session.instances). -/
 @[command_parser] def systemCmd : Parser := leading_parser optional Command.docComment >> systemBody
 
+/-- `deployment Name of P { ... }` as a Lean command (selfhost.session.deployment). -/
+@[command_parser] def deploymentCmd : Parser := leading_parser optional Command.docComment >> deploymentBody
+
 /-- `require per q { ... }` as a Lean command. -/
 @[command_parser] def requireCmd : Parser := leading_parser requireBody
 
@@ -348,7 +383,7 @@ def structureBody : Parser := node `LeanFM.Session.Grammar.structureBody
 def file : Parser := node `LeanFM.Session.Grammar.file
   (many (node `LeanFM.Session.Grammar.import ("import " >> ident)) >>
     many (node `LeanFM.Session.Grammar.item (optional Command.docComment >>
-      (structureBody <|> protocolBody <|> requireBody <|> systemBody <|> requirementsBody <|> implementationBody <|> leanDecl))) >>
+      (structureBody <|> protocolBody <|> requireBody <|> systemBody <|> deploymentBody <|> requirementsBody <|> implementationBody <|> leanDecl))) >>
     notFollowedBy (Command.moduleDoc) "module doc comment (/-! -/); use -- comments")
 
 /-! ## Running the grammar on text -/
@@ -402,7 +437,7 @@ private unsafe def runImpl (p : Parser) (what : String) (text : String) : Except
 @[implemented_by runImpl, never_extract] opaque run (p : Parser) (what : String) (text : String) : Except String Syntax
 
 /-- Parse protocol text: the Lean header, structures, protocols and requirements. -/
-def parseFile (text : String) : Except String Syntax := run file "structure, protocol, require, system, requirements or implementation" text
+def parseFile (text : String) : Except String Syntax := run file "structure, protocol, require, system, deployment, requirements or implementation" text
 
 /-- Parse one annotation value, such as a fraction, duration or time expression. -/
 def parseValue (p : Parser) (text : String) : Except String Syntax := run p "the end of the value" text

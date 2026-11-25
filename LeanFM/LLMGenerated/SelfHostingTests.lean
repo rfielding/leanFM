@@ -8,12 +8,13 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 116 := by native_decide
+example : clauses.length = 117 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.session.navigator" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.context" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.lazy" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.probability" = true := by native_decide
+example : (clauses.map (·.id)).contains "selfhost.session.deployment" = true := by native_decide
 example : workflow.transitions.any (fun t => t.message == "WorkflowRejected" && t.dst == "rejected") = true := by native_decide
 example : LeanFM.LLMGenerated.Requirements.all.length = 2 := by native_decide
 example : (successfulBranchAtoms workflowGrammar.body).length = 10 := by native_decide
@@ -26,7 +27,7 @@ example : LeanFM.LLMGenerated.McpLogicImplementation.errors = [] := by native_de
 -- every logic clause is implemented, knows, protocol, reassembly and the view included
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 11 := by native_decide
 -- the session-type library is specified, and every clause has a decision and a test
-example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length = 73 := by native_decide
+example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length = 74 := by native_decide
 example : LeanFM.LLMGenerated.SessionImplementation.errors = [] := by native_decide
 -- the session tools, their view and its navigator are specified and implemented
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.session." && c.status == "implemented")).length = 5 := by native_decide

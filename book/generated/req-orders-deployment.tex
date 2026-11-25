@@ -1,0 +1,18 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+deployment Production of ShopImpl {
+  outside { Client; }
+  island us {
+    datacenter dc1 {
+      machine m1 {
+        Api { ingress https : ingressHttps; }
+        Db { local sql : call; }
+      }
+    }
+  }
+  island eu {
+    replicated ledger {
+      Bank { peering api : api; internal admin : api; }
+    }
+  }
+}
+\end{lstlisting}

@@ -4,6 +4,7 @@ import LeanFM.Session.Spec
 import LeanFM.Session.Text
 import LeanFM.Session.System
 import LeanFM.Session.Versions
+import LeanFM.Session.Deployment
 
 /-- A field minted by the message that carries it: its value names a new session
 (selfhost.session.identity.marks). It is the value itself; the mark is read from the text. -/
@@ -314,6 +315,37 @@ def elabSystem : CommandElab := fun stx => do
   let n := nm sd.name
   elabCommand (<- withRef body `($[$doc:docComment]? def $n : LeanFM.Session.System :=
     { name := $(str sd.name), shared := [$shared,*], accepts := [$accepts,*] }))
+
+/-- `deployment Name of P { ... }` (selfhost.session.deployment): elaborating it checks the tree
+against protocol `P` (an unknown protocol is a Lean error) and defines nothing. Every issue of
+`Deployment.check` is an error at the first identifier of the block naming the role it is about: a
+role unplaced or placed twice, a name that is not a role, a link no interface lets through. -/
+@[command_elab LeanFM.Session.Grammar.deploymentCmd]
+def elabDeployment : CommandElab := fun stx => do
+  let body := stx[1]
+  let pid := body[3]
+  let c <- withRef pid do
+    let cs <- resolveGlobalName pid.getId
+    match cs.find? (fun x => x.2.isEmpty) with
+    | some (c, _) => pure c
+    | none => throwError "deployment {body[1].getId}: no protocol {pid.getId} is defined"
+  -- a reading error names its line and column: report it there, not at the whole block
+  let d <- match ((Text.deploymentDecl body).run (← getFileMap).source).run {} with
+    | .ok (v, _) => pure v
+    | .error e =>
+      match e.splitOn ": " with
+      | pos :: rest =>
+        match (pos.dropPrefix? "line ").map (fun p => p.toString.splitOn ", column ") with
+        | some [l, col] =>
+          let here := (← getFileMap).ofPosition ⟨l.toNat!, col.toNat! - 1⟩
+          throwErrorAt (Syntax.atom (SourceInfo.synthetic here here) "") (": ".intercalate rest)
+        | _ => throwErrorAt body e
+      | [] => throwErrorAt body e
+  let (roles, g) <- evalProtocol c
+  let r := Deployment.check { d with protocolName := pid.getId.toString } roles g
+  let idents := Text.identsIn body[5]
+  for (who, msg) in r.issues do
+    logErrorAt ((idents.find? (·.getId.toString == who)).getD body[1]) msg
 
 /-- `requirements { "name" => pointer; ... }` (selfhost.requirements.map): elaborating it checks
 every name once and every protocol a pointer names, which must be defined; nothing is defined, so
