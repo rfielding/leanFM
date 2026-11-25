@@ -328,7 +328,7 @@ def statesAfter (g : Global String) (evs : List LogEvent) : Except String (List 
 end Conform
 
 /-- What may happen next in one session after `log` (its events, in order): every step some state
-that explains the run allows, and whether the session may end here. With `sessions { body }` at the
+that explains the run allows, and whether the session may stop here. With `sessions { body }` at the
 top the session is one instance of the body; nested `sessions` blocks are played once, in place. A run the protocol does not allow is an error naming
 its first problem. -/
 def Global.next (g : Global String) (log : List LogEvent) : Except String (List Conform.NextStep × Bool) := do
@@ -349,7 +349,7 @@ def Global.nextOwn (g : Global String) (log : List LogEvent) : Except String (Li
 
 /-- One session of a protocol as a state graph, for temporal properties: the states conformance
 explores (residual global types with their bindings, nested `sessions` played once in place), every
-step between them, and the states where the session may end. At most `maxNodes` states. -/
+step between them, and the states where the session may stop. At most `maxNodes` states. -/
 structure StateGraph where
   states    : List String
   terminals : List String

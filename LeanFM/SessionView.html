@@ -2323,10 +2323,10 @@ function graphView(opts) {
     if (token) { ctx.fillStyle = colors.amber; ctx.beginPath(); ctx.arc(token.x, token.y, 7, 0, 2 * Math.PI); ctx.fill(); }
     const hidden = states.length - pos.size;
     info.textContent = `${states.length} states, ${edges.length} transitions` + (hidden > 0 ? `; showing the ${pos.size} within ${FOCUS_RADIUS} steps of ${cur} (${hidden} hidden)` : "") +
-      (cur !== null ? `; current: ${opts.nameOf ? opts.nameOf(cur) : cur}` + (finals.has(cur) ? " (may end here)" : "") : "");
+      (cur !== null ? `; current: ${opts.nameOf ? opts.nameOf(cur) : cur}` + (finals.has(cur) ? " (may stop here)" : "") : "");
   }
   // the book's typestate style: rounded boxes named by what just happened, a double border where the
-  // session may end, edges along LeanFM's routes with one style per kind
+  // session may stop, edges along LeanFM's routes with one style per kind
   function rounded(x, y, w, h, r) {
     ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
@@ -2362,7 +2362,7 @@ function graphView(opts) {
     }
     if (token) { ctx.fillStyle = colors.amber; ctx.beginPath(); ctx.arc(token.x, token.y, 6, 0, 2 * Math.PI); ctx.fill(); }
     info.textContent = `${states.length} states, ${edges.length} transitions, laid out by LeanFM` +
-      (cur !== null ? `; current: ${nameOf(cur)}` + (finals.has(cur) ? " (may end here)" : "") : "");
+      (cur !== null ? `; current: ${nameOf(cur)}` + (finals.has(cur) ? " (may stop here)" : "") : "");
   }
   // the whole drawing fits the width once the canvas has one; the canvas is as tall as the drawing needs
   let fit = null, userZoomed = false;
@@ -2386,7 +2386,7 @@ function graphView(opts) {
       b.addEventListener("click", () => (opts.onMove ? opts.onMove(e) : api.move(e)));
       moves.appendChild(b);
     }
-    if (!outs.length) moves.appendChild(el("span", "meta", finals.has(cur) ? "The session may end here; nothing else can happen." : "No transition from here."));
+    if (!outs.length) moves.appendChild(el("span", "meta", finals.has(cur) ? "The session may stop here; nothing else can happen." : "No transition from here."));
     if (opts.extraMoves) opts.extraMoves(moves);
   }
   const api = {

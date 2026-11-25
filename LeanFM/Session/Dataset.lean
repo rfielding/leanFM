@@ -8,7 +8,7 @@ sessions are generated, and what comes back is how they are distributed (over pa
 roles, lengths and durations) rather than every event.
 
 A protocol without probabilities is walked by `walk`: at each step it takes one of the steps the
-protocol allows next, or ends where the protocol may end, each equally likely under a seeded
+protocol allows next, or ends where the protocol may stop, each equally likely under a seeded
 generator. Those frequencies describe the walker, not the system; only a protocol with a
 probability layer has frequencies that estimate its stated probabilities, and the summary says
 which of the two it is. -/
@@ -43,7 +43,7 @@ structure Step where
 /-- One generated session. -/
 structure Run where
   steps     : Array Step
-  /-- the session reached a point where the protocol may end, and ended there -/
+  /-- the session reached a point where the protocol may stop, and ended there -/
   ended     : Bool
   /-- generation stopped at `maxSessionEvents` -/
   truncated : Bool := false
@@ -64,7 +64,7 @@ def sessionSeed (seed i : Nat) : Nat :=
   z ^^^ (z >>> 31)
 
 /-- Walk one session of a protocol without probabilities: from the start, take one of the steps the
-protocol allows next, or end where it may end, each equally likely; a step is taken with
+protocol allows next, or end where it may stop, each equally likely; a step is taken with
 `Conform.step`, the same transition conformance uses, so every walk conforms by construction. A
 state with no step where the protocol may not end is stuck, and the run is not ended. -/
 def walk (g : Global String) (seed : Nat) (cap : Nat := maxSessionEvents) : Run × Nat := Id.run do

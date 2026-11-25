@@ -118,7 +118,7 @@ def step : State -> Event -> Option State
   | .s3, { src := .shop, dst := .client, payload := .paymentDeclined _, .. } => some .done
   | _, _ => none
 
-/-- Whether the session may end here. -/
+/-- Whether the session may stop here. -/
 def final : State -> Bool
   | .done => true
   | _ => false
@@ -163,7 +163,7 @@ def step : State -> Event -> Option State
   | .s6, { src := .shop, dst := .client, payload := .paymentDeclined _, .. } => some .done
   | _, _ => none
 
-/-- Whether the session may end here. -/
+/-- Whether the session may stop here. -/
 def final : State -> Bool
   | .done => true
   | _ => false
@@ -197,7 +197,7 @@ def step : State -> Event -> Option State
   | .s1, { src := .bank, dst := .shop, payload := .declined _, .. } => some .done
   | _, _ => none
 
-/-- Whether the session may end here. -/
+/-- Whether the session may stop here. -/
 def final : State -> Bool
   | .s0 => true
   | .done => true

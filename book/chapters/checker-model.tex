@@ -16,7 +16,7 @@ The \emph{state graph} of a protocol $P$ is $G_P = (S, s_0, \Delta, F)$ where
 \item $s_0$ is $P$ itself with nothing bound;
 \item $(s, \ell, s') \in \Delta$ when $\ell$ is a message or event the residual of $s$
   allows next and $s'$ is the residual after it;
-\item $F \subseteq S$ holds the states where the session may end (the residual can be
+\item $F \subseteq S$ holds the states where the session may stop (the residual can be
   empty).
 \end{itemize}
 \end{definition}
@@ -60,7 +60,7 @@ $\mathsf{secret}(A, B, f)$ holds iff the step that reached $n$ carried a field e
 
 So $\mathsf{on}(\ell)$ is true in the state a delivery of $\ell$ reaches, and only until
 the next message: it means ``$\ell$ was just delivered'', not ``some time after $\ell$''.
-(Earlier versions of LeanFM spelled it \texttt{after}; that spelling is still read.)
+(Earlier versions of LeanFM spelled it \texttt{after}; LeanFM now refuses that spelling and names \texttt{on}.)
 
 LeanFM writes $\mathsf{end}$ as \texttt{terminal}. The atoms say only what the last step
 was and whether the session may stop. Everything else, in particular which typestate a

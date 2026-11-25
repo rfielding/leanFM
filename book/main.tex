@@ -227,7 +227,7 @@
 \newcommand{\EX}{\mathsf{EX}\,}
 \newcommand{\EF}{\mathsf{EF}\,}
 \newcommand{\EG}{\mathsf{EG}\,}
-\newcommand{\after}[1]{\mathsf{on}(\mathit{#1})}
+\newcommand{\on}[1]{\mathsf{on}(\mathit{#1})}
 \newcommand{\term}{\mathsf{stop}}
 % the words LeanFM writes for them (selfhost.mcp.logic.words)
 \newcommand{\always}{\mathsf{always}\,}
@@ -262,8 +262,8 @@
   \node[anchor=south west,text width=.84\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=3.2cm]current page.south west)
     {\color{leangold}\normalsize
-      $\always\big(\after{GetImage} \rightarrow \someNext \after{Image} \wedge \someNext \after{NotFound}$\\
-      $\qquad\qquad\wedge\ \allNext(\after{Image} \vee \after{NotFound})\big)$};
+      $\always\big(\on{GetImage} \rightarrow \someNext \on{Image} \wedge \someNext \on{NotFound}$\\
+      $\qquad\qquad\wedge\ \allNext(\on{Image} \vee \on{NotFound})\big)$};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and Claude Opus 5.5\\[.35em]

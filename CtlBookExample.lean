@@ -70,7 +70,7 @@ def typestatesOf (text : String) : IO (LGraph × Typestates) := do
   return (g, typestates g)
 
 /-- The typestate graph for Graphviz: each class a box named by its last message (a double border
-where the session may end), the start marked by an arrow, an ended session's stutter a loop. dot
+where the session may stop), the start marked by an arrow, an ended session's stutter a loop. dot
 only places the boxes; the classes and their steps are LeanFM's. Themes: light, dark, cover. -/
 def dotOf (t : Typestates) (theme : String) : String := Id.run do
   let (ink, fill, bg) := match theme with

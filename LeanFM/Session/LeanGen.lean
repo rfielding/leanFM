@@ -121,7 +121,7 @@ def roleMachine (g : Global String) (r : String) (labels : List String) : Except
     s!"def start : State := .{← stateName start}", "",
     s!"/-- The step an event takes {r} from a state, where the protocol allows it. -/",
     "def step : State -> Event -> Option State"] ++ cases ++ ["  | _, _ => none", "",
-    "/-- Whether the session may end here. -/",
+    "/-- Whether the session may stop here. -/",
     "def final : State -> Bool"] ++ finalCtors.map (fun f => s!"  | .{f} => true") ++ ["  | _ => false", "",
     s!"/-- The events {r} takes part in. -/",
     s!"def involves (e : Event) : Bool := e.src == {role r} || e.dst == {role r}", "",

@@ -177,7 +177,7 @@ def step : State -> Event -> Option State
   | .s10, { src := .app, dst := .browser, payload := .signInFailed _, .. } => some .done
   | _, _ => none
 
-/-- Whether the session may end here. -/
+/-- Whether the session may stop here. -/
 def final : State -> Bool
   | .done => true
   | _ => false
@@ -224,7 +224,7 @@ def step : State -> Event -> Option State
   | .s8, { src := .app, dst := .browser, payload := .signInFailed _, .. } => some .done
   | _, _ => none
 
-/-- Whether the session may end here. -/
+/-- Whether the session may stop here. -/
 def final : State -> Bool
   | .done => true
   | _ => false
@@ -267,7 +267,7 @@ def step : State -> Event -> Option State
   | .s6, { src := .idp, dst := .app, payload := .badCode _, .. } => some .done
   | _, _ => none
 
-/-- Whether the session may end here. -/
+/-- Whether the session may stop here. -/
 def final : State -> Bool
   | .done => true
   | _ => false

@@ -17,7 +17,7 @@ tree. This chapter needs only six pieces, and each has a plain reading.
 \toprule
 written & CTL & read it as \\
 \midrule
-$\after{GetImage}$ & & on delivery of GetImage \\
+$\on{GetImage}$ & & on delivery of GetImage \\
 $\term$ & & the conversation may stop here \\
 $\someNext\varphi$ & $\mathsf{EX}$ & \emph{some} possible next step leads to a moment where $\varphi$ \\
 $\allNext\varphi$ & $\mathsf{AX}$ & \emph{every} possible next step leads to a moment where $\varphi$ \\
@@ -41,9 +41,9 @@ just after GetImage. Three things are true there, and each is one line of CTL.
 \toprule
 CTL & in words \\
 \midrule
-$\someNext(\after{Image}\wedge\term)$ & an Image \emph{can} come next, and then the conversation may stop \\
-$\someNext(\after{NotFound}\wedge\term)$ & a NotFound \emph{can} come next, and then it may stop \\
-$\allNext\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)$ & \emph{whatever} comes next is one of those two; nothing else can \\
+$\someNext(\on{Image}\wedge\term)$ & an Image \emph{can} come next, and then the conversation may stop \\
+$\someNext(\on{NotFound}\wedge\term)$ & a NotFound \emph{can} come next, and then it may stop \\
+$\allNext\big((\on{Image}\wedge\term)\vee(\on{NotFound}\wedge\term)\big)$ & \emph{whatever} comes next is one of those two; nothing else can \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -57,9 +57,9 @@ That statement is about one moment. To make it a rule about the whole conversati
 say \emph{when} it applies: ``at every moment at which the last message was GetImage
 and the conversation may not stop yet, those three lines hold.''
 \begin{align*}
-&\always\Big(\after{GetImage}\wedge\neg\term\ \rightarrow\\
-&\qquad\someNext(\after{Image}\wedge\term)\wedge\someNext(\after{NotFound}\wedge\term)\\
-&\qquad{}\wedge\allNext\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)\Big)
+&\always\Big(\on{GetImage}\wedge\neg\term\ \rightarrow\\
+&\qquad\someNext(\on{Image}\wedge\term)\wedge\someNext(\on{NotFound}\wedge\term)\\
+&\qquad{}\wedge\allNext\big((\on{Image}\wedge\term)\vee(\on{NotFound}\wedge\term)\big)\Big)
 \end{align*}
 Write one such rule for every moment the protocol can be in, add one saying where it
 starts, and the rules together say \emph{everything} the protocol says: what may happen
@@ -72,7 +72,7 @@ typestates and their names are for.
 
 \begin{figure}[ht]
 \centering
-\AccessibleFigure{Typestate graph of Images: start then GetImage then either Image or NotFound each with a double border because the session may end there and a loop for the stutter.}{\Typestates[.62\textwidth]{ctl-images}}
+\AccessibleFigure{Typestate graph of Images: start then GetImage then either Image or NotFound each with a double border because the session may stop there and a loop for the stutter.}{\Typestates[.62\textwidth]{ctl-images}}
 \caption{The four moments of Images, as LeanFM computes them. A double border marks a moment where the conversation may stop; its loop says nothing more happens.}
 \label{fig:images-ts}
 \end{figure}
@@ -107,7 +107,7 @@ $\approx_{k+1}$-related.
 \end{proof}
 
 The lookahead measures how far ahead one must look to tell two typestates apart. When
-it is $0$, the last message and whether the session may end already determine the
+it is $0$, the last message and whether the session may stop already determine the
 typestate. Images has lookahead $0$ (Figure~\ref{fig:images-ts}).
 
 
@@ -118,7 +118,7 @@ For each class $C$ of $\approx_k$, define $\chi^k_C$ by induction on $k$. With $
 (m, e)$ the common label of its nodes,
 \[
 \chi^0_C = \alpha(m) \wedge \beta(e),\qquad
-\alpha(m) = \begin{cases}\after{m} & m \neq \bot\\ \neg\bigvee_{\ell}\after{\ell} & m = \bot\end{cases},\qquad
+\alpha(m) = \begin{cases}\on{m} & m \neq \bot\\ \neg\bigvee_{\ell}\on{\ell} & m = \bot\end{cases},\qquad
 \beta(e) = \begin{cases}\term & e\\ \neg\term & \neg e\end{cases}
 \]
 and, writing $S_C$ for the set of $\approx_k$-classes the nodes of a class $C$ of
@@ -233,7 +233,7 @@ computed rather than drawn.
 Corollary~\ref{cor:best} turns every property one could ask of the protocol into a
 consequence of eleven formulas. For example, every request is answered:
 \[
-\always\big(\after{CreateOrder} \rightarrow \inevitably(\after{Receipt}\vee\after{PaymentDeclined}\vee\after{SoldOut})\big)
+\always\big(\on{CreateOrder} \rightarrow \inevitably(\on{Receipt}\vee\on{PaymentDeclined}\vee\on{SoldOut})\big)
 \]
 holds of PlaceOrder, so it holds of every system bisimilar to it, and need not be
 stated separately. Properties that are \emph{not} consequences of the protocol, such as

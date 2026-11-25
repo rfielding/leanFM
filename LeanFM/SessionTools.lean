@@ -2844,7 +2844,7 @@ instance plays its own role, and a fresh actor belongs to one session only.
 
 - `session_next {lean, events?}`: what may happen next in one session after the events so far (in
   session_conform's format): each allowed step with the cause it must name, and whether the session
-  may end here (`running`, `finished`, or `violates` with the first problem). The view's walk-through
+  may stop here (`running`, `finished`, or `violates` with the first problem). The view's walk-through
   calls it after every click.
 
 - `session_ctl {lean, faithful}`: the protocol's faithful CTL. `faithful: \"rules\"` answers its

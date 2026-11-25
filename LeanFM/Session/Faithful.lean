@@ -96,7 +96,7 @@ def Typestates.deterministic (t : Typestates) : Bool :=
   t.next.all fun ns => (ns.map t.labelOf).toList.eraseDups.length == ns.size
 
 def labelText (l : Option String × Bool) : String :=
-  (l.1.getD "(start)") ++ (if l.2 then " (may end)" else "")
+  (l.1.getD "(start)") ++ (if l.2 then " (may stop)" else "")
 
 /-- What a faithfulness check answers. -/
 structure Verdict where
