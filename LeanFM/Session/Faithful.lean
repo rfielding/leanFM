@@ -205,7 +205,7 @@ def labelFormula (allMsgs : List String) (l : Option String × Bool) : Formula :
   match l.1 with
   -- a message's label is a conversation state (selfhost.mcp.logic.state)
   | some msg => .state msg l.2
-  | none => .and [.not (.or (allMsgs.map Formula.after)), if l.2 then .terminal else .not .terminal]
+  | none => .start l.2
 
 /-- One formula per typestate naming it: its label, and for a typestate that needs lookahead k, which
 typestates of round k-1 may follow. Each round's formulas are built from the round before, so they
@@ -236,7 +236,11 @@ def rules (t : Typestates) : List (String × Formula) :=
   let ns := names t
   ("start", ns[t.final[0]!]!) :: (List.range t.count).map fun c =>
     let nexts := (t.next[c]!).toList.map (ns[·]!)
-    (s!"typestate {c}: {labelText (t.labelOf c)}", .follows ns[c]! nexts)
+    let isState := fun (f : Formula) => match f with | .state .. | .start _ => true | _ => false
+    let rule := match ns[c]!, nexts with
+      | .state m true, [.state m' true] => if m == m' then Formula.final m else .transition ns[c]! nexts
+      | a, _ => if isState a && nexts.all isState then .transition a nexts else .follows a nexts
+    (s!"typestate {c}: {labelText (t.labelOf c)}", rule)
 
 /-- The checker model of a draft (the logic tools' inline task form). -/
 def modelOfDraft (draft : Json) (b : Bounds := LeanFM.Session.sessionBounds) : Except String LGraph := do

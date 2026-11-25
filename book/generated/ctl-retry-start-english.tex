@@ -7,34 +7,36 @@ all of these:
             - Ok was just delivered
             - Busy was just delivered
             - GiveUp was just delivered
-      - (#0) it is not the case that the conversation may stop
+      - it is not the case that the conversation may stop
   - on some path, at the next step:
-      (#1) all of these:
-        - (#2) Ask was just delivered and the formula marked #0
+      (#0) all of these:
+        - the conversation is just after Ask and must go on
         - on some path, at the next step:
-            (#3) all of these:
-              - (#4) Ok was just delivered and the conversation may stop
+            (#1) all of these:
+              - the conversation is just after Ok and may stop
+              - on some path, at the next step:
+                  (#2) all of these:
+                    - the conversation is just after Ok and may stop
+                    - (#3) on some path, at the next step:
+                        the conversation is just after Ok and may stop
+                    - on every path, at the next step:
+                        the conversation is just after Ok and may stop
+              - on every path, at the next step the formula marked #2
+        - on some path, at the next step:
+            (#4) all of these:
+              - the conversation is just after Busy and must go on
               - on some path, at the next step:
                   (#5) all of these:
-                    - the formula marked #4
-                    - (#6) on some path, at the next step:
-                        the formula marked #4
-                    - on every path, at the next step:
-                        the formula marked #4
-              - on every path, at the next step the formula marked #5
-        - on some path, at the next step:
-            (#7) all of these:
-              - (#8) Busy was just delivered and the formula marked #0
-              - on some path, at the next step:
-                  (#9) all of these:
-                    - the formula marked #2
-                    - the formula marked #6
+                    - the conversation is just after Ask and must go on
+                    - the formula marked #3
                     - on some path, at the next step:
-                        the formula marked #8
+                        the conversation is just after Busy and must go on
                     - on every path, at the next step:
-                        the formula marked #4 or the formula marked #8
-              - on every path, at the next step the formula marked #9
+                        at least one of these:
+                          - the conversation is just after Ok and may stop
+                          - the conversation is just after Busy and must go on
+              - on every path, at the next step the formula marked #5
         - on every path, at the next step:
-            the formula marked #3 or the formula marked #7
-  - on every path, at the next step the formula marked #1
+            the formula marked #1 or the formula marked #4
+  - on every path, at the next step the formula marked #0
 \end{lstlisting}

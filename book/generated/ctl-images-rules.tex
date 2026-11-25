@@ -3,14 +3,14 @@ start
   ¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop
 
 typestate 0: (start)
-  always ((¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop) → (someNext (GetImage ∧ ¬stop) ∧ allNext (GetImage ∧ ¬stop)))
+  follows(¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop, state GetImage)
 
 typestate 1: GetImage
-  always ((GetImage ∧ ¬stop) → (someNext (Image ∧ stop) ∧ someNext (NotFound ∧ stop) ∧ allNext ((Image ∧ stop) ∨ (NotFound ∧ stop))))
+  follows(state GetImage, state Image stop, state NotFound stop)
 
 typestate 2: Image (may stop)
-  always ((Image ∧ stop) → (someNext (Image ∧ stop) ∧ allNext (Image ∧ stop)))
+  follows(state Image stop, state Image stop)
 
 typestate 3: NotFound (may stop)
-  always ((NotFound ∧ stop) → (someNext (NotFound ∧ stop) ∧ allNext (NotFound ∧ stop)))
+  follows(state NotFound stop, state NotFound stop)
 \end{lstlisting}

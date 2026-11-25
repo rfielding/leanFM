@@ -632,6 +632,22 @@ def main : IO Unit := do
     (onSt "(follows (state A) (state B stop))" == "proved" && onSt "(follows (state A) (state B))" == "disproved" &&
      onSt "(possibly (state A))" == onSt "(possibly (and (on A) (not stop)))" && onSt "(possibly (state A stop))" == "disproved")
   expect "a state naming an unknown message is refused" (onSt "(possibly (state Nope))" == "rejected")
+  -- the table form: transition over states, final, start (selfhost.mcp.logic.state)
+  expect "transition, final and start are written back in table form"
+    (sexprOf (Json.str "(transition start A)") == "(transition start A)" &&
+     sexprOf (Json.str "(transition A (B stop))") == "(transition A (B stop))" && sexprOf (Json.str "(final B)") == "(final B)")
+  expect "transition reads the same from JSON"
+    ((((parseBounded (parseJ "{\"transition\": [{\"state\": \"A\"}, {\"state\": [\"B\", \"stop\"]}]}")).toOption.map Formula.toJson).getD Json.null) == readsAs "(transition A (B stop))")
+  expect "transition notation" (notationOf "{\"transition\": [\"start\", {\"state\": \"A\"}]}" == "transition(start, A)")
+  expect "transition, final and start decide as follows over states"
+    (onSt "(transition start A)" == "proved" && onSt "(transition A (B stop))" == "proved" && onSt "(final B)" == "proved" &&
+     onSt "(transition A B)" == "disproved" && onSt "(transition start (A stop))" == "disproved" &&
+     onSt "(transition A (B stop))" == onSt "(follows (state A) (state B stop))")
+  expect "transition and final unfold to follows over states"
+    ((((parseBounded (Json.str "(final B)")).toOption.map (·.unfold)).getD .tt) ==
+       ((Formula.follows (.state "B" true) [.state "B" true]).unfold))
+  expect "a malformed transition, final or start is refused"
+    (["(transition A)", "(final)", "(final (B stop))", "(transition A (B go))", "(start go)"].all fun t => (parseBounded (Json.str t)).toOption.isNone)
   -- words that read as English and unfold to one primitive each (selfhost.mcp.logic.words)
   for (sx, js, note, prim) in [
       ("(possibly (on A))", "{\"possibly\": {\"on\": \"A\"}}", "possibly A", "(EF (on A))"),

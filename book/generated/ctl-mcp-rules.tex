@@ -13,45 +13,36 @@ answer (excerpt)
    "notation": "¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop",
    "name": "start",
    "formula": "(and (not (or (on GetImage) (on Image) (on NotFound))) (not stop))"},
-  {"subformulas": 15,
+  {"subformulas": 10,
    "sexprPretty":
-   "(always\n  (implies\n    (and\n      (not (or (on GetImage) (on Image) (on NotFound)))\n      #0=(not stop))\n    (and (someNext #1=(and (on GetImage) #0#)) (allNext (or #1#)))))",
+   "(follows\n  (and (not (or (on GetImage) (on Image) (on NotFound))) (not stop))\n  (state GetImage))",
    "readingIndented":
-   "on every path, always:\n  if:\n    all of these:\n      - it is not the case that:\n          at least one of these:\n            - GetImage was just delivered\n            - Image was just delivered\n            - NotFound was just delivered\n      - (#0) it is not the case that the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step:\n          (#1) GetImage was just de ...",
-   "notation":
-   "always ((¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop) → (someNext (GetImage ∧ ¬stop) ∧ allNext (GetImage ∧ ¬stop)))",
+   "on every path, whenever:\n  all of these:\n    - it is not the case that:\n        at least one of these:\n          - GetImage was just delivered\n          - Image was just delivered\n          - NotFound was just delivered\n    - it is not the case that the conversation may stop\nthe next step is one of these, each possible:\n  - the conversation is just after GetImage and must go on",
+   "notation": "follows(¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop, state GetImage)",
    "name": "typestate 0: (start)",
    "formula":
-   "(always (implies (and (not (or (on GetImage) (on Image) (on NotFound))) #0=(not stop)) (and (someNext #1=(and (on GetImage) #0#)) (allNext (or #1#)))))"},
-  {"subformulas": 15,
-   "sexprPretty":
-   "(always\n  (implies\n    (and (on GetImage) (not stop))\n    (and\n      (someNext #0=(and (on Image) stop))\n      (someNext #1=(and (on NotFound) stop))\n      (allNext (or #0# #1#)))))",
+   "(follows (and (not (or (on GetImage) (on Image) (on NotFound))) (not stop)) (state GetImage))"},
+  {"subformulas": 4,
+   "sexprPretty": "(follows (state GetImage) (state Image stop) (state NotFound stop))",
    "readingIndented":
-   "on every path, always:\n  if:\n    all of these:\n      - GetImage was just delivered\n      - it is not the case that the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step:\n          (#0) Image was just delivered and the conversation may stop\n      - on some path, at the next step:\n          (#1) NotFound was just delivered and the conversation may stop\n      - on ...",
-   "notation":
-   "always ((GetImage ∧ ¬stop) → (someNext (Image ∧ stop) ∧ someNext (NotFound ∧ stop) ∧ allNext ((Image ∧ stop) ∨ (NotFound ∧ stop))))",
+   "on every path, whenever:\n  the conversation is just after GetImage and must go on\nthe next step is one of these, each possible:\n  - the conversation is just after Image and may stop\n  - the conversation is just after NotFound and may stop",
+   "notation": "follows(state GetImage, state Image stop, state NotFound stop)",
    "name": "typestate 1: GetImage",
-   "formula":
-   "(always (implies (and (on GetImage) (not stop)) (and (someNext #0=(and (on Image) stop)) (someNext #1=(and (on NotFound) stop)) (allNext (or #0# #1#)))))"},
-  {"subformulas": 9,
-   "sexprPretty":
-   "(always\n  (implies\n    #0=(and (on Image) stop)\n    (and (someNext #0#) (allNext (or #0#)))))",
+   "formula": "(follows (state GetImage) (state Image stop) (state NotFound stop))"},
+  {"subformulas": 2,
+   "sexprPretty": "(follows (state Image stop) (state Image stop))",
    "readingIndented":
-   "on every path, always:\n  if:\n    (#0) Image was just delivered and the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
-   "notation": "always ((Image ∧ stop) → (someNext (Image ∧ stop) ∧ allNext (Image ∧ stop)))",
+   "on every path, whenever:\n  the conversation is just after Image and may stop\nthe next step is one of these, each possible:\n  - the conversation is just after Image and may stop",
+   "notation": "follows(state Image stop, state Image stop)",
    "name": "typestate 2: Image (may stop)",
-   "formula":
-   "(always (implies #0=(and (on Image) stop) (and (someNext #0#) (allNext (or #0#)))))"},
-  {"subformulas": 9,
-   "sexprPretty":
-   "(always\n  (implies\n    #0=(and (on NotFound) stop)\n    (and (someNext #0#) (allNext (or #0#)))))",
+   "formula": "(follows (state Image stop) (state Image stop))"},
+  {"subformulas": 2,
+   "sexprPretty": "(follows (state NotFound stop) (state NotFound stop))",
    "readingIndented":
-   "on every path, always:\n  if:\n    (#0) NotFound was just delivered and the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
-   "notation":
-   "always ((NotFound ∧ stop) → (someNext (NotFound ∧ stop) ∧ allNext (NotFound ∧ stop)))",
+   "on every path, whenever:\n  the conversation is just after NotFound and may stop\nthe next step is one of these, each possible:\n  - the conversation is just after NotFound and may stop",
+   "notation": "follows(state NotFound stop, state NotFound stop)",
    "name": "typestate 3: NotFound (may stop)",
-   "formula":
-   "(always (implies #0=(and (on NotFound) stop) (and (someNext #0#) (allNext (or #0#)))))"}],
+   "formula": "(follows (state NotFound stop) (state NotFound stop))"}],
  "ruleCount": 5,
  "lookahead": 0,
  "deterministic": true}

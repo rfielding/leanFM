@@ -3,32 +3,32 @@ start
   ¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop
 
 typestate 0: (start)
-  always ((¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop) → (someNext (CreateOrder ∧ ¬stop) ∧ allNext (CreateOrder ∧ ¬stop)))
+  follows(¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop, state CreateOrder)
 
 typestate 1: CreateOrder
-  always ((CreateOrder ∧ ¬stop) → (someNext (Quote ∧ ¬stop) ∧ someNext (SoldOut ∧ stop) ∧ allNext ((Quote ∧ ¬stop) ∨ (SoldOut ∧ stop))))
+  follows(state CreateOrder, state Quote, state SoldOut stop)
 
 typestate 2: Quote
-  always ((Quote ∧ ¬stop) → (someNext (Pay ∧ ¬stop) ∧ allNext (Pay ∧ ¬stop)))
+  follows(state Quote, state Pay)
 
 typestate 3: SoldOut (may stop)
-  always ((SoldOut ∧ stop) → (someNext (SoldOut ∧ stop) ∧ allNext (SoldOut ∧ stop)))
+  follows(state SoldOut stop, state SoldOut stop)
 
 typestate 4: Pay
-  always ((Pay ∧ ¬stop) → (someNext (Charge ∧ ¬stop) ∧ allNext (Charge ∧ ¬stop)))
+  follows(state Pay, state Charge)
 
 typestate 5: Charge
-  always ((Charge ∧ ¬stop) → (someNext (Charged ∧ ¬stop) ∧ someNext (Declined ∧ ¬stop) ∧ allNext ((Charged ∧ ¬stop) ∨ (Declined ∧ ¬stop))))
+  follows(state Charge, state Charged, state Declined)
 
 typestate 6: Charged
-  always ((Charged ∧ ¬stop) → (someNext (Receipt ∧ stop) ∧ allNext (Receipt ∧ stop)))
+  follows(state Charged, state Receipt stop)
 
 typestate 7: Declined
-  always ((Declined ∧ ¬stop) → (someNext (PaymentDeclined ∧ stop) ∧ allNext (PaymentDeclined ∧ stop)))
+  follows(state Declined, state PaymentDeclined stop)
 
 typestate 8: Receipt (may stop)
-  always ((Receipt ∧ stop) → (someNext (Receipt ∧ stop) ∧ allNext (Receipt ∧ stop)))
+  follows(state Receipt stop, state Receipt stop)
 
 typestate 9: PaymentDeclined (may stop)
-  always ((PaymentDeclined ∧ stop) → (someNext (PaymentDeclined ∧ stop) ∧ allNext (PaymentDeclined ∧ stop)))
+  follows(state PaymentDeclined stop, state PaymentDeclined stop)
 \end{lstlisting}

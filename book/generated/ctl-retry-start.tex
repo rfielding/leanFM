@@ -1,20 +1,28 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 (and
-  (and (not (or (on Ask) (on Ok) (on Busy) (on GiveUp))) #0=(not stop))
+  (and (not (or (on Ask) (on Ok) (on Busy) (on GiveUp))) (not stop))
   (someNext
-    #1=(and
-      #2=(and (on Ask) #0#)
+    #0=(and
+      (state Ask)
       (someNext
-        #3=(and
-          #4=(and (on Ok) stop)
-          (someNext #5=(and #4# #6=(someNext #4#) (allNext (or #4#))))
-          (allNext (or #5#))))
-      (someNext
-        #7=(and
-          #8=(and (on Busy) #0#)
+        #1=(and
+          (state Ok stop)
           (someNext
-            #9=(and #2# #6# (someNext #8#) (allNext (or #4# #8#))))
-          (allNext (or #9#))))
-      (allNext (or #3# #7#))))
-  (allNext (or #1#)))
+            #2=(and
+              (state Ok stop)
+              #3=(someNext (state Ok stop))
+              (allNext (or (state Ok stop)))))
+          (allNext (or #2#))))
+      (someNext
+        #4=(and
+          (state Busy)
+          (someNext
+            #5=(and
+              (state Ask)
+              #3#
+              (someNext (state Busy))
+              (allNext (or (state Ok stop) (state Busy)))))
+          (allNext (or #5#))))
+      (allNext (or #1# #4#))))
+  (allNext (or #0#)))
 \end{lstlisting}

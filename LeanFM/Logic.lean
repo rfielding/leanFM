@@ -167,6 +167,12 @@ inductive Formula where
   /-- a conversation state: just after `message`, where the conversation must go on or, with
   `mayStop`, may stop (selfhost.mcp.logic.state) -/
   | state (message : String) (mayStop : Bool)
+  /-- the state before any message: the conversation must go on or, with `mayStop`, may stop at once -/
+  | start (mayStop : Bool)
+  /-- a row of a transition table: from state `a`, the next state is one of `bs`, each possible -/
+  | transition (a : Formula) (bs : List Formula)
+  /-- a state where the conversation may stop and nothing else can happen -/
+  | final (message : String)
   /-- a word that reads as English: `eventually f`, `a until b` (selfhost.mcp.logic.words) -/
   | word (w : Word) (fs : List Formula)
   | never (f : Formula)
@@ -199,6 +205,7 @@ partial def size : Formula → Nat
   | follows a bs => 1 + size a + (bs.map size).foldl (· + ·) 0
   | leadsTo a b | precedes a b => 1 + size a + size b
   | word _ fs => 1 + (fs.map size).foldl (· + ·) 0
+  | transition a bs => 1 + size a + (bs.map size).foldl (· + ·) 0
   | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => 1 + size a + size b
   | _ => 1
 
@@ -208,6 +215,9 @@ partial def toJson : Formula → Json
   | atState s => Json.mkObj [("at", s)]
   | after m => Json.mkObj [("on", m)]
   | state m b => Json.mkObj [("state", if b then Json.arr #[Json.str m, Json.str "stop"] else Json.str m)]
+  | start b => if b then Json.mkObj [("start", "stop")] else "start"
+  | transition a bs => Json.mkObj [("transition", Json.arr ((a :: bs).map toJson).toArray)]
+  | final m => Json.mkObj [("final", m)]
   | terminal => "stop"
   | field m n v => Json.mkObj [("field", Json.mkObj [("message", m), ("name", n), ("value", v)])]
   | predicate t => Json.mkObj [("predicate", t)]
@@ -250,6 +260,9 @@ partial def reading : Formula → String
   | atState s => "the task is in state " ++ s
   | after m => m ++ " was just delivered"
   | state m b => "the conversation is just after " ++ m ++ (if b then " and may stop" else " and must go on")
+  | start b => "no message has been delivered yet" ++ (if b then " and the conversation may stop" else " and the conversation must go on")
+  | transition a bs => "on every path, whenever " ++ paren a ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (bs.map paren)
+  | final m => "on every path, once the conversation is just after " ++ m ++ " it may stop and nothing else can happen"
   | terminal => "the conversation may stop"
   | field m n v => "the last message was " ++ m ++ " with " ++ n ++ " = " ++ v
   | predicate t => "\"" ++ t ++ "\" holds (a predicate text, not an observable event)"
@@ -294,6 +307,9 @@ partial def symbols : Formula → String
   | atState s => "@" ++ s
   | after m => m
   | state m b => "state " ++ m ++ (if b then " stop" else "")
+  | start b => "start" ++ (if b then " stop" else "")
+  | transition a bs => "transition(" ++ ", ".intercalate ((a :: bs).map stateSym) ++ ")"
+  | final m => "final(" ++ m ++ ")"
   | terminal => "stop"
   | field m n v => m ++ "." ++ n ++ " = " ++ v
   | predicate t => "\"" ++ t ++ "\""
@@ -326,6 +342,12 @@ partial def symbols : Formula → String
   | au a b => symbolsArg a ++ " allUntil " ++ symbolsArg b
   | ew a b => symbolsArg a ++ " someUnless " ++ symbolsArg b
   | aw a b => symbolsArg a ++ " allUnless " ++ symbolsArg b
+/-- A transition's state written as in the table: a bare name, Name stop, start or start stop. -/
+partial def stateSym (f : Formula) : String :=
+  match f with
+  | state m b => m ++ (if b then " stop" else "")
+  | start b => "start" ++ (if b then " stop" else "")
+  | g => symbols g
 /-- An operand: parenthesized only when it is a binary connective (and, or, implies). -/
 partial def symbolsArg (f : Formula) : String :=
   match f with
@@ -360,6 +382,8 @@ def expand : Formula → Formula
   | precedes a b => not (eu (not a) b)
   | word w fs => w.apply fs
   | state m b => and [after m, if b then terminal else not terminal]
+  | transition a bs => follows a bs
+  | final m => follows (state m true) [state m true]
   | f => f
 
 /-- Negation pushed inward through the CTL dualities. -/
@@ -372,7 +396,7 @@ partial def negate : Formula → Formula
   | implies a b => and [a, negate b]
   | stronglyImplies a b => or [ag (negate a), ef (and [a, negate b])]
   | outcomes fs => or (fs.map (fun a => ag (negate a)) ++ [eg (and (fs.map negate))])
-  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) | f@(word ..) => negate (expand f)
+  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) | f@(word ..) | f@(transition ..) | f@(final _) => negate (expand f)
   | never f => ef f
   | ex f => ax (negate f)
   | ax f => ex (negate f)
@@ -399,6 +423,7 @@ partial def mode : Formula → String
   | leadsTo .. => "always (non-vacuous)"
   | precedes .. => "never"
   | word w fs => mode (w.apply fs)
+  | transition .. | final _ => "always"
   | _ => "compound"
 
 partial def subformulas (f : Formula) : List Formula :=
@@ -408,13 +433,17 @@ partial def subformulas (f : Formula) : List Formula :=
     | follows a bs => subformulas a ++ bs.flatMap subformulas
     | leadsTo a b | precedes a b => subformulas a ++ subformulas b
     | word _ fs => fs.flatMap subformulas
+    | transition a bs => subformulas a ++ bs.flatMap subformulas
     | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => subformulas a ++ subformulas b
     | _ => []
 
 /-- Every word and function replaced by the CTL primitives it means, all the way down
 (selfhost.mcp.logic.words): the plain CTL under any formula. -/
 partial def unfold (f : Formula) : Formula :=
-  match f.expand with
+  -- a function may expand to another (transition to follows): keep expanding until a primitive
+  let e := f.expand
+  if e != f && (match f with | .state .. => false | _ => true) && (match e with | .follows .. | .transition .. | .final _ | .leadsTo .. | .precedes .. | .outcomes _ | .word .. => true | _ => false) then unfold e else
+  match e with
   | not g => not (unfold g)
   | and fs => and (fs.map unfold)
   | or fs => or (fs.map unfold)
@@ -470,6 +499,8 @@ def shape : Formula → String × List Formula × Option String
   | .leadsTo a b => ("leadsTo", [a, b], none)
   | .precedes a b => ("precedes", [a, b], none)
   | .word w fs => (w.name, fs, none)
+  | .transition a bs => ("transition", a :: bs, none)
+  | .final m => ("final", [.state m true], none)
   | .eu a b => ("EU", [a, b], none) | .au a b => ("AU", [a, b], none)
   | .ew a b => ("EW", [a, b], none) | .aw a b => ("AW", [a, b], none)
   | f => ("atom", [], some (reprStr f))
@@ -534,7 +565,7 @@ def treeSize (d : Dag) (cap : Nat) : Nat := Id.run do
 /-- A name as the s-expression reader reads it: bare when it is a plain run, quoted otherwise. -/
 def nameText (s : String) : String :=
   let plain := !s.isEmpty && s.toList.all (fun c => c.isAlphanum || "_.:/@$-".toList.contains c)
-    && !["stop", "true", "false"].contains s
+    && !["stop", "start", "true", "false"].contains s
   if plain then s else "\"" ++ (s.replace "\\" "\\\\" |>.replace "\"" "\\\"") ++ "\""
 
 /-- The atoms' retired names, refused naming their replacements (selfhost.mcp.logic.on). -/
@@ -544,6 +575,7 @@ def retiredTerminal : String := "terminal is now stop: write stop, where the con
 def atomText : Formula → String
   | .after m => s!"(on {nameText m})"
   | .state m b => s!"(state {nameText m}" ++ (if b then " stop)" else ")")
+  | .start b => if b then "(start stop)" else "start"
   | .atState x => s!"(at {nameText x})"
   | .claimed c => s!"(claimed {nameText c})"
   | .terminal => "stop"
@@ -570,6 +602,15 @@ partial def flatAt (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashM
     let (labels, pre) := if shared then (labels.insert i labels.size, s!"#{labels.size}=") else (labels, "")
     if op == "atom" then (pre ++ atomText (d.atoms[i]!.getD .tt), labels)
     else if op == "true" || op == "false" then (op, labels)
+    else if op == "transition" || op == "final" then
+      -- a transition's states are written as in a table: a bare name, (Name stop), start (selfhost.mcp.logic.state)
+      let arg := fun (k : Nat) => match d.atoms[k]?.join with
+        | some (.state m true) => if op == "final" then nameText m else s!"({nameText m} stop)"
+        | some (.state m false) => nameText m
+        | some (.start true) => "(start stop)"
+        | some (.start false) => "start"
+        | _ => (flatAt d parents k {} core).1
+      (pre ++ "(" ++ " ".intercalate (op :: ((d.kids[i]!).toList.map arg)) ++ ")", labels)
     else
       let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
         let (t, l) := flatAt d parents k acc.2 core; (acc.1.push t, l)) (#[], labels)
@@ -595,7 +636,7 @@ partial def toSexprPretty (d : Dag) (width : Nat := sexprWidth) (core : Bool := 
   let rec go (i indent close : Nat) (labels : Std.HashMap Nat Nat) : String × Std.HashMap Nat Nat :=
     let (flat, after) := flatAt d parents i labels core
     let op := d.ops[i]!
-    if indent + flat.length + close ≤ width || labels.contains i || op == "atom" || op == "true" || op == "false" then
+    if indent + flat.length + close ≤ width || labels.contains i || op == "atom" || op == "true" || op == "false" || op == "transition" || op == "final" then
       (flat, after)
     else
       let shared := (parents[i]?.getD 0) ≥ 2
@@ -632,7 +673,8 @@ def readOp (op : String) (p : Array String) : String :=
   | "EW" => "on some path, " ++ part 0 ++ " holds unless " ++ part 1 ++ " (which need not happen)"
   | "AW" => "on every path, " ++ part 0 ++ " holds unless " ++ part 1 ++ " (which need not happen)"
   | "outcomes" => "each of these can happen, and on every path one of them eventually happens: " ++ "; ".intercalate p.toList
-  | "follows" => "on every path, whenever " ++ part 0 ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (p.toList.drop 1)
+  | "follows" | "transition" => "on every path, whenever " ++ part 0 ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (p.toList.drop 1)
+  | "final" => "on every path, whenever " ++ part 0 ++ ", nothing else can happen"
   | "precedes" => "on every path, " ++ part 1 ++ " never holds unless " ++ part 0 ++ " has held at or before that point"
   | _ => op ++ "(" ++ ", ".intercalate p.toList ++ ")"
 
@@ -659,7 +701,8 @@ def readClauses (op : String) (ks : Array Nat) : List (String × List Nat × Boo
   | "EW" => [("on some path, this holds:", k 0, false), ("unless this does (which need not happen):", k 1, false)]
   | "AW" => [("on every path, this holds:", k 0, false), ("unless this does (which need not happen):", k 1, false)]
   | "outcomes" => [("each of these can happen, and on every path one of them eventually happens:", ks.toList, true)]
-  | "follows" => [("on every path, whenever:", k 0, false), ("the next step is one of these, each possible:", ks.toList.drop 1, true)]
+  | "follows" | "transition" => [("on every path, whenever:", k 0, false), ("the next step is one of these, each possible:", ks.toList.drop 1, true)]
+  | "final" => [("on every path, whenever this holds, nothing else can happen:", k 0, false)]
   | "precedes" => [("on every path, this never holds:", k 1, false), ("unless this has held at or before that point:", k 0, false)]
   | _ => [(op ++ ":", ks.toList, true)]
 
@@ -877,6 +920,7 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
     | some f => return f
     | none => throw s!"#{n}# refers to a label not yet defined (a label is defined when its expression is complete)"
   | some (.name "stop") => let _ ← next (); count (); return .terminal
+  | some (.name "start") => let _ ← next (); count (); return .start false
   | some (.name "terminal") => throw Dag.retiredTerminal
   | some (.name "true") => let _ ← next (); count (); return .tt
   | some (.name "false") => let _ ← next (); count (); return .ff
@@ -901,6 +945,20 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       match ← next () with
       | some .rp => pure x
       | _ => throw s!"{op} takes exactly one name"
+    let bad := s!"{op} takes states written as in a table: a name, (Name stop), start or (start stop)"
+    -- one state: a bare name, start, or a parenthesized (Name stop) or (start stop)
+    let rec tableStates (acc : Array Formula) : StateT SexprState (Except String) (Array Formula) := do
+      match ← next () with
+      | some .rp => return acc
+      | some (.name "start") => tableStates (acc.push (.start false))
+      | some (.name x) => let x' ← checkString op x; tableStates (acc.push (.state x' false))
+      | some .lp =>
+        let n ← match ← next () with | some (.name x) => pure x | _ => throw bad
+        let n' ← checkString op n
+        match ← next (), ← next () with
+        | some (.name "stop"), some .rp => tableStates (acc.push (if n' == "start" then .start true else .state n' true))
+        | _, _ => throw bad
+      | _ => throw bad
     match op with
     | "on" => return .after (← nameArg ())
     | "state" =>
@@ -915,6 +973,23 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
         | some .rp => return .state m true
         | _ => throw bad
       | _ => throw bad
+    | "start" =>
+      match ← next () with
+      | some (.name "stop") =>
+        match ← next () with
+        | some .rp => return .start true
+        | _ => throw "start takes nothing, or the word stop: start or (start stop)"
+      | _ => throw "start takes nothing, or the word stop: start or (start stop)"
+    | "transition" | "final" =>
+      let xs ← tableStates #[]
+      if op == "final" then
+        match xs.toList with
+        | [.state m false] => return .final m
+        | _ => throw "final takes one message name: (final M)"
+      else
+        match xs.toList with
+        | a :: b :: bs => return .transition a (b :: bs)
+        | _ => throw "transition takes a state and at least one next state"
     | "after" => throw Dag.retiredAfter
     | "at" => return .atState (← nameArg ())
     | "claimed" => return .claimed (← nameArg ())
@@ -978,6 +1053,7 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
   | .bool true => return .tt
   | .bool false => return .ff
   | .str "stop" => return .terminal
+  | .str "start" => return .start false
   | .str "terminal" => throw Dag.retiredTerminal
   | .str "true" => return .tt
   | .str "false" => return .ff
@@ -1006,6 +1082,21 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
       match op with
       | "at" => atomStr .atState
       | "on" => atomStr .after
+      | "start" =>
+        match arg with
+        | .str "stop" => return .start true
+        | _ => throw "start takes \"stop\": {\"start\": \"stop\"}, or is the string \"start\""
+      | "final" => atomStr .final
+      | "transition" =>
+        match arg with
+        | .arr xs =>
+          let fs ← xs.toList.mapM (fun x => parseFormula x (depth + 1) bnd)
+          unless fs.all (fun | .state .. | .start _ => true | _ => false) do
+            throw "transition takes states: {\"state\": M}, {\"state\": [M, \"stop\"]}, \"start\" or {\"start\": \"stop\"}"
+          match fs with
+          | a :: b :: bs => return .transition a (b :: bs)
+          | _ => throw "transition takes a state and at least one next state"
+        | _ => throw "transition takes an array of states"
       | "state" =>
         let bad := "state takes a message, or [message, \"stop\"] where the conversation may stop"
         match arg with
@@ -1223,7 +1314,7 @@ def secretPathNames (field path : String) : Bool :=
 def unknownAtoms (t : TaskModel) (f : Formula) : List String :=
   (f.atoms.filterMap fun
     | .atState s => if t.states.contains s then none else some ("unknown state " ++ s)
-    | .after m | .state m _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
+    | .after m | .state m _ | .final m => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .field m _ _ => if t.messages.contains m then none else some ("unknown message " ++ m ++ " for task " ++ t.id)
     | .claimed c => if t.transitions.any (·.claim == some c) then none
         else some ("no transition of task " ++ t.id ++ " makes the claim " ++ c)
@@ -1368,6 +1459,8 @@ partial def satTree (m : Model) : Formula → Array Bool
   | .atState s => m.nodes.map (·.state == s)
   | .after msg => m.nodes.map (·.message == some msg)
   | f@(.state ..) => satTree m f.expand
+  | .start b => m.nodes.map (fun n => n.message.isNone && (m.task.terminals.contains n.state == b))
+  | f@(.transition ..) | f@(.final _) => satTree m f.expand
   | .terminal => m.nodes.map (fun n => m.task.terminals.contains n.state)
   | .claimed c => m.nodes.map (·.claims.contains c)
   | .secret a b f => m.nodes.map fun n =>
@@ -1435,11 +1528,13 @@ def Core.ofDag (d : Dag) : Core × Nat := Id.run do
   let mut ids : Array Nat := #[]
   let mut root := 0
   for i in [0:d.size] do
-    let ks := (d.kids[i]!).map (ids[·]!)
+    let ks0 := (d.kids[i]!).map (ids[·]!)
+    -- a transition is follows; final m is follows (state m stop) [state m stop] (selfhost.mcp.logic.state)
+    let ks := if d.ops[i]! == "final" then ks0 ++ ks0 else ks0
     let k0 := ks[0]?.getD 0
     let k1 := ks[1]?.getD 0
     let mk := fun (c : Core) (op : COp) (kids : Array Nat) => c.mk' op kids
-    let (c', r) := match Word.coreOf d.ops[i]! with
+    let (c', r) := match (match d.ops[i]! with | "transition" | "final" => "follows" | o => Word.coreOf o) with
       | "true" => mk c .tt #[]
       | "false" => mk c .ff #[]
       | "atom" => c.mk' .atom #[] i
@@ -1788,7 +1883,7 @@ partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option
     | some g => some { kind := "unreachable", path := [i], note := s!"the outcome {g.symbols} can never happen" }
     | none => evidence m i false (.af (.or fs))
   | false, .and fs => (fs.find? (fun g => !get (sat g) i)).bind (evidence m i false)
-  | h, f@(.follows ..) | h, f@(.leadsTo ..) | h, f@(.precedes ..) | h, f@(.word ..) => evidence m i h f.expand
+  | h, f@(.follows ..) | h, f@(.leadsTo ..) | h, f@(.precedes ..) | h, f@(.word ..) | h, f@(.transition ..) | h, f@(.final _) => evidence m i h f.expand
   | false, .implies a b => (evidence m i true a).orElse fun _ => evidence m i false b
   | _, _ => none
 

@@ -769,22 +769,26 @@ def ruleRows : List Json := (((field (ctl (Json.mkObj [("lean", Json.str ordersP
 #guard ruleRows.all fun r => let t := (field (.ok r) "sexprPretty").getStr?.toOption.getD ""; !t.contains "terminal" && !t.contains "(after "
 #guard ruleRows.any fun r => ((field (.ok r) "sexprPretty").getStr?.toOption.getD "").contains "stop"
 -- faithful rules print the atom as on, never after (selfhost.mcp.logic.on)
-#guard ruleRows.all fun r => let t := (field (.ok r) "sexprPretty").getStr?.toOption.getD ""; !t.contains "(after " &&
-  (t.contains "(state " || (field (.ok r) "name").getStr?.toOption == some "start")
+#guard ruleRows.all fun r => let t := (field (.ok r) "sexprPretty").getStr?.toOption.getD ""; !t.contains "(after " && !t.contains "terminal"
 -- each typestate's rule is follows over states, and unfolds to the always/someNext/allNext rule it replaced
 -- (selfhost.mcp.logic.state)
-#guard (ruleRows.drop 1).all fun r => let t := (field (.ok r) "formula").getStr?.toOption.getD ""; t.startsWith "(follows (" && t.contains "(state "
+#guard (ruleRows.drop 1).all fun r => let t := (field (.ok r) "formula").getStr?.toOption.getD ""; t.startsWith "(transition " || t.startsWith "(final "
+#guard (ruleRows.take 1).all fun r => (field (.ok r) "formula").getStr?.toOption == some "start"
 #guard (ruleRows.drop 1).all fun r =>
+  let old (a : LeanFM.Logic.Formula) (bs : List LeanFM.Logic.Formula) := LeanFM.Logic.Formula.unfold (.ag (.implies a (.and (bs.map .ex ++ [.ax (.or bs)]))))
   match LeanFM.Logic.parseFormula (Json.str ((field (.ok r) "formula").getStr?.toOption.getD "")) with
-  | .ok (.follows a bs) => (LeanFM.Logic.Formula.follows a bs).unfold ==
-      LeanFM.Logic.Formula.unfold (.ag (.implies a (.and (bs.map .ex ++ [.ax (.or bs)]))))
+  | .ok f@(.transition a bs) => f.unfold == old a bs
+  | .ok f@(.final m) => f.unfold == old (.state m true) [.state m true]
   | _ => false
+#guard verdict (ctlOver "(transition Quote Pay)") == "proved"
+#guard verdict (ctlOver "(transition Charge Charged Declined)") == "proved"
+#guard verdict (ctlOver "(final Receipt)") == "proved"
+#guard verdict (ctlOver "(transition start CreateOrder)") == "proved"
 #guard verdict (ctlOver "(follows (state Quote) (state Pay))") == "proved"
 #guard verdict (ctlOver "(follows (state Charge) (state Charged) (state Declined))") == "proved"
 #guard verdict (ctlOver "(follows (state Quote) (state Pay stop))") == "disproved"
 #guard verdict (ctlOver "(possibly (state Receipt stop))") == "proved"
 #guard !ruleRows.isEmpty && ruleRows.all (fun r => (r.getObjValAs? String "sexprPretty").toOption.isSome)
-#guard ruleRows.any (fun r => ((r.getObjValAs? String "sexprPretty").toOption.getD "").contains "\n")
 -- session_ctl answers carry the indented reading (selfhost.mcp.logic.explain)
 #guard ((field (ctlOver "(leadsTo (on Pay) (on Charge))") "readingIndented").getStr?.toOption.getD "").startsWith "it is possible that eventually:"
 
