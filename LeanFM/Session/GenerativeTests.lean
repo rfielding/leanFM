@@ -74,7 +74,7 @@ def externalWeights := Json.mkObj [("name","external-v1"),("choices",toJson [Jso
 def unknownWeights := sampleText.replace "probability 3/4:" "" |>.replace "probability 1/4:" ""
 #guard ok (check (args unknownWeights)) "ok"
 #guard errorHas (simulate (args unknownWeights)) "no probabilities"
-def concurrent := "protocol P (A,B,C) { r: R from A to B; clock start = time(r); par { X from B to A; } and { Y from B to C; } }"
+def concurrent := "protocol P (A,B,C) { r: R from A to B; clock start = time(r); parallel { X from B to A; } and { Y from B to C; } }"
 #guard ok (check (args concurrent)) "ok"
 #guard errorHas (simulate (args concurrent)) "scheduling semantics"
 
@@ -109,7 +109,7 @@ def reportStatus (r : Except String Json) : Option String := do
 def written := Text.write [{name := parsed.name, roles := parsed.roles, body := parsed.body}]
 #guard ok (check (args written)) "ok"
 #guard (Generative.compile ((Generative.resolve (Text.parse written).toOption.get!.body).toOption.get!) parsed.roles).toOption.get!.length == 3
-#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 26 "par { ") ++ "X from A to B;" ++ String.join (List.replicate 26 " }") ++ " }")) "deeply"
+#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 26 "parallel { ") ++ "X from A to B;" ++ String.join (List.replicate 26 " }") ++ " }")) "deeply"
 
 #guard errorHas (Generative.appendPaths (List.replicate 65 {}) (List.replicate 65 {})) "4096"
 #guard errorHas (check (args (sampleText.replace "clock settlement =" "clock settlement = time(ended); clock settlement ="))) "duplicate clock"
@@ -121,9 +121,9 @@ def guarded := (sampleText.replace "import LeanFM.Session.Syntax\n" "import Lean
 def guardedParsed := (Text.parse guarded).toOption.get!
 #guard ok (check (args (Text.writeAll guardedParsed.types [{name := guardedParsed.name, roles := guardedParsed.roles, body := guardedParsed.body}]))) "ok"
 #guard ok (check (args "protocol P (A,B) { clock from A to B; obligation from B to A; probability from A to B; }")) "ok"
-#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 30 "par { ") ++ "X from A to B; " ++ String.join (List.replicate 30 "} ") ++ "}")) "nested too deeply"
+#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 30 "parallel { ") ++ "X from A to B; " ++ String.join (List.replicate 30 "} ") ++ "}")) "nested too deeply"
 -- nesting past what the grammar parses is refused before parsing, so no input can exhaust the stack
-#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 1000 "par { ") ++ "}")) "nested more than 64 deep"
+#guard errorHas (Text.parse ("protocol P (A,B) { " ++ String.join (List.replicate 1000 "parallel { ") ++ "}")) "nested more than 64 deep"
 -- probability is only part of a declared choice
 #guard errorHas (Text.parse "protocol P (A,B) { probability 1/2: X from A to B; }") "expected"
 end LeanFM.Session.GenerativeTests

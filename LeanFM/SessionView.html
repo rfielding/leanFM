@@ -447,7 +447,7 @@ function diagram(model, opts) {
   // ---- the source each drawn part comes from, as the explorer's tree finds it: within the protocol
   // that owns the part (the innermost included protocol around it, else the one drawn), the next
   // line, in drawing order, that has the part's message ("Label from"), event ("Label at") or
-  // keyword (choice, rec, par, sessions, include Name)
+  // keyword (choice, loop, parallel, sessions, include Name)
   const srcLines = String(typeof opts.source === "string" ? opts.source : (text ? text.value : "")).split("\n");
   const defOf = (name) => (Array.isArray(opts.defs) ? opts.defs : []).find((d) => d && d.name === name);
   const ownerAt = (y, self) => {
@@ -478,7 +478,7 @@ function diagram(model, opts) {
     items.push({ y, shape: s, label: lab, what: (isMsg ? "message " : "event ") + label,
       re: new RegExp("(^|[^A-Za-z0-9_])" + esc(label) + (isMsg ? " from\\b" : " at\\b")), block: false });
   }
-  const KW = { alt: /\bchoice\b/, loop: /\brec\s+[A-Za-z_]/, sessions: /\bsessions\b/, par: /\bpar\b/, join: /\bpar\b/ };
+  const KW = { alt: /\bchoice\b/, loop: /\bloop\s+[A-Za-z_]/, sessions: /\bsessions\b/, par: /\bparallel\b/, join: /\bjoin\b/ };
   for (const f of frames) {
     const re = f.kind === "ref" ? (f.name ? new RegExp("\\binclude\\s+" + esc(f.name) + "\\b") : null) : KW[f.kind];
     if (re) items.push({ y: f.y, frame: f, re, block: true, what: (f.kind === "ref" ? "include " + f.name : f.kind + " frame") });
@@ -1736,27 +1736,27 @@ function drawPropForm() {
   ctlSuggestions.forEach((sg, i) => { const o = el("option", "", String(sg.name || "") + " — " + String(sg.verdict || "")); o.value = String(i); sel.appendChild(o); });
   const area = el("textarea");
   area.spellcheck = false; area.value = ctlFormula;
-  area.setAttribute("aria-label", 'The property as JSON CTL over {"after": "Label"} and "terminal"');
+  area.setAttribute("aria-label", 'The property as JSON CTL over {"on": "Label"} and "stop"');
   const decide = el("button", "", "Decide");
   sel.addEventListener("change", () => { const p = ctlSuggestions[Number(sel.value)]; if (p && p.formula !== undefined) { area.value = ctlFormula = JSON.stringify(p.formula, null, 2); runCtl(); } });
   area.addEventListener("input", () => { ctlFormula = area.value; });
   decide.addEventListener("click", () => { ctlFormula = area.value; runCtl(); });
   const line = el("div", "controls"); line.append(sel, decide);
-  form.append(propBuilder(area), el("p", "meta", 'JSON CTL over {"after": "Label"} (a message or event just happened), "terminal" (the session ended) and {"secret": {"to": "Role"}} (a field ending in _secr was just sent; ask it when the project needs secrecy). Empty, Decide lists the properties suggested for this protocol. In the Tree, a message has buttons that fill this in.'), area, line);
+  form.append(propBuilder(area), el("p", "meta", 'JSON CTL over {"on": "Label"} (on delivery of that message or event), "stop" (the conversation may stop) and {"secret": {"to": "Role"}} (a field ending in _secr was just sent; ask it when the project needs secrecy). Empty, Decide lists the properties suggested for this protocol. In the Tree, a message has buttons that fill this in.'), area, line);
   propBox.replaceChildren(form);
 }
 // Properties built from the protocol's own messages: a pattern and one or two message labels fill in
 // the formula, which LeanFM decides. The labels are read from the protocol text in the editor (each
 // "Label from A to B" and "Label at A"); only the list to choose from comes from the text.
 const PROP_PATTERNS = [
-  ["A can happen", false, (a) => ({ EF: { after: a } })],
-  ["A always happens", false, (a) => ({ AF: { after: a } })],
-  ["A never happens", false, (a) => ({ AG: { not: { after: a } } })],
-  ["after A, the session can still end", false, (a) => ({ AG: { implies: [{ after: a }, { EF: "terminal" }] } })],
-  ["after A, B always follows", true, (a, b) => ({ AG: { implies: [{ after: a }, { AF: { after: b } }] } })],
-  ["after A, B can still happen", true, (a, b) => ({ AG: { implies: [{ after: a }, { EF: { after: b } }] } })],
-  ["after A, B never happens", true, (a, b) => ({ AG: { implies: [{ after: a }, { AG: { not: { after: b } } }] } })],
-  ["B only after A (never before it)", true, (a, b) => ({ not: { EU: [{ not: { after: a } }, { after: b }] } })] ];
+  ["A can happen", false, (a) => ({ EF: { on: a } })],
+  ["A always happens", false, (a) => ({ AF: { on: a } })],
+  ["A never happens", false, (a) => ({ AG: { not: { on: a } } })],
+  ["on A, the session can still stop", false, (a) => ({ AG: { implies: [{ on: a }, { EF: "stop" }] } })],
+  ["on A, B always follows", true, (a, b) => ({ AG: { implies: [{ on: a }, { AF: { on: b } }] } })],
+  ["on A, B can still happen", true, (a, b) => ({ AG: { implies: [{ on: a }, { EF: { on: b } }] } })],
+  ["on A, B never happens", true, (a, b) => ({ AG: { implies: [{ on: a }, { AG: { not: { on: b } } }] } })],
+  ["B only after A (never before it)", true, (a, b) => ({ not: { EU: [{ not: { on: a } }, { on: b }] } })] ];
 function protocolLabels() {
   const src = text ? String(text.value) : "", seen = new Set();
   const re = /(?:^|[;{}\s])(?:[A-Za-z_][A-Za-z0-9_]*\s*:\s*)?([A-Z][A-Za-z0-9_]*)\s+(?:from\s+[A-Za-z_][A-Za-z0-9_]*\s+to\s+[A-Za-z_][A-Za-z0-9_]*|at\s+[A-Za-z_][A-Za-z0-9_]*\s*;)/g;
@@ -2179,11 +2179,11 @@ function ctlPanels(r) {
 }
 // questions about one message, asked of session_ctl from the tree
 function messageQuestions(label) {
-  const a = { after: label };
+  const a = { on: label };
   return [
     ["Can " + label + " happen?", { EF: a }],
     ["Does " + label + " always happen?", { AF: a }],
-    ["After " + label + ", can the session still end?", { AG: { implies: [a, { EF: "terminal" }] } }] ];
+    ["After " + label + ", can the session still end?", { AG: { implies: [a, { EF: "stop" }] } }] ];
 }
 
 // ---- a message's payload: what LeanFM says it carries ------------------------------------------

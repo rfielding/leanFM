@@ -45,6 +45,18 @@ def leadsTo {S : Type} (p q : CTL S) : CTL S := stronglyImplies p (CTL.af q)
 /-- `q` never happens before `p`, and need not happen at all. -/
 def precedes {S : Type} (p q : CTL S) : CTL S := CTL.neg (CTL.eu (CTL.neg p) q)
 
+/-! Words that read as English (selfhost.mcp.logic.words), each one primitive. -/
+def possibly {S : Type} (p : CTL S) : CTL S := CTL.ef p
+def inevitably {S : Type} (p : CTL S) : CTL S := CTL.af p
+def always {S : Type} (p : CTL S) : CTL S := CTL.ag p
+def someAlways {S : Type} (p : CTL S) : CTL S := CTL.eg p
+def allNext {S : Type} (p : CTL S) : CTL S := CTL.ax p
+def someNext {S : Type} (p : CTL S) : CTL S := CTL.ex p
+def allUntil {S : Type} (p q : CTL S) : CTL S := CTL.au p q
+def someUntil {S : Type} (p q : CTL S) : CTL S := CTL.eu p q
+def allUnless {S : Type} (p q : CTL S) : CTL S := CTL.aw p q
+def someUnless {S : Type} (p q : CTL S) : CTL S := CTL.ew p q
+
 partial def anyReachable [DecidableEq S]
     (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
   if p s then
@@ -94,7 +106,7 @@ partial def existsUntil [DecidableEq S]
   else
     (succ s).any (existsUntil succ p q (s :: seen))
 
-partial def allUntil [DecidableEq S]
+partial def allUntilFrom [DecidableEq S]
     (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
   if q s then
     true
@@ -105,7 +117,7 @@ partial def allUntil [DecidableEq S]
   else
     match succ s with
     | [] => false
-    | next => next.all (allUntil succ p q (s :: seen))
+    | next => next.all (allUntilFrom succ p q (s :: seen))
 
 partial def existsWeakUntil [DecidableEq S]
     (succ : S -> List S) (p q : S -> Bool) (seen : List S) (s : S) : Bool :=
@@ -149,7 +161,7 @@ partial def holds [DecidableEq S] (succ : S -> List S) (s : S) : CTL S -> Bool
      counterexample instead of implementing a separate universal traversal. -/
   | ag p => !(anyReachable succ (fun s' => !(holds succ s' p)) [] s)
   | eu p q => existsUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
-  | au p q => allUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
+  | au p q => allUntilFrom succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
   | ew p q => existsWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
   | aw p q => allWeakUntil succ (fun s' => holds succ s' p) (fun s' => holds succ s' q) [] s
 

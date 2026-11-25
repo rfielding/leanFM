@@ -111,7 +111,7 @@ example : PlaceOrderFile.Pay := { amount := 10, card_secr := "4242" }
 namespace Copies
 structure Try where n : Nat
 protocol Retry (A, B) {
-  rec Again at most 2 {
+  loop Again at most 2 {
     t: Try from A to B where t.n > 0 and not (t.n = 7);
     choice { Ok from B to A cause t; } or { No from B to A cause t; continue Again; }
   } otherwise { GiveUp from A to B; }
@@ -120,7 +120,7 @@ end Copies
 -- copy 2 reads its own ids, and its condition is the renamed text the text reading writes
 #guard agrees "structure Try where n : Nat
 protocol Retry (A, B) {
-  rec Again at most 2 {
+  loop Again at most 2 {
     t: Try from A to B where t.n > 0 and not (t.n = 7);
     choice { Ok from B to A cause t; } or { No from B to A cause t; continue Again; }
   } otherwise { GiveUp from A to B; }
@@ -152,6 +152,18 @@ def rewrittenRide : String := match Text.parse (include_str "../../examples/sess
   | .ok p => Text.writeAll p.types [{ name := p.name, roles := p.roles, body := p.body }]
   | .error e => e
 #elab_leanfm_text RewrittenRide rewrittenRide
+
+-- keywords are the words they are explained with (selfhost.session.keywords)
+def parseErr (t : String) : String := match Text.parse t with | .ok _ => "" | .error e => e
+#guard (parseErr "protocol P (A, B) { par { X from A to B; } and { Y from B to A; } }").contains "write parallel, not par"
+#guard (parseErr "protocol P (A, B) { rec L { X from A to B; continue L; } }").contains "write loop, not rec"
+#guard (parseErr "protocol P (A, B) { rec L at most 2 { X from A to B; } }").contains "write loop, not rec"
+def kwText := "protocol P (A, B) {\n  parallel {\n    X from A to B;\n  } and {\n    Y from B to A;\n  }\n  loop L {\n    Z from A to B;\n    continue L;\n  }\n}"
+#guard parseErr kwText == ""
+def kwWritten : String := match Text.parse kwText with
+  | .ok p => Text.writeAll p.types [{ name := p.name, roles := p.roles, body := p.body }]
+  | .error e => e
+#guard kwWritten.contains "parallel {" && kwWritten.contains "loop L {" && !kwWritten.contains "par {" && !kwWritten.contains "rec L"
 
 -- the language reference's example is a Lean file
 def referenceExample : String :=

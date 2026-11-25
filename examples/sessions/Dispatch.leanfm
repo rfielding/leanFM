@@ -2,7 +2,7 @@ import LeanFM.Session.Syntax
 
 protocol Dispatch (Rider, Platform, Driver) {
   Request from Rider to Platform amount 25 USD;
-  rec Search {
+  loop Search {
     choice {
       o: Offer from Platform to Driver after 30 seconds;
       choice at Driver using declared("standard-acceptance") {

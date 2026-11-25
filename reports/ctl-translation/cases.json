@@ -17,7 +17,7 @@
    },
    {
     "name": "GetOrder repeated in a loop",
-    "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  rec R {\n    g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n    Order from Api to Client cause g status 200;\n    choice { continue R; } or { Done from Client to Api; }\n  }\n}"
+    "lean": "structure CreateOrder where\n  item : String\nstructure Created where\n  orderId : Header (Fresh String)\nstructure GetOrder where\n  orderId : PathParam (Link String)\n  verbose : QueryParam Bool\nstructure Order where\n  orderId : Link String\n  item : String\nprotocol Orders (Client, Api) {\n  c: CreateOrder from Client to Api route \"POST /orders\";\n  Created from Api to Client cause c status 201;\n  loop R {\n    g: GetOrder from Client to Api route \"GET /orders/{orderId}\";\n    Order from Api to Client cause g status 200;\n    choice { continue R; } or { Done from Client to Api; }\n  }\n}"
    }
   ]
  },

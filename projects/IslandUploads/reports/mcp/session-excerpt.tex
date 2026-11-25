@@ -4,7 +4,7 @@ protocol Upload (Browser, Shard) {
   u: UploadStart from Browser to Shard;
   choice {
     o: UploadStarted from Shard to Browser cause u where o.requestId = u.requestId /\ o.offset = 0;
-    rec Parts {
+    loop Parts {
       choice {
         p: UploadPart from Browser to Shard;
         choice {

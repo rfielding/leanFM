@@ -258,9 +258,9 @@ def main : IO Unit := do
   let constructs : List (String × String × String) :=
     [ ("sequence", "a request and its answer", "protocol Seq (A, B) {\n  q: Ask from A to B;\n  Answer from B to A cause q;\n}")
     , ("choice", "an answer of two kinds", images)
-    , ("loop", "ask again until done", "protocol Poll (A, B) {\n  rec L {\n    choice {\n      q: Ask from A to B;\n      Answer from B to A cause q;\n      continue L;\n    } or {\n      Bye from A to B;\n    }\n  }\n}")
-    , ("bounded loop", "at most three tries", "protocol Retry (A, B) {\n  rec Try at most 3 {\n    q: Ask from A to B;\n    choice {\n      Ok from B to A cause q;\n    } or {\n      Busy from B to A cause q;\n      continue Try;\n    }\n  } otherwise {\n    GiveUp from A to B;\n  }\n}")
-    , ("parallel", "two independent requests", "protocol Both (A, B, C) {\n  par {\n    q: Ask from A to B;\n    Answer from B to A cause q;\n  } and {\n    r: Ask2 from A to C;\n    Answer2 from C to A cause r;\n  }\n}") ]
+    , ("loop", "ask again until done", "protocol Poll (A, B) {\n  loop L {\n    choice {\n      q: Ask from A to B;\n      Answer from B to A cause q;\n      continue L;\n    } or {\n      Bye from A to B;\n    }\n  }\n}")
+    , ("bounded loop", "at most three tries", "protocol Retry (A, B) {\n  loop Try at most 3 {\n    q: Ask from A to B;\n    choice {\n      Ok from B to A cause q;\n    } or {\n      Busy from B to A cause q;\n      continue Try;\n    }\n  } otherwise {\n    GiveUp from A to B;\n  }\n}")
+    , ("parallel", "two independent requests", "protocol Both (A, B, C) {\n  parallel {\n    q: Ask from A to B;\n    Answer from B to A cause q;\n  } and {\n    r: Ask2 from A to C;\n    Answer2 from C to A cause r;\n  }\n}") ]
   let mut crow : Array String := #[]
   for (name, what, text) in constructs do
     let (g, t) ← typestatesOf text
@@ -310,15 +310,15 @@ def main : IO Unit := do
   let imgCheckArgs := withLean images
   write "ctl-mcp-check.tex" (transcript "session_check" (Json.mkObj [("lean", Json.str "protocol Images (Browser, Server) { ... }")])
     (← tool "session_check" (check imgCheckArgs)) ["verdict", "reading", "issues"])
-  let sexpr := "(AG (implies (after GetImage) (AF (or (after Image) (after NotFound)))))"
+  let sexpr := "(always (implies (on GetImage) (inevitably (or (on Image) (on NotFound)))))"
   write "ctl-mcp-ctl.tex" (transcript "session_ctl" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("formula", Json.str sexpr)])
     (← tool "session_ctl" (ctl (withLean images [("formula", Json.str sexpr)]))) ["verdict", "notation", "reading", "report", "states"])
-  let bad := "(not (EU (not (after GetImage)) (after NotFound)))"
+  let bad := "(not (someUntil (not (on GetImage)) (on NotFound)))"
   write "ctl-mcp-ctl-order.tex" (transcript "session_ctl" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("formula", Json.str bad)])
     (← tool "session_ctl" (ctl (withLean images [("formula", Json.str bad)]))) ["verdict", "notation", "report"])
-  let ev := "(AG (implies (after GetImage) (EF (after NotFound))))"
-  let disp ← tool "session_ctl" (ctl (withLean images [("formula", Json.str "(AG (implies (after GetImage) (AX (after Image))))")]))
-  write "ctl-mcp-ctl-disproved.tex" (transcript "session_ctl" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("formula", Json.str "(AG (implies (after GetImage) (AX (after Image))))")])
+  let ev := "(always (implies (on GetImage) (possibly (on NotFound))))"
+  let disp ← tool "session_ctl" (ctl (withLean images [("formula", Json.str "(always (implies (on GetImage) (allNext (on Image))))")]))
+  write "ctl-mcp-ctl-disproved.tex" (transcript "session_ctl" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("formula", Json.str "(always (implies (on GetImage) (allNext (on Image))))")])
     disp ["verdict", "notation", "report"])
   let _ := ev
   let sug ← tool "session_ctl" (ctl (withLean order))
@@ -336,7 +336,7 @@ def main : IO Unit := do
       ("params", Json.mkObj [("name", Json.str "session_ctl"), ("arguments", args)])])
     let j ← IO.ofExcept (Json.parse r.body)
     pure ((j.getObjValD "result").getObjValD "structuredContent")
-  let everyEnd := Json.mkObj [("AF", Json.str "terminal")]
+  let everyEnd := Json.mkObj [("inevitably", Json.str "stop")]
   let lowArgs := Json.mkObj [("lean", Json.str "protocol PlaceOrder ..."), ("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (5 : Nat))])]
   let low ← viaMcp ((withLean order [("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (5 : Nat))])]))
   let highArgs := Json.mkObj [("lean", Json.str "protocol PlaceOrder ..."), ("formula", everyEnd), ("limits", Json.mkObj [("states", toJson (40000 : Nat))])]
@@ -347,7 +347,7 @@ def main : IO Unit := do
   write "ctl-mcp-next.tex" (transcript "session_next" (Json.mkObj [("lean", Json.str "protocol PlaceOrder ..."), ("events", json% [{id: "e1", «from»: "Client", to: "Shop", label: "CreateOrder"}])])
     nx ["verdict", "reading", "next", "mayEnd"])
   let loopy := draftOf "{\"id\": \"loopy\", \"states\": [\"s0\", \"s1\", \"s2\"], \"initial\": \"s0\", \"terminals\": [\"s2\"], \"transitions\": [{\"src\": \"s0\", \"dst\": \"s1\", \"message\": \"a\"}, {\"src\": \"s1\", \"dst\": \"s0\", \"message\": \"b\"}, {\"src\": \"s1\", \"dst\": \"s2\", \"message\": \"c\"}]}"
-  let shared := "(and #1=(EF (after c)) (AG (implies (after a) #1#)))"
+  let shared := "(and #1=(possibly (on c)) (always (implies (on a) #1#)))"
   let cc ← tool "check_ctl" ((LeanFM.Logic.run "check_ctl" (Json.mkObj [("task", loopy), ("formula", Json.str shared)])).getD (.error "no tool"))
   write "ctl-mcp-checkctl.tex" (transcript "check_ctl" (Json.mkObj [("task", loopy), ("formula", Json.str shared)]) cc ["verdict", "notation", "reading", "reachableNodes"])
   write "ctl-mcp-conform.tex" (transcript "session_conform" (Json.mkObj [("lean", Json.str "protocol Images ..."), ("events", interleaved)])

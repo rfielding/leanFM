@@ -184,7 +184,7 @@ in `SelfHosting.lean`), mapped in `SessionImplementation.lean` and implemented:
   one backward worklist pass each, where the old fixpoints could take n passes. Each truth set is freed
   when its readers are done, under a byte bound. It gives the old evaluation's answer on every operator
   (tested), and `check_ctl`, `session_ctl`, `Spec.check`, systems and evidence paths all use it.
-- **S-expression formulas** everywhere a formula is read, such as `(and #1=(EF (after a)) (AG #1#))`,
+- **S-expression formulas** everywhere a formula is read, such as `(and #1=(EF (on a)) (AG #1#))`,
   with labels for shared parts and no read-time evaluation.
 - **`session_ctl` with `faithful`**: `"rules"` gives the typestates, the lookahead and the rules;
   `{task}` or `{lean}` decides faithfulness by the walk (O(m)) when the typestates are deterministic

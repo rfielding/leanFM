@@ -12,7 +12,7 @@ per event, the event envelope, and for each role its states as an inductive type
 typestate states; a step exists exactly where the projection allows the event, so the module is
 the protocol's transition system over typed events.
 
-Negative requirements: a role whose projection fails, a projection with `par`, `join` or
+Negative requirements: a role whose projection fails, a projection with `parallel`, `join` or
 `sessions` (whose states are not single machines; they are refused with that reason), two
 transitions from one state on one event to different states, and names that collide after being
 made Lean identifiers are errors, not guesses. Labels and roles reach the code only as Lean

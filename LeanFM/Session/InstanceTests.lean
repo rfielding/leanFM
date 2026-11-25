@@ -86,7 +86,7 @@ def shop2 := (run Shop 2 [] []).toOption.get!
    [("Client", "Client/s3"), ("Db", "Db/db"), ("Cache", "Cache/cache")], [("Client", "Client/s4"), ("Db", "Db/db"), ("Cache", "Cache/cache")]]
 -- a deadlock breaks liveness for each instance: the checker's counterexample is the same path
 #guard (SystemSpec.check { sys := Shop, instances := 1, perInstance := [.AF .terminal] }).getLast! ==
-  "property {\"AF\":\"terminal\"} disproved for s2: Shop s2: on every path, eventually the claim finished@s2 has been made; counterexample: Lock@s1 -> Drop@s2 (and stays there)"
+  "property {\"inevitably\":\"stop\"} disproved for s2: Shop s2: on every path, eventually the claim finished@s2 has been made; counterexample: Lock@s1 -> Drop@s2 (and stays there)"
 
 -- the same order in both code paths: no deadlock, and every instance finishes on every path
 def ordered : SystemSpec :=
@@ -109,7 +109,7 @@ def unlockAfterLock : SystemSpec :=
 -- a per-instance property is checked for each instance, and the instance where it fails is named
 def holdEverywhere : SystemSpec := { sys := OrderedShop, instances := 1, perInstance := [.EF (sent% Hold)] }
 #guard holdEverywhere.check ==
-  ["property {\"EF\":{\"after\":\"Hold\"}} disproved for s1: OrderedShop s1: it is possible that eventually false (s1 never sends Hold, so it reads as false)"]
+  ["property {\"possibly\":{\"on\":\"Hold\"}} disproved for s1: OrderedShop s1: it is possible that eventually false (s1 never sends Hold, so it reads as false)"]
 
 /-! ## Isolation over every step -/
 
@@ -168,7 +168,7 @@ def args (text : String) (more : List (Prod String Json) := []) : Json := Json.m
 -- without serial instances the instances are independent: each has 5 protocol states (4 messages),
 -- so 4 of them interleave over 5^4 = 625 states
 #guard field (tool (args (shopText.replace " serial;" ";") [("instances", 2),
-  ("perInstance", Json.arr #[Json.mkObj [("AF", "terminal")]])])) "reading" ==
+  ("perInstance", Json.arr #[Json.mkObj [("AF", "stop")]])])) "reading" ==
   "Shop: 4 instances interleaved over 625 states: no deadlock, every step isolated, 4 properties proved"
 -- a system formula over any instance's message, disproved with its path
 #guard field (tool (args (shopText.replace " serial;" ";") [("instances", 1),

@@ -157,7 +157,7 @@ def _(p):
     wrap(d, 80, 800, "data/field_atom.json: " + FIELD["terminalConvention"], F(R, 21), 680, MUTED, 6)
     img.save(p)
 
-TABLE = [("after(GetImage)", "the message that just happened was GetImage"), ("terminal", "the conversation may stop here"),
+TABLE = [("on(GetImage)", "on delivery of GetImage"), ("stop", "the conversation may stop here"),
          ("EX φ", "SOME next step leads to a moment where φ"), ("AX φ", "EVERY next step leads to a moment where φ"),
          ("AG φ", "φ at every moment that can ever be reached"), ("φ → ψ", "whenever φ, also ψ")]
 @scene("reading", "Six pieces of C T L carry the whole translation. After, and terminal, the atoms. E X: some next step leads somewhere "
@@ -178,9 +178,9 @@ r_img = {x["name"]: x for x in RULES["Images"]["rules"]}
        "and it is a rule about the whole conversation. This is the rule LeanFM writes.")
 def _(p):
     img, d = base("3 · ONE MOMENT, THREE LINES", "Possible: EX.  Nothing else: AX.  Always: AG.", "session_ctl faithful rules · data/rules_Images.json")
-    rows = [("EX (Image ∧ terminal)", "an Image can come next, and then it may stop", GREEN),
-            ("EX (NotFound ∧ terminal)", "a NotFound can come next, and then it may stop", GREEN),
-            ("AX ((Image ∧ terminal) ∨ (NotFound ∧ terminal))", "whatever comes next is one of those", BLUE)]
+    rows = [("EX (Image ∧ stop)", "an Image can come next, and then it may stop", GREEN),
+            ("EX (NotFound ∧ stop)", "a NotFound can come next, and then it may stop", GREEN),
+            ("AX ((Image ∧ stop) ∨ (NotFound ∧ stop))", "whatever comes next is one of those", BLUE)]
     for i, (f, t, c) in enumerate(rows):
         y = 260 + i * 120
         d.rounded_rectangle([80, y, 1840, y + 100], radius=12, fill=CARD, outline=c, width=2)
@@ -314,7 +314,7 @@ gc = {x["name"]: x["answer"] for x in PCON}
        "A promise that something will happen, A F, or that it can, E F, only holds if the guards of each choice cover every value.")
 def _(p):
     img, d = base("10 · WHEN DATA BLOCKS THE SHAPE", "Guards of a choice must cover every value", "protocols/PricingGap.leanfm · data/pricing_gap_ctl.json · data/pricing_conform.json")
-    box(d, 80, 250, 1760, 130, GREEN, f"shape: {GAP.get('notation', 'AF terminal')}  →  {GAP['verdict']}", GAP["reading"], 28)
+    box(d, 80, 250, 1760, 130, GREEN, f"shape: {GAP.get('notation', 'AF stop')}  →  {GAP['verdict']}", GAP["reading"], 28)
     for i, nm in enumerate(["gap: total 70, Quote", "gap: total 70, Discount"]):
         a = gc[nm]; y = 410 + i * 140
         d.rounded_rectangle([80, y, 1840, y + 120], radius=12, fill=CARD, outline=RED, width=2)

@@ -55,7 +55,7 @@ inductive Stmt where
   | par (branches : List (List Stmt))
   | join (need : Nat) (branches : List (List Stmt))
   | loop (name : String) (body : List Stmt)
-  /-- `rec Name at most N { body } otherwise { stmts }`; expanded by `unroll` right after parsing -/
+  /-- `loop Name at most N { body } otherwise { stmts }`; expanded by `unroll` right after parsing -/
   | bounded (name : String) (n : Nat) (body : List Stmt) (otherwise : List Stmt)
   | cont (name : String)
   | sessions (body : List Stmt)
@@ -658,6 +658,11 @@ partial def boundedStmt (depth : Nat) (stx : Syntax) : R Stmt := do
   return .bounded (← name stx[1] "a loop name") n (← block depth stx[5]) other
 
 partial def stmt (depth : Nat) (stx : Syntax) : R Stmt := do
+  -- the retired keywords are read only to be refused where they stand (selfhost.session.keywords)
+  let kw := if stx[0].isIdent then stx[0].getId.toString else stx[0].getAtomVal
+  if stx.getKind == `LeanFM.Session.Grammar.par && kw == "par" then failAt stx[0] "write parallel, not par"
+  if (stx.getKind == `LeanFM.Session.Grammar.rec || stx.getKind == `LeanFM.Session.Grammar.bounded) && kw == "rec" then
+    failAt stx[0] "write loop, not rec"
   match stx.getKind with
   | `LeanFM.Session.Grammar.msg => msgStmt stx
   | `LeanFM.Session.Grammar.event => eventStmt stx
@@ -1176,7 +1181,7 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
       let b ← deeper { here with loops := name :: c.loops } body
       return Global.andThen (.loop name b) (← next ())
     | .cont name =>
-      if !c.loops.contains name then bfail here s!"continue {name} is not inside rec {name}"
+      if !c.loops.contains name then bfail here s!"continue {name} is not inside loop {name}"
       if !rest.isEmpty then bfail here s!"continue {name} must be the last statement of its block"
       return .var name
     | .sessions body => return .sessions (← deeper here body) (← next ())
@@ -1590,7 +1595,7 @@ partial def writeAnnotated (ind : String) (t : Option Generative.TimeExpr) (as :
   | _ => []
 
 partial def writeStmt (ind : String) : Stmt → List String
-  | .bounded name n body other => [ind ++ s!"rec {showIdent name} at most {n} \u007b"] ++ writeStmts (ind ++ "  ") body ++
+  | .bounded name n body other => [ind ++ s!"loop {showIdent name} at most {n} \u007b"] ++ writeStmts (ind ++ "  ") body ++
       [ind ++ "} otherwise {"] ++ writeStmts (ind ++ "  ") other ++ [ind ++ "}"]
   | .clock name refs => [ind ++ "clock " ++ showIdent name ++ " = " ++
       (if refs.length == 1 then "time(" ++ showIdent refs.head! ++ ")" else
@@ -1624,9 +1629,9 @@ partial def writeStmt (ind : String) : Stmt → List String
         s!" }} from {showIdent a.payer} to {showIdent a.payee};"]
     | [] => []
   | .choice bs => writeBranches ind "choice" "or" bs
-  | .par bs => writeBranches ind "par" "and" bs
+  | .par bs => writeBranches ind "parallel" "and" bs
   | .join k bs => writeBranches ind s!"join {k} of" "and" bs
-  | .loop n body => [ind ++ "rec " ++ showIdent n ++ " {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
+  | .loop n body => [ind ++ "loop " ++ showIdent n ++ " {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
   | .cont n => [ind ++ "continue " ++ showIdent n ++ ";"]
   | .sessions body => [ind ++ "sessions {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
   | .incl n args binds => [ind ++ "include " ++ showIdent n ++ String.join (args.map (" " ++ showIdent ·)) ++

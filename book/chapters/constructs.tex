@@ -5,7 +5,7 @@ how much they cost, depends on the constructs the protocol uses. This chapter ta
 the constructs of Chapter~\ref{ch:global} one at a time. The measure throughout is the
 lookahead $K$ of Definition~\ref{def:rounds}: with $K = 0$ every typestate is named by
 its last message and ending, and every rule is the one-step shape of Images; each step
-of lookahead nests the names one $\EX$/$\AX$ level deeper.
+of lookahead nests the names one $\someNext$/$\allNext$ level deeper.
 
 \begin{table}[ht]
 \centering
@@ -18,8 +18,8 @@ whether its typestates are deterministic (Definition~\ref{def:det}).}
 \section{Sequence and choice}
 
 A sequence $m_1; m_2$ contributes one typestate per message. A choice contributes one
-typestate per first message of a branch, and its rule has one $\EX$ per branch and one
-$\AX$ over all of them. As long as no label occurs at two places that behave
+typestate per first message of a branch, and its rule has one $\someNext$ per branch and one
+$\allNext$ over all of them. As long as no label occurs at two places that behave
 differently, the last message names the typestate, and $K = 0$. A \texttt{cause} adds
 nothing to the control: it records which request an answer answers, which matters for
 logs (Chapter~\ref{ch:where}), not for the order of labels in one session.
@@ -27,7 +27,7 @@ logs (Chapter~\ref{ch:where}), not for the order of labels in one session.
 \begin{proposition}[Every request is answered]\label{prop:answered}
 If in a protocol every path from a request $q$ reaches one of its answers
 $r_1, \ldots, r_j$, then every system satisfying $\Rules_P$ satisfies
-$\AG(\after{q} \rightarrow \AF\bigvee_i \after{r_i})$.
+\[\always(\after{q} \rightarrow \inevitably\textstyle\bigvee_i \after{r_i}).\]
 \end{proposition}
 
 \begin{proof}
@@ -80,7 +80,7 @@ makes that the basis of the checker.
 
 \section{Parallel composition}
 
-\texttt{par} interleaves its branches, so its checker model is a product: a node
+\texttt{parallel} interleaves its branches, so its checker model is a product: a node
 records where each branch is. The last message says only which branch moved last,
 and nothing about where the other branch is.
 
@@ -120,7 +120,7 @@ the $P_i$ exactly when each subsequence is a run of its $P_i$.
 
 The cost is then the sum of the sessions' sizes, not their product. GoServer's
 protocols checked one session at a time all have lookahead $0$ except the seat, which
-keeps its own \texttt{par}. Joins, a session that belongs to two others, are not
+keeps its own \texttt{parallel}. Joins, a session that belongs to two others, are not
 independent, and LeanFM accepts a join only where the text writes one.
 
 \section{Determinism and prev}

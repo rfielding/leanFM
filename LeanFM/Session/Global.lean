@@ -121,12 +121,12 @@ partial def lines {R : Type} [ToString R] [BEq R] (ind : String := "") : Local R
   | .act l k => s!"{ind}{l};" :: lines ind k
   | .select bs => block ind "select" "or" bs
   | .offer bs => block ind "offer" "or" bs
-  | .par bs k => block ind "par" "and" (bs.filter (· != .done)) ++ lines ind k
+  | .par bs k => block ind "parallel" "and" (bs.filter (· != .done)) ++ lines ind k
   | .join n bs k =>
     -- as the typestate reads it: a role in no more than n of the branches waits for all of its own
     let live := bs.filter (· != .done)
-    block ind (if live.length ≤ n then "par" else s!"join {n} of") "and" live ++ lines ind k
-  | .loop n b => (s!"{ind}rec {n} " ++ "{") :: lines (ind ++ "  ") b ++ [ind ++ "}"]
+    block ind (if live.length ≤ n then "parallel" else s!"join {n} of") "and" live ++ lines ind k
+  | .loop n b => (s!"{ind}loop {n} " ++ "{") :: lines (ind ++ "  ") b ++ [ind ++ "}"]
   | .var n => [s!"{ind}continue {n};"]
   | .sessions b k => (s!"{ind}sessions " ++ "{") :: lines (ind ++ "  ") b ++ [ind ++ "}"] ++ lines ind k
   | .done => []
@@ -134,7 +134,7 @@ where
   block (ind word sep : String) (bs : List (Local R)) : List String :=
     match bs.map (lines (ind ++ "  ")) with
     | [] => []
-    | [b] => if word == "par" then lines ind (bs.headD .done) else ((s!"{ind}{word} " ++ "{") :: b) ++ [ind ++ "}"]
+    | [b] => if word == "parallel" then lines ind (bs.headD .done) else ((s!"{ind}{word} " ++ "{") :: b) ++ [ind ++ "}"]
     | b :: rest =>
       ((s!"{ind}{word} " ++ "{") :: b) ++ rest.flatMap (fun r => (ind ++ "} " ++ sep ++ " {") :: r) ++ [ind ++ "}"]
 
@@ -320,8 +320,8 @@ def mergeBranches [DecidableEq R] [ToString R] (r c : R) (started : Bool) (ps : 
       | .var _ => !started
       | _ => false
     let absent := alts.filter isAbsent
-    -- Whatever reaches the role first must tell the branches apart, looking inside `par`: a
-    -- branch that runs concurrent work the role is not part of, or that starts with a `par`,
+    -- Whatever reaches the role first must tell the branches apart, looking inside `parallel`: a
+    -- branch that runs concurrent work the role is not part of, or that starts with a `parallel`,
     -- is told apart by the first messages the role can receive in it. A role that has not
     -- started may also be absent from some branches; one that has started may not.
     if !started || absent.isEmpty then

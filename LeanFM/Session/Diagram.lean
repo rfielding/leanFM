@@ -15,9 +15,9 @@ one notation, so a diagram is a view of the protocol, never a separate drawing:
 | a request and its responses      | an activation bar on the callee, request to last response  |
 | `L at A`                         | action box on A's lifeline                                 |
 | `choice { } or { }`              | `alt` frame captioned `D decides`: the role that sends the first message of every branch |
-| `par { } and { }`                | `par` frame with dashed dividers                           |
-| `join k of { } and { }`          | `par` frame captioned `any k of n`                         |
-| `rec N { ... continue N; }`      | `loop N` frame; `continue N` drawn as `↻ continue N`              |
+| `parallel { } and { }`                | `parallel` frame with dashed dividers                           |
+| `join k of { } and { }`          | `parallel` frame captioned `any k of n`                         |
+| `loop N { ... continue N; }`      | `loop N` frame; `continue N` drawn as `↻ continue N`              |
 | `sessions { }`                   | `loop` frame captioned `one session per request` (or `one session per x.f` when keyed), around one instance |
 | `include P ...`                  | `ref P` frame around P's steps                             |
 
@@ -231,9 +231,11 @@ def frameTop (n d : Nat) (op caption : String) : M R Nat := do
   if (← get).fresh then adv 22 else adv 14
   let y ← getY
   let (x0, _) ← edges n d
-  let w := 10 + 8 * op.length
+  -- the tab names the frame with the language's own keyword, not UML's (selfhost.session.keywords)
+  let shown := match op with | "alt" => "choice" | "par" => "parallel" | "ref" => "include" | o => o
+  let w := 10 + 8 * shown.length
   emit (.path "" s!"M{x0} {y} h{w} v12 l-6 6 h-{w - 6} z" .bg .frame "" false)
-  emit (text (x0 + 5) (y + 13) op "start" .frame 11 (bold := true))
+  emit (text (x0 + 5) (y + 13) shown "start" .frame 11 (bold := true))
   if caption != "" then
     emit (text (x0 + w + 8) (y + 13) s!"[{caption}]" "start" .frame 11)
   adv 8

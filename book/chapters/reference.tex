@@ -18,9 +18,9 @@ Form & Meaning \\
 \texttt{E at A;} & an event performed by \texttt{A} \\
 \texttt{choice \{ ... \} or \{ ... \}} & alternatives; the sender of a branch's first message decides \\
 \texttt{choice at A using declared("X") \{ probability 9/10: ... \}} & a choice with its driver and weights \\
-\texttt{rec L \{ ... continue L; \}} & a loop \\
-\texttt{rec L at most N \{ ... \} otherwise \{ ... \}} & a bounded loop, unrolled when read \\
-\texttt{par \{ ... \} and \{ ... \}} & interleaved branches \\
+\texttt{loop L \{ ... continue L; \}} & a loop \\
+\texttt{loop L at most N \{ ... \} otherwise \{ ... \}} & a bounded loop, unrolled when read \\
+\texttt{parallel \{ ... \} and \{ ... \}} & interleaved branches \\
 \texttt{sessions \{ ... \}}, \texttt{sessions by a.f \{ ... \}} & a block run as any number of sessions, optionally keyed \\
 \texttt{include P A B with x, y;} & play \texttt{P} in place with roles and fields bound \\
 \texttt{Fresh T}, \texttt{Link T}; \texttt{Header}, \texttt{PathParam}, \texttt{QueryParam} & identity marks on field types \\
@@ -37,15 +37,16 @@ field names ending \texttt{\_secr} & secrets \\
 Meaning & JSON & S-expression \\
 \midrule
 constants & \texttt{true}, \texttt{false} & \texttt{true}, \texttt{false} \\
-last message & \texttt{\{"after": "M"\}} & \texttt{(after M)} \\
-may end & \texttt{"terminal"} & \texttt{terminal} \\
+on delivery of M & \texttt{\{"on": "M"\}} & \texttt{(on M)} \\
+may stop & \texttt{"stop"} & \texttt{stop} \\
 secret carried & \texttt{\{"secret": \{"to": "Log"\}\}} & \texttt{(secret to Log)} \\
 state of a draft & \texttt{\{"at": "s"\}} & \texttt{(at s)} \\
 Boolean & \texttt{not}, \texttt{and}, \texttt{or}, \texttt{implies} & the same, prefix \\
 non-vacuous always & \texttt{\{"stronglyImplies": [a, b]\}} & \texttt{(stronglyImplies a b)} \\
-next & \texttt{EX}, \texttt{AX} & \texttt{(EX f)}, \texttt{(AX f)} \\
-eventually, always & \texttt{EF}, \texttt{AF}, \texttt{EG}, \texttt{AG}, \texttt{never} & \texttt{(AG f)} and so on \\
-until, unless & \texttt{\{"AU": [a, b]\}}, \texttt{EU}, \texttt{AW}, \texttt{EW} & \texttt{(AU a b)} and so on \\
+next step & \texttt{someNext}, \texttt{allNext} (EX, AX) & \texttt{(allNext f)} \\
+eventually & \texttt{possibly}, \texttt{inevitably} (EF, AF) & \texttt{(inevitably f)} \\
+from here on & \texttt{always}, \texttt{someAlways}, \texttt{never} (AG, EG, AG not) & \texttt{(always f)} \\
+until, unless & \texttt{\{"allUntil": [a, b]\}}, \texttt{someUntil}, \texttt{allUnless}, \texttt{someUnless} (AU, EU, AW, EW) & \texttt{(allUntil a b)} \\
 shared part & --- & \texttt{\#1=f} \ldots\ \texttt{\#1\#} \\
 \bottomrule
 \end{tabular}

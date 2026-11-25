@@ -118,12 +118,12 @@ The rest of the language adds repetition, concurrency and composition. Each cons
 appears here with the smallest protocol that shows it; Chapter~\ref{ch:constructs}
 gives each one's reduction and what it costs.
 
-\paragraph{Loops.} \texttt{rec L \{ \ldots\ continue L; \}} repeats a body.
+\paragraph{Loops.} \texttt{loop L \{ \ldots\ continue L; \}} repeats a body.
 A loop that may end offers a branch without \texttt{continue}.
 
 \input{generated/ctl-construct-loop.tex}
 
-\paragraph{Bounded loops.} \texttt{rec Try at most 3 \{ \ldots\ \} otherwise \{ \ldots\ \}}
+\paragraph{Bounded loops.} \texttt{loop Try at most 3 \{ \ldots\ \} otherwise \{ \ldots\ \}}
 repeats at most three times and then takes the \texttt{otherwise} block. LeanFM unrolls
 it as soon as the text is read, so nothing later sees a counter; the counter becomes
 three copies of the body. That makes bounded loops cheap to write and, as
@@ -131,7 +131,7 @@ Chapter~\ref{ch:constructs} shows, expensive to name in CTL.
 
 \input{generated/ctl-construct-bounded-loop.tex}
 
-\paragraph{Parallel composition.} \texttt{par \{ \ldots\ \} and \{ \ldots\ \}} runs
+\paragraph{Parallel composition.} \texttt{parallel \{ \ldots\ \} and \{ \ldots\ \}} runs
 branches whose messages interleave in any order. Each branch is a conversation of its
 own; the protocol says nothing about how they interleave, so every interleaving is
 allowed.
@@ -201,7 +201,7 @@ and the game includes a seat (Chapter~\ref{ch:where}).
 
 \paragraph{Events.} \texttt{Finished at Server} is an event: something one role does
 that no other role receives. Events order the conversation like messages do and
-appear in CTL as \texttt{after(Finished)}.
+appear in CTL as \texttt{(on Finished)}.
 
 \paragraph{What else a protocol may say.} A choice may name what drives it
 (\texttt{choice at Server using declared("IsBusy")}) and give branch probabilities;

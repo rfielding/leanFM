@@ -6,8 +6,8 @@ implementation Go of examples.orders.Requirements {
   "Every order is answered" => test "shop/order_test.go: TestEveryOrderAnswered";
   "Every payment is charged to the bank" => conform "examples/orders/logs/order-1.json";
   "No receipt without a charge" => sorry;
-  "Stock is reserved before a quote" => ShopImpl ⊨ (precedes (after Reserved) (after Quote));
-  "A payment is recorded before the receipt" => ShopImpl ⊨ (precedes (after Recorded) (after Receipt));
+  "Stock is reserved before a quote" => ShopImpl ⊨ (precedes (on Reserved) (on Quote));
+  "A payment is recorded before the receipt" => ShopImpl ⊨ (precedes (on Recorded) (on Receipt));
   hint "Implement the code as Go, with net/http and no web framework";
   hint "Keep orders in PostgreSQL; the Db role is one transaction per message";
 }

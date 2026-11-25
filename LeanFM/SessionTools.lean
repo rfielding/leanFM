@@ -77,15 +77,15 @@ def limitsJson : Json :=
 
 /-! ## The JSON form -/
 
-def stepKinds : List String := ["msg", "event", "choice", "par", "join", "rec", "continue", "sessions", "include"]
+def stepKinds : List String := ["msg", "event", "choice", "parallel", "join", "loop", "continue", "sessions", "include"]
 
 def allowedKeys : String → List String
   | "msg" => ["msg", "from", "to", "id", "cause", "route", "status", "media", "where"]
   | "event" => ["event", "at"]
   | "choice" => ["choice"]
-  | "par" => ["par"]
+  | "parallel" => ["parallel"]
   | "join" => ["join", "of"]
-  | "rec" => ["rec", "steps"]
+  | "loop" => ["loop", "steps"]
   | "continue" => ["continue"]
   | "sessions" => ["sessions"]
   | "include" => ["include", "steps"]
@@ -158,7 +158,7 @@ partial def steps (c : Ctx) (js : List Json) (index : Nat := 0) : P (Global Stri
     let c := { c with path := s!"{c.path}[{index}]" }
     tick c
     let keys := keysOf j
-    if keys.isEmpty then fail c "a step must be an object with one of the keys msg, event, choice, par, join, rec, continue, sessions, include"
+    if keys.isEmpty then fail c "a step must be an object with one of the keys msg, event, choice, parallel, join, rec, continue, sessions, include"
     let kinds := keys.filter stepKinds.contains
     let kind ← match kinds with
       | [k] => pure k
@@ -195,8 +195,8 @@ partial def steps (c : Ctx) (js : List Json) (index : Nat := 0) : P (Global Stri
     | "choice" =>
         let bs ← branches c j "choice"
         return Global.andThen (.choice bs) (← next ())
-    | "par" =>
-        let bs ← branches c j "par"
+    | "parallel" =>
+        let bs ← branches c j "parallel"
         return .par bs (← next ())
     | "join" =>
         let n ← match j.getObjVal? "join" with
@@ -205,13 +205,13 @@ partial def steps (c : Ctx) (js : List Json) (index : Nat := 0) : P (Global Stri
         let bs ← branches c j "of"
         if n == 0 || n > bs.length then fail c s!"join {n} of {bs.length} branches is out of range"
         return .join n bs (← next ())
-    | "rec" =>
-        let name ← reqString c j "rec"
+    | "loop" =>
+        let name ← reqString c j "loop"
         let body ← nested { c with loops := name :: c.loops } (← stepList c j "steps") "steps"
         return Global.andThen (.loop name body) (← next ())
     | "continue" =>
         let name ← reqString c j "continue"
-        if !c.loops.contains name then fail c s!"continue {name} is not inside rec {name}"
+        if !c.loops.contains name then fail c s!"continue {name} is not inside loop {name}"
         if !rest.isEmpty then fail c s!"continue {name} must be the last step of its branch"
         return .var name
     | "sessions" =>
@@ -296,10 +296,10 @@ partial def stmt (roles : List String) (j : Json) : W Stmt := do
       ((str j "media").filter Session.Text.validMedia) (str j "where")
   if let some l := str j "event" then return .event l ((str j "at").getD "")
   if (j.getObjVal? "choice").isOk then return .choice (← branchesOf roles j "choice")
-  if (j.getObjVal? "par").isOk then return .par (← branchesOf roles j "par")
+  if (j.getObjVal? "parallel").isOk then return .par (← branchesOf roles j "parallel")
   if let .ok v := j.getObjVal? "join" then
     return .join (v.getNat?.toOption.getD 1) (← branchesOf roles j "of")
-  if let some n := str j "rec" then return .loop n (← listOf roles j "steps")
+  if let some n := str j "loop" then return .loop n (← listOf roles j "steps")
   if let some n := str j "continue" then return .cont n
   if (j.getObjVal? "sessions").isOk then return .sessions (← listOf roles j "sessions")
   if let some n := str j "include" then
@@ -339,7 +339,7 @@ def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) 
       -- say what does and does not run: with a loop or a rate the chain generates (session_simulate,
       -- session_dataset) and solves it (session_mdp); only the finite-path deadline monitor cannot
       let note := if hasLoop body
-        then "Generation and expectations use the chain view: session_simulate, session_dataset and session_mdp run this protocol with its loops and rates. Per-session deadline monitoring needs finite paths (no rec, par, join, sessions or include), so session_conform gives no deadline reports for it."
+        then "Generation and expectations use the chain view: session_simulate, session_dataset and session_mdp run this protocol with its loops and rates. Per-session deadline monitoring needs finite paths (no rec, parallel, join, sessions or include), so session_conform gives no deadline reports for it."
         else e
       return some { r with metadata := Json.mkObj [("layer", r.metadata), ("executionUnsupported", note)] }
     throw e
@@ -824,7 +824,7 @@ def mdpChain (args : Json) (p : Protocol) (layer : Generative.Resolved)
     (if duration == 0 then [] else [s!"Expected duration: {Chain.daysText duration}"]) ++
     (if exp.isEmpty then [] else ["Expected net balance per role:"] ++ exp.map fun (r,u,v) => s!"- {r}: {Chain.ratText v} {u}") ++
     Chain.legend c p.roles ++ c.notes ++
-    (if hasLoop layer.body then ["No distribution: with loops and no horizon its support is infinite; bound the loop (rec Name at most N) or pass a horizon behind a gate."] else []))
+    (if hasLoop layer.body then ["No distribution: with loops and no horizon its support is infinite; bound the loop (loop Name at most N) or pass a horizon behind a gate."] else []))
   let provenance := Decision.output
   let result := Json.mkObj [("report", report),
     ("tool", "session_mdp"), ("verdict", "drawn"), ("view", "chain"), ("name", p.name), ("lean", p.lean),
@@ -1848,7 +1848,7 @@ def faithful (p : Protocol) (fa : Json) (args : Json := Json.mkObj []) : Except 
   | _ => throw "faithful is \"rules\", {task: an inline draft as check_ctl takes} or {lean: another protocol text}"
 
 /-- A CTL formula over one session of the protocol: the protocol's state graph handed to the
-logic tools' checker as an inline task, so `{"after": "Charge"}` holds in the state a Charge has
+logic tools' checker as an inline task, so `{"on": "Charge"}` holds in the state a Charge has
 just reached, and the answer carries a witness or counterexample path. -/
 def ctl (args : Json) : Except String Json := do
   let p ← parseProtocol args
@@ -2490,7 +2490,7 @@ check it, draw it and run it. Every diagram, call list and event stream is gener
 Send the text as the `lean` argument of the tools. It is parsed with the same Lean parser that
 reads it in a Lean file, and nothing in it is elaborated or run as code. A `where` condition is run by conformance with
 LeanFM's own interpreter over the fields each event logs (see Conditions, below).
-
+" ++ "\n" ++ LeanFM.Logic.renamedWords ++ "\n\n" ++ "
 The same text is a Lean file. Saved with `import LeanFM.Session.Syntax` as its first line (the
 tools accept and write that line), `lake env lean File.leanfm` elaborates it with the LeanFM
 library: labels are types (a label no structure declares carries nothing), and every condition is
@@ -2548,7 +2548,7 @@ How `session_mdp` reads a session:
 
 - without loops, rates or gates: a decision tree; each terminal has its probability, times,
   deadline reports and each role's balance; `expectedBalances` sums them.
-- with `rec`, `accrue` or `after` on an event (or `view: \"chain\"`): an absorbing Markov chain.
+- with `loop`, `accrue` or `after` on an event (or `view: \"chain\"`): an absorbing Markov chain.
   Expected visits solve v = start + vQ; an edge's traversals are visits times probability; time is
   traversals times mean delay; balances are traversals times trade vectors plus rates times time.
   Each way of ending (its last step) is an outcome with its probability and the expected balances
@@ -2838,7 +2838,7 @@ instance plays its own role, and a fresh actor belongs to one session only.
   block (see Instances below) with 1 to 4 instances of each accept interleaved (default 2, at
   most 4 in all): every deadlock with the steps that reach it and what each instance waits for,
   isolation over every step, and each formula's verdict with its path. A `perInstance` formula is
-  checked for every instance: `{\"after\": \"Label\"}` is that instance's Label and `\"terminal\"`
+  checked for every instance: `{\"on\": \"Label\"}` is that instance's Label and `\"stop\"`
   means it has finished. A `properties` formula is about the system: any instance's Label, and
   every instance able to end. Answers `ok`, `deadlock`, `isolation` or `disproved`.
 
@@ -2856,16 +2856,16 @@ instance plays its own role, and a fresh actor belongs to one session only.
   differ.
 - `session_ctl {lean, formula}`: a CTL formula over one session, decided on the protocol's state
   graph by the same checker as check_ctl, with a witness or counterexample path. The formula may be
-  JSON or an s-expression string such as `(AG (implies (after Order) (AF (after Confirmed))))`, with
+  JSON or an s-expression string such as `(AG (implies (on Order) (AF (on Confirmed))))`, with
   shared parts labelled `#1=` and reused as `#1#`. Atoms:
-  `{\"after\": \"Label\"}` (a Label message or event has just happened) and `\"terminal\"` (the session
+  `{\"on\": \"Label\"}` (a Label message or event has just happened) and `\"stop\"` (the session
   has ended), and `{\"secret\": {from?, to?, field?}}` (the step just taken carried a field ending in
   `_secr`; ask it when the project needs secrecy, such as no secret ever reaching Log:
   `{\"AG\": {\"not\": {\"secret\": {\"to\": \"Log\"}}}}`). Without a formula it suggests up to 12
   properties built from the protocol, each decided. Rules the structure does not show belong here, for example:
-  never charge after no seat, `{\"AG\": {\"implies\": [{\"after\": \"NoSeat\"}, {\"AG\": {\"not\": {\"after\": \"Charge\"}}}]}}`;
-  every held seat is confirmed or released, `{\"AG\": {\"implies\": [{\"after\": \"SeatHeld\"}, {\"AF\": {\"or\":
-  [{\"after\": \"SeatConfirmed\"}, {\"after\": \"SeatReleased\"}]}}]}}`; every session ends, `{\"AF\": \"terminal\"}`.
+  never charge after no seat, `{\"AG\": {\"implies\": [{\"on\": \"NoSeat\"}, {\"AG\": {\"not\": {\"on\": \"Charge\"}}}]}}`;
+  every held seat is confirmed or released, `{\"AG\": {\"implies\": [{\"on\": \"SeatHeld\"}, {\"AF\": {\"or\":
+  [{\"on\": \"SeatConfirmed\"}, {\"on\": \"SeatReleased\"}]}}]}}`; every session ends, `{\"AF\": \"stop\"}`.
 
 - `session_openapi {lean, role}`: the requests `role` receives, with their routes and the responses
   the protocol allows, as an OpenAPI 3.1 document: one operation per route, the label as its
@@ -2964,9 +2964,9 @@ protocol PlaceOrder (Client, Shop, Bank) {
 | `x: Label from A to B cause y route \"...\" status 201 media \"image/png\" where e;` | a message; `x:`, `cause`, `route`, `status`, `media` and `where` are optional; `media` says the body is raw bytes of that type instead of JSON, so the message's fields travel as `Header`, `PathParam` or `QueryParam`; `cause y` names an earlier id, and a response's cause chain reaches its request |
 | `Label at A;` | something a role does on its own |
 | `choice { ... } or { ... }` | exactly one branch happens; the role that sends the first message of every branch decides (`select` in its local type); the others learn the branch from what reaches them (`offer`) |
-| `par { ... } and { ... }` | branches run concurrently; what follows waits for all |
+| `parallel { ... } and { ... }` | branches run concurrently; what follows waits for all |
 | `join 2 of { ... } and { ... } and { ... }` | what follows waits for any 2 branches |
-| `rec Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |
+| `loop Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |
 | `sessions { ... }` | any number of independent instances, as a server handles requests; nested inside a protocol, a role that appears only in such blocks is a service that handles each one on its own |
 | `include Replicate Primary R1 R2 R3;` | an earlier protocol in the same text, roles renamed in order, drawn as a ref frame |
 
@@ -2995,7 +2995,7 @@ The tools also accept `protocol: {name, roles, steps, types?}` in place of `lean
 the same protocol written as text. `types` declares the message types:
 `[{\"name\": \"Pay\", \"fields\": [\"amount : Nat\"]}]`. Each step is an object with exactly one kind key: `msg` (with `from`,
 `to`, and optional `id`, `cause`, `route`, `status`, `where`), `event` (with `at`), `choice` and
-`par` (arrays of branches, each an array of steps), `join` (a number, with `of`), `rec` (with
+`parallel` (arrays of branches, each an array of steps), `join` (a number, with `of`), `loop` (with
 `steps`), `continue`, `sessions` (an array of steps) and `include` (with `steps`):
 
 ```json

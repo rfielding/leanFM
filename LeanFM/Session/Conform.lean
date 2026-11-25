@@ -12,8 +12,8 @@ an id, a session, the sender and receiver (or the role, for an event), the label
 caused it. `Global.conforms` checks every session of such a log against the protocol, by derivatives
 of the global type: after each event, the set of protocol states that could explain the run so far.
 
-* Order: an event must be one the protocol allows next; `par` branches interleave, a `choice` is
-  settled by the first event that only one branch allows, `rec` repeats, `include` is inlined.
+* Order: an event must be one the protocol allows next; `parallel` branches interleave, a `choice` is
+  settled by the first event that only one branch allows, `loop` repeats, `include` is inlined.
 * Causes: when the protocol says `cause y`, the event's cause must be the event that was `y` in the
   same session.
 * Completion: a session is complete when the protocol can end where its events stop; a log taken
@@ -117,7 +117,7 @@ partial def key : Global String → String
   | .box n b k => s!"b({n})[" ++ key b ++ "]" ++ key k
 
 /-- A residual protocol with every loop directly inside a loop of the same name collapsed: the inner
-loop shadows the outer, so `rec L { rec L { b } }` behaves as `rec L { b }`. Stepping into a loop
+loop shadows the outer, so `loop L { loop L { b } }` behaves as `loop L { b }`. Stepping into a loop
 leaves exactly that nesting, so without this a walk that goes round a loop once would not be named as
 the state it started from. -/
 partial def collapseLoops : Global String → Global String

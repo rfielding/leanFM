@@ -227,13 +227,13 @@ where
     | .loop name body =>
       let l ← addState "loop" s!"loop {name}" ""
       let entry ← build ((name, l) :: loops) body k
-      addEdge { src := l, dst := entry, kind := "loop", label := s!"rec {name}", prob := Q.one }
+      addEdge { src := l, dst := entry, kind := "loop", label := s!"loop {name}", prob := Q.one }
       return l
     | .cont name =>
       match loops.lookup name with
       | some l => return l
-      | none => throw s!"continue {name} is not inside rec {name}"
-    | _ => throw "the chain view supports sequential sessions with choices and loops; par, join, sessions and include need scheduling semantics"
+      | none => throw s!"continue {name} is not inside loop {name}"
+    | _ => throw "the chain view supports sequential sessions with choices and loops; parallel, join, sessions and include need scheduling semantics"
 
 /-- The accruals in force: canonical (a zero rate is no rate), keyed by payer, payee and unit. -/
 abbrev Regime := List Accrual

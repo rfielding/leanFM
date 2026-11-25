@@ -57,7 +57,7 @@ before. Requirement: selfhost.session.amounts.
 
 ## Loops, time, rates and trades (the chain view)
 
-A session with `rec`/`continue` or `accrue` is solved as an absorbing Markov chain
+A session with `loop`/`continue` or `accrue` is solved as an absorbing Markov chain
 (requirements selfhost.session.mdp.loops and .mdp.rewards). Expected visits come
 from v = start + vQ, solved exactly; each edge's expected traversals are visits ×
 probability, so loops are counted rather than unrolled.

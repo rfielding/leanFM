@@ -5,7 +5,7 @@ import LeanFM.Session.Syntax
 protocol Trip (Traveler, Agency, Flights, Hotels, Payments) {
   sessions {
     b: Book from Traveler to Agency route "POST /trips";
-    par {
+    parallel {
       f: HoldSeat from Agency to Flights;
       choice {
         SeatHeld from Flights to Agency cause f;

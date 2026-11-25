@@ -81,9 +81,58 @@ def boundsJson (b : Bounds := bounds) : Json :=
 def terminalConvention : String :=
   "Terminal states, and non-terminal states with no outgoing transition (reported as deadlocks), " ++
   "repeat forever: they stutter on themselves, keeping the message that reached them, so every path is infinite. " ++
-  "after(m) holds in the state reached by delivering m; the initial state has no message."
+  "on(m), on delivery of m, holds in the state reached by delivering m, until the next message; stop holds where the conversation may stop; the initial state has no message."
+
+/-- The words renamed to say what they mean, old to new, for every reference an agent reads
+(selfhost.mcp.logic.on, selfhost.session.keywords). -/
+def renamedWords : String := "## Renamed words
+
+LeanFM's words were renamed to say what they mean. The old words are refused, each with an error
+naming its replacement, so a formula or protocol written in them fails rather than meaning
+something else.
+
+| old | new | meaning |
+|---|---|---|
+| `par { ... } and { ... }` | `parallel { ... } and { ... }` | branches that run interleaved |
+| `rec L { ... continue L; }` | `loop L { ... continue L; }` | a named loop (bounded: `loop L at most N { ... } otherwise { ... }`) |
+| JSON steps `\"par\"`, `\"rec\"` | `\"parallel\"`, `\"loop\"` | the same, in the JSON protocol form |
+| `(after M)`, `{\"after\": \"M\"}` | `(on M)`, `{\"on\": \"M\"}` | on delivery of M: true in the state that delivery reaches, until the next message |
+| `terminal`, `\"terminal\"` | `stop`, `\"stop\"` | the conversation may stop here |
+| diagram tabs `alt`, `par`, `ref` | `choice`, `parallel`, `include` | the language's own keywords |
+
+Words that read as English stand for the CTL operators; each says whether it means some path or
+every path: `possibly` (EF), `inevitably` (AF), `always` (AG), `never` (AG not), `someAlways` (EG),
+`allNext`/`someNext` (AX/EX), and, infix, `allUntil`/`someUntil` (AU/EU) and `allUnless`/`someUnless`
+(AW/EW). `explain_formula` answers any formula `unfolded` into the primitives."
 
 /-! ## Formulas -/
+
+/-- Words that read as English and unfold to one CTL primitive each (selfhost.mcp.logic.words); every
+word says whether it speaks of some path or of every path. -/
+inductive Word where
+  | possibly | inevitably | always | someAlways | allNext | someNext | allUntil | someUntil | allUnless | someUnless
+deriving Repr, Inhabited, BEq
+
+namespace Word
+def all : List Word := [.possibly, .inevitably, .always, .someAlways, .allNext, .someNext, .allUntil, .someUntil, .allUnless, .someUnless]
+def name : Word → String
+  | .possibly => "possibly" | .inevitably => "inevitably" | .always => "always" | .someAlways => "someAlways"
+  | .allNext => "allNext" | .someNext => "someNext" | .allUntil => "allUntil" | .someUntil => "someUntil"
+  | .allUnless => "allUnless" | .someUnless => "someUnless"
+/-- The primitive's operator name. -/
+def core : Word → String
+  | .possibly => "EF" | .inevitably => "AF" | .always => "AG" | .someAlways => "EG"
+  | .allNext => "AX" | .someNext => "EX" | .allUntil => "AU" | .someUntil => "EU"
+  | .allUnless => "AW" | .someUnless => "EW"
+def arity : Word → Nat
+  | .allUntil | .someUntil | .allUnless | .someUnless => 2
+  | _ => 1
+def ofName? (n : String) : Option Word := all.find? (·.name == n)
+/-- A word's primitive, for an operator name in the DAG (any other name is itself). -/
+def coreOf (op : String) : String := ((ofName? op).map core).getD op
+/-- The word LeanFM prints for a primitive operator (any other name is itself). -/
+def ofCore (op : String) : String := ((all.find? (·.core == op)).map name).getD op
+end Word
 
 inductive Formula where
   | tt
@@ -115,6 +164,8 @@ inductive Formula where
   | leadsTo (a b : Formula)
   /-- `b` never happens before `a` (and need not happen) -/
   | precedes (a b : Formula)
+  /-- a word that reads as English: `eventually f`, `a until b` (selfhost.mcp.logic.words) -/
+  | word (w : Word) (fs : List Formula)
   | never (f : Formula)
   | ex (f : Formula)
   | ax (f : Formula)
@@ -128,6 +179,15 @@ inductive Formula where
   | aw (a b : Formula)
 deriving Repr, Inhabited, BEq
 
+/-- The primitive a word unfolds to; a word given the wrong number of formulas (which the readers
+refuse) is false. -/
+def Word.apply : Word → List Formula → Formula
+  | .possibly, [f] => .ef f | .inevitably, [f] => .af f | .always, [f] => .ag f | .someAlways, [f] => .eg f
+  | .allNext, [f] => .ax f | .someNext, [f] => .ex f
+  | .allUntil, [a, b] => .au a b | .someUntil, [a, b] => .eu a b
+  | .allUnless, [a, b] => .aw a b | .someUnless, [a, b] => .ew a b
+  | _, _ => .ff
+
 namespace Formula
 
 partial def size : Formula → Nat
@@ -135,6 +195,7 @@ partial def size : Formula → Nat
   | and fs | or fs | outcomes fs => 1 + (fs.map size).foldl (· + ·) 0
   | follows a bs => 1 + size a + (bs.map size).foldl (· + ·) 0
   | leadsTo a b | precedes a b => 1 + size a + size b
+  | word _ fs => 1 + (fs.map size).foldl (· + ·) 0
   | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => 1 + size a + size b
   | _ => 1
 
@@ -142,8 +203,8 @@ partial def toJson : Formula → Json
   | tt => Json.bool true
   | ff => Json.bool false
   | atState s => Json.mkObj [("at", s)]
-  | after m => Json.mkObj [("after", m)]
-  | terminal => "terminal"
+  | after m => Json.mkObj [("on", m)]
+  | terminal => "stop"
   | field m n v => Json.mkObj [("field", Json.mkObj [("message", m), ("name", n), ("value", v)])]
   | predicate t => Json.mkObj [("predicate", t)]
   | derived n => Json.mkObj [("derived", n)]
@@ -160,6 +221,8 @@ partial def toJson : Formula → Json
   | follows a bs => Json.mkObj [("follows", Json.arr ((a :: bs).map toJson).toArray)]
   | leadsTo a b => Json.mkObj [("leadsTo", Json.arr #[toJson a, toJson b])]
   | precedes a b => Json.mkObj [("precedes", Json.arr #[toJson a, toJson b])]
+  | word w [f] => Json.mkObj [(w.name, toJson f)]
+  | word w fs => Json.mkObj [(w.name, Json.arr (fs.map toJson).toArray)]
   | never f => Json.mkObj [("never", toJson f)]
   | ex f => Json.mkObj [("EX", toJson f)]
   | ax f => Json.mkObj [("AX", toJson f)]
@@ -182,7 +245,7 @@ partial def reading : Formula → String
   | ff => "false"
   | atState s => "the task is in state " ++ s
   | after m => m ++ " was just delivered"
-  | terminal => "the task has ended"
+  | terminal => "the conversation may stop"
   | field m n v => "the last message was " ++ m ++ " with " ++ n ++ " = " ++ v
   | predicate t => "\"" ++ t ++ "\" holds (a predicate text, not an observable event)"
   | derived n => "the derived predicate " ++ n ++ " holds"
@@ -200,6 +263,7 @@ partial def reading : Formula → String
   | follows a bs => "on every path, whenever " ++ paren a ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (bs.map paren)
   | leadsTo a b => "it is possible that eventually " ++ paren a ++ ", and on every path, whenever " ++ paren a ++ ", eventually " ++ paren b
   | precedes a b => "on every path, " ++ paren b ++ " never holds unless " ++ paren a ++ " has held at or before that point (" ++ paren b ++ " need not hold at all)"
+  | word w fs => reading (w.apply fs)
   | never f => "on every path, never " ++ paren f
   | ex f => "on some path, at the next step " ++ paren f
   | ax f => "on every path, at the next step " ++ paren f
@@ -224,7 +288,7 @@ partial def symbols : Formula → String
   | ff => "false"
   | atState s => "@" ++ s
   | after m => m
-  | terminal => "terminal"
+  | terminal => "stop"
   | field m n v => m ++ "." ++ n ++ " = " ++ v
   | predicate t => "\"" ++ t ++ "\""
   | derived n => n
@@ -242,23 +306,44 @@ partial def symbols : Formula → String
   | follows a bs => "follows(" ++ ", ".intercalate ((a :: bs).map symbols) ++ ")"
   | leadsTo a b => "leadsTo(" ++ symbols a ++ ", " ++ symbols b ++ ")"
   | precedes a b => "precedes(" ++ symbols a ++ ", " ++ symbols b ++ ")"
+  | word w [f] => w.name ++ " " ++ symbolsArg f
+  | word w [a, b] => symbolsArg a ++ " " ++ w.name ++ " " ++ symbolsArg b
+  | word w fs => w.name ++ "(" ++ ", ".intercalate (fs.map symbols) ++ ")"
   | never f => "never " ++ symbolsArg f
-  | ex f => "EX " ++ symbolsArg f
-  | ax f => "AX " ++ symbolsArg f
-  | ef f => "EF " ++ symbolsArg f
-  | af f => "AF " ++ symbolsArg f
-  | eg f => "EG " ++ symbolsArg f
-  | ag f => "AG " ++ symbolsArg f
-  | eu a b => symbolsArg a ++ " EU " ++ symbolsArg b
-  | au a b => symbolsArg a ++ " AU " ++ symbolsArg b
-  | ew a b => symbolsArg a ++ " EW " ++ symbolsArg b
-  | aw a b => symbolsArg a ++ " AW " ++ symbolsArg b
+  | ex f => "someNext " ++ symbolsArg f
+  | ax f => "allNext " ++ symbolsArg f
+  | ef f => "possibly " ++ symbolsArg f
+  | af f => "inevitably " ++ symbolsArg f
+  | eg f => "someAlways " ++ symbolsArg f
+  | ag f => "always " ++ symbolsArg f
+  | eu a b => symbolsArg a ++ " someUntil " ++ symbolsArg b
+  | au a b => symbolsArg a ++ " allUntil " ++ symbolsArg b
+  | ew a b => symbolsArg a ++ " someUnless " ++ symbolsArg b
+  | aw a b => symbolsArg a ++ " allUnless " ++ symbolsArg b
 /-- An operand: parenthesized only when it is a binary connective (and, or, implies). -/
 partial def symbolsArg (f : Formula) : String :=
   match f with
-  | and (_ :: _ :: _) | or (_ :: _ :: _) | implies .. | stronglyImplies .. | field .. | eu .. | au .. | ew .. | aw .. => "(" ++ symbols f ++ ")"
+  | and (_ :: _ :: _) | or (_ :: _ :: _) | implies .. | stronglyImplies .. | field .. | eu .. | au .. | ew .. | aw .. | word _ [_, _] => "(" ++ symbols f ++ ")"
   | _ => symbols f
 end
+
+/-- The primitives' notation, for `unfolded` only (selfhost.mcp.logic.words): an unfolded formula has
+atoms, Boolean connectives and the ten CTL operators, written AG, AF, ..., a EU b. -/
+partial def coreSymbols (f : Formula) : String :=
+  let arg (g : Formula) : String := match g with
+    | and (_ :: _ :: _) | or (_ :: _ :: _) | implies .. | eu .. | au .. | ew .. | aw .. => "(" ++ coreSymbols g ++ ")"
+    | _ => coreSymbols g
+  match f with
+  | not g => "¬" ++ arg g
+  | and fs => " ∧ ".intercalate (fs.map arg)
+  | or fs => " ∨ ".intercalate (fs.map arg)
+  | implies a b => arg a ++ " → " ++ arg b
+  | ex g => "EX " ++ arg g | ax g => "AX " ++ arg g
+  | ef g => "EF " ++ arg g | af g => "AF " ++ arg g
+  | eg g => "EG " ++ arg g | ag g => "AG " ++ arg g
+  | eu a b => arg a ++ " EU " ++ arg b | au a b => arg a ++ " AU " ++ arg b
+  | ew a b => arg a ++ " EW " ++ arg b | aw a b => arg a ++ " AW " ++ arg b
+  | g => g.symbols
 
 /-- A function's meaning in the core operators (selfhost.mcp.logic.functions); any other formula is
 itself. -/
@@ -267,6 +352,7 @@ def expand : Formula → Formula
   | follows a bs => ag (implies a (and (bs.map ex ++ [ax (or bs)])))
   | leadsTo a b => stronglyImplies a (af b)
   | precedes a b => not (eu (not a) b)
+  | word w fs => w.apply fs
   | f => f
 
 /-- Negation pushed inward through the CTL dualities. -/
@@ -279,7 +365,7 @@ partial def negate : Formula → Formula
   | implies a b => and [a, negate b]
   | stronglyImplies a b => or [ag (negate a), ef (and [a, negate b])]
   | outcomes fs => or (fs.map (fun a => ag (negate a)) ++ [eg (and (fs.map negate))])
-  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) => negate (expand f)
+  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) | f@(word ..) => negate (expand f)
   | never f => ef f
   | ex f => ax (negate f)
   | ax f => ex (negate f)
@@ -293,7 +379,7 @@ partial def negate : Formula → Formula
   | ew a b => au (negate b) (and [negate a, negate b])
   | f => not f
 
-def mode : Formula → String
+partial def mode : Formula → String
   | never _ => "never"
   | ag (not _) => "never"
   | ag _ => "always"
@@ -305,6 +391,7 @@ def mode : Formula → String
   | follows .. => "always"
   | leadsTo .. => "always (non-vacuous)"
   | precedes .. => "never"
+  | word w fs => mode (w.apply fs)
   | _ => "compound"
 
 partial def subformulas (f : Formula) : List Formula :=
@@ -313,8 +400,26 @@ partial def subformulas (f : Formula) : List Formula :=
     | and fs | or fs | outcomes fs => fs.flatMap subformulas
     | follows a bs => subformulas a ++ bs.flatMap subformulas
     | leadsTo a b | precedes a b => subformulas a ++ subformulas b
+    | word _ fs => fs.flatMap subformulas
     | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => subformulas a ++ subformulas b
     | _ => []
+
+/-- Every word and function replaced by the CTL primitives it means, all the way down
+(selfhost.mcp.logic.words): the plain CTL under any formula. -/
+partial def unfold (f : Formula) : Formula :=
+  match f.expand with
+  | not g => not (unfold g)
+  | and fs => and (fs.map unfold)
+  | or fs => or (fs.map unfold)
+  | implies a b => implies (unfold a) (unfold b)
+  | stronglyImplies a b => let a' := unfold a; and [ef a', ag (implies a' (unfold b))]
+  | never g => ag (not (unfold g))
+  | ex g => ex (unfold g) | ax g => ax (unfold g)
+  | ef g => ef (unfold g) | af g => af (unfold g)
+  | eg g => eg (unfold g) | ag g => ag (unfold g)
+  | eu a b => eu (unfold a) (unfold b) | au a b => au (unfold a) (unfold b)
+  | ew a b => ew (unfold a) (unfold b) | aw a b => aw (unfold a) (unfold b)
+  | g => g
 
 end Formula
 
@@ -357,6 +462,7 @@ def shape : Formula → String × List Formula × Option String
   | .follows a bs => ("follows", a :: bs, none)
   | .leadsTo a b => ("leadsTo", [a, b], none)
   | .precedes a b => ("precedes", [a, b], none)
+  | .word w fs => (w.name, fs, none)
   | .eu a b => ("EU", [a, b], none) | .au a b => ("AU", [a, b], none)
   | .ew a b => ("EW", [a, b], none) | .aw a b => ("AW", [a, b], none)
   | f => ("atom", [], some (reprStr f))
@@ -421,17 +527,21 @@ def treeSize (d : Dag) (cap : Nat) : Nat := Id.run do
 /-- A name as the s-expression reader reads it: bare when it is a plain run, quoted otherwise. -/
 def nameText (s : String) : String :=
   let plain := !s.isEmpty && s.toList.all (fun c => c.isAlphanum || "_.:/@$-".toList.contains c)
-    && !["terminal", "true", "false"].contains s
+    && !["stop", "true", "false"].contains s
   if plain then s else "\"" ++ (s.replace "\\" "\\\\" |>.replace "\"" "\\\"") ++ "\""
 
+/-- The atoms' retired names, refused naming their replacements (selfhost.mcp.logic.on). -/
+def retiredAfter : String := "after is now on: write (on M), read on delivery of M"
+def retiredTerminal : String := "terminal is now stop: write stop, where the conversation may stop"
+
 def atomText : Formula → String
-  | .after m => s!"(after {nameText m})"
+  | .after m => s!"(on {nameText m})"
   | .atState x => s!"(at {nameText x})"
   | .claimed c => s!"(claimed {nameText c})"
-  | .terminal => "terminal"
+  | .terminal => "stop"
   | .secret a b f => "(secret" ++ (a.map (" from " ++ nameText ·)).getD "" ++ (b.map (" to " ++ nameText ·)).getD "" ++
       (f.map (" field " ++ nameText ·)).getD "" ++ ")"
-  | .unsupported op => s!"({op} terminal)"
+  | .unsupported op => s!"({op} stop)"
   | f => nameText (reprStr f)
 
 /-- How many parents each node has. -/
@@ -442,7 +552,7 @@ def parentCounts (d : Dag) : Array Nat := Id.run do
   return parents
 
 /-- Node `i` on one line, threading the labels given so far (selfhost.session.ctl-sexpr). -/
-partial def flatAt (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashMap Nat Nat) :
+partial def flatAt (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashMap Nat Nat) (core : Bool := false) :
     String × Std.HashMap Nat Nat :=
   match labels.get? i with
   | some n => (s!"#{n}#", labels)
@@ -454,13 +564,15 @@ partial def flatAt (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashM
     else if op == "true" || op == "false" then (op, labels)
     else
       let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
-        let (t, l) := flatAt d parents k acc.2; (acc.1.push t, l)) (#[], labels)
-      (pre ++ "(" ++ " ".intercalate (op :: parts.toList) ++ ")", labels)
+        let (t, l) := flatAt d parents k acc.2 core; (acc.1.push t, l)) (#[], labels)
+      -- every formula is written in words; the primitives only when asked for (unfolded)
+      let head := if core then op else Word.ofCore op
+      (pre ++ "(" ++ " ".intercalate (head :: parts.toList) ++ ")", labels)
 
 /-- The formula as an s-expression, each part shared by two or more parents written once with a
 label #n= and referred to as #n# after (selfhost.session.ctl-sexpr). -/
-def toSexpr (d : Dag) : String :=
-  if d.size == 0 then "true" else (flatAt d (parentCounts d) (d.size - 1) {}).1
+def toSexpr (d : Dag) (core : Bool := false) : String :=
+  if d.size == 0 then "true" else (flatAt d (parentCounts d) (d.size - 1) {} core).1
 
 /-- The column sexprPretty keeps a part within when it can (selfhost.mcp.logic.explain). -/
 def sexprWidth : Nat := 72
@@ -469,11 +581,11 @@ def sexprWidth : Nat := 72
 `close` parentheses that end its line, stays on one line; otherwise its label and operator open a line and each argument follows on its own line,
 two spaces further in. The labels are threaded in the same order as `toSexpr`, so it reads back to
 the same formula (selfhost.mcp.logic.explain). -/
-partial def toSexprPretty (d : Dag) (width : Nat := sexprWidth) : String :=
+partial def toSexprPretty (d : Dag) (width : Nat := sexprWidth) (core : Bool := false) : String :=
   if d.size == 0 then "true" else
   let parents := parentCounts d
   let rec go (i indent close : Nat) (labels : Std.HashMap Nat Nat) : String × Std.HashMap Nat Nat :=
-    let (flat, after) := flatAt d parents i labels
+    let (flat, after) := flatAt d parents i labels core
     let op := d.ops[i]!
     if indent + flat.length + close ≤ width || labels.contains i || op == "atom" || op == "true" || op == "false" then
       (flat, after)
@@ -486,14 +598,14 @@ partial def toSexprPretty (d : Dag) (width : Nat := sexprWidth) : String :=
       let (body, labels) := (kids.zipIdx).foldl (fun (acc : String × Std.HashMap Nat Nat) (k, j) =>
         let (t, l) := go k (indent + 2) (if j + 1 == kids.size then close + 1 else 0) acc.2
         (acc.1 ++ "\n" ++ pad ++ t, l)) ("", labels)
-      (pre ++ "(" ++ op ++ body ++ ")", labels)
+      (pre ++ "(" ++ (if core then op else Word.ofCore op) ++ body ++ ")", labels)
   (go (d.size - 1) 0 0 {}).1
 
 /-- An operator's English on one line, given its parts' texts (each parenthesized where it is not
 atomic); the sentences of `Formula.reading`, with a repeated part said once ("whenever that holds"). -/
 def readOp (op : String) (p : Array String) : String :=
   let part := fun (k : Nat) => p[k]?.getD "?"
-  match op with
+  match Word.coreOf op with
   | "not" => "it is not the case that " ++ part 0
   | "never" => "on every path, never " ++ part 0
   | "EX" => "on some path, at the next step " ++ part 0
@@ -520,7 +632,7 @@ def readOp (op : String) (p : Array String) : String :=
 and whether they are a bulleted list. -/
 def readClauses (op : String) (ks : Array Nat) : List (String × List Nat × Bool) :=
   let k := fun (i : Nat) => ks[i]?.toList
-  match op with
+  match Word.coreOf op with
   | "not" => [("it is not the case that:", k 0, false)]
   | "never" => [("on every path, never:", k 0, false)]
   | "EX" => [("on some path, at the next step:", k 0, false)]
@@ -672,11 +784,11 @@ end Terms
 
 def pathOperatorHint (op : String) : Option String :=
   match op with
-  | "F" | "eventually" | "<>" => some "F is a path operator; quantify it: AF (on every path) or EF (on some path)"
-  | "G" | "always" | "[]" => some "G is a path operator; quantify it: AG (on every path) or EG (on some path)"
-  | "X" | "next" => some "X is a path operator; quantify it: AX (every path) or EX (some path)"
-  | "U" | "until" => some "U is a path operator; quantify it: AU or EU (or AW/EW when the right side need not happen)"
-  | "W" | "unless" => some "W is a path operator; quantify it: AW or EW"
+  | "F" | "eventually" | "<>" => some "F is a path operator; say which paths: inevitably (AF, on every path) or possibly (EF, on some path)"
+  | "G" | "[]" => some "G is a path operator; say which paths: always (AG, on every path) or someAlways (EG, on some path)"
+  | "X" | "next" => some "X is a path operator; say which paths: allNext (AX) or someNext (EX)"
+  | "U" | "until" => some "U is a path operator; say which paths: allUntil (AU) or someUntil (EU), or allUnless/someUnless (AW/EW) when the right side need not happen"
+  | "W" | "unless" => some "W is a path operator; say which paths: allUnless (AW) or someUnless (EW)"
   | _ => none
 
 def unsupportedOperators : List String :=
@@ -756,10 +868,11 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
     match (← get).labels.get? n with
     | some f => return f
     | none => throw s!"#{n}# refers to a label not yet defined (a label is defined when its expression is complete)"
-  | some (.name "terminal") => let _ ← next (); count (); return .terminal
+  | some (.name "stop") => let _ ← next (); count (); return .terminal
+  | some (.name "terminal") => throw Dag.retiredTerminal
   | some (.name "true") => let _ ← next (); count (); return .tt
   | some (.name "false") => let _ ← next (); count (); return .ff
-  | some (.name x) => throw s!"bare name {(x.take 40).toString} is not a formula; write (after {(x.take 40).toString}), (at {(x.take 40).toString}) or terminal"
+  | some (.name x) => throw s!"bare name {(x.take 40).toString} is not a formula; write (on {(x.take 40).toString}), (at {(x.take 40).toString}) or stop"
   | some .rp => throw "unexpected ) in an s-expression formula"
   | none => throw "the s-expression formula ends early"
   | some .lp =>
@@ -781,7 +894,8 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       | some .rp => pure x
       | _ => throw s!"{op} takes exactly one name"
     match op with
-    | "after" => return .after (← nameArg ())
+    | "on" => return .after (← nameArg ())
+    | "after" => throw Dag.retiredAfter
     | "at" => return .atState (← nameArg ())
     | "claimed" => return .claimed (← nameArg ())
     | "secret" =>
@@ -821,6 +935,10 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       | "EU" => need 2; return .eu xs[0]! xs[1]! | "AU" => need 2; return .au xs[0]! xs[1]!
       | "EW" => need 2; return .ew xs[0]! xs[1]! | "AW" => need 2; return .aw xs[0]! xs[1]!
       | other =>
+        if let some w := Word.ofName? other then
+          need w.arity
+          -- a word is its primitive; LeanFM writes every primitive as its word (selfhost.mcp.logic.words)
+          return w.apply xs.toList
         if unsupportedOperators.contains other then return .unsupported other
         match pathOperatorHint other with
         | some hint => throw ("typing error: " ++ hint)
@@ -839,13 +957,14 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
   match j with
   | .bool true => return .tt
   | .bool false => return .ff
-  | .str "terminal" => return .terminal
+  | .str "stop" => return .terminal
+  | .str "terminal" => throw Dag.retiredTerminal
   | .str "true" => return .tt
   | .str "false" => return .ff
   | .str s =>
     let t := s.trimAscii.toString
     if t.startsWith "(" || t.startsWith "#" then parseSexpr s bnd else
-    throw ("bare string \"" ++ (s.take 40).toString ++ "\" is not a formula; write {\"at\": state}, {\"after\": message} or \"terminal\"")
+    throw ("bare string \"" ++ (s.take 40).toString ++ "\" is not a formula; write {\"at\": state}, {\"on\": message} or \"stop\"")
   | .obj _ =>
     match keyValues j with
     | [(op, arg)] =>
@@ -866,7 +985,8 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
         | none => throw s!"{op} takes a string"
       match op with
       | "at" => atomStr .atState
-      | "after" => atomStr .after
+      | "on" => atomStr .after
+      | "after" => throw Dag.retiredAfter
       | "predicate" => atomStr .predicate
       | "derived" => atomStr .derived
       | "claimed" => atomStr .claimed
@@ -917,13 +1037,17 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
       | "precedes" => two .precedes
       | "EU" => two .eu | "AU" => two .au | "EW" => two .ew | "AW" => two .aw
       | other =>
+        if let some w := Word.ofName? other then
+          match w.arity with
+          | 1 => return ← one (fun f => w.apply [f])
+          | _ => return ← two (fun a b => w.apply [a, b])
         if unsupportedOperators.contains other then return .unsupported other
         match pathOperatorHint other with
         | some hint => throw ("typing error: " ++ hint)
         | none => throw s!"unknown operator \"{other.take 40}\"; see leanfm://language/logic-reference"
     | [] => throw "empty object is not a formula"
     | _ => throw "a formula object has exactly one operator key"
-  | _ => throw "a formula is a JSON object, true, false or \"terminal\""
+  | _ => throw "a formula is a JSON object, true, false or \"stop\""
 
 /-- A formula a tool writes back out as a tree (explain_formula, classify_requirement and the other
 logic tools): at most maxFormulaNodes nodes as a tree, with the caller's bounds. -/
@@ -1232,7 +1356,7 @@ partial def satTree (m : Model) : Formula → Array Bool
   | .implies a b => satTree m (.or [.not a, b])
   | .stronglyImplies a b => satTree m (.and [.ef a, .ag (.implies a b)])
   | .outcomes fs => satTree m (.and (fs.map .ef ++ [.af (.or fs)]))
-  | f@(.follows ..) | f@(.leadsTo ..) | f@(.precedes ..) => satTree m f.expand
+  | f@(.follows ..) | f@(.leadsTo ..) | f@(.precedes ..) | f@(.word ..) => satTree m f.expand
   | .never f => satTree m (.ag (.not f))
   | .ex f => let s := satTree m f; m.mapI (m.existsSucc s)
   | .ax f => let s := satTree m f; m.mapI (m.allSucc s)
@@ -1288,7 +1412,7 @@ def Core.ofDag (d : Dag) : Core × Nat := Id.run do
     let k0 := ks[0]?.getD 0
     let k1 := ks[1]?.getD 0
     let mk := fun (c : Core) (op : COp) (kids : Array Nat) => c.mk' op kids
-    let (c', r) := match d.ops[i]! with
+    let (c', r) := match Word.coreOf d.ops[i]! with
       | "true" => mk c .tt #[]
       | "false" => mk c .ff #[]
       | "atom" => c.mk' .atom #[] i
@@ -1637,7 +1761,7 @@ partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option
     | some g => some { kind := "unreachable", path := [i], note := s!"the outcome {g.symbols} can never happen" }
     | none => evidence m i false (.af (.or fs))
   | false, .and fs => (fs.find? (fun g => !get (sat g) i)).bind (evidence m i false)
-  | h, f@(.follows ..) | h, f@(.leadsTo ..) | h, f@(.precedes ..) => evidence m i h f.expand
+  | h, f@(.follows ..) | h, f@(.leadsTo ..) | h, f@(.precedes ..) | h, f@(.word ..) => evidence m i h f.expand
   | false, .implies a b => (evidence m i true a).orElse fun _ => evidence m i false b
   | _, _ => none
 
@@ -1723,7 +1847,10 @@ def explainFormula (args : Json) : ToolOutcome := do
     | none => [("sexpr", Json.str dag.toSexpr), ("sexprPretty", Json.str dag.toSexprPretty)]
     | some k => [("sexpr", Json.null), ("sexprPretty", Json.null),
         ("sexprNote", Json.str s!"a {k} atom has no s-expression form; write this formula in the JSON form")]
-  return verdictJson "explain_formula" "explained" f.reading <| sx ++ [("readingIndented", Json.str dag.toReadingIndented)] ++
+  let u := f.unfold
+  let ud := Dag.ofFormula u
+  let unfolded := Json.mkObj [("sexpr", if ud.sexprBlocker.isNone then Json.str (ud.toSexprPretty (core := true)) else Json.null), ("notation", Json.str u.coreSymbols)]
+  return verdictJson "explain_formula" "explained" f.reading <| sx ++ [("readingIndented", Json.str dag.toReadingIndented), ("unfolded", unfolded)] ++
     [ ("formula", f.toJson), ("notation", f.symbols), ("mode", Formula.mode f)
     , ("negation", Json.mkObj [("formula", neg.toJson), ("notation", neg.symbols), ("reading", neg.reading)])
     , ("typingErrors", Json.arr #[])
@@ -1989,9 +2116,9 @@ def classifyAtom (task : Option TaskModel) : Formula → Json
       ("reason", if ok then "a task state reached by delivered messages" else "the task does not declare this state")]
   | .after m =>
     let ok := task.map (·.messages.contains m) |>.getD true
-    Json.mkObj [("atom", "after " ++ m), ("class", if ok then "observable" else "unknown name"),
+    Json.mkObj [("atom", "on " ++ m), ("class", if ok then "observable" else "unknown name"),
       ("reason", if ok then "a delivered message" else "the task does not send this message")]
-  | .terminal => Json.mkObj [("atom", "terminal"), ("class", "observable"), ("reason", "a terminal task state")]
+  | .terminal => Json.mkObj [("atom", "stop"), ("class", "observable"), ("reason", "a state where the conversation may stop")]
   | .field m n _ => Json.mkObj [("atom", m ++ "." ++ n), ("class", "observable"), ("reason", "a field of a delivered message")]
   | .derived n => Json.mkObj [("atom", "derived " ++ n), ("class", "derived"),
       ("needs", "a declared reducer, policy or knowledge rule named " ++ n ++ " in Requirements.lean")]
@@ -2656,6 +2783,8 @@ def checkReassembly (args : Json) : ToolOutcome := do
 def reference : String := String.intercalate "\n"
   [ "# LeanFM logic reference (MCP)"
   , ""
+  , renamedWords
+  , ""
   , "Formulas, tasks and traces are JSON data. They are parsed into closed types and never executed."
   , ""
   , "## Formula grammar"
@@ -2664,8 +2793,8 @@ def reference : String := String.intercalate "\n"
   , "|---|---|"
   , "| `true`, `false` | constants |"
   , "| `{\"at\": \"s\"}` | the task is in state s (observable) |"
-  , "| `{\"after\": \"M\"}` | message M was just delivered (observable) |"
-  , "| `\"terminal\"` | the task has ended (observable) |"
+  , "| `{\"on\": \"M\"}` | on delivery of M: true in the state that delivery reaches, until the next message (observable); after, the old name, is refused |"
+  , "| `\"stop\"` | the conversation may stop here (observable); terminal, the old name, is refused |"
   , "| `{\"field\": {\"message\": \"M\", \"name\": \"f\", \"value\": \"v\"}}` | last message M had f = v (observable in traces; not in task models) |"
   , "| `{\"derived\": \"name\"}` | a declared reducer, policy or knowledge predicate |"
   , "| `{\"claimed\": \"commit(B, A)\"}` | some transition on the path made this claim (drafts with claims, and check_protocol) |"
@@ -2679,6 +2808,8 @@ def reference : String := String.intercalate "\n"
   , "| `{\"leadsTo\": [a, b]}` | stronglyImplies(a, AF b): a can happen, and every a is eventually followed by b (never vacuous, unlike AG(a -> AF b)) |"
   , "| `{\"precedes\": [a, b]}` | not (not a EU b): b never happens before a, and need not happen |"
   , "| `{\"never\": f}` | AG not f |"
+  , "| `{\"possibly\": f}` `{\"inevitably\": f}` `{\"always\": f}` `{\"someAlways\": f}` `{\"allNext\": f}` `{\"someNext\": f}` | words for EF, AF, AG, EG, AX, EX: written back as written, decided as the primitive |"
+  , "| `{\"allUntil\": [a, b]}` `{\"someUntil\": [a, b]}` `{\"allUnless\": [a, b]}` `{\"someUnless\": [a, b]}` | words for a AU b, a EU b, a AW b, a EW b; the notation writes them infix, a allUntil b |"
   , "| `{\"AG\": f}` `{\"AF\": f}` `{\"EG\": f}` `{\"EF\": f}` `{\"AX\": f}` `{\"EX\": f}` | CTL unary |"
   , "| `{\"AU\": [a, b]}` `{\"EU\": [a, b]}` | a until b, and b happens |"
   , "| `{\"AW\": [a, b]}` `{\"EW\": [a, b]}` | a unless b, b need not happen |"
@@ -2687,7 +2818,7 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## S-expressions"
   , ""
-  , "Wherever a formula is read, a JSON string beginning with ( or # is an s-expression over the same operators: `(AG (implies (after Ping) (AX (or (after Pong) (after SlowPong)))))`. `(outcomes a b ...)` and `(follows a b ...)` take two or more formulas and `(leadsTo a b)` and `(precedes a b)` two; `(after M)`, `(at s)` and `(claimed c)` take a name; `terminal`, `true` and `false` are bare; `(secret from A to B field f)` with each pair optional. A name is letters, digits and `_ . : / @ $ -`, or a double-quoted string. A part written once may be labelled `#1=` and reused as `#1#`, so a formula with shared parts is written with each part once. The reader is data only: no other # form and nothing evaluated; a label must be defined before it is used, which rules out cycles. knows, field, predicate and derived have structure the string form does not carry: write them in JSON."
+  , "Wherever a formula is read, a JSON string beginning with ( or # is an s-expression over the same operators: `(AG (implies (on Ping) (AX (or (on Pong) (on SlowPong)))))`. `(outcomes a b ...)` and `(follows a b ...)` take two or more formulas and `(leadsTo a b)` and `(precedes a b)` two; `(on M)`, `(at s)` and `(claimed c)` take a name; `stop`, `true` and `false` are bare; `(secret from A to B field f)` with each pair optional. A name is letters, digits and `_ . : / @ $ -`, or a double-quoted string. A part written once may be labelled `#1=` and reused as `#1#`, so a formula with shared parts is written with each part once. The reader is data only: no other # form and nothing evaluated; a label must be defined before it is used, which rules out cycles. knows, field, predicate and derived have structure the string form does not carry: write them in JSON."
   , ""
   , "To parse or format one, call explain_formula with the formula alone (no task): besides its reading it answers `formula` (the JSON tree), `sexpr` (the canonical one-line s-expression: single spaces, names quoted only where needed, a part shared by two or more parents written once with a label) and `sexprPretty` (the same, indented: every line within 72 columns where it can be: a part that fits there, closing parentheses included, stays on one line, otherwise each argument goes on its own line two spaces in). Both read back to the same formula. A formula with a knows, field, predicate or derived atom gets null for both, with `sexprNote` saying why. Every formula also gets `readingIndented`: its English as an indented outline (a part that fits in 72 columns on one line, otherwise its leading phrase ending in a colon and its parts below, lists bulleted, a shared part read once as (#n)); check_ctl and session_ctl answers carry it too."
   , ""
@@ -2754,7 +2885,7 @@ def reference : String := String.intercalate "\n"
   , "## Example"
   , ""
   , "```json"
-  , "{\"task\": \"mcp_logic_consult\", \"formula\": {\"AG\": {\"implies\": [{\"after\": \"LogicConsultRequested\"}, {\"AF\": \"terminal\"}]}}}"
+  , "{\"task\": \"mcp_logic_consult\", \"formula\": {\"AG\": {\"implies\": [{\"on\": \"LogicConsultRequested\"}, {\"AF\": \"stop\"}]}}}"
   , "```" ]
 
 /-! ## Dispatch -/

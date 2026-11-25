@@ -379,7 +379,7 @@ def afterLoginParallel : Grammar :=
   Grammar.seq loginSuccess (Grammar.par getHomeGrammar apiTask)
 ```
 
-The meaning of `par` is all legal interleavings that preserve each child grammar's internal order. If two completions do not depend on each other and do not contend for the same bounded queue/resource, they commute:
+The meaning of `parallel` is all legal interleavings that preserve each child grammar's internal order. If two completions do not depend on each other and do not contend for the same bounded queue/resource, they commute:
 
 ```text
 getHome.done ; api.done

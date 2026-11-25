@@ -278,31 +278,31 @@ def Graph.draft (g : Graph) (name : String) : Json :=
 def Graph.messages (g : Graph) : List String :=
   (g.edges.toList.map fun e => s!"{e.step.label}@{(g.insts[e.inst]?.map (fun x => x.id)).getD "?"}").eraseDups
 
-/-- A formula about one instance: `{"after": X}` is that instance's X, `"terminal"` that it has
+/-- A formula about one instance: `{"on": X}` is that instance's X, `"stop"` that it has
 finished. An atom the model never shows (a message that instance never sends) is false. -/
 partial def localize (g : Graph) (sid : String) : Json -> Json
-  | .str "terminal" =>
+  | .str "stop" =>
     if g.edges.any (fun e => e.finishes && (g.insts[e.inst]?.map (fun x => x.id)) == some sid)
     then Json.mkObj [("claimed", Json.str s!"finished@{sid}")] else Json.bool false
   | .obj kvs =>
     match kvs.toList with
-    | [("after", .str l)] =>
+    | [("on", .str l)] =>
       let t := s!"{l}@{sid}"
-      if g.messages.contains t then Json.mkObj [("after", Json.str t)] else Json.bool false
+      if g.messages.contains t then Json.mkObj [("on", Json.str t)] else Json.bool false
     | items => Json.mkObj (items.map fun (k, v) => (k, localize g sid v))
   | .arr a => Json.arr (a.map (localize g sid))
   | j => j
 
-/-- A formula about the whole system: `{"after": X}` is any instance's X, `"terminal"` that every
+/-- A formula about the whole system: `{"on": X}` is any instance's X, `"stop"` that every
 instance can end. -/
 partial def globalize (g : Graph) : Json -> Json
   | .obj kvs =>
     match kvs.toList with
-    | [("after", .str l)] =>
+    | [("on", .str l)] =>
       let present := (g.insts.map fun i => s!"{l}@{i.id}").filter g.messages.contains
       if present.isEmpty then Json.bool false
-      else if present.length == 1 then Json.mkObj [("after", Json.str present.head!)]
-      else Json.mkObj [("or", Json.arr (present.map fun t => Json.mkObj [("after", Json.str t)]).toArray)]
+      else if present.length == 1 then Json.mkObj [("on", Json.str present.head!)]
+      else Json.mkObj [("or", Json.arr (present.map fun t => Json.mkObj [("on", Json.str t)]).toArray)]
     | items => Json.mkObj (items.map fun (k, v) => (k, globalize g v))
   | .arr a => Json.arr (a.map (globalize g))
   | j => j
@@ -316,10 +316,10 @@ structure Verdict where
   why : String
   deriving Inhabited
 
-/-- The labels a formula names with `{"after": X}`. -/
+/-- The labels a formula names with `{"on": X}`. -/
 partial def afterLabels : Json -> List String
   | .obj kvs => match kvs.toList with
-    | [("after", .str l)] => [l]
+    | [("on", .str l)] => [l]
     | items => items.flatMap (fun kv => afterLabels kv.2)
   | .arr a => a.toList.flatMap afterLabels
   | _ => []

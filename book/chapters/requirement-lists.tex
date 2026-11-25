@@ -145,7 +145,7 @@ its internal interface:
 \input{generated/req-deployment-refused.tex}
 
 Nothing in the protocol changed. A deployment adds no message and moves none; \texttt{choice},
-\texttt{par}, \texttt{include} and \texttt{sessions} mean what they meant, and a replicated
+\texttt{parallel}, \texttt{include} and \texttt{sessions} mean what they meant, and a replicated
 group does not stand in for the messages of a replication protocol, which the protocol must
 still get right. So PlaceOrder says nothing about islands, and the same requirements can be met
 on one machine or across three regions.
@@ -173,18 +173,18 @@ A requirement an implementation does not name counts as sorry for it. The shop:
 
 \input{generated/req-orders-summary.tex}
 
-Evidence is only as strong as its kind. A conforming log carries every $\AG$ property
-proved of the protocol to that run, since the run is one of the protocol's runs; an
-$\AF$ or $\EF$ property also needs the guards of every choice to cover every value
-(Chapter~\ref{ch:where}). A test is evidence but not CTL, so a sorry requirement with a
-passing test is ``tested'', not ``met''.
+Evidence is only as strong as its kind. A conforming log is one of the protocol's runs, so
+every property of the form $\always\varphi$ proved of the protocol holds of it. A property
+$\inevitably\varphi$ or $\possibly\varphi$ also needs the guards of every choice to cover
+every value (Chapter~\ref{ch:where}). A test is evidence but not CTL, so a sorry
+requirement with a passing test is ``tested'', not ``met''.
 
 \section{LeanFM's own lists}
 
-LeanFM is specified the same way. Its requirements map ends
-\texttt{LeanFM/LLMGenerated/LeanFM.leanfm}, over its own MCP protocol; its implementation
-is \texttt{LeanFMImplementation.leanfm}; and the clauses of \texttt{SelfHosting.lean},
-which are still prose, join its list as sorry entries:
+{\sloppy LeanFM is specified the same way, in \texttt{LeanFM/LLMGenerated}. Its requirements
+map ends \texttt{LeanFM.leanfm}, over its own MCP protocol. Its implementation is
+\texttt{LeanFMImplementation.leanfm}. The clauses of \texttt{SelfHosting.lean}, which are
+still prose, join its list as sorry entries:\par}
 
 \input{generated/req-leanfm-summary.tex}
 

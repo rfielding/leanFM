@@ -5,7 +5,7 @@ protocol GameP (Person, Server, Bot) given sessionId {
   choice {
     c: GameCreated from Server to Person cause g status 200 where c.requestId = g.requestId;
     include Challenge Person Server with sessionId, gameId;
-    rec Turns {
+    loop Turns {
       choice {
         include Turn Server Bot;
         continue Turns;

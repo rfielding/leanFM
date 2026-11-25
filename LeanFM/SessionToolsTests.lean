@@ -53,7 +53,7 @@ def po := call check (withProtocol placeOrder)
 
 -- the core rules report what SessionTests reports for the Lean versions
 def race := call check (withProtocol r#"{"roles": ["Sender", "Receiver"], "steps": [
-  {"rec": "Block", "steps": [
+  {"loop": "Block", "steps": [
     {"msg": "Data", "id": "d", "from": "Sender", "to": "Receiver"},
     {"choice": [
       [{"event": "Timeout", "at": "Sender"}, {"continue": "Block"}],
@@ -107,8 +107,8 @@ def rejects (p : String) (needle : String) : Bool :=
 #guard rejects r#"{"roles": ["A", "B"], "steps": [{"msg": "X", "from": "A", "to": "B", "colour": "red"}]}"# "unknown keys [colour]"
 #guard rejects r#"{"roles": ["A", "B"], "steps": [{"send": "X"}]}"# "unknown step"
 #guard rejects r#"{"roles": ["A", "B"], "steps": [{"msg": "X", "event": "Y", "from": "A", "to": "B"}]}"# "exactly one kind"
-#guard rejects r#"{"roles": ["A", "B"], "steps": [{"choice": [[{"continue": "L"}]]}]}"# "steps[0].choice[0].steps[0]: continue L is not inside rec L"
-#guard rejects r#"{"roles": ["A", "B"], "steps": [{"rec": "L", "steps": [{"continue": "L"}, {"msg": "X", "from": "A", "to": "B"}]}]}"# "must be the last step"
+#guard rejects r#"{"roles": ["A", "B"], "steps": [{"choice": [[{"continue": "L"}]]}]}"# "steps[0].choice[0].steps[0]: continue L is not inside loop L"
+#guard rejects r#"{"roles": ["A", "B"], "steps": [{"loop": "L", "steps": [{"continue": "L"}, {"msg": "X", "from": "A", "to": "B"}]}]}"# "must be the last step"
 #guard rejects r#"{"roles": ["A", "B"], "steps": [{"join": 3, "of": [[], []]}]}"# "out of range"
 #guard rejects r#"{"roles": ["A", "A"], "steps": []}"# "distinct"
 #guard rejects r#"{"roles": ["A", "B"], "steps": [{"msg": "X\u0007", "from": "A", "to": "B"}]}"# "control character"
@@ -126,7 +126,7 @@ def manySteps : String := "{\"roles\": [\"A\", \"B\"], \"steps\": [" ++
 #guard rejects manySteps "more than 200 steps"
 def deep : Nat → String
   | 0 => "[]"
-  | n + 1 => "[{\"par\": [" ++ deep n ++ "]}]"
+  | n + 1 => "[{\"parallel\": [" ++ deep n ++ "]}]"
 #guard rejects ("{\"roles\": [\"A\"], \"steps\": " ++ deep 30 ++ "}") "nested more than 24 deep"
 
 -- a simulation is bounded, deterministic, and fits the result limit, saying what it left out
@@ -208,7 +208,7 @@ open LeanFM.Session.SessionTests in
 open LeanFM.Session.SessionTests in
 #guard agrees "-- the receiver decides whether the block repeats
 protocol Transfer (Sender, Receiver) {
-  rec Block {
+  loop Block {
     d: Data from Sender to Receiver;
     choice {
       Ack from Receiver to Sender cause d;
@@ -221,7 +221,7 @@ protocol Transfer (Sender, Receiver) {
 
 open LeanFM.Session.SessionTests in
 #guard agrees "protocol TransferWithTimer (Sender, Receiver) {
-  rec Block {
+  loop Block {
     d: Data from Sender to Receiver;
     choice {
       Timeout at Sender;
@@ -297,8 +297,8 @@ def leanRejects (t : String) (needle : String) : Bool :=
 #guard leanRejects "protocol P (A, B) {\n  X from A to B;\n" "line 3, column 1: unexpected end of input; expected '}'"
 #guard leanRejects "/- never closed\nprotocol P (A) { }" "unterminated comment"
 #guard leanRejects "protocol P (A, B) { X from A to B route \"open; }" "unterminated string literal"
-#guard leanRejects "protocol P (A, B) { rec L { X from A to B; } continue L; }" "continue L is not inside rec L"
-#guard leanRejects "protocol P (A, B) { rec L { continue L; X from A to B; } }" "must be the last statement"
+#guard leanRejects "protocol P (A, B) { loop L { X from A to B; } continue L; }" "continue L is not inside loop L"
+#guard leanRejects "protocol P (A, B) { loop L { continue L; X from A to B; } }" "must be the last statement"
 #guard leanRejects "protocol P (A, B) { include Q A B; }" "no protocol Q is defined before this one"
 #guard leanRejects "protocol Q (A) { X at A; }\nprotocol P (A, B) { include Q A B; }" "include Q needs 1 roles, not 2"
 #guard leanRejects "protocol P (A, A) { }" "role names must be distinct"
@@ -413,9 +413,9 @@ def fullWalk : String := r#"[{"id":"w1","from":"Member","to":"Desk","label":"Bor
 #guard (reason (next ((leanArgs lendingProtocol).setObjVal! "events" (Json.arr ((List.range 201).map fun i => parse! s!"\{\"id\":\"{i}\",\"from\":\"Member\",\"to\":\"Desk\",\"label\":\"Borrow\"}").toArray)))) ==
   "at most 200 events in a walk"
 -- events and par: both branches are offered at once, and the event after them only when both end
-#guard nextOf (next (leanArgs "protocol F (H, A, B) { par { x: Ping from H to A; } and { y: Ping from H to B; } Bye at H; }")) ==
+#guard nextOf (next (leanArgs "protocol F (H, A, B) { parallel { x: Ping from H to A; } and { y: Ping from H to B; } Bye at H; }")) ==
   "[{\"from\":\"H\",\"label\":\"Ping\",\"to\":\"A\"},{\"from\":\"H\",\"label\":\"Ping\",\"to\":\"B\"}]"
-#guard nextOf (next ((leanArgs "protocol F (H, A, B) { par { x: Ping from H to A; } and { y: Ping from H to B; } Bye at H; }").setObjVal! "events"
+#guard nextOf (next ((leanArgs "protocol F (H, A, B) { parallel { x: Ping from H to A; } and { y: Ping from H to B; } Bye at H; }").setObjVal! "events"
   (parse! r#"[{"id":"1","from":"H","to":"A","label":"Ping"},{"id":"2","from":"H","to":"B","label":"Ping"}]"#))) ==
   "[{\"act\":true,\"from\":\"H\",\"label\":\"Bye\"}]"
 
@@ -428,7 +428,7 @@ def httpCheck (t : String) (pairs : String) (extra : List (String × Json) := []
 def loginDraft : String := "protocol Login (User, App) { p: Password from User to App; e: EnterCode from User to App; Welcome from App to User cause p; }"
 #guard strs (field (httpCheck loginDraft "[[\"User\",\"App\"]]") "httpCuts") == ["EnterCode (e) from User to App never gets a response"]
 -- a request made before a loop and answered after it is not reported by a run that goes round again
-#guard strs (field (httpCheck "protocol P (C, S) { o: Order from C to S; rec W { choice { Busy at S; continue W; } or { Ready at S; } } Done from S to C cause o; }" "[[\"C\",\"S\"]]") "httpCuts") == []
+#guard strs (field (httpCheck "protocol P (C, S) { o: Order from C to S; loop W { choice { Busy at S; continue W; } or { Ready at S; } } Done from S to C cause o; }" "[[\"C\",\"S\"]]") "httpCuts") == []
 -- notHttp: a text message is not an HTTP request, so it needs no response and no permission
 def withText : String := "protocol L (User, App, Sms) { p: Password from User to App; s: Send from App to Sms; Sent from Sms to App cause s; Text from Sms to User; Ok from App to User cause p; }"
 #guard strs (field (httpCheck withText "[[\"User\",\"App\"],[\"App\",\"Sms\"]]") "httpCuts") ==
@@ -438,7 +438,7 @@ def withText : String := "protocol L (User, App, Sms) { p: Password from User to
 
 /-! ## Diagram layout found by using the tools: captions and label room -/
 
-def loginLoop : String := "protocol Login (User, App, Auth, Sms) { p: Password from User to App; c: CheckPassword from App to Auth cause p route \"POST /auth/password\"; s: SendCode from Auth to Sms; Text from Sms to User; rec Try { e: EnterCode from User to App; v: VerifyCode from App to Auth cause e; choice { Valid from Auth to App cause v; Welcome from App to User cause e; } or { Invalid from Auth to App cause v; TryAgain from App to User cause e; continue Try; } } }"
+def loginLoop : String := "protocol Login (User, App, Auth, Sms) { p: Password from User to App; c: CheckPassword from App to Auth cause p route \"POST /auth/password\"; s: SendCode from Auth to Sms; Text from Sms to User; loop Try { e: EnterCode from User to App; v: VerifyCode from App to Auth cause e; choice { Valid from Auth to App cause v; Welcome from App to User cause e; } or { Invalid from Auth to App cause v; TryAgain from App to User cause e; continue Try; } } }"
 def loginSvg : String := ((field (diagram (leanArgs loginLoop)) "svg").getStr?.toOption).getD ""
 -- a choice is captioned with the role that decides
 #guard loginSvg.contains "[Auth decides]"
@@ -490,7 +490,7 @@ def loginWalk : String := r#"[{"id":"w1","from":"User","to":"App","label":"Passw
 def tripParallel : String := include_str "../examples/vibecode/trip/Trip-parallel.protocol"
 def tripSequential : String := include_str "../examples/vibecode/trip/Trip.protocol"
 def prop (t f : String) : Except String Json := ctl ((leanArgs t).setObjVal! "formula" (parse! f))
-def neverChargeAfterNoSeat : String := r#"{"AG": {"implies": [{"after": "NoSeat"}, {"AG": {"not": {"after": "Charge"}}}]}}"#
+def neverChargeAfterNoSeat : String := r#"{"AG": {"implies": [{"on": "NoSeat"}, {"AG": {"not": {"on": "Charge"}}}]}}"#
 def pathOf (r : Except String Json) : List String :=
   match (field r "evidence").getObjValD "path" with
   | .arr a => a.toList.filterMap fun n => (n.getObjValAs? String "message").toOption
@@ -502,14 +502,14 @@ def pathOf (r : Except String Json) : List String :=
 #guard ((field (prop tripParallel neverChargeAfterNoSeat) "report").getStr?.toOption.getD "") ==
   "counterexample: Book -> HoldSeat -> NoSeat -> HoldRoom -> RoomHeld -> Charge"
 -- a path that ends where the session ended says it stays there
-#guard ((field (prop tripSequential r#"{"AF": {"after": "Charge"}}"#) "report").getStr?.toOption.getD "").endsWith "(and stays there)"
+#guard ((field (prop tripSequential r#"{"AF": {"on": "Charge"}}"#) "report").getStr?.toOption.getD "").endsWith "(and stays there)"
 -- holding in sequence fixes it, every hold is confirmed or released, and every session ends
 #guard verdict (prop tripSequential neverChargeAfterNoSeat) == "proved"
-#guard verdict (prop tripSequential r#"{"AG": {"implies": [{"after": "SeatHeld"}, {"AF": {"or": [{"after": "SeatConfirmed"}, {"after": "SeatReleased"}]}}]}}"#) == "proved"
-#guard verdict (prop tripSequential r#"{"AF": "terminal"}"#) == "proved"
+#guard verdict (prop tripSequential r#"{"AG": {"implies": [{"on": "SeatHeld"}, {"AF": {"or": [{"on": "SeatConfirmed"}, {"on": "SeatReleased"}]}}]}}"#) == "proved"
+#guard verdict (prop tripSequential r#"{"AF": "stop"}"#) == "proved"
 #guard verdict (check ((leanArgs tripSequential).setObjVal! "mayCall" (parse! "[[\"Traveler\",\"Agency\"],[\"Agency\",\"Flights\"],[\"Agency\",\"Hotels\"],[\"Agency\",\"Payments\"]]"))) == "ok"
 -- negative: an unknown label is rejected, not answered
-#guard (reason (prop tripSequential r#"{"never": {"after": "Teleport"}}"#)).contains "unknown message Teleport"
+#guard (reason (prop tripSequential r#"{"never": {"on": "Teleport"}}"#)).contains "unknown message Teleport"
 -- without a formula, session_ctl suggests properties built from the protocol, each decided
 #guard verdict (ctl (leanArgs tripSequential)) == "suggested"
 
@@ -637,9 +637,9 @@ def draft : String := "protocol Login (User, App, Sms) { p: Password from User t
 #guard strs (field (rev "protocol P (A, B) { q: Ask from A to B route \"GET /x\"; Answer from B to A cause q; }") "issues") ==
   ["Answer answers Ask (GET /x) without a status (try: Add the status it means, such as `status 200`, to Answer.)"]
 -- a loop with no way out, with the steps into it; a role that takes no part
-#guard strs (field (rev "protocol P (A, B) { Hello from A to B; rec L { Ping from A to B; continue L; } }") "issues") ==
+#guard strs (field (rev "protocol P (A, B) { Hello from A to B; loop L { Ping from A to B; continue L; } }") "issues") ==
   ["the session can never end, whatever happens (try: Give the loop a branch that leaves it (one without continue), or end it.)"]
-#guard strs (field (rev "protocol P (A, B) { choice { Quit from A to B; } or { Stay from A to B; rec L { Ping from A to B; continue L; } } }") "issues") ==
+#guard strs (field (rev "protocol P (A, B) { choice { Quit from A to B; } or { Stay from A to B; loop L { Ping from A to B; continue L; } } }") "issues") ==
   ["after Stay, the session can never end (try: Give the loop a branch that leaves it (one without continue), or end it.)"]
 #guard kinds (rev "protocol P (A, B, C) { Hi from A to B; }") == ["roles"]
 -- the structural rules come with their usual fix
@@ -675,7 +675,7 @@ def noHolds : String := "protocol Lending (Member, Desk) { sessions { b: Borrow 
   , "B cannot upgrade first: A waits to receive Pong from B (after A -> B: Ping)"
   , "B cannot stay on the old version: B is stuck trying to send Pong to A (after A -> B: Ping)" ]
 -- par: branches interleave in the composed system, and a reordering inside a branch is found
-#guard verdict (compatOf "protocol F (H, A, B) { par { Ping from H to A; } and { Ping from H to B; } }" "protocol F (H, A, B) { par { Ping from H to B; } and { Ping from H to A; } }") == "compatible"
+#guard verdict (compatOf "protocol F (H, A, B) { parallel { Ping from H to A; } and { Ping from H to B; } }" "protocol F (H, A, B) { parallel { Ping from H to B; } and { Ping from H to A; } }") == "compatible"
 #guard verdict (compatOf "protocol T (S, R) { x: Ask from S to R; y: Tell from S to R; }" "protocol T (S, R) { y: Tell from S to R; x: Ask from S to R; }") == "incompatible"
 -- a version that drops the text gateway's answer cannot go first against the old Auth
 #guard verdict (compatOf (loginProtocol.replace "Queued from Sms to Auth cause s status 202; " "") loginProtocol) == "incompatible"
@@ -694,8 +694,8 @@ def code (t : String) : String := ((field (skel t) "code").getStr?.toOption).get
 #guard (code lendingProtocol).contains "def desk(session, transport, log=None, new_id=None):\n    \"\"\"Desk's start state in a new session.\"\"\"\n    return DeskS1("
 -- an empty branch for this role is skip; loops come back; par and join fork
 #guard (code lendingProtocol).contains "    def skip(self):"
-#guard (code "protocol T (S, R) { rec B { d: Data from S to R; choice { Ack from R to S cause d; continue B; } or { Done from R to S cause d; } } }").contains "return msg, SS0(ep)"
-#guard (code "protocol F (H, A, B) { par { x: Ping from H to A; Pong from A to H cause x; } and { y: Ping from H to B; Pong from B to H cause y; } Bye at H; }").contains
+#guard (code "protocol T (S, R) { loop B { d: Data from S to R; choice { Ack from R to S cause d; continue B; } or { Done from R to S cause d; } } }").contains "return msg, SS0(ep)"
+#guard (code "protocol F (H, A, B) { parallel { x: Ping from H to A; Pong from A to H cause x; } and { y: Ping from H to B; Pong from B to H cause y; } Bye at H; }").contains
   "return Fork([HS1(ep), HS3(ep)], lambda: HS5(ep))"
 -- join k of: the generated fork joins on k ends
 #guard (code "protocol R (P, A, B, C) { join 2 of { wa: W from P to A; S from A to P cause wa; } and { wb: W from P to B; S from B to P cause wb; } and { wc: W from P to C; S from C to P cause wc; } Done at P; }").contains
@@ -746,20 +746,33 @@ def hostile : String := "protocol I («a\"b», «x)\\nimport os») {\n  «Go\"\"
 -- ways, each possible; one AF per outcome would say one particular end is inevitable, and is false
 def ordersProtocol : String := ((include_str "../examples/orders/Requirements.leanfm").splitOn "requirements {").headD ""
 def ctlOver (f : String) : Except String Json := ctl (Json.mkObj [("lean", Json.str ordersProtocol), ("formula", Json.str f)])
-#guard verdict (ctlOver "(outcomes (after Receipt) (after PaymentDeclined) (after SoldOut))") == "proved"
-#guard verdict (ctlOver "(or (AF (after Receipt)) (AF (after PaymentDeclined)) (AF (after SoldOut)))") == "disproved"
-#guard verdict (ctlOver "(outcomes (after Receipt) (after PaymentDeclined))") == "disproved"
+#guard verdict (ctlOver "(outcomes (on Receipt) (on PaymentDeclined) (on SoldOut))") == "proved"
+#guard verdict (ctlOver "(or (AF (on Receipt)) (AF (on PaymentDeclined)) (AF (on SoldOut)))") == "disproved"
+#guard verdict (ctlOver "(outcomes (on Receipt) (on PaymentDeclined))") == "disproved"
 -- the other functions over PlaceOrder: its next steps, its responses and its order
-#guard verdict (ctlOver "(follows (after CreateOrder) (after Quote) (after SoldOut))") == "proved"
-#guard verdict (ctlOver "(follows (after Charge) (after Charged) (after Declined))") == "proved"
-#guard verdict (ctlOver "(leadsTo (after Pay) (or (after Receipt) (after PaymentDeclined)))") == "proved"
-#guard verdict (ctlOver "(precedes (after Quote) (after Pay))") == "proved"
-#guard verdict (ctlOver "(precedes (after Pay) (after Quote))") == "disproved"
+#guard verdict (ctlOver "(follows (on CreateOrder) (on Quote) (on SoldOut))") == "proved"
+#guard verdict (ctlOver "(follows (on Charge) (on Charged) (on Declined))") == "proved"
+#guard verdict (ctlOver "(leadsTo (on Pay) (or (on Receipt) (on PaymentDeclined)))") == "proved"
+#guard verdict (ctlOver "(precedes (on Quote) (on Pay))") == "proved"
+#guard verdict (ctlOver "(precedes (on Pay) (on Quote))") == "disproved"
+-- the JSON protocol form names its steps parallel and loop (selfhost.session.keywords)
+#guard rejects r#"{"roles": ["A", "B"], "steps": [{"par": [[{"msg": "X", "from": "A", "to": "B"}]]}]}"# "unknown step"
+#guard rejects r#"{"roles": ["A", "B"], "steps": [{"rec": "L", "steps": [{"msg": "X", "from": "A", "to": "B"}, {"continue": "L"}]}]}"# "unknown step"
+#guard verdict (call check (withProtocol r#"{"roles": ["A", "B"], "steps": [{"parallel": [[{"msg": "X", "from": "A", "to": "B"}], [{"msg": "Y", "from": "B", "to": "A"}]]}, {"loop": "L", "steps": [{"msg": "Z", "from": "A", "to": "B"}, {"continue": "L"}]}]}"#)) != "rejected"
+-- words that read as English (selfhost.mcp.logic.words)
+#guard verdict (ctlOver "(always (implies (on CreateOrder) (inevitably (or (on Receipt) (on PaymentDeclined) (on SoldOut)))))") == "proved"
+#guard verdict (ctlOver "(allNext (on Quote))") == "disproved"
+#guard verdict (ctlOver "(possibly (on SoldOut))") == "proved"
 -- each faithful rule is also laid out for reading, beside its one-line formula (selfhost.session.ctl-scale)
 def ruleRows : List Json := (((field (ctl (Json.mkObj [("lean", Json.str ordersProtocol), ("faithful", Json.str "rules")])) "rules").getArr?).toOption.getD #[]).toList
+-- faithful rules and suggestions write on and stop (selfhost.mcp.logic.on)
+#guard ruleRows.all fun r => let t := (field (.ok r) "sexprPretty").getStr?.toOption.getD ""; !t.contains "terminal" && !t.contains "(after "
+#guard ruleRows.any fun r => ((field (.ok r) "sexprPretty").getStr?.toOption.getD "").contains "stop"
+-- faithful rules print the atom as on, never after (selfhost.mcp.logic.on)
+#guard ruleRows.all fun r => let t := (field (.ok r) "sexprPretty").getStr?.toOption.getD ""; t.contains "(on " && !t.contains "(after "
 #guard !ruleRows.isEmpty && ruleRows.all (fun r => (r.getObjValAs? String "sexprPretty").toOption.isSome)
 #guard ruleRows.any (fun r => ((r.getObjValAs? String "sexprPretty").toOption.getD "").contains "\n")
 -- session_ctl answers carry the indented reading (selfhost.mcp.logic.explain)
-#guard ((field (ctlOver "(leadsTo (after Pay) (after Charge))") "readingIndented").getStr?.toOption.getD "").startsWith "it is possible that eventually:"
+#guard ((field (ctlOver "(leadsTo (on Pay) (on Charge))") "readingIndented").getStr?.toOption.getD "").startsWith "it is possible that eventually:"
 
 end LeanFM.SessionToolsTests

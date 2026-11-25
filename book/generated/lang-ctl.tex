@@ -1,17 +1,17 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 Every session ends.
-  {"AF":"terminal"}
+  {"inevitably":"stop"}
   proved
 
 A receipt is possible.
-  {"EF":{"after":"Receipt"}}
+  {"possibly":{"on":"Receipt"}}
   proved: witness: CreateOrder -> Quote -> Pay -> Charge -> Charged -> Receipt
 
 Never charge after sold out.
-  {"AG":{"implies":[{"after":"SoldOut"},{"AG":{"not":{"after":"Charge"}}}]}}
+  {"always":{"implies":[{"on":"SoldOut"},{"always":{"not":{"on":"Charge"}}}]}}
   proved
 
 Every charge ends in a receipt.
-  {"AG":{"implies":[{"after":"Charge"},{"AF":{"after":"Receipt"}}]}}
+  {"always":{"implies":[{"on":"Charge"},{"inevitably":{"on":"Receipt"}}]}}
   disproved: counterexample: CreateOrder -> Quote -> Pay -> Charge -> Declined -> PaymentDeclined (and stays there)
 \end{lstlisting}

@@ -11,7 +11,7 @@ implementation Lean of LeanFM.LLMGenerated.LeanFM {
   "A file the project does not list is refused" => test "LeanFM/MCPTests.lean: a file outside the listing is refused";
   "The session ends only with Bye" => sorry "no test drives Bye yet";
   "The session can always end" => sorry;
-  "Every read of the project root is answered" => LeanFMMcp ⊨ (AG (implies (after ReadPage) (AX (after Items))));
+  "Every read of the project root is answered" => LeanFMMcp ⊨ (always (implies (on ReadPage) (allNext (on Items))));
   hint "Implement in Lean 4; the server is one executable built with lake";
   hint "The MCP surface is read-only: no tool writes, renames or deletes a file";
   hint "Read the project root only through ProjectView.inside, so a symlink cannot escape it";

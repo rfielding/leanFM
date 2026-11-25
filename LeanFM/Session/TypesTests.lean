@@ -68,7 +68,7 @@ def typed (cond : String) : String :=
 #guard refuses (nested.replace "s.to.city = \"Oslo\"" "s.items = \"x\"") "is a list"
 #guard refuses (nested.replace "s.to.city = \"Oslo\"" "s.to = \"x\"") "is a Address"
 -- copies of a bounded loop read their own ids
-def retry := "structure Try where n : Nat\nprotocol R (A, B) { rec Again at most 2 { t: Try from A to B where t.n > 0; choice { Ok from B to A cause t; } or { No from B to A cause t; continue Again; } } otherwise { GiveUp from A to B; } }"
+def retry := "structure Try where n : Nat\nprotocol R (A, B) { loop Again at most 2 { t: Try from A to B where t.n > 0; choice { Ok from B to A cause t; } or { No from B to A cause t; continue Again; } } otherwise { GiveUp from A to B; } }"
 #guard (check (args retry)) matches .ok _
 
 /-! Logs are checked against the types -/

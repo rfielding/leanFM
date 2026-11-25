@@ -11,7 +11,7 @@ protocol Login (User, App, Auth, Sms) {
       ok: PasswordOk from Auth to App cause c status 200;
       CodeSent from App to User cause p status 202;
       sessions { s: SendCode from Auth to Sms; Queued from Sms to Auth cause s status 202; Text from Sms to User; }
-      rec Try {
+      loop Try {
         choice {
           r: Resend from User to App route "POST /login/resend";
           rs: ResendCode from App to Auth cause r;

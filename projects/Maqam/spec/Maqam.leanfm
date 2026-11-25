@@ -35,7 +35,7 @@ structure Fetch where
   name : String
 
 protocol MaqamLive (Performer, App, Audio, Recorder, Ffmpeg, Llm, Web, Disk) {
-  rec Live {
+  loop Live {
     choice {
       -- a timeline edit: the App updates its timeline first, then tells the audio
       c: Command from Performer to App;

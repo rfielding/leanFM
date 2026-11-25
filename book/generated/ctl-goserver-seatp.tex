@@ -2,7 +2,7 @@
 -- from projects/GoServer/source/cmd/demo/static/session/goserver.leanfm
 protocol SeatP (Person, Server) given sessionId gameId {
   include TakeSeatP Person Server with sessionId, gameId;
-  par {
+  parallel {
     sessions { include PlayMoveP Person Server with sessionId, gameId; }
   } and {
     sessions { include SetAutopilotP Person Server with sessionId, gameId; }

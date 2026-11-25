@@ -19,8 +19,8 @@
     -> proved
 
 "A sold-out order is never charged"
-    AG (SoldOut → AG ¬Charge)
-    on every path, always (if SoldOut was just delivered then (on every path, always (it is not the case that Charge was just delivered)))
+    always (SoldOut → never Charge)
+    on every path, always (if SoldOut was just delivered then (on every path, never Charge was just delivered))
     -> proved
 
 "Refunds within 30 days"

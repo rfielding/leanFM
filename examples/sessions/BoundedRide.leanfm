@@ -8,7 +8,7 @@ import LeanFM.Session.Syntax
 -- Money moves Rider -> Platform -> Driver; the Platform keeps the difference.
 protocol BoundedRide (Rider, Platform, Driver) {
   Request from Rider to Platform;
-  rec Dispatch at most 3 {
+  loop Dispatch at most 3 {
     o: Offer from Platform to Driver after 30 seconds;
     choice at Driver using declared("acceptance") {
       probability 4/5:

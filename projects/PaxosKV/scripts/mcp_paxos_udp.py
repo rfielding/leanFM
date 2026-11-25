@@ -14,7 +14,7 @@ import mcp  # noqa: E402
 OUT = "reports/mcp"
 VARIANTS = ["correct", "broken", "partitioned", "lossy"]
 
-def after(m): return {"after": m}
+def after(m): return {"on": m}
 def chosen(): return {"or": [after("ChosenA"), after("ChosenB")]}
 def only(a, b): return {"stronglyImplies": [after(a), {"AG": {"not": after(b)}}]}
 

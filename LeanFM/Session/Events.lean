@@ -4,13 +4,13 @@ import LeanFM.Session.Global
 # Event streams generated from a global type (clause selfhost.session.events)
 
 `Global.simulate` runs a protocol as a server would: `sessions` starts instances at staggered
-times, every `par` branch is a thread of its own, and at each step one runnable thread, picked by a
+times, every `parallel` branch is a thread of its own, and at each step one runnable thread, picked by a
 seeded pseudo-random generator, takes its next step. A choice takes a branch at random. The result
 is one interleaved stream of events, each carrying
 
 * `prior`: the events immediately before it on the timelines of the roles it involves, in its own
   session (an actor handles one message at a time, so its events are ordered), and, for the first
-  event after a `par` or `join`, the last event of each branch it waited for. The links are a backwards linked list that records what happened before what; two events
+  event after a `parallel` or `join`, the last event of each branch it waited for. The links are a backwards linked list that records what happened before what; two events
   neither of which reaches the other through `prior` were concurrent.
 * `cause`: the event of the message its `cause` names, in the same session.
 * `answers`: for a response, the request event it answers: the first request up its cause chain

@@ -38,7 +38,7 @@ save("faithful_compare", {"variant": "SoldOut 409 replaced by Backorder 202", "a
 
 # the model holds labels, not values: a field atom is unknown, a guard's branches are both possible
 save("field_atom", call("session_ctl", {"lean": P["PlaceOrder"], "formula":
-     {"AG": {"implies": [{"after": "Pay"}, {"field": {"message": "Pay", "name": "amount", "value": "10"}}]}}}))
+     {"AG": {"implies": [{"on": "Pay"}, {"field": {"message": "Pay", "name": "amount", "value": "10"}}]}}}))
 save("pricing_ctl", [{"formula": f, "answer": call("session_ctl", {"lean": P["Pricing"], "formula": f})}
                      for f in ("(EF (after Discount))", "(EF (after Quote))", "(AG (implies (after Discount) (AG (not (after Quote)))))")])
 
@@ -55,7 +55,7 @@ save("pricing_conform", [
     conform("total not logged", P["Pricing"], [ev("o1", "CreateOrder", "Client", "Shop"), ev("d1", "Discount", "Shop", "Client", "o1", {"percent": 10})]),
     conform("gap: total 70, Quote", P["PricingGap"], [ev("o1", "CreateOrder", "Client", "Shop", body={"total": 70}), ev("q1", "Quote", "Shop", "Client", "o1")]),
     conform("gap: total 70, Discount", P["PricingGap"], [ev("o1", "CreateOrder", "Client", "Shop", body={"total": 70}), ev("d1", "Discount", "Shop", "Client", "o1", {"percent": 10})])])
-save("pricing_gap_ctl", call("session_ctl", {"lean": P["PricingGap"], "formula": "(AF terminal)"}))
+save("pricing_gap_ctl", call("session_ctl", {"lean": P["PricingGap"], "formula": "(AF stop)"}))
 
 good = [ev("o1", "CreateOrder", "Client", "Shop", body={"item": "tea", "quantity": 1}), ev("q1", "Quote", "Shop", "Client", "o1", {"price": 10}),
         ev("p1", "Pay", "Client", "Shop", "q1", {"amount": 10}), ev("c1", "Charge", "Shop", "Bank", "p1", {"amount": 10}),

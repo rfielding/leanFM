@@ -46,7 +46,7 @@ def timed(tool, args, reps=3):
     return best, ans
 fsP = T.translate(place)
 t0 = time.time(); T.check(place, fsP); tp = time.time() - t0
-tg, ag = timed("session_ctl", {"example": "goserver", "formula": {"EF": {"after": "PlayMove"}}})
+tg, ag = timed("session_ctl", {"example": "goserver", "formula": {"EF": {"on": "PlayMove"}}})
 tparse, _ = timed("session_check", {"example": "goserver"})
 tsug, asug = timed("session_ctl", {"example": "goserver"})
 save("timings", {"place_formulas": len(fsP), "place_seconds": tp,

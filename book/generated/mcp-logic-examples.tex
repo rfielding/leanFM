@@ -2,7 +2,7 @@
 \medskip\noindent\textbf{A never-claim that fails (\texttt{check\_ctl})}\par\nopagebreak
 \begin{lstlisting}[language={},breaklines=true]
 {"task": "mcp_logic_consult",
- "formula": {"never": {"after": "LogicInputRejected"}}}
+ "formula": {"never": {"on": "LogicInputRejected"}}}
 \end{lstlisting}
 \noindent returns
 \begin{lstlisting}[language={},breaklines=true]
@@ -16,7 +16,7 @@
  "reachableNodes": 4,
  "notation": "never LogicInputRejected",
  "mode": "never",
- "formula": {"never": {"after": "LogicInputRejected"}},
+ "formula": {"never": {"on": "LogicInputRejected"}},
  "evidence":
  {"path":
   [{"state": "drafting", "message": null},
@@ -40,7 +40,7 @@
  [{"restated":
    {"AG":
     {"implies":
-     [{"after": "CacheConsistentObserved"},
+     [{"on": "CacheConsistentObserved"},
       {"field":
        {"value": "true",
         "name": "holds",

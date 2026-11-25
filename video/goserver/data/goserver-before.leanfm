@@ -508,7 +508,7 @@ protocol StartGameP (Person, Server) {
 and anyone in the room may watch. The phase ends only when StartGame is accepted; a rejected
 StartGame (seats not filled, not the creator) leaves the challenge open. -/
 protocol Challenge (Person, Server) given sessionId gameId {
-  rec Open {
+  loop Open {
     choice {
       p: SetSeatPlan from Person to Server route "POST /api/set_seat_plan";
       choice {
@@ -663,7 +663,7 @@ protocol GameP (Person, Server, Bot) given sessionId {
   choice {
     c: GameCreated from Server to Person cause g status 200 where c.requestId = g.requestId;
     include Challenge Person Server with sessionId, gameId;
-    rec Turns {
+    loop Turns {
       choice {
         include Turn Server Bot;
         continue Turns;
@@ -680,7 +680,7 @@ protocol GameP (Person, Server, Bot) given sessionId {
 each its own session given both the person's session and the game, so each belongs to both. -/
 protocol SeatP (Person, Server) given sessionId gameId {
   include TakeSeatP Person Server with sessionId, gameId;
-  par {
+  parallel {
     sessions { include PlayMoveP Person Server with sessionId, gameId; }
   } and {
     sessions { include SetAutopilotP Person Server with sessionId, gameId; }
@@ -703,7 +703,7 @@ enters a room (a rejected entry is retried). In the room they create rooms, list
 start a game, which runs as a session of its own beside the lobby; or pick a game (its id only a
 reference) and take part in it, also beside the lobby; or sign out, which ends their session. -/
 protocol GoServer (Person, Server, Bot) {
-  rec SignIn {
+  loop SignIn {
     i: IssueSession from Person to Server route "POST /api/issue_session";
     choice {
       SessionIssued from Server to Person cause i status 200;
@@ -712,7 +712,7 @@ protocol GoServer (Person, Server, Bot) {
       continue SignIn;
     }
   }
-  rec Enter {
+  loop Enter {
     e: EnterRoom from Person to Server route "POST /api/enter_room";
     choice {
       a: RoomEntered from Server to Person cause e status 200
@@ -722,7 +722,7 @@ protocol GoServer (Person, Server, Bot) {
       continue Enter;
     }
   }
-  rec Lobby {
+  loop Lobby {
     choice {
       include CreateRoomP Person Server with sessionId;
       continue Lobby;

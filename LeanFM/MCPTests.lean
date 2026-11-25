@@ -272,13 +272,13 @@ def projectViewTests : IO Unit := do
     let chk (r : Json) := LeanFM.ProjectView.checkRow p protos files r
     let failing (r : Json) : IO Bool := do pure ((← chk r).getObjValD "failing" == Json.bool true)
     expect "a disproved formula of the implementation's own is failing"
-      (← failing (implRow [("id", Json.str "x"), ("kind", Json.str "formula"), ("name", Json.str "LeanFMMcp"), ("formula", Json.str "(AG (not (after Page)))")]))
+      (← failing (implRow [("id", Json.str "x"), ("kind", Json.str "formula"), ("name", Json.str "LeanFMMcp"), ("formula", Json.str "(always (not (on Page)))")]))
     expect "a refinement that breaks a requirement is failing"
       (← failing (implRow [("id", Json.str "refines"), ("kind", Json.str "refines"), ("from", Json.str "LeanFMMcp"), ("by", Json.str "Nope")]))
     expect "evidence for a key the imported map does not have is failing"
       (← failing (implRow [("id", Json.str "not a requirement"), ("kind", Json.str "test"), ("test", Json.str "t")]))
     expect "own CTL for an imported requirement is failing (it needs evidence)"
-      (← failing (implRow [("id", Json.str "The session can always end"), ("kind", Json.str "formula"), ("name", Json.str "LeanFMMcp"), ("formula", Json.str "(AG (EF terminal))")]))
+      (← failing (implRow [("id", Json.str "The session can always end"), ("kind", Json.str "formula"), ("name", Json.str "LeanFMMcp"), ("formula", Json.str "(always (possibly stop))")]))
     expect "an implementation of its own file is failing"
       (← failing ((implRow [("id", Json.str "h"), ("kind", Json.str "hint"), ("text", Json.str "x")]).setObjVal! "of" (Json.str "LeanFM.LLMGenerated.LeanFMImplementation")))
     expect "an implementation of an unlisted file is failing"
@@ -406,12 +406,12 @@ def main : IO Unit := do
   assertContains "MCP logic tools require their arguments" toolsListed.body "\"required\":[\"task\",\"formula\"]"
   let reference ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"resources/read\",\"params\":{\"uri\":\"leanfm://language/logic-reference\"}}"
   assertContains "MCP serves the logic reference" reference.body "Terminal convention"
-  let ctl ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"check_ctl\",\"arguments\":{\"task\":\"mcp_logic_consult\",\"formula\":{\"never\":{\"after\":\"LogicInputRejected\"}}}}}"
+  let ctl ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"check_ctl\",\"arguments\":{\"task\":\"mcp_logic_consult\",\"formula\":{\"never\":{\"on\":\"LogicInputRejected\"}}}}}"
   assertContains "MCP check_ctl passes arguments and returns a verdict" ctl.body "\"verdict\":\"disproved\""
   assertContains "MCP check_ctl returns a counterexample" ctl.body "\"kind\":\"counterexample\""
-  let bad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"check_ctl\",\"arguments\":{\"task\":\"mcp_logic_consult\",\"formula\":{\"G\":\"terminal\"}}}}"
+  let bad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"check_ctl\",\"arguments\":{\"task\":\"mcp_logic_consult\",\"formula\":{\"G\":\"stop\"}}}}"
   assertContains "MCP rejects malformed logic as a tool error" bad.body "\"isError\":true"
-  assertContains "MCP rejection names the typing error" bad.body "AG (on every path)"
+  assertContains "MCP rejection names the typing error" bad.body "always (AG, on every path)"
   let known ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"knows\",\"arguments\":{\"actor\":\"Ivo\",\"at\":\"e1\",\"initial\":[{\"sk\":\"I\"}],\"query\":{\"atom\":\"nb\"},\"events\":[{\"id\":\"e1\",\"src\":\"Alice\",\"dst\":\"Ivo\",\"term\":{\"enc\":{\"key\":{\"pk\":\"I\"},\"body\":{\"atom\":\"nb\"}}}}]}}}"
   assertContains "MCP knows decides a query" known.body "\"verdict\":\"proved\""
   assertContains "MCP knows returns the derivation" known.body "\"kind\":\"derivation\""
@@ -597,7 +597,7 @@ def main : IO Unit := do
     ("conform", ← callTool "session_conform" [("events", bugLog)]),
     ("diagram", ← callTool "session_diagram" []),
     ("skeleton", ← callTool "session_skeleton" []),
-    ("ctl", ← callTool "session_ctl" [("formula", (Json.parse "{\"AG\": {\"implies\": [{\"after\": \"Approved\"}, {\"AG\": {\"not\": {\"after\": \"Waitlisted\"}}}]}}").toOption.get!)]),
+    ("ctl", ← callTool "session_ctl" [("formula", (Json.parse "{\"AG\": {\"implies\": [{\"on\": \"Approved\"}, {\"AG\": {\"not\": {\"on\": \"Waitlisted\"}}}]}}").toOption.get!)]),
     ("compat", ← callTool "session_compat" [("old", Json.str lendingLean)]),
     ("actor", ← callTool "session_actor" [("role", "Member")]),
     ("dataset", ← callTool "session_dataset" [("sessions", (500 : Nat))]),
@@ -788,9 +788,9 @@ def main : IO Unit := do
   let exNoMsg ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":50,\"method\":\"tools/call\",\"params\":{\"name\":\"session_explore\",\"arguments\":{\"example\":\"goserver\",\"message\":\"Nope\"}}}"
   expect "MCP session_explore refuses a message the protocol does not have" (exNoMsg.body.contains "Nope is not a message of GoServer")
   -- the walk names its state, the same after a loop's pass as at its start
-  let n0 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { rec Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\"}}}"
-  let n1 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { rec Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\",\"events\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"More\"}]}}}"
-  let n2 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":53,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { rec Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\",\"events\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"Stop\"}]}}}"
+  let n0 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":51,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { loop Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\"}}}"
+  let n1 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":52,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { loop Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\",\"events\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"More\"}]}}}"
+  let n2 ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":53,\"method\":\"tools/call\",\"params\":{\"name\":\"session_next\",\"arguments\":{\"lean\":\"protocol L (A, B) { loop Loop { choice { More from A to B; continue Loop; } or { Stop from A to B; } } }\",\"events\":[{\"id\":\"e1\",\"from\":\"A\",\"to\":\"B\",\"label\":\"Stop\"}]}}}"
   let stateOf (r : Response) : String := match Json.parse r.body with
     | .ok j => (((j.getObjValD "result").getObjValD "structuredContent").getObjValAs? String "state").toOption.getD ""
     | .error _ => ""
@@ -805,10 +805,10 @@ def main : IO Unit := do
   expect "MCP session_review of GoServer checks HTTP and liveness over its whole state graph: clean" (rv.body.contains "\"verdict\":\"clean\"" && rv.body.contains "HTTP from 17 routed requests, liveness" && !rv.body.contains "not checked")
   -- GoServer's properties are decided, not skipped: its state graph is 10969 states (each game, seat and polled list played once in place) once a state is
   -- keyed by the set of names it bound (keyed by their order it looked unbounded)
-  let gEf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"EF\":{\"after\":\"PlayMove\"}}}}}"
+  let gEf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":57,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"EF\":{\"on\":\"PlayMove\"}}}}}"
   expect "MCP session_ctl proves PlayMove can happen in GoServer, over 10969 states, with a witness path" (gEf.body.contains "\"verdict\":\"proved\"" && gEf.body.contains "\"states\":10969" && gEf.body.contains "TakeSeat -> SeatTaken -> PlayMove")
-  expect "MCP session_ctl answers the formula in CTL notation" (gEf.body.contains "\"notation\":\"EF PlayMove\"")
-  let gAf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"AF\":{\"after\":\"PlayMove\"}}}}}"
+  expect "MCP session_ctl answers the formula in CTL notation" (gEf.body.contains "\"notation\":\"possibly PlayMove\"")
+  let gAf ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":58,\"method\":\"tools/call\",\"params\":{\"name\":\"session_ctl\",\"arguments\":{\"example\":\"goserver\",\"formula\":{\"AF\":{\"on\":\"PlayMove\"}}}}}"
   expect "MCP session_ctl disproves that PlayMove always happens in GoServer, with a counterexample that loops" (gAf.body.contains "\"verdict\":\"disproved\"" && gAf.body.contains "counterexample:" && gAf.body.contains "then repeats from")
   let exBad ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"example\":\"../../etc/passwd\"}}}"
   expect "MCP refuses an example LeanFM does not carry, naming the ones it does" (exBad.body.contains "example must be one of goserver" && !exBad.body.contains "root:")
@@ -818,7 +818,7 @@ def main : IO Unit := do
   expect "MCP session_check of GoServer fits the result limit, saying what it left out" (chk.body.contains "\"verdict\":\"ok\"" && (chk.body.contains "projections (each role" || !chk.body.contains "\"omitted\"") && compactReply chk.body == chk.body)
   let big ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"example\":\"goserver\",\"sessions\":10000}}}"
   expect "MCP session_dataset runs 10000 GoServer sessions within the result limit" (big.body.contains "\"sessions\":10000" && big.body.contains "distinct paths" && big.body.length < 100000)
-  let tooBig ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":46,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"sessions\":2000,\"lean\":\"protocol Forever (A, B) { rec L { Ping from A to B; continue L; } }\"}}}"
+  let tooBig ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":46,\"method\":\"tools/call\",\"params\":{\"name\":\"session_dataset\",\"arguments\":{\"sessions\":2000,\"lean\":\"protocol Forever (A, B) { loop L { Ping from A to B; continue L; } }\"}}}"
   expect "MCP session_dataset refuses more than 1000000 events rather than truncating" (tooBig.body.contains "would exceed 1000000 events")
   -- LeanFM's own requirements and mappings are readable resources
   for uri in ["leanfm://project/specification/SelfHosting.lean", "leanfm://project/specification/McpLogicImplementation.lean",
@@ -867,7 +867,7 @@ def main : IO Unit := do
   expect "MCP tools/list stays under the client's result limit" (listed.body.length < 100000)
   let imagesLean := (Json.str "protocol Images (Browser, Server) {\n  g: GetImage from Browser to Server;\n  choice {\n    Image from Server to Browser cause g;\n  } or {\n    NotFound from Server to Browser cause g;\n  }\n}").compress
   let callWith (id : Nat) (extra : String) : IO LeanFM.MCP.Response :=
-    dispatch s!"\{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"tools/call\",\"params\":\{\"name\":\"session_ctl\",\"arguments\":\{\"lean\":{imagesLean},\"formula\":\{\"AF\":\"terminal\"}{extra}}}}"
+    dispatch s!"\{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"tools/call\",\"params\":\{\"name\":\"session_ctl\",\"arguments\":\{\"lean\":{imagesLean},\"formula\":\{\"AF\":\"stop\"}{extra}}}}"
   let raised ← callWith 301 ",\"limits\":{\"states\":40000}"
   expect "MCP an answer under a raised limit carries limitsApplied and a warning line"
     (raised.body.contains "\"limitsApplied\"" && raised.body.contains "limits changed for this call: states 40000 (default 20000)" && raised.body.contains "\"verdict\":\"proved\"")

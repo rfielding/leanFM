@@ -1,7 +1,8 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 tools/call session_ctl
-{"lean": "protocol Images ...", "formula": "(not (EU (not (after GetImage)) (after NotFound)))"}
+{"lean": "protocol Images ...",
+ "formula": "(not (someUntil (not (on GetImage)) (on NotFound)))"}
 
 answer (excerpt)
-{"verdict": "proved", "report": "", "notation": "¬(¬GetImage EU NotFound)"}
+{"verdict": "proved", "report": "", "notation": "¬(¬GetImage someUntil NotFound)"}
 \end{lstlisting}

@@ -95,7 +95,7 @@ def lineOf (lines : Array String) (first last : Nat) (needle : String) : Option 
 structure Node where
   id : Nat
   parent : Option Nat
-  /-- protocol, definitions, definition, include, choice, branch, par, join, rec, continue,
+  /-- protocol, definitions, definition, include, choice, branch, parallel, join, rec, continue,
   sessions, message, event, roles, role -/
   kind : String
   label : String
@@ -159,8 +159,8 @@ partial def walk (ds : List Def) (lines : Array String) (parent : Nat) (inDef : 
     walk ds lines parent inDef k
   | .loop n b => do
     let d := (ds.find? (·.name == inDef))
-    let line := d.bind fun d => lineOf lines d.first d.last s!"rec {n}"
-    let some c ← add { id := 0, parent := some parent, kind := "rec", label := s!"rec {n}", protocol := inDef, first := line, last := line } | pure ()
+    let line := d.bind fun d => lineOf lines d.first d.last s!"loop {n}"
+    let some c ← add { id := 0, parent := some parent, kind := "rec", label := s!"loop {n}", protocol := inDef, first := line, last := line } | pure ()
     walk ds lines c inDef b
   | .var n => do
     let _ ← add { id := 0, parent := some parent, kind := "continue", label := s!"continue {n}", protocol := inDef }

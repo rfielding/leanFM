@@ -309,7 +309,7 @@ structure Moved where
 protocol Game (P, S) given sid {
   m: Make from P to S;
   Made from S to P cause m;
-  rec Turns {
+  loop Turns {
     choice {
       Tick at S;
       continue Turns;

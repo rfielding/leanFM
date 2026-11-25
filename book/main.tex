@@ -227,8 +227,15 @@
 \newcommand{\EX}{\mathsf{EX}\,}
 \newcommand{\EF}{\mathsf{EF}\,}
 \newcommand{\EG}{\mathsf{EG}\,}
-\newcommand{\after}[1]{\mathsf{after}(\mathit{#1})}
-\newcommand{\term}{\mathsf{end}}
+\newcommand{\after}[1]{\mathsf{on}(\mathit{#1})}
+\newcommand{\term}{\mathsf{stop}}
+% the words LeanFM writes for them (selfhost.mcp.logic.words)
+\newcommand{\always}{\mathsf{always}\,}
+\newcommand{\inevitably}{\mathsf{inevitably}\,}
+\newcommand{\possibly}{\mathsf{possibly}\,}
+\newcommand{\someAlways}{\mathsf{someAlways}\,}
+\newcommand{\allNext}{\mathsf{allNext}\,}
+\newcommand{\someNext}{\mathsf{someNext}\,}
 \newcommand{\Rules}{\mathcal{R}}
 
 % A typestate graph LeanFM derived (generated/NAME-ts-THEME.pdf, laid out by Graphviz)
@@ -255,8 +262,8 @@
   \node[anchor=south west,text width=.84\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=3.2cm]current page.south west)
     {\color{leangold}\normalsize
-      $\AG\big(\after{GetImage} \rightarrow \EX \after{Image} \wedge \EX \after{NotFound}$\\
-      $\qquad\qquad\wedge\ \AX(\after{Image} \vee \after{NotFound})\big)$};
+      $\always\big(\after{GetImage} \rightarrow \someNext \after{Image} \wedge \someNext \after{NotFound}$\\
+      $\qquad\qquad\wedge\ \allNext(\after{Image} \vee \after{NotFound})\big)$};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and Claude Opus 5.5\\[.35em]

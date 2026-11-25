@@ -1,9 +1,10 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 tools/call session_ctl
-{"lean": "protocol Images ...", "formula": "(AG (implies (after GetImage) (AX (after Image))))"}
+{"lean": "protocol Images ...",
+ "formula": "(always (implies (on GetImage) (allNext (on Image))))"}
 
 answer (excerpt)
 {"verdict": "disproved",
  "report": "counterexample: GetImage -> NotFound",
- "notation": "AG (GetImage → AX Image)"}
+ "notation": "always (GetImage → allNext Image)"}
 \end{lstlisting}

@@ -51,21 +51,21 @@ def bigCheck : ToolOutcome :=
     { bounds with maxFormulaNodes := 1000 }
 #guard match bigCheck with
   | .ok j => (j.getObjValAs? String "verdict").toOption != some "rejected" &&
-      ((j.getObjValAs? String "formula").toOption.getD "").startsWith "(or (EX #0="
+      ((j.getObjValAs? String "formula").toOption.getD "").startsWith "(or (someNext #0="
   | .error _ => false
 
 -- the caller's bounds apply: the distinct-subformula bound, the tree bound and the truth-set bound
 #guard (parseShared (Json.str (Dag.ofFormula (doubling 25)).toSexpr) { bounds with maxFormulaNodes := 75 }).toOption.isNone
 #guard (parseShared (Json.str (Dag.ofFormula (doubling 25)).toSexpr) { bounds with maxFormulaNodes := 76 }).toOption.isSome
-#guard (parseBounded (parse! "{\"AG\": {\"EF\": \"terminal\"}}") { bounds with maxFormulaNodes := 2 }).toOption.isNone
-#guard (parseBounded (parse! "{\"AG\": {\"EF\": \"terminal\"}}")).toOption.isSome
-#guard (parseFormula (parse! "{\"AG\": {\"AG\": {\"AG\": \"terminal\"}}}") 0 { bounds with maxDepth := 2 }).toOption.isNone
+#guard (parseBounded (parse! "{\"AG\": {\"EF\": \"stop\"}}") { bounds with maxFormulaNodes := 2 }).toOption.isNone
+#guard (parseBounded (parse! "{\"AG\": {\"EF\": \"stop\"}}")).toOption.isSome
+#guard (parseFormula (parse! "{\"AG\": {\"AG\": {\"AG\": \"stop\"}}}") 0 { bounds with maxDepth := 2 }).toOption.isNone
 #guard match models.head? with
   | some m => match Model.satE m (doubling 3) { bounds with maxTruthBytes := 2 } with
     | .error e => (e.splitOn "nothing was proved").length > 1
     | .ok _ => false
   | none => false
-#guard match checkCtl (Json.mkObj [("task", parse! loopy), ("formula", parse! "{\"AG\": {\"EF\": \"terminal\"}}")]) { bounds with maxTruthBytes := 1 } with
+#guard match checkCtl (Json.mkObj [("task", parse! loopy), ("formula", parse! "{\"AG\": {\"EF\": \"stop\"}}")]) { bounds with maxTruthBytes := 1 } with
   | .ok j => (j.getObjValAs? String "verdict").toOption == some "resource-limit"
   | .error _ => false
 
@@ -81,31 +81,31 @@ def same (s j : String) : Bool :=
   | .ok a, .ok b => a == b
   | _, _ => false
 
-#guard same "(AG (implies (after Ping) (AX (or (after Pong) (after SlowPong)))))"
-  "{\"AG\": {\"implies\": [{\"after\": \"Ping\"}, {\"AX\": {\"or\": [{\"after\": \"Pong\"}, {\"after\": \"SlowPong\"}]}}]}}"
-#guard same "(not (EU (not (after Charge)) (after Refund)))" "{\"not\": {\"EU\": [{\"not\": {\"after\": \"Charge\"}}, {\"after\": \"Refund\"}]}}"
+#guard same "(AG (implies (on Ping) (AX (or (on Pong) (on SlowPong)))))"
+  "{\"AG\": {\"implies\": [{\"on\": \"Ping\"}, {\"AX\": {\"or\": [{\"on\": \"Pong\"}, {\"on\": \"SlowPong\"}]}}]}}"
+#guard same "(not (EU (not (on Charge)) (on Refund)))" "{\"not\": {\"EU\": [{\"not\": {\"on\": \"Charge\"}}, {\"on\": \"Refund\"}]}}"
 #guard same "(AG (not (secret to Log)))" "{\"AG\": {\"not\": {\"secret\": {\"to\": \"Log\"}}}}"
-#guard same "(and terminal true false (at s1) (claimed \"commit(B, A)\"))"
-  "{\"and\": [\"terminal\", true, false, {\"at\": \"s1\"}, {\"claimed\": \"commit(B, A)\"}]}"
-#guard same "(K terminal)" "{\"K\": \"terminal\"}"
+#guard same "(and stop true false (at s1) (claimed \"commit(B, A)\"))"
+  "{\"and\": [\"stop\", true, false, {\"at\": \"s1\"}, {\"claimed\": \"commit(B, A)\"}]}"
+#guard same "(K stop)" "{\"K\": \"stop\"}"
 -- a label writes a shared part once; the formula is the one with that part written out
-#guard same "(and #1=(EF (after a)) (AG #1#))" "{\"and\": [{\"EF\": {\"after\": \"a\"}}, {\"AG\": {\"EF\": {\"after\": \"a\"}}}]}"
+#guard same "(and #1=(EF (on a)) (AG #1#))" "{\"and\": [{\"EF\": {\"on\": \"a\"}}, {\"AG\": {\"EF\": {\"on\": \"a\"}}}]}"
 -- what the reader refuses: an undefined label, a label defined twice, a cycle, any other # form,
 -- an unknown character, structure it does not carry, and the bounds
 def refused (s : String) (b : Bounds := bounds) : Bool := (parseFormula (Json.str s) 0 b).toOption.isNone
 #guard refused "(AG #1#)"
 #guard refused "(and #1=terminal #1=true)"
-#guard refused "#1=(and #1# terminal)"
+#guard refused "#1=(and #1# stop)"
 #guard refused "(AG #.(launch))"
 #guard refused "(AG [x])"
 #guard refused "(knows A k)"
 #guard refused "(AG (after))"
-#guard refused "(AG terminal) (EF terminal)"
-#guard refused "(AG (AG (AG terminal)))" { bounds with maxDepth := 2 }
+#guard refused "(AG stop) (EF stop)"
+#guard refused "(AG (AG (AG stop)))" { bounds with maxDepth := 2 }
 -- the bound counts distinct subformulas: a repeated part, labelled or not, counts once
-#guard (parseShared (Json.str "(and (after a) (after b) (after c))") { bounds with maxFormulaNodes := 3 }).toOption.isNone
-#guard (parseShared (Json.str "(and #1=(EF terminal) #1# #1# (EF terminal))") { bounds with maxFormulaNodes := 3 }).toOption.isSome
-#guard (parseBounded (Json.str "(and #1=(EF terminal) #1# #1#)") { bounds with maxFormulaNodes := 6 }).toOption.isNone
+#guard (parseShared (Json.str "(and (on a) (on b) (on c))") { bounds with maxFormulaNodes := 3 }).toOption.isNone
+#guard (parseShared (Json.str "(and #1=(EF stop) #1# #1# (EF stop))") { bounds with maxFormulaNodes := 3 }).toOption.isSome
+#guard (parseBounded (Json.str "(and #1=(EF stop) #1# #1#)") { bounds with maxFormulaNodes := 6 }).toOption.isNone
 -- written back as an s-expression, a formula reads as itself
 #guard [doubling 6, .ag (.implies (.after "x y") (.au (.not .terminal) (.secret (some "A") none (some "pw_secr"))))].all fun f =>
   (parseFormula (Json.str (Dag.ofFormula f).toSexpr)).toOption == some f
@@ -114,8 +114,8 @@ def verdictPath (formula : Json) : Option (String × String) :=
   match checkCtl (Json.mkObj [("task", parse! loopy), ("formula", formula)]) with
   | .ok j => some ((j.getObjValAs? String "verdict").toOption.getD "", ((j.getObjValD "evidence").getObjValD "path").compress)
   | .error _ => none
-#guard verdictPath (Json.str "(AG (EF terminal))") == verdictPath (parse! "{\"AG\": {\"EF\": \"terminal\"}}")
-#guard verdictPath (Json.str "(AF (after d))") == verdictPath (parse! "{\"AF\": {\"after\": \"d\"}}")
-#guard (verdictPath (Json.str "(AG (EF terminal))")).map (·.1) == some "disproved"
+#guard verdictPath (Json.str "(AG (EF stop))") == verdictPath (parse! "{\"AG\": {\"EF\": \"stop\"}}")
+#guard verdictPath (Json.str "(AF (on d))") == verdictPath (parse! "{\"AF\": {\"on\": \"d\"}}")
+#guard (verdictPath (Json.str "(AG (EF stop))")).map (·.1) == some "disproved"
 
 end LeanFM.Session.CtlScaleTests

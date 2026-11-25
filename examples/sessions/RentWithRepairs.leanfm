@@ -6,7 +6,7 @@ import LeanFM.Session.Syntax
 protocol RentWithRepairs (Tenant, Landlord) {
   Lease from Landlord to Tenant;
   accrue 1 roomweek per week from Landlord to Tenant;
-  rec Week {
+  loop Week {
     Rent from Tenant to Landlord amount 1000 USD at next 1 week;
     choice at Tenant using declared("week-goes") {
       probability 3/4:

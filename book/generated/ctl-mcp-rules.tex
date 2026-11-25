@@ -7,52 +7,51 @@ answer (excerpt)
  "typestates": 4,
  "rules":
  [{"subformulas": 8,
-   "sexprPretty":
-   "(and\n  (not (or (after GetImage) (after Image) (after NotFound)))\n  (not terminal))",
+   "sexprPretty": "(and (not (or (on GetImage) (on Image) (on NotFound))) (not stop))",
    "readingIndented":
-   "all of these:\n  - it is not the case that:\n      at least one of these:\n        - GetImage was just delivered\n        - Image was just delivered\n        - NotFound was just delivered\n  - it is not the case that the task has ended",
-   "notation": "¬(GetImage ∨ Image ∨ NotFound) ∧ ¬terminal",
+   "all of these:\n  - it is not the case that:\n      at least one of these:\n        - GetImage was just delivered\n        - Image was just delivered\n        - NotFound was just delivered\n  - it is not the case that the conversation may stop",
+   "notation": "¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop",
    "name": "start",
-   "formula":
-   "(and (not (or (after GetImage) (after Image) (after NotFound))) (not terminal))"},
+   "formula": "(and (not (or (on GetImage) (on Image) (on NotFound))) (not stop))"},
   {"subformulas": 15,
    "sexprPretty":
-   "(AG\n  (implies\n    (and\n      (not (or (after GetImage) (after Image) (after NotFound)))\n      #0=(not terminal))\n    (and (EX #1=(and (after GetImage) #0#)) (AX (or #1#)))))",
+   "(always\n  (implies\n    (and\n      (not (or (on GetImage) (on Image) (on NotFound)))\n      #0=(not stop))\n    (and (someNext #1=(and (on GetImage) #0#)) (allNext (or #1#)))))",
    "readingIndented":
-   "on every path, always:\n  if:\n    all of these:\n      - it is not the case that:\n          at least one of these:\n            - GetImage was just delivered\n            - Image was just delivered\n            - NotFound was just delivered\n      - (#0) it is not the case that the task has ended\n  then:\n    all of these:\n      - on some path, at the next step:\n          (#1) GetImage was just delivered ...",
+   "on every path, always:\n  if:\n    all of these:\n      - it is not the case that:\n          at least one of these:\n            - GetImage was just delivered\n            - Image was just delivered\n            - NotFound was just delivered\n      - (#0) it is not the case that the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step:\n          (#1) GetImage was just de ...",
    "notation":
-   "AG ((¬(GetImage ∨ Image ∨ NotFound) ∧ ¬terminal) → (EX (GetImage ∧ ¬terminal) ∧ AX (GetImage ∧ ¬terminal)))",
+   "always ((¬(GetImage ∨ Image ∨ NotFound) ∧ ¬stop) → (someNext (GetImage ∧ ¬stop) ∧ allNext (GetImage ∧ ¬stop)))",
    "name": "typestate 0: (start)",
    "formula":
-   "(AG (implies (and (not (or (after GetImage) (after Image) (after NotFound))) #0=(not terminal)) (and (EX #1=(and (after GetImage) #0#)) (AX (or #1#)))))"},
+   "(always (implies (and (not (or (on GetImage) (on Image) (on NotFound))) #0=(not stop)) (and (someNext #1=(and (on GetImage) #0#)) (allNext (or #1#)))))"},
   {"subformulas": 15,
    "sexprPretty":
-   "(AG\n  (implies\n    (and (after GetImage) (not terminal))\n    (and\n      (EX #0=(and (after Image) terminal))\n      (EX #1=(and (after NotFound) terminal))\n      (AX (or #0# #1#)))))",
+   "(always\n  (implies\n    (and (on GetImage) (not stop))\n    (and\n      (someNext #0=(and (on Image) stop))\n      (someNext #1=(and (on NotFound) stop))\n      (allNext (or #0# #1#)))))",
    "readingIndented":
-   "on every path, always:\n  if:\n    all of these:\n      - GetImage was just delivered\n      - it is not the case that the task has ended\n  then:\n    all of these:\n      - on some path, at the next step:\n          (#0) Image was just delivered and the task has ended\n      - on some path, at the next step:\n          (#1) NotFound was just delivered and the task has ended\n      - on every path, at the n ...",
+   "on every path, always:\n  if:\n    all of these:\n      - GetImage was just delivered\n      - it is not the case that the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step:\n          (#0) Image was just delivered and the conversation may stop\n      - on some path, at the next step:\n          (#1) NotFound was just delivered and the conversation may stop\n      - on ...",
    "notation":
-   "AG ((GetImage ∧ ¬terminal) → (EX (Image ∧ terminal) ∧ EX (NotFound ∧ terminal) ∧ AX ((Image ∧ terminal) ∨ (NotFound ∧ terminal))))",
+   "always ((GetImage ∧ ¬stop) → (someNext (Image ∧ stop) ∧ someNext (NotFound ∧ stop) ∧ allNext ((Image ∧ stop) ∨ (NotFound ∧ stop))))",
    "name": "typestate 1: GetImage",
    "formula":
-   "(AG (implies (and (after GetImage) (not terminal)) (and (EX #0=(and (after Image) terminal)) (EX #1=(and (after NotFound) terminal)) (AX (or #0# #1#)))))"},
+   "(always (implies (and (on GetImage) (not stop)) (and (someNext #0=(and (on Image) stop)) (someNext #1=(and (on NotFound) stop)) (allNext (or #0# #1#)))))"},
   {"subformulas": 9,
    "sexprPretty":
-   "(AG\n  (implies\n    #0=(and (after Image) terminal)\n    (and (EX #0#) (AX (or #0#)))))",
+   "(always\n  (implies\n    #0=(and (on Image) stop)\n    (and (someNext #0#) (allNext (or #0#)))))",
    "readingIndented":
-   "on every path, always:\n  if:\n    (#0) Image was just delivered and the task has ended\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
-   "notation": "AG ((Image ∧ terminal) → (EX (Image ∧ terminal) ∧ AX (Image ∧ terminal)))",
+   "on every path, always:\n  if:\n    (#0) Image was just delivered and the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
+   "notation": "always ((Image ∧ stop) → (someNext (Image ∧ stop) ∧ allNext (Image ∧ stop)))",
    "name": "typestate 2: Image (may end)",
-   "formula": "(AG (implies #0=(and (after Image) terminal) (and (EX #0#) (AX (or #0#)))))"},
+   "formula":
+   "(always (implies #0=(and (on Image) stop) (and (someNext #0#) (allNext (or #0#)))))"},
   {"subformulas": 9,
    "sexprPretty":
-   "(AG\n  (implies\n    #0=(and (after NotFound) terminal)\n    (and (EX #0#) (AX (or #0#)))))",
+   "(always\n  (implies\n    #0=(and (on NotFound) stop)\n    (and (someNext #0#) (allNext (or #0#)))))",
    "readingIndented":
-   "on every path, always:\n  if:\n    (#0) NotFound was just delivered and the task has ended\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
+   "on every path, always:\n  if:\n    (#0) NotFound was just delivered and the conversation may stop\n  then:\n    all of these:\n      - on some path, at the next step the formula marked #0\n      - on every path, at the next step the formula marked #0",
    "notation":
-   "AG ((NotFound ∧ terminal) → (EX (NotFound ∧ terminal) ∧ AX (NotFound ∧ terminal)))",
+   "always ((NotFound ∧ stop) → (someNext (NotFound ∧ stop) ∧ allNext (NotFound ∧ stop)))",
    "name": "typestate 3: NotFound (may end)",
    "formula":
-   "(AG (implies #0=(and (after NotFound) terminal) (and (EX #0#) (AX (or #0#)))))"}],
+   "(always (implies #0=(and (on NotFound) stop) (and (someNext #0#) (allNext (or #0#)))))"}],
  "ruleCount": 5,
  "lookahead": 0,
  "deterministic": true}

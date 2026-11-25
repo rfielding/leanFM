@@ -2,38 +2,38 @@
 PlaceOrder: 12 properties suggested from the protocol, 10 proved; pass one as formula to decide it with its path
 
 proved: Every session can still end from every state it reaches (no trap)
-  AG EF terminal
+  always possibly stop
 
 proved: Every session ends (no path runs forever)
-  AF terminal
+  inevitably stop
 
 disproved: Some session can run forever
-  EG ¬terminal
+  someAlways ¬stop
 
 proved: Every session starts with CreateOrder
-  AX CreateOrder
+  allNext CreateOrder
 
 disproved: No secret is ever sent
-  AG ¬secret
+  always ¬secret
 
 proved: No secret ever reaches Client
-  AG ¬secret →Client
+  always ¬secret →Client
 
 proved: Every CreateOrder is answered (Quote or SoldOut) before the session ends
-  AG (CreateOrder → (¬terminal AU (Quote ∨ SoldOut)))
+  always (CreateOrder → (¬stop allUntil (Quote ∨ SoldOut)))
 
 proved: CreateOrder can happen, and every CreateOrder is eventually answered
-  CreateOrder ⇒ AF (Quote ∨ SoldOut)
+  CreateOrder ⇒ inevitably (Quote ∨ SoldOut)
 
 proved: No Quote or SoldOut before a CreateOrder
-  ¬(¬CreateOrder EU (Quote ∨ SoldOut))
+  ¬(¬CreateOrder someUntil (Quote ∨ SoldOut))
 
 proved: Every Pay is answered (Receipt or PaymentDeclined) before the session ends
-  AG (Pay → (¬terminal AU (Receipt ∨ PaymentDeclined)))
+  always (Pay → (¬stop allUntil (Receipt ∨ PaymentDeclined)))
 
 proved: Pay can happen, and every Pay is eventually answered
-  Pay ⇒ AF (Receipt ∨ PaymentDeclined)
+  Pay ⇒ inevitably (Receipt ∨ PaymentDeclined)
 
 proved: No Receipt or PaymentDeclined before a Pay
-  ¬(¬Pay EU (Receipt ∨ PaymentDeclined))
+  ¬(¬Pay someUntil (Receipt ∨ PaymentDeclined))
 \end{lstlisting}

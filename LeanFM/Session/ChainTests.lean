@@ -35,7 +35,7 @@ def limit := mdp (args limitText)
 #guard field limit "terminalProbability" == Json.str "1"
 
 -- a geometric loop that exits with probability 1/4 runs its body 4 times on average
-def geometric := "protocol G (A,B) { rec L { R from A to B amount sample { 1 USD : 1/2; 3 USD : 1/2; }; choice at A using declared(\"stop\") { probability 1/4: Done from A to B; } or { probability 3/4: Again from A to B; continue L; } } }"
+def geometric := "protocol G (A,B) { loop L { R from A to B amount sample { 1 USD : 1/2; 3 USD : 1/2; }; choice at A using declared(\"stop\") { probability 1/4: Done from A to B; } or { probability 3/4: Again from A to B; continue L; } } }"
 #guard traversalsOf (mdp (args geometric)) "R: A -> B" == Json.str "4"
 -- an amount sample enters by its mean: 4 traversals × 2 USD
 #guard field (mdp (args geometric)) "expectedBalances" == toJson [
@@ -57,19 +57,19 @@ def noObligation := (pricedText.splitOn "  obligation Act.Section2").headD "" ++
 #guard ((priced.getObjValAs? String "svg").toOption.getD "").contains "expected visits 3/4"
 
 -- negative: refuse rather than report finite numbers for a session that can never end
-#guard errorHas (mdp (args "protocol F (A,B) { rec L { R from A to B; continue L; } }")) "loop forever"
+#guard errorHas (mdp (args "protocol F (A,B) { loop L { R from A to B; continue L; } }")) "loop forever"
 def neverFills := ((limitText.replace "probability 2/3:" "probability 1:").replace "probability 1/3:" "probability 0:").replace "probability 1/4:" "probability 0:" |>.replace "probability 3/4:" "probability 1:"
 #guard errorHas (mdp (args neverFills)) "loop forever"
 -- obligations depend on history: refused in the chain, with a pointer to the tree
 #guard errorHas (mdp ((args pricedText).setObjVal! "view" "chain")) "tree view"
-#guard errorHas (mdp (args "protocol P (A,B) { rec L { choice { R from A to B; continue L; } or { S from A to B; } } }")) "needs probabilities"
-#guard errorHas (mdp (args "protocol P (A,B,C) { rec L { par { R from A to B; } and { S from A to C; } choice at A using declared(\"x\") { probability 1/2: T from A to B; continue L; } or { probability 1/2: U from A to B; } } }")) "par"
+#guard errorHas (mdp (args "protocol P (A,B) { loop L { choice { R from A to B; continue L; } or { S from A to B; } } }")) "needs probabilities"
+#guard errorHas (mdp (args "protocol P (A,B,C) { loop L { parallel { R from A to B; } and { S from A to C; } choice at A using declared(\"x\") { probability 1/2: T from A to B; continue L; } or { probability 1/2: U from A to B; } } }")) "par"
 #guard errorHas (mdp ((args limitText).setObjVal! "view" "sideways")) "view must be"
-def tooMany := "protocol P (A,B) { rec L { " ++ String.join (List.replicate 100 "R from A to B; ") ++
+def tooMany := "protocol P (A,B) { loop L { " ++ String.join (List.replicate 100 "R from A to B; ") ++
   "choice at A using declared(\"x\") { probability 1/2: S from A to B; continue L; } or { probability 1/2: T from A to B; } } }"
 #guard errorHas (mdp (args tooMany)) "96 states"
 -- protocol text is escaped in the drawing
-def hostile := "protocol P (A,B) { rec L { «<b>x</b>» from A to B; choice at A using declared(\"x\") { probability 1/2: S from A to B; continue L; } or { probability 1/2: T from A to B; } } }"
+def hostile := "protocol P (A,B) { loop L { «<b>x</b>» from A to B; choice at A using declared(\"x\") { probability 1/2: S from A to B; continue L; } or { probability 1/2: T from A to B; } } }"
 #guard ((field (mdp (args hostile)) "svg").getStr?.toOption.getD "").contains "&lt;b&gt;"
 #guard !((field (mdp (args hostile)) "svg").getStr?.toOption.getD "").contains "<b>"
 
@@ -213,9 +213,9 @@ def notice := mdp ((args noticeText).setObjVal! "horizon" "4 weeks")
 #guard errorHas (mdp ((args (weeklyText.replace "after 1 hour" "after 8 days")).setObjVal! "horizon" "52 weeks")) "longer than the period"
 #guard errorHas (mdp ((args weeklyText).setObjVal! "horizon" "3 days")) "shorter than one period"
 #guard errorHas (mdp ((args (weeklyText.replace "Check from Landlord to Tenant after 1 hour;" "Check from Landlord to Tenant after 1 hour at next 1 week;")).setObjVal! "horizon" "52 weeks")) "';'"
-def innerLoop := "protocol P (A,B) { rec Week { rec Poll { choice at A using declared(\"p\") { probability 1/2: Again from A to B after 1 hour; continue Poll; } or { probability 1/2: Ready from A to B after 1 hour; } } Pay from A to B at next 1 week; continue Week; } }"
+def innerLoop := "protocol P (A,B) { loop Week { loop Poll { choice at A using declared(\"p\") { probability 1/2: Again from A to B after 1 hour; continue Poll; } or { probability 1/2: Ready from A to B after 1 hour; } } Pay from A to B at next 1 week; continue Week; } }"
 #guard errorHas (mdp ((args innerLoop).setObjVal! "horizon" "52 weeks")) "does not pass the gate"
-def twoGates := "protocol P (A,B) { rec W { X from A to B at next 1 week; Y from A to B at next 1 week; continue W; } }"
+def twoGates := "protocol P (A,B) { loop W { X from A to B at next 1 week; Y from A to B at next 1 week; continue W; } }"
 #guard errorHas (mdp ((args twoGates).setObjVal! "horizon" "52 weeks")) "several"
 #guard errorHas (mdp ((args weeklyText).setObjVal! "horizon" "200000 weeks")) "at most 10000"
 
@@ -279,7 +279,7 @@ def realizedRider : Rat := walkedAll.foldl (fun acc w =>
 #guard errorHas (mdp ((args rideText).setObjVal! "walk" (toJson [Json.mkObj [("label", "Request"),
   ("amounts", toJson [Json.mkObj [("from", "Rider"), ("to", "Platform"), ("unit", "USD"), ("quantity", toJson (5 : Nat))]])]]))) "does not"
 -- a session that never ends is cut at 512 events and marked not ended
-def spin := (parseProtocol (args "protocol P (A,B) { rec L { choice at A using declared(\"x\") { probability 1/2: R from A to B; continue L; } or { probability 1/2: S from A to B; continue L; } } }")).toOption.get!
+def spin := (parseProtocol (args "protocol P (A,B) { loop L { choice at A using declared(\"x\") { probability 1/2: R from A to B; continue L; } or { probability 1/2: S from A to B; continue L; } } }")).toOption.get!
 #guard ((Chain.generate (Chain.analyse spin.generative.get! (solveAll := false)).toOption.get! 1 1).toOption.get!).ended == [(1, false)]
 
 -- generated events carry the message ids and causes the protocol names, so a generated stream
@@ -301,7 +301,7 @@ def rideNote : String := ((field (check (args rideText)) "generative").getObjVal
 #guard (rideNote.splitOn "session_simulate, session_dataset and session_mdp run this protocol").length == 2
 #guard (rideNote.splitOn "session_conform gives no deadline reports").length == 2
 -- a protocol with par and no loop keeps the generator's own reason
-def parText : String := "protocol P (A, B) { par { X from A to B after 1 seconds; } and { Y from B to A; } }"
+def parText : String := "protocol P (A, B) { parallel { X from A to B after 1 seconds; } and { Y from B to A; } }"
 #guard ((((field (check (args parText)) "generative").getObjValAs? String "executionUnsupported").toOption.getD "").splitOn "finite sequential choices only").length == 2
 
 /-! Requirement selfhost.session.diagram.annotations: probabilities and rewards on the sequence diagram. -/
@@ -405,10 +405,10 @@ def branchValue (r : Except String Json) (first : String) : String :=
 #guard errorHas (opt "Platform" "EUR" "max") "no step or rate gives Platform any EUR"
 #guard errorHas (mdp ((args rideText).setObjVal! "optimize" (Json.mkObj [("role", "Rider"), ("unit", "USD"), ("goal", "max")]))) "at least one open choice"
 -- a policy that never ends is never chosen, however much it would pay
-def forever := "protocol P (A,B) { rec L { choice { More from A to B amount 1 USD; continue L; } or { Stop from A to B; } } }"
+def forever := "protocol P (A,B) { loop L { choice { More from A to B amount 1 USD; continue L; } or { Stop from A to B; } } }"
 def foreverOpt := mdp ((args forever).setObjVal! "optimize" (Json.mkObj [("role", "B"), ("unit", "USD"), ("goal", "max")]))
 #guard chosen foreverOpt == "Stop" && field foreverOpt "excludedNonEnding" == toJson true
 -- a session where no open choice can end is refused
-def trapped := "protocol P (A,B) { Go from A to B; rec L { choice { X from A to B; continue L; } or { Y from A to B; continue L; } } }"
+def trapped := "protocol P (A,B) { Go from A to B; loop L { choice { X from A to B; continue L; } or { Y from A to B; continue L; } } }"
 #guard errorHas (mdp ((args trapped).setObjVal! "optimize" (Json.mkObj [("role", "B"), ("unit", "time"), ("goal", "min")]))) "never reach an end"
 end LeanFM.Session.ChainTests

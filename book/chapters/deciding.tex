@@ -54,7 +54,7 @@ A GoServer whose refused sign-in falls through to the room instead of retrying:
 And the classic pair that no trace comparison can separate, $a$ then $b$ or $a$ then
 $c$ as two branches, against $a$ then a choice of $b$ or $c$: both produce exactly the
 traces $ab$ and $ac$, yet they are not bisimilar, and CTL tells them apart
-($\EX\,\AX\,\after{b}$ holds of one and not the other).
+($\someNext\allNext\after{b}$ holds of one and not the other).
 
 \input{generated/ctl-branching.tex}
 
@@ -120,7 +120,7 @@ A formula travels to LeanFM as JSON or as an s-expression. JSON is a tree and ca
 say ``this part again''; an s-expression can, with a label at the first occurrence and a
 reference after it:
 \begin{center}
-\texttt{(and \#1=(EF (after c)) (AG (implies (after a) \#1\#)))}
+\texttt{(and \#1=(possibly (on c)) (always (implies (on a) \#1\#)))}
 \end{center}
 The reader is data only: there is no read-time evaluation, and no \texttt{\#} form other
 than \texttt{\#n=} and \texttt{\#n\#}. A label is defined only once its expression is

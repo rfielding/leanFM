@@ -13,16 +13,16 @@ one of several; and so on. A CTL formula is a statement made at one moment about
 tree. This chapter needs only six pieces, and each has a plain reading.
 
 \begin{center}
-\begin{tabular}{@{}ll@{}}
+\begin{tabular}{@{}lll@{}}
 \toprule
-written & read it as \\
+written & CTL & read it as \\
 \midrule
-$\after{GetImage}$ & the message that just happened was GetImage \\
-$\term$ & the conversation is allowed to stop here \\
-$\EX\,\varphi$ & \emph{some} possible next step leads to a moment where $\varphi$ \\
-$\AX\,\varphi$ & \emph{every} possible next step leads to a moment where $\varphi$ \\
-$\AG\,\varphi$ & $\varphi$ holds at every moment the conversation can ever reach \\
-$\varphi\rightarrow\psi$ & whenever $\varphi$, also $\psi$ \\
+$\after{GetImage}$ & & on delivery of GetImage \\
+$\term$ & & the conversation may stop here \\
+$\someNext\varphi$ & $\mathsf{EX}$ & \emph{some} possible next step leads to a moment where $\varphi$ \\
+$\allNext\varphi$ & $\mathsf{AX}$ & \emph{every} possible next step leads to a moment where $\varphi$ \\
+$\always\varphi$ & $\mathsf{AG}$ & $\varphi$ holds at every moment the conversation can ever reach \\
+$\varphi\rightarrow\psi$ & & whenever $\varphi$, also $\psi$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -41,9 +41,9 @@ just after GetImage. Three things are true there, and each is one line of CTL.
 \toprule
 CTL & in words \\
 \midrule
-$\EX(\after{Image}\wedge\term)$ & an Image \emph{can} come next, and then the conversation may stop \\
-$\EX(\after{NotFound}\wedge\term)$ & a NotFound \emph{can} come next, and then it may stop \\
-$\AX\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)$ & \emph{whatever} comes next is one of those two; nothing else can \\
+$\someNext(\after{Image}\wedge\term)$ & an Image \emph{can} come next, and then the conversation may stop \\
+$\someNext(\after{NotFound}\wedge\term)$ & a NotFound \emph{can} come next, and then it may stop \\
+$\allNext\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)$ & \emph{whatever} comes next is one of those two; nothing else can \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -57,9 +57,9 @@ That statement is about one moment. To make it a rule about the whole conversati
 say \emph{when} it applies: ``at every moment at which the last message was GetImage
 and the conversation may not stop yet, those three lines hold.''
 \begin{align*}
-\AG\Big(\after{GetImage}\wedge\neg\term\ \rightarrow\ 
-  &\EX(\after{Image}\wedge\term)\wedge\EX(\after{NotFound}\wedge\term)\\
-  {}\wedge{}&\AX\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)\Big)
+&\always\Big(\after{GetImage}\wedge\neg\term\ \rightarrow\\
+&\qquad\someNext(\after{Image}\wedge\term)\wedge\someNext(\after{NotFound}\wedge\term)\\
+&\qquad{}\wedge\allNext\big((\after{Image}\wedge\term)\vee(\after{NotFound}\wedge\term)\big)\Big)
 \end{align*}
 Write one such rule for every moment the protocol can be in, add one saying where it
 starts, and the rules together say \emph{everything} the protocol says: what may happen
@@ -124,8 +124,8 @@ For each class $C$ of $\approx_k$, define $\chi^k_C$ by induction on $k$. With $
 and, writing $S_C$ for the set of $\approx_k$-classes the nodes of a class $C$ of
 $\approx_{k+1}$ step into,
 \[
-\chi^{k+1}_C = \chi^0_{C} \wedge \bigwedge_{D \in S_C} \EX\,\chi^k_D \wedge
-\AX\bigvee_{D \in S_C} \chi^k_D .
+\chi^{k+1}_C = \chi^0_{C} \wedge \bigwedge_{D \in S_C} \someNext\,\chi^k_D \wedge
+\allNext\bigvee_{D \in S_C} \chi^k_D .
 \]
 \end{definition}
 
@@ -136,9 +136,9 @@ Every node $n$ of $M_P$ satisfies $\chi^k_{[n]_k}$, for every $k$.
 \begin{proof}
 By induction on $k$. For $k = 0$, $n$ has its own label. For $k + 1$, each successor
 $n'$ of $n$ lies in some $D \in S_{[n]_{k+1}}$ and satisfies $\chi^k_D$ by induction,
-which gives the $\AX$ conjunct; and each $D \in S_{[n]_{k+1}}$ contains a successor of
+which gives the $\allNext$ conjunct; and each $D \in S_{[n]_{k+1}}$ contains a successor of
 $n$, because all nodes of a $\approx_{k+1}$-class step into the same classes, which
-gives the $\EX$ conjuncts.
+gives the $\someNext$ conjuncts.
 \end{proof}
 
 \begin{lemma}[Names exclude each other]\label{lem:exclusive}
@@ -164,8 +164,8 @@ steps deep, what may follow.
 \begin{definition}[Faithful rules]\label{def:rules}
 With $K$ the lookahead and $\chi_C = \chi^K_C$, the \emph{faithful rules} of $P$ are
 \[
-\Rules_P = \{\chi_{[n_0]}\} \cup \Big\{\ \AG\big(\chi_C \rightarrow
-  \textstyle\bigwedge_{D \in S_C}\EX\,\chi_D \wedge \AX\bigvee_{D\in S_C}\chi_D\big)
+\Rules_P = \{\chi_{[n_0]}\} \cup \Big\{\ \always\big(\chi_C \rightarrow
+  \textstyle\bigwedge_{D \in S_C}\someNext\,\chi_D \wedge \allNext\bigvee_{D\in S_C}\chi_D\big)
   \ :\ C \text{ a typestate}\Big\}
 \]
 where $S_C$ is now the set of typestates the nodes of $C$ step into.
@@ -186,10 +186,10 @@ Theorem~\ref{thm:bcg}, every $M' \sim M_P$ satisfies the same formulas.
 ($\Rightarrow$) Let $B = \{(v, n) : v \text{ reachable from } v_0 \text{ in } M',\ v
 \models \chi_{[n]}\}$. Then $(v_0, n_0) \in B$ by the start rule. Let $(v, n) \in B$ with
 $[n] = C$. Labels agree, since $\chi_C$ fixes the label. Because $v$ is reachable and
-$C$'s rule is under $\AG$, $v$ satisfies its consequent. Forth: if $v \to v'$, the
-$\AX$ conjunct gives $v' \models \chi_D$ for some $D \in S_C$; some successor $n'$ of
+$C$'s rule is under $\always$, $v$ satisfies its consequent. Forth: if $v \to v'$, the
+$\allNext$ conjunct gives $v' \models \chi_D$ for some $D \in S_C$; some successor $n'$ of
 $n$ lies in $D$, and $(v', n') \in B$. Back: if $n \to n'$ with $[n'] = D \in S_C$,
-the $\EX\,\chi_D$ conjunct gives a successor $v'$ of $v$ with $v' \models \chi_D$, so
+the $\someNext\,\chi_D$ conjunct gives a successor $v'$ of $v$ with $v' \models \chi_D$, so
 $(v', n') \in B$. Hence $B$ is a bisimulation containing $(v_0, n_0)$.
 \end{proof}
 
@@ -233,7 +233,7 @@ computed rather than drawn.
 Corollary~\ref{cor:best} turns every property one could ask of the protocol into a
 consequence of eleven formulas. For example, every request is answered:
 \[
-\AG\big(\after{CreateOrder} \rightarrow \AF(\after{Receipt}\vee\after{PaymentDeclined}\vee\after{SoldOut})\big)
+\always\big(\after{CreateOrder} \rightarrow \inevitably(\after{Receipt}\vee\after{PaymentDeclined}\vee\after{SoldOut})\big)
 \]
 holds of PlaceOrder, so it holds of every system bisimilar to it, and need not be
 stated separately. Properties that are \emph{not} consequences of the protocol, such as

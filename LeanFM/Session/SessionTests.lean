@@ -14,7 +14,7 @@ import LeanFM.Session.Conform
 
 Built with the library, so `lake build` runs every `#guard`. The protocols are the book's examples
 (SessionExample.lean), repeated here so a broken rule fails the build rather than only the book.
-Projection through `par` is tested in ProjectionTests.lean.
+Projection through `parallel` is tested in ProjectionTests.lean.
 -/
 
 namespace LeanFM.Session.SessionTests
@@ -99,7 +99,7 @@ protocol PurchaseWithHold (Client, Shop, Bank) {
 /-! ## selfhost.session.choice -/
 
 protocol TransferWithTimer (Sender, Receiver) {
-  rec Block {
+  loop Block {
     d: Data from Sender to Receiver;
     choice {
       Timeout at Sender;
@@ -114,7 +114,7 @@ protocol TransferWithTimer (Sender, Receiver) {
   [ "no single role decides a choice, so it is a race: Sender starts Timeout; Receiver starts Ack" ]
 
 protocol Transfer (Sender, Receiver) {
-  rec Block {
+  loop Block {
     d: Data from Sender to Receiver;
     choice {
       Ack from Receiver to Sender cause d;
@@ -445,7 +445,7 @@ def serveEvents := (Serve Role.client Role.shop).simulate (seed := 3) (instances
 protocol Fan (Client, Shop, Bank, Ledger) {
   o: Order from Client to Shop;
   v: Verify from Shop to Bank cause o;
-  par {
+  parallel {
     Receipt from Shop to Client cause o;
   } and {
     Hold from Bank to Ledger cause v;
@@ -466,7 +466,7 @@ def idOf (evs : Array (Event Role)) (l : String) : Nat := ((evs.toList.find? (·
 #guard (List.range 12).all fun seed => ((transfer.simulate (seed := seed) (loops := 2)).toList.any (·.label == "LastAck"))
 -- each loop has its own fuel: a loop after a spent one still runs, and the run reaches its end
 protocol TwoLoops (Sender, Receiver) {
-  rec First {
+  loop First {
     choice {
       A from Sender to Receiver;
       continue First;
@@ -474,7 +474,7 @@ protocol TwoLoops (Sender, Receiver) {
       EndA from Sender to Receiver;
     }
   }
-  rec Second {
+  loop Second {
     choice {
       B from Sender to Receiver;
       continue Second;

@@ -1,34 +1,34 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 start
-  ¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬terminal
+  ¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop
 
 typestate 0: (start)
-  AG ((¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬terminal) → (EX (CreateOrder ∧ ¬terminal) ∧ AX (CreateOrder ∧ ¬terminal)))
+  always ((¬(CreateOrder ∨ Quote ∨ SoldOut ∨ Pay ∨ Charge ∨ Charged ∨ Declined ∨ Receipt ∨ PaymentDeclined) ∧ ¬stop) → (someNext (CreateOrder ∧ ¬stop) ∧ allNext (CreateOrder ∧ ¬stop)))
 
 typestate 1: CreateOrder
-  AG ((CreateOrder ∧ ¬terminal) → (EX (Quote ∧ ¬terminal) ∧ EX (SoldOut ∧ terminal) ∧ AX ((Quote ∧ ¬terminal) ∨ (SoldOut ∧ terminal))))
+  always ((CreateOrder ∧ ¬stop) → (someNext (Quote ∧ ¬stop) ∧ someNext (SoldOut ∧ stop) ∧ allNext ((Quote ∧ ¬stop) ∨ (SoldOut ∧ stop))))
 
 typestate 2: Quote
-  AG ((Quote ∧ ¬terminal) → (EX (Pay ∧ ¬terminal) ∧ AX (Pay ∧ ¬terminal)))
+  always ((Quote ∧ ¬stop) → (someNext (Pay ∧ ¬stop) ∧ allNext (Pay ∧ ¬stop)))
 
 typestate 3: SoldOut (may end)
-  AG ((SoldOut ∧ terminal) → (EX (SoldOut ∧ terminal) ∧ AX (SoldOut ∧ terminal)))
+  always ((SoldOut ∧ stop) → (someNext (SoldOut ∧ stop) ∧ allNext (SoldOut ∧ stop)))
 
 typestate 4: Pay
-  AG ((Pay ∧ ¬terminal) → (EX (Charge ∧ ¬terminal) ∧ AX (Charge ∧ ¬terminal)))
+  always ((Pay ∧ ¬stop) → (someNext (Charge ∧ ¬stop) ∧ allNext (Charge ∧ ¬stop)))
 
 typestate 5: Charge
-  AG ((Charge ∧ ¬terminal) → (EX (Charged ∧ ¬terminal) ∧ EX (Declined ∧ ¬terminal) ∧ AX ((Charged ∧ ¬terminal) ∨ (Declined ∧ ¬terminal))))
+  always ((Charge ∧ ¬stop) → (someNext (Charged ∧ ¬stop) ∧ someNext (Declined ∧ ¬stop) ∧ allNext ((Charged ∧ ¬stop) ∨ (Declined ∧ ¬stop))))
 
 typestate 6: Charged
-  AG ((Charged ∧ ¬terminal) → (EX (Receipt ∧ terminal) ∧ AX (Receipt ∧ terminal)))
+  always ((Charged ∧ ¬stop) → (someNext (Receipt ∧ stop) ∧ allNext (Receipt ∧ stop)))
 
 typestate 7: Declined
-  AG ((Declined ∧ ¬terminal) → (EX (PaymentDeclined ∧ terminal) ∧ AX (PaymentDeclined ∧ terminal)))
+  always ((Declined ∧ ¬stop) → (someNext (PaymentDeclined ∧ stop) ∧ allNext (PaymentDeclined ∧ stop)))
 
 typestate 8: Receipt (may end)
-  AG ((Receipt ∧ terminal) → (EX (Receipt ∧ terminal) ∧ AX (Receipt ∧ terminal)))
+  always ((Receipt ∧ stop) → (someNext (Receipt ∧ stop) ∧ allNext (Receipt ∧ stop)))
 
 typestate 9: PaymentDeclined (may end)
-  AG ((PaymentDeclined ∧ terminal) → (EX (PaymentDeclined ∧ terminal) ∧ AX (PaymentDeclined ∧ terminal)))
+  always ((PaymentDeclined ∧ stop) → (someNext (PaymentDeclined ∧ stop) ∧ allNext (PaymentDeclined ∧ stop)))
 \end{lstlisting}

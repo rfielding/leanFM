@@ -24,17 +24,17 @@ namespace Prop'
 
 /-- The formula as the logic tools read it. -/
 def toJson : Prop' → Json
-  | sent l => Json.mkObj [("after", Json.str l)]
-  | terminal => Json.str "terminal"
+  | sent l => Json.mkObj [("on", Json.str l)]
+  | terminal => Json.str "stop"
   | not p => Json.mkObj [("not", toJson p)]
   | and p q => Json.mkObj [("and", Json.arr #[toJson p, toJson q])]
   | or p q => Json.mkObj [("or", Json.arr #[toJson p, toJson q])]
-  | AG p => Json.mkObj [("AG", toJson p)]
-  | AF p => Json.mkObj [("AF", toJson p)]
-  | EF p => Json.mkObj [("EF", toJson p)]
-  | EG p => Json.mkObj [("EG", toJson p)]
-  | allUntil p q => Json.mkObj [("AU", Json.arr #[toJson p, toJson q])]
-  | someUntil p q => Json.mkObj [("EU", Json.arr #[toJson p, toJson q])]
+  | AG p => Json.mkObj [("always", toJson p)]
+  | AF p => Json.mkObj [("inevitably", toJson p)]
+  | EF p => Json.mkObj [("possibly", toJson p)]
+  | EG p => Json.mkObj [("someAlways", toJson p)]
+  | allUntil p q => Json.mkObj [("allUntil", Json.arr #[toJson p, toJson q])]
+  | someUntil p q => Json.mkObj [("someUntil", Json.arr #[toJson p, toJson q])]
 
 end Prop'
 

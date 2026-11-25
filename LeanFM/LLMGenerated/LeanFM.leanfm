@@ -23,7 +23,7 @@ protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
   Initialized from Server to Host cause i status 200;
   l: ListTools from Host to Server route "POST /mcp";
   Tools from Server to Host cause l status 200;
-  rec Ask {
+  loop Ask {
     choice {
       o: Open from Agent to Host;
       v: ProjectView from Host to Server cause o route "POST /mcp";
@@ -32,7 +32,7 @@ protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
         Shown from Server to Host cause v status 200;
         Render from Host to View cause o;
         sessions {
-          rec Browse {
+          loop Browse {
             choice {
               p: Page from View to Host;
               pv: ProjectView from Host to Server cause p route "POST /mcp";
@@ -83,10 +83,10 @@ protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
    The clauses of SelfHosting.lean join this list as sorry entries until one of these replaces them. -/
 requirements {
   "The MCP conversation follows LeanFMMcp" => LeanFMMcp;
-  "No project view or tool before the server is initialized" => LeanFMMcp ⊨ (not (EU (not (after Initialized)) (or (after ProjectView) (after SessionTool))));
-  "Every page the view asks for is shown or refused" => LeanFMMcp ⊨ (AG (implies (after Page) (AF (or (after Paged) (after Refused)))));
-  "Every protocol the view loads is drawn or refused" => LeanFMMcp ⊨ (AG (implies (after Load) (AF (or (after Drawn) (after Refused)))));
-  "A file the project does not list is refused" => LeanFMMcp ⊨ (AG (implies (after NotListed) (AX (after Refused))));
-  "The session ends only with Bye" => LeanFMMcp ⊨ (AG (implies terminal (after ByeDone)));
-  "The session can always end" => LeanFMMcp ⊨ (AG (EF terminal));
+  "No project view or tool before the server is initialized" => LeanFMMcp ⊨ (precedes (on Initialized) (or (on ProjectView) (on SessionTool)));
+  "Every page the view asks for is shown or refused" => LeanFMMcp ⊨ (always (implies (on Page) (inevitably (or (on Paged) (on Refused)))));
+  "Every protocol the view loads is drawn or refused" => LeanFMMcp ⊨ (always (implies (on Load) (inevitably (or (on Drawn) (on Refused)))));
+  "A file the project does not list is refused" => LeanFMMcp ⊨ (always (implies (on NotListed) (allNext (on Refused))));
+  "The session ends only with Bye" => LeanFMMcp ⊨ (always (implies stop (on ByeDone)));
+  "The session can always end" => LeanFMMcp ⊨ (always (possibly stop));
 }

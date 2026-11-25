@@ -67,7 +67,7 @@ def login (sealed : Bool) (extra : List (String × Json) := []) : Json := loginW
 
 -- a name that looks secret but is not marked is a warning, not silence
 def plain : Json := Json.mkObj [("roles", json% [{name: "A", steps: [{send: {to: {atom: "B"}, message: {atom: "password"}}}]}]),
-  ("attacker", attacker), ("formula", json% {EF: {after: "A -> B: password"}})]
+  ("attacker", attacker), ("formula", json% {EF: {on: "A -> B: password"}})]
 #guard (field (check plain) "warnings").compress.contains "password looks secret but is not marked"
 
 -- a model cut off at the state bound never reports a secret kept (the tool's bound is 4096; here 3)

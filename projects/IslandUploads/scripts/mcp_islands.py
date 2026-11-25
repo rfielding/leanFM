@@ -12,7 +12,7 @@ import mcp  # noqa: E402
 
 OUT = "reports/mcp"
 
-def after(m): return {"after": m}
+def after(m): return {"on": m}
 
 FORMULAS = {
     "converge": ("from every state the shards can still converge", {"AG": {"EF": after("Synced")}}),

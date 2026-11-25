@@ -55,13 +55,13 @@ def call (extra : String) : Json := args ("{\"lean\": " ++ (Json.str images).com
 def answer (r : Except String Json) : String := match r with | .ok j => j.compress | .error e => e
 
 -- states: session_ctl, its suggestions, faithful rules and session_review stop at it and name it
-#guard (SessionTools.ctl (call ", \"formula\": {\"AF\": \"terminal\"}")).toOption.isSome
-#guard refused (SessionTools.ctl (call ", \"formula\": {\"AF\": \"terminal\"}, \"limits\": {\"states\": 2}")) "\"limits\": {\"states\": 4}"
+#guard (SessionTools.ctl (call ", \"formula\": {\"AF\": \"stop\"}")).toOption.isSome
+#guard refused (SessionTools.ctl (call ", \"formula\": {\"AF\": \"stop\"}, \"limits\": {\"states\": 2}")) "\"limits\": {\"states\": 4}"
 #guard has (answer (SessionTools.ctl (call ", \"limits\": {\"states\": 2}"))) "the states limit (2)"
 #guard refused (SessionTools.ctl (call ", \"faithful\": \"rules\", \"limits\": {\"states\": 2}")) "the states limit (2)"
 #guard has (answer (SessionTools.review (call ", \"limits\": {\"states\": 2}"))) "the states limit (2)"
 -- formulaNodes
-#guard refused (SessionTools.ctl (call ", \"formula\": {\"AG\": {\"EF\": \"terminal\"}}, \"limits\": {\"formulaNodes\": 2}")) "\"formulaNodes\": 4"
+#guard refused (SessionTools.ctl (call ", \"formula\": {\"AG\": {\"EF\": \"stop\"}}, \"limits\": {\"formulaNodes\": 2}")) "\"formulaNodes\": 4"
 -- faithfulRules: the rules are cut and the reading says how to see them all
 #guard has (answer (SessionTools.ctl (call ", \"faithful\": \"rules\", \"limits\": {\"faithfulRules\": 1}"))) "the faithfulRules limit (1)"
 -- logEvents
@@ -71,7 +71,7 @@ def answer (r : Except String Json) : String := match r with | .ok j => j.compre
 #guard refused (SessionTools.dataset (call ", \"sessions\": 10, \"limits\": {\"datasetEvents\": 3}")) "the datasetEvents limit (3)"
 #guard (SessionTools.dataset (call ", \"sessions\": 10")).toOption.isSome
 -- check_ctl's own limits
-def draft := "{\"task\": {\"id\": \"d\", \"states\": [\"a\", \"b\"], \"initial\": \"a\", \"terminals\": [\"b\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"b\", \"message\": \"m\"}]}, \"formula\": {\"AF\": \"terminal\"}"
+def draft := "{\"task\": {\"id\": \"d\", \"states\": [\"a\", \"b\"], \"initial\": \"a\", \"terminals\": [\"b\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"b\", \"message\": \"m\"}]}, \"formula\": {\"AF\": \"stop\"}"
 #guard match Logic.run "check_ctl" (args (draft ++ "}")) with | some (.ok _) => true | _ => false
 #guard match Logic.run "check_ctl" (args (draft ++ ", \"limits\": {\"draftStates\": 1}}")) with | some r => refused r "the draftStates limit (1)" | none => false
 #guard match Logic.run "check_ctl" (args (draft ++ ", \"limits\": {\"ctlFormulaNodes\": 1}}")) with | some r => refused r "the ctlFormulaNodes limit (1)" | none => false

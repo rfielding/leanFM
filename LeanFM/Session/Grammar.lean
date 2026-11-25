@@ -165,13 +165,13 @@ def declared (st : Parser) : Parser := node `LeanFM.Session.Grammar.declared
   (atomic (W "choice" >> W "at") >> ident >> W "using" >> W "declared" >> "(" >> strLit >> ")" >>
     wbranch st >> many (W "or" >> wbranch st))
 def par (st : Parser) : Parser := node `LeanFM.Session.Grammar.par
-  (atomic (W "par" >> lookahead "{") >> block st >> many (W "and" >> block st))
+  (atomic ((W "parallel" <|> W "par") >> lookahead "{") >> block st >> many (W "and" >> block st))
 def join (st : Parser) : Parser := node `LeanFM.Session.Grammar.join
   (atomic (W "join" >> lookahead numLit) >> numLit >> W "of" >> block st >> many (W "and" >> block st))
 def recP (st : Parser) : Parser := node `LeanFM.Session.Grammar.rec
-  (atomic (W "rec" >> ident >> lookahead "{") >> block st)
+  (atomic ((W "loop" <|> W "rec") >> ident >> lookahead "{") >> block st)
 def bounded (st : Parser) : Parser := node `LeanFM.Session.Grammar.bounded
-  (atomic (W "rec" >> ident >> W "at") >> W "most" >> numLit >> block st >> optional (W "otherwise" >> block st))
+  (atomic ((W "loop" <|> W "rec") >> ident >> W "at") >> W "most" >> numLit >> block st >> optional (W "otherwise" >> block st))
 def sessions (st : Parser) : Parser := node `LeanFM.Session.Grammar.sessions
   (atomic (W "sessions" >> lookahead "{") >> block st)
 def keyed (st : Parser) : Parser := node `LeanFM.Session.Grammar.keyed
@@ -268,7 +268,7 @@ def sexprFn : ParserFn := fun c s => Id.run do
   let input := c.inputString
   let start := s.pos
   if String.Pos.Raw.atEnd input start || String.Pos.Raw.get input start != '(' then
-    return s.mkErrorAt "a formula in parentheses, such as (AG (EF terminal))" start
+    return s.mkErrorAt "a formula in parentheses, such as (AG (EF stop))" start
   let mut i := start
   let mut depth : Nat := 0
   let mut inStr := false

@@ -6,7 +6,7 @@ import LeanFM.Session.Syntax
 -- the Proxy loses), as seen from outside. The require block states what every lookup must
 -- achieve, per entry of q.
 protocol UserLookup (Browser, Proxy, Api, Db) {
-  rec Browse {
+  loop Browse {
     q: GetUser from Browser to Proxy;
     choice at Proxy using declared("forward-delivered") {
       probability 999/1000:

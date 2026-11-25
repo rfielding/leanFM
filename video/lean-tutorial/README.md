@@ -17,7 +17,7 @@ Part one, Lean:
 - `syntax` and `macro_rules`, and how LeanFM's commands are added with a non-reserved leading word.
 
 Part two, LeanFM: a `.leanfm` file is a Lean file; message lines piece by piece; where clauses typed
-by Lean; `par`, `rec`/`continue`, `include`, `sessions` and events; versions and their upgrade path;
+by Lean; `parallel`, `loop`/`continue`, `include`, `sessions` and events; versions and their upgrade path;
 CTL as s-expressions, parsed and formatted by `explain_formula`; `session_ctl` and `session_conform`;
 the requirements list, its checked readings, and an implementation with evidence, its own CTL and
 hints.

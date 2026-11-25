@@ -13,8 +13,8 @@ def refused (t part : String) : Bool := match Text.readText t with
   | .error e => (e.splitOn part).length > 1 | .ok _ => false
 
 -- a map with each pointer kind
-#guard (mapOf (withMap "  \"placed\" => PlaceOrder;\n  \"pay\" => PlaceOrder ⊨ (AG (implies (after Pay) (AX (after Charge))));\n  \"refunds\" => sorry \"later\";\n  \"bare\" => sorry;\n")).toOption ==
-  some [("placed", .protocol "PlaceOrder"), ("pay", .formula "PlaceOrder" "(AG (implies (after Pay) (AX (after Charge))))"),
+#guard (mapOf (withMap "  \"placed\" => PlaceOrder;\n  \"pay\" => PlaceOrder ⊨ (AG (implies (on Pay) (AX (on Charge))));\n  \"refunds\" => sorry \"later\";\n  \"bare\" => sorry;\n")).toOption ==
+  some [("placed", .protocol "PlaceOrder"), ("pay", .formula "PlaceOrder" "(AG (implies (on Pay) (AX (on Charge))))"),
        ("refunds", .sorry_ "later"), ("bare", .sorry_ "")]
 -- refused: an unknown protocol (an error, not a sorry), a duplicate, an empty or long name, an
 -- unbalanced formula, a second map, an item after the map
@@ -22,17 +22,17 @@ def refused (t part : String) : Bool := match Text.readText t with
 #guard refused (withMap "  \"x\" => sorry;\n  \"x\" => sorry;\n") "is in the map twice"
 #guard refused (withMap "  \"\" => sorry;\n") "must not be empty"
 #guard refused (withMap ("  \"" ++ "".pushn 'n' 201 ++ "\" => sorry;\n")) "at most 200 characters"
-#guard refused (withMap "  \"x\" => PlaceOrder ⊨ (AG (after Pay);\n") "parentheses close"
+#guard refused (withMap "  \"x\" => PlaceOrder ⊨ (AG (on Pay);\n") "parentheses close"
 #guard refused (withMap "  \"x\" => sorry;\n" ++ "requirements {\n}\n") "the requirements map is the file's last item"
 #guard refused (withMap "  \"x\" => sorry;\n" ++ "protocol Q (A, B) { M from A to B; }\n") "the requirements map is the file's last item"
 
 -- an implementation block: refinements, evidence, own CTL and hints
-def impl := "import LeanFM.Session.Syntax\nimplementation Go of Orders.Requirements {\n  refines PlaceOrder by ShopImpl;\n  \"placed\" => conform \"logs/o.jsonl\";\n  \"pay\" => test \"PayTests.ok\";\n  \"refunds\" => sorry;\n  \"own\" => ShopImpl ⊨ (AG (EF terminal));\n  hint \"Implement as Go\";\n}\n"
+def impl := "import LeanFM.Session.Syntax\nimplementation Go of Orders.Requirements {\n  refines PlaceOrder by ShopImpl;\n  \"placed\" => conform \"logs/o.jsonl\";\n  \"pay\" => test \"PayTests.ok\";\n  \"refunds\" => sorry;\n  \"own\" => ShopImpl ⊨ (AG (EF stop));\n  hint \"Implement as Go\";\n}\n"
 #guard match Text.readMaps impl with
   | .ok (_, a) => match a.impls.toList with
     | [d] => d.name == "Go" && d.of == "Orders.Requirements" && d.refines == [("PlaceOrder", "ShopImpl")] &&
         d.entries == [("placed", .conform "logs/o.jsonl"), ("pay", .test "PayTests.ok"), ("refunds", .pointer (.sorry_ "")),
-          ("own", .pointer (.formula "ShopImpl" "(AG (EF terminal))"))] && d.hints == ["Implement as Go"]
+          ("own", .pointer (.formula "ShopImpl" "(AG (EF stop))"))] && d.hints == ["Implement as Go"]
     | _ => false
   | .error _ => false
 -- a file of only an implementation reads for its maps, never as a protocol for the session tools
@@ -50,8 +50,8 @@ def two := order ++ "\nprotocol Ping (A, B) { M from A to B; }\nrequirements {\n
 
 -- each kind converts to CTL and is decided over the protocol it names
 #guard (checkPointer two (.protocol "PlaceOrder")).met
-#guard (checkPointer two (.formula "PlaceOrder" "(AG (EF terminal))")).met
-#guard let c := checkPointer two (.formula "PlaceOrder" "(AG (not (after Pay)))"); !c.met && c.failing && c.verdict == "disproved"
+#guard (checkPointer two (.formula "PlaceOrder" "(AG (EF stop))")).met
+#guard let c := checkPointer two (.formula "PlaceOrder" "(AG (not (on Pay)))"); !c.met && c.failing && c.verdict == "disproved"
 #guard (checkPointer two (.formula "PlaceOrder" "(AG (bogus")).failing
 #guard let c := checkPointer two (.sorry_ "why"); c.usesSorry && !c.met && !c.failing
 #guard (checkPointer two (.protocol "Nope")).failing
@@ -62,7 +62,7 @@ def two := order ++ "\nprotocol Ping (A, B) { M from A to B; }\nrequirements {\n
 #guard status (checkPointer two (.protocol "PlaceOrder")) none == "specified"
 #guard status (sorryChecked "") (some (testChecked "t")) == "tested"
 #guard status (sorryChecked "") none == "sorry"
-#guard status (checkPointer two (.formula "PlaceOrder" "(AG (not (after Pay)))")) (some (testChecked "t")) == "failing"
+#guard status (checkPointer two (.formula "PlaceOrder" "(AG (not (on Pay)))")) (some (testChecked "t")) == "failing"
 -- conform: a run that keeps the protocol meets it, one that breaks a where clause fails
 def ev (i l s d : String) (c : Option String) (body : List (String × Json)) : Json :=
   Json.mkObj ([("id", Json.str i), ("label", Json.str l), ("from", Json.str s), ("to", Json.str d), ("body", Json.mkObj body)] ++

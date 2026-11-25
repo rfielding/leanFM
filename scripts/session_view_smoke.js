@@ -439,7 +439,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     await show(R.ctl);
     expectText("session_ctl shows its counterexample path", byId.results, "Counterexample: the steps that break it");
     // the property reads as CTL symbols, not as JSON
-    expectText("session_ctl heads the property with its CTL notation", byId.results, "AG (Approved → AG ¬Waitlisted)");
+    expectText("session_ctl heads the property with its CTL notation", byId.results, "always (Approved → always ¬Waitlisted)");
   }
   if (R.compat) {
     await show(R.compat);
@@ -523,7 +523,7 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     sectionButton("requirements").click(); await wait(200);
     if (navSent()?.params.arguments.section !== "requirements") throw new Error("the requirements section was not asked for");
     expectText("the requirements section lists LeanFM's protocol requirement", byId.results, "protocol · The MCP conversation follows LeanFMMcp");
-    expectText("a formula requirement shows the CTL it converts to", byId.results, "(AG (EF terminal))");
+    expectText("a formula requirement shows the CTL it converts to", byId.results, "(always (possibly stop))");
     expectText("a clause is a sorry requirement", byId.results, "sorry · selfhost.revision");
     button(byId.results, "Open LeanFMMcp in the explorer");
     buttons(byId.results).find((b) => b.textContent === "Open in the CTL view").click(); await wait(300);

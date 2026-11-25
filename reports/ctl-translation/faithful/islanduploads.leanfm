@@ -63,7 +63,7 @@ protocol Upload (Browser, Shard) {
   u: UploadStart from Browser to Shard;
   choice {
     o: UploadStarted from Shard to Browser cause u where o.requestId = u.requestId ∧ o.offset = 0;
-    rec Parts {
+    loop Parts {
       choice {
         p: UploadPart from Browser to Shard;
         choice {
@@ -180,8 +180,8 @@ protocol Socket (Browser, Door, Host) {
     g: WsUpgrade from Door to Host cause u where g.mount = u.mount;
     a: WsAccepted from Host to Door cause g;
     WsAccepted from Door to Browser cause u;
-    par {
-      rec Up {
+    parallel {
+      loop Up {
         choice {
           FrameUp from Browser to Door;
           FrameUp from Door to Host;
@@ -192,7 +192,7 @@ protocol Socket (Browser, Door, Host) {
         }
       }
     } and {
-      rec Down {
+      loop Down {
         choice {
           FrameDown from Host to Door;
           FrameDown from Door to Browser;

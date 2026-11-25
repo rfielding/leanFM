@@ -6,7 +6,7 @@ protocol Lending (Member, Desk, Librarian) {
     b: Borrow from Member to Desk route "POST /loans";
     choice {
       l: Lent from Desk to Member cause b status 201;
-      rec Loan {
+      loop Loan {
         choice {
           n: Renew from Member to Desk route "POST /renewals";
              Renewed from Desk to Member cause n status 200;

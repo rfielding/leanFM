@@ -122,7 +122,7 @@ class LeanFMOverview(Scene):
     def requirements_scene(self):
         head = self.heading("5. State constraints over the generated futures")
         cards = VGroup(self.requirement_card("AG(authenticated ∨ ¬success)","safety: no unauthenticated success",RED),
-                       self.requirement_card("AF terminal","liveness: every future terminates",AMBER),
+                       self.requirement_card("AF stop","liveness: every future can stop",AMBER),
                        self.requirement_card("EF not_found","existence: retain a failure witness",BLUE),
                        self.requirement_card("EG within_bound","viability: some invariant future",GREEN))
         cards.arrange_in_grid(rows=2,cols=2,buff=(.55,.55)).shift(DOWN*.25)

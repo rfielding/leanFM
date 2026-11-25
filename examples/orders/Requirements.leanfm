@@ -42,9 +42,9 @@ protocol PlaceOrder (Client, Shop, Bank) {
 
 requirements {
   "Orders are placed as PlaceOrder says" => PlaceOrder;
-  "Every order is answered" => PlaceOrder ⊨ (leadsTo (after CreateOrder) (or (after Receipt) (after PaymentDeclined) (after SoldOut)));
-  "Every payment is charged to the bank" => PlaceOrder ⊨ (leadsTo (after Pay) (after Charge));
-  "No receipt without a charge" => PlaceOrder ⊨ (precedes (after Charged) (after Receipt));
-  "A sold-out order is never charged" => PlaceOrder ⊨ (AG (implies (after SoldOut) (AG (not (after Charge)))));
+  "Every order is answered" => PlaceOrder ⊨ (leadsTo (on CreateOrder) (or (on Receipt) (on PaymentDeclined) (on SoldOut)));
+  "Every payment is charged to the bank" => PlaceOrder ⊨ (leadsTo (on Pay) (on Charge));
+  "No receipt without a charge" => PlaceOrder ⊨ (precedes (on Charged) (on Receipt));
+  "A sold-out order is never charged" => PlaceOrder ⊨ (always (implies (on SoldOut) (never (on Charge))));
   "Refunds within 30 days" => sorry "PlaceOrder has no Refund message yet";
 }

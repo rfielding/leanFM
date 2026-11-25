@@ -19,14 +19,14 @@ namespace Suggest
 /-- At most this many suggestions. -/
 def maxSuggestions : Nat := 12
 
-def after (l : String) : Json := Json.mkObj [("after", Json.str l)]
+def after (l : String) : Json := Json.mkObj [("on", Json.str l)]
 def one (k : String) (f : Json) : Json := Json.mkObj [(k, f)]
 def two (k : String) (a b : Json) : Json := Json.mkObj [(k, Json.arr #[a, b])]
 def anyOf (ls : List String) : Json :=
   match ls with
   | [l] => after l
   | _ => Json.mkObj [("or", Json.arr (ls.map after).toArray)]
-def notTerminal : Json := one "not" (Json.str "terminal")
+def notTerminal : Json := one "not" (Json.str "stop")
 def secret (fields : List (String × String)) : Json := Json.mkObj [("secret", Json.mkObj (fields.map fun (k, v) => (k, Json.str v)))]
 
 /-- A call with its nested calls, flattened. -/
@@ -41,8 +41,8 @@ def Global.suggest (g : Global String) (roles : List String) (secretsOf : String
   let graph ← g.stateGraph maxStates
   let firsts := ((graph.edges.filter (·.1 == "s0")).map (·.2.2.label)).eraseDups
   let base : List (String × Json) :=
-    [ ("Every session can still end from every state it reaches (no trap)", one "AG" (one "EF" (Json.str "terminal")))
-    , ("Every session ends (no path runs forever)", one "AF" (Json.str "terminal"))
+    [ ("Every session can still end from every state it reaches (no trap)", one "AG" (one "EF" (Json.str "stop")))
+    , ("Every session ends (no path runs forever)", one "AF" (Json.str "stop"))
     , ("Some session can run forever", one "EG" notTerminal) ] ++
     (if firsts.isEmpty then [] else
       [(s!"Every session starts with {" or ".intercalate firsts}", one "AX" (anyOf firsts))])

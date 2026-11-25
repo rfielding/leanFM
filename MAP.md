@@ -109,7 +109,7 @@ This is the newest layer, and what the book's first chapters describe.
 | Module | Lines | What it is |
 |---|---|---|
 | `Global.lean` | 396 | Global types (`Global R`), inferred choice deciders, projection to local types, issue checks |
-| `Syntax.lean` | 142 | The `protocol` notation (`choice … or …`, `par`, `join`, `rec`, `include`, `sessions`) |
+| `Syntax.lean` | 142 | The `protocol` notation (`choice … or …`, `parallel`, `join`, `loop`, `include`, `sessions`) |
 | `Physics.lean` | 130 | Channel declarations and presets (`reliable`, `http`, `udp`, `stream`, `kafka`) |
 | `Topology.lean` | 132 | Interfaces, scopes and the deployment tree |
 | `Http.lean` | 55 | The HTTP call discipline: cut and un-cut |

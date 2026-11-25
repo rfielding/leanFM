@@ -78,7 +78,7 @@ def split : List Json := (named "0" "1").set 2 (ev "r0" "Resp" "B" "A" (some "m0
 
 /-! The declared session key joins; a where equation does not -/
 
-def keyedLoop := "structure Ask where\n  caller : String\n\nprotocol K (A, B) {\n  sessions by a.caller {\n    rec L {\n      choice {\n        a: Ask from A to B;\n        Reply from B to A cause a;\n        continue L;\n      } or {\n        Bye from A to B;\n      }\n    }\n  }\n}"
+def keyedLoop := "structure Ask where\n  caller : String\n\nprotocol K (A, B) {\n  sessions by a.caller {\n    loop L {\n      choice {\n        a: Ask from A to B;\n        Reply from B to A cause a;\n        continue L;\n      } or {\n        Bye from A to B;\n      }\n    }\n  }\n}"
 def ask (id caller : String) : Json := ev id "Ask" "A" "B" none none none (some (Json.mkObj [("caller", Json.str caller)]))
 -- two asks of alice, no cause between them, are one session by the key; bob's is another
 def keyedEvents : List Json :=

@@ -90,10 +90,10 @@ def main : IO Unit := do
   write "lang-ping-sla.tex" (listing (str s "report"))
 
   -- Chapter: questions you ask a protocol
-  let rows ← [ ("Every session ends.", json% {AF: "terminal"})
-             , ("A receipt is possible.", json% {EF: {after: "Receipt"}})
-             , ("Never charge after sold out.", json% {AG: {implies: [{after: "SoldOut"}, {AG: {not: {after: "Charge"}}}]}})
-             , ("Every charge ends in a receipt.", json% {AG: {implies: [{after: "Charge"}, {AF: {after: "Receipt"}}]}}) ].mapM
+  let rows ← [ ("Every session ends.", json% {inevitably: "stop"})
+             , ("A receipt is possible.", json% {possibly: {on: "Receipt"}})
+             , ("Never charge after sold out.", json% {always: {implies: [{on: "SoldOut"}, {always: {not: {on: "Charge"}}}]}})
+             , ("Every charge ends in a receipt.", json% {always: {implies: [{on: "Charge"}, {inevitably: {on: "Receipt"}}]}}) ].mapM
     fun (e, f) => ctlRow order e f
   write "lang-ctl.tex" (listing ("\n\n".intercalate rows))
   let newer := order.replace "    SoldOut from Shop to Client cause o status 409;" "    SoldOut from Shop to Client cause o status 409;\n  } or {\n    Backorder from Shop to Client cause o status 202;"

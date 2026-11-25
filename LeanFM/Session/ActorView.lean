@@ -23,7 +23,7 @@ partial def Global.silent {R : Type} : Global R → Bool
   | .var _ | .done => true
 
 /-- The steps of `g` that `r` takes part in: its messages (sent or received) and its own events, in
-the same frames (choice, par, join, loop, sessions, include boxes). A frame left with nothing the role
+the same frames (choice, parallel, join, loop, sessions, include boxes). A frame left with nothing the role
 sees is dropped; a choice keeps its other branches, an empty one standing for "the role sees nothing
 on this branch", unless every branch is empty. -/
 partial def Global.restrict {R : Type} [DecidableEq R] (r : R) : Global R → Global R

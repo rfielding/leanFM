@@ -6,7 +6,7 @@ import LeanFM.Session.Syntax
 
 Requirement: a role that has already taken part in a session, and waits on another role's
 choice, can tell the branches apart when the first messages it can receive in them differ, even
-when a branch runs concurrent work (`par`) first. Its projection is an `offer`.
+when a branch runs concurrent work (`parallel`) first. Its projection is an `offer`.
 
 Negative requirements, unchanged by that rule:
 
@@ -44,7 +44,7 @@ protocol ConcurrentAnswer (Client, Shop, Bank, Warehouse) {
   c: Charge from Shop to Bank cause p;
   choice {
     d: Charged from Bank to Shop cause c;
-    par {
+    parallel {
       Receipt from Shop to Client cause d;
     } and {
       s: Ship from Shop to Warehouse cause d;
@@ -56,13 +56,13 @@ protocol ConcurrentAnswer (Client, Shop, Bank, Warehouse) {
   }
 }
 
-/-- The answer comes after the concurrent work; the client is in neither side of the `par`. -/
+/-- The answer comes after the concurrent work; the client is in neither side of the `parallel`. -/
 protocol FanOutThenAnswer (Client, Shop, Bank, Warehouse) {
   p: Pay from Client to Shop;
   c: Charge from Shop to Bank cause p;
   choice {
     d: Charged from Bank to Shop cause c;
-    par {
+    parallel {
       s: Ship from Shop to Warehouse cause d;
          Shipped from Warehouse to Shop cause s;
     } and {
@@ -81,7 +81,7 @@ protocol ConcurrentNoRefusal (Client, Shop, Bank, Warehouse) {
   c: Charge from Shop to Bank cause p;
   choice {
     d: Charged from Bank to Shop cause c;
-    par {
+    parallel {
       Receipt from Shop to Client cause d;
     } and {
       s: Ship from Shop to Warehouse cause d;

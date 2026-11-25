@@ -8,7 +8,7 @@ open Lean LeanFM LeanFM.Session LeanFM.SessionTools
 
 def lookup := "protocol Lookup (Browser, Api, Db, Cache) {
   q: GetUser from Browser to Api route \"GET /users\";
-  par {
+  parallel {
     d: Query from Api to Db cause q;
     Row from Db to Api cause d;
   } and {

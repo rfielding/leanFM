@@ -40,7 +40,7 @@ and the other `*Example.lean` files) through the functions its tools call, so th
 from the code.
 
 **Part I, the protocol language.**
-- *Global Types*: roles, messages, causes, choices, loops, bounded loops, `par`, `sessions` and
+- *Global Types*: roles, messages, causes, choices, loops, bounded loops, `parallel`, `sessions` and
   `include`, on a request with two answers (`GET /images`: 200 or 404) and a three-party purchase.
 - *Projection and Well-Formedness*: each role's local type, and the two ways a protocol cannot be
   played (a race, and a role that cannot tell which branch was taken).
@@ -55,7 +55,7 @@ from the code.
   theorem that the faithful rules hold exactly when the system is bisimilar to the protocol, which
   no CTL can improve on.
 - *Construct by Construct*: what each construct costs in typestates and lookahead, hidden counters,
-  `par` as a product, and the linear walk with its proof. Formulas appear both as indented
+  `parallel` as a product, and the linear walk with its proof. Formulas appear both as indented
   s-expressions and read out as indented English.
 - *Deciding It*: faithfulness as one bisimulation check; CTL evaluated over a hash-consed DAG in
   O(distinct subformulas × model); the functions that name the shapes specifications repeat
@@ -120,6 +120,26 @@ section. Agents connected to the server can ask `server_info` which commit it wa
 whether it is stale (rebuilt since it started).
 
 ---
+
+## Renamed words
+
+LeanFM's words were renamed to say what they mean. The old words are refused, each with an error
+naming its replacement, so a formula or protocol written in them fails rather than meaning
+something else.
+
+| old | new | meaning |
+|---|---|---|
+| `par { ... } and { ... }` | `parallel { ... } and { ... }` | branches that run interleaved |
+| `rec L { ... continue L; }` | `loop L { ... continue L; }` | a named loop (bounded: `loop L at most N { ... } otherwise { ... }`) |
+| JSON steps `"par"`, `"rec"` | `"parallel"`, `"loop"` | the same, in the JSON protocol form |
+| `(after M)`, `{"after": "M"}` | `(on M)`, `{"on": "M"}` | on delivery of M: true in the state that delivery reaches, until the next message |
+| `terminal`, `"terminal"` | `stop`, `"stop"` | the conversation may stop here |
+| diagram tabs `alt`, `par`, `ref` | `choice`, `parallel`, `include` | the language's own keywords |
+
+Words that read as English stand for the CTL operators; each says whether it means some path or
+every path: `possibly` (EF), `inevitably` (AF), `always` (AG), `never` (AG not), `someAlways` (EG),
+`allNext`/`someNext` (AX/EX), and, infix, `allUntil`/`someUntil` (AU/EU) and `allUnless`/`someUnless`
+(AW/EW). `explain_formula` answers any formula `unfolded` into the primitives.
 
 ## LeanFM in Claude Desktop
 

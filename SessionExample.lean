@@ -149,7 +149,7 @@ acknowledgement. No single role decides that choice: the sender's timer starts o
 receiver's `Ack` the other, and both can happen at once. The checker reports the race. -/
 --@begin TransferWithTimer
 protocol TransferWithTimer (Sender, Receiver) {
-  rec Block {
+  loop Block {
     d: Data from Sender to Receiver;
     choice {
       Timeout at Sender;
@@ -169,7 +169,7 @@ protocol TransferWithTimer (Sender, Receiver) {
 the sender's retransmission timer are physics, declared below, not branches of the type. -/
 --@begin Transfer
 protocol Transfer (Sender, Receiver) {
-  rec Block {
+  loop Block {
     d: Data from Sender to Receiver;
     choice {
       Ack from Receiver to Sender cause d;

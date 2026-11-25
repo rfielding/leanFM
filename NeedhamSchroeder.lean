@@ -97,11 +97,11 @@ def declared (v : Variant) : Protocol :=
 
 def formulas : List (String × String × Json) :=
   [ ("secrecy", "Ivo never learns the nonce Bob shares with Alice",
-      Json.mkObj [("never", Json.mkObj [("after", "SecrecyBreach")])])
+      Json.mkObj [("never", Json.mkObj [("on", "SecrecyBreach")])])
   , ("authentication", "Bob never commits to Alice unless Alice ran with Bob",
-      Json.mkObj [("never", Json.mkObj [("after", "Impersonation")])])
+      Json.mkObj [("never", Json.mkObj [("on", "Impersonation")])])
   , ("canComplete", "Alice and Bob can complete an honest run",
-      Json.mkObj [("EF", Json.mkObj [("after", "HonestRun")])]) ]
+      Json.mkObj [("EF", Json.mkObj [("on", "HonestRun")])]) ]
 
 /-- The secrecy requirement again, without a flag: never is Bob committed to Alice while Ivo knows
 Bob's nonce. -/

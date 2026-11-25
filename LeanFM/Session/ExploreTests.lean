@@ -99,7 +99,7 @@ def shopData : Except String Json := dataset (args shopText [("sessions", toJson
 #guard ((str shopData "reading").splitOn "these frequencies describe the walker, not the system").length == 2
 
 -- never: a session reported ended when it was cut at the event limit
-def forever : String := "protocol Forever (A, B) { rec L { Ping from A to B; continue L; } }"
+def forever : String := "protocol Forever (A, B) { loop L { Ping from A to B; continue L; } }"
 #guard (walks forever 2).all fun r => r.truncated && !r.ended && r.steps.size == Dataset.maxSessionEvents
 #guard ((str (dataset (args forever [("sessions", toJson (3 : Nat))])) "reading").splitOn "3 did not end").length == 2
 -- never: an unbounded request (sessions, or events in all)
@@ -119,7 +119,7 @@ def forever : String := "protocol Forever (A, B) { rec L { Ping from A to B; con
   | .error _ => false
 -- a protocol whose parallel branches interleave says its paths are orders, not outcomes
 -- three branches of three messages: 9!/(3!^3) = 1680 orders, so 12 sessions all but surely differ
-def interleave : String := "protocol I (A, B, C, D) { par { A1 from A to D; A2 from A to D; A3 from A to D; } and { B1 from B to D; B2 from B to D; B3 from B to D; } and { C1 from C to D; C2 from C to D; C3 from C to D; } }"
+def interleave : String := "protocol I (A, B, C, D) { parallel { A1 from A to D; A2 from A to D; A3 from A to D; } and { B1 from B to D; B2 from B to D; B3 from B to D; } and { C1 from C to D; C2 from C to D; C3 from C to D; } }"
 #guard ((str (dataset (args interleave [("sessions", toJson (12 : Nat))])) "reading").splitOn "parallel branches interleave").length == 2
 -- never: a dataset of a protocol with issues
 #guard refused (dataset (args "protocol Bad (A, B, C) { choice { X from A to B; } or { Y from C to B; } }")) "fix protocol issues"
@@ -138,7 +138,7 @@ def coin : String := "protocol Coin (A, B) {
 }"
 
 def tosses : String := "protocol Tosses (A, B) {
-  rec Toss {
+  loop Toss {
     Flip from A to B;
     choice at B using declared(\"coin\") {
       probability 1/2:

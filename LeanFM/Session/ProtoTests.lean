@@ -115,7 +115,7 @@ def lending := include_str "../../examples/vibecode/lending/Lending.protocol"
 #guard has (str (types (Json.mkObj [("lean", Json.str lending)])) "leanModule") "namespace Desk" &&
   (match types (Json.mkObj [("lean", Json.str lending)]) with | .ok j => j.getObjValD "leanModuleNote" == Json.null | _ => false)
 -- a role that runs branches in parallel has no single machine: the module leaves it out and says why
-def parallel := "protocol R (P, A, B) { par { X from P to A; } and { Y from P to B; } }"
+def parallel := "protocol R (P, A, B) { parallel { X from P to A; } and { Y from P to B; } }"
 #guard has (str (types (Json.mkObj [("lean", Json.str parallel)])) "leanModuleNote") "P: its projection runs branches in parallel"
 #guard has (str (types (Json.mkObj [("lean", Json.str parallel)])) "leanModule") "namespace A"
 

@@ -49,7 +49,7 @@ def listing (caption request response : String) : String :=
 
 def examples : List (String × String × String) :=
   [ ("A never-claim that fails", "check_ctl",
-     "{\"task\": \"mcp_logic_consult\", \"formula\": {\"never\": {\"after\": \"LogicInputRejected\"}}}")
+     "{\"task\": \"mcp_logic_consult\", \"formula\": {\"never\": {\"on\": \"LogicInputRejected\"}}}")
   , ("A requirement over hidden state", "classify_requirement",
      "{\"predicates\": [\"the cache is consistent\"], \"task\": \"mcp_logic_consult\"}")
   , ("Designing a sequence diagram by writing events", "check_trace",

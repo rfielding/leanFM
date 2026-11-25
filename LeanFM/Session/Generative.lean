@@ -239,7 +239,7 @@ partial def expandStmt (s : Stmt) : Except String (List Path) := do
         actions := .decision name actor i ((qs[i]?).getD Q.one) :: p.actions,
         probability := Q.mul p.probability ((qs[i]?).getD Q.one), unknown := p.unknown || qs.isEmpty }
     return result
-  | _ => throw "timed generation/monitoring supports finite sequential choices only; par, join, rec, sessions and include need explicit scheduling semantics"
+  | _ => throw "timed generation/monitoring supports finite sequential choices only; parallel, join, rec, sessions and include need explicit scheduling semantics"
 end
 
 structure Pending where

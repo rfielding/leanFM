@@ -228,7 +228,7 @@ partial def append : Local R → Local R → Local R
   | .var n, _ => .var n
   | .done, b => b
 
-/-- A `par` the role takes part in on one side only is no concurrency for that role: it is that
+/-- A `parallel` the role takes part in on one side only is no concurrency for that role: it is that
 side, then what follows. -/
 partial def norm : Local R → Local R
   | .par bs k =>
