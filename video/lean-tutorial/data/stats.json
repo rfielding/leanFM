@@ -1,0 +1,15 @@
+{
+ "files": 181,
+ "lines": 48287,
+ "def": 3621,
+ "partial def": 209,
+ "Id.run do": 123,
+ "structure": 415,
+ "inductive": 104,
+ "match": 1581,
+ "do-arrow": 2190,
+ "#guard": 1424,
+ "theorem": 47,
+ "native_decide": 218,
+ "boundary": "tracked .lean files outside projects/, reports/ and video/"
+}

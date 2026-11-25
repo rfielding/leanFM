@@ -1,0 +1,11 @@
+import LeanFM.Session.Syntax
+
+protocol Checkout (Client, Shop) {
+  q: Quote from Shop to Client;
+  Pay from Client to Shop cause q;
+}
+
+requirements {
+  "Checkout as written" => Checkout;
+  "Refunds are answered" => Refund ⊨ (AG (implies (after Ask) (AF (after Refunded))));
+}

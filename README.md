@@ -161,6 +161,17 @@ names it again, and `given`/`with` hand an included task its parent's id.
 *Children (each order a child session of its login) and threads (one server thread serving two
 orders in turn: a thread runs through many sessions, and a session through many threads).*
 
+### A Lean tutorial ([video](video/lean-tutorial/leanfm-lean-tutorial.mp4))
+
+Most people meet Lean in proofs; LeanFM is mostly Lean as a programming language. Part one teaches
+the Lean the codebase actually uses (definitions, structures, inductive types and `match`, `Option`
+and `Except`, `do`, IO, type classes, `partial`, `#guard`, proofs as values, structures that carry
+proofs, `sorry`, syntax extension), each snippet from the checked file
+[`video/lean-tutorial/Tour.lean`](video/lean-tutorial/Tour.lean) beside what Lean printed for it,
+and each mistake beside Lean's real error. Part two is the LeanFM language written in it: message
+types, protocol statements, typed where clauses, versions, CTL as s-expressions, and the
+requirements and implementation lists of the book's Orders example.
+
 ---
 
 ## The book in brief

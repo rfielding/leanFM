@@ -1,0 +1,12 @@
+{
+ "file": "LeanFM/Session/Grammar.lean",
+ "body": [
+  "def requirementsBody : Parser := node `LeanFM.Session.Grammar.requirementsBody",
+  "  (nonReservedSymbol \"requirements\" true >> \"{\" >> many reqEntry >> \"}\")"
+ ],
+ "cmd": [
+  "/-- `requirements { ... }` as a Lean command (checked by the tools, nothing elaborated). -/",
+  "@[command_parser] def requirementsCmd : Parser := leading_parser requirementsBody"
+ ],
+ "line": 270
+}

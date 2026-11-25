@@ -1,0 +1,64 @@
+{
+ "log": "examples/orders/logs/order-1.json",
+ "events": [
+  {
+   "id": "o1",
+   "label": "CreateOrder",
+   "from": "Client",
+   "to": "Shop",
+   "body": {
+    "item": "tea",
+    "quantity": 1
+   }
+  },
+  {
+   "id": "q1",
+   "label": "Quote",
+   "from": "Shop",
+   "to": "Client",
+   "cause": "o1",
+   "body": {
+    "price": 10
+   }
+  },
+  {
+   "id": "p1",
+   "label": "Pay",
+   "from": "Client",
+   "to": "Shop",
+   "cause": "q1",
+   "body": {
+    "amount": 10
+   }
+  },
+  {
+   "id": "c1",
+   "label": "Charge",
+   "from": "Shop",
+   "to": "Bank",
+   "cause": "p1",
+   "body": {
+    "amount": 10
+   }
+  },
+  {
+   "id": "d1",
+   "label": "Charged",
+   "from": "Bank",
+   "to": "Shop",
+   "cause": "c1"
+  },
+  {
+   "id": "r1",
+   "label": "Receipt",
+   "from": "Shop",
+   "to": "Client",
+   "cause": "d1",
+   "body": {
+    "amount": 10
+   }
+  }
+ ],
+ "verdict": "conforms",
+ "reading": "PlaceOrder: 6 events in 1 session follow the protocol"
+}

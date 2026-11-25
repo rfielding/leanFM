@@ -1,0 +1,227 @@
+[
+ {
+  "line": 19,
+  "severity": "information",
+  "text": "42"
+ },
+ {
+  "line": 22,
+  "severity": "information",
+  "text": "\"hello, Lean\""
+ },
+ {
+  "line": 26,
+  "severity": "information",
+  "text": "20"
+ },
+ {
+  "line": 27,
+  "severity": "information",
+  "text": "7"
+ },
+ {
+  "line": 28,
+  "severity": "information",
+  "text": "7"
+ },
+ {
+  "line": 39,
+  "severity": "information",
+  "text": "{ amount := 10, currency := \"USD\" }"
+ },
+ {
+  "line": 40,
+  "severity": "information",
+  "text": "10"
+ },
+ {
+  "line": 41,
+  "severity": "information",
+  "text": "{ amount := 12, currency := \"USD\" }"
+ },
+ {
+  "line": 42,
+  "severity": "information",
+  "text": "true"
+ },
+ {
+  "line": 59,
+  "severity": "information",
+  "text": "\"(AF (after Receipt)), decided over Orders\""
+ },
+ {
+  "line": 60,
+  "severity": "information",
+  "text": "[\"the faithful rules of Orders\", \"nothing yet: no Refund\"]"
+ },
+ {
+  "line": 70,
+  "severity": "information",
+  "text": "some 3"
+ },
+ {
+  "line": 71,
+  "severity": "information",
+  "text": "none"
+ },
+ {
+  "line": 72,
+  "severity": "information",
+  "text": "0"
+ },
+ {
+  "line": 78,
+  "severity": "information",
+  "text": "\"no soup here\""
+ },
+ {
+  "line": 97,
+  "severity": "information",
+  "text": "Except.ok 6"
+ },
+ {
+  "line": 98,
+  "severity": "information",
+  "text": "Except.error \"two is not a number\""
+ },
+ {
+  "line": 99,
+  "severity": "information",
+  "text": "Except.error \"no soup here\""
+ },
+ {
+  "line": 104,
+  "severity": "information",
+  "text": "[6, 10, 24, 14]"
+ },
+ {
+  "line": 105,
+  "severity": "information",
+  "text": "[5, 12, 7]"
+ },
+ {
+  "line": 106,
+  "severity": "information",
+  "text": "27"
+ },
+ {
+  "line": 108,
+  "severity": "information",
+  "text": "[10, 24, 14]"
+ },
+ {
+  "line": 112,
+  "severity": "information",
+  "text": "#[3, 5, 12]"
+ },
+ {
+  "line": 113,
+  "severity": "information",
+  "text": "3"
+ },
+ {
+  "line": 114,
+  "severity": "information",
+  "text": "none"
+ },
+ {
+  "line": 125,
+  "severity": "information",
+  "text": "15"
+ },
+ {
+  "line": 129,
+  "severity": "information",
+  "text": "[\"Client\", \"Shop\", \"Bank\"]"
+ },
+ {
+  "line": 130,
+  "severity": "information",
+  "text": "\"Client -> Shop -> Bank\""
+ },
+ {
+  "line": 131,
+  "severity": "information",
+  "text": "\"5 items\""
+ },
+ {
+  "line": 132,
+  "severity": "information",
+  "text": "true"
+ },
+ {
+  "line": 137,
+  "severity": "information",
+  "text": "some \"protocol PlaceOrder (Client, Shop, Bank) {\""
+ },
+ {
+  "line": 148,
+  "severity": "information",
+  "text": "51 lines; the requirements:\n\"Orders are placed as PlaceOrder says\" => PlaceOrder;\n\"Every order is answered\" => PlaceOrder ⊨ (AG (implies (after CreateOrder) (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut)))));\n\"Every payment is charged to the bank\" => PlaceOrder ⊨ (AG (implies (after Pay) (AF (after Charge))));\n\"No receipt without a charge\" => PlaceOrder ⊨ (not (EU (not (after Charged)) (after Receipt)));\n\"A sold-out order is never charged\" => PlaceOrder ⊨ (AG (implies (after SoldOut) (AG (not (after Charge)))));\n\"Refunds within 30 days\" => sorry \"PlaceOrder has no Refund message yet\";\n"
+ },
+ {
+  "line": 155,
+  "severity": "information",
+  "text": "5"
+ },
+ {
+  "line": 157,
+  "severity": "information",
+  "text": "5"
+ },
+ {
+  "line": 161,
+  "severity": "information",
+  "text": "11"
+ },
+ {
+  "line": 168,
+  "severity": "information",
+  "text": "\"Client\""
+ },
+ {
+  "line": 179,
+  "severity": "information",
+  "text": "\"Shop answers Client\""
+ },
+ {
+  "line": 185,
+  "severity": "information",
+  "text": "{\"price\": 10}"
+ },
+ {
+  "line": 188,
+  "severity": "information",
+  "text": "Except.ok { price := 12 }"
+ },
+ {
+  "line": 196,
+  "severity": "information",
+  "text": "[3, 2, 1, 0]"
+ },
+ {
+  "line": 206,
+  "severity": "information",
+  "text": "111"
+ },
+ {
+  "line": 243,
+  "severity": "information",
+  "text": "\"250 cents\""
+ },
+ {
+  "line": 244,
+  "severity": "information",
+  "text": "\"a price is positive\""
+ },
+ {
+  "line": 253,
+  "severity": "warning",
+  "text": "declaration uses `sorry`"
+ },
+ {
+  "line": 261,
+  "severity": "information",
+  "text": "42"
+ }
+]

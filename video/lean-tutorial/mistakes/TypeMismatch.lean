@@ -1,0 +1,1 @@
+def price : Nat := "ten"

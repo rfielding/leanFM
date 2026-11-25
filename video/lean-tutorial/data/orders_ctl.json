@@ -1,0 +1,22 @@
+[
+ {
+  "formula": "(AG (implies (after CreateOrder) (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut)))))",
+  "verdict": "proved",
+  "notation": "AG (CreateOrder → AF (Receipt ∨ PaymentDeclined ∨ SoldOut))",
+  "reading": "PlaceOrder: on every path, always (if CreateOrder was just delivered then (on every path, eventually (Receipt was just delivered or PaymentDeclined was just delivered or SoldOut was just delivered)))",
+  "path": {
+   "kind": "exhaustive",
+   "note": "evaluated over all 10 reachable nodes"
+  }
+ },
+ {
+  "formula": "(EF (and (after SoldOut) (EF (after Charge))))",
+  "verdict": "disproved",
+  "notation": "EF (SoldOut ∧ EF Charge)",
+  "reading": "PlaceOrder: it is possible that eventually (SoldOut was just delivered and (it is possible that eventually Charge was just delivered))",
+  "path": {
+   "kind": "exhaustive",
+   "note": "evaluated over all 10 reachable nodes"
+  }
+ }
+]

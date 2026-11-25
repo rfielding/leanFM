@@ -1,0 +1,6 @@
+{
+ "command": "make requirements-check  (RequirementsCheck --files examples/orders/Requirements.leanfm examples/orders/Implementation.leanfm)",
+ "exit": 0,
+ "stdout": "LeanFM: 15 entries in 2 files; 0 failing; 2 use sorry (warnings)\n",
+ "stderr": ""
+}

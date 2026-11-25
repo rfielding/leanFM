@@ -1,0 +1,11 @@
+import LeanFM.Session.Syntax
+
+structure Quote where
+  price : Nat
+structure Pay where
+  amount : Nat
+
+protocol Checkout (Client, Shop) {
+  q: Quote from Shop to Client;
+  p: Pay from Client to Shop cause q where p.amont = q.price;
+}

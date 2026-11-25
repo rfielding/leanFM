@@ -1,0 +1,14 @@
+import LeanFM.Session.Syntax
+
+-- Two deployed versions of one protocol: version 2 may also answer Missing. Lean checks, when the
+-- file compiles, that the roles can upgrade one at a time without a mixed deployment getting stuck.
+
+protocol Lookup (Client, Server) version 1 {
+  q: Get from Client to Server;
+  Found from Server to Client cause q;
+}
+
+protocol Lookup (Client, Server) version 2 {
+  q: Get from Client to Server;
+  choice { Found from Server to Client cause q; } or { Missing from Server to Client cause q; }
+}

@@ -1,0 +1,82 @@
+{
+ "Guard.lean": {
+  "source": "def double (n : Nat) : Nat := n * 2\n#guard double 2 == 5\n",
+  "errors": [
+   {
+    "line": 2,
+    "severity": "error",
+    "text": "Expression\n  double 2 == 5\ndid not evaluate to `true`"
+   }
+  ]
+ },
+ "MissingCase.lean": {
+  "source": "inductive Pointer where\n  | protocol (name : String)\n  | unconverted\n\ndef Pointer.describe : Pointer → String\n  | .protocol n => s!\"the faithful rules of {n}\"\n",
+  "errors": [
+   {
+    "line": 6,
+    "severity": "error",
+    "text": "Missing cases:\nunconverted"
+   }
+  ]
+ },
+ "OptionNotNat.lean": {
+  "source": "def priceOf (item : String) : Option Nat :=\n  if item == \"tea\" then some 3 else none\n\ndef total : Nat := priceOf \"tea\" + 1\n",
+  "errors": [
+   {
+    "line": 4,
+    "severity": "error",
+    "text": "failed to synthesize instance of type class\n  HAdd (Option Nat) Nat Nat\n\nHint: Type class instance resolution failures can be inspected with the `set_option trace.Meta.synthInstance true` command."
+   }
+  ]
+ },
+ "Termination.lean": {
+  "source": "def collatz (n : Nat) (steps : Nat := 0) : Nat :=\n  if n ≤ 1 then steps\n  else\n    let next := if n % 2 == 0 then n / 2\n                else 3 * n + 1\n    collatz next (steps + 1)\n",
+  "errors": [
+   {
+    "line": 1,
+    "severity": "error",
+    "text": "fail to show termination for\n  collatz\nwith errors\nfailed to infer structural recursion:\nCannot use parameter n:\n  failed to eliminate recursive application\n    collatz next (steps + 1)\nCannot use parameter steps:\n  failed to eliminate recursive application\n    collatz next (steps + 1)\n\n\nCould not find a decreasing measure.\nThe basic measures relate at each recursive call as follows:\n(<, ≤, =: relation proved, ? all proofs failed, _: no proof attempted)\n          n steps\n1) 6:4-28 ?     ?\nPlease use `termination_by` to specify a decreasing measure."
+   }
+  ]
+ },
+ "TypeMismatch.lean": {
+  "source": "def price : Nat := \"ten\"\n",
+  "errors": [
+   {
+    "line": 1,
+    "severity": "error",
+    "text": "Type mismatch\n  \"ten\"\nhas type\n  String\nbut is expected to have type\n  Nat"
+   }
+  ]
+ },
+ "UnknownProtocol.leanfm": {
+  "source": "import LeanFM.Session.Syntax\n\nprotocol Checkout (Client, Shop) {\n  q: Quote from Shop to Client;\n  Pay from Client to Shop cause q;\n}\n\nrequirements {\n  \"Checkout as written\" => Checkout;\n  \"Refunds are answered\" => Refund ⊨ (AG (implies (after Ask) (AF (after Refunded))));\n}\n",
+  "errors": [
+   {
+    "line": 10,
+    "severity": "error",
+    "text": "requirement \"Refunds are answered\": no protocol Refund is defined"
+   }
+  ]
+ },
+ "WhereTypo.leanfm": {
+  "source": "import LeanFM.Session.Syntax\n\nstructure Quote where\n  price : Nat\nstructure Pay where\n  amount : Nat\n\nprotocol Checkout (Client, Shop) {\n  q: Quote from Shop to Client;\n  p: Pay from Client to Shop cause q where p.amont = q.price;\n}\n",
+  "errors": [
+   {
+    "line": 8,
+    "severity": "error",
+    "text": "Invalid field `amont`: The environment does not contain `Pay.amont`, so it is not possible to project the field `amont` from an expression\n  p\nof type `Pay`"
+   }
+  ]
+ },
+ "ZeroPrice.lean": {
+  "source": "structure Price where\n  cents : Nat\n  positive : 0 < cents\n\ndef free : Price := ⟨0, by decide⟩\n",
+  "errors": [
+   {
+    "line": 5,
+    "severity": "error",
+    "text": "Tactic `decide` proved that the proposition\n  0 < 0\nis false"
+   }
+  ]
+ }
+}

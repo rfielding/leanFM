@@ -83,8 +83,11 @@ def projectFilesTests : IO Unit := do
     expect s!"{project} lists protocol files" (!files.isEmpty)
     for f in files do
       let r ← call "session_check" (Json.mkObj [("project", Json.str project), ("file", Json.str f)])
+      -- a file of a mistakes/ directory is an example written to fail (video/lean-tutorial/mistakes)
+      if (f.splitOn "/").contains "mistakes" then
+        if !rejected r then throw <| IO.userError s!"failed: {project} {f} was written to fail and loaded"
       -- a file holding only implementation blocks has no protocol to load, and says so
-      if rejected r && !(reason r).contains "holds only implementation blocks" then
+      else if rejected r && !(reason r).contains "holds only implementation blocks" then
         throw <| IO.userError s!"failed: {project} {f} does not load cleanly: {reason r}"
     IO.println s!"ok: every one of the {files.size} {project} protocol files loads through project and file and checks"
   let ps ← LeanFM.ProjectView.projects

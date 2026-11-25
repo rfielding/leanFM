@@ -76,6 +76,9 @@ selfhost-check:
 
 video-check:
 	python3 scripts/validate_video_overview.py
+	lake env lean video/lean-tutorial/Tour.lean
+	lake env lean video/lean-tutorial/protocols/Constructs.leanfm
+	lake env lean video/lean-tutorial/protocols/Lookup.leanfm
 
 video: video-check
 	$(VIDEO_PYTHON) -m manim -qm --media_dir video/media --output_file leanfm-overview.mp4 video/manim_overview.py LeanFMOverview

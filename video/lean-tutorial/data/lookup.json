@@ -1,0 +1,51 @@
+{
+ "text": "import LeanFM.Session.Syntax\n\n-- Two deployed versions of one protocol: version 2 may also answer Missing. Lean checks, when the\n-- file compiles, that the roles can upgrade one at a time without a mixed deployment getting stuck.\n\nprotocol Lookup (Client, Server) version 1 {\n  q: Get from Client to Server;\n  Found from Server to Client cause q;\n}\n\nprotocol Lookup (Client, Server) version 2 {\n  q: Get from Client to Server;\n  choice { Found from Server to Client cause q; } or { Missing from Server to Client cause q; }\n}\n",
+ "compat": {
+  "issues": [
+   "Client cannot stay on the old version: Client waits to receive Found from Server; Server is stuck trying to send Missing to Client (after Client -> Server: Get; Server chooses to send Missing to Client)",
+   "Server cannot upgrade first: Client waits to receive Found from Server; Server is stuck trying to send Missing to Client (after Client -> Server: Get; Server chooses to send Missing to Client)"
+  ],
+  "name": "Lookup version 2",
+  "notes": [],
+  "reading": "Lookup version 1 -> Lookup version 2: upgrade first: Client; clean upgrade path: Client then Server",
+  "roles": [
+   {
+    "role": "Client",
+    "stayBehind": {
+     "after": [
+      "Client -> Server: Get",
+      "Server chooses to send Missing to Client"
+     ],
+     "ok": false,
+     "reason": "Client waits to receive Found from Server; Server is stuck trying to send Missing to Client"
+    },
+    "upgradeFirst": {
+     "ok": true
+    }
+   },
+   {
+    "role": "Server",
+    "stayBehind": {
+     "ok": true
+    },
+    "upgradeFirst": {
+     "after": [
+      "Client -> Server: Get",
+      "Server chooses to send Missing to Client"
+     ],
+     "ok": false,
+     "reason": "Client waits to receive Found from Server; Server is stuck trying to send Missing to Client"
+    }
+   }
+  ],
+  "tool": "session_compat",
+  "upgradePath": {
+   "clean": true,
+   "order": [
+    "Client",
+    "Server"
+   ]
+  },
+  "verdict": "incompatible"
+ }
+}

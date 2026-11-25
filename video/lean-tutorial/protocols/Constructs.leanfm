@@ -1,0 +1,39 @@
+import LeanFM.Session.Syntax
+
+-- Every statement form of a LeanFM protocol in one small, checked file: messages with ids, causes,
+-- routes, statuses and where clauses; an event at one role; choice; par; rec with continue;
+-- include; and sessions. `lake env lean video/lean-tutorial/protocols/Constructs.leanfm` elaborates
+-- it.
+
+structure Upload where
+  bytes : Nat
+structure Stored where
+  bytes : Nat
+
+/-- Copy a block to two replicas at once; both must answer. -/
+protocol Replicate (Primary, R1, R2) {
+  par {
+    a: Copy from Primary to R1;
+    Copied from R1 to Primary cause a;
+  } and {
+    b: Copy from Primary to R2;
+    Copied from R2 to Primary cause b;
+  }
+}
+
+/-- Store an upload, retrying until it fits; each client is a session of its own. -/
+protocol Store (Client, Primary, R1, R2) {
+  sessions {
+    rec Try {
+      u: Upload from Client to Primary route "PUT /blocks";
+      choice {
+        include Replicate Primary R1 R2;
+        s: Stored from Primary to Client cause u status 201 where s.bytes = u.bytes;
+      } or {
+        Full from Primary to Client cause u status 507;
+        Compact at Primary;
+        continue Try;
+      }
+    }
+  }
+}

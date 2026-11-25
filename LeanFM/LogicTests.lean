@@ -92,6 +92,12 @@ def main : IO Unit := do
   expect "a long formula breaks one argument per line"
     ((pretty.splitOn "\n").length > 1 && (pretty.splitOn "\n").all (·.length ≤ 72))
   expect "sexprPretty reads back to the same formula" (readsAs pretty == readsAs (sexprOf long) && readsAs pretty != Json.null)
+  -- the last argument fits in 72 columns only without the closing parentheses after it
+  let tight := Json.str s!"(AG (AF (EF (AX (after {"".pushn 'N' 47})))))"
+  let tightPretty := sexprOf tight "sexprPretty"
+  expect "closing parentheses count toward the 72 columns"
+    ((tightPretty.splitOn "\n").length > 2 && (tightPretty.splitOn "\n").all (·.length ≤ 72) &&
+     readsAs tightPretty == readsAs (sexprOf tight) && readsAs tightPretty != Json.null)
   let sharedLong := Json.str "(and #0=(AF (or (after Receipt) (after PaymentDeclined) (after SoldOut) (after Refunded))) (AG (implies (after CreateOrder) #0#)))"
   expect "a labelled long formula's sexprPretty reads back"
     (readsAs (sexprOf sharedLong "sexprPretty") == readsAs (sexprOf sharedLong) && readsAs (sexprOf sharedLong) != Json.null)

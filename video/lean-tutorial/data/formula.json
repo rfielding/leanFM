@@ -1,0 +1,68 @@
+{
+ "input": "(AG   (implies (after CreateOrder)\n   (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut)))))",
+ "formula": {
+  "AG": {
+   "implies": [
+    {
+     "after": "CreateOrder"
+    },
+    {
+     "AF": {
+      "or": [
+       {
+        "after": "Receipt"
+       },
+       {
+        "after": "PaymentDeclined"
+       },
+       {
+        "after": "SoldOut"
+       }
+      ]
+     }
+    }
+   ]
+  }
+ },
+ "notation": "AG (CreateOrder → AF (Receipt ∨ PaymentDeclined ∨ SoldOut))",
+ "reading": "on every path, always (if CreateOrder was just delivered then (on every path, eventually (Receipt was just delivered or PaymentDeclined was just delivered or SoldOut was just delivered)))",
+ "sexpr": "(AG (implies (after CreateOrder) (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut)))))",
+ "sexprPretty": "(AG\n  (implies\n    (after CreateOrder)\n    (AF (or (after Receipt) (after PaymentDeclined) (after SoldOut)))))",
+ "lints": [
+  "AG(implies(a, b)) also holds when a never happens. If a is meant to be possible, use stronglyImplies(a, b), which means EF a and AG(a -> b)."
+ ],
+ "negation": {
+  "formula": {
+   "EF": {
+    "and": [
+     {
+      "after": "CreateOrder"
+     },
+     {
+      "EG": {
+       "and": [
+        {
+         "not": {
+          "after": "Receipt"
+         }
+        },
+        {
+         "not": {
+          "after": "PaymentDeclined"
+         }
+        },
+        {
+         "not": {
+          "after": "SoldOut"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   }
+  },
+  "notation": "EF (CreateOrder ∧ EG (¬Receipt ∧ ¬PaymentDeclined ∧ ¬SoldOut))",
+  "reading": "it is possible that eventually (CreateOrder was just delivered and (on some path, always ((it is not the case that Receipt was just delivered) and (it is not the case that PaymentDeclined was just delivered) and (it is not the case that SoldOut was just delivered))))"
+ }
+}

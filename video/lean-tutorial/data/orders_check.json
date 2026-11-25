@@ -1,0 +1,68 @@
+{
+ "verdict": "ok",
+ "reading": "PlaceOrder: no issues; 3 roles, 9 messages, 2 top-level calls",
+ "roles": [
+  "Client",
+  "Shop",
+  "Bank"
+ ],
+ "issues": [],
+ "calls": [
+  {
+   "from": "Client",
+   "id": "o",
+   "label": "CreateOrder",
+   "nested": [],
+   "responses": [
+    {
+     "label": "Quote",
+     "status": 201
+    },
+    {
+     "label": "SoldOut",
+     "status": 409
+    }
+   ],
+   "route": "POST /orders",
+   "to": "Shop"
+  },
+  {
+   "from": "Client",
+   "id": "p",
+   "label": "Pay",
+   "nested": [
+    {
+     "from": "Shop",
+     "id": "c",
+     "label": "Charge",
+     "nested": [],
+     "responses": [
+      {
+       "label": "Charged",
+       "status": null
+      },
+      {
+       "label": "Declined",
+       "status": null
+      }
+     ],
+     "route": null,
+     "to": "Bank"
+    }
+   ],
+   "responses": [
+    {
+     "label": "Receipt",
+     "status": 200
+    },
+    {
+     "label": "PaymentDeclined",
+     "status": 402
+    }
+   ],
+   "route": null,
+   "to": "Shop"
+  }
+ ],
+ "callsText": "o: CreateOrder  Client -> Shop  POST /orders\n  returns Quote 201 | SoldOut 409\np: Pay  Client -> Shop\n  returns Receipt 200 | PaymentDeclined 402\n    c: Charge  Shop -> Bank\n      returns Charged | Declined"
+}
