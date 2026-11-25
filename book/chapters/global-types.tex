@@ -218,7 +218,7 @@ sequences of messages and events it allows, each with the causes and field value
 that make it a run of this protocol. The semantics LeanFM implements is operational.
 A state is the part of the protocol still to be played, its \emph{residual}, together
 with the ids already bound; a step plays one message the residual allows next; the
-session may end where the residual can be empty. Chapter~\ref{ch:checker} builds the
+session may stop where the residual can be empty. Chapter~\ref{ch:checker} builds the
 graph of these states and makes it the model CTL is evaluated over. Before that,
 Chapter~\ref{ch:projection} asks whether the roles, each seeing only its own messages,
 can play a protocol at all.

@@ -1,80 +1,28 @@
-\chapter{The Checker Model}\label{ch:checker}
+\chapter{CTL over a Conversation}\label{ch:checker}
 
-To reduce a protocol to CTL we need the structure CTL is evaluated over. This chapter
-defines it precisely: the protocol's state graph, the Kripke structure built on it, the
-atoms, and the semantics of the operators. Everything in the next three chapters is
-stated over these definitions, and LeanFM implements them as written
-(\texttt{Global.stateGraph} and \texttt{Logic.buildModel}).
+This chapter defines CTL by four recursive rules, then the states a session type implies,
+which are what CTL is evaluated over, and the one notion of sameness CTL can see.
+Everything in the next three chapters is stated over these definitions, and LeanFM
+implements them as written.
 
-\section{The state graph}
+\section{CTL}\label{sec:ctl}
 
-\begin{definition}[State graph]\label{def:stategraph}
-The \emph{state graph} of a protocol $P$ is $G_P = (S, s_0, \Delta, F)$ where
-\begin{itemize}
-\item a state $s \in S$ is a residual of $P$ (the part still to be played, with loops
-  collapsed) together with the set of ids it has bound;
-\item $s_0$ is $P$ itself with nothing bound;
-\item $(s, \ell, s') \in \Delta$ when $\ell$ is a message or event the residual of $s$
-  allows next and $s'$ is the residual after it;
-\item $F \subseteq S$ holds the states where the session may stop (the residual can be
-  empty).
-\end{itemize}
-\end{definition}
 
-States are named by their residual and the \emph{set} of names bound, not the order in
-which they were bound. Two interleavings that reach the same residual with the same
-names are the same state; without this, interleaved branches would make every
-protocol with \texttt{parallel} look larger than it is. Nested sessions are played once in
-place. The graph is built breadth first and is bounded (20{,}000 states).
+A CTL formula is a statement made at one moment of a conversation about every way the
+conversation can go on from there. It is built from a few atoms, which say what is true at
+that moment, with $\neg$, $\wedge$, $\vee$ and $\rightarrow$, two one-step operators, and
+four rules that each refer to themselves.
 
-\section{The Kripke structure}
-
-CTL is evaluated over states that carry atomic propositions. A message is a step, not
-a state, so the structure LeanFM uses remembers, in each node, the step that reached it.
-
-\begin{definition}[Checker model]\label{def:model}
-The \emph{checker model} of $P$ is $M_P = (N, n_0, \to, L)$ where
-\begin{itemize}
-\item $N$ is the set of pairs $(s, m)$, $s \in S$ and $m$ the label of the step that
-  reached $s$ (none at the start), reachable from $n_0 = (s_0, \bot)$;
-\item a node whose state is in $F$, or whose state has no step, has exactly one
-  successor, itself: it \emph{stutters}; every other node $(s, m)$ has the successors
-  $(s', m')$ with $(s, m', s') \in \Delta$;
-\item $L(s, m) = (m, [s \in F])$: the node's last message and whether the session may
-  end there.
-\end{itemize}
-\end{definition}
-
-The stutter makes $\to$ total, so every path is infinite and $\mathsf{inevitably}$ and
-$\mathsf{always}$ mean what they mean in textbook CTL \citep{clarke1986automatic}. A node
-reached by a message is labelled by that message, and a node is identified by its
-state \emph{and} its label, so the model can be larger than the state graph: one state
-reached by two different messages is two nodes.
-
-\begin{definition}[Atoms]\label{def:atoms}
-At a node $n$ with $L(n) = (m, e)$:
-$\mathsf{on}(\ell)$ holds iff $m = \ell$; $\mathsf{stop}$ holds iff $e$;
-$\mathsf{secret}(A, B, f)$ holds iff the step that reached $n$ carried a field ending in
-\texttt{\_secr} (named $f$ when $f$ is given) from $A$ to $B$ (when they are given).
-\end{definition}
-
-So $\mathsf{on}(\ell)$ is true in the state a delivery of $\ell$ reaches, and only until
-the next message: it means ``$\ell$ was just delivered'', not ``some time after $\ell$''.
-(Earlier versions of LeanFM spelled it \texttt{after}; LeanFM now refuses that spelling and names \texttt{on}.)
-
-The atoms say only what the last step was and whether the session may stop. Everything else, in particular which typestate a
-node is in, must be expressed with temporal operators, and that is the subject of
-Chapter~\ref{ch:faithful}.
-
-\section{CTL}
-
-A CTL formula is a statement made at one node about the tree of paths that start there.
-Formulas are built from the atoms with $\neg$, $\wedge$, $\vee$ and $\rightarrow$, two
-one-step operators, and four rules that each refer to themselves.
+The atoms: $\on{\ell}$ holds on delivery of $\ell$, from the moment $\ell$ arrives until the
+next message (``$\ell$ was just delivered'', not ``some time after $\ell$''; earlier versions
+of LeanFM spelled it \texttt{after}, a spelling it now refuses, naming \texttt{on});
+$\mathsf{stop}$ holds where the conversation may stop; $\mathsf{secret}(A, B, f)$ holds where
+the step just taken carried a field ending in \texttt{\_secr} (named $f$, from $A$ to $B$,
+when they are given).
 
 \begin{definition}[CTL]\label{def:ctl}
-The two steps: $n \models \allNext\varphi$ when every successor of $n$ satisfies
-$\varphi$, and $n \models \someNext\varphi$ when some successor does.
+The two steps: $\allNext\varphi$ holds at a moment when $\varphi$ holds at every moment that
+can come next, and $\someNext\varphi$ when it holds at some moment that can come next.
 The four recursive rules, ``else'' being ``or'':
 \begin{align*}
 \varphi \mathbin{\mathsf{allUntil}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \allNext(\varphi \mathbin{\mathsf{allUntil}} \psi)\big)\\
@@ -84,8 +32,8 @@ The four recursive rules, ``else'' being ``or'':
 \end{align*}
 An \emph{until} counts only finite unfoldings of its rule: on the paths it speaks of,
 $\psi$ is reached. An \emph{unless} also counts the unfolding that goes on forever:
-$\varphi$ may hold all along and $\psi$ never come. A model satisfies a formula when its
-start node does.
+$\varphi$ may hold all along and $\psi$ never come. A protocol satisfies a formula when the
+moment before its first message does.
 \end{definition}
 
 Everything else is defined from these in one line:
@@ -134,9 +82,41 @@ the words. \texttt{explain\_formula} answers any formula \emph{unfolded} into th
 and the untils, and LeanFM's tests check its evaluator against these definitions on every
 operator.
 
+\section{The states a session type implies}
+
+The formulas above are evaluated at moments of a conversation. A session type says what
+may happen next at every point, so the moments are already in it: they are the places the
+conversation can be in, and LeanFM derives them from the protocol text
+(\texttt{Global.stateGraph} and \texttt{Logic.buildModel}).
+
+A \emph{state} is what is left of the protocol to play, together with the session ids
+bound so far. The first state is the whole protocol; each message the protocol allows next
+leads to the state of what remains after it. Two interleavings that leave the same
+remainder with the same ids bound are the same state, so a protocol with
+\texttt{parallel} is no larger than its interleavings make necessary. Nested sessions are
+played once in place. The states are found breadth first, at most 20{,}000 of them.
+
+Each state remembers two things, which is all the atoms read: the message that led to it
+(none, before the first message), and whether the conversation may stop there (nothing is
+left that must happen). The same remainder reached by two different messages is
+therefore two states. A state where the conversation may stop, or where nothing more can
+happen, repeats itself forever: it \emph{stutters}. So every path goes on forever, and
+$\inevitably$ and $\always$ mean what they mean in textbook CTL
+\citep{clarke1986automatic}; it is also why a $\mathsf{final}$ row lists itself as what
+comes next.
+
+The later chapters use a little notation for this. The states of protocol $P$ with their
+steps form its \emph{checker model} $M_P$: its states are written $n$, the first one
+$n_0$, a step from $n$ to $n'$ as $n \to n'$, and the two things a state remembers as its
+label $L(n) = (m, e)$, $m$ the last message and $e$ whether it may stop. The atoms read
+only that label; which typestate a state belongs to has to be said with the operators of
+Section~\ref{sec:ctl}, and that is the subject of Chapter~\ref{ch:faithful}.
+
 \section{Bisimulation}
 
-The notion of sameness CTL respects is bisimulation \citep{hennessy1985algebraic}.
+Two states are \emph{bisimilar} when they have the same label and every step one of them can
+take can be matched by a step of the other to states that are again bisimilar
+\citep{hennessy1985algebraic}. It is the sameness CTL can see.
 
 \begin{definition}[Bisimulation]\label{def:bisim}
 Let $M = (N, n_0, \to, L)$ and $M' = (N', n_0', \to', L')$ be total labelled graphs. A

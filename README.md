@@ -49,8 +49,9 @@ from the code.
   on the wire.
 
 **Part II, from session types to CTL.**
-- *The Checker Model*: the state graph, the Kripke structure, the atoms (`after M`, `terminal`), CTL
-  and bisimulation.
+- *CTL over a Conversation*: CTL as two steps and four recursive rules (`allUntil`, `someUntil`,
+  `allUnless`, `someUnless`), everything else defined from them in one line; the states a session
+  type implies, with the atoms `on M` and `stop`; and bisimulation.
 - *Faithful CTL*: typestates as bisimulation classes, a characteristic formula for each, and the
   theorem that the faithful rules hold exactly when the system is bisimilar to the protocol, which
   no CTL can improve on.
