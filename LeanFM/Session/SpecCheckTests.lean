@@ -119,9 +119,9 @@ def suggested (text : String) : List (String × String × String) :=
 #guard ((suggested orderText).map (·.2.1)).take 4 == ["AG EF terminal", "AF terminal", "EG ¬terminal", "AX Place"]
 #guard ((suggested orderText).map (·.2.2)).take 4 == ["proved", "proved", "disproved", "proved"]
 #guard (suggested orderText).any (· == ("Every Place is answered (Quote or SoldOut) before the session ends",
-  "AG (Place → A[¬terminal U Quote ∨ SoldOut])", "proved"))
+  "AG (Place → (¬terminal AU (Quote ∨ SoldOut)))", "proved"))
 #guard (suggested orderText).any (·.2.1 == "Place ⇒ AF (Quote ∨ SoldOut)")
-#guard (suggested orderText).any (·.2.1 == "¬E[¬Place U Quote ∨ SoldOut]")
+#guard (suggested orderText).any (·.2.1 == "¬(¬Place EU (Quote ∨ SoldOut))")
 -- secret suggestions only when a secret exists
 #guard !(suggested orderText).any (has ·.1 "secret")
 #guard (suggested orderSecret).any (· == ("No secret is ever sent", "AG ¬secret", "disproved"))

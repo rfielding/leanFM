@@ -78,10 +78,10 @@ steps are held as offset and target arrays in both directions.
 \begin{itemize}
 \item $\neg$, $\wedge$, $\vee$ are word operations on bitsets.
 \item $\mathsf{EX}\,\varphi$ and $\mathsf{AX}\,\varphi$ are one pass over the steps.
-\item $\mathsf{E}[\varphi\,\mathsf{U}\,\psi]$ starts from the $\psi$-nodes and works
+\item $\varphi\mathbin{\mathsf{EU}}\psi$ starts from the $\psi$-nodes and works
   backwards: a predecessor that satisfies $\varphi$ and is not yet in the set joins it
   and is pushed on a worklist.
-\item $\mathsf{A}[\varphi\,\mathsf{U}\,\psi]$ keeps, per node, the number of its steps
+\item $\varphi\mathbin{\mathsf{AU}}\psi$ keeps, per node, the number of its steps
   not yet known to lead into the set; when it reaches zero at a $\varphi$-node, the
   node joins.
 \item $\mathsf{EG}\,\varphi$ starts from the $\varphi$-nodes and removes, by worklist,

@@ -67,8 +67,8 @@ def main : IO Unit := do
   for (j, want) in [
       ("{\"AG\": {\"implies\": [{\"after\": \"Pay\"}, {\"AF\": {\"after\": \"Receipt\"}}]}}", "AG (Pay → AF Receipt)"),
       ("{\"AG\": {\"not\": {\"after\": \"Pay\"}}}", "AG ¬Pay"),
-      ("{\"not\": {\"EU\": [{\"not\": {\"after\": \"A\"}}, {\"after\": \"B\"}]}}", "¬E[¬A U B]"),
-      ("{\"AW\": [{\"at\": \"s\"}, \"terminal\"]}", "A[@s W terminal]"),
+      ("{\"not\": {\"EU\": [{\"not\": {\"after\": \"A\"}}, {\"after\": \"B\"}]}}", "¬(¬A EU B)"),
+      ("{\"AW\": [{\"at\": \"s\"}, \"terminal\"]}", "@s AW terminal"),
       ("{\"EF\": {\"and\": [{\"after\": \"A\"}, {\"or\": [{\"after\": \"B\"}, {\"after\": \"C\"}]}]}}", "EF (A ∧ (B ∨ C))"),
       ("{\"never\": {\"after\": \"Charge\"}}", "never Charge")] do
     let got := notationOf j
@@ -102,6 +102,23 @@ def main : IO Unit := do
   expect "a labelled long formula's sexprPretty reads back"
     (readsAs (sexprOf sharedLong "sexprPretty") == readsAs (sexprOf sharedLong) && readsAs (sexprOf sharedLong) != Json.null)
   expect "a name that needs quotes stays quoted" (sexprOf (parseJ "{\"EF\": {\"after\": \"Pay now\"}}") == "(EF (after \"Pay now\"))")
+  -- readingIndented: the English as an outline (selfhost.mcp.logic.explain)
+  let short := sexprOf (Json.str "(AG (not (after Pay)))") "readingIndented"
+  expect "a short formula's readingIndented is one line" ((short.splitOn "\n").length == 1 && has short "Pay")
+  let outline := sexprOf long "readingIndented"
+  let olines := outline.splitOn "\n"
+  expect "a long formula's readingIndented is an outline within 72 columns naming every atom"
+    (olines.length > 3 && olines.all (·.length ≤ 72) &&
+     ["CreateOrder", "Quote", "Pay", "Receipt", "PaymentDeclined", "SoldOut", "Refunded"].all (has outline ·) &&
+     has outline "if:" && has outline "  - ")
+  let sharedRead := sexprOf sharedLong "readingIndented"
+  expect "a shared part is read once and referred to after"
+    (has sharedRead "(#0) " && has sharedRead "the formula marked #0" && (sharedRead.splitOn "Refunded").length == 2)
+  expect "readingIndented works where the s-expression form does not"
+    (has (sexprOf (parseJ "{\"AG\": {\"predicate\": \"cache is consistent\"}}") "readingIndented") "cache is consistent")
+  expect "check_ctl answers carry readingIndented"
+    (match call "check_ctl" "{\"task\": {\"states\": [\"a\", \"yes\", \"no\"], \"initial\": \"a\", \"terminals\": [\"yes\", \"no\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"yes\", \"message\": \"Yes\"}, {\"src\": \"a\", \"dst\": \"no\", \"message\": \"No\"}]}, \"formula\": \"(outcomes (after Yes) (after No))\"}" with
+     | .ok j => has ((j.getObjValAs? String "readingIndented").toOption.getD "") "Yes" | _ => false)
   let pred := explainOf (parseJ "{\"AG\": {\"predicate\": \"cache is consistent\"}}")
   expect "a predicate atom has no s-expression"
     (pred.getObjValD "sexpr" == Json.null && pred.getObjValD "sexprPretty" == Json.null &&
@@ -170,6 +187,56 @@ def main : IO Unit := do
       | _ => false)
   let vac := call "check_ctl" ("{\"task\": " ++ cyc ++ ", \"formula\": {\"stronglyImplies\": [{\"after\": \"Never\"}, \"terminal\"]}}")
   expect "unknown message in stronglyImplies rejected" (verdictOf vac == "rejected")
+  -- outcomes: each possible, and on every path one of them (selfhost.mcp.logic.outcomes)
+  let outJ := parseJ "{\"outcomes\": [{\"after\": \"A\"}, {\"after\": \"B\"}]}"
+  expect "outcomes reads the same from JSON and from an s-expression"
+    (readsAs "(outcomes (after A) (after B))" == (((parseBounded outJ).toOption.map Formula.toJson).getD Json.null) && readsAs "(outcomes (after A) (after B))" != Json.null)
+  expect "outcomes of one formula is refused, in both forms"
+    ((parseBounded (Json.str "(outcomes (after A))")).toOption.isNone && (parseBounded (parseJ "{\"outcomes\": [{\"after\": \"A\"}]}")).toOption.isNone)
+  expect "outcomes notation" (notationOf "{\"outcomes\": [{\"after\": \"A\"}, {\"after\": \"B\"}]}" == "outcomes(A, B)")
+  let outF := (parseBounded outJ).toOption.getD .tt
+  expect "outcomes reading states both halves" (has outF.reading "can happen, and on every path one of them eventually happens")
+  expect "outcomes negation through the duals" (outF.negate.symbols == "AG ¬A ∨ AG ¬B ∨ EG (¬A ∧ ¬B)")
+  expect "outcomes is written back as outcomes" (sexprOf (Json.str "(outcomes   (after A) (after B))") == "(outcomes (after A) (after B))")
+  let ends := "{\"states\": [\"a\", \"yes\", \"no\", \"z\"], \"initial\": \"a\", \"terminals\": [\"yes\", \"no\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"yes\", \"message\": \"Yes\"}, {\"src\": \"a\", \"dst\": \"no\", \"message\": \"No\"}, {\"src\": \"z\", \"dst\": \"no\", \"message\": \"Ghost\"}]}"
+  let ctlOn (task f : String) := call "check_ctl" ("{\"task\": " ++ task ++ ", \"formula\": " ++ f ++ "}")
+  expect "outcomes of a choice's two ends is proved"
+    (verdictOf (ctlOn ends "\"(outcomes (after Yes) (after No))\"") == "proved")
+  expect "while the disjunction of AFs is disproved"
+    (verdictOf (ctlOn ends "\"(or (AF (after Yes)) (AF (after No)))\"") == "disproved")
+  let ghost := ctlOn ends "\"(outcomes (after Yes) (after Ghost))\""
+  expect "an outcome no path reaches is named"
+    (verdictOf ghost == "disproved" && match ghost with | .ok j => has j.compress "Ghost can never happen" | _ => false)
+  let circling := "{\"states\": [\"a\", \"b\", \"done\"], \"initial\": \"a\", \"terminals\": [\"done\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"b\", \"message\": \"Ping\"}, {\"src\": \"b\", \"dst\": \"a\", \"message\": \"Pong\"}, {\"src\": \"a\", \"dst\": \"done\", \"message\": \"Stop\"}, {\"src\": \"b\", \"dst\": \"done\", \"message\": \"Quit\"}]}"
+  let around := ctlOn circling "\"(outcomes (after Stop) (after Quit))\""
+  expect "a path reaching no outcome is shown as a loop"
+    (verdictOf around == "disproved" && match around with
+      | .ok j => ((j.getObjValD "evidence").getObjValD "loopsBackTo").getNat?.toOption.isSome
+      | _ => false)
+  -- follows, leadsTo, precedes (selfhost.mcp.logic.functions)
+  for (sx, js, note) in [
+      ("(follows (after A) (after B) (after C))", "{\"follows\": [{\"after\": \"A\"}, {\"after\": \"B\"}, {\"after\": \"C\"}]}", "follows(A, B, C)"),
+      ("(leadsTo (after A) (after B))", "{\"leadsTo\": [{\"after\": \"A\"}, {\"after\": \"B\"}]}", "leadsTo(A, B)"),
+      ("(precedes (after A) (after B))", "{\"precedes\": [{\"after\": \"A\"}, {\"after\": \"B\"}]}", "precedes(A, B)")] do
+    expect s!"{note} reads the same from JSON and from an s-expression"
+      (readsAs sx == (((parseBounded (parseJ js)).toOption.map Formula.toJson).getD Json.null) && readsAs sx != Json.null)
+    expect s!"{note} notation" (notationOf js == note)
+    expect s!"{note} is written back as the call" (sexprOf (Json.str sx) == sx)
+  expect "functions are refused below their arity"
+    (["(follows (after A))", "(leadsTo (after A))", "(precedes (after A) (after B) (after C))"].all fun t => (parseBounded (Json.str t)).toOption.isNone)
+  expect "precedes negates to an EU"
+    ((((parseBounded (Json.str "(precedes (after A) (after B))")).toOption.map (·.negate.symbols)).getD "") == "¬A EU B")
+  let shop := "{\"states\": [\"s0\", \"s1\", \"s2\", \"s3\", \"done\", \"sold\", \"z\"], \"initial\": \"s0\", \"terminals\": [\"done\", \"sold\"], \"transitions\": [{\"src\": \"s0\", \"dst\": \"s1\", \"message\": \"Order\"}, {\"src\": \"s1\", \"dst\": \"s2\", \"message\": \"Quote\"}, {\"src\": \"s1\", \"dst\": \"sold\", \"message\": \"SoldOut\"}, {\"src\": \"s2\", \"dst\": \"s3\", \"message\": \"Pay\"}, {\"src\": \"s3\", \"dst\": \"done\", \"message\": \"Receipt\"}, {\"src\": \"z\", \"dst\": \"done\", \"message\": \"Ghost\"}]}"
+  let onShop (f : String) := verdictOf (ctlOn shop ("\"" ++ f ++ "\""))
+  expect "follows of a typestate's next steps is proved" (onShop "(follows (after Order) (after Quote) (after SoldOut))" == "proved")
+  expect "follows missing a next step is disproved" (onShop "(follows (after Order) (after Quote))" == "disproved")
+  expect "leadsTo is proved where every Pay gets a Receipt" (onShop "(leadsTo (after Pay) (after Receipt))" == "proved")
+  expect "leadsTo from a message that cannot happen is disproved, not vacuous"
+    (onShop "(leadsTo (after Ghost) (after Receipt))" == "disproved" && onShop "(AG (implies (after Ghost) (AF (after Receipt))))" == "proved")
+  expect "precedes is proved for an order the draft keeps" (onShop "(precedes (after Quote) (after Pay))" == "proved")
+  let early := ctlOn shop "\"(precedes (after Pay) (after Quote))\""
+  expect "precedes is disproved with the path where the second comes first"
+    (verdictOf early == "disproved" && match early with | .ok j => has j.compress "Quote" | _ => false)
   let orphan := "{\"states\": [\"a\", \"done\", \"z\"], \"initial\": \"a\", \"terminals\": [\"done\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"done\", \"message\": \"Finish\"}, {\"src\": \"z\", \"dst\": \"done\", \"message\": \"Ghost\"}]}"
   let vacOut := call "check_ctl" ("{\"task\": " ++ orphan ++ ", \"formula\": {\"stronglyImplies\": [{\"after\": \"Ghost\"}, \"terminal\"]}}")
   expect "unreachable antecedent: stronglyImplies disproved as vacuous" (verdictOf vacOut == "disproved" && match vacOut with

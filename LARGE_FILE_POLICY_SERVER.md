@@ -572,7 +572,7 @@ AG(listing_mentions_file -> last_decision.can_list)
 AG(readable -> valid_hash && valid_policy)
 AG(readable && !deleted -> exists_active_admin)
 AG(owner_inactive -> AF(manager_admin || quarantined_with_audit))
-A[pending_upload U (readable || quarantined || garbage_collected)]
+pending_upload AU (readable || quarantined || garbage_collected)
 ```
 
 The OpenAPI document tells clients how to speak to the server. The LeanFM grammar is stricter: it says which predecessor messages must exist before a response is legal. That is where we can prove that a server following the spec does not produce the obvious spill and orphan traces. The resulting event order does not, by itself, assert causation.

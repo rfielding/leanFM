@@ -4,18 +4,18 @@
     -> ok
 
 "Every order is answered"
-    AG (CreateOrder → AF (Receipt ∨ PaymentDeclined ∨ SoldOut))
-    on every path, always (if CreateOrder was just delivered then (on every path, eventually (Receipt was just delivered or PaymentDeclined was just delivered or SoldOut was just delivered)))
+    leadsTo(CreateOrder, Receipt ∨ PaymentDeclined ∨ SoldOut)
+    it is possible that eventually CreateOrder was just delivered, and on every path, whenever CreateOrder was just delivered, eventually (Receipt was just delivered or PaymentDeclined was just delivered or SoldOut was just delivered)
     -> proved
 
 "Every payment is charged to the bank"
-    AG (Pay → AF Charge)
-    on every path, always (if Pay was just delivered then (on every path, eventually Charge was just delivered))
+    leadsTo(Pay, Charge)
+    it is possible that eventually Pay was just delivered, and on every path, whenever Pay was just delivered, eventually Charge was just delivered
     -> proved
 
 "No receipt without a charge"
-    ¬E[¬Charged U Receipt]
-    it is not the case that (on some path, (it is not the case that Charged was just delivered) holds until Receipt was just delivered (and Receipt was just delivered does happen))
+    precedes(Charged, Receipt)
+    on every path, Receipt was just delivered never holds unless Charged was just delivered has held at or before that point (Receipt was just delivered need not hold at all)
     -> proved
 
 "A sold-out order is never charged"

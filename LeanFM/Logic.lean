@@ -107,6 +107,14 @@ inductive Formula where
   | or (fs : List Formula)
   | implies (a b : Formula)
   | stronglyImplies (a b : Formula)
+  /-- the outcomes of a choice: each can happen, and on every path one of them eventually happens -/
+  | outcomes (fs : List Formula)
+  /-- right after `a`, the next step is one of `bs`, each possible -/
+  | follows (a : Formula) (bs : List Formula)
+  /-- `a` can happen, and every `a` is eventually followed by `b` -/
+  | leadsTo (a b : Formula)
+  /-- `b` never happens before `a` (and need not happen) -/
+  | precedes (a b : Formula)
   | never (f : Formula)
   | ex (f : Formula)
   | ax (f : Formula)
@@ -124,7 +132,9 @@ namespace Formula
 
 partial def size : Formula → Nat
   | not f | never f | ex f | ax f | ef f | af f | eg f | ag f => 1 + size f
-  | and fs | or fs => 1 + (fs.map size).foldl (· + ·) 0
+  | and fs | or fs | outcomes fs => 1 + (fs.map size).foldl (· + ·) 0
+  | follows a bs => 1 + size a + (bs.map size).foldl (· + ·) 0
+  | leadsTo a b | precedes a b => 1 + size a + size b
   | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => 1 + size a + size b
   | _ => 1
 
@@ -146,6 +156,10 @@ partial def toJson : Formula → Json
   | or fs => Json.mkObj [("or", Json.arr (fs.map toJson).toArray)]
   | implies a b => Json.mkObj [("implies", Json.arr #[toJson a, toJson b])]
   | stronglyImplies a b => Json.mkObj [("stronglyImplies", Json.arr #[toJson a, toJson b])]
+  | outcomes fs => Json.mkObj [("outcomes", Json.arr (fs.map toJson).toArray)]
+  | follows a bs => Json.mkObj [("follows", Json.arr ((a :: bs).map toJson).toArray)]
+  | leadsTo a b => Json.mkObj [("leadsTo", Json.arr #[toJson a, toJson b])]
+  | precedes a b => Json.mkObj [("precedes", Json.arr #[toJson a, toJson b])]
   | never f => Json.mkObj [("never", toJson f)]
   | ex f => Json.mkObj [("EX", toJson f)]
   | ax f => Json.mkObj [("AX", toJson f)]
@@ -182,6 +196,10 @@ partial def reading : Formula → String
   | or fs => " or ".intercalate (fs.map paren)
   | implies a b => "if " ++ paren a ++ " then " ++ paren b
   | stronglyImplies a b => paren a ++ " can happen, and on every path, whenever " ++ paren a ++ " then " ++ paren b
+  | outcomes fs => "each of these can happen, and on every path one of them eventually happens: " ++ "; ".intercalate (fs.map paren)
+  | follows a bs => "on every path, whenever " ++ paren a ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (bs.map paren)
+  | leadsTo a b => "it is possible that eventually " ++ paren a ++ ", and on every path, whenever " ++ paren a ++ ", eventually " ++ paren b
+  | precedes a b => "on every path, " ++ paren b ++ " never holds unless " ++ paren a ++ " has held at or before that point (" ++ paren b ++ " need not hold at all)"
   | never f => "on every path, never " ++ paren f
   | ex f => "on some path, at the next step " ++ paren f
   | ax f => "on every path, at the next step " ++ paren f
@@ -199,7 +217,7 @@ end
 
 mutual
 /-- The formula in CTL symbols, one line a person reads instead of the JSON: an after atom is its
-message label, temporal operators are prefixes (AG, EF, ...) or brackets (E[a U b]), and
+message label, temporal operators are prefixes (AG, EF, ...) or infix (a EU b), and
 parentheses appear only around a binary operand. -/
 partial def symbols : Formula → String
   | tt => "true"
@@ -220,6 +238,10 @@ partial def symbols : Formula → String
   | or fs => " ∨ ".intercalate (fs.map symbolsArg)
   | implies a b => symbolsArg a ++ " → " ++ symbolsArg b
   | stronglyImplies a b => symbolsArg a ++ " ⇒ " ++ symbolsArg b
+  | outcomes fs => "outcomes(" ++ ", ".intercalate (fs.map symbols) ++ ")"
+  | follows a bs => "follows(" ++ ", ".intercalate ((a :: bs).map symbols) ++ ")"
+  | leadsTo a b => "leadsTo(" ++ symbols a ++ ", " ++ symbols b ++ ")"
+  | precedes a b => "precedes(" ++ symbols a ++ ", " ++ symbols b ++ ")"
   | never f => "never " ++ symbolsArg f
   | ex f => "EX " ++ symbolsArg f
   | ax f => "AX " ++ symbolsArg f
@@ -227,16 +249,25 @@ partial def symbols : Formula → String
   | af f => "AF " ++ symbolsArg f
   | eg f => "EG " ++ symbolsArg f
   | ag f => "AG " ++ symbolsArg f
-  | eu a b => "E[" ++ symbols a ++ " U " ++ symbols b ++ "]"
-  | au a b => "A[" ++ symbols a ++ " U " ++ symbols b ++ "]"
-  | ew a b => "E[" ++ symbols a ++ " W " ++ symbols b ++ "]"
-  | aw a b => "A[" ++ symbols a ++ " W " ++ symbols b ++ "]"
+  | eu a b => symbolsArg a ++ " EU " ++ symbolsArg b
+  | au a b => symbolsArg a ++ " AU " ++ symbolsArg b
+  | ew a b => symbolsArg a ++ " EW " ++ symbolsArg b
+  | aw a b => symbolsArg a ++ " AW " ++ symbolsArg b
 /-- An operand: parenthesized only when it is a binary connective (and, or, implies). -/
 partial def symbolsArg (f : Formula) : String :=
   match f with
-  | and (_ :: _ :: _) | or (_ :: _ :: _) | implies .. | stronglyImplies .. | field .. => "(" ++ symbols f ++ ")"
+  | and (_ :: _ :: _) | or (_ :: _ :: _) | implies .. | stronglyImplies .. | field .. | eu .. | au .. | ew .. | aw .. => "(" ++ symbols f ++ ")"
   | _ => symbols f
 end
+
+/-- A function's meaning in the core operators (selfhost.mcp.logic.functions); any other formula is
+itself. -/
+def expand : Formula → Formula
+  | outcomes fs => and (fs.map ef ++ [af (or fs)])
+  | follows a bs => ag (implies a (and (bs.map ex ++ [ax (or bs)])))
+  | leadsTo a b => stronglyImplies a (af b)
+  | precedes a b => not (eu (not a) b)
+  | f => f
 
 /-- Negation pushed inward through the CTL dualities. -/
 partial def negate : Formula → Formula
@@ -247,6 +278,8 @@ partial def negate : Formula → Formula
   | or fs => and (fs.map negate)
   | implies a b => and [a, negate b]
   | stronglyImplies a b => or [ag (negate a), ef (and [a, negate b])]
+  | outcomes fs => or (fs.map (fun a => ag (negate a)) ++ [eg (and (fs.map negate))])
+  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) => negate (expand f)
   | never f => ef f
   | ex f => ax (negate f)
   | ax f => ex (negate f)
@@ -268,12 +301,18 @@ def mode : Formula → String
   | au .. => "eventually"
   | ef _ | ex _ | eu .. | eg _ | ew .. => "possibly"
   | stronglyImplies .. => "always (non-vacuous)"
+  | outcomes _ => "eventually"
+  | follows .. => "always"
+  | leadsTo .. => "always (non-vacuous)"
+  | precedes .. => "never"
   | _ => "compound"
 
 partial def subformulas (f : Formula) : List Formula :=
   f :: match f with
     | not g | never g | ex g | ax g | ef g | af g | eg g | ag g => subformulas g
-    | and fs | or fs => fs.flatMap subformulas
+    | and fs | or fs | outcomes fs => fs.flatMap subformulas
+    | follows a bs => subformulas a ++ bs.flatMap subformulas
+    | leadsTo a b | precedes a b => subformulas a ++ subformulas b
     | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => subformulas a ++ subformulas b
     | _ => []
 
@@ -314,6 +353,10 @@ def shape : Formula → String × List Formula × Option String
   | .or fs => ("or", fs, none)
   | .implies a b => ("implies", [a, b], none)
   | .stronglyImplies a b => ("stronglyImplies", [a, b], none)
+  | .outcomes fs => ("outcomes", fs, none)
+  | .follows a bs => ("follows", a :: bs, none)
+  | .leadsTo a b => ("leadsTo", [a, b], none)
+  | .precedes a b => ("precedes", [a, b], none)
   | .eu a b => ("EU", [a, b], none) | .au a b => ("AU", [a, b], none)
   | .ew a b => ("EW", [a, b], none) | .aw a b => ("AW", [a, b], none)
   | f => ("atom", [], some (reprStr f))
@@ -445,6 +488,104 @@ partial def toSexprPretty (d : Dag) (width : Nat := sexprWidth) : String :=
         (acc.1 ++ "\n" ++ pad ++ t, l)) ("", labels)
       (pre ++ "(" ++ op ++ body ++ ")", labels)
   (go (d.size - 1) 0 0 {}).1
+
+/-- An operator's English on one line, given its parts' texts (each parenthesized where it is not
+atomic); the sentences of `Formula.reading`, with a repeated part said once ("whenever that holds"). -/
+def readOp (op : String) (p : Array String) : String :=
+  let part := fun (k : Nat) => p[k]?.getD "?"
+  match op with
+  | "not" => "it is not the case that " ++ part 0
+  | "never" => "on every path, never " ++ part 0
+  | "EX" => "on some path, at the next step " ++ part 0
+  | "AX" => "on every path, at the next step " ++ part 0
+  | "EF" => "it is possible that eventually " ++ part 0
+  | "AF" => "on every path, eventually " ++ part 0
+  | "EG" => "on some path, always " ++ part 0
+  | "AG" => "on every path, always " ++ part 0
+  | "and" => " and ".intercalate p.toList
+  | "or" => " or ".intercalate p.toList
+  | "implies" => "if " ++ part 0 ++ " then " ++ part 1
+  | "stronglyImplies" => "it is possible that eventually " ++ part 0 ++ ", and on every path, whenever that holds, " ++ part 1
+  | "leadsTo" => "it is possible that eventually " ++ part 0 ++ ", and on every path, whenever that holds, eventually " ++ part 1
+  | "EU" => "on some path, " ++ part 0 ++ " holds until " ++ part 1 ++ " (and it does happen)"
+  | "AU" => "on every path, " ++ part 0 ++ " holds until " ++ part 1 ++ " (and it does happen)"
+  | "EW" => "on some path, " ++ part 0 ++ " holds unless " ++ part 1 ++ " (which need not happen)"
+  | "AW" => "on every path, " ++ part 0 ++ " holds unless " ++ part 1 ++ " (which need not happen)"
+  | "outcomes" => "each of these can happen, and on every path one of them eventually happens: " ++ "; ".intercalate p.toList
+  | "follows" => "on every path, whenever " ++ part 0 ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (p.toList.drop 1)
+  | "precedes" => "on every path, " ++ part 1 ++ " never holds unless " ++ part 0 ++ " has held at or before that point"
+  | _ => op ++ "(" ++ ", ".intercalate p.toList ++ ")"
+
+/-- An operator's clauses in the outline, one per line: the leading phrase, the parts read below it,
+and whether they are a bulleted list. -/
+def readClauses (op : String) (ks : Array Nat) : List (String × List Nat × Bool) :=
+  let k := fun (i : Nat) => ks[i]?.toList
+  match op with
+  | "not" => [("it is not the case that:", k 0, false)]
+  | "never" => [("on every path, never:", k 0, false)]
+  | "EX" => [("on some path, at the next step:", k 0, false)]
+  | "AX" => [("on every path, at the next step:", k 0, false)]
+  | "EF" => [("it is possible that eventually:", k 0, false)]
+  | "AF" => [("on every path, eventually:", k 0, false)]
+  | "EG" => [("on some path, always:", k 0, false)]
+  | "AG" => [("on every path, always:", k 0, false)]
+  | "and" => [("all of these:", ks.toList, true)]
+  | "or" => [("at least one of these:", ks.toList, true)]
+  | "implies" => [("if:", k 0, false), ("then:", k 1, false)]
+  | "stronglyImplies" => [("it is possible that eventually:", k 0, false), ("and on every path, whenever that holds:", k 1, false)]
+  | "leadsTo" => [("it is possible that eventually:", k 0, false), ("and on every path, whenever that holds, eventually:", k 1, false)]
+  | "EU" => [("on some path, this holds:", k 0, false), ("until this does (and it does happen):", k 1, false)]
+  | "AU" => [("on every path, this holds:", k 0, false), ("until this does (and it does happen):", k 1, false)]
+  | "EW" => [("on some path, this holds:", k 0, false), ("unless this does (which need not happen):", k 1, false)]
+  | "AW" => [("on every path, this holds:", k 0, false), ("unless this does (which need not happen):", k 1, false)]
+  | "outcomes" => [("each of these can happen, and on every path one of them eventually happens:", ks.toList, true)]
+  | "follows" => [("on every path, whenever:", k 0, false), ("the next step is one of these, each possible:", ks.toList.drop 1, true)]
+  | "precedes" => [("on every path, this never holds:", k 1, false), ("unless this has held at or before that point:", k 0, false)]
+  | _ => [(op ++ ":", ks.toList, true)]
+
+/-- Node `i`'s English on one line, threading labels as `flatAt` does: a part with two or more
+parents is marked (#n) where it is first read, and is "the formula marked #n" after. -/
+partial def readFlat (d : Dag) (parents : Array Nat) (i : Nat) (labels : Std.HashMap Nat Nat) :
+    String × Std.HashMap Nat Nat :=
+  match labels.get? i with
+  | some n => (s!"the formula marked #{n}", labels)
+  | none =>
+    let op := d.ops[i]!
+    if op == "atom" then ((d.atoms[i]!.getD .tt).reading, labels)
+    else if op == "true" || op == "false" then (op, labels)
+    else
+      let (labels, pre) := if (parents[i]?.getD 0) ≥ 2 then (labels.insert i labels.size, s!"(#{labels.size}) ") else (labels, "")
+      let (parts, labels) := (d.kids[i]!).foldl (fun (acc : Array String × Std.HashMap Nat Nat) k =>
+        let o := d.ops[k]!
+        let plain := o == "atom" || o == "true" || o == "false" || acc.2.contains k
+        let (t, l) := readFlat d parents k acc.2
+        (acc.1.push (if plain then t else "(" ++ t ++ ")"), l)) (#[], labels)
+      (pre ++ readOp op parts, labels)
+
+/-- The formula's English as an indented outline (readingIndented): a part whose English fits in
+`width` columns at its indentation stays on one line; otherwise each clause of its operator opens
+a line ending in a colon, its parts below, two spaces in, list parts bulleted. Labels as `readFlat`,
+so the text grows with the distinct parts, never with the tree. -/
+partial def toReadingIndented (d : Dag) (width : Nat := sexprWidth) : String :=
+  if d.size == 0 then "true" else
+  let parents := parentCounts d
+  let rec go (i indent : Nat) (labels : Std.HashMap Nat Nat) : List String × Std.HashMap Nat Nat :=
+    let (flat, after) := readFlat d parents i labels
+    let op := d.ops[i]!
+    if indent + flat.length ≤ width || labels.contains i || op == "atom" || op == "true" || op == "false" then
+      ([flat], after)
+    else
+      let (labels, mark) := if (parents[i]?.getD 0) ≥ 2 then (labels.insert i labels.size, s!"(#{labels.size}) ") else (labels, "")
+      let (lines, labels) := (readClauses op d.kids[i]!).foldl
+        (fun (acc : List String × Std.HashMap Nat Nat) (lead, ks, bullet) =>
+          let (ls, labels) := ks.foldl (fun (acc2 : List String × Std.HashMap Nat Nat) k =>
+            let (kl, l) := go k (indent + (if bullet then 4 else 2)) acc2.2
+            let kl := if bullet then (match kl with | [] => [] | h :: t => ("  - " ++ h) :: t.map ("    " ++ ·))
+              else kl.map ("  " ++ ·)
+            (acc2.1 ++ kl, l)) ([], acc.2)
+          (acc.1 ++ [lead] ++ ls, labels)) ([], labels)
+      ((match lines with | [] => [] | h :: t => (mark ++ h) :: t), labels)
+  "\n".intercalate (go (d.size - 1) 0 {}).1
 
 /-- The first atom kind the s-expression form refuses, if the formula has one. -/
 def sexprBlocker (d : Dag) : Option String :=
@@ -666,6 +807,10 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       | "or" => if xs.isEmpty then throw "or needs at least one formula" else return .or xs.toList
       | "implies" => need 2; return .implies xs[0]! xs[1]!
       | "stronglyImplies" => need 2; return .stronglyImplies xs[0]! xs[1]!
+      | "outcomes" => if xs.size < 2 then throw "outcomes needs at least two formulas" else return .outcomes xs.toList
+      | "follows" => if xs.size < 2 then throw "follows needs a formula and at least one next formula" else return .follows xs[0]! (xs.toList.drop 1)
+      | "leadsTo" => need 2; return .leadsTo xs[0]! xs[1]!
+      | "precedes" => need 2; return .precedes xs[0]! xs[1]!
       | "EU" => need 2; return .eu xs[0]! xs[1]! | "AU" => need 2; return .au xs[0]! xs[1]!
       | "EW" => need 2; return .ew xs[0]! xs[1]! | "AW" => need 2; return .aw xs[0]! xs[1]!
       | other =>
@@ -752,6 +897,17 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
       | "or" => many .or
       | "implies" => two .implies
       | "stronglyImplies" => two .stronglyImplies
+      | "outcomes" => do
+        let f ← many .outcomes
+        match f with
+        | .outcomes (_ :: _ :: _) => return f
+        | _ => throw "outcomes needs at least two formulas"
+      | "follows" => do
+        match ← many .and with
+        | .and (a :: b :: bs) => return .follows a (b :: bs)
+        | _ => throw "follows needs a formula and at least one next formula"
+      | "leadsTo" => two .leadsTo
+      | "precedes" => two .precedes
       | "EU" => two .eu | "AU" => two .au | "EW" => two .ew | "AW" => two .aw
       | other =>
         if unsupportedOperators.contains other then return .unsupported other
@@ -1068,6 +1224,8 @@ partial def satTree (m : Model) : Formula → Array Bool
   | .or fs => fs.foldl (fun acc f => (acc.zip (satTree m f)).map fun (a, b) => a || b) (m.all false)
   | .implies a b => satTree m (.or [.not a, b])
   | .stronglyImplies a b => satTree m (.and [.ef a, .ag (.implies a b)])
+  | .outcomes fs => satTree m (.and (fs.map .ef ++ [.af (.or fs)]))
+  | f@(.follows ..) | f@(.leadsTo ..) | f@(.precedes ..) => satTree m f.expand
   | .never f => satTree m (.ag (.not f))
   | .ex f => let s := satTree m f; m.mapI (m.existsSucc s)
   | .ax f => let s := satTree m f; m.mapI (m.allSucc s)
@@ -1149,6 +1307,38 @@ def Core.ofDag (d : Dag) : Core × Nat := Id.run do
         let (c, e) := mk c .eu #[t, nimp]
         let (c, ag) := mk c .not #[e]
         mk c .and #[ef, ag]
+      | "outcomes" =>
+        let (c, t) := mk c .tt #[]
+        let (c, efs) := ks.foldl (fun (acc : Core × Array Nat) k => let (c, e) := mk acc.1 .eu #[t, k]; (c, acc.2.push e)) (c, #[])
+        let (c, any) := mk c .or ks
+        let (c, af) := mk c .au #[t, any]
+        mk c .and (efs.push af)
+      | "follows" =>
+        let rest := ks.extract 1 ks.size
+        let (c, t) := mk c .tt #[]
+        let (c, exs) := rest.foldl (fun (acc : Core × Array Nat) k => let (c, e) := mk acc.1 .ex #[k]; (c, acc.2.push e)) (c, #[])
+        let (c, any) := mk c .or rest
+        let (c, ax) := mk c .ax #[any]
+        let (c, body) := mk c .and (exs.push ax)
+        let (c, na) := mk c .not #[k0]
+        let (c, imp) := mk c .or #[na, body]
+        let (c, nimp) := mk c .not #[imp]
+        let (c, e) := mk c .eu #[t, nimp]
+        mk c .not #[e]
+      | "leadsTo" =>
+        let (c, t) := mk c .tt #[]
+        let (c, ef) := mk c .eu #[t, k0]
+        let (c, af) := mk c .au #[t, k1]
+        let (c, na) := mk c .not #[k0]
+        let (c, imp) := mk c .or #[na, af]
+        let (c, nimp) := mk c .not #[imp]
+        let (c, e) := mk c .eu #[t, nimp]
+        let (c, ag) := mk c .not #[e]
+        mk c .and #[ef, ag]
+      | "precedes" =>
+        let (c, na) := mk c .not #[k0]
+        let (c, e) := mk c .eu #[na, k1]
+        mk c .not #[e]
       | "EW" => let (c, u) := mk c .eu #[k0, k1]; let (c, g) := mk c .eg #[k0]; mk c .or #[u, g]
       | "AW" =>
         let (c, nb) := mk c .not #[k1]
@@ -1435,7 +1625,12 @@ partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option
     if !get (sat (.ef a)) i then
       some { kind := "vacuous", path := [i], note := "the antecedent is unreachable, so the claim would hold vacuously; stronglyImplies rejects that" }
     else reach (.and [a, .not b]) "counterexample"
+  | false, .outcomes fs =>
+    match fs.find? (fun g => !get (sat (.ef g)) i) with
+    | some g => some { kind := "unreachable", path := [i], note := s!"the outcome {g.symbols} can never happen" }
+    | none => evidence m i false (.af (.or fs))
   | false, .and fs => (fs.find? (fun g => !get (sat g) i)).bind (evidence m i false)
+  | h, f@(.follows ..) | h, f@(.leadsTo ..) | h, f@(.precedes ..) => evidence m i h f.expand
   | false, .implies a b => (evidence m i true a).orElse fun _ => evidence m i false b
   | _, _ => none
 
@@ -1521,7 +1716,7 @@ def explainFormula (args : Json) : ToolOutcome := do
     | none => [("sexpr", Json.str dag.toSexpr), ("sexprPretty", Json.str dag.toSexprPretty)]
     | some k => [("sexpr", Json.null), ("sexprPretty", Json.null),
         ("sexprNote", Json.str s!"a {k} atom has no s-expression form; write this formula in the JSON form")]
-  return verdictJson "explain_formula" "explained" f.reading <| sx ++
+  return verdictJson "explain_formula" "explained" f.reading <| sx ++ [("readingIndented", Json.str dag.toReadingIndented)] ++
     [ ("formula", f.toJson), ("notation", f.symbols), ("mode", Formula.mode f)
     , ("negation", Json.mkObj [("formula", neg.toJson), ("notation", neg.symbols), ("reading", neg.reading)])
     , ("typingErrors", Json.arr #[])
@@ -1552,7 +1747,8 @@ def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
   let reading := if asTree then f.reading else s!"a formula of {dag.size} distinct subformulas, too large to read out as a tree"
   let common : List (String × Json) :=
     [("task", t.id), ("formula", if asTree then f.toJson else Json.str dag.toSexpr),
-     ("notation", if asTree then f.symbols else dag.toSexpr), ("mode", Formula.mode f), ("terminalConvention", terminalConvention)]
+     ("notation", if asTree then f.symbols else dag.toSexpr), ("mode", Formula.mode f), ("terminalConvention", terminalConvention),
+     ("readingIndented", if dag.size ≤ treeLimit then Json.str dag.toReadingIndented else Json.null)]
   let unsupported := unsupportedIn f
   if !unsupported.isEmpty then
     return verdictJson "check_ctl" "unsupported" reading <| common ++
@@ -2471,6 +2667,10 @@ def reference : String := String.intercalate "\n"
   , "| `{\"predicate\": \"text\"}` | free text: never observable; classify it first |"
   , "| `{\"not\": f}`, `{\"and\": [..]}`, `{\"or\": [..]}`, `{\"implies\": [a, b]}` | Boolean |"
   , "| `{\"stronglyImplies\": [a, b]}` | EF a and AG(a -> b): non-vacuous always |"
+  , "| `{\"outcomes\": [a, b, ...]}` | EF a and EF b and ... and AF (a or b or ...): the outcomes of a choice, each possible and one inevitable (not AF a or AF b, which says one particular outcome is inevitable); two or more |"
+  , "| `{\"follows\": [a, b, ...]}` | AG(a -> (EX b and ... and AX (b or ...))): right after a, the next step is one of b, ..., each possible; a and one or more |"
+  , "| `{\"leadsTo\": [a, b]}` | stronglyImplies(a, AF b): a can happen, and every a is eventually followed by b (never vacuous, unlike AG(a -> AF b)) |"
+  , "| `{\"precedes\": [a, b]}` | not (not a EU b): b never happens before a, and need not happen |"
   , "| `{\"never\": f}` | AG not f |"
   , "| `{\"AG\": f}` `{\"AF\": f}` `{\"EG\": f}` `{\"EF\": f}` `{\"AX\": f}` `{\"EX\": f}` | CTL unary |"
   , "| `{\"AU\": [a, b]}` `{\"EU\": [a, b]}` | a until b, and b happens |"
@@ -2480,9 +2680,9 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## S-expressions"
   , ""
-  , "Wherever a formula is read, a JSON string beginning with ( or # is an s-expression over the same operators: `(AG (implies (after Ping) (AX (or (after Pong) (after SlowPong)))))`. `(after M)`, `(at s)` and `(claimed c)` take a name; `terminal`, `true` and `false` are bare; `(secret from A to B field f)` with each pair optional. A name is letters, digits and `_ . : / @ $ -`, or a double-quoted string. A part written once may be labelled `#1=` and reused as `#1#`, so a formula with shared parts is written with each part once. The reader is data only: no other # form and nothing evaluated; a label must be defined before it is used, which rules out cycles. knows, field, predicate and derived have structure the string form does not carry: write them in JSON."
+  , "Wherever a formula is read, a JSON string beginning with ( or # is an s-expression over the same operators: `(AG (implies (after Ping) (AX (or (after Pong) (after SlowPong)))))`. `(outcomes a b ...)` and `(follows a b ...)` take two or more formulas and `(leadsTo a b)` and `(precedes a b)` two; `(after M)`, `(at s)` and `(claimed c)` take a name; `terminal`, `true` and `false` are bare; `(secret from A to B field f)` with each pair optional. A name is letters, digits and `_ . : / @ $ -`, or a double-quoted string. A part written once may be labelled `#1=` and reused as `#1#`, so a formula with shared parts is written with each part once. The reader is data only: no other # form and nothing evaluated; a label must be defined before it is used, which rules out cycles. knows, field, predicate and derived have structure the string form does not carry: write them in JSON."
   , ""
-  , "To parse or format one, call explain_formula with the formula alone (no task): besides its reading it answers `formula` (the JSON tree), `sexpr` (the canonical one-line s-expression: single spaces, names quoted only where needed, a part shared by two or more parents written once with a label) and `sexprPretty` (the same, indented: every line within 72 columns where it can be: a part that fits there, closing parentheses included, stays on one line, otherwise each argument goes on its own line two spaces in). Both read back to the same formula. A formula with a knows, field, predicate or derived atom gets null for both, with `sexprNote` saying why."
+  , "To parse or format one, call explain_formula with the formula alone (no task): besides its reading it answers `formula` (the JSON tree), `sexpr` (the canonical one-line s-expression: single spaces, names quoted only where needed, a part shared by two or more parents written once with a label) and `sexprPretty` (the same, indented: every line within 72 columns where it can be: a part that fits there, closing parentheses included, stays on one line, otherwise each argument goes on its own line two spaces in). Both read back to the same formula. A formula with a knows, field, predicate or derived atom gets null for both, with `sexprNote` saying why. Every formula also gets `readingIndented`: its English as an indented outline (a part that fits in 72 columns on one line, otherwise its leading phrase ending in a colon and its parts below, lists bulleted, a shared part read once as (#n)); check_ctl and session_ctl answers carry it too."
   , ""
   , "check_ctl evaluates a formula as its DAG: each distinct subformula once, so its size bound counts distinct subformulas, and an answer writes a formula too large to write as a tree as an s-expression with its shared parts labelled."
   , "K, O, P, B and Pr are parsed and reported as unsupported inside formulas; the knows tool decides what an actor can derive at an event of a trace."

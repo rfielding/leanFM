@@ -1819,7 +1819,7 @@ def faithful (p : Protocol) (fa : Json) (args : Json := Json.mkObj []) : Except 
       let d := Logic.Dag.ofFormula f
       let small := d.treeSize (Logic.treeLimit + 1) ≤ Logic.treeLimit
       Json.mkObj ([("name", Json.str n), ("formula", Json.str d.toSexpr), ("subformulas", toJson d.size)] ++
-        (if small then [("notation", Json.str f.symbols)] else []))
+        (if small then [("notation", Json.str f.symbols), ("readingIndented", Json.str d.toReadingIndented)] else []))
     return fit <| Json.mkObj (base ++
       [ ("verdict", Json.str "rules")
       , ("reading", Json.str s!"{p.name}: {t.count} typestates over {spec.size} checker nodes, lookahead {t.lookahead}; {rs.length} rules (the start and one per typestate: in it each next typestate is possible and nothing else is){if rs.length > shown.length then s!", the first {shown.length} listed ({CallLimits.raise "faithfulRules" maxRules})" else ""}. Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol")

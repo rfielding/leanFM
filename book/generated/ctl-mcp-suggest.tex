@@ -20,20 +20,20 @@ proved: No secret ever reaches Client
   AG ¬secret →Client
 
 proved: Every CreateOrder is answered (Quote or SoldOut) before the session ends
-  AG (CreateOrder → A[¬terminal U Quote ∨ SoldOut])
+  AG (CreateOrder → (¬terminal AU (Quote ∨ SoldOut)))
 
 proved: CreateOrder can happen, and every CreateOrder is eventually answered
   CreateOrder ⇒ AF (Quote ∨ SoldOut)
 
 proved: No Quote or SoldOut before a CreateOrder
-  ¬E[¬CreateOrder U Quote ∨ SoldOut]
+  ¬(¬CreateOrder EU (Quote ∨ SoldOut))
 
 proved: Every Pay is answered (Receipt or PaymentDeclined) before the session ends
-  AG (Pay → A[¬terminal U Receipt ∨ PaymentDeclined])
+  AG (Pay → (¬terminal AU (Receipt ∨ PaymentDeclined)))
 
 proved: Pay can happen, and every Pay is eventually answered
   Pay ⇒ AF (Receipt ∨ PaymentDeclined)
 
 proved: No Receipt or PaymentDeclined before a Pay
-  ¬E[¬Pay U Receipt ∨ PaymentDeclined]
+  ¬(¬Pay EU (Receipt ∨ PaymentDeclined))
 \end{lstlisting}

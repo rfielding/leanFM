@@ -191,7 +191,7 @@ def toolDefinitions : Array Json := #[
   tool "code_generation_prompt" "Read one-shot implementation prompt"
     "Return the canonical prompt that maps the book and checked specifications to source changes.",
   tool "explain_formula" "Explain a CTL formula"
-    "Read a CTL formula (JSON, or an s-expression string) back in English with its negation, mode, unknown atoms and lints (vacuity, AF AG vs AG AF, quantifier mismatch with an optional sentence), and write it back as a canonical one-line s-expression (sexpr) and an indented one (sexprPretty), so it also parses and formats a formula. Needs no task. Read leanfm://language/logic-reference first."
+    "Read a CTL formula (JSON, or an s-expression string) back in English with its negation, mode, unknown atoms and lints (vacuity, AF AG vs AG AF, quantifier mismatch with an optional sentence), and write it back as a canonical one-line s-expression (sexpr) and an indented one (sexprPretty), so it also parses and formats a formula, and read it out as indented English (readingIndented, also in check_ctl and session_ctl answers). Needs no task. Read leanfm://language/logic-reference first."
     (schema [("formula", anyJson "JSON formula, or an s-expression string such as (AG (implies (after Pay) (AF (after Receipt))))"), ("task", anyJson "optional canonical task id or inline draft"),
       ("sentence", stringSchema "optional English requirement the formula is meant to state")] ["formula"]),
   tool "check_ctl" "Check a CTL formula against a task"

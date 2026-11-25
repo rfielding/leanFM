@@ -742,4 +742,20 @@ def hostile : String := "protocol I («a\"b», «x)\\nimport os») {\n  «Go\"\"
 #guard !((tsCode hostile).splitOn "\n").any fun l => (l.dropWhile (· == ' ')).startsWith "import os"
 #guard (tsCode hostile).contains "ep.send(\"x)\\\\nimport os\", \"Go\\\"\\\"\\\"!\""
 
+-- outcomes over the book's PlaceOrder (selfhost.mcp.logic.functions): every order ends one of three
+-- ways, each possible; one AF per outcome would say one particular end is inevitable, and is false
+def ordersProtocol : String := ((include_str "../examples/orders/Requirements.leanfm").splitOn "requirements {").headD ""
+def ctlOver (f : String) : Except String Json := ctl (Json.mkObj [("lean", Json.str ordersProtocol), ("formula", Json.str f)])
+#guard verdict (ctlOver "(outcomes (after Receipt) (after PaymentDeclined) (after SoldOut))") == "proved"
+#guard verdict (ctlOver "(or (AF (after Receipt)) (AF (after PaymentDeclined)) (AF (after SoldOut)))") == "disproved"
+#guard verdict (ctlOver "(outcomes (after Receipt) (after PaymentDeclined))") == "disproved"
+-- the other functions over PlaceOrder: its next steps, its responses and its order
+#guard verdict (ctlOver "(follows (after CreateOrder) (after Quote) (after SoldOut))") == "proved"
+#guard verdict (ctlOver "(follows (after Charge) (after Charged) (after Declined))") == "proved"
+#guard verdict (ctlOver "(leadsTo (after Pay) (or (after Receipt) (after PaymentDeclined)))") == "proved"
+#guard verdict (ctlOver "(precedes (after Quote) (after Pay))") == "proved"
+#guard verdict (ctlOver "(precedes (after Pay) (after Quote))") == "disproved"
+-- session_ctl answers carry the indented reading (selfhost.mcp.logic.explain)
+#guard ((field (ctlOver "(leadsTo (after Pay) (after Charge))") "readingIndented").getStr?.toOption.getD "").startsWith "it is possible that eventually:"
+
 end LeanFM.SessionToolsTests

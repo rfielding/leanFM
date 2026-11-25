@@ -69,28 +69,38 @@ Chapter~\ref{ch:faithful}.
 Formulas are
 $\varphi ::= \top \mid \bot \mid a \mid \neg\varphi \mid \varphi\wedge\varphi \mid
 \varphi\vee\varphi \mid \mathsf{EX}\,\varphi \mid \mathsf{AX}\,\varphi \mid
-\mathsf{E}[\varphi\,\mathsf{U}\,\varphi] \mid \mathsf{A}[\varphi\,\mathsf{U}\,\varphi]
+\varphi\mathbin{\mathsf{EU}}\varphi \mid \varphi\mathbin{\mathsf{AU}}\varphi
 \mid \mathsf{EG}\,\varphi$
 over atoms $a$. At a node $n$ of a total model:
 $n \models \mathsf{EX}\,\varphi$ iff some successor satisfies $\varphi$;
 $n \models \mathsf{AX}\,\varphi$ iff every successor does;
-$n \models \mathsf{E}[\varphi\,\mathsf{U}\,\psi]$ iff some path from $n$ reaches a
+$n \models \varphi\mathbin{\mathsf{EU}}\psi$ iff some path from $n$ reaches a
 $\psi$-node through $\varphi$-nodes;
-$n \models \mathsf{A}[\varphi\,\mathsf{U}\,\psi]$ iff every path does;
+$n \models \varphi\mathbin{\mathsf{AU}}\psi$ iff every path does;
 $n \models \mathsf{EG}\,\varphi$ iff some path stays in $\varphi$ forever.
-A model satisfies $\varphi$ when its start node does.
+A model satisfies $\varphi$ when its start node does. Textbooks write $\varphi\mathbin{\mathsf{EU}}\psi$ as
+$\mathsf{E}[\varphi\,\mathsf{U}\,\psi]$; LeanFM writes the path quantifier and the until as one
+operator, so nothing in a formula reads as LTL.
 \end{definition}
 
 The rest are abbreviations, and LeanFM rewrites them into the core before it evaluates:
-$\mathsf{EF}\,\varphi = \mathsf{E}[\top\,\mathsf{U}\,\varphi]$,
-$\mathsf{AF}\,\varphi = \mathsf{A}[\top\,\mathsf{U}\,\varphi]$,
+$\mathsf{EF}\,\varphi = \top\mathbin{\mathsf{EU}}\varphi$,
+$\mathsf{AF}\,\varphi = \top\mathbin{\mathsf{AU}}\varphi$,
 $\mathsf{AG}\,\varphi = \neg\mathsf{EF}\,\neg\varphi$,
 $\mathsf{never}\,\varphi = \mathsf{AG}\,\neg\varphi$,
 $\varphi\rightarrow\psi = \neg\varphi\vee\psi$,
-$\mathsf{E}[\varphi\,\mathsf{W}\,\psi] = \mathsf{E}[\varphi\,\mathsf{U}\,\psi]\vee\mathsf{EG}\,\varphi$,
-$\mathsf{A}[\varphi\,\mathsf{W}\,\psi] = \neg\mathsf{E}[\neg\psi\,\mathsf{U}\,(\neg\varphi\wedge\neg\psi)]$,
-and the non-vacuous implication
-$\varphi \Rightarrow \psi = \mathsf{EF}\,\varphi \wedge \mathsf{AG}(\varphi\rightarrow\psi)$.
+$\varphi\mathbin{\mathsf{EW}}\psi = (\varphi\mathbin{\mathsf{EU}}\psi)\vee\mathsf{EG}\,\varphi$,
+$\varphi\mathbin{\mathsf{AW}}\psi = \neg(\neg\psi\mathbin{\mathsf{EU}}(\neg\varphi\wedge\neg\psi))$,
+the non-vacuous implication
+$\varphi \Rightarrow \psi = \mathsf{EF}\,\varphi \wedge \mathsf{AG}(\varphi\rightarrow\psi)$,
+and the functions for the shapes specifications repeat most:
+$\mathsf{outcomes}(a_1,\dots,a_n) = \mathsf{EF}\,a_1\wedge\dots\wedge\mathsf{EF}\,a_n\wedge\mathsf{AF}(a_1\vee\dots\vee a_n)$,
+each outcome possible and one of them inevitable (not $\mathsf{AF}\,a_1\vee\dots\vee\mathsf{AF}\,a_n$,
+which makes one particular outcome inevitable);
+$\mathsf{follows}(a,b_1,\dots,b_n) = \mathsf{AG}(a\rightarrow\mathsf{EX}\,b_1\wedge\dots\wedge\mathsf{EX}\,b_n\wedge\mathsf{AX}(b_1\vee\dots\vee b_n))$,
+what a faithful rule says of one typestate;
+$\mathsf{leadsTo}(a,b) = a \Rightarrow \mathsf{AF}\,b$, a response that cannot hold vacuously;
+and $\mathsf{precedes}(a,b) = \neg(\neg a\mathbin{\mathsf{EU}}b)$, no $b$ before $a$.
 
 \section{Bisimulation}
 

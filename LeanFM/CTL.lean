@@ -30,6 +30,21 @@ def implies {S : Type} (p q : CTL S) : CTL S :=
 def stronglyImplies {S : Type} (p q : CTL S) : CTL S :=
   CTL.and (CTL.ef p) (CTL.ag (implies p q))
 
+/-- The outcomes of a choice (selfhost.mcp.logic.functions): each of `ps` can happen, and on every path
+one of them eventually happens; the disjunction under one `AF`, not one `AF` per outcome. -/
+def outcomes {S : Type} (ps : List (CTL S)) : CTL S :=
+  ps.foldr (fun p acc => CTL.and (CTL.ef p) acc) (CTL.af (ps.foldr CTL.or (CTL.atom fun _ => false)))
+
+/-- Right after `p`, the next step is one of `qs`, each possible (selfhost.mcp.logic.functions). -/
+def follows {S : Type} (p : CTL S) (qs : List (CTL S)) : CTL S :=
+  CTL.ag (implies p (qs.foldr (fun q acc => CTL.and (CTL.ex q) acc) (CTL.ax (qs.foldr CTL.or (CTL.atom fun _ => false)))))
+
+/-- `p` can happen, and every `p` is eventually followed by `q`: never vacuous. -/
+def leadsTo {S : Type} (p q : CTL S) : CTL S := stronglyImplies p (CTL.af q)
+
+/-- `q` never happens before `p`, and need not happen at all. -/
+def precedes {S : Type} (p q : CTL S) : CTL S := CTL.neg (CTL.eu (CTL.neg p) q)
+
 partial def anyReachable [DecidableEq S]
     (succ : S -> List S) (p : S -> Bool) (seen : List S) (s : S) : Bool :=
   if p s then

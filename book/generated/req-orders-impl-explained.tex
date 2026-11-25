@@ -20,13 +20,13 @@ refines PlaceOrder by ShopImpl
     -> specified
 
 "Stock is reserved before a quote"
-    ¬E[¬Reserved U Quote]
-    it is not the case that (on some path, (it is not the case that Reserved was just delivered) holds until Quote was just delivered (and Quote was just delivered does happen))
+    precedes(Reserved, Quote)
+    on every path, Quote was just delivered never holds unless Reserved was just delivered has held at or before that point (Quote was just delivered need not hold at all)
     -> proved
 
 "A payment is recorded before the receipt"
-    ¬E[¬Recorded U Receipt]
-    it is not the case that (on some path, (it is not the case that Recorded was just delivered) holds until Receipt was just delivered (and Receipt was just delivered does happen))
+    precedes(Recorded, Receipt)
+    on every path, Receipt was just delivered never holds unless Recorded was just delivered has held at or before that point (Receipt was just delivered need not hold at all)
     -> proved
 
 hint 1: Implement the code as Go, with net/http and no web framework
