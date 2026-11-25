@@ -2,15 +2,15 @@
 start
   start
 
-typestate 0: (start)
+typestate 0
   transition(start, GetImage)
 
-typestate 1: GetImage
+typestate 1
   transition(GetImage, Image stop, NotFound stop)
 
-typestate 2: Image (may stop)
+typestate 2
   final(Image)
 
-typestate 3: NotFound (may stop)
+typestate 3
   final(NotFound)
 \end{lstlisting}

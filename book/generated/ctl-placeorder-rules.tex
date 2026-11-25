@@ -2,33 +2,33 @@
 start
   start
 
-typestate 0: (start)
+typestate 0
   transition(start, CreateOrder)
 
-typestate 1: CreateOrder
+typestate 1
   transition(CreateOrder, Quote, SoldOut stop)
 
-typestate 2: Quote
+typestate 2
   transition(Quote, Pay)
 
-typestate 3: SoldOut (may stop)
+typestate 3
   final(SoldOut)
 
-typestate 4: Pay
+typestate 4
   transition(Pay, Charge)
 
-typestate 5: Charge
+typestate 5
   transition(Charge, Charged, Declined)
 
-typestate 6: Charged
+typestate 6
   transition(Charged, Receipt stop)
 
-typestate 7: Declined
+typestate 7
   transition(Declined, PaymentDeclined stop)
 
-typestate 8: Receipt (may stop)
+typestate 8
   final(Receipt)
 
-typestate 9: PaymentDeclined (may stop)
+typestate 9
   final(PaymentDeclined)
 \end{lstlisting}

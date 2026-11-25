@@ -235,12 +235,13 @@ def names (t : Typestates) : Array Formula := Id.run do
 def rules (t : Typestates) : List (String × Formula) :=
   let ns := names t
   ("start", ns[t.final[0]!]!) :: (List.range t.count).map fun c =>
-    let nexts := (t.next[c]!).toList.map (ns[·]!)
+    let nexts : List Formula := (t.next[c]!).toList.map (ns[·]!)
+    let here : Formula := ns[c]!
     let isState := fun (f : Formula) => match f with | .state .. | .start _ => true | _ => false
-    let rule := match ns[c]!, nexts with
-      | .state m true, [.state m' true] => if m == m' then Formula.final m else .transition ns[c]! nexts
+    let rule : Formula := match here, nexts with
+      | .state m true, [.state m' true] => if m == m' then Formula.final m else .transition here nexts
       | a, _ => if isState a && nexts.all isState then .transition a nexts else .follows a nexts
-    (s!"typestate {c}: {labelText (t.labelOf c)}", rule)
+    (s!"typestate {c}", rule)
 
 /-- The checker model of a draft (the logic tools' inline task form). -/
 def modelOfDraft (draft : Json) (b : Bounds := LeanFM.Session.sessionBounds) : Except String LGraph := do
