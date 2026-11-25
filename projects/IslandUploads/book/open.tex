@@ -10,12 +10,32 @@ that could ship later.
 
 \section{Security: settle before the source}
 \begin{enumerate}
-\item \textbf{Keeping apps read-only.} An app runs in its viewer's browser, so
-  whatever lets it read could let it write. The proposal: serve uploaded content
-  from its own origin, whose session can only read, under a Content Security
-  Policy that lets it reach nothing but this server; writes need credentials that
-  origin never holds. Is that enough, or should each folder's apps get an origin
-  of their own, so one app cannot read what another folder's app was shown?
+\item \textbf{Whose authority an app runs with.} Uploaded React apps are a
+  feature, but an app's script runs in its viewer's browser, and a client
+  certificate goes with every request the browser makes to the shard, so to the
+  APIs the script \emph{is} its viewer. The proposal: every request carries a
+  pair of principals, recorded in the audit log, and runs with the intersection
+  of their permissions:
+  \begin{itemize}\tightlist
+  \item a direct call: the user's DN alone;
+  \item a page running an uploaded script: the viewer's DN and the DN that
+    uploaded the script into the tree;
+  \item a batch job: its \texttt{BOT\_DN} and the DN it runs on behalf of, whose
+    outputs answer to their sources' policy (an AWS Rekognition analysis of a
+    restricted image is as restricted as the image).
+  \end{itemize}
+  The uploader is whoever placed the app in the tree and vouches for it, not
+  whoever wrote it, so an app written outside and uploaded into a classified tree
+  by a cleared user still shows each viewer what both may see. The intersection
+  also bounds what a script can leak: a script that reads can navigate away with
+  what it read (no Content Security Policy forbids that), but it can only read
+  what its uploader could already see. The rest follows from the certificate
+  being the session: writes accepted only from the app origin
+  (\texttt{Sec-Fetch-Site: same-origin}) and only as requests that need a
+  preflight; no CORS answer to \texttt{Origin: null}. Should each folder's apps
+  also get an origin of their own, so one app cannot read what another folder's
+  app was shown? And should a policy be able to grant an app more than its
+  uploader may see?
 \item \textbf{Who may write a policy?} Anyone who may write a folder can create
   \texttt{plans.doc--policy.rego} next to someone else's \texttt{plans.doc} and,
   being the last level of the walk, it overwrites what it likes. Creating or
