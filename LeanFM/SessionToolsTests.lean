@@ -808,4 +808,55 @@ def hiddenOf (text : String) : Nat :=
 #guard hiddenOf ordersProtocol == 0
 #guard ((field (ctl (Json.mkObj [("lean", Json.str ordersProtocol), ("faithful", Json.str "rules")])) "reading").getStr?.toOption.getD "").contains "no hidden state"
 
+-- a proof that leans on a condition that never happens is vacuous, not proved (selfhost.mcp.logic.vacuity)
+#guard verdict (ctlOver "(always (implies (and (on Quote) (on Pay)) (on Receipt)))") == "vacuous"
+#guard (reason (ctlOver "(always (implies (and (on Quote) (on Pay)) (on Receipt)))") == "") &&
+  (((field (ctlOver "(always (implies (and (on Quote) (on Pay)) (on Receipt)))") "reading").getStr?.toOption.getD "").startsWith "PlaceOrder: proved only because (Quote was just delivered and Pay was just delivered) never happens")
+#guard (((field (ctlOver "(always (implies (and (on Quote) (on Pay)) (on Receipt)))") "vacuousParts").getArr?).toOption.getD #[]).size == 1
+#guard verdict (ctlOver "(precedes (on Quote) (and (on Pay) (on Quote)))") == "vacuous"
+#guard verdict (ctlOver "(always (implies (on Pay) (inevitably (or (on Receipt) (on PaymentDeclined)))))") == "proved"
+#guard verdict (ctlOver "(and (always (implies (and (on Quote) (on Pay)) (on Receipt))) (always (on Quote)))") == "disproved"
+#guard verdict (ctlOver "(not (implies (and (on Quote) (on Pay)) (on Receipt)))") != "vacuous"
+
+-- ifEver: a condition allowed never to happen is no vacuity, and is said (selfhost.mcp.logic.vacuity)
+#guard verdict (ctlOver "(always (ifEver (and (on Quote) (on Pay)) (on Receipt)))") == "proved"
+#guard ((field (ctlOver "(always (ifEver (and (on Quote) (on Pay)) (on Receipt)))") "reading").getStr?.toOption.getD "").endsWith "(Quote was just delivered and Pay was just delivered) never happens)"
+#guard (((field (ctlOver "(always (ifEver (and (on Quote) (on Pay)) (on Receipt)))") "neverHappens").getArr?).toOption.getD #[]).size == 1
+#guard verdict (ctlOver "(always (ifEver (on Pay) (on Quote)))") == "disproved"
+
+-- event lines in an ordinary log (selfhost.session.event-log)
+def pingText := "protocol PingPong (A, B) {\n  p: Ping from A to B;\n  Pong from B to A cause p;\n}"
+def pingLog := "starting up\n{\"type\":\"leanFM\",\"id\":\"e1\",\"session\":\"s\",\"label\":\"Ping\",\"from\":\"A\",\"to\":\"B\",\"ts\":\"1000\"}\nsome warning\n{\"type\":\"leanFM\",\"id\":\"e2\",\"session\":\"s\",\"label\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"e1\",\"ts\":\"2000\"}\n"
+def logConform (log : String) : Except String Json := conform (Json.mkObj [("lean", Json.str pingText), ("log", Json.str log)])
+#guard verdict (logConform pingLog) == "conforms"
+#guard (field (logConform pingLog) "logOtherLines") == toJson (2 : Nat) && (field (logConform pingLog) "logEventLines") == toJson (2 : Nat)
+-- the same two lines in the opposite order: order comes from the events, not the file
+def reversedLog := String.intercalate "\n" ((pingLog.splitOn "\n").reverse)
+#guard verdict (logConform reversedLog) == "conforms"
+-- a line that begins with the tag but is not JSON is refused, naming its line
+#guard ((reason (logConform "ok\nfine\n{\"type\":\"leanFM\",not json\n")).splitOn "line 3").length > 1
+-- a payload that would pass the bound is cut and marked, the line staying under 4096 bytes
+def bigLine := LeanFM.EventLog.line [("id", Json.str "x"), ("label", Json.str "Big")] (Json.str (String.ofList (List.replicate 9000 'a')))
+#guard bigLine.utf8ByteSize < 4096 && (bigLine.splitOn "truncated").length > 1 && bigLine.startsWith "{\"type\":\"leanFM\","
+
+-- a log of one JSON object per line: objects with type leanFM are events, wherever the marker stands; other JSON is ignored
+def jsonlLog := "{\"level\":\"info\",\"msg\":\"up\"}\n{\"protocol\":\"PingPong\",\"type\":\"leanFM\",\"id\":\"e1\",\"session\":\"s\",\"label\":\"Ping\",\"from\":\"A\",\"to\":\"B\"}\n{\"protocol\":\"PingPong\",\"id\":\"e2\",\"type\":\"leanFM\",\"session\":\"s\",\"label\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"e1\"}\n"
+#guard verdict (logConform jsonlLog) == "conforms" && (field (logConform jsonlLog) "logOtherLines") == toJson (1 : Nat)
+
+-- a log of several protocols: each check takes its own protocol's events and counts the others
+def twoProtocolLog := pingLog ++ "{\"type\":\"leanFM\",\"protocol\":\"Other\",\"id\":\"z1\",\"session\":\"t\",\"label\":\"Hello\",\"from\":\"A\",\"to\":\"B\"}\n"
+def namedPingLog := (pingLog.replace "{\"type\":\"leanFM\"," "{\"type\":\"leanFM\",\"protocol\":\"PingPong\",") ++ "{\"type\":\"leanFM\",\"protocol\":\"Other\",\"id\":\"z1\",\"session\":\"t\",\"label\":\"Hello\",\"from\":\"A\",\"to\":\"B\"}\n"
+#guard verdict (logConform namedPingLog) == "conforms" && field (logConform namedPingLog) "logOtherProtocolEvents" == toJson (1 : Nat)
+
+-- logs are read by lines: a window, nextLine to poll from, and sessions cut by the window's start left out
+def twoSessionLog := "{\"type\":\"leanFM\",\"id\":\"a1\",\"session\":\"s1\",\"label\":\"Ping\",\"from\":\"A\",\"to\":\"B\"}\n{\"type\":\"leanFM\",\"id\":\"b1\",\"session\":\"s2\",\"label\":\"Ping\",\"from\":\"A\",\"to\":\"B\"}\n{\"type\":\"leanFM\",\"id\":\"a2\",\"session\":\"s1\",\"label\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"a1\"}\n{\"type\":\"leanFM\",\"id\":\"b2\",\"session\":\"s2\",\"label\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"b1\"}\n"
+def windowConform (fromLine : Nat) (count : Option Nat) : Except String Json :=
+  conform (Json.mkObj ([("lean", Json.str pingText), ("log", Json.str twoSessionLog), ("fromLine", toJson fromLine)] ++
+    (match count with | some c => [("lineCount", toJson c)] | none => [])))
+#guard verdict (windowConform 1 none) == "conforms" && field (windowConform 1 none) "logLines" == toJson (4 : Nat)
+#guard field (windowConform 1 (some 2)) "nextLine" == toJson (3 : Nat) && field (windowConform 1 (some 2)) "logEventLines" == toJson (2 : Nat)
+-- from line 3: both Pongs answer Pings before the window, so both sessions began before it and are left out
+#guard field (windowConform 3 none) "sessionsBeganBeforeWindow" == toJson (2 : Nat) && field (windowConform 3 none) "nextLine" == toJson (5 : Nat)
+#guard ((reason (conform (Json.mkObj [("lean", Json.str pingText), ("log", Json.str twoSessionLog), ("fromLine", toJson (0 : Nat))]))).splitOn "fromLine").length > 1
+
 end LeanFM.SessionToolsTests

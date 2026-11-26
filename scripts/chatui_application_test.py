@@ -92,7 +92,7 @@ def serveLauncherFixture : IO Unit := do
         body=driver.read_text().replace('apiKey := "", provider', 'apiKey := "documentation-placeholder", provider')
         body=body.replace('credentials := []', 'credentials := [{provider := "openai", credentialRef := "fixture", apiKey := "documentation-placeholder", fingerprint := "fixture"}]')
         driver.write_text(body)
-    env=dict(os.environ,LEANFM_WORKSPACE_ROOT=str(workspace),LEANFM_PORT=str(port),LEANFM_OPENAI_BASE_URL='http://127.0.0.1:1',LEANFM_ANTHROPIC_BASE_URL='http://127.0.0.1:1',LEANFM_TEST_SECRET='must-not-enter-app')
+    env=dict(os.environ,LEANFM_CHATUI="1",LEANFM_WORKSPACE_ROOT=str(workspace),LEANFM_PORT=str(port),LEANFM_OPENAI_BASE_URL='http://127.0.0.1:1',LEANFM_ANTHROPIC_BASE_URL='http://127.0.0.1:1',LEANFM_TEST_SECRET='must-not-enter-app')
     if screenshots:
         env.update(LEANFM_OPENAI_BASE_URL='http://127.0.0.1:'+str(provider.server_address[1])+'/v1',LEANFM_LLM_MODEL='documentation-model')
     log=(fixture/'server.log').open('w')

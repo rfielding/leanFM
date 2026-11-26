@@ -231,8 +231,10 @@ def main : IO Unit := do
   expect "follows of a typestate's next steps is proved" (onShop "(follows (on Order) (on Quote) (on SoldOut))" == "proved")
   expect "follows missing a next step is disproved" (onShop "(follows (on Order) (on Quote))" == "disproved")
   expect "leadsTo is proved where every Pay gets a Receipt" (onShop "(leadsTo (on Pay) (on Receipt))" == "proved")
-  expect "leadsTo from a message that cannot happen is disproved, not vacuous"
-    (onShop "(leadsTo (on Ghost) (on Receipt))" == "disproved" && onShop "(always (implies (on Ghost) (inevitably (on Receipt))))" == "proved")
+  expect "leadsTo from a message that cannot happen is disproved, and the same claim with implies is vacuous, not proved (selfhost.mcp.logic.vacuity)"
+    (onShop "(leadsTo (on Ghost) (on Receipt))" == "disproved" && onShop "(always (implies (on Ghost) (inevitably (on Receipt))))" == "vacuous")
+  expect "with ifEver, a Ghost that never happens is allowed: proved"
+    (onShop "(always (ifEver (on Ghost) (inevitably (on Receipt))))" == "proved")
   expect "precedes is proved for an order the draft keeps" (onShop "(precedes (on Quote) (on Pay))" == "proved")
   let early := ctlOn shop "\"(precedes (on Pay) (on Quote))\""
   expect "precedes is disproved with the path where the second comes first"
@@ -241,7 +243,7 @@ def main : IO Unit := do
   let vacOut := call "check_ctl" ("{\"task\": " ++ orphan ++ ", \"formula\": {\"stronglyImplies\": [{\"on\": \"Ghost\"}, \"stop\"]}}")
   expect "unreachable antecedent: stronglyImplies disproved as vacuous" (verdictOf vacOut == "disproved" && match vacOut with
     | .ok j => (j.getObjValD "evidence").getObjValD "kind" == Json.str "vacuous" | _ => false)
-  expect "plain always implies with unreachable antecedent is proved (the vacuity the lint warns about)"
+  expect "always implies with a false consequent is a negation (Ghost never happens), so an unreachable Ghost proves it, not vacuously"
     (verdictOf (call "check_ctl" ("{\"task\": " ++ orphan ++ ", \"formula\": {\"AG\": {\"implies\": [{\"on\": \"Ghost\"}, false]}}}")) == "proved")
   let dead := "{\"states\": [\"a\", \"stuck\", \"done\"], \"initial\": \"a\", \"terminals\": [\"done\"], \"transitions\": [{\"src\": \"a\", \"dst\": \"stuck\", \"message\": \"Go\"}, {\"src\": \"a\", \"dst\": \"done\", \"message\": \"Finish\"}]}"
   let deadOut := call "check_ctl" ("{\"task\": " ++ dead ++ ", \"formula\": {\"AF\": \"stop\"}}")

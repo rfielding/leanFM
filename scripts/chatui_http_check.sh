@@ -84,7 +84,7 @@ LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" \
 LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" \
 LEANFM_LLM_MODEL="test-model" \
 LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 \
-LEANFM_PORT="$server_port" \
+LEANFM_CHATUI=1 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 
@@ -422,7 +422,7 @@ test -f "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json"
 test "$(stat -c %a "$test_root/data/.leanfm/accounts/rfielding/credentials/default.json")" = 600
 kill "$server_pid"
 wait "$server_pid" || true
-LEANFM_WORKSPACE_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_PORT="$server_port" \
+LEANFM_WORKSPACE_ROOT="$data_root_setting" LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1" LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1" LEANFM_TEST_UNSANDBOXED_BOOK_BUILD=1 LEANFM_CHATUI=1 LEANFM_PORT="$server_port" \
   .lake/build/bin/leanfm-server >"$server_log" 2>&1 &
 server_pid=$!
 wait_for_server

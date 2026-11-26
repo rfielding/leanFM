@@ -232,8 +232,10 @@ def projectViewTests : IO Unit := do
   let num (j : Option Json) (k : String) : Nat := ((j.map (·.getObjValAs? Nat k |>.toOption)).join).getD 999999
   let rq := sec "requirements"
   let kinds := (rq.map (·.getObjValD "kinds"))
-  expect "the overview counts LeanFM's requirements: 1 protocol, 6 formulas, the clauses as sorry, 7 met, none failing"
-    (num kinds "protocol" == 1 && num kinds "formula" == 6 && num kinds "sorry" == nClauses && num rq "met" == 7 && num rq "failing" == 0)
+  -- the formulas are counted from LeanFM.leanfm's requirements block, so adding one needs no new number here
+  let nFormulas := (((← IO.FS.readFile "LeanFM/LLMGenerated/LeanFM.leanfm").splitOn "requirements {").getLast!.splitOn "⊨").length - 1
+  expect s!"the overview counts LeanFM's requirements: 1 protocol, {nFormulas} formulas (its requirements block), the clauses as sorry, all {nFormulas + 1} met, none failing"
+    (num kinds "protocol" == 1 && num kinds "formula" == nFormulas && num kinds "sorry" == nClauses && num rq "met" == nFormulas + 1 && num rq "failing" == 0)
   let im := sec "implementations"
   let leanImpl := (((im.map (·.getObjValD "implementations")).map (·.getArr?.toOption.getD #[])).getD #[]).find? fun x =>
     (x.getObjValAs? String "impl").toOption == some "Lean"
@@ -249,7 +251,7 @@ def projectViewTests : IO Unit := do
     (ritems.any fun it => field it "kind" == "protocol" && field it "viewer" == "explore" && isTrue it "met" &&
       field it "file" == "LeanFM/LLMGenerated/LeanFM.leanfm" && ((it.getObjValD "ctl").getObjValAs? Nat "ruleCount").toOption.getD 0 > 1)
   expect "every formula opens in the CTL view, proved and met, its CTL the formula"
-    ((ritems.filter (field · "kind" == "formula")).size == 6 && (ritems.filter (field · "kind" == "formula")).all fun it =>
+    ((ritems.filter (field · "kind" == "formula")).size == nFormulas && (ritems.filter (field · "kind" == "formula")).all fun it =>
       field it "viewer" == "ctl" && field it "verdict" == "proved" && isTrue it "met" && (it.getObjValD "ctl").compress.contains (field it "formula"))
   expect "the clauses are sorry: never met, never failing, shown as text"
     (ritems.any fun it => field it "id" == "selfhost.revision" && field it "kind" == "sorry" && isTrue it "sorry" &&
@@ -342,8 +344,13 @@ def projectViewTests : IO Unit := do
   expect "LeanFM's spec overview names LeanFM.leanfm as its primary protocol"
     (lspec.contains "\"primary\":\"LeanFM/LLMGenerated/LeanFM.leanfm\"")
   let pspec ← pvCall "{\"project\":\"PaxosKV\",\"stage\":\"requirements\"}"
+  expect "PaxosKV's spec overview names its protocol file under spec/ as its primary protocol"
+    (pspec.contains "\"primary\":\"spec/PaxosKV.leanfm\"")
+  -- every project now has protocol files, so the rule for none is checked on the function itself
+  let some paxos := (← LeanFM.ProjectView.projects).find? (·.name == "PaxosKV")
+    | throw (IO.userError "PaxosKV is not listed")
   expect "a project without protocol files names no primary protocol, so its spec stage opens on the index"
-    (pspec.contains "\"primary\":null")
+    (LeanFM.ProjectView.primaryProtocol paxos #[] == none)
   let mbook ← pvCall "{\"project\":\"Maqam\",\"stage\":\"book\"}"
   expect "a project's written book is found" (mbook.contains "\"found\":true" && mbook.contains "\"file\":\"book/main-dark.pdf\"")
   -- every project in the checkout has a book now, so the unwritten case is a temporary empty root

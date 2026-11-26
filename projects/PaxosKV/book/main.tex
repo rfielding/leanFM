@@ -105,6 +105,26 @@ the same committed map; the later slot for \texttt{color} wins.}
 \chapter{Two islands over UDP}
 \input{islands.tex}
 
+\chapter{Requirements in CTL}
+\texttt{spec/PaxosKV.leanfm} writes the write, takeover and recovery paths
+as protocol text and lists the requirements over them that convert to CTL.
+LeanFM decides each one: eleven are proved and three are \texttt{sorry}.
+Every proved entry holds under LeanFM's default assumptions: messages
+arrive in order, none is lost and no replica crashes.
+
+Where a requirement has the shape ``whenever $p$, then $q$'', it is written
+as strong implication, \texttt{(stronglyImplies p q)}: $p$ can happen, and
+every time it does, $q$ follows. A plain implication would also pass if $p$
+could never happen.
+
+Writing the requirements this way corrected two of them. ``Every durable
+acceptance leads to an answer'' is false: the leader answers after any two
+of the three acceptances, so the third can arrive after the answer. LeanFM
+proves that this can happen, and the list now says so. The same holds for
+the takeover's second prepare. The claims that do hold are stated from the
+start of the write (``every write is answered'') and before the session can
+end (``a write never ends before its answer'').
+
 \chapter{Known gaps}
 This example runs end to end, but it does not yet close the loop from a
 running system back to the checker. These are the open items, in the order
@@ -130,5 +150,11 @@ they should be fixed:
   \texttt{spec/Session.lean}. It is shaped to fit the MCP server's bounds (64
   KiB of arguments, 4096 nodes): one slot, two ballots, no duplicate delivery,
   and loss only in the leader-only slice.
+\item Three requirements in \texttt{spec/PaxosKV.leanfm} are \texttt{sorry}.
+  ``Last committed slot wins'' is about data, not message order. ``A write
+  acknowledged before a total shutdown survives it'' and ``a write is
+  answered when replica messages may be lost or reordered'' need LeanFM to
+  check a requirement with an assumption dropped (a replica may crash,
+  messages may be lost or reordered), which it does not do yet.
 \end{enumerate}
 \end{document}

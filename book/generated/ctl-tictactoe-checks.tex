@@ -1,0 +1,11 @@
+{\footnotesize\begin{tabular}{@{}p{.3\textwidth}p{.5\textwidth}l@{}}
+\toprule
+Requirement & Formula & Verdict \\
+\midrule
+Every game ends with a result & \texttt{(inevitably (on Result))} & proved \\
+O moves only after the game starts & \texttt{(precedes (on Joined) (on MoveO))} & proved \\
+O moves only when told it is its turn & \texttt{(precedes (on OTurn) (on MoveO))} & proved \\
+Every move by X is answered & \texttt{(stronglyImplies (on MoveX) (inevitably (or (on OTurn) (on Result))))} & proved \\
+A game can always still end & \texttt{(always (possibly stop))} & proved \\
+\bottomrule
+\end{tabular}}

@@ -155,6 +155,8 @@ structure Forward where
   port : Nat
   path : String
   hostHeader : String
+  /-- how long a request waits for the server to listen (LEANFM_FORWARD_WAIT_SECONDS) -/
+  waitMs : Nat := 30000
 
 /-- Only plain HTTP on this machine: 127.0.0.1 or localhost, a port, and a path. -/
 def parseForward (url : String) : Except String Forward := do
@@ -201,6 +203,29 @@ def connectTo (fw : Forward) : IO TcpClient := do
   (client.connect (SocketAddress.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := UInt16.ofNat fw.port })).block
   return client
 
+/-- Connect, waiting for the server to listen (selfhost.mcp.forward): while nothing listens, retry with a
+pause doubling from 50 ms to 1 s until the server listens or `fw.waitMs` have passed. A server still
+starting costs latency, not an error. The wait is written as the event lines Stalled and Resumed on
+standard error (selfhost.session.event-log). -/
+partial def connectWaiting (fw : Forward) : IO (Option TcpClient) := do
+  let start ← IO.monoMsNow
+  let stderr ← IO.getStderr
+  let me ← LeanFM.Launch.actor "leanfm-mcp"
+  let rec go (pause : Nat) (stalled : Option String) : IO (Option TcpClient) := do
+    match ← (try some <$> connectTo fw catch _ => pure none) with
+    | some c =>
+      if let some s := stalled then
+        let _ ← LeanFM.EventLog.emit stderr me me "Relay" "Resumed" (.inr "Relay") (cause := some s)
+      return some c
+    | none =>
+      if (← IO.monoMsNow) - start ≥ fw.waitMs then return none
+      let stalled ← match stalled with
+        | some s => pure (some s)
+        | none => some <$> LeanFM.EventLog.emit stderr me me "Relay" "Stalled" (.inr "Relay")
+      IO.sleep pause.toUInt32
+      go (min 1000 (pause * 2)) stalled
+  go 50 none
+
 /-- Post one message over the kept connection, opening a new one when it is missing or the server
 closed it (tried once more). -/
 def post (fw : Forward) (conn : IO.Ref (Option TcpClient)) (body : String) : IO (Except String (Nat × String)) := do
@@ -214,7 +239,7 @@ def post (fw : Forward) (conn : IO.Ref (Option TcpClient)) (body : String) : IO 
   if let some client := ← conn.get then
     if let .ok r := ← attempt client then return .ok r
   conn.set none
-  let client ← try pure (some (← connectTo fw)) catch _ => pure none
+  let client ← connectWaiting fw
   match client with
   | none => return .error "unreachable"
   | some c =>
@@ -254,6 +279,13 @@ def serveForward (url : String) : IO UInt32 := do
   let fw ← match parseForward url with
     | .ok f => pure f
     | .error e => IO.eprintln e; return 2
+  -- read and checked once, at startup (selfhost.env.startup)
+  let fw ← match ← IO.getEnv "LEANFM_FORWARD_WAIT_SECONDS" with
+    | none => pure fw
+    | some v => match v.trimAscii.toString.toNat? with
+      | some n => if n ≤ 600 then pure { fw with waitMs := n * 1000 } else
+          IO.eprintln s!"LEANFM_FORWARD_WAIT_SECONDS must be a whole number of seconds from 0 to 600, not {v}"; return 2
+      | none => IO.eprintln s!"LEANFM_FORWARD_WAIT_SECONDS must be a whole number of seconds from 0 to 600, not {v}"; return 2
   let stderr ← IO.getStderr
   stderr.putStrLn s!"leanfm-mcp relaying standard input and output to {url}"; stderr.flush
   let conn ← IO.mkRef (none : Option TcpClient)
@@ -270,12 +302,17 @@ def serveStdio (root : Option String) : IO UInt32 := do
   -- a child process of the user's own client may read the user's own logs (LeanFM/ServerLogs.lean)
   LeanFM.ServerLogs.enable
   LeanFM.ServerInfo.capture
+  -- standard output carries the protocol here, so event lines go to standard error
+  LeanFM.EventLog.sink.set (some stderr)
   stderr.putStrLn s!"leanfm-mcp on standard input and output; resources read from {← IO.currentDir}"
   stderr.flush
   stdioLoop (← IO.getStdin) (← IO.getStdout) stderr
   return 0
 
 def serveHttp : IO Unit := do
+  -- the startup as event lines on standard output (selfhost.session.event-log)
+  let launch ← LeanFM.Launch.emitStart (← IO.getStdout) "leanfm-mcp"
+  LeanFM.EventLog.sink.set (some (← IO.getStdout))
   let cfg ← HostConfig.fromEnv
   let some addr := IPv4Addr.ofString cfg.bind
     | throw <| IO.userError s!"LEANFM_MCP_BIND must be an IPv4 address, not {cfg.bind}"
@@ -286,14 +323,16 @@ def serveHttp : IO Unit := do
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (SocketAddress.v4 { addr, port := UInt16.ofNat cfg.port })
   server.listen 128
-  IO.println s!"leanfm-mcp listening on http://{cfg.bind}:{cfg.port}/mcp origins={",".intercalate cfg.origins} token={if cfg.token.isSome then "required" else "none"} rate={cfg.ratePerMinute}/min burst={cfg.burst} inflight={cfg.maxInflight}"
+  IO.println s!"leanfm-mcp listening on http://{cfg.bind}:{cfg.port}/mcp origins={",".intercalate cfg.origins} token={if cfg.token.isSome then "required" else "none"} rate={cfg.ratePerMinute}/min burst={cfg.burst} inflight={cfg.maxInflight}{← LeanFM.Launch.note}"
+  LeanFM.Launch.emitListening (← IO.getStdout) "leanfm-mcp" launch
   (← IO.getStdout).flush
   serveLoop cfg limits server
 
 def main (args : List String) : IO UInt32 := do
   -- every environment variable is checked before serving, so a bad one stops the server now, not
   -- later in its logs (selfhost.env.startup); HTTP's own variables are checked by HostConfig.fromEnv
-  try LeanFM.CallLimits.configureFromEnv; LeanFM.ModelCache.configureFromEnv; LeanFM.KeepAlive.configureFromEnv catch e =>
+  -- first: how long launch took to reach main (selfhost.env.launch)
+  try LeanFM.Launch.read; LeanFM.CallLimits.configureFromEnv; LeanFM.ModelCache.configureFromEnv; LeanFM.KeepAlive.configureFromEnv catch e =>
     IO.eprintln s!"leanfm-mcp: {e}"
     return 2
   let (forward, args) ← match splitForward args with

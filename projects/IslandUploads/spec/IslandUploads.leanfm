@@ -1,0 +1,262 @@
+/- IslandUploads's protocols in LeanFM protocol text, with the requirements over them that convert
+   to CTL. The ten protocols mirror spec/Session.lean, which elaborates the same bodies in Lean with
+   the channel physics and the two-island deployment; copy changes there first. Two differences:
+   the `deriving TypeName` clauses are dropped, and prevDts, a list of timestamps in
+   spec/Session.lean, is a String here because a condition reads single values. ForwardDirect, the
+   negative example of spec/Session.lean that the HTTP check must reject, is left out.
+
+   Every entry holds under LeanFM's default assumptions: messages arrive in order, none is lost or
+   duplicated, no role crashes and the islands are not partitioned. The shard-to-shard channels do
+   time out, duplicate, reorder and partition (spec/Session.lean, handles and the deployment), so
+   the entries that need those assumptions dropped are sorry until LeanFM can drop them; so are the
+   claims about payload values, policy decisions and state across sessions, which no message order
+   decides. Each sorry carries a short note of what it would say.
+
+   Loops (upload parts, websocket frames) may run until shutdown, so "eventually answered" inside
+   them is written in the weak form (allUnless (not stop) answer): the session cannot end before
+   the answer, but it may stay in the loop. -/
+
+structure UploadStart    where requestId : String
+structure UploadStarted  where
+  requestId : String
+  offset : Nat
+structure UploadPart     where offset : Nat
+structure UploadPartAck  where offset : Nat
+structure UploadFinish   where
+structure UploadResponse where requestId : String
+structure UploadRejected where
+  status : Nat
+  offset : Nat
+structure UpdateRequest  where
+  requestId : String
+  id : Nat
+  prevDts : String
+structure UpdateResponse where
+  requestId : String
+  id : Nat
+  prevDts : String
+structure UpdateRejected where
+structure FeedRequest    where afterVisibleDt : Nat
+structure FeedResponse   where lastVisibleDt : Nat
+structure DownloadRequest where
+structure DownloadResponse where
+structure AccessDenied   where status : Nat
+structure RangeNotSatisfiable where
+structure IHaveRequest   where
+structure IHaveResponse  where
+structure RecordsRequest where
+  afterVisibleDt : Nat
+structure RecordsResponse where
+  lastVisibleDt : Nat
+  more : Bool
+structure BlobRequest    where urgent : Bool
+structure BlobResponse   where
+structure BlobMissing    where
+structure JobRequest     where job : String
+structure JobResult      where job : String
+structure JobFailed      where
+structure ApiRequest     where
+  mount : String
+  task : String
+structure ApiForward     where task : String
+structure ApiReply       where status : Nat
+structure ApiResponse    where status : Nat
+structure WsUpgrade      where mount : String
+structure WsAccepted     where
+structure FrameUp        where
+structure FrameDown      where
+structure CloseUp        where
+structure CloseDown      where
+
+protocol Upload (Browser, Shard) {
+  u: UploadStart from Browser to Shard;
+  choice {
+    o: UploadStarted from Shard to Browser cause u where o.requestId = u.requestId ∧ o.offset = 0;
+    loop Parts {
+      choice {
+        p: UploadPart from Browser to Shard;
+        choice {
+          a: UploadPartAck from Shard to Browser cause p where a.offset > p.offset;
+          continue Parts;
+        } or {
+          x: UploadRejected from Shard to Browser cause p where x.status = 409;
+          continue Parts;
+        }
+      } or {
+        f: UploadFinish from Browser to Shard;
+        choice {
+          r: UploadResponse from Shard to Browser cause f where r.requestId = u.requestId;
+        } or {
+          UploadRejected from Shard to Browser cause f;
+        }
+      }
+    }
+  } or {
+    UploadRejected from Shard to Browser cause u;
+  }
+}
+
+protocol Update (Browser, Shard) {
+  u: UpdateRequest from Browser to Shard;
+  choice {
+    r: UpdateResponse from Shard to Browser cause u where r.prevDts = u.prevDts ∧ r.id = u.id;
+  } or {
+    UpdateRejected from Shard to Browser cause u;
+  }
+}
+
+protocol Feed (Browser, Shard) {
+  f: FeedRequest from Browser to Shard;
+  choice {
+    p: FeedResponse from Shard to Browser cause f where p.lastVisibleDt ≥ f.afterVisibleDt;
+  } or {
+    a: AccessDenied from Shard to Browser cause f where a.status = 401;
+  }
+}
+
+protocol Download (Browser, Shard) {
+  d: DownloadRequest from Browser to Shard;
+  choice {
+    a: AccessDenied from Shard to Browser cause d where a.status = 401 ∨ a.status = 404;
+  } or {
+    DownloadResponse from Shard to Browser cause d;
+  } or {
+    RangeNotSatisfiable from Shard to Browser cause d;
+  }
+}
+
+protocol Replicate (Shard, Peer) {
+  i: IHaveRequest from Shard to Peer;
+     IHaveResponse from Peer to Shard cause i;
+}
+
+protocol PullPage (Shard, Peer) {
+  q: RecordsRequest from Shard to Peer;
+  p: RecordsResponse from Peer to Shard cause q where p.lastVisibleDt ≥ q.afterVisibleDt;
+}
+
+protocol ImportRange (Shard, Peer) {
+  b: BlobRequest from Shard to Peer where b.urgent = false;
+  choice {
+    BlobResponse from Peer to Shard cause b;
+  } or {
+    BlobMissing from Peer to Shard cause b;
+  }
+}
+
+protocol Derive (Shard, Worker) {
+  j: JobRequest from Shard to Worker;
+  choice {
+    r: JobResult from Worker to Shard cause j where r.job = j.job;
+  } or {
+    JobFailed from Worker to Shard cause j;
+  }
+}
+
+protocol Forward (Browser, Door, Host) {
+  r: ApiRequest from Browser to Door;
+  choice {
+    f: ApiForward from Door to Host cause r where f.task = r.task;
+    a: ApiReply from Host to Door cause f;
+    p: ApiResponse from Door to Browser cause r where p.status = a.status;
+  } or {
+    d: AccessDenied from Door to Browser cause r where d.status = 401 ∨ d.status = 404;
+  }
+}
+
+protocol Socket (Browser, Door, Host) {
+  u: WsUpgrade from Browser to Door;
+  choice {
+    g: WsUpgrade from Door to Host cause u where g.mount = u.mount;
+    a: WsAccepted from Host to Door cause g;
+    WsAccepted from Door to Browser cause u;
+    parallel {
+      loop Up {
+        choice {
+          FrameUp from Browser to Door;
+          FrameUp from Door to Host;
+          continue Up;
+        } or {
+          CloseUp from Browser to Door;
+          CloseUp from Door to Host;
+        }
+      }
+    } and {
+      loop Down {
+        choice {
+          FrameDown from Host to Door;
+          FrameDown from Door to Browser;
+          continue Down;
+        } or {
+          CloseDown from Host to Door;
+          CloseDown from Door to Browser;
+        }
+      }
+    }
+  } or {
+    d: AccessDenied from Door to Browser cause u where d.status = 401 ∨ d.status = 404;
+  }
+}
+
+requirements {
+  "An upload follows Upload: it involves only the browser and its shard" => Upload;
+  "An upload never ends before it is finished or rejected" => Upload ⊨ (stronglyImplies (on UploadStart) (allUnless (not stop) (or (on UploadResponse) (on UploadRejected))));
+  "No part is sent before the upload is started" => Upload ⊨ (precedes (on UploadStarted) (on UploadPart));
+  "Every part is answered next, by an acknowledgement or a rejection" => Upload ⊨ (stronglyImplies (on UploadPart) (allNext (or (on UploadPartAck) (on UploadRejected))));
+  "No upload succeeds before it is finished" => Upload ⊨ (precedes (on UploadFinish) (on UploadResponse));
+  "Every finish is answered next" => Upload ⊨ (stronglyImplies (on UploadFinish) (allNext (or (on UploadResponse) (on UploadRejected))));
+  "A rejected part does not end the upload" => Upload ⊨ (possibly (and (on UploadRejected) (possibly (on UploadResponse))));
+  "An update follows Update" => Update;
+  "Every update is answered" => Update ⊨ (stronglyImplies (on UpdateRequest) (inevitably (or (on UpdateResponse) (on UpdateRejected))));
+  "An update may be rejected" => Update ⊨ (possibly (on UpdateRejected));
+  "A feed page follows Feed" => Feed;
+  "Every feed request is answered" => Feed ⊨ (stronglyImplies (on FeedRequest) (inevitably (or (on FeedResponse) (on AccessDenied))));
+  "A feed request may be denied" => Feed ⊨ (possibly (on AccessDenied));
+  "A download follows Download" => Download;
+  "Every download is answered" => Download ⊨ (stronglyImplies (on DownloadRequest) (inevitably (or (on DownloadResponse) (or (on AccessDenied) (on RangeNotSatisfiable)))));
+  "A range may be unsatisfiable" => Download ⊨ (possibly (on RangeNotSatisfiable));
+  "Every IHave is answered" => Replicate ⊨ (stronglyImplies (on IHaveRequest) (inevitably (on IHaveResponse)));
+  "Every page request is answered" => PullPage ⊨ (stronglyImplies (on RecordsRequest) (inevitably (on RecordsResponse)));
+  "Every blob range request is answered" => ImportRange ⊨ (stronglyImplies (on BlobRequest) (inevitably (or (on BlobResponse) (on BlobMissing))));
+  "A peer may be missing a blob" => ImportRange ⊨ (possibly (on BlobMissing));
+  "Every job is answered" => Derive ⊨ (stronglyImplies (on JobRequest) (inevitably (or (on JobResult) (on JobFailed))));
+  "A job may fail" => Derive ⊨ (possibly (on JobFailed));
+  "Every forwarded call is answered by the door" => Forward ⊨ (stronglyImplies (on ApiRequest) (inevitably (or (on ApiResponse) (on AccessDenied))));
+  "The host is asked before it replies" => Forward ⊨ (precedes (on ApiForward) (on ApiReply));
+  "The door answers only after the host's reply" => Forward ⊨ (precedes (on ApiReply) (on ApiResponse));
+  "A denied call never reaches the host" => Forward ⊨ (stronglyImplies (on AccessDenied) (never (on ApiForward)));
+  "A websocket follows Socket" => Socket;
+  "No frame up before the upgrade is accepted" => Socket ⊨ (precedes (on WsAccepted) (on FrameUp));
+  "No frame down before the upgrade is accepted" => Socket ⊨ (precedes (on WsAccepted) (on FrameDown));
+  "A denied upgrade carries no frames" => Socket ⊨ (stronglyImplies (on AccessDenied) (never (or (on FrameUp) (on FrameDown))));
+  "A websocket never ends before its up direction is closed or denied" => Socket ⊨ (stronglyImplies (on WsUpgrade) (allUnless (not stop) (or (on CloseUp) (on AccessDenied))));
+  "A websocket never ends before its down direction is closed or denied" => Socket ⊨ (stronglyImplies (on WsUpgrade) (allUnless (not stop) (or (on CloseDown) (on AccessDenied))));
+  "Frames may still go down after the up direction closes" => Socket ⊨ (possibly (and (on CloseUp) (someNext (on FrameDown))));
+  "Frames may still go up after the down direction closes" => Socket ⊨ (possibly (and (on CloseDown) (someNext (on FrameUp))));
+  -- the offset carried by UploadRejected and the parts resent from it are payload values
+  "Parts resume from the offset the shard holds" => sorry;
+  -- byte ranges and sizes are payload values
+  "Ranges are exact" => sorry;
+  -- whether this shard holds every prev_dts entry is state, not message order
+  "Updates are never refused for being stale" => sorry;
+  -- a policy decision (write = true) is data
+  "Writes need write" => sorry;
+  -- a decision per record and the page banner are data
+  "Every shown file carries its label" => sorry;
+  -- token verification is data; intended: an unverifiable token is answered by AccessDenied 401
+  "Unverifiable tokens are denied" => sorry;
+  -- visible_dt values across feed pages are data
+  "No feed skips" => sorry;
+  -- needs duplicated and reordered RecordsResponse delivery; intended: the same records either way
+  "Anti-entropy is idempotent" => sorry;
+  -- needs an island partition and its repair; intended: once peers answer, every record reaches every shard
+  "Converge after repair" => sorry;
+  -- needs a peer timeout (a lost call); intended: (precedes (on PeerTimedOut) (on BlobRequest)) at the held offset
+  "Imports resume after a timeout" => sorry;
+  -- visibility and blob completeness are state across ImportRange sessions
+  "A visible record has its blob" => sorry;
+  -- the origin shard of a record is data
+  "Jobs never run on imports" => sorry;
+  -- needs an island partition: PeerTimedOut on every call between islands for a day
+  "Islands may be partitioned for a day" => sorry;
+}

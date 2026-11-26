@@ -1,0 +1,100 @@
+/- PaxosKV's protocols in LeanFM protocol text, with the requirements over them that convert to CTL.
+   QuorumWrite and Takeover are the same protocols spec/Session.lean elaborates in Lean (with the
+   channel physics and the deployment); Recovery is the restart path that spec/Requirements.lean
+   describes as the recover_replica task.
+
+   Every entry holds under LeanFM's default assumptions: messages arrive in order, none is lost and
+   no replica crashes. The replicas' UDP channels do lose and reorder messages (spec/Session.lean,
+   handles), and a replica may crash; the entries that drop those assumptions wait for
+   selfhost.mcp.logic.assumptions and are sorry until then. -/
+
+structure PutRequest where
+  requestId : String
+  key : String
+  value : String
+
+structure Propose where
+  requestId : String
+  key : String
+  value : String
+
+structure Prepare where
+  ballot : Nat
+
+structure Promise where
+  ballot : Nat
+  acceptedBallot : Nat
+  acceptedValue : String
+
+structure Accept where
+  ballot : Nat
+  value : String
+
+structure DurableAccepted where
+  ballot : Nat
+
+structure PutResult where
+  requestId : String
+  success : Bool
+
+structure PutResponse where
+  requestId : String
+  success : Bool
+
+/- The write as the stable leader Kv0 runs it: accept on two of three replicas, durably, then
+   answer. Kv0's own acceptance is a local fsync. The answer goes out after any two acceptances,
+   so the third can still arrive after it. -/
+protocol QuorumWrite (Browser, Web, Kv0, Kv1, Kv2) {
+  put:  PutRequest from Browser to Web;
+  prop: Propose from Web to Kv0 cause put where prop.requestId = put.requestId;
+  join 2 of {
+    Fsync at Kv0;
+  } and {
+    a1: Accept from Kv0 to Kv1 cause prop;
+        DurableAccepted from Kv1 to Kv0 cause a1;
+  } and {
+    a2: Accept from Kv0 to Kv2 cause prop;
+        DurableAccepted from Kv2 to Kv0 cause a2;
+  }
+  res: PutResult from Kv0 to Web cause prop where res.requestId = prop.requestId;
+       PutResponse from Web to Browser cause res;
+}
+
+/- A replica that lost touch with the leader takes over with a higher ballot: phase 1 on one
+   promise of two, then phase 2. The other prepare and promise may still arrive later. -/
+protocol Takeover (New, OldA, OldB) {
+  p: Prepare from New to OldA;
+  join 1 of {
+    Promise from OldA to New cause p;
+  } and {
+    q: Prepare from New to OldB;
+       Promise from OldB to New cause q;
+  }
+  a: Accept from New to OldA;
+     DurableAccepted from OldA to New cause a;
+}
+
+/- A replica that went down restarts, recovers the accepted log from a peer, and only then serves. -/
+protocol Recovery (Web, Kv, Peer) {
+  Unavailable from Kv to Web;
+  Restarted from Kv to Web;
+  r: RecoverAcceptedLog from Peer to Kv;
+  Available from Kv to Web;
+}
+
+requirements {
+  "A write follows QuorumWrite" => QuorumWrite;
+  "No success before a durable acceptance" => QuorumWrite ⊨ (precedes (or (on DurableAccepted) (on Fsync)) (on PutResult));
+  "Every write is answered" => QuorumWrite ⊨ (stronglyImplies (on PutRequest) (inevitably (on PutResponse)));
+  "A write never ends before its answer" => QuorumWrite ⊨ (always (implies (on PutRequest) (allUnless (not stop) (on PutResponse))));
+  "A late acceptance may arrive after the answer" => QuorumWrite ⊨ (possibly (and (on PutResponse) (someNext (on DurableAccepted))));
+  "A takeover follows Takeover" => Takeover;
+  "A takeover accepts only after a promise" => Takeover ⊨ (precedes (on Promise) (on Accept));
+  "A takeover always finishes" => Takeover ⊨ (inevitably (on DurableAccepted));
+  "Recovery precedes availability" => Recovery ⊨ (precedes (on RecoverAcceptedLog) (on Available));
+  "A restarted replica becomes available" => Recovery ⊨ (stronglyImplies (on Restarted) (inevitably (on Available)));
+  "Possibly one replica unavailable" => Recovery ⊨ (possibly (on Unavailable));
+  "Last committed slot wins" => sorry;
+  "A write acknowledged before a total shutdown survives it" => sorry;
+  "A write is answered when replica messages may be lost or reordered" => sorry;
+}

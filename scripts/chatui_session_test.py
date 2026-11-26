@@ -48,7 +48,7 @@ with socket.socket() as allocator:
     port = allocator.getsockname()[1]
 other = f"http://127.0.0.1:{port}"
 log = (data.parent / "session-port-test.log").open("w")
-env = dict(os.environ, LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT=str(data),
+env = dict(os.environ, LEANFM_CHATUI="1", LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT=str(data),
            LEANFM_OPENAI_BASE_URL="http://127.0.0.1:9/v1",
            LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:9/v1")
 server = subprocess.Popen([str(ROOT / ".lake/build/bin/leanfm-server")], cwd=ROOT,

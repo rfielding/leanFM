@@ -208,6 +208,27 @@ def indexText (j : Json) : String :=
       s!" — {f "description"}"
   "Logs this server can show (pass one as log):\n" ++ "\n".intercalate (rows.toList.map line)
 
+/-- The most of a log session_conform reads by name. -/
+def logArgsBytes : Nat := 64 * 1024 * 1024
+
+/-- session_conform's `serverLog` (selfhost.session.event-log): the arguments with it replaced by `log`,
+the text of that log as server_logs names it, the whole file up to `logArgsBytes` (beyond that its
+end, with a first line the window cut dropped, so no event line is read half). Only where server_logs is served; other arguments pass. -/
+def logArgs (args : Json) : IO (Except String Json) := do
+  let .obj kvs := args | return .ok args
+  let some v := kvs.get? "serverLog" | return .ok args
+  unless ← enabled.get do return .error ("serverLog " ++ disabledMessage)
+  let .str name := v | return .error s!"serverLog is the name of a log: one of {", ".intercalate names}"
+  if kvs.contains "log" || kvs.contains "events" then return .error "give serverLog, log or events, not two of them"
+  let some src := sources.find? (·.name == name)
+    | return .error s!"serverLog must be one of {", ".intercalate names}"
+  let some path ← pathOf src | return .error s!"the {name} log is not on this machine"
+  unless ← path.pathExists do return .error s!"the {name} log does not exist yet ({path})"
+  let (bytes, cut) ← tailBytes path logArgsBytes
+  let text := decodeLossy bytes
+  let text := if cut then ((text.splitOn "\n").drop 1 |> "\n".intercalate) else text
+  return .ok (Json.obj (kvs.erase "serverLog") |>.setObjVal! "log" (Json.str text))
+
 /-- The arguments {log?, lines?, grep?}: without log, the index; with it, the end of that log. -/
 def query (args : Json) : IO (Except String (String × Json)) := do
   unless ← enabled.get do return .error disabledMessage

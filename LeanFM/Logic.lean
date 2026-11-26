@@ -156,6 +156,9 @@ inductive Formula where
   | or (fs : List Formula)
   | implies (a b : Formula)
   | stronglyImplies (a b : Formula)
+  /-- if `a` ever happens then `b`: implies, saying that `a` never happening is acceptable (an error,
+  a fault, input from outside), so it is no vacuity (selfhost.mcp.logic.vacuity) -/
+  | ifEver (a b : Formula)
   /-- the outcomes of a choice: each can happen, and on every path one of them eventually happens -/
   | outcomes (fs : List Formula)
   /-- right after `a`, the next step is one of `bs`, each possible -/
@@ -206,7 +209,7 @@ partial def size : Formula → Nat
   | leadsTo a b | precedes a b => 1 + size a + size b
   | word _ fs => 1 + (fs.map size).foldl (· + ·) 0
   | transition a bs => 1 + size a + (bs.map size).foldl (· + ·) 0
-  | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => 1 + size a + size b
+  | implies a b | stronglyImplies a b | ifEver a b | eu a b | au a b | ew a b | aw a b => 1 + size a + size b
   | _ => 1
 
 partial def toJson : Formula → Json
@@ -231,6 +234,7 @@ partial def toJson : Formula → Json
   | or fs => Json.mkObj [("or", Json.arr (fs.map toJson).toArray)]
   | implies a b => Json.mkObj [("implies", Json.arr #[toJson a, toJson b])]
   | stronglyImplies a b => Json.mkObj [("stronglyImplies", Json.arr #[toJson a, toJson b])]
+  | ifEver a b => Json.mkObj [("ifEver", Json.arr #[toJson a, toJson b])]
   | outcomes fs => Json.mkObj [("outcomes", Json.arr (fs.map toJson).toArray)]
   | follows a bs => Json.mkObj [("follows", Json.arr ((a :: bs).map toJson).toArray)]
   | leadsTo a b => Json.mkObj [("leadsTo", Json.arr #[toJson a, toJson b])]
@@ -277,6 +281,7 @@ partial def reading : Formula → String
   | or fs => " or ".intercalate (fs.map paren)
   | implies a b => "if " ++ paren a ++ " then " ++ paren b
   | stronglyImplies a b => paren a ++ " can happen, and on every path, whenever " ++ paren a ++ " then " ++ paren b
+  | ifEver a b => "if " ++ paren a ++ " ever happens, then " ++ paren b
   | outcomes fs => "each of these can happen, and on every path one of them eventually happens: " ++ "; ".intercalate (fs.map paren)
   | follows a bs => "on every path, whenever " ++ paren a ++ ", the next step is one of these, each possible: " ++ "; ".intercalate (bs.map paren)
   | leadsTo a b => "it is possible that eventually " ++ paren a ++ ", and on every path, whenever " ++ paren a ++ ", eventually " ++ paren b
@@ -324,6 +329,7 @@ partial def symbols : Formula → String
   | or fs => " ∨ ".intercalate (fs.map symbolsArg)
   | implies a b => symbolsArg a ++ " → " ++ symbolsArg b
   | stronglyImplies a b => symbolsArg a ++ " ⇒ " ++ symbolsArg b
+  | ifEver a b => "ifEver(" ++ symbols a ++ ", " ++ symbols b ++ ")"
   | outcomes fs => "outcomes(" ++ ", ".intercalate (fs.map symbols) ++ ")"
   | follows a bs => "follows(" ++ ", ".intercalate ((a :: bs).map symbols) ++ ")"
   | leadsTo a b => "leadsTo(" ++ symbols a ++ ", " ++ symbols b ++ ")"
@@ -379,6 +385,7 @@ def expand : Formula → Formula
   | outcomes fs => and (fs.map ef ++ [af (or fs)])
   | follows a bs => ag (implies a (and (bs.map ex ++ [ax (or bs)])))
   | leadsTo a b => stronglyImplies a (af b)
+  | ifEver a b => implies a b
   | precedes a b => not (eu (not a) b)
   | word w fs => w.apply fs
   | state m b => and [after m, if b then terminal else not terminal]
@@ -396,7 +403,7 @@ partial def negate : Formula → Formula
   | implies a b => and [a, negate b]
   | stronglyImplies a b => or [ag (negate a), ef (and [a, negate b])]
   | outcomes fs => or (fs.map (fun a => ag (negate a)) ++ [eg (and (fs.map negate))])
-  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) | f@(word ..) | f@(transition ..) | f@(final _) => negate (expand f)
+  | f@(follows ..) | f@(leadsTo ..) | f@(precedes ..) | f@(word ..) | f@(transition ..) | f@(final _) | f@(ifEver ..) => negate (expand f)
   | never f => ef f
   | ex f => ax (negate f)
   | ax f => ex (negate f)
@@ -418,6 +425,7 @@ partial def mode : Formula → String
   | au .. => "eventually"
   | ef _ | ex _ | eu .. | eg _ | ew .. => "possibly"
   | stronglyImplies .. => "always (non-vacuous)"
+  | ifEver .. => "compound"
   | outcomes _ => "eventually"
   | follows .. => "always"
   | leadsTo .. => "always (non-vacuous)"
@@ -434,7 +442,7 @@ partial def subformulas (f : Formula) : List Formula :=
     | leadsTo a b | precedes a b => subformulas a ++ subformulas b
     | word _ fs => fs.flatMap subformulas
     | transition a bs => subformulas a ++ bs.flatMap subformulas
-    | implies a b | stronglyImplies a b | eu a b | au a b | ew a b | aw a b => subformulas a ++ subformulas b
+    | implies a b | stronglyImplies a b | ifEver a b | eu a b | au a b | ew a b | aw a b => subformulas a ++ subformulas b
     | _ => []
 
 /-- Every word and function replaced by the CTL primitives it means, all the way down
@@ -494,6 +502,7 @@ def shape : Formula → String × List Formula × Option String
   | .or fs => ("or", fs, none)
   | .implies a b => ("implies", [a, b], none)
   | .stronglyImplies a b => ("stronglyImplies", [a, b], none)
+  | .ifEver a b => ("ifEver", [a, b], none)
   | .outcomes fs => ("outcomes", fs, none)
   | .follows a bs => ("follows", a :: bs, none)
   | .leadsTo a b => ("leadsTo", [a, b], none)
@@ -666,6 +675,7 @@ def readOp (op : String) (p : Array String) : String :=
   | "and" => " and ".intercalate p.toList
   | "or" => " or ".intercalate p.toList
   | "implies" => "if " ++ part 0 ++ " then " ++ part 1
+  | "ifEver" => "if " ++ part 0 ++ " ever happens, then " ++ part 1
   | "stronglyImplies" => "it is possible that eventually " ++ part 0 ++ ", and on every path, whenever that holds, " ++ part 1
   | "leadsTo" => "it is possible that eventually " ++ part 0 ++ ", and on every path, whenever that holds, eventually " ++ part 1
   | "EU" => "on some path, " ++ part 0 ++ " holds until " ++ part 1 ++ " (and it does happen)"
@@ -694,6 +704,7 @@ def readClauses (op : String) (ks : Array Nat) : List (String × List Nat × Boo
   | "and" => [("all of these:", ks.toList, true)]
   | "or" => [("at least one of these:", ks.toList, true)]
   | "implies" => [("if:", k 0, false), ("then:", k 1, false)]
+  | "ifEver" => [("if this ever happens:", k 0, false), ("then:", k 1, false)]
   | "stronglyImplies" => [("it is possible that eventually:", k 0, false), ("and on every path, whenever that holds:", k 1, false)]
   | "leadsTo" => [("it is possible that eventually:", k 0, false), ("and on every path, whenever that holds, eventually:", k 1, false)]
   | "EU" => [("on some path, this holds:", k 0, false), ("until this does (and it does happen):", k 1, false)]
@@ -1023,6 +1034,7 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       | "or" => if xs.isEmpty then throw "or needs at least one formula" else return .or xs.toList
       | "implies" => need 2; return .implies xs[0]! xs[1]!
       | "stronglyImplies" => need 2; return .stronglyImplies xs[0]! xs[1]!
+      | "ifEver" => need 2; return .ifEver xs[0]! xs[1]!
       | "outcomes" => if xs.size < 2 then throw "outcomes needs at least two formulas" else return .outcomes xs.toList
       | "follows" => if xs.size < 2 then throw "follows needs a formula and at least one next formula" else return .follows xs[0]! (xs.toList.drop 1)
       | "leadsTo" => need 2; return .leadsTo xs[0]! xs[1]!
@@ -1141,6 +1153,7 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
       | "or" => many .or
       | "implies" => two .implies
       | "stronglyImplies" => two .stronglyImplies
+      | "ifEver" => two .ifEver
       | "outcomes" => do
         let f ← many .outcomes
         match f with
@@ -1475,6 +1488,7 @@ partial def satTree (m : Model) : Formula → Array Bool
   | .or fs => fs.foldl (fun acc f => (acc.zip (satTree m f)).map fun (a, b) => a || b) (m.all false)
   | .implies a b => satTree m (.or [.not a, b])
   | .stronglyImplies a b => satTree m (.and [.ef a, .ag (.implies a b)])
+  | .ifEver a b => satTree m (.implies a b)
   | .outcomes fs => satTree m (.and (fs.map .ef ++ [.af (.or fs)]))
   | f@(.follows ..) | f@(.leadsTo ..) | f@(.precedes ..) | f@(.word ..) => satTree m f.expand
   | .never f => satTree m (.ag (.not f))
@@ -1550,7 +1564,7 @@ def Core.ofDag (d : Dag) : Core × Nat := Id.run do
       | "AF" => let (c, t) := mk c .tt #[]; mk c .au #[t, k0]
       | "AG" => let (c, t) := mk c .tt #[]; let (c, n) := mk c .not #[k0]; let (c, e) := mk c .eu #[t, n]; mk c .not #[e]
       | "never" => let (c, t) := mk c .tt #[]; let (c, e) := mk c .eu #[t, k0]; mk c .not #[e]
-      | "implies" => let (c, n) := mk c .not #[k0]; mk c .or #[n, k1]
+      | "implies" | "ifEver" => let (c, n) := mk c .not #[k0]; mk c .or #[n, k1]
       | "stronglyImplies" =>
         let (c, t) := mk c .tt #[]
         let (c, ef) := mk c .eu #[t, k0]
@@ -1862,7 +1876,7 @@ partial def evidence (m : Model) (i : Nat) (holds : Bool) (f : Formula) : Option
   | true, .ew a b => if get (sat (.eu a b)) i then reachThrough a b "witness" else loop a "witness"
   | true, .stronglyImplies a _ => reach a "witness"
   | true, .or fs => (fs.find? (fun g => get (sat g) i)).bind (evidence m i true)
-  | true, .implies a b => if get (sat b) i then evidence m i true b else evidence m i false a
+  | true, .implies a b | true, .ifEver a b => if get (sat b) i then evidence m i true b else evidence m i false a
   -- reach the state where g fails (or, for never, holds), then show why with g's own evidence
   -- from there, so a nested AG(p -> AG q) ends at the step that breaks q, not at p
   | false, .ag g => (reach (.not g) "counterexample").map fun e => extend e (evidence m (e.path.getLastD i) false g)
@@ -1942,6 +1956,29 @@ def lints (f : Formula) (sentence : Option String) : List String :=
       ["The sentence sounds existential (can/may/possible) but the formula is universal. Did you mean EF?"]
     else []
   vacuity ++ topImplies ++ afag ++ agaf ++ efag ++ nextOnTerminal ++ quantifier
+
+/-- The conditions a formula leans on (selfhost.mcp.logic.vacuity): the condition of each implies
+and the second event of each precedes standing under no not or never. If one cannot happen, the
+formula holds for free. stronglyImplies, leadsTo and outcomes say their own condition can happen;
+follows, transition and final are generated from reachable states. -/
+partial def Formula.leanConditions (f : Formula) : List Formula :=
+  let rec go : Formula → List Formula
+    | .not _ | .never _ => []
+    -- implies with a false consequent is a negation: it says its condition never happens
+    | .implies _ .ff => []
+    | .implies a b => a :: go b
+    | .precedes _ b => [b]
+    | .stronglyImplies _ b | .leadsTo _ b | .ifEver _ b => go b
+    | .and fs | .or fs | .word _ fs => fs.flatMap go
+    | .ex f | .ax f | .ef f | .af f | .eg f | .ag f => go f
+    | .eu a b | .au a b | .ew a b | .aw a b => go a ++ go b
+    | _ => []
+  (go f).foldl (fun acc c => if acc.contains c then acc else acc ++ [c]) []
+
+/-- The conditions of the formula's ifEver parts: allowed never to happen, reported when they cannot. -/
+partial def Formula.neverConditions (f : Formula) : List Formula :=
+  ((f.subformulas.filterMap fun | .ifEver a _ => some a | _ => none)).foldl
+    (fun acc c => if acc.contains c then acc else acc ++ [c]) []
 
 def unsupportedIn (f : Formula) : List String :=
   (f.atoms.filterMap fun | .unsupported op => some op | _ => none).eraseDups
@@ -2030,7 +2067,26 @@ def checkCtl (args : Json) (b : Bounds := bounds) : ToolOutcome := do
     let evJson := match ev with
       | some e => evidenceJson m e
       | none => Json.mkObj [("kind", "exhaustive"), ("note", s!"evaluated over all {m.size} reachable nodes")]
-    return verdictJson "check_ctl" (if holds then "proved" else "disproved") reading <| common ++
+    -- a proof that leans on a condition that never happens says nothing (selfhost.mcp.logic.vacuity)
+    let empty := if !holds then [] else f.leanConditions.filter fun c =>
+      match Model.satE m (.ef c) b with
+      | .ok s => !(Model.get s 0)
+      | .error _ => false
+    let verdict := if !holds then "disproved" else if empty.isEmpty then "proved" else "vacuous"
+    let reading := if empty.isEmpty then reading else
+      s!"proved only because {" and ".intercalate (empty.map fun c => "(" ++ c.reading ++ ")")} never happens: " ++ reading
+    -- an ifEver condition may never happen; that is said, not counted against the proof
+    let never := if verdict != "proved" then [] else f.neverConditions.filter fun c =>
+      match Model.satE m (.ef c) b with
+      | .ok s => !(Model.get s 0)
+      | .error _ => false
+    let reading := if never.isEmpty then reading else
+      reading ++ s!" ({" and ".intercalate (never.map fun c => "(" ++ c.reading ++ ")")} never happens)"
+    return verdictJson "check_ctl" verdict reading <| common ++
+      (if empty.isEmpty then [] else [("vacuousParts", Json.arr (empty.map fun c =>
+        Json.mkObj [("notation", Json.str c.symbols), ("reading", Json.str c.reading)]).toArray)]) ++
+      (if never.isEmpty then [] else [("neverHappens", Json.arr (never.map fun c =>
+        Json.mkObj [("notation", Json.str c.symbols), ("reading", Json.str c.reading)]).toArray)]) ++
       [ ("reachableNodes", toJson m.size)
       , ("deadlocks", Json.arr (m.deadlocks.map Json.str).toArray)
       , ("evidence", evJson) ]
@@ -2925,6 +2981,7 @@ def reference : String := String.intercalate "\n"
   , "| `{\"predicate\": \"text\"}` | free text: never observable; classify it first |"
   , "| `{\"not\": f}`, `{\"and\": [..]}`, `{\"or\": [..]}`, `{\"implies\": [a, b]}` | Boolean |"
   , "| `{\"stronglyImplies\": [a, b]}` | EF a and AG(a -> b): non-vacuous always |"
+  , "| `{\"ifEver\": [a, b]}` | a -> b where a never happening is fine (an error, a fault, outside input): never vacuous; an a that cannot happen is reported as neverHappens. A request or feature takes stronglyImplies, a failure takes ifEver |"
   , "| `{\"outcomes\": [a, b, ...]}` | EF a and EF b and ... and AF (a or b or ...): the outcomes of a choice, each possible and one inevitable (not AF a or AF b, which says one particular outcome is inevitable); two or more |"
   , "| `{\"follows\": [a, b, ...]}` | AG(a -> (EX b and ... and AX (b or ...))): right after a, the next step is one of b, ..., each possible; a and one or more |"
   , "| `{\"leadsTo\": [a, b]}` | stronglyImplies(a, AF b): a can happen, and every a is eventually followed by b (never vacuous, unlike AG(a -> AF b)) |"

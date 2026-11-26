@@ -1,4 +1,6 @@
-import LeanFM
+-- not the LeanFM root, which also imports every test module (LeanFM/Library.lean)
+import LeanFM.Library
+import LeanFM.MCPHost
 import LeanFM.ChatUI.Server
 import LeanFM.ChatUI.HttpRequest
 import LeanFM.KeepAlive
@@ -451,9 +453,22 @@ def projectImageResponse? (path method request : String) : IO (Option Response) 
                   return some (rangedByteResponse request contentType bytes ["Content-Disposition: inline", "Cache-Control: no-store"])
   | _ => return none
 
+/-- Whether the chat UI is served (clause selfhost.chatui.switch): LEANFM_CHATUI, read once at startup. -/
+initialize chatUi : IO.Ref Bool ← IO.mkRef false
+
+/-- What leanfm-server serves with the chat UI off: its MCP endpoint and the views a client opens. -/
+def servedWithoutChatUi (path : String) : Bool :=
+  ["/mcp", "/view", "/view/", "/view/app", "/health", "/metrics", "/renders/", "/openapi.yaml", "/report"].contains path ||
+    path.startsWith "/tools/"
+
+def chatUiOffBody : String :=
+  "{\"error\":\"The chat UI is off: this server serves MCP at /mcp and the views an MCP client opens. Start it with LEANFM_CHATUI=1 to serve the chat UI.\"}\n"
+
 def responseForRequest (request : String) : IO Response := do
   let path := requestPath request
   let method := requestMethod request
+  if !(← chatUi.get) && !servedWithoutChatUi path then
+    return response 404 "application/json; charset=utf-8" chatUiOffBody
   if path.startsWith "/app-view/" then
     if !(← LeanFM.ChatUI.Server.admittedWorkspaceRequest "GET" request) then
       return response 403 "application/json" "{\"error\":\"Unapproved preview host\"}"
@@ -619,6 +634,15 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
   serveLoop server
 
 def main : IO Unit := do
+  -- first: how long launch took to reach main (selfhost.env.launch)
+  LeanFM.Launch.read
+  -- the startup as event lines on standard output (selfhost.session.event-log)
+  let launch ← LeanFM.Launch.emitStart (← IO.getStdout) "leanfm-server"
+  LeanFM.EventLog.sink.set (some (← IO.getStdout))
+  -- the chat UI is off unless asked for (selfhost.chatui.switch)
+  match LeanFM.MCPHost.parseSwitch "LEANFM_CHATUI" false (← IO.getEnv "LEANFM_CHATUI") with
+  | .ok on => chatUi.set on
+  | .error e => throw (IO.userError e)
   let port ← configuredPort
   -- checked before serving, so a bad value stops the server now (selfhost.env.startup)
   LeanFM.CallLimits.configureFromEnv
@@ -630,7 +654,9 @@ def main : IO Unit := do
   -- bound to 127.0.0.1 only: logs are the local user's own (GET /tools/logs, MCP server_logs)
   LeanFM.ServerLogs.enable
   LeanFM.ServerInfo.capture
-  IO.println s!"LeanFM server listening on http://127.0.0.1:{port}"
+  IO.println s!"LeanFM server listening on http://127.0.0.1:{port}{← LeanFM.Launch.note}"
+  LeanFM.Launch.emitListening (← IO.getStdout) "leanfm-server" launch
+  (← IO.getStdout).flush
   serveLoop server
 
 end LeanFM.Server

@@ -1,5 +1,23 @@
 SHELL := /usr/bin/env bash
 
+# One make at a time in this checkout (clause selfhost.build.lock): every run takes an exclusive lock
+# on .cache/make.lock (LEANFM_MAKE_LOCK names another path) and waits for a run already holding it.
+# Make's own recursive calls run with LEANFM_MAKE_LOCKED=1 and do not wait on their caller's lock.
+# serve, run, stop and claude start or stop long-lived processes and do not hold it (serve takes it
+# only while building the server binary).
+LEANFM_MAKE_LOCK ?= .cache/make.lock
+UNLOCKED_GOALS := serve run stop claude
+LOCK_GOALS := $(if $(LEANFM_MAKE_LOCKED),,$(if $(MAKECMDGOALS),$(filter-out $(UNLOCKED_GOALS),$(MAKECMDGOALS)),default))
+ifneq ($(LOCK_GOALS),)
+.NOTPARALLEL:
+.PHONY: leanfm-make-lock leanfm-default $(MAKECMDGOALS)
+$(if $(MAKECMDGOALS),$(MAKECMDGOALS),leanfm-default): leanfm-make-lock ; @:
+leanfm-make-lock:
+	@mkdir -p $(dir $(LEANFM_MAKE_LOCK))
+	@flock -n $(LEANFM_MAKE_LOCK) true || echo "make: another make is running in this checkout; waiting for it ($(LEANFM_MAKE_LOCK))"
+	@LEANFM_MAKE_LOCKED=1 flock $(LEANFM_MAKE_LOCK) $(MAKE) --no-print-directory $(MAKECMDGOALS)
+else
+
 GO_VERSION ?= 1.23.12
 GO_SHA256 ?= d3847fef834e9db11bf64e3fb34db9c04db14e068eeb064f49af747010454f90
 GO_ARCHIVE := /tmp/leanfm-go$(GO_VERSION).linux-amd64.tar.gz
@@ -19,7 +37,7 @@ EXAMPLES_HTML ?= /tmp/leanfm-examples.html
 
 .DEFAULT_GOAL := all
 
-.PHONY: all lean build ui-build run serve claude stop check chatui-check go-toolchain paxos-check http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
+.PHONY: all lean build ui-build run serve claude stop check test chatui-check go-toolchain paxos-check http-check validate proto diagrams mdp-example-check scripts bakery-data bakery-stats book book-clean video-check video video-narrated clean
 
 # `make` rebuilds everything: the browser bundle, every Lean target, and the book.
 all: build lean book
@@ -40,7 +58,9 @@ run:
 	lake exe leanfm
 
 serve:
-	lake exe leanfm-server
+	@mkdir -p $(dir $(LEANFM_MAKE_LOCK))
+	$(if $(LEANFM_MAKE_LOCKED),,flock $(LEANFM_MAKE_LOCK)) lake build leanfm-server
+	LEANFM_LAUNCHED_NS=$$(date +%s%N) .lake/build/bin/leanfm-server
 
 claude:
 	bash scripts/claude.sh
@@ -54,7 +74,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check
+check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -274,3 +294,24 @@ book-listings-check: build
 .PHONY: constructors-check
 constructors-check:
 	lake env lean ./ConstructorsExample.lean
+
+# The short tier: test what changed (clause selfhost.build.changed-tests); make check is the long tier.
+.PHONY: test
+test:
+	python3 -I scripts/changed_tests.py --self-test
+	python3 -I scripts/changed_tests.py
+
+# Every environment variable read is in LeanFM/Env.lean (clause selfhost.env.registry).
+.PHONY: env-registry-check
+env-registry-check:
+	python3 -I scripts/env_registry_check.py
+
+# Serialized make runs (clause selfhost.build.lock): two makes at once must not overlap.
+.PHONY: make-lock-check lock-probe
+make-lock-check:
+	python3 -I scripts/make_lock_check.py
+LOCK_PROBE_LOG ?= .cache/lock-probe.log
+lock-probe:
+	@echo "start $$(date +%s%N)" >> $(LOCK_PROBE_LOG); sleep 2; echo "end $$(date +%s%N)" >> $(LOCK_PROBE_LOG)
+
+endif

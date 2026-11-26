@@ -8,6 +8,7 @@ import LeanFM.SessionView
 import LeanFM.SessionTools
 import LeanFM.CheckMetrics
 import LeanFM.ServerLogs
+import LeanFM.Launch
 import LeanFM.ServerInfo
 import LeanFM.ProjectView
 import LeanFM.ModelCache
@@ -268,6 +269,10 @@ def toolDefinitions : Array Json := #[
     "Check events a running program logged ({ts or id, session, from, to, label, cause, fields?}, or {ts or id, session, at, label, act: true} for an event; session_simulate's events also work) against the protocol: in every session each event must be allowed at that point, carry the cause the protocol names, and the session must end where the protocol can end (unless allowIncomplete). Returns conforms or violates with the first problem per session and what the protocol allowed instead. Each event's fields must fit its message type, with integers as decimal strings; a sessions block with a key (sessions by a.caller) requires each session's events to name the key's value as their session. With timing annotations, every event needs ts (nanoseconds) or timeMs; horizonMs advances observation of incomplete traces. Deadline reports do not change the structural verdict."
     (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("events", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")])]),
+      ("fromLine", Json.mkObj [("type", "integer"), ("minimum", 1), ("description", Json.str "with log or serverLog: the first line to read, 1-based (default 1); poll a running log by asking from the last answer's nextLine")]),
+      ("lineCount", Json.mkObj [("type", "integer"), ("minimum", 1), ("maximum", 100000), ("description", Json.str "with log or serverLog: how many lines to read from fromLine (default to the end)")]),
+      ("serverLog", stringSchema "instead of events or log: the name of a log server_logs lists (serve is make serve's output), read on the server; its event lines are checked as log's are"),
+      ("log", stringSchema "instead of events: the text of a log; its lines that are JSON objects with type leanFM (LeanFM writes them beginning {\"type\":\"leanFM\",) are the events, every other line, JSON or not, is ignored and counted, and a line beginning with that marker that is malformed is refused naming its line number"),
       ("horizonMs", anyJson "optional observation horizon in milliseconds relative to each session"), ("allowIncomplete", Json.mkObj [("type", "boolean"), ("description", Json.str "sessions still running are not reported")])] ["events"]),
   tool "session_spans" "Time the calls in a log, without trusting clocks across machines"
     "Given a protocol and a log whose events carry sentAt (the sender's clock when it sent) and receivedAt (the receiver's clock when it received), in nanoseconds as decimal strings, and whose from and to may name actors as Role/instance: every call (a request and the reply that names it as cause) with the caller's view (reply received minus request sent, on the caller's clock) and the callee's own (reply sent minus request received, on its clock); their difference, the network and queueing time of both directions together; the sub-calls the callee made while handling it, which ran concurrently where they overlap on its clock; the critical path, the chain of sub-calls one after another that set the time; and each call tree laid on its root caller's timeline, a callee anchored where its request was sent. No two clocks are ever compared. A callee that took longer than its caller waited, or sub-calls whose own durations along a chain exceed the call that contains them, are reported as inconsistent with both numbers."
@@ -568,7 +573,7 @@ private def stringField (json : Json) (name : String) : Except String String := 
 /-- The names of the listed tools: the only tool names a metric label may carry. -/
 def listedToolNames : List String := tools.toList.filterMap fun t => (t.getObjValAs? String "name").toOption
 
-def dispatchJson (request : Json) : IO Response := do
+def dispatchJsonCore (request : Json) : IO Response := do
   let id := (field request "id").toOption.getD Json.null
   let method ← match stringField request "method" with
     | .ok value => pure value
@@ -629,7 +634,11 @@ def dispatchJson (request : Json) : IO Response := do
             -- a session tool may name a project's protocol file instead of carrying its text
             let r ← if name.startsWith "session_" then do
                 match ← LeanFM.ProjectView.protocolArgs args with
-                | .ok args => if name == "session_ctl" then ctlCached args else pure (toolResult name args)
+                | .ok args =>
+                  -- session_conform may name a server log instead of carrying it (selfhost.session.event-log)
+                  match ← (if name == "session_conform" then LeanFM.ServerLogs.logArgs args else pure (.ok args)) with
+                  | .ok args => if name == "session_ctl" then ctlCached args else pure (toolResult name args)
+                  | .error e => pure (.ok (logicResult name (.error e)))
                 | .error e => pure (.ok (logicResult name (.error e)))
               else pure (toolResult name args)
             pure (r.map (withLimitsReport applied))
@@ -647,6 +656,23 @@ def dispatchJson (request : Json) : IO Response := do
         | .ok result => pure <| ok id result
         | .error err => pure <| rpcError id (-32602) err
   | _ => pure <| rpcError id (-32601) s!"method not found: {method}"
+
+/-- Every MCP request as event lines of protocol McpCall, when this process has an event sink
+(selfhost.session.event-log): Call when it arrives, Answer when its answer is ready, the Answer's
+payload carrying kind (the method, or the tool for tools/call), bytes and status. -/
+def dispatchJson (request : Json) : IO Response := do
+  let some h ← LeanFM.EventLog.sink.get | dispatchJsonCore request
+  let method := (request.getObjValAs? String "method").toOption.getD ""
+  let kind := if method == "tools/call" then
+      ((request.getObjValD "params").getObjValAs? String "name").toOption.getD method else method
+  let me ← LeanFM.Launch.actor "leanfm"
+  let n ← LeanFM.EventLog.counter.get
+  let session := s!"{me}:call{n + 1}"
+  let call ← LeanFM.EventLog.emit h me session "McpCall" "Call" (.inl ("Client", "Server"))
+  let reply ← dispatchJsonCore request
+  let _ ← LeanFM.EventLog.emit h me session "McpCall" "Answer" (.inl ("Server", "Client")) (cause := some call)
+    (payload := Json.mkObj [("kind", Json.str kind), ("bytes", toJson reply.body.utf8ByteSize), ("status", toJson reply.status)])
+  return reply
 
 def dispatch (body : String) : IO Response :=
   match Json.parse body with

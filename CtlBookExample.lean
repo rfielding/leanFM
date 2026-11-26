@@ -192,6 +192,38 @@ def main : IO Unit := do
   let leanfm ← IO.FS.readFile "LeanFM/LLMGenerated/LeanFM.leanfm"
   let goserver ← IO.FS.readFile "projects/GoServer/source/cmd/demo/static/session/goserver.leanfm"
 
+  /- Start here: designing TicTacToe with LeanFM (book chapter start). The first draft lets the
+     players trade moves forever; LeanFM disproves that every game ends; one bound fixes it. -/
+  let tttRounds (bounded : Bool) : String :=
+    "protocol TicTacToe (X, O, Referee) {\n  g: NewGame from X to Referee;\n  Joined from Referee to O cause g;\n" ++
+    (if bounded then "  loop Round at most 5 {\n" else "  loop Round {\n") ++
+    "    x: MoveX from X to Referee;\n    choice {\n      OTurn from Referee to O cause x;\n      o: MoveO from O to Referee;\n" ++
+    "      choice {\n        XTurn from Referee to X cause o;\n        continue Round;\n      } or {\n" ++
+    "        Result from Referee to X cause o;\n        Result from Referee to O cause o;\n      }\n    } or {\n" ++
+    "      Result from Referee to X cause x;\n      Result from Referee to O cause x;\n    }\n" ++
+    (if bounded then "  } otherwise {\n    Result from Referee to X;\n    Result from Referee to O;\n  }\n}" else "  }\n}")
+  let tttDraft := tttRounds false
+  let ttt := tttRounds true
+  write "ctl-tictactoe-draft.tex" (listing tttDraft)
+  write "ctl-tictactoe.tex" (listing ttt)
+  for theme in ["light", "dark"] do
+    let d ← tool "session_diagram" (diagram (withLean tttDraft [("theme", Json.str theme)]))
+    write s!"ctl-tictactoe-{theme}.svg" (str d "svg")
+  let ends ← tool "session_ctl" (ctl (withLean tttDraft [("formula", Json.str "(inevitably (on Result))")]))
+  write "ctl-tictactoe-draft-ends.tex" (listing (str ends "verdict" ++ ": " ++ str ends "reading" ++ "\n" ++ str ends "report"))
+  let tttChecks : List (String × String) :=
+    [ ("Every game ends with a result", "(inevitably (on Result))")
+    , ("O moves only after the game starts", "(precedes (on Joined) (on MoveO))")
+    , ("O moves only when told it is its turn", "(precedes (on OTurn) (on MoveO))")
+    , ("Every move by X is answered", "(stronglyImplies (on MoveX) (inevitably (or (on OTurn) (on Result))))")
+    , ("A game can always still end", "(always (possibly stop))") ]
+  let mut tttRows : Array String := #[]
+  for (sentence, f) in tttChecks do
+    let r ← tool "session_ctl" (ctl (withLean ttt [("formula", Json.str f)]))
+    tttRows := tttRows.push s!"{sentence} & \\texttt\{{f}} & {str r "verdict"} \\\\"
+  write "ctl-tictactoe-checks.tex" ("{\\footnotesize\\begin{tabular}{@{}p{.3\\textwidth}p{.5\\textwidth}l@{}}\n\\toprule\nRequirement & Formula & Verdict \\\\\n\\midrule\n" ++
+    "\n".intercalate tttRows.toList ++ "\n\\bottomrule\n\\end{tabular}}\n")
+
   /- Part I: the language -/
   -- include: the same protocol written with include and with Order's body pasted in place
   let withInclude := includeStructs "token" ++ "\n" ++ includeProtocols

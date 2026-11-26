@@ -1,4 +1,4 @@
-import LeanFM
+import LeanFM.Library
 
 def writeDiagram (name dot : String) : IO Unit := do
   IO.FS.createDirAll "diagrams"

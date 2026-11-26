@@ -1,0 +1,23 @@
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
+protocol TicTacToe (X, O, Referee) {
+  g: NewGame from X to Referee;
+  Joined from Referee to O cause g;
+  loop Round {
+    x: MoveX from X to Referee;
+    choice {
+      OTurn from Referee to O cause x;
+      o: MoveO from O to Referee;
+      choice {
+        XTurn from Referee to X cause o;
+        continue Round;
+      } or {
+        Result from Referee to X cause o;
+        Result from Referee to O cause o;
+      }
+    } or {
+      Result from Referee to X cause x;
+      Result from Referee to O cause x;
+    }
+  }
+}
+\end{lstlisting}

@@ -24,3 +24,21 @@ protocol AudioPeriod (Device, Audio) {
     Skipped from Device to Audio cause b;
   }
 }
+
+/- The requirements over one audio period that convert to CTL, each decided by LeanFM
+   (session_ctl), none vacuous. Whether a block is Played or Skipped is decided by a deadline
+   (Block.ts - Pull.ts <= P), which is not CTL yet, so the two timing requirements are sorry: the
+   protocol only says a block may be skipped. -/
+requirements {
+  "One audio period follows AudioPeriod" => AudioPeriod;
+  "A block is rendered only after its release" => AudioPeriod ⊨ (precedes (on Pull) (on Block));
+  "Every released block is handed over" => AudioPeriod ⊨ (stronglyImplies (on Pull) (inevitably (on Block)));
+  "The device judges a block only after it is handed over" => AudioPeriod ⊨ (precedes (on Block) (or (on Played) (on Skipped)));
+  "Every handed-over block is played or skipped" => AudioPeriod ⊨ (stronglyImplies (on Block) (inevitably (or (on Played) (on Skipped))));
+  "A played block is never also skipped" => AudioPeriod ⊨ (stronglyImplies (on Played) (never (on Skipped)));
+  "Possibly a block is skipped: the device does not wait" => AudioPeriod ⊨ (possibly (on Skipped));
+  -- a deadline: every Pull reaches Played, Block within one period P of its Pull
+  "Every block is on time" => sorry;
+  -- a deadline: never Skipped while NAM, the sympathetic strings and the reverb all run
+  "No missed audio deadline" => sorry;
+}

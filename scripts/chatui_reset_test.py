@@ -28,7 +28,7 @@ with socket.socket() as allocator:
     allocator.bind(("127.0.0.1", 0))
     port = allocator.getsockname()[1]
 base = "http://127.0.0.1:" + str(port)
-env = dict(os.environ, LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT="private-data",
+env = dict(os.environ, LEANFM_CHATUI="1", LEANFM_PORT=str(port), LEANFM_WORKSPACE_ROOT="private-data",
            LEANFM_OPENAI_BASE_URL="http://127.0.0.1:18080/v1", LEANFM_LLM_MODEL="test-model",
            LEANFM_ANTHROPIC_BASE_URL="http://127.0.0.1:18080/anthropic/v1",
            LEANFM_TEST_UNSANDBOXED_BOOK_BUILD="1")

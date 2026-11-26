@@ -1,0 +1,78 @@
+\chapter{Start here}\label{ch:start}
+
+You are in Claude Desktop. This chapter goes once around the whole loop: get LeanFM, connect
+Claude to it, and design a small system with it. The rest of the book explains what happened.
+
+\section{Get LeanFM and start it}
+
+LeanFM needs \texttt{git}, elan (which installs the right Lean by itself), Node.js and Python;
+the README lists them. In a terminal:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+git clone https://github.com/rfielding/leanFM.git
+cd leanFM
+make build
+make serve
+\end{lstlisting}
+\texttt{make serve} keeps running: it is the LeanFM server, answering on
+\texttt{http://127.0.0.1:8080}. Leave it open.
+
+\section{Connect Claude}
+
+In Claude Desktop's Code tab, open the \texttt{leanFM} folder. The folder's
+\texttt{.mcp.json} connects Claude to the server you just started. For a Claude Desktop chat
+instead, run this once in the folder and restart Claude Desktop once:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+python3 scripts/claude_desktop_config.py --root "$PWD" \
+  --forward http://127.0.0.1:8080/mcp --install
+\end{lstlisting}
+From then on, after a rebuild you restart only \texttt{make serve}. Claude Desktop and the
+server may start in either order: a request that arrives first waits for the server to listen.
+
+Now ask Claude:
+\begin{quote}
+\emph{Find the LeanFM MCP server from this directory.}
+\end{quote}
+Claude lists LeanFM's tools; \texttt{server\_info} names the commit the server was built from.
+
+\section{Design TicTacToe}
+
+Ask:
+\begin{quote}
+\emph{Let's design a TicTacToe game with LeanFM.}
+\end{quote}
+Claude writes the game as a protocol: who sends what to whom, and in what order. Two players
+and a referee. X starts a game, the referee tells O it has joined, and then the players take
+turns through the referee until it announces the result:
+\input{generated/ctl-tictactoe-draft.tex}
+LeanFM checks the text and draws it (Figure~\ref{fig:ttt}).
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Interaction diagram of TicTacToe. NewGame from X to Referee then Joined from Referee to O. Then a loop named Round. MoveX from X to Referee. Then either OTurn from Referee to O and MoveO from O to Referee and then either XTurn from Referee to X and the loop continues or Result from Referee to X and to O. Or Result from Referee to X and to O.}{\ThemedDiagram{width=.62\textwidth}{ctl-tictactoe}}
+\caption{The first draft of TicTacToe, as LeanFM draws it.}
+\label{fig:ttt}
+\end{figure}
+
+Then Claude asks the question every game must answer: does it always end? LeanFM says no, and
+shows the run that does not:
+\input{generated/ctl-tictactoe-draft-ends.tex}
+The players can trade moves forever. Nothing in the draft says the board fills up. But it
+does: nine squares, X first, so X moves at most five times. One phrase says that, and one
+block says what happens when a fifth round would go on:
+\input{generated/ctl-tictactoe.tex}
+Now every requirement Claude wrote down is decided:
+\begin{center}
+\input{generated/ctl-tictactoe-checks.tex}
+\end{center}
+
+\section{What just happened}
+
+The protocol is the design, written so a machine can read it. Each requirement is a formula
+of computation tree logic (CTL), a logic of what may and must happen next. LeanFM decided each
+one over every run the protocol allows. When one failed, it did not just say so: it showed the
+run, and that run was the design mistake.
+
+None of it had to be trusted. Claude wrote the protocol and the formulas; LeanFM checked them.
+Part~\ref{part:language} is the protocol language; Part~\ref{part:ctl} is how a protocol
+becomes CTL and how CTL is decided; Part~\ref{part:lists} is the list of requirements a project
+keeps; and Part~\ref{part:mcp} is the server Claude just used.

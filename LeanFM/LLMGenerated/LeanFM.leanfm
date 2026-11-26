@@ -18,6 +18,33 @@ structure Load where
   project : String
   file : String
 
+/-- How a LeanFM server starts (clauses selfhost.env.launch, selfhost.session.event-log): the shell
+    launches it, stamping the time, and the server tells the shell when it reaches main and when it
+    listens, as event lines on its standard output. Reaching main must take at most a second: what a
+    program computes before main is invisible to its own logs. -/
+protocol ServerStart (Shell, Server) {
+  l: Launch from Shell to Server;
+  clock launched = time(l);
+  obligation StartsQuickly on Server {
+    trigger launched;
+    require MainEntered within 1000 ms;
+    on breach record SlowStart;
+  }
+  MainEntered from Server to Shell cause l;
+  Listening from Server to Shell cause l;
+}
+
+/-- Every MCP request a LeanFM server answers, as it writes it to its log (clause
+    selfhost.session.event-log): any number at once, each a Call when it arrives and an Answer
+    when its answer is written. The Answer's payload says what kind of request it was and how
+    many bytes it answered, which is what load measurement reads. -/
+protocol McpCall (Client, Server) {
+  sessions {
+    c: Call from Client to Server;
+    Answer from Server to Client cause c;
+  }
+}
+
 protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
   i: Initialize from Host to Server route "POST /mcp";
   Initialized from Server to Host cause i status 200;
@@ -82,6 +109,8 @@ protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
 /- LeanFM's own requirements (clause selfhost.requirements.map): each converts to CTL, or uses sorry.
    The clauses of SelfHosting.lean join this list as sorry entries until one of these replaces them. -/
 requirements {
+  "Every MCP request a server takes is answered" => McpCall ⊨ (stronglyImplies (on Call) (inevitably (on Answer)));
+  "A server listens only after reaching main" => ServerStart ⊨ (precedes (on MainEntered) (on Listening));
   "The MCP conversation follows LeanFMMcp" => LeanFMMcp;
   "No project view or tool before the server is initialized" => LeanFMMcp ⊨ (precedes (on Initialized) (or (on ProjectView) (on SessionTool)));
   "Every page the view asks for is shown or refused" => LeanFMMcp ⊨ (always (implies (on Page) (inevitably (or (on Paged) (on Refused)))));

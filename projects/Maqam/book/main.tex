@@ -375,6 +375,27 @@ in red in the header.
 
 \IfFileExists{implementations.tex}{\input{implementations.tex}}{}
 
+\chapter{Requirements in CTL}
+The protocol files end with the requirements over their own protocols that
+convert to CTL: \path{spec/Maqam.leanfm} over \texttt{MaqamLive} and
+\path{spec/AudioPeriod.leanfm} over \texttt{AudioPeriod}. LeanFM decides each
+one. Of 39 entries, 23 are formulas and all are proved, none vacuously; two
+only name the protocol a run must follow, and 14 are \texttt{sorry}. Every
+proved entry holds under LeanFM's default assumptions: messages arrive in
+order, none is lost and no thread crashes.
+
+Where a requirement reads ``whenever $p$, then $q$'', it is a strong
+implication, \texttt{(stronglyImplies p q)}: $p$ can happen, and every time it
+does, $q$ follows. The live loop runs until the performer quits, so ``every
+command is answered'' is the weak form: the session does not stop before the
+answer. ``The session inevitably stops'' is false, since the performer may
+never quit; LeanFM proves instead that it stops only after \texttt{Quit}.
+
+\texttt{AudioPeriod} shows the limit of message order: LeanFM proves that a
+block may be skipped, because nothing in the protocol makes the device wait.
+Whether it is skipped is the deadline of Section~\ref{sec:deadline}, which is
+not CTL yet.
+
 % ---------------------------------------------------------------------------
 \chapter{Known gaps}\label{ch:gaps}
 These are counterexamples to the requirements in the upstream Rust
@@ -425,6 +446,24 @@ implementation avoids each.
   (\path{reports/zig-macos/bench-m1.txt}). The live callback runs on
   CoreAudio's own I/O thread, which counted no skip in the same session. Breaks
   \emph{No missed audio deadline} for the bench on macOS.
+\end{description}
+
+\noindent One gap is in the specification itself:
+
+\begin{description}
+  \item[Requirements not yet in CTL] Fourteen entries of the requirements
+  blocks are \texttt{sorry}. Two are deadlines (\emph{Every block is on time},
+  \emph{No missed audio deadline}). Nine are about values, files or samples,
+  not message order (\emph{Entry ids are stable}, \emph{Jump passes},
+  \emph{Just intonation}, \emph{Session round trip}, \emph{The LLM never saves,
+  loads, records or plays}, \emph{A failed recording leaves no partial mp4},
+  \emph{Renders are deterministic}, \emph{Cache writes stay in the cache},
+  \emph{Secrets stay out of files, scores and prompts}). Two are about
+  blocking and crashing, which are not messages of \texttt{MaqamLive}
+  (\emph{The audio callback never blocks}, \emph{No input crashes the app}).
+  \emph{A request is answered when its worker thread dies} needs LeanFM to
+  check a requirement with the no-crash assumption dropped, which it does not
+  do yet.
 \end{description}
 
 \chapter{Where the documents and the code disagree}

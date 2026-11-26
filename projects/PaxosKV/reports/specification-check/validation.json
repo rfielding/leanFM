@@ -23,7 +23,7 @@
   "artifacts": {
     "spec/Requirements.lean": "fbea5d3096d027be0f3ac95fe2f21870e410de3a3f438f51aed809dd30e0adda",
     "spec/Requirements.proto": "05ae841aeca1f071e5bcb84adebb9b23e727fc97dc9c6575a87c5026612f70ba",
-    "book/main.tex": "0b65c9be752cefa69e0019c1cfcbb06a01b38d43ec3814f0d4752c43cdb90637",
+    "book/main.tex": "f791a380b65e7d5fb604fd3bb4fa5d6d9178c50004afbb6b50bbf33d91b3bfaf",
     "spec/Implementation.lean": "f5a45a8260acf0db9163e8fcc43f1bfb9f192e1eaef068f99e093ebe570a4fff"
   },
   "task_count": 3,

@@ -1,6 +1,7 @@
 import Lean
 import Std.Time
 import LeanFM.ServerLogs
+import LeanFM.Launch
 
 /-! Which build of LeanFM is answering (clause selfhost.mcp.server-info), so an agent can tell
 whether the server it consults runs the code in front of it.
@@ -94,7 +95,8 @@ def answer (args : Json) : IO (Except String (String × Json)) := do
     ("why", if i.commit.isSome then Json.null else Json.str i.why),
     ("changedFiles", match i.changedFiles with | some n => toJson n | none => Json.null),
     ("startedAt", iso i.startedAt), ("executable", i.executable), ("builtAt", iso i.builtAt),
-    ("stale", stale), ("version", ← version)]
+    ("stale", stale), ("version", ← version),
+    ("initMs", match ← LeanFM.Launch.initMs.get with | some ms => toJson ms | none => Json.null)]
   let dirty := match i.changedFiles with
     | some 0 => "" | some n => s!", {n} tracked files changed at start" | none => ""
   let text := (match short i with

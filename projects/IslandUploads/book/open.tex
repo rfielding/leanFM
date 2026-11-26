@@ -318,6 +318,15 @@ security questions above.
   \texttt{mcp\_islands.py} joins the rest by asking again from where it stopped.
 \item Liveness holds only under fair delivery. The server shows the lassos where
   it fails, and the requirements state the assumption instead of hiding it.
+\item Thirteen requirements in \texttt{spec/IslandUploads.leanfm} are
+  \texttt{sorry}. Four need an assumption dropped (a lost or duplicated call, a
+  partition): anti-entropy is idempotent, converge after repair, imports resume
+  after a timeout, islands may be partitioned for a day. Two are about state
+  across sessions: a visible record has its blob, no feed skips. Seven are claims about
+  payload values and policy: parts resume from the held offset, ranges are
+  exact, updates are never refused for being stale, writes need write, every
+  shown file carries its label, unverifiable tokens are denied, jobs never run
+  on imports.
 \end{itemize}
 
 \appendix

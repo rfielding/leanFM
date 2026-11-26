@@ -501,6 +501,26 @@ Besides the task views, the specification asks for two outputs: the
 projected-score timeline (per seat, against move number, from bot searches and
 the viewer's local searches), and the game result (team scores and winners).
 
+\chapter{Requirements in CTL}
+\path{spec/GoServer.leanfm} copies GoServer's protocols from the session
+panel's text and lists the requirements over them that convert to CTL.
+LeanFM decides each one: twenty-five are proved and nine are
+\texttt{sorry}. Every proved entry holds under LeanFM's default assumptions:
+messages arrive in order, none is lost and neither the server nor a bot
+crashes.
+
+Where a requirement reads ``whenever $p$, then $q$'', it is written as
+\texttt{(stronglyImplies p q)}: $p$ can happen, and every time it does, $q$
+follows. Nothing here runs forever, but a lobby or a challenge may loop as long
+as people keep asking, so ``is answered'' is the weak form: before the
+conversation can stop, the answer has come.
+
+Writing them this way corrected one. ``Games always finish'' as ``every game
+eventually finishes'' is false: a challenge can keep changing its seat plan and
+never start (LeanFM's counterexample loops on \texttt{SetSeatPlan},
+\texttt{SeatPlanSet}). The list states it from the start instead: once a game
+has started, it cannot end before \texttt{Finished}.
+
 % ---------------------------------------------------------------------------
 \chapter{Implementation}
 \path{spec/Implementation.lean} maps the specification onto Go. The server
@@ -575,6 +595,15 @@ its evidence under \path{reports/}.
   live game session and is reported.
   \item Server-side enforcement of the analysis rule for seated players, which
   is impossible by nature for public positions.
+  \item Nine requirements in \path{spec/GoServer.leanfm} are \texttt{sorry}.
+  Six are about message contents, not order: moving only for one's own seat
+  in turn with the current move number, a bot result applying only to its
+  turn, clocks never giving time back, merges needing every seated person's
+  consent, a claimed name needing its password, and every answer carrying its
+  request's id. Two need an assumption dropped (a server restart, a lost
+  connection), which LeanFM does not check yet. ``A turn never ends twice''
+  cannot be stated yet, because the checker repeats the last event of a
+  finished conversation.
 \end{itemize}
 
 \appendix

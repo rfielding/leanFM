@@ -124,3 +124,46 @@ protocol MaqamLive (Performer, App, Audio, Recorder, Ffmpeg, Llm, Web, Disk) {
     }
   }
 }
+
+/- The requirements over MaqamLive that convert to CTL, each decided by LeanFM (session_ctl), none
+   vacuous. They hold under LeanFM's default assumptions: messages arrive in order, none is lost
+   and no thread crashes. The live loop runs until the performer quits, so "is answered" is the
+   weak form: no stop before the answer. The sorry entries are claims about values, files,
+   blocking or failures (spec/Requirements.lean), which are not message order. -/
+requirements {
+  "The live app follows MaqamLive" => MaqamLive;
+  "Timeline first, audio second" => MaqamLive ⊨ (precedes (on Command) (on Phrase));
+  "After a command is shown, the audio gets no phrase until the next command" => MaqamLive ⊨ (stronglyImplies (on Shown) (allUnless (not (on Phrase)) (on Command)));
+  "A rejected command changes nothing" => MaqamLive ⊨ (stronglyImplies (on Rejected) (allUnless (not (on Phrase)) (on Command)));
+  "Every command is answered" => MaqamLive ⊨ (stronglyImplies (on Command) (allUnless (not stop) (or (on Shown) (on Rejected))));
+  "Every save or load is answered" => MaqamLive ⊨ (stronglyImplies (on Session) (allUnless (not stop) (or (on Loaded) (on LoadFailed))));
+  "The audio resyncs only after the disk succeeds" => MaqamLive ⊨ (precedes (on Done) (on Resync));
+  "A failed load leaves the audio alone" => MaqamLive ⊨ (stronglyImplies (on LoadFailed) (allUnless (not (on Resync)) (on Session)));
+  "Every recording is answered" => MaqamLive ⊨ (stronglyImplies (on Record) (allUnless (not stop) (or (on RecordDone) (on RecordFailed))));
+  "A recording is reported done only after its mp4 is written" => MaqamLive ⊨ (precedes (on Written) (on RecordDone));
+  "Every prompt is answered" => MaqamLive ⊨ (stronglyImplies (on Prompt) (allUnless (not stop) (or (on Applied) (on RolledBack) (on Explained) (on AskFailed))));
+  "LLM commands are checked before any is applied" => MaqamLive ⊨ (precedes (on Commands) (on Apply));
+  "Returned LLM commands are applied or rolled back" => MaqamLive ⊨ (stronglyImplies (on Commands) (allUnless (not stop) (or (on Applied) (on RolledBack))));
+  "A rolled-back LLM edit applies nothing" => MaqamLive ⊨ (stronglyImplies (on RolledBack) (allUnless (not (on Apply)) (on Prompt)));
+  "Every NAM fetch is answered" => MaqamLive ⊨ (stronglyImplies (on Fetch) (allUnless (not stop) (or (on NamLoaded) (on NamFailed))));
+  "A download is cached before it is loaded" => MaqamLive ⊨ (precedes (on Cached) (on NamModel));
+  "Quit stops the audio" => MaqamLive ⊨ (stronglyImplies (on Quit) (inevitably (on Stop)));
+  "The app stops only after Quit" => MaqamLive ⊨ (precedes (on Quit) stop);
+  -- values of the timeline, the tuning and the session text, not message order
+  "Entry ids are stable" => sorry;
+  "Jump passes" => sorry;
+  "Just intonation" => sorry;
+  "Session round trip" => sorry;
+  -- which commands an LLM answer holds: a value of Commands
+  "The LLM never saves, loads, records or plays" => sorry;
+  -- files on disk and samples written
+  "A failed recording leaves no partial mp4" => sorry;
+  "Renders are deterministic" => sorry;
+  "Cache writes stay in the cache" => sorry;
+  "Secrets stay out of files, scores and prompts" => sorry;
+  -- blocking and crashing are not messages of MaqamLive
+  "The audio callback never blocks" => sorry;
+  "No input crashes the app" => sorry;
+  -- needs a failed worker thread: (stronglyImplies (on Record) (allUnless (not stop) (or (on RecordDone) (on RecordFailed)))) with the Recorder allowed to crash
+  "A request is answered when its worker thread dies" => sorry;
+}

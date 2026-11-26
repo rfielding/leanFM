@@ -57,7 +57,7 @@
   button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
   input[type=range] { flex: 1; min-width: 120px; accent-color: var(--amber); }
   .pos { color: var(--dim); font: 13px ui-monospace, Menlo, monospace; }
-  .stage { display: grid; grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr); gap: 10px; height: 560px; }
+  .stage { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 10px; height: 560px; }
   :root[data-mode="fullscreen"] .stage { height: calc(100vh - 230px); min-height: 560px; }
   .sessbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
   .sessbar button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
@@ -1022,7 +1022,8 @@ function animation(body, opts) {
   const eid = (i) => "e" + String(num(E[i].id)).padStart(3, "0");
   const kind = (e) => e.act ? "act" : (e.status != null && num(e.status) >= 400) ? "bad" : e.answers != null ? "rep" : "req";
 
-  // the log beside the drawing: one row per event, the current one lit, later ones faint
+  // the log beside the drawing, on its left: one row per event, the current one lit, later ones faint,
+  // scrolled to follow the animation, so the log flies by as the diagram draws it
   const log = el("div", "evlog");
   log.setAttribute("role", "list");
   log.setAttribute("aria-label", "Event log: click an event to go to it");
@@ -1057,7 +1058,7 @@ function animation(body, opts) {
   spacer.appendChild(cv); seq.appendChild(spacer);
   seq.setAttribute("aria-label", "Interaction diagram of the stream; scroll to see all of it");
   const stage = el("div", "stage");
-  stage.append(seq, side);
+  stage.append(side, seq);
   wrap.append(stage, controls, pos);
 
   const ctx = cv.getContext("2d");

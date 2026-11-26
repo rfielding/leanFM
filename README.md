@@ -153,14 +153,20 @@ submitted text as code (protocol text is read by a parser for its grammar alone)
 
 ```sh
 git clone https://github.com/rfielding/leanFM.git && cd leanFM
-lake build leanfm-mcp                       # needs elan (https://github.com/leanprover/elan)
-python3 scripts/claude_desktop_config.py --root "$PWD" --install
+make build                                  # needs elan (https://github.com/leanprover/elan)
+make serve                                  # the LeanFM server; leave it running
+python3 scripts/claude_desktop_config.py --root "$PWD" --forward http://127.0.0.1:8080/mcp --install
 ```
 
-Then quit and reopen Claude Desktop. The script adds one `leanfm` entry to
+Then quit and reopen Claude Desktop, once. The script adds one `leanfm` entry to
 `claude_desktop_config.json` (keeping your other servers and writing a backup first): Claude
-Desktop runs `leanfm-mcp --stdio --root <this checkout>`. Rerun `lake build leanfm-mcp` after a
-`git pull`, and restart Claude Desktop so it starts the new binary.
+Desktop runs `leanfm-mcp --stdio --forward http://127.0.0.1:8080/mcp`, a relay to the server
+`make serve` runs. After a `git pull` and a rebuild, restart only `make serve`; Claude Desktop
+keeps running. The two may start in either order: a request that arrives before the server
+listens waits for it (up to `LEANFM_FORWARD_WAIT_SECONDS`, 30 by default).
+
+Without `--forward`, Claude Desktop starts its own `leanfm-mcp --stdio --root <this checkout>`
+instead; then restart Claude Desktop after each rebuild.
 
 - **LeanFM on another machine?** Build it there and install with `--ssh HOST`: Claude Desktop then
   runs the server over ssh (`scripts/claude_desktop_config.py --help`).

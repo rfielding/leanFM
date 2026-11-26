@@ -612,5 +612,25 @@ is how this chapter states them.
   files.
 \end{itemize}
 
+\chapter{Requirements in CTL}
+\texttt{spec/IslandUploads.leanfm} writes the ten protocols of
+\texttt{spec/Session.lean} as protocol text and lists the requirements over
+them that convert to CTL. LeanFM decides each one: of 47 entries, 29 are
+formulas and all are proved, 5 say only that a session follows its protocol,
+and 13 are \texttt{sorry}. Every proved entry holds under LeanFM's default
+assumptions: messages arrive in order, none is lost or duplicated, no role
+crashes and the islands are not partitioned.
+
+``Whenever $p$, then $q$'' is written as strong implication,
+\texttt{(stronglyImplies p q)}: $p$ can happen, and every time it does, $q$
+follows. A plain implication would also pass if $p$ could never happen.
+
+An upload's parts and a websocket's frames loop until shutdown, so
+``every upload is answered'' with \texttt{inevitably} is false: LeanFM's
+counterexample stays in the loop of parts. Those entries say instead that
+the session cannot end before the answer. The sorry entries are claims about
+payload values and policy, or need a lost call or a partition; the last
+chapter lists them.
+
 \input{open.tex}
 \end{document}

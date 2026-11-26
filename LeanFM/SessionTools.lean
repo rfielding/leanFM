@@ -1,3 +1,4 @@
+import LeanFM.EventLog
 import Lean.Data.Json
 import LeanFM.Session.Global
 import LeanFM.Session.Http
@@ -1446,7 +1447,46 @@ def secretFields (evs : List LogEvent) : Json := Id.run do
         seen := seen ++ [(k, e.id)]
   return Json.arr (seen.map fun (k, id) => Json.mkObj [("field", Json.str k), ("event", Json.str id)]).toArray
 
-def conform (args : Json) : Except String Json := do
+/-- session_conform over the event lines of a whole log (selfhost.session.event-log): the lines that
+are JSON objects with type leanFM are the events, every other line is counted and ignored, and a
+malformed line beginning with the marker is refused naming its line number. -/
+def conformLog (args : Json) (log : String) (conformEvents : Json → Except String Json) : Except String Json := do
+  if (args.getObjVal? "events").isOk then throw "give events or log, not both"
+  -- read by lines: a window of the log (selfhost.session.event-log)
+  let fromLine := (args.getObjValAs? Nat "fromLine").toOption.getD 1
+  if fromLine == 0 then throw "fromLine counts from 1"
+  let count := (args.getObjValAs? Nat "lineCount").toOption
+  if count.any (fun c => c == 0 || c > 100000) then throw "lineCount is from 1 to 100000"
+  let (log, logLines, nextLine) := EventLog.window log fromLine count
+  let (events, other) ← EventLog.extract log
+  -- a log of several protocols: the events of the one checked, the others counted
+  let p ← parseProtocol args
+  let named := events.any fun e => (e.getObjVal? "protocol").isOk
+  let mine := if named then events.filter fun e => e.getObjValD "protocol" == Json.str p.name else events
+  -- a window that starts after line 1 cuts sessions: one with an event naming an event before the
+  -- window began before it, and is left out; the rest may still be running at the window's end
+  let ids := mine.filterMap fun e => (e.getObjValAs? String "id").toOption
+  let links (e : Json) : List String :=
+    ((e.getObjValAs? String "cause").toOption.toList) ++ ((e.getObjValAs? (List String) "prev").toOption.getD [])
+  let cut : List String := if fromLine == 1 then [] else
+    (mine.filter fun e => (links e).any fun l => !ids.contains l).toList.filterMap
+      (fun e => (e.getObjValAs? String "session").toOption) |>.eraseDups
+  let kept := mine.filter fun e => !cut.contains ((e.getObjValAs? String "session").toOption.getD "")
+  -- links to the left-out sessions' events, or to before the window, are dropped from what is kept
+  let keptIds := kept.filterMap fun e => (e.getObjValAs? String "id").toOption
+  let kept := if fromLine == 1 then kept else kept.map fun e =>
+    let e := match (e.getObjValAs? (List String) "prev").toOption with
+      | some ps => e.setObjVal! "prev" (toJson (ps.filter keptIds.contains))
+      | none => e
+    e
+  let args := if fromLine == 1 then args else args.setObjVal! "allowIncomplete" (Json.bool true)
+  let answer ← conformEvents (args.setObjVal! "events" (Json.arr kept))
+  return answer.setObjVal! "logEventLines" (toJson kept.size) |>.setObjVal! "logOtherLines" (toJson other)
+    |>.setObjVal! "logOtherProtocolEvents" (toJson (events.size - mine.size))
+    |>.setObjVal! "logLines" (toJson logLines) |>.setObjVal! "fromLine" (toJson fromLine)
+    |>.setObjVal! "nextLine" (toJson nextLine) |>.setObjVal! "sessionsBeganBeforeWindow" (toJson cut.length)
+
+def conformEvents (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let evs ← match args.getObjVal? "events" with
     | .ok (.arr a) =>
@@ -1570,6 +1610,13 @@ def conform (args : Json) : Except String Json := do
          ("problem", match r.problem with | some (e, why) => Json.mkObj [("event", e), ("reason", why)] | none => Json.null)]).toArray)
     , ("derivedSessions", derived.json named), ("events", Json.arr streamEvs)
     , ("diagram", diagramJson p) ]
+
+
+def conform (args : Json) : Except String Json :=
+  match args.getObjVal? "log" with
+  | .ok (.str log) => conformLog args log conformEvents
+  | .ok _ => .error "log is the text of a log whose event lines are JSON objects with type leanFM"
+  | .error _ => conformEvents args
 
 /-- Calls, their two views, timelines and critical paths of a log (selfhost.session.timelines,
 selfhost.session.critical-path): every duration a difference of one clock's readings. -/
