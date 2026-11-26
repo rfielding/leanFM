@@ -217,7 +217,8 @@ def command(path):
         # the runner never runs itself as a whole run, which would recurse
         if os.path.basename(path) == os.path.basename(__file__) and "--self-test" not in args:
             args = ["--self-test"]
-        return ["python3", "-I", path, *args]
+        # as make check runs it: the script's own folder stays on the import path for its sibling modules
+        return ["python3", path, *args]
     return ["bash", path]
 
 

@@ -2,6 +2,8 @@
 -- Import modules here that should be built as part of the library.
 -- the library itself, without its tests, which executables import (LeanFM/Library.lean)
 import LeanFM.Library
+-- reading logs by line ranges (clause selfhost.session.log-paging)
+import LeanFM.LogIndexTests
 -- the session-type library and its tests (clauses selfhost.session.*)
 -- the philosophy calculator example and its tests
 import LeanFM.Philosophy.ExistenceTests

@@ -54,10 +54,28 @@ function firstArguments() {
   return args;
 }
 
+// /view?log=NAME&protocol=P opens on that log's last lines against protocol P of LeanFM.leanfm
+// (selfhost.session.log-paging), each value checked against a pattern before it is passed on
+function logArguments() {
+  const log = query.get("log"), protocol = query.get("protocol");
+  if (!log || !/^[a-z][a-z0-9-]{0,39}$/.test(log)) return null;
+  const args = { project: "LeanFM", file: "LeanFM/LLMGenerated/LeanFM.leanfm", serverLog: log, lastLines: 200, allowIncomplete: true };
+  if (protocol && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(protocol)) args.protocolName = protocol;
+  return args;
+}
+
 async function openFirst() {
   if (opened) return;
   opened = true;
   try {
+    const logArgs = logArguments();
+    if (logArgs) {
+      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: logArgs } });
+      const answer = await mcp("tools/call", { name: "session_conform", arguments: logArgs });
+      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: answer });
+      if (answer && answer.isError) say(String((answer.content && answer.content[0] && answer.content[0].text) || "LeanFM refused the log."));
+      return;
+    }
     const result = await mcp("tools/call", { name: "project_view", arguments: firstArguments() });
     toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result });
     if (result && result.isError) say(String((result.structuredContent && result.structuredContent.reason) || "LeanFM refused the first view."));

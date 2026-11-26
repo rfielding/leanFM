@@ -256,7 +256,7 @@ window.addEventListener("message", (event) => {
   }
   const params = msg.params || {};
   switch (msg.method) {
-    case "ui/notifications/tool-input": break;
+    case "ui/notifications/tool-input": lastToolInput = params.arguments && typeof params.arguments === "object" ? params.arguments : null; break;
     case "ui/notifications/tool-result": show(params); break;
     case "ui/notifications/host-context-changed": theme(params); break;
     case "ui/notifications/tool-cancelled": status("The tool call was cancelled."); break;
@@ -877,6 +877,81 @@ function sessionBody(body, keepIt) {
 // (selfhost.mcp.session.view): null clears the lighting
 let diagramFocus = null;
 
+// ---- a server log read by windows of lines (selfhost.session.log-paging) ----------------------
+// A log is only appended to, so a window once read never changes: at most LOG_WINDOWS windows of
+// LOG_WINDOW lines are held, the least recently used dropped first; a window not held is fetched
+// with the same arguments and its range (a miss); an answer for a window no longer wanted is held but
+// never drawn; a changed fingerprint or fewer lines than before drops every window held.
+const LOG_WINDOW = 200, LOG_WINDOWS = 8;
+let lastToolInput = null;
+let logPager = null;
+function makeLogPager(args, first) {
+  const P = { args, held: new Map(), cur: first, total: num(first.logLines), fp: first.logFingerprint || null,
+    want: 0, openMs: null, hits: 0, misses: 0, missMs: 0, note: "", stats: null };
+  P.hold = (b) => {
+    const k = num(b.fromLine);
+    P.held.delete(k); P.held.set(k, b);
+    while (P.held.size > LOG_WINDOWS) P.held.delete(P.held.keys().next().value);
+  };
+  P.hold(first);
+  P.owns = (b) => b === P.cur;
+  // false when the log was rotated or truncated: everything held is dropped
+  P.seen = (b) => {
+    const total = num(b.logLines);
+    if ((P.fp && b.logFingerprint && b.logFingerprint !== P.fp) || total < P.total) {
+      P.held.clear(); P.fp = b.logFingerprint || null; P.total = total;
+      P.note = "The log was rotated or truncated: the windows held were dropped, reading from its end again.";
+      return false;
+    }
+    P.total = Math.max(P.total, total); P.fp = P.fp || b.logFingerprint || null;
+    return true;
+  };
+  P.show = (b) => { P.cur = b; render(b); };
+  P.go = async (fromLine, count, lastLines) => {
+    const ticket = ++P.want;
+    if (!lastLines && P.held.has(fromLine)) { const b = P.held.get(fromLine); P.hold(b); P.hits++; P.show(b); return; }
+    const a = Object.assign({}, P.args);
+    delete a.fromLine; delete a.lineCount; delete a.lastLines;
+    Object.assign(a, lastLines ? { lastLines } : { fromLine, lineCount: count });
+    const t0 = performance.now();
+    let result;
+    try { result = await rpc("tools/call", { name: "session_conform", arguments: a }, 60000); }
+    catch (e) { if (ticket === P.want) status("Could not read that part of the log: " + String(e && e.message || e), true); return; }
+    const b = result && result.structuredContent;
+    if (!b || typeof b !== "object" || result.isError) { if (ticket === P.want) status("Could not read that part of the log.", true); return; }
+    P.misses++; P.missMs += performance.now() - t0;
+    if (!P.seen(b)) { if (ticket === P.want) P.go(0, 0, LOG_WINDOW); return; }
+    P.hold(b);
+    if (ticket === P.want) P.show(b);
+  };
+  P.canEarlier = () => num(P.cur.fromLine) > 1;
+  P.canLater = () => num(P.cur.nextLine) <= P.total;
+  P.earlier = () => { if (!P.canEarlier()) return; const f = num(P.cur.fromLine), from = Math.max(1, f - LOG_WINDOW); P.go(from, f - from); };
+  P.later = () => { if (P.canLater()) P.go(num(P.cur.nextLine), LOG_WINDOW); };
+  P.newest = () => P.go(0, 0, LOG_WINDOW);
+  P.refresh = () => {
+    if (!P.stats) return;
+    const b = P.cur, from = num(b.fromLine), to = Math.max(from - 1, num(b.nextLine) - 1);
+    P.stats.textContent = `Lines ${from}–${to} of ${P.total}` +
+      (P.openMs != null ? ` · opened in ${Math.round(P.openMs)} ms` : "") +
+      ` · ${P.hits} from memory, ${P.misses} fetched` + (P.misses ? ` (mean ${Math.round(P.missMs / P.misses)} ms)` : "") +
+      ` · ${P.held.size} of ${LOG_WINDOWS} windows held` + (P.note ? " · " + P.note : "");
+  };
+  P.bar = () => {
+    const bar = el("div", "sessbar");
+    bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", "Log window");
+    const mk = (text, fn, ok, tip) => { const btn = el("button", "", text); btn.title = tip; btn.disabled = !ok; btn.addEventListener("click", fn); return btn; };
+    bar.append(mk("Earlier", P.earlier, P.canEarlier(), "the " + LOG_WINDOW + " lines before these (PageUp at the top of the event log)"),
+      mk("Later", P.later, P.canLater(), "the lines after these (PageDown at the bottom of the event log)"),
+      mk("Newest", P.newest, true, "the last " + LOG_WINDOW + " lines of the log as it is now"));
+    P.stats = el("p", "meta");
+    P.refresh();
+    const box = el("div"); box.append(bar, P.stats);
+    return box;
+  };
+  return P;
+}
+
 function streamView(body) {
   const box = el("div"), bar = el("div", "sessbar"), stage = el("div"), note = el("p", "meta");
   const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
@@ -1074,6 +1149,14 @@ function animation(body, opts) {
     row.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
     rows.push(row); base.push(cls); log.appendChild(row);
   });
+  // a server log read by windows: PageUp at the top edge and PageDown at the bottom edge move a window
+  if (logPager && logPager.owns(body)) {
+    const pager = logPager;
+    log.addEventListener("keydown", (ev) => {
+      if (ev.key === "PageUp" && num(log.scrollTop) <= 0) { ev.preventDefault(); pager.earlier(); }
+      else if (ev.key === "PageDown" && num(log.scrollTop) + num(log.clientHeight) >= num(log.scrollHeight) - 1) { ev.preventDefault(); pager.later(); }
+    });
+  }
   const jsonCap = el("p", "cap", "Event");
   const jsonBox = el("div");
   jsonBox.style.display = "contents";
@@ -1324,7 +1407,13 @@ function show(result) {
   if (body.tool === "project_view") { stageView(body); return; }
   currentOverlay = body.overlay || null;
   if (typeof body.lean === "string") editor(body.lean);
+  // a conformance answer over a server log is read a window at a time (selfhost.session.log-paging)
+  const args = lastToolInput;
+  const t0 = performance.now();
+  logPager = body.tool === "session_conform" && args && typeof args.serverLog === "string" && Number.isInteger(body.logLines)
+    ? makeLogPager(args, body) : null;
   render(body);
+  if (logPager) { logPager.openMs = performance.now() - t0; logPager.refresh(); }
 }
 
 function render(body) {
@@ -1384,6 +1473,7 @@ function render(body) {
     }
     parts.push(panel("Deadline monitoring", ul));
   }
+  if (logPager && logPager.owns(body)) parts.push(panel("Log window", logPager.bar()));
   if (Array.isArray(body.events)) parts.push(panel("Event stream", streamView(body)));
   if (body.tool === "session_actor") parts.push(...actorPanels(body));
   if (body.tool === "session_dataset") parts.push(...datasetPanels(body));

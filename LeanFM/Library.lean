@@ -1,5 +1,6 @@
 import LeanFM.Env
 import LeanFM.EventLog
+import LeanFM.LogIndex
 import LeanFM.Launch
 import LeanFM.Basic
 import LeanFM.Assets

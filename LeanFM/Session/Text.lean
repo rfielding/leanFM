@@ -1498,10 +1498,16 @@ def linkTargetsOf (env : Types.Env) (defs : List Def) (fuel : Nat) (ren : List (
 
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
 (selfhost.session.proto); the text may then not declare structures of its own. -/
-def parse (text : String) (types : Option Types.Env := none) : Except String Parsed := do
+def parse (text : String) (types : Option Types.Env := none) (mainName : Option String := none) : Except String Parsed := do
   let (defs, st) ← readText text
-  let main := defs.getLast!
-  let earlier := defs.dropLast
+  -- the protocol checked: the last one, or the one named, with only those before it in reach
+  -- (selfhost.session.log-paging: protocolName)
+  let (main, earlier) ← match mainName with
+    | none => pure (defs.getLast!, defs.dropLast)
+    | some n => match defs.findIdx? (·.name == n) with
+      | some i => pure (defs[i]!, defs.take i)
+      | none => throw s!"protocolName {n} is not a protocol of the text; it defines {", ".intercalate (defs.map (·.name))}"
+  let defs := earlier ++ [main]
   let ctx : Ctx := { defs := earlier, rename := [], roles := main.roles, path := main.name,
                      inside := [main.name] }
   let (g, n) ← (build ctx main.body).run 0

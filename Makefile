@@ -74,7 +74,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check
+check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -303,6 +303,12 @@ test:
 	python3 -I scripts/changed_tests.py
 
 # Every environment variable read is in LeanFM/Env.lean (clause selfhost.env.registry).
+# Logs read by line ranges: 206, 416, ETag, appends (clause selfhost.session.log-paging).
+.PHONY: log-range-check
+log-range-check:
+	lake build leanfm-server
+	python3 -I scripts/log_range_check.py
+
 .PHONY: env-registry-check
 env-registry-check:
 	python3 -I scripts/env_registry_check.py

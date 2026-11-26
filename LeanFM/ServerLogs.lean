@@ -1,4 +1,5 @@
 import Lean
+import LeanFM.LogIndex
 
 /-! Reading LeanFM's own logs and Claude Desktop's logs of LeanFM, so an agent can diagnose a
 failure itself instead of asking the user to paste log files.
@@ -224,10 +225,32 @@ def logArgs (args : Json) : IO (Except String Json) := do
     | return .error s!"serverLog must be one of {", ".intercalate names}"
   let some path ← pathOf src | return .error s!"the {name} log is not on this machine"
   unless ← path.pathExists do return .error s!"the {name} log does not exist yet ({path})"
-  let (bytes, cut) ← tailBytes path logArgsBytes
-  let text := decodeLossy bytes
-  let text := if cut then ((text.splitOn "\n").drop 1 |> "\n".intercalate) else text
-  return .ok (Json.obj (kvs.erase "serverLog") |>.setObjVal! "log" (Json.str text))
+  -- by line ranges through the log's index (selfhost.session.log-paging): only appended bytes are
+  -- read to update it, and a window is read from the nearest kept offset
+  let nat (k : String) : Except String (Option Nat) := match kvs.get? k with
+    | none => .ok none
+    | some v => match v.getNat? with
+      | .ok n => .ok (some n)
+      | .error _ => .error s!"{k} is a whole number"
+  let (fromLine, count, lastLines) ← match nat "fromLine", nat "lineCount", nat "lastLines" with
+    | .ok a, .ok b, .ok c => pure (a, b, c)
+    | .error e, _, _ | _, .error e, _ | _, _, .error e => return .error e
+  if lastLines.isSome && (fromLine.isSome || count.isSome) then
+    return .error "give lastLines, or fromLine and lineCount, not both"
+  if fromLine == some 0 then return .error "fromLine counts from 1"
+  if [count, lastLines].any (·.any fun c => c == 0 || c > 100000) then
+    return .error "lineCount and lastLines are from 1 to 100000"
+  let (fp, ix) ← LogIndex.refresh path
+  let total := ix.lines
+  let (first, last) := match lastLines with
+    | some n => (total - min n total + 1, total)
+    | none => let f := fromLine.getD 1; (f, match count with | some c => f + c - 1 | none => total)
+  let (lines, next) ← LogIndex.window path ix first last
+  let window := Json.mkObj [("fromLine", toJson first), ("nextLine", toJson (max next first)),
+    ("logLines", toJson total), ("logFingerprint", Json.str fp)]
+  let kvs := ((kvs.erase "serverLog").erase "fromLine" |>.erase "lineCount").erase "lastLines"
+  return .ok (Json.obj kvs |>.setObjVal! "log" (Json.str ("\n".intercalate lines.toList))
+    |>.setObjVal! "logWindow" window)
 
 /-- The arguments {log?, lines?, grep?}: without log, the index; with it, the end of that log. -/
 def query (args : Json) : IO (Except String (String × Json)) := do
@@ -301,5 +324,29 @@ def httpAnswer (target : String) : IO (Nat × String × String) := do
   | .ok (text, j) =>
     if json then return (200, "application/json; charset=utf-8", j.compress ++ "\n")
     return (200, "text/plain; charset=utf-8", text ++ "\n")
+
+/-- GET /tools/logs?log=NAME with a Range header of lines (selfhost.session.log-paging): status,
+content type, headers and body. 206 with the lines, each redacted as the 200 answers are; 416 when
+the range starts after the last line or is not one this reads. -/
+def rangeAnswer (target header : String) : IO (Nat × String × List String × String) := do
+  unless ← enabled.get do return (403, "text/plain; charset=utf-8", [], disabledMessage ++ "\n")
+  let args := argsOfTarget target
+  let some name := (args.getObjValAs? String "log").toOption
+    | return (400, "text/plain; charset=utf-8", [], "a range needs log=NAME\n")
+  let some src := sources.find? (·.name == name)
+    | return (400, "text/plain; charset=utf-8", [], s!"log must be one of {", ".intercalate names}\n")
+  let some path ← pathOf src | return (404, "text/plain; charset=utf-8", [], s!"the {name} log is not on this machine\n")
+  unless ← path.pathExists do return (404, "text/plain; charset=utf-8", [], s!"the {name} log does not exist yet\n")
+  let (fp, ix) ← LogIndex.refresh path
+  let tag := "ETag: \"" ++ fp ++ "\""
+  let unsatisfiable := (416, "text/plain; charset=utf-8",
+    [s!"Content-Range: lines */{ix.lines}", "Accept-Ranges: lines", tag], "")
+  let .ok r := LogIndex.parseRange header | return unsatisfiable
+  let some (first, last) := LogIndex.resolve r ix.lines | return unsatisfiable
+  let (lines, next) ← LogIndex.window path ix first last
+  if lines.isEmpty then return unsatisfiable
+  let body := String.join (lines.toList.map fun l => redactLine l ++ "\n")
+  return (206, "text/plain; charset=utf-8",
+    [s!"Content-Range: lines {first}-{next - 1}/{ix.lines}", "Accept-Ranges: lines", tag], body)
 
 end LeanFM.ServerLogs

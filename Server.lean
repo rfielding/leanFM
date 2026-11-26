@@ -391,8 +391,13 @@ def responseBody (path : String) (request : String) : IO Response := do
   | "/tasks.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.taskGraphDot
   | "/assembled.dot" => pure <| response 200 "text/vnd.graphviz; charset=utf-8" LeanFM.assembledGraphDot
   | "/tools/logs" => do
-      let (status, contentType, body) ← LeanFM.ServerLogs.httpAnswer (requestTarget request)
-      pure <| response status contentType body ["Cache-Control: no-store"]
+      match LeanFM.ChatUI.Store.headerValue? request "Range" with
+      | some range =>
+          let (status, contentType, headers, body) ← LeanFM.ServerLogs.rangeAnswer (requestTarget request) range
+          pure <| response status contentType body (headers ++ ["Cache-Control: no-store"])
+      | none =>
+          let (status, contentType, body) ← LeanFM.ServerLogs.httpAnswer (requestTarget request)
+          pure <| response status contentType body ["Accept-Ranges: lines", "Cache-Control: no-store"]
   | "/health" => pure <| response 200 "text/plain; charset=utf-8" "ok\n"
   | _ => pure <| response 404 "text/plain; charset=utf-8" "not found\n"
 

@@ -1,4 +1,5 @@
 import LeanFM.EventLog
+import LeanFM.LogIndex
 import Lean.Data.Json
 import LeanFM.Session.Global
 import LeanFM.Session.Http
@@ -416,7 +417,11 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
     let text ← match v.getStr? with
       | .ok t => pure t
       | .error _ => throw "lean must be a string of LeanFM protocol text"
-    let r ← LeanFM.Session.Text.parse text (← protoTypes args)
+    let mainName ← match args.getObjVal? "protocolName" with
+      | .ok (.str n) => pure (some n)
+      | .ok _ => throw "protocolName is the name of a protocol of the text"
+      | .error _ => pure none
+    let r ← LeanFM.Session.Text.parse text (← protoTypes args) mainName
     -- a version without a clean upgrade path from the one before is refused, as the Lean
     -- elaborator refuses it (selfhost.session.versions)
     let upgrades <- Versions.check r
@@ -1453,11 +1458,26 @@ malformed line beginning with the marker is refused naming its line number. -/
 def conformLog (args : Json) (log : String) (conformEvents : Json → Except String Json) : Except String Json := do
   if (args.getObjVal? "events").isOk then throw "give events or log, not both"
   -- read by lines: a window of the log (selfhost.session.event-log)
-  let fromLine := (args.getObjValAs? Nat "fromLine").toOption.getD 1
+  -- a serverLog arrives already windowed by its index (selfhost.session.log-paging), with its numbers
+  let given := (args.getObjVal? "logWindow").toOption
+  let lastLines := (args.getObjValAs? Nat "lastLines").toOption
+  if lastLines.isSome && ((args.getObjVal? "fromLine").isOk || (args.getObjVal? "lineCount").isOk) then
+    throw "give lastLines, or fromLine and lineCount, not both"
+  if lastLines.any (fun c => c == 0 || c > 100000) then throw "lastLines is from 1 to 100000"
+  let total := (EventLog.window log 1 (some 0)).2.1
+  let fromLine := match given, lastLines with
+    | some w, _ => (w.getObjValAs? Nat "fromLine").toOption.getD 1
+    | none, some n => total - min n total + 1
+    | none, none => (args.getObjValAs? Nat "fromLine").toOption.getD 1
   if fromLine == 0 then throw "fromLine counts from 1"
-  let count := (args.getObjValAs? Nat "lineCount").toOption
+  let count := if lastLines.isSome then none else (args.getObjValAs? Nat "lineCount").toOption
   if count.any (fun c => c == 0 || c > 100000) then throw "lineCount is from 1 to 100000"
-  let (log, logLines, nextLine) := EventLog.window log fromLine count
+  let fingerprint := match given with
+    | some w => w.getObjValD "logFingerprint"
+    | none => Json.str (LogIndex.fingerprint (log.toUTF8.extract 0 LogIndex.fingerprintBytes))
+  let (log, logLines, nextLine) := match given with
+    | some w => (log, (w.getObjValAs? Nat "logLines").toOption.getD 0, (w.getObjValAs? Nat "nextLine").toOption.getD fromLine)
+    | none => EventLog.window log fromLine count
   let (events, other) ← EventLog.extract log
   -- a log of several protocols: the events of the one checked, the others counted
   let p ← parseProtocol args
@@ -1485,6 +1505,7 @@ def conformLog (args : Json) (log : String) (conformEvents : Json → Except Str
     |>.setObjVal! "logOtherProtocolEvents" (toJson (events.size - mine.size))
     |>.setObjVal! "logLines" (toJson logLines) |>.setObjVal! "fromLine" (toJson fromLine)
     |>.setObjVal! "nextLine" (toJson nextLine) |>.setObjVal! "sessionsBeganBeforeWindow" (toJson cut.length)
+    |>.setObjVal! "logFingerprint" fingerprint
 
 def conformEvents (args : Json) : Except String Json := do
   let p ← parseProtocol args

@@ -89,11 +89,14 @@ const deliver = (data) => { for (const fn of viewListeners) { try { fn({ source:
 // ---- the stub host: the MCP Apps handshake, then tools/call answered from RESULTS.json
 let nextCalls = 0;
 const toolCalls = [];
+// session_conform over a server log is answered by the log paging test (selfhost.session.log-paging)
+let conformHost = null;
 function host(msg) {
   if (msg.method === "ui/initialize") deliver({ jsonrpc: "2.0", id: msg.id, result: { hostContext: { theme: "dark" } } });
   else if (msg.method === "tools/call") {
     const name = msg.params && msg.params.name;
     toolCalls.push(name);
+    if (name === "session_conform" && conformHost) { conformHost(msg.params.arguments || {}, (ans) => deliver({ jsonrpc: "2.0", id: msg.id, result: ans })); return; }
     const answer = name === "session_next" ? R.next[Math.min(nextCalls++, R.next.length - 1)]
       : name === "session_check" ? R.check : name === "session_simulate" ? R.simulate : name === "session_mdp" ? R.mdp
       : name === "session_ctl" ? R.ctl : name === "session_actor" ? R.actor : name === "session_dataset" ? R.dataset : name === "session_types" ? R.types
@@ -628,6 +631,54 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
       if (!zpick || zpick.value !== "rust") throw new Error("the implementation picker does not keep rust");
       console.log("ok: an implementation picker switches the code stage between Maqam's rust and zig");
     }
+  }
+
+  {
+    // selfhost.session.log-paging: a server log read a window at a time, at most 8 held (LRU)
+    let fp = "00000000000000aa", total = 5000, held = null;
+    const answer = (a) => {
+      const from = a.lastLines ? Math.max(1, total - a.lastLines + 1) : a.fromLine;
+      const next = Math.min(total, from + (a.lastLines || a.lineCount) - 1) + 1;
+      return { content: [], structuredContent: { tool: "session_conform", verdict: "conforms", events: [], fromLine: from, nextLine: next, logLines: total, logFingerprint: fp } };
+    };
+    conformHost = (a, reply) => { if (held) held.push(() => reply(answer(a))); else reply(answer(a)); };
+    const args = { lean: "protocol P (A, B) { Ping from A to B; }", serverLog: "serve", lastLines: 200 };
+    deliver({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: args } });
+    await show(answer(args));
+    expectText("a server log answer shows its window and the total", byId.results, "Lines 4801–5000 of 5000");
+    expectText("the view says how long it took to open", byId.results, "opened in");
+    const calls = () => hostSent.filter((m) => m.method === "tools/call" && m.params.name === "session_conform");
+    const n0 = calls().length;
+    button(byId.results, "Earlier").click(); await wait(150);
+    const asked = calls().pop().params.arguments;
+    if (calls().length !== n0 + 1 || asked.fromLine !== 4601 || asked.lineCount !== 200 || asked.lastLines !== undefined || asked.serverLog !== "serve")
+      throw new Error("Earlier did not fetch lines 4601-4800 with the same arguments: " + JSON.stringify(asked));
+    expectText("Earlier fetches the window before (a miss)", byId.results, "Lines 4601–4800 of 5000");
+    button(byId.results, "Later").click(); await wait(150);
+    if (calls().length !== n0 + 1) throw new Error("Later fetched a window the view holds");
+    expectText("Later shows the held window from memory (a hit)", byId.results, "1 from memory, 1 fetched");
+    // an answer to a superseded request is held but not drawn
+    held = [];
+    // (the stub's timers are capped at 50 ms, the view's request timeout among them: release within it)
+    button(byId.results, "Newest").click(); await wait(5);
+    button(byId.results, "Earlier").click(); await wait(5);
+    held.forEach((f) => f()); held = null; await wait(150);
+    expectText("an answer for a window no longer wanted is not drawn", byId.results, "Lines 4601–4800 of 5000");
+    // nine windows further back: the least recently used are dropped, at most 8 held
+    for (let i = 0; i < 9; i++) { button(byId.results, "Earlier").click(); await wait(60); }
+    expectText("at most 8 windows are held", byId.results, "8 of 8 windows held");
+    const n1 = calls().length;
+    for (let i = 0; i < 7; i++) { button(byId.results, "Later").click(); await wait(60); }
+    if (calls().length !== n1) throw new Error("walking back over held windows fetched one");
+    button(byId.results, "Later").click(); await wait(150);
+    if (calls().length !== n1 + 1) throw new Error("a dropped window was not fetched again");
+    console.log("ok: walking back over the 8 held windows fetches nothing, and the least recently used one, dropped, is fetched again");
+    // the log replaced: a changed fingerprint drops every window and reads the new log's end
+    fp = "00000000000000bb"; total = 10;
+    button(byId.results, "Newest").click(); await wait(250);
+    expectText("a rotated log drops the windows held and says so", byId.results, "rotated or truncated");
+    expectText("after a rotation the view reads the new log's end", byId.results, "Lines 1–10 of 10");
+    conformHost = null;
   }
 
   for (const t of timers) clearTimeout(t);
