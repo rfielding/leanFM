@@ -87,17 +87,22 @@ first.
 
 \section{The whole language in one function}
 
-CTL is one recursive function, called two ways, and a tower of short names on top of it.
+CTL is one recursive function, under one of two quantifiers, and a tower of short names on top
+of it.
 Each name abbreviates an expression one level down, so the whole language fits on a page
 and every word unfolds, level by level, to the function at the bottom:
 
 \begin{definition}[CTL]\label{def:ctl}
 \[
-\mathsf{until}(\mathit{step}, a, b) \;=\; b \ \text{else}\ \big(a \wedge \mathit{step}(\mathsf{until}(\mathit{step}, a, b))\big)
+Q(a \mathbin{\mathsf{until}} b) \;=\; b \ \text{else}\ \big(a \wedge Q\,\mathsf{next}(Q(a \mathbin{\mathsf{until}} b))\big)
+\qquad Q \in \{\forall, \exists\}
 \]
-with $\mathit{step}$ either $\allNext$ or $\someNext$, ``else'' meaning ``or'', and the
-recursion required to reach $b$: $a$ holds until $b$, and $b$ does come. A protocol
-satisfies a formula when its start state does.
+``$a$ holds until $b$, and $b$ does come'', on every path ($\forall$) or on some path
+($\exists$). $\forall\,\mathsf{next}\ p$ holds when every state that can come next has $p$,
+$\exists\,\mathsf{next}\ p$ when some state that can come next has $p$, ``else'' means ``or'',
+and the recursion must reach $b$. One quantifier, chosen once, decides both which paths and
+which next states, so the two can never disagree. A protocol satisfies a formula when its
+start state does.
 \end{definition}
 
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
@@ -106,13 +111,14 @@ satisfies a formula when its start state does.
 stop                    the conversation may stop here
 start                   no message has been delivered yet
 not, and, or            as in any logic
-(allNext p)             every state that can come next has p
-(someNext p)            some state that can come next has p
-until(step, a, b)       b, else a and step(until(step, a, b)); b must come
+Q next p                p at every (Q = forall) or some (Q = exists) next state
+Q(a until b)            b, else a and Q next (Q(a until b)); b must come
 
 -- level 1
-(allUntil a b)        = until(allNext, a, b)
-(someUntil a b)       = until(someNext, a, b)
+(allNext p)           = forall next p
+(someNext p)          = exists next p
+(allUntil a b)        = forall(a until b)
+(someUntil a b)       = exists(a until b)
 (implies a b)         = (or (not a) b)
 
 -- level 2: the four words, and the unlesses
@@ -193,6 +199,38 @@ the same sets as the negations; its fast evaluator (Chapter~\ref{ch:deciding}) c
 with worklists, and the tests compare the
 two on every operator. A formula holds of the protocol when its cell in the start row is
 true.
+
+\section{Every check is a search for a path}
+
+Under the truth table, every question is a search for one path. An $\exists$ claim holds
+when a \emph{witness} exists: find one and show it. A $\forall$ claim holds when no
+\emph{counterexample} exists: negate the claim, search for the counterexample, and show it if
+it is there. The negations turn every $\forall$ into an $\exists$:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+always p          = not exists(true until (not p))
+                    -- counterexample: a path to a state where p fails
+inevitably p      = not exists((not p) forever)
+                    -- counterexample: a path that avoids p forever
+forall(a until b) = not exists((not b) until (not a and not b))
+                    and not exists((not b) forever)
+\end{lstlisting}
+and the searches come in exactly two shapes:
+\begin{center}
+\begin{tabular}{@{}p{.27\textwidth}p{.33\textwidth}p{.32\textwidth}@{}}
+\toprule
+search & finds & answers \\
+\midrule
+reach: $\exists(a \mathbin{\mathsf{until}} b)$ & a finite path along $a$ to a $b$ state &
+$\mathsf{possibly}$, $\mathsf{someUntil}$; counterexamples to $\mathsf{always}$ and $\mathsf{never}$ \\
+lasso: $\exists(p\ \mathsf{forever})$ & a path along $p$ into a loop that stays in $p$ &
+$\mathsf{someAlways}$; counterexamples to $\mathsf{inevitably}$, $\mathsf{leadsTo}$, $\mathsf{allUntil}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+So a checker is two searches, run backwards over the state graph, and negation. LeanFM's
+answers have the same shape: \texttt{proved} or \texttt{disproved}, with the witness or the
+counterexample as a path of messages, and for a lasso \texttt{loopsBackTo}, the step where
+the loop closes.
 
 \section{What a check means}
 
