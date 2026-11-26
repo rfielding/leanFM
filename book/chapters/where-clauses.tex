@@ -101,7 +101,7 @@ from quadratic to linear.
 Part~\ref{part:ctl} reduces the protocol's \emph{control}, the order and branching of
 labels, to CTL. Values are abstracted: the model knows that an Image follows a
 GetImage, not which image. Where clauses carry the values. The two meet in
-Definition~\ref{def:conform}: a run conforms when its labels form a path of the model
+conformance (Section~\ref{def:conform}): a run conforms when its labels form a path of the model
 the CTL rules characterise, and its values satisfy the where clauses along that path.
 
 A where clause that selects a branch, such as \texttt{where o.total >= 100} on one

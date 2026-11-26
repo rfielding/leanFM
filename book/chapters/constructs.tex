@@ -1,9 +1,9 @@
 \chapter{Construct by Construct}\label{ch:constructs}
 
-Theorem~\ref{thm:faithful} holds for any protocol, but what the rules look like, and
+The faithfulness result (Section~\ref{thm:faithful}) holds for any protocol, but what the rules look like, and
 how much they cost, depends on the constructs the protocol uses. This chapter takes
 the constructs of Chapter~\ref{ch:global} one at a time. The measure throughout is the
-lookahead $K$ of Definition~\ref{def:rounds}: with $K = 0$ every typestate is named by
+lookahead $K$ of the refinement rounds (Section~\ref{def:rounds}): with $K = 0$ every typestate is named by
 its last message and ending, and every rule is the one-step shape of Images; each step
 of lookahead nests the names one $\someNext$/$\allNext$ level deeper.
 
@@ -11,7 +11,7 @@ of lookahead nests the names one $\someNext$/$\allNext$ level deeper.
 \centering
 \input{generated/ctl-constructs.tex}
 \caption{Each construct's smallest protocol: checker nodes, typestates, lookahead, and
-whether its typestates are deterministic (Definition~\ref{def:det}).}
+whether its typestates are deterministic (deterministic typestates (Section~\ref{def:det})).}
 \label{tab:constructs}
 \end{table}
 
@@ -31,10 +31,10 @@ $r_1, \ldots, r_j$, then every system satisfying $\Rules_P$ satisfies
 \end{proposition}
 
 \begin{proof}
-The formula holds of $M_P$ by assumption; apply Corollary~\ref{cor:best}.
+The formula holds of $M_P$ by assumption; apply the result that nothing in CTL does better (Section~\ref{cor:best}).
 \end{proof}
 
-The proposition is typical: in this setting, properties of a protocol are not axioms to
+That is typical: in this setting, properties of a protocol are not axioms to
 be added but consequences to be derived. Chapter~\ref{ch:mcp} shows LeanFM proposing
 such properties and deciding each.
 
@@ -149,7 +149,7 @@ If the walk succeeds, the pairing is a bisimulation between the reachable part o
 and $M_P$'s typestates: labels agree at each pair; each step of $v$ is matched by the
 step of $C$ into the paired class; each step of $C$, into $D \in S_C$, is matched by a
 step of $v$ with $D$'s label, which the walk paired with $D$. Since $\approx_K$ is
-bisimilarity (Lemma~\ref{lem:rounds}), $M' \sim M_P$.
+bisimilarity (the refinement rounds (Section~\ref{lem:rounds})), $M' \sim M_P$.
 Conversely suppose $M' \sim M_P$ via some bisimulation $B$. By induction along the
 walk, every pair $(v, C)$ it makes has $v$ bisimilar to the nodes of $C$: true at the
 start; and if $v \sim C$, a successor $v'$ is bisimilar to some successor of $C$'s
@@ -171,7 +171,7 @@ nonetheless change what the rules say.
 \begin{itemize}
 \item A clause that \emph{correlates} (\texttt{i.id = g.id}, an echoed request id)
   defines identity. It decides which events form one session, and so which runs the
-  rules are applied to (Proposition~\ref{prop:sessions}).
+  rules are applied to (checking per session (Section~\ref{prop:sessions})).
 \item A clause that \emph{guards} a branch (\texttt{o.total >= 100}) restricts, on a
   given run, which of the branches the rules allow may be taken. The rule of the
   typestate before the choice still names both branches as possible; the guard is

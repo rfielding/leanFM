@@ -220,13 +220,16 @@
   showstringspaces=false
 }
 
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[chapter]
-\theoremstyle{plain}
-\newtheorem{theorem}[definition]{Theorem}
-\newtheorem{lemma}[definition]{Lemma}
-\newtheorem{proposition}[definition]{Proposition}
-\newtheorem{corollary}[definition]{Corollary}
+% No numbered Theorem/Lemma/Definition: a block is a paragraph with a bold run-in title when it
+% has a name, and a proof is a paragraph that starts "Why." A reference names the idea and its
+% section, "the faithfulness result (Section 5.5)".
+\newcommand{\runinblock}[1]{\par\medskip\noindent\if\relax\detokenize{#1}\relax\else\textbf{#1.}\ \fi\ignorespaces}
+\newenvironment{definition}[1][]{\runinblock{#1}}{\par\medskip}
+\newenvironment{theorem}[1][]{\runinblock{#1}}{\par\medskip}
+\newenvironment{lemma}[1][]{\runinblock{#1}}{\par\medskip}
+\newenvironment{proposition}[1][]{\runinblock{#1}}{\par\medskip}
+\newenvironment{corollary}[1][]{\runinblock{#1}}{\par\medskip}
+\renewenvironment{proof}[1][Why]{\par\noindent\textit{#1.}\ \ignorespaces}{\par\medskip}
 \theoremstyle{remark}
 \newtheorem*{remark}{Remark}
 

@@ -329,6 +329,9 @@ def main : IO Unit := do
       let start := LeanFM.Logic.Dag.ofFormula ((rs.headD ("", .tt)).2)
       write "ctl-retry-start.tex" (listing start.toSexprPretty)
       write "ctl-retry-start-english.tex" (listing start.toReadingIndented)
+      -- hidden state per message name (selfhost.session.bits), from the same function session_ctl uses
+      let brows := (bitsOf t).map fun (n, k, b) => s!"\\texttt\{{n}} & {k} & {b} \\\\"
+      write "ctl-retry-bits.tex" ("\\begin{tabular}{@{}lrr@{}}\n\\toprule\nMessage & Typestates & Bits \\\\\n\\midrule\n" ++ "\n".intercalate brows ++ "\n\\bottomrule\n\\end{tabular}\n")
   write "ctl-constructs.tex" ("\\begin{tabular}{@{}llrrrl@{}}\n\\toprule\nConstruct & Example & Nodes & Typestates & Lookahead & Deterministic \\\\\n\\midrule\n" ++ "\n".intercalate crow.toList ++ "\n\\bottomrule\n\\end{tabular}\n")
   -- the protocols LeanFM carries
   let corpus : List (String × String) :=

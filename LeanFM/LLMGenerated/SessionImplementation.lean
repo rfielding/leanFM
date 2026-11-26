@@ -12,7 +12,12 @@ open LeanFM.ChatUI.Implementation
 open LeanFM.LLMGenerated.SelfHosting
 
 def decisions : List ImplementationDecision :=
-  [ decision "session-buffers"
+  [ decision "session-bits"
+      ["clause:selfhost.session.bits"]
+      ["LeanFM/Session/Faithful.lean", "LeanFM/SessionTools.lean", "CtlBookExample.lean", "book/chapters/faithful-ctl.tex"]
+      "Faithful.bitsOf groups the typestates by the message of their label (none written start), in order of first appearance, with each group's count and Faithful.bitsFor count, the least b with 2^b at least the count. SessionTools.faithful adds bits [{label, typestates, bits}] and hiddenBits to the rules answer and a sentence to its reading. CtlBookExample writes ctl-retry-bits.tex, the table for the Retry loop, from the same function."
+      ["LeanFM/SessionToolsTests.lean: Retry's Ask and Busy each label 3 typestates and need 2 bits, Ok, GiveUp and start 0, hiddenBits 2; PlaceOrder has hiddenBits 0 and its reading says it has no hidden state; bitsFor gives 0, 1, 2, 2, 3 for 1, 2, 3, 4, 5"]
+  , decision "session-buffers"
       ["clause:selfhost.session.buffers"]
       ["LeanFM/Session/Grammar.lean", "LeanFM/Session/Text.lean", "LeanFM/Session/Syntax.lean", "LeanFM/Session/Realizable.lean", "LeanFM/SessionTools.lean", "LeanFM/MCP.lean"]
       "Grammar.protocolRole reads a role as an identifier with an optional [N]; Text.protocolDef keeps the names as roles and the sizes as buffers (a size above 64 refused at its position), Parsed carries buffers, and Syntax elaborates the role names as before. Realizable.explore builds each role's machine from its projection (Global.project, Local.machine, LeanGen.closure: edges and finality, refusing fork and serve) and searches breadth first over states of (each role's machine state, each role's inbox as a list of (sender, label)): a role's send edge to r with r's size 0 is one step when r's state has the matching receive edge and r's inbox is empty, delivering; with size n > 0 it appends to r's inbox while it holds fewer than n; a receive edge is taken when the front of the role's inbox matches it; an act is a step of its role. A state with no step is final when every role is final and every inbox empty, and a deadlock otherwise. Alongside each state it keeps the set of protocol states (Global.stateGraph) its deliveries can be at, advanced by each delivery and act; an empty set is an order the protocol does not allow. session_realizable answers verdict realizable or unrealizable, the problem (order or deadlock) with the deliveries leading to it, each role's inbox and waiting edges at a deadlock, the sizes and the guarantees, and the states explored under the states limit."

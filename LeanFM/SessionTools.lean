@@ -1837,6 +1837,11 @@ def faithful (p : Protocol) (fa : Json) (args : Json := Json.mkObj []) : Except 
   | .str "rules" =>
     let rs := Session.Faithful.rules t
     let shown := rs.take maxRules
+    let bits := Session.Faithful.bitsOf t
+    let hidden := bits.foldl (fun m (_, _, b) => max m b) 0
+    let needing := bits.filter (fun (_, _, b) => b > 0)
+    let bitsReading := if hidden == 0 then " Every message name labels one typestate, so the name alone is the state: no hidden state."
+      else s!" Hidden state: {", ".intercalate (needing.map fun (n, k, b) => s!"{n} labels {k} typestates and needs {b} bit{if b == 1 then "" else "s"}")}; a message must carry them (in a field, or by cause or prev) or every participant must remember them."
     let row := fun (n, f) =>
       let d := Logic.Dag.ofFormula f
       let small := d.treeSize (Logic.treeLimit + 1) ≤ Logic.treeLimit
@@ -1844,8 +1849,10 @@ def faithful (p : Protocol) (fa : Json) (args : Json := Json.mkObj []) : Except 
         (if small then [("notation", Json.str f.symbols), ("readingIndented", Json.str d.toReadingIndented)] else []))
     return fit <| Json.mkObj (base ++
       [ ("verdict", Json.str "rules")
-      , ("reading", Json.str s!"{p.name}: {t.count} typestates over {spec.size} checker nodes, lookahead {t.lookahead}; {rs.length} rules (the start and one per typestate: in it each next typestate is possible and nothing else is){if rs.length > shown.length then s!", the first {shown.length} listed ({CallLimits.raise "faithfulRules" maxRules})" else ""}. Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol")
-      , ("rules", Json.arr (shown.map row).toArray), ("ruleCount", toJson rs.length) ])
+      , ("reading", Json.str s!"{p.name}: {t.count} typestates over {spec.size} checker nodes, lookahead {t.lookahead}; {rs.length} rules (the start and one per typestate: in it each next typestate is possible and nothing else is){if rs.length > shown.length then s!", the first {shown.length} listed ({CallLimits.raise "faithfulRules" maxRules})" else ""}. Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol.{bitsReading}")
+      , ("rules", Json.arr (shown.map row).toArray), ("ruleCount", toJson rs.length)
+      , ("bits", Json.arr (bits.map fun (n, k, b) => Json.mkObj [("label", Json.str n), ("typestates", toJson k), ("bits", toJson b)]).toArray)
+      , ("hiddenBits", toJson hidden) ])
   | .obj _ =>
     let cand ← match fa.getObjVal? "task", fa.getObjVal? "lean" with
       | .ok d, _ => Session.Faithful.modelOfDraft d b

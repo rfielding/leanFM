@@ -16,7 +16,7 @@ request side by side.
 \paragraph{Size comes from products.} As one model, GoServer has 39{,}497 checker nodes
 and 1{,}604 typestates, with lookahead $2$ (Table~\ref{tab:corpus}). Almost all of it is
 interleaving: the polling branch beside the lobby, and the seat's four child sessions.
-Checked one session at a time (Proposition~\ref{prop:sessions}), every GoServer protocol
+Checked one session at a time (checking per session (Section~\ref{prop:sessions})), every GoServer protocol
 has lookahead $0$ except the seat, which keeps its own \texttt{parallel}: 941 nodes, 412
 typestates, lookahead $1$.
 
@@ -50,7 +50,7 @@ carry. After \texttt{PullAtoB}, which writes island B now holds depends on every
 before it, and a formula can only recover that by looking ahead.
 
 The experiments measured each remedy on the cursor-based replication design
-(typestates as LeanFM computes them, rules as Definition~\ref{def:rules} writes them):
+(typestates as LeanFM computes them, rules as the faithful rules (Section~\ref{def:rules}) writes them):
 
 \begin{center}
 \begin{tabular}{@{}lrr@{}}
@@ -68,7 +68,7 @@ a prev pointer, so each typestate is read off the chain & 0 & $59{,}502$ nodes \
 \noindent Payload fields shorten the lookahead but cannot remove it: one message on a
 shared timeline cannot say what the other island has done. A prev pointer removes it:
 every rule becomes the one-step shape, total size is linear in the model's steps, and
-faithfulness is decided by the walk of Theorem~\ref{thm:walk}, which on GoServer's graph
+faithfulness is decided by the walk of the walk (Section~\ref{thm:walk}), which on GoServer's graph
 with prev labels took 17\,ms in the experiments. That is the design lesson of this book
 in one table: \emph{a protocol whose messages carry their place in it is cheap to check
 exactly.}
@@ -87,6 +87,6 @@ Its tests check the whole chain of this book on it. Every one of its 34 faithful
 is proved by \texttt{session\_ctl} over the protocol. Over more than a hundred broken
 copies of its graph (each step dropped, and steps sent to other states, relabelled and
 added) the walk says ``faithful'' exactly when the CTL checker proves every rule, and the
-walk and the refinement agree on every copy. That is Theorem~\ref{thm:faithful},
-Theorem~\ref{thm:walk} and Proposition~\ref{prop:refine} checked against each other, on
+walk and the refinement agree on every copy. That is the faithfulness result (Section~\ref{thm:faithful}),
+the walk (Section~\ref{thm:walk}) and the cost of refinement (Section~\ref{prop:refine}) checked against each other, on
 the protocol of the tool that checks them.

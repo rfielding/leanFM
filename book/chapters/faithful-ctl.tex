@@ -3,7 +3,7 @@
 This chapter turns a protocol into CTL formulas that say exactly what the protocol
 allows: in each state the conversation can be in, each next state is possible and
 nothing else is. It proves that a system satisfies the formulas if and only if it is
-bisimilar to the protocol, which by Theorem~\ref{thm:bcg} is the most any CTL can say.
+bisimilar to the protocol, which by Browne's result (Section~\ref{thm:bcg}) is the most any CTL can say.
 
 \section{Reading CTL}
 
@@ -98,9 +98,9 @@ The groups left at the end are the \emph{typestates}; the number of rounds that 
 something is the \emph{lookahead}.
 \end{definition}
 
-\begin{lemma}\label{lem:rounds}
+\begin{lemma}[Typestates are the same-moves classes]\label{lem:rounds}
 The typestates are exactly the classes of states with the same moves (bisimilarity,
-Definition~\ref{def:bisim}).
+Section~\ref{def:bisim}).
 \end{lemma}
 
 \begin{proof}
@@ -114,6 +114,18 @@ The lookahead is how far ahead one must look to tell typestates apart. At $0$ th
 alone decides: Images is like that (Figure~\ref{fig:images-ts}). The Retry loop of
 Chapter~\ref{ch:constructs} is not: a Busy after the first Ask and a Busy after the third
 look the same, and only what may come next (another Ask, or GiveUp) tells them apart.
+
+Another way to read a typestate: it is the message, plus the bits it would have to carry
+for the message to say what may come next. A name that labels one typestate carries nothing
+more; a name that labels $n$ of them needs $\lceil \log_2 n \rceil$ bits, in a field, by
+cause, or remembered by every participant. For Retry, from the same count \texttt{session\_ctl}
+answers as \texttt{bits}:
+\begin{center}
+\input{generated/ctl-retry-bits.tex}
+\end{center}
+Ask and Busy each need two bits: the try counter. Lookahead $4$ is what it costs to leave
+those bits off the wire and recover them from what follows. Images needs none: its names are
+its states.
 
 \section{Naming a typestate}
 
@@ -180,10 +192,10 @@ state, no move more and no move less (it is bisimilar to the protocol).
 \begin{proof}
 If it has the same moves: the protocol satisfies its own rules (each state satisfies its
 name, and its next states are exactly the typestates its row lists), and a system with the
-same moves satisfies the same formulas (Theorem~\ref{thm:bcg}).
+same moves satisfies the same formulas (Browne's result (Section~\ref{thm:bcg})).
 
 If it satisfies the rules: pair each reachable state of the system with the protocol
-typestate whose name it satisfies, at most one by Lemma~\ref{lem:exclusive}; the start rule
+typestate whose name it satisfies, at most one by the exclusion of names (Section~\ref{lem:exclusive}); the start rule
 pairs the two starts. Paired states have the same label, which every name fixes. Each move
 the system makes lands in a typestate its row lists (the $\mathsf{allNext}$ part), so the
 protocol has that move; each move the protocol makes is one the system can make (the
@@ -191,14 +203,14 @@ $\mathsf{someNext}$ parts). So paired states have the same moves, step after ste
 system is bisimilar to the protocol.
 \end{proof}
 
-\begin{corollary}\label{cor:best}
+\begin{corollary}[Nothing in CTL does better]\label{cor:best}
 No set of CTL formulas tells more systems apart from the protocol than its faithful rules,
 and every CTL property of the protocol holds of every system that satisfies them.
 \end{corollary}
 
 \begin{proof}
-A system that satisfies the rules has the protocol's moves (Theorem~\ref{thm:faithful}), so
-it satisfies exactly the protocol's formulas (Theorem~\ref{thm:bcg}). A system that does not
+A system that satisfies the rules has the protocol's moves (the faithfulness result (Section~\ref{thm:faithful})), so
+it satisfies exactly the protocol's formulas (Browne's result (Section~\ref{thm:bcg})). A system that does not
 satisfy the rules fails a formula the protocol satisfies.
 \end{proof}
 
@@ -227,9 +239,9 @@ computed rather than drawn.
 
 \input{generated/ctl-placeorder-rules.tex}
 
-\section{What the theorem buys}
+\section{What the rules buy}
 
-Corollary~\ref{cor:best} turns every property one could ask of the protocol into a
+Because nothing in CTL does better than the rules (Section~\ref{cor:best}), every property one could ask of the protocol is a
 consequence of eleven formulas. For example, every request is answered:
 \[
 \always\big(\on{CreateOrder} \rightarrow \inevitably(\on{Receipt}\vee\on{PaymentDeclined}\vee\on{SoldOut})\big)

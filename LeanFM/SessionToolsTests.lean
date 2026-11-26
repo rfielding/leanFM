@@ -792,4 +792,20 @@ def ruleRows : List Json := (((field (ctl (Json.mkObj [("lean", Json.str ordersP
 -- session_ctl answers carry the indented reading (selfhost.mcp.logic.explain)
 #guard ((field (ctlOver "(leadsTo (on Pay) (on Charge))") "readingIndented").getStr?.toOption.getD "").startsWith "it is possible that eventually:"
 
+-- hidden state per message name (selfhost.session.bits)
+#guard (List.range 6 |>.drop 1 |>.map LeanFM.Session.Faithful.bitsFor) == [0, 1, 2, 2, 3]
+def retryText := "protocol Retry (A, B) {\n  loop Try at most 3 {\n    q: Ask from A to B;\n    choice {\n      Ok from B to A cause q;\n    } or {\n      Busy from B to A cause q;\n      continue Try;\n    }\n  } otherwise {\n    GiveUp from A to B;\n  }\n}"
+def bitsRows (text : String) : List (String × Nat × Nat) :=
+  let r := ctl (Json.mkObj [("lean", Json.str text), ("faithful", Json.str "rules")])
+  (((field r "bits").getArr?).toOption.getD #[]).toList.map fun j =>
+    ((j.getObjValAs? String "label").toOption.getD "", (j.getObjValAs? Nat "typestates").toOption.getD 0, (j.getObjValAs? Nat "bits").toOption.getD 0)
+def hiddenOf (text : String) : Nat :=
+  ((field (ctl (Json.mkObj [("lean", Json.str text), ("faithful", Json.str "rules")])) "hiddenBits").getNat?).toOption.getD 99
+#guard (bitsRows retryText).contains ("Ask", 3, 2) && (bitsRows retryText).contains ("Busy", 3, 2)
+#guard (bitsRows retryText).all fun (n, _, b) => n == "Ask" || n == "Busy" || b == 0
+#guard (bitsRows retryText).any (·.1 == "start") && (bitsRows retryText).any (·.1 == "GiveUp") && (bitsRows retryText).any (·.1 == "Ok")
+#guard hiddenOf retryText == 2
+#guard hiddenOf ordersProtocol == 0
+#guard ((field (ctl (Json.mkObj [("lean", Json.str ordersProtocol), ("faithful", Json.str "rules")])) "reading").getStr?.toOption.getD "").contains "no hidden state"
+
 end LeanFM.SessionToolsTests

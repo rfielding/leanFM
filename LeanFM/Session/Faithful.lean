@@ -243,6 +243,20 @@ def rules (t : Typestates) : List (String × Formula) :=
       | a, _ => if isState a && nexts.all isState then .transition a nexts else .follows a nexts
     (s!"typestate {c}", rule)
 
+/-- The least b with 2^b ≥ n: the bits that tell n typestates apart. -/
+def bitsFor (n : Nat) : Nat := Id.run do
+  let mut b := 0
+  while 2 ^ b < n do b := b + 1
+  return b
+
+/-- Hidden state per message name (selfhost.session.bits): for each name (start for no message
+yet), in order of first appearance, how many typestates it labels and the bits a message with that
+name must carry, or its participants remember, to say which one. The stop bit is part of the
+state, not of the message, so it is not counted. -/
+def bitsOf (t : Typestates) : List (String × Nat × Nat) :=
+  let names := (List.range t.count).map fun c => ((t.labelOf c).1.getD "start")
+  names.eraseDups.map fun n => let k := names.count n; (n, k, bitsFor k)
+
 /-- The checker model of a draft (the logic tools' inline task form). -/
 def modelOfDraft (draft : Json) (b : Bounds := LeanFM.Session.sessionBounds) : Except String LGraph := do
   let t ← parseDraft draft b
