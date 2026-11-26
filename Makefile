@@ -172,8 +172,9 @@ validate:
 	@lake env lean LeanFM/CharacterizationTests.lean
 	@lake env lean LeanFM/CTLTests.lean
 	@lake build LeanFM.MCPHost
-	@lake env lean --run LeanFM/MCPTests.lean
-	@lake env lean --run LeanFM/LogicTests.lean
+	@lake build leanfm-mcp-tests leanfm-logic-tests
+	@.lake/build/bin/leanfm-mcp-tests
+	@.lake/build/bin/leanfm-logic-tests
 	@python3 scripts/roundtrip_generated_scenario.py
 	@python3 scripts/reduce_bakery_events.py --output /tmp/leanfm-bakery-stats.json --tex-output /tmp/leanfm-bakery-stats.tex >/dev/null
 	@cmp examples/bakery-stats.json /tmp/leanfm-bakery-stats.json

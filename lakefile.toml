@@ -24,3 +24,12 @@ root = "Validate"
 [[lean_exe]]
 name = "leanfm-mcp"
 root = "McpServer"
+
+# test modules with a main, compiled so their runs are native, not interpreted (selfhost.build.changed-tests)
+[[lean_exe]]
+name = "leanfm-mcp-tests"
+root = "LeanFM.MCPTests"
+
+[[lean_exe]]
+name = "leanfm-logic-tests"
+root = "LeanFM.LogicTests"

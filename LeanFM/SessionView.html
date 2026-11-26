@@ -59,6 +59,14 @@
   .pos { color: var(--dim); font: 13px ui-monospace, Menlo, monospace; }
   .stage { display: grid; grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); gap: 10px; height: 560px; }
   :root[data-mode="fullscreen"] .stage { height: calc(100vh - 230px); min-height: 560px; }
+  /* narrower than a wide window (an inline view in a chat): the log and the diagram stack, each at
+     full width, so neither shrinks to an unreadable column (selfhost.mcp.session.view) */
+  @media (max-width: 1100px) {
+    .stage, :root[data-mode="fullscreen"] .stage { display: flex; flex-direction: column; height: auto; min-height: 0; }
+    .stage > .side { height: auto; }
+    .stage > .side .evlog { max-height: 260px; flex: none; }
+    .stage > .seq { height: 520px; }
+  }
   .sessbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
   .sessbar button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
   .sessbar button.on { border-color: var(--amber); border-width: 2px; color: var(--amber); font-weight: 600; }
@@ -484,7 +492,7 @@ function diagram(model, opts) {
     if (!lab) continue;
     const y = s.k === "line" ? num(s.y1) : s.k === "rect" ? num(s.y) : Number((String(s.d).match(/^M\s*-?[0-9.]+\s+(-?[0-9.]+)/) || [])[1]) + 8;
     const label = isMsg ? lab.text.replace(/^[A-Za-z_][A-Za-z0-9_]*: /, "").split(" - ")[0] : lab.text;
-    items.push({ y, shape: s, label: lab, what: (isMsg ? "message " : "event ") + label,
+    items.push({ y, shape: s, label: lab, name: label, what: (isMsg ? "message " : "event ") + label,
       re: new RegExp("(^|[^A-Za-z0-9_])" + esc(label) + (isMsg ? " from\\b" : " at\\b")), block: false });
   }
   const KW = { alt: /\bchoice\b/, loop: /\bloop\s+[A-Za-z_]/, sessions: /\bsessions\b/, par: /\bparallel\b/, join: /\bjoin\b/ };
@@ -509,9 +517,11 @@ function diagram(model, opts) {
     if (it.frame && it.range) it.frame.range = it.range;
   }
   let select = Array.isArray(opts.select) ? opts.select : [];
+  // a focused thread's labels (selfhost.mcp.session.view): its messages lit, the rest faded
+  const focusLabels = opts.labels instanceof Set && opts.labels.size ? opts.labels : null;
   const lit = (rg) => !!rg && select.some((q) => q.protocol === rg.protocol && q.first <= rg.last && q.last >= rg.first && !(rg.first < q.first && rg.last > q.last && items.some((o) => o.frame && o.range === rg)));
   const openAround = () => {
-    for (const it of items) if (!it.frame && lit(it.range)) {
+    for (const it of items) if (!it.frame && (lit(it.range) || (focusLabels && focusLabels.has(it.name)))) {
       for (const f of frames) if (it.y > f.y && it.y < f.y + f.h) f.mode = "open";
       for (const c of calls) if (it.y > c.top && it.y <= c.bottom) c.open = true;
     }
@@ -609,11 +619,14 @@ function diagram(model, opts) {
     defs.appendChild(marker); svg.appendChild(defs);
     svg.appendChild(sv("rect", { width: wd, height: h, fill: "var(--ink-bg)" }));
     const hlShapes = new Set();
-    for (const it of items) if (!it.frame && lit(it.range)) { hlShapes.add(it.shape); hlShapes.add(it.label); }
+    for (const it of items) if (!it.frame && (lit(it.range) || (focusLabels && focusLabels.has(it.name)))) { hlShapes.add(it.shape); hlShapes.add(it.label); }
+    const itemShapes = new Set(items.filter((it) => !it.frame).flatMap((it) => [it.shape, it.label]));
     let firstLit = null;
     for (const s of shapes) {
       const cls = typeof s.cls === "string" ? { class: s.cls } : {};
       const hl = hlShapes.has(s);
+      // with a focused thread, the messages it did not take fade
+      if (focusLabels && !hl && itemShapes.has(s)) cls.opacity = 0.25;
       if (hl) { const yy = s.k === "line" ? num(s.y1) : num(s.y); if (firstLit === null || yy < firstLit) firstLit = yy; }
       if (s.k === "rect") {
         const y1 = num(s.y), y2 = y1 + num(s.h);
@@ -860,6 +873,10 @@ function sessionBody(body, keepIt) {
   const live = roles.filter((r) => used.has(r));
   return Object.assign({}, body, { events, roles: live.length ? live : roles, hiddenRoles: live.length ? roles.filter((r) => !used.has(r)) : [] });
 }
+// the newest answer's sequence diagram panel, told which message labels a focused thread has
+// (selfhost.mcp.session.view): null clears the lighting
+let diagramFocus = null;
+
 function streamView(body) {
   const box = el("div"), bar = el("div", "sessbar"), stage = el("div"), note = el("p", "meta");
   const E = (Array.isArray(body.events) ? body.events : []).slice(0, MAX_EVENTS);
@@ -869,6 +886,7 @@ function streamView(body) {
   const unattributed = idxs(d && d.unattributed);
   const buttons = [];
   let current = null;
+  let escListener = null;
   // the highlight: the ids of one session's or one thread's events, lit in the whole stream while
   // every other event stays drawn, faded (concurrent sessions are concurrent diagrams, drawn as one)
   let highlight = null;
@@ -896,13 +914,21 @@ function streamView(body) {
       for (let n = 0; stack.length && n < 64; n++) { const g = stack.pop(); if (!g || framed.includes(g.key)) continue; framed.push(g.key); for (const q of g.parents) stack.push(byKey.get(q)); }
     }
     note.replaceChildren(el("span", "", `Thread of ${"e" + String(selId).padStart(3, "0")}: ${sub.events.length} events linked through prior` + (hidden.length ? " · hidden: " + hidden.join(", ") : "") +
-      (framed.length ? " · in sessions " + framed.join(", ") : "") + " "), back);
+      (framed.length ? " · in sessions " + framed.join(", ") : "") + " · Esc shows all "), back);
+    // the protocol's sequence diagram lights the messages this thread's events are instances of
+    if (diagramFocus) diagramFocus({ name: "e" + String(selId).padStart(3, "0"), labels: new Set(sub.events.map((e) => String(e.label))), count: sub.events.length });
+    // Escape gets out of the focus, as the button does
+    if (escListener) document.removeEventListener("keydown", escListener);
+    escListener = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); back.click(); } };
+    document.addEventListener("keydown", escListener);
     stage.replaceChildren(animation(sub, { start: sub.events.length - 1, paused: true, select: selId, onFocus, threadOf, highlight,
       frames: frames.filter((f) => framed.includes(f.key)) }));
     reportSize();
   };
   function show(which, keep, btn) {
     current = [which, keep, btn];
+    if (escListener) { document.removeEventListener("keydown", escListener); escListener = null; }
+    if (diagramFocus) diagramFocus(null);
     for (const b of buttons) b.className = b === btn ? "on" : "";
     const sub = keep ? sessionBody(body, (_, i) => keep.has(i)) : body;
     const hidden = Array.isArray(sub.hiddenRoles) ? sub.hiddenRoles : [];
@@ -1269,7 +1295,13 @@ function animation(body, opts) {
     const r = cv.getBoundingClientRect(), y = (ev.clientY - r.top) / uiScale, i = Math.round((y + sy - TOP) / ROW());
     if (i >= 0 && i <= Math.floor(p) && Math.abs(yOf(i) - y) < ROW() / 2) {
       // focus on the clicked event's thread when the stream can; otherwise select it
-      if (typeof opts.onFocus === "function") { opts.onFocus(new Set([...threadOf(E, idx, i)].map((j) => num(E[j].id))), num(E[i].id)); return; }
+      if (typeof opts.onFocus === "function") {
+        // the event's stream: its thread through prior links, or, when it has none (most logs carry no
+        // prev), every event of its session
+        let stream = [...threadOf(E, idx, i)];
+        if (stream.length <= 1 && E[i].session != null) stream = E.map((_, j) => j).filter((j) => String(E[j].session) === String(E[i].session));
+        opts.onFocus(new Set(stream.map((j) => num(E[j].id))), num(E[i].id)); return;
+      }
       sel = sel === i ? null : i; shown = -1;
     }
   });
@@ -1387,7 +1419,18 @@ function render(body) {
   if (body.tool === "session_openapi" && Array.isArray(body.documents))
     for (const d of body.documents.slice(0, MAX_ITEMS))
       if (d && typeof d.code === "string") parts.push(panel("OpenAPI 3.1 that " + String(d.role || "") + " serves" + oaTag(d.language) + ": " + String(d.reading || ""), codeBox(d.code, d.language)));
-  if (body.diagram) parts.push(panel(body.diagramKind === "mdp" ? "Decision process under the supplied policy"
+  if (body.diagram && body.diagramKind !== "mdp") {
+    // the protocol's sequence diagram, redrawn with a focused thread's messages lit
+    const holder = el("div"), focusNote = el("p", "meta");
+    const draw = (sel) => {
+      focusNote.textContent = sel ? `Stream of ${sel.name}: its ${sel.count} event${sel.count === 1 ? "" : "s"} lit in the protocol (by message label); Esc shows all` : "";
+      holder.replaceChildren(...(sel ? [focusNote] : []), diagram(body.diagram, sel ? { labels: sel.labels } : {}));
+    };
+    draw(null);
+    diagramFocus = draw;
+    parts.push(panel(body.tool === "session_actor" ? "Sequence diagram: only the steps " + String(body.role) + " takes part in"
+      : "Sequence diagram, generated from the protocol", holder));
+  } else if (body.diagram) parts.push(panel(body.diagramKind === "mdp" ? "Decision process under the supplied policy"
     : body.tool === "session_actor" ? "Sequence diagram: only the steps " + String(body.role) + " takes part in"
     : "Sequence diagram, generated from the protocol", diagram(body.diagram)));
   else if (Array.isArray(body.omitted) && body.omitted.includes("diagram"))

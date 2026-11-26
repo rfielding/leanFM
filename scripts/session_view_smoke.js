@@ -54,8 +54,11 @@ const root = new Node("body");
 const byId = {};
 for (const id of ["app", "editor", "walk", "results"]) { byId[id] = new Node("div"); byId[id].id = id; }
 byId.app.append(byId.editor, byId.walk, byId.results); root.appendChild(byId.app);
+const docListeners = [];
 const document = {
   body: root, documentElement: new Node("html"),
+  addEventListener: (type, fn) => { docListeners.push([type, fn]); },
+  removeEventListener: (type, fn) => { const i = docListeners.findIndex(([t, f]) => t === type && f === fn); if (i >= 0) docListeners.splice(i, 1); },
   getElementById: (id) => byId[id] || null,
   createElement: (t) => new Node(t), createElementNS: (_, t) => new Node(t), createTextNode: (t) => new Text(t),
 };
@@ -346,7 +349,10 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     E.forEach((e, i) => (e.prior || []).forEach((q) => { if (posOf.has(q)) kids[posOf.get(q)].push(i); }));
     const reach = (start, next) => { const got = new Set([start]), st = [start]; while (st.length) for (const j of next(st.pop())) if (!got.has(j)) { got.add(j); st.push(j); } return got; };
     const pickAt = 2;
-    const want = new Set([...reach(pickAt, (i) => (E[i].prior || []).filter((q) => posOf.has(q)).map((q) => posOf.get(q))), ...reach(pickAt, (i) => kids[i])]);
+    let want = new Set([...reach(pickAt, (i) => (E[i].prior || []).filter((q) => posOf.has(q)).map((q) => posOf.get(q))), ...reach(pickAt, (i) => kids[i])]);
+    // an event with no prior links stands for its whole session's stream
+    if (want.size <= 1) want = new Set(E.map((_, j) => j).filter((j) => String(E[j].session) === String(E[pickAt].session)));
+    const fadedNow = () => byId.results.all().filter((n) => n.attrs && String(n.attrs.opacity) === "0.25").length;
     const rowsNow = () => byId.results.all().filter((n) => n.className.split(" ").includes("evrow"));
     const cv = root.all().find((n) => n.tag === "canvas");
     const before = rowsNow().length;
@@ -354,13 +360,23 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     cv.dispatch("click", { clientX: 100, clientY: 76 + pickAt * 48 }); await wait(200);
     if (rowsNow().length !== want.size) throw new Error(`focusing on event ${pickAt} shows ${rowsNow().length} events, its thread has ${want.size}`);
     expectText("a focused thread says whose it is", byId.results, "Thread of e");
+    // the protocol's sequence diagram lights the stream's messages and fades the rest
+    if (R.simulate.structuredContent.diagram && fadedNow() === 0) throw new Error("focusing on an event faded nothing in the protocol's sequence diagram");
+    expectText("the protocol diagram names the focused stream", byId.results, "lit in the protocol");
     // the focus frames the sessions its events formed: the note names each session with a shown event
     const ds = (R.simulate.structuredContent.derivedSessions || {}).sessions || [];
     const framedKeys = ds.filter((x) => (x.events || []).some((i) => want.has(i))).map((x) => String(x.key));
     if (framedKeys.length) expectText("a focus names the sessions it frames", byId.results, "in sessions " + framedKeys[0]);
+    // Escape gets out of the focus, as the button does, and clears the lighting
+    for (const [t, fn] of docListeners.slice()) if (t === "keydown") fn({ key: "Escape", preventDefault() {} });
+    await wait(200);
+    if (rowsNow().length !== before) throw new Error("Escape did not bring the stream back");
+    if (fadedNow() !== 0) throw new Error("Escape left the protocol diagram faded");
+    console.log(`ok: clicking an event focuses on its stream (${want.size} of ${before} events), lights it in the protocol diagram, and Escape brings everything back`);
+    cv.dispatch("click", { clientX: 100, clientY: 76 + pickAt * 48 }); await wait(200);
     button(byId.results, "Show all events").click(); await wait(200);
     if (rowsNow().length !== before) throw new Error("Show all events did not bring the stream back");
-    console.log(`ok: clicking an event focuses on its thread (${want.size} of ${before} events) and Show all events brings the rest back`);
+    console.log("ok: Show all events also brings the stream back");
   }
   // the derived sessions (clause selfhost.session.derived-sessions): one button per session LeanFM
   // derived; picking one shows only its events in the log
