@@ -209,7 +209,7 @@ selected event as JSON.*
 
 | Group | Tools |
 |---|---|
-| Design and check | `session_check`, `session_review`, `session_diagram`, `session_explore`, `session_actor`, `session_types`, `session_openapi`, `session_skeleton`, `session_compat`, `session_deployment` |
+| Design and check | `session_check`, `session_review`, `session_diagram`, `session_explore`, `session_actor`, `session_types`, `session_openapi`, `session_skeleton`, `session_compat`, `session_deployment`, `session_realizable` |
 | Behaviour | `session_simulate`, `session_next`, `session_dataset`, `session_mdp`, `session_sla`, `session_instances` |
 | Real runs | `session_conform` (a log against the protocol, sessions derived when the log names none), `session_spans` |
 | Questions | `session_ctl` (temporal properties, with witnesses and counterexamples), `check_ctl`, `explain_formula`, `knows` (what an actor can derive) |

@@ -287,6 +287,14 @@ def toolDefinitions : Array Json := #[
       ("instances", Json.mkObj [("type", "integer"), ("description", Json.str "instances of each accept, 1 to 4 in all (default 2)")]),
       ("perInstance", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")]), ("description", Json.str "JSON CTL formulas checked for every instance")]),
       ("properties", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")]), ("description", Json.str "JSON CTL formulas about the whole system")])] ["lean"]),
+  tool "session_realizable" "Check what a deployment can actually do"
+    ("A protocol says the order its messages should happen in; a deployment can only enforce some of it. Each role runs its own projection " ++
+     "and every actor has a FIFO inbox that loses nothing, of the size written where it is named, protocol Shop (Client, Api[8], Bank[2]) " ++
+     "(no size: 0, a rendezvous). Answers realizable, or unrealizable with the first problem and the deliveries leading to it: an order the " ++
+     "protocol does not allow (unrelated roles cannot be held to the protocol's order), or a deadlock with each role's inbox and what it waits " ++
+     "for. Lists the sizes and guarantees assumed. Roles that run parallel branches or serve sessions are refused for now. The protocol's text " ++
+     "stays the specification: no other tool's answer depends on inbox sizes.")
+    (schema [("lean", stringSchema "LeanFM protocol text; roles may carry inbox sizes, Api[8]")] ["lean"]),
   tool "session_deployment" "Check where a protocol's roles run"
     "Read the text's last deployment block (deployment Production of P { outside { Client; } island us { machine m1 { Api { ingress https : ingressHttps; } } } }), or the one named by deployment, and check it against protocol P: every role placed once, and every message arriving on an interface of its receiver that its sender can reach (ingress: anyone; peering: any island; internal: the same island; local: the same machine; a role with no interfaces is unrestricted). Answers placed or refused, each role's groups and interfaces, each link with the interface it uses and the conditions its kind and placement add (hostile, partition, reject, per-key order), every issue, and an SVG of the tree with its links. A deployment adds no message to P."
     (schema [("lean", stringSchema "LeanFM protocol text with a protocol and a deployment block after it"),

@@ -1,139 +1,260 @@
-\chapter{CTL over a Conversation}\label{ch:checker}
+\chapter{CTL, a Logic of the Future}\label{ch:checker}
 
-This chapter defines CTL by four recursive rules, then the states a session type implies,
-which are what CTL is evaluated over, and the one notion of sameness CTL can see.
-Everything in the next three chapters is stated over these definitions, and LeanFM
-implements them as written.
+CTL is a logic of the future. Stand at one moment of a conversation: from here it can go
+on in several ways, and each of those can go on in several more. A CTL formula is a claim
+about that tree of futures, checked the way a regular expression is matched against text:
+every future either fits the pattern or does not.
 
-\section{CTL}\label{sec:ctl}
+Almost all of it is two choices made together. \emph{Which} futures: some of them
+(possibly) or all of them (necessarily). And \emph{what} happens in them: $p$ eventually
+holds, or $p$ always holds. Each pair is one word:
 
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & $p$ eventually holds & $p$ always holds \\
+\midrule
+in some future & $\possibly p$ & $\someAlways p$ \\
+in every future & $\inevitably p$ & $\always p$ \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-A CTL formula is a statement made at one moment of a conversation about every way the
-conversation can go on from there. It is built from a few atoms, which say what is true at
-that moment, with $\neg$, $\wedge$, $\vee$ and $\rightarrow$, two one-step operators, and
-four rules that each refer to themselves.
+$\possibly p$: the rules allow a future in which $p$ holds. $\inevitably p$: every future
+leads to $p$. $\someAlways p$: some future keeps $p$ forever. $\always p$: from now on $p$
+holds on every path; you can never find it false.
 
-The atoms: $\on{\ell}$ holds on delivery of $\ell$, from the moment $\ell$ arrives until the
-next message (``$\ell$ was just delivered'', not ``some time after $\ell$''; earlier versions
-of LeanFM spelled it \texttt{after}, a spelling it now refuses, naming \texttt{on});
-$\mathsf{stop}$ holds where the conversation may stop; $\mathsf{secret}(A, B, f)$ holds where
-the step just taken carried a field ending in \texttt{\_secr} (named $f$, from $A$ to $B$,
-when they are given).
+There is no other state to talk about. The only state is the protocol's own: where the
+conversation is, and that shows up only in the messages, the one just delivered and
+whether the conversation may stop. No variable, counter or field of any implementation
+appears in a formula. That keeps every formula a requirement: it says what may be seen on
+the wire, and leaves how to build it to whoever builds it.
+
+This chapter shows where the futures come from (a protocol), defines the whole language by
+one recursive equation, and checks a formula by filling in a truth table, with a loop short
+enough to write in any language.
+
+\section{Start from the protocol}\label{sec:ctl}
+
+Everything begins as a protocol. Here is Images from Chapter~\ref{ch:global}, and the
+interaction diagram LeanFM draws from it:
+
+\input{generated/ctl-images.tex}
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Interaction diagram of Images: GetImage from Browser to Server and then either Image or NotFound back.}{\ThemedDiagram{width=.58\textwidth}{ctl-images}}
+\caption{Images as LeanFM draws it.}
+\end{figure}
+
+LeanFM compiles it in three steps.
+\begin{enumerate}
+\item \textbf{States.} A protocol is a grammar, and like a parser LeanFM tracks what is
+  left to play. Each state is ``what remains'', and each message the protocol allows next
+  is a step to the state of what remains after it. Calls nest and protocols include
+  protocols, so this is a context-free grammar, not a state machine anyone wrote by hand:
+  the state machine falls out of the grammar.
+\item \textbf{Labels.} Each state remembers two things: the message that led to it (none,
+  at the start) and whether the conversation may stop there. Those are the only two facts
+  a formula can read directly, written $\on{M}$ (``on delivery of $M$'') and
+  $\mathsf{stop}$. A state where the conversation may stop, or where nothing else can
+  happen, repeats itself forever: so every path goes on, and ``forever'' always means
+  something.
+\item \textbf{Merge.} States that nobody could tell apart, by their labels now or by
+  anything that can happen later, are the same state, a \emph{typestate}. What is left is
+  the smallest state machine that still says everything the protocol says.
+\end{enumerate}
+
+For Images that is four typestates:
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Typestate graph of Images: start then GetImage then Image or NotFound which each have a double border and a loop back to itself.}{\Typestates{ctl-images}}
+\caption{The typestates of Images: a double border where the conversation may stop.}
+\end{figure}
+
+and LeanFM writes them out as a transition table, one rule per typestate, each a formula:
+
+\input{generated/ctl-images-rules.tex}
+
+Read it like code. \texttt{start}: the conversation begins before any message.
+\texttt{(transition start GetImage)}: from there, GetImage comes next and nothing else.
+\texttt{(transition GetImage (Image stop) (NotFound stop))}: after GetImage, an Image or a
+NotFound comes next, and after either the conversation may stop. \texttt{(final Image)}:
+after an Image, nothing else can happen. The protocol text, the diagram, the typestate graph
+and the table are four views of one thing, and LeanFM derives the last three from the
+first.
+
+\section{The whole language in one equation}
+
+A formula is built from the two labels ($\on{M}$, $\mathsf{stop}$), the Boolean
+connectives ($\neg$, $\wedge$, $\vee$, $\rightarrow$), and two steps:
+$\allNext p$, ``every state that can come next has $p$'', and $\someNext p$, ``some state
+that can come next has $p$''. Then one recursive equation, in an \textsf{all} and a
+\textsf{some} version:
 
 \begin{definition}[CTL]\label{def:ctl}
-The two steps: $\allNext\varphi$ holds at a moment when $\varphi$ holds at every moment that
-can come next, and $\someNext\varphi$ when it holds at some moment that can come next.
-The four recursive rules, ``else'' being ``or'':
-\begin{align*}
-\varphi \mathbin{\mathsf{allUntil}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \allNext(\varphi \mathbin{\mathsf{allUntil}} \psi)\big)\\
-\varphi \mathbin{\mathsf{someUntil}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \someNext(\varphi \mathbin{\mathsf{someUntil}} \psi)\big)\\
-\varphi \mathbin{\mathsf{allUnless}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \allNext(\varphi \mathbin{\mathsf{allUnless}} \psi)\big)\\
-\varphi \mathbin{\mathsf{someUnless}} \psi &\;:=\; \psi \ \text{else}\ \big(\varphi \wedge \someNext(\varphi \mathbin{\mathsf{someUnless}} \psi)\big)
-\end{align*}
-An \emph{until} counts only finite unfoldings of its rule: on the paths it speaks of,
-$\psi$ is reached. An \emph{unless} also counts the unfolding that goes on forever:
-$\varphi$ may hold all along and $\psi$ never come. A protocol satisfies a formula when the
-moment before its first message does.
+\[
+a \mathbin{\mathsf{until}} b \;=\; b \ \text{else}\ \big(a \wedge \mathsf{next}(a \mathbin{\mathsf{until}} b)\big)
+\]
+with $\mathsf{next}$ either $\allNext$ (giving $\mathsf{allUntil}$) or $\someNext$ (giving
+$\mathsf{someUntil}$), ``else'' meaning ``or'', and the recursion required to reach $b$:
+$a$ holds until $b$, and $b$ does come. A protocol satisfies a formula when its start
+state does.
 \end{definition}
 
-Everything else is defined from these in one line:
-\begin{align*}
-\possibly\varphi &= \top \mathbin{\mathsf{someUntil}} \varphi & \inevitably\varphi &= \top \mathbin{\mathsf{allUntil}} \varphi\\
-\someAlways\varphi &= \varphi \mathbin{\mathsf{someUnless}} \bot & \always\varphi &= \varphi \mathbin{\mathsf{allUnless}} \bot\\
-\mathsf{never}\,\varphi &= \always\neg\varphi & \varphi\rightarrow\psi &= \neg\varphi\vee\psi
-\end{align*}
-$\possibly\varphi$: some path reaches $\varphi$. $\inevitably\varphi$: every path does.
-$\someAlways\varphi$: some path keeps $\varphi$ forever. $\always\varphi$: every path
-does, so $\varphi$ holds everywhere from here.
+That is the whole language. Everything else is a one-line definition:
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+$\possibly p = \mathsf{true} \mathbin{\mathsf{someUntil}} p$ & some future reaches $p$\\
+$\inevitably p = \mathsf{true} \mathbin{\mathsf{allUntil}} p$ & every future reaches $p$\\
+$\always p = \neg\possibly\neg p$ & no future ever finds $p$ false\\
+$\someAlways p = \neg\inevitably\neg p$ & some path keeps $p$ forever\\
+$\mathsf{never}\ p = \always\neg p$ & $p$ never holds\\
+$a \mathbin{\mathsf{allUnless}} b = \neg(\neg b \mathbin{\mathsf{someUntil}} (\neg a \wedge \neg b))$ & $a$ until $b$ or forever\\
+$a \mathbin{\mathsf{someUnless}} b = (a \mathbin{\mathsf{someUntil}} b) \vee \someAlways a$ & on some path\\
+\bottomrule
+\end{tabular}
+\end{center}
+and the shapes specifications repeat most are functions on top of those:
+\begin{center}
+\begin{tabular}{@{}p{.43\textwidth}p{.52\textwidth}@{}}
+\toprule
+function & means \\
+\midrule
+\texttt{(stronglyImplies a b)} & $\possibly a \wedge \always(a \rightarrow b)$: $a$ can happen, and whenever it does, $b$ \\
+\texttt{(leadsTo a b)} & \texttt{(stronglyImplies a (inevitably b))}: every $a$ is answered by a $b$ \\
+\texttt{(precedes a b)} & $\neg(\neg a \mathbin{\mathsf{someUntil}} b)$: no $b$ before $a$ \\
+\texttt{(outcomes a b \ldots)} & each of $a, b, \ldots$ is possible, and one of them is inevitable \\
+\texttt{(follows a b \ldots)} & $\always(a \rightarrow \someNext b \wedge \ldots \wedge \allNext(b \vee \ldots))$: after $a$, exactly these come next \\
+\texttt{(state M)}, \texttt{(state M stop)} & $\on{M}$ and $\neg\mathsf{stop}$, or and $\mathsf{stop}$: a typestate \\
+\texttt{start} & no message yet: the first state \\
+\texttt{(transition A B (C stop))} & \texttt{follows} over states: one row of a transition table \\
+\texttt{(final A)} & \texttt{(follows (state A stop) (state A stop))}: may stop, nothing else can happen \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-The shapes specifications repeat most are functions, each defined by what it unfolds to:
-\begin{itemize}
-\item an implication that cannot hold vacuously, written \texttt{stronglyImplies},
-  \[\varphi \Rightarrow \psi = \possibly\varphi \wedge \always(\varphi\rightarrow\psi);\]
-\item each outcome possible and one of them inevitable,
-  \[\mathsf{outcomes}(a_1,\dots,a_n) = \possibly a_1\wedge\dots\wedge\possibly a_n\wedge
-  \inevitably(a_1\vee\dots\vee a_n)\]
-  (not $\inevitably a_1\vee\dots\vee\inevitably a_n$, which makes one particular outcome
-  inevitable);
-\item after $a$, exactly these may come next,
-  \[\mathsf{follows}(a,b_1,\dots,b_n) = \always\big(a\rightarrow\someNext b_1\wedge\dots\wedge
-  \someNext b_n\wedge\allNext(b_1\vee\dots\vee b_n)\big);\]
-\item $\mathsf{leadsTo}(a,b) = a \Rightarrow \inevitably b$: every $a$ is answered by a $b$;
-\item $\mathsf{precedes}(a,b) = \neg(\neg a\mathbin{\mathsf{someUntil}}b)$: no $b$ before $a$.
-\end{itemize}
-A state of the conversation has its own term, and a transition table is written with them:
-\begin{align*}
-(\mathsf{state}\ M) &= \on{M}\wedge\neg\mathsf{stop} &
-(\mathsf{state}\ M\ \mathsf{stop}) &= \on{M}\wedge\mathsf{stop}\\
-(\mathsf{transition}\ A\ B\ (C\ \mathsf{stop})) &= \mathsf{follows}(A, B, C\ \mathsf{stop}) &
-(\mathsf{final}\ A) &= \mathsf{follows}(A\ \mathsf{stop}, A\ \mathsf{stop})
-\end{align*}
-where a bare name in a transition is a state where the conversation must go on,
-$\mathsf{start}$ is the state before any message, and a final state is one where the
-conversation may stop and nothing else can happen.
+\section{Checking is filling in a truth table}
 
-For readers who know the textbook terms: counting only finite unfoldings makes each until
-the \emph{least} fixpoint of its rule, and counting the infinite one too makes each unless
-the \emph{greatest}. Textbooks write $\varphi\mathbin{\mathsf{someUntil}}\psi$ as
-$\mathsf{E}[\varphi\,\mathsf{U}\,\psi]$, the steps as $\mathsf{EX}$ and $\mathsf{AX}$, and the
-derived operators as $\mathsf{EF}$, $\mathsf{AF}$, $\mathsf{EG}$, $\mathsf{AG}$
-\citep{clarke1986automatic}; LeanFM reads those letters too, and writes every formula in
-the words. \texttt{explain\_formula} answers any formula \emph{unfolded} into the steps
-and the untils, and LeanFM's tests check its evaluator against these definitions on every
-operator.
+To check formulas, write the protocol's states down the side and the formulas across the
+top, and fill in each cell: does this formula hold at this state? Here is Images with six
+formulas, as LeanFM's evaluator fills it in:
 
-\section{The states a session type implies}
+\input{generated/ctl-images-truth.tex}
 
-The formulas above are evaluated at moments of a conversation. A session type says what
-may happen next at every point, so the moments are already in it: they are the places the
-conversation can be in, and LeanFM derives them from the protocol text
-(\texttt{Global.stateGraph} and \texttt{Logic.buildModel}).
+Each column follows from columns already filled in. (1) and (2) are read off the labels.
+(3) looks one row ahead: it is true just after GetImage because a NotFound can come next,
+and true just after NotFound because a final state's next state is itself. (4), (5) and (6)
+come from the recursive equations, and the only question for a recursive column is how
+to start the loop:
 
-A \emph{state} is what is left of the protocol to play, together with the session ids
-bound so far. The first state is the whole protocol; each message the protocol allows next
-leads to the state of what remains after it. Two interleavings that leave the same
-remainder with the same ids bound are the same state, so a protocol with
-\texttt{parallel} is no larger than its interleavings make necessary. Nested sessions are
-played once in place. The states are found breadth first, at most 20{,}000 of them.
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+def sat(f):                                  # the set of states where f holds
+    match f:
+        on(m):         return {s for s in States if s.last == m}
+        stop:          return {s for s in States if s.may_stop}
+        not g:         return States - sat(g)
+        g and h:       return sat(g) & sat(h)
+        g or h:        return sat(g) | sat(h)
+        allNext g:     return {s for s in States if all(t in sat(g) for t in next(s))}
+        someNext g:    return {s for s in States if any(t in sat(g) for t in next(s))}
+        a allUntil b:  return until(a, b, all)
+        a someUntil b: return until(a, b, any)
+        _:             return sat(definition(f))   # always, possibly, ... : the table above
 
-Each state remembers two things, which is all the atoms read: the message that led to it
-(none, before the first message), and whether the conversation may stop there (nothing is
-left that must happen). The same remainder reached by two different messages is
-therefore two states. A state where the conversation may stop, or where nothing more can
-happen, repeats itself forever: it \emph{stutters}. So every path goes on forever, and
-$\inevitably$ and $\always$ mean what they mean in textbook CTL
-\citep{clarke1986automatic}; it is also why a $\mathsf{final}$ row lists itself as what
-comes next.
+def until(a, b, quantifier):
+    z = set()                                # start with nothing; grow
+    while True:                              # the equation, run until nothing changes
+        z2 = sat(b) | {s for s in sat(a) if quantifier(t in z for t in next(s))}
+        if z2 == z: return z
+        z = z2
+\end{lstlisting}
 
-The later chapters use a little notation for this. The states of protocol $P$ with their
-steps form its \emph{checker model} $M_P$: its states are written $n$, the first one
-$n_0$, a step from $n$ to $n'$ as $n \to n'$, and the two things a state remembers as its
-label $L(n) = (m, e)$, $m$ the last message and $e$ whether it may stop. The atoms read
-only that label; which typestate a state belongs to has to be said with the operators of
-Section~\ref{sec:ctl}, and that is the subject of Chapter~\ref{ch:faithful}.
+The loop starts with no states and grows: a state joins only when $b$ holds there, or $a$
+holds and its steps lead into states that joined earlier, so every state it accepts reaches
+$b$ in finitely many steps. That is why an until promises $b$ comes. $\always$ and
+$\someAlways$, which speak of forever, need no loop of their own: they are untils under a
+negation. (The textbooks call the until a least fixpoint and the forevers greatest
+fixpoints; a complement of a least fixpoint is a greatest one, and that is all those words
+mean here.)
+LeanFM's tree evaluator (\texttt{Logic.satTree}) runs this loop for the untils, and gets the
+forevers the same way from the other end (start with every state and shrink), which gives
+the same sets as the negations; its fast evaluator (Chapter~\ref{ch:deciding}) computes them
+with worklists, and the tests compare the
+two on every operator. A formula holds of the protocol when its cell in the start row is
+true.
 
-\section{Bisimulation}
+\section{What a check means}
 
-Two states are \emph{bisimilar} when they have the same label and every step one of them can
-take can be matched by a step of the other to states that are again bisimilar
-\citep{hennessy1985algebraic}. It is the sameness CTL can see.
+A conversation that really happened is a trace: the messages in order. A log
+\emph{conforms} when every trace in it is one the protocol allows,
+\[
+\mathrm{Traces}(\text{log}) \subseteq \mathrm{Traces}(\text{protocol}).
+\]
+The same inclusion applies to a design before anything is built. A protocol says the order
+its messages should happen in, but a deployment can only enforce some of it. In a deployment
+each role runs on its own, from its own projection, and every actor has an \emph{inbox}: a
+first-in first-out buffer that loses nothing, whose size is written where the actor is named,
+\texttt{Shop (Client, Api[8], Bank[2])}. An actor with no size has an inbox of size 0: a send
+waits until the receiver takes it, a rendezvous, which is what every protocol in this book
+assumed so far. A sender sleeps when the inbox it writes to is full, a receiver when the
+message at the front of its inbox is not one it can take yet, and each wakes as soon as its
+step becomes possible. \texttt{session\_realizable} explores every state a deployment can
+reach and checks that every order of deliveries it produces is one the protocol allows,
+$\mathrm{Traces}(\text{deployment}) \subseteq \mathrm{Traces}(\text{protocol})$, and that no
+state is stuck. Two pairs of roles that never talk cannot be held to the protocol's order
+between them:
+
+\input{generated/ctl-realizable-pairs.tex}
+\input{generated/ctl-realizable-pairs-answer.tex}
+
+and a buffer makes deadlocks possible that a rendezvous rules out. Here B must take X and then
+Y, but C can fill B's one-slot inbox with Y first; then A cannot put X in, and B cannot take Y:
+
+\input{generated/ctl-realizable-jam.tex}
+\input{generated/ctl-realizable-jam-answer.tex}
+
+With B's inbox at size 0 the same protocol is realizable, since C cannot hand Y over until B
+takes it. The protocol text stays the specification: inbox sizes change this one answer and
+no other.
+
+An implementation is \emph{faithful} when it allows exactly what the protocol allows at
+every state, no move more and no move less, so that the transition table holds of it.
+The textbook name for ``the same moves at every state'' is bisimilar:
 
 \begin{definition}[Bisimulation]\label{def:bisim}
-Let $M = (N, n_0, \to, L)$ and $M' = (N', n_0', \to', L')$ be total labelled graphs. A
-relation $B \subseteq N \times N'$ is a \emph{bisimulation} when every $(n, n') \in B$
-has $L(n) = L'(n')$, every step $n \to m$ is matched by some $n' \to' m'$ with
-$(m, m') \in B$, and every step $n' \to' m'$ is matched by some $n \to m$ with
-$(m, m') \in B$. $M$ and $M'$ are \emph{bisimilar}, $M \sim M'$, when some bisimulation
-contains $(n_0, n_0')$. Two nodes of one model are bisimilar, $n \sim m$, when some
-bisimulation of the model with itself contains $(n, m)$.
+Two states are bisimilar when they have the same label, every step from one is matched by
+a step from the other to bisimilar states, and the other way round
+\citep{hennessy1985algebraic}; two systems are bisimilar when their start states are.
 \end{definition}
 
 \begin{theorem}[\citet{browne1988characterizing}]\label{thm:bcg}
-Bisimilar nodes satisfy the same CTL formulas. Conversely, for finite models, two nodes
-that satisfy the same CTL formulas are bisimilar.
+Bisimilar states satisfy the same CTL formulas, and on finite systems two states that
+satisfy the same formulas are bisimilar.
 \end{theorem}
 
-The first half is a routine induction on formulas. Its consequence is the ceiling for
-everything in this book: no set of CTL formulas can tell apart two systems that are
-bisimilar. The best a translation into CTL can do is characterise a protocol
-\emph{up to} bisimulation. The next chapter does exactly that.
+So no formula can tell two bisimilar systems apart, and the best a translation into CTL can
+do is pin a protocol down up to bisimilarity. The transition table does exactly that
+(Chapter~\ref{ch:faithful}). For the proofs there, the states of protocol $P$ with their
+steps are its \emph{checker model} $M_P$: a state is written $n$, the start $n_0$, a step
+$n \to n'$, and a state's label $L(n) = (m, e)$, its last message and whether it may stop.
+
+\section{Where the CTL comes from}
+
+Most of the CTL in a project is never written by hand.
+\begin{itemize}
+\item \textbf{From protocols:} every protocol yields its transition table, as above.
+\item \textbf{From requirements:} a requirements map adds formulas no diagram shows
+  (Chapter~\ref{ch:lists}), such as
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+(leadsTo (on Pay) (on Charge))
+(always (implies (on SoldOut) (never (on Charge))))
+\end{lstlisting}
+\item \textbf{From prose:} a requirement with no formula yet is \texttt{sorry}, counted and
+  warned about, the way Lean treats an unfinished proof, until someone gives it CTL.
+\item \textbf{From deployments:} a deployment graph places each role and is checked for
+  links that cross a hostile network or a partition (Chapter~\ref{ch:lists}); those checks
+  are structural today, not CTL.
+\end{itemize}

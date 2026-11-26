@@ -72,6 +72,8 @@ structure Def where
   version : Nat := 0
   /-- `given token`: the fields its includer binds (selfhost.session.identity.scopes) -/
   givens : List String := []
+  /-- inbox sizes, `Api[8]`; a role not listed has size 0 (selfhost.session.buffers) -/
+  buffers : List (String × Nat) := []
   deriving Inhabited
 
 /-- The highest version a protocol may declare. -/
@@ -805,7 +807,16 @@ open Lean (Syntax) in
 /-- One protocol (`protocolBody`): its name, roles and statements, bounded loops unrolled. -/
 def protocolDef (body : Syntax) : R Def := do
   let pname ← name body[1] "the protocol's name"
-  let rs ← (body[3].getArgs.filter (·.isIdent)).toList.mapM (name · "a role")
+  let decls := (body[3].getArgs.filter (·.getKind == `LeanFM.Session.Grammar.protocolRole)).toList
+  let rs ← decls.mapM (fun d => name d[0] "a role")
+  let mut bufs : List (String × Nat) := []
+  for d in decls do
+    match d[1].getArgs with
+    | #[_, n, _] =>
+      let k ← nat n
+      if k > 64 then failAt n "an inbox holds 0 to 64 messages"
+      bufs := bufs ++ [(← name d[0] "a role", k)]
+    | _ => pure ()
   if rs.isEmpty then failAt body "a protocol needs at least one role"
   if rs.length > limits.maxRoles then failAt body s!"a protocol has at most {limits.maxRoles} roles"
   if rs.eraseDups.length != rs.length then failAt body "role names must be distinct"
@@ -822,7 +833,7 @@ def protocolDef (body : Syntax) : R Def := do
   let b <- block 0 body[7]
   if (labelsOf b).contains pname then
     failAt body s!"protocol {pname} has a message {pname}; in Lean they would be two declarations with one name, so rename one of them"
-  return { name := pname, roles := rs, body := unroll b, version, givens := gv }
+  return { name := pname, roles := rs, body := unroll b, version, givens := gv, buffers := bufs }
 
 /-- A word the grammar matched with `W`: an atom, or an identifier when the word is not reserved. -/
 def word (stx : Lean.Syntax) : String := if stx.isAtom then stx.getAtomVal else stx.getId.toString
@@ -1230,6 +1241,8 @@ structure Parsed where
   linkTargets : List ((String × String) × String) := []
   /-- the given Links that name a parent session (selfhost.session.identity.children) -/
   parentLinks : List (String × String) := []
+  /-- the main protocol's inbox sizes (selfhost.session.buffers) -/
+  buffers : List (String × Nat) := []
   /-- sessions bodies whose copies cannot be told apart, each with its fix (selfhost.session.identity.scopes) -/
   identityNotes : List String := []
   /-- the labels of every protocol in the text, the main one's and the earlier ones' -/
@@ -1526,7 +1539,7 @@ def parse (text : String) (types : Option Types.Env := none) : Except String Par
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
            requires := st.requires.toList, types := env, keys := st.keys.toList, linkTargets := targets, parentLinks, identityNotes,
            allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList,
-           version := main.version, versioned }
+           version := main.version, versioned, buffers := main.buffers }
 
 /-! ## Writing -/
 

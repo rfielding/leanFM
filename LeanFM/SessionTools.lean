@@ -28,6 +28,7 @@ import LeanFM.Session.Evolution
 import LeanFM.Session.OpenApi
 import LeanFM.Session.Review
 import LeanFM.Session.ActorView
+import LeanFM.Session.Realizable
 import LeanFM.Session.Dataset
 import LeanFM.Session.Outline
 import LeanFM.Session.Derived
@@ -1758,6 +1759,27 @@ def instances (args : Json) : Except String Json := do
         [("formula", v.formula), ("scope", Json.str v.scope), ("verdict", Json.str v.verdict), ("reading", Json.str v.why)]).toArray)
     , ("lean", Json.str p.lean) ]
 
+/-- What a deployment can do with FIFO, lossless inboxes of the sizes the protocol gives its roles
+(selfhost.session.buffers, LeanFM/Session/Realizable.lean). -/
+def realizable (args : Json) : Except String Json := do
+  let p ← parseProtocol args
+  let parsed ← Text.parse p.lean (← protoTypes args)
+  let a ← Realizable.explore p.global p.roles parsed.buffers (CallLimits.get args "states")
+  let sizes := p.roles.map fun r => (r, (parsed.buffers.lookup r).getD 0)
+  let guarantees := ["in order: a role takes the oldest message in its inbox first", "lossless: every message put in an inbox stays until it is taken"] ++
+    sizes.map fun (r, n) => if n == 0 then s!"{r}'s inbox holds nothing: a send to {r} is taken at once (a rendezvous)" else s!"{r}'s inbox holds at most {n}"
+  let reading := if a.verdict == "realizable" then
+      s!"{p.name}: realizable: every order of deliveries a deployment can produce is one the protocol allows, and no deployment state is stuck ({a.states} deployment states)"
+    else s!"{p.name}: unrealizable: {a.problem}" ++ (if a.path.isEmpty then "" else s!"; after {", ".intercalate a.path}")
+  return Json.mkObj
+    [ ("tool", "session_realizable"), ("verdict", Json.str a.verdict), ("reading", Json.str reading)
+    , ("problem", Json.str a.problem), ("path", Json.arr (a.path.map Json.str).toArray)
+    , ("inboxes", Json.mkObj (a.inboxes.map fun (r, q) => (r, Json.arr (q.map Json.str).toArray)))
+    , ("waiting", Json.mkObj (a.waiting.map fun (r, q) => (r, Json.arr (q.map Json.str).toArray)))
+    , ("sizes", Json.mkObj (sizes.map fun (r, n) => (r, toJson n)))
+    , ("guarantees", Json.arr (guarantees.map Json.str).toArray)
+    , ("states", toJson a.states) ]
+
 /-- The text's last deployment block, or the one named by `deployment`, checked against the
 protocol it places (selfhost.session.deployment): placed or refused, where each role runs, each link
 with the interface it uses and the conditions it adds, every issue, and the view. -/
@@ -2456,7 +2478,7 @@ def explore (args : Json) : Except String Json := do
           , ("unit", "nodes: protocols, frames, branches, messages and events; lines of the text")
           , ("boundary", s!"the main protocol {p.name} with every protocol it includes, the protocols defined, and the roles; at most {Outline.maxNodes} nodes") ]) ]
 
-def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore", "session_deployment"]
+def toolNames : List String := ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore", "session_deployment", "session_realizable"]
 
 def run (name : String) (args : Json) : Option (Except String Json) :=
   match name with
@@ -2479,6 +2501,7 @@ def run (name : String) (args : Json) : Option (Except String Json) :=
   | "session_dataset" => some (dataset args)
   | "session_explore" => some (explore args)
   | "session_deployment" => some (deployment args)
+  | "session_realizable" => some (realizable args)
   | _ => none
 
 /-! ## Reference -/
@@ -2969,6 +2992,11 @@ protocol PlaceOrder (Client, Shop, Bank) {
 | `loop Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |
 | `sessions { ... }` | any number of independent instances, as a server handles requests; nested inside a protocol, a role that appears only in such blocks is a service that handles each one on its own |
 | `include Replicate Primary R1 R2 R3;` | an earlier protocol in the same text, roles renamed in order, drawn as a ref frame |
+
+A role may carry its inbox size, `protocol Shop (Client, Api[8], Bank[2])`: a FIFO buffer that loses
+nothing, 0 to 64 messages, 0 (a rendezvous) when no size is given. Only `session_realizable` reads
+sizes: it checks what a deployment of independent roles with those inboxes can do against the
+protocol, and reports an order the protocol does not allow or a deadlock.
 
 Write several protocols in one text to include one in another; the last protocol is the one
 checked. Names are Lean identifiers (`«two words»` works). `--` and `/- -/` comments are allowed.

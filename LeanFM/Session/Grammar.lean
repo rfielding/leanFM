@@ -204,8 +204,11 @@ def stmt : Parser := { fn := stmtFn, info := (alternatives skip).info }
 
 /-! ## Protocols, requirements, structures, files -/
 
+/-- A role, with its inbox size where the protocol gives one: `Api[8]` (selfhost.session.buffers). -/
+def protocolRole : Parser := node `LeanFM.Session.Grammar.protocolRole (ident >> optional ("[" >> numLit >> "]"))
+
 def protocolBody : Parser := node `LeanFM.Session.Grammar.protocolBody
-  ("protocol " >> ident >> "(" >> sepBy ident "," >> ")" >> optional (W "version" >> numLit) >>
+  ("protocol " >> ident >> "(" >> sepBy protocolRole "," >> ")" >> optional (W "version" >> numLit) >>
     optional (W "given" >> many1 ident) >> block stmt)
 
 def reqOpt : Parser := node `LeanFM.Session.Grammar.reqOpt

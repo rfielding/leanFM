@@ -1,16 +1,7 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 start
-  start
-
-typestate 0
-  transition(start, GetImage)
-
-typestate 1
-  transition(GetImage, Image stop, NotFound stop)
-
-typestate 2
-  final(Image)
-
-typestate 3
-  final(NotFound)
+(transition start GetImage)
+(transition GetImage (Image stop) (NotFound stop))
+(final Image)
+(final NotFound)
 \end{lstlisting}

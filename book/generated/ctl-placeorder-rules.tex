@@ -1,34 +1,13 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
 start
-  start
-
-typestate 0
-  transition(start, CreateOrder)
-
-typestate 1
-  transition(CreateOrder, Quote, SoldOut stop)
-
-typestate 2
-  transition(Quote, Pay)
-
-typestate 3
-  final(SoldOut)
-
-typestate 4
-  transition(Pay, Charge)
-
-typestate 5
-  transition(Charge, Charged, Declined)
-
-typestate 6
-  transition(Charged, Receipt stop)
-
-typestate 7
-  transition(Declined, PaymentDeclined stop)
-
-typestate 8
-  final(Receipt)
-
-typestate 9
-  final(PaymentDeclined)
+(transition start CreateOrder)
+(transition CreateOrder Quote (SoldOut stop))
+(transition Quote Pay)
+(final SoldOut)
+(transition Pay Charge)
+(transition Charge Charged Declined)
+(transition Charged (Receipt stop))
+(transition Declined (PaymentDeclined stop))
+(final Receipt)
+(final PaymentDeclined)
 \end{lstlisting}

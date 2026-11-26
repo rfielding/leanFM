@@ -95,8 +95,32 @@ def writeDot (name : String) (t : Typestates) : IO Unit := do
   for theme in ["light", "dark", "cover"] do
     IO.FS.writeFile s!"book/generated/{name}-ts-{theme}.dot" (dotOf t theme)
 
+/-- The rules as a transition table: one formula per line, as session_ctl writes them. -/
 def rulesText (t : Typestates) : String :=
-  "\n\n".intercalate ((rules t).map fun (n, f) => s!"{n}\n  {f.symbols}")
+  "\n".intercalate ((rules t).map fun (_, f) => (LeanFM.Logic.Dag.ofFormula f).toSexpr)
+
+/-- A truth table: one row per state of the protocol (its last message and whether it may stop),
+one column per formula, each cell the formula's truth at that state as LeanFM's evaluator gives it. -/
+def truthTable (text : String) (cols : List (String × String)) : IO String := do
+  let p ← IO.ofExcept (parseProtocol (withLean text))
+  let (d, _) ← IO.ofExcept (p.global.draft p.name)
+  let tm ← IO.ofExcept (LeanFM.Logic.parseDraft d)
+  let some m := LeanFM.Logic.buildModel tm | throw (IO.userError "the protocol's model is too large")
+  let sets ← cols.mapM fun (_, f) => do
+    let φ ← IO.ofExcept (LeanFM.Logic.parseFormula (Json.str f))
+    pure (LeanFM.Logic.Model.sat m φ)
+  let rowName (i : Nat) : String :=
+    let n := m.nodes[i]!
+    let msg := (n.message.map fun x => s!"just after {x}").getD "start"
+    if m.task.terminals.contains n.state then msg ++ ", may stop" else msg
+  let numbered := (List.range cols.length).map (· + 1)
+  let header := "state & " ++ " & ".intercalate (numbered.map fun k => s!"({k})") ++ " \\\\"
+  let key := "\\begin{center}\\begin{tabular}{@{}rl@{}}\n" ++ "\n".intercalate ((numbered.zip cols).map fun (k, (h, _)) =>
+    s!"({k}) & \\texttt\{{h}} \\\\") ++ "\n\\end{tabular}\\end{center}\n"
+  let rows := (List.range m.nodes.size).map fun i =>
+    rowName i ++ " & " ++ " & ".intercalate (sets.map fun z => if z[i]?.getD false then "T" else "F") ++ " \\\\"
+  return key ++ "\\begin{center}\\begin{tabular}{@{}l" ++ String.join (cols.map fun _ => "c") ++ "@{}}\n\\toprule\n" ++ header ++ "\n\\midrule\n" ++
+    "\n".intercalate rows ++ "\n\\bottomrule\n\\end{tabular}\\end{center}\n"
 
 def images : String := "structure GetImage where
   id : String
@@ -250,6 +274,26 @@ def main : IO Unit := do
   let (_, imgT) ← typestatesOf images
   writeDot "ctl-images" imgT
   write "ctl-images-rules.tex" (listing (rulesText imgT))
+  -- what a deployment can do: unrelated pairs, and a deadlock a buffer makes possible (selfhost.session.buffers)
+  let unrelated := "protocol Pairs (A, B, C, D) {\n  X from A to B;\n  Y from C to D;\n}"
+  let jam := "protocol Jam (A, B[1], C) {\n  X from A to B;\n  Y from C to B;\n}"
+  let ru ← tool "session_realizable" (realizable (withLean unrelated))
+  let rj ← tool "session_realizable" (realizable (withLean jam))
+  let waits (j : Json) : List String := match j.getObjValD "waiting" with
+    | .obj kv => kv.toList.map fun (r, v) => s!"  {r} waits to: {", ".intercalate ((v.getArr?.toOption.getD #[]).toList.filterMap (·.getStr?.toOption))}"
+    | _ => []
+  let boxes (j : Json) : List String := match j.getObjValD "inboxes" with
+    | .obj kv => kv.toList.map fun (r, v) => s!"  {r}'s inbox: {", ".intercalate ((v.getArr?.toOption.getD #[]).toList.filterMap (·.getStr?.toOption))}"
+    | _ => []
+  write "ctl-realizable-pairs.tex" (listing unrelated)
+  write "ctl-realizable-pairs-answer.tex" (listing (str ru "reading"))
+  write "ctl-realizable-jam.tex" (listing jam)
+  write "ctl-realizable-jam-answer.tex" (listing ("\n".intercalate ([str rj "reading"] ++ boxes rj ++ waits rj)))
+  -- the same formulas as columns of a truth table over the protocol's states (Chapter 4)
+  write "ctl-images-truth.tex" (← truthTable images
+    [("on GetImage", "(on GetImage)"), ("stop", "stop"), ("someNext (state NotFound stop)", "(someNext (state NotFound stop))"),
+     ("possibly (on NotFound)", "(possibly (on NotFound))"), ("inevitably stop", "(inevitably stop)"),
+     ("always (possibly stop)", "(always (possibly stop))")])
   let (orderG, orderT) ← typestatesOf order
   writeDot "ctl-placeorder" orderT
   write "ctl-placeorder-rules.tex" (listing (rulesText orderT))

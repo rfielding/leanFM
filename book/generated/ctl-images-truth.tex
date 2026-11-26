@@ -1,0 +1,18 @@
+\begin{center}\begin{tabular}{@{}rl@{}}
+(1) & \texttt{on GetImage} \\
+(2) & \texttt{stop} \\
+(3) & \texttt{someNext (state NotFound stop)} \\
+(4) & \texttt{possibly (on NotFound)} \\
+(5) & \texttt{inevitably stop} \\
+(6) & \texttt{always (possibly stop)} \\
+\end{tabular}\end{center}
+\begin{center}\begin{tabular}{@{}lcccccc@{}}
+\toprule
+state & (1) & (2) & (3) & (4) & (5) & (6) \\
+\midrule
+start & F & F & F & T & T & T \\
+just after GetImage & T & F & T & T & T & T \\
+just after Image, may stop & F & T & F & F & T & T \\
+just after NotFound, may stop & F & T & T & T & T & T \\
+\bottomrule
+\end{tabular}\end{center}
