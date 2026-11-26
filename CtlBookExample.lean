@@ -289,6 +289,14 @@ def main : IO Unit := do
   write "ctl-realizable-pairs-answer.tex" (listing (str ru "reading"))
   write "ctl-realizable-jam.tex" (listing jam)
   write "ctl-realizable-jam-answer.tex" (listing ("\n".intercalate ([str rj "reading"] ++ boxes rj ++ waits rj)))
+  -- CTL in a page of Lean: the part of book/examples/CtlTiny.lean between its markers, which
+  -- make check compiles with its guards, so the book prints only code that runs (Chapter 4)
+  let tiny ← IO.FS.readFile "book/examples/CtlTiny.lean"
+  let core := match tiny.splitOn "-- @book begin\n" with
+    | [_, rest] => (rest.splitOn "-- @book end").headD ""
+    | _ => ""
+  if core.isEmpty then throw (IO.userError "book/examples/CtlTiny.lean has no @book markers")
+  write "ctl-lean-core.tex" ("\\begin{lstlisting}[language=Lean,basicstyle=\\ttfamily\\footnotesize]\n" ++ core.trimAsciiEnd.toString ++ "\n\\end{lstlisting}\n")
   -- the same formulas as columns of a truth table over the protocol's states (Chapter 4)
   write "ctl-images-truth.tex" (← truthTable images
     [("on GetImage", "(on GetImage)"), ("stop", "stop"), ("someNext (state NotFound stop)", "(someNext (state NotFound stop))"),

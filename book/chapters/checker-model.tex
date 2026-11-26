@@ -144,6 +144,20 @@ Q(a until b)            b, else a and Q next (Q(a until b)); b must come
 (final A)             = (follows (state A stop) (state A stop))
 \end{lstlisting}
 
+Over a finite list, $\forall$ is the \texttt{and} of the mapped list and $\exists$ is the
+\texttt{or}, and a state's next states are a finite list. So the quantifier is a reducer, and the
+whole definition fits in a page of Lean, with \texttt{List.all} for $\forall$ and
+\texttt{List.any} for $\exists$. This is \texttt{book/examples/CtlTiny.lean}, which
+\texttt{make check} compiles together with tests of every word on a small example:
+
+\input{generated/ctl-lean-core.tex}
+
+\texttt{untilR} is the whole recursive core: the map is \texttt{(next s).map}, the reduce is
+\texttt{R}, and coming back to a state already on the path means $b$ was never reached on that
+future. \texttt{partial} tells Lean the recursion stops without a proof; it does, because the
+path only grows and there are finitely many states. \texttt{allOf} and \texttt{anyOf} are the
+same map and reduce over any list of claims, as in \texttt{(and (map final A B C))}.
+
 $\always p$ is ``no future ever finds $p$ false'', and $\someAlways p$ is ``not every future
 reaches $\neg p$''. The unlesses are untils of the other kind under a negation: ``on every
 path, $a$ until $b$ or forever'' is ``on no path does $a$ fail before $b$ has come''.
@@ -227,7 +241,10 @@ $\mathsf{someAlways}$; counterexamples to $\mathsf{inevitably}$, $\mathsf{leadsT
 \bottomrule
 \end{tabular}
 \end{center}
-So a checker is two searches, run backwards over the state graph, and negation. LeanFM's
+So a checker is two searches, run backwards over the state graph, and negation. The reach
+search is a breadth-first search backwards from the $b$ states, through states where $a$ holds:
+each state joins once. The lasso search starts from every state where $p$ holds and keeps
+removing those with no step left inside the set; what remains can stay in $p$ forever. LeanFM's
 answers have the same shape: \texttt{proved} or \texttt{disproved}, with the witness or the
 counterexample as a path of messages, and for a lasso \texttt{loopsBackTo}, the step where
 the loop closes.

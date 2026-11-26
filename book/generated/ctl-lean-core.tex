@@ -1,0 +1,34 @@
+\begin{lstlisting}[language=Lean,basicstyle=\ttfamily\footnotesize]
+/-- A formula, read at a state. -/
+abbrev Pred := String → Bool
+
+/-- Over a finite list, ∀ is `and` of the mapped list, and ∃ is `or`. -/
+abbrev Reduce := List Bool → Bool
+def andR : Reduce := fun bs => bs.all id      -- ∀
+def orR  : Reduce := fun bs => bs.any id      -- ∃
+
+/-- R next p: p mapped over the next states, then reduced. -/
+def nextR (R : Reduce) (p : Pred) : Pred := fun s => R ((next s).map p)
+
+/-- until(R, a, b): b here, or a here and the same claim reduced over the next states. Coming
+back to a state already on the path means b was never reached on that future: false. -/
+partial def untilR (R : Reduce) (a b : Pred) (s : String) (path : List String := []) : Bool :=
+  b s || (a s && !path.contains s && R ((next s).map (untilR R a b · (s :: path))))
+
+def tt : Pred := fun _ => true
+def neg (p : Pred) : Pred := fun s => !p s
+
+def allNext   : Pred → Pred := nextR andR
+def someNext  : Pred → Pred := nextR orR
+def allUntil  (a b : Pred) : Pred := untilR andR a b
+def someUntil (a b : Pred) : Pred := untilR orR a b
+
+def possibly   (p : Pred) : Pred := someUntil tt p
+def inevitably (p : Pred) : Pred := allUntil tt p
+def always     (p : Pred) : Pred := neg (possibly (neg p))
+def someAlways (p : Pred) : Pred := neg (inevitably (neg p))
+
+/-- map/reduce over a list of claims: and (map f xs), or (map f xs). -/
+def allOf (f : α → Pred) (xs : List α) : Pred := fun s => andR (xs.map (f · s))
+def anyOf (f : α → Pred) (xs : List α) : Pred := fun s => orR (xs.map (f · s))
+\end{lstlisting}

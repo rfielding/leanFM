@@ -109,6 +109,15 @@
   % remainder of a Lean line styled as a string after its closing quote.
   morestring=[s]{"}{"}
 }
+% A listing that fits on a page is kept whole, moving to the next page when it does not fit where
+% it is; one taller than a page may break, line by line (it is typeset into a box and measured).
+\usepackage{etoolbox}
+\newsavebox{\listingbox}
+\BeforeBeginEnvironment{lstlisting}{\par\setbox\listingbox\vbox\bgroup}
+\AfterEndEnvironment{lstlisting}{\egroup
+  \ifdim\dimexpr\ht\listingbox+\dp\listingbox\relax>.9\textheight
+    \unvbox\listingbox% too tall to keep: its lines may break across pages
+  \else\box\listingbox\fi\par}
 \lstset{
   language=Lean,
   basicstyle=\ttfamily\small,

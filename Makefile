@@ -54,7 +54,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check
+check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -244,6 +244,11 @@ ui-snapshots:
 .PHONY: sandbox-check
 sandbox-check:
 	python3 scripts/chatui_sandbox_check.py
+
+# CTL in a page of Lean, printed in the book's Chapter 4: it compiles, and its guards hold.
+.PHONY: ctl-tiny-check
+ctl-tiny-check:
+	lake env lean book/examples/CtlTiny.lean
 
 # The stdio relay to a running HTTP server, for Claude Desktop and Codex (selfhost.mcp.forward).
 .PHONY: forward-check
