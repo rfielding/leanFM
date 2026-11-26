@@ -138,7 +138,21 @@ structure Fold where
   roles    : List String
   deriving Repr
 
+/-- A group's bracket (selfhost.session.group): its name, its frame's top, whether the view may fold
+it (no parallel, join or sessions frame around it, so nothing interleaves with its steps), and,
+when its steps are between exactly two roles, those roles and whether every message goes one way. -/
+structure Group where
+  name     : String
+  top      : Nat
+  foldable : Bool
+  ends     : Option (String × String × Bool)
+  deriving Repr
+
 structure St (R : Type) where
+  /-- Parallel, join and sessions frames around what is being drawn: inside one, other branches or
+  instances interleave with it, so a group there is a bracket that does not fold. -/
+  conc  : Nat := 0
+  groups : Array Group := #[]
   y     : Nat := 70
   out   : Array Shape := #[]
   /-- Messages drawn so far, by id: sender, receiver, cause, and whether it was a reply. -/
@@ -408,17 +422,18 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
   | .par bs k => do
       let top ← frameTop roles.length d "par" ""
       let fid ← newFrame
-      branches roles d bs "" fid
+      concurrently (branches roles d bs "" fid)
       frameBottom roles.length d top "par"
       closeFrame fid
       draw roles d k
   | .join need bs k => do
       let top ← frameTop roles.length d "par" s!"any {need} of {bs.length}"
       let fid ← newFrame
-      branches roles d bs "" fid
+      concurrently (branches roles d bs "" fid)
       frameBottom roles.length d top "join"
       closeFrame fid
-      draw roles d k
+      -- what follows a join of fewer than all runs beside the branches still going
+      if need < bs.length then concurrently (draw roles d k) else draw roles d k
   | .loop name body => do
       let top ← frameTop roles.length d "loop" name
       let fid ← newFrame
@@ -436,12 +451,34 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
       let top ← frameTop roles.length d "loop" caption
       let fid ← newFrame
       let saved ← enterScope fid
-      draw roles (d + 1) body
+      concurrently (draw roles (d + 1) body)
       leaveScope saved
       frameBottom roles.length d top "sessions"
       closeFrame fid
       draw roles d k
   | .box name body k => do
+    match Global.groupOf? name with
+    | some gname =>
+      -- a group (selfhost.session.group): a bracket, foldable only where nothing interleaves
+      let top ← frameTop roles.length d "group" gname
+      let fid ← newFrame
+      let before := (← get).rows.size
+      let saved ← enterScope fid
+      draw roles (d + 1) body
+      leaveScope saved
+      frameBottom roles.length d top "group"
+      closeFrame fid
+      let st ← get
+      let rows := (st.rows.extract before st.rows.size).toList
+      let rs := rows.foldl (fun acc w => (if acc.contains w.src then acc else acc ++ [w.src]) |>
+        fun a => if a.contains w.dst then a else a ++ [w.dst]) ([] : List String)
+      let ends := match rs, rows.head? with
+        | [a, b], some w => let (f, t) := if w.src == a then (a, b) else (b, a)
+                            some (f, t, rows.all fun w => w.isAct || (w.src == f && w.dst == t))
+        | _, _ => none
+      set { st with groups := st.groups.push { name := gname, top, foldable := st.conc == 0, ends } }
+      draw roles d k
+    | none =>
       let top ← frameTop roles.length d "ref" name
       let fid ← newFrame
       let saved ← enterScope fid
@@ -451,6 +488,10 @@ partial def draw [DecidableEq R] [ToString R] (roles : List R) (d : Nat) :
       closeFrame fid
       draw roles d k
 where
+  concurrently (act : M R Unit) : M R Unit := do
+    modify fun st => { st with conc := st.conc + 1 }
+    act
+    modify fun st => { st with conc := st.conc - 1 }
   branches (roles : List R) (d : Nat) (bs : List (Global R)) (cap : String) (fid : Nat) :
       M R Unit := do
     let mut firstB := true
@@ -533,6 +574,7 @@ structure DiagramModel where
   lanes  : List (String × Nat) := []
   steps  : Array Diagram.Row := #[]
   calls  : Array Diagram.Fold := #[]
+  groups : Array Diagram.Group := #[]
   deriving Repr
 
 /-- The shapes of a sequence diagram of `g` with one lifeline per role in `roles`, in that order. -/
@@ -562,7 +604,7 @@ def Global.diagramModel [DecidableEq R] [ToString R] (g : Global R) (roles : Lis
   { width, height := height + footer.length * 20 + (if footer.isEmpty then 0 else 16),
     shapes := (titleEl ++ heads ++ bars).toArray ++ st.out ++ legend.toArray,
     colW := cw, lanes := roles.map fun r => (toString r, Diagram.xAt cw roles r),
-    steps := st.rows, calls := Diagram.callsOf st.rows st.scopeInfo st.frameEnds }
+    steps := st.rows, calls := Diagram.callsOf st.rows st.scopeInfo st.frameEnds, groups := st.groups }
 
 /-- The model written out as SVG text in a theme. -/
 def DiagramModel.svg (m : DiagramModel) (t : DiagramTheme := .dark) : String :=

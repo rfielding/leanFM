@@ -147,7 +147,7 @@ partial def entryLabelOf (body : List Text.Stmt) (id : String) : Option String :
       | .msg (some x) label .. => if x == id then some label else none
       | .timed _ m | .valued _ m => go [m]
       | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.findSome? go
-      | .loop _ b | .sessions b => go b
+      | .loop _ b | .sessions b | .group _ b => go b
       | .bounded _ _ b o => go b <|> go o
       | _ => none) <|> go rest
   go body

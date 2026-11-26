@@ -97,6 +97,39 @@ typestates each has up to $t^b$ typestates. This is the real source of size in
 practice: GoServer's 1{,}604 typestates come from polling the game list beside the
 lobby, and from a seat's four child sessions running side by side.
 
+\section{Brackets: group}
+
+A response is tied to its request by \texttt{cause}, and the view folds the pair into
+one arrow. Some runs of messages have no such tie: the frames that carry one HTTP
+message, the steps of a handshake. Where to bracket them is a choice, so the protocol
+writes it:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+protocol Upload (Client, Server, Log) {
+  group Request {
+    q: Headers from Client to Server;
+    Data from Client to Server;
+    End from Client to Server;
+  }
+  Saved from Server to Client cause q;
+  parallel {
+    group Audit {
+      Note from Server to Log;
+      Ack from Log to Server;
+    }
+  } and {
+    Done from Server to Client;
+  }
+}
+\end{lstlisting}
+A group is for people only. Every check sees its steps in place, so the typestates,
+rules and verdicts are those of the same text without the brackets. A bracket can
+always be drawn. Folding it into one arrow claims its steps happen together, and that
+is true only where nothing else can run between them. \texttt{Request} folds to one
+arrow from Client to Server. \texttt{Audit} sits in a \texttt{parallel} branch: in the
+full event stream, \texttt{Done} can land between \texttt{Note} and \texttt{Ack}. So it
+is drawn open and never folds. The same holds inside \texttt{sessions}, and after a
+\texttt{join} of fewer than all of its branches.
+
 \section{Sessions decompose a product}
 
 A product is large because one global model must remember every branch at once. A

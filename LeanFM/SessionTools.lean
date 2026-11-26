@@ -325,7 +325,7 @@ partial def hasLoop : List Text.Stmt → Bool
     | .loop .. | .accrue .. | .timed _ (.event ..) => true
     | .timed t _ => t.period.isSome
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.any hasLoop
-    | .sessions b => hasLoop b
+    | .sessions b | .group _ b => hasLoop b
     | _ => false) || hasLoop rest
 
 def generativeLayer (body : List Text.Stmt) (roles : List String) (args : Json) : Except String (Option Generative.Resolved) := do
@@ -485,7 +485,11 @@ def modelJson (m : DiagramModel) : Json :=
     ("calls", Json.arr (m.calls.map fun c => Json.mkObj [("request", c.request), ("caller", c.caller),
       ("callee", c.callee), ("label", Json.str s!"{c.reqLabel} -> {c.resLabel}"),
       ("top", c.top), ("y", c.y), ("bottom", c.bottom), ("depth", c.depth),
-      ("roles", Json.arr (c.roles.map Json.str).toArray)]))]
+      ("roles", Json.arr (c.roles.map Json.str).toArray)])),
+    ("groups", Json.arr (m.groups.map fun g => Json.mkObj ([("name", Json.str g.name), ("top", toJson g.top),
+      ("foldable", Json.bool g.foldable)] ++ (match g.ends with
+        | some (f, t, one) => [("from", Json.str f), ("to", Json.str t), ("oneWay", Json.bool one)]
+        | none => []))))]
 
 /-! ## Annotations on the sequence diagram: probabilities, amounts, delays, expected counts -/
 
@@ -552,6 +556,9 @@ where
         let b ← tagStmts pending body
         return (.loop name b, pending.isSome)
       | .sessions body => return (.sessions (← tagStmts none body), false)
+      | .group n body => do
+        let b ← tagStmts pending body
+        return (.group n b, pending.isSome)
       | other => return (other, false)
 
 def untag (label : String) : String × Option Nat :=
@@ -3016,6 +3023,7 @@ protocol PlaceOrder (Client, Shop, Bank) {
 | `loop Loop { ... continue Loop; }` | a loop; `continue` is the last statement of its block |
 | `sessions { ... }` | any number of independent instances, as a server handles requests; nested inside a protocol, a role that appears only in such blocks is a service that handles each one on its own |
 | `include Replicate Primary R1 R2 R3;` | an earlier protocol in the same text, roles renamed in order, drawn as a ref frame |
+| `group Request { ... }` | a named bracket around steps no cause links (the frames of one HTTP message, a handshake), for people only: every check sees the steps in place; drawn as a group frame that folds to one arrow when its steps are between two roles, and only where no `parallel`, `join` or `sessions` encloses it (there its steps interleave with others, so it stays open); a `continue` may not leave it, and each group's name is used once per protocol |
 
 A role may carry its inbox size, `protocol Shop (Client, Api[8], Bank[2])`: a FIFO buffer that loses
 nothing, 0 to 64 messages, 0 (a rendezvous) when no size is given. Only `session_realizable` reads

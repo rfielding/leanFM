@@ -59,6 +59,9 @@ inductive Stmt where
   | bounded (name : String) (n : Nat) (body : List Stmt) (otherwise : List Stmt)
   | cont (name : String)
   | sessions (body : List Stmt)
+  /-- `group Name { body }`: a bracket around statements for people; it builds a box, so no check
+  sees it (selfhost.session.group) -/
+  | group (name : String) (body : List Stmt)
   /-- `include P A B with g, h = x;`: roles in order, and each given field of P bound to a field in
   scope, as (given field, field in scope) (selfhost.session.identity.scopes) -/
   | incl (name : String) (args : List String) (binds : List (String × String) := [])
@@ -159,7 +162,7 @@ partial def labelsOf : List Stmt → List String
     | .event label _ => [label]
     | .timed _ m | .valued _ m => labelsOf [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap labelsOf
-    | .loop _ b | .sessions b => labelsOf b
+    | .loop _ b | .sessions b | .group _ b => labelsOf b
     | .bounded _ _ b o => labelsOf b ++ labelsOf o
     | _ => []) ++ labelsOf rest
 
@@ -170,7 +173,7 @@ partial def declaredIds : List Stmt → List String
     | .msg (some x) .. => [x]
     | .timed _ m | .valued _ m => declaredIds [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap declaredIds
-    | .loop _ b | .sessions b => declaredIds b
+    | .loop _ b | .sessions b | .group _ b => declaredIds b
     | .bounded _ _ b o => declaredIds b ++ declaredIds o
     | _ => []) ++ declaredIds rest
 
@@ -183,7 +186,7 @@ partial def unitsOf : List Stmt → List String
     | .accrue as => as.map (·.unit)
     | .obligation o => (o.penalty.map (·.unit)).toList
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap unitsOf
-    | .loop _ b | .sessions b => unitsOf b
+    | .loop _ b | .sessions b | .group _ b => unitsOf b
     | .bounded _ _ b o => unitsOf b ++ unitsOf o
     | _ => []) ++ unitsOf rest
 
@@ -194,7 +197,7 @@ partial def idLabels : List Stmt → List (String × String)
     | .msg (some x) label .. => [(x, label)]
     | .timed _ m | .valued _ m => idLabels [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap idLabels
-    | .loop _ b | .sessions b => idLabels b
+    | .loop _ b | .sessions b | .group _ b => idLabels b
     | .bounded _ _ b o => idLabels b ++ idLabels o
     | _ => []) ++ idLabels rest
 
@@ -205,7 +208,7 @@ partial def mediaOf : List Stmt → List (String × Option String)
     | .msg _ label _ _ _ _ _ media _ => [(label, media)]
     | .timed _ m | .valued _ m => mediaOf [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap mediaOf
-    | .loop _ b | .sessions b => mediaOf b
+    | .loop _ b | .sessions b | .group _ b => mediaOf b
     | .bounded _ _ b o => mediaOf b ++ mediaOf o
     | _ => []) ++ mediaOf rest
 
@@ -216,7 +219,7 @@ partial def conditions : List Stmt → List (String × String)
     | .msg _ label _ _ _ _ _ _ (some g) => [(label, g)]
     | .timed _ m | .valued _ m => conditions [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap conditions
-    | .loop _ b | .sessions b => conditions b
+    | .loop _ b | .sessions b | .group _ b => conditions b
     | .bounded _ _ b o => conditions b ++ conditions o
     | _ => []) ++ conditions rest
 
@@ -241,7 +244,7 @@ partial def scopedConditions (scope : List (String × List String)) :
         let names := (bound.map (·.1)).eraseDups
         let merged := names.map fun x => (x, (bound.filter (·.1 == x) |>.flatMap (·.2)).eraseDups)
         (outs.flatMap (·.1), merged ++ scope)
-      | .loop _ b | .sessions b => scopedConditions scope b
+      | .loop _ b | .sessions b | .group _ b => scopedConditions scope b
       | .bounded _ _ b o =>
         let (c1, sc1) := scopedConditions scope b
         let (c2, _) := scopedConditions sc1 o
@@ -273,6 +276,7 @@ where
     | .join k bs => .join k (bs.map (renameIds ids sfx))
     | .loop n b => .loop n (renameIds ids sfx b)
     | .sessions b => .sessions (renameIds ids sfx b)
+    | .group n b => .group n (renameIds ids sfx b)
     | .bounded n k b o => .bounded n k (renameIds ids sfx b) (renameIds ids sfx o)
     | other => other
 
@@ -288,7 +292,31 @@ partial def splice (name : String) (next : List Stmt) : List Stmt → List Stmt
     | .join k bs => .join k (bs.map (splice name next))
     | .loop n b => if n == name then s else .loop n (splice name next b)
     | .sessions b => .sessions (splice name next b)
+    | .group n b => .group n (splice name next b)
     | other => other) :: splice name next rest
+
+/-- A `continue` in `ss` that no loop inside `ss` binds (`bound` are the loops around it). -/
+partial def escapes (bound : List String) : List Stmt → Option String
+  | [] => none
+  | s :: rest => (match s with
+    | .cont n => if bound.contains n then none else some n
+    | .timed _ m | .valued _ m => escapes bound [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.findSome? (escapes bound)
+    | .loop n b => escapes (n :: bound) b
+    | .bounded n _ b o => escapes (n :: bound) b <|> escapes bound o
+    | .sessions b | .group _ b => escapes bound b
+    | _ => none) <|> escapes bound rest
+
+/-- The names of the groups in a body, in order, nested ones too. -/
+partial def groupNames : List Stmt → List String
+  | [] => []
+  | s :: rest => (match s with
+    | .group n b => n :: groupNames b
+    | .timed _ m | .valued _ m => groupNames [m]
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap groupNames
+    | .loop _ b | .sessions b => groupNames b
+    | .bounded _ _ b o => groupNames b ++ groupNames o
+    | _ => []) ++ groupNames rest
 
 /-- Expand every bounded loop into explicit copies: copy k continues into copy k+1, and copy N
 continues into the otherwise block. -/
@@ -311,6 +339,7 @@ partial def unroll : List Stmt → List Stmt
     | .join k bs => .join k (bs.map unroll)
     | .loop n b => .loop n (unroll b)
     | .sessions b => .sessions (unroll b)
+    | .group n b => .group n (unroll b)
     | .timed t m => .timed t m
     | other => other) :: unroll rest
 
@@ -659,6 +688,15 @@ partial def boundedStmt (depth : Nat) (stx : Syntax) : R Stmt := do
   let other ← match opt stx[6] 1 with | some b => block depth b | none => pure []
   return .bounded (← name stx[1] "a loop name") n (← block depth stx[5]) other
 
+/-- `group Name { ... }` (selfhost.session.group): a continue inside would leave the bracket half
+drawn, so it is refused unless a loop inside the group binds it. -/
+partial def groupStmt (depth : Nat) (stx : Syntax) : R Stmt := do
+  let n ← name stx[1] "a group name"
+  let body ← block depth stx[2]
+  if let some l := escapes [] body then
+    failAt stx[1] s!"group {n}: continue {l} would leave the group; end the group before the continue"
+  return .group n body
+
 partial def stmt (depth : Nat) (stx : Syntax) : R Stmt := do
   -- the retired keywords are read only to be refused where they stand (selfhost.session.keywords)
   let kw := if stx[0].isIdent then stx[0].getId.toString else stx[0].getAtomVal
@@ -675,6 +713,7 @@ partial def stmt (depth : Nat) (stx : Syntax) : R Stmt := do
   | `LeanFM.Session.Grammar.bounded => boundedStmt depth stx
   | `LeanFM.Session.Grammar.sessions => return .sessions (← block depth stx[1])
   | `LeanFM.Session.Grammar.keyed => keyedStmt depth stx
+  | `LeanFM.Session.Grammar.group => groupStmt depth stx
   | `LeanFM.Session.Grammar.cont => return .cont (← name stx[1] "a loop name")
   | `LeanFM.Session.Grammar.incl => do
     let binds ← match stx[3].getArgs with
@@ -833,6 +872,10 @@ def protocolDef (body : Syntax) : R Def := do
   let b <- block 0 body[7]
   if (labelsOf b).contains pname then
     failAt body s!"protocol {pname} has a message {pname}; in Lean they would be two declarations with one name, so rename one of them"
+  -- each group's name once per protocol (selfhost.session.group)
+  let gs := groupNames b
+  if let some g := gs.find? (fun g => (gs.filter (· == g)).length > 1) then
+    failAt body s!"protocol {pname} has two groups named {g}; name each group once"
   return { name := pname, roles := rs, body := unroll b, version, givens := gv, buffers := bufs }
 
 /-- A word the grammar matched with `W`: an atom, or an identifier when the word is not reserved. -/
@@ -1196,6 +1239,7 @@ partial def build (c : Ctx) (ss : List Stmt) (i : Nat := 0) : B (Global String) 
       if !rest.isEmpty then bfail here s!"continue {name} must be the last statement of its block"
       return .var name
     | .sessions body => return .sessions (← deeper here body) (← next ())
+    | .group name body => return .box (Global.groupName name) (← deeper here body) (← next ())
     | .incl name args binds =>
       let some d := latest c.defs name
         | bfail here s!"include {name}: no protocol {name} is defined before this one"
@@ -1287,7 +1331,7 @@ partial def deepLabels (defs : List Def) (fuel : Nat) : List Stmt → List Strin
     | .event label _ => [label]
     | .timed _ m | .valued _ m => deepLabels defs fuel [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (deepLabels defs fuel)
-    | .loop _ b | .sessions b => deepLabels defs fuel b
+    | .loop _ b | .sessions b | .group _ b => deepLabels defs fuel b
     | .bounded _ _ b o => deepLabels defs fuel b ++ deepLabels defs fuel o
     | .incl n _ _ => match fuel, latest defs n with
       | f + 1, some d => deepLabels defs f d.body
@@ -1301,7 +1345,7 @@ partial def deepMsgs (defs : List Def) (fuel : Nat) : List Stmt → List (String
     | .msg _ label _ _ cause .. => [(label, cause.isSome)]
     | .timed _ m | .valued _ m => deepMsgs defs fuel [m]
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (deepMsgs defs fuel)
-    | .loop _ b | .sessions b => deepMsgs defs fuel b
+    | .loop _ b | .sessions b | .group _ b => deepMsgs defs fuel b
     | .bounded _ _ b o => deepMsgs defs fuel b ++ deepMsgs defs fuel o
     | .incl n _ _ => match fuel, latest defs n with
       | f + 1, some d => deepMsgs defs f d.body
@@ -1321,7 +1365,7 @@ partial def firstMsgs (defs : List Def) (fuel : Nat) : List Stmt → List String
     | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs =>
       let rs := bs.map (firstMsgs defs fuel)
       more (rs.flatMap (·.1), rs.isEmpty || rs.any (·.2))
-    | .loop _ b | .sessions b => more (firstMsgs defs fuel b)
+    | .loop _ b | .sessions b | .group _ b => more (firstMsgs defs fuel b)
     | .bounded _ _ b o => more (let (x, e) := firstMsgs defs fuel b; let (y, e2) := firstMsgs defs fuel o; (x ++ y, e || e2))
     | .incl n _ _ => match fuel, latest defs n with
       | f + 1, some d => more (firstMsgs defs f d.body)
@@ -1361,7 +1405,7 @@ partial def scopeCheck (env : Types.Env) (defs : List Def) (keyIds : List String
         | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => do
           let outs ← bs.mapM (walk seen)
           pure (seen ++ outs.flatMap (·.1), outs.flatMap (·.2))
-        | .loop _ b => walk seen b
+        | .loop _ b | .group _ b => walk seen b
         | .bounded _ _ b o => do let (a, n1) ← walk seen b; let (c, n2) ← walk a o; pure (c, n1 ++ n2)
         | .sessions b => do
           let (a, n) ← walk seen b
@@ -1413,7 +1457,7 @@ partial def freshDepth (env : Types.Env) (x : String) (depth : Nat := 0) : List 
       | .msg _ label .. => if (fieldsOf env label).any (fun f => f.name == x && f.mark == .fresh) then some depth else none
       | .timed _ m | .valued _ m => freshDepth env x depth [m]
       | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => (bs.filterMap (freshDepth env x depth)).min?
-      | .loop _ b => freshDepth env x depth b
+      | .loop _ b | .group _ b => freshDepth env x depth b
       | .sessions b => freshDepth env x (depth + 1) b
       | .bounded _ _ b o => [freshDepth env x depth b, freshDepth env x depth o].filterMap id |>.min?
       | _ => none
@@ -1434,7 +1478,7 @@ partial def linkTargetsOfDepth (env : Types.Env) (defs : List Def) (fuel : Nat) 
           (ren.lookup f.name).map fun (t, minted) => ((label, f.name), t, depth > minted)
       | .timed _ m | .valued _ m => go fuel depth base cur ren [m]
       | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap (go fuel depth base cur ren)
-      | .loop _ b => go fuel depth base cur ren b
+      | .loop _ b | .group _ b => go fuel depth base cur ren b
       | .sessions b => go fuel (depth + 1) base cur ren b
       | .bounded _ _ b o => go fuel depth base cur ren b ++ go fuel depth base cur ren o
       | .incl n _ binds => match fuel, latest defs n with
@@ -1647,6 +1691,7 @@ partial def writeStmt (ind : String) : Stmt → List String
   | .loop n body => [ind ++ "loop " ++ showIdent n ++ " {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
   | .cont n => [ind ++ "continue " ++ showIdent n ++ ";"]
   | .sessions body => [ind ++ "sessions {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
+  | .group n body => [ind ++ "group " ++ showIdent n ++ " {"] ++ writeStmts (ind ++ "  ") body ++ [ind ++ "}"]
   | .incl n args binds => [ind ++ "include " ++ showIdent n ++ String.join (args.map (" " ++ showIdent ·)) ++
       (if binds.isEmpty then "" else " with " ++ ", ".intercalate (binds.map fun (g, x) =>
         if g == x then showIdent g else showIdent g ++ " = " ++ showIdent x)) ++ ";"]

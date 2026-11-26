@@ -229,6 +229,7 @@ where
       let entry ← build ((name, l) :: loops) body k
       addEdge { src := l, dst := entry, kind := "loop", label := s!"loop {name}", prob := Q.one }
       return l
+    | .group _ body => build loops body k  -- a bracket for people (selfhost.session.group)
     | .cont name =>
       match loops.lookup name with
       | some l => return l

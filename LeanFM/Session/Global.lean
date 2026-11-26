@@ -35,6 +35,14 @@ token`), so the interaction diagram shows how ids pass into the task (selfhost.s
 def Global.boxName (name : String) (binds : List (String × String)) : String :=
   if binds.isEmpty then name else s!"{name} with {Global.showBinds binds}"
 
+/-- The box of `group Name { ... }` (selfhost.session.group): a bracket around statements no
+cause links, drawn as a group frame. Its name is marked so it is never taken for an include. -/
+def Global.groupName (name : String) : String := "group " ++ name
+
+/-- The group a box brackets, or none when the box is an include. -/
+def Global.groupOf? (n : String) : Option String :=
+  if n.startsWith "group " then some (n.drop 6).toString else none
+
 /-- The protocol a box is an include of: its name without the bindings. -/
 def Global.boxProtocol (n : String) : String := ((n.splitOn " with ").headD n)
 

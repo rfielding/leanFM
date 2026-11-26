@@ -411,6 +411,9 @@ function collapsible(what, child) {
 // responses and the span between them; a folded call is one double-headed arrow from caller to
 // callee, and calls at depth 2 and below start folded. A role whose every message is folded away
 // loses its lifeline and column and is named in a "hidden:" note whose names open it again.
+// A group (clause selfhost.session.group) is a bracket the protocol names: LeanFM says whether it is
+// foldable (nothing runs beside it) and, for two roles, its ends; a foldable group starts folded and,
+// folded between two roles, is one arrow; a group that is not foldable is always drawn open.
 // Folding and eliding change only what is drawn: the shapes and calls LeanFM sent stay as they are.
 const FRAME_HEAD = 26, FRAME_FOOT = 6, CALL_ROW = 30;
 function rolesOfProtocol(name) {
@@ -432,6 +435,12 @@ function diagram(model, opts) {
     const cap = shapes.find((t) => t.k === "text" && num(t.y) === f.y + 13 && num(t.x) > f.x + 8 && num(t.x) < f.x + f.w && typeof t.text === "string" && t.text.startsWith("["));
     if (cap) f.name = cap.text.replace(/^\[|\]$/g, "");
     f.mode = f.kind === "ref" ? "hidden" : "open";
+    if (f.kind === "group") {
+      const g = (Array.isArray(model.groups) ? model.groups : []).find((q) => q && num(q.top) === f.y);
+      f.foldable = !!(g && g.foldable === true);
+      f.ends = g && typeof g.from === "string" && typeof g.to === "string" ? { from: g.from, to: g.to, oneWay: g.oneWay === true } : null;
+      f.mode = f.foldable ? "hidden" : "open";
+    }
     frames.push(f);
   }
   frames.sort((a, b) => (a.y - b.y) || (b.h - a.h));
@@ -480,8 +489,9 @@ function diagram(model, opts) {
   }
   const KW = { alt: /\bchoice\b/, loop: /\bloop\s+[A-Za-z_]/, sessions: /\bsessions\b/, par: /\bparallel\b/, join: /\bjoin\b/ };
   for (const f of frames) {
-    const re = f.kind === "ref" ? (f.name ? new RegExp("\\binclude\\s+" + esc(f.name) + "\\b") : null) : KW[f.kind];
-    if (re) items.push({ y: f.y, frame: f, re, block: true, what: (f.kind === "ref" ? "include " + f.name : f.kind + " frame") });
+    const re = f.kind === "ref" ? (f.name ? new RegExp("\\binclude\\s+" + esc(f.name) + "\\b") : null)
+      : f.kind === "group" ? (f.name ? new RegExp("\\bgroup\\s+" + esc(f.name) + "\\b") : null) : KW[f.kind];
+    if (re) items.push({ y: f.y, frame: f, re, block: true, what: (f.kind === "ref" ? "include " + f.name : f.kind === "group" ? "group " + f.name : f.kind + " frame") });
   }
   items.sort((a, b) => a.y - b.y);
   const cursor = new Map();
@@ -548,7 +558,8 @@ function diagram(model, opts) {
     for (const f of frames) {
       if (f.mode === "open") continue;
       const a = f.y + FRAME_HEAD, b = f.y + f.h - FRAME_FOOT;
-      if (b > a) cand.push({ a, b, keep: 0, lo: f.y, hi: f.y + f.h, f, steps: 0, incl: false });
+      const keep = f.kind === "group" && f.ends && b - a > CALL_ROW ? CALL_ROW : 0;
+      if (b > a) cand.push({ a, b, keep, lo: f.y, hi: f.y + f.h, f, steps: 0, incl: false });
     }
     for (const c of calls) if (!c.open && c.bottom > c.top + CALL_ROW) cand.push({ a: c.top, b: c.bottom, keep: CALL_ROW, lo: c.top, hi: c.bottom, c, steps: 0, incl: true });
     cand.sort((p, q) => (p.lo - q.lo) || ((q.hi - q.lo) - (p.hi - p.lo)));
@@ -566,6 +577,7 @@ function diagram(model, opts) {
     const used = new Set(), seen = new Set();
     for (const t of steps) { t.roles.forEach((r) => used.add(r)); if (!inside(t.y)) t.roles.forEach((r) => seen.add(r)); }
     for (const r of folded) if (r.c) { seen.add(r.c.caller); seen.add(r.c.callee); }
+    for (const r of folded) if (r.f && r.keep && r.f.ends) { seen.add(r.f.ends.from); seen.add(r.f.ends.to); }
     let hidden = colW > 0 ? lanes.filter((l) => used.has(l.role) && !seen.has(l.role)) : [];
     if (!lanes.some((l) => used.has(l.role) && seen.has(l.role))) hidden = [];
     const hiddenSet = new Set(hidden.map((l) => l.role));
@@ -669,7 +681,14 @@ function diagram(model, opts) {
         svg.appendChild(sv("text", { x: f.x + f.w - (f.kind === "ref" ? 74 + 7 * (f.name.length + 5) : 10), y: top + 13, "text-anchor": "end", fill: "var(--ink-frame)", "font-size": 11,
           stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, note));
       }
-      const what = (f.kind === "ref" ? "included protocol " : f.kind + " frame ") + (f.name || "");
+      const what = (f.kind === "ref" ? "included protocol " : f.kind === "group" ? "group " : f.kind + " frame ") + (f.name || "");
+      if (f.kind === "group" && !f.foldable) {
+        // a bracket beside other steps: their events interleave with its own, so it does not fold
+        svg.appendChild(sv("text", { x: f.x + f.w - 10, y: top + 13, "text-anchor": "end", fill: "var(--ink-frame)", "font-size": 11,
+          stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, "runs beside other steps: not folded"));
+        hot(f.x, top, f.w - 230, 20, "Source of " + what, () => { pick(f0.range, what); render(); });
+        continue;
+      }
       const ow = f.kind === "ref" && f.name ? 7 * (f.name.length + 5) : 0;  // the "open Name" link's width
       hot(f.x, top, f.w - (f.kind === "ref" ? 66 + ow : 0), 20, (f.mode === "open" ? "Fold " : "Show the interaction of ") + what,
         () => { f0.mode = f0.mode === "open" ? "hidden" : "open"; pick(f0.range, what); render(); });
@@ -691,6 +710,15 @@ function diagram(model, opts) {
       const xs = s.k === "line" ? [num(s.x1), num(s.x2)] : s.k === "rect" ? [num(s.x), num(s.x) + num(s.w)] : [num((String(s.d).match(/^M\s*(-?[0-9.]+)/) || [])[1]), num((String(s.d).match(/^M\s*(-?[0-9.]+)/) || [])[1]) + 46];
       const x0 = mapX(Math.min(...xs)), x1 = mapX(Math.max(...xs));
       hot(x0, map(y) - 16, Math.max(24, x1 - x0), 22, "Source of " + it.what, () => { pick(it.range, it.what); render(); });
+    }
+    // folded groups between two roles: one arrow, one head when every message goes one way
+    for (const r of folded) {
+      if (!r.f || !r.keep || !r.f.ends) continue;
+      const g = r.f, y = map(r.a) + CALL_ROW / 2 + 2, x1 = mapX(laneX(g.ends.from)), x2 = mapX(laneX(g.ends.to));
+      const heads = g.ends.oneWay ? { "marker-end": "url(#head)" } : { "marker-end": "url(#head)", "marker-start": "url(#head)" };
+      svg.appendChild(sv("line", Object.assign({ class: "msg fold", x1, y1: y, x2, y2: y, stroke: "var(--ink-arrow)", "stroke-width": 2.5 }, heads)));
+      svg.appendChild(sv("text", { x: (x1 + x2) / 2, y: y - 6, "text-anchor": "middle", fill: "var(--ink-arrow)", "font-size": 12, "font-weight": "bold", stroke: "var(--ink-bg)", "stroke-width": 4, "paint-order": "stroke" }, "▸ " + g.name));
+      hot(Math.min(x1, x2), y - 20, Math.max(46, Math.abs(x2 - x1)), 26, "Open the group " + g.name, () => { g.mode = "open"; render(); });
     }
     // folded calls: one arrow from caller to callee with heads at both ends, a click opens it;
     // an open call that is drawn has a ▾ at its request that folds it

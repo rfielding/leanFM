@@ -435,6 +435,30 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     if (JSON.stringify(R.diagram.structuredContent.diagram.shapes) !== shapesBefore) throw new Error("folding changed the shapes LeanFM sent");
     console.log("ok: a hidden role's name opens its calls again, and the shapes are unchanged");
   }
+  // groups (clause selfhost.session.group): a foldable group starts folded as one labelled arrow and
+  // opens on a click; a group beside a parallel branch is drawn open with no fold control
+  if (R.groupDiagram) {
+    await show(R.groupDiagram);
+    const svgAll = () => byId.results.all();
+    const hotNamed = (prefix) => svgAll().filter((n) => n.tag === "rect" && String(n.attrs["aria-label"] || "").startsWith(prefix));
+    const groups = R.groupDiagram.structuredContent.diagram.groups || [];
+    const req = groups.find((g) => g.name === "Request"), audit = groups.find((g) => g.name === "Audit");
+    if (!req || req.foldable !== true || req.from !== "Client" || req.to !== "Server" || req.oneWay !== true) throw new Error("Request is not listed as a foldable one-way group: " + JSON.stringify(req));
+    if (!audit || audit.foldable !== false) throw new Error("Audit inside parallel is listed as foldable: " + JSON.stringify(audit));
+    if (!svgAll().some((n) => n.tag === "text" && n.textContent === "▸ Request")) throw new Error("the folded group Request is not one arrow labelled ▸ Request");
+    const arrow = svgAll().find((n) => n.tag === "line" && n.attrs.class === "msg fold" && n.attrs["marker-end"] && !n.attrs["marker-start"]);
+    if (!arrow) throw new Error("the one-way group's arrow should have one head");
+    if (hotNamed("Show the interaction of group Audit").length || hotNamed("Fold group Audit").length) throw new Error("the group beside a parallel branch offers a fold");
+    if (!svgAll().some((n) => n.tag === "text" && n.textContent === "runs beside other steps: not folded")) throw new Error("the parallel group does not say why it is not folded");
+    if (!svgAll().some((n) => n.tag === "text" && /Note/.test(n.textContent))) throw new Error("the parallel group's steps are not drawn");
+    console.log("ok: a foldable group starts folded as one arrow; a group beside a parallel branch stays open and says why");
+    hotNamed("Open the group Request")[0].dispatch("click", { stopPropagation() {} }); await wait(30);
+    if (!svgAll().some((n) => n.tag === "text" && /Headers/.test(n.textContent))) throw new Error("opening the group did not show its steps");
+    if (!hotNamed("Fold group Request").length) throw new Error("the opened group has no fold control");
+    hotNamed("Fold group Request")[0].dispatch("click", { stopPropagation() {} }); await wait(30);
+    if (!svgAll().some((n) => n.tag === "text" && n.textContent === "▸ Request")) throw new Error("folding the group again did not draw its arrow");
+    console.log("ok: a group opens on its arrow and folds again on its header");
+  }
   if (R.ctl) {
     await show(R.ctl);
     expectText("session_ctl shows its counterexample path", byId.results, "Counterexample: the steps that break it");

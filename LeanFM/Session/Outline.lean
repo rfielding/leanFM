@@ -168,7 +168,15 @@ partial def walk (ds : List Def) (lines : Array String) (parent : Nat) (inDef : 
     if let some c ← add { id := 0, parent := some parent, kind := "sessions", label := "sessions: any number at once", protocol := inDef } then
       walk ds lines c inDef b
     walk ds lines parent inDef k
-  | .box bn b k => do
+  | .box bn b k => match Global.groupOf? bn with
+   | some g => do
+    -- a group (selfhost.session.group): a node in its own protocol, its steps under it
+    let d := (ds.find? (·.name == inDef))
+    let line := d.bind fun d => lineOf lines d.first d.last s!"group {g}"
+    if let some c ← add { id := 0, parent := some parent, kind := "group", label := s!"group {g}", protocol := inDef, first := line, last := line } then
+      walk ds lines c inDef b
+    walk ds lines parent inDef k
+   | none => do
     -- an included protocol: its own definition's lines, and its steps under it; the box's name
     -- carries the include's bindings (Order with token), the protocol is its first word
     let n := Global.boxProtocol bn

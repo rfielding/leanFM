@@ -12,7 +12,12 @@ open LeanFM.ChatUI.Implementation
 open LeanFM.LLMGenerated.SelfHosting
 
 def decisions : List ImplementationDecision :=
-  [ decision "session-bits"
+  [ decision "session-group"
+      ["clause:selfhost.session.group"]
+      ["LeanFM/Session/Text.lean", "LeanFM/Session/Grammar.lean", "LeanFM/Session/Syntax.lean", "LeanFM/Session/Diagram.lean", "LeanFM/Session/Outline.lean", "LeanFM/Session/Global.lean", "LeanFM/SessionView.html"]
+      "Text.Stmt.group name body is parsed from group Name { ... } (Grammar.group) and built as Global.box (Global.groupName name) body k, so every Global walk already passes through it; Global.groupOf? reads a group's name back from its box. Every Stmt walk in Text, Syntax, Sla, Generative and SessionTools that descends into loop and sessions bodies descends into group bodies too; build refuses continue inside a group and a repeated group name. Diagram draws the box as frame kind group and records a Group (name, top, foldable, from, to, oneWay) for diagramModel's groups, foldable when the drawing is not inside a parallel, join or sessions frame (a depth of concurrent frames carried in St); Outline adds a group node; Text.writeStmts writes group Name { ... }. SessionView starts group frames folded and draws a folded two-role group as one arrow."
+      ["LeanFM/Session/GroupTests.lean: a protocol with and without the brackets has the same labels, projections, typestates, faithful rules, simulated events and conformance verdicts; the diagram has a frame of kind group captioned [Name] and diagramModel lists the group with from, to and oneWay and foldable true; the same group inside parallel or sessions is listed with foldable false; a three-role group has no ends; the outline has a group node with the block's lines; writeStmts round-trips the group; continue inside a group, a repeated name, and a name that is not an identifier are refused", "scripts/session_view_check.mjs or the view tests: a foldable group frame starts folded and a folded two-role group draws one arrow; a group that is not foldable stays open and has no fold control"]
+  , decision "session-bits"
       ["clause:selfhost.session.bits"]
       ["LeanFM/Session/Faithful.lean", "LeanFM/SessionTools.lean", "CtlBookExample.lean", "book/chapters/faithful-ctl.tex"]
       "Faithful.bitsOf groups the typestates by the message of their label (none written start), in order of first appearance, with each group's count and Faithful.bitsFor count, the least b with 2^b at least the count. SessionTools.faithful adds bits [{label, typestates, bits}] and hiddenBits to the rules answer and a sentence to its reading. CtlBookExample writes ctl-retry-bits.tex, the table for the Retry loop, from the same function."

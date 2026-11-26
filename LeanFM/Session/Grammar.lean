@@ -176,6 +176,9 @@ def sessions (st : Parser) : Parser := node `LeanFM.Session.Grammar.sessions
   (atomic (W "sessions" >> lookahead "{") >> block st)
 def keyed (st : Parser) : Parser := node `LeanFM.Session.Grammar.keyed
   (atomic (W "sessions" >> W "by") >> ident >> block st)
+/-- `group Name { ... }`: a bracket for people (selfhost.session.group). -/
+def group (st : Parser) : Parser := node `LeanFM.Session.Grammar.group
+  (atomic (W "group" >> ident >> lookahead "{") >> block st)
 def cont : Parser := node `LeanFM.Session.Grammar.cont (atomic (W "continue" >> ident >> ";"))
 /-- `token` or `token = sid` after `with` (selfhost.session.identity.scopes). -/
 def binding : Parser := node `LeanFM.Session.Grammar.binding (ident >> optional ("=" >> ident))
@@ -193,7 +196,7 @@ def accrue : Parser := node `LeanFM.Session.Grammar.accrue
 /-- Every statement form, the recursive ones over `st`; keyword forms first, messages last. -/
 def alternatives (st : Parser) : Parser :=
   clock <|> obligation <|> accrue <|> declared st <|> choice st <|> par st <|> keyed st <|> sessions st <|>
-  join st <|> bounded st <|> recP st <|> cont <|> incl <|> event <|> msg
+  join st <|> bounded st <|> recP st <|> group st <|> cont <|> incl <|> event <|> msg
 
 /-- One statement. -/
 partial def stmtFn : ParserFn := fun c s => (alternatives { fn := stmtFn }).fn c s

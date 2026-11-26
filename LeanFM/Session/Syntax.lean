@@ -144,6 +144,7 @@ partial def gen (scope : List (String × String)) : List Text.Stmt → MacroM Te
       `(LeanFM.Session.Global.andThen (LeanFM.Session.Global.loop $(str n) $(← gen scope b)) $(← gen scope rest))
     | .cont n => `(LeanFM.Session.Global.var $(str n))
     | .sessions b => `(LeanFM.Session.Global.sessions $(← gen scope b) $(← gen scope rest))
+    | .group n b => `(LeanFM.Session.Global.box $(str (Global.groupName n)) $(← gen scope b) $(← gen scope rest))
     | .incl p args bs =>
       let as := args.toArray.map fun a => (nm a : Term)
       -- a versioned protocol is included by its newest version, Name.vN (selfhost.session.versions);
@@ -177,7 +178,7 @@ partial def includesOf : List Text.Stmt -> List String
       | .incl p _ _ => [p]
       | .timed _ m | .valued _ m => includesOf [m]
       | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.flatMap includesOf
-      | .loop _ b | .sessions b => includesOf b
+      | .loop _ b | .sessions b | .group _ b => includesOf b
       | .bounded _ _ b o => includesOf b ++ includesOf o
       | _ => []) ++ includesOf rest
 
@@ -194,6 +195,7 @@ partial def retarget (targets : List (Prod String String)) : List Text.Stmt -> L
       | .join k bs => .join k (bs.map (retarget targets))
       | .loop n b => .loop n (retarget targets b)
       | .sessions b => .sessions (retarget targets b)
+      | .group n b => .group n (retarget targets b)
       | .bounded n k b o => .bounded n k (retarget targets b) (retarget targets o)
       | other => other) :: retarget targets rest
 

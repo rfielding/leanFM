@@ -118,6 +118,7 @@ partial def resolveStmt (ext : External) (s : Stmt) : ResolveM Stmt := do
   | .join n bs => return .join n (← bs.mapM (resolveList ext))
   | .loop n b => return .loop n (← resolveList ext b)
   | .sessions b => return .sessions (← resolveList ext b)
+  | .group n b => return .group n (← resolveList ext b)
   | _ => return s
 partial def resolveChoice (ext : External) (named : Option String) (actor : String)
     (weights : List Q) (bs : List (List Stmt)) : ResolveM Stmt := do

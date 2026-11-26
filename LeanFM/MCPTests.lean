@@ -596,6 +596,8 @@ def main : IO Unit := do
     ("simulate", ← callTool "session_simulate" [("instances", (5 : Nat)), ("seed", (3 : Nat))]),
     ("conform", ← callTool "session_conform" [("events", bugLog)]),
     ("diagram", ← callTool "session_diagram" []),
+    -- groups (selfhost.session.group): one foldable between two roles, one beside a parallel branch
+    ("groupDiagram", ← callTool "session_diagram" [("lean", Json.str "protocol Upload (Client, Server, Log) {\n  group Request {\n    Headers from Client to Server;\n    Data from Client to Server;\n    End from Client to Server;\n  }\n  Saved from Server to Client;\n  parallel {\n    group Audit {\n      Note from Server to Log;\n      Ack from Log to Server;\n    }\n  } and {\n    Done from Server to Client;\n  }\n}")]),
     ("skeleton", ← callTool "session_skeleton" []),
     ("ctl", ← callTool "session_ctl" [("formula", (Json.parse "{\"AG\": {\"implies\": [{\"on\": \"Approved\"}, {\"AG\": {\"not\": {\"on\": \"Waitlisted\"}}}]}}").toOption.get!)]),
     ("compat", ← callTool "session_compat" [("old", Json.str lendingLean)]),

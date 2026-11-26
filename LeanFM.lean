@@ -51,6 +51,7 @@ import LeanFM.Session.FaithfulTests
 import LeanFM.Session.InstanceTests
 import LeanFM.Session.DeploymentTests
 import LeanFM.Session.RealizableTests
+import LeanFM.Session.GroupTests
 import LeanFM.Session.VersionTests
 import LeanFM.Session.ExploreTests
 import LeanFM.SecretsTests
