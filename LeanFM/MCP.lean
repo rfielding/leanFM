@@ -10,6 +10,7 @@ import LeanFM.CheckMetrics
 import LeanFM.ServerLogs
 import LeanFM.ServerInfo
 import LeanFM.ProjectView
+import LeanFM.ModelCache
 
 namespace LeanFM.MCP
 
@@ -239,7 +240,7 @@ def toolDefinitions : Array Json := #[
         ("description", Json.str "pairs of roles whose messages are not HTTP (a text message, a queue)")])] []),
   tool "session_diagram" "Draw a session type"
     "Draw a protocol as a UML sequence diagram generated from the session type: alt frames naming the role that decides, parallel and loop frames, dashed responses, activation bars, routes and status codes. Returns SVG text and the shapes the view draws."
-    (schema [("lean", stringSchema "LeanFM protocol text"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
+    (schema [("lean", stringSchema "LeanFM protocol text"), ("model", stringSchema "optional: the model token of an earlier answer about this protocol; send the text too, a token held for it skips rebuilding the state graph"), ("proto", stringSchema "optional: the text of the proto3 file that declares the message types"), ("overlay", anyJson "optional named layer {name, choices:[{choice, weights:[fraction strings]}], timings:[{message, at: time expression}]} replacing matching inline entries"), ("protocol", anyJson "alternative to lean: the JSON form"),
       ("theme", stringSchema "dark (default) or light")] []),
   tool "session_mdp" "Render a session decision process and terminal probabilities"
     "Render a finite sequential session under its inline or external probability policy as a decision tree, with action selections, chance transitions, times and terminal deadline reports. Returns SVG and an interactive MCP Apps view, exact terminal probabilities whose total is checked to equal 1, and violationProbability counting each violating terminal once. Messages with amounts (amount 1000 USD, or amount sample { 1000 USD : 9/10; 700 USD : 1/10; }) and obligations with penalties (on breach record Label pays 2000 USD to Role) give each terminal every role's net balance per unit, and expectedBalances gives each role's exact expected net balance. A session with loops (loop and continue) or rates (accrue { 1000 USD per week; -1 roomweek per week; } from A to B), or view chain, is solved as an absorbing Markov chain instead: expected visits, traversals and time (after 1 week is a delay after the previous step), each outcome's probability and conditional expectations, and each role's expected balance per unit (trade vectors per traversal plus rates in force times time), all exact. With events (an event stream) or walk, it gives the realized rewards of those walks instead. A session with one periodic gate (Rent from Tenant to Landlord amount 1000 USD at next 1 week) and a horizon (52 weeks) gives totals over that many whole periods: a weekly trade that always continues passes exactly 52 times. With optimize ({role, unit, goal: max or min}, unit time for duration), choices without probabilities are open actions and exact policy iteration picks the best branch at each for that role, among policies that end; it returns the policy, every branch's value and the chain solved under it. Zero-probability paths remain. Without optimize, every choice needs weights; unsupported scheduling and output limits fail explicitly."
@@ -478,6 +479,25 @@ def toolResult (name : String) (arguments : Json := Json.mkObj []) : Except Stri
   | "code_generation_prompt" => .ok <| textContent LeanFM.codeGenerationSystemPrompt
   | _ => .error s!"unknown tool: {name}"
 
+/-- session_ctl with the model token (selfhost.mcp.model-token): a token held for exactly this call's
+text and arguments reuses its state graph (hit); otherwise the graph is built once, kept under a new
+token (miss). The answer is the same either way apart from model and cache. -/
+def ctlCached (args : Json) : IO (Except String Json) := do
+  let key := LeanFM.ModelCache.keyOf args
+  let held ← match (args.getObjValAs? String "model").toOption with
+    | some t => LeanFM.ModelCache.lookup t key
+    | none => pure none
+  let tag (token cache : String) (r : Except String Json) : Except String Json :=
+    r.map fun j => (j.setObjVal! "model" (Json.str token)).setObjVal! "cache" (Json.str cache)
+  match held with
+  | some e => return .ok (logicResult "session_ctl" (tag e.token "hit" (LeanFM.SessionTools.ctlWith args (some (e.draft, e.states)))))
+  | none =>
+    match LeanFM.SessionTools.ctlDraft args with
+    | .ok (some (d, n)) =>
+      let token ← LeanFM.ModelCache.store key d n
+      return .ok (logicResult "session_ctl" (tag token "miss" (LeanFM.SessionTools.ctlWith args (some (d, n)))))
+    | _ => return toolResult "session_ctl" args
+
 /-- The workflow for building software from a session type, as a prompt Claude Desktop can offer. -/
 def sessionDesignPrompt : String :=
   "Help me build software by designing it as a session type with LeanFM, then implementing it.\n\n" ++
@@ -609,7 +629,7 @@ def dispatchJson (request : Json) : IO Response := do
             -- a session tool may name a project's protocol file instead of carrying its text
             let r ← if name.startsWith "session_" then do
                 match ← LeanFM.ProjectView.protocolArgs args with
-                | .ok args => pure (toolResult name args)
+                | .ok args => if name == "session_ctl" then ctlCached args else pure (toolResult name args)
                 | .error e => pure (.ok (logicResult name (.error e)))
               else pure (toolResult name args)
             pure (r.map (withLimitsReport applied))

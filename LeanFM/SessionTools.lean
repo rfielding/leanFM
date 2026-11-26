@@ -1899,6 +1899,23 @@ def ctl (args : Json) : Except String Json := do
       , ("reading", Json.str s!"{p.name}: {rows.length} properties suggested from the protocol, {proved} proved; pass one as formula to decide it with its path")
       , ("suggestions", Json.arr rows.toArray), ("name", Json.str p.name), ("lean", Json.str p.lean) ]
 
+/-- session_ctl's state graph for a formula, built from the protocol; none when the call asks for
+suggestions or faithfulness, which build their own (selfhost.mcp.model-token). -/
+def ctlDraft (args : Json) : Except String (Option (Json × Nat)) := do
+  if (args.getObjVal? "faithful").isOk || (args.getObjVal? "formula").toOption.isNone then return none
+  let p ← parseProtocol args
+  let secretsOf := fun (label : String) => Session.Types.secretPaths p.types label
+  return some (← p.global.draft p.name secretsOf (Session.sessionBoundsOf args).maxDraftStates)
+
+/-- session_ctl over a state graph already built for this call's protocol, or computed afresh. -/
+def ctlWith (args : Json) (pre : Option (Json × Nat)) : Except String Json := do
+  match pre, (args.getObjVal? "formula").toOption with
+  | some (d, n), some formula =>
+    let p ← parseProtocol args
+    let answer ← Session.checkFormulaOn p.name d n formula (Session.sessionBoundsOf args)
+    return answer.setObjVal! "tool" (Json.str "session_ctl") |>.setObjVal! "lean" (Json.str p.lean)
+  | _, _ => ctl args
+
 /-- JSON as YAML in block style: keys and strings in JSON's double quotes (valid YAML), so nothing
 in a label, route or description can change the document's structure. -/
 partial def yaml (j : Json) (ind : String := "") : String :=

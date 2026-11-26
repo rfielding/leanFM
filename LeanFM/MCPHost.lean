@@ -312,10 +312,11 @@ def reasonPhrase : Nat → String
   | 415 => "Unsupported Media Type" | 429 => "Too Many Requests" | 431 => "Request Header Fields Too Large"
   | 500 => "Internal Server Error" | 503 => "Service Unavailable" | _ => "Status"
 
-def render (res : Resp) : ByteArray :=
+def render (res : Resp) (keepAlive : Bool := false) : ByteArray :=
   let body := res.body.toUTF8
   let ct := if res.contentType.isEmpty then [] else [("Content-Type", res.contentType ++ (if res.contentType.startsWith "text/" || res.contentType == "application/json" then "; charset=utf-8" else ""))]
-  let headers := ct ++ [("Content-Length", toString body.size), ("Connection", "close")] ++ res.headers
+  -- keep-alive says whether this connection stays open after this answer (selfhost.mcp.keepalive)
+  let headers := ct ++ [("Content-Length", toString body.size), ("Connection", if keepAlive then "keep-alive" else "close")] ++ res.headers
   let head := s!"HTTP/1.1 {res.status} {reasonPhrase res.status}\r\n" ++
     String.join (headers.map (fun (k, v) => s!"{k}: {v}\r\n")) ++ "\r\n"
   head.toUTF8 ++ body

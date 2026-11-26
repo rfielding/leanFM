@@ -54,7 +54,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check
+check: sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -244,6 +244,21 @@ ui-snapshots:
 .PHONY: sandbox-check
 sandbox-check:
 	python3 scripts/chatui_sandbox_check.py
+
+# The stdio relay to a running HTTP server, for Claude Desktop and Codex (selfhost.mcp.forward).
+.PHONY: forward-check
+forward-check: build
+	python3 -I scripts/forward_check.py
+
+# The one-page Go reverse proxy for a public host (selfhost.mcp.proxy).
+.PHONY: proxy-check
+proxy-check: go-toolchain
+	cd deploy/mcp/proxy && "$(LOCAL_GO)" vet ./... && "$(LOCAL_GO)" test ./...
+
+# HTTP keep-alive on both servers, over raw sockets (selfhost.mcp.keepalive).
+.PHONY: keepalive-check
+keepalive-check: build
+	python3 -I scripts/keepalive_check.py
 
 # Every listing of LeanFM text in the book passes the checker as printed (selfhost.book.listings).
 .PHONY: book-listings-check

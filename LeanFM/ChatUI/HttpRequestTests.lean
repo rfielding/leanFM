@@ -8,7 +8,10 @@ def frame (headers body : String) : ByteArray :=
 
 example : ((frameLength? (frame "Content-Length: 5\r\n" "ab")).toOption.bind id).isSome := by native_decide
 example : (frameLength? "POST /api/login HTTP/1.1\r\n".toUTF8).toOption == some none := by native_decide
-example : (frameLength? (frame "Content-Length: 2\r\n" "abc")).toOption.isNone := by native_decide
+-- bytes after the frame begin the next request on a kept connection: the frame is only the first
+-- (selfhost.mcp.keepalive); framing stays strict otherwise (no Transfer-Encoding, one Content-Length)
+example : ((frameLength? (frame "Content-Length: 2\r\n" "abc")).toOption.bind id) ==
+    some ((frame "Content-Length: 2\r\n" "ab").size) := by native_decide
 example : (frameLength? (frame "Content-Length: 2\r\nContent-Length: 2\r\n" "ab")).toOption.isNone := by native_decide
 example : (frameLength? (frame "Content-Length: 2\r\nTransfer-Encoding: chunked\r\n" "ab")).toOption.isNone := by native_decide
 example : (frameLength? (frame "Content-Length : 2\r\n" "ab")).toOption.isNone := by native_decide

@@ -94,13 +94,20 @@ def Global.draft (g : Global String) (name : String) (secretsOf : String → Lis
     ("transitions", Json.arr (graph.edges.map transition).toArray)]
   return (draft, graph.states.length)
 
+/-- checkFormula over a state graph already built (selfhost.mcp.model-token reuses one). -/
+def checkFormulaOn (name : String) (draft : Json) (states : Nat) (formula : Json)
+    (b : LeanFM.Logic.Bounds := sessionBounds) : Except String Json := do
+  let answer ← checkDraft name draft formula b
+  return answer.setObjVal! "states" (toJson states)
+
 /-- A CTL formula (the logic tools' JSON) decided over one session of a protocol: the checker's
 answer, with `report` naming the path's messages in order and `states` the graph's size. -/
 def Global.checkFormula (g : Global String) (name : String) (formula : Json)
     (secretsOf : String → List String := fun _ => []) (b : LeanFM.Logic.Bounds := sessionBounds) : Except String Json := do
   let (draft, states) ← g.draft name secretsOf b.maxDraftStates
-  let answer ← checkDraft name draft formula b
-  return answer.setObjVal! "states" (toJson states)
+  checkFormulaOn name draft states formula b
+
+
 
 /-- Several formulas over one session, the state graph built once; each answer as checkFormula's,
 or the error that formula gave. -/

@@ -720,16 +720,26 @@ class MultiProvider(unittest.TestCase):
             return (f"POST {path} HTTP/1.1\r\nHost: localhost:{port}\r\nCookie: {cookie}\r\n"
                     "Content-Type: application/x-www-form-urlencoded\r\n" + fields + "\r\n").encode()
 
-        def receive(connection):
-            parts = []
-            while True:
+        def receive_raw(connection, pending=b""):
+            # one response by its Content-Length: a kept connection stays open after it (selfhost.mcp.keepalive)
+            raw = pending
+            while b"\r\n\r\n" not in raw:
                 part = connection.recv(65536)
                 if not part:
                     break
-                parts.append(part)
-            raw = b"".join(parts)
+                raw += part
             head, content = raw.split(b"\r\n\r\n", 1)
-            return int(head.split(b" ", 2)[1]), json.loads(content)
+            length = next(int(line.split(b":", 1)[1]) for line in head.split(b"\r\n") if line.lower().startswith(b"content-length:"))
+            while len(content) < length:
+                part = connection.recv(65536)
+                if not part:
+                    break
+                content += part
+            return int(head.split(b" ", 2)[1]), content[:length], content[length:]
+
+        def receive(connection):
+            status, content, _ = receive_raw(connection)
+            return status, json.loads(content)
 
         before = stats()
         with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
@@ -757,8 +767,7 @@ class MultiProvider(unittest.TestCase):
                 ("Content-Length : 2\r\n", b"ab", 400, False),
                 ("Content-Length: 8388609\r\n", b"", 413, False),
                 ("Content-Length: 1\r\n", b"\xff", 400, False),
-                ("Content-Length: 99\r\n", b"truncated", 400, True),
-                ("Content-Length: 0\r\n", b"pipelined", 400, False)]:
+                ("Content-Length: 99\r\n", b"truncated", 400, True)]:
             with self.subTest(fields=fields):
                 with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
                     connection.sendall(headers(fields) + content)
@@ -768,6 +777,18 @@ class MultiProvider(unittest.TestCase):
                     self.assertEqual(status, expected, answer)
                     self.assertEqual(answer["code"], "leanfm_http_frame_invalid")
                     self.assertNotIn(cookie, json.dumps(answer))
+        # bytes after a complete request are the next request on a kept connection: the first is answered,
+        # the malformed second is refused as a frame and the connection closes (selfhost.mcp.keepalive)
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
+            # a complete second frame with a malformed request line (a partial one would rightly be waited for)
+            connection.sendall(f"GET /health HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n".encode() + b"pipelined\r\n\r\n")
+            status, content, rest = receive_raw(connection)
+            self.assertEqual((status, content), (200, b"ok\n"))
+            status, content, _ = receive_raw(connection, rest)
+            self.assertEqual(status, 400, content)
+            self.assertEqual(json.loads(content)["code"], "leanfm_http_frame_invalid")
+            connection.settimeout(5)
+            self.assertEqual(connection.recv(1), b"", "the connection closes after a malformed frame")
         self.assertEqual(stats(), before, "malformed frames must not reach either provider")
 
     def test_no_plaintext_keys_or_raw_error_body_on_disk(self):

@@ -31,7 +31,7 @@ appears in a formula. That keeps every formula a requirement: it says what may b
 the wire, and leaves how to build it to whoever builds it.
 
 This chapter shows where the futures come from (a protocol), defines the whole language by
-one recursive equation, and checks a formula by filling in a truth table, with a loop short
+one recursive function, and checks a formula by filling in a truth table, with a loop short
 enough to write in any language.
 
 \section{Start from the protocol}\label{sec:ctl}
@@ -85,56 +85,64 @@ after an Image, nothing else can happen. The protocol text, the diagram, the typ
 and the table are four views of one thing, and LeanFM derives the last three from the
 first.
 
-\section{The whole language in one equation}
+\section{The whole language in one function}
 
-A formula is built from the two labels ($\on{M}$, $\mathsf{stop}$), the Boolean
-connectives ($\neg$, $\wedge$, $\vee$, $\rightarrow$), and two steps:
-$\allNext p$, ``every state that can come next has $p$'', and $\someNext p$, ``some state
-that can come next has $p$''. Then one recursive equation, in an \textsf{all} and a
-\textsf{some} version:
+CTL is one recursive function, called two ways, and a tower of short names on top of it.
+Each name abbreviates an expression one level down, so the whole language fits on a page
+and every word unfolds, level by level, to the function at the bottom:
 
 \begin{definition}[CTL]\label{def:ctl}
 \[
-a \mathbin{\mathsf{until}} b \;=\; b \ \text{else}\ \big(a \wedge \mathsf{next}(a \mathbin{\mathsf{until}} b)\big)
+\mathsf{until}(\mathit{step}, a, b) \;=\; b \ \text{else}\ \big(a \wedge \mathit{step}(\mathsf{until}(\mathit{step}, a, b))\big)
 \]
-with $\mathsf{next}$ either $\allNext$ (giving $\mathsf{allUntil}$) or $\someNext$ (giving
-$\mathsf{someUntil}$), ``else'' meaning ``or'', and the recursion required to reach $b$:
-$a$ holds until $b$, and $b$ does come. A protocol satisfies a formula when its start
-state does.
+with $\mathit{step}$ either $\allNext$ or $\someNext$, ``else'' meaning ``or'', and the
+recursion required to reach $b$: $a$ holds until $b$, and $b$ does come. A protocol
+satisfies a formula when its start state does.
 \end{definition}
 
-That is the whole language. Everything else is a one-line definition:
-\begin{center}
-\begin{tabular}{@{}ll@{}}
-\toprule
-$\possibly p = \mathsf{true} \mathbin{\mathsf{someUntil}} p$ & some future reaches $p$\\
-$\inevitably p = \mathsf{true} \mathbin{\mathsf{allUntil}} p$ & every future reaches $p$\\
-$\always p = \neg\possibly\neg p$ & no future ever finds $p$ false\\
-$\someAlways p = \neg\inevitably\neg p$ & some path keeps $p$ forever\\
-$\mathsf{never}\ p = \always\neg p$ & $p$ never holds\\
-$a \mathbin{\mathsf{allUnless}} b = \neg(\neg b \mathbin{\mathsf{someUntil}} (\neg a \wedge \neg b))$ & $a$ until $b$ or forever\\
-$a \mathbin{\mathsf{someUnless}} b = (a \mathbin{\mathsf{someUntil}} b) \vee \someAlways a$ & on some path\\
-\bottomrule
-\end{tabular}
-\end{center}
-and the shapes specifications repeat most are functions on top of those:
-\begin{center}
-\begin{tabular}{@{}p{.43\textwidth}p{.52\textwidth}@{}}
-\toprule
-function & means \\
-\midrule
-\texttt{(stronglyImplies a b)} & $\possibly a \wedge \always(a \rightarrow b)$: $a$ can happen, and whenever it does, $b$ \\
-\texttt{(leadsTo a b)} & \texttt{(stronglyImplies a (inevitably b))}: every $a$ is answered by a $b$ \\
-\texttt{(precedes a b)} & $\neg(\neg a \mathbin{\mathsf{someUntil}} b)$: no $b$ before $a$ \\
-\texttt{(outcomes a b \ldots)} & each of $a, b, \ldots$ is possible, and one of them is inevitable \\
-\texttt{(follows a b \ldots)} & $\always(a \rightarrow \someNext b \wedge \ldots \wedge \allNext(b \vee \ldots))$: after $a$, exactly these come next \\
-\texttt{(state M)}, \texttt{(state M stop)} & $\on{M}$ and $\neg\mathsf{stop}$, or and $\mathsf{stop}$: a typestate \\
-\texttt{start} & no message yet: the first state \\
-\texttt{(transition A B (C stop))} & \texttt{follows} over states: one row of a transition table \\
-\texttt{(final A)} & \texttt{(follows (state A stop) (state A stop))}: may stop, nothing else can happen \\
-\bottomrule
-\end{tabular}
-\end{center}
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+-- level 0: what a state shows, the connectives, the two steps, the function
+(on M)                  M was just delivered
+stop                    the conversation may stop here
+start                   no message has been delivered yet
+not, and, or            as in any logic
+(allNext p)             every state that can come next has p
+(someNext p)            some state that can come next has p
+until(step, a, b)       b, else a and step(until(step, a, b)); b must come
+
+-- level 1
+(allUntil a b)        = until(allNext, a, b)
+(someUntil a b)       = until(someNext, a, b)
+(implies a b)         = (or (not a) b)
+
+-- level 2: the four words, and the unlesses
+(possibly p)          = (someUntil true p)
+(inevitably p)        = (allUntil true p)
+(always p)            = (not (someUntil true (not p)))
+(someAlways p)        = (not (allUntil true (not p)))
+(never p)             = (always (not p))
+(allUnless a b)       = (not (someUntil (not b) (and (not a) (not b))))
+(someUnless a b)      = (not (allUntil (not b) (and (not a) (not b))))
+
+-- level 3: the shapes specifications repeat
+(stronglyImplies a b) = (and (possibly a) (always (implies a b)))
+(leadsTo a b)         = (stronglyImplies a (inevitably b))
+(precedes a b)        = (not (someUntil (not a) b))
+(outcomes a b ...)    = (and (possibly a) (possibly b) ... (inevitably (or a b ...)))
+(follows a b ...)     = (always (implies a (and (someNext b) ... (allNext (or b ...)))))
+
+-- level 4: states and transition tables
+(state M)             = (and (on M) (not stop))
+(state M stop)        = (and (on M) stop)
+(transition A B ...)  = (follows (state A) (state B) ...)   ; (B stop) for (state B stop)
+(final A)             = (follows (state A stop) (state A stop))
+\end{lstlisting}
+
+$\always p$ is ``no future ever finds $p$ false'', and $\someAlways p$ is ``not every future
+reaches $\neg p$''. The unlesses are untils of the other kind under a negation: ``on every
+path, $a$ until $b$ or forever'' is ``on no path does $a$ fail before $b$ has come''.
+\texttt{explain\_formula} unfolds any formula this way, all the way down; LeanFM writes the
+primitives back in these words and keeps every function as it was written.
 
 \section{Checking is filling in a truth table}
 

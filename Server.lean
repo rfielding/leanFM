@@ -1,6 +1,7 @@
 import LeanFM
 import LeanFM.ChatUI.Server
 import LeanFM.ChatUI.HttpRequest
+import LeanFM.KeepAlive
 import Std.Async.TCP
 import Std.Async.Timer
 
@@ -532,50 +533,62 @@ def statusText : Nat -> String
   | 503 => "Service Unavailable"
   | _ => "OK"
 
-def httpHeader (status : Nat) (contentType : String) (body : ByteArray) (extraHeaders : List String := []) : String :=
+def httpHeader (status : Nat) (contentType : String) (body : ByteArray) (extraHeaders : List String := []) (keepAlive : Bool := false) : String :=
   "HTTP/1.1 " ++ toString status ++ " " ++ statusText status ++ "\r\n" ++
   "Content-Type: " ++ contentType ++ "\r\n" ++
   "Content-Length: " ++ toString body.size ++ "\r\n" ++
   "Cache-Control: no-store\r\n" ++
   "X-Content-Type-Options: nosniff\r\n" ++
   (String.join (extraHeaders.map fun h => h ++ "\r\n")) ++
-  "Connection: close\r\n\r\n"
+  -- whether this connection stays open after this answer (selfhost.mcp.keepalive)
+  (if keepAlive then "Connection: keep-alive\r\n\r\n" else "Connection: close\r\n\r\n")
 
-def readRequest (client : TcpClient) : IO (Except LeanFM.ChatUI.HttpRequest.FrameError String) := do
-  let deadline := (← IO.monoMsNow) + 15000
-  let mut bytes := ByteArray.empty
+/-- One request from the bytes already received and the connection, with the bytes after its frame
+(they begin the next request); `none` when the connection closed or stayed idle past `idleMs` before
+a request began (selfhost.mcp.keepalive). A request that has begun has 15 seconds to complete. -/
+def readRequest (client : TcpClient) (pending : ByteArray) (idleMs : Nat) :
+    IO (Except LeanFM.ChatUI.HttpRequest.FrameError (Option (String × ByteArray))) := do
+  let mut bytes := pending
+  let mut deadline := (← IO.monoMsNow) + (if pending.isEmpty then idleMs else 15000)
   repeat
     match LeanFM.ChatUI.HttpRequest.frameLength? bytes with
     | .error failure => return .error failure
     | .ok (some expected) =>
-        if bytes.size == expected then
-          return match String.fromUTF8? bytes with
-            | some text => .ok text
+        if bytes.size ≥ expected then
+          return match String.fromUTF8? (bytes.extract 0 expected) with
+            | some text => .ok (some (text, bytes.extract expected bytes.size))
             | none => .error (400, "HTTP request is not valid UTF-8.")
     | .ok none => pure ()
     let now ← IO.monoMsNow
-    if now >= deadline then return .error (408, "HTTP request did not complete within 15 seconds.")
+    if now >= deadline then
+      return if bytes.isEmpty then .ok none else .error (408, "HTTP request did not complete within 15 seconds.")
     let received ← (do
       let timer ← Std.Async.Selector.sleep (Std.Time.Millisecond.Offset.ofNat (deadline - now))
       Std.Async.Selectable.one #[
         .case (client.recvSelector 65536) (fun chunk => pure (some chunk)),
         .case timer (fun _ => pure none)]).block
     match received with
-    | none => return .error (408, "HTTP request did not complete within 15 seconds.")
-    | some none => return .error (400, "HTTP request ended before its complete frame arrived.")
+    | none => return if bytes.isEmpty then .ok none else .error (408, "HTTP request did not complete within 15 seconds.")
+    | some none => return if bytes.isEmpty then .ok none else .error (400, "HTTP request ended before its complete frame arrived.")
     | some (some chunk) =>
-        if chunk.isEmpty then return .error (400, "HTTP request ended before its complete frame arrived.")
+        if chunk.isEmpty then
+          return if bytes.isEmpty then .ok none else .error (400, "HTTP request ended before its complete frame arrived.")
+        if bytes.isEmpty then deadline := (← IO.monoMsNow) + 15000
         bytes := bytes ++ chunk
   return .error (400, "Incomplete HTTP request.")
 
-def handleClient (client : TcpClient) : IO Unit := do
-  let request ← match ← readRequest client with
-    | .ok request => pure request
+/-- Serve requests on one connection until it should close (selfhost.mcp.keepalive). -/
+partial def handleClient (client : TcpClient) (pending : ByteArray := .empty) (served : Nat := 0) : IO Unit := do
+  let ka ← LeanFM.KeepAlive.settings.get
+  let request ← match ← readRequest client pending (ka.idleSeconds * 1000) with
+    | .ok (some r) => pure r
+    | .ok none => return
     | .error (status, detail) =>
         let res := response status "application/json; charset=utf-8"
           ("{\"error\":\"" ++ jsonEscape detail ++ "\",\"code\":\"leanfm_http_frame_invalid\"}\n")
         (client.sendAll #[(httpHeader res.status res.contentType res.body res.headers).toUTF8, res.body]).block
         return
+  let (request, rest) := request
   let requestId := (LeanFM.ChatUI.Store.headerValue? request "X-LeanFM-Request-ID").getD "unassigned"
   let res ← try
       responseForRequest request
@@ -586,19 +599,31 @@ def handleClient (client : TcpClient) : IO Unit := do
         ("{\"error\":\"Internal server error\",\"request_id\":\"" ++ jsonEscape requestId ++
           "\",\"detail\":\"" ++ jsonEscape (toString err) ++ "\"}\n")
   let res := { res with headers := ("X-LeanFM-Request-ID: " ++ requestId) :: res.headers }
-  (client.sendAll #[(httpHeader res.status res.contentType res.body res.headers).toUTF8, res.body]).block
+  let asksClose := ((LeanFM.ChatUI.Store.headerValue? request "Connection").map
+    (fun v => LeanFM.KeepAlive.wantsClose [("Connection", v)])).getD false
+  let keep := !asksClose && served + 1 < ka.requests
+  (client.sendAll #[(httpHeader res.status res.contentType res.body res.headers keep).toUTF8, res.body]).block
+  if keep then handleClient client rest (served + 1)
 
 partial def serveLoop (server : TcpServer) : IO Unit := do
   let client ← (server.accept).block
   let _ ← IO.asTask (do
-    try handleClient client
-    catch err => IO.eprintln s!"request failed: {err}") Task.Priority.dedicated
+    if ← LeanFM.KeepAlive.tryOpen then
+      try handleClient client
+      catch err => IO.eprintln s!"request failed: {err}"
+      LeanFM.KeepAlive.close
+    else
+      let body := "{\"error\":\"too many open connections\"}\n".toUTF8
+      try (client.sendAll #[(httpHeader 503 "application/json; charset=utf-8" body).toUTF8, body]).block
+      catch _ => pure ()) Task.Priority.dedicated
   serveLoop server
 
 def main : IO Unit := do
   let port ← configuredPort
   -- checked before serving, so a bad value stops the server now (selfhost.env.startup)
   LeanFM.CallLimits.configureFromEnv
+  LeanFM.ModelCache.configureFromEnv
+  LeanFM.KeepAlive.configureFromEnv
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (bindAddr port)
   server.listen 128

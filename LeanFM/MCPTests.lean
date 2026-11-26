@@ -855,6 +855,32 @@ def main : IO Unit := do
   expect "server_logs prints times as UTC" (LeanFM.ServerLogs.isoUtc 1794853518 == "2026-11-16T18:25:18Z")
   let (st, _, _) ← LeanFM.ServerLogs.httpAnswer "/tools/logs?log=..%2F..%2Fetc%2Fpasswd"
   expect "GET /tools/logs refuses a path with 400" (st == 400)
+  -- the model token (selfhost.mcp.model-token): a held token for the same text is a hit with the same answer
+  let ctlCall (id : Nat) (text : String) (extra : String) : IO Json := do
+    let r ← dispatch s!"\{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"tools/call\",\"params\":\{\"name\":\"session_ctl\",\"arguments\":\{\"lean\":{(Json.str text).compress},\"formula\":\"(possibly (on Quote))\"{extra}}}}"
+    pure ((((Json.parse r.body).toOption.getD Json.null).getObjValD "result").getObjValD "structuredContent")
+  let shop := "protocol Shop (Client, Shop) { o: Order from Client to Shop; choice { Quote from Shop to Client cause o; } or { SoldOut from Shop to Client cause o; } }"
+  let first ← ctlCall 400 shop ""
+  let token := (first.getObjValAs? String "model").toOption.getD ""
+  expect "session_ctl hands out a 32-hex-digit model token on a miss"
+    (token.length == 32 && token.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) && (first.getObjValAs? String "cache").toOption == some "miss")
+  let second ← ctlCall 401 shop s!",\"model\":\"{token}\""
+  let strip (j : Json) : String := match j with
+    | .obj kv => (Json.mkObj (kv.toList.filter fun (k, _) => k != "model" && k != "cache")).compress | _ => j.compress
+  expect "the same text with its token is a hit, and the answer is the same apart from model and cache"
+    ((second.getObjValAs? String "cache").toOption == some "hit" && (second.getObjValAs? String "model").toOption == some token && strip second == strip first)
+  let other ← ctlCall 402 (shop.replace "SoldOut" "Gone") s!",\"model\":\"{token}\""
+  expect "a token used with another text is a miss with a new token"
+    ((other.getObjValAs? String "cache").toOption == some "miss" && (other.getObjValAs? String "model").toOption != some token)
+  LeanFM.ModelCache.clear
+  LeanFM.ModelCache.capacity.set 2
+  let t1 := (((← ctlCall 403 shop "").getObjValAs? String "model").toOption.getD "")
+  let _ ← ctlCall 404 (shop.replace "Quote" "Offer") ""
+  let _ ← ctlCall 405 (shop.replace "Order" "Ask") ""
+  let again ← ctlCall 406 shop s!",\"model\":\"{t1}\""
+  expect "the cache holds at most its size and drops the least recently used"
+    ((← LeanFM.ModelCache.size) == 2 && (again.getObjValAs? String "cache").toOption == some "miss")
+  LeanFM.ModelCache.capacity.set LeanFM.ModelCache.defaultCapacity
   -- per-call limits (selfhost.mcp.limits): listed on every tool, reported when changed, capped, one call only
   let listed ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":300,\"method\":\"tools/list\"}"
   let listedTools := match (Json.parse listed.body).toOption.map (fun j => (j.getObjValD "result").getObjValD "tools") with

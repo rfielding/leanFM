@@ -37,6 +37,24 @@ protocol, each role's view with its OpenAPI and protobuf, walk-throughs, animati
 By hand, the entry is `{"mcpServers": {"leanfm": {"command": ".../leanfm-mcp", "args": ["--stdio",
 "--root", "/path/to/leanFM"]}}}` in `claude_desktop_config.json`.
 
+To share one running server between Claude Desktop, Codex and Claude Code, start `make serve` and
+let Desktop (or Codex) launch the relay, which computes nothing and forwards every message to it:
+
+```sh
+python3 scripts/claude_desktop_config.py --root "$PWD" --forward http://127.0.0.1:8080/mcp --install
+```
+
+For Codex, the same command in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.leanfm]
+command = "/path/to/leanFM/.lake/build/bin/leanfm-mcp"
+args = ["--stdio", "--forward", "http://127.0.0.1:8080/mcp"]
+```
+
+After a rebuild, restart only `make serve`; the clients keep running, and all of them share its
+model cache. If the server is not running, each request is answered with an error saying so.
+
 ## Run it on a public host (EC2 or any VM)
 
 Claude (claude.ai, the desktop and mobile apps) reaches a connector added by URL from Anthropic's
@@ -49,11 +67,35 @@ LEANFM_MCP_BIND=127.0.0.1 LEANFM_MCP_PORT=8090 .lake/build/bin/leanfm-mcp &
 caddy reverse-proxy --from leanfm.example.com --to 127.0.0.1:8090    # TLS from Let's Encrypt
 ```
 
+Or, with nothing but the Go toolchain (`make go-toolchain`), the one-page proxy in
+`deploy/mcp/proxy` in place of Caddy:
+
+```sh
+(cd deploy/mcp/proxy && ../../../.toolchains/go/bin/go build -o leanfm-proxy .)
+LEANFM_MCP_TRUST_PROXY=1 LEANFM_MCP_PORT=8090 .lake/build/bin/leanfm-mcp &
+LEANFM_PROXY_CERT=cert.pem LEANFM_PROXY_KEY=key.pem LEANFM_PROXY_LISTEN=:443 deploy/mcp/proxy/leanfm-proxy
+```
+
+It forwards only `/mcp` and `/healthz`, replaces the client's `X-Forwarded-For` with the real peer
+(so `LEANFM_MCP_TRUST_PROXY=1` is safe behind it), caps bodies at 256 KiB and requests in flight at
+32, and closes slow or idle connections (`LEANFM_PROXY_*` variables, checked at startup; without a
+certificate it serves plain HTTP, for use behind a load balancer).
+
 Then add `https://leanfm.example.com/mcp` as a custom connector. Without `LEANFM_MCP_TOKEN` it needs
 no authentication. Every tool is read-only and deterministic, and holds no user data. Each client
 is still held to the rate and in-flight limits below, so an open endpoint can be slowed but not made
 to do unbounded work. A static host such as GitHub Pages cannot serve it, because every answer is
 computed by the Lean checker.
+
+Connections are kept alive (HTTP/1.1), so a client asking question after question pays for one
+connection; behind Caddy, Caddy keeps the client's connection and its own to `leanfm-mcp`. A kept
+connection closes after its request quota, after it sits idle, or after any request that is not one
+complete frame, and open connections are capped; framing stays strict (one `Content-Length`, no
+`Transfer-Encoding`), so a proxy and `leanfm-mcp` cannot disagree about where a request ends. Keep
+`leanfm-mcp` on loopback behind the proxy: the connection cap protects the process, but on an open
+port one client could fill it. `session_ctl` answers carry a `model` token; sending it back with the
+same protocol text skips rebuilding the state graph. The tokens are random, the cache is memory only
+and least-recently-used, and every request still carries its text, so a token grants nothing.
 
 ## Run it in a container
 
@@ -78,6 +120,10 @@ endpoint clients add as a connector is `https://<your host>/mcp`.
 | `LEANFM_MCP_BURST` | `20` | requests a client may make at once |
 | `LEANFM_MCP_MAX_INFLIGHT` | `4` | tool calls running at the same time |
 | `LEANFM_MCP_TRUST_PROXY` | off | `1` to take the client from the first `X-Forwarded-For` address; set it only behind a proxy you control |
+| `LEANFM_KEEPALIVE_REQUESTS` | `100` | requests one connection serves before it closes |
+| `LEANFM_KEEPALIVE_SECONDS` | `30` | seconds a kept connection may wait for its next request |
+| `LEANFM_MAX_CONNECTIONS` | `64` | connections open at once; one more is answered 503 |
+| `LEANFM_MODEL_CACHE` | `16` | state graphs `session_ctl` keeps for model tokens, least recently used dropped first |
 
 ## What the server enforces
 

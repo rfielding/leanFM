@@ -52,8 +52,8 @@ def frameLength? (bytes : ByteArray) : Except FrameError (Option Nat) := do
         let some count := value.toNat? | throw (400, "Invalid Content-Length.")
         pure count
   if bodyLength > maxBodyBytes then throw (413, "HTTP body exceeds the 8 MiB limit.")
-  let expected := headerEnd + bodyLength
-  if bytes.size > expected then throw (400, "Extra bytes after one HTTP request are not accepted.")
-  return some expected
+  -- bytes after the frame begin the next request on a kept connection; the reader takes exactly
+  -- `expected` bytes for this one (selfhost.mcp.keepalive)
+  return some (headerEnd + bodyLength)
 
 end LeanFM.ChatUI.HttpRequest

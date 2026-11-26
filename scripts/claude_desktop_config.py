@@ -11,6 +11,10 @@ of the Claude subscription.
   # merge it into this computer's Claude Desktop configuration (a backup is written first)
   python3 scripts/claude_desktop_config.py --root /home/me/code/leanFM --install
 
+  # share the running `make serve` instead (clause selfhost.mcp.forward): a rebuild then needs only
+  # that server restarted, never Claude Desktop
+  python3 scripts/claude_desktop_config.py --root /home/me/code/leanFM --forward http://127.0.0.1:8080/mcp --install
+
   # Claude Desktop on another computer (a Mac), LeanFM built on this one: run there with --ssh
   ssh LINUXHOST cat code/leanFM/scripts/claude_desktop_config.py | \\
     python3 - --ssh LINUXHOST --root /home/me/code/leanFM --install
@@ -41,17 +45,19 @@ def config_path():
     return os.path.join(home, ".config", "Claude", "claude_desktop_config.json")
 
 
-def entry(root, ssh):
+def entry(root, ssh, forward=None):
     exe = root.rstrip("/") + "/.lake/build/bin/leanfm-mcp"
+    tail = ["--stdio", "--forward", forward] if forward else ["--stdio", "--root", root]
     if ssh:
-        return {"command": "ssh", "args": ["-T", "-o", "BatchMode=yes", ssh, exe, "--stdio", "--root", root]}
-    return {"command": exe, "args": ["--stdio", "--root", root]}
+        return {"command": "ssh", "args": ["-T", "-o", "BatchMode=yes", ssh, exe] + tail}
+    return {"command": exe, "args": tail}
 
 
 def main():
     ap = argparse.ArgumentParser(description="Add LeanFM to Claude Desktop as a local MCP server.")
     ap.add_argument("--root", required=True, help="the LeanFM checkout (absolute path) on the machine that runs leanfm-mcp")
     ap.add_argument("--ssh", help="run leanfm-mcp on this ssh host instead of locally")
+    ap.add_argument("--forward", help="relay to this running LeanFM HTTP server (http://127.0.0.1:PORT/mcp) instead of starting one")
     ap.add_argument("--install", action="store_true", help="merge the entry into this computer's Claude Desktop configuration")
     ap.add_argument("--config", help="the configuration file to merge into (default: Claude Desktop's for this system)")
     a = ap.parse_args()
@@ -61,7 +67,9 @@ def main():
         sys.exit("--ssh must be a host name, such as rob@linuxbox")
     if not a.ssh and not os.path.isfile(entry(a.root, None)["command"]):
         print(f"note: {entry(a.root, None)['command']} does not exist yet; build it with: lake build leanfm-mcp", file=sys.stderr)
-    e = entry(a.root, a.ssh)
+    if a.forward is not None and not (a.forward.startswith("http://127.0.0.1:") or a.forward.startswith("http://localhost:")):
+        sys.exit("--forward must be http://127.0.0.1:PORT/... or http://localhost:PORT/...")
+    e = entry(a.root, a.ssh, a.forward)
     if not a.install:
         print(json.dumps({"mcpServers": {NAME: e}}, indent=2))
         return
