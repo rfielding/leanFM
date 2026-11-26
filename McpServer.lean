@@ -228,7 +228,7 @@ partial def connectWaiting (fw : Forward) : IO (Option TcpClient) := do
 
 /-- Post one message over the kept connection, opening a new one when it is missing or the server
 closed it (tried once more). -/
-def post (fw : Forward) (conn : IO.Ref (Option TcpClient)) (body : String) : IO (Except String (Nat × String)) := do
+def post (fw : Forward) (conn : IO.Ref (Option TcpClient)) (body : String) (wait : Bool := true) : IO (Except String (Nat × String)) := do
   let bytes := body.toUTF8
   let req := s!"POST {fw.path} HTTP/1.1\r\nHost: {fw.hostHeader}\r\nContent-Type: application/json\r\nAccept: application/json\r\nContent-Length: {bytes.size}\r\n\r\n".toUTF8 ++ bytes
   let attempt (client : TcpClient) : IO (Except String (Nat × String)) := do
@@ -239,7 +239,7 @@ def post (fw : Forward) (conn : IO.Ref (Option TcpClient)) (body : String) : IO 
   if let some client := ← conn.get then
     if let .ok r := ← attempt client then return .ok r
   conn.set none
-  let client ← connectWaiting fw
+  let client ← if wait then connectWaiting fw else (try some <$> connectTo fw catch _ => pure none)
   match client with
   | none => return .error "unreachable"
   | some c =>
@@ -247,6 +247,17 @@ def post (fw : Forward) (conn : IO.Ref (Option TcpClient)) (body : String) : IO 
     let r ← attempt c
     if r matches .error _ then conn.set none
     return r
+
+/-- The startup questions a client asks before anything else (selfhost.mcp.forward): when the server
+does not accept at once, the relay answers them itself with the server's own dispatch, so a client
+started while the server is down keeps its tools and its view. None reads a file. -/
+def localDiscovery (j : Lean.Json) : Bool :=
+  match (j.getObjValAs? String "method").toOption with
+  | some "initialize" | some "ping" | some "tools/list" | some "prompts/list"
+  | some "resources/list" | some "resources/templates/list" => true
+  | some "resources/read" =>
+    ((j.getObjVal? "params").toOption.bind fun p => (p.getObjValAs? String "uri").toOption).any (·.startsWith "ui://")
+  | _ => false
 
 partial def forwardLoop (fw : Forward) (url : String) (conn : IO.Ref (Option TcpClient))
     (stdin stdout stderr : IO.FS.Stream) : IO Unit := do
@@ -256,14 +267,15 @@ partial def forwardLoop (fw : Forward) (url : String) (conn : IO.Ref (Option Tcp
     return
   let body := line.trimAscii.toString
   if !body.isEmpty then
-    let id := match Lean.Json.parse body with
-      | .ok j => (j.getObjVal? "id").toOption
-      | .error _ => none
+    let parsed := (Lean.Json.parse body).toOption
+    let id := parsed.bind fun j => (j.getObjVal? "id").toOption
+    -- a startup question or a notification does not wait for the server
+    let quick := parsed.any fun j => localDiscovery j || id.isNone
     let fail (msg : String) : IO Unit := do
       if let some i := id then
         stdout.putStr ((LeanFM.MCP.rpcError i (-32000) msg).body ++ "\n"); stdout.flush
       stderr.putStrLn s!"leanfm-mcp --forward: {msg}"; stderr.flush
-    match ← post fw conn body with
+    match ← post fw conn body (wait := !quick) with
     | .ok (200, answer) =>
       let one := match Lean.Json.parse answer with
         | .ok j => j.compress
@@ -271,7 +283,13 @@ partial def forwardLoop (fw : Forward) (url : String) (conn : IO.Ref (Option Tcp
       stdout.putStr (one ++ "\n"); stdout.flush
     | .ok (202, _) => pure ()
     | .ok (status, answer) => fail s!"the server at {url} answered {status}: {(answer.take 200).toString}"
-    | .error "unreachable" => fail s!"nothing is listening at {url}; start it with make serve"
+    | .error "unreachable" =>
+      if id.isNone then pure ()
+      else if parsed.any localDiscovery then
+        if let some out := ← LeanFM.MCPHost.stdioReply body then
+          stdout.putStr (out ++ "\n"); stdout.flush
+        stderr.putStrLn s!"leanfm-mcp --forward: nothing is listening at {url}; answered a startup question itself"; stderr.flush
+      else fail s!"nothing is listening at {url}; start it with make serve"
     | .error e => fail s!"the server at {url} failed: {e}"
   forwardLoop fw url conn stdin stdout stderr
 

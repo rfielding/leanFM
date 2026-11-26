@@ -575,7 +575,134 @@ private def stringField (json : Json) (name : String) : Except String String := 
 /-- The names of the listed tools: the only tool names a metric label may carry. -/
 def listedToolNames : List String := tools.toList.filterMap fun t => (t.getObjValAs? String "name").toOption
 
-def dispatchJsonCore (request : Json) : IO Response := do
+/-! ## LeanFMMcp events (clause selfhost.session.real-events)
+
+A host that names its conversation (params._meta leanfm/session) gets that protocol's own messages in
+the log: the request and its answer, and between them the Disk reads the server made. -/
+
+structure Trace where
+  h : IO.FS.Stream
+  actor : String
+  session : String
+  cause : Option String
+
+def isHexRoot (s : String) : Bool :=
+  16 ≤ s.length && s.length ≤ 32 && s.toList.all fun (c : Char) => c.isDigit || ('a' ≤ c && c ≤ 'f')
+
+/-- A conversation's session: its hex root, then up to three child parts (-r12, -v1), as the
+protocol's sessions blocks open child sessions. -/
+def isHexSession (s : String) : Bool :=
+  match s.splitOn "-" with
+  | root :: parts => isHexRoot root && parts.length ≤ 3 &&
+      parts.all fun p => 1 ≤ p.length && p.length ≤ 12 && p.toList.all fun (c : Char) => c.isDigit || ('a' ≤ c && c ≤ 'z')
+  | [] => false
+
+def rootOf (session : String) : String := (session.splitOn "-").headD session
+
+initialize diskCounter : IO.Ref Nat ← IO.mkRef 0
+
+def isCauseId (s : String) : Bool :=
+  1 ≤ s.length && s.length ≤ 96 && s.toList.all fun (c : Char) => c.isAlphanum || "@._:-".toList.contains c
+
+def hasText (s sub : String) : Bool := (s.splitOn sub).length > 1
+
+/-- The host's conversation a request names, when this process logs events. -/
+def traceOf (h : IO.FS.Stream) (request : Json) : IO (Option Trace) := do
+  let m := (request.getObjValD "params").getObjValD "_meta"
+  let some session := (m.getObjValAs? String "leanfm/session").toOption | return none
+  unless isHexSession session do return none
+  let cause := (m.getObjValAs? String "leanfm/cause").toOption.filter isCauseId
+  return some { h, actor := ← LeanFM.Launch.actor "leanfm", session, cause }
+
+def Trace.emit (t : Trace) (label src dst : String) (cause : Option String) (session : Option String := none) : IO String :=
+  LeanFM.EventLog.emit t.h t.actor (session.getD t.session) "LeanFMMcp" label (.inl (src, dst)) (cause := cause)
+
+/-- A read of the project's disk, written around the read itself: the request to Disk, the read, and
+Disk's answer caused by the request. -/
+def Trace.disk {α : Type} (t : Option Trace) (req resp : String) (act : IO α) : IO α := do
+  match t with
+  | none => act
+  | some t =>
+    -- each read is a child session of the request's, as the protocol's sessions block makes it
+    let n ← diskCounter.modifyGet fun c => (c + 1, c + 1)
+    let child := s!"{t.session}-r{n}"
+    let r ← t.emit req "Server" "Disk" none child
+    let a ← act
+    let _ ← t.emit resp "Disk" "Server" (some r) child
+    return a
+
+/-- The protocol's name for a request, or none for one LeanFMMcp does not speak of. -/
+def requestLabel (method tool : String) : Option String :=
+  match method with
+  | "initialize" => some "Initialize"
+  | "tools/list" => some "ListTools"
+  | "tools/call" => if tool == "project_view" then some "ProjectView" else if tool.startsWith "session_" then some "SessionTool" else none
+  | _ => none
+
+/-- Whether a project_view call asked for a page rather than a stage: a section or offset, or any
+request of the view's browsing (a child session), where LeanFMMcp makes every request a page. -/
+def asksPage (request : Json) (trace : Option Trace) : Bool :=
+  let a := (request.getObjValD "params").getObjValD "arguments"
+  (a.getObjVal? "section").isOk || (a.getObjVal? "offset").isOk || trace.any (fun t => (t.session.splitOn "-").length > 1)
+
+/-- The answer as the protocol names it: success, or the refusal it was, never a refusal as success. -/
+def answerLabel (req : String) (page : Bool) (reply : Response) : String :=
+  let j := (Json.parse reply.body).toOption.getD Json.null
+  let err := (j.getObjVal? "error").isOk
+  let res := j.getObjValD "result"
+  let isErr := err || (res.getObjValAs? Bool "isError").toOption.getD false
+  let text := if err then ((j.getObjValD "error").getObjValAs? String "message").toOption.getD ""
+    else match res.getObjValD "content" with
+      | .arr xs => ((xs[0]?.getD Json.null).getObjValAs? String "text").toOption.getD ""
+      | _ => ""
+  let notListed := hasText text "must be one of" && hasText text "listed"
+  let overBound := hasText text "bound" || hasText text "too large"
+  match req with
+  | "Initialize" => if isErr then "InitializeError" else "Initialized"
+  | "ListTools" => if isErr then "ListToolsError" else "Tools"
+  | "ProjectView" =>
+    if !isErr then (if page then "PageShown" else "Shown")
+    else if notListed then "NotListed" else if overBound then (if page then "OverBound" else "TooLarge") else "ViewError"
+  | _ => if !isErr then "Checked" else if notListed then "NotListed" else "ToolError"
+
+/-- The host's own steps (Agent, Host and View), each with the sender and receiver LeanFMMcp gives it. -/
+def hostRoles : List (String × String × String) :=
+  [("Open", "Agent", "Host"), ("Quit", "Agent", "Host"),
+   ("Render", "Host", "View"), ("Paged", "Host", "View"), ("Drawn", "Host", "View"), ("Refused", "Host", "View"),
+   ("Page", "View", "Host"), ("Load", "View", "Host"), ("Close", "View", "Host"),
+   ("Done", "Host", "Agent"), ("Failed", "Host", "Agent")]
+
+/-- Whether an id is the host's own: host@ROOT:N, one host through all its sessions. -/
+def isHostId (session id : String) : Bool :=
+  let pre := s!"host@{rootOf session}:"
+  id.startsWith pre && (let n := (id.drop pre.length).toString; 1 ≤ n.length && n.length ≤ 9 && n.toList.all Char.isDigit)
+
+/-- One host event, checked: what it would write, or why it is dropped. -/
+def hostEventFields (params : Json) (ts : Nat) : Except String (List (String × Json)) := do
+  let str (k : String) := (params.getObjValAs? String k).toOption
+  let some session := str "session" | throw "no session"
+  unless isHexSession session do throw "session is not 16 to 32 hex digits"
+  let some id := str "id" | throw "no id"
+  unless isHostId session id do throw "id is not host@ROOT:N"
+  let some label := str "label" | throw "no label"
+  let some (_, src, dst) := hostRoles.find? (·.1 == label) | throw s!"{label} is not a host label of LeanFMMcp"
+  let prev := str "prev"
+  if prev.any (fun p => !isHostId session p) then throw "prev is not host@ROOT:N"
+  let cause := str "cause"
+  if cause.any (fun c => !isCauseId c) then throw "cause does not match its pattern"
+  return [("ts", Json.str (toString ts)), ("id", Json.str id), ("session", Json.str session), ("label", Json.str label),
+    ("from", Json.str src), ("to", Json.str dst)] ++
+    (match prev with | some p => [("prev", Json.arr #[Json.str p])] | none => []) ++
+    (match cause with | some c => [("cause", Json.str c)] | none => []) ++
+    [("protocol", Json.str "LeanFMMcp"), ("actor", Json.str s!"host@{rootOf session}")]
+
+def hostEvent (params : Json) : IO Unit := do
+  let some h ← LeanFM.EventLog.sink.get | return
+  match hostEventFields params (← LeanFM.EventLog.nowNs) with
+  | .ok fields => h.putStr (LeanFM.EventLog.line fields ++ "\n"); h.flush
+  | .error _ => LeanFM.EventLog.droppedHostEvents.modify (· + 1)
+
+def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Response := do
   let id := (field request "id").toOption.getD Json.null
   let method ← match stringField request "method" with
     | .ok value => pure value
@@ -619,7 +746,9 @@ def dispatchJsonCore (request : Json) : IO Response := do
           pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
         | .error err => pure <| rpcError id (-32602) err
       | .ok "project_view" =>
-        match ← LeanFM.ProjectView.query ((field params "arguments").toOption.getD (Json.mkObj [])) with
+        let page := asksPage request trace
+        match ← Trace.disk trace (if page then "ReadPage" else "ReadRoot") (if page then "Items" else "Listing")
+            (LeanFM.ProjectView.query ((field params "arguments").toOption.getD (Json.mkObj []))) with
         | .ok (text, body) =>
           let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
           pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
@@ -635,10 +764,14 @@ def dispatchJsonCore (request : Json) : IO Response := do
             let args := LeanFM.CallLimits.rewrite args applied
             -- a session tool may name a project's protocol file instead of carrying its text
             let r ← if name.startsWith "session_" then do
-                match ← LeanFM.ProjectView.protocolArgs args with
+                let names (k : String) := (args.getObjVal? k).isOk
+                match ← (if names "file" then Trace.disk trace "ReadFile" "FileText" (LeanFM.ProjectView.protocolArgs args)
+                    else LeanFM.ProjectView.protocolArgs args) with
                 | .ok args =>
                   -- session_conform may name a server log instead of carrying it (selfhost.session.event-log)
-                  match ← (if name == "session_conform" then LeanFM.ServerLogs.logArgs args else pure (.ok args)) with
+                  match ← (if name == "session_conform" then
+                      (if names "serverLog" then Trace.disk trace "ReadLog" "LogLines" (LeanFM.ServerLogs.logArgs args) else LeanFM.ServerLogs.logArgs args)
+                    else pure (.ok args)) with
                   | .ok args => if name == "session_ctl" then ctlCached args else pure (toolResult name args)
                   | .error e => pure (.ok (logicResult name (.error e)))
                 | .error e => pure (.ok (logicResult name (.error e)))
@@ -663,15 +796,27 @@ def dispatchJsonCore (request : Json) : IO Response := do
 (selfhost.session.event-log): Call when it arrives, Answer when its answer is ready, the Answer's
 payload carrying kind (the method, or the tool for tools/call), bytes and status. -/
 def dispatchJson (request : Json) : IO Response := do
-  let some h ← LeanFM.EventLog.sink.get | dispatchJsonCore request
   let method := (request.getObjValAs? String "method").toOption.getD ""
+  -- the host's own steps go to the log as they are, checked, and are not MCP calls (selfhost.session.real-events)
+  if method == "notifications/leanfm/host-event" then
+    hostEvent (request.getObjValD "params")
+    return { status := 202, body := "" }
+  let some h ← LeanFM.EventLog.sink.get | dispatchJsonCore request
   let kind := if method == "tools/call" then
       ((request.getObjValD "params").getObjValAs? String "name").toOption.getD method else method
   let me ← LeanFM.Launch.actor "leanfm"
   let n ← LeanFM.EventLog.counter.get
   let session := s!"{me}:call{n + 1}"
   let call ← LeanFM.EventLog.emit h me session "McpCall" "Call" (.inl ("Client", "Server"))
-  let reply ← dispatchJsonCore request
+  -- a request of a named host conversation is also LeanFMMcp's own message, with its answer
+  let trace ← traceOf h request
+  let req := trace.bind fun _ => requestLabel method kind
+  let reqId ← match trace, req with
+    | some t, some r => some <$> t.emit r "Host" "Server" t.cause
+    | _, _ => pure none
+  let reply ← dispatchJsonCore request (if req.isSome then trace else none)
+  if let (some t, some r, some rid) := (trace, req, reqId) then
+    let _ ← t.emit (answerLabel r (asksPage request trace) reply) "Server" "Host" (some rid)
   let _ ← LeanFM.EventLog.emit h me session "McpCall" "Answer" (.inl ("Server", "Client")) (cause := some call)
     (payload := Json.mkObj [("kind", Json.str kind), ("bytes", toJson reply.body.utf8ByteSize), ("status", toJson reply.status)])
   return reply

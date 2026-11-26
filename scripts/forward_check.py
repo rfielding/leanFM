@@ -5,7 +5,7 @@ server with clients that can only start a command (Claude Desktop, Codex).
 Through the relay, initialize and tools/list are answered by a running leanfm-server; a notification
 writes nothing; with the server stopped a request waits up to LEANFM_FORWARD_WAIT_SECONDS and is then
 answered with an error naming the URL, and the relay keeps running; with the server started again the
-next request is answered; a relay started before its server holds the first request until the server
+next request is answered; a relay started before its server holds a tools/call until the server
 listens and answers it normally, writing Stalled and Resumed event lines on standard error; a forward
 URL to another host, https, --forward without --stdio and a bad wait setting are refused.
 """
@@ -66,12 +66,20 @@ def main():
         print("ok: a notification writes nothing")
         server.kill(); server.wait()
         t0 = time.time()
-        r = ask(relay, {"jsonrpc": "2.0", "id": 3, "method": "tools/list"})
+        r = ask(relay, {"jsonrpc": "2.0", "id": 30, "method": "tools/list"})
+        quick = time.time() - t0
+        assert r and r.get("id") == 30 and any(t["name"] == "session_ctl" for t in r["result"]["tools"]), r
+        assert quick < 2, f"tools/list waited {quick:.1f} s for a stopped server"
+        r = ask(relay, {"jsonrpc": "2.0", "id": 31, "method": "resources/read", "params": {"uri": "ui://leanfm/session-view"}})
+        assert r and "text/html" in r["result"]["contents"][0]["mimeType"], r
+        print(f"ok: with the server stopped the relay answers tools/list ({quick:.2f} s) and the view's resources/read itself")
+        t0 = time.time()
+        r = ask(relay, {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "session_check", "arguments": {"lean": "protocol P (A, B) { Ping from A to B; }"}}})
         waited = time.time() - t0
         assert r and r.get("id") == 3 and url in r["error"]["message"] and "make serve" in r["error"]["message"], r
         assert waited >= 2.5, f"the error came after {waited:.1f} s, before the 3 s wait bound"
         assert relay.poll() is None, "the relay must keep running"
-        print(f"ok: with the server stopped the relay waits for it ({waited:.1f} s), then answers an error naming the URL and keeps running")
+        print(f"ok: with the server stopped a tools/call waits for it ({waited:.1f} s), then answers an error naming the URL and keeps running")
         server = start_server(port)
         r = ask(relay, {"jsonrpc": "2.0", "id": 4, "method": "tools/list"})
         assert r and r.get("id") == 4 and "result" in r, r
@@ -87,15 +95,19 @@ def main():
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     server = None
     try:
-        relay.stdin.write((json.dumps({"jsonrpc": "2.0", "id": 7, "method": "initialize", "params": {}}) + "\n").encode())
+        t0 = time.time()
+        r = ask(relay, {"jsonrpc": "2.0", "id": 6, "method": "initialize", "params": {}})
+        assert r and r.get("id") == 6 and "serverInfo" in r.get("result", {}) and time.time() - t0 < 2, r
+        print("ok: a relay started with no server answers initialize at once")
+        relay.stdin.write((json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "session_check", "arguments": {"lean": "protocol P (A, B) { Ping from A to B; }"}}}) + "\n").encode())
         relay.stdin.flush()
         time.sleep(1.5)
         server = start_server(port)
         ready, _, _ = select.select([relay.stdout], [], [], 60)
         assert ready, "the held request was never answered"
         r = json.loads(relay.stdout.readline())
-        assert r.get("id") == 7 and "serverInfo" in r.get("result", {}), r
-        print("ok: a relay started before its server holds the first request and answers it once the server listens")
+        assert r.get("id") == 7 and "result" in r, r
+        print("ok: a relay started before its server holds a tools/call and answers it once the server listens")
     finally:
         relay.kill(); relay.wait()
         if server:

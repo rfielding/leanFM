@@ -57,7 +57,7 @@ def server : Json := match LeanFM.SessionTools.explore (Json.mkObj [("lean", Jso
   | .ok j => j | .error _ => Json.null
 def lay := server.getObjValD "layout"
 #guard (match lay.getObjValD "nodes", server.getObjValD "states" with
-  | .arr ns, .arr ss => ns.size == ss.size && ns.size == 21 | _, _ => false)
+  | .arr ns, .arr ss => ns.size == ss.size && ns.size == 24 | _, _ => false)
 #guard (match lay.getObjValD "nodes" with
   | .arr ns => ns.any (fun n => (n.getObjValAs? String "label").toOption == some "Initialize ← Host") &&
       ns.any (fun n => (n.getObjValAs? String "label").toOption == some "end" && (n.getObjValAs? Bool "ends").toOption == some true)

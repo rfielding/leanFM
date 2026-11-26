@@ -282,8 +282,9 @@ def actorsOf (r : Except String Json) : List (String × String) := match r with
 #guard (actorsOf (run served)).take 3 == [("Client/c1", "Api/a1"), ("Client/c2", "Api/a1"), ("Api/a1", "Client/c1")]
 -- a log naming only roles: its actors are the roles
 #guard (actorsOf (run two)).take 1 == [("Client", "Api")]
--- a log naming only roles: each role is its own thread in each session
-#guard (threadsOf (run two)).take 3 == ["Client@chain from c1", "Client@chain from c2", "Api@chain from c2"]
+-- a log naming only roles and no writer: each role is one thread through every session
+-- (selfhost.session.event-source: threads are actors, never named after a session)
+#guard (threadsOf (run two)).take 3 == ["Client", "Client", "Api"]
 
 /-! Joins: a play belongs to its player and to its game (selfhost.session.identity.joins) -/
 

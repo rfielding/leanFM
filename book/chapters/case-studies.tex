@@ -78,12 +78,12 @@ exactly.}
 LeanFM is developed with LeanFM, and its MCP protocol (\texttt{LeanFM.leanfm}: an agent, its host, the view, the
 server and the disk; initialising, listing tools, calling a session tool and drawing its
 answer, paging through project files, and closing) is the first thing
-its own tools are tested on. It has 101 checker nodes, 33 typestates and lookahead $1$,
+its own tools are tested on. It has 109 checker nodes, 35 typestates and lookahead $1$,
 and the faithfulness check agrees with itself:
 
 \input{generated/ctl-leanfm-self.tex}
 
-Its tests check the whole chain of this book on it. Every one of its 34 faithful rules
+Its tests check the whole chain of this book on it. Every one of its 36 faithful rules
 is proved by \texttt{session\_ctl} over the protocol. Over more than a hundred broken
 copies of its graph (each step dropped, and steps sent to other states, relabelled and
 added) the walk says ``faithful'' exactly when the CTL checker proves every rule, and the

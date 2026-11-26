@@ -160,6 +160,18 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
 
   await show(R.check);
   {
+    // big text folds away: each role's typestate is its own folded panel, one under another
+    const heads = byId.results.all().filter((n) => n.tag === "button" && n.className.split(" ").includes("foldhead") && /: typestate, \d+ lines/.test(n.textContent));
+    if (!heads.length) throw new Error("no folded typestate panels: " + byId.results.textContent.slice(0, 200));
+    const body0 = heads[0].parent.children[1];
+    if (!body0.hidden) throw new Error("a role's typestate does not start folded");
+    heads[0].click(); await wait(20);
+    if (body0.hidden) throw new Error("clicking a folded typestate did not open it");
+    heads[0].click(); await wait(20);
+    const long = byId.results.all().filter((n) => n.tag === "button" && n.className.split(" ").includes("foldhead") && / lines$/.test(n.textContent.replace(/click to (show|hide)$/, "").trim()));
+    console.log(`ok: big text folds away: ${heads.length} role typestates folded, one under another, and ${long.length} panels name their line count`);
+  }
+  {
     // the views bar is nested tabs: the group tabs, then only the shown group's views
     const tabs = byId.editor.all().filter((n) => n.tag === "button" && n.attrs.role === "tab").map((n) => n.textContent).join(" ");
     if (tabs !== "Structure Roles Behaviour Properties Code") throw new Error("the views bar's group tabs are " + tabs);
@@ -338,6 +350,18 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
 
   await show(R.simulate);
   await wait(400);
+  {
+    // the source banner (selfhost.session.event-source): first, and built from the answer's source alone
+    const src = R.simulate.structuredContent.source;
+    if (!src || src.kind !== "simulated") throw new Error("session_simulate's answer has no simulated source");
+    const banner = byId.results.all().find((n) => n.className === "source simulated");
+    if (!banner) throw new Error("a simulated stream is shown without the SIMULATED banner");
+    if (!banner.textContent.includes("SIMULATED") || !banner.textContent.includes("seed " + src.seed) || !banner.textContent.includes("not a real run")) throw new Error("the banner does not say SIMULATED, its seed and not a real run: " + banner.textContent);
+    const order = byId.results.all();
+    const head = order.find((n) => n.className === "head");
+    if (head && order.indexOf(banner) > order.indexOf(head)) throw new Error("the source banner is not above the result's heading");
+    console.log("ok: a simulated stream opens with the SIMULATED banner naming its seed, above everything else");
+  }
   expectText("session_simulate result shows the event stream", byId.results, "Event stream");
   // the stream opens with more detail on: the button offers less, then more again
   button(byId.results, "Less detail").click(); await wait(100);
@@ -389,6 +413,10 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     const first = d.sessions[0];
     const sb = buttons(byId.results).find((b) => b.textContent === `${first.key} · ${first.count}`);
     if (!sb) throw new Error("no button for the derived session " + first.key + "; have: " + buttons(byId.results).map((b) => b.textContent).join(" | "));
+    const list = byId.results.all().find((n) => n.className === "sesslist");
+    if (!list || !list.children.includes(sb)) throw new Error("the session buttons are not in their own scrolling list");
+    if (list.children.some((c) => c.textContent.startsWith("all · ") || c.textContent.startsWith("unattributed · "))) throw new Error("all or unattributed scrolls away with the sessions");
+    console.log("ok: the session buttons sit in their own scrolling list, all and unattributed outside it");
     const rowsNow = () => byId.results.all().filter((n) => n.className.split(" ").includes("evrow"));
     const before = rowsNow().length;
     sb.click(); await wait(200);
@@ -420,6 +448,9 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
 
   await show(R.conform);
   expectText("session_conform shows where the run breaks the protocol", byId.results, "Where the run breaks the protocol");
+  if (!byId.results.all().some((n) => n.className === "source given" && n.textContent.includes("EVENTS GIVEN"))) throw new Error("events given to session_conform are shown without their banner");
+  if (byId.results.all().some((n) => n.className === "source simulated")) throw new Error("a conformance answer still shows the SIMULATED banner");
+  console.log("ok: events given to session_conform show the EVENTS GIVEN banner, and no SIMULATED one");
   await show(R.diagram);
   expectText("session_diagram result renders", byId.results, "Sequence diagram");
   // calls fold (clause selfhost.session.diagram.folds): depth 2 and below start folded; folding the
@@ -639,7 +670,8 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     const answer = (a) => {
       const from = a.lastLines ? Math.max(1, total - a.lastLines + 1) : a.fromLine;
       const next = Math.min(total, from + (a.lastLines || a.lineCount) - 1) + 1;
-      return { content: [], structuredContent: { tool: "session_conform", verdict: "conforms", events: [], fromLine: from, nextLine: next, logLines: total, logFingerprint: fp } };
+      return { content: [], structuredContent: { tool: "session_conform", verdict: "conforms", events: [], fromLine: from, nextLine: next, logLines: total, logFingerprint: fp,
+        source: { kind: "log", log: "serve", path: "logs/serve.log", fromLine: from, lastLine: next - 1, logLines: total, writers: ["leanfm@7"], moreWriters: 0 } } };
     };
     conformHost = (a, reply) => { if (held) held.push(() => reply(answer(a))); else reply(answer(a)); };
     const args = { lean: "protocol P (A, B) { Ping from A to B; }", serverLog: "serve", lastLines: 200 };
@@ -654,6 +686,12 @@ const show = async (result) => { deliver({ jsonrpc: "2.0", method: "ui/notificat
     if (calls().length !== n0 + 1 || asked.fromLine !== 4601 || asked.lineCount !== 200 || asked.lastLines !== undefined || asked.serverLog !== "serve")
       throw new Error("Earlier did not fetch lines 4601-4800 with the same arguments: " + JSON.stringify(asked));
     expectText("Earlier fetches the window before (a miss)", byId.results, "Lines 4601–4800 of 5000");
+    {
+      const banner = byId.results.all().find((n) => n.className === "source log");
+      if (!banner || !banner.textContent.includes("REAL LOG") || !banner.textContent.includes("logs/serve.log lines 4601\u20134800 of 5000") || !banner.textContent.includes("leanfm@7"))
+        throw new Error("a real log window is shown without its REAL LOG banner naming the lines and writer: " + (banner ? banner.textContent : "none"));
+      console.log("ok: a real log window shows the REAL LOG banner with its path, lines and writer, kept up to date by paging");
+    }
     button(byId.results, "Later").click(); await wait(150);
     if (calls().length !== n0 + 1) throw new Error("Later fetched a window the view holds");
     expectText("Later shows the held window from memory (a hit)", byId.results, "1 from memory, 1 fetched");

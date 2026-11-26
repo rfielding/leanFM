@@ -96,6 +96,36 @@ def main():
         assert a["fromLine"] == LINES + 1 and a["logLines"] == LINES + 2 and a["nextLine"] == LINES + 3, a
         assert a["logFingerprint"] == tag.strip('"'), (a["logFingerprint"], tag)
         print("ok: session_conform with serverLog and lastLines 2 answers fromLine, logLines, nextLine and the same fingerprint")
+        src = a["source"]
+        assert src["kind"] == "log" and src["log"] == "serve" and src["path"] == "logs/serve.log", src
+        assert (src["fromLine"], src["lastLine"], src["logLines"]) == (LINES + 1, LINES + 2, LINES + 2) and src["writers"] == [], src
+        print("ok: its source says kind log, log serve, path logs/serve.log, lines 5001-5002 of 5002 and no writers")
+        size = os.path.getsize(log)
+        assert size > 65536, size
+        big = conform(port, {"lean": "protocol P (A, B) { Ping from A to B; }", "serverLog": "serve", "lastLines": LINES + 2})
+        assert big["source"]["fromLine"] == 1 and big["source"]["lastLine"] == LINES + 2, big["source"]
+        try:
+            conform(port, {"lean": "protocol P (A, B) { Ping from A to B; }", "log": open(log).read()})
+            raise AssertionError("a client-sent log over 64 KiB was accepted")
+        except SystemExit as e:
+            assert "exceed 65536" in str(e), e
+        print(f"ok: a window of the whole {size}-byte log read by the server is checked, while the same text sent by a client is refused at 64 KiB")
+        P = "protocol P (Client, Server) { Call from Client to Server; Done from Server to Client; }"
+        evs = []
+        for k in range(3):
+            evs.append({"id": f"w:{2*k+1}", "session": f"call{k}", "from": "Client", "to": "Server", "label": "Call", "actor": "w"})
+            evs.append({"id": f"w:{2*k+2}", "session": f"call{k}", "from": "Server", "to": "Client", "label": "Done", "actor": "w", "cause": f"w:{2*k+1}"})
+        g = conform(port, {"lean": P, "events": evs})
+        assert g["source"] == {"kind": "given", "events": 6}, g["source"]
+        threads = sorted({e["thread"] for e in g["events"]})
+        assert threads == ["Client@w", "Server@w"], threads
+        print("ok: events given in the call have source kind given; three calls written by one process w run on two threads, Client@w and Server@w")
+        body = {"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": "session_simulate", "arguments": {"lean": P, "seed": 7, "instances": 5}}}
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", json.dumps(body).encode(), {"Content-Type": "application/json"})
+        sim = json.loads(urllib.request.urlopen(req, timeout=60).read())["result"]["structuredContent"]
+        assert sim["source"]["kind"] == "simulated" and sim["source"]["seed"] == 7 and sim["source"]["protocol"] == "P", sim["source"]
+        assert sorted({e["thread"] for e in sim["events"]}) == ["Client", "Server"], sorted({e["thread"] for e in sim["events"]})
+        print("ok: session_simulate says source kind simulated with its seed, and its five sessions run on one thread per role")
         with open(log, "w") as f:
             f.write("a new log\n")
         s, h, b = get(port, "lines=1-1")

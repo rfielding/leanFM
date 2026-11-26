@@ -407,11 +407,19 @@ def withExample (args : Json) : Except String Json := do
     | none => throw s!"example must be one of {", ".intercalate exampleNames}"
   | .ok _ => throw s!"example must be the name of one of LeanFM's examples: {", ".intercalate exampleNames}"
 
+/-- The arguments as a client sent them: a log window the server read itself (logWindow, with the
+log and the events cut from it) is bounded by the window's own limits, not by maxArgumentBytes
+(selfhost.session.log-paging). -/
+def sentArgs (args : Json) : Json :=
+  match args with
+  | .obj kvs => if kvs.contains "logWindow" then Json.obj ((kvs.erase "log").erase "events" |>.erase "logWindow") else args
+  | j => j
+
 def parseProtocol (args0 : Json) : Except String Protocol := do
-  if args0.compress.length > limits.maxArgumentBytes then
+  if (sentArgs args0).compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
   let args ← withExample args0
-  if args.compress.length > limits.maxArgumentBytes then
+  if (sentArgs args).compress.length > limits.maxArgumentBytes then
     throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
   if let .ok v := args.getObjVal? "lean" then
     let text ← match v.getStr? with
@@ -621,7 +629,7 @@ def themeOf (args : Json) : DiagramTheme :=
   | _ => .dark
 
 def eventJson (e : Event String) : Json :=
-  Json.mkObj [("id", e.id), ("session", e.session), ("thread", Json.str s!"{e.src}@{e.session}"), ("time", e.time),
+  Json.mkObj [("id", e.id), ("session", e.session), ("thread", Json.str e.src), ("time", e.time),
     ("prior", Json.arr (e.prior.map toJson).toArray), ("cause", toJson e.cause),
     ("answers", toJson e.answers), ("src", e.src), ("dst", e.dst), ("label", e.label),
     ("msgId", toJson e.msgId), ("route", toJson e.route), ("status", toJson e.status),
@@ -1262,6 +1270,10 @@ def derivedJson (p : Protocol) (events : Array Json) : Json :=
   let guards := p.global.messages.filterMap fun i => i.guard.map (·.text)
   (Derived.group (Derived.equations guards) (events.map Derived.Ev.ofJson)).json
 
+/-- Where a simulated stream came from (selfhost.session.event-source): generated, not run. -/
+def simulatedSource (p : Protocol) (seed sessions : Nat) : Json :=
+  Json.mkObj [("kind", "simulated"), ("protocol", Json.str p.name), ("seed", toJson seed), ("sessions", toJson sessions)]
+
 def simulate (args : Json) : Except String Json := do
   let p ← parseProtocol args
   let seed ← natArg args "seed" 1 4294967295
@@ -1285,6 +1297,7 @@ def simulate (args : Json) : Except String Json := do
          ("name", p.name), ("roles", toJson p.roles), ("lean", p.lean), ("protocol", args.getObjValD "protocol"),
          ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
          ("seed", seed), ("instances", instances), ("sessions", instances),
+         ("source", simulatedSource p seed instances),
          ("ended", toJson (g.ended.map fun (sid, e) => Json.mkObj [("session", sid), ("ended", e)])),
          ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson)), ("derivedSessions", derivedJson p evJson), ("diagram", diagramJson p)]
   if let some layer := p.generative then
@@ -1298,6 +1311,7 @@ def simulate (args : Json) : Except String Json := do
        ("name", p.name), ("roles", toJson p.roles), ("lean", p.lean), ("protocol", args.getObjValD "protocol"),
        ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p), ("timeUnit", "ms"), ("timeBasis", "session-relative"),
        ("seed", seed), ("instances", instances), ("sessions", instances),
+       ("source", simulatedSource p seed instances),
        ("tsUnit", "ns"), ("events", Json.arr (stampNs (generated.events.map eventJson))), ("deadlineReports", toJson generated.reports),
        ("derivedSessions", derivedJson p (generated.events.map eventJson)),
        ("diagram", diagramJson p)]
@@ -1319,6 +1333,7 @@ def simulate (args : Json) : Except String Json := do
     , ("name", p.name), ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("seed", seed), ("instances", instances), ("sessions", sessions)
+    , ("source", simulatedSource p seed sessions)
     , ("tsUnit", "ns"), ("events", Json.arr (stampNs evJson))
     , ("derivedSessions", derivedJson p evJson)
     , ("diagram", diagramJson p) ]
@@ -1377,11 +1392,12 @@ def logEvent (j : Json) : Except String LogEvent := do
   let version := match <- reading "version" with | some 0 => none | v => v
   let protocolName := text "protocol"
   let prev := text "prev"
-  for t in [prev, protocolName] do
+  let writer := (text "actor").getD ""
+  for t in [prev, protocolName, some writer] do
     if let some p := t then
       if p.length > limits.maxString then .error s!"event {id} has a field over {limits.maxString} characters"
   return { id, session := (text "session").getD "0", src := srcRole, dst := dstRole, label, cause := text "cause", isAct, fields,
-           srcActor, dstActor := if isAct then srcActor else dstActor, prev, sentAt, receivedAt, protocolName, version }
+           srcActor, dstActor := if isAct then srcActor else dstActor, writer, prev, sentAt, receivedAt, protocolName, version }
 
 /-- What is wrong with the versions a log's events name (selfhost.session.versions): against a
 versioned protocol, every event names one of its versions and no other protocol, and one session
@@ -1452,6 +1468,17 @@ def secretFields (evs : List LogEvent) : Json := Id.run do
         seen := seen ++ [(k, e.id)]
   return Json.arr (seen.map fun (k, id) => Json.mkObj [("field", Json.str k), ("event", Json.str id)]).toArray
 
+/-- Where a log's events came from (selfhost.session.event-source): the named log's lines and the
+processes that wrote them (the envelope's actor field), at most 8 named. -/
+def logSource (name : String) (first last total : Nat) (events : Array Json) : Json :=
+  let writers := (events.toList.filterMap fun e => (e.getObjValAs? String "actor").toOption).eraseDups
+  Json.mkObj [("kind", "log"), ("log", Json.str name), ("path", Json.str s!"logs/{name}.log"),
+    ("fromLine", toJson first), ("lastLine", toJson last), ("logLines", toJson total),
+    ("writers", toJson (writers.take 8)), ("moreWriters", toJson (writers.length - min 8 writers.length))]
+
+/-- Events handed to session_conform as an argument rather than read from a log. -/
+def givenSource (n : Nat) : Json := Json.mkObj [("kind", "given"), ("events", toJson n)]
+
 /-- session_conform over the event lines of a whole log (selfhost.session.event-log): the lines that
 are JSON objects with type leanFM are the events, every other line is counted and ignored, and a
 malformed line beginning with the marker is refused naming its line number. -/
@@ -1506,6 +1533,9 @@ def conformLog (args : Json) (log : String) (conformEvents : Json → Except Str
     |>.setObjVal! "logLines" (toJson logLines) |>.setObjVal! "fromLine" (toJson fromLine)
     |>.setObjVal! "nextLine" (toJson nextLine) |>.setObjVal! "sessionsBeganBeforeWindow" (toJson cut.length)
     |>.setObjVal! "logFingerprint" fingerprint
+    |>.setObjVal! "source" (match given.bind (fun w => (w.getObjValAs? String "log").toOption) with
+      | some name => logSource name fromLine (if nextLine > fromLine then nextLine - 1 else fromLine) logLines kept
+      | none => givenSource kept.size)
 
 def conformEvents (args : Json) : Except String Json := do
   let p ← parseProtocol args
@@ -1620,7 +1650,7 @@ def conformEvents (args : Json) : Except String Json := do
     else s!"{p.name}: {bad.length} of {results.length} sessions break the protocol; first: {problems.head!}"
   let deadlines ← if bad.isEmpty && keyProblems.isEmpty then deadlineReports p args evs else pure Json.null
   return fit <| Json.mkObj
-    [ ("tool", "session_conform"), ("secretFields", secretFields evs), ("deadlineReports", deadlines), ("verdict", verdict), ("reading", reading), ("name", p.name)
+    [ ("tool", "session_conform"), ("source", givenSource evs.length), ("secretFields", secretFields evs), ("deadlineReports", deadlines), ("verdict", verdict), ("reading", reading), ("name", p.name)
     , ("roles", Json.arr (p.roles.map Json.str).toArray)
     , ("lean", p.lean), ("protocol", args.getObjValD "protocol"), ("overlay", args.getObjValD "overlay"), ("generative", generativeJson p)
     , ("issues", Json.arr ((problems.take 64).map Json.str).toArray)

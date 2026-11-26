@@ -27,6 +27,14 @@
   html, body { margin: 0; background: var(--bg); color: var(--fg);
     font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
   main { padding: 14px 16px 16px; display: grid; gap: 12px; }
+  /* where the events came from (selfhost.session.event-source): never missed, never guessed */
+  .source { font-size: 1.25em; font-weight: 700; line-height: 1.35; padding: 10px 14px; border-radius: 8px;
+    background: var(--panel); color: var(--fg); border: 3px solid var(--edge); border-left-width: 14px; }
+  .source .kind { letter-spacing: 0.04em; }
+  .source .more { display: block; font-size: 0.72em; font-weight: 400; color: var(--fg); margin-top: 2px; }
+  .source.simulated { border-color: var(--amber); } .source.simulated .kind { color: var(--amber); }
+  .source.log { border-color: var(--good); } .source.log .kind { color: var(--good); }
+  .source.given { border-color: var(--cyan); } .source.given .kind { color: var(--cyan); }
   .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
   .tool { font-weight: 600; }
   .badge { border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: 13px; }
@@ -43,7 +51,9 @@
   .scroll { overflow-x: auto; }
   /* full screen: every drawing shrinks to the window's width, however small that makes it */
   :root[data-mode="fullscreen"] .scroll > svg, :root[data-mode="fullscreen"] .scroll > img { max-width: 100%; height: auto; }
-  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+  .roles { display: block; }
+  .roles > .panel { margin-bottom: 10px; }
+  .panel pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   button.fold { font-size: 12px; padding: 1px 8px; margin: 2px 0 4px; }
   .hidden-note { font-size: 12px; margin: 2px 0 4px; }
@@ -69,6 +79,7 @@
   }
   .sessbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
   .sessbar button { font: 13px ui-monospace, Menlo, monospace; padding: 2px 8px; }
+  .sesslist { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 100%; max-height: 120px; overflow-y: auto; padding: 2px; border: 1px solid var(--edge); border-radius: 4px; }
   .sessbar button.on { border-color: var(--amber); border-width: 2px; color: var(--amber); font-weight: 600; }
   .evrow > span { flex: none; }
   .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
@@ -367,7 +378,19 @@ function sv(tag, attrs, text) {
   return node;
 }
 function status(text, bad) { results.replaceChildren(el("p", bad ? "err" : "meta", text)); reportSize(); }
-function panel(title, child) { const p = el("div", "panel"); p.appendChild(el("h3", "", title)); p.appendChild(child); return p; }
+// big text folds away (selfhost.mcp.session.view): a panel whose text runs over FOLD_LINES lines
+// starts folded, its header naming it and its line count
+const FOLD_LINES = 15;
+function textLines(node) {
+  let n = 0;
+  const walk = (x) => { if (x.tag === "pre" || (x.tagName && String(x.tagName).toLowerCase() === "pre")) n += String(x.textContent || "").split("\n").length; else for (const c of (x.children || [])) walk(c); };
+  walk(node); return n;
+}
+function panel(title, child) {
+  const lines = textLines(child);
+  if (lines > FOLD_LINES) return foldPanel(`${title}, ${lines} lines`, child, false);
+  const p = el("div", "panel"); p.appendChild(el("h3", "", title)); p.appendChild(child); return p;
+}
 // A panel whose whole header is a button that says what it does: hide or show what is under it.
 function foldPanel(title, child, open) {
   const p = el("div", "panel"), b = el("button", "foldhead"), mark = el("span"), name = el("span", "", title), hint = el("span", "hint");
@@ -1017,8 +1040,14 @@ function streamView(body) {
   const add = (label, aria, keep, which) => {
     const b = el("button", "", label);
     b.setAttribute("aria-label", aria);
-    b.addEventListener("click", () => show(which, keep, b)); buttons.push(b); bar.appendChild(b);
+    b.addEventListener("click", () => show(which, keep, b)); buttons.push(b); (where || bar).appendChild(b);
   };
+  // the session buttons scroll in a list of their own, at most about four rows tall, so a log with
+  // many sessions never pushes the drawing down; all and unattributed stay outside it
+  const list = el("div", "sesslist");
+  list.setAttribute("role", "group"); list.setAttribute("aria-label", `${Math.min(sessions.length, MAX_ITEMS)} sessions, scrolling`);
+  let where = list;
+  if (sessions.length) bar.appendChild(list);
   sessions.slice(0, MAX_ITEMS).forEach((x) => {
     const key = String(x.key || "").slice(0, MAX_LABEL), keep = idxs(x.events);
     add(`${key} · ${keep.size}`, `Session ${key}, ${keep.size} events`, keep,
@@ -1027,6 +1056,7 @@ function streamView(body) {
   });
   // the reason comes from LeanFM's reading: for a simulated stream, equations and links; for a log,
   // causes and the declared session key (selfhost.session.log-sessions)
+  where = null;
   if (unattributed.size) add(`unattributed · ${unattributed.size}`, `${unattributed.size} events nothing places in a session`, unattributed,
     `${unattributed.size} unattributed events: nothing the protocol declares places them in a session` + (d && d.reading ? ` (${String(d.reading)})` : ""));
   box.appendChild(bar);
@@ -1352,7 +1382,8 @@ function animation(body, opts) {
     if (id === shown) return;
     shown = id;
     jsonCap.textContent = (sel !== null ? "Selected event " : "Event ") + eid(id) + " as JSON";
-    jsonBox.replaceChildren(jsonView(ORIGINAL.get(E[id]) || E[id]));
+    const ev = ORIGINAL.get(E[id]) || E[id];
+    jsonBox.replaceChildren(jsonView(currentSource ? { event: ev, source: currentSource } : ev));
   }
   let prev = performance.now();
   function tick(now) {
@@ -1416,14 +1447,47 @@ function show(result) {
   if (logPager) { logPager.openMs = performance.now() - t0; logPager.refresh(); }
 }
 
+// The banner naming where an answer's events came from, built from its source field alone
+// (selfhost.session.event-source); none when the answer has no events to account for.
+let currentSource = null;
+function sourceBanner(src) {
+  if (!src || typeof src !== "object") return null;
+  const n = (x) => Number.isInteger(x) ? String(x) : "?";
+  const t = (x) => String(x == null ? "" : x).slice(0, MAX_LABEL);
+  const box = el("div", "source");
+  box.setAttribute("role", "status");
+  let kind, main, more;
+  if (src.kind === "simulated") {
+    box.className = "source simulated";
+    kind = "SIMULATED"; main = ` from ${t(src.protocol)}, seed ${n(src.seed)}: not a real run`;
+    more = `LeanFM's simulator generated these events from the protocol (${n(src.sessions)} sessions); the same seed always gives the same events. Nothing ran.`;
+  } else if (src.kind === "log") {
+    box.className = "source log";
+    const ws = Array.isArray(src.writers) ? src.writers.map(t) : [];
+    kind = "REAL LOG"; main = `: ${t(src.path)} lines ${n(src.fromLine)}\u2013${n(src.lastLine)} of ${n(src.logLines)}`;
+    more = ws.length ? `Written by ${ws.join(", ")}${Number.isInteger(src.moreWriters) && src.moreWriters > 0 ? ` and ${src.moreWriters} more` : ""}.` : "The log's events name no writer.";
+  } else if (src.kind === "given") {
+    box.className = "source given";
+    kind = "EVENTS GIVEN"; main = ` to session_conform: ${n(src.events)} events`;
+    more = "The events were passed in the call, not read from a log.";
+  } else return null;
+  box.appendChild(el("span", "kind", kind));
+  box.appendChild(document.createTextNode(main));
+  box.appendChild(el("span", "more", more));
+  return box;
+}
+
 function render(body) {
   anim = null;
+  currentSource = body && body.source && typeof body.source === "object" ? body.source : null;
   syncNav(body);
   const head = el("div", "head");
   head.appendChild(el("span", "tool", String(body.tool || "session")));
   const v = String(body.verdict || "answered");
   head.appendChild(el("span", "badge " + (v === "ok" || v === "drawn" || v === "generated" || v === "projected" || v === "conforms" || v === "proved" || v === "compatible" ? "ok" : v === "issues" || v === "violates" || v === "disproved" || v === "incompatible" ? "issues" : "other"), v));
   const parts = [head, el("p", "reading", String(body.reason || body.reading || ""))];
+  const banner = sourceBanner(currentSource);
+  if (banner) parts.unshift(banner);
   if (Array.isArray(body.issues) && body.issues.length) {
     const ul = el("ul");
     body.issues.slice(0, MAX_ITEMS).forEach((t) => ul.appendChild(el("li", "issue", String(t))));
@@ -1595,7 +1659,8 @@ function render(body) {
       if (typeof pr.error === "string") box.appendChild(el("p", "err", pr.error));
       if (typeof pr.typestate === "string") box.appendChild(el("pre", "", pr.typestate));
       if (typeof pr.local === "string") { box.appendChild(el("h3", "", "local type")); box.appendChild(el("pre", "", pr.local)); }
-      grid.appendChild(panel(r + ": typestate", box));
+      // one role per full-width panel, folded, one under another
+      grid.appendChild(foldPanel(`${r}: typestate, ${textLines(box)} lines`, box, false));
     }
     parts.push(grid);
   }

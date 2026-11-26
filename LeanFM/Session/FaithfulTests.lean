@@ -22,9 +22,9 @@ def nat (r : Except String Json) (k : String) : Nat :=
 
 def rulesAnswer := ctl [("faithful", Json.str "rules")]
 #guard str rulesAnswer "verdict" == "rules"
-#guard nat rulesAnswer "typestates" == 33
+#guard nat rulesAnswer "typestates" == 35
 #guard nat rulesAnswer "lookahead" == 1
-#guard nat rulesAnswer "ruleCount" == 34
+#guard nat rulesAnswer "ruleCount" == 36
 
 /-- The protocol's draft, and its typestates. -/
 def draft : Json := Id.run do

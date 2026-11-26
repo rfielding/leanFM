@@ -244,7 +244,7 @@ def stream (evs : Array LogEvent) (r : Result) (named : Bool) : Array Json :=
     Json.mkObj [("id", toJson (i + 1)), ("logId", Json.str e.id),
       ("session", Json.str session),
       -- the thread: the actor that sent it, whose own order its prev links make (selfhost.mcp.session.view)
-      ("thread", Json.str (if e.srcActor.isEmpty then s!"{e.src}@{session}" else e.srcActor)),
+      ("thread", Json.str (if !e.srcActor.isEmpty then e.srcActor else if !e.writer.isEmpty then s!"{e.src}@{e.writer}" else e.src)),
       -- the actors, so each instance is its own lifeline (selfhost.mcp.session.view)
       ("srcActor", Json.str (if e.srcActor.isEmpty then e.src else e.srcActor)),
       ("dstActor", Json.str (if e.dstActor.isEmpty then e.dst else e.dstActor)),

@@ -246,7 +246,7 @@ def logArgs (args : Json) : IO (Except String Json) := do
     | some n => (total - min n total + 1, total)
     | none => let f := fromLine.getD 1; (f, match count with | some c => f + c - 1 | none => total)
   let (lines, next) ← LogIndex.window path ix first last
-  let window := Json.mkObj [("fromLine", toJson first), ("nextLine", toJson (max next first)),
+  let window := Json.mkObj [("log", Json.str name), ("fromLine", toJson first), ("nextLine", toJson (max next first)),
     ("logLines", toJson total), ("logFingerprint", Json.str fp)]
   let kvs := ((kvs.erase "serverLog").erase "fromLine" |>.erase "lineCount").erase "lastLines"
   return .ok (Json.obj kvs |>.setObjVal! "log" (Json.str ("\n".intercalate lines.toList))

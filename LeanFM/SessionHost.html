@@ -6,7 +6,16 @@
 <title>LeanFM view</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0b0d10; color: #e6e6e6; font: 16px system-ui, sans-serif; }
-  iframe { display: block; border: 0; width: 100vw; height: 100vh; background: #0b0d10; }
+  /* one address, two sources (selfhost.session.event-source): the switch is always on screen */
+  #switch { position: fixed; top: 0; left: 0; right: 0; height: 56px; z-index: 2; display: flex; align-items: center; gap: 10px;
+    padding: 0 14px; background: #0b0d10; border-bottom: 2px solid #263445; }
+  #switch .cap { font: 700 14px system-ui, sans-serif; letter-spacing: 0.06em; color: #e6e6e6; margin-right: 4px; }
+  #switch button { font: 700 18px system-ui, sans-serif; padding: 7px 18px; border-radius: 8px; cursor: pointer;
+    background: #0b0d10; color: #e6e6e6; border: 3px solid #4b5563; }
+  #switch button#actual[aria-pressed="true"] { background: #4ade80; color: #000; border-color: #4ade80; }
+  #switch button#simulated[aria-pressed="true"] { background: #fbbf24; color: #000; border-color: #fbbf24; }
+  #switch button:focus-visible { outline: 3px solid #67e8f9; outline-offset: 2px; }
+  iframe { display: block; border: 0; width: 100vw; height: calc(100vh - 56px); margin-top: 56px; background: #0b0d10; }
   #note { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 12px; background: #3a1010; color: #ffd0d0; display: none; }
 </style>
 </head>
@@ -16,6 +25,11 @@
      server's /mcp (only the tools the view uses), and opens on project_view for the project, stage
      and implementation in the address. The view runs in a sandboxed frame with scripts only. -->
 <iframe id="view" title="LeanFM session view" sandbox="allow-scripts" src="/view/app"></iframe>
+<div id="switch" role="group" aria-label="Which events to show">
+  <span class="cap">EVENTS</span>
+  <button id="actual" type="button" aria-pressed="false">Actual log</button>
+  <button id="simulated" type="button" aria-pressed="false">Simulated</button>
+</div>
 <div id="note" role="status"></div>
 <script>
 "use strict";
@@ -34,7 +48,29 @@ let nextId = 1, opened = false;
 function say(text) { note.textContent = text; note.style.display = text ? "block" : "none"; }
 function toView(msg) { if (frame.contentWindow) frame.contentWindow.postMessage(msg, "*"); }
 
-async function mcp(method, params) {
+// this page's conversation, named in every request so the server logs LeanFMMcp's own messages
+// (selfhost.session.real-events); its own steps are written as host events, each with its cause
+const hostSession = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+// the view's browsing is a child session of the conversation, as LeanFMMcp's sessions block makes it
+const viewSession = hostSession + "-v1";
+let hostCount = 0, hostPrev = null;
+async function hostEvent(label, cause, session) {
+  const id = "host@" + hostSession + ":" + (++hostCount);
+  const params = { session: session || hostSession, id, label };
+  if (cause) params.cause = cause;
+  if (hostPrev) params.prev = hostPrev;
+  hostPrev = id;
+  try {
+    await fetch("/mcp", { method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/leanfm/host-event", params }) });
+  } catch (e) { /* the log is a record, never a reason to stop the view */ }
+  return id;
+}
+
+async function mcp(method, params, cause, session) {
+  const meta = { "leanfm/session": session || hostSession };
+  if (cause) meta["leanfm/cause"] = cause;
+  params = Object.assign({}, params || {}, { _meta: meta });
   const response = await fetch("/mcp", {
     method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: nextId++, method, params })
@@ -54,32 +90,86 @@ function firstArguments() {
   return args;
 }
 
-// /view?log=NAME&protocol=P opens on that log's last lines against protocol P of LeanFM.leanfm
-// (selfhost.session.log-paging), each value checked against a pattern before it is passed on
-function logArguments() {
-  const log = query.get("log"), protocol = query.get("protocol");
-  if (!log || !/^[a-z][a-z0-9-]{0,39}$/.test(log)) return null;
-  const args = { project: "LeanFM", file: "LeanFM/LLMGenerated/LeanFM.leanfm", serverLog: log, lastLines: 200, allowIncomplete: true };
-  if (protocol && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(protocol)) args.protocolName = protocol;
-  return args;
+// the conversation starts as an MCP host's does: initialize, then the tool list
+const started = (async () => {
+  try {
+    await mcp("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "leanfm-standalone", version: "1.0.0" } });
+    await mcp("tools/list", {});
+  } catch (e) { /* openFirst reports a server that does not answer */ }
+})();
+// a first view: Render when it is shown, Failed when it is refused; the view browses only after it
+// (LeanFMMcp: Render, then the view's sessions), so its requests wait for this
+let firstShown;
+const rendered = new Promise((resolve) => { firstShown = resolve; });
+async function shownOrFailed(answer, open) {
+  const id = await hostEvent(answer && !answer.isError ? "Render" : "Failed", open);
+  firstShown();
+  return id;
 }
+
+// one address, two sources (selfhost.session.event-source): LeanFM's own protocol, as it ran
+// (logs/serve.log) or as its simulator generates it; each is View's Load, answered Drawn or Refused
+const PROTOCOL = { project: "LeanFM", file: "LeanFM/LLMGenerated/LeanFM.leanfm", protocolName: "LeanFMMcp" };
+const SOURCES = {
+  actual: { tool: "session_conform", args: Object.assign({ serverLog: "serve", lastLines: 2000, allowIncomplete: true }, PROTOCOL) },
+  simulated: { tool: "session_simulate", args: Object.assign({ instances: 10 }, PROTOCOL) }
+};
+const buttons = { actual: document.getElementById("actual"), simulated: document.getElementById("simulated") };
+let showing = null, switching = false;
+async function showSource(which) {
+  if (switching || !SOURCES[which]) return;
+  switching = true;
+  try {
+    await rendered;
+    const { tool, args } = SOURCES[which];
+    const load = await hostEvent("Load", null, viewSession);
+    toView({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: args } });
+    const answer = await mcp("tools/call", { name: tool, arguments: args }, load, viewSession);
+    toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: answer });
+    await hostEvent(answer && !answer.isError ? "Drawn" : "Refused", load, viewSession);
+    if (answer && answer.isError) { showing = null; say(String((answer.content && answer.content[0] && answer.content[0].text) || "LeanFM refused it.")); }
+    else { say(""); showing = which; }
+  } catch (e) { showing = null; say("LeanFM did not answer: " + String((e && e.message) || e)); }
+  finally {
+    switching = false;
+    mark(showing);
+  }
+}
+buttons.actual.addEventListener("click", () => showSource("actual"));
+buttons.simulated.addEventListener("click", () => showSource("simulated"));
+// the view's own requests in flight: the first view starts some (a project page, its protocol
+// tree) whose answers would cover a source shown before they end, so the source waits until the view
+// has been quiet for 200 ms, at most 3 s in all
+let viewInflight = 0, viewStarted = 0, idleWaiters = [];
+function viewSettled() {
+  const until = performance.now() + 3000;
+  return new Promise((resolve) => {
+    const check = () => {
+      if (performance.now() >= until) return resolve();
+      if (viewInflight > 0) { idleWaiters.push(check); return; }
+      const seen = viewStarted;
+      setTimeout(() => { if (viewStarted === seen && viewInflight === 0) resolve(); else check(); }, 200);
+    };
+    check();
+  });
+}
+function viewDone() { const w = idleWaiters; idleWaiters = []; w.forEach((f) => f()); }
+function mark(which) { showing = which; for (const [k, btn] of Object.entries(buttons)) btn.setAttribute("aria-pressed", String(k === which)); }
 
 async function openFirst() {
   if (opened) return;
   opened = true;
   try {
-    const logArgs = logArguments();
-    if (logArgs) {
-      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: logArgs } });
-      const answer = await mcp("tools/call", { name: "session_conform", arguments: logArgs });
-      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: answer });
-      if (answer && answer.isError) say(String((answer.content && answer.content[0] && answer.content[0].text) || "LeanFM refused the log."));
-      return;
-    }
-    const result = await mcp("tools/call", { name: "project_view", arguments: firstArguments() });
+    await started;
+    const open = await hostEvent("Open");
+    const result = await mcp("tools/call", { name: "project_view", arguments: firstArguments() }, open);
+    await shownOrFailed(result, open);
     toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result });
-    if (result && result.isError) say(String((result.structuredContent && result.structuredContent.reason) || "LeanFM refused the first view."));
+    if (result && result.isError) { firstShown(); say(String((result.structuredContent && result.structuredContent.reason) || "LeanFM refused the first view.")); return; }
+    // the page opens on what actually happened, unless the address asks for a stage
+    if (!query.get("stage") && !query.get("project")) { await viewSettled(); await showSource("actual"); }
   } catch (e) {
+    firstShown();
     say("LeanFM did not answer: " + String((e && e.message) || e) + ". Is make serve running?");
   }
 }
@@ -106,8 +196,20 @@ window.addEventListener("message", async (event) => {
     case "tools/call": {
       const name = msg.params && msg.params.name;
       if (!VIEW_TOOLS.includes(name)) { refuse(-32601, "this page forwards only the session view's tools"); return; }
-      try { reply(await mcp("tools/call", { name, arguments: (msg.params && msg.params.arguments) || {} })); say(""); }
-      catch (e) { refuse(-32603, String((e && e.message) || e)); say("LeanFM did not answer: " + String((e && e.message) || e)); }
+      // the view's request is View's Page (a project page) or Load (anything else), answered Paged or Drawn, or Refused
+      viewInflight++; viewStarted++;
+      await rendered;
+      const asked = await hostEvent(name === "project_view" ? "Page" : "Load", null, viewSession);
+      try {
+        const answer = await mcp("tools/call", { name, arguments: (msg.params && msg.params.arguments) || {} }, asked, viewSession);
+        reply(answer); say("");
+        // the switch marks what is shown, whoever asked for it (paging a log, Animate inside the view)
+        const src = answer && answer.structuredContent && answer.structuredContent.source;
+        if (src && typeof src === "object") mark(src.kind === "log" ? "actual" : src.kind === "simulated" ? "simulated" : null);
+        await hostEvent(answer && !answer.isError ? (name === "project_view" ? "Paged" : "Drawn") : "Refused", asked, viewSession);
+      }
+      catch (e) { refuse(-32603, String((e && e.message) || e)); say("LeanFM did not answer: " + String((e && e.message) || e)); await hostEvent("Refused", asked, viewSession); }
+      finally { viewInflight--; viewDone(); }
       return;
     }
     default:

@@ -29,6 +29,8 @@ initialize sink : IO.Ref (Option IO.FS.Stream) ← IO.mkRef none
 /-- This process's events so far, for ids and prev. -/
 initialize counter : IO.Ref Nat ← IO.mkRef 0
 initialize lastId : IO.Ref (Option String) ← IO.mkRef none
+/-- Host events refused and not written (selfhost.session.real-events). -/
+initialize droppedHostEvents : IO.Ref Nat ← IO.mkRef 0
 
 /-- Nanoseconds since the Unix epoch now. -/
 def nowNs : IO Nat := do

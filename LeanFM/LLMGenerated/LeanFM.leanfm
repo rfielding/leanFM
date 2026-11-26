@@ -4,7 +4,8 @@ import LeanFM.Session.Syntax
     Claude Code, Codex) and the MCP Apps view both reach the LeanFM server only through the host, and
     the server reads a project piecemeal from the project's root (Disk). The view loads one bounded
     answer at a time: the stage, then a section or a page of it, then one protocol file, which a
-    session tool reads by project and file instead of carrying its text. -/
+    session tool reads by project and file instead of carrying its text, and for session_conform a
+    window of a server log (clause selfhost.session.real-events: a real run showed that read). -/
 structure Open where
   project : String
   stage : String
@@ -77,6 +78,7 @@ protocol LeanFMMcp (Agent, Host, View, Server, Disk) {
               f: Load from View to Host;
               st: SessionTool from Host to Server cause f route "POST /mcp";
               sessions { rf: ReadFile from Server to Disk; FileText from Disk to Server cause rf; }
+              sessions { rl: ReadLog from Server to Disk; LogLines from Disk to Server cause rl; }
               choice {
                 Checked from Server to Host cause st status 200;
                 Drawn from Host to View cause f;

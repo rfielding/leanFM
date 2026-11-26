@@ -59,6 +59,9 @@ structure LogEvent where
   log names only the role, in which case the actor is the role in this session -/
   srcActor : String := ""
   dstActor : String := ""
+  /-- the process that wrote the event, the envelope's actor field (selfhost.session.event-source),
+  empty when the log does not say -/
+  writer  : String := ""
   /-- the previous event of the same sending actor, in its own order -/
   prev    : Option String := none
   /-- readings of the sender's clock when it sent and the receiver's when it received, in
