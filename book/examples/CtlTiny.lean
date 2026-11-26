@@ -48,6 +48,10 @@ def inevitably (p : Pred) : Pred := allUntil tt p
 def always     (p : Pred) : Pred := neg (possibly (neg p))
 def someAlways (p : Pred) : Pred := neg (inevitably (neg p))
 
+/-- a until b, or a forever: on no path (or not on every path) does a fail before b has come. -/
+def allUnless  (a b : Pred) : Pred := neg (someUntil (neg b) (fun s => !a s && !b s))
+def someUnless (a b : Pred) : Pred := neg (allUntil (neg b) (fun s => !a s && !b s))
+
 /-- map/reduce over a list of claims: and (map f xs), or (map f xs). -/
 def allOf (f : α → Pred) (xs : List α) : Pred := fun s => andR (xs.map (f · s))
 def anyOf (f : α → Pred) (xs : List α) : Pred := fun s => orR (xs.map (f · s))
@@ -63,6 +67,9 @@ def holdsAt (p : Pred) : List String := States.filter p
 #guard possibly b "s0" && !inevitably b "s0"
 #guard always a "s1" && someAlways a "s0" && !always a "s0"
 #guard someNext b "s2" && !allNext a "s0" && someNext a "s0"
+-- unless: from s0, the future through s1 keeps a forever, the one through s2 loses a before b
+#guard someUnless a b "s0" && !allUnless a b "s0"
+#guard allUnless a b "s1" && allUnless a b "s3" && !someUnless a b "s2"
 -- map/reduce: every one of s1, s3 is reachable from s0; s1 is not reachable from s2
 #guard allOf (fun t => possibly (· == t)) ["s1", "s3"] "s0"
 #guard !allOf (fun t => possibly (· == t)) ["s1", "s3"] "s2" && anyOf (fun t => possibly (· == t)) ["s1", "s3"] "s2"

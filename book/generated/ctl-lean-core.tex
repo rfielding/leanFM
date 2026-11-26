@@ -28,6 +28,10 @@ def inevitably (p : Pred) : Pred := allUntil tt p
 def always     (p : Pred) : Pred := neg (possibly (neg p))
 def someAlways (p : Pred) : Pred := neg (inevitably (neg p))
 
+/-- a until b, or a forever: on no path (or not on every path) does a fail before b has come. -/
+def allUnless  (a b : Pred) : Pred := neg (someUntil (neg b) (fun s => !a s && !b s))
+def someUnless (a b : Pred) : Pred := neg (allUntil (neg b) (fun s => !a s && !b s))
+
 /-- map/reduce over a list of claims: and (map f xs), or (map f xs). -/
 def allOf (f : α → Pred) (xs : List α) : Pred := fun s => andR (xs.map (f · s))
 def anyOf (f : α → Pred) (xs : List α) : Pred := fun s => orR (xs.map (f · s))

@@ -79,129 +79,127 @@ typestates and their names are for.
 
 \section{Typestates}
 
-A \emph{typestate} is a state of the protocol as far as any observer can tell.
-Formally it is a class of nodes of the checker model under bisimulation
-(Definition~\ref{def:bisim}).
+A \emph{typestate} is a state of the protocol as far as anyone can tell: two states are the
+same typestate when they have the same label (the last message, and whether the conversation
+may stop) and the same typestates can come next. LeanFM finds them by splitting groups until
+nothing splits any more:
 
 \begin{definition}[Refinement rounds]\label{def:rounds}
-For nodes of $M_P$, let $n \approx_0 m$ iff $L(n) = L(m)$, and
-$n \approx_{k+1} m$ iff $n \approx_k m$ and
-$\{[n']_k : n \to n'\} = \{[m']_k : m \to m'\}$, where $[x]_k$ is the class of $x$ under
-$\approx_k$. Each $\approx_{k+1}$ refines $\approx_k$, so on a finite model the sequence
-becomes constant at some least $K$. The classes of $\approx_K$ are the
-\emph{typestates} of $P$, and $K$ is its \emph{lookahead}.
+Start with one group per label, and split until nothing splits:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+group = {s: label(s) for s in States}                  # round 0: last message, may stop
+while True:
+    split = {s: (group[s], frozenset(group[t] for t in next(s))) for s in States}
+    if len(set(split.values())) == len(set(group.values())):
+        break                                          # nothing split: done
+    group = split
+\end{lstlisting}
+The groups left at the end are the \emph{typestates}; the number of rounds that split
+something is the \emph{lookahead}.
 \end{definition}
 
 \begin{lemma}\label{lem:rounds}
-$\approx_K$ is bisimilarity on $M_P$.
+The typestates are exactly the classes of states with the same moves (bisimilarity,
+Definition~\ref{def:bisim}).
 \end{lemma}
 
 \begin{proof}
-$\approx_K$ is a bisimulation: related nodes have equal labels (it refines
-$\approx_0$), and since $\approx_{K+1} = \approx_K$, related nodes reach the same set
-of $\approx_K$-classes, so each step of one is matched by a step of the other into the
-same class. Conversely every bisimulation $B$ is contained in each $\approx_k$, by
-induction on $k$: $B$ relates only equally labelled nodes, and if $B \subseteq
-\approx_k$ then $B$-related nodes reach the same $\approx_k$-classes, so they are
-$\approx_{k+1}$-related.
+When the loop stops, states in one group have the same label and step into the same groups,
+so each move of one is matched by a move of the other into the same group: same moves. And
+the loop never separates two states with the same moves, since they have the same label and
+step into the same groups in every round.
 \end{proof}
 
-The lookahead measures how far ahead one must look to tell two typestates apart. When
-it is $0$, the last message and whether the session may stop already determine the
-typestate. Images has lookahead $0$ (Figure~\ref{fig:images-ts}).
-
+The lookahead is how far ahead one must look to tell typestates apart. At $0$ the label
+alone decides: Images is like that (Figure~\ref{fig:images-ts}). The Retry loop of
+Chapter~\ref{ch:constructs} is not: a Busy after the first Ask and a Busy after the third
+look the same, and only what may come next (another Ask, or GiveUp) tells them apart.
 
 \section{Naming a typestate}
 
-\begin{definition}[Characteristic formulas]\label{def:chi}
-For each class $C$ of $\approx_k$, define $\chi^k_C$ by induction on $k$. With $L(C) =
-(m, e)$ the common label of its nodes,
-\[
-\chi^0_C = \alpha(m) \wedge \beta(e),\qquad
-\alpha(m) = \begin{cases}\on{m} & m \neq \bot\\ \neg\bigvee_{\ell}\on{\ell} & m = \bot\end{cases},\qquad
-\beta(e) = \begin{cases}\term & e\\ \neg\term & \neg e\end{cases}
-\]
-and, writing $S_C$ for the set of $\approx_k$-classes the nodes of a class $C$ of
-$\approx_{k+1}$ step into,
-\[
-\chi^{k+1}_C = \chi^0_{C} \wedge \bigwedge_{D \in S_C} \someNext\,\chi^k_D \wedge
-\allNext\bigvee_{D \in S_C} \chi^k_D .
-\]
+Each typestate gets a formula that is true exactly at its states, its \emph{name}, built up
+round by round like the groups:
+
+\begin{definition}[Names]\label{def:chi}
+A typestate's name at each round:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+name(C, 0)   = (state M)  or  (state M stop)  or  start       ; its label
+name(C, k+1) = (and name(C, 0)
+                    (someNext name(D1, k)) ... (someNext name(Dn, k))
+                    (allNext (or name(D1, k) ... name(Dn, k))))
+               ; D1 ... Dn: the groups of round k that C's states step into
+\end{lstlisting}
+A typestate's name is its name at the last round.
 \end{definition}
 
-\begin{lemma}[Each node satisfies its name]\label{lem:own}
-Every node $n$ of $M_P$ satisfies $\chi^k_{[n]_k}$, for every $k$.
+At lookahead $0$ a name is just a state term, \texttt{(state GetImage)}. With lookahead, a
+name also says, as many steps deep as needed, what may come next. Two facts make the names
+work:
+
+\begin{lemma}[Each state satisfies its name]\label{lem:own}
+Every state of the protocol satisfies the name of its own typestate.
 \end{lemma}
 
 \begin{proof}
-By induction on $k$. For $k = 0$, $n$ has its own label. For $k + 1$, each successor
-$n'$ of $n$ lies in some $D \in S_{[n]_{k+1}}$ and satisfies $\chi^k_D$ by induction,
-which gives the $\allNext$ conjunct; and each $D \in S_{[n]_{k+1}}$ contains a successor of
-$n$, because all nodes of a $\approx_{k+1}$-class step into the same classes, which
-gives the $\someNext$ conjuncts.
+Round by round: a state has its own label, and at each round its next states lie in the
+groups $D_i$ it steps into (the $\mathsf{allNext}$ part) and it reaches each of them (the
+$\mathsf{someNext}$ parts), since every state of a group steps into the same groups.
 \end{proof}
 
 \begin{lemma}[Names exclude each other]\label{lem:exclusive}
-For distinct classes $C \neq D$ of $\approx_k$, no node of any total labelled graph
-satisfies both $\chi^k_C$ and $\chi^k_D$.
+In any system, no state satisfies the names of two different typestates.
 \end{lemma}
 
 \begin{proof}
-By induction on $k$. For $k = 0$, distinct classes have distinct labels and $\chi^0$
-fixes the label. For $k + 1$: if $C$ and $D$ have different labels, the $\chi^0$
-conjuncts conflict. Otherwise $S_C \neq S_D$; say $E \in S_C \setminus S_D$. A node
-satisfying $\chi^{k+1}_C$ has a successor $w \models \chi^k_E$; satisfying
-$\chi^{k+1}_D$ as well, $w \models \chi^k_F$ for some $F \in S_D$, so $F \neq E$,
-contradicting the induction hypothesis.
+Round by round: two groups split at round $0$ have different labels, which conflict. Two
+groups split later step into different groups, so one has a $\mathsf{someNext}$ the other's
+$\mathsf{allNext}$ rules out.
 \end{proof}
-
-So in any system, a state satisfies at most one typestate's name. Names of typestates
-with lookahead $0$ are a label and an ending; names that need lookahead $k$ say, $k$
-steps deep, what may follow.
 
 \section{The rules}
 
+The rules are the transition table: where the conversation starts, and for each typestate
+which typestates may come next.
+
 \begin{definition}[Faithful rules]\label{def:rules}
-With $K$ the lookahead and $\chi_C = \chi^K_C$, the \emph{faithful rules} of $P$ are
-\[
-\Rules_P = \{\chi_{[n_0]}\} \cup \Big\{\ \always\big(\chi_C \rightarrow
-  \textstyle\bigwedge_{D \in S_C}\someNext\,\chi_D \wedge \allNext\bigvee_{D\in S_C}\chi_D\big)
-  \ :\ C \text{ a typestate}\Big\}
-\]
-where $S_C$ is now the set of typestates the nodes of $C$ step into.
+The start, and one row per typestate:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+name(start typestate)                                  ; it begins there
+(follows name(C) name(D1) ... name(Dn))                ; for each typestate C,
+                                                       ; D1 ... Dn the ones C steps into
+\end{lstlisting}
+With lookahead $0$ every name is a state term, so each \texttt{follows} is a
+\texttt{transition} row, or \texttt{final} where a typestate steps only into itself.
 \end{definition}
 
 \begin{theorem}[Faithfulness]\label{thm:faithful}
-Let $M'$ be any finite total labelled graph with start $v_0$. Then
-$M' \models \Rules_P$ if and only if $M' \sim M_P$.
+A system satisfies the faithful rules exactly when it has the protocol's moves at every
+state, no move more and no move less (it is bisimilar to the protocol).
 \end{theorem}
 
 \begin{proof}
-($\Leftarrow$) $M_P \models \Rules_P$: the start rule holds by Lemma~\ref{lem:own}, and
-at any node $n$ of typestate $C$ the successors of $n$ lie exactly in the typestates of
-$S_C$ (Lemma~\ref{lem:rounds}: $\approx_K$ is stable), each satisfies its own name
-(Lemma~\ref{lem:own}), so both conjuncts of $C$'s rule hold at $n$. By
-Theorem~\ref{thm:bcg}, every $M' \sim M_P$ satisfies the same formulas.
+If it has the same moves: the protocol satisfies its own rules (each state satisfies its
+name, and its next states are exactly the typestates its row lists), and a system with the
+same moves satisfies the same formulas (Theorem~\ref{thm:bcg}).
 
-($\Rightarrow$) Let $B = \{(v, n) : v \text{ reachable from } v_0 \text{ in } M',\ v
-\models \chi_{[n]}\}$. Then $(v_0, n_0) \in B$ by the start rule. Let $(v, n) \in B$ with
-$[n] = C$. Labels agree, since $\chi_C$ fixes the label. Because $v$ is reachable and
-$C$'s rule is under $\always$, $v$ satisfies its consequent. Forth: if $v \to v'$, the
-$\allNext$ conjunct gives $v' \models \chi_D$ for some $D \in S_C$; some successor $n'$ of
-$n$ lies in $D$, and $(v', n') \in B$. Back: if $n \to n'$ with $[n'] = D \in S_C$,
-the $\someNext\,\chi_D$ conjunct gives a successor $v'$ of $v$ with $v' \models \chi_D$, so
-$(v', n') \in B$. Hence $B$ is a bisimulation containing $(v_0, n_0)$.
+If it satisfies the rules: pair each reachable state of the system with the protocol
+typestate whose name it satisfies, at most one by Lemma~\ref{lem:exclusive}; the start rule
+pairs the two starts. Paired states have the same label, which every name fixes. Each move
+the system makes lands in a typestate its row lists (the $\mathsf{allNext}$ part), so the
+protocol has that move; each move the protocol makes is one the system can make (the
+$\mathsf{someNext}$ parts). So paired states have the same moves, step after step: the
+system is bisimilar to the protocol.
 \end{proof}
 
 \begin{corollary}\label{cor:best}
-No set of CTL formulas distinguishes more systems from $P$ than $\Rules_P$ does. Every
-CTL property of the protocol holds of every system that satisfies $\Rules_P$.
+No set of CTL formulas tells more systems apart from the protocol than its faithful rules,
+and every CTL property of the protocol holds of every system that satisfies them.
 \end{corollary}
 
 \begin{proof}
-A system $M'$ that satisfies $\Rules_P$ is bisimilar to $M_P$ (Theorem~\ref{thm:faithful})
-and so satisfies exactly the CTL formulas $M_P$ does (Theorem~\ref{thm:bcg}). A system
-that does not satisfy $\Rules_P$ fails a CTL formula that $M_P$ satisfies.
+A system that satisfies the rules has the protocol's moves (Theorem~\ref{thm:faithful}), so
+it satisfies exactly the protocol's formulas (Theorem~\ref{thm:bcg}). A system that does not
+satisfy the rules fails a formula the protocol satisfies.
 \end{proof}
 
 \section{The rules of Images}
@@ -211,8 +209,9 @@ Images, with lookahead $0$, every name is a label and an ending:
 
 \input{generated/ctl-images-rules.tex}
 
-Typestate~1 is the sentence this chapter began with. The rules of the two ended
-typestates are their stutter: once an answer has arrived, nothing else happens.
+The row \texttt{(transition GetImage (Image stop) (NotFound stop))} is the sentence this
+chapter began with. The two \texttt{final} rows are the ended typestates: once an answer has
+arrived, nothing else happens.
 
 \section{A larger protocol}
 
