@@ -182,4 +182,46 @@ def draws : List Nat := Id.run do
 #guard let z := (draws.filter (· == 0)).length; 9717 <= z && z <= 10283
 #guard let same := ((draws.zip draws.tail).filter fun (a, b) => a == b).length; 9717 <= same && same <= 10283
 
+
+/-! Each tree node carries the lines it comes from (selfhost.session.explorer): a block from its keyword
+to its closing brace, each branch its own braces, each message its own line in order. -/
+def linesText : String := "protocol Shop (Client, Shop, Bank) {
+  o: Order from Client to Shop;
+  choice {
+    c: Charge from Shop to Bank;
+    choice {
+      Paid from Bank to Shop cause c;
+      Done from Shop to Client cause o;
+    } or {
+      Declined from Bank to Shop cause c;
+      Done from Shop to Client cause o;
+    }
+  } or {
+    loop Wait {
+      Busy from Shop to Client;
+      choice {
+        Retry from Client to Shop;
+        continue Wait;
+      } or {
+        GiveUp from Client to Shop;
+      }
+    }
+  }
+}"
+def linesNodes : List (String × Option Nat × Option Nat) :=
+  match parseProtocol (args linesText) with
+  | .ok p => let (ns, _, _) := Outline.tree linesText p.name p.global []
+             ns.toList.map fun n => (n.label, n.first, n.last)
+  | .error _ => []
+def linesOf (label : String) : List (Option Nat × Option Nat) := (linesNodes.filter (·.1 == label)).map (·.2)
+#guard linesOf "Shop decides: choice of 2" == [(some 3, some 22)]
+#guard (linesNodes.filter (·.1 == "branch 1")).head?.map (·.2) == some (some 3, some 11)
+#guard (linesNodes.filter (·.1 == "branch 2")).head?.map (·.2) == some (some 8, some 11)
+#guard linesOf "Bank decides: choice of 2" == [(some 5, some 11)]
+#guard linesOf "loop Wait" == [(some 13, some 21)]
+#guard linesOf "Order: Client -> Shop" == [(some 2, some 2)]
+-- two uses of Done: each its own line
+#guard linesOf "Done: Shop -> Client" == [(some 7, some 7), (some 10, some 10)]
+#guard linesOf "GiveUp: Client -> Shop" == [(some 19, some 19)]
+
 end LeanFM.Session.ExploreTests

@@ -91,6 +91,45 @@ def lineOf (lines : Array String) (first last : Nat) (needle : String) : Option 
       if (l.splitOn needle).length > 1 then return some i
   return none
 
+/-- Whether `line` holds `needle` with no identifier character just before it, so `Data from`
+is not found in `Metadata from`. -/
+def holds (line needle : String) : Bool :=
+  match line.splitOn needle with
+  | [] | [_] => false
+  | before :: _ :: _ =>
+    let parts := line.splitOn needle
+    (parts.dropLast.any fun b => match b.toList.getLast? with
+      | some c => !(c.isAlphanum || c == '_')
+      | none => true) || before.isEmpty
+
+/-- The line where the block opened on line `start` closes: its braces, having opened, are back to
+where they started. -/
+def blockEnd (lines : Array String) (start last : Nat) : Nat := Id.run do
+  let mut depth : Int := 0
+  let mut opened := false
+  let mut block := false
+  for i in [start:last + 1] do
+    let (d, o, b) := braces (lines[i - 1]?.getD "") block
+    block := b
+    depth := depth + d
+    opened := opened || o
+    if opened && depth <= 0 then return i
+  return last
+
+/-- The lines between `start` and `to` where a block's next branch opens (`} or {`, `} and {`): a
+line starting with a closing brace, at the block's own depth, that opens another. -/
+def branchStarts (lines : Array String) (start to : Nat) : List Nat := Id.run do
+  let mut depth : Int := 0
+  let mut block := false
+  let mut out : List Nat := []
+  for i in [start:to + 1] do
+    let l := lines[i - 1]?.getD ""
+    if i > start && depth == 1 && l.trimAscii.toString.startsWith "}" && (braces l block).2.1 then out := out ++ [i]
+    let (d, _, b) := braces l block
+    block := b
+    depth := depth + d
+  return out
+
 /-- A node of the tree. -/
 structure Node where
   id : Nat
@@ -111,6 +150,9 @@ structure Node where
 structure St where
   nodes : Array Node := #[]
   omitted : Nat := 0
+  /-- per definition, the line the next statement is looked for from: statements are found in
+  order through the text, so a label used twice gives each use its own line -/
+  cursor : List (String × Nat) := []
 
 abbrev M := StateM St
 
@@ -123,64 +165,106 @@ def add (n : Node) : M (Option Nat) := do
   set { s with nodes := s.nodes.push { n with id } }
   return some id
 
+def setCursor (d : String) (n : Nat) : M Unit :=
+  modify fun s => { s with cursor := (d, n) :: s.cursor.filter (·.1 != d) }
+
+/-- The next line of definition `inDef` holding `needle`, from its cursor, moving the cursor past
+it; when there is none from the cursor (a bounded loop's later pass repeats the first pass's
+text), the first such line, leaving the cursor. -/
+def find (ds : List Def) (lines : Array String) (inDef needle : String) : M (Option Nat) := do
+  let some d := ds.find? (·.name == inDef) | return none
+  let start := ((← get).cursor.lookup inDef).getD d.first
+  let hit := (List.range (d.last + 1 - start)).map (· + start) |>.find? fun i => holds (lines[i - 1]?.getD "") needle
+  match hit with
+  | some i => setCursor inDef (i + 1); return some i
+  | none => return (List.range (d.last + 1 - d.first)).map (· + d.first) |>.find? fun i => holds (lines[i - 1]?.getD "") needle
+
+/-- A block's lines and its branches' lines, from the line its keyword is on. -/
+def blockLines (ds : List Def) (lines : Array String) (inDef : String) (at_ : Option Nat) (n : Nat) :
+    Option Nat × List (Option Nat × Option Nat) :=
+  match at_, ds.find? (·.name == inDef) with
+  | some l, some d =>
+    let e := blockEnd lines l d.last
+    let starts := l :: branchStarts lines l e
+    let ends := (starts.drop 1).map (· - 1) ++ [e]
+    let rs := (starts.zip ends).map fun (a, b) => (some a, some b)
+    (some e, if rs.length == n then rs else List.replicate n (none, none))
+  | _, _ => (none, List.replicate n (none, none))
+
 /-- The nodes of a global type under `parent`, in order, with the lines they come from in `inDef`. -/
 partial def walk (ds : List Def) (lines : Array String) (parent : Nat) (inDef : String) : Global String → M Unit
   | .done => pure ()
   | .msg i k => do
-    let d := (ds.find? (·.name == inDef))
-    let line := d.bind fun d => lineOf lines d.first d.last s!"{i.label} from"
+    let line ← find ds lines inDef s!"{i.label} from"
     let detail := ([i.route.map (s!"route " ++ ·), i.status.map (s!"status " ++ toString ·), i.cause.map (s!"cause " ++ ·)].filterMap id) |> ", ".intercalate
     let _ ← add { id := 0, parent := some parent, kind := "message", label := s!"{i.label}: {i.src} -> {i.dst}", detail,
                   protocol := inDef, first := line, last := line, message := i.label }
     walk ds lines parent inDef k
   | .act r l k => do
-    let d := (ds.find? (·.name == inDef))
-    let line := d.bind fun d => lineOf lines d.first d.last s!"{l} at"
+    let line ← find ds lines inDef s!"{l} at"
     let _ ← add { id := 0, parent := some parent, kind := "event", label := s!"{l} at {r}", protocol := inDef, first := line, last := line }
     walk ds lines parent inDef k
   | .choice bs => do
     -- the role that decides, as the diagram's alt frame names it
     let who := match Global.decider bs with | .ok r => s!"{r} decides: " | .error _ => ""
-    let some c ← add { id := 0, parent := some parent, kind := "choice", label := s!"{who}choice of {bs.length}", protocol := inDef } | pure ()
-    for (b, j) in bs.zipIdx do
-      let some bn ← add { id := 0, parent := some c, kind := "branch", label := s!"branch {j + 1}", protocol := inDef } | pure ()
+    let at_ ← find ds lines inDef "choice"
+    let (e, rs) := blockLines ds lines inDef at_ bs.length
+    let some c ← add { id := 0, parent := some parent, kind := "choice", label := s!"{who}choice of {bs.length}", protocol := inDef, first := at_, last := e } | pure ()
+    for ((b, j), (f, l)) in bs.zipIdx.zip rs do
+      if let some f := f then setCursor inDef f
+      let some bn ← add { id := 0, parent := some c, kind := "branch", label := s!"branch {j + 1}", protocol := inDef, first := f, last := l } | pure ()
       walk ds lines bn inDef b
   | .par bs k => do
-    if let some c ← add { id := 0, parent := some parent, kind := "par", label := s!"in parallel: {bs.length} branches", protocol := inDef } then
-      for (b, j) in bs.zipIdx do
-        if let some bn ← add { id := 0, parent := some c, kind := "branch", label := s!"branch {j + 1}", protocol := inDef } then
+    let at_ ← find ds lines inDef "parallel"
+    let (e, rs) := blockLines ds lines inDef at_ bs.length
+    if let some c ← add { id := 0, parent := some parent, kind := "par", label := s!"in parallel: {bs.length} branches", protocol := inDef, first := at_, last := e } then
+      for ((b, j), (f, l)) in bs.zipIdx.zip rs do
+        if let some f := f then setCursor inDef f
+        if let some bn ← add { id := 0, parent := some c, kind := "branch", label := s!"branch {j + 1}", protocol := inDef, first := f, last := l } then
           walk ds lines bn inDef b
+    if let some e := e then setCursor inDef (e + 1)
     walk ds lines parent inDef k
   | .join n bs k => do
-    if let some c ← add { id := 0, parent := some parent, kind := "join", label := s!"first {n} of {bs.length} branches", protocol := inDef } then
-      for (b, j) in bs.zipIdx do
-        if let some bn ← add { id := 0, parent := some c, kind := "branch", label := s!"branch {j + 1}", protocol := inDef } then
+    let at_ ← find ds lines inDef "join"
+    let (e, rs) := blockLines ds lines inDef at_ bs.length
+    if let some c ← add { id := 0, parent := some parent, kind := "join", label := s!"first {n} of {bs.length} branches", protocol := inDef, first := at_, last := e } then
+      for ((b, j), (f, l)) in bs.zipIdx.zip rs do
+        if let some f := f then setCursor inDef f
+        if let some bn ← add { id := 0, parent := some c, kind := "branch", label := s!"branch {j + 1}", protocol := inDef, first := f, last := l } then
           walk ds lines bn inDef b
+    if let some e := e then setCursor inDef (e + 1)
     walk ds lines parent inDef k
   | .loop n b => do
-    let d := (ds.find? (·.name == inDef))
-    let line := d.bind fun d => lineOf lines d.first d.last s!"loop {n}"
-    let some c ← add { id := 0, parent := some parent, kind := "rec", label := s!"loop {n}", protocol := inDef, first := line, last := line } | pure ()
+    let line ← find ds lines inDef s!"loop {n}"
+    let (e, _) := blockLines ds lines inDef line 1
+    let some c ← add { id := 0, parent := some parent, kind := "rec", label := s!"loop {n}", protocol := inDef, first := line, last := e } | pure ()
     walk ds lines c inDef b
   | .var n => do
     let _ ← add { id := 0, parent := some parent, kind := "continue", label := s!"continue {n}", protocol := inDef }
   | .sessions b k => do
-    if let some c ← add { id := 0, parent := some parent, kind := "sessions", label := "sessions: any number at once", protocol := inDef } then
+    let at_ ← find ds lines inDef "sessions"
+    let (e, _) := blockLines ds lines inDef at_ 1
+    if let some c ← add { id := 0, parent := some parent, kind := "sessions", label := "sessions: any number at once", protocol := inDef, first := at_, last := e } then
       walk ds lines c inDef b
+    if let some e := e then setCursor inDef (e + 1)
     walk ds lines parent inDef k
   | .box bn b k => match Global.groupOf? bn with
    | some g => do
     -- a group (selfhost.session.group): a node in its own protocol, its steps under it
-    let d := (ds.find? (·.name == inDef))
-    let line := d.bind fun d => lineOf lines d.first d.last s!"group {g}"
-    if let some c ← add { id := 0, parent := some parent, kind := "group", label := s!"group {g}", protocol := inDef, first := line, last := line } then
+    let line ← find ds lines inDef s!"group {g}"
+    let (e, _) := blockLines ds lines inDef line 1
+    if let some c ← add { id := 0, parent := some parent, kind := "group", label := s!"group {g}", protocol := inDef, first := line, last := e } then
       walk ds lines c inDef b
+    if let some e := e then setCursor inDef (e + 1)
     walk ds lines parent inDef k
    | none => do
     -- an included protocol: its own definition's lines, and its steps under it; the box's name
     -- carries the include's bindings (Order with token), the protocol is its first word
     let n := Global.boxProtocol bn
     let d := ds.find? (·.name == n)
+    -- past the include in the includer; its own text read start its first line
+    let _ ← find ds lines inDef s!"include {n}"
+    if let some d := d then setCursor n d.first
     if let some c ← add { id := 0, parent := some parent, kind := "include", label := s!"include {bn}", protocol := n,
                           first := d.map (·.first), last := d.map (·.last) } then
       walk ds lines c n b
