@@ -241,6 +241,9 @@ def purchaseSvg := purchase.diagram roles3
 -- SoldOut answer o; Pay is a new call made after a reply, and Paid answers Client's call to Bank
 -- but goes to Shop, so both stay solid
 #guard occurs purchaseSvg "class=\"msg reply\"" == 2
+-- replies are dotted with round caps, requests solid, and the alt divider keeps its dashes
+#guard occurs purchaseSvg "stroke-dasharray=\"1 6\" stroke-linecap=\"round\"" == 2
+#guard occurs purchaseSvg "stroke-dasharray=\"6 4\"" == 1
 #guard occurs purchaseSvg "class=\"frame alt\"" == 1
 #guard (purchaseSvg.splitOn "[Shop decides]").length == 2
 #guard occurs purchaseSvg ">p: Pay<" == 1

@@ -4,6 +4,8 @@
 import LeanFM.Library
 -- reading logs by line ranges (clause selfhost.session.log-paging)
 import LeanFM.LogIndexTests
+-- claims over measured values (clause selfhost.mcp.logic.signal)
+import LeanFM.SignalTests
 -- the session-type library and its tests (clauses selfhost.session.*)
 -- the philosophy calculator example and its tests
 import LeanFM.Philosophy.ExistenceTests

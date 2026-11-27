@@ -7,6 +7,7 @@ import LeanFM.LLMGenerated.SelfHosting
 import LeanFM.Session.Knowledge
 import LeanFM.Session.Attack
 import LeanFM.Session.Reassembly
+import LeanFM.Signal
 
 /-!
 # LeanFM logic consultation (selfhost.mcp.logic.*)
@@ -3026,6 +3027,12 @@ def reference : String := String.intercalate "\n"
   , ""
   , "The attacker sends any segments of the stream, any number of times; each byte is the signature's or another, shown as . in the answer. The claims alerted(sig) and delivered(sig) mark the defender's copy and the host's copy first holding the signature. The search covers every segmentation; the answer lists the segments of an evasion."
   , ""
+  , "## check_signal"
+  , ""
+  , "Arguments: claim (an s-expression), and samples ([{t: seconds, label?, field: number, ...}] in time order) or log (event lines with ts in nanoseconds, label and payload numbers)."
+  , ""
+  , "Claims over measured values on one recorded run, in linear time. Words: (above f c), (below f c), (on M), not, and, or, implies, (within d p), (throughout d p), always, never, possibly and inevitably (the same over one run). A field's value is its latest reading; a field read before its first reading is refused. The margin says how far the claim is from failing, in the readings' units: positive is room left, negative is how far it failed. Example: (always (implies (below food 20) (within 600 (on Dispense))))."
+  , ""
   , "## Requirement modes"
   , ""
   , "always = AG p; never = AG not p; eventually = AF p; possibly = EF p."
@@ -3069,7 +3076,7 @@ def reference : String := String.intercalate "\n"
 
 /-! ## Dispatch -/
 
-def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows", "check_protocol", "check_reassembly"]
+def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows", "check_protocol", "check_reassembly", "check_signal"]
 
 def run (name : String) (args : Json) : Option ToolOutcome :=
   if args.compress.length > bounds.maxArgumentBytes then
@@ -3082,6 +3089,7 @@ def run (name : String) (args : Json) : Option ToolOutcome :=
     | "knows" => some (knows args)
     | "check_protocol" => some (checkProtocol args)
     | "check_reassembly" => some (checkReassembly args)
+    | "check_signal" => some (LeanFM.Signal.check args)
     | _ => none
 
 end LeanFM.Logic

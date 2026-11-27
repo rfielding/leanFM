@@ -235,6 +235,8 @@ book: lean
 	for f in book/generated/ctl-*-ts-*.dot; do dot -Tpdf "$$f" -o "$${f%.dot}.pdf"; done
 	lake env lean --run RequirementListsExample.lean
 	python3 scripts/svg_to_pdf.py book/generated/req-*.svg
+	lake env lean --run SignalChapterExample.lean
+	python3 scripts/svg_to_pdf.py book/generated/sig-*.svg
 	lake env lean --run BookListingsCheck.lean
 	$(MAKE) -C book
 

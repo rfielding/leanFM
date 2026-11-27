@@ -1,0 +1,4 @@
+generator: SignalChapterExample.lean (lake env lean --run SignalChapterExample.lean)
+function: LeanFM.Signal.check, the function the check_signal tool calls
+input: a simulated three-day cage log, generated deterministically in the generator
+outputs: sig-log.tex sig-claims.tex sig-results.tex sig-counts.tex sig-{temp,water,food,motion}-{light,dark}.svg

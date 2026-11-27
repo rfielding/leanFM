@@ -9,7 +9,7 @@ one notation, so a diagram is a view of the protocol, never a separate drawing:
 | protocol                         | diagram                                                    |
 |----------------------------------|------------------------------------------------------------|
 | `x: L from A to B`               | solid arrow A → B labelled `x: L`                          |
-| `... cause y` reaching a call B → A | dashed arrow: the reply to that call                    |
+| `... cause y` reaching a call B → A | dotted arrow (round dots): the reply to that call; requests are solid, frame dividers dashed |
 | `where e`                        | `[e]` under the arrow                                      |
 | `route "POST /orders"`, `status 201` | `· POST /orders`, `· 201` after the label              |
 | a request and its responses      | an activation bar on the callee, request to last response  |
@@ -80,8 +80,13 @@ namespace Shape
 where it passes a frame's edge. -/
 def arrowWidth : String := "2.5"
 
+/-- A reply's stroke: round dots, distinct from the dashes of frame dividers and lifelines, so a
+response is never mistaken for a line a choice or parallel frame draws. -/
+def replyDash : String := "1 6"
+
 private def clsAttr (c : String) : String := if c == "" then "" else s!" class=\"{c}\""
-private def dashAttr (d : String) : String := if d == "" then "" else s!" stroke-dasharray=\"{d}\""
+private def dashAttr (d : String) : String :=
+  if d == "" then "" else s!" stroke-dasharray=\"{d}\"" ++ (if d == replyDash then " stroke-linecap=\"round\"" else "")
 private def headAttr (a : Bool) : String := if a then " marker-end=\"url(#head)\"" else ""
 
 def svg (t : DiagramTheme) : Shape → String
@@ -308,7 +313,7 @@ def arrow [DecidableEq R] [ToString R] (roles : List R) (i : Interaction R) : M 
   let label := (match i.id with | some x => s!"{x}: " | none => "") ++ i.label ++
     (match i.route with | some r => s!" - {r}" | none => "") ++
     (match i.status with | some s => s!" - {s}" | none => "")
-  let dash := if reply then "6 4" else ""
+  let dash := if reply then Shape.replyDash else ""
   let cls := if reply then "msg reply" else "msg"
   if x1 == x2 then
     emit (.path cls s!"M{x1} {y - 8} h40 v16 h-40" .none .arrow dash true)

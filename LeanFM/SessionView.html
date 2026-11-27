@@ -669,6 +669,7 @@ function diagram(model, opts) {
         if (s.width) a["stroke-width"] = num(s.width);
         if (hl) a["stroke-width"] = 3.5;
         if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
+        if (/\breply\b/.test(s.cls || "")) a["stroke-linecap"] = "round"; // a reply is dotted, never dashed like a divider
         if (s.arrow === true) a["marker-end"] = "url(#head)";
         svg.appendChild(sv("line", a));
       } else if (s.k === "path" && typeof s.d === "string" && /^[MmHhVvLlZz0-9 .\-]+$/.test(s.d)) {
@@ -679,6 +680,7 @@ function diagram(model, opts) {
         if (inside(y)) { if (/msg/.test(s.cls || "")) inside(y).steps++; continue; }
         const a = Object.assign({}, cls, { d: `M${mapX(Number(m[1]))} ${map(y)}${m[3]}`, fill: ink(s.fill), stroke: hl ? "var(--ink-hl)" : ink(s.stroke) });
         if (typeof s.dash === "string" && /^[0-9 ]+$/.test(s.dash) && s.dash) a["stroke-dasharray"] = s.dash;
+        if (/\breply\b/.test(s.cls || "")) a["stroke-linecap"] = "round";
         if (s.arrow === true) { a["marker-end"] = "url(#head)"; a["stroke-width"] = 2.5; }
         svg.appendChild(sv("path", a));
       } else if (s.k === "text") {
@@ -1346,8 +1348,9 @@ function animation(body, opts) {
         const x1 = xSrc(X, e), x2 = xDst(X, e), dir = Math.sign(x2 - x1) || 1, xe = x1 + (x2 - x1) * ease;
         ctx.globalAlpha = unlit ? 0.15 : recent ? 1 : 0.4;
         ctx.strokeStyle = c; ctx.lineWidth = (i === sel || (anc && anc.has(i))) ? 3.5 : 2.5;
-        ctx.setLineDash(e.answers != null ? [7, 5] : []);
-        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 8, y); ctx.stroke(); ctx.setLineDash([]);
+        // a request solid, an answer dotted (round dots), as the sequence diagram draws them
+        ctx.setLineDash(e.answers != null ? [1, 6] : []); ctx.lineCap = e.answers != null ? "round" : "butt";
+        ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(xe - dir * 8, y); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = "butt";
         ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(xe, y); ctx.lineTo(xe - dir * 12, y - 6); ctx.lineTo(xe - dir * 12, y + 6); ctx.closePath(); ctx.fill();
         if (recent) {
           ctx.globalAlpha = Math.max(0.25, ease); ctx.fillStyle = c; ctx.textAlign = "center";

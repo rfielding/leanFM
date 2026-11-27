@@ -328,6 +328,68 @@ do is pin a protocol down up to bisimilarity. The transition table does exactly 
 steps are its \emph{checker model} $M_P$: a state is written $n$, the start $n_0$, a step
 $n \to n'$, and a state's label $L(n) = (m, e)$, its last message and whether it may stop.
 
+\section{Claims over measurements}\label{sec:signals}
+
+Some requirements are about amounts, not messages. Our guinea pigs stay home while we travel.
+An Arduino reads the water bottle, the food bowl and the temperature every ten minutes, the
+food dispenser says when it runs, and a webcam over the cage reports how much the guinea pigs
+move. Each writes event lines, like any other part of a system (this log is simulated for the
+book: three days, \input{generated/sig-counts.tex}):
+
+\input{generated/sig-log.tex}
+
+What we require of the cage, written as claims:
+
+\input{generated/sig-claims.tex}
+
+Two new kinds of word appear. \texttt{(above f c)} and \texttt{(below f c)} compare the latest
+reading of a field with a number, and \texttt{(within d p)} and \texttt{(throughout d p)} say
+that $p$ holds at some or at every reading in the next $d$ seconds. Everything else is as
+before. A recorded log is one run, with one future, so \texttt{possibly} and
+\texttt{inevitably} mean the same thing here: it happens now or later in this log.
+
+Each claim gets a \emph{margin} at every reading: how far it is from failing, in the readings'
+own units. Positive is room to spare; negative is how far it failed. The margins are computed
+word by word:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+margin(above f c)     = reading(f) - c
+margin(below f c)     = c - reading(f)
+margin(not p)         = - margin(p)
+margin(and p q)       = min(margin(p), margin(q))    # always, throughout: the least ahead
+margin(or p q)        = max(margin(p), margin(q))    # within, possibly: the greatest ahead
+margin(on M)          = +infinity at an M, -infinity elsewhere
+\end{lstlisting}
+and a claim holds when its margin at the first reading is zero or more. \texttt{check\_signal}
+answers these four over the three days:
+
+\begin{center}
+\small
+\input{generated/sig-results.tex}
+\end{center}
+
+\begin{figure}[ht]
+\centering
+\AccessibleFigure{Four charts over three days. Temperature crosses the dashed 26 degree line once on the afternoon of day 2 and is marked red there. The food bowl falls and refills in a sawtooth with a tick at each dispenser run and one red mark on day 3 where the dispenser was late. The water level falls slowly and stays above its dashed 100 ml line. The webcam motion level dips to the dashed 0.3 line each night with a red mark only at the last reading.}{%
+\ThemedDiagram{width=.49\textwidth}{sig-temp}\hfill\ThemedDiagram{width=.49\textwidth}{sig-food}\\[4pt]
+\ThemedDiagram{width=.49\textwidth}{sig-water}\hfill\ThemedDiagram{width=.49\textwidth}{sig-motion}}
+\caption{The cage over three days, as \texttt{check\_signal} draws it: each claim's bounds
+dashed, the readings where it fails in red, and the dispenser's runs as ticks.}
+\label{fig:signals}
+\end{figure}
+
+Each answer says what happened. The afternoon sun on day 2 took the cage to 27.1\,\textdegree C,
+1.1 degrees over. The dispenser stuck once on day 3 and ran 25 minutes late. The bottle held,
+with 71\,ml to spare. The webcam claim fails only at the very last reading, and that is the
+log's fault, not the guinea pigs': the log ends during their quietest hour, so the two-hour
+window after its last readings runs past the end. \texttt{check\_signal} counts such moments
+(\input{generated/sig-cut.tex} here) rather than guessing what came next, so a reader knows
+to trust the verdict only up to two hours before the end.
+
+Checking stays linear. Each word is one pass over the readings: a window is a sliding maximum or
+minimum, kept in a queue that each reading enters and leaves once, so a claim costs
+$O(\text{words} \times \text{readings})$. These are the requirements Signal Temporal Logic
+writes, said in the same plain words as the rest of this chapter.
+
 \section{Where the CTL comes from}
 
 Most of the CTL in a project is never written by hand.
