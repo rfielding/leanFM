@@ -261,6 +261,32 @@ Each is a complete LeanFM project with its own book, requirements, implementatio
 - [`projects/IslandUploads`](projects/IslandUploads): file uploads across islands that may be
   partitioned for a day.
 
+## A project in its own repository
+
+A project does not have to live under `projects/`. Give its root as an absolute path in
+`LEANFM_PROJECTS` (several are separated by colons) when you start the server:
+
+```sh
+LEANFM_PROJECTS=$HOME/code/maqam make serve
+```
+
+The project is then listed by `project_view`, its protocol files work with the session tools'
+`project` and `file` arguments, and its `logs/events.log` appears in `server_logs` as
+`<Name>/events`, exactly as for a project here. The name is the `display_name` in the project's
+`manifest.json`. The server only reads the project. It refuses to start if a listed root is
+relative, missing, has no `manifest.json`, is inside this checkout, overlaps another listed root,
+or has a name another project already uses.
+
+The project runs its own checks from its own root against this checkout, writing only below its
+root:
+
+```sh
+python3 $LEANFM/scripts/chatui_specification.py . \
+  Project.Requirements.requirements Project.Implementation.implementation
+```
+
+`make external-project-check` tests all of this.
+
 ## Working on LeanFM
 
 LeanFM is developed with the LeanFM method: a change starts in its own requirements

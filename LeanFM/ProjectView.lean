@@ -63,7 +63,8 @@ def chatWhere : String :=
 
 structure Project where
   name : String
-  /-- the root as given: "." for LeanFM, projects/<dir> otherwise -/
+  /-- the root as given: "." for LeanFM, projects/<dir> for a child, an absolute path for a project
+  outside the checkout (LEANFM_PROJECTS) -/
   root : System.FilePath
   /-- the root with symlinks resolved; every read must stay below it -/
   real : System.FilePath
@@ -74,7 +75,8 @@ structure Project where
 
 def projectsDir : System.FilePath := "projects"
 
-/-- LeanFM first, then each immediate child of projects/ with a manifest.json, by display name. -/
+/-- LeanFM first, then each immediate child of projects/ with a manifest.json, by display name, then
+the projects outside the checkout that LEANFM_PROJECTS lists. -/
 def projects : IO (Array Project) := do
   let leanReal ← IO.FS.realPath "."
   let mut out : Array Project := #[{ name := "LeanFM", root := ".", real := leanReal, manifest := Json.mkObj [], isLeanFM := true }]
@@ -95,6 +97,9 @@ def projects : IO (Array Project) := do
     let name := (manifest.getObjValAs? String "display_name").toOption.getD e.fileName
     if out.any (·.name == name) then continue
     out := out.push { name, root, real, manifest, isLeanFM := false }
+  -- projects outside the checkout (selfhost.project.external), validated at startup
+  for r in ← LeanFM.ProjectRoots.roots.get do
+    out := out.push { name := r.name, root := r.root, real := r.real, manifest := r.manifest, isLeanFM := false }
   return out
 
 /-- The real path of `rel` (relative to the project root) when it lies inside the root. -/

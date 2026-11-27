@@ -654,6 +654,7 @@ def main : IO Unit := do
   LeanFM.CallLimits.configureFromEnv
   LeanFM.ModelCache.configureFromEnv
   LeanFM.KeepAlive.configureFromEnv
+  LeanFM.ProjectRoots.configureFromEnv
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (bindAddr port)
   server.listen 128

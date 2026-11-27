@@ -27,6 +27,7 @@ def mcp := "leanfm-mcp"
 def registry : List Variable :=
   [ -- both servers
     { name := "LEANFM_LAUNCHED_NS", readers := [server, mcp], accepts := "the launch time, nanoseconds since the Unix epoch (date +%s%N)", default := "no measurement" }
+  , { name := "LEANFM_PROJECTS", readers := [server, mcp], accepts := "project roots outside the checkout, absolute paths separated by colons, each with a manifest.json", default := "only LeanFM and the projects/ children" }
   , { name := "LEANFM_LIMIT_CEILING", readers := [server, mcp], accepts := "a whole factor of at least 1 by which one call may raise its limits", default := "the built-in ceiling" }
   , { name := "LEANFM_MODEL_CACHE", readers := [server, mcp], accepts := "how many checker models to keep, a whole number", default := "16" }
   , { name := "LEANFM_KEEPALIVE_REQUESTS", readers := [server, mcp], accepts := "requests per connection, a whole number of at least 1", default := "100" }

@@ -1,5 +1,6 @@
 import Lean
 import LeanFM.LogIndex
+import LeanFM.ProjectRoots
 
 /-! Reading LeanFM's own logs and Claude Desktop's logs of LeanFM, so an agent can diagnose a
 failure itself instead of asking the user to paste log files.
@@ -78,6 +79,9 @@ def projectSources : IO (List Source) := do
       | .error _ => e.fileName
     unless safeProjectName display && safeProjectName e.fileName do continue
     out := out ++ [⟨s!"{display}/events", s!"{display}'s protocol events, one LeanFM event line per message (projects/{e.fileName}/logs/events.log)", true, s!"projects/{e.fileName}/logs/events.log"⟩]
+  -- projects outside the checkout (selfhost.project.external), validated at startup
+  for r in ← LeanFM.ProjectRoots.roots.get do
+    out := out ++ [⟨s!"{r.name}/events", s!"{r.name}'s protocol events, one LeanFM event line per message ({r.root}/logs/events.log)", true, (r.root / "logs" / "events.log").toString⟩]
   return out
 
 /-- LeanFM's own logs, then each project's events log. -/
@@ -97,6 +101,14 @@ def desktopLogDir : IO (Option System.FilePath) := do
 
 def pathOf (s : Source) : IO (Option System.FilePath) := do
   if s.project then
+    -- an external project's log is named by its absolute path, checked to stay below its root
+    if s.file.startsWith "/" then
+      let p : System.FilePath := s.file
+      let some r := (← LeanFM.ProjectRoots.roots.get).find? (fun r => (r.root / "logs" / "events.log").toString == s.file)
+        | return none
+      if !(← p.pathExists) then return some p
+      let real := (← IO.FS.realPath p).toString
+      return if LeanFM.ProjectRoots.below real r.real.toString then some p else none
     return some ((← IO.currentDir) / s.file)
   else
     return (← desktopLogDir).map (· / s.file)

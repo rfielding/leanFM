@@ -420,7 +420,7 @@ def projectViewTool : Json :=
      "source tree with traceability mappings; with file, a page of one file's text and its mappings; for a project with several " ++
      "implementations, impl picks which one, the default otherwise). Every answer is " ++
      s!"under {LeanFM.ProjectView.maxAnswerChars} characters; follow next or older for more. Without stage, only the project " ++
-     "names. Projects: LeanFM (default) and each projects/ child with a manifest. Read-only.")
+     "names. Projects: LeanFM (default), each projects/ child with a manifest, and each project root outside the checkout that the server's LEANFM_PROJECTS lists. Read-only.")
     (schema [("project", stringSchema "a project name from the list (default LeanFM)"),
       ("stage", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ProjectView.stages.map Json.str).toArray),
         ("description", Json.str "which stage; omit to list the projects")]),

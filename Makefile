@@ -74,7 +74,7 @@ stop:
 	  echo "no leanfm-server listening on :$(PORT)"; \
 	fi
 
-check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check
+check: make-lock-check env-registry-check sandbox-check build validate diagrams mdp-example-check paxos-check video-check selfhost-check chatui-check constructors-check book-listings-check keepalive-check proxy-check forward-check ctl-tiny-check log-range-check external-project-check
 
 mdp-example-check:
 	lake env lean --run StochasticUserMDPExample.lean
@@ -319,6 +319,12 @@ test:
 log-range-check:
 	lake build leanfm-server
 	python3 -I scripts/log_range_check.py
+
+# Projects outside the checkout, named by LEANFM_PROJECTS (clause selfhost.project.external).
+.PHONY: external-project-check
+external-project-check:
+	lake build leanfm-server leanfm-mcp
+	python3 -I scripts/external_project_check.py
 
 # The LeanFM-Limits header raises limits for one HTTP request (clause selfhost.mcp.limits).
 .PHONY: header-limits-check
