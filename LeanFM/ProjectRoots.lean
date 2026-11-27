@@ -3,15 +3,17 @@ import Lean.Data.Json
 /-! Projects that live outside the LeanFM checkout (clause selfhost.project.external, decision
 project-external).
 
-`LEANFM_PROJECTS` lists project roots as absolute paths separated by colons. It is read once at
-startup; a root that cannot be served stops the server, naming the variable and the root, so a
-project is never served in part. The server only reads these roots: nothing is written to them and
-nothing about them is kept elsewhere, so the list is rebuilt from the variable on every start. -/
+Each root is given on the command line as `--project DIR`, repeated for several, because the
+command line is the one setting every MCP client's configuration can carry. A relative DIR is taken
+from the directory the server was started in. The roots are read once at startup; a root that cannot
+be served stops the server, naming --project and the root, so a project is never served in part. The
+server only reads these roots: nothing is written to them and nothing about them is kept elsewhere,
+so the list is rebuilt from the command line on every start. -/
 
 namespace LeanFM.ProjectRoots
 open Lean
 
-def envName : String := "LEANFM_PROJECTS"
+def flag : String := "--project"
 
 /-- A project root accepted at startup. -/
 structure Root where
@@ -42,7 +44,7 @@ def validate (checkout : String) (taken : List String) (fs : List Facts) : Optio
   let mut names := taken
   let mut seen : List Facts := []
   for f in fs do
-    let bad := fun (why : String) => some s!"{envName}: the project root {f.given} {why}"
+    let bad := fun (why : String) => some s!"{flag}: the project root {f.given} {why}"
     if !f.given.startsWith "/" then return bad "is not an absolute path"
     if !f.isDir then return bad "is not an existing directory"
     if !f.hasManifest then return bad "has no manifest.json"
@@ -79,14 +81,32 @@ def takenNames : IO (List String) := do
       out := out ++ [nameOf e.fileName (← manifestOf root)]
   return out
 
-/-- Read LEANFM_PROJECTS once at startup (selfhost.env.startup); throws on the first bad root. -/
-def configureFromEnv : IO Unit := do
-  let some raw ← IO.getEnv envName | return
-  let given : List String := ((raw.splitOn ":").map fun (x : String) => x.trimAscii.toString).filter fun (x : String) => !x.isEmpty
+/-- Every `--project DIR` taken out of the command line: the roots, then the other arguments. -/
+def split : List String → Except String (List String × List String)
+  | [] => .ok ([], [])
+  | "--project" :: dir :: rest => do
+      if dir.startsWith "--" then throw s!"--project needs a directory, not {dir}"
+      let (ps, other) ← split rest
+      pure (dir :: ps, other)
+  | ["--project"] => .error "--project needs a directory"
+  | a :: rest => do
+      let (ps, other) ← split rest
+      pure (ps, a :: other)
+
+/-- A root as given, made absolute against the directory the process started in. -/
+def absolute (startDir : System.FilePath) (dir : String) : String :=
+  if dir.startsWith "/" then dir
+  else if dir == "." || dir == "./" then startDir.toString
+  else (startDir / dir).toString
+
+/-- Check the roots once at startup, from the LeanFM checkout (selfhost.env.startup); throws on the
+first bad root, naming --project and the root. -/
+def configure (dirs : List String) : IO Unit := do
+  if dirs.isEmpty then return
   let checkout := (← IO.FS.realPath ".").toString
   let mut facts : List Facts := []
   let mut manifests : List Json := []
-  for g in given do
+  for g in dirs do
     let p : System.FilePath := g
     let isDir ← p.isDir
     let hasManifest ← if isDir then (p / "manifest.json").pathExists else pure false

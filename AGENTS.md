@@ -50,6 +50,14 @@ and path-boundary consequences in proportion to the change. Map every material
 negative requirement to an implementation control and negative test or proof;
 do not call the feature complete while a material risk is unmitigated.
 
+**Features need strong implication; security guarantees need weak implication.**
+Write a feature as `(leadsTo a b)` or `(stronglyImplies a b)`: its trigger `a`
+must be able to happen (`possibly a`), so a system that never allows it fails.
+Write a security guarantee as `(weaklyImplies a b)` or a `never`: a trigger that
+can never happen is fine. Never write a feature as `(always (implies a b))`,
+which passes vacuously when `a` cannot happen. `possibly` speaks of some future,
+which LTL cannot express; this is why requirements are written in CTL.
+
 Work in three layers, in order, checking each before the next:
 
 1. observable requirements and their derived outputs;

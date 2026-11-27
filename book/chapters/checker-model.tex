@@ -144,10 +144,12 @@ Q(a until b)            b, else a and Q next (Q(a until b)); b must come
 (allUntil a b)        = forall(a until b)
 (someUntil a b)       = exists(a until b)
 (implies a b)         = (or (not a) b)
+(ifEver a b)          = (implies a b)                ; the same, but a need not ever happen
 
 -- level 2: the four words, and the unlesses
 (possibly p)          = (someUntil true p)
 (inevitably p)        = (allUntil true p)
+(eventually p)        = (inevitably p)
 (always p)            = (not (someUntil true (not p)))
 (someAlways p)        = (not (allUntil true (not p)))
 (never p)             = (always (not p))
@@ -155,7 +157,8 @@ Q(a until b)            b, else a and Q next (Q(a until b)); b must come
 (someUnless a b)      = (not (allUntil (not b) (and (not a) (not b))))
 
 -- level 3: the shapes specifications repeat
-(stronglyImplies a b) = (and (possibly a) (always (implies a b)))
+(stronglyImplies a b) = (and (possibly a) (always (implies a b)))   ; a feature: a can happen
+(weaklyImplies a b)   = (always (ifEver a b))                     ; a security guarantee: a need not
 (leadsTo a b)         = (stronglyImplies a (inevitably b))
 (precedes a b)        = (not (someUntil (not a) b))
 (outcomes a b ...)    = (and (possibly a) (possibly b) ... (inevitably (or a b ...)))

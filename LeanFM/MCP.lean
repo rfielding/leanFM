@@ -36,6 +36,9 @@ def instructions : String :=
   "surface is read-only: it supplies canonical context and deterministic checks. " ++
   "Before writing temporal properties, event sequences or requirements over hidden state, consult the logic " ++
   "tools (explain_formula, check_ctl, check_trace, classify_requirement) described by leanfm://language/logic-reference. " ++
+  "Require features with strong implication, (leadsTo a b) or (stronglyImplies a b), which fail when the trigger a cannot happen, " ++
+  "and security guarantees with weak implication, (weaklyImplies a b), which pass when a can never happen; " ++
+  "the difference is (possibly a), a claim about some future that only CTL, not LTL, can state. " ++
   "For interactions between roles (services, clients, actors, APIs), design a session type and check it with " ++
   "session_check, draw it with session_diagram, animate it with session_simulate and check run logs with session_conform, show one role's view (its diagram, OpenAPI and payloads) with session_actor, generate a large dataset to see how sessions distribute with session_dataset, browse a protocol's tree of included protocols, branches and roles like a file explorer with session_explore (example goserver is a whole specification to show), generate code to implement it with session_skeleton, writing the protocol in " ++
   "LeanFM protocol syntax as the lean argument (leanfm://language/session-reference). Show people the diagrams and streams these tools " ++
@@ -420,7 +423,7 @@ def projectViewTool : Json :=
      "source tree with traceability mappings; with file, a page of one file's text and its mappings; for a project with several " ++
      "implementations, impl picks which one, the default otherwise). Every answer is " ++
      s!"under {LeanFM.ProjectView.maxAnswerChars} characters; follow next or older for more. Without stage, only the project " ++
-     "names. Projects: LeanFM (default), each projects/ child with a manifest, and each project root outside the checkout that the server's LEANFM_PROJECTS lists. Read-only.")
+     "names. Projects: LeanFM (default), each projects/ child with a manifest, and each project root outside the checkout that the server was started with (--project). Read-only.")
     (schema [("project", stringSchema "a project name from the list (default LeanFM)"),
       ("stage", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ProjectView.stages.map Json.str).toArray),
         ("description", Json.str "which stage; omit to list the projects")]),

@@ -122,7 +122,8 @@ partial def stdioLoop (stdin stdout stderr : IO.FS.Stream) : IO Unit := do
   stdioLoop stdin stdout stderr
 
 def usage : String :=
-  "usage: leanfm-mcp [--stdio [--root DIR | --forward http://127.0.0.1:PORT/mcp]]\n" ++
+  "usage: leanfm-mcp [--stdio [--root DIR | --forward http://127.0.0.1:PORT/mcp]] [--project DIR]...\n" ++
+  "  --project DIR serves a LeanFM project outside the checkout (a relative DIR is taken from where it starts)\n" ++
   "  without --stdio it serves MCP over HTTP, configured by LEANFM_MCP_* (see deploy/mcp/README.md)"
 
 /-- The command line: --stdio and --root DIR, each at most once; anything else is refused. -/
@@ -310,13 +311,17 @@ def serveForward (url : String) : IO UInt32 := do
   forwardLoop fw url conn (← IO.getStdin) (← IO.getStdout) stderr
   return 0
 
-def serveStdio (root : Option String) : IO UInt32 := do
+def serveStdio (root : Option String) (projects : List String) : IO UInt32 := do
   let stderr ← IO.getStderr
   if let some dir := root then
     unless ← System.FilePath.isDir dir do
       stderr.putStrLn s!"--root {dir} is not a directory"
       return 2
     IO.Process.setCurrentDir dir
+  -- projects outside the checkout, checked from it (selfhost.project.external)
+  try LeanFM.ProjectRoots.configure projects catch e =>
+    stderr.putStrLn s!"leanfm-mcp: {e}"
+    return 2
   -- a child process of the user's own client may read the user's own logs (LeanFM/ServerLogs.lean)
   LeanFM.ServerLogs.enable
   LeanFM.ServerInfo.capture
@@ -327,7 +332,8 @@ def serveStdio (root : Option String) : IO UInt32 := do
   stdioLoop (← IO.getStdin) (← IO.getStdout) stderr
   return 0
 
-def serveHttp : IO Unit := do
+def serveHttp (projects : List String) : IO Unit := do
+  LeanFM.ProjectRoots.configure projects
   -- the startup as event lines on standard output (selfhost.session.event-log)
   let launch ← LeanFM.Launch.emitStart (← IO.getStdout) "leanfm-mcp"
   LeanFM.EventLog.sink.set (some (← IO.getStdout))
@@ -350,9 +356,14 @@ def main (args : List String) : IO UInt32 := do
   -- every environment variable is checked before serving, so a bad one stops the server now, not
   -- later in its logs (selfhost.env.startup); HTTP's own variables are checked by HostConfig.fromEnv
   -- first: how long launch took to reach main (selfhost.env.launch)
-  try LeanFM.Launch.read; LeanFM.CallLimits.configureFromEnv; LeanFM.ModelCache.configureFromEnv; LeanFM.KeepAlive.configureFromEnv; LeanFM.ProjectRoots.configureFromEnv catch e =>
+  try LeanFM.Launch.read; LeanFM.CallLimits.configureFromEnv; LeanFM.ModelCache.configureFromEnv; LeanFM.KeepAlive.configureFromEnv catch e =>
     IO.eprintln s!"leanfm-mcp: {e}"
     return 2
+  -- projects outside the checkout: a relative DIR is taken from where the server started
+  let startDir ← IO.currentDir
+  let (projects, args) ← match LeanFM.ProjectRoots.split args with
+    | .ok r => pure (r.1.map (LeanFM.ProjectRoots.absolute startDir), r.2)
+    | .error why => IO.eprintln s!"{why}\n{usage}"; return 2
   let (forward, args) ← match splitForward args with
     | .ok r => pure r
     | .error why => IO.eprintln s!"{why}\n{usage}"; return 2
@@ -361,8 +372,12 @@ def main (args : List String) : IO UInt32 := do
       IO.eprintln s!"{why}\n{usage}"
       return 2
   | .ok (true, root) => match forward with
-    | some url => serveForward url
-    | none => serveStdio root
+    | some url =>
+      if !projects.isEmpty then
+        IO.eprintln s!"--project cannot be used with --forward: give --project to the server at {url}\n{usage}"
+        return 2
+      serveForward url
+    | none => serveStdio root projects
   | .ok (false, root) =>
     if forward.isSome then
       IO.eprintln s!"--forward needs --stdio\n{usage}"
@@ -370,7 +385,9 @@ def main (args : List String) : IO UInt32 := do
     if root.isSome then
       IO.eprintln s!"--root needs --stdio\n{usage}"
       return 2
-    serveHttp
+    try serveHttp projects catch e =>
+      IO.eprintln s!"leanfm-mcp: {e}"
+      return 2
     return 0
 
 end LeanFM.McpServer

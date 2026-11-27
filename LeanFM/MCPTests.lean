@@ -500,6 +500,8 @@ def main : IO Unit := do
   for t in ["session_check", "session_diagram", "session_mdp", "session_sla", "session_simulate", "session_conform", "session_spans", "session_skeleton", "session_next", "session_compat", "session_ctl", "session_instances", "session_openapi", "session_types", "session_review", "session_actor", "session_dataset", "session_explore", "session_deployment"] do
     assertContains s!"MCP lists {t}" toolsListed.body s!"\"name\":\"{t}\""
   assertContains "MCP instructions point to the session tools" initialized.body "session_check"
+  assertContains "MCP instructions require features with strong implication" initialized.body "Require features with strong implication"
+  assertContains "MCP instructions require security guarantees with weak implication" initialized.body "security guarantees with weak implication, (weaklyImplies a b)"
   assertContains "MCP lists the session reference" listed.body "leanfm://language/session-reference"
   let sref ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":30,\"method\":\"resources/read\",\"params\":{\"uri\":\"leanfm://language/session-reference\"}}"
   assertContains "MCP serves the session reference" sref.body "# LeanFM session types"

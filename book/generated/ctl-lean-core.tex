@@ -27,6 +27,13 @@ def possibly   (p : Pred) : Pred := someUntil tt p
 def inevitably (p : Pred) : Pred := allUntil tt p
 def always     (p : Pred) : Pred := neg (possibly (neg p))
 def someAlways (p : Pred) : Pred := neg (inevitably (neg p))
+def eventually (p : Pred) : Pred := inevitably p
+
+/-- The two implications. A feature needs the strong one: its trigger must be able to happen.
+A security guarantee needs the weak one: a trigger that never happens is fine. -/
+def implies (a b : Pred) : Pred := fun s => !a s || b s
+def stronglyImplies (a b : Pred) : Pred := fun s => possibly a s && always (implies a b) s
+def weaklyImplies   (a b : Pred) : Pred := always (implies a b)
 
 /-- a until b, or a forever: on no path (or not on every path) does a fail before b has come. -/
 def allUnless  (a b : Pred) : Pred := neg (someUntil (neg b) (fun s => !a s && !b s))

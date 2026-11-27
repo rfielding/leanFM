@@ -639,9 +639,15 @@ partial def serveLoop (server : TcpServer) : IO Unit := do
       catch _ => pure ()) Task.Priority.dedicated
   serveLoop server
 
-def main : IO Unit := do
+def main (args : List String) : IO UInt32 := do
   -- first: how long launch took to reach main (selfhost.env.launch)
   LeanFM.Launch.read
+  -- projects outside the checkout (selfhost.project.external): --project DIR, nothing else
+  let startDir ← IO.currentDir
+  let projects ← match LeanFM.ProjectRoots.split args with
+    | .ok (ps, []) => pure (ps.map (LeanFM.ProjectRoots.absolute startDir))
+    | .ok (_, other :: _) => IO.eprintln s!"unknown argument {other}\nusage: leanfm-server [--project DIR]..."; return 2
+    | .error why => IO.eprintln s!"{why}\nusage: leanfm-server [--project DIR]..."; return 2
   -- the startup as event lines on standard output (selfhost.session.event-log)
   let launch ← LeanFM.Launch.emitStart (← IO.getStdout) "leanfm-server"
   LeanFM.EventLog.sink.set (some (← IO.getStdout))
@@ -654,7 +660,9 @@ def main : IO Unit := do
   LeanFM.CallLimits.configureFromEnv
   LeanFM.ModelCache.configureFromEnv
   LeanFM.KeepAlive.configureFromEnv
-  LeanFM.ProjectRoots.configureFromEnv
+  try LeanFM.ProjectRoots.configure projects catch e =>
+    IO.eprintln s!"leanfm-server: {e}"
+    return 2
   let server ← Std.Async.TCP.Socket.Server.mk
   server.bind (bindAddr port)
   server.listen 128
@@ -665,8 +673,9 @@ def main : IO Unit := do
   LeanFM.Launch.emitListening (← IO.getStdout) "leanfm-server" launch
   (← IO.getStdout).flush
   serveLoop server
+  return 0
 
 end LeanFM.Server
 
-def main : IO Unit :=
-  LeanFM.Server.main
+def main (args : List String) : IO UInt32 :=
+  LeanFM.Server.main args

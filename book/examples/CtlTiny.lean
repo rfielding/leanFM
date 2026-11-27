@@ -47,6 +47,13 @@ def possibly   (p : Pred) : Pred := someUntil tt p
 def inevitably (p : Pred) : Pred := allUntil tt p
 def always     (p : Pred) : Pred := neg (possibly (neg p))
 def someAlways (p : Pred) : Pred := neg (inevitably (neg p))
+def eventually (p : Pred) : Pred := inevitably p
+
+/-- The two implications. A feature needs the strong one: its trigger must be able to happen.
+A security guarantee needs the weak one: a trigger that never happens is fine. -/
+def implies (a b : Pred) : Pred := fun s => !a s || b s
+def stronglyImplies (a b : Pred) : Pred := fun s => possibly a s && always (implies a b) s
+def weaklyImplies   (a b : Pred) : Pred := always (implies a b)
 
 /-- a until b, or a forever: on no path (or not on every path) does a fail before b has come. -/
 def allUnless  (a b : Pred) : Pred := neg (someUntil (neg b) (fun s => !a s && !b s))
@@ -65,6 +72,10 @@ def holdsAt (p : Pred) : List String := States.filter p
 #guard holdsAt (someUntil a b) == ["s3"]
 #guard holdsAt (allUntil a b) == ["s3"]
 #guard possibly b "s0" && !inevitably b "s0"
+-- a trigger that cannot happen: the guarantee holds, the feature fails; one that can: they agree
+def nowhere : Pred := fun _ => false
+#guard weaklyImplies nowhere b "s0" && !stronglyImplies nowhere b "s0"
+#guard weaklyImplies b b "s0" && stronglyImplies b b "s0"
 #guard always a "s1" && someAlways a "s0" && !always a "s0"
 #guard someNext b "s2" && !allNext a "s0" && someNext a "s0"
 -- unless: from s0, the future through s1 keeps a forever, the one through s2 loses a before b

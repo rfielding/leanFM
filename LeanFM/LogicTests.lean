@@ -235,6 +235,23 @@ def main : IO Unit := do
     (onShop "(leadsTo (on Ghost) (on Receipt))" == "disproved" && onShop "(always (implies (on Ghost) (inevitably (on Receipt))))" == "vacuous")
   expect "with ifEver, a Ghost that never happens is allowed: proved"
     (onShop "(always (ifEver (on Ghost) (inevitably (on Receipt))))" == "proved")
+  -- features with strong implication, security guarantees with weak (selfhost.mcp.logic.implication)
+  expect "eventually reads as inevitably, from an s-expression and from JSON"
+    (readsAs "(eventually (on A))" == readsAs "(inevitably (on A))" && readsAs "(eventually (on A))" != Json.null &&
+     ((parseBounded (parseJ "{\"eventually\": {\"on\": \"A\"}}")).toOption.map Formula.toJson) == some (readsAs "(inevitably (on A))"))
+  expect "weaklyImplies reads as always over ifEver, from an s-expression and from JSON"
+    (readsAs "(weaklyImplies (on A) (on B))" == readsAs "(always (ifEver (on A) (on B)))" && readsAs "(weaklyImplies (on A) (on B))" != Json.null &&
+     ((parseBounded (parseJ "{\"weaklyImplies\": [{\"on\": \"A\"}, {\"on\": \"B\"}]}")).toOption.map Formula.toJson) == some (readsAs "(always (ifEver (on A) (on B)))"))
+  expect "a Ghost that cannot happen: the guarantee (weak) is proved, the feature (strong) is disproved, plain always-implies is vacuous"
+    (onShop "(weaklyImplies (on Ghost) (eventually (on Receipt)))" == "proved" &&
+     onShop "(stronglyImplies (on Ghost) (eventually (on Receipt)))" == "disproved" &&
+     onShop "(leadsTo (on Ghost) (on Receipt))" == "disproved" &&
+     onShop "(always (implies (on Ghost) (eventually (on Receipt))))" == "vacuous")
+  expect "a Pay that can happen: strong and weak implication agree, both proved"
+    (onShop "(leadsTo (on Pay) (on Receipt))" == "proved" && onShop "(weaklyImplies (on Pay) (eventually (on Receipt)))" == "proved")
+  expect "the logic reference opens with the rule"
+    (has (reference.take 1200).toString "strong implication" && has (reference.take 1200).toString "weak implication" &&
+     has (reference.take 1200).toString "LTL")
   expect "precedes is proved for an order the draft keeps" (onShop "(precedes (on Quote) (on Pay))" == "proved")
   let early := ctlOn shop "\"(precedes (on Pay) (on Quote))\""
   expect "precedes is disproved with the path where the second comes first"

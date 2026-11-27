@@ -1040,6 +1040,10 @@ partial def sexprFormula (ts : Array SexprTok) (b : Bounds) (depth : Nat) : Stat
       | "outcomes" => if xs.size < 2 then throw "outcomes needs at least two formulas" else return .outcomes xs.toList
       | "follows" => if xs.size < 2 then throw "follows needs a formula and at least one next formula" else return .follows xs[0]! (xs.toList.drop 1)
       | "leadsTo" => need 2; return .leadsTo xs[0]! xs[1]!
+      -- eventually is a word for AF, the same as inevitably; weaklyImplies is always over ifEver
+      -- (selfhost.mcp.logic.implication)
+      | "eventually" => need 1; return Word.inevitably.apply xs.toList
+      | "weaklyImplies" => need 2; return .ag (.ifEver xs[0]! xs[1]!)
       | "precedes" => need 2; return .precedes xs[0]! xs[1]!
       | "EU" => need 2; return .eu xs[0]! xs[1]! | "AU" => need 2; return .au xs[0]! xs[1]!
       | "EW" => need 2; return .ew xs[0]! xs[1]! | "AW" => need 2; return .aw xs[0]! xs[1]!
@@ -1166,6 +1170,8 @@ partial def parseFormula (j : Json) (depth : Nat := 0) (bnd : Bounds := bounds) 
         | .and (a :: b :: bs) => return .follows a (b :: bs)
         | _ => throw "follows needs a formula and at least one next formula"
       | "leadsTo" => two .leadsTo
+      | "eventually" => one (fun f => Word.inevitably.apply [f])
+      | "weaklyImplies" => two (fun a b => .ag (.ifEver a b))
       | "precedes" => two .precedes
       | "EU" => two .eu | "AU" => two .au | "EW" => two .ew | "AW" => two .aw
       | other =>
@@ -2960,8 +2966,14 @@ def checkReassembly (args : Json) : ToolOutcome := do
 
 /-! ## Reference -/
 
+/-- The rule every requirement follows (selfhost.mcp.logic.implication), stated where requirements are written. -/
+def implicationRule : String :=
+  "**Features with strong implication, security guarantees with weak implication.** A feature is required with (stronglyImplies a b) = (and (possibly a) (always (implies a b))), or its usual shape (leadsTo a b) = (stronglyImplies a (eventually b)): the trigger a must be able to happen, so a system that never lets a happen fails the requirement instead of passing for free. A security guarantee is required with (weaklyImplies a b) = (always (ifEver a b)): whenever a happens b holds, and a system where a can never happen passes, as it should (a door that never opens lets no one in). The difference is possibly, a claim that some future reaches a; LTL speaks of every path only and cannot say it, which is why requirements need CTL. (always (implies a b)) is neither: when a cannot happen it is reported vacuous."
+
 def reference : String := String.intercalate "\n"
   [ "# LeanFM logic reference (MCP)"
+  , ""
+  , implicationRule
   , ""
   , renamedWords
   , ""
@@ -2986,7 +2998,9 @@ def reference : String := String.intercalate "\n"
   , "| `{\"ifEver\": [a, b]}` | a -> b where a never happening is fine (an error, a fault, outside input): never vacuous; an a that cannot happen is reported as neverHappens. A request or feature takes stronglyImplies, a failure takes ifEver |"
   , "| `{\"outcomes\": [a, b, ...]}` | EF a and EF b and ... and AF (a or b or ...): the outcomes of a choice, each possible and one inevitable (not AF a or AF b, which says one particular outcome is inevitable); two or more |"
   , "| `{\"follows\": [a, b, ...]}` | AG(a -> (EX b and ... and AX (b or ...))): right after a, the next step is one of b, ..., each possible; a and one or more |"
-  , "| `{\"leadsTo\": [a, b]}` | stronglyImplies(a, AF b): a can happen, and every a is eventually followed by b (never vacuous, unlike AG(a -> AF b)) |"
+  , "| `{\"leadsTo\": [a, b]}` | stronglyImplies(a, AF b): a can happen, and every a is eventually followed by b (never vacuous, unlike AG(a -> AF b)); the shape of a feature |"
+  , "| `{\"weaklyImplies\": [a, b]}` | AG(ifEver(a, b)): whenever a happens, b; a that can never happen passes; the shape of a security guarantee |"
+  , "| `{\"eventually\": f}` | AF f, the same as inevitably: on every path, at some point |"
   , "| `{\"precedes\": [a, b]}` | not (not a EU b): b never happens before a, and need not happen |"
   , "| `{\"never\": f}` | AG not f |"
   , "| `{\"possibly\": f}` `{\"inevitably\": f}` `{\"always\": f}` `{\"someAlways\": f}` `{\"allNext\": f}` `{\"someNext\": f}` | words for EF, AF, AG, EG, AX, EX: written back as written, decided as the primitive |"

@@ -285,7 +285,8 @@
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and Claude Opus 5.5\\[.35em]
-     \normalsize Second edition, rewritten---\today};
+     \normalsize Second edition, rewritten---\today\\[.35em]
+     \normalsize\href{https://github.com/rfielding/leanFM}{\texttt{github.com/rfielding/leanFM}}};
 \end{tikzpicture}
 \end{titlepage}
 \frontmatter
@@ -321,6 +322,7 @@ word & meaning \\
 \midrule
 \textsf{possibly} $p$ & in some future, $p$ happens \\
 \textsf{inevitably} $p$ & in every future, $p$ happens \\
+\textsf{eventually} $p$ & the same as \textsf{inevitably} $p$ \\
 \textsf{always} $p$ & in every future, $p$ holds at every moment \\
 \textsf{never} $p$ & in every future, $p$ holds at no moment \\
 \textsf{someAlways} $p$ & in some future, $p$ holds at every moment, forever \\
@@ -330,6 +332,36 @@ word & meaning \\
 Anything these words can say, Requirements Logic can say and check, and nothing more is
 needed: Chapter~\ref{ch:checker} writes the function and builds every word from it on one
 page.
+
+\medskip
+\noindent\fcolorbox{leanblue}{diagramblue}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}{%
+\color{foregroundink}\textbf{Features need strong implication. Security guarantees need weak implication.}
+
+\smallskip
+A feature is required with \emph{strong} implication:
+\begin{center}
+\texttt{(stronglyImplies a b)} \;=\; \texttt{(and (possibly a) (always (implies a b)))}
+\end{center}
+``A request can be made, and every request is answered.'' The trigger \texttt{a} must be able
+to happen. A system that never lets anyone make the request fails the requirement, instead of
+passing it for free. The usual shape is \texttt{(leadsTo a b)}, the same as
+\texttt{(stronglyImplies a (eventually b))}.
+
+\smallskip
+A security guarantee is required with \emph{weak} implication:
+\begin{center}
+\texttt{(weaklyImplies a b)} \;=\; \texttt{(always (ifEver a b))}
+\end{center}
+Here \texttt{(ifEver a b)} is \texttt{(implies a b)}, marked so that \texttt{a} never
+happening is fine. ``Whenever someone logs in, they gave the right password.'' A system in which no one can ever
+log in passes, as it should: a door that never opens lets no one in.
+
+\smallskip
+The difference is \textsf{possibly}: some future reaches \texttt{a}. That is a claim about
+branching futures, and LTL, which speaks only of every path, cannot make it. This is why
+requirements need CTL. Plain \texttt{(always (implies a b))} is neither: when \texttt{a} cannot
+happen, LeanFM reports it as vacuous, not proved.}}
+\medskip
 
 The book's central result joins the halves: a protocol \emph{is} a short list of claims,
 one per moment the conversation can be in, and a system obeys the claims exactly when it

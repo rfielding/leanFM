@@ -20,6 +20,18 @@ and counterexamples. You push back, the protocol changes, the pictures change wi
 then is code written. The model learns the language from LeanFM itself: its server speaks the
 Model Context Protocol and hands any agent that connects the language reference and the tools.
 
+> **Features need strong implication. Security guarantees need weak implication.**
+>
+> A feature is required with `(stronglyImplies a b)`, which is `(and (possibly a) (always (implies a b)))`,
+> or its usual shape `(leadsTo a b)`, which is `(stronglyImplies a (eventually b))`. The trigger `a` must
+> be able to happen, so a system that never lets anyone make the request fails, instead of passing for free.
+>
+> A security guarantee is required with `(weaklyImplies a b)`, which is `(always (ifEver a b))`. A system
+> where `a` can never happen passes, as it should: a door that never opens lets no one in.
+>
+> The difference is `possibly`: some future reaches `a`. LTL speaks only of every path and cannot say
+> that, so requirements need CTL.
+
 ![Two real GoServer games at once: four people on 11×11, three on 9×9](book/assets/readme/goserver-games.png)
 
 *Two games of N-player Go running on one server: four people on an 11×11 board, three on a
@@ -263,25 +275,35 @@ Each is a complete LeanFM project with its own book, requirements, implementatio
 
 ## A project in its own repository
 
-A project does not have to live under `projects/`. Give its root as an absolute path in
-`LEANFM_PROJECTS` (several are separated by colons) when you start the server:
+A project does not have to live under `projects/`. Name its root with `--project` (repeat it for
+several). From an MCP client, start `leanfm-mcp` from the project's own `.mcp.json`; a relative
+`--project` is taken from where the client starts it, which is the project:
 
-```sh
-LEANFM_PROJECTS=$HOME/code/maqam make serve
+```json
+{
+  "mcpServers": {
+    "leanfm": {
+      "command": "/path/to/leanFM/.lake/build/bin/leanfm-mcp",
+      "args": ["--stdio", "--root", "/path/to/leanFM", "--project", "."]
+    }
+  }
+}
 ```
+
+Or run the shared server with it: `make serve PROJECTS="$HOME/code/maqam"`.
 
 The project is then listed by `project_view`, its protocol files work with the session tools'
 `project` and `file` arguments, and its `logs/events.log` appears in `server_logs` as
 `<Name>/events`, exactly as for a project here. The name is the `display_name` in the project's
-`manifest.json`. The server only reads the project. It refuses to start if a listed root is
-relative, missing, has no `manifest.json`, is inside this checkout, overlaps another listed root,
-or has a name another project already uses.
+`manifest.json`. The server only reads the project. It refuses to start if a root is missing, has
+no `manifest.json`, is inside this checkout, overlaps another root, or has a name another project
+already uses.
 
 The project runs its own checks from its own root against this checkout, writing only below its
 root:
 
 ```sh
-python3 $LEANFM/scripts/chatui_specification.py . \
+python3 /path/to/leanFM/scripts/chatui_specification.py . \
   Project.Requirements.requirements Project.Implementation.implementation
 ```
 

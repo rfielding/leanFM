@@ -2,12 +2,14 @@
 """Projects outside the LeanFM checkout (clause selfhost.project.external, decision project-external).
 
 Builds a scratch checkout (a projects/Cage child) and, in another temporary directory, a project
-root Ext outside it, then starts leanfm-server with LEANFM_PROJECTS naming Ext and checks over /mcp:
+root Ext outside it, then starts leanfm-server with --project naming Ext and checks over /mcp:
 project_view lists Ext; session_check with project Ext and file spec/Ping.leanfm checks its
 protocol; server_logs lists Ext/events and session_conform reads it by serverLog; a protocol file in
-Ext that is a symlink out of the root is not read. Then each bad LEANFM_PROJECTS (relative, missing,
-no manifest, inside the checkout, nested roots, a name already taken, an unsafe name) stops
-leanfm-server and leanfm-mcp at startup naming LEANFM_PROJECTS and the root. Ext's files are
+Ext that is a symlink out of the root is not read. leanfm-mcp --stdio started inside Ext with
+--root <checkout> --project . serves Ext (a relative --project is taken from where it started), as a
+project's own MCP configuration would start it; --project with --forward is refused. Each bad
+--project (missing, no manifest, inside the checkout, nested roots, a name already taken, an unsafe
+name) stops leanfm-server and leanfm-mcp at startup naming --project and the root. Ext's files are
 unchanged by the servers. Last, the project's own spec check runs from outside the checkout on a
 copy of projects/Maqam's specification, writing only below that copy.
 """
@@ -58,14 +60,31 @@ def digest(root):
     return h.hexdigest()
 
 
-def refused(checkout, value, needle):
-    """Both servers stop at startup, naming LEANFM_PROJECTS and the root."""
-    env = {**os.environ, "LEANFM_PROJECTS": value, "LEANFM_PORT": str(spare_port()), "LEANFM_MCP_PORT": str(spare_port())}
+def flags(roots):
+    return [a for r in roots for a in ("--project", r)]
+
+
+def refused(checkout, roots, needle):
+    """Both servers stop at startup, naming --project and the root."""
+    env = {**os.environ, "LEANFM_PORT": str(spare_port()), "LEANFM_MCP_PORT": str(spare_port())}
     for exe, args in [("leanfm-server", []), ("leanfm-mcp", ["--stdio"])]:
-        p = subprocess.run([os.path.join(BIN, exe)] + args, cwd=checkout, env=env, stdin=subprocess.DEVNULL,
+        p = subprocess.run([os.path.join(BIN, exe)] + args + flags(roots), cwd=checkout, env=env, stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=60)
         err = p.stdout + p.stderr
-        assert p.returncode != 0 and "LEANFM_PROJECTS" in err and needle in err, (exe, value, p.returncode, err[-400:])
+        assert p.returncode != 0 and "--project" in err and needle in err, (exe, roots, p.returncode, err[-400:])
+
+
+def stdio_from(cwd, checkout):
+    """leanfm-mcp --stdio started in the project with --root <checkout> --project ., as a client would."""
+    msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+             "clientInfo": {"name": "t", "version": "1"}}},
+            {"jsonrpc": "2.0", "method": "notifications/initialized"},
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "session_check",
+             "arguments": {"project": "Ext", "file": "spec/Ping.leanfm"}}}]
+    p = subprocess.run([os.path.join(BIN, "leanfm-mcp"), "--stdio", "--root", checkout, "--project", "."], cwd=cwd,
+                       input="".join(json.dumps(m) + "\n" for m in msgs), capture_output=True, text=True, timeout=120)
+    replies = [json.loads(l) for l in p.stdout.splitlines() if l.strip()]
+    return [r for r in replies if r.get("id") == 2]
 
 
 def main():
@@ -83,8 +102,8 @@ def main():
         before = digest(ext)
 
         port = spare_port()
-        srv = subprocess.Popen([os.path.join(BIN, "leanfm-server")], cwd=checkout,
-                               env={**os.environ, "LEANFM_PORT": str(port), "LEANFM_PROJECTS": ext},
+        srv = subprocess.Popen([os.path.join(BIN, "leanfm-server"), "--project", ext], cwd=checkout,
+                               env={**os.environ, "LEANFM_PORT": str(port)},
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             until_listening(srv)
@@ -112,15 +131,21 @@ def main():
         taken = os.path.join(outside, "taken"); project(taken, "Cage")
         unsafe = os.path.join(outside, "unsafe"); project(unsafe, "two words")
         bare = os.path.join(outside, "bare"); os.makedirs(bare)
-        refused(checkout, "ext", "is not an absolute path")
-        refused(checkout, os.path.join(outside, "missing"), "is not an existing directory")
-        refused(checkout, bare, "has no manifest.json")
-        refused(checkout, inside, "is inside the LeanFM checkout")
-        refused(checkout, f"{ext}:{nested}", "overlaps the project root")
-        refused(checkout, taken, "which another project already has")
-        refused(checkout, unsafe, "not only letters, digits")
-        refused(checkout, f"{ext}:{ext}", "overlaps the project root")
-        print("ok: a relative, missing, manifest-less, inside, nested, repeated, taken or unsafe root stops leanfm-server and leanfm-mcp at startup, naming LEANFM_PROJECTS and the root")
+        got = stdio_from(ext, checkout)
+        assert got and not got[0]["result"].get("isError"), got
+        print("ok: leanfm-mcp --stdio started in Ext with --root <checkout> --project . serves Ext's protocol")
+        p = subprocess.run([os.path.join(BIN, "leanfm-mcp"), "--stdio", "--forward", "http://127.0.0.1:9/mcp", "--project", ext],
+                           cwd=checkout, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+        assert p.returncode != 0 and "--project cannot be used with --forward" in p.stderr, p.stderr
+        print("ok: --project with --forward is refused, naming the server forwarded to")
+        refused(checkout, ["missing"], "is not an existing directory")
+        refused(checkout, [bare], "has no manifest.json")
+        refused(checkout, [inside], "is inside the LeanFM checkout")
+        refused(checkout, [ext, nested], "overlaps the project root")
+        refused(checkout, [taken], "which another project already has")
+        refused(checkout, [unsafe], "not only letters, digits")
+        refused(checkout, [ext, ext], "overlaps the project root")
+        print("ok: a missing, manifest-less, inside, nested, repeated, taken or unsafe root stops leanfm-server and leanfm-mcp at startup, naming --project and the root")
 
         # the project's own checks run from outside the checkout against this installation
         maqam = os.path.join(ROOT, "projects", "Maqam")

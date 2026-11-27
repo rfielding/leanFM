@@ -60,7 +60,7 @@ run:
 serve:
 	@mkdir -p $(dir $(LEANFM_MAKE_LOCK))
 	$(if $(LEANFM_MAKE_LOCKED),,flock $(LEANFM_MAKE_LOCK)) lake build leanfm-server
-	LEANFM_LAUNCHED_NS=$$(date +%s%N) .lake/build/bin/leanfm-server
+	LEANFM_LAUNCHED_NS=$$(date +%s%N) .lake/build/bin/leanfm-server $(foreach p,$(PROJECTS),--project $(p))
 
 claude:
 	bash scripts/claude.sh
@@ -320,7 +320,7 @@ log-range-check:
 	lake build leanfm-server
 	python3 -I scripts/log_range_check.py
 
-# Projects outside the checkout, named by LEANFM_PROJECTS (clause selfhost.project.external).
+# Projects outside the checkout, named by --project (clause selfhost.project.external).
 .PHONY: external-project-check
 external-project-check:
 	lake build leanfm-server leanfm-mcp
