@@ -1,4 +1,5 @@
 import Lean.Data.Json
+import LeanFM.CallLimits
 
 /-!
 # Claims over measured values (clause selfhost.mcp.logic.signal, decision logic-signal)
@@ -72,36 +73,36 @@ def number (what s : String) : Except String Float :=
 
 def words : String := "above, below, on, not, and, or, implies, within, throughout, always, never, possibly, inevitably"
 
-partial def claimOf (x : Sx) : StateT Nat (Except String) Claim := do
+partial def claimOf (x : Sx) (maxWords : Nat := maxWords) : StateT Nat (Except String) Claim := do
   modify (· + 1)
-  if (← get) > maxWords then throw s!"a claim has at most {maxWords} words"
+  if (← get) > maxWords then throw s!"a claim has at most {maxWords} words; {LeanFM.CallLimits.raise "signalWords" maxWords}"
   let lift {α} (e : Except String α) : StateT Nat (Except String) α := liftM (m := Except String) e
   match x with
   | .list [.atom "above", .atom f, .atom c] => return .over f (← lift (number "the bound of above" c))
   | .list [.atom "below", .atom f, .atom c] => return .under f (← lift (number "the bound of below" c))
   | .list [.atom "on", .atom m] => return .on m
-  | .list [.atom "not", p] => return .not (← claimOf p)
-  | .list (.atom "and" :: ps) => return .and (← ps.mapM claimOf)
-  | .list (.atom "or" :: ps) => return .or (← ps.mapM claimOf)
-  | .list [.atom "implies", a, b] => return .implies (← claimOf a) (← claimOf b)
+  | .list [.atom "not", p] => return .not (← claimOf p maxWords)
+  | .list (.atom "and" :: ps) => return .and (← ps.mapM (claimOf · maxWords))
+  | .list (.atom "or" :: ps) => return .or (← ps.mapM (claimOf · maxWords))
+  | .list [.atom "implies", a, b] => return .implies (← claimOf a maxWords) (← claimOf b maxWords)
   | .list [.atom w, .atom d, p] =>
       if w == "within" || w == "throughout" then do
         let d ← lift (number s!"the window of {w}" d)
         if d < 0 then throw s!"the window of {w} is not negative"
-        let p ← claimOf p
+        let p ← claimOf p maxWords
         return if w == "within" then .within d p else .throughout d p
       else throw s!"({w} ...) is not a word here; the words are {words}"
-  | .list [.atom "always", p] => return .always (← claimOf p)
-  | .list [.atom "never", p] => return .never (← claimOf p)
-  | .list [.atom "possibly", p] | .list [.atom "inevitably", p] => return .possibly (← claimOf p)
+  | .list [.atom "always", p] => return .always (← claimOf p maxWords)
+  | .list [.atom "never", p] => return .never (← claimOf p maxWords)
+  | .list [.atom "possibly", p] | .list [.atom "inevitably", p] => return .possibly (← claimOf p maxWords)
   | .list (.atom w :: _) => throw s!"({w} ...) is not a word here, or has the wrong number of parts; the words are {words}"
   | .atom a => throw s!"{a} on its own is not a claim; the words are {words}"
   | .list _ => throw "a claim starts with one of its words"
 
-def parse (s : String) : Except String Claim := do
+def parse (s : String) (maxWords : Nat := maxWords) : Except String Claim := do
   let (x, rest) ← sexp (tokens s)
   unless rest.isEmpty do throw "text follows the claim"
-  let (c, _) ← (claimOf x).run 0
+  let (c, _) ← (claimOf x maxWords).run 0
   return c
 
 /-- A number as it was written: rounded to 3 decimals, no trailing zeros. -/
@@ -178,7 +179,7 @@ def inf : Float := 1.0 / 0.0
 
 /-- Each field's value at every sample: its latest reading at or before it. -/
 def hold (ss : Array Sample) (f : String) : Except String (Array Float) := do
-  let some first := ((ss[0]!).vals.lookup f) | throw s!"the claim reads {f} before its first reading (the first sample has no {f})"
+  let some first := ((ss[0]!).vals.lookup f) | throw s!"internal: {f} has no reading at the first checked sample"
   let mut cur := first
   let mut out : Array Float := Array.mkEmpty ss.size
   for s in ss do
@@ -259,7 +260,7 @@ def numText (x : Float) : String :=
   | j => j.compress
 
 /-- Every `stride`th point, so a long run is drawn whole in at most `maxPoints` points. -/
-def series (t xs : Array Float) : Json × Nat :=
+def series (t xs : Array Float) (maxPoints : Nat := maxPoints) : Json × Nat :=
   let n := xs.size
   let stride := max 1 ((n + maxPoints - 1) / maxPoints)
   let pts := (List.range ((n + stride - 1) / stride)).map fun k =>
@@ -356,17 +357,25 @@ def check (args : Json) : Except String Json := do
   let text ← match args.getObjValD "claim" with
     | .str s => pure s
     | _ => throw "check_signal needs a claim, an s-expression such as (always (below temp 26))"
-  let claim ← parse text
+  let lim := LeanFM.CallLimits.get args
+  let claim ← parse text (lim "signalWords")
   let ss ← match args.getObjValD "samples", args.getObjValD "log" with
     | .arr js, _ => ofSamples js
     | _, .str l => ofLog l
     | _, _ => throw "check_signal needs samples ([{t, label?, field: number, ...}]) or log (event lines)"
   if ss.isEmpty then throw "there are no samples"
-  if ss.size > maxSamples then throw s!"at most {maxSamples} samples"
+  if ss.size > lim "signalSamples" then
+    throw s!"at most {lim "signalSamples"} samples; {LeanFM.CallLimits.raise "signalSamples" (lim "signalSamples")}, or check a window of the log with serverLog and fromLine and lineCount"
   for i in [1:ss.size] do
     if ss[i]!.t < ss[i-1]!.t then
       throw s!"sample {i + 1} (t {numText ss[i]!.t}) comes before the one above it (t {numText ss[i-1]!.t})"
   let fields := claim.fields.eraseDups
+  -- the claim starts where every field it reads has had a reading
+  let firsts ← fields.mapM fun f => match (List.range ss.size).find? (fun i => (ss[i]!.vals.lookup f).isSome) with
+    | some i => pure i
+    | none => throw s!"the claim reads {f}, which the run never reads"
+  let start := firsts.foldl max 0
+  let ss := ss.extract start ss.size
   let vals ← fields.mapM fun f => do pure (f, ← hold ss f)
   let r : Run := { t := ss.map (·.t), labels := ss.map (·.label), vals }
   let (m, cut) := (margin r claim).run 0
@@ -382,8 +391,8 @@ def check (args : Json) : Except String Json := do
           [("readings", Json.mkObj (vals.map fun (f, a) => (f, num a[i]!)))])
       | none => Json.null
     | none => Json.null
-  let (marginSeries, omitted) := series r.t (inner.getD m)
-  let fieldSeries := vals.map fun (f, a) => (f, (series r.t a).1)
+  let (marginSeries, omitted) := series r.t (inner.getD m) (lim "signalPoints")
+  let fieldSeries := vals.map fun (f, a) => (f, (series r.t a (lim "signalPoints")).1)
   let reading :=
     (if holds then s!"holds: margin {numText m[0]!} at the first sample"
      else s!"fails: margin {numText m[0]!} at the first sample") ++
@@ -391,13 +400,17 @@ def check (args : Json) : Except String Json := do
       | .null => ""
       | j => s!"; it first fails at t {(j.getObjValD "t").compress}") ++
     (if cut > 0 then s!"; {cut} moments had a window cut short by the end of the run" else "")
+  let source : Json := match args.getObjValD "logWindow" with
+    | .obj w => Json.mkObj [("kind", Json.str "log"), ("log", w.getD "log" Json.null), ("fromLine", w.getD "fromLine" Json.null),
+        ("lastLine", toJson (((Json.obj w).getObjValAs? Nat "nextLine").toOption.getD 1 - 1)), ("logLines", w.getD "logLines" Json.null)]
+    | _ => Json.mkObj [("kind", Json.str "given"), ("samples", toJson (ss.size + start))]
   let svg : List (String × Json) := match args.getObjValD "theme" with
     | .str "dark" => [("svg", Json.str (plot r claim (inner.getD m) true))]
     | .str "light" => [("svg", Json.str (plot r claim (inner.getD m) false))]
     | _ => []
   return Json.mkObj <| svg ++ [("tool", Json.str "check_signal"), ("verdict", Json.str (if holds then "holds" else "fails")),
     ("reading", Json.str reading), ("claim", Json.str claim.text), ("margin", num m[0]!),
-    ("firstFailure", first), ("samples", toJson ss.size), ("cutShort", toJson cut),
+    ("firstFailure", first), ("samples", toJson ss.size), ("skipped", toJson start), ("source", source), ("cutShort", toJson cut),
     ("series", Json.mkObj ([("margin", marginSeries)] ++ fieldSeries)), ("omittedPoints", toJson omitted)]
 
 end LeanFM.Signal

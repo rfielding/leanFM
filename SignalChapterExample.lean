@@ -1,4 +1,5 @@
 import LeanFM.Signal
+import LeanFM.SessionTools
 
 /-! Generates the book's "Claims over measurements" section: three days of a guinea pig cage
     while its owners are away. An Arduino reads the water bottle, the food bowl and the temperature
@@ -27,11 +28,17 @@ structure Ev where
   t : Nat
   label : String
   payload : List (String × Float)
+  /-- The device that sent it: Arduino, Dispenser or Webcam (to the Hub). -/
+  src : String := "Arduino"
 
-/-- An event line as LeanFM's event log writes one: the marker first, then the fields. -/
-def line (e : Ev) : String :=
-  let rest := (Json.mkObj [("ts", Json.str (toString ((t0 + e.t) * 1000000000))), ("label", Json.str e.label),
-    ("payload", Json.mkObj (e.payload.map fun (k, v) => (k, num v)))]).compress
+/-- An event line as LeanFM's event log writes one: the marker first, then the event, numbered per
+device (`arduino:3`) with its prev link to the device's previous event, all in one session. -/
+def line (e : Ev) (n : Nat) : String :=
+  let dev := e.src.toLower
+  let rest := (Json.mkObj ([("id", Json.str s!"{dev}:{n}"), ("session", Json.str "cage"), ("from", Json.str e.src),
+    ("to", Json.str "Hub"), ("label", Json.str e.label), ("ts", Json.str (toString ((t0 + e.t) * 1000000000))),
+    ("payload", Json.mkObj (e.payload.map fun (k, v) => (k, num v)))] ++
+    (if n > 1 then [("prev", Json.arr #[Json.str s!"{dev}:{n - 1}"])] else []))).compress
   "{\"type\":\"leanFM\"," ++ (rest.drop 1).toString
 
 /-- Three days, a reading every ten minutes; a Dispense when the bowl drops below 20 g (five
@@ -48,22 +55,34 @@ def events : List Ev := Id.run do
     if let some at_ := pending then
       if at_ ≤ t then
         food := food + 35
-        out := out.push { t := at_, label := "Dispense", payload := [("food", round1 food)] }
+        out := out.push { t := at_, label := "Dispense", payload := [("food", round1 food)], src := "Dispenser" }
         pending := none
     let spike := if day == 1 then max 0 (4.1 * (1 - Float.abs (h - 15) / 2.5)) else 0
     let temp := 21 + 2 * Float.sin (2 * pi * (h / 24 - 0.375)) + spike + 0.15 * noise i 1
     let water := 600 - 1.0 * i.toFloat + 2 * noise i 2
     let motion := 0.58 + 0.3 * Float.cos (2 * pi * (h - 6) / 12) + 0.04 * noise i 3
     food := food - 0.9 - 0.1 * noise i 4
-    out := out.push { t, label := "Reading", payload := [("temp", round1 temp), ("water", round1 water), ("food", round1 food), ("motion", round2 motion)] }
+    out := out.push { t, label := "Reading", payload := [("temp", round1 temp), ("water", round1 water), ("food", round1 food)] }
+    out := out.push { t := t + 300, label := "Frame", payload := [("motion", round2 motion)], src := "Webcam" }
     if food < 20 && pending.isNone then
       -- the dispenser sticks once, at the first low bowl of the third day
       let sticks := day == 2 && !stuck
       if sticks then stuck := true
       pending := some (t + if sticks then 1500 else 300)
+  -- in time order (a Dispense lands between a Reading and the next Frame)
+  return (out.toList.mergeSort (fun a b => a.t ≤ b.t))
+
+/-- The lines, each numbered within its device. -/
+def lines : List String := Id.run do
+  let mut seen : List (String × Nat) := []
+  let mut out : Array String := #[]
+  for e in events do
+    let n := (seen.lookup e.src).getD 0 + 1
+    seen := (e.src, n) :: seen.filter (·.1 != e.src)
+    out := out.push (line e n)
   return out.toList
 
-def logText : String := "\n".intercalate (events.map line)
+def logText : String := "\n".intercalate lines
 
 structure Example where
   name : String
@@ -106,7 +125,18 @@ def listing (body : String) : String :=
 
 def main : IO Unit := do
   let dir := "book/generated"
-  let lines := events.map line
+  IO.FS.writeFile "examples/guinea-pigs/cage.log" (logText ++ "\n")
+  -- the order of the events, checked against the example's protocol by session_conform's function
+  -- for a log the server reads itself (as with serverLog), so the 64 KiB bound on what a client
+  -- sends does not apply to it
+  let cageText ← IO.FS.readFile "examples/guinea-pigs/GuineaPigCage.leanfm"
+  let order ← match LeanFM.SessionTools.conformLog (Json.mkObj [("lean", Json.str cageText), ("allowIncomplete", Json.bool true),
+      ("logWindow", Json.mkObj [("log", Json.str "cage"), ("fromLine", toJson (1 : Nat)), ("logLines", toJson lines.length),
+        ("nextLine", toJson (lines.length + 1)), ("logFingerprint", Json.str "")])]) logText LeanFM.SessionTools.conformEvents with
+    | .ok j => pure j
+    | .error e => throw (IO.userError s!"session_conform refused the cage log: {e}")
+  unless str order "verdict" == "conforms" do throw (IO.userError s!"the cage log breaks GuineaPigCage: {str order "reading"}")
+  IO.FS.writeFile s!"{dir}/sig-conform.tex" (listing s!"session_conform: {str order "verdict"}: {str order "reading"}")
   IO.FS.writeFile s!"{dir}/sig-log.tex" <| listing <| "\n".intercalate (lines.take 3 ++ ["..."] ++
     (lines.filter (fun (l : String) => (l.splitOn "Dispense").length > 1)).take 1)
   IO.FS.writeFile s!"{dir}/sig-claims.tex" <| listing <| "\n".intercalate (examples.map (·.claim))

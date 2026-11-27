@@ -428,6 +428,8 @@ def main : IO Unit := do
   let sig ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"tools/call\",\"params\":{\"name\":\"check_signal\",\"arguments\":{\"claim\":\"(always (below temp 26))\",\"samples\":[{\"t\":0,\"temp\":20},{\"t\":600,\"temp\":27.1}]}}}"
   assertContains "MCP check_signal answers a verdict" sig.body "\"verdict\":\"fails\""
   assertContains "MCP check_signal answers the margin" sig.body "\"margin\":-1.1"
+  let sigLog ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"tools/call\",\"params\":{\"name\":\"check_signal\",\"arguments\":{\"claim\":\"(always (below temp 26))\",\"serverLog\":\"devices\"}}}"
+  assertContains "MCP check_signal refuses serverLog where server_logs is not served" sigLog.body "\"isError\":true"
   let reasm ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":12,\"method\":\"tools/call\",\"params\":{\"name\":\"check_reassembly\",\"arguments\":{\"signature\":\"AB\"}}}"
   assertContains "MCP check_reassembly finds an evasion with defaults" reasm.body "\"verdict\":\"disproved\""
   assertContains "MCP check_reassembly lists the segments" reasm.body "{\"data\":\"AB\",\"offset\":\"0\"}"

@@ -68,7 +68,8 @@ def boundsOf (args : Json) : Bounds :=
     maxDraftTransitions := (g "draftTransitions")
     maxModelNodes := (g "modelNodes")
     maxFormulaNodes := (g "ctlFormulaNodes")
-    maxTruthBytes := (g "truthBytes") }
+    maxTruthBytes := (g "truthBytes")
+    maxArgumentBytes := (g "argumentBytes") }
 
 def boundsJson (b : Bounds := bounds) : Json :=
   Json.mkObj
@@ -3029,7 +3030,7 @@ def reference : String := String.intercalate "\n"
   , ""
   , "## check_signal"
   , ""
-  , "Arguments: claim (an s-expression), and samples ([{t: seconds, label?, field: number, ...}] in time order) or log (event lines with ts in nanoseconds, label and payload numbers)."
+  , "Arguments: claim (an s-expression), and samples ([{t: seconds, label?, field: number, ...}] in time order), log (event lines with ts in nanoseconds, label and payload numbers), or serverLog (a log server_logs lists, read on the server, with fromLine and lineCount or lastLines; devices is logs/devices.log, for a project's own devices). A log over the 64 KiB a client may send is checked by serverLog."
   , ""
   , "Claims over measured values on one recorded run, in linear time. Words: (above f c), (below f c), (on M), not, and, or, implies, (within d p), (throughout d p), always, never, possibly and inevitably (the same over one run). A field's value is its latest reading; a field read before its first reading is refused. The margin says how far the claim is from failing, in the readings' units: positive is room left, negative is how far it failed. Example: (always (implies (below food 20) (within 600 (on Dispense))))."
   , ""
@@ -3079,8 +3080,15 @@ def reference : String := String.intercalate "\n"
 def toolNames : List String := ["explain_formula", "check_ctl", "check_trace", "classify_requirement", "knows", "check_protocol", "check_reassembly", "check_signal"]
 
 def run (name : String) (args : Json) : Option ToolOutcome :=
-  if args.compress.length > bounds.maxArgumentBytes then
-    some (.error s!"arguments exceed {bounds.maxArgumentBytes} bytes")
+  -- a log the server read itself (serverLog: logWindow beside it) is bounded by its window, not by
+  -- the bound on what a client sends
+  let sent := match args with
+    | .obj kvs => if kvs.contains "logWindow" then Json.obj ((kvs.erase "log").erase "logWindow") else args
+    | j => j
+  let cap := LeanFM.CallLimits.get args "argumentBytes"
+  if sent.compress.length > cap then
+    some (.error (s!"arguments exceed {cap} bytes; name a log with serverLog instead of sending it, or " ++
+      LeanFM.CallLimits.raise "argumentBytes" cap))
   else match name with
     | "explain_formula" => some (explainFormula args)
     | "check_ctl" => some (checkCtl args (boundsOf args))

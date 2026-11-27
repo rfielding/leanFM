@@ -77,4 +77,29 @@ def draft := "{\"task\": {\"id\": \"d\", \"states\": [\"a\", \"b\"], \"initial\"
 #guard match Logic.run "check_ctl" (args (draft ++ ", \"limits\": {\"ctlFormulaNodes\": 1}}")) with | some r => refused r "the ctlFormulaNodes limit (1)" | none => false
 #guard match Logic.run "check_ctl" (args (draft ++ ", \"limits\": {\"draftTransitions\": 0}}")) with | some (.ok _) => true | _ => false
 
+-- the LeanFM-Limits header: name=value pairs, merged into each tool call of a request
+#guard (match parseHeader "argumentBytes=1048576, states=100000" with | .ok j => j == Json.mkObj [("argumentBytes", toJson (1048576 : Nat)), ("states", toJson (100000 : Nat))] | _ => false)
+#guard refused (parseHeader "bogus=3") "unknown limit bogus"
+#guard refused (parseHeader "states=0") "at least 1"
+#guard refused (parseHeader "states=lots") "at least 1"
+#guard refused (parseHeader "states") "name=value"
+def hcall (lim : String) : Json := args ("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"session_check\",\"arguments\":{\"lean\":\"x\"" ++ lim ++ "}}}")
+def limitsOf (m : Json) : Json := ((m.getObjValD "params").getObjValD "arguments").getObjValD "limits"
+#guard limitsOf (withHeader (hcall "") (Json.mkObj [("states", toJson (5 : Nat))])) == Json.mkObj [("states", toJson (5 : Nat))]
+-- a name the call gives keeps its own value; others come from the header
+#guard limitsOf (withHeader (hcall ",\"limits\":{\"states\":9}") (Json.mkObj [("states", toJson (5 : Nat)), ("textBytes", toJson (7 : Nat))])) ==
+  Json.mkObj [("states", toJson (9 : Nat)), ("textBytes", toJson (7 : Nat))]
+-- other methods are left alone
+#guard withHeader (args "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}") (Json.mkObj [("states", toJson (5 : Nat))]) ==
+  args "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"
+-- the body cap: the default without a header, the header's value above it, never below, capped at the ceiling
+#guard requestCap none 262144 100 == 262144
+#guard requestCap (some "requestBytes=1000000") 262144 100 == 1000000
+#guard requestCap (some "requestBytes=10") 262144 100 == 262144
+#guard requestCap (some "requestBytes=999999999999") 262144 2 == 524288
+#guard requestCap (some "nonsense") 262144 100 == 262144
+-- size limits refuse naming the limit, the argument and the header
+#guard refused (SessionTools.parseProtocol (args ("{\"lean\":\"" ++ String.ofList (List.replicate 70000 'x') ++ "\"}"))) "LeanFM-Limits: argumentBytes="
+#guard refused (SessionTools.parseProtocol (args ("{\"lean\":\"" ++ String.ofList (List.replicate 70000 'x') ++ "\"}"))) "serverLog"
+
 end LeanFM.CallLimitsTests

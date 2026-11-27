@@ -43,7 +43,13 @@ def instructions : String :=
   "A limit is a warning, not a wall: when an answer says it stopped at a limit (states, logEvents, datasetEvents, formulaNodes and the others " ++
   "listed in each tool's limits argument), and the work is worth the memory and time, call the same tool again with the optional " ++
   "limits argument, for example {\"limits\": {\"states\": 100000}}; it applies to that call only, is capped at the operator's ceiling, " ++
-  "and the answer's limitsApplied says what was used. The limits and their defaults: " ++ LeanFM.CallLimits.listing ++ ". " ++
+  "and the answer's limitsApplied says what was used. Over HTTP the same limits can be raised for one whole request with the " ++
+  "header LeanFM-Limits: name=value, name=value (for example LeanFM-Limits: argumentBytes=1048576, requestBytes=4194304); " ++
+  "a name the call's own limits argument gives wins, and only the header can raise requestBytes, since the body is sized before it is read. " ++
+  "Sizes are limits too, and each has a way around it: a log larger than argumentBytes is named instead of sent (serverLog, read " ++
+  "on the server, with fromLine and lineCount or lastLines to read a window), a project's protocol is named by file, and " ++
+  "argumentBytes, textBytes, protoBytes, requestBytes, signalSamples, signalWords and signalPoints are raised like any other limit; " ++
+  "a stdio client sends no headers, so it names large data rather than sending it. The limits and their defaults: " ++ LeanFM.CallLimits.listing ++ ". " ++
   "When a LeanFM tool, view or server fails, and server_logs is listed, read the logs with it (no log argument " ++
   "lists them) before asking the user to paste a log."
 
@@ -221,7 +227,12 @@ def toolDefinitions : Array Json := #[
     "Check a claim about measured values over one recorded run (an Arduino's water, food and temperature readings, a webcam's motion level) in time linear in the run. The claim is an s-expression in these words only: (above f c), (below f c), (on M), not, and, or, implies, (within d p) (p at some sample in the next d seconds), (throughout d p) (p at every sample in the next d seconds), always, never, and possibly or inevitably (the same over one run: p now or later). A field's value is its latest reading. Returns holds or fails with the margin (how far from failing, in the readings' units; unbounded when infinite), the first failing sample of an always or never with its readings, the moments whose window was cut short by the end of the run, and series of each field and of the margin for drawing."
     (schema [("claim", stringSchema "an s-expression such as (always (and (above temp 18) (below temp 26)))"),
       ("samples", Json.mkObj [("type", "array"), ("items", Json.mkObj [("type", "object")]), ("description", "[{t: seconds, label?: name, field: number, ...}] in time order")]),
-      ("log", stringSchema "event lines instead of samples: each {\"type\":\"leanFM\",...} line's ts (nanoseconds), label and payload numbers")] ["claim"]),
+      ("log", stringSchema "event lines instead of samples: each {\"type\":\"leanFM\",...} line's ts (nanoseconds), label and payload numbers"),
+      ("serverLog", stringSchema "instead of samples or log: the name of a log server_logs lists (devices is logs/devices.log, for a project's own devices), read on the server, so a log over the 64 KiB a client may send is checked by name"),
+      ("fromLine", Json.mkObj [("type", "integer"), ("minimum", 1), ("description", Json.str "with serverLog: the first line to read (default 1)")]),
+      ("lineCount", Json.mkObj [("type", "integer"), ("minimum", 1), ("maximum", 100000), ("description", Json.str "with serverLog: how many lines to read")]),
+      ("lastLines", Json.mkObj [("type", "integer"), ("minimum", 1), ("maximum", 100000), ("description", Json.str "with serverLog, instead of fromLine and lineCount: the last N lines")]),
+      ("theme", stringSchema "light or dark: also draw the chart as an SVG")] ["claim"]),
   tool "check_reassembly" "Find stream-reassembly evasions"
     "A defender scans a TCP stream for a signature, and the host behind it reassembles the same stream; the attacker chooses every segment (any offset and length, the signature's bytes or others, repeated with different bytes). Each side keeps the first or the last bytes of an overlap. Returns check_ctl's verdict over every segmentation and, for an evasion, the segments that make it. Defaults: signature EVIL, box first, host last, mode blocking (an IPS resets the stream on a match; passive is an IDS that alerts), formula never claimed delivered(sig) in blocking mode and never (delivered and not alerted) in passive mode. Claims for a formula: alerted(sig), delivered(sig)."
     (schema [("signature", stringSchema "1 to 4 characters, no ."),
@@ -780,6 +791,11 @@ def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Respon
                   | .ok args => if name == "session_ctl" then ctlCached args else pure (toolResult name args)
                   | .error e => pure (.ok (logicResult name (.error e)))
                 | .error e => pure (.ok (logicResult name (.error e)))
+              -- check_signal may also name a server log (selfhost.mcp.logic.signal)
+              else if name == "check_signal" then do
+                match ← LeanFM.ServerLogs.logArgs args with
+                | .ok args => pure (toolResult name args)
+                | .error e => pure (.ok (logicResult name (.error e)))
               else pure (toolResult name args)
             pure (r.map (withLimitsReport applied))
         let t1 ← IO.monoNanosNow
@@ -830,5 +846,16 @@ def dispatch (body : String) : IO Response :=
   match Json.parse body with
   | .error err => pure <| rpcError Json.null (-32700) err 400
   | .ok request => dispatchJson request
+
+/-- `dispatch` with the request's LeanFM-Limits header (selfhost.mcp.limits): its limits are merged
+into every tool call of the request; a malformed header is refused, naming the limits. -/
+def dispatchWith (body : String) (limitsHeader : Option String) : IO Response :=
+  match Json.parse body with
+  | .error err => pure <| rpcError Json.null (-32700) err 400
+  | .ok request => match limitsHeader with
+    | none => dispatchJson request
+    | some h => match LeanFM.CallLimits.parseHeader h with
+      | .error e => pure <| rpcError (request.getObjValD "id") (-32602) e 400
+      | .ok lim => dispatchJson (LeanFM.CallLimits.withHeader request lim)
 
 end LeanFM.MCP

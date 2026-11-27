@@ -36,9 +36,21 @@ def registry : List Limit :=
   , ⟨"draftStates", 8192, "states", "states of a check_ctl draft"⟩
   , ⟨"draftTransitions", 16384, "transitions", "transitions of a check_ctl draft"⟩
   , ⟨"modelNodes", 4096, "nodes", "checker-model nodes check_ctl builds"⟩
-  , ⟨"ctlFormulaNodes", 256, "subformulas", "distinct subformulas of a check_ctl formula"⟩ ]
+  , ⟨"ctlFormulaNodes", 256, "subformulas", "distinct subformulas of a check_ctl formula"⟩
+  -- sizes: each can also be raised for one HTTP request with the LeanFM-Limits header, and a log or
+  -- protocol can be named instead of sent (serverLog, file), so the server reads it from disk
+  , ⟨"argumentBytes", 65536, "bytes", "a tool's arguments as the client sends them (a log named by serverLog, or a protocol by file, is read on the server and not counted)"⟩
+  , ⟨"textBytes", 65536, "bytes", "LeanFM protocol text"⟩
+  , ⟨"protoBytes", 65536, "bytes", "a .proto file"⟩
+  , ⟨"requestBytes", 262144, "bytes", "one HTTP request body to /mcp; raise it with the LeanFM-Limits header, which arrives before the body"⟩
+  , ⟨"signalSamples", 100000, "samples", "samples one check_signal reads"⟩
+  , ⟨"signalWords", 256, "words", "words of one check_signal claim"⟩
+  , ⟨"signalPoints", 2000, "points", "points of each series check_signal returns or draws"⟩ ]
 
 def names : List String := registry.map (·.name)
+
+/-- The HTTP header that raises limits for one request (see `parseHeader`). -/
+def headerName : String := "LeanFM-Limits"
 
 def defaultOf (name : String) : Nat := ((registry.find? (·.name == name)).map (·.default)).getD 0
 
@@ -115,7 +127,53 @@ def report (as : List Applied) : Json :=
 
 /-- The sentence a refusal ends with: the limit in force and the argument that raises it. -/
 def raise (name : String) (value : Nat) : String :=
-  s!"this is the {name} limit ({value}); to allow more, call again with \"limits\": \{\"{name}\": {2 * value}} (a warning, not a wall: raise it when the machine has the memory)"
+  s!"this is the {name} limit ({value}); to allow more, call again with \"limits\": \{\"{name}\": {2 * value}}, or over HTTP send the header {headerName}: {name}={2 * value} (a warning, not a wall: raise it when the machine has the memory)"
+
+/-! ## The LeanFM-Limits header
+
+An HTTP client may raise limits for one request with a header instead of, or as well as, the
+`limits` argument: `LeanFM-Limits: argumentBytes=1048576, states=100000`. It applies to every tool
+call in the request; a name the call's own `limits` argument gives wins. Only the header can raise
+requestBytes, since the body is sized before it is read. The operator's ceiling applies the same way.
+A stdio client, which sends no headers, uses the argument. -/
+
+/-- The header's value as a `limits` object: `name=value` pairs separated by commas. -/
+def parseHeader (value : String) : Except String Json := do
+  let parts := (value.splitOn ",").map (·.trimAscii.toString) |>.filter (· != "")
+  let kvs ← parts.mapM fun p => do
+    let [k, v] := (p.splitOn "=").map (·.trimAscii.toString)
+      | throw s!"{headerName}: write name=value, such as argumentBytes=1048576, not {p}"
+    unless names.contains k do throw s!"{headerName}: unknown limit {k}; the limits are {known}"
+    let some n := v.toNat? | throw s!"{headerName}: {k} must be a whole number of at least 1"
+    if n == 0 then throw s!"{headerName}: {k} must be a whole number of at least 1"
+    pure (k, toJson n)
+  return Json.mkObj kvs
+
+/-- A JSON-RPC message with the header's limits merged into each tools/call's `limits` argument
+(names the call already gives keep their own values). -/
+def withHeader (message header : Json) : Json :=
+  let one (m : Json) : Json :=
+    if m.getObjValD "method" != Json.str "tools/call" then m else
+    let params := m.getObjValD "params"
+    let args := params.getObjValD "arguments"
+    let given := match args.getObjValD "limits" with | .obj kvs => kvs | _ => {}
+    let merged := match header with
+      | .obj hs => hs.toList.foldl (fun acc (k, v) => if acc.contains k then acc else acc.insert k v) given
+      | _ => given
+    let args := (match args with | .obj _ => args | _ => Json.mkObj []).setObjVal! "limits" (Json.obj merged)
+    m.setObjVal! "params" ((match params with | .obj _ => params | _ => Json.mkObj []).setObjVal! "arguments" args)
+  match message with
+  | .arr ms => Json.arr (ms.map one)
+  | m => one m
+
+/-- The most body bytes one request may have: the header's requestBytes, capped at the operator's
+ceiling, else `default`. Never less than `default`. -/
+def requestCap (header : Option String) (default factor : Nat) : Nat :=
+  match header.map parseHeader with
+  | some (.ok j) => match (j.getObjValD "requestBytes").getNat? with
+    | .ok n => max default (min n (defaultOf "requestBytes" * factor))
+    | .error _ => default
+  | _ => default
 
 /-- The limits, their defaults and what each bounds: said once, in the server instructions. -/
 def listing : String :=

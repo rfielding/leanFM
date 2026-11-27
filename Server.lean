@@ -489,7 +489,7 @@ def responseForRequest (request : String) : IO Response := do
       ["Content-Security-Policy: " ++ LeanFM.MCP.sessionAppPolicy, "Cache-Control: no-store", "X-Content-Type-Options: nosniff"]
   else if path == "/mcp" then
     if method == "POST" then
-      let mcpResponse ← LeanFM.MCP.dispatch (requestBody request)
+      let mcpResponse ← LeanFM.MCP.dispatchWith (requestBody request) (LeanFM.ChatUI.Store.headerValue? request LeanFM.CallLimits.headerName)
       pure <| response mcpResponse.status "application/json; charset=utf-8" mcpResponse.body
         ["MCP-Protocol-Version: " ++ LeanFM.MCP.protocolVersion]
     else
@@ -570,8 +570,9 @@ def readRequest (client : TcpClient) (pending : ByteArray) (idleMs : Nat) :
     IO (Except LeanFM.ChatUI.HttpRequest.FrameError (Option (String × ByteArray))) := do
   let mut bytes := pending
   let mut deadline := (← IO.monoMsNow) + (if pending.isEmpty then idleMs else 15000)
+  let factor ← LeanFM.CallLimits.ceilingFactor.get
   repeat
-    match LeanFM.ChatUI.HttpRequest.frameLength? bytes with
+    match LeanFM.ChatUI.HttpRequest.frameLength? bytes (fun h => LeanFM.CallLimits.requestCap h LeanFM.ChatUI.HttpRequest.maxBodyBytes factor) with
     | .error failure => return .error failure
     | .ok (some expected) =>
         if bytes.size ≥ expected then

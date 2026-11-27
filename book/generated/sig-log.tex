@@ -1,7 +1,7 @@
 \begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize,breaklines=true]
-{"type":"leanFM","label":"Reading","payload":{"food":51.2,"motion":0.28,"temp":19.6,"water":598},"ts":"1794528000000000000"}
-{"type":"leanFM","label":"Reading","payload":{"food":50.2,"motion":0.26,"temp":19.5,"water":600.1},"ts":"1794528600000000000"}
-{"type":"leanFM","label":"Reading","payload":{"food":49.3,"motion":0.25,"temp":19.3,"water":598.1},"ts":"1794529200000000000"}
+{"type":"leanFM","from":"Arduino","id":"arduino:1","label":"Reading","payload":{"food":51.2,"temp":19.6,"water":598},"session":"cage","to":"Hub","ts":"1794528000000000000"}
+{"type":"leanFM","from":"Webcam","id":"webcam:1","label":"Frame","payload":{"motion":0.28},"session":"cage","to":"Hub","ts":"1794528300000000000"}
+{"type":"leanFM","from":"Arduino","id":"arduino:2","label":"Reading","payload":{"food":50.2,"temp":19.5,"water":600.1},"prev":["arduino:1"],"session":"cage","to":"Hub","ts":"1794528600000000000"}
 ...
-{"type":"leanFM","label":"Dispense","payload":{"food":54.6},"ts":"1794549300000000000"}
+{"type":"leanFM","from":"Dispenser","id":"dispenser:1","label":"Dispense","payload":{"food":54.6},"session":"cage","to":"Hub","ts":"1794549300000000000"}
 \end{lstlisting}

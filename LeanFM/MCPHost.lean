@@ -155,7 +155,7 @@ def isJsonContentType (ct : Option String) : Bool :=
   | none => false
 
 /-- Answers decided before dispatch, in the order the decision lists them. `none` means dispatch. -/
-def gate (cfg : HostConfig) (r : Req) : Option Resp :=
+def gate (cfg : HostConfig) (r : Req) (bodyCap : Nat := maxBodyBytes) : Option Resp :=
   if r.path == "/healthz" then
     if r.method == "GET" then some { status := 200, contentType := "text/plain", body := "ok\n" }
     else some (plain 405 "method_not_allowed" "GET only" [("Allow", "GET")])
@@ -165,8 +165,8 @@ def gate (cfg : HostConfig) (r : Req) : Option Resp :=
   else if r.method == "OPTIONS" then some { status := 204, contentType := "", body := "" }
   else if r.method != "POST" then
     some (plain 405 "method_not_allowed" "this server sends no event stream; use POST" [("Allow", "POST, OPTIONS")])
-  else if r.body.utf8ByteSize > maxBodyBytes then
-    some (plain 413 "body_too_large" s!"the request body exceeds {maxBodyBytes} bytes")
+  else if r.body.utf8ByteSize > bodyCap then
+    some (plain 413 "body_too_large" s!"the request body exceeds {bodyCap} bytes; send the header LeanFM-Limits: requestBytes={r.body.utf8ByteSize} to allow it (up to the operator's ceiling), or name the data instead of sending it (serverLog, file)")
   else if (match cfg.token with
       | some t => match r.header? "Authorization" with
         | some auth => !(auth.startsWith "Bearer " && constantTimeEq ((auth.drop 7).toString.trimAscii.toString) t)
@@ -261,7 +261,9 @@ def Limits.leave (l : Limits) : IO Unit :=
 def handle (cfg : HostConfig) (limits : Limits) (r : Req) (nowMs : Nat) : IO Resp := do
   let cors := corsHeaders cfg r
   let finish (res : Resp) : Resp := { res with headers := baseHeaders ++ cors ++ res.headers }
-  if let some early := gate cfg r then return finish early
+  let limitsHeader := r.header? LeanFM.CallLimits.headerName
+  let bodyCap := LeanFM.CallLimits.requestCap limitsHeader maxBodyBytes (← LeanFM.CallLimits.ceilingFactor.get)
+  if let some early := gate cfg r bodyCap then return finish early
   if let some wait ← limits.take cfg (clientKey cfg r) nowMs then
     return finish (plain 429 "rate_limited" "too many requests" [("Retry-After", toString wait)])
   let parsed := Json.parse r.body
@@ -273,7 +275,7 @@ def handle (cfg : HostConfig) (limits : Limits) (r : Req) (nowMs : Nat) : IO Res
   if isToolCall then
     unless ← limits.enter cfg do
       return finish { (plain 503 "busy" "too many tool calls are running; retry shortly" [("Retry-After", "1")]) with rpcMethod, tool }
-  let reply ← try LeanFM.MCP.dispatch r.body
+  let reply ← try LeanFM.MCP.dispatchWith r.body limitsHeader
     finally if isToolCall then limits.leave
   let hasId := match message with
     | .obj kvs => kvs.contains "id"

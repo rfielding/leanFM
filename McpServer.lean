@@ -31,11 +31,11 @@ def readRequest (client : TcpClient) (pending : ByteArray) (idleMs : Nat) :
   let start ← IO.monoMsNow
   let mut bytes := pending
   let mut deadline := if pending.isEmpty then start + idleMs else start + 15000
+  let factor ← LeanFM.CallLimits.ceilingFactor.get
   repeat
-    match LeanFM.ChatUI.HttpRequest.frameLength? bytes with
+    match LeanFM.ChatUI.HttpRequest.frameLength? bytes (fun h => LeanFM.CallLimits.requestCap h maxBodyBytes factor) with
     | .error failure => return .error failure
     | .ok (some expected) =>
-        if expected > maxBodyBytes + 32768 then return .error (413, "the request exceeds the size limit")
         if bytes.size ≥ expected then
           return match String.fromUTF8? (bytes.extract 0 expected) with
             | some text => .ok (some (text, bytes.extract expected bytes.size))

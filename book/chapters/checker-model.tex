@@ -333,17 +333,59 @@ $n \to n'$, and a state's label $L(n) = (m, e)$, its last message and whether it
 Some requirements are about amounts, not messages. Our guinea pigs stay home while we travel.
 An Arduino reads the water bottle, the food bowl and the temperature every ten minutes, the
 food dispenser says when it runs, and a webcam over the cage reports how much the guinea pigs
-move. Each writes event lines, like any other part of a system (this log is simulated for the
-book: three days, \input{generated/sig-counts.tex}):
+move. The three devices and the hub they report to are a protocol like any other, each device
+reporting until it is switched off:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+-- from examples/guinea-pigs/GuineaPigCage.leanfm
+protocol GuineaPigCage (Arduino, Dispenser, Webcam, Hub) {
+  parallel {
+    loop Readings {
+      choice {
+        Reading from Arduino to Hub;
+        continue Readings;
+      } or {
+        ArduinoOff from Arduino to Hub;
+      }
+    }
+  } and {
+    loop Feeding {
+      choice {
+        Dispense from Dispenser to Hub;
+        continue Feeding;
+      } or {
+        DispenserOff from Dispenser to Hub;
+      }
+    }
+  } and {
+    loop Watching {
+      choice {
+        Frame from Webcam to Hub;
+        continue Watching;
+      } or {
+        WebcamOff from Webcam to Hub;
+      }
+    }
+  }
+}
+\end{lstlisting}
+Each event carries its measurements in its payload. Here is the start of the log, which is
+simulated for the book (three days, \input{generated/sig-counts.tex}; the whole log is
+\texttt{examples/guinea-pigs/cage.log}):
 
 \input{generated/sig-log.tex}
+
+The order of the events is checked as for any protocol, and the devices are still running:
+
+\input{generated/sig-conform.tex}
 
 What we require of the cage, written as claims:
 
 \input{generated/sig-claims.tex}
 
-Two new kinds of word appear. \texttt{(above f c)} and \texttt{(below f c)} compare the latest
-reading of a field with a number, and \texttt{(within d p)} and \texttt{(throughout d p)} say
+The measurements need claims of their own. Two new kinds of word appear.
+\texttt{(above f c)} and \texttt{(below f c)} compare the latest reading of a field with a
+number (each device sends its own fields, and a claim starts once every field it reads has been
+read), and \texttt{(within d p)} and \texttt{(throughout d p)} say
 that $p$ holds at some or at every reading in the next $d$ seconds. Everything else is as
 before. A recorded log is one run, with one future, so \texttt{possibly} and
 \texttt{inevitably} mean the same thing here: it happens now or later in this log.

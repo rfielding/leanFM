@@ -31,6 +31,8 @@ nothing but the protocol, and proves what the protocol promises
 
 ## The book in brief
 
+<img src="book/figures/cover-cage.svg" alt="The book's cover: two guinea pigs in a cage watched by an Arduino and a webcam, beside charts of what they measure" width="640">
+
 The [book](book/main.pdf) ([dark copy](book/main-dark.pdf)), *Requirements Logic*, is
 the reference for what LeanFM is and does. Requirements Logic is a Temporal Lean: protocols (session
 types: who sends what to whom) together with claims about what may and must happen next (CTL). Its

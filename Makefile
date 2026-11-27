@@ -311,6 +311,12 @@ log-range-check:
 	lake build leanfm-server
 	python3 -I scripts/log_range_check.py
 
+# The LeanFM-Limits header raises limits for one HTTP request (clause selfhost.mcp.limits).
+.PHONY: header-limits-check
+header-limits-check:
+	lake build leanfm-server leanfm-mcp
+	python3 -I scripts/header_limits_check.py
+
 .PHONY: env-registry-check
 env-registry-check:
 	python3 -I scripts/env_registry_check.py

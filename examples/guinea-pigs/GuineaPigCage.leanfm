@@ -1,0 +1,37 @@
+import LeanFM.Session.Syntax
+
+/-- Three devices watch a guinea pig cage while its owners are away, and each reports to the hub
+    until it is switched off: the Arduino reads the water bottle, the food bowl and the temperature
+    (Reading), the food dispenser says when it runs (Dispense), and the webcam reports how much the
+    guinea pigs move (Frame). The measurements ride in each event's payload; check_signal decides
+    the claims about them (book Section 5.6), and session_conform checks the order of the events. -/
+protocol GuineaPigCage (Arduino, Dispenser, Webcam, Hub) {
+  parallel {
+    loop Readings {
+      choice {
+        Reading from Arduino to Hub;
+        continue Readings;
+      } or {
+        ArduinoOff from Arduino to Hub;
+      }
+    }
+  } and {
+    loop Feeding {
+      choice {
+        Dispense from Dispenser to Hub;
+        continue Feeding;
+      } or {
+        DispenserOff from Dispenser to Hub;
+      }
+    }
+  } and {
+    loop Watching {
+      choice {
+        Frame from Webcam to Hub;
+        continue Watching;
+      } or {
+        WebcamOff from Webcam to Hub;
+      }
+    }
+  }
+}

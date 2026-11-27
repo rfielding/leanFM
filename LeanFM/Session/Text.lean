@@ -1128,8 +1128,9 @@ def fileDefs (stx : Syntax) (allowNoProtocol : Bool := false) : R (List Def) := 
 
 /-- Read protocol text with the grammar (Lean's parser, never elaborated): its protocols and what
 else it declares. -/
-def readText (text : String) : Except String (List Def × Acc) := do
-  if text.utf8ByteSize > limits.maxBytes then throw s!"the text is over {limits.maxBytes} bytes"
+def readText (text : String) (maxBytes : Nat := limits.maxBytes) : Except String (List Def × Acc) := do
+  if text.utf8ByteSize > maxBytes then
+    throw s!"the text is over {maxBytes} bytes; to allow more, call again with \"limits\": \{\"textBytes\": {2 * text.utf8ByteSize}}, or over HTTP send the header LeanFM-Limits: textBytes={2 * text.utf8ByteSize}"
   let stx ← Grammar.parseFile text
   (fileDefs stx |>.run text).run {}
 
@@ -1498,8 +1499,9 @@ def linkTargetsOf (env : Types.Env) (defs : List Def) (fuel : Nat) (ren : List (
 
 /-- Read protocol text. `types`, when given, are the message types from the protocol's .proto
 (selfhost.session.proto); the text may then not declare structures of its own. -/
-def parse (text : String) (types : Option Types.Env := none) (mainName : Option String := none) : Except String Parsed := do
-  let (defs, st) ← readText text
+def parse (text : String) (types : Option Types.Env := none) (mainName : Option String := none)
+    (maxBytes : Nat := limits.maxBytes) : Except String Parsed := do
+  let (defs, st) ← readText text maxBytes
   -- the protocol checked: the last one, or the one named, with only those before it in reach
   -- (selfhost.session.log-paging: protocolName)
   let (main, earlier) ← match mainName with

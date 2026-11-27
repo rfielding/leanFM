@@ -131,6 +131,28 @@ def main():
         s, h, b = get(port, "lines=1-1")
         assert h["ETag"] != tag and h["Content-Range"] == "lines 1-1/1" and b == "a new log\n", (h, b)
         print("ok: a replaced log has a new ETag and its own lines")
+        # check_signal reads a log by name too (selfhost.mcp.logic.signal)
+        with open(log, "w") as f:
+            for i in range(700):
+                temp = 20 + (i % 10) * 0.5 + (7 if i == 650 else 0)
+                f.write(json.dumps({"type": "leanFM", "id": f"arduino:{i+1}", "session": "cage", "from": "Arduino", "to": "Hub",
+                                    "label": "Reading", "ts": str(1794528000000000000 + i * 600000000000),
+                                    "payload": {"temp": temp, "water": 600 - i * 0.5}}).replace('{"type": "leanFM", ', '{"type":"leanFM",') + "\n")
+        size = os.path.getsize(log)
+        assert size > 65536, size
+        def signal(args):
+            body = {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "check_signal", "arguments": args}}
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", json.dumps(body).encode(), {"Content-Type": "application/json"})
+            r = json.loads(urllib.request.urlopen(req, timeout=60).read())["result"]
+            return r, (r.get("structuredContent") or json.loads(r["content"][0]["text"]) if not r.get("isError") else None)
+        r, a = signal({"claim": "(always (below temp 26))", "serverLog": "serve"})
+        assert a and a["verdict"] == "fails" and a["samples"] == 700, a
+        assert a["source"] == {"kind": "log", "log": "serve", "fromLine": 1, "lastLine": 700, "logLines": 700}, a["source"]
+        r, _ = signal({"claim": "(always (below temp 26))", "log": open(log).read()})
+        assert r.get("isError") and "exceed 65536" in r["content"][0]["text"], r
+        r, a = signal({"claim": "(always (below temp 26))", "serverLog": "serve", "lastLines": 10})
+        assert a["source"]["fromLine"] == 691 and a["verdict"] == "holds", a["source"]
+        print(f"ok: check_signal reads the whole {size}-byte log by serverLog (source log serve, lines 1-700), the same text sent as log is refused at 64 KiB, and lastLines 10 reads only the end")
     finally:
         proc.kill(); proc.wait()
         shutil.rmtree(tmp, ignore_errors=True)

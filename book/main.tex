@@ -260,11 +260,11 @@
 \begin{tikzpicture}[remember picture,overlay]
   \fill[covernavy]
     (current page.south west) rectangle (current page.north east);
-  % The cover is the book's subject: a typestate graph LeanFM derived from a protocol
-  % (generated/ctl-parallel-ts-cover.dot: two requests interleaved, thirteen typestates) and the rule one typestate must keep.
+  % The cover is an illustration (figures/cover-cage.svg, drawn by hand, not generated): the guinea
+  % pig cage of Section~5.6, its Arduino, sensors and webcam, beside charts of what it measures.
   \node[inner sep=0pt]
     at ([yshift=-.4cm]current page.center)
-    {\includegraphics[width=.86\paperwidth,height=.5\paperheight,keepaspectratio]{generated/ctl-parallel-ts-cover.pdf}};
+    {\includegraphics[width=.86\paperwidth,height=.5\paperheight,keepaspectratio]{figures/cover-cage.pdf}};
   \node[anchor=north west,text width=.84\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.85cm]current page.north west)
     {\color{leangold}\fontsize{30}{34}\selectfont\bfseries

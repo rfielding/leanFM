@@ -49,7 +49,8 @@ def sources : List Source := [
   ⟨"desktop-main", "Claude Desktop's main log (app restarts, connectors, memory)", false, "main.log"⟩,
   ⟨"serve", "output of make serve: leanfm-server's standard output and error", true, "logs/serve.log"⟩,
   ⟨"server", "leanfm-server's own log file", true, "logs/leanfm-server.log"⟩,
-  ⟨"diagnostics", "LeanFM's runtime diagnostics journal (JSON lines)", true, "logs/runtime-diagnostics.jsonl"⟩]
+  ⟨"diagnostics", "LeanFM's runtime diagnostics journal (JSON lines)", true, "logs/runtime-diagnostics.jsonl"⟩,
+  ⟨"devices", "event lines from the project's own devices (an Arduino's readings, a webcam's motion), which check_signal and session_conform read by name", true, "logs/devices.log"⟩]
 
 def names : List String := sources.map (·.name)
 

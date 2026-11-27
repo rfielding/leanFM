@@ -108,8 +108,9 @@ def markComment (d : String) : Except String (Option (Mark × Place)) := do
   return some (marks.headD .plain, places.headD .body)
 
 /-- The messages of a proto3 file, as message types. -/
-def ofProto (text : String) : Except String Env := do
-  if text.utf8ByteSize > maxBytes then throw s!"the .proto is over {maxBytes} bytes"
+def ofProto (text : String) (maxBytes : Nat := maxBytes) : Except String Env := do
+  if text.utf8ByteSize > maxBytes then
+    throw s!"the .proto is over {maxBytes} bytes; to allow more, call again with \"limits\": \{\"protoBytes\": {2 * text.utf8ByteSize}}, or over HTTP send the header LeanFM-Limits: protoBytes={2 * text.utf8ByteSize}"
   let toks := (← lex text.toList).toList
   let mut rest := toks
   let mut docs : List String := []

@@ -1,5 +1,6 @@
 import LeanFM.SessionTools
 import LeanFM.Session.SessionTests
+import LeanFM.Signal
 
 /-! Tests for the MCP session tools (clause selfhost.mcp.session.tools). Built with the library, so
 `lake build` runs every `#guard`. -/
@@ -858,5 +859,34 @@ def windowConform (fromLine : Nat) (count : Option Nat) : Except String Json :=
 -- from line 3: both Pongs answer Pings before the window, so both sessions began before it and are left out
 #guard field (windowConform 3 none) "sessionsBeganBeforeWindow" == toJson (2 : Nat) && field (windowConform 3 none) "nextLine" == toJson (5 : Nat)
 #guard ((reason (conform (Json.mkObj [("lean", Json.str pingText), ("log", Json.str twoSessionLog), ("fromLine", toJson (0 : Nat))]))).splitOn "fromLine").length > 1
+
+/-! ## The guinea pig cage: examples/guinea-pigs (decision logic-signal)
+
+The log written for the book's Section 5.6 follows the cage's protocol, and the book's four claims
+over its measurements come out as the book says. -/
+
+def cageProtocol : String := include_str "../examples/guinea-pigs/GuineaPigCage.leanfm"
+def cageLog : String := include_str "../examples/guinea-pigs/cage.log"
+def cageLines : Nat := (cageLog.splitOn "\n").filter (·.startsWith "{") |>.length
+-- read as the server reads a log it holds (serverLog), so the 64 KiB bound on what a client sends
+-- does not apply
+def cageOrder : Except String Json :=
+  conformLog (Json.mkObj [("lean", Json.str cageProtocol), ("allowIncomplete", Json.bool true),
+    ("logWindow", Json.mkObj [("log", Json.str "cage"), ("fromLine", toJson (1 : Nat)), ("logLines", toJson cageLines),
+      ("nextLine", toJson (cageLines + 1)), ("logFingerprint", Json.str "")])]) cageLog conformEvents
+#guard (match cageOrder with | .ok j => j.getObjValD "verdict" == Json.str "conforms" | _ => false)
+-- without allowIncomplete the devices, still running, are reported
+#guard (match conformLog (Json.mkObj [("lean", Json.str cageProtocol),
+    ("logWindow", Json.mkObj [("log", Json.str "cage"), ("fromLine", toJson (1 : Nat)), ("logLines", toJson cageLines),
+      ("nextLine", toJson (cageLines + 1)), ("logFingerprint", Json.str "")])]) cageLog conformEvents with
+  | .ok j => j.getObjValD "verdict" != Json.str "conforms" | _ => false)
+def cageClaim (c : String) : String :=
+  match LeanFM.Signal.check (Json.mkObj [("claim", Json.str c), ("log", Json.str cageLog)]) with
+  | .ok j => match j.getObjValD "verdict" with | .str v => v | _ => "?"
+  | .error e => e
+#guard cageClaim "(always (and (above temp 18) (below temp 26)))" == "fails"
+#guard cageClaim "(never (throughout 1800 (below water 100)))" == "holds"
+#guard cageClaim "(always (implies (below food 20) (within 600 (on Dispense))))" == "fails"
+#guard cageClaim "(always (within 7200 (above motion 0.3)))" == "fails"
 
 end LeanFM.SessionToolsTests

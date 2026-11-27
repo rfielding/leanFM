@@ -376,7 +376,7 @@ def jsonTypesText (j : Json) : Except String String := do
 def protoTypes (args : Json) : Except String (Option Session.Types.Env) := do
   match args.getObjVal? "proto" with
   | .error _ | .ok .null => return none
-  | .ok (.str t) => return some (← Session.Proto.ofProto t)
+  | .ok (.str t) => return some (← Session.Proto.ofProto t (LeanFM.CallLimits.get args "protoBytes"))
   | .ok _ => throw "proto is the text of a proto3 file"
 
 /-- Protocols LeanFM carries, compiled in, so a client that cannot send a file (Claude Desktop, a
@@ -415,12 +415,16 @@ def sentArgs (args : Json) : Json :=
   | .obj kvs => if kvs.contains "logWindow" then Json.obj ((kvs.erase "log").erase "events" |>.erase "logWindow") else args
   | j => j
 
+/-- The refusal of arguments over the argumentBytes limit, saying both ways past it. -/
+def tooLarge (n : Nat) : String :=
+  s!"arguments exceed {n} bytes; name a log with serverLog or a protocol with file instead of sending it, or " ++
+    LeanFM.CallLimits.raise "argumentBytes" n
+
 def parseProtocol (args0 : Json) : Except String Protocol := do
-  if (sentArgs args0).compress.length > limits.maxArgumentBytes then
-    throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
+  let cap := LeanFM.CallLimits.get args0 "argumentBytes"
+  if (sentArgs args0).compress.length > cap then throw (tooLarge cap)
   let args ← withExample args0
-  if (sentArgs args).compress.length > limits.maxArgumentBytes then
-    throw s!"arguments exceed {limits.maxArgumentBytes} bytes"
+  if (sentArgs args).compress.length > cap then throw (tooLarge cap)
   if let .ok v := args.getObjVal? "lean" then
     let text ← match v.getStr? with
       | .ok t => pure t
@@ -429,7 +433,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
       | .ok (.str n) => pure (some n)
       | .ok _ => throw "protocolName is the name of a protocol of the text"
       | .error _ => pure none
-    let r ← LeanFM.Session.Text.parse text (← protoTypes args) mainName
+    let r ← LeanFM.Session.Text.parse text (← protoTypes args) mainName (LeanFM.CallLimits.get args "textBytes")
     -- a version without a clean upgrade path from the one before is refused, as the Lean
     -- elaborator refuses it (selfhost.session.versions)
     let upgrades <- Versions.check r
@@ -462,7 +466,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
   let (global, count) ← (steps { roles } js).run 0
   -- the echoed text is a whole Lean file (selfhost.session.lean-syntax)
   let text := Text.header ++ typesText ++ ToText.write name roles js
-  let parsed ← Text.parse text (← protoTypes args)
+  let parsed ← Text.parse text (← protoTypes args) (maxBytes := LeanFM.CallLimits.get args "textBytes")
   return { name, roles, global, steps := count, lean := text, generative := ← generativeLayer parsed.body roles args, types := parsed.types, keys := parsed.keys, linkTargets := parsed.linkTargets, parentLinks := parsed.parentLinks, identityNotes := parsed.identityNotes }
 
 /-! ## Results -/
@@ -1052,7 +1056,7 @@ def mdpHorizon (args : Json) (p : Protocol) (layer : Generative.Resolved) (text 
 def mdp (args : Json) : Except String Json := do
   let p ← parseProtocol args
   if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before rendering the MDP"
-  let parsed ← Text.parse p.lean (← protoTypes args)
+  let parsed ← Text.parse p.lean (← protoTypes args) (maxBytes := LeanFM.CallLimits.get args "textBytes")
   let layer ← match p.generative with
     | some r => pure r
     | none => Generative.resolve parsed.body
@@ -1868,7 +1872,7 @@ def instances (args : Json) : Except String Json := do
 (selfhost.session.buffers, LeanFM/Session/Realizable.lean). -/
 def realizable (args : Json) : Except String Json := do
   let p ← parseProtocol args
-  let parsed ← Text.parse p.lean (← protoTypes args)
+  let parsed ← Text.parse p.lean (← protoTypes args) (maxBytes := LeanFM.CallLimits.get args "textBytes")
   let a ← Realizable.explore p.global p.roles parsed.buffers (CallLimits.get args "states")
   let sizes := p.roles.map fun r => (r, (parsed.buffers.lookup r).getD 0)
   let guarantees := ["in order: a role takes the oldest message in its inbox first", "lossless: every message put in an inbox stays until it is taken"] ++
@@ -2232,7 +2236,7 @@ def vectorText (v : List (String × String × Rat)) : String :=
 def sla (args : Json) : Except String Json := do
   let p ← parseProtocol args
   if !(p.global.issues p.roles).isEmpty then throw "fix protocol issues before checking its requirements"
-  let parsed ← Text.parse p.lean (← protoTypes args)
+  let parsed ← Text.parse p.lean (← protoTypes args) (maxBytes := LeanFM.CallLimits.get args "textBytes")
   if parsed.requires.isEmpty then
     throw "the protocol states no requirements: add require per q { every q reaches Reply within 2 seconds; } after it, where q is a message id"
   let layer ← match p.generative with

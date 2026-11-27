@@ -57,7 +57,10 @@ def fed := "(always (implies (below food 20) (within 600 (on Dispense))))"
 #guard get (run fed (food true)) "verdict" == "fails"
 
 -- refusals
-#guard refusedWith (run "(always (below food 20))" temps) "reads food before its first reading"
+#guard refusedWith (run "(always (below food 20))" temps) "which the run never reads"
+-- a field first read later starts the claim there: the samples before are skipped, not refused
+#guard get (run "(always (below food 20))" (temps ++ [sample 2400 [("food", 15)]])) "verdict" == "holds"
+#guard get (run "(always (below food 20))" (temps ++ [sample 2400 [("food", 15)]])) "skipped" == "4"
 #guard refusedWith (run band [sample 600 [("temp", 20)], sample 0 [("temp", 21)]]) "sample 2"
 #guard refusedWith (run "(eventually (below temp 26))" temps) "not a word here"
 #guard refusedWith (run "(within -5 (below temp 26))" temps) "not negative"
