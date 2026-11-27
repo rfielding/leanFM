@@ -51,9 +51,12 @@ class Specification(unittest.TestCase):
 
     def test_full_leanfm_import_compiles_under_the_existing_memory_limit(self):
         # Reproduce the real project's import surface, not just the small
-        # Artifacts fixture. Do not remove RLIMIT_AS to make startup succeed.
+        # Artifacts fixture: the whole library, LeanFM.Library, which make build
+        # compiles. The root module LeanFM also imports every test module, which
+        # make build does not compile, so a fresh checkout (CI) has no oleans for
+        # them. Do not remove RLIMIT_AS to make startup succeed.
         (self.root / "spec/Requirements.lean").write_text(REQUIREMENTS.replace(
-            "import LeanFM.Artifacts", "import LeanFM"))
+            "import LeanFM.Artifacts", "import LeanFM.Library"))
         self.run_check()
         report = json.loads((self.root / "reports/specification-check/validation.json").read_text())
         self.assertEqual(report["status"], "validated")
