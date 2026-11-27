@@ -136,6 +136,15 @@ def main : IO Unit := do
     | .ok j => pure j
     | .error e => throw (IO.userError s!"session_conform refused the cage log: {e}")
   unless str order "verdict" == "conforms" do throw (IO.userError s!"the cage log breaks GuineaPigCage: {str order "reading"}")
+  -- the cage protocol's sequence diagram, drawn by session_diagram's function, for the cover
+  for theme in ["light", "dark"] do
+    match LeanFM.SessionTools.diagram (Json.mkObj [("lean", Json.str cageText), ("theme", Json.str theme)]) with
+    | .ok j =>
+      IO.FS.writeFile s!"{dir}/sig-cage-diagram-{theme}.svg" (str j "svg")
+      -- the cover's copy: the same drawing on the cover's navy (covernavy, RGB 30,58,94)
+      if theme == "dark" then
+        IO.FS.writeFile s!"{dir}/sig-cage-diagram-cover.svg" ((str j "svg").replace "fill=\"#111111\"" "fill=\"#1E3A5E\"")
+    | .error e => throw (IO.userError s!"session_diagram refused the cage protocol: {e}")
   IO.FS.writeFile s!"{dir}/sig-conform.tex" (listing s!"session_conform: {str order "verdict"}: {str order "reading"}")
   IO.FS.writeFile s!"{dir}/sig-log.tex" <| listing <| "\n".intercalate (lines.take 3 ++ ["..."] ++
     (lines.filter (fun (l : String) => (l.splitOn "Dispense").length > 1)).take 1)

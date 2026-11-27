@@ -45,6 +45,18 @@ def main():
     tmp = tempfile.mkdtemp(prefix="leanfm-logrange-")
     log = os.path.join(tmp, "logs", "serve.log")
     os.makedirs(os.path.dirname(log))
+    # a project app's standard log (selfhost.project.logs), and a project that is a symlink out of projects/
+    app = os.path.join(tmp, "projects", "Cage")
+    os.makedirs(os.path.join(app, "logs"))
+    open(os.path.join(app, "manifest.json"), "w").write(json.dumps({"display_name": "Cage"}))
+    with open(os.path.join(app, "logs", "events.log"), "w") as f:
+        for i in range(3):
+            f.write(json.dumps({"id": f"cage:{i}", "session": f"s{i}", "from": "A", "to": "B", "label": "Ping"}).replace('{"id"', '{"type":"leanFM","id"', 1) + "\n")
+    outside = tempfile.mkdtemp(prefix="leanfm-outside-")
+    os.makedirs(os.path.join(outside, "logs"))
+    open(os.path.join(outside, "manifest.json"), "w").write("{}")
+    open(os.path.join(outside, "logs", "events.log"), "w").write("secret\n")
+    os.symlink(outside, os.path.join(tmp, "projects", "Escape"))
     with open(log, "w") as f:
         for i in range(1, LINES + 1):
             f.write(f"plain line {i}\n" if i != 11 else "Authorization: Bearer hunter2secretvalue\n")
@@ -83,6 +95,18 @@ def main():
         schema = next(t for t in tools if t["name"] == "session_conform")["inputSchema"]
         assert not schema.get("required") and "lastLines" in schema["properties"], schema.get("required")
         print("ok: session_conform's input schema requires none of events, log and serverLog, and offers lastLines")
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+              "params": {"name": "server_logs", "arguments": {}}}).encode(), {"Content-Type": "application/json"})
+        listing = json.loads(urllib.request.urlopen(req, timeout=60).read())["result"]["content"][0]["text"]
+        assert "Cage/events" in listing and "projects/Cage/logs/events.log" in listing and "Escape" not in listing, listing[-600:]
+        pc = conform(port, {"lean": "protocol P (A, B) { Ping from A to B; }", "serverLog": "Cage/events"})
+        assert pc["verdict"] == "conforms" and pc["source"]["log"] == "Cage/events", pc.get("reading")
+        try:
+            conform(port, {"lean": "protocol P (A, B) { Ping from A to B; }", "serverLog": "Escape/events"})
+            raise AssertionError("a project symlinked out of projects/ was read")
+        except SystemExit as e:
+            assert "must be one of" in str(e), e
+        print("ok: server_logs lists a project's logs/events.log as Cage/events, serverLog reads it, and a project symlinked out of projects/ has no log")
         leanfm = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "LeanFM", "LLMGenerated", "LeanFM.leanfm")).read()
         mc = conform(port, {"lean": leanfm, "protocolName": "McpCall", "events": []})
         assert "McpCall:" in json.dumps(mc) and "LeanFMMcp:" not in json.dumps(mc), json.dumps(mc)[:300]
@@ -156,6 +180,7 @@ def main():
     finally:
         proc.kill(); proc.wait()
         shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(outside, ignore_errors=True)
 
 
 if __name__ == "__main__":

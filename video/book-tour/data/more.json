@@ -1,0 +1,136 @@
+{
+ "own": {
+  "verdict": "violates",
+  "reading": "LeanFMMcp: 1 of 60 sessions break the protocol; first: session 5cbd0cba05c7314d-v1, event host@5cbd0cba05c7314d:3: Page from View to Host is not allowed here; the protocol allows Initialize from Host to Server",
+  "source": {
+   "fromLine": 1,
+   "kind": "log",
+   "lastLine": 1059,
+   "log": "serve",
+   "logLines": 1059,
+   "moreWriters": 1,
+   "path": "logs/serve.log",
+   "writers": [
+    "leanfm@2257431",
+    "host@c0e90920e6565a19",
+    "host@5cbd0cba05c7314d",
+    "leanfm@2263297",
+    "host@d14878eb457bbd80",
+    "host@b8db0d8840686065",
+    "leanfm@2287452",
+    "host@9e3d541a3d5d79d4"
+   ]
+  }
+ },
+ "sim": {
+  "reading": "PlaceOrder: 14 events from 3 sessions (seed 7); each message carries example fields (sessionId names one of three people) that satisfy its where clause",
+  "events": [
+   {
+    "session": 1,
+    "from": "Client",
+    "to": "Shop",
+    "label": "CreateOrder",
+    "thread": "Client"
+   },
+   {
+    "session": 1,
+    "from": "Shop",
+    "to": "Client",
+    "label": "Quote",
+    "thread": "Shop"
+   },
+   {
+    "session": 1,
+    "from": "Client",
+    "to": "Shop",
+    "label": "Pay",
+    "thread": "Client"
+   },
+   {
+    "session": 1,
+    "from": "Shop",
+    "to": "Bank",
+    "label": "Charge",
+    "thread": "Shop"
+   },
+   {
+    "session": 1,
+    "from": "Bank",
+    "to": "Shop",
+    "label": "Declined",
+    "thread": "Bank"
+   },
+   {
+    "session": 1,
+    "from": "Shop",
+    "to": "Client",
+    "label": "PaymentDeclined",
+    "thread": "Shop"
+   },
+   {
+    "session": 2,
+    "from": "Client",
+    "to": "Shop",
+    "label": "CreateOrder",
+    "thread": "Client"
+   },
+   {
+    "session": 2,
+    "from": "Shop",
+    "to": "Client",
+    "label": "Quote",
+    "thread": "Shop"
+   },
+   {
+    "session": 2,
+    "from": "Client",
+    "to": "Shop",
+    "label": "Pay",
+    "thread": "Client"
+   },
+   {
+    "session": 2,
+    "from": "Shop",
+    "to": "Bank",
+    "label": "Charge",
+    "thread": "Shop"
+   },
+   {
+    "session": 2,
+    "from": "Bank",
+    "to": "Shop",
+    "label": "Declined",
+    "thread": "Bank"
+   },
+   {
+    "session": 2,
+    "from": "Shop",
+    "to": "Client",
+    "label": "PaymentDeclined",
+    "thread": "Shop"
+   },
+   {
+    "session": 3,
+    "from": "Client",
+    "to": "Shop",
+    "label": "CreateOrder",
+    "thread": "Client"
+   },
+   {
+    "session": 3,
+    "from": "Shop",
+    "to": "Client",
+    "label": "SoldOut",
+    "thread": "Shop"
+   }
+  ],
+  "sessions": 3
+ },
+ "mcp-suggest": "\\begin{lstlisting}[language={},basicstyle=\\ttfamily\\footnotesize,breaklines=true]\nPlaceOrder: 12 properties suggested from the protocol, 10 proved; pass one as formula to decide it with its path\n\nproved: Every session can still end from every state it reaches (no trap)\n  always possibly stop\n\nproved: Every session ends (no path runs forever)\n  inevitably stop\n\ndisproved: Some session can run forever\n  someAlways \u00acstop\n\nproved: Every session starts with CreateOrder\n  allNext CreateOrder\n\ndisproved: No secret is ever sent\n  always \u00acsecret\n\nproved: No secret ever reaches Client\n  always \u00acsecret \u2192Client\n\nproved: Every CreateOrder is answered (Quote or SoldOut) before the session ends\n  always (CreateOrder \u2192 (\u00acstop allUntil (Quote \u2228 SoldOut)))\n\nproved: CreateOrder can happen, and every CreateOrder is eventually answered\n  CreateOrder \u21d2 inevitably (Quote \u2228 SoldOut)\n\nproved: No Quote or SoldOut before a CreateOrder\n  \u00ac(\u00acCreateOrder someUntil (Quote \u2228 SoldOut))\n\nproved: Every Pay is answered (Receipt or PaymentDeclined) before the session ends\n  always (Pay \u2192 (\u00acstop allUntil (Receipt \u2228 PaymentDeclined)))\n\nproved: Pay can happen, and every Pay is eventually answered\n  Pay \u21d2 inevitably (Receipt \u2228 PaymentDeclined)\n\nproved: No Receipt or PaymentDeclined before a Pay\n  \u00ac(\u00acPay someUntil (Receipt \u2228 PaymentDeclined))\n\\end{lstlisting}\n",
+ "mcp-next": "\\begin{lstlisting}[language={},basicstyle=\\ttfamily\\footnotesize,breaklines=true]\ntools/call session_next\n{\"lean\": \"protocol PlaceOrder ...\",\n \"events\": [{\"to\": \"Shop\", \"label\": \"CreateOrder\", \"id\": \"e1\", \"from\": \"Client\"}]}\n\nanswer (excerpt)\n{\"verdict\": \"running\",\n \"reading\": \"PlaceOrder: after 1 event, 2 steps may happen next\",\n \"next\":\n [{\"to\": \"Client\", \"label\": \"Quote\", \"from\": \"Shop\", \"cause\": \"e1\"},\n  {\"to\": \"Client\", \"label\": \"SoldOut\", \"from\": \"Shop\", \"cause\": \"e1\"}]}\n\\end{lstlisting}\n",
+ "mcp-checkctl": "\\begin{lstlisting}[language={},basicstyle=\\ttfamily\\footnotesize,breaklines=true]\ntools/call check_ctl\n{\"task\":\n {\"transitions\":\n  [{\"src\": \"s0\", \"message\": \"a\", \"dst\": \"s1\"},\n   {\"src\": \"s1\", \"message\": \"b\", \"dst\": \"s0\"},\n   {\"src\": \"s1\", \"message\": \"c\", \"dst\": \"s2\"}],\n  \"terminals\": [\"s2\"],\n  \"states\": [\"s0\", \"s1\", \"s2\"],\n  \"initial\": \"s0\",\n  \"id\": \"loopy\"},\n \"formula\": \"(and #1=(possibly (on c)) (always (implies (on a) #1#)))\"}\n\nanswer (excerpt)\n{\"verdict\": \"proved\",\n \"reading\":\n \"(it is possible that eventually c was just delivered) and (on every path, always (if a was just delivered then (it is possible that eventually c was j ...\",\n \"reachableNodes\": 4,\n \"notation\": \"possibly c \u2227 always (a \u2192 possibly c)\"}\n\\end{lstlisting}\n",
+ "images-truth": "\\begin{center}\\begin{tabular}{@{}rl@{}}\n(1) & \\texttt{on GetImage} \\\\\n(2) & \\texttt{stop} \\\\\n(3) & \\texttt{someNext (state NotFound stop)} \\\\\n(4) & \\texttt{possibly (on NotFound)} \\\\\n(5) & \\texttt{inevitably stop} \\\\\n(6) & \\texttt{always (possibly stop)} \\\\\n\\end{tabular}\\end{center}\n\\begin{center}\\begin{tabular}{@{}lcccccc@{}}\n\\toprule\nstate & (1) & (2) & (3) & (4) & (5) & (6) \\\\\n\\midrule\nstart & F & F & F & T & T & T \\\\\njust after GetImage & T & F & T & T & T & T \\\\\njust after Image, may stop & F & T & F & F & T & T \\\\\njust after NotFound, may stop & F & T & T & T & T & T \\\\\n\\bottomrule\n\\end{tabular}\\end{center}\n",
+ "images-openapi": "\\begin{lstlisting}[language={},basicstyle=\\ttfamily\\footnotesize,breaklines=true]\nopenapi: \"3.1.0\"\ninfo:\n  description: \"The requests Server receives in protocol Images, generated by LeanFM from the session type.\"\n  title: \"Images: Server\"\n  version: \"0.1.0\"\npaths:\n  \"/images/{id}\":\n    get:\n      operationId: \"GetImage\"\n      parameters:\n        - in: \"path\"\n          name: \"id\"\n          required: true\n          schema:\n            type: \"string\"\n      responses:\n        \"200\":\n          content:\n            \"image/png\":\n              schema:\n                contentMediaType: \"image/png\"\n                format: \"binary\"\n                maxLength: 5000000\n                type: \"string\"\n          description: \"Image\"\n          headers:\n            \"Cache-Control\":\n              required: true\n              schema:\n                enum:\n                  - \"max-age=3600\"\n                  - \"no-store\"\n                type: \"string\"\n            \"Content-Length\":\n              required: true\n              schema:\n                minimum: 0\n                type: \"integer\"\n            \"Image-Id\":\n              required: true\n              schema:\n                type: \"string\"\n        \"404\":\n          content:\n            \"application/json\":\n              schema:\n                \"$ref\": \"#/components/schemas/NotFound\"\n          description: \"NotFound\"\n      summary: \"GetImage from Browser\"\ncomponents:\n  schemas:\n    GetImage:\n      additionalProperties: false\n      properties:\n        id:\n          type: \"string\"\n      required:\n        - \"id\"\n      title: \"GetImage\"\n      type: \"object\"\n    Image:\n      additionalProperties: false\n      properties:\n        cacheControl:\n          enum:\n            - \"max-age=3600\"\n            - \"no-store\"\n          type: \"string\"\n        contentLength:\n          minimum: 0\n          type: \"integer\"\n        imageId:\n          type: \"string\"\n      required:\n        - \"imageId\"\n        - \"contentLength\"\n        - \"cacheControl\"\n      title: \"Image\"\n      type: \"object\"\n      \"x-leanfm-constraints\":\n        - \"cached: cacheControl = \\\"max-age=3600\\\" or cacheControl = \\\"no-store\\\"\"\n        - \"small: size <= 5000000\"\n        - \"measured: contentLength = size\"\n    NotFound:\n      additionalProperties: false\n      properties: {}\n      required: []\n      title: \"NotFound\"\n      type: \"object\"\n\\end{lstlisting}\n",
+ "corpus": "\\begin{tabular}{@{}lrrrrl@{}}\n\\toprule\nProtocol & Nodes & Typestates & Lookahead & Rules & Deterministic \\\\\n\\midrule\nPing (examples) & 4 & 4 & 0 & 5 & yes \\\\\nPlaceOrder (examples) & 10 & 10 & 0 & 11 & yes \\\\\nRide (examples) & 28 & 16 & 0 & 17 & yes \\\\\nBoundedRide (examples) & 45 & 23 & 6 & 24 & yes \\\\\nUserLookup (examples) & 32 & 21 & 0 & 22 & yes \\\\\nOAuth sign-in & 16 & 15 & 0 & 16 & yes \\\\\nLeanFM's own MCP protocol & 109 & 35 & 1 & 36 & yes \\\\\nIslandUploads Socket & 38 & 38 & 1 & 39 & yes \\\\\nMaqam audio period & 1849 & 45 & 0 & 46 & yes \\\\\nGoServer & 39497 & 1604 & 2 & 1605 & no \\\\\n\\bottomrule\n\\end{tabular}\n",
+ "mcp-ctl-disproved": "\\begin{lstlisting}[language={},basicstyle=\\ttfamily\\footnotesize,breaklines=true]\ntools/call session_ctl\n{\"lean\": \"protocol Images ...\",\n \"formula\": \"(always (implies (on GetImage) (allNext (on Image))))\"}\n\nanswer (excerpt)\n{\"verdict\": \"disproved\",\n \"report\": \"counterexample: GetImage -> NotFound\",\n \"notation\": \"always (GetImage \u2192 allNext Image)\"}\n\\end{lstlisting}\n"
+}

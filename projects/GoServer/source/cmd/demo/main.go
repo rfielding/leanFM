@@ -337,6 +337,21 @@ func main() {
 	}
 	defer accounts.Close()
 	s := goserver.NewServerWith(accounts)
+	// the LeanFM event log (selfhost.project.logs): GOSERVER_EVENT_LOG, else the project's logs/events.log
+	evPath := os.Getenv("GOSERVER_EVENT_LOG")
+	if evPath == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			evPath, _ = goserver.DefaultEventLogPath(cwd)
+		}
+	}
+	if evPath != "" {
+		if ev, err := goserver.OpenEventLog(evPath); err == nil {
+			s.SetEventLog(ev)
+			defer ev.Close()
+		} else {
+			log.Printf("GoServer writes no event log: %v", err)
+		}
+	}
 	server := &http.Server{Handler: newHandler(s, port), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	log.Printf("GoServer ready at http://%s/", listener.Addr())
 	log.Fatal(server.Serve(listener))

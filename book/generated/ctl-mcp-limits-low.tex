@@ -5,5 +5,5 @@ tools/call session_ctl
 answer (excerpt)
 {"verdict": "rejected",
  "reason":
- "more than 5 protocol states; the property was not checked; this is the states limit (5); to allow more, call again with \"limits\": {\"states\": 10} (a warning, not a wall: raise it when the machine has the memory)"}
+ "more than 5 protocol states; the property was not checked; this is the states limit (5); to allow more, call again with \"limits\": {\"states\": 10}, or over HTTP send the header LeanFM-Limits: states=10 (a warning, not a wall: raise it when the machine has the memory)"}
 \end{lstlisting}

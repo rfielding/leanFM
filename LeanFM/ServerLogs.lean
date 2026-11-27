@@ -54,6 +54,36 @@ def sources : List Source := [
 
 def names : List String := sources.map (·.name)
 
+/-- A project name usable in a log name: letters, digits, _ and -. -/
+def safeProjectName (n : String) : Bool :=
+  !n.isEmpty && n.length ≤ 64 && n.toList.all fun c => c.isAlphanum || c == '_' || c == '-'
+
+/-- Each project app's standard event log (selfhost.project.logs): <Project>/events, the file
+logs/events.log under the project's root, for every immediate child of projects/ with a
+manifest.json whose real path stays inside the checkout. The name is the manifest's display_name
+(as project_view shows it), else the directory's; a client names the log, never a path. -/
+def projectSources : IO (List Source) := do
+  let dir : System.FilePath := "projects"
+  if !(← dir.isDir) then return []
+  let here ← IO.FS.realPath "."
+  let entries := (← dir.readDir).qsort (fun a b => a.fileName < b.fileName)
+  let mut out : List Source := []
+  for e in entries do
+    let root := dir / e.fileName
+    if !(← root.isDir) || !(← (root / "manifest.json").pathExists) then continue
+    let real ← IO.FS.realPath root
+    unless real.toString.startsWith (here.toString ++ "/") do continue
+    let display := match Json.parse (← IO.FS.readFile (root / "manifest.json")) with
+      | .ok j => (j.getObjValAs? String "display_name").toOption.getD e.fileName
+      | .error _ => e.fileName
+    unless safeProjectName display && safeProjectName e.fileName do continue
+    out := out ++ [⟨s!"{display}/events", s!"{display}'s protocol events, one LeanFM event line per message (projects/{e.fileName}/logs/events.log)", true, s!"projects/{e.fileName}/logs/events.log"⟩]
+  return out
+
+/-- LeanFM's own logs, then each project's events log. -/
+def allSources : IO (List Source) := return sources ++ (← projectSources)
+def allNames : IO (List String) := return (← allSources).map (·.name)
+
 def disabledMessage : String :=
   "server_logs is off on this host: it is served by leanfm-mcp --stdio and by leanfm-server on 127.0.0.1, " ++
   "and by the hosted HTTP endpoint only when LEANFM_MCP_LOGS=1"
@@ -187,7 +217,7 @@ def Answer.toText (a : Answer) : String :=
 /-- The index: every log this server can show, whether it exists, its size and when it changed. -/
 def index : IO Json := do
   let mut rows : Array Json := #[]
-  for s in sources do
+  for s in ← allSources do
     let p ← pathOf s
     let (found, size, mod) ← match p with
       | none => pure (false, 0, 0)
@@ -220,10 +250,10 @@ def logArgs (args : Json) : IO (Except String Json) := do
   let .obj kvs := args | return .ok args
   let some v := kvs.get? "serverLog" | return .ok args
   unless ← enabled.get do return .error ("serverLog " ++ disabledMessage)
-  let .str name := v | return .error s!"serverLog is the name of a log: one of {", ".intercalate names}"
+  let .str name := v | return .error s!"serverLog is the name of a log: one of {", ".intercalate (← allNames)}"
   if kvs.contains "log" || kvs.contains "events" then return .error "give serverLog, log or events, not two of them"
-  let some src := sources.find? (·.name == name)
-    | return .error s!"serverLog must be one of {", ".intercalate names}"
+  let some src := (← allSources).find? (·.name == name)
+    | return .error s!"serverLog must be one of {", ".intercalate (← allNames)}"
   let some path ← pathOf src | return .error s!"the {name} log is not on this machine"
   unless ← path.pathExists do return .error s!"the {name} log does not exist yet ({path})"
   -- by line ranges through the log's index (selfhost.session.log-paging): only appended bytes are
@@ -262,8 +292,8 @@ def query (args : Json) : IO (Except String (String × Json)) := do
     return .ok (indexText j, j)
   | .ok logJson =>
     let .ok name := logJson.getStr? | return .error "log must be a string"
-    let some s := sources.find? (·.name == name)
-      | return .error s!"log must be one of {", ".intercalate names}"
+    let some s := (← allSources).find? (·.name == name)
+      | return .error s!"log must be one of {", ".intercalate (← allNames)}"
     let count ← match args.getObjVal? "lines" with
       | .error _ => pure defaultLines
       | .ok v => match v.getNat? with
@@ -334,8 +364,8 @@ def rangeAnswer (target header : String) : IO (Nat × String × List String × S
   let args := argsOfTarget target
   let some name := (args.getObjValAs? String "log").toOption
     | return (400, "text/plain; charset=utf-8", [], "a range needs log=NAME\n")
-  let some src := sources.find? (·.name == name)
-    | return (400, "text/plain; charset=utf-8", [], s!"log must be one of {", ".intercalate names}\n")
+  let some src := (← allSources).find? (·.name == name)
+    | return (400, "text/plain; charset=utf-8", [], s!"log must be one of {", ".intercalate (← allNames)}\n")
   let some path ← pathOf src | return (404, "text/plain; charset=utf-8", [], s!"the {name} log is not on this machine\n")
   unless ← path.pathExists do return (404, "text/plain; charset=utf-8", [], s!"the {name} log does not exist yet\n")
   let (fp, ix) ← LogIndex.refresh path

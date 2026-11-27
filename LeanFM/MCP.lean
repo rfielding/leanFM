@@ -402,9 +402,9 @@ def serverLogsTool : Json :=
     ("Read the end of a log, to diagnose a failure yourself instead of asking the user to paste it. Without log, list the logs with " ++
      "their paths, sizes and last change. Logs: desktop-mcp (Claude Desktop's log of this MCP server: messages, " ++
      "disconnects, its standard error), desktop-mcp-all, desktop-main (Claude Desktop restarts), serve (make serve output), " ++
-     "server, diagnostics (JSON lines). Times in the answer are UTC. Tokens and API keys are redacted. Read-only.")
-    (schema [("log", Json.mkObj [("type", "string"), ("enum", Json.arr (LeanFM.ServerLogs.names.map Json.str).toArray),
-        ("description", Json.str "which log; omit to list them")]),
+     "server, diagnostics (JSON lines), devices, and <Project>/events, each project app's protocol events (logs/events.log under its root, one LeanFM event line per message), which session_conform and check_signal also read by serverLog. Times in the answer are UTC. Tokens and API keys are redacted. Read-only.")
+    (schema [("log", Json.mkObj [("type", "string"),
+        ("description", Json.str ("which log, omit to list them: " ++ ", ".intercalate LeanFM.ServerLogs.names ++ ", or <Project>/events for a project app's protocol events (GoServer/events)"))]),
       ("lines", Json.mkObj [("type", "integer"), ("description", Json.str s!"newest lines to return, 1 to {LeanFM.ServerLogs.maxLines} (default {LeanFM.ServerLogs.defaultLines})")]),
       ("grep", stringSchema "optional: only lines containing this text, ignoring case")] [])
 

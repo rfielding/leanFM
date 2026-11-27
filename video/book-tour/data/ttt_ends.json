@@ -1,0 +1,46 @@
+{
+ "verdict": "disproved",
+ "reading": "TicTacToe: on every path, eventually Result was just delivered",
+ "evidence": {
+  "kind": "counterexample",
+  "loopsBackTo": 5,
+  "path": [
+   {
+    "message": null,
+    "state": "s0"
+   },
+   {
+    "message": "NewGame",
+    "state": "s1"
+   },
+   {
+    "message": "Joined",
+    "state": "s2"
+   },
+   {
+    "message": "MoveX",
+    "state": "s3"
+   },
+   {
+    "message": "OTurn",
+    "state": "s4"
+   },
+   {
+    "message": "MoveO",
+    "state": "s6"
+   },
+   {
+    "message": "XTurn",
+    "state": "s8"
+   },
+   {
+    "message": "MoveX",
+    "state": "s10"
+   },
+   {
+    "message": "OTurn",
+    "state": "s12"
+   }
+  ]
+ }
+}

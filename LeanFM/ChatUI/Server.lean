@@ -364,7 +364,7 @@ def appendProjectDiagnostic (root category detail : String) : IO Unit := do
   writeAtomic path (retained ++ entry)
   let readme := root ++ "/logs/README.md"
   if !(← (fp readme).pathExists) then
-    writeAtomic readme ("# LeanFM private diagnostics\n\n`runtime-diagnostics.jsonl` is a bounded, project-owned engineering journal for LeanFM and Codex. Read it before diagnosing a failed agent turn. It records sanitized stages, tool destinations, compiler output, exit decisions, and terminal failures. It intentionally excludes prompts, credentials, cookies, and arbitrary provider response bodies. Do not ask the user to copy this file into chat; inspect it directly from the project root.\n")
+    writeAtomic readme ("# LeanFM private diagnostics\n\n`runtime-diagnostics.jsonl` is a bounded, project-owned engineering journal for LeanFM and Codex. Read it before diagnosing a failed agent turn. It records sanitized stages, tool destinations, compiler output, exit decisions, and terminal failures. It intentionally excludes prompts, credentials, cookies, and arbitrary provider response bodies. Do not ask the user to copy this file into chat; inspect it directly from the project root.\n\n`events.log` is the project app's own log of its protocol events, one LeanFM event line per message it sends, receives or performs (selfhost.project.logs). LeanFM's MCP tools read it by the name <Project>/events: server_logs lists it, and session_conform and check_signal read it with serverLog, following a running app with fromLine and nextLine.\n")
 
 def safeDiagnosticQuestionId (id : String) : Bool :=
   !id.isEmpty && id.length ≤ 80 && id.toList.all fun character =>

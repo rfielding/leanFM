@@ -160,7 +160,8 @@ def drivers(decs):
         except OSError:
             continue
         for t in tests:
-            if t != driver and t not in DRIVER and re.search(re.escape(t) + r"[\"' ]", text):
+            # the path ends at a quote, any whitespace or the end of the text (a line may end with it)
+            if t != driver and t not in DRIVER and re.search(re.escape(t) + r"(?:[\"'\s]|$)", text):
                 DRIVER[t] = driver
 
 

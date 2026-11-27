@@ -109,6 +109,15 @@ video-narrated: video-check
 	$(MAKE) video
 	$(VIDEO_PYTHON) scripts/render_video_narration.py
 
+# The book tour (video/book-tour): real terminal steps, real LeanFM answers, local narration.
+.PHONY: video-tour
+video-tour:
+	cp -n examples/guinea-pigs/cage.log logs/devices.log || true
+	python3 video/book-tour/capture.py
+	python3 video/book-tour/fetch.py
+	python3 video/book-tour/live.py 4 40
+	python3 video/book-tour/produce.py
+
 .PHONY: kerberos-video
 kerberos-video:
 	$(VIDEO_PYTHON) scripts/prepare_video_narration.py --project video/kerberos

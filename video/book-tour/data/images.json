@@ -1,0 +1,81 @@
+{
+ "lean": "protocol Images (Browser, Server) {\n  q: GetImage from Browser to Server;\n  choice {\n    Image from Server to Browser cause q;\n  } or {\n    NotFound from Server to Browser cause q;\n  }\n}",
+ "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"360\" height=\"292\" viewBox=\"0 0 360 292\" font-family=\"ui-sans-serif, system-ui, sans-serif\"><defs><marker id=\"head\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerUnits=\"userSpaceOnUse\" markerWidth=\"12\" markerHeight=\"12\" orient=\"auto-start-reverse\"><path d=\"M0 0 L10 5 L0 10 z\" fill=\"#93c5fd\"/></marker></defs><rect width=\"100%\" height=\"100%\" fill=\"#111111\"/><text x=\"10\" y=\"14\" text-anchor=\"start\" fill=\"#9ca3af\" font-size=\"11\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">Images</text><rect class=\"role\" x=\"50\" y=\"20\" width=\"80\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"90\" y=\"39\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Browser</text><rect class=\"role\" x=\"50\" y=\"252\" width=\"80\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"90\" y=\"271\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Browser</text><line class=\"lifeline\" x1=\"90\" y1=\"48\" x2=\"90\" y2=\"252\" stroke=\"#4b5563\" stroke-dasharray=\"4 4\"/><rect class=\"role\" x=\"234\" y=\"20\" width=\"72\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"270\" y=\"39\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Server</text><rect class=\"role\" x=\"234\" y=\"252\" width=\"72\" height=\"28\" rx=\"4\" fill=\"#1f2937\" stroke=\"#e5e7eb\"/><text x=\"270\" y=\"271\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" class=\"boxed\">Server</text><line class=\"lifeline\" x1=\"270\" y1=\"48\" x2=\"270\" y2=\"252\" stroke=\"#4b5563\" stroke-dasharray=\"4 4\"/><rect class=\"activation\" x=\"265\" y=\"100\" width=\"10\" height=\"52\" fill=\"#1f2937\" stroke=\"#93c5fd\"/><rect class=\"activation\" x=\"265\" y=\"164\" width=\"10\" height=\"36\" fill=\"#1f2937\" stroke=\"#93c5fd\"/><line class=\"msg\" x1=\"90\" y1=\"100\" x2=\"270\" y2=\"100\" stroke=\"#93c5fd\" stroke-width=\"2.5\" marker-end=\"url(#head)\"/><text x=\"180\" y=\"94\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">q: GetImage</text><path d=\"M20 114 h58 v12 l-6 6 h-52 z\" fill=\"#111111\" stroke=\"#fbbf24\"/><text x=\"25\" y=\"127\" text-anchor=\"start\" fill=\"#fbbf24\" font-size=\"11\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\" font-weight=\"bold\">choice</text><text x=\"86\" y=\"127\" text-anchor=\"start\" fill=\"#fbbf24\" font-size=\"11\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">[Server decides]</text><line class=\"msg reply\" x1=\"270\" y1=\"152\" x2=\"90\" y2=\"152\" stroke=\"#93c5fd\" stroke-width=\"2.5\" stroke-dasharray=\"1 6\" stroke-linecap=\"round\" marker-end=\"url(#head)\"/><text x=\"180\" y=\"146\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">Image</text><line x1=\"20\" y1=\"164\" x2=\"340\" y2=\"164\" stroke=\"#fbbf24\" stroke-dasharray=\"6 4\"/><line class=\"msg reply\" x1=\"270\" y1=\"200\" x2=\"90\" y2=\"200\" stroke=\"#93c5fd\" stroke-width=\"2.5\" stroke-dasharray=\"1 6\" stroke-linecap=\"round\" marker-end=\"url(#head)\"/><text x=\"180\" y=\"194\" text-anchor=\"middle\" fill=\"#e5e7eb\" font-size=\"12\" stroke=\"#111111\" stroke-width=\"4\" stroke-linejoin=\"round\" paint-order=\"stroke\">NotFound</text><rect class=\"frame alt\" x=\"20\" y=\"114\" width=\"320\" height=\"98\" fill=\"none\" stroke=\"#fbbf24\"/></svg>",
+ "rules": {
+  "bits": [
+   {
+    "bits": 0,
+    "label": "start",
+    "typestates": 1
+   },
+   {
+    "bits": 0,
+    "label": "GetImage",
+    "typestates": 1
+   },
+   {
+    "bits": 0,
+    "label": "Image",
+    "typestates": 1
+   },
+   {
+    "bits": 0,
+    "label": "NotFound",
+    "typestates": 1
+   }
+  ],
+  "deterministic": true,
+  "hiddenBits": 0,
+  "lean": "protocol Images (Browser, Server) {\n  q: GetImage from Browser to Server;\n  choice {\n    Image from Server to Browser cause q;\n  } or {\n    NotFound from Server to Browser cause q;\n  }\n}",
+  "lookahead": 0,
+  "name": "Images",
+  "nodes": 4,
+  "reading": "Images: 4 typestates over 4 checker nodes, lookahead 0; 5 rules (the start and one per typestate: in it each next typestate is possible and nothing else is). Faithfulness is decided as one bisimulation check: pass faithful a task or lean to compare a model with this protocol. Every message name labels one typestate, so the name alone is the state: no hidden state.",
+  "ruleCount": 5,
+  "rules": [
+   {
+    "formula": "start",
+    "name": "start",
+    "notation": "start",
+    "readingIndented": "no message has been delivered yet and the conversation must go on",
+    "sexprPretty": "start",
+    "subformulas": 1
+   },
+   {
+    "formula": "(transition start GetImage)",
+    "name": "typestate 0",
+    "notation": "transition(start, GetImage)",
+    "readingIndented": "on every path, whenever:\n  no message has been delivered yet and the conversation must go on\nthe next step is one of these, each possible:\n  - the conversation is just after GetImage and must go on",
+    "sexprPretty": "(transition start GetImage)",
+    "subformulas": 3
+   },
+   {
+    "formula": "(transition GetImage (Image stop) (NotFound stop))",
+    "name": "typestate 1",
+    "notation": "transition(GetImage, Image stop, NotFound stop)",
+    "readingIndented": "on every path, whenever:\n  the conversation is just after GetImage and must go on\nthe next step is one of these, each possible:\n  - the conversation is just after Image and may stop\n  - the conversation is just after NotFound and may stop",
+    "sexprPretty": "(transition GetImage (Image stop) (NotFound stop))",
+    "subformulas": 4
+   },
+   {
+    "formula": "(final Image)",
+    "name": "typestate 2",
+    "notation": "final(Image)",
+    "readingIndented": "on every path, whenever this holds, nothing else can happen:\n  the conversation is just after Image and may stop",
+    "sexprPretty": "(final Image)",
+    "subformulas": 2
+   },
+   {
+    "formula": "(final NotFound)",
+    "name": "typestate 3",
+    "notation": "final(NotFound)",
+    "readingIndented": "on every path, whenever this holds, nothing else can happen:\n  the conversation is just after NotFound and may stop",
+    "sexprPretty": "(final NotFound)",
+    "subformulas": 2
+   }
+  ],
+  "tool": "session_ctl",
+  "typestates": 4,
+  "verdict": "rules"
+ }
+}

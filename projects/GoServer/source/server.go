@@ -212,6 +212,9 @@ type ServerCore struct {
 	// test hooks: quicker bots, and straight byo-yomi with one short period
 	botBudgetOverride time.Duration
 	turnLimit         time.Duration
+	// the LeanFM event log (events.go); nil when off. turnCause maps a turn's session to its BotTurn's id.
+	events    *EventLog
+	turnCause map[string]string
 }
 
 func NewServer() *ServerCore {

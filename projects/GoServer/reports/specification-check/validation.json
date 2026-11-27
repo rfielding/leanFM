@@ -21,10 +21,10 @@
   "unit": "task grammars",
   "boundary": ".",
   "artifacts": {
-    "spec/Requirements.lean": "de40ced9f61f44f1453e20318135d25f9df994e1842a98c0b962f110a14870f3",
+    "spec/Requirements.lean": "5c6159e301cae47544156bf803c4b870c31d6308c6c2d90602a0ca661bfe643c",
     "spec/Requirements.proto": "fcbeea0a99b6bc1f0ef0add2ae0974f576c33f509bd690e25a3652ccafc3c4c8",
-    "book/main.tex": "ef23b8b4ee9c3376a2637b80fda2aa4e7bcbfd7b10aa5728c90384f2b7a04423",
-    "spec/Implementation.lean": "038af0f563d17eb3b75d4d8d48e0a6033c3ccd3009905d1b18e2586dc031e54e"
+    "book/main.tex": "bede156269fd0ecd1d4d1e953e14735b9d368cc7dfb5dc007b371cb2f85d94da",
+    "spec/Implementation.lean": "431514f448fb50903ffe83424be75ebff6556d48ce1f62d25feb0515245bef23"
   },
   "task_count": 28,
   "acceptance": "unchanged"

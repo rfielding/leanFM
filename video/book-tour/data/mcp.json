@@ -1,0 +1,43 @@
+{
+ "server": {
+  "name": "leanfm",
+  "version": "0.1.0+a817a2caa24d-dirty"
+ },
+ "tools": [
+  "validate_generated_artifacts",
+  "requirements_interrogation",
+  "code_generation_prompt",
+  "explain_formula",
+  "check_ctl",
+  "check_trace",
+  "classify_requirement",
+  "check_protocol",
+  "check_signal",
+  "check_reassembly",
+  "knows",
+  "session_check",
+  "session_diagram",
+  "session_mdp",
+  "session_sla",
+  "session_simulate",
+  "session_conform",
+  "session_spans",
+  "session_next",
+  "session_ctl",
+  "session_instances",
+  "session_realizable",
+  "session_deployment",
+  "session_review",
+  "session_openapi",
+  "session_types",
+  "session_compat",
+  "session_actor",
+  "session_dataset",
+  "session_explore",
+  "session_skeleton",
+  "server_logs",
+  "project_view",
+  "server_info"
+ ],
+ "instructions": "LeanFM's book is durable agent context, not optional human documentation. Before requirements, design, or implementation work, read leanfm://project/book/main.pdf, leanfm://project/specification/SelfHosting.lean (LeanFM's own requirements), leanfm://project/specification/Requirements.lean (the registry), leanfm://project/specification/Requirements.proto, and leanfm://project/specification/Implementation.lean. Treat the book like a maintained portion of the system prompt. Work in order: observable requirements and their derived views, then the traceable implementation specification, then source"
+}

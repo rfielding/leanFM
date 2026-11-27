@@ -1,0 +1,56 @@
+{
+ "listing": [
+  "{\"logs\": [{\"bytes\": 226008, \"description\": \"Claude Desktop's log of the leanfm MCP server: every message, connects and disconnects, and anything leanfm-mcp writes to standard error\", \"found\": true, \"log\": \"desktop-mcp\", \"modifiedUnix\": 1795687728, \"path\": \"/home/rfielding/.config/Claude/logs/mcp-server-leanfm.log\"}, {\"bytes\": 168604, \"description\": \"Claude Desktop's log of all its MCP servers\", \"found\": true, \"log\": \"desktop-mcp-all\", \"modifiedUnix\": 1795687718, \"path\": \"/home/rfielding/.config/Claude/logs/mcp.log\"}, {\"bytes\": 9349565, \"description\": \"Claude Desktop's main log (app restarts, connectors, memory)\", \"found\": true, \"log\": \"desktop-main\", \"modifiedUnix\": 1795798299, \"path\": \"/home/rfielding/.config/Claude/logs/main.log\"}, {\"bytes\": 267215, \"description\": \"output of make serve: leanfm-server's standard output and error\", \"found\": true, \"log\": \"serve\", \"modifiedUnix\": 1795798355, \"path\": \"/home/rfielding/code/leanFM/logs/serve.log\"}, {\"bytes\": 0, \"description\": \"leanfm-server's own log file\", \"found\": true, \"log\": \"server\", \"modifiedUnix\": 1792976493, \"path\": \"/home/rfielding/code/leanFM/logs/leanfm-server.log\"}, {\"bytes\": 90684, \"description\": \"LeanFM's runtime diagnostics journal (JSON lines)\", \"found\": true, \"log\": \"diagnostics\", \"modifiedUnix\": 1795797617, \"path\": \"/home/rfielding/code/leanFM/logs/runtime-diagnostics.jsonl\"}, {\"bytes\": 161394, \"description\": \"event lines from the project's own devices (an Arduino's readings, a webcam's motion), which check_signal and session_conform read by name\", \"found\": true, \"log\": \"devices\", \"modifiedUnix\": 1795793081, \"path\": \"/home/rfielding/code/leanFM/logs/devices.log\"}, {\"bytes\": 69038, \"description\": \"GoServer's protocol events, one LeanFM event line per message (projects/GoServer/logs/events.log)\", \"found\": true, \"log\": \"GoServer/events\", \"modifiedUnix\": 1795798342, \"path\": \"/home/rfielding/code/leanFM/projects/GoServer/logs/events.log\"}, {\"bytes\": 0, \"description\": \"IslandUploads's protocol events, one LeanFM event line per message (projects/IslandUploads/logs/events.log)\", \"found\": false, \"log\": \"IslandUploads/events\", \"modifiedUnix\": 0, \"path\": \"/home/rfielding/code/leanFM/projects/IslandUploads/logs/events.log\"}, {\"bytes\": 0, \"description\": \"Maqam's protocol events, one LeanFM event line per message (projects/Maqam/logs/events.log)\", \"found\": false, \"log\": \"Maqam/events\", \"modifiedUnix\": 0, \"path\": \"/home/rfielding/code/leanFM/projects/Maqam/logs/events.log\"}, {\"bytes\": 0, \"description\": \"PaxosKV's protocol events, one LeanFM event line per message (projects/PaxosKV/logs/events.log)\", \"found\": false, \"log\": \"PaxosKV/events\", \"modifiedUnix\": 0, \"path\": \"/home/rfielding/code/leanFM/projects/PaxosKV/logs/events.log\"}]}"
+ ],
+ "game": {
+  "id": "game-3",
+  "name": "tour game 452"
+ },
+ "startLine": 344,
+ "steps": [
+  {
+   "at": 40,
+   "fromLine": 344,
+   "nextLine": 363,
+   "verdict": "conforms",
+   "reading": "Turn: 17 events in 7 sessions follow the protocol; 2 still running",
+   "newest": [
+    "{\"type\":\"leanFM\",\"id\":\"goserver:361\",\"ts\":\"1795798386040127756\",\"session\":\"game-2:t38\",\"protocol\":\"Turn\",\"at\":\"Server\",\"act\":true,\"label\":\"Applied\"}",
+    "{\"type\":\"leanFM\",\"id\":\"goserver:362\",\"ts\":\"1795798386040147099\",\"session\":\"game-2:t39\",\"protocol\":\"Turn\",\"from\":\"Server\",\"to\":\"Bot\",\"label\":\"BotTurn\",\"fields\":{\"budgetMs\""
+   ]
+  },
+  {
+   "at": 80,
+   "fromLine": 363,
+   "nextLine": 378,
+   "verdict": "conforms",
+   "reading": "Turn: 11 events in 5 sessions follow the protocol; 2 still running",
+   "newest": [
+    "{\"type\":\"leanFM\",\"id\":\"goserver:376\",\"ts\":\"1795798422096904643\",\"session\":\"game-2:t42\",\"protocol\":\"Turn\",\"at\":\"Server\",\"act\":true,\"label\":\"Applied\"}",
+    "{\"type\":\"leanFM\",\"id\":\"goserver:377\",\"ts\":\"1795798422096915105\",\"session\":\"game-2:t43\",\"protocol\":\"Turn\",\"from\":\"Server\",\"to\":\"Bot\",\"label\":\"BotTurn\",\"fields\":{\"budgetMs\""
+   ]
+  },
+  {
+   "at": 120,
+   "fromLine": 378,
+   "nextLine": 405,
+   "verdict": "conforms",
+   "reading": "Turn: 23 events in 9 sessions follow the protocol; 2 still running",
+   "newest": [
+    "{\"type\":\"leanFM\",\"id\":\"goserver:403\",\"ts\":\"1795798470515549822\",\"session\":\"game-3:t3\",\"protocol\":\"Turn\",\"at\":\"Server\",\"act\":true,\"label\":\"Applied\"}",
+    "{\"type\":\"leanFM\",\"id\":\"goserver:404\",\"ts\":\"1795798470515570727\",\"session\":\"game-3:t4\",\"protocol\":\"Turn\",\"from\":\"Server\",\"to\":\"Bot\",\"label\":\"BotTurn\",\"fields\":{\"budgetMs\":"
+   ]
+  },
+  {
+   "at": 160,
+   "fromLine": 405,
+   "nextLine": 435,
+   "verdict": "conforms",
+   "reading": "Turn: 26 events in 10 sessions follow the protocol; 2 still running",
+   "newest": [
+    "{\"type\":\"leanFM\",\"id\":\"goserver:433\",\"ts\":\"1795798515701475912\",\"session\":\"game-3:t7\",\"protocol\":\"Turn\",\"at\":\"Server\",\"act\":true,\"label\":\"Applied\"}",
+    "{\"type\":\"leanFM\",\"id\":\"goserver:434\",\"ts\":\"1795798515701491486\",\"session\":\"game-3:t8\",\"protocol\":\"Turn\",\"from\":\"Server\",\"to\":\"Bot\",\"label\":\"BotTurn\",\"fields\":{\"budgetMs\":"
+   ]
+  }
+ ]
+}

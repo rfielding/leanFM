@@ -588,6 +588,7 @@ func (s *ServerCore) playMove(r PlayMove) any {
 		}
 		if s.clock().Sub(p.turnBegan) >= s.clockOf(g).limit(seatNow) {
 			// The clock ran out but its timer has not fired yet: the timeout wins.
+			s.logServerTurnLocked(g, p.turnSeq, "ClockRanOut")
 			s.applyLocked(g, MoveTimeout, "deadline", nil)
 			return reject(r.RequestID, "deadline_passed", "play_move")
 		}
@@ -718,6 +719,7 @@ func (s *ServerCore) beginTurnLocked(g *game) {
 		return
 	}
 	if p.state.IsOut(p.state.ToMove) {
+		s.logServerTurnLocked(g, p.turnSeq, "Passed")
 		s.applyLocked(g, MovePass, "resigned", nil)
 		return
 	}
@@ -740,6 +742,7 @@ func (s *ServerCore) armTurnLocked(g *game, fresh bool) {
 	elapsed := s.clock().Sub(p.turnBegan)
 	wait := c.limit(st) - elapsed
 	if wait <= 0 {
+		s.logServerTurnLocked(g, seq, "ClockRanOut")
 		s.applyLocked(g, MoveTimeout, "deadline", nil)
 		return
 	}
@@ -758,6 +761,7 @@ func (s *ServerCore) armTurnLocked(g *game, fresh bool) {
 		for k := range p.history {
 			job.params.History[k] = true
 		}
+		s.logBotTurnLocked(g, seq, n, p.state.MoveNo, planned)
 		s.bots.dispatch(s, job)
 	}
 	p.timer = time.AfterFunc(wait, func() { s.timeout(gameID, seq) })
@@ -788,12 +792,15 @@ func (s *ServerCore) applyBotResult(job botJob, res SearchResult) {
 	defer s.mu.Unlock()
 	g, _ := s.findGame(job.gameID)
 	if g == nil || g.status != GamePlaying || g.play.turnSeq != job.seq {
+		s.logBotResultLocked(job, res, false)
 		return
 	}
 	st := &g.seatInfo[g.play.state.ToMove-1]
 	if !st.botControlled() {
+		s.logBotResultLocked(job, res, false)
 		return
 	}
+	s.logBotResultLocked(job, res, true)
 	m := res.Move
 	if s.legalLocked(g.play, m) != "" {
 		m = MovePass
@@ -838,6 +845,7 @@ func (s *ServerCore) timeout(gameID string, seq uint64) {
 	if g == nil || g.status != GamePlaying || g.play.turnSeq != seq {
 		return
 	}
+	s.logServerTurnLocked(g, seq, "ClockRanOut")
 	s.applyLocked(g, MoveTimeout, "deadline", nil)
 }
 
