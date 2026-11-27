@@ -67,12 +67,13 @@ Now every requirement Claude wrote down is decided:
 
 \section{What just happened}
 
-The protocol is the design, written so a machine can read it. Each requirement is a formula
-of computation tree logic (CTL), a logic of what may and must happen next. LeanFM decided each
+That was Requirements Logic at work. The protocol is the design, written so a machine can
+read it. Each requirement is a claim about what may and must happen next (a formula of CTL,
+the half of the logic Chapter~\ref{ch:checker} explains). LeanFM decided each
 one over every run the protocol allows. When one failed, it did not just say so: it showed the
 run, and that run was the design mistake.
 
 None of it had to be trusted. Claude wrote the protocol and the formulas; LeanFM checked them.
 Part~\ref{part:language} is the protocol language; Part~\ref{part:ctl} is how a protocol
-becomes CTL and how CTL is decided; Part~\ref{part:lists} is the list of requirements a project
+becomes claims and how claims are checked; Part~\ref{part:lists} is the list of requirements a project
 keeps; and Part~\ref{part:mcp} is the server Claude just used.

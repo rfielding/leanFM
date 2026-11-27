@@ -192,7 +192,7 @@ state, no move more and no move less (it is bisimilar to the protocol).
 \begin{proof}
 If it has the same moves: the protocol satisfies its own rules (each state satisfies its
 name, and its next states are exactly the typestates its row lists), and a system with the
-same moves satisfies the same formulas (Browne's result (Section~\ref{thm:bcg})).
+same moves satisfies the same formulas (Browne's result, Section~\ref{thm:bcg}).
 
 If it satisfies the rules: pair each reachable state of the system with the protocol
 typestate whose name it satisfies, at most one by the exclusion of names (Section~\ref{lem:exclusive}); the start rule
@@ -209,8 +209,8 @@ and every CTL property of the protocol holds of every system that satisfies them
 \end{corollary}
 
 \begin{proof}
-A system that satisfies the rules has the protocol's moves (the faithfulness result (Section~\ref{thm:faithful})), so
-it satisfies exactly the protocol's formulas (Browne's result (Section~\ref{thm:bcg})). A system that does not
+A system that satisfies the rules has the protocol's moves (Section~\ref{thm:faithful}), so
+it satisfies exactly the protocol's formulas (Browne's result, Section~\ref{thm:bcg}). A system that does not
 satisfy the rules fails a formula the protocol satisfies.
 \end{proof}
 

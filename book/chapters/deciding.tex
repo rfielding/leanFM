@@ -1,7 +1,7 @@
 \chapter{Deciding It}\label{ch:deciding}
 
-The faithfulness result (Section~\ref{thm:faithful}) says what to check. This chapter says how to check it fast
-enough to use interactively on real protocols, and proves the costs. There are two
+Chapter~\ref{ch:faithful} says what to check. This chapter says how to check it fast
+enough to use interactively on real protocols, and what that costs. There are two
 questions. The first is whether a candidate system is faithful to a protocol; it never
 needs the formulas at all. The second is whether a model satisfies a CTL formula,
 including the large formulas faithful rules and project rules can be; it needs an
@@ -11,33 +11,31 @@ evaluator whose cost does not grow with the formula's size as a tree.
 
 Checking the rules one at a time costs one model check per typestate, and each model
 check is linear in the model: quadratic in all. The rules, taken together, only say
-that the candidate is bisimilar to the protocol (the faithfulness result (Section~\ref{thm:faithful})), and
-bisimilarity can be decided directly.
+that the candidate has the protocol's moves at every state (Section~\ref{thm:faithful}), and
+that can be decided directly.
 
-\paragraph{Refinement.} LeanFM computes the rounds of the refinement rounds (Section~\ref{def:rounds}) over
-the disjoint union of the protocol's model and the candidate's, and the candidate is
-faithful exactly when the two start nodes end in one class. A round numbers, through a
-hash table, each pair (class, sorted set of successor classes): one pass over the
-steps. The rounds stop when no class splits, after $K + 1$ rounds, $K$ the lookahead.
+\paragraph{Refinement.} LeanFM runs the refinement rounds (Section~\ref{def:rounds}) over
+the protocol's model and the candidate's side by side, as one graph, and the candidate is
+faithful exactly when the two start nodes end in one group. A round gives each node a new group number,
+through a hash table keyed by its old group and the sorted groups it steps into: one pass
+over the steps. The rounds stop when no group splits.
 
-\begin{proposition}[What refinement costs]\label{prop:refine}
-Refinement costs $O((K+1)(n + m\log d))$ hash-table operations for $n$ nodes, $m$ steps
-and out-degree at most $d$, and $O(n \cdot m \log d)$ in the worst case.
-\end{proposition}
-
-\begin{proof}
-Each round sorts each node's successor classes ($O(d\log d)$ per node, $O(m\log d)$ in
-all) and looks up one key per node. There are $K+1$ rounds, and since each round that
-does not stop splits at least one class, $K < n$.
-\end{proof}
-
-In every protocol LeanFM carries, $K \le 6$, so refinement is effectively linear. Paige
+\paragraph{What refinement costs.}\label{prop:refine} One round is one pass over the
+steps: each node sorts the groups it steps into and looks the result up in a hash table.
+There are $K+1$ rounds, $K$ the lookahead. So for $n$ nodes, $m$ steps and at most $d$
+steps out of any node, refinement costs $O((K+1)(n + m\log d))$. A logarithm grows so slowly that $m\log d$
+is almost just $m$, and $d$ is small anyway (a protocol rarely offers more than a handful
+of next messages, so $\log_2 d$ is 1 to 3): refinement is a few linear passes over the
+graph when the lookahead is small. Every round but the last splits at least one group, so
+$K < n$, and the worst case is $O(n \cdot m\log d)$.
+In every protocol LeanFM carries the lookahead is at most $6$, so refinement is effectively
+a few passes. Paige
 and Tarjan's algorithm achieves $O(m \log n)$ unconditionally
 \citep{paige1987three}; LeanFM does not use it, and the worst case above is real for
-protocols with long hidden counters.
+protocols with long hidden counters (Chapter~\ref{ch:constructs}).
 
 \paragraph{The walk.} When the protocol's typestates are deterministic, LeanFM uses the
-walk of the walk (Section~\ref{thm:walk}) instead: one pass over the candidate's steps, $O(m)$.
+walk (Section~\ref{thm:walk}) instead: one pass over the candidate's steps, $O(m)$.
 This is the case prev makes possible.
 
 \paragraph{When they differ.} For an unfaithful candidate, LeanFM searches breadth first
@@ -51,10 +49,11 @@ A GoServer whose refused sign-in falls through to the room instead of retrying:
 
 \input{generated/ctl-goserver-mutant.tex}
 
-And the classic pair that no trace comparison can separate, $a$ then $b$ or $a$ then
-$c$ as two branches, against $a$ then a choice of $b$ or $c$: both produce exactly the
-traces $ab$ and $ac$, yet they are not bisimilar, and CTL tells them apart
-($\someNext\allNext\on{b}$ holds of one and not the other).
+And the classic pair that no comparison of traces can separate: a choice between ``a then
+b'' and ``a then c'', against ``a, then a choice of b or c''. Both produce exactly the traces
+a b and a c, yet after a the first has already chosen and the second has not. CTL tells
+them apart: \texttt{(someNext (allNext (on b)))}, ``some first step leaves b as the only
+next message'', holds of the first and not the second.
 
 \input{generated/ctl-branching.tex}
 
@@ -71,45 +70,35 @@ subformulas. A formula whose parts are already shared in memory, as the s-expres
 reader builds them from labels, is walked once per shared part, so building the DAG is
 linear in the DAG, not in the tree. Every word and function is rewritten with its one-line
 definition (Chapter~\ref{ch:checker}) into the two steps, $\mathsf{someUntil}$,
-$\mathsf{allUntil}$ and $\mathsf{someAlways}$; an unless is rewritten through
-$\varphi\mathbin{\mathsf{someUnless}}\psi = (\varphi\mathbin{\mathsf{someUntil}}\psi)\vee\someAlways\varphi$
-and $\varphi\mathbin{\mathsf{allUnless}}\psi = \neg(\neg\psi\mathbin{\mathsf{someUntil}}(\neg\varphi\wedge\neg\psi))$.
+$\mathsf{allUntil}$ and $\mathsf{someAlways}$; an unless is rewritten as
+\texttt{(someUnless a b)} $=$ \texttt{(or (someUntil a b) (someAlways a))}
+and \texttt{(allUnless a b)} $=$ \texttt{(not (someUntil (not b) (and (not a) (not b))))}.
 
 \paragraph{Evaluation.} The DAG's nodes are numbered children first, and evaluated in
 that order. Each truth set is a packed bitset over the model's nodes, and the model's
 steps are held as offset and target arrays in both directions.
 \begin{itemize}
-\item $\neg$, $\wedge$, $\vee$ are word operations on bitsets.
-\item $\someNext\varphi$ and $\allNext\varphi$ are one pass over the steps.
-\item $\varphi\mathbin{\mathsf{someUntil}}\psi$ starts from the $\psi$-nodes and works
-  backwards: a predecessor that satisfies $\varphi$ and is not yet in the set joins it
+\item \texttt{not}, \texttt{and}, \texttt{or} are word operations on bitsets.
+\item \texttt{(someNext a)} and \texttt{(allNext a)} are one pass over the steps.
+\item \texttt{(someUntil a b)} starts from the nodes where b holds and works
+  backwards: a node before one in the set, where a holds and not yet in the set, joins it
   and is pushed on a worklist.
-\item $\varphi\mathbin{\mathsf{allUntil}}\psi$ keeps, per node, the number of its steps
-  not yet known to lead into the set; when it reaches zero at a $\varphi$-node, the
-  node joins.
-\item $\someAlways\varphi$ starts from the $\varphi$-nodes and removes, by worklist,
-  every node left with no successor inside.
+\item \texttt{(allUntil a b)} keeps, per node, the number of its steps not yet known to
+  lead into the set; when that reaches zero at a node where a holds, the node joins.
+\item \texttt{(someAlways a)} starts from the nodes where a holds and removes, by
+  worklist, every node left with no step that stays inside.
 \end{itemize}
 Each truth set is freed as soon as every node that reads it has been evaluated, and the
 bytes held at once are bounded; a check that would exceed the bound stops and says so,
 and proves nothing.
 
-\begin{theorem}[What evaluation costs]\label{thm:eval}
-Evaluating a formula with $D$ distinct subformulas over a model with $n$ nodes and $m$
-steps takes $O(D \cdot (n + m))$ time.
-\end{theorem}
-
-\begin{proof}
-Each DAG node is evaluated once. The Boolean operators and $\someNext$, $\allNext$
-take $O(n + m)$. In the $\mathsf{someUntil}$ worklist a node is pushed at most once, when it
-joins, and each push examines that node's predecessor steps once: $O(n + m)$. In
-$\mathsf{allUntil}$ each step's counter is decremented at most once, when its target joins:
-$O(n + m)$. In $\mathsf{someAlways}$ each node is removed at most once and each removal
-examines its predecessor steps once: $O(n + m)$.
-\end{proof}
-
-These are the classical bounds of CTL model checking \citep{clarke1986automatic}, with
-$D$ in place of the formula's length. The difference matters exactly where faithful
+\paragraph{What evaluation costs.}\label{thm:eval} Each distinct subformula is
+evaluated once, and each evaluation is one pass over the model: in the worklists a node
+joins or leaves at most once, and each step is looked at once when it does. So a formula
+with $D$ distinct subformulas, over a model of $n$ nodes and $m$ steps, takes
+$O(D \cdot (n + m))$: the classical bound of CTL model checking
+\citep{clarke1986automatic}, with distinct subformulas in place of the formula's length as
+a tree. The difference matters exactly where faithful
 rules live: Retry's names are hundreds of nodes as trees and dozens as DAGs
 (Chapter~\ref{ch:constructs}), and the replication model of
 Chapter~\ref{ch:cases} has rules totalling about $6\times 10^9$ nodes as trees and
@@ -146,7 +135,7 @@ Most protocols have lookahead $0$: the last message names the typestate and ever
 is the one-step shape. BoundedRide counts dispatch attempts and has lookahead $6$.
 GoServer is the only one whose typestates are not deterministic; it is also the only
 large one, and its size is the product of sessions that, checked one at a time, are
-small (checking per session (Section~\ref{prop:sessions})).
+small (Section~\ref{prop:sessions}).
 
 Measured through the MCP server on GoServer (39{,}497 checker nodes), on the author's
 machine: all 1{,}605 faithful rules in 0.73\,s; GoServer against itself, by

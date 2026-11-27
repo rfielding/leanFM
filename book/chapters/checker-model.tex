@@ -85,6 +85,30 @@ after an Image, nothing else can happen. The protocol text, the diagram, the typ
 and the table are four views of one thing, and LeanFM derives the last three from the
 first.
 
+Read this way, the table is a pattern matcher over the event stream, like a regular
+expression run over text. Feed it a log one message at a time; each row says which messages
+may come next, so a message the row does not list is caught the moment it arrives:
+\begin{lstlisting}[language={},basicstyle=\ttfamily\footnotesize]
+def follows(log, table):                     # table: the rows above
+    at = "start"
+    for m in log:                            # the events, oldest first
+        if m not in table[at].next:
+            return f"{m} is not allowed after {at}"
+        at = m                               # where the conversation is now
+    return "follows" if table[at].may_stop else f"stopped early, after {at}"
+\end{lstlisting}
+(When the last message does not say where the conversation is, the matcher tracks the
+typestate instead; Chapter~\ref{ch:faithful}.) That is what \texttt{session\_conform} does
+with a real log (Chapter~\ref{ch:where}).
+
+The table says one thing more than a matcher can check. \texttt{(transition GetImage (Image
+stop) (NotFound stop))} says that nothing else comes after GetImage, which a matcher
+checks, and also that an Image \emph{can} come and a NotFound \emph{can} come, which no
+single log shows: a log records what happened, not what was possible. So the table is more
+than a pattern; it is a \emph{behaviour}: everything a system may do, with the choices open
+at every moment. A matcher checks logs against it; the claims of this chapter check designs
+against it.
+
 \section{The whole language in one function}
 
 CTL is one recursive function, under one of two quantifiers, and a tower of short names on top

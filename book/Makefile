@@ -6,6 +6,11 @@ DARK_BUILD := main-dark-build
 
 .PHONY: all light dark clean ui-tour-check
 
+# A design rule of the book: no undefined references or citations. The build fails on one,
+# naming it, instead of printing ?? in the PDF.
+no-undefined = if grep -E "(Reference|Citation) .* undefined|There were undefined" $(1).log; then \
+	echo "book: undefined reference or citation in $(1).log (listed above)" >&2; exit 1; fi
+
 all: light dark
 
 ui-tour-check:
@@ -17,6 +22,7 @@ light: ui-tour-check
 	makeindex $(LIGHT_BUILD).idx
 	$(LATEX) -jobname=$(LIGHT_BUILD) -interaction=nonstopmode -halt-on-error $(MAIN).tex
 	$(LATEX) -jobname=$(LIGHT_BUILD) -interaction=nonstopmode -halt-on-error $(MAIN).tex
+	@$(call no-undefined,$(LIGHT_BUILD))
 	mv $(LIGHT_BUILD).pdf $(MAIN).pdf
 
 dark: ui-tour-check
@@ -25,6 +31,7 @@ dark: ui-tour-check
 	makeindex $(DARK_BUILD).idx
 	$(LATEX) -jobname=$(DARK_BUILD) -interaction=nonstopmode -halt-on-error "\def\darkmode{1}\input{$(MAIN).tex}"
 	$(LATEX) -jobname=$(DARK_BUILD) -interaction=nonstopmode -halt-on-error "\def\darkmode{1}\input{$(MAIN).tex}"
+	@$(call no-undefined,$(DARK_BUILD))
 	mv $(DARK_BUILD).pdf $(DARK).pdf
 
 clean:

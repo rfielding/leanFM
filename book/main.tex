@@ -83,7 +83,7 @@
 }
 
 \hypersetup{
-  pdftitle={Session Types as CTL},
+  pdftitle={Requirements Logic},
   pdfauthor={Rob Fielding and Claude Opus 5.5}
 }
 
@@ -268,15 +268,16 @@
   \node[anchor=north west,text width=.84\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=-.85cm]current page.north west)
     {\color{leangold}\fontsize{30}{34}\selectfont\bfseries
-      Session Types as CTL\\[.45em]
+      Requirements Logic\\[.45em]
      \fontsize{14}{18}\selectfont\mdseries
-      Multiparty protocols, the temporal logic that says exactly what they allow,\\
+      A Temporal Lean: protocols that say who sends what to whom,\\
+      claims about what may and must happen next,\\
       and the L\(\boldsymbol{\exists\forall}\)NFM server that checks both};
   \node[anchor=south west,text width=.84\paperwidth,align=left]
     at ([xshift=1.35cm,yshift=3.2cm]current page.south west)
     {\color{leangold}\normalsize
-      $\always\big(\on{GetImage} \rightarrow \someNext \on{Image} \wedge \someNext \on{NotFound}$\\
-      $\qquad\qquad\wedge\ \allNext(\on{Image} \vee \on{NotFound})\big)$};
+      \texttt{(transition GetImage (Image stop) (NotFound stop))}\\[.3em]
+      \small after GetImage, an Image or a NotFound comes next, and nothing else};
   \node[anchor=south west,text width=.78\paperwidth,align=left]
     at ([xshift=1.4cm,yshift=1.05cm]current page.south west)
     {\color{leangold}\Large Rob Fielding and Claude Opus 5.5\\[.35em]
@@ -288,47 +289,89 @@
 \chapter*{Preface}
 \addcontentsline{toc}{chapter}{Preface}
 
-This book builds a Temporal Lean: a way to state what a system must do, usually a piece of
-software, precisely enough that a machine checks it. Lean checks that a proof proves its
-statement. Temporal Lean checks statements about behaviour over time: what may happen next,
-what must eventually happen, what must never happen. The statements are written in Lean
-files, as protocols and as formulas of computation tree logic (CTL), and LeanFM, the tool
-this book describes, decides them.
+This book is about \emph{Requirements Logic}: a way to say what a system must do, usually a
+piece of software, precisely enough that a machine can check it. Think of it as a
+\emph{Temporal Lean}. Lean checks that a proof proves what it claims. Requirements Logic
+checks claims about behaviour over time: what may happen next, what must happen eventually,
+and what must never happen.
 
-The parallel with Lean is the point. A requirement is a statement; an implementation is
-evidence that it holds, such as a log that conforms or a test; and a requirement no one can
-state precisely yet is \texttt{sorry}: admitted, counted and shown, never silently assumed.
-Every requirement and every implementation choice is an entry in a list, and every entry
-converts to CTL or says that it does not yet (Chapter~\ref{ch:lists}). The difference from
-Lean is the subject matter. These statements are about the runs of a system, the order of
-its messages and the choices it makes, and checking a running system means comparing what
-it did with what was required.
+It has two halves, and each has a plain job.
+\begin{itemize}
+\item A \textbf{protocol} says who sends what to whom, in what order, and where the
+  conversation branches. ``The browser asks for an image; the server answers with the image
+  or with not-found.'' The textbooks call this a \emph{session type}; it is easy to write and
+  easy to draw.
+\item A \textbf{claim} says what may or must happen next, from any moment of the
+  conversation. ``Every request is eventually answered.'' ``No refund before a charge.''
+  The textbooks call this \emph{CTL}, a logic of the future; it is easy to check, combine
+  and extend.
+\end{itemize}
+The claims come down to a handful of everyday words, all made from one function. The
+function says ``this holds until that comes'', and it is asked about \emph{every} future or
+about \emph{some} future; that one choice, every or some, is all the logic adds to ordinary
+and, or and not:
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+word & meaning \\
+\midrule
+\textsf{possibly} $p$ & in some future, $p$ happens \\
+\textsf{inevitably} $p$ & in every future, $p$ happens \\
+\textsf{always} $p$ & in every future, $p$ holds at every moment \\
+\textsf{never} $p$ & in every future, $p$ holds at no moment \\
+\textsf{someAlways} $p$ & in some future, $p$ holds at every moment, forever \\
+\bottomrule
+\end{tabular}
+\end{center}
+Anything these words can say, Requirements Logic can say and check, and nothing more is
+needed: Chapter~\ref{ch:checker} writes the function and builds every word from it on one
+page.
 
-Temporal Lean is meant to be driven by LLMs. A person argues about what the system should
-do; an LLM writes the protocols, the formulas, the implementation and its code; and LeanFM
-checks every step, so nothing the LLM writes has to be trusted. The LLM reaches LeanFM
-through the Model Context Protocol (Part~\ref{part:mcp}) and asks it the questions this book
-asks. The lists give it work: each \texttt{sorry} is a requirement still to be stated in CTL,
-each failing entry is something to fix, and the hints of an implementation tell it how to
-write the code.
+The book's central result joins the halves: a protocol \emph{is} a short list of claims,
+one per moment the conversation can be in, and a system obeys the claims exactly when it
+behaves as the protocol says. So one language does both jobs. The protocol is what people
+write and look at; the claims are what the machine checks; and any rule a diagram cannot
+show is added as one more claim in the same language.
 
-A multiparty session type is one global description of a conversation: who sends
-what to whom, in what order, and where the conversation branches
-\citep{honda2008multiparty}. This book shows that such a description is exactly a
-set of formulas of computation tree logic (CTL), one formula for each state the
-conversation can be in, and that the reduction is precise: a system satisfies the
-formulas if and only if it behaves as the protocol says, up to the only notion of
-sameness CTL can see. That gives one language for two jobs. The protocol is easy to
-write and easy to draw; the formulas are easy to check, combine and extend. Every
-rule the structure does not show is added in the same logic.
+This is a different approach from the usual one. Most tools for checking behaviour model
+the inside of each process: its variables, its counters, its locks. Requirements Logic
+models only what can be observed: the messages, as a log records them. A claim reads the
+message just delivered and whether the conversation may stop, and nothing else; no variable
+of any implementation appears in it. The state does not disappear: it moves into the
+observable protocol. Where the conversation is (what has been said, what may come next) is
+the state, and the messages show it, so a log is enough to know it. Observed behaviour is messier than one process's
+state, because conversations fork into child conversations that run at once and later join
+again, and the logic is built for exactly that (Chapter~\ref{ch:where}). It follows that systems with identical observable behaviour are indistinguishable: a claim
+true of one is true of the other, however differently they are built (Chapter~\ref{ch:checker}).
+Identical here means the same messages \emph{and} the same choices still open at every
+moment, so a system that decides early is told apart from one that decides late, even when
+their logs could be the same (Chapter~\ref{ch:deciding}). That is what makes a port
+safe. To move a program from Rust to Zig, go through the specification: port from Rust to
+the protocol and its claims, checked against the Rust program's logs, then from the
+specification to Zig, checked against the same claims. When both pass, nothing observable
+can tell the two programs apart, though they share no code. In return, every
+claim is a requirement anyone can check against a real log, and how to build the system is
+left to whoever builds it.
+
+The parallel with Lean goes further. A requirement is a statement; an implementation is
+evidence that it holds, such as a log that follows the protocol, or a test; and a
+requirement nobody can state precisely yet is \texttt{sorry}: admitted, counted and shown,
+never silently assumed. Every requirement and every implementation choice is an entry in a
+list, and every entry becomes claims or says that it does not yet (Chapter~\ref{ch:lists}).
+
+Requirements Logic is meant to be driven by LLMs. A person argues about what the system
+should do; an LLM writes the protocols, the claims, the implementation and its code; and
+LeanFM, the tool this book describes, checks every step, so nothing the LLM writes has to be
+trusted. The LLM reaches LeanFM through the Model Context Protocol (Part~\ref{part:mcp}) and
+asks it the questions this book asks.
 
 The book has four parts. Part~\ref{part:language} is the protocol language of
 LeanFM: global types, their projection onto each role, and the where clauses that
-tie messages to the data that implements them. Part~\ref{part:ctl} reduces a
-protocol to CTL, proves the reduction faithful, takes it construct by construct,
-and shows how to decide it in time close to linear. Part~\ref{part:lists} puts that to
+tie messages to the data that implements them. Part~\ref{part:ctl} turns a
+protocol into claims, shows that nothing is lost, takes it construct by construct,
+and shows how to check it in time close to linear. Part~\ref{part:lists} puts that to
 work: a project's requirements are an actual list, and so is each implementation, and
-every entry of both converts to CTL or says plainly that it does not yet, the way
+every entry of both becomes claims or says plainly that it does not yet, the way
 \texttt{sorry} does in Lean. Part~\ref{part:mcp} is the
 LeanFM server: an agent such as Claude connects to it over the Model Context
 Protocol and asks every question in this book, with the answers shown as they
@@ -339,10 +382,9 @@ the same functions its tools call; the generator, \texttt{CtlBookExample.lean},
 names its inputs in a provenance file beside what it writes. Every listing of LeanFM
 text passes LeanFM's checker as printed, so every name in it is defined in it; a listing
 whose first line is \texttt{-- from} \emph{file} is an excerpt, and the whole file is
-checked instead. The proofs are on paper.
-LeanFM's tests check the implementation against them: the evaluator against the
-fixpoint semantics on every operator, and the faithfulness check against the CTL
-checker on broken copies of real protocols. The source is public
+checked instead. The proofs are on paper, and LeanFM's tests check the implementation against them: the fast
+checker against the plain definitions on every word of the logic, and the faithfulness check
+against the claim checker on broken copies of real protocols. The source is public
 \citep{leanfmrepo}.
 
 \tableofcontents
@@ -355,7 +397,7 @@ checker on broken copies of real protocols. The source is public
 \include{chapters/projection}
 \include{chapters/where-clauses}
 
-\part{From Session Types to CTL}\label{part:ctl}
+\part{From Protocols to Claims}\label{part:ctl}
 \include{chapters/checker-model}
 \include{chapters/faithful-ctl}
 \include{chapters/constructs}
