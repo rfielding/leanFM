@@ -90,3 +90,6 @@ video/ctl-where/build/
 video/lean-tutorial/build/
 /video/maqam-zig/card_*.png
 video/book-tour/build/
+
+# rendered videos stay local; rebuild with the make video targets
+*.mp4

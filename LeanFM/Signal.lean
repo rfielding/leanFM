@@ -125,6 +125,22 @@ partial def Claim.text : Claim → String
   | .never p => s!"(never {p.text})"
   | .possibly p => s!"(possibly {p.text})"
 
+/-- The leaves: the above, below and on claims, in order. -/
+partial def Claim.leaves : Claim → List Claim
+  | .over f c => [.over f c]
+  | .under f c => [.under f c]
+  | .on m => [.on m]
+  | .not p | .within _ p | .throughout _ p | .always p | .never p | .possibly p => p.leaves
+  | .and ps | .or ps => ps.flatMap Claim.leaves
+  | .implies a b => a.leaves ++ b.leaves
+
+/-- How many nodes the claim has. -/
+partial def Claim.size : Claim → Nat
+  | .over _ _ | .under _ _ | .on _ => 1
+  | .not p | .within _ p | .throughout _ p | .always p | .never p | .possibly p => 1 + p.size
+  | .and ps | .or ps => 1 + (ps.map Claim.size).foldl (· + ·) 0
+  | .implies a b => 1 + a.size + b.size
+
 partial def Claim.fields : Claim → List String
   | .over f _ | .under f _ => [f]
   | .on _ => []
@@ -177,14 +193,16 @@ def ofLog (text : String) : Except String (Array Sample) := do
 
 def inf : Float := 1.0 / 0.0
 
-/-- Each field's value at every sample: its latest reading at or before it. -/
-def hold (ss : Array Sample) (f : String) : Except String (Array Float) := do
-  let some first := ((ss[0]!).vals.lookup f) | throw s!"internal: {f} has no reading at the first checked sample"
-  let mut cur := first
-  let mut out : Array Float := Array.mkEmpty ss.size
-  for s in ss do
-    if let some v := s.vals.lookup f then cur := v
-    out := out.push cur
+/-- Each field's value at every sample from `start` on: its latest reading at or before it, which
+may come from before `start`. -/
+def hold (ss : Array Sample) (f : String) (start : Nat := 0) : Except String (Array Float) := do
+  let mut cur : Option Float := none
+  let mut out : Array Float := Array.mkEmpty (ss.size - start)
+  for i in [0:ss.size] do
+    if let some v := ss[i]!.vals.lookup f then cur := some v
+    if i ≥ start then
+      let some v := cur | throw s!"internal: {f} has no reading by sample {start + 1}"
+      out := out.push v
   return out
 
 structure Run where
@@ -195,7 +213,7 @@ structure Run where
 
 /-- For each i, the max (or min) of `xs` over samples j ≥ i with t j ≤ t i + d: a monotone deque,
 each index pushed and popped once. Also how many windows reach past the last sample. -/
-def slide (t xs : Array Float) (d : Float) (isMax : Bool) : Array Float × Nat := Id.run do
+def slide (t xs : Array Float) (d : Float) (isMax : Bool) : Array Float × Nat × Nat := Id.run do
   let n := xs.size
   let better := fun (a b : Float) => if isMax then a ≥ b else a ≤ b
   let mut dq : Array Nat := #[]
@@ -203,15 +221,19 @@ def slide (t xs : Array Float) (d : Float) (isMax : Bool) : Array Float × Nat :
   let mut r := 0          -- next index to push
   let mut out : Array Float := Array.mkEmpty n
   let mut cut := 0
+  let mut steps := 0
   for i in [0:n] do
+    steps := steps + 1
     while r < n && t[r]! ≤ t[i]! + d do
-      while dq.size > head && better xs[r]! xs[dq.back!]! do dq := dq.pop
+      while dq.size > head && better xs[r]! xs[dq.back!]! do
+        dq := dq.pop; steps := steps + 1
       dq := dq.push r
-      r := r + 1
-    while head < dq.size && dq[head]! < i do head := head + 1
+      r := r + 1; steps := steps + 1
+    while head < dq.size && dq[head]! < i do
+      head := head + 1; steps := steps + 1
     out := out.push xs[dq[head]!]!
     if t[n - 1]! < t[i]! + d then cut := cut + 1
-  return (out, cut)
+  return (out, cut, steps)
 
 def suffix (xs : Array Float) (isMax : Bool) : Array Float := Id.run do
   let n := xs.size
@@ -221,29 +243,38 @@ def suffix (xs : Array Float) (isMax : Bool) : Array Float := Id.run do
     out := out.set! i (if isMax then max out[i]! out[i+1]! else min out[i]! out[i+1]!)
   return out
 
-partial def margin (r : Run) : Claim → StateM Nat (Array Float)
-  | .over f c => return ((r.vals.lookup f).getD #[]).map (· - c)
-  | .under f c => return ((r.vals.lookup f).getD #[]).map (c - ·)
-  | .on m => return r.labels.map fun l => if l == m then inf else -inf
-  | .not p => return (← margin r p).map (- ·)
+/-- What margin counts as it goes: moments with a window cut short, and elementary steps. -/
+structure Tally where
+  cut : Nat := 0
+  steps : Nat := 0
+  deriving Inhabited
+
+partial def margin (r : Run) : Claim → StateM Tally (Array Float)
+  | .over f c => do tick 1; return ((r.vals.lookup f).getD #[]).map (· - c)
+  | .under f c => do tick 1; return ((r.vals.lookup f).getD #[]).map (c - ·)
+  | .on m => do tick 1; return r.labels.map fun l => if l == m then inf else -inf
+  | .not p => do let m ← margin r p; tick 1; return m.map (- ·)
   | .and ps => do
-      let ms ← ps.mapM (margin r)
+      let ms ← ps.mapM (margin r); tick (ps.length + 1)
       return ms.foldl (fun acc m => acc.zipWith min m) (r.t.map fun _ => inf)
   | .or ps => do
-      let ms ← ps.mapM (margin r)
+      let ms ← ps.mapM (margin r); tick (ps.length + 1)
       return ms.foldl (fun acc m => acc.zipWith max m) (r.t.map fun _ => -inf)
   | .implies a b => do
-      let ma ← margin r a; let mb ← margin r b
+      let ma ← margin r a; let mb ← margin r b; tick 1
       return (ma.map (- ·)).zipWith max mb
   | .within d p => do
-      let (o, c) := slide r.t (← margin r p) d true
-      modify (· + c); return o
+      let (o, c, s) := slide r.t (← margin r p) d true
+      modify fun t => { t with cut := t.cut + c, steps := t.steps + s }; return o
   | .throughout d p => do
-      let (o, c) := slide r.t (← margin r p) d false
-      modify (· + c); return o
-  | .always p => return suffix (← margin r p) false
-  | .never p => return suffix ((← margin r p).map (- ·)) false
-  | .possibly p => return suffix (← margin r p) true
+      let (o, c, s) := slide r.t (← margin r p) d false
+      modify fun t => { t with cut := t.cut + c, steps := t.steps + s }; return o
+  | .always p => do let m ← margin r p; tick 1; return suffix m false
+  | .never p => do let m ← margin r p; tick 1; return suffix (m.map (- ·)) false
+  | .possibly p => do let m ← margin r p; tick 1; return suffix m true
+where
+  /-- k passes over the n samples. -/
+  tick (k : Nat) : StateM Tally Unit := modify fun t => { t with steps := t.steps + k * r.t.size }
 
 /-- A margin as JSON: rounded to 3 decimals, or `unbounded` when it is infinite. -/
 def num (x : Float) : Json :=
@@ -374,17 +405,48 @@ def check (args : Json) : Except String Json := do
   let firsts ← fields.mapM fun f => match (List.range ss.size).find? (fun i => (ss[i]!.vals.lookup f).isSome) with
     | some i => pure i
     | none => throw s!"the claim reads {f}, which the run never reads"
-  let start := firsts.foldl max 0
+  let firstOf := fun f => ((fields.zip firsts).lookup f).getD 0
+  let leafStart : Claim → Nat := fun c => c.fields.foldl (fun a f => max a (firstOf f)) 0
+  let start ← match args.getObjValD "from" with
+    | .num n =>
+      let from_ := n.toFloat
+      let some s := (List.range ss.size).find? (fun i => ss[i]!.t ≥ from_)
+        | throw s!"no sample is at or after from {numText from_}; the last is at t {numText ss.back!.t}"
+      for f in fields do
+        if firstOf f > s then
+          throw s!"from {numText from_} starts the claim at sample {s + 1}, but {f} is first read at sample {firstOf f + 1}; give a later from"
+      pure s
+    | .null =>
+      -- a branch gives the same answer inside the claim as alone only if every branch starts at the
+      -- same sample; a node starts at the latest start of its leaves, so compare the leaves
+      let leaves := claim.leaves
+      let late := leaves.foldl (fun a c => if leafStart c > leafStart a then c else a) leaves.head!
+      let early := leaves.foldl (fun a c => if leafStart c < leafStart a then c else a) leaves.head!
+      if leafStart early < leafStart late then
+        let why := match early with
+          | .on _ => "it reads no field"
+          | c => s!"{c.fields.head!} is first read there"
+        throw s!"{late.text} starts at sample {leafStart late + 1}, where {late.fields.head!} is first read, but {early.text} starts at sample {leafStart early + 1}, since {why}; checked together the claim would skip samples {leafStart early + 1} to {leafStart late}, so {early.text} would not give the answer it gives alone. Give from (a time in seconds) to say where the claim starts, or check the branches separately"
+      pure (firsts.foldl max 0)
+    | v => throw s!"from is a time in seconds, not {v.compress}"
+  let vals ← fields.mapM fun f => do pure (f, ← hold ss f start)
   let ss := ss.extract start ss.size
-  let vals ← fields.mapM fun f => do pure (f, ← hold ss f)
   let r : Run := { t := ss.map (·.t), labels := ss.map (·.label), vals }
-  let (m, cut) := (margin r claim).run 0
+  let (m, tally) := (margin r claim).run {}
+  let cut := tally.cut
   let holds := m[0]! ≥ 0
   -- the first failing sample of an always or never
-  let inner : Option (Array Float) := match claim with
-    | .always p => some ((margin r p).run' 0)
-    | .never p => some (((margin r p).run' 0).map (- ·))
+  let innerRun : Option (Array Float × Tally) := match claim with
+    | .always p => some ((margin r p).run {})
+    | .never p => some (let (xs, t) := (margin r p).run {}; (xs.map (- ·), t))
     | _ => none
+  let inner := innerRun.map (·.1)
+  let steps := tally.steps + (innerRun.map (·.2.steps)).getD 0
+  -- linear by construction; a change that breaks that must not answer quietly
+  let stepBound := 10 * claim.size * ss.size
+  if steps > stepBound then
+    throw s!"internal: check_signal took {steps} steps for {claim.size} nodes over {ss.size} samples, more than its linear bound {stepBound}; the check is no longer linear, which is a bug in LeanFM"
+
   let first : Json := match inner with
     | some xs => match (List.range xs.size).find? (fun i => xs[i]! < 0) with
       | some i => Json.mkObj ([("sample", toJson (i + 1)), ("t", num r.t[i]!), ("label", Json.str r.labels[i]!)] ++
@@ -410,7 +472,7 @@ def check (args : Json) : Except String Json := do
     | _ => []
   return Json.mkObj <| svg ++ [("tool", Json.str "check_signal"), ("verdict", Json.str (if holds then "holds" else "fails")),
     ("reading", Json.str reading), ("claim", Json.str claim.text), ("margin", num m[0]!),
-    ("firstFailure", first), ("samples", toJson ss.size), ("skipped", toJson start), ("source", source), ("cutShort", toJson cut),
+    ("firstFailure", first), ("samples", toJson ss.size), ("skipped", toJson start), ("source", source), ("cutShort", toJson cut), ("steps", toJson steps), ("stepBound", toJson stepBound),
     ("series", Json.mkObj ([("margin", marginSeries)] ++ fieldSeries)), ("omittedPoints", toJson omitted)]
 
 end LeanFM.Signal
