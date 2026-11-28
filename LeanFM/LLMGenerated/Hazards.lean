@@ -56,6 +56,11 @@ def hazards : List Hazard :=
       never := "the server reads a file outside the project root it was asked about"
       control := "ProjectView.inside, ServerLogs.pathOf and ProjectRoots resolve real paths and check they are below the root"
       test := "LeanFM/MCPTests.lean: a conform log /etc/passwd outside the root is failing; scripts/external_project_check.py: a symlink out of the root is not read; proved for every path: LeanFM.PathProofs.paths_stay_inside" }
+  , { id := "parser.environment", status := "mitigated"
+      hazard := "protocol text with an antiquotation ($(e) where a name belongs, %$(e) after a token) sent Lean's term parser to the placeholder environment the grammar runs with, and one request crashed the server"
+      never := "a request whose text reaches a parser that reads the environment"
+      control := "the grammar uses Lean's forms without antiquotations throughout (selfhost.session.grammar-safe); ProofCheck walks what its parsers can reach and fails on any environment reader"
+      test := "LeanFM/Session/GrammarTests.lean: every antiquotation form is a parse error; ProofCheck.lean --self-test: the grammar reaches no environment reader" }
   , { id := "connections.exhaustion", status := "mitigated"
       hazard := "clients hold open connections until the server runs out of file handles"
       never := "more than LEANFM_MAX_CONNECTIONS connections are open at once"

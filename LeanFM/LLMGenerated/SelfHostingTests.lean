@@ -9,7 +9,7 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 156 := by native_decide
+example : clauses.length = 157 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.session.navigator" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.server-info" = true := by native_decide
@@ -33,7 +33,7 @@ example : LeanFM.LLMGenerated.McpLogicImplementation.errors = [] := by native_de
 -- every logic clause is implemented, knows, protocol, reassembly and the view included
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.logic." && c.status == "implemented")).length = 20 := by native_decide
 -- the session-type library is specified, and every clause has a decision and a test
-example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length = 82 := by native_decide
+example : (clauses.filter (fun c => c.id.startsWith "selfhost.session.")).length = 83 := by native_decide
 example : LeanFM.LLMGenerated.SessionImplementation.errors = [] := by native_decide
 -- the session tools, their view and its navigator are specified and implemented
 example : (clauses.filter (fun c => c.id.startsWith "selfhost.mcp.session." && c.status == "implemented")).length = 5 := by native_decide
@@ -44,5 +44,5 @@ example : protocolPathOk "LeanFM/LLMGenerated/LeanFM.leanfm" = true := by native
 example : ["/etc/x.leanfm", "a/../b.leanfm", "a//b.leanfm", "./a.leanfm", "x.lean", "", "a\\b.leanfm"].all (fun f => !protocolPathOk f) = true := by native_decide
 -- hazards are named like requirements; a mitigated one names its control and its test (selfhost.hazards)
 example : LeanFM.LLMGenerated.Hazards.errors = [] := by native_decide
-example : LeanFM.LLMGenerated.Hazards.hazards.length = 13 := by native_decide
+example : LeanFM.LLMGenerated.Hazards.hazards.length = 14 := by native_decide
 example : LeanFM.LLMGenerated.Hazards.openHazards.length = 1 := by native_decide

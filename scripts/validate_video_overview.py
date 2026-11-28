@@ -19,8 +19,14 @@ assert [scene["id"] for scene in narration] == [
 ]
 for constructor in ["| ef :", "| af :", "| eg :", "| ag :"]:
     assert constructor in ctl, constructor
-assert "| af p => !(existsPathAlways" in ctl
-assert "| ag p => !(anyReachable" in ctl
+# the dualities the video states: AG is computed as the negation of EF of the negation (the
+# checker's label for ag), and AF against the negation of EG of the negation is checked in CTLTests,
+# beside the exhaustive comparison with the earlier checker (selfhost.mcp.logic.checker)
+tests = (root / "LeanFM/CTLTests.lean").read_text()
+assert "| .ag p =>" in ctl and "fun z s => !mem a s || (succ s).any z" in ctl
+assert "CTL.holds weakBranches .start (CTL.neg (CTL.ef (CTL.neg weakP)))" in tests
+assert "CTL.holds weakBranches .start (CTL.neg (CTL.eg (CTL.neg weakQ)))" in tests
+assert "example : disagreements = 0" in tests
 assert 'id := "book.overview_video"' in requirements
 assert data["id"] == "book.overview_video"
 print("ok: video overview provenance and CTL vocabulary match the checked sources")

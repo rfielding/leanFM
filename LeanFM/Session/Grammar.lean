@@ -25,7 +25,30 @@ namespace LeanFM.Session.Grammar
 open Lean Parser PrettyPrinter
 
 /-- A word that is a construct only here: an identifier, or a keyword Lean already reserves. -/
-local macro "W" s:str : term => `(nonReservedSymbol $s)
+local macro "W" s:str : term => `(nonReservedSymbolNoAntiquot $s)
+
+/-! ## Names and literals, without antiquotations
+
+Lean's `ident`, `strLit` and `numLit` also accept an antiquotation (`$x`, `$(e)`), whose term is read
+by `termParser`, a category parser that reads the environment. The grammar runs with no environment
+(see `run`), so submitted text such as `from $(1 + 2) to B` reached it and crashed the server; these
+forms never parse an antiquotation, and ProofCheck.lean checks that no parser of this module can reach a
+category parser or the environment (selfhost.session.text, hazard parser.environment). -/
+def identP : Parser := identNoAntiquot
+def strLitP : Parser := strLitNoAntiquot
+def numLitP : Parser := numLitNoAntiquot
+
+def optionalP (p : Parser) : Parser := optionalNoAntiquot p
+def manyP (p : Parser) : Parser := manyNoAntiquot p
+def many1P (p : Parser) : Parser := many1NoAntiquot p
+def sepByP (p : Parser) (sep : String) : Parser := sepByNoAntiquot p (symbolNoAntiquot sep)
+def sepBy1P (p : Parser) (sep : String) : Parser := sepBy1NoAntiquot p (symbolNoAntiquot sep)
+/-- A doc comment, `/-- ... -/`, as Lean's command parser reads it but with no antiquotation. -/
+def docCommentP : Parser := node ``Lean.Parser.Command.docComment (symbolNoAntiquot "/--" >> Command.commentBody)
+def moduleDocP : Parser := node ``Lean.Parser.Command.moduleDoc (symbolNoAntiquot "/-!" >> Command.commentBody)
+
+/-- A symbol written as a string in a parser is a symbol without token antiquotations (`%$x`). -/
+local instance (priority := high) : Coe String Parser := ⟨fun s => symbolNoAntiquot s⟩
 
 /-! ## Raw condition text -/
 
@@ -124,74 +147,74 @@ def leanDecl : Parser := node `LeanFM.Session.Grammar.leanDecl { fn := leanDeclF
 
 /-! ## Annotations: numbers, durations, amounts and times -/
 
-def frac : Parser := node `LeanFM.Session.Grammar.frac (numLit >> optional ("/" >> numLit))
-def dur : Parser := node `LeanFM.Session.Grammar.dur (numLit >> ident)
+def frac : Parser := node `LeanFM.Session.Grammar.frac (numLitP >> optionalP ("/" >> numLitP))
+def dur : Parser := node `LeanFM.Session.Grammar.dur (numLitP >> identP)
 def durWeight : Parser := node `LeanFM.Session.Grammar.durWeight (dur >> ":" >> frac >> ";")
 def delay : Parser := node `LeanFM.Session.Grammar.delay
-  ((atomic (W "sample" >> lookahead "{") >> "{" >> many durWeight >> "}") <|> dur)
+  ((atomic (W "sample" >> lookahead "{") >> "{" >> manyP durWeight >> "}") <|> dur)
 /-- `time(x)` (the tokenizer reads `time(` whole where some syntax names it) or `max(time(a), time(b))`. -/
 def timeRef1 : Parser := node `LeanFM.Session.Grammar.timeRef1
-  (("time(" <|> atomic (W "time" >> "(")) >> ident >> ")")
+  (("time(" <|> atomic (W "time" >> "(")) >> identP >> ")")
 def timeRef : Parser := node `LeanFM.Session.Grammar.timeRef
   (timeRef1 <|> (atomic (W "max" >> "(") >> timeRef1 >> "," >> timeRef1 >> ")"))
 def timeExpr : Parser := node `LeanFM.Session.Grammar.timeExpr
-  ((W "next" >> dur) <|> ((timeRef <|> ident) >> optional ("+" >> delay)))
-def qty : Parser := node `LeanFM.Session.Grammar.qty (optional "-" >> numLit >> ident)
+  ((W "next" >> dur) <|> ((timeRef <|> identP) >> optionalP ("+" >> delay)))
+def qty : Parser := node `LeanFM.Session.Grammar.qty (optionalP "-" >> numLitP >> identP)
 def qtyWeight : Parser := node `LeanFM.Session.Grammar.qtyWeight (qty >> ":" >> frac >> ";")
 def amount : Parser := node `LeanFM.Session.Grammar.amount
-  (W "amount" >> ((atomic (W "sample" >> lookahead "{") >> "{" >> many qtyWeight >> "}") <|>
-    ("{" >> many (qty >> ";") >> "}") <|> qty))
+  (W "amount" >> ((atomic (W "sample" >> lookahead "{") >> "{" >> manyP qtyWeight >> "}") <|>
+    ("{" >> manyP (qty >> ";") >> "}") <|> qty))
 def timing : Parser := node `LeanFM.Session.Grammar.timing ((W "at" >> timeExpr) <|> (W "after" >> delay))
 def eventTiming : Parser := node `LeanFM.Session.Grammar.eventTiming
   ((W "after" >> delay) <|> (W "at" >> W "next" >> dur))
 def rate : Parser := node `LeanFM.Session.Grammar.rate
-  (optional "-" >> numLit >> ident >> W "per" >> (dur <|> ident))
+  (optionalP "-" >> numLitP >> identP >> W "per" >> (dur <|> identP))
 
 /-! ## Statements -/
 
-def block (st : Parser) : Parser := node `LeanFM.Session.Grammar.block ("{" >> many st >> "}")
+def block (st : Parser) : Parser := node `LeanFM.Session.Grammar.block ("{" >> manyP st >> "}")
 
 def msg : Parser := node `LeanFM.Session.Grammar.msg
-  (optional (atomic (ident >> ":")) >> ident >> W "from" >> ident >> W "to" >> ident >>
-    optional (W "cause" >> ident) >> optional (W "route" >> strLit) >> optional (W "status" >> numLit) >>
-    optional (W "media" >> strLit) >> optional amount >> optional timing >> optional (W "where" >> cond) >> ";")
+  (optionalP (atomic (identP >> ":")) >> identP >> W "from" >> identP >> W "to" >> identP >>
+    optionalP (W "cause" >> identP) >> optionalP (W "route" >> strLitP) >> optionalP (W "status" >> numLitP) >>
+    optionalP (W "media" >> strLitP) >> optionalP amount >> optionalP timing >> optionalP (W "where" >> cond) >> ";")
 def event : Parser := node `LeanFM.Session.Grammar.event
-  (atomic (ident >> W "at") >> ident >> optional eventTiming >> ";")
+  (atomic (identP >> W "at") >> identP >> optionalP eventTiming >> ";")
 def choice (st : Parser) : Parser := node `LeanFM.Session.Grammar.choice
-  (atomic (W "choice" >> lookahead "{") >> block st >> many (W "or" >> block st))
+  (atomic (W "choice" >> lookahead "{") >> block st >> manyP (W "or" >> block st))
 def wbranch (st : Parser) : Parser := node `LeanFM.Session.Grammar.wbranch
-  ("{" >> optional (atomic (W "probability" >> lookahead numLit) >> frac >> ":") >> many st >> "}")
+  ("{" >> optionalP (atomic (W "probability" >> lookahead numLitP) >> frac >> ":") >> manyP st >> "}")
 def declared (st : Parser) : Parser := node `LeanFM.Session.Grammar.declared
-  (atomic (W "choice" >> W "at") >> ident >> W "using" >> W "declared" >> "(" >> strLit >> ")" >>
-    wbranch st >> many (W "or" >> wbranch st))
+  (atomic (W "choice" >> W "at") >> identP >> W "using" >> W "declared" >> "(" >> strLitP >> ")" >>
+    wbranch st >> manyP (W "or" >> wbranch st))
 def par (st : Parser) : Parser := node `LeanFM.Session.Grammar.par
-  (atomic ((W "parallel" <|> W "par") >> lookahead "{") >> block st >> many (W "and" >> block st))
+  (atomic ((W "parallel" <|> W "par") >> lookahead "{") >> block st >> manyP (W "and" >> block st))
 def join (st : Parser) : Parser := node `LeanFM.Session.Grammar.join
-  (atomic (W "join" >> lookahead numLit) >> numLit >> W "of" >> block st >> many (W "and" >> block st))
+  (atomic (W "join" >> lookahead numLitP) >> numLitP >> W "of" >> block st >> manyP (W "and" >> block st))
 def recP (st : Parser) : Parser := node `LeanFM.Session.Grammar.rec
-  (atomic ((W "loop" <|> W "rec") >> ident >> lookahead "{") >> block st)
+  (atomic ((W "loop" <|> W "rec") >> identP >> lookahead "{") >> block st)
 def bounded (st : Parser) : Parser := node `LeanFM.Session.Grammar.bounded
-  (atomic ((W "loop" <|> W "rec") >> ident >> W "at") >> W "most" >> numLit >> block st >> optional (W "otherwise" >> block st))
+  (atomic ((W "loop" <|> W "rec") >> identP >> W "at") >> W "most" >> numLitP >> block st >> optionalP (W "otherwise" >> block st))
 def sessions (st : Parser) : Parser := node `LeanFM.Session.Grammar.sessions
   (atomic (W "sessions" >> lookahead "{") >> block st)
 def keyed (st : Parser) : Parser := node `LeanFM.Session.Grammar.keyed
-  (atomic (W "sessions" >> W "by") >> ident >> block st)
+  (atomic (W "sessions" >> W "by") >> identP >> block st)
 /-- `group Name { ... }`: a bracket for people (selfhost.session.group). -/
 def group (st : Parser) : Parser := node `LeanFM.Session.Grammar.group
-  (atomic (W "group" >> ident >> lookahead "{") >> block st)
-def cont : Parser := node `LeanFM.Session.Grammar.cont (atomic (W "continue" >> ident >> ";"))
+  (atomic (W "group" >> identP >> lookahead "{") >> block st)
+def cont : Parser := node `LeanFM.Session.Grammar.cont (atomic (W "continue" >> identP >> ";"))
 /-- `token` or `token = sid` after `with` (selfhost.session.identity.scopes). -/
-def binding : Parser := node `LeanFM.Session.Grammar.binding (ident >> optional ("=" >> ident))
+def binding : Parser := node `LeanFM.Session.Grammar.binding (identP >> optionalP ("=" >> identP))
 def incl : Parser := node `LeanFM.Session.Grammar.incl
-  (atomic (W "include" >> ident) >> many ident >> optional ("with" >> sepBy1 binding ",") >> ";")
-def clock : Parser := node `LeanFM.Session.Grammar.clock (atomic (W "clock" >> ident >> "=") >> timeRef >> ";")
+  (atomic (W "include" >> identP) >> manyP identP >> optionalP ("with" >> sepBy1P binding ",") >> ";")
+def clock : Parser := node `LeanFM.Session.Grammar.clock (atomic (W "clock" >> identP >> "=") >> timeRef >> ";")
 def obligation : Parser := node `LeanFM.Session.Grammar.obligation
-  (atomic (W "obligation" >> ident >> W "on") >> ident >> "{" >> W "trigger" >> ident >> ";" >>
-    W "require" >> ident >> many (W "or" >> ident) >> W "within" >> dur >> ";" >>
-    W "on" >> W "breach" >> W "record" >> ident >> optional (W "pays" >> qty >> W "to" >> ident) >> ";" >> "}")
+  (atomic (W "obligation" >> identP >> W "on") >> identP >> "{" >> W "trigger" >> identP >> ";" >>
+    W "require" >> identP >> manyP (W "or" >> identP) >> W "within" >> dur >> ";" >>
+    W "on" >> W "breach" >> W "record" >> identP >> optionalP (W "pays" >> qty >> W "to" >> identP) >> ";" >> "}")
 def accrue : Parser := node `LeanFM.Session.Grammar.accrue
-  (atomic (W "accrue" >> lookahead (numLit <|> "{" <|> "-")) >>
-    (("{" >> many (rate >> ";") >> "}") <|> rate) >> W "from" >> ident >> W "to" >> ident >> ";")
+  (atomic (W "accrue" >> lookahead (numLitP <|> "{" <|> "-")) >>
+    (("{" >> manyP (rate >> ";") >> "}") <|> rate) >> W "from" >> identP >> W "to" >> identP >> ";")
 
 /-- Every statement form, the recursive ones over `st`; keyword forms first, messages last. -/
 def alternatives (st : Parser) : Parser :=
@@ -208,49 +231,49 @@ def stmt : Parser := { fn := stmtFn, info := (alternatives skip).info }
 /-! ## Protocols, requirements, structures, files -/
 
 /-- A role, with its inbox size where the protocol gives one: `Api[8]` (selfhost.session.buffers). -/
-def protocolRole : Parser := node `LeanFM.Session.Grammar.protocolRole (ident >> optional ("[" >> numLit >> "]"))
+def protocolRole : Parser := node `LeanFM.Session.Grammar.protocolRole (identP >> optionalP ("[" >> numLitP >> "]"))
 
 def protocolBody : Parser := node `LeanFM.Session.Grammar.protocolBody
-  ("protocol " >> ident >> "(" >> sepBy protocolRole "," >> ")" >> optional (W "version" >> numLit) >>
-    optional (W "given" >> many1 ident) >> block stmt)
+  ("protocol " >> identP >> "(" >> sepByP protocolRole "," >> ")" >> optionalP (W "version" >> numLitP) >>
+    optionalP (W "given" >> many1P identP) >> block stmt)
 
 def reqOpt : Parser := node `LeanFM.Session.Grammar.reqOpt
-  ((W "within" >> dur) <|> (W "over" >> numLit >> ident) <|> (W "confidence" >> frac) <|>
-    (W "expecting" >> numLit >> W "per" >> ident))
+  ((W "within" >> dur) <|> (W "over" >> numLitP >> identP) <|> (W "confidence" >> frac) <|>
+    (W "expecting" >> numLitP >> W "per" >> identP))
 def reqClause : Parser := node `LeanFM.Session.Grammar.reqClause
-  (((W "every" >> ident >> W "reaches") <|> (W "at" >> (W "least" <|> W "most") >> frac >> W "of" >> ident >> W "reach")) >>
-    sepBy1 ident "," >> many reqOpt >> ";")
+  (((W "every" >> identP >> W "reaches") <|> (W "at" >> (W "least" <|> W "most") >> frac >> W "of" >> identP >> W "reach")) >>
+    sepBy1P identP "," >> manyP reqOpt >> ";")
 def requireBody : Parser := node `LeanFM.Session.Grammar.requireBody
-  ("require " >> W "per" >> ident >> "{" >> many reqClause >> "}")
+  ("require " >> W "per" >> identP >> "{" >> manyP reqClause >> "}")
 
 /-- `instance db : Db serial;`: a shared instance named `db` playing role `Db`. -/
 def instDecl : Parser := node `LeanFM.Session.Grammar.instDecl
-  ("instance " >> ident >> " : " >> ident >> optional (W "serial") >> ";")
+  ("instance " >> identP >> " : " >> identP >> optionalP (W "serial") >> ";")
 /-- One player of an accept: `fresh Role` or the name of a shared instance. -/
-def acceptArg : Parser := node `LeanFM.Session.Grammar.acceptArg (optional (W "fresh") >> ident)
+def acceptArg : Parser := node `LeanFM.Session.Grammar.acceptArg (optionalP (W "fresh") >> identP)
 /-- `accept Order (fresh Client, db, cache);`: one instance of `Order` per accept. -/
 def acceptDecl : Parser := node `LeanFM.Session.Grammar.acceptDecl
-  (W "accept" >> ident >> "(" >> sepBy1 acceptArg "," >> ")" >> ";")
+  (W "accept" >> identP >> "(" >> sepBy1P acceptArg "," >> ")" >> ";")
 def systemBody : Parser := node `LeanFM.Session.Grammar.systemBody
-  ("system " >> ident >> "{" >> many (instDecl <|> acceptDecl) >> "}")
+  ("system " >> identP >> "{" >> manyP (instDecl <|> acceptDecl) >> "}")
 
 /-! ## Deployments (selfhost.session.deployment) -/
 
 /-- `ingress https : ingressHttps;`: an interface of a placed role, its scope, name and kind. -/
 def ifaceDecl : Parser := node `LeanFM.Session.Grammar.ifaceDecl
-  ((W "ingress" <|> W "peering" <|> W "internal" <|> W "local") >> ident >> " : " >> ident >> ";")
+  ((W "ingress" <|> W "peering" <|> W "internal" <|> W "local") >> identP >> " : " >> identP >> ";")
 /-- `kind grpc refines http adds "deadline exceeded";`: an interface kind refined from a known one. -/
 def kindDecl : Parser := node `LeanFM.Session.Grammar.kindDecl
-  (atomic (W "kind" >> ident >> W "refines") >> ident >> optional (W "adds" >> sepBy1 strLit ",") >>
-    optional (W "removes" >> sepBy1 strLit ",") >> ";")
+  (atomic (W "kind" >> identP >> W "refines") >> identP >> optionalP (W "adds" >> sepBy1P strLitP ",") >>
+    optionalP (W "removes" >> sepBy1P strLitP ",") >> ";")
 /-- `outside { ... }`, or `island us { ... }` and the other places with a name. -/
 def groupDecl (it : Parser) : Parser := node `LeanFM.Session.Grammar.groupDecl
-  ((atomic (W "outside" >> lookahead "{") >> "{" >> many it >> "}") <|>
-   (atomic ((W "island" <|> W "datacenter" <|> W "machine" <|> W "replicated" <|> W "sharded") >> ident >> lookahead "{") >>
-     "{" >> many it >> "}"))
+  ((atomic (W "outside" >> lookahead "{") >> "{" >> manyP it >> "}") <|>
+   (atomic ((W "island" <|> W "datacenter" <|> W "machine" <|> W "replicated" <|> W "sharded") >> identP >> lookahead "{") >>
+     "{" >> manyP it >> "}"))
 /-- `Role;` or `Role { interfaces }`: a role of the protocol, placed here. -/
 def roleDecl : Parser := node `LeanFM.Session.Grammar.roleDecl
-  (ident >> (";" <|> ("{" >> many ifaceDecl >> "}")))
+  (identP >> (";" <|> ("{" >> manyP ifaceDecl >> "}")))
 
 /-- Every item of a deployment, groups over `it`; keyword forms first, roles last. -/
 def deployAlternatives (it : Parser) : Parser := kindDecl <|> groupDecl it <|> roleDecl
@@ -264,7 +287,7 @@ def deployItem : Parser := { fn := deployItemFn, info := (deployAlternatives ski
 
 /-- `deployment Name of P { ... }`; the leading word is not reserved, as `requirements`. -/
 def deploymentBody : Parser := node `LeanFM.Session.Grammar.deploymentBody
-  (nonReservedSymbol "deployment" true >> ident >> W "of" >> ident >> "{" >> many deployItem >> "}")
+  (nonReservedSymbolNoAntiquot "deployment" true >> identP >> W "of" >> identP >> "{" >> manyP deployItem >> "}")
 
 /-! ## Requirement and implementation maps (selfhost.requirements.map, selfhost.implementations.map) -/
 
@@ -302,35 +325,35 @@ def sexpr : Parser := { fn := sexprFn }
 
 /-- What a requirement points at: `sorry` (with an optional note), a protocol, or `P ⊨ φ`. -/
 def reqPointer : Parser := node `LeanFM.Session.Grammar.reqPointer
-  ((W "sorry" >> optional strLit) <|> (ident >> optional (" ⊨ " >> sexpr)))
+  ((W "sorry" >> optionalP strLitP) <|> (identP >> optionalP (" ⊨ " >> sexpr)))
 /-- `Short "sentence" => pointer;`: an optional short name (an identifier; a SelfHosting clause id
 says which clause the entry formalizes), the requirement in English, and what it reduces to. -/
-def reqEntry : Parser := node `LeanFM.Session.Grammar.reqEntry (optional ident >> strLit >> " => " >> reqPointer >> ";")
+def reqEntry : Parser := node `LeanFM.Session.Grammar.reqEntry (optionalP identP >> strLitP >> " => " >> reqPointer >> ";")
 def requirementsBody : Parser := node `LeanFM.Session.Grammar.requirementsBody
-  (nonReservedSymbol "requirements" true >> "{" >> many reqEntry >> "}")
+  (nonReservedSymbolNoAntiquot "requirements" true >> "{" >> manyP reqEntry >> "}")
 
 /-- Evidence for an imported requirement, or a pointer for the implementation's own CTL. -/
 def evidence : Parser := node `LeanFM.Session.Grammar.evidence
-  ((W "conform" >> strLit) <|> (W "test" >> strLit) <|> (W "proof" >> strLit) <|> (W "pure" >> strLit) <|> (W "readonly" >> strLit) <|> reqPointer)
+  ((W "conform" >> strLitP) <|> (W "test" >> strLitP) <|> (W "proof" >> strLitP) <|> (W "pure" >> strLitP) <|> (W "readonly" >> strLitP) <|> reqPointer)
 /-- One line of an implementation: `refines P by Q;`, `hint "text";` or `"name" => evidence;`. -/
 def implItem : Parser := node `LeanFM.Session.Grammar.implItem
-  ((W "refines" >> ident >> W "by" >> ident >> ";") <|> (W "hint" >> strLit >> ";") <|> (strLit >> " => " >> evidence >> ";"))
+  ((W "refines" >> identP >> W "by" >> identP >> ";") <|> (W "hint" >> strLitP >> ";") <|> (strLitP >> " => " >> evidence >> ";"))
 def implementationBody : Parser := node `LeanFM.Session.Grammar.implementationBody
-  (nonReservedSymbol "implementation" true >> ident >> W "of" >> ident >> "{" >> many implItem >> "}")
+  (nonReservedSymbolNoAntiquot "implementation" true >> identP >> W "of" >> identP >> "{" >> manyP implItem >> "}")
 
 /-- `requirements { ... }` as a Lean command (checked by the tools, nothing elaborated). -/
 @[command_parser] def requirementsCmd : Parser := leading_parser requirementsBody
 /-- `implementation Name of Module { ... }` as a Lean command. -/
-@[command_parser] def implementationCmd : Parser := leading_parser optional Command.docComment >> implementationBody
+@[command_parser] def implementationCmd : Parser := leading_parser optionalP docCommentP >> implementationBody
 
 /-- `protocol Name (Roles) { ... }` as a Lean command (`Session.Syntax` elaborates it). -/
-@[command_parser] def protocolCmd : Parser := leading_parser optional Command.docComment >> protocolBody
+@[command_parser] def protocolCmd : Parser := leading_parser optionalP docCommentP >> protocolBody
 
 /-- `system Name { instance ...; accept ...; }` as a Lean command (selfhost.session.instances). -/
-@[command_parser] def systemCmd : Parser := leading_parser optional Command.docComment >> systemBody
+@[command_parser] def systemCmd : Parser := leading_parser optionalP docCommentP >> systemBody
 
 /-- `deployment Name of P { ... }` as a Lean command (selfhost.session.deployment). -/
-@[command_parser] def deploymentCmd : Parser := leading_parser optional Command.docComment >> deploymentBody
+@[command_parser] def deploymentCmd : Parser := leading_parser optionalP docCommentP >> deploymentBody
 
 /-- `require per q { ... }` as a Lean command. -/
 @[command_parser] def requireCmd : Parser := leading_parser requireBody
@@ -377,21 +400,21 @@ def fieldTypeFn : ParserFn := fun c s =>
 def fieldType : Parser := { fn := fieldTypeFn }
 
 def field : Parser := node `LeanFM.Session.Grammar.field
-  (many1 ident >> ":" >> (node `LeanFM.Session.Grammar.constraintField (atomic constraint) <|> fieldType) >>
+  (many1P identP >> ":" >> (node `LeanFM.Session.Grammar.constraintField (atomic constraint) <|> fieldType) >>
     notFollowedBy ":=" "default values (:=); they are not part of a message type")
 /-- `mk ::` or `private mk ::`: the structure's constructor, private when only a smart constructor
 (a function that checks, then builds) may make one. -/
 def ctorLine : Parser := node `LeanFM.Session.Grammar.ctorLine
-  (atomic (optional "private " >> ident >> " ::"))
+  (atomic (optionalP "private " >> identP >> " ::"))
 def structureBody : Parser := node `LeanFM.Session.Grammar.structureBody
-  ("structure " >> ident >> optional ("where" >> optional ctorLine >> many field) >> optional ("deriving" >> sepBy1 ident ","))
+  ("structure " >> identP >> optionalP ("where" >> optionalP ctorLine >> manyP field) >> optionalP ("deriving" >> sepBy1P identP ","))
 
 /-- A file as the tools read it: the Lean header, then structures, protocols and requirements. -/
 def file : Parser := node `LeanFM.Session.Grammar.file
-  (many (node `LeanFM.Session.Grammar.import ("import " >> ident)) >>
-    many (node `LeanFM.Session.Grammar.item (optional Command.docComment >>
+  (manyP (node `LeanFM.Session.Grammar.import ("import " >> identP)) >>
+    manyP (node `LeanFM.Session.Grammar.item (optionalP docCommentP >>
       (structureBody <|> protocolBody <|> requireBody <|> systemBody <|> deploymentBody <|> requirementsBody <|> implementationBody <|> leanDecl))) >>
-    notFollowedBy (Command.moduleDoc) "module doc comment (/-! -/); use -- comments")
+    notFollowedBy (moduleDocP) "module doc comment (/-! -/); use -- comments")
 
 /-! ## Running the grammar on text -/
 

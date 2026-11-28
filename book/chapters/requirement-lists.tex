@@ -286,7 +286,13 @@ on any reached call that writes, creates, renames or removes a file, or runs a p
 opened other than to read it. Everything an MCP request can reach, 6{,}405 definitions, passes. The
 walk found two places that needed a stated reason. One is the book-page renderer, which runs
 \texttt{pdftoppm} to standard output. The other is the protocol parser, which runs Lean's parsers with
-a placeholder environment that none of them reads.
+a placeholder environment, on the assumption that none of them reads it.
+
+Checking that assumption found a crash. Lean's name parser also accepts an antiquotation, such as
+\texttt{\$(1 + 2)}, and parses its term with a parser that reads the environment. So one request with
+\texttt{from \$(1 + 2) to B} in its protocol text stopped the server. The grammar now uses Lean's forms
+without antiquotations throughout. \texttt{make selfhost-check} walks the 5{,}713 definitions its
+parsers can reach and fails if any reads the environment.
 
 A requirement an implementation does not name counts as sorry for it. The shop:
 

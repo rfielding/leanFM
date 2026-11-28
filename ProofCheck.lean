@@ -15,7 +15,43 @@ open Lean
 in the answer. -/
 def exceptions : List (String × String) :=
   [("LeanFM.Logic.Dag.addUnsafe", "LeanFM.Logic.Dag.addUnsafe: a cache keyed by pointer address in front of Dag.add, whose own definition (addRef) builds the same DAG; it reads no file, clock or network and changes only how much work is repeated"),
-   ("_private.LeanFM.Session.Grammar.0.LeanFM.Session.Grammar.runImpl", "LeanFM.Session.Grammar.run: reads Lean's built-in token table and runs the protocol grammar's parsers with a placeholder for the environment, which none of them reads (none is a category parser); it parses, elaborates nothing, and writes nothing")]
+   ("_private.LeanFM.Session.Grammar.0.LeanFM.Session.Grammar.runImpl", "LeanFM.Session.Grammar.run: reads Lean's built-in token table and runs the protocol grammar's parsers with a placeholder for the environment; it parses, elaborates nothing, and writes nothing")]
+
+/-- What reads the environment while parsing: a category parser, the parser context's environment, or
+an environment extension. -/
+def envReader (n : Name) : Bool :=
+  n == ``Lean.Parser.ParserModuleContext.env || n == ``Lean.Parser.categoryParser || n == ``Lean.Parser.categoryParserFn ||
+  n == ``Lean.Parser.categoryParserFnRef || (`Lean.Environment).isPrefixOf n || (`Lean.EnvExtension).isPrefixOf n ||
+  (`Lean.PersistentEnvExtension).isPrefixOf n || (`Lean.ScopedEnvExtension).isPrefixOf n
+
+/-- The parsers Session.Grammar.run is given (parseFile's file, and parseValue's frac, dur and timeExpr),
+walked through LeanFM's modules and Lean's parser library: how many definitions, and each place one
+reads the environment, which the placeholder run passes cannot answer (hazard parser.environment). -/
+def grammarEnvReads (env : Environment) : Nat × List String := Id.run do
+  let follow (c : Name) : Bool := (env.getModuleIdxFor? c).any fun i =>
+    let m := (env.header.moduleNames[i.toNat]!).toString
+    m.startsWith "LeanFM" || m.startsWith "Lean.Parser" || m.startsWith "Init"
+  let mut seen : NameSet := {}
+  let mut todo : List Name := [`LeanFM.Session.Grammar.file, `LeanFM.Session.Grammar.frac, `LeanFM.Session.Grammar.dur,
+    `LeanFM.Session.Grammar.timeExpr]
+  let mut hits : List String := []
+  let mut n := 0
+  while !todo.isEmpty do
+    let c := todo.head!
+    todo := todo.tail!
+    if seen.contains c then continue
+    seen := seen.insert c
+    let some ci := env.find? c | continue
+    unless follow c do continue
+    n := n + 1
+    if let some i := Compiler.getImplementedBy? env c then todo := i :: todo
+    let ur := c.str "_unsafe_rec"
+    if env.contains ur then todo := ur :: todo
+    if let some v := ci.value? (allowOpaque := true) then
+      for k in v.getUsedConstants do
+        if envReader k then hits := hits ++ [s!"{c} uses {k}"]
+      todo := v.getUsedConstants.toList ++ todo
+  return (n, hits)
 
 /-- Definitions the read-only walk does not follow, each with why it writes nothing. -/
 def readonlyExceptions : List (String × String) :=
@@ -50,6 +86,7 @@ def mentionsIO (e : Expr) : Bool :=
 _unsafe_rec code of a partial definition, followed through LeanFM's modules: how many LeanFM constants,
 the problems, and the exceptions reached (clause selfhost.requirements.proofs). -/
 def purityWalk (env : Environment) (roots : List Name) (readonly : Bool := false) : Nat × List String × List String := Id.run do
+  let (gn, gHits) := grammarEnvReads env
   let mut seen : NameSet := {}
   let mut todo := roots
   let mut problems : List String := []
@@ -61,7 +98,11 @@ def purityWalk (env : Environment) (roots : List Name) (readonly : Bool := false
     if seen.contains c then continue
     seen := seen.insert c
     if let some (_, why) := (exceptions ++ (if readonly then readonlyExceptions else [])).find? (·.1 == c.toString) then
-      excepted := excepted ++ [why]; continue
+      if c.toString.endsWith "Grammar.runImpl" then
+        if gHits.isEmpty then excepted := excepted ++ [why ++ s!"; checked: none of the {gn} definitions its parsers can reach reads the environment"]
+        else problems := problems ++ [s!"Session.Grammar.run's parsers can reach the environment: {gHits.take 3}"]
+      else excepted := excepted ++ [why]
+      continue
     if readonly && writes.contains c then problems := problems ++ [s!"reaches {c}"]; continue
     let some ci := env.find? c | continue
     let inLeanFM := (env.getModuleIdxFor? c).any fun i => (env.header.moduleNames[i.toNat]!).toString.startsWith "LeanFM"
@@ -92,6 +133,9 @@ def selfTest (env : Environment) : IO UInt32 := do
   if !addProblems.isEmpty || addEx.isEmpty then IO.eprintln s!"self-test: Dag.ofFormula: {addProblems} {addEx}"; return 1
   let (_, storeProblems, _) := purityWalk env [`LeanFM.ChatUI.Store.writeAtomic] (readonly := true)
   if storeProblems.isEmpty then IO.eprintln "self-test: the chat UI store's writes were not found"; return 1
+  let (gn, gHits) := grammarEnvReads env
+  if !gHits.isEmpty || gn < 100 then IO.eprintln s!"self-test: the grammar walk: {gn} definitions, {gHits.take 3}"; return 1
+  if !envReader ``Lean.Parser.categoryParser then IO.eprintln "self-test: categoryParser is not an environment reader"; return 1
   IO.println s!"ok: ProofCheck self-test: IO found in configureFromEnv; Reduce.eval's {n} definitions clean; Dag.add's exception declared; the chat UI store's writes found"
   return 0
 
