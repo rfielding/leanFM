@@ -13,8 +13,35 @@ open Lean
 
 /-- Definitions the purity walk does not follow, each with why it is safe; every one reached is named
 in the answer. -/
-def exceptions : List (Name × String) :=
-  [(`LeanFM.Logic.Dag.addUnsafe, "LeanFM.Logic.Dag.addUnsafe: a cache keyed by pointer address in front of Dag.add, whose own definition (addRef) builds the same DAG; it reads no file, clock or network and changes only how much work is repeated")]
+def exceptions : List (String × String) :=
+  [("LeanFM.Logic.Dag.addUnsafe", "LeanFM.Logic.Dag.addUnsafe: a cache keyed by pointer address in front of Dag.add, whose own definition (addRef) builds the same DAG; it reads no file, clock or network and changes only how much work is repeated"),
+   ("_private.LeanFM.Session.Grammar.0.LeanFM.Session.Grammar.runImpl", "LeanFM.Session.Grammar.run: reads Lean's built-in token table and runs the protocol grammar's parsers with a placeholder for the environment, which none of them reads (none is a category parser); it parses, elaborates nothing, and writes nothing")]
+
+/-- Definitions the read-only walk does not follow, each with why it writes nothing. -/
+def readonlyExceptions : List (String × String) :=
+  [("LeanFM.ProjectView.runBounded", "LeanFM.ProjectView.runBounded: runs pdfinfo and pdftoppm with fixed arguments and no shell (its only callers), and pdftoppm, given no output file, writes the page image to standard output, which the server reads")]
+
+/-- Calls that change the disk or start a process. -/
+def writes : List Name := [``IO.FS.writeFile, ``IO.FS.writeBinFile, ``IO.FS.createDir, ``IO.FS.createDirAll,
+  ``IO.FS.removeFile, ``IO.FS.removeDir, ``IO.FS.removeDirAll, ``IO.FS.rename, ``IO.setAccessRights,
+  ``IO.Process.spawn, ``IO.Process.output, ``IO.Process.run, ``IO.FS.createTempFile, ``IO.FS.Handle.truncate]
+
+def isOpen (n : Name) : Bool := n == ``IO.FS.Handle.mk || n == ``IO.FS.withFile
+
+/-- A file opened in any mode but read, or an opening function passed around unapplied. -/
+partial def opensForWriting : Expr → Bool
+  | e@(.app ..) =>
+    let f := e.getAppFn
+    let args := e.getAppArgs
+    let here := match f.constName? with
+      | some n => isOpen n && !(args.size ≥ 2 && args[1]! == mkConst ``IO.FS.Mode.read)
+      | none => opensForWriting f
+    here || args.any opensForWriting
+  | .const n _ => isOpen n
+  | .lam _ t b _ | .forallE _ t b _ => opensForWriting t || opensForWriting b
+  | .letE _ t v b _ => opensForWriting t || opensForWriting v || opensForWriting b
+  | .mdata _ e | .proj _ _ e => opensForWriting e
+  | _ => false
 
 def mentionsIO (e : Expr) : Bool :=
   e.getUsedConstants.any fun k => k == ``IO || k == ``EIO || k == ``BaseIO || k == ``IO.RealWorld
@@ -22,7 +49,7 @@ def mentionsIO (e : Expr) : Bool :=
 /-- Every constant the `roots` can reach, through each definition's value, its implemented_by target and the
 _unsafe_rec code of a partial definition, followed through LeanFM's modules: how many LeanFM constants,
 the problems, and the exceptions reached (clause selfhost.requirements.proofs). -/
-def purityWalk (env : Environment) (roots : List Name) : Nat × List String × List String := Id.run do
+def purityWalk (env : Environment) (roots : List Name) (readonly : Bool := false) : Nat × List String × List String := Id.run do
   let mut seen : NameSet := {}
   let mut todo := roots
   let mut problems : List String := []
@@ -33,10 +60,12 @@ def purityWalk (env : Environment) (roots : List Name) : Nat × List String × L
     todo := todo.tail!
     if seen.contains c then continue
     seen := seen.insert c
-    if let some (_, why) := exceptions.find? (·.1 == c) then excepted := excepted ++ [why]; continue
+    if let some (_, why) := (exceptions ++ (if readonly then readonlyExceptions else [])).find? (·.1 == c.toString) then
+      excepted := excepted ++ [why]; continue
+    if readonly && writes.contains c then problems := problems ++ [s!"reaches {c}"]; continue
     let some ci := env.find? c | continue
     let inLeanFM := (env.getModuleIdxFor? c).any fun i => (env.header.moduleNames[i.toNat]!).toString.startsWith "LeanFM"
-    if mentionsIO ci.type then problems := problems ++ [s!"{c} has IO in its type"]
+    if !readonly && mentionsIO ci.type then problems := problems ++ [s!"{c} has IO in its type"]
     if ci.isUnsafe && !(c.toString.endsWith "_unsafe_rec") then problems := problems ++ [s!"{c} is unsafe"]
     unless inLeanFM do continue
     n := n + 1
@@ -47,7 +76,9 @@ def purityWalk (env : Environment) (roots : List Name) : Nat × List String × L
       todo := i :: todo
     let ur := c.str "_unsafe_rec"
     if env.contains ur then todo := ur :: todo
-    if let some v := ci.value? (allowOpaque := true) then todo := v.getUsedConstants.toList ++ todo
+    if let some v := ci.value? (allowOpaque := true) then
+      if readonly && opensForWriting v then problems := problems ++ [s!"{c} opens a file other than to read it"]
+      todo := v.getUsedConstants.toList ++ todo
   return (n, problems, excepted)
 
 /-- The walk catches a way out: configureFromEnv reads the environment; Reduce.eval's partial code is
@@ -59,7 +90,9 @@ def selfTest (env : Environment) : IO UInt32 := do
   if bad.isEmpty then IO.eprintln "self-test: configureFromEnv's IO was not found"; return 1
   if !good.isEmpty || n < 50 then IO.eprintln s!"self-test: Reduce.eval: {n} reached, problems {good}"; return 1
   if !addProblems.isEmpty || addEx.isEmpty then IO.eprintln s!"self-test: Dag.ofFormula: {addProblems} {addEx}"; return 1
-  IO.println s!"ok: ProofCheck self-test: IO found in configureFromEnv; Reduce.eval's {n} definitions clean; Dag.add's exception declared"
+  let (_, storeProblems, _) := purityWalk env [`LeanFM.ChatUI.Store.writeAtomic] (readonly := true)
+  if storeProblems.isEmpty then IO.eprintln "self-test: the chat UI store's writes were not found"; return 1
+  IO.println s!"ok: ProofCheck self-test: IO found in configureFromEnv; Reduce.eval's {n} definitions clean; Dag.add's exception declared; the chat UI store's writes found"
   return 0
 
 def main (args : List String) : IO UInt32 := do
@@ -68,27 +101,28 @@ def main (args : List String) : IO UInt32 := do
   let (protocols, _) ← LeanFM.ProjectView.protocolFiles p
   let (files, _) ← LeanFM.ProjectView.readMapFiles p (LeanFM.ProjectView.specProtocols p protocols)
   initSearchPath (← findSysroot)
-  let env ← importModules #[{ module := `LeanFM.Proofs }, { module := `LeanFM.Logic }] {} 0
+  let env ← importModules #[{ module := `LeanFM.Proofs }, { module := `LeanFM.Logic }, { module := `LeanFM.MCP }, { module := `LeanFM.ChatUI.Store }] {} 0
   if args.contains "--self-test" then return ← selfTest env
   let mut failed := false
   for mf in files do
     let names : List String := mf.impls.flatMap fun d => d.entries.filterMap fun (_, ev) =>
       match ev with | .proof n => some n | _ => none
-    let pures : List String := mf.impls.flatMap fun d => d.entries.filterMap fun (_, ev) =>
-      match ev with | .purity n => some n | _ => none
+    let pures : List (String × Bool) := mf.impls.flatMap fun d => d.entries.filterMap fun (_, ev) =>
+      match ev with | .purity n => some (n, false) | .readonly n => some (n, true) | _ => none
     if names.isEmpty && pures.isEmpty then continue
     let mut out : List (String × Json) := []
-    for n in pures.eraseDups do
+    for (n, ro) in pures.eraseDups do
+      let kind := if ro then "readonly" else "pure"
       let roots := (n.splitOn " ").filter (· ≠ "") |>.map String.toName
       if let some c := roots.find? (!env.contains ·) then
-        out := out ++ [(s!"pure {n}", Json.mkObj [("exists", false), ("reached", (0 : Nat)), ("problems", Json.arr #[]), ("exceptions", Json.arr #[])])]
-        IO.eprintln s!"pure {n}: no such function {c}"; failed := true
+        out := out ++ [(s!"{kind} {n}", Json.mkObj [("exists", false), ("reached", (0 : Nat)), ("problems", Json.arr #[]), ("exceptions", Json.arr #[])])]
+        IO.eprintln s!"{kind} {n}: no such function {c}"; failed := true
         continue
-      let (reached, problems, excepted) := purityWalk env roots
-      if !problems.isEmpty then IO.eprintln s!"pure {n}: {problems}"; failed := true
-      out := out ++ [(s!"pure {n}", Json.mkObj [("exists", true), ("reached", reached),
+      let (reached, problems, excepted) := purityWalk env roots ro
+      if !problems.isEmpty then IO.eprintln s!"{kind} {n}: {problems}"; failed := true
+      out := out ++ [(s!"{kind} {n}", Json.mkObj [("exists", true), ("reached", reached),
         ("problems", Json.arr (problems.map Json.str).toArray), ("exceptions", Json.arr (excepted.eraseDups.map Json.str).toArray)])]
-      IO.println s!"ok: pure {n}: {reached} LeanFM definitions reached; problems: {problems.length}; exceptions: {excepted.eraseDups.length}"
+      IO.println s!"ok: {kind} {n}: {reached} LeanFM definitions reached; problems: {problems.length}; exceptions: {excepted.eraseDups.length}"
     for n in names.eraseDups do
       let c := n.toName
       if !env.contains c then

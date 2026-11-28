@@ -70,7 +70,7 @@ def hazards : List Hazard :=
       hazard := "a LeanFM server writes to disk as it serves, until the disk is full"
       never := "a LeanFM process fills the disk while serving"
       control := "the MCP surface is read-only (selfhost.mcp.readonly) and the servers write their event lines to standard output, never to a file; the chat UI, off by default, is the only writer, of its own store"
-      test := "scripts/mcp_run_log.py: a server serving a whole viewer conversation and 40 more requests leaves git status of the checkout unchanged" }
+      test := "scripts/mcp_run_log.py: a server serving a whole viewer conversation and 40 more requests leaves git status of the checkout unchanged; checked over the built code: nothing MCP.dispatchWith can reach writes (ProofCheck readonly walk, McpNeverWrites)" }
   , { id := "logs.retention", status := "open"
       hazard := "log files kept outside LeanFM (make serve's output where an operator tees it, a project's logs/events.log) grow without bound; LeanFM reads them in bounded windows but does not rotate them"
       never := "a log LeanFM's tools read fills the disk" }

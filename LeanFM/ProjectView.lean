@@ -634,6 +634,7 @@ def implementationRows (files : Array MapFile) : Array Json := Id.run do
           | .test t => [("kind", "test"), ("test", Json.str t), ("viewer", "text")]
           | .proof t => [("kind", "proof"), ("theorem", Json.str t), ("viewer", "text")]
           | .purity t => [("kind", "pure"), ("function", Json.str t), ("viewer", "text")]
+          | .readonly t => [("kind", "readonly"), ("function", Json.str t), ("viewer", "text")]
           | .pointer ptr => pointerFields ptr
         out := out.push (Json.mkObj (base ++ [("id", Json.str k)] ++ fields))
       for (h, i) in d.hints.zipIdx do
@@ -735,13 +736,14 @@ def checkRow (p : Project) (protocols : Array String) (files : Array MapFile) (r
           | "conform" => do pure (checkConform imp.text rp (← readLog p (g "log")))
           | "proof" => do pure (proofChecked (g "theorem") (← readProofs p (g "file")))
           | "pure" => do pure (pureChecked (g "function") (← readProofs p (g "file")))
+          | "readonly" => do pure (pureChecked (g "function") (← readProofs p (g "file")) (kind := "readonly"))
           | "test" => pure (testChecked (g "test"))
           | "sorry" => pure (sorryChecked (g "text"))
           | _ => pure (failed s!"\"{key}\" is a requirement of {imp.path}: answer it with evidence (conform or sorry), not with CTL of its own")
         return put ev [("evidence", true), ("status", Json.str (status rc (some ev)))]
       | none =>
         match kind, ptr with
-        | "conform", _ | "test", _ | "proof", _ | "pure", _ => return put (failed s!"\"{key}\" is not a requirement of {imp.path}")
+        | "conform", _ | "test", _ | "proof", _ | "pure", _ | "readonly", _ => return put (failed s!"\"{key}\" is not a requirement of {imp.path}")
         | _, some x =>
           match pointerProtocol x with
           | none => return put (sorryChecked (g "text"))

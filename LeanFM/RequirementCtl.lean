@@ -210,19 +210,21 @@ def proofChecked (name : String) (proofs : Option Json) : Checked :=
 
 /-- Pure evidence (selfhost.requirements.proofs): ProofCheck.lean's walk of what the function can reach,
 read from proofs.json under `pure Name`. -/
-def pureChecked (name : String) (proofs : Option Json) : Checked :=
+def pureChecked (name : String) (proofs : Option Json) (kind : String := "pure") : Checked :=
+  let what := if kind == "pure" then "take none of Lean's ways out of purity (no IO in a type, nothing unsafe, extern or implemented outside LeanFM)"
+    else "write nothing: no file or directory written, created, renamed or removed, no permission changed, no process run, no file opened but to read"
   match proofs with
-  | none => { verdict := "sorry", usesSorry := true, reading := s!"pure {name}: not checked (no proofs.json beside the implementation; make selfhost-check writes it)" }
+  | none => { verdict := "sorry", usesSorry := true, reading := s!"{kind} {name}: not checked (no proofs.json beside the implementation; make selfhost-check writes it)" }
   | some j =>
-    match j.getObjVal? s!"pure {name}" with
-    | .error _ => { verdict := "sorry", usesSorry := true, reading := s!"pure {name}: proofs.json has no line for it; make selfhost-check checks it" }
+    match j.getObjVal? s!"{kind} {name}" with
+    | .error _ => { verdict := "sorry", usesSorry := true, reading := s!"{kind} {name}: proofs.json has no line for it; make selfhost-check checks it" }
     | .ok line =>
       let strs (k : String) := ((line.getObjValD k).getArr?).toOption.getD #[] |>.toList.filterMap (·.getStr?.toOption)
       let reached := (line.getObjValD "reached").getNat?.toOption.getD 0
-      if (line.getObjValD "exists") != Json.bool true then failed s!"pure {name}: no such function in the built environment"
-      else if !(strs "problems").isEmpty then failed s!"pure {name}: {"; ".intercalate (strs "problems")}"
+      if (line.getObjValD "exists") != Json.bool true then failed s!"{kind} {name}: no such function in the built environment"
+      else if !(strs "problems").isEmpty then failed s!"{kind} {name}: {"; ".intercalate (strs "problems")}"
       else { verdict := "proof", met := true,
-             reading := s!"pure {name}: the {reached} LeanFM definitions it can reach take none of Lean's ways out of purity (no IO in a type, nothing unsafe, extern or implemented outside LeanFM)" ++
+             reading := s!"{kind} {name}: the {reached} LeanFM definitions it can reach {what}" ++
                (if (strs "exceptions").isEmpty then "" else s!"; declared exceptions: {"; ".intercalate (strs "exceptions")}") }
 
 /-- A named test with no run: sorry, since only a run judged against the requirement counts as tested. -/

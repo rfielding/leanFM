@@ -281,6 +281,13 @@ fails on any way out. The logic tools and \texttt{reduce\_run} reach 1{,}535 of 
 and pass, with one declared exception: a cache keyed by memory address, which changes only how much
 work is repeated.
 
+The same walk shows the MCP server is read-only. \texttt{readonly "Name"} allows reading but fails
+on any reached call that writes, creates, renames or removes a file, or runs a process, and on a file
+opened other than to read it. Everything an MCP request can reach, 6{,}405 definitions, passes. The
+walk found two places that needed a stated reason. One is the book-page renderer, which runs
+\texttt{pdftoppm} to standard output. The other is the protocol parser, which runs Lean's parsers with
+a placeholder environment that none of them reads.
+
 A requirement an implementation does not name counts as sorry for it. The shop:
 
 \ToolOutput{generated/req-orders-summary.tex}

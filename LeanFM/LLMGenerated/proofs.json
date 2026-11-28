@@ -1,4 +1,12 @@
-{"pure LeanFM.Logic.run LeanFM.Reduce.check":
+{"readonly LeanFM.MCP.dispatchWith":
+ {"reached": 6405,
+  "problems": [],
+  "exists": true,
+  "exceptions":
+  ["LeanFM.Session.Grammar.run: reads Lean's built-in token table and runs the protocol grammar's parsers with a placeholder for the environment, which none of them reads (none is a category parser); it parses, elaborates nothing, and writes nothing",
+   "LeanFM.Logic.Dag.addUnsafe: a cache keyed by pointer address in front of Dag.add, whose own definition (addRef) builds the same DAG; it reads no file, clock or network and changes only how much work is repeated",
+   "LeanFM.ProjectView.runBounded: runs pdfinfo and pdftoppm with fixed arguments and no shell (its only callers), and pdftoppm, given no output file, writes the page image to standard output, which the server reads"]},
+ "pure LeanFM.Logic.run LeanFM.Reduce.check":
  {"reached": 1535,
   "problems": [],
   "exists": true,

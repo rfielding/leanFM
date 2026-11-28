@@ -105,6 +105,11 @@ def purity : Lean.Json := Lean.Json.mkObj
 #guard let c := pureChecked "A.f" (some purity); c.met && c.standing == "proved" && (c.reading.splitOn "X: a cache").length > 1
 #guard let c := pureChecked "A.g" (some purity); c.failing && (c.reading.splitOn "has IO in its type").length > 1
 #guard (pureChecked "A.k" (some purity)).usesSorry
+-- readonly evidence reads its own lines
+def ro : Lean.Json := Lean.Json.mkObj
+  [("readonly A.f", Lean.Json.mkObj [("exists", true), ("reached", (9 : Nat)), ("problems", Lean.Json.arr #["reaches IO.FS.writeFile"]), ("exceptions", Lean.Json.arr #[])])]
+#guard let c := pureChecked "A.f" (some ro) (kind := "readonly"); c.failing && (c.reading.splitOn "IO.FS.writeFile").length > 1
+#guard (pureChecked "A.f" (some purity) (kind := "readonly")).usesSorry
 #guard status (sorryChecked "") (some (proofChecked "Good" (some proofs))) == "proved"
 #guard status (sorryChecked "") (some (proofChecked "Bad" (some proofs))) == "failing"
 #guard match Text.readMaps "import LeanFM.Session.Syntax\nimplementation Go of Orders.Requirements {\n  \"pay\" => proof \"Orders.payProof\";\n}\n" with
