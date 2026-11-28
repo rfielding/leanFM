@@ -3,9 +3,11 @@ import LeanFM.CTL
 /-! # LeanFM's CTL checker, proved (clause selfhost.mcp.logic.checker; selfhost.requirements.proofs)
 
 `CTL.label states succ f` lists the states where `f` holds. For every list of states that holds every
-successor of its members (`Closed`), this proves: the fixpoint iteration of a monotone step reaches a
+successor of its members (`Closed`), this proves: every fixpoint iteration of a monotone step reaches a
 fixpoint within its bound; EX and AX are exact over the successors; EU and EF are exact over finite
-paths; AG is the negation of EF of the negation; and the implication rule holds of the checker. -/
+paths (`Until`); AU and AF are exact over every path reaching the target within finitely many steps
+(`AllUntil`); EG, EW and AW are exact as the largest set of states their step keeps; AG is the
+negation of EF of the negation; and the implication rule holds of the checker. All 14 operators. -/
 
 set_option linter.unusedSectionVars false
 
@@ -30,7 +32,7 @@ theorem filter_length_le {α : Type} (l : List α) (P Q : α → Bool) (h : ∀ 
   | nil => simp
   | cons x xs ih =>
     have ih' := ih (fun y hy => h y (List.mem_cons_of_mem _ hy))
-    cases hP : P x <;> cases hQ : Q x <;> simp [List.filter_cons, hP, hQ] <;> try omega
+    cases hP : P x <;> cases hQ : Q x <;> simp [hP, hQ] <;> try omega
     exact absurd (h x List.mem_cons_self hP) (by simp [hQ])
 
 theorem filter_length_lt {α : Type} (l : List α) (P Q : α → Bool) (h : ∀ x ∈ l, P x = true → Q x = true)
@@ -39,7 +41,7 @@ theorem filter_length_lt {α : Type} (l : List α) (P Q : α → Bool) (h : ∀ 
   | nil => simp at hne
   | cons x xs ih =>
     have h' : ∀ y ∈ xs, P y = true → Q y = true := fun y hy => h y (List.mem_cons_of_mem _ hy)
-    cases hP : P x <;> cases hQ : Q x <;> simp [List.filter_cons, hP, hQ] at hne ⊢
+    cases hP : P x <;> cases hQ : Q x <;> simp [hP, hQ] at hne ⊢
     · exact ih h' hne
     · have := filter_length_le xs P Q h'; omega
     · exact absurd (h x List.mem_cons_self hP) (by simp [hQ])
@@ -70,8 +72,8 @@ theorem iter_fix (states : List S) (f : (S → Bool) → S → Bool) (hm : Mono 
     intro z P hz hgrow hlen
     simp only [iter]
     by_cases he : states.filter (f (mem z)) = z
-    · simp only [he, if_true]; exact he
-    · simp only [he, if_false]
+    · simp only [he, ite_true]; exact he
+    · simp only [he, ite_false]
       have hsub : ∀ x ∈ states, P x = true → f (mem z) x = true := by
         intro x hx hp
         have : x ∈ z := by rw [hz]; exact List.mem_filter.mpr ⟨hx, hp⟩
@@ -199,13 +201,179 @@ theorem checker_implication_rule (states : List S) (succ : S → List S) (hc : C
       cases h : mem (label states succ (.ef p)) s
       · rfl
       · exact absurd ((label_ef states succ hc p s hs).mp h) (until_nowhere succ _ _ hnone s)
-    simp only [CTL.stronglyImplies, label, mem, List.contains_iff_mem, List.mem_filter] at hef ⊢
+    simp only [CTL.stronglyImplies, label, mem] at hef ⊢
     simp_all
   · rw [label_ag states succ hc _ s hs]
     apply until_nowhere_in states succ hc _ _ _ s hs
     intro t ht
     have : t ∉ label states succ p := by simp [hp]
     simp [CTL.implies, label, mem, List.mem_filter, ht, this]
+
+/-! ## The universal untils, by induction
+
+`AllUntil succ a b s`: on every path from `s`, `b` comes within finitely many steps, through states where
+`a` holds and that have a successor. With finitely many successors per state, this is every maximal
+path (a deadlock ends a path) reaching `b`. -/
+
+inductive AllUntil (succ : S → List S) (a b : S → Bool) : S → Prop
+  | here {s} : b s = true → AllUntil succ a b s
+  | next {s} : a s = true → succ s ≠ [] → (∀ t ∈ succ s, AllUntil succ a b t) → AllUntil succ a b s
+
+theorem all_until_mono (succ : S → List S) (a b : S → Bool) :
+    Mono (fun z s => b s || (a s && !(succ s).isEmpty && (succ s).all z)) := by
+  intro z z' h s hs
+  simp only [Bool.or_eq_true, Bool.and_eq_true, List.all_eq_true] at hs ⊢
+  rcases hs with hb | ⟨⟨ha, hne⟩, hall⟩
+  · exact Or.inl hb
+  · exact Or.inr ⟨⟨ha, hne⟩, fun t ht => h t (hall t ht)⟩
+
+theorem lfp_all_until (states : List S) (succ : S → List S) (hc : Closed states succ) (a b : S → Bool)
+    (s : S) (hs : s ∈ states) :
+    s ∈ lfp states (fun z s => b s || (a s && !(succ s).isEmpty && (succ s).all z)) ↔ AllUntil succ a b s := by
+  constructor
+  · intro h
+    refine iter_inv states _ (AllUntil succ a b) ?_ _ [] (by simp) s h
+    intro z hz x hx
+    simp only [step, List.mem_filter, Bool.or_eq_true, Bool.and_eq_true, List.all_eq_true] at hx
+    rcases hx.2 with hb | ⟨⟨ha, hne⟩, hall⟩
+    · exact .here hb
+    · refine .next ha (by simpa using hne) (fun t ht => hz t ((mem_iff z t).mp (hall t ht)))
+  · intro h
+    have hfix := lfp_fixpoint states _ (all_until_mono succ a b)
+    revert hs
+    induction h with
+    | here hb => intro hs; rw [← hfix]; simp only [step, List.mem_filter]; exact ⟨hs, by simp [hb]⟩
+    | @next s ha hne _ ih =>
+      intro hs
+      rw [← hfix]; simp only [step, List.mem_filter]
+      refine ⟨hs, ?_⟩
+      simp only [Bool.or_eq_true, Bool.and_eq_true, List.all_eq_true]
+      exact Or.inr ⟨⟨ha, by simpa using hne⟩, fun t ht => (mem_iff _ t).mpr (ih t ht (hc s hs t ht))⟩
+
+theorem label_au (states : List S) (succ : S → List S) (hc : Closed states succ) (p q : CTL S)
+    (s : S) (hs : s ∈ states) :
+    mem (label states succ (.au p q)) s = true ↔
+      AllUntil succ (mem (label states succ p)) (mem (label states succ q)) s := by
+  rw [mem_iff]; exact lfp_all_until states succ hc _ _ s hs
+
+theorem label_af (states : List S) (succ : S → List S) (hc : Closed states succ) (p : CTL S)
+    (s : S) (hs : s ∈ states) :
+    mem (label states succ (.af p)) s = true ↔ AllUntil succ (fun _ => true) (mem (label states succ p)) s := by
+  rw [mem_iff]
+  have := lfp_all_until states succ hc (fun _ => true) (mem (label states succ p)) s hs
+  simp only [Bool.true_and] at this
+  simp only [label]; exact this
+
+/-! ## The greatest fixpoints, as the largest invariant
+
+`gfp` is the largest list of states every member of which the step keeps: a state is in it exactly
+when some such list holds it. For EG this is a set of states where p holds and from each of which some
+successor in the set goes on, or that ends: the states of a maximal path where p always holds. -/
+
+theorem gfp_iter_fix (states : List S) (f : (S → Bool) → S → Bool) (hm : Mono f) :
+    ∀ (k : Nat) (z : List S) (P : S → Bool), z = states.filter P → (∀ x ∈ step states f z, x ∈ z) →
+      z.length < k → step states f (iter states f k z) = iter states f k z := by
+  intro k
+  induction k with
+  | zero => intro _ _ _ _ h; omega
+  | succ k ih =>
+    intro z P hz hshrink hlen
+    simp only [iter]
+    by_cases he : states.filter (f (mem z)) = z
+    · simp only [he, ite_true]; exact he
+    · simp only [he, ite_false]
+      have hsub : ∀ x ∈ states, f (mem z) x = true → P x = true := by
+        intro x hx hf
+        have : x ∈ step states f z := by simp only [step, List.mem_filter]; exact ⟨hx, hf⟩
+        have := hshrink x this
+        rw [hz] at this; exact (List.mem_filter.mp this).2
+      have hlt : (states.filter (f (mem z))).length < z.length := by
+        rw [hz] at he ⊢
+        exact filter_length_lt states _ P (by rw [hz] at hsub; exact hsub) he
+      refine ih _ _ rfl ?_ (by omega)
+      exact step_mono states f hm _ z (fun x hx => hshrink x hx)
+
+theorem gfp_fixpoint (states : List S) (f : (S → Bool) → S → Bool) (hm : Mono f) :
+    step states f (gfp states f) = gfp states f := by
+  refine gfp_iter_fix states f hm _ states (fun _ => true) (List.filter_eq_self.mpr (by simp)).symm ?_ (by omega)
+  intro x hx; simp only [step, List.mem_filter] at hx; exact hx.1
+
+/-- A list every member of which the step keeps is inside every iterate that started above it. -/
+theorem iter_above (states : List S) (f : (S → Bool) → S → Bool) (hm : Mono f) (Z : List S)
+    (hZ : ∀ x ∈ Z, x ∈ step states f Z) :
+    ∀ (k : Nat) (z : List S), (∀ x ∈ Z, x ∈ z) → ∀ x ∈ Z, x ∈ iter states f k z := by
+  intro k
+  induction k with
+  | zero => intro z h; exact h
+  | succ k ih =>
+    intro z h
+    simp only [iter]
+    split
+    · exact h
+    · exact ih _ (fun x hx => step_mono states f hm Z z h x (hZ x hx))
+
+/-- The greatest fixpoint is exactly the union of the lists the step keeps. -/
+theorem gfp_iff (states : List S) (f : (S → Bool) → S → Bool) (hm : Mono f) (s : S) :
+    s ∈ gfp states f ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ step states f Z := by
+  constructor
+  · intro h
+    exact ⟨gfp states f, h, fun x hx => by rw [gfp_fixpoint states f hm]; exact hx⟩
+  · rintro ⟨Z, hs, hZ⟩
+    exact iter_above states f hm Z hZ _ states (fun x hx => (List.mem_filter.mp (hZ x hx)).1) s hs
+
+theorem weak_mono (succ : S → List S) (a b : S → Bool) :
+    Mono (fun z s => b s || (a s && ((succ s).isEmpty || (succ s).any z))) := by
+  intro z z' h s hs
+  simp only [Bool.or_eq_true, Bool.and_eq_true, List.any_eq_true] at hs ⊢
+  rcases hs with hb | ⟨ha, he | ⟨t, ht, hz⟩⟩
+  · exact Or.inl hb
+  · exact Or.inr ⟨ha, Or.inl he⟩
+  · exact Or.inr ⟨ha, Or.inr ⟨t, ht, h t hz⟩⟩
+
+theorem eg_mono (succ : S → List S) (a : S → Bool) :
+    Mono (fun z s => a s && ((succ s).isEmpty || (succ s).any z)) := by
+  intro z z' h s hs
+  simp only [Bool.or_eq_true, Bool.and_eq_true, List.any_eq_true] at hs ⊢
+  rcases hs with ⟨ha, he | ⟨t, ht, hz⟩⟩
+  · exact ⟨ha, Or.inl he⟩
+  · exact ⟨ha, Or.inr ⟨t, ht, h t hz⟩⟩
+
+theorem aw_mono (succ : S → List S) (a b : S → Bool) :
+    Mono (fun z s => b s || (a s && (succ s).all z)) := by
+  intro z z' h s hs
+  simp only [Bool.or_eq_true, Bool.and_eq_true, List.all_eq_true] at hs ⊢
+  rcases hs with hb | ⟨ha, hall⟩
+  · exact Or.inl hb
+  · exact Or.inr ⟨ha, fun t ht => h t (hall t ht)⟩
+
+/-- EG p: some list holds s, and each of its members satisfies p and either ends or has a successor
+in the list. -/
+theorem label_eg (states : List S) (succ : S → List S) (p : CTL S) (s : S) :
+    mem (label states succ (.eg p)) s = true ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ states ∧
+      mem (label states succ p) x = true ∧ (succ x = [] ∨ ∃ t ∈ succ x, t ∈ Z) := by
+  rw [mem_iff]; simp only [label]
+  rw [gfp_iff states _ (eg_mono succ _)]
+  simp [step, List.mem_filter, List.any_eq_true, mem_iff]
+
+/-- E[p W q]: some list holds s, and each of its members satisfies q, or satisfies p and either ends
+or has a successor in the list. -/
+theorem label_ew (states : List S) (succ : S → List S) (p q : CTL S) (s : S) :
+    mem (label states succ (.ew p q)) s = true ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ states ∧
+      (mem (label states succ q) x = true ∨
+        (mem (label states succ p) x = true ∧ (succ x = [] ∨ ∃ t ∈ succ x, t ∈ Z))) := by
+  rw [mem_iff]; simp only [label]
+  rw [gfp_iff states _ (weak_mono succ _ _)]
+  simp [step, List.mem_filter, List.any_eq_true, mem_iff]
+
+/-- A[p W q]: some list holds s, and each of its members satisfies q, or satisfies p with every
+successor in the list. -/
+theorem label_aw (states : List S) (succ : S → List S) (p q : CTL S) (s : S) :
+    mem (label states succ (.aw p q)) s = true ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ states ∧
+      (mem (label states succ q) x = true ∨
+        (mem (label states succ p) x = true ∧ ∀ t ∈ succ x, t ∈ Z)) := by
+  rw [mem_iff]; simp only [label]
+  rw [gfp_iff states _ (aw_mono succ _ _)]
+  simp [step, List.mem_filter, List.all_eq_true, mem_iff]
 
 /-- The checker's proved properties, as one statement an implementation can name. -/
 theorem checker_proved :
@@ -221,7 +389,22 @@ theorem checker_proved :
     (∀ (states : List S) succ, Closed states succ → ∀ (p : CTL S) s, s ∈ states →
       (mem (label states succ (.ag p)) s = true ↔ ¬ Until succ (fun _ => true) (fun t => !mem (label states succ p) t) s)) ∧
     (∀ (states : List S) succ, Closed states succ → ∀ (p q : CTL S), label states succ p = [] → ∀ s, s ∈ states →
-      mem (label states succ (CTL.stronglyImplies p q)) s = false ∧ mem (label states succ (CTL.ag (CTL.implies p q))) s = true) :=
-  ⟨lfp_fixpoint, label_ex, label_ax, label_eu, label_ef, label_ag, checker_implication_rule⟩
+      mem (label states succ (CTL.stronglyImplies p q)) s = false ∧ mem (label states succ (CTL.ag (CTL.implies p q))) s = true) ∧
+    (∀ (states : List S) (f : (S → Bool) → S → Bool), Mono f → step states f (gfp states f) = gfp states f) ∧
+    (∀ (states : List S) succ, Closed states succ → ∀ (p q : CTL S) s, s ∈ states →
+      (mem (label states succ (.au p q)) s = true ↔ AllUntil succ (mem (label states succ p)) (mem (label states succ q)) s)) ∧
+    (∀ (states : List S) succ, Closed states succ → ∀ (p : CTL S) s, s ∈ states →
+      (mem (label states succ (.af p)) s = true ↔ AllUntil succ (fun _ => true) (mem (label states succ p)) s)) ∧
+    (∀ (states : List S) succ (p : CTL S) s,
+      (mem (label states succ (.eg p)) s = true ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ states ∧
+        mem (label states succ p) x = true ∧ (succ x = [] ∨ ∃ t ∈ succ x, t ∈ Z))) ∧
+    (∀ (states : List S) succ (p q : CTL S) s,
+      (mem (label states succ (.ew p q)) s = true ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ states ∧
+        (mem (label states succ q) x = true ∨ (mem (label states succ p) x = true ∧ (succ x = [] ∨ ∃ t ∈ succ x, t ∈ Z))))) ∧
+    (∀ (states : List S) succ (p q : CTL S) s,
+      (mem (label states succ (.aw p q)) s = true ↔ ∃ Z : List S, s ∈ Z ∧ ∀ x ∈ Z, x ∈ states ∧
+        (mem (label states succ q) x = true ∨ (mem (label states succ p) x = true ∧ ∀ t ∈ succ x, t ∈ Z)))) :=
+  ⟨lfp_fixpoint, label_ex, label_ax, label_eu, label_ef, label_ag, checker_implication_rule,
+   gfp_fixpoint, label_au, label_af, label_eg, label_ew, label_aw⟩
 
 end LeanFM.CheckerProofs
