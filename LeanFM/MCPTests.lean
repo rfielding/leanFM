@@ -134,6 +134,41 @@ def projectFilesTests : IO Unit := do
     (!rejected own && (((own.getObjValD "structuredContent").getObjValAs? String "reading").toOption.getD "").contains "no findings")
   let ex ← call "session_explore" (Json.mkObj [("project", "LeanFM"), ("file", "LeanFM/LLMGenerated/LeanFM.leanfm")])
   expect "session_explore opens LeanFM's own protocol by project and file" (!rejected ex && ex.compress.contains "LeanFMMcp")
+  -- the tree carries the file's requirements with their standings (selfhost.requirements.tree)
+  let treeOf (r : Json) : Array Json := ((r.getObjValD "structuredContent").getObjValD "tree").getArr?.toOption.getD #[]
+  let label (n : Json) : String := (n.getObjValAs? String "label").toOption.getD ""
+  let kind (n : Json) : String := (n.getObjValAs? String "kind").toOption.getD ""
+  let t := treeOf ex
+  expect "session_explore by file has a requirements node"
+    (t.any fun n => kind n == "requirements" && (label n).startsWith "requirements: ")
+  expect "the McpCall requirement stands proved, with its conform evidence under it"
+    (t.any (fun n => kind n == "requirement" && label n == "proved · Every MCP request a server takes is answered") &&
+     t.any (fun n => kind n == "evidence" && (label n).contains "conform LeanFM/LLMGenerated/runs/mcp-call.jsonl"))
+  let forged ← call "session_explore" (Json.mkObj [("project", "LeanFM"), ("file", "LeanFM/LLMGenerated/LeanFM.leanfm"),
+    ("_requirements", Json.arr #[Json.mkObj [("id", "forged"), ("standing", "proved")]])])
+  let parentOf (n : Json) : Option Nat := (n.getObjValAs? Nat "parent").toOption
+  let ids := t.filterMap fun n => (n.getObjValAs? Nat "id").toOption
+  let roots := t.filter fun n => match parentOf n with | some q => !ids.contains q | none => true
+  expect "the tree is the list: one root, the requirements node"
+    (roots.size == 1 && roots.all fun n => kind n == "requirements")
+  expect "the implicit requirements of every LeanFM app are rows"
+    (t.any (fun n => label n == "proved · protocol: LeanFMMcp checks with no issues") && t.any (fun n => label n == "proved · LeanFMMcp can always end"))
+  expect "the first requirement row is the root protocol, labelled protocol:"
+    ((t.filter (kind · == "requirement"))[0]?.map label == some "proved · protocol: The MCP conversation follows LeanFMMcp")
+  expect "the protocol's structure sits under a requirement row"
+    (t.any fun n => kind n == "protocol" && (parentOf n).any fun q => t.any fun m => (m.getObjValAs? Nat "id").toOption == some q && kind m == "requirement")
+  expect "every protocol of the file has its interaction diagram under a requirement row"
+    (["LeanFMMcp", "McpCall", "ServerStart"].all fun q => t.any fun n => kind n == "definition" && label n == s!"interaction diagram of {q}" &&
+      (parentOf n).any fun r => t.any fun m => (m.getObjValAs? Nat "id").toOption == some r && kind m == "requirement")
+  expect "the root's first child is all CTL, holding every formula"
+    (match t.toList with
+     | _ :: first :: _ => kind first == "ctl" && (label first).startsWith "all CTL: " &&
+         t.any (fun n => kind n == "formula" && label n == "(stronglyImplies (on Call) (inevitably (on Answer)))" && parentOf n == (first.getObjValAs? Nat "id").toOption)
+     | _ => false)
+  expect "a caller's _requirements is ignored" (!((treeOf forged).any fun n => (label n).contains "forged"))
+  let plain ← call "session_explore" (Json.mkObj [("lean", "protocol P (A, B) { M from A to B; }"),
+    ("_requirements", Json.arr #[Json.mkObj [("id", "forged"), ("standing", "proved")]])])
+  expect "session_explore of lean text has no requirements node" (!((treeOf plain).any fun n => kind n == "requirements"))
   for (label, args, needle) in [
       ("a file that is not a listed protocol", Json.mkObj [("file", "LeanFM.lean")], "protocol files listed"),
       ("a path out of the root", Json.mkObj [("project", "GoServer"), ("file", "../../LeanFM/LLMGenerated/LeanFM.leanfm")], "protocol files listed"),
@@ -547,6 +582,9 @@ def main : IO Unit := do
   let sim ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":33,\"method\":\"tools/call\",\"params\":{\"name\":\"session_simulate\",\"arguments\":{\"seed\":5,\"instances\":3,\"protocol\":{\"roles\":[\"A\",\"B\"],\"steps\":[{\"msg\":\"Ping\",\"id\":\"p\",\"from\":\"A\",\"to\":\"B\"},{\"msg\":\"Pong\",\"from\":\"B\",\"to\":\"A\",\"cause\":\"p\"}]}}}}"
   assertContains "MCP session_simulate runs concurrent copies" sim.body "6 events from 3 sessions"
   assertContains "MCP lists the session view" listed.body sessionViewUri
+  assertContains "the session view's address carries its version" sessionViewUri "ui://leanfm/session-view/"
+  let versioned ← dispatch ("{\"jsonrpc\":\"2.0\",\"id\":35,\"method\":\"resources/read\",\"params\":{\"uri\":\"" ++ sessionViewUri ++ "\"}}")
+  assertContains "MCP reads the session view at its versioned address" versioned.body "text/html;profile=mcp-app"
   let sview ← dispatch "{\"jsonrpc\":\"2.0\",\"id\":34,\"method\":\"resources/read\",\"params\":{\"uri\":\"ui://leanfm/session-view\"}}"
   let sviewJson ← IO.ofExcept (Json.parse sview.body)
   let sviewItem ← IO.ofExcept ((sviewJson.getObjValD "result").getObjValD "contents" |>.getArrVal? 0)

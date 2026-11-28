@@ -2166,6 +2166,32 @@ function datasetPanels(body) {
 const TREE_INK = { protocol: "amber", definition: "amber", include: "amber", definitions: "dim", roles: "dim",
   role: "good", choice: "cyan", branch: "dim", par: "cyan", join: "cyan", rec: "cyan", continue: "dim",
   sessions: "cyan", message: "ink-arrow", event: "ink-arrow" };
+// a mark per kind of row, so a protocol, a formula, a test and a folder are told apart at a glance
+// (selfhost.requirements.tree); any other row is a folder when it holds rows, a page when not
+function treeIcon(n, hasKids, open) {
+  const d = String(n.detail || ""), l = String(n.label || "");
+  switch (n.kind) {
+    case "requirements": return "📋";
+    case "requirement": return d.startsWith("protocol") ? "🔀" : d.startsWith("deployment") ? "🖧" : d.startsWith("formula") ? "⊨" : "❓";
+    case "ctl": case "formula": return "∀";
+    case "definition": case "include": return "🗺";
+    case "protocol": return "🔀";
+    case "evidence": return l.includes(": conform ") ? "📜" : l.includes(": test ") ? "🧪" : "❓";
+    case "message": case "event": return "✉";
+    case "role": return "👤";
+  }
+  return hasKids ? (open ? "📂" : "📁") : "📄";
+}
+// a requirement or evidence row is coloured by its standing
+function treeInk(n) {
+  if (n.kind === "requirement" || n.kind === "evidence") {
+    const st = String(n.label || "").split(" · ")[0];
+    if (st === "proved" || st === "tested") return "good";
+    if (st === "failing") return "bad";
+    return "amber";
+  }
+  return TREE_INK[n.kind] || "fg";
+}
 let treeGen = 0;
 // what the person had open and selected, so that the tree LeanFM gives back after an edit opens the
 // same way and the selected node's drawing is drawn again from the new text
@@ -2203,6 +2229,9 @@ function treePanels(body) {
   for (const n of N) byId.set(n.id, { n, kids: [], open: false, depth: 0 });
   let root = null;
   for (const n of N) { const t = byId.get(n.id); if (Number.isInteger(n.parent) && byId.has(n.parent)) byId.get(n.parent).kids.push(t); else if (!root) root = t; }
+  // a row's CTL is not a row: it is kept on the row and shown folded when the row is picked, like its
+  // source (selfhost.requirements.tree)
+  for (const t of byId.values()) { t.ctl = t.kids.filter((k) => k.n.kind === "ctl"); t.kids = t.kids.filter((k) => k.n.kind !== "ctl"); }
   // a node's key is its path of kinds and labels (a repeated sibling counted), stable across edits
   (function keyOf(t, prefix) {
     const seen = new Map();
@@ -2244,9 +2273,9 @@ function treePanels(body) {
       row.style.paddingLeft = (6 + 22 * t.depth) + "px";
       const tw = el("span", "twisty", t.kids.length ? (t.open ? "▾" : "▸") : "");
       if (t.kids.length) tw.addEventListener("click", (ev) => { if (ev.stopPropagation) ev.stopPropagation(); toggle(t); });
-      const mark = el("span", "fmark", t.kids.length ? (t.open ? "📂" : "📁") : "📄");
+      const mark = el("span", "fmark", treeIcon(t.n, t.kids.length > 0, t.open));
       const name = el("span", "fname", String(t.n.label));
-      name.style.color = "var(--" + (TREE_INK[t.n.kind] || "fg") + ")";
+      name.style.color = "var(--" + treeInk(t.n) + ")";
       const kind = el("span", "fkind", t.n.kind + (t.kids.length && !t.open ? ` (${t.kids.length})` : ""));
       row.append(tw, mark, name, kind);
       row.addEventListener("click", () => { if (t !== sel) show(t); });
@@ -2316,6 +2345,15 @@ function treePanels(body) {
       acts.appendChild(b);
     }
     if (acts.children.length) box.appendChild(acts);
+    for (const c of (t.ctl || [])) {
+      const lines = el("div", "ctllist");
+      for (const f of c.kids) {
+        const row = el("div", "ctlrow");
+        row.append(el("code", "", String(f.n.label)), el("span", "meta", f.n.detail ? "  " + String(f.n.detail) : ""));
+        lines.appendChild(row);
+      }
+      box.appendChild(foldPanel(String(c.n.label) + (c.n.detail ? " · " + String(c.n.detail) : ""), lines, false));
+    }
     if (Number.isInteger(n.first)) box.appendChild(foldPanel("Source, lines " + n.first + (n.last && n.last !== n.first ? " to " + n.last : ""), sourceBox(body.lean, n.first, n.last)));
     box.append(payloadOut, out, picked, machines);
     detail.replaceChildren(box); reportSize();

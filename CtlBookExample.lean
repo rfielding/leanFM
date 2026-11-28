@@ -194,16 +194,13 @@ def main : IO Unit := do
 
   /- Start here: designing TicTacToe with LeanFM (book chapter start). The first draft lets the
      players trade moves forever; LeanFM disproves that every game ends; one bound fixes it. -/
-  let tttRounds (bounded : Bool) : String :=
-    "protocol TicTacToe (X, O, Referee) {\n  g: NewGame from X to Referee;\n  Joined from Referee to O cause g;\n" ++
-    (if bounded then "  loop Round at most 5 {\n" else "  loop Round {\n") ++
-    "    x: MoveX from X to Referee;\n    choice {\n      OTurn from Referee to O cause x;\n      o: MoveO from O to Referee;\n" ++
-    "      choice {\n        XTurn from Referee to X cause o;\n        continue Round;\n      } or {\n" ++
-    "        Result from Referee to X cause o;\n        Result from Referee to O cause o;\n      }\n    } or {\n" ++
-    "      Result from Referee to X cause x;\n      Result from Referee to O cause x;\n    }\n" ++
-    (if bounded then "  } otherwise {\n    Result from Referee to X;\n    Result from Referee to O;\n  }\n}" else "  }\n}")
-  let tttDraft := tttRounds false
-  let ttt := tttRounds true
+  -- the protocol is examples/sessions/TicTacToe.leanfm; the draft is the same loop without its bound
+  let tttFile ← IO.FS.readFile "examples/sessions/TicTacToe.leanfm"
+  let ttt := match (tttFile.splitOn "protocol TicTacToe").drop 1 with
+    | rest :: _ => "protocol TicTacToe" ++ ((rest.splitOn "\nrequirements {").headD rest).trimAsciiEnd.toString
+    | [] => ""
+  let tttDraft := (ttt.replace "  loop Round at most 5 {\n" "  loop Round {\n").replace
+    "  } otherwise {\n    Result from Referee to X;\n    Result from Referee to O;\n  }\n}" "  }\n}"
   write "ctl-tictactoe-draft.tex" (listing tttDraft)
   write "ctl-tictactoe.tex" (listing ttt)
   for theme in ["light", "dark"] do

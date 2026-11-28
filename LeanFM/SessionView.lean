@@ -9,8 +9,14 @@ declares no network domains (editing Lean text; session_conform's problems show 
 namespace LeanFM.MCP
 open Lean
 
-def sessionViewUri : String := "ui://leanfm/session-view"
 def sessionViewHtml : String := include_str "SessionView.html"
+/-- The view's address without its version; still answered, for hosts that ask for it. -/
+def sessionViewBareUri : String := "ui://leanfm/session-view"
+/-- The view's address, versioned by a hash of its text, so a host that keeps a fetched view fetches
+it again when it changes (selfhost.mcp.session.view). -/
+def sessionViewUri : String :=
+  let h := hash sessionViewHtml
+  sessionViewBareUri ++ "/" ++ String.ofList (Nat.toDigits 16 h.toNat)
 
 /-- The session view in a whole browser window (clause selfhost.mcp.session.standalone): a host page
 served by make serve at /view that frames the view (served at /view/app) with scripts only, answers

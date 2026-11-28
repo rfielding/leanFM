@@ -889,4 +889,18 @@ def cageClaim (c : String) : String :=
 #guard cageClaim "(always (implies (below food 20) (within 600 (on Dispense))))" == "fails"
 #guard cageClaim "(always (within 7200 (above motion 0.3)))" == "fails"
 
+-- a bounded loop is drawn folded, and checked expanded (selfhost.session.rec.bounded)
+def tictactoe : String := include_str "../examples/sessions/TicTacToe.leanfm"
+def tttSvg : String := match diagram (Json.mkObj [("lean", Json.str tictactoe)]) with
+  | .ok j => (j.getObjValAs? String "svg").toOption.getD "" | .error _ => ""
+#guard (tttSvg.splitOn ">x: MoveX<").length == 2
+#guard (tttSvg.splitOn "[Round, at most 5]").length == 2 && (tttSvg.splitOn "[otherwise, after 5]").length == 2
+#guard (tttSvg.splitOn "x_2: MoveX").length == 1
+#guard match explore (Json.mkObj [("lean", Json.str tictactoe)]) with
+  | .ok j => (((j.getObjValD "tree").getArr?.toOption.getD #[]).filter (fun n => (n.getObjValAs? String "message").toOption == some "MoveX")).size == 1
+  | .error _ => false
+#guard match check (Json.mkObj [("lean", Json.str tictactoe)]) with
+  | .ok j => ((j.getObjValAs? String "reading").toOption.getD "").startsWith "TicTacToe: no issues; 3 roles, 44 messages"
+  | .error _ => false
+
 end LeanFM.SessionToolsTests

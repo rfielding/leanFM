@@ -755,6 +755,59 @@ def listSummariesOf (p : Project) (protocols : Array String) (withClauses : Bool
     ("failing", countWhere ichecked "failing"), ("sorry", countWhere ichecked "sorry")]
   return (reqs, implsJ)
 
+open LeanFM.RequirementCtl in
+/-- The requirements LeanFM demands of every app, for one file's text (selfhost.requirements.tree):
+each protocol checks with no issues and can always end; each deployment places every role. -/
+def implicitRows (text : String) : Array Json := Id.run do
+  let .ok (defs, acc) := LeanFM.Session.Text.readText text | return #[]
+  let row (id kind proto : String) (c : Checked) : Json :=
+    Json.mkObj ([("list", Json.str "requirements"), ("id", Json.str id), ("kind", Json.str kind), ("implicit", Json.bool true),
+      ("protocol", Json.str proto)] ++ c.toFields)
+  let mut out : Array Json := #[]
+  for d in defs do
+    out := out.push (row s!"{d.name} checks with no issues" "protocol" d.name (checkPointer text (.protocol d.name)))
+    out := out.push (row s!"{d.name} can always end" "formula" d.name (checkPointer text (.formula d.name "(always (possibly stop))")))
+  for dep in acc.deployments do
+    let c : Checked := match LeanFM.SessionTools.deployment (Json.mkObj [("lean", Json.str text), ("deployment", Json.str dep.name)]) with
+      | .ok a =>
+        let v := (a.getObjValAs? String "verdict").toOption.getD ""
+        { verdict := v, met := v == "placed", failing := v != "placed", reading := (a.getObjValAs? String "reading").toOption.getD "" }
+      | .error e => failed e
+    out := out.push (row s!"{dep.name} places every role" "deployment" dep.protocolName c)
+  return out
+
+/-- One file's requirements, checked as project_view checks them, each with the evidence the
+implementations give for it, then the implicit requirements of every LeanFM app
+(selfhost.requirements.tree). -/
+def fileRequirements (p : Project) (protocols : Array String) (f : String) : IO (Array Json) := do
+  let .ok text ← readProtocolText p protocols f | return #[]
+  let (files, _) ← readMapFiles p protocols
+  let explicit ← match files.find? (·.path == f) with
+    | none => pure #[]
+    | some _ => do
+      let rows := (requirementRows p files #[] (withClauses := false)).filter fun r => (r.getObjValAs? String "file").toOption == some f
+      let checked ← rows.mapM (checkRow p protocols files)
+      -- evidence rows of implementations whose of resolves to this file
+      let irows := (implementationRows files).filter fun r =>
+        let g (k : String) := (r.getObjValAs? String k).toOption.getD ""
+        match resolveOf files protocols (g "file") (g "of") with
+        | .ok imp => imp.path == f
+        | .error _ => false
+      let ichecked ← irows.mapM (checkRow p protocols files)
+      let evidence := ichecked.filter fun r => r.getObjValD "evidence" == Json.bool true
+      pure <| checked.map fun r =>
+        let id := (r.getObjValAs? String "id").toOption.getD ""
+        let mine := evidence.filter fun e => (e.getObjValAs? String "id").toOption == some id
+        -- the requirement's standing over all its evidence: failing if any fails, else the strongest
+        let st := (r.getObjValAs? String "standing").toOption.getD "sorry"
+        let evSt := mine.toList.filterMap fun e => (e.getObjValAs? String "status").toOption
+        let standing := if st == "failing" || evSt.contains "failing" then "failing"
+          else if evSt.contains "proved" || st == "proved" then "proved"
+          else if evSt.contains "tested" then "tested" else st
+        let proto := (r.getObjValAs? String "name").toOption.getD ""
+        ((r.setObjVal! "standing" (Json.str standing)).setObjVal! "evidence" (Json.arr mine)).setObjVal! "protocol" (Json.str proto)
+  return explicit ++ implicitRows text
+
 /-- The overview's two sections for the project's specification files (specProtocols). -/
 def listSummaries (p : Project) (listed : Array String) : IO (Json × Json) :=
   listSummariesOf p (specProtocols p listed)
@@ -1062,8 +1115,11 @@ file at a time instead of carrying its text. The file must be one project_view l
 project's protocol files, its real path inside the project root, and at most `textPageChars`
 characters; the project must be one listed. Read only where project_view is served. Arguments
 without `file` (and without `project`) are returned as they are. -/
-def protocolArgs (args : Json) : IO (Except String Json) := do
+def protocolArgs (args : Json) (wantsRequirements : Bool := false) : IO (Except String Json) := do
   let .obj kvs := args | return .ok args
+  -- a standing is never taken from a caller (selfhost.requirements.tree)
+  let kvs := kvs.erase "_requirements"
+  let args := Json.obj kvs
   if !kvs.contains "file" && !kvs.contains "project" then return .ok args
   unless ← enabled.get do return .error ("project and file " ++ disabledMessage)
   let .ok (some f) := argString args "file" | return .error "file must be a protocol file listed by project_view stage requirements section protocols"
@@ -1082,7 +1138,11 @@ def protocolArgs (args : Json) : IO (Except String Json) := do
   let lean := decodeLossy bytes
   if over || lean.length > textPageChars then
     return .error s!"{f} is larger than {textPageChars} characters, too large to load whole"
-  return .ok (Json.obj ((kvs.erase "project").erase "file") |>.setObjVal! "lean" (Json.str lean))
+  let base := Json.obj (((kvs.erase "project").erase "file").erase "_requirements") |>.setObjVal! "lean" (Json.str lean)
+  -- session_explore's tree shows the file's requirements, checked here (selfhost.requirements.tree)
+  if wantsRequirements then
+    return .ok (base.setObjVal! "_requirements" (Json.arr (← fileRequirements p protocols f)))
+  return .ok base
 
 def query (args : Json) : IO (Except String (String × Json)) := do
   unless ← enabled.get do return .error disabledMessage

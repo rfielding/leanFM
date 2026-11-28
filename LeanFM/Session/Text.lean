@@ -77,6 +77,8 @@ structure Def where
   givens : List String := []
   /-- inbox sizes, `Api[8]`; a role not listed has size 0 (selfhost.session.buffers) -/
   buffers : List (String × Nat) := []
+  /-- the body as written, bounded loops not expanded: for drawing only (selfhost.session.rec.bounded) -/
+  folded : List Stmt := []
   deriving Inhabited
 
 /-- The highest version a protocol may declare. -/
@@ -294,6 +296,34 @@ partial def splice (name : String) (next : List Stmt) : List Stmt → List Stmt
     | .sessions b => .sessions (splice name next b)
     | .group n b => .group n (splice name next b)
     | other => other) :: splice name next rest
+
+/-- A body for drawing: each bounded loop as it is written, a group `Name, at most N` around one
+loop over its body, then a group `otherwise, after N` around its otherwise block (left out when
+empty). Checks never see this: they use `unroll` (selfhost.session.rec.bounded). -/
+partial def foldForDrawing : List Stmt → List Stmt
+  | [] => []
+  | .bounded name n body other :: rest =>
+    let o := foldForDrawing other
+    [.group s!"{name}, at most {n}" [.loop name (foldForDrawing body)]] ++
+      (if o.isEmpty then [] else [.group s!"otherwise, after {n}" o]) ++ foldForDrawing rest
+  | s :: rest => (match s with
+    | .weighted n a qs bs => .weighted n a qs (bs.map foldForDrawing)
+    | .choice bs => .choice (bs.map foldForDrawing)
+    | .par bs => .par (bs.map foldForDrawing)
+    | .join k bs => .join k (bs.map foldForDrawing)
+    | .loop n b => .loop n (foldForDrawing b)
+    | .sessions b => .sessions (foldForDrawing b)
+    | .group n b => .group n (foldForDrawing b)
+    | other => other) :: foldForDrawing rest
+
+/-- Whether a body has a bounded loop anywhere. -/
+partial def hasBounded : List Stmt → Bool
+  | [] => false
+  | s :: rest => (match s with
+    | .bounded .. => true
+    | .weighted _ _ _ bs | .choice bs | .par bs | .join _ bs => bs.any hasBounded
+    | .loop _ b | .sessions b | .group _ b => hasBounded b
+    | _ => false) || hasBounded rest
 
 /-- A `continue` in `ss` that no loop inside `ss` binds (`bound` are the loops around it). -/
 partial def escapes (bound : List String) : List Stmt → Option String
@@ -876,7 +906,7 @@ def protocolDef (body : Syntax) : R Def := do
   let gs := groupNames b
   if let some g := gs.find? (fun g => (gs.filter (· == g)).length > 1) then
     failAt body s!"protocol {pname} has two groups named {g}; name each group once"
-  return { name := pname, roles := rs, body := unroll b, version, givens := gv, buffers := bufs }
+  return { name := pname, roles := rs, body := unroll b, version, givens := gv, buffers := bufs, folded := b }
 
 /-- A word the grammar matched with `W`: an atom, or an identifier when the word is not reserved. -/
 def word (stx : Lean.Syntax) : String := if stx.isAtom then stx.getAtomVal else stx.getId.toString
@@ -1299,6 +1329,8 @@ structure Parsed where
   /-- every protocol with more than one version: each version (number, roles, global type),
   oldest first -/
   versioned : List (Prod String (List (Prod Nat (Prod (List String) (Global String))))) := []
+  /-- the main protocol for drawing: bounded loops folded (selfhost.session.rec.bounded); none when it has none -/
+  display : Option (Global String) := none
   deriving Inhabited
 
 /-- The global type of the text's main protocol with its body replaced by `f` of it (used to draw
@@ -1591,7 +1623,8 @@ def parse (text : String) (types : Option Types.Env := none) (mainName : Option 
   return { name := main.name, roles := main.roles, global := g, steps := n, body := main.body,
            requires := st.requires.toList, types := env, keys := st.keys.toList, linkTargets := targets, parentLinks, identityNotes,
            allLabels := (defs.flatMap fun d => labelsOf d.body).eraseDups, systems := st.systems.toList,
-           version := main.version, versioned, buffers := main.buffers }
+           version := main.version, versioned, buffers := main.buffers,
+           display := if hasBounded main.folded then ((build ctx (foldForDrawing main.folded)).run' 0).toOption else none }
 
 /-! ## Writing -/
 

@@ -167,13 +167,15 @@ def resourceContents (uri : String) : IO (Except String Json) := do
       | "leanfm://language/session-reference" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", "text/markdown"),
             ("text", LeanFM.SessionTools.reference)]
-      | "ui://leanfm/session-view" =>
-          pure <| Json.mkObj [("uri", uri), ("mimeType", logicViewMimeType),
-            ("text", sessionViewHtml), ("_meta", logicViewResourceMeta)]
       | "ui://leanfm/logic-view" =>
           pure <| Json.mkObj [("uri", uri), ("mimeType", logicViewMimeType),
             ("text", logicViewHtml), ("_meta", logicViewResourceMeta)]
-      | _ => return .error s!"unknown resource URI: {uri}"
+      | _ =>
+        -- the session view, at its versioned address or the bare one (selfhost.mcp.session.view)
+        if uri == sessionViewUri || uri == sessionViewBareUri then
+          pure <| Json.mkObj [("uri", uri), ("mimeType", logicViewMimeType),
+            ("text", sessionViewHtml), ("_meta", logicViewResourceMeta)]
+        else return .error s!"unknown resource URI: {uri}"
     return .ok contents
   catch err => return .error s!"resource unavailable: {err}"
 
@@ -797,8 +799,10 @@ def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Respon
             -- a session tool may name a project's protocol file instead of carrying its text
             let r ← if name.startsWith "session_" then do
                 let names (k : String) := (args.getObjVal? k).isOk
-                match ← (if names "file" then Trace.disk trace "ReadFile" "FileText" (LeanFM.ProjectView.protocolArgs args)
-                    else LeanFM.ProjectView.protocolArgs args) with
+                -- session_explore's outline carries the file's requirements (selfhost.requirements.tree)
+                let wants := name == "session_explore" && !names "focus" && !names "states"
+                match ← (if names "file" then Trace.disk trace "ReadFile" "FileText" (LeanFM.ProjectView.protocolArgs args wants)
+                    else LeanFM.ProjectView.protocolArgs args wants) with
                 | .ok args =>
                   -- session_conform may name a server log instead of carrying it (selfhost.session.event-log)
                   match ← (if name == "session_conform" then

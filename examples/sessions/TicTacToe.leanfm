@@ -1,0 +1,37 @@
+import LeanFM.Session.Syntax
+
+/-- TicTacToe, as designed in the book's first chapter: X starts a game, the Referee tells O, and
+    the players alternate moves until the Referee announces a result. A game has at most five
+    rounds, so every game ends. -/
+protocol TicTacToe (X, O, Referee) {
+  g: NewGame from X to Referee;
+  Joined from Referee to O cause g;
+  loop Round at most 5 {
+    x: MoveX from X to Referee;
+    choice {
+      OTurn from Referee to O cause x;
+      o: MoveO from O to Referee;
+      choice {
+        XTurn from Referee to X cause o;
+        continue Round;
+      } or {
+        Result from Referee to X cause o;
+        Result from Referee to O cause o;
+      }
+    } or {
+      Result from Referee to X cause x;
+      Result from Referee to O cause x;
+    }
+  } otherwise {
+    Result from Referee to X;
+    Result from Referee to O;
+  }
+}
+
+requirements {
+  "Every game ends with a result" => TicTacToe ⊨ (inevitably (on Result));
+  "O moves only after the game starts" => TicTacToe ⊨ (precedes (on Joined) (on MoveO));
+  "O moves only when told it is its turn" => TicTacToe ⊨ (precedes (on OTurn) (on MoveO));
+  "Every move by X is answered" => TicTacToe ⊨ (stronglyImplies (on MoveX) (inevitably (or (on OTurn) (on Result))));
+  "A game can always still end" => TicTacToe ⊨ (always (possibly stop));
+}

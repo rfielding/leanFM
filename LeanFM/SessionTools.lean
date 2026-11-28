@@ -267,6 +267,8 @@ structure Protocol where
   upgrades : List Versions.Upgrade := []
   /-- the main protocol's labels across its versions: each one's payload field number -/
   labelHistory : List String := []
+  /-- the main protocol for drawing, bounded loops folded (selfhost.session.rec.bounded) -/
+  display : Option (Global String) := none
 
 /-! ## The JSON form written as protocol text -/
 
@@ -439,7 +441,7 @@ def parseProtocol (args0 : Json) : Except String Protocol := do
     let upgrades <- Versions.check r
     return { name := r.name, roles := r.roles, global := r.global, steps := r.steps, lean := text, generative := <- generativeLayer r.body r.roles args, types := r.types, keys := r.keys, linkTargets := r.linkTargets, parentLinks := r.parentLinks, identityNotes := r.identityNotes,
              version := r.version, versions := (r.versioned.lookup r.name).getD [], upgrades,
-             labelHistory := Versions.labelHistory r }
+             labelHistory := Versions.labelHistory r, display := r.display }
   let p ← match args.getObjVal? "protocol" with
     | .ok p => pure p
     | .error _ => throw "lean is required: LeanFM protocol text such as protocol PingPong (A, B) { p: Ping from A to B; Pong from B to A cause p; }; read leanfm://language/session-reference"
@@ -599,14 +601,17 @@ partial def strip : Global String → List Nat × Global String
 
 end Annotate
 
+/-- What a drawing shows: bounded loops folded where the protocol has them. -/
+def Protocol.drawn (p : Protocol) : Global String := p.display.getD p.global
+
 /-- The sequence diagram, annotated when the protocol carries probabilities, amounts or times:
 under each arrow its branch's probability, its amounts, its delay and, when the session's chain can
 be solved, its expected count per session. Without annotations, the plain diagram. -/
 def annotatedModel (p : Protocol) : DiagramModel := Id.run do
-  let some layer := p.generative | return p.global.diagramModel p.roles p.name (keys := p.keys)
+  let some layer := p.generative | return p.drawn.diagramModel p.roles p.name (keys := p.keys)
   let (tagged, notes) := (Annotate.tagStmts none layer.body).run #[]
-  if notes.all (· == "") then return p.global.diagramModel p.roles p.name (keys := p.keys)
-  let .ok g := Text.buildWith p.lean tagged | return p.global.diagramModel p.roles p.name (keys := p.keys)
+  if notes.all (· == "") then return p.drawn.diagramModel p.roles p.name (keys := p.keys)
+  let .ok g := Text.buildWith p.lean tagged | return p.drawn.diagramModel p.roles p.name (keys := p.keys)
   -- expected counts and totals from the chain, when it can be solved without a horizon
   let chain := (Chain.analyse { layer with body := tagged }).toOption
   let counts : Array String := match chain with
@@ -2482,6 +2487,84 @@ def dataset (args : Json) : Except String Json := do
 
 /-! ## The tree to browse (selfhost.session.explorer) -/
 
+/-- Tree nodes for a file's list of requirements (selfhost.requirements.tree): a root node, the
+explicit rows, then a node holding the implicit rows, each row's CTL and evidence under it. Ids start
+at `start`. Also answers the id of the row the protocol `main` hangs under: its explicit protocol
+row, else its implicit check row. -/
+def requirementNodes (start : Nat) (reqs : Array Json) (main : String) (defs : List Outline.Def := []) :
+    Array Outline.Node × Option Nat := Id.run do
+  let g (j : Json) (k : String) : String := (j.getObjValAs? String k).toOption.getD ""
+  let node (i : Nat) (parent : Option Nat) (kind label detail : String) : Outline.Node :=
+    { id := i, parent := parent, kind := kind, label := label, detail := detail }
+  let count (k : String) := (reqs.filter (g · "standing" == k)).size
+  let top := start
+  let summary := s!"{count "proved"} proved, {count "tested"} tested, {count "sorry"} sorry, {count "failing"} failing"
+  let mut out : Array Outline.Node := #[node top none "requirements" s!"requirements: {reqs.size}" summary]
+  let mut next := start + 1
+  -- all the CTL in one place, from the top (selfhost.requirements.tree)
+  let allTop := next
+  let mut all : Array Outline.Node := #[]
+  next := next + 1
+  for r in reqs do
+    let ctl := r.getObjValD "ctl"
+    let fs := ((ctl.getObjValD "formulas").getArr?).toOption.getD #[]
+    let rules := (ctl.getObjValAs? Nat "ruleCount").toOption.getD fs.size
+    for f in fs do
+      let more := if g r "kind" == "protocol" then s!" (rule of {rules})" else ""
+      all := all.push (node next (some allTop) "formula" (g f "formula") s!"{g r "id"}{more}")
+      next := next + 1
+  out := out.push (node allTop (some top) "ctl" s!"all CTL: {all.size} formulas" "every formula the requirements below reduce to") ++ all
+  let mut mainRow : Option Nat := none
+  let mut implicitTop : Option Nat := none
+  -- protocols first, explicit then implicit: the interactions that hold the rest are on top
+  let isP (r : Json) := g r "kind" == "protocol"
+  let isI (r : Json) := r.getObjValD "implicit" == Json.bool true
+  let ordered := reqs.filter (fun r => !isI r && isP r) ++ reqs.filter (fun r => !isI r && !isP r) ++
+    reqs.filter (fun r => isI r && isP r) ++ reqs.filter (fun r => isI r && !isP r)
+  for r in ordered do
+    let implicit := r.getObjValD "implicit" == Json.bool true
+    let parent ← if implicit then do
+        match implicitTop with
+        | some t => pure t
+        | none =>
+          let t := next
+          let n := (reqs.filter fun x => x.getObjValD "implicit" == Json.bool true).size
+          out := out.push (node t (some top) "implicit" s!"implicit: {n}" "demanded of every LeanFM app")
+          next := next + 1
+          implicitTop := some t
+          pure t
+      else pure top
+    let me := next
+    let proto := g r "protocol"
+    -- a row over a protocol carries it, so picking the row draws its interaction diagram
+    -- `protocol` is a keyword where the session syntax is open, so the node is built in order
+    let shown := if isP r then s!"{g r "standing"} · protocol: {g r "id"}" else s!"{g r "standing"} · {g r "id"}"
+    out := out.push ⟨me, some parent, "requirement", shown, s!"{g r "kind"}: {g r "reading"}", proto, none, none, ""⟩
+    next := next + 1
+    if let some d := defs.find? (·.name == proto) then
+      out := out.push ⟨next, some me, "definition", s!"interaction diagram of {proto}", "", proto, some d.first, some d.last, ""⟩
+      next := next + 1
+    if g r "kind" == "protocol" && g r "protocol" == main && (mainRow.isNone || !implicit) then
+      if !implicit || mainRow.isNone then mainRow := some me
+    let ctl := r.getObjValD "ctl"
+    let fs := ((ctl.getObjValD "formulas").getArr?).toOption.getD #[]
+    if !fs.isEmpty then
+      let rules := (ctl.getObjValAs? Nat "ruleCount").toOption.getD fs.size
+      let plural := if rules == 1 then "" else "s"
+      let label := if g r "kind" == "protocol" then s!"reduces to {rules} CTL rule{plural}" else "CTL"
+      let c := next
+      out := out.push (node c (some me) "ctl" label s!"over {g ctl "protocol"}")
+      next := next + 1
+      for f in fs do
+        out := out.push (node next (some c) "formula" (g f "formula") (g f "name"))
+        next := next + 1
+    for e in ((r.getObjValD "evidence").getArr?).toOption.getD #[] do
+      let k := g e "kind"
+      let what := if k == "conform" then s!"conform {g e "log"}" else if k == "test" then s!"test {g e "test"}" else k
+      out := out.push (node next (some me) "evidence" s!"{g e "status"} · {g e "impl"}: {what}" (g e "reading"))
+      next := next + 1
+  return (out, mainRow)
+
 /-- The protocol as a tree to browse, or, with `focus`, the sequence diagram of one protocol the text
 defines. The tree: the main protocol's structure (included protocols with their own lines,
 choices and their branches, parallel branches, loops, independent sessions, messages and events
@@ -2594,7 +2677,16 @@ def explore (args : Json) : Except String Json := do
       let sends := (rows.filter (·.direction == "sends")).length
       let receives := (rows.filter (·.direction == "receives")).length
       (r, s!"sends {sends} and receives {receives} kinds of message; open it for its view")
-    let (nodes, omitted, _) := Outline.tree text p.name p.global load
+    let (nodes0, omitted, _) := Outline.tree text p.name p.drawn load
+    -- the file's requirements, checked on the server before this call (selfhost.requirements.tree)
+    let reqs := ((args.getObjValD "_requirements").getArr?).toOption.getD #[]
+    -- with rows, the tree is the list: the outline hangs under its protocol's row
+    let nodes := if reqs.isEmpty || nodes0.isEmpty then nodes0 else
+      let (rows, mainRow) := requirementNodes nodes0.size reqs p.name ds
+      let outline := match mainRow with
+        | some m => nodes0.modify 0 fun n => { n with parent := some m }
+        | none => nodes0.modify 0 fun n => { n with parent := some nodes0.size }
+      rows ++ outline
     let msgs := (nodes.filter (·.kind == "message")).size
     let incs := (nodes.filter (·.kind == "include")).size
     let cut := if omitted == 0 then "" else s!"; {omitted} more nodes left out (at most {Outline.maxNodes})"
