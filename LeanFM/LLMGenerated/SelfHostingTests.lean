@@ -9,7 +9,7 @@ open LeanFM.LLMGenerated.SelfHosting
 example : errors = [] := by native_decide
 example : spec.tasks.length = LeanFM.ChatUI.Requirements.spec.tasks.length + 2 := by native_decide
 example : spec.messages.length = LeanFM.ChatUI.Requirements.spec.messages.length + 14 := by native_decide
-example : clauses.length = 151 := by native_decide
+example : clauses.length = 152 := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.session.navigator" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.hosting" = true := by native_decide
 example : (clauses.map (·.id)).contains "selfhost.mcp.server-info" = true := by native_decide

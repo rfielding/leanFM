@@ -30,6 +30,7 @@
 \pagecolor{pagebackground}
 \color{foregroundink}
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{tagpdf}
 \tagpdfsetup{activate-all,interwordspace=true}
 \usepackage{amsmath,amssymb,mathtools}
@@ -64,6 +65,12 @@
   \else\includegraphics[#1]{generated/#2-light.pdf}\fi}
 % Every drawn diagram is a tool's output, so it gets the double border, shrunk by the border's
 % width so the whole keeps the size asked for.
+% A screenshot of a tool's answer (LeanFM's viewer), with the double border of tool output.
+\newcommand{\ToolShot}[2]{%
+  \begingroup\setlength{\fboxrule}{.4pt}%
+  \setlength{\fboxsep}{1.5pt}\fcolorbox{toolrule}{pagebackground}{%
+  \setlength{\fboxsep}{2pt}\fcolorbox{toolrule}{pagebackground}{%
+  \includegraphics[width=\dimexpr#1-8.6pt\relax]{generated/#2}}}\endgroup}
 \newsavebox{\diagrambox}
 \newcommand{\ThemedDiagram}[2]{%
   \sbox{\diagrambox}{\ThemedDiagramBare{#1}{#2}}%
@@ -455,6 +462,7 @@ against the claim checker on broken copies of real protocols. The source is publ
 
 \mainmatter
 \include{chapters/start}
+\include{chapters/walkthrough}
 
 \part{The Protocol Language}\label{part:language}
 \include{chapters/global-types}

@@ -59,6 +59,7 @@ run:
 
 serve:
 	@mkdir -p $(dir $(LEANFM_MAKE_LOCK))
+	@python3 scripts/invalidate_include_str.py
 	$(if $(LEANFM_MAKE_LOCKED),,flock $(LEANFM_MAKE_LOCK)) lake build leanfm-server
 	LEANFM_LAUNCHED_NS=$$(date +%s%N) .lake/build/bin/leanfm-server $(foreach p,$(PROJECTS),--project $(p))
 
@@ -108,6 +109,12 @@ video-narrated: video-check
 	$(VIDEO_PYTHON) scripts/prepare_video_narration.py
 	$(MAKE) video
 	$(VIDEO_PYTHON) scripts/render_video_narration.py
+
+# The TicTacToe walkthrough (video/tictactoe): LeanFM's real answers and viewer, captured, then narrated.
+.PHONY: video-tictactoe
+video-tictactoe:
+	python3 video/tictactoe/capture.py
+	python3 video/tictactoe/produce.py
 
 # The book tour (video/book-tour): real terminal steps, real LeanFM answers, local narration.
 .PHONY: video-tour

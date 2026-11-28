@@ -93,3 +93,4 @@ video/book-tour/build/
 
 # rendered videos stay local; rebuild with the make video targets
 *.mp4
+video/tictactoe/build/

@@ -134,6 +134,16 @@ def projectFilesTests : IO Unit := do
     (!rejected own && (((own.getObjValD "structuredContent").getObjValAs? String "reading").toOption.getD "").contains "no findings")
   let ex ← call "session_explore" (Json.mkObj [("project", "LeanFM"), ("file", "LeanFM/LLMGenerated/LeanFM.leanfm")])
   expect "session_explore opens LeanFM's own protocol by project and file" (!rejected ex && ex.compress.contains "LeanFMMcp")
+  -- where a client starts (selfhost.mcp.introduction)
+  let intro ← call "introduction" (Json.mkObj [])
+  let ib := intro.getObjValD "structuredContent"
+  expect "introduction answers the rule, LeanFM's requirement files, standings and next calls"
+    (!rejected intro && ((ib.getObjValAs? String "rule").toOption.getD "").contains "strong implication" &&
+     ib.compress.contains "LeanFM/LLMGenerated/LeanFM.leanfm" && (ib.getObjValD "standing").getObjValD "proved" != Json.null &&
+     ((ib.getObjValD "next").getArr?.toOption.getD #[]).any fun c => (c.getObjValAs? String "tool").toOption == some "session_explore")
+  let badIntro ← call "introduction" (Json.mkObj [("project", "NoSuchProject")])
+  expect "introduction refuses an unknown project, naming the projects" (rejected badIntro && (reason badIntro).contains "LeanFM")
+  expect "the instructions begin by telling the client to call introduction" (LeanFM.MCP.instructions.startsWith "Call introduction first")
   -- the tree carries the file's requirements with their standings (selfhost.requirements.tree)
   let treeOf (r : Json) : Array Json := ((r.getObjValD "structuredContent").getObjValD "tree").getArr?.toOption.getD #[]
   let label (n : Json) : String := (n.getObjValAs? String "label").toOption.getD ""
@@ -948,7 +958,7 @@ def main : IO Unit := do
   expect "MCP every tool LeanFM's checks run in lists the limits argument"
     (!listedTools.isEmpty && listedTools.all fun t =>
       let n := (t.getObjValAs? String "name").toOption.getD ""
-      n == "server_logs" || n == "project_view" || n == "server_info" || (((t.getObjValD "inputSchema").getObjValD "properties").getObjVal? "limits").isOk)
+      n == "server_logs" || n == "project_view" || n == "server_info" || n == "introduction" || (((t.getObjValD "inputSchema").getObjValD "properties").getObjVal? "limits").isOk)
   expect "MCP the instructions say how to raise a limit and list the limits" (LeanFM.MCP.instructions.contains "\"limits\": {\"states\": 100000}" && LeanFM.MCP.instructions.contains "datasetEvents 1000000")
   expect "MCP tools/list stays under the client's result limit" (listed.body.length < 100000)
   let imagesLean := (Json.str "protocol Images (Browser, Server) {\n  g: GetImage from Browser to Server;\n  choice {\n    Image from Server to Browser cause g;\n  } or {\n    NotFound from Server to Browser cause g;\n  }\n}").compress

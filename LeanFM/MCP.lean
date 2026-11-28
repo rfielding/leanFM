@@ -13,6 +13,7 @@ import LeanFM.ServerInfo
 import LeanFM.ProjectView
 import LeanFM.ModelCache
 import LeanFM.Reduce
+import LeanFM.Introduction
 
 namespace LeanFM.MCP
 
@@ -26,6 +27,7 @@ structure Response where
 def protocolVersion := "2025-06-18"
 
 def instructions : String :=
+  "Call introduction first: it says what LeanFM is, lists the projects and their requirement files, and gives the calls to make next. " ++
   "LeanFM's book is durable agent context, not optional human documentation. " ++
   "Before requirements, design, or implementation work, read leanfm://project/book/main.pdf, " ++
   "leanfm://project/specification/SelfHosting.lean (LeanFM's own requirements), " ++
@@ -458,10 +460,18 @@ def serverInfoTool : Json :=
      "so the server should be restarted before trusting its answers about new code. No arguments. Read-only.")
     (schema [] [])
 
+/-- Where a client starts (clause selfhost.mcp.introduction). Listed on every host. -/
+def introductionTool : Json :=
+  tool "introduction" "Start here: what LeanFM is and what to call next"
+    ("What LeanFM is, the rule that features need strong implication and security guarantees weak implication, " ++
+     "the projects with their requirement files, the named project's standings (proved, tested, sorry, failing), " ++
+     "and the next calls written out with their arguments. Call it first. Read-only.")
+    (schema [("project", stringSchema "optional: a project to report on (default LeanFM)")] [])
+
 /-- The tools listed on this host. -/
 def listedTools : IO (Array Json) := do
-  if ← LeanFM.ServerLogs.enabled.get then return ((tools.push serverLogsTool).push projectViewTool).push serverInfoTool
-  return tools
+  if ← LeanFM.ServerLogs.enabled.get then return (((tools.push serverLogsTool).push projectViewTool).push serverInfoTool).push introductionTool
+  return tools.push introductionTool
 
 /-- The one-line text of a logic tool result: tool, verdict, and the reading or rejection reason, at most
 `logicSummaryLimit` characters. The full answer is only in structuredContent. -/
@@ -772,6 +782,12 @@ def dispatchJsonCore (request : Json) (trace : Option Trace := none) : IO Respon
           let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
           pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
         | .error err => pure <| rpcError id (-32602) err
+      | .ok "introduction" =>
+        match ← LeanFM.Introduction.answer ((field params "arguments").toOption.getD (Json.mkObj [])) with
+        | .ok (text, body) =>
+          let content := Json.arr #[Json.mkObj [("type", "text"), ("text", text)]]
+          pure (ok id (Json.mkObj [("content", content), ("structuredContent", body)]))
+        | .error err => pure (ok id (logicResult "introduction" (.error err)))
       | .ok "server_info" =>
         if !(← LeanFM.ServerLogs.enabled.get) then pure <| rpcError id (-32602) LeanFM.ServerInfo.disabledMessage else
         match ← LeanFM.ServerInfo.answer ((field params "arguments").toOption.getD (Json.mkObj [])) with

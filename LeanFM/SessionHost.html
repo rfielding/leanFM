@@ -90,6 +90,17 @@ function firstArguments() {
   return args;
 }
 
+// with file in the address, the page opens on that protocol file's requirements list
+// (selfhost.mcp.session.standalone, selfhost.requirements.tree); otherwise on project_view
+function firstCall() {
+  const file = query.get("file");
+  if (file && file.length <= 300) {
+    const args = { project: firstArguments().project || "LeanFM", file };
+    return { name: "session_explore", arguments: args };
+  }
+  return { name: "project_view", arguments: firstArguments() };
+}
+
 // the conversation starts as an MCP host's does: initialize, then the tool list
 const started = (async () => {
   try {
@@ -141,14 +152,14 @@ buttons.simulated.addEventListener("click", () => showSource("simulated"));
 // tree) whose answers would cover a source shown before they end, so the source waits until the view
 // has been quiet for 200 ms, at most 3 s in all
 let viewInflight = 0, viewStarted = 0, idleWaiters = [];
-function viewSettled() {
-  const until = performance.now() + 3000;
+function viewSettled(quietMs = 200, maxMs = 3000) {
+  const until = performance.now() + maxMs;
   return new Promise((resolve) => {
     const check = () => {
       if (performance.now() >= until) return resolve();
       if (viewInflight > 0) { idleWaiters.push(check); return; }
       const seen = viewStarted;
-      setTimeout(() => { if (viewStarted === seen && viewInflight === 0) resolve(); else check(); }, 200);
+      setTimeout(() => { if (viewStarted === seen && viewInflight === 0) resolve(); else check(); }, quietMs);
     };
     check();
   });
@@ -167,6 +178,19 @@ async function openFirst() {
     toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: result });
     if (result && result.isError) { firstShown(); say(String((result.structuredContent && result.structuredContent.reason) || "LeanFM refused the first view.")); return; }
     // the page opens on what actually happened, unless the address asks for a stage
+    // with file, the named protocol's requirements list is shown once the view has settled on its stage
+    const named = firstCall();
+    if (named.name === "session_explore") {
+      // the view opens the project's primary protocol on its own after the stage arrives; wait for that to finish
+      await viewSettled(1200, 10000);
+      const load = await hostEvent("Load", null, viewSession);
+      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-input", params: { arguments: named.arguments } });
+      const answer = await mcp("tools/call", named, load, viewSession);
+      toView({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: answer });
+      await hostEvent(answer && !answer.isError ? "Drawn" : "Refused", load, viewSession);
+      if (answer && answer.isError) say(String((answer.structuredContent && answer.structuredContent.reason) || "LeanFM refused the file."));
+      return;
+    }
     if (!query.get("stage") && !query.get("project")) { await viewSettled(); await showSource("actual"); }
   } catch (e) {
     firstShown();

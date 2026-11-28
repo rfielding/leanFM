@@ -1,0 +1,199 @@
+{
+ "intro": {
+  "about": "LeanFM checks requirements before code exists. A project's specification is a list of named requirements: protocols (interactions between roles, drawn as diagrams), CTL formulas over them, and deployments. Every requirement reduces to CTL and stands proved (by the model checker), tested (a run of an implementation meets it), sorry (nothing shows it yet) or failing. Runs, logs and charts of a running project are judged against the same requirements.",
+  "book": "leanfm://project/book/main.pdf",
+  "next": [
+   {
+    "arguments": {
+     "file": "LeanFM/LLMGenerated/LeanFM.leanfm",
+     "project": "LeanFM"
+    },
+    "tool": "session_explore",
+    "why": "the requirements list of LeanFM/LLMGenerated/LeanFM.leanfm: its protocols, interaction diagrams, CTL and evidence"
+   },
+   {
+    "arguments": {
+     "project": "LeanFM",
+     "stage": "requirements"
+    },
+    "tool": "project_view",
+    "why": "the project's stages: chat, book, requirements, code"
+   },
+   {
+    "arguments": {
+     "events": [],
+     "program": "(pie \"events\" \"events\" (countBy label (events)))"
+    },
+    "tool": "reduce_run",
+    "why": "numbers and charts from a run, with a small sandboxed Lisp"
+   },
+   {
+    "arguments": {},
+    "tool": "server_logs",
+    "why": "the logs this server and the projects write"
+   }
+  ],
+  "project": "LeanFM",
+  "projects": [
+   {
+    "name": "LeanFM",
+    "requirementFiles": [
+     "LeanFM/LLMGenerated/LeanFM.leanfm"
+    ]
+   },
+   {
+    "name": "GoServer",
+    "requirementFiles": [
+     "spec/GoServer.leanfm"
+    ]
+   },
+   {
+    "name": "IslandUploads",
+    "requirementFiles": [
+     "spec/IslandUploads.leanfm"
+    ]
+   },
+   {
+    "name": "Maqam",
+    "requirementFiles": [
+     "spec/AudioPeriod.leanfm",
+     "spec/Maqam.leanfm"
+    ]
+   },
+   {
+    "name": "PaxosKV",
+    "requirementFiles": [
+     "spec/PaxosKV.leanfm"
+    ]
+   }
+  ],
+  "rule": "Features need strong implication, (leadsTo a b) or (stronglyImplies a b): the trigger a must be able to happen. Security guarantees need weak implication, (weaklyImplies a b): a trigger that never happens is fine. The difference is (possibly a), which CTL can say and LTL cannot.",
+  "standing": {
+   "failing": 0,
+   "proved": 9,
+   "sorry": 152,
+   "tested": 0
+  },
+  "tool": "introduction"
+ },
+ "introText": "LeanFM checks requirements before code exists. A project's specification is a list of named requirements: protocols (interactions between roles, drawn as diagrams), CTL formulas over them, and deployments. Every requirement reduces to CTL and stands proved (by the model checker), tested (a run of an implementation meets it), sorry (nothing shows it yet) or failing. Runs, logs and charts of a running project are judged against the same requirements.\n\nFeatures need strong implication, (leadsTo a b) or (stronglyImplies a b): the trigger a must be able to happen. Security guarantees need weak implication, (weaklyImplies a b): a trigger that never happens is fine. The difference is (possibly a), which CTL can say and LTL cannot.\n\nProjects: LeanFM, GoServer, IslandUploads, Maqam, PaxosKV.\nLeanFM: 9 proved, 0 tested, 152 sorry, 0 failing.\nIts requirement files:\n  - LeanFM/LLMGenerated/LeanFM.leanfm\n\nStart with session_explore on one of them (project LeanFM, file as above): the tree is the requirements list, each row with its standing, its interaction diagram and its CTL.",
+ "explore": {
+  "reading": "TicTacToe: 71 nodes to browse: 1 protocols defined, 0 included where used, 12 message steps, 3 roles; folded at the start, open a node to see inside"
+ },
+ "check": {
+  "verdict": "ok",
+  "reading": "TicTacToe: no issues; 3 roles, 44 messages, 13 top-level calls"
+ },
+ "events": [
+  {
+   "id": "g",
+   "session": "g1",
+   "from": "X",
+   "to": "Referee",
+   "label": "NewGame"
+  },
+  {
+   "id": "e1",
+   "session": "g1",
+   "from": "Referee",
+   "to": "O",
+   "label": "Joined",
+   "cause": "g"
+  },
+  {
+   "id": "e2",
+   "session": "g1",
+   "from": "X",
+   "to": "Referee",
+   "label": "MoveX"
+  },
+  {
+   "id": "e3",
+   "session": "g1",
+   "from": "Referee",
+   "to": "O",
+   "label": "OTurn",
+   "cause": "e2"
+  },
+  {
+   "id": "e4",
+   "session": "g1",
+   "from": "O",
+   "to": "Referee",
+   "label": "MoveO"
+  },
+  {
+   "id": "e5",
+   "session": "g1",
+   "from": "Referee",
+   "to": "X",
+   "label": "XTurn",
+   "cause": "e4"
+  },
+  {
+   "id": "e6",
+   "session": "g1",
+   "from": "X",
+   "to": "Referee",
+   "label": "MoveX"
+  },
+  {
+   "id": "e7",
+   "session": "g1",
+   "from": "Referee",
+   "to": "O",
+   "label": "OTurn",
+   "cause": "e6"
+  },
+  {
+   "id": "e8",
+   "session": "g1",
+   "from": "O",
+   "to": "Referee",
+   "label": "MoveO"
+  },
+  {
+   "id": "e9",
+   "session": "g1",
+   "from": "Referee",
+   "to": "X",
+   "label": "XTurn",
+   "cause": "e8"
+  },
+  {
+   "id": "e10",
+   "session": "g1",
+   "from": "X",
+   "to": "Referee",
+   "label": "MoveX"
+  },
+  {
+   "id": "e11",
+   "session": "g1",
+   "from": "Referee",
+   "to": "X",
+   "label": "Result",
+   "cause": "e10"
+  },
+  {
+   "id": "e12",
+   "session": "g1",
+   "from": "Referee",
+   "to": "O",
+   "label": "Result",
+   "cause": "e10"
+  }
+ ],
+ "outcome": "X wins",
+ "conform": {
+  "verdict": "conforms",
+  "reading": "TicTacToe: 13 events in 1 session follow the protocol"
+ },
+ "shots": {
+  "game": "game.png",
+  "tree": "tree.png",
+  "diagram": "diagram.png",
+  "animate": "animate.png"
+ },
+ "typescript": "// TicTacToe, implementing examples/sessions/TicTacToe.leanfm: X is the person, O plays at random\n// (seeded, so a run can be replayed), and the Referee writes every protocol message as an event.\ntype Mark = \"X\" | \"O\" | null;\ntype Ev = { id: string; session: string; from: string; to: string; label: string; cause?: string };\n\nconst LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];\nlet cells: Mark[] = [], events: Ev[] = [], n = 0, game = 0, over = false, seed = 7;\n\nfunction random(): number { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }\n\nfunction winner(c: Mark[]): string | null {\n  for (const [a, b, d] of LINES) if (c[a] && c[a] === c[b] && c[a] === c[d]) return c[a];\n  return c.every((x) => x) ? \"draw\" : null;\n}\n\nfunction log(label: string, from: string, to: string, cause?: string, id?: string): string {\n  const e: Ev = { id: id || \"e\" + (++n), session: \"g\" + game, from, to, label };\n  if (cause) e.cause = cause;\n  events.push(e);\n  return e.id;\n}\n\nfunction result(cause: string, w: string): string {\n  log(\"Result\", \"Referee\", \"X\", cause); log(\"Result\", \"Referee\", \"O\", cause); over = true;\n  return w === \"draw\" ? \"Draw\" : w + \" wins\";\n}\n\nfunction start(): void {\n  game++; cells = Array(9).fill(null); events = []; n = 0; over = false;\n  log(\"Joined\", \"Referee\", \"O\", log(\"NewGame\", \"X\", \"Referee\", undefined, \"g\"));\n}\n\nfunction moveX(i: number): string {\n  if (over || cells[i]) return \"\";\n  cells[i] = \"X\"; const x = log(\"MoveX\", \"X\", \"Referee\");\n  const w = winner(cells); if (w) return result(x, w);\n  log(\"OTurn\", \"Referee\", \"O\", x);\n  const free = cells.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0);\n  cells[free[Math.floor(random() * free.length)]] = \"O\";\n  const o = log(\"MoveO\", \"O\", \"Referee\");\n  const w2 = winner(cells); if (w2) return result(o, w2);\n  log(\"XTurn\", \"Referee\", \"X\", o);\n  return \"Your move, X\";\n}\n"
+}
